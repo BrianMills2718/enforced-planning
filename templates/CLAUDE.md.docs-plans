@@ -1,0 +1,63 @@
+# Plans Directory
+
+Implementation plans live here. All significant work needs a plan.
+
+## Plan Index
+
+| # | Name | Status | Description |
+|---|------|--------|-------------|
+| 1 | example_plan | Complete | Example plan |
+
+## Plan Lifecycle
+
+```
+Planned → In Progress → Complete
+```
+
+## Creating a Plan
+
+1. Copy `plan.md.template` to `NN_name.md`
+2. Fill in sections
+3. Add to index table above
+4. Commit with `[Plan #N] Add plan: description`
+
+## Plan Template
+
+```markdown
+# Plan #N: Title
+
+Status: Planned
+
+## Problem
+What's the problem being solved?
+
+## Solution
+How will we solve it?
+
+## Implementation
+Specific steps to implement.
+
+## Required Tests
+What tests are needed?
+
+## Files Affected
+Which files will change?
+
+## Acceptance Criteria
+How do we know it's done?
+```
+
+## Completing a Plan
+
+```bash
+python scripts/complete_plan.py --plan N
+```
+
+This will:
+1. Run required tests
+2. Update status to Complete
+3. Record evidence
+
+## Related
+
+- `meta-process/patterns/15_plan-workflow.md` - Full plan workflow

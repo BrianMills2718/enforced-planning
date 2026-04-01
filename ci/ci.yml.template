@@ -1,0 +1,174 @@
+# Meta-Process CI Workflow Template
+# Copy to .github/workflows/ci.yml and customize for your project
+
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # =============================================================================
+  # Change Detection - Skip expensive jobs for docs-only changes
+  # =============================================================================
+  changes:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+      docs: ${{ steps.filter.outputs.docs }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            code:
+              - 'src/**'
+              - 'tests/**'
+              - 'requirements*.txt'
+            docs:
+              - 'docs/**'
+              - '*.md'
+
+  # =============================================================================
+  # Core Quality Gates
+  # =============================================================================
+  test:
+    needs: changes
+    if: needs.changes.outputs.code == 'true' || github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run tests
+        run: pytest tests/ -v
+
+  mypy:
+    needs: changes
+    if: needs.changes.outputs.code == 'true' || github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install mypy
+      - run: mypy src/ --ignore-missing-imports
+
+  # =============================================================================
+  # Meta-Process Checks (customize based on meta-process.yaml)
+  # =============================================================================
+  meta-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install pyyaml
+
+      # Doc-code coupling (if enabled)
+      - name: Check doc-code coupling
+        run: python scripts/meta/check_doc_coupling.py --strict
+        continue-on-error: false  # Set to true to warn only
+
+      # Mock policy (if enabled)
+      - name: Check mock usage
+        run: python scripts/meta/check_mock_usage.py --strict
+        continue-on-error: false
+
+  # =============================================================================
+  # Plan Checks
+  # =============================================================================
+  plan-checks:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install pyyaml
+
+      # Verify commit messages reference plans
+      - name: Check commit references
+        run: |
+          # Get commits in this PR
+          COMMITS=$(git log --format="%s" origin/main..HEAD)
+          echo "Checking commits:"
+          echo "$COMMITS"
+
+          # Each commit must have [Plan #N] or [Trivial]
+          while IFS= read -r msg; do
+            if [[ ! "$msg" =~ \[Plan\ \#[0-9]+\] ]] && \
+               [[ ! "$msg" =~ \[Trivial\] ]] && \
+               [[ ! "$msg" =~ \[Unplanned\] ]]; then
+              echo "ERROR: Commit missing plan reference: $msg"
+              echo "Use: [Plan #N] or [Trivial] prefix"
+              exit 1
+            fi
+          done <<< "$COMMITS"
+
+      # Check for stale blockers
+      - name: Check plan blockers
+        run: python scripts/meta/check_plan_blockers.py --strict
+        continue-on-error: true  # Warn only
+
+  # =============================================================================
+  # Post-Merge Sync (optional)
+  # =============================================================================
+  post-merge:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install pyyaml
+
+      - name: Sync plan index
+        run: |
+          python scripts/meta/sync_plan_status.py --sync
+          if [[ -n "$(git status --porcelain)" ]]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add docs/plans/CLAUDE.md
+            git commit -m "[Trivial] Auto-sync plan index"
+            git push
+          fi

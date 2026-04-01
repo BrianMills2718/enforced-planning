@@ -1,0 +1,185 @@
+# {{PROJECT_NAME}} - Claude Code Context
+
+---
+
+## Quick Reference - Commands
+
+### Session Start
+```bash
+make status              # Git status
+```
+
+### During Work
+```bash
+make test                # Run tests
+make check               # All checks (test, mypy, doc-coupling)
+```
+
+### Finishing Work
+```bash
+make pr-ready            # Rebase + push
+make pr                  # Create PR
+make pr-auto-check       # Preflight autonomous PR workflow
+make pr-auto             # Non-interactive PR + auto-merge request
+make finish BRANCH=X PR=N  # Merge + cleanup
+```
+
+---
+
+## Project Structure
+
+```
+{{PROJECT_NAME}}/
+  src/                    # Source code
+  tests/                  # Test suite
+  docs/
+    plans/                # Implementation plans
+    adr/                  # Architecture Decision Records
+  config/                 # Configuration files
+  scripts/                # Utility scripts
+```
+
+---
+
+## Workflow
+
+### The Complete Cycle
+
+```
+1. START     -->  git checkout -b plan-N-description
+       |
+2. IMPLEMENT -->  Edit files, commit with [Plan #N] prefix
+       |
+3. VERIFY    -->  make test && make check
+       |
+4. SHIP      -->  make pr-auto (or make pr-ready && make pr && make finish BRANCH=X PR=N)
+```
+
+### Commit Messages
+
+```bash
+[Plan #N] Description       # Links to plan
+[Trivial] Fix typo          # For tiny changes (<20 lines)
+```
+
+---
+
+## Key Rules
+
+### Plans
+- All significant work requires a plan in `docs/plans/NN_name.md`
+- Use `[Trivial]` only for <20 lines, no src/ changes
+
+### Process Awareness
+- If you're doing something not covered by the meta-process (no pattern, no
+  template, no convention), treat it as a signal:
+  - Either the meta-process has a gap — record it in `meta-process/ISSUES.md`
+  - Or you're deviating from process — stop and ask before continuing
+- Don't silently invent new conventions. Make them explicit.
+- If work uncovers a real issue, persist it into the durable surface that should
+  govern the next pass:
+  - update the current plan when scope, blockers, tests, or acceptance change
+  - create or supersede an ADR when the architectural decision changed
+  - update root or subtree `CLAUDE.md` when the issue is an operating rule
+  - update `UNCERTAINTIES.md`, `ISSUES.md`, or `TECH_DEBT.md` when the issue is
+    real but not yet resolved
+
+### Worktree Hygiene
+- Capture `git status --short` at task start.
+- Report pre-existing dirty files separately from files changed in the current
+  task.
+- Commit independently verified milestones when safe.
+- If a safe commit is blocked, state why and list the exact task-owned files
+  left uncommitted.
+
+---
+
+## How to Build
+
+### Design (before writing code)
+
+Every non-trivial piece of work follows this sequence. Each step depends on the
+ones before it — don't skip ahead.
+
+1. **Requirements** — what must the system do, what counts as success/failure
+2. **Research** — what already exists (prior art, libraries, benchmarks). Search
+   before building. Don't re-derive what the field already knows.
+3. **Boundaries** — major components, what's in/out of scope
+4. **Domain model** — objects, relationships, constraints
+5. **Contracts** — input/output boundaries, failure semantics, types
+6. **Schema** — tables, APIs, typed models derived from above
+
+ADRs accumulate whenever a fork is encountered and a choice is made. Glossary
+entries accumulate whenever a term needs definition. Neither is a discrete
+step — they are captured as they arise.
+
+Not every project needs every step. Scale the sequence to the complexity.
+
+### Plan (before implementing)
+
+Every plan must be concrete enough that an agent can execute autonomously:
+
+- **Gap**: what exists now vs what we want (requirements)
+- **Research**: what was investigated before planning (references reviewed)
+- **Acceptance criteria**: what passes and what fails
+- **Failure modes**: what can go wrong and how to diagnose it
+
+The plan validator enforces these sections. Plans missing them will be blocked.
+
+### Execute
+
+- Commit every verified slice — uncommitted work is invisible and unrecoverable
+- Fail loud — no silent fallbacks, no `except: pass`
+- Log governance friction to `FRICTION.md` — if the process gets in the way,
+  record it so the process can improve
+
+### Friction Log
+
+If the governance framework creates friction during your work, append to
+`FRICTION.md`:
+
+```markdown
+### YYYY-MM-DD — {context}
+**Friction:** What happened
+**Impact:** How it slowed you down
+**Suggestion:** What would have been better
+```
+
+This is how the framework improves. Every friction entry is actionable feedback.
+
+## Design Principles
+
+1. **{{PRINCIPLE_1_NAME}}** - {{PRINCIPLE_1_DESC}}
+2. **{{PRINCIPLE_2_NAME}}** - {{PRINCIPLE_2_DESC}}
+3. **{{PRINCIPLE_3_NAME}}** - {{PRINCIPLE_3_DESC}}
+
+---
+
+## Terminology
+
+| Use | Not | Why |
+|-----|-----|-----|
+| `{{TERM_1}}` | `{{TERM_1_ALT}}` | Consistency |
+
+---
+
+## References
+
+| Doc | Purpose |
+|-----|---------|
+| `README.md` | Full documentation |
+| `docs/plans/CLAUDE.md` | Plan index |
+| `scripts/CLAUDE.md` | Script reference |
+
+## Autonomous PR flow
+
+Non-interactive PR operations with preflight gates:
+1. `make pr-auto-check`
+2. `make pr-auto`
+
+`pr-auto` enforces:
+1. feature-branch only (not `main`)
+2. origin repo match (default from current directory via `PR_AUTO_EXPECTED_REPO`)
+3. sanitized GitHub CLI auth env (ignores `GITHUB_TOKEN` overrides)
+4. rebase/push + PR create/reuse + auto-merge request
+   - if repo policy disables auto-merge, command reports and exits successfully

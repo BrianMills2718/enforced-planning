@@ -1,0 +1,30 @@
+# Worktree Context: {{BRANCH}}
+
+This file helps track progress in this worktree. Update as you work.
+
+## Task
+{{TASK_DESCRIPTION}}
+
+## Plan Reference
+{{PLAN_FILE_PATH:-None (trivial change)}}
+
+## Status
+- [ ] Implementation started
+- [ ] Tests passing
+- [ ] Ready for PR
+
+## Progress Notes
+<!-- Update this as you work. Helps resume after context compaction. -->
+
+
+## Decisions Made
+<!-- Document key decisions and why. -->
+
+
+## Files Changed
+<!-- List files you've modified. -->
+
+
+## Next Steps
+<!-- What needs to happen next? -->
+

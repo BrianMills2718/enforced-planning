@@ -1,0 +1,64 @@
+# Plan #N: [Name]
+
+**Status:** Planned
+**Type:** documentation  <!-- documentation | governance | triage -->
+**Priority:** High | Medium | Low
+**Blocked By:** None
+**Blocks:** None
+
+---
+
+## Gap
+
+**Current:** What exists now
+
+**Target:** What we want
+
+**Why:** Why this matters
+
+---
+
+## References Reviewed
+
+> **REQUIRED:** Cite specific docs reviewed before planning.
+
+- `vision/EXAMPLE.md` - current design doc
+- `STATUS_LEDGER.md` - current operational state
+- `CLAUDE.md` - project conventions
+
+---
+
+## Files Affected
+
+> **REQUIRED:** Declare upfront what files will be touched.
+
+- vision/example.md (modify)
+- vision/new_doc.md (create)
+- vision/archive/YYYY-MM-DD/ (move)
+
+---
+
+## Plan
+
+### Steps
+
+1. Review existing docs
+2. Draft changes
+3. Update cross-references
+4. Verify doc lint passes
+
+---
+
+## Acceptance Criteria
+
+- [ ] Docs updated with correct doc-role headers
+- [ ] Cross-references verified (no broken links)
+- [ ] Freshness dates updated where applicable
+- [ ] `python scripts/doc_lint.py` passes
+- [ ] `python scripts/validate_project_graph_paths.py --strict` passes
+
+---
+
+## Notes
+
+[Design decisions, alternatives considered, risks]

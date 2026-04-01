@@ -1,0 +1,30 @@
+# ADR Governance Map
+#
+# Links Architecture Decision Records to source files.
+# Governed files get header comments referencing applicable ADRs.
+#
+# Format:
+#   - adr: "ADR-NNNN"
+#     title: "Short title"
+#     applies_to: [glob patterns]
+
+governance:
+  # Example: Everything-is-artifact pattern
+  - adr: "ADR-0001"
+    title: "Everything is an artifact"
+    applies_to:
+      - "src/models/*.py"
+      - "src/store/*.py"
+
+  # Example: No debt allowed
+  - adr: "ADR-0002"
+    title: "No compute debt"
+    applies_to:
+      - "src/billing/*.py"
+      - "src/resources/*.py"
+
+# Run sync to update file headers:
+#   python scripts/meta/sync_governance.py --apply
+#
+# Check for violations:
+#   python scripts/meta/sync_governance.py --check

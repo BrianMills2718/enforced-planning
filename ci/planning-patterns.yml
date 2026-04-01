@@ -1,0 +1,86 @@
+# GitHub Actions workflow for planning pattern validation
+#
+# Copy this to .github/workflows/planning-patterns.yml to enable CI checks.
+#
+# Configuration is read from meta-process.yaml:
+#   planning:
+#     question_driven_planning: advisory | required | disabled
+#     uncertainty_tracking: advisory | required | disabled
+#     warn_on_unverified_claims: true | false
+#
+# This workflow runs on PRs that modify plan files.
+
+name: Planning Patterns
+
+on:
+  pull_request:
+    paths:
+      - 'docs/plans/*.md'
+      - 'meta-process.yaml'
+
+jobs:
+  validate-plans:
+    name: Validate Planning Patterns
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Need full history to find changed files
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install pyyaml
+
+      - name: Get changed plan files
+        id: changed-plans
+        run: |
+          # Get plan files changed in this PR
+          CHANGED=$(git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -E '^docs/plans/[0-9].*\.md$' || true)
+          if [[ -n "$CHANGED" ]]; then
+            echo "plans=$CHANGED" >> $GITHUB_OUTPUT
+            echo "has_plans=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_plans=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Validate changed plans
+        if: steps.changed-plans.outputs.has_plans == 'true'
+        run: |
+          echo "Validating planning patterns..."
+          for plan in ${{ steps.changed-plans.outputs.plans }}; do
+            echo "Checking: $plan"
+            python scripts/check_planning_patterns.py --file "$plan" --verbose
+          done
+
+      - name: Check for required sections (strict mode)
+        if: steps.changed-plans.outputs.has_plans == 'true'
+        run: |
+          # Read weight level from config
+          WEIGHT=$(python -c "
+          import yaml
+          try:
+              with open('meta-process.yaml') as f:
+                  config = yaml.safe_load(f)
+                  print(config.get('weight', 'medium'))
+          except:
+              print('medium')
+          ")
+
+          echo "Weight level: $WEIGHT"
+
+          # Only run strict mode for heavy weight
+          if [[ "$WEIGHT" == "heavy" ]]; then
+            echo "Running strict validation (weight=heavy)..."
+            for plan in ${{ steps.changed-plans.outputs.plans }}; do
+              python scripts/check_planning_patterns.py --file "$plan" --strict
+            done
+          else
+            echo "Skipping strict validation (weight=$WEIGHT)"
+          fi

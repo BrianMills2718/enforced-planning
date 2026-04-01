@@ -1,6 +1,6 @@
 # Pattern: Acceptance-Gate-Driven Development
 
-A comprehensive meta-process for AI-assisted software development that ensures verified progress, prevents AI drift, and maintains thin slices.
+A comprehensive enforced-planning framework for AI-assisted software development that ensures verified progress, prevents AI drift, and maintains thin slices.
 
 ## Why This Exists: The Anti-Big-Bang Goal
 
@@ -600,7 +600,7 @@ require_approval_for_lock: true
 - [Testing Strategy](03_testing-strategy.md) - Test organization
 - [Verification Enforcement](17_verification-enforcement.md) - Proving completion
 
-## Related Meta-Process ADRs
+## Related Enforced Planning ADRs
 
 - [META-ADR-0001: Acceptance Gate Terminology](../adr/0001-acceptance-gate-terminology.md) - Why "acceptance gate" not "feature"
 - [META-ADR-0002: Thin-Slice Enforcement](../adr/0002-thin-slice-enforcement.md) - Anti-big-bang goal

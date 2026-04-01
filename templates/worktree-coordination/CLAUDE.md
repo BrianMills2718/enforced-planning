@@ -1,4 +1,4 @@
-# meta-process/templates/worktree-coordination
+# enforced-planning/templates/worktree-coordination
 
 This directory contains optional worktree-coordination templates.
 

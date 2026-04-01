@@ -1,4 +1,4 @@
-# meta-process/scripts/worktree-coordination
+# enforced-planning/scripts/worktree-coordination
 
 This directory contains the optional portable worktree-coordination scripts.
 

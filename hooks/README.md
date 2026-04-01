@@ -1,6 +1,6 @@
 # Hooks Overview
 
-This directory contains hook templates for the meta-process framework. There are two types of hooks:
+This directory contains hook templates for the enforced-planning framework. There are two types of hooks:
 
 1. **Git Hooks** - Run on git operations (commit, push)
 2. **Claude Code Hooks** - Run on Claude Code tool operations (Edit, Write, Bash, Read)
@@ -197,7 +197,7 @@ git config core.hooksPath hooks
 
 # Claude Code hooks (add to .claude/settings.json)
 mkdir -p .claude/hooks
-# Copy desired hooks from meta-process/hooks/claude/
+# Copy desired hooks from enforced-planning/hooks/claude/
 ```
 
 ## Troubleshooting

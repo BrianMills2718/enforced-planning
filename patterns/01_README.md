@@ -2,7 +2,7 @@
 
 Reusable development process patterns. Each pattern solves a specific coordination or quality problem when working with AI coding assistants (Claude Code, etc.).
 
-> **New to meta-process?** Start with the [Getting Started Guide](../GETTING_STARTED.md) for a step-by-step onboarding path.
+> **New to the enforced-planning framework?** Start with the [Getting Started Guide](../GETTING_STARTED.md) for a step-by-step onboarding path.
 
 ## Core Patterns
 

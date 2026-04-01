@@ -1,5 +1,5 @@
 #!/bin/bash
-# Meta-Process Installation Script
+# Enforced Planning Installation Script
 # Usage: ./install.sh /path/to/target/project [--minimal|--full]
 
 set -e
@@ -28,7 +28,7 @@ fi
 # Resolve target directory
 TARGET_DIR="$(cd "$TARGET_DIR" && pwd)"
 
-echo -e "${GREEN}Installing meta-process to: $TARGET_DIR${NC}"
+echo -e "${GREEN}Installing enforced-planning framework to: $TARGET_DIR${NC}"
 echo -e "Mode: $MODE"
 echo ""
 
@@ -213,12 +213,12 @@ fi
 echo "Copying Makefile targets..."
 if [[ -f "$SCRIPT_DIR/templates/Makefile.meta" ]]; then
     if [[ -f "$TARGET_DIR/Makefile" ]]; then
-        if ! grep -q "# === META-PROCESS ===" "$TARGET_DIR/Makefile"; then
+        if ! grep -q "# === META-PROCESS ===" "$TARGET_DIR/Makefile" && ! grep -q "# === ENFORCED PLANNING TARGETS ===" "$TARGET_DIR/Makefile"; then
             echo "" >> "$TARGET_DIR/Makefile"
             cat "$SCRIPT_DIR/templates/Makefile.meta" >> "$TARGET_DIR/Makefile"
-            echo -e "  ${GREEN}Appended meta-process targets to Makefile${NC}"
+            echo -e "  ${GREEN}Appended enforced-planning targets to Makefile${NC}"
         else
-            echo -e "  ${YELLOW}Skipped: Makefile (already has meta-process targets)${NC}"
+            echo -e "  ${YELLOW}Skipped: Makefile (already has enforced-planning targets)${NC}"
         fi
     else
         cp "$SCRIPT_DIR/templates/Makefile.meta" "$TARGET_DIR/Makefile"

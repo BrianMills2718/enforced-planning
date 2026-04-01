@@ -5,7 +5,7 @@
 
 ## Context
 
-The meta-process documentation used two terms interchangeably:
+The enforced-planning documentation used two terms interchangeably:
 - "Feature" - a common software development term
 - "Acceptance gate" - describing the E2E verification checkpoint
 

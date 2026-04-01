@@ -113,7 +113,7 @@ clicked around and it seemed okay.”
 | File | Purpose |
 |------|---------|
 | `docs/ops/GOVERNED_REPO_CONTRACT.md` | Ecosystem-level requirement for UI-bearing repos |
-| `meta-process/patterns/39_agent-harness-engineering.md` | Related long-running harness guidance |
+| `enforced-planning/patterns/39_agent-harness-engineering.md` | Related long-running harness guidance |
 | `Makefile` | Standard smoke and debug targets |
 | repo-local `README.md` | Documents the machine-drivable UI path for the project |
 

@@ -154,7 +154,7 @@ phase without human intervention.
 
 ## Assessment
 
-Our meta-process already covers most of what Traycer offers at the process layer. The gaps that
+Our enforced-planning framework already covers most of what Traycer offers at the process layer. The gaps that
 remain are either:
 
 1. **Enforcement gaps** — we document conventions but don't enforce them (escalation, CONTEXT.md)
@@ -193,7 +193,7 @@ Ranked by value/effort:
 
 ## Next Steps
 
-Review this document when considering meta-process improvements. The main decision points:
+Review this document when considering enforced-planning framework improvements. The main decision points:
 
 1. **Is MP-017 (CONTEXT.md) worth fixing?** If yes, the Ralph/Traycer patterns suggest: lighter
    template, workflow integration (e.g., `make pr` pulls from it), or enforcement only on branches

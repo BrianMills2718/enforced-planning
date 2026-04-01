@@ -126,7 +126,7 @@ Create an incident log when:
 Don't create an incident log for:
 - One-time issues (just fix them)
 - Issues with obvious, permanent fixes
-- Issues tracked elsewhere (use ISSUES.md for meta-process issues)
+- Issues tracked elsewhere (use ISSUES.md for enforced-planning issues)
 
 ## Examples
 

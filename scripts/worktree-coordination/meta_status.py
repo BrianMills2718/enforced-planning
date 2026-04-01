@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Meta-process status aggregator for Claude Code coordination.
+"""Enforced-planning status aggregator for Claude Code coordination.
 
 Gathers claims, PRs, plan progress, and worktree status into a single
 view. Claude Code reads this output and provides analysis/recommendations.
@@ -480,7 +480,7 @@ def identify_issues(claims: list, prs: list, plans: dict, worktrees: list, my_id
 
 
 def print_status(brief: bool = False) -> None:
-    """Print meta-process status."""
+    """Print enforced-planning status."""
     claims = get_claims()
     prs = get_open_prs()
     reviews = get_review_status()
@@ -637,7 +637,7 @@ def print_status(brief: bool = False) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Meta-process status for CC coordination")
+    parser = argparse.ArgumentParser(description="Enforced-planning status for CC coordination")
     parser.add_argument("--brief", action="store_true", help="One-line summary")
     args = parser.parse_args()
     

@@ -57,7 +57,7 @@ if echo "$COMMAND" | grep -qE '(^|&&|;|\|)\s*cd\s+["\x27]?(\./|/[^ ]*)?worktrees
     echo "  gh pr create                   # Works from any directory" >&2
     echo "  Absolute paths for reads/writes" >&2
     echo "" >&2
-    echo "See: meta-process/patterns/worktree-coordination/19_worktree-enforcement.md for why this matters." >&2
+    echo "See: enforced-planning/patterns/worktree-coordination/19_worktree-enforcement.md for why this matters." >&2
     exit 2
 fi
 

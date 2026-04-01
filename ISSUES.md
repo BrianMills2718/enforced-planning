@@ -1,6 +1,6 @@
-# Meta-Process Issues
+# Enforced Planning Issues
 
-Observed problems, concerns, and technical debt for the meta-process framework itself.
+Observed problems, concerns, and technical debt for the enforced-planning framework itself.
 
 Items start as **unconfirmed** observations and get triaged through investigation into
 confirmed issues, plans, or dismissed.
@@ -203,7 +203,7 @@ between CC instances become common.
 
 **Update (2026-03-21):** Canonical project-meta now has 161 tests covering
 audit, hook wiring, plan validation, install, subtree audit, and governance
-scripts. The portable meta-process scripts still have lower coverage than the
+scripts. The portable enforced-planning scripts still have lower coverage than the
 project-meta-specific tooling. Original plan #248 reference is from
 agent_ecology2 and is not ported.
 
@@ -245,7 +245,7 @@ Step 3). The new installer:
   AGENTS.md, and re-audits in one command
 - does not have the CWD, duplication, or hardcoding issues from the original
 
-The portable `install.sh` in meta-process still exists for framework-only
+The portable `install.sh` in enforced-planning still exists for framework-only
 installations but is no longer the primary governed-repo installer.
 
 | ID | Description | Resolution | Date |
@@ -280,7 +280,7 @@ installations but is no longer the primary governed-repo installer.
 4. **Not actually a problem?** Move to Dismissed with reasoning
 5. **Watching a concern?** Move to Monitoring with trigger conditions
 
-This file tracks issues with the **meta-process framework itself**, not the
+This file tracks issues with the **enforced-planning framework itself**, not the
 agent_ecology2 system. For system-level issues, see `docs/CONCERNS.md` and
 `docs/architecture/TECH_DEBT.md`.
 

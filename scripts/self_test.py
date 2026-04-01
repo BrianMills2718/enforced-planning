@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Self-test for the meta-process framework.
+"""Self-test for the enforced-planning framework.
 
 Verifies internal consistency:
 1. File existence - all files referenced by install.sh actually exist
@@ -7,10 +7,10 @@ Verifies internal consistency:
 3. Install test - install to temp dir, make a commit, verify hooks work
 
 Usage:
-    python meta-process/scripts/self_test.py              # All checks
-    python meta-process/scripts/self_test.py --files       # File existence only
-    python meta-process/scripts/self_test.py --links       # Link checker only
-    python meta-process/scripts/self_test.py --install     # Install test only
+    python enforced-planning/scripts/self_test.py              # All checks
+    python enforced-planning/scripts/self_test.py --files       # File existence only
+    python enforced-planning/scripts/self_test.py --links       # Link checker only
+    python enforced-planning/scripts/self_test.py --install     # Install test only
 """
 
 import argparse
@@ -378,7 +378,7 @@ def _run(cmd: list[str]) -> subprocess.CompletedProcess[str]:
 
 def main() -> None:
     """Parse CLI flags and run selected self-test checks."""
-    parser = argparse.ArgumentParser(description="Meta-process framework self-test")
+    parser = argparse.ArgumentParser(description="Enforced-planning framework self-test")
     parser.add_argument("--files", action="store_true", help="File existence check only")
     parser.add_argument("--links", action="store_true", help="Link checker only")
     parser.add_argument("--install", action="store_true", help="Install test only")

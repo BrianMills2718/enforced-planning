@@ -48,7 +48,7 @@ confidence scores for Brian's review.
 ## Files
 
 - `scripts/ecosystem_sweep.py` — Quantitative signal detection
-- `meta-process/scripts/check_dead_code.py` — Dead code detection
+- `enforced-planning/scripts/check_dead_code.py` — Dead code detection
 - `ops/openclaw/task_planner.py` — Generates tasks from signals
 
 ## Requires

@@ -2,9 +2,9 @@
 
 ## Problem
 
-You want an external LLM (Gemini, GPT, etc.) with a large context window to review your codebase or meta-process. But repos contain a mix of:
+You want an external LLM (Gemini, GPT, etc.) with a large context window to review your codebase or enforced-planning framework. But repos contain a mix of:
 - **Core system** — the actual code and architecture docs
-- **Meta-process** — coordination tooling for CC instances
+- **Enforced planning** — coordination tooling for CC instances
 - **Infrastructure** — dependencies, build artifacts, runtime output
 
 Dumping everything into context wastes tokens and confuses the reviewer.
@@ -18,7 +18,7 @@ Use [repomix](https://github.com/yamadashy/repomix) with curated config files th
 | Config | Purpose | Typical size |
 |--------|---------|--------------|
 | `repomix.core.json` | System code + architecture docs | ~200-300K tokens |
-| `repomix.meta-process.json` | Meta-process patterns + scripts | ~100-150K tokens |
+| `repomix.meta-process.json` | Enforced-planning patterns + scripts | ~100-150K tokens |
 
 ### Usage
 
@@ -27,7 +27,7 @@ Use [repomix](https://github.com/yamadashy/repomix) with curated config files th
 npx repomix --config repomix.core.json
 # Output: repomix-core.md
 
-# Generate meta-process bundle
+# Generate enforced-planning bundle
 npx repomix --config repomix.meta-process.json
 # Output: repomix-meta-process.md
 ```
@@ -43,10 +43,10 @@ Upload the generated `.md` file to your external LLM.
 - `config/` — runtime configuration
 - `docs/GLOSSARY.md` — terminology
 
-**Meta-process review:**
-- `meta-process/patterns/` — all patterns
-- `meta-process/scripts/` — coordination scripts
-- `meta-process/hooks/` — hook implementations
+**Enforced-planning review:**
+- `enforced-planning/patterns/` — all patterns
+- `enforced-planning/scripts/` — coordination scripts
+- `enforced-planning/hooks/` — hook implementations
 - `CLAUDE.md` — CC instructions
 - `Makefile` — workflow commands
 - `meta-process.yaml` — enforcement config

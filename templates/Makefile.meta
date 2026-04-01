@@ -1,5 +1,5 @@
-# === META-PROCESS TARGETS ===
-# Added by meta-process install.sh
+# === ENFORCED PLANNING TARGETS ===
+# Added by enforced-planning install.sh
 
 # Configuration
 SCRIPTS_META := scripts/meta
@@ -89,8 +89,8 @@ dead-code:  ## Run dead code detection
 # --- Help ---
 .PHONY: help-meta
 
-help-meta:  ## Show meta-process targets
-	@echo "Meta-Process Targets:"
+help-meta:  ## Show enforced-planning targets
+	@echo "Enforced Planning Targets:"
 	@echo ""
 	@echo "  Session:"
 	@echo "    status          Show git status"

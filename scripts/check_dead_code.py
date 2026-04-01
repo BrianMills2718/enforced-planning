@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Dead code sensor for meta-process framework.
+"""Dead code sensor for enforced-planning framework.
 
 Wraps vulture (Python) and knip (TypeScript) to detect unused code.
 Reads config from meta-process.yaml quality.dead_code section.

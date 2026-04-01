@@ -6,7 +6,7 @@
 #
 # Exceptions (allowed in main):
 #   - Coordination files (.claude/*, CLAUDE.md, .git/*, .claude_session)
-#   - Meta-process docs (meta/patterns/*.md) - process patterns, not implementation
+#   - Enforced-planning docs (patterns/*.md) - process patterns, not implementation
 #   - Plan files (docs/plans/NN_*.md) - if NEW or UNCLAIMED
 #   - Files in claimed worktrees (worktrees/XXX/*) - if XXX has a claim
 #

@@ -52,7 +52,7 @@ Categorize the uncertainty:
 |----------|-------------|-----------------|
 | Architecture | Affects system design | ADR |
 | Implementation | How to build something | Test empirically |
-| Process | How we work | Meta-process pattern |
+| Process | How we work | Enforced-planning pattern |
 | Specification | What we're building | Update PRD/domain model |
 | Trivial | Low-impact choice | Just decide |
 
@@ -77,8 +77,8 @@ cp docs/adr/TEMPLATE.md docs/adr/00XX_decision_name.md
 - Choose based on evidence
 
 **Process:**
-- If reusable: Create new pattern in `meta-process/patterns/`
-- If one-off: Document in `meta-process/ISSUES.md` with resolution
+- If reusable: Create new pattern in `enforced-planning/patterns/`
+- If one-off: Document in `enforced-planning/ISSUES.md` with resolution
 
 **Specification:**
 - Update the source doc (PRD, domain model, ontology)
@@ -139,14 +139,14 @@ After resolution:
 
 ---
 
-## Meta-Meta-Process
+## Meta-Pattern
 
-This pattern is itself part of how we improve the meta-process:
+This pattern is itself part of how we improve the enforced-planning framework:
 
 1. When working on any project, uncertainties about process arise
 2. Resolve them using this pattern
 3. If resolution is reusable, create a new pattern
-4. The meta-process improves incrementally through use
+4. The enforced-planning framework improves incrementally through use
 
 This is how Pattern #33 was created - by encountering uncertainty handling as an uncertainty during Plan #294.
 
@@ -155,5 +155,5 @@ This is how Pattern #33 was created - by encountering uncertainty handling as an
 ## References
 
 - `docs/DESIGN_CLARIFICATIONS.md` - Decision rationale archive
-- `meta-process/ISSUES.md` - Meta-process gaps
+- `enforced-planning/ISSUES.md` - Enforced-planning gaps
 - `docs/adr/TEMPLATE.md` - ADR template

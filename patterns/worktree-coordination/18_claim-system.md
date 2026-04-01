@@ -61,7 +61,7 @@ python scripts/check_claims.py --list-features
 #   - contracts
 #   - escrow
 #   - ledger
-#   - meta-process-tooling
+#   - enforced-planning-tooling
 # Files mapped to features: 9
 ```
 

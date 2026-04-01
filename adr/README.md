@@ -1,10 +1,10 @@
-# Meta-Process Architecture Decision Records
+# Enforced Planning Architecture Decision Records
 
-ADRs for the meta-process patterns themselves, not the agent ecology system.
+ADRs for the enforced-planning patterns themselves, not the agent ecology system.
 
-## Why Meta-Process ADRs?
+## Why Enforced Planning ADRs?
 
-The meta-process documentation (`docs/meta/`) defines reusable development patterns for AI-assisted projects. Like any architecture, these patterns involve decisions with tradeoffs that should be documented.
+The enforced-planning documentation defines reusable development patterns for AI-assisted projects. Like any architecture, these patterns involve decisions with tradeoffs that should be documented.
 
 Without ADRs:
 - Decisions get lost or forgotten
@@ -15,7 +15,7 @@ Without ADRs:
 ## Scope
 
 These ADRs cover decisions about:
-- Terminology choices for the meta-process
+- Terminology choices for the enforced-planning framework
 - Process structure and hierarchy
 - Enforcement mechanisms
 - Documentation organization
@@ -38,7 +38,7 @@ They do NOT cover:
 
 ## Format
 
-Meta-process ADRs follow the same format as system ADRs:
+Enforced-planning ADRs follow the same format as system ADRs:
 
 ```markdown
 # META-ADR-NNNN: Title
@@ -58,4 +58,4 @@ What becomes easier or more difficult to do because of this change?
 
 ## Portability
 
-These ADRs travel with the meta-process patterns. When adopting the patterns for another project, the ADRs explain the reasoning behind process decisions.
+These ADRs travel with the enforced-planning patterns. When adopting the patterns for another project, the ADRs explain the reasoning behind process decisions.

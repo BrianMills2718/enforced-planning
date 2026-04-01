@@ -1,4 +1,4 @@
-# meta-process/patterns/worktree-coordination
+# enforced-planning/patterns/worktree-coordination
 
 This subtree contains the optional portable worktree-coordination patterns.
 

@@ -19,7 +19,7 @@ All **portable** automation and control-plane tooling should resolve project pat
 
 ### Rule
 
-- **Portable set**: tools under `project-meta/scripts`, `meta-process`, and workspace bootstrap scripts should avoid hardcoded `~/projects` / `/home/brian/projects` references.
+- **Portable set**: tools under `project-meta/scripts`, `enforced-planning`, and workspace bootstrap scripts should avoid hardcoded `~/projects` / `/home/brian/projects` references.
 - **Legacy compatibility exception**: existing non-portable scripts in active projects may keep current references until migrated.
 - **Source of truth**: project paths come from `PROJECT_GRAPH.json` or `PROJECTS_ROOT + project id/name`.
 - **Validation**: add advisory checks that report hardcoded root usage in candidate portable tooling.

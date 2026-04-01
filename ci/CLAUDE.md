@@ -1,6 +1,6 @@
-# meta-process/ci
+# enforced-planning/ci
 
-This directory holds portable CI templates for the meta-process framework.
+This directory holds portable CI templates for the enforced-planning framework.
 
 ## Use This Directory For
 

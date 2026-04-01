@@ -1,7 +1,7 @@
-# meta-process/adr
+# enforced-planning/adr
 
 This directory contains framework-level architecture decision records for the
-portable meta-process.
+portable enforced-planning framework.
 
 ## Use This Directory For
 

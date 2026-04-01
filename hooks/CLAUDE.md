@@ -1,6 +1,6 @@
-# meta-process/hooks
+# enforced-planning/hooks
 
-This subtree contains the portable hook templates for the meta-process
+This subtree contains the portable hook templates for the enforced-planning
 framework.
 
 ## Route Narrower Work

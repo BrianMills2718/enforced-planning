@@ -1,4 +1,4 @@
-# Meta-Process: AI-Assisted Development Framework
+# Enforced Planning: AI-Assisted Development Framework
 
 A portable framework for coordinating AI coding assistants (Claude Code, etc.) on shared codebases.
 
@@ -95,7 +95,7 @@ planning:
 - `warn` means keep blocked probes visible but non-blocking
 - `ignore` means record probe evidence but do not use it in gating decisions
 
-Meta-process owns the vocabulary. Each project decides how to map that policy
+The enforced-planning framework owns the vocabulary. Each project decides how to map that policy
 into its own artifacts and gates.
 
 ## Directory Structure (After Install)
@@ -103,12 +103,12 @@ into its own artifacts and gates.
 ```
 your-project/
 ├── meta-process.yaml        # Your configuration
-├── meta-process/            # Portable framework (copy this to new projects)
+├── enforced-planning/       # Portable framework (copy this to new projects)
 │   ├── scripts/             # Baseline scripts (portable)
 │   ├── patterns/            # Pattern documentation
 │   │   └── worktree-coordination/  # Optional multi-CC module
 │   └── hooks/               # Hook templates
-├── scripts/                 # Project-specific scripts (may extend meta-process/)
+├── scripts/                 # Project-specific scripts (may extend enforced-planning/)
 ├── docs/
 │   └── plans/               # Implementation plans
 ├── hooks/                   # Git hooks
@@ -122,13 +122,13 @@ The framework separates **portable** scripts from **project-specific** extension
 
 | Directory | Purpose | When to Modify |
 |-----------|---------|----------------|
-| `meta-process/scripts/` | Baseline scripts that work in any project | Never (modify upstream) |
+| `enforced-planning/scripts/` | Baseline scripts that work in any project | Never (modify upstream) |
 | `scripts/` | Project-specific scripts that extend the baseline | Add features specific to your project |
 
-**When adopting meta-process:**
-1. Copy `meta-process/` directory to your project
+**When adopting the enforced-planning framework:**
+1. Copy `enforced-planning/` directory to your project
 2. Create project-specific scripts in `scripts/` as needed
-3. Project scripts can import from meta-process or replace them entirely
+3. Project scripts can import from enforced-planning or replace them entirely
 
 ## Full Documentation
 

@@ -11,7 +11,7 @@ Two naive strategies both fail:
 1. **Read everything** — doesn't fit, and most of it is irrelevant to the current task
 2. **Read only the target file** — gives fragments without structural understanding. You can edit `executor.py` correctly only if you understand how it relates to `permission_checker.py`, `contracts.py`, `ledger.py`, and the artifact system. But you shouldn't have to read all of them.
 
-The meta-process framework accumulated several documentation layers over time — glossary, ontology, domain models, ADRs, architecture docs, PRDs. These were initially justified as "good documentation practice." But their real value is something different.
+The enforced-planning framework accumulated several documentation layers over time — glossary, ontology, domain models, ADRs, architecture docs, PRDs. These were initially justified as "good documentation practice." But their real value is something different.
 
 ## Decision
 

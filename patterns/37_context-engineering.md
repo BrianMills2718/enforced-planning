@@ -93,4 +93,4 @@ Both Anthropic and OpenAI independently converged on the same guidance: plan bef
 
 ## Origin
 
-Synthesized from Anthropic's "Effective Context Engineering for AI Agents" (2026), OpenAI's "Harness Engineering" and Codex best practices, Anthropic's "Advanced Tool Use" engineering blog, Chroma Research on context rot, and practical experience across 70+ projects in Brian's workspace. Formalized as a meta-process pattern after discovering that context management failures were the root cause of most agent quality issues.
+Synthesized from Anthropic's "Effective Context Engineering for AI Agents" (2026), OpenAI's "Harness Engineering" and Codex best practices, Anthropic's "Advanced Tool Use" engineering blog, Chroma Research on context rot, and practical experience across 70+ projects in Brian's workspace. Formalized as an enforced-planning pattern after discovering that context management failures were the root cause of most agent quality issues.

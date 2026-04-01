@@ -298,16 +298,16 @@ Resolution: Primary gate's ADRs apply. Both gates' tests must pass.
 
 ## Related Patterns
 
-- [Acceptance-Gate-Driven Development](13_acceptance-gate-driven-development.md) - The complete meta-process
+- [Acceptance-Gate-Driven Development](13_acceptance-gate-driven-development.md) - The complete enforced-planning framework
 - [ADR Governance](08_adr-governance.md) - Now derived from gates
 - [Doc-Code Coupling](10_doc-code-coupling.md) - Now derived from gates
 - [Documentation Graph](09_documentation-graph.md) - Gates as nodes
 
-## Related Meta-Process ADRs
+## Related Enforced Planning ADRs
 
 - [META-ADR-0001: Acceptance Gate Terminology](../adr/0001-acceptance-gate-terminology.md) - Why "acceptance gate" not "feature"
 - [META-ADR-0004: Gate YAML Is Documentation](../adr/0004-gate-yaml-is-documentation.md) - YAML as single source
 
 ## Origin
 
-Identified during meta-process design when analyzing why ADR conformance checking would fail - the linkage from files to ADRs was too sparse to be useful. Gate-centric organization provides complete coverage.
+Identified during enforced-planning framework design when analyzing why ADR conformance checking would fail - the linkage from files to ADRs was too sparse to be useful. Gate-centric organization provides complete coverage.

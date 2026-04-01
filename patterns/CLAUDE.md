@@ -1,6 +1,6 @@
-# meta-process/patterns
+# enforced-planning/patterns
 
-This directory contains the canonical portable meta-process patterns.
+This directory contains the canonical portable enforced-planning patterns.
 
 ## Use This Directory For
 

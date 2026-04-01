@@ -1,4 +1,4 @@
-# Meta-Process CI Workflow Template
+# Enforced Planning CI Workflow Template
 # Copy to .github/workflows/ci.yml and customize for your project
 
 name: CI
@@ -76,7 +76,7 @@ jobs:
       - run: mypy src/ --ignore-missing-imports
 
   # =============================================================================
-  # Meta-Process Checks (customize based on meta-process.yaml)
+  # Enforced Planning Checks (customize based on meta-process.yaml)
   # =============================================================================
   meta-checks:
     runs-on: ubuntu-latest

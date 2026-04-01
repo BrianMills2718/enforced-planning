@@ -1,4 +1,4 @@
-# Meta-Process Configuration — Docs-Only Variant
+# Enforced Planning Configuration — Docs-Only Variant
 # For documentation/governance repos (no src/, no pytest, no mypy)
 
 meta_process:

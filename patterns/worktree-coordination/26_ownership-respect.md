@@ -46,7 +46,7 @@ Root cause: CC instances default to being helpful by fixing problems they see, w
 1. Add Priority 0 to CLAUDE.md Work Priorities section
 2. Ensure meta_status.py shows owner/yours info
 3. Update /proceed skill to require ownership check
-4. Add this pattern doc to meta-process/patterns/
+4. Add this pattern doc to enforced-planning/patterns/
 
 ## Usage
 

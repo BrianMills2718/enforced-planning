@@ -44,5 +44,5 @@ in `scripts/worktree-coordination/`:
 ## Configuration
 
 Edit config files in repo root to customize behavior:
-- `meta-process.yaml` - Meta-process settings
+- `meta-process.yaml` - Enforced-planning settings
 - `scripts/relationships.yaml` - Doc-code mappings

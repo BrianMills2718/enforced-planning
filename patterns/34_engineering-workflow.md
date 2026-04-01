@@ -70,7 +70,7 @@ Implementation includes incremental user walkthrough, scaled by risk:
 |-----------|------------------------|------|
 | High | Per-change | Core system modifications (`src/world/`) |
 | Medium | Per-file | Supporting code, config, agents |
-| Low | Batch at end | Docs, meta-process, test updates |
+| Low | Batch at end | Docs, enforced-planning, test updates |
 
 User can override the level per task.
 

@@ -24,7 +24,7 @@ Formalize gap analysis as a repeatable, methodology-driven process:
 
 | Trigger | Scope | Why |
 |---------|-------|-----|
-| **Bootstrap** | Full (all workstreams) | Applying meta-process to existing codebase |
+| **Bootstrap** | Full (all workstreams) | Applying enforced-planning framework to existing codebase |
 | **Target architecture changes** | Affected workstreams | New vision creates new gaps |
 | **Major milestone** | Focused re-check | Implementation may have drifted from plan |
 | **Current architecture update** | Affected workstreams | Better understanding reveals hidden gaps |

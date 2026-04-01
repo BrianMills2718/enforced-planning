@@ -1,4 +1,4 @@
-# meta-process/hooks/git
+# enforced-planning/hooks/git
 
 This directory contains portable git hook templates.
 

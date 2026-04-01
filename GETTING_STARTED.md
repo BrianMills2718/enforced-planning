@@ -1,10 +1,10 @@
-# Getting Started with Meta-Process
+# Getting Started with Enforced Planning
 
-A step-by-step guide to adopting the meta-process framework for AI-assisted development.
+A step-by-step guide to adopting the enforced-planning framework for AI-assisted development.
 
-## What is Meta-Process?
+## What is Enforced Planning?
 
-Meta-process is a collection of patterns for coordinating AI coding assistants (Claude Code, Cursor, etc.) on shared codebases. It solves problems like:
+Enforced planning is a collection of patterns for coordinating AI coding assistants (Claude Code, Cursor, etc.) on shared codebases. It solves problems like:
 
 - **Context loss** - AI forgetting project conventions mid-session
 - **Documentation drift** - Docs diverging from code over time

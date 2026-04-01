@@ -178,7 +178,7 @@ The hook allows editing **coordination files** even in main directory:
 |---------|-------|-------------|
 | `*/.claude/*` | `.claude/active-work.yaml` | Claims tracking |
 | `CLAUDE.md` | All `CLAUDE.md` files | Coordination tables, plan status |
-| `meta-process/patterns/*.md` | Meta-process patterns | Process docs, not implementation |
+| `enforced-planning/patterns/*.md` | Enforced-planning patterns | Process docs, not implementation |
 
 This enables the "Reviews, quick reads, coordination only" workflow in main while blocking implementation work.
 

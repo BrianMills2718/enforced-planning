@@ -7,7 +7,7 @@
 # This fires on Read|Glob (the first tools any session uses).
 # Bash commands are NOT blocked — so the model can run 'cd' to fix itself.
 #
-# See meta-process/CWD_INCIDENT_LOG.md (Incident #3) for why this blocks
+# See enforced-planning/CWD_INCIDENT_LOG.md (Incident #3) for why this blocks
 # instead of warning.
 #
 # Exit codes:

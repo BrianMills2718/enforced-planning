@@ -1,4 +1,4 @@
-# meta-process/hooks/claude
+# enforced-planning/hooks/claude
 
 This directory contains portable Claude Code hook templates.
 

@@ -1,4 +1,4 @@
-# meta-process/templates
+# enforced-planning/templates
 
 This directory contains portable scaffolding templates installed into governed
 repos.

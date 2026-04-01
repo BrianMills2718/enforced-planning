@@ -1,5 +1,5 @@
 #!/bin/bash
-# Pre-commit hook (portable meta-process template)
+# Pre-commit hook (portable enforced-planning template)
 # Each check only runs if its script is installed.
 # Install via: meta-process/install.sh
 

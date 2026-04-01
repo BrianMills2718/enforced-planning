@@ -1,7 +1,7 @@
-# meta-process/scripts
+# enforced-planning/scripts
 
 This directory contains the portable baseline scripts shipped by the
-meta-process framework.
+enforced-planning framework.
 
 ## Use This Directory For
 

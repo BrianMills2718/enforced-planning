@@ -29,7 +29,7 @@ Key principles:
 2. "Complete" means "gate passed", not "code written"
 3. Working for days without E2E verification is an anti-pattern
 
-The meta-process documentation must prominently explain this motivation.
+The enforced-planning documentation must prominently explain this motivation.
 
 ## Consequences
 

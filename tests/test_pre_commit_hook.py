@@ -9,7 +9,7 @@ from pathlib import Path
 
 
 PROJECT_META_ROOT = Path(__file__).resolve().parents[1]
-HOOK_SCRIPT = PROJECT_META_ROOT / "hooks" / "pre-commit"
+HOOK_SCRIPT = PROJECT_META_ROOT / "hooks" / "git" / "pre-commit"
 
 
 def test_pre_commit_hook_invokes_doc_coupling_in_staged_mode(tmp_path: Path) -> None:

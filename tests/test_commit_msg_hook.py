@@ -8,7 +8,7 @@ import textwrap
 from pathlib import Path
 
 PROJECT_META_ROOT = Path(__file__).resolve().parents[1]
-HOOK_SCRIPT = PROJECT_META_ROOT / "hooks" / "commit-msg"
+HOOK_SCRIPT = PROJECT_META_ROOT / "hooks" / "git" / "commit-msg"
 
 
 def _run_hook(

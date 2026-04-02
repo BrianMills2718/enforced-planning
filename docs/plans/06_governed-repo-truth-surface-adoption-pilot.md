@@ -94,6 +94,7 @@ checks?
   - config-declared surface paths must resolve relative to the config file
   - renderer import path must not assume execution from the framework repo root
 - Recommendation after the first pilot: default workflow wiring should remain advisory until repo-local scoping is added and broader registry hygiene is improved.
+- Follow-on update from Plan #9: repo-local scoping was added and materially improved local signal, so scoped mode is now the right default operator view for repo-local runs while unscoped mode remains the broader ecosystem hygiene view.
 
 ## Open Questions
 

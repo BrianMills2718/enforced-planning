@@ -73,10 +73,22 @@ CORE_SCRIPTS=(
     "generate_quiz.py"
 )
 
+TRUTH_SURFACE_SCRIPTS=(
+    "check_truth_surface_drift.py"
+    "render_truth_surface_status.py"
+)
+
 for script in "${CORE_SCRIPTS[@]}"; do
     if [[ -f "$SCRIPT_DIR/scripts/$script" ]]; then
         cp "$SCRIPT_DIR/scripts/$script" "$TARGET_DIR/scripts/meta/"
         echo -e "  ${GREEN}Copied: scripts/meta/$script${NC}"
+    fi
+done
+
+for script in "${TRUTH_SURFACE_SCRIPTS[@]}"; do
+    if [[ -f "$SCRIPT_DIR/scripts/$script" ]]; then
+        cp "$SCRIPT_DIR/scripts/$script" "$TARGET_DIR/scripts/"
+        echo -e "  ${GREEN}Copied: scripts/$script${NC}"
     fi
 done
 
@@ -193,6 +205,13 @@ fi
 if [[ ! -f "$TARGET_DIR/ISSUES.md" ]]; then
     cp "$SCRIPT_DIR/templates/issues.md.template" "$TARGET_DIR/ISSUES.md"
     echo -e "  ${GREEN}Created: ISSUES.md${NC}"
+fi
+
+if [[ ! -f "$TARGET_DIR/truth_surface_drift.yaml.example" ]]; then
+    if [[ -f "$SCRIPT_DIR/templates/truth_surface_drift.yaml.example" ]]; then
+        cp "$SCRIPT_DIR/templates/truth_surface_drift.yaml.example" "$TARGET_DIR/truth_surface_drift.yaml.example"
+        echo -e "  ${GREEN}Created: truth_surface_drift.yaml.example${NC}"
+    fi
 fi
 
 if [[ "$MODE" == "--full" ]]; then

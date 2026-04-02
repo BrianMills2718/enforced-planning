@@ -60,8 +60,11 @@ planning:
 ### Step 1: Install
 
 ```bash
-# From the enforced-planning repo root, targeting your project root
-./install.sh . --minimal
+# From the enforced-planning repo root, targeting a consumer project
+./install.sh /path/to/your/project --minimal
+
+# Or from inside the consumer project
+~/projects/enforced-planning/install.sh . --minimal
 ```
 
 This creates:
@@ -69,7 +72,8 @@ This creates:
 - `docs/plans/` - Work tracking
 - `hooks/` - Git hooks
 - `.claude/hooks/` - Claude Code hooks
-- `scripts/` - Utility scripts
+- `scripts/` - Utility scripts, including truth-surface tools
+- `truth_surface_drift.yaml.example` - Optional truth-surface scaffold
 
 ### Step 2: Configure
 
@@ -117,12 +121,12 @@ If that worked, you're ready!
 ### Step 5: Optional Truth-Surface Validation
 
 For repos with runtime coordination, rollout trackers, or reservation state,
-create a repo-local config from `templates/truth_surface_drift.yaml.example` and
-run:
+copy `truth_surface_drift.yaml.example` to a repo-local config and run:
 
 ```bash
-python scripts/check_truth_surface_drift.py --config path/to/truth_surface_drift.yaml
-python scripts/render_truth_surface_status.py --config path/to/truth_surface_drift.yaml
+cp truth_surface_drift.yaml.example truth_surface_drift.yaml
+python scripts/check_truth_surface_drift.py --config truth_surface_drift.yaml
+python scripts/render_truth_surface_status.py --config truth_surface_drift.yaml
 ```
 
 This gives you a generated current-state summary driven by measured surfaces

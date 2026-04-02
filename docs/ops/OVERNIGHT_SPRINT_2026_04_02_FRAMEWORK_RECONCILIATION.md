@@ -1,6 +1,6 @@
 # Overnight Sprint — 2026-04-02 — Framework Truth-Surface Reconciliation
 
-**Status:** In Progress
+**Status:** Complete
 **Owner:** codex
 **Primary Plan:** `docs/plans/10_framework-truth-surface-and-onboarding-reconciliation.md`
 **Underlying Goal:** make the framework's onboarding, installer behavior, and internal truth surfaces agree before the next adoption or semantic-review wave
@@ -43,13 +43,13 @@ Success criteria:
 
 ## Current Phase
 
-- Active phase: Phase B
-- Next action: reconcile `install.sh`, `README.md`, `GETTING_STARTED.md`, and the truth-surface template so consumer onboarding matches reality
+- Active phase: Complete
+- Next action: start `docs/plans/11_semantic-truth-surface-review-execution-sprint.md` before implementing the optional semantic-review layer
 
 ## Open Uncertainties
 
-- Whether repo-local truth-surface tooling should be fully copied into governed repos or documented as framework-root invocation only. Working assumption for this sprint: copy the scripts/template into governed repos because the existing docs already present repo-local execution.
+- None. The installer/consumer-doc direction for truth-surface tooling was resolved inside this sprint: repo-local scripts plus repo-local scaffold.
 
 ## Rollback Points
 
-- `pending` — sprint contract + active tracker wiring
+- `a4ad670` — sprint contract + active tracker wiring

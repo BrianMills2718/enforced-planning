@@ -1,6 +1,6 @@
 # Plan #10: Framework Truth-Surface and Onboarding Reconciliation
 
-**Status:** In Progress
+**Status:** Complete
 **Type:** implementation
 **Priority:** High
 **Blocked By:** None
@@ -120,17 +120,17 @@ Success criteria:
 
 ## Acceptance Criteria
 
-- [ ] Root `CLAUDE.md` points to this sprint while it is active.
-- [ ] README and getting-started guidance match the real installer behavior.
-- [ ] The installer copies or clearly delegates any truth-surface assets the docs tell adopters to use.
-- [ ] Scoped-sprint tracker/TODO surfaces are truthfully closed.
-- [ ] Plans #6 and #8 reflect the measured scoped follow-on instead of freezing at the pre-scope recommendation.
-- [ ] Plan #1 is restated in the current capability/boundary vocabulary.
-- [ ] The next bounded follow-on after this cleanup is explicit.
+- [x] Root `CLAUDE.md` points to this sprint while it is active.
+- [x] README and getting-started guidance match the real installer behavior.
+- [x] The installer copies or clearly delegates any truth-surface assets the docs tell adopters to use.
+- [x] Scoped-sprint tracker/TODO surfaces are truthfully closed.
+- [x] Plans #6 and #8 reflect the measured scoped follow-on instead of freezing at the pre-scope recommendation.
+- [x] Plan #1 is restated in the current capability/boundary vocabulary.
+- [x] The next bounded follow-on after this cleanup is explicit.
 
 ---
 
 ## Open Questions
 
-- [ ] Should truth-surface scripts be installed directly into governed repos, or should the framework docs switch to framework-root invocation instead?
-      - Working assumption for this sprint: install the truth-surface scripts and template into governed repos so the docs remain repo-local and operational.
+- [x] Should truth-surface scripts be installed directly into governed repos, or should the framework docs switch to framework-root invocation instead?
+      - Resolved in this sprint: install the truth-surface scripts and scaffold into governed repos so the docs remain repo-local and operational.

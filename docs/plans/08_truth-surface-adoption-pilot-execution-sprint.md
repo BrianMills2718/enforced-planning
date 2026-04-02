@@ -122,6 +122,9 @@ Success criteria:
 
 ## Open Questions
 
-- [ ] Should the first pilot prefer the cleanest governed repo or the most coordination-heavy governed repo when those differ?
-- [ ] Does a canonical-root `!! ACTIVE (no claim)` warning in the target repo require a pilot blocker, or is a claimed clean worktree sufficient for the first slice?
-- [ ] Which pilot findings are strong enough to justify default workflow wiring before any semantic LLM layer exists?
+- [x] Should the first pilot prefer the cleanest governed repo or the most coordination-heavy governed repo when those differ?
+      - Resolved during Plan #8 / Plan #6: clean governed repo first (`prompt_eval`) so framework ergonomics are measurable before coordination-heavy noise dominates.
+- [x] Does a canonical-root `!! ACTIVE (no claim)` warning in the target repo require a pilot blocker, or is a claimed clean worktree sufficient for the first slice?
+      - Resolved during Plan #8: a claimed clean worktree was sufficient for the first pilot slice.
+- [x] Which pilot findings are strong enough to justify default workflow wiring before any semantic LLM layer exists?
+      - Resolved by Plan #9: scoped repo-local validation is now the right default operator view, while broader default workflow wiring beyond advisory mode still remains a separate follow-on decision.

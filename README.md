@@ -31,9 +31,10 @@ capabilities, plans, notebooks, tests, code, and observability fit together is
 ./install.sh /path/to/your/project
 
 # 2. Configure what patterns to enable
-vim meta-process.yaml
+vim /path/to/your/project/meta-process.yaml
 
 # 3. Start using
+cd /path/to/your/project
 git checkout -b plan-N-description   # Create feature branch
 # ... do work ...
 make pr-auto-check && make pr-auto   # Non-interactive ship
@@ -106,33 +107,32 @@ into its own artifacts and gates.
 
 ```
 your-project/
-├── meta-process.yaml        # Your configuration
-├── enforced-planning/       # Portable framework (copy this to new projects)
-│   ├── scripts/             # Baseline scripts (portable)
-│   ├── patterns/            # Pattern documentation
-│   │   └── worktree-coordination/  # Optional multi-CC module
-│   └── hooks/               # Hook templates
-├── scripts/                 # Project-specific scripts (may extend enforced-planning/)
+├── meta-process.yaml                # Your configuration
+├── truth_surface_drift.yaml.example # Optional truth-surface scaffold
+├── scripts/
+│   ├── check_truth_surface_drift.py # Repo-local truth-surface validator
+│   ├── render_truth_surface_status.py
+│   └── meta/                        # Baseline enforced-planning scripts
 ├── docs/
-│   └── plans/               # Implementation plans
-├── hooks/                   # Git hooks
+│   ├── plans/                       # Implementation plans
+│   └── meta-patterns/               # Copied pattern documentation
+├── hooks/                           # Git hooks
 └── .claude/
-    └── hooks/               # Claude Code hooks
+    └── hooks/                       # Claude Code hooks
 ```
 
 ## Portable vs. Project-Specific Scripts
 
-The framework separates **portable** scripts from **project-specific** extensions:
+The installer copies portable framework scripts directly into the governed repo.
+Use these conventions after install:
 
 | Directory | Purpose | When to Modify |
 |-----------|---------|----------------|
-| `enforced-planning/scripts/` | Baseline scripts that work in any project | Never (modify upstream) |
-| `scripts/` | Project-specific scripts that extend the baseline | Add features specific to your project |
+| `scripts/meta/` | Baseline enforced-planning workflow scripts copied from the framework | Modify upstream in `enforced-planning`, then re-install or replay intentionally |
+| `scripts/` | Repo-local entrypoints and project-specific scripts | Add repo-specific tools here |
 
-**When adopting the enforced-planning framework:**
-1. Copy `enforced-planning/` directory to your project
-2. Create project-specific scripts in `scripts/` as needed
-3. Project scripts can import from enforced-planning or replace them entirely
+Truth-surface tools are installed as top-level `scripts/*.py` because they are
+meant to be invoked directly from the governed repo root.
 
 ## Truth-Surface Validation Workflow
 
@@ -140,8 +140,9 @@ For coordination-heavy repos, keep one config file that names the active tracker
 plan index, runtime registry, and any measured audit surface.
 
 ```bash
-python scripts/check_truth_surface_drift.py --config path/to/truth_surface_drift.yaml
-python scripts/render_truth_surface_status.py --config path/to/truth_surface_drift.yaml
+cp truth_surface_drift.yaml.example truth_surface_drift.yaml
+python scripts/check_truth_surface_drift.py --config truth_surface_drift.yaml
+python scripts/render_truth_surface_status.py --config truth_surface_drift.yaml
 ```
 
 Use the validator to detect contradictions. Use the renderer to produce a compact
@@ -158,7 +159,7 @@ A later optional LLM/agent review layer should sit on top of deterministic
 validation for semantic drift, misleading prose, and missing cross-surface
 updates that exact rules cannot capture robustly.
 
-See `templates/truth_surface_drift.yaml.example` for the scaffold.
+See `truth_surface_drift.yaml.example` for the installed scaffold.
 
 ## Full Documentation
 

@@ -434,15 +434,16 @@ Use `dry_run` when:
    The value of this pattern comes from explicit input/output schemas. If phases use hidden notebook state, the pattern collapses.
 
 
-## Integration with Data Contracts
+## Integration with Capabilities and Data Contracts
 
-Journey notebooks are the **executable specification** of data contracts defined in the plan template's Data Boundaries section. The relationship:
+Journey notebooks are the **executable specification** of capabilities defined in the plan template's Capabilities section. Each notebook cell corresponds to one capability from the plan's Capabilities table. A capability IS a tool IS a boundary IS a notebook cell — one definition, multiple views.
 
 | Planning Layer | Artifact | Detail Level |
 |---------------|----------|-------------|
-| Plan template `## Data Boundaries` | Summary table | "produces X for consumer Y" |
+| Plan template `## Capabilities` | Summary table | "capability X: input → output, producer → consumer(s)" |
 | Journey notebook cells | Executable pseudocode → real code | Pydantic schemas, input/output shapes, contract validation |
 | `@boundary` decorator in code | Runtime enforcement | Validates schemas at every call |
+| `@tool` decorator in code | Agent discoverability | Registers callable capability in tool registry |
 | Contract registry | Machine-readable state | Tracks all boundaries, call counts, violations |
 | Dashboard `/contracts` page | Human visibility | Shows schemas, compatibility, violations |
 
@@ -473,7 +474,19 @@ These cells run in **Phase 2** (schema validation) before any implementation beg
 | Phase 3: Real code | `@boundary` decorators added, registry populated |
 | Phase 4: End-to-end | Contracts enforced at runtime, dashboard shows green |
 
+### Cell header convention for capabilities
+
+Each notebook cell that implements a capability should reference the capability name from the plan's Capabilities table. This links the executable cell back to the plan, the tool registry, and the contract registry:
+
+```python
+# CAPABILITY: investigate(question) → InvestigationMemo
+# Plan: docs/plans/01_research_pipeline.md
+# Registry: research_v3.investigate (tool + boundary)
+```
+
 ### Cell header convention for boundaries
+
+For cells that validate schema compatibility between producer and consumer (as opposed to implementing a capability), use the boundary header:
 
 ```python
 # BOUNDARY: {producer_project}.{function_name} → {ConsumerSchema}
@@ -491,7 +504,7 @@ These cells run in **Phase 2** (schema validation) before any implementation beg
 | [Acceptance-Gate-Driven Development](13_acceptance-gate-driven-development.md) | Journey notebooks can render gate progression phase by phase |
 | [Plan Workflow](15_plan-workflow.md) | Plans define the work; journey notebooks render that work as runnable phase sections |
 | [Engineering Workflow](34_engineering-workflow.md) | Journey notebooks can act as the visible walkthrough surface for the workflow outputs |
-| Data Contracts (`@boundary`, `BoundaryModel`) | Journey notebooks are the executable specification of boundary contracts; schema validation cells verify contracts before implementation |
+| Capabilities and Data Contracts (`@tool`, `@boundary`, `BoundaryModel`) | Journey notebooks are the executable specification of capabilities and boundary contracts; each cell maps to one capability from the plan's Capabilities table |
 
 ## Origin
 

@@ -28,6 +28,27 @@
 
 ---
 
+## Capabilities
+
+> **REQUIRED if this plan creates or modifies callable functions that other projects use.**
+> Each capability is simultaneously: a feature, a tool, a boundary, and a notebook cell.
+
+| Capability | Input Schema | Output Schema | Producer | Consumer(s) | Cost Tier |
+|-----------|-------------|---------------|----------|-------------|-----------|
+| `investigate(question)` | `str` | `InvestigationMemo` | research_v3 | grounded-research, onto-canon6 | expensive |
+| `export_findings(memo)` | `InvestigationMemo` | `list[FindingExport]` | research_v3 | onto-canon6 | free |
+
+### Capability Validation
+
+- [ ] Input/output schemas defined as Pydantic models with Field(description=...)
+- [ ] Each capability registered in tool registry (@tool) or contract registry (@boundary)
+- [ ] Schema validation passes between producer and consumer
+- [ ] Journey notebook has a cell for each capability
+
+> Skip this section for internal-only changes that don't create callable capabilities.
+
+---
+
 ## Files Affected
 
 > **REQUIRED:** Declare upfront what files will be touched.

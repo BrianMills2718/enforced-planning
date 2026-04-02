@@ -98,6 +98,37 @@ This layer answers:
 
 The validator consumes both layers but should not redefine them.
 
+## Deterministic vs LLM Review
+
+The truth-surface validator is intentionally **deterministic first**.
+
+It is the right layer for:
+- file existence
+- plan-status parity
+- tracker pattern vs registry contradictions
+- claimed state vs measured audit state
+
+These checks should remain programmatic because they need high-confidence,
+repeatable failure semantics and should be eligible for hard enforcement.
+
+Some drift is still too semantic or too cross-cutting for exact rules alone:
+- a tracker is technically parseable but misleading or stale in prose
+- multiple summaries disagree without sharing one exact machine-readable field
+- a plan/TODO/roadmap set is individually valid but collectively no longer
+  compendious
+
+Those cases should be handled by an **optional LLM/agent review layer** that
+reads the same truth surfaces and emits advisory findings. The framework should
+use a hybrid model:
+
+1. deterministic validator for exact contradictions and hard failures
+2. optional LLM semantic review for ambiguity, misleading prose, and missing
+   updates that static rules cannot enumerate cleanly
+3. promotion path from repeated high-precision LLM findings into new
+   deterministic checks when the pattern becomes stable
+
+The LLM layer should complement the validator, not replace it.
+
 ## What Belongs in `relationships.yaml`
 
 Belongs there:

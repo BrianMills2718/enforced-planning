@@ -16,6 +16,11 @@
 
 **Why:** Portable framework code is not enough. A coordination safeguard becomes real only after at least one governed repo consumes it truthfully and the resulting friction/benefit is measured.
 
+This pilot is scoped to the deterministic validator and renderer only. It is
+also the evidence-gathering phase for the next question: which semantic drift
+cases still require an optional LLM/agent review layer on top of deterministic
+checks?
+
 ---
 
 ## References Reviewed
@@ -46,6 +51,8 @@
 3. Run validator and renderer against real surfaces.
 4. Record friction, false positives, and missing invariants.
 5. Update framework guidance only from measured pilot evidence.
+6. Record which drift classes remain out of reach for deterministic rules and
+   should feed the next semantic-review plan.
 
 ---
 
@@ -71,6 +78,8 @@
 - [ ] One governed repo consumes the validator and renderer through a real repo-local config.
 - [ ] At least one real or intentionally simulated drift case is detected in that repo.
 - [ ] The pilot documents whether default workflow wiring should stay advisory or tighten.
+- [ ] The pilot leaves a categorized list of semantic drift cases that still
+      require LLM/agent review or richer machine-readable surfaces.
 
 ---
 
@@ -78,3 +87,5 @@
 
 - [ ] Which governed repo is the best first pilot: `project-meta`, another coordination-heavy repo, or a smaller clean candidate?
 - [ ] Should the first pilot target an already-known drift case or a cleaner repo to establish baseline ergonomics first?
+- [ ] Which semantic drift findings should stay advisory even after the
+      deterministic pilot is stable?

@@ -148,6 +148,11 @@ Use the validator to detect contradictions. Use the renderer to produce a compac
 current-state summary from validator output instead of hand-maintaining status
 prose.
 
+This workflow is deterministic by design. It is the right default for hard
+contradictions and machine-checkable parity. A later optional LLM/agent review
+layer should sit on top of it for semantic drift, misleading prose, and missing
+cross-surface updates that exact rules cannot capture robustly.
+
 See `templates/truth_surface_drift.yaml.example` for the scaffold.
 
 ## Full Documentation

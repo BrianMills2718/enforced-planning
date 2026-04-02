@@ -10,8 +10,8 @@ three layers of discipline:
 > Read the active tracker, execute the next unblocked phase, commit the verified slice, and continue.
 
 Active sprint tracker:
-- `docs/ops/OVERNIGHT_SPRINT_2026_04_02_RELATIONSHIPS_V2.md` — Relationships V2 implementation sprint
-- **NEVER STOP.** Execute all phases. Commit every slice. Read the tracker for next action.
+- `docs/ops/OVERNIGHT_SPRINT_2026_04_02_FRAMEWORK_RECONCILIATION.md` — active reconciliation sprint for onboarding/install truth, stale framework truth surfaces, and backlog cleanup.
+- If this sprint closes, fall back to `docs/plans/CLAUDE.md` before starting new coding work.
 
 Rules during continuous execution:
 - complete the current phase, update the tracker, and move immediately to the next phase
@@ -77,6 +77,8 @@ make pr-auto  # ship
 
 ## References
 
+- `docs/ops/OVERNIGHT_SPRINT_2026_04_02_FRAMEWORK_RECONCILIATION.md` — Active sprint (Plan #10)
+- `docs/ops/OVERNIGHT_SPRINT_2026_04_02_SCOPE.md` — Completed sprint (Plan #9)
 - `docs/ops/OVERNIGHT_SPRINT_2026_04_02_TRUTH_SURFACE.md` — Completed sprint (Plans #2-5)
 - `PLANNING_OPERATING_MODEL.md` — Canonical methodology and artifact dependency model
 - `STATIC_GRAPH_AND_RUNTIME_TRUTH.md` — Canonical split between static graph and runtime coordination state

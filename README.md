@@ -20,11 +20,15 @@ When AI instances work on a codebase:
 
 If you trust the spec (human-reviewed) and trust CI (automated), you can trust implementation (green = done) without reading code.
 
+The canonical methodology for how thesis, investigation, gap analysis,
+capabilities, plans, notebooks, tests, code, and observability fit together is
+[`PLANNING_OPERATING_MODEL.md`](PLANNING_OPERATING_MODEL.md).
+
 ## Quick Start
 
 ```bash
 # 1. Install into your project
-./meta-process/install.sh /path/to/your/project
+./install.sh /path/to/your/project
 
 # 2. Configure what patterns to enable
 vim meta-process.yaml
@@ -133,8 +137,9 @@ The framework separates **portable** scripts from **project-specific** extension
 ## Full Documentation
 
 See `patterns/` directory for detailed documentation of each pattern:
+- `PLANNING_OPERATING_MODEL.md` - Canonical methodology and artifact dependency model
 - `patterns/01_README.md` - Pattern index (core + optional modules)
-- `patterns/15_plan-workflow.md` - How plans work
+- `patterns/15_plan-workflow.md` - How bounded plans work inside the operating model
 - `patterns/13_acceptance-gate-driven-development.md` - Full acceptance gate system
 
 ## Customizing for Your Project

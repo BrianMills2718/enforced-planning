@@ -61,6 +61,7 @@ make pr-auto  # ship
 
 ## References
 
+- `PLANNING_OPERATING_MODEL.md` — Canonical methodology and artifact dependency model
 - `GETTING_STARTED.md` — Full adoption guide
 - `patterns/01_README.md` — Pattern index with dependencies
 - `adr/` — Framework architecture decisions

@@ -184,7 +184,7 @@ Informational only. Shows count of unpushed commits and suggests `git push`.
 ### For New Projects
 
 ```bash
-./meta-process/install.sh /path/to/project --minimal
+./install.sh /path/to/project --minimal
 ```
 
 This copies hooks and configures git to use the `hooks/` directory.

@@ -6,7 +6,7 @@ Work happens without tracking. AI assistants implement features without:
 - Recording what changed
 - Linking to requirements
 - Following consistent structure
-- Ensuring tests exist
+- Ensuring tests exist before code starts
 
 Result: orphan code, undocumented features, missed requirements.
 
@@ -17,6 +17,10 @@ Result: orphan code, undocumented features, missed requirements.
 3. Status tracked in plan file AND index
 4. Commit messages link to plans: `[Plan #N]`
 5. TDD: define tests in plan before implementing
+6. This pattern is one layer inside the canonical operating model in
+   `PLANNING_OPERATING_MODEL.md`; it does not replace investigation, gap
+   analysis, capability/boundary definition, or journey notebooks where those
+   are required
 
 ## Files
 

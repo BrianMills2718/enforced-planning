@@ -26,7 +26,9 @@ Before starting, decide how much process overhead you want:
 
 ### Planning Patterns
 
-These patterns improve planning quality and reduce AI drift:
+These patterns improve planning quality and reduce AI drift. The canonical
+artifact order and dependency model lives in
+[`PLANNING_OPERATING_MODEL.md`](PLANNING_OPERATING_MODEL.md).
 
 | Pattern | What It Does | When to Use |
 |---------|--------------|-------------|
@@ -58,8 +60,8 @@ planning:
 ### Step 1: Install
 
 ```bash
-# From your project root
-./meta-process/install.sh . --minimal
+# From the enforced-planning repo root, targeting your project root
+./install.sh . --minimal
 ```
 
 This creates:
@@ -131,10 +133,11 @@ If that worked, you're ready!
 
 **Goal:** Get comfortable with branches and plans.
 
-1. **Read patterns** (in this order):
-   - [CLAUDE.md Authoring](patterns/02_claude-md-authoring.md) - Project context
-   - [Plan Workflow](patterns/15_plan-workflow.md) - Work tracking
-   - [Question-Driven Planning](patterns/28_question-driven-planning.md) - Better AI planning
+1. **Read methodology docs** (in this order):
+   - [Planning Operating Model](PLANNING_OPERATING_MODEL.md) - canonical artifact dependency model
+   - [CLAUDE.md Authoring](patterns/02_claude-md-authoring.md) - project context
+   - [Plan Workflow](patterns/15_plan-workflow.md) - bounded work tracking
+   - [Question-Driven Planning](patterns/28_question-driven-planning.md) - investigate before planning
 
 2. **Set up your CLAUDE.md:**
    ```markdown
@@ -175,6 +178,12 @@ If that worked, you're ready!
    cp docs/plans/TEMPLATE.md docs/plans/001_my_first_plan.md
    # Edit to describe your task
    ```
+
+   Before implementing, make sure the plan has:
+   - current vs target gap framing
+   - references reviewed
+   - required tests declared before code starts
+   - any capability/boundary notes needed for cross-project work
 
 ### Day 5-7: Git Hooks
 

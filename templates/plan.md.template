@@ -72,6 +72,9 @@
 
 ## Required Tests
 
+> **REQUIRED BEFORE IMPLEMENTATION:** declare the tests and gates that will prove
+> the plan. Write them first where feasible.
+
 ### New Tests (TDD)
 
 | Test File | Test Function | What It Verifies |

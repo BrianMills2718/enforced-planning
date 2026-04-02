@@ -1,6 +1,6 @@
 # Plan #8: Truth-Surface Adoption Pilot Execution Sprint
 
-**Status:** In Progress
+**Status:** Complete
 **Type:** implementation
 **Priority:** High
 **Blocked By:** None
@@ -111,12 +111,12 @@ Success criteria:
 
 ## Acceptance Criteria
 
-- [ ] Root `CLAUDE.md` points to one active sprint tracker for this work.
-- [ ] The pilot repo is chosen from measured conditions and documented.
-- [ ] The chosen repo consumes the validator and renderer through a real repo-local config.
-- [ ] At least one real or intentionally simulated drift case is detected.
-- [ ] Plan #6 is updated with measured findings and default-wiring guidance.
-- [ ] The sprint leaves a categorized semantic-drift backlog for Plan #7.
+- [x] Root `CLAUDE.md` points to one active sprint tracker for this work.
+- [x] The pilot repo is chosen from measured conditions and documented.
+- [x] The chosen repo consumes the validator and renderer through a real repo-local config.
+- [x] At least one real or intentionally simulated drift case is detected.
+- [x] Plan #6 is updated with measured findings and default-wiring guidance.
+- [x] The sprint leaves a categorized semantic-drift backlog for Plan #7.
 
 ---
 

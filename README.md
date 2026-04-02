@@ -149,9 +149,14 @@ current-state summary from validator output instead of hand-maintaining status
 prose.
 
 This workflow is deterministic by design. It is the right default for hard
-contradictions and machine-checkable parity. A later optional LLM/agent review
-layer should sit on top of it for semantic drift, misleading prose, and missing
-cross-surface updates that exact rules cannot capture robustly.
+contradictions and machine-checkable parity. For repo-local runs, prefer a
+scoped config with `scope.repo_names` so unrelated ecosystem registry drift does
+not dominate the local result. Full unscoped runs are still useful for broader
+global coordination review.
+
+A later optional LLM/agent review layer should sit on top of deterministic
+validation for semantic drift, misleading prose, and missing cross-surface
+updates that exact rules cannot capture robustly.
 
 See `templates/truth_surface_drift.yaml.example` for the scaffold.
 

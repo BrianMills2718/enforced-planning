@@ -7,7 +7,7 @@ from pathlib import Path
 
 import yaml
 
-from scripts.check_truth_surface_drift import run_checks
+from scripts.check_truth_surface_drift import _canonical_repo_name, run_checks
 
 
 def _write(path: Path, content: str) -> None:
@@ -188,6 +188,85 @@ def test_tracker_pattern_conflict_warns(tmp_path: Path) -> None:
     assert len(issues) == 1
     assert issues[0].code == "tracker_next_action_already_active"
     assert issues[0].severity == "warn"
+
+
+def test_scope_derives_canonical_name_from_worktree_repo_root() -> None:
+    assert _canonical_repo_name("/tmp/projects/prompt_eval") == "prompt_eval"
+    assert (
+        _canonical_repo_name("/tmp/projects/prompt_eval_worktrees/plan-15-truth-surface-pilot")
+        == "prompt_eval"
+    )
+
+
+def test_scope_filters_by_canonical_repo_identity(tmp_path: Path) -> None:
+    registry = tmp_path / "registry.yaml"
+    registry.write_text(
+        yaml.safe_dump(
+            {
+                "active_work": [
+                    {
+                        "status": "active",
+                        "project": "agentic_scaffolding",
+                        "repo_root": "/tmp/projects/agentic_scaffolding_worktrees/plan-08-authoritative-coordination-wave9",
+                        "plan": 8,
+                    }
+                ],
+                "plan_reservations": [
+                    {
+                        "status": "consumed",
+                        "plan": 14,
+                        "project": "plan-60-prompt-eval-coordination",
+                        "repo_root": "/tmp/projects/prompt_eval_worktrees/plan-60-prompt-eval-coordination",
+                        "plan_file": "/tmp/projects/prompt_eval_worktrees/plan-60-prompt-eval-coordination/docs/plans/14_authoritative-coordination-wave-1-rollout.md",
+                    },
+                    {
+                        "status": "consumed",
+                        "plan": 73,
+                        "project": "plan-58-authoritative-registry-rollout",
+                        "repo_root": "/tmp/projects/project-meta_worktrees/plan-58-authoritative-registry-rollout",
+                        "plan_file": "/tmp/projects/project-meta_worktrees/plan-58-authoritative-registry-rollout/docs/plans/73_authoritative-coordination-wave-9-rollout.md",
+                    },
+                ],
+            }
+        )
+    )
+    plan_index = tmp_path / "CLAUDE.md"
+    _write(
+        plan_index,
+        """
+        # Implementation Plans
+        | # | Gap | Priority | Status | Blocks |
+        |---|-----|----------|--------|--------|
+        | 8 | Example | High | ✅ Complete | None |
+        | 14 | Example | High | ✅ Complete | None |
+        | 73 | Example | High | ✅ Complete | None |
+        """,
+    )
+    tracker = tmp_path / "tracker.md"
+    tracker.write_text("next action: nothing")
+    config = tmp_path / "config.yaml"
+    config.write_text(
+        yaml.safe_dump(
+            {
+                "scope": {"repo_names": ["prompt_eval"]},
+                "surfaces": {
+                    "tracker_file": str(tracker),
+                    "registry_file": str(registry),
+                    "plan_index_file": str(plan_index),
+                },
+                "checks": {
+                    "consumed_reservations_exist": {"severity": "fail"},
+                    "no_active_work_for_complete_plans": {"severity": "fail"},
+                },
+            }
+        )
+    )
+
+    issues = run_checks(config)
+
+    assert len(issues) == 1
+    assert issues[0].code == "consumed_reservation_missing_plan_file"
+    assert issues[0].evidence["canonical_repo"] == "prompt_eval"
 
 
 def test_relative_surface_paths_resolve_from_config_dir(tmp_path: Path) -> None:

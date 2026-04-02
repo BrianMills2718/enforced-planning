@@ -1,6 +1,6 @@
 # Plan #6: Governed Repo Truth-Surface Adoption Pilot
 
-**Status:** Planned
+**Status:** Complete
 **Type:** implementation
 **Priority:** High
 **Blocked By:** None
@@ -75,17 +75,32 @@ checks?
 
 ## Acceptance Criteria
 
-- [ ] One governed repo consumes the validator and renderer through a real repo-local config.
-- [ ] At least one real or intentionally simulated drift case is detected in that repo.
-- [ ] The pilot documents whether default workflow wiring should stay advisory or tighten.
-- [ ] The pilot leaves a categorized list of semantic drift cases that still
+- [x] One governed repo consumes the validator and renderer through a real repo-local config.
+- [x] At least one real or intentionally simulated drift case is detected in that repo.
+- [x] The pilot documents whether default workflow wiring should stay advisory or tighten.
+- [x] The pilot leaves a categorized list of semantic drift cases that still
       require LLM/agent review or richer machine-readable surfaces.
 
 ---
 
+## Measured Findings
+
+- First real consumer: `prompt_eval`
+- Repo-local consumption worked through `truth_surface_drift.yaml`, a local pilot status surface, and a measured governed-audit artifact.
+- The first measured findings were real but dominated by shared registry hygiene:
+  - consumed reservations pointing to missing historical worktree plan files
+  - active work still referencing a completed plan in another repo
+- The pilot also exposed and helped fix two framework-level portability issues:
+  - config-declared surface paths must resolve relative to the config file
+  - renderer import path must not assume execution from the framework repo root
+- Recommendation after the first pilot: default workflow wiring should remain advisory until repo-local scoping is added and broader registry hygiene is improved.
+
 ## Open Questions
 
-- [ ] Which governed repo is the best first pilot: `project-meta`, another coordination-heavy repo, or a smaller clean candidate?
-- [ ] Should the first pilot target an already-known drift case or a cleaner repo to establish baseline ergonomics first?
-- [ ] Which semantic drift findings should stay advisory even after the
+- [x] Which governed repo is the best first pilot: `project-meta`, another coordination-heavy repo, or a smaller clean candidate?
+      - Resolved: `prompt_eval` was the best first pilot because it was clean, governed, and already had live claims/worktree surfaces.
+- [x] Should the first pilot target an already-known drift case or a cleaner repo to establish baseline ergonomics first?
+      - Resolved: cleaner governed repo first, as long as at least one real drift case still exists.
+- [x] Which semantic drift findings should stay advisory even after the
       deterministic pilot is stable?
+      - Resolved for the first slice: stale or misleading prose and cross-surface compendiousness remain advisory and feed Plan #7.

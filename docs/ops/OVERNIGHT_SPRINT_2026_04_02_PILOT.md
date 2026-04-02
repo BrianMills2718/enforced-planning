@@ -1,6 +1,6 @@
 # Overnight Sprint — 2026-04-02 — Truth-Surface Adoption Pilot
 
-**Status:** In Progress
+**Status:** Complete
 **Owner:** codex
 **Primary Plan:** `docs/plans/08_truth-surface-adoption-pilot-execution-sprint.md`
 **Underlying Goal:** complete the first governed-repo truth-surface adoption pilot and leave a measured handoff into semantic review work
@@ -44,8 +44,8 @@ Success criteria:
 
 ## Current Phase
 
-- Active phase: Phase A
-- Next action: update framework active-sprint surfaces, then open the repo-local pilot in the chosen governed repo
+- Active phase: Phase D complete
+- Next action: continue in `docs/ops/OVERNIGHT_SPRINT_2026_04_02_SCOPE.md` for scoped repo-local validation hardening
 
 ## Measured Pilot Target Selection
 
@@ -69,4 +69,6 @@ Reason:
 
 ## Rollback Points
 
-- none yet for this sprint
+- `0f9623f` — defined the pilot sprint contract
+- `4a9196b` — hardened truth-surface tools for repo-local config execution
+- `1fdc80f` in `prompt_eval` — completed the first governed-repo pilot consumer slice

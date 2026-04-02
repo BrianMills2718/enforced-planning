@@ -10,9 +10,9 @@ three layers of discipline:
 > Read the active tracker, execute the next unblocked phase, commit the verified slice, and continue.
 
 Active sprint tracker:
-- `docs/ops/OVERNIGHT_SPRINT_2026_04_02_PILOT.md` while the pilot sprint is active
-- otherwise start from `docs/plans/CLAUDE.md` to identify the next bounded sprint before coding
-- latest completed prior sprint: `docs/ops/OVERNIGHT_SPRINT_2026_04_02_TRUTH_SURFACE.md` (Plans #2-5 landed)
+- No active sprint (scoped-validation sprint complete 2026-04-02).
+- Start from `docs/plans/CLAUDE.md` to identify the next bounded sprint before coding.
+- Latest completed: `docs/ops/OVERNIGHT_SPRINT_2026_04_02_SCOPE.md` (Plan #9 scoped hardening after Plan #8 / Plan #6 closeout).
 
 Rules during continuous execution:
 - complete the current phase, update the tracker, and move immediately to the next phase

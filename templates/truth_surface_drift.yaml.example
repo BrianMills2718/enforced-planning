@@ -3,6 +3,10 @@
 
 version: 1
 
+scope:
+  repo_names:
+    - agentic_scaffolding
+
 surfaces:
   tracker_file: docs/ops/ACTIVE_TRACKER.md
   registry_file: ~/.claude/coordination/active-work-registry.yaml

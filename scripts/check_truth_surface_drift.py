@@ -34,6 +34,21 @@ class Issue:
     evidence: dict[str, Any]
 
 
+def _canonical_repo_name(repo_root: Any, *, project: Any = None) -> str | None:
+    """Derive a canonical repo identity from a repo root or fallback project name."""
+    if isinstance(repo_root, str) and repo_root.strip():
+        path = Path(repo_root).expanduser()
+        parts = path.parts
+        if len(parts) >= 2 and parts[-2].endswith("_worktrees"):
+            parent = parts[-2]
+            return parent[: -len("_worktrees")]
+        if path.name:
+            return path.name
+    if isinstance(project, str) and project.strip():
+        return project.strip()
+    return None
+
+
 def _load_yaml(path: Path) -> dict[str, Any]:
     """Load YAML from path, returning an empty mapping when the file is blank."""
     data = yaml.safe_load(path.read_text())
@@ -117,12 +132,17 @@ def _normalize_severity(value: Any, default: str = "fail") -> str:
 
 
 def _check_consumed_reservations_exist(
-    registry: dict[str, Any], severity: str
+    registry: dict[str, Any], severity: str, *, scoped_repo_names: set[str] | None = None
 ) -> list[Issue]:
     """Validate that consumed reservations still point to a real plan file."""
     issues: list[Issue] = []
     for reservation in registry.get("plan_reservations", []):
         if not isinstance(reservation, dict):
+            continue
+        canonical_repo = _canonical_repo_name(
+            reservation.get("repo_root"), project=reservation.get("project")
+        )
+        if scoped_repo_names and canonical_repo not in scoped_repo_names:
             continue
         if reservation.get("status") != "consumed":
             continue
@@ -133,7 +153,7 @@ def _check_consumed_reservations_exist(
                     code="consumed_reservation_missing_plan_file_field",
                     severity=severity,
                     message="Consumed reservation is missing its plan_file field.",
-                    evidence={"reservation": reservation},
+                    evidence={"reservation": reservation, "canonical_repo": canonical_repo},
                 )
             )
             continue
@@ -143,7 +163,7 @@ def _check_consumed_reservations_exist(
                     code="consumed_reservation_missing_plan_file",
                     severity=severity,
                     message=f"Consumed reservation points to missing plan file: {plan_file}",
-                    evidence={"reservation": reservation},
+                    evidence={"reservation": reservation, "canonical_repo": canonical_repo},
                 )
             )
     return issues
@@ -156,12 +176,15 @@ def _is_complete_status(status: str) -> bool:
 
 
 def _check_no_active_work_for_complete_plans(
-    registry: dict[str, Any], plan_statuses: dict[str, str], severity: str
+    registry: dict[str, Any], plan_statuses: dict[str, str], severity: str, *, scoped_repo_names: set[str] | None = None
 ) -> list[Issue]:
     """Validate that active work does not still point at completed plans."""
     issues: list[Issue] = []
     for active in registry.get("active_work", []):
         if not isinstance(active, dict):
+            continue
+        canonical_repo = _canonical_repo_name(active.get("repo_root"), project=active.get("project"))
+        if scoped_repo_names and canonical_repo not in scoped_repo_names:
             continue
         if active.get("status") != "active":
             continue
@@ -179,7 +202,7 @@ def _check_no_active_work_for_complete_plans(
                         f"Active work entry for project {active.get('project')} still references "
                         f"completed Plan #{plan_key}."
                     ),
-                    evidence={"active_work": active, "plan_status": status},
+                    evidence={"active_work": active, "plan_status": status, "canonical_repo": canonical_repo},
                 )
             )
     return issues
@@ -290,6 +313,20 @@ def run_checks(config_path: Path) -> list[Issue]:
     plan_index_file = _resolve_surface_path(str(surfaces["plan_index_file"]), base_dir=config_dir)
     tracker_file = surfaces.get("tracker_file")
 
+    scope = config.get("scope", {})
+    if scope is False:
+        scope = {}
+    if not isinstance(scope, dict):
+        raise ValueError("scope must be a mapping when provided")
+    repo_names_raw = scope.get("repo_names", [])
+    if repo_names_raw in (None, False):
+        repo_names_raw = []
+    if not isinstance(repo_names_raw, list):
+        raise ValueError("scope.repo_names must be a list when provided")
+    scoped_repo_names = {
+        str(value).strip() for value in repo_names_raw if str(value).strip()
+    } or None
+
     registry = _load_yaml(registry_file)
     plan_statuses = _parse_plan_index(plan_index_file)
     tracker_text = ""
@@ -308,7 +345,13 @@ def run_checks(config_path: Path) -> list[Issue]:
             consumed_cfg.get("severity") if isinstance(consumed_cfg, dict) else None,
             default="fail",
         )
-        issues.extend(_check_consumed_reservations_exist(registry, severity))
+        issues.extend(
+            _check_consumed_reservations_exist(
+                registry,
+                severity,
+                scoped_repo_names=scoped_repo_names,
+            )
+        )
 
     active_cfg = checks.get("no_active_work_for_complete_plans", {})
     if active_cfg is not False:
@@ -316,7 +359,14 @@ def run_checks(config_path: Path) -> list[Issue]:
             active_cfg.get("severity") if isinstance(active_cfg, dict) else None,
             default="fail",
         )
-        issues.extend(_check_no_active_work_for_complete_plans(registry, plan_statuses, severity))
+        issues.extend(
+            _check_no_active_work_for_complete_plans(
+                registry,
+                plan_statuses,
+                severity,
+                scoped_repo_names=scoped_repo_names,
+            )
+        )
 
     tracker_cfg = checks.get("tracker_next_action_claim_conflicts", {})
     if tracker_cfg and tracker_text:

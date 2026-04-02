@@ -129,6 +129,23 @@ use a hybrid model:
 
 The LLM layer should complement the validator, not replace it.
 
+## Scoped Repo-Local Validation
+
+Repo-local truth-surface checks and broader ecosystem coordination review are
+not always the same question.
+
+When the operator asks, "is this governed repo internally truthful right now?",
+the validator should be able to scope runtime checks to that repo's canonical
+identity. This keeps local runs actionable even when the shared registry still
+contains unrelated drift from other repos.
+
+When the operator asks, "what is drifting across the ecosystem?", run the same
+validator without repo-local scope so global registry problems remain visible.
+
+The framework therefore needs both modes:
+- scoped repo-local validation for governed consumer adoption and closeout
+- unscoped/global validation for broader coordination hygiene
+
 ## What Belongs in `relationships.yaml`
 
 Belongs there:

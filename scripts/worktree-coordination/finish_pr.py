@@ -217,7 +217,7 @@ def finish_pr(branch: str, pr_number: int, check_ci: bool = False) -> bool:
         # Check for uncommitted changes
         clean, changes = check_worktree_clean(worktree_path)
         if not clean:
-            print(f"❌ Worktree has uncommitted changes:")
+            print("❌ Worktree has uncommitted changes:")
             for line in changes.split("\n")[:5]:
                 print(f"   {line}")
             print()

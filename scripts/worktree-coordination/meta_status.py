@@ -602,7 +602,7 @@ def print_status(brief: bool = False) -> None:
 
             # Main worktree (no dir_name)
             if dir_name is None:
-                print(f"  - main")
+                print("  - main")
                 continue
 
             # Check for mismatch

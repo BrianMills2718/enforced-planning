@@ -109,7 +109,7 @@ def compare_locked_criteria(
                         LockedSectionViolation(
                             feature_name,
                             f"acceptance_criteria/{ac_id}/{field}",
-                            f"Locked field was modified",
+                            "Locked field was modified",
                         )
                     )
 

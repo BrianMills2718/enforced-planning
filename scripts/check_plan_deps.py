@@ -151,7 +151,7 @@ def check_plan(
                         "ref": ref,
                         "status": "skip",
                         "type": "cross_project",
-                        "message": f"Cross-project ref (use --scan-dir to validate)",
+                        "message": "Cross-project ref (use --scan-dir to validate)",
                     })
                 elif project in cross_project_plans:
                     if plan_num in cross_project_plans[project]:

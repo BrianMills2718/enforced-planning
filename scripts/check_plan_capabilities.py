@@ -66,8 +66,6 @@ def check_plan(path: Path) -> dict:
     has_capabilities = bool(re.search(r"^## Capabilities", text, re.MULTILINE))
 
     # Check if plan mentions skip instruction
-    has_skip = "skip this section" in text.lower() and "internal-only" in text.lower()
-
     # Explicit opt-out: plan says it's internal
     explicit_internal = bool(re.search(
         r"(does NOT cross project boundar|N/A.*internal|internal.only)",

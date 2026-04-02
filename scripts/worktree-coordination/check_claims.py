@@ -954,7 +954,7 @@ def release_claim(
             is_stale, stale_session = is_session_stale(claim_session)
 
             if is_stale:
-                print(f"Note: Claim owner session is stale, allowing takeover")
+                print("Note: Claim owner session is stale, allowing takeover")
             else:
                 print("=" * 60)
                 print("❌ OWNERSHIP VERIFICATION FAILED")
@@ -981,7 +981,7 @@ def release_claim(
                 return False
             print("\n--force specified, releasing despite validation failures.\n")
     elif plan and not validate:
-        print(f"Tip: Use --validate to check TDD requirements before release.")
+        print("Tip: Use --validate to check TDD requirements before release.")
 
     data["claims"].remove(claim_to_remove)
 

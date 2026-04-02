@@ -165,7 +165,7 @@ def send_message(
     inbox_dir = repo_root / ".claude" / "messages" / "inbox" / recipient
 
     if dry_run:
-        print(f"[DRY RUN] Would create message:")
+        print("[DRY RUN] Would create message:")
         print(f"  From: {sender}")
         print(f"  To: {recipient}")
         print(f"  Type: {msg_type}")

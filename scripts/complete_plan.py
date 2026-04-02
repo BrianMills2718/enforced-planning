@@ -95,9 +95,9 @@ def print_human_review_instructions(
     print(f"\n{'-'*40}")
     print(section_content)
     print(f"{'-'*40}")
-    print(f"\nAfter verifying all items above, run:")
+    print("\nAfter verifying all items above, run:")
     print(f"\n  python scripts/complete_plan.py --plan {plan_number} --human-verified")
-    print(f"\nThis confirms a human has checked things automated tests cannot verify.")
+    print("\nThis confirms a human has checked things automated tests cannot verify.")
 
 
 def run_unit_tests(project_root: Path, verbose: bool = True) -> tuple[bool, str]:
@@ -185,7 +185,7 @@ def run_e2e_tests(project_root: Path, verbose: bool = True) -> tuple[bool, str]:
         if result.returncode == 0:
             print(f"    PASSED ({timing}s)")
         else:
-            print(f"    FAILED")
+            print("    FAILED")
             print(output[-2000:])
 
     return result.returncode == 0, summary
@@ -240,7 +240,7 @@ def run_real_e2e_tests(project_root: Path, verbose: bool = True) -> tuple[bool, 
         if result.returncode == 0:
             print(f"    PASSED ({timing}s)")
         else:
-            print(f"    FAILED")
+            print("    FAILED")
             print(output[-2000:])
 
     return result.returncode == 0, summary
@@ -339,7 +339,7 @@ commit: {commit}
     # Update status line
     new_content = re.sub(
         r"\*\*Status:\*\*\s*.+",
-        f"**Status:** \u2705 Complete",  # ✅
+        "**Status:** \u2705 Complete",  # ✅
         content
     )
 
@@ -362,7 +362,7 @@ commit: {commit}
 
     if dry_run:
         print(f"\n[DRY RUN] Would update {plan_file.name}:")
-        print(f"  Status: \u2705 Complete")
+        print("  Status: \u2705 Complete")
         print(f"  Verified: {timestamp}")
         print(f"  Commit: {commit}")
         return True
@@ -400,7 +400,7 @@ def update_plan_index(
         return False
 
     if dry_run:
-        print(f"[DRY RUN] Would update plans/CLAUDE.md index")
+        print("[DRY RUN] Would update plans/CLAUDE.md index")
         return True
 
     index_file.write_text(new_content)
@@ -443,18 +443,18 @@ def complete_plan(
         return True
 
     if force and verbose:
-        print(f"  (--force: re-verifying already-complete plan)")
+        print("  (--force: re-verifying already-complete plan)")
 
     # Check for human review requirements
     human_review_section = get_human_review_section(plan_file)
     if human_review_section and not human_verified:
         # Human review required but not confirmed
         print_human_review_instructions(plan_number, human_review_section, plan_file)
-        print(f"\n❌ Cannot complete: human review required but --human-verified not provided")
+        print("\n❌ Cannot complete: human review required but --human-verified not provided")
         return False
 
     if human_review_section and human_verified and verbose:
-        print(f"  (--human-verified: human review confirmed)")
+        print("  (--human-verified: human review confirmed)")
 
     # Run verification steps
     all_passed = True
@@ -508,7 +508,7 @@ def complete_plan(
     commit, branch = get_git_info(project_root)
 
     if verbose:
-        print(f"\nAll checks passed!")
+        print("\nAll checks passed!")
 
     update_plan_file(
         plan_file,
@@ -525,7 +525,7 @@ def complete_plan(
     if not dry_run:
         print(f"\n\u2705 Plan #{plan_number} marked COMPLETE")
         print(f"   Verification evidence recorded in {plan_file.name}")
-        print(f"\nNext steps:")
+        print("\nNext steps:")
         print(f"   1. Commit changes: git add {plan_file}")
 
     return True

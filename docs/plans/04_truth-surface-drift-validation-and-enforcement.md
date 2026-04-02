@@ -64,7 +64,9 @@ another.
 - Implemented first portable validator slice in `scripts/check_truth_surface_drift.py`.
 - First slice covers consumed-reservation path existence, active-work references
   to completed plans, and explicit tracker-pattern/registry conflict rules.
-- Audit-output parity and generated current-state rendering remain open.
+- Second slice adds config-driven audit claim parity rules for comparing claimed
+  text state against measured audit output.
+- Generated current-state rendering remains open.
 
 ---
 

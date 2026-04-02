@@ -21,7 +21,7 @@ Only stop for:
 
 ### Phase A — Sprint Contract and Entry Surface
 
-Status: In progress
+Status: Complete
 Success criteria:
 - `CLAUDE.md` points here as the active tracker
 - plan index includes Plan #5
@@ -29,7 +29,7 @@ Success criteria:
 
 ### Phase B — Audit-Output Parity Checks
 
-Status: Planned
+Status: Complete
 Success criteria:
 - validator supports audit-surface checks through config
 - at least one parity mismatch test exists and passes
@@ -37,7 +37,7 @@ Success criteria:
 
 ### Phase C — Generated Current-State Rendering
 
-Status: Planned
+Status: In progress
 Success criteria:
 - renderer emits deterministic summary text from validator output
 - tests cover clean and non-clean rendering
@@ -64,8 +64,8 @@ Success criteria:
 
 ## Current Phase
 
-Phase A
+Phase C
 
 ## Next Action
 
-Update root `CLAUDE.md` with an explicit active-tracker pointer and continuous-execution contract, then start Phase B implementation.
+Create `scripts/render_truth_surface_status.py` and renderer tests for clean and non-clean summaries.

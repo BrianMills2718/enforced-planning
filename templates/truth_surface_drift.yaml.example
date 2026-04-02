@@ -21,3 +21,10 @@ checks:
         project: agentic_scaffolding
         scope: authoritative-coordination-wave9
         severity: fail
+
+  audit_claim_rules:
+    rules:
+      - source_pattern: "agentic_scaffolding adoption state: (?P<claim>\w+)"
+        audit_file: generated/coordination_rollout.json
+        audit_json_path: repo_results.agentic_scaffolding.coordination_adoption_state
+        severity: fail

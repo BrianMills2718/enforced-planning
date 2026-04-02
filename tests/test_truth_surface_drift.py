@@ -188,3 +188,67 @@ def test_tracker_pattern_conflict_warns(tmp_path: Path) -> None:
     assert len(issues) == 1
     assert issues[0].code == "tracker_next_action_already_active"
     assert issues[0].severity == "warn"
+
+
+def test_audit_claim_mismatch_fails(tmp_path: Path) -> None:
+    existing_plan = tmp_path / "plan-1.md"
+    existing_plan.write_text("# plan")
+    registry = tmp_path / "registry.yaml"
+    registry.write_text(
+        yaml.safe_dump(
+            {
+                "active_work": [],
+                "plan_reservations": [
+                    {"status": "consumed", "plan": 1, "plan_file": str(existing_plan)}
+                ],
+            }
+        )
+    )
+    plan_index = tmp_path / "CLAUDE.md"
+    _write(
+        plan_index,
+        """
+        # Implementation Plans
+        | # | Gap | Priority | Status | Blocks |
+        |---|-----|----------|--------|--------|
+        | 1 | Example | High | 📋 Planned | None |
+        """,
+    )
+    tracker = tmp_path / "tracker.md"
+    tracker.write_text("agentic_scaffolding adoption state: adopted")
+    audit = tmp_path / "audit.json"
+    audit.write_text(
+        '{"repo_results": {"agentic_scaffolding": {"coordination_adoption_state": "blocked"}}}'
+    )
+    config = tmp_path / "config.yaml"
+    config.write_text(
+        yaml.safe_dump(
+            {
+                "surfaces": {
+                    "tracker_file": str(tracker),
+                    "registry_file": str(registry),
+                    "plan_index_file": str(plan_index),
+                },
+                "checks": {
+                    "consumed_reservations_exist": {"severity": "fail"},
+                    "no_active_work_for_complete_plans": {"severity": "fail"},
+                    "audit_claim_rules": {
+                        "rules": [
+                            {
+                                "source_pattern": r"agentic_scaffolding adoption state: (?P<claim>\w+)",
+                                "audit_file": str(audit),
+                                "audit_json_path": "repo_results.agentic_scaffolding.coordination_adoption_state",
+                                "severity": "fail",
+                            }
+                        ]
+                    },
+                },
+            }
+        )
+    )
+
+    issues = run_checks(config)
+
+    assert len(issues) == 1
+    assert issues[0].code == "audit_claim_mismatch"
+    assert issues[0].severity == "fail"

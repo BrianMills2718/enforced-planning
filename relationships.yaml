@@ -1,0 +1,69 @@
+version: 2
+
+# Coupling types — see docs/designs/RELATIONSHIPS_V2_DESIGN.md
+coupling_types:
+  locked:
+    action: block
+    description: Commit blocked until coupled doc also updated
+    actor: programmatic
+  generated:
+    action: regenerate
+    description: Regeneration command runs automatically when source changes
+    actor: programmatic
+  validated:
+    action: agent_verify
+    description: Agent checks if doc is actually stale; fixes or escalates
+    actor: agent
+
+required_reading:
+  defaults:
+    - CLAUDE.md
+    - PLANNING_OPERATING_MODEL.md
+
+governance:
+  - sources:
+      - "scripts/check_plan_deps.py"
+      - "scripts/check_plan_capabilities.py"
+      - "scripts/infer_dependencies.py"
+    docs:
+      - "PLANNING_OPERATING_MODEL.md"
+    type: locked
+    description: Checker scripts must stay aligned with the canonical operating model
+
+couplings:
+  - sources:
+      - "patterns/15_plan-workflow.md"
+    docs:
+      - "PLANNING_OPERATING_MODEL.md"
+    type: locked
+    description: Plan workflow pattern must stay aligned with the canonical model
+
+  - sources:
+      - "patterns/42_planning-hierarchy.md"
+    docs:
+      - "PLANNING_OPERATING_MODEL.md"
+    type: locked
+    description: Hierarchy pattern is the hierarchy VIEW of the operating model
+
+  - sources:
+      - "templates/plan.md.template"
+    docs:
+      - "PLANNING_OPERATING_MODEL.md"
+    type: locked
+    description: Plan template must reflect current operating model requirements
+
+  - sources:
+      - "PLANNING_OPERATING_MODEL.md"
+    docs:
+      - "STATIC_GRAPH_AND_RUNTIME_TRUTH.md"
+    type: validated
+    description: Runtime truth doc should stay consistent with operating model changes
+
+  - sources:
+      - "docs/designs/RELATIONSHIPS_V2_DESIGN.md"
+    docs:
+      - "STATIC_GRAPH_AND_RUNTIME_TRUTH.md"
+    type: validated
+    description: V2 design should be consistent with the static/runtime split
+
+overrides: {}

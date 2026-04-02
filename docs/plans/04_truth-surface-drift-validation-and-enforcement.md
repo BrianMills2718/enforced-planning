@@ -1,6 +1,6 @@
 # Plan #4: Truth-Surface Drift Validation and Enforcement
 
-**Status:** Planned
+**Status:** In Progress
 **Type:** implementation
 **Priority:** High
 **Blocked By:** None
@@ -58,6 +58,13 @@ another.
 3. Wire the validator into closeout/rollout workflows after advisory proving.
 4. Generate a compact current-state surface from the validator/audit outputs so
    operators stop hand-maintaining drift-prone status docs.
+
+### Progress Notes
+
+- Implemented first portable validator slice in `scripts/check_truth_surface_drift.py`.
+- First slice covers consumed-reservation path existence, active-work references
+  to completed plans, and explicit tracker-pattern/registry conflict rules.
+- Audit-output parity and generated current-state rendering remain open.
 
 ---
 

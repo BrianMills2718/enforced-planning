@@ -1,0 +1,23 @@
+# Illustrative scaffold only. Replace all paths and pattern rules with real
+# repo-local surfaces before running the validator.
+
+version: 1
+
+surfaces:
+  tracker_file: docs/ops/ACTIVE_TRACKER.md
+  registry_file: ~/.claude/coordination/active-work-registry.yaml
+  plan_index_file: docs/plans/CLAUDE.md
+
+checks:
+  consumed_reservations_exist:
+    severity: fail
+
+  no_active_work_for_complete_plans:
+    severity: fail
+
+  tracker_next_action_claim_conflicts:
+    rules:
+      - tracker_pattern: "create the agentic_scaffolding worktree"
+        project: agentic_scaffolding
+        scope: authoritative-coordination-wave9
+        severity: fail

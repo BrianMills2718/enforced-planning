@@ -1,6 +1,6 @@
 # Overnight Sprint — 2026-04-02 — Relationships V2 Implementation
 
-**Status:** Active
+**Status:** Complete
 **Owner:** claude-code
 **Started:** 2026-04-02 10:45 PDT
 **Design doc:** `docs/designs/RELATIONSHIPS_V2_DESIGN.md`
@@ -17,16 +17,17 @@ Only stop for:
 
 ## Acceptance Criteria (sprint complete when ALL green)
 
-- [ ] Plan dependency format standard in template (`#N`, `project#N`, `[future]`)
-- [ ] Plan dependency checker validates format (check_plan_deps.py)
-- [ ] Dependency inference engine scans markdown links, imports, plan refs
-- [ ] Inference engine tested on enforced-planning + ecosystem-ops repos
-- [ ] relationships.yaml V2 schema defined with coupling types (locked/generated/validated)
-- [ ] Migration script converts V1 → V2 format
-- [ ] enforced-planning test suite expanded to ≥25 tests
-- [ ] Cross-doc consistency: root CLAUDE.md references PLANNING_OPERATING_MODEL.md
-- [ ] All changes committed and pushed
-- [ ] All tests pass in modified repos
+- [x] Plan dependency format standard in template (`#N`, `project#N`, `[future]`) ✅
+- [x] Plan dependency checker validates format (check_plan_deps.py) ✅
+- [x] Dependency inference engine scans markdown links, imports, plan refs ✅
+- [x] Inference engine tested on enforced-planning (351 edges) + ecosystem-ops (264 edges) ✅
+- [x] relationships.yaml V2 schema defined with coupling types (locked/generated/validated) ✅
+- [x] Migration script converts V1 → V2 format (tested: 23 couplings migrated) ✅
+- [x] enforced-planning test suite expanded to 149 tests (was 107, added 42) ✅
+- [x] Cross-doc consistency: root CLAUDE.md references PLANNING_OPERATING_MODEL.md ✅
+- [x] All changes committed and pushed ✅
+- [x] All 149 tests pass ✅
+- [x] Coordination TTL already 24h (no change needed) ✅
 
 ---
 
@@ -170,3 +171,11 @@ Steps:
 | Time (PDT) | Phase | What |
 |-------------|-------|------|
 | 10:45 | 0 | Sprint started, tracker written |
+| 10:50 | 1 | Plan dep format in template + check_plan_deps.py |
+| 11:05 | 2 | Dependency inference engine (infer_dependencies.py) |
+| 11:15 | 3 | V2 schema + migration script + example relationships.yaml |
+| 11:25 | 4 | 42 new tests (149 total, all passing) |
+| 11:30 | 5 | Integration: inference on real repos (351 + 264 edges) |
+| 11:35 | 6 | Root CLAUDE.md references PLANNING_OPERATING_MODEL.md |
+| 11:35 | 7 | TTL already 24h — no change needed |
+| 11:40 | 8 | All pushed, tracker updated, sprint complete |

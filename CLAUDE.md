@@ -10,8 +10,9 @@ three layers of discipline:
 > Read the active tracker, execute the next unblocked phase, commit the verified slice, and continue.
 
 Active sprint tracker:
-- `docs/ops/OVERNIGHT_SPRINT_2026_04_02_TRUTH_SURFACE.md` while a sprint is active
-- otherwise start from `docs/plans/CLAUDE.md` and open the next bounded sprint before coding
+- No active sprint (truth-surface sprint complete 2026-04-02).
+- Start from `docs/plans/CLAUDE.md` to identify the next bounded sprint before coding.
+- Latest completed: `docs/ops/OVERNIGHT_SPRINT_2026_04_02_TRUTH_SURFACE.md` (Plans #2-5 landed).
 
 Rules during continuous execution:
 - complete the current phase, update the tracker, and move immediately to the next phase
@@ -77,7 +78,7 @@ make pr-auto  # ship
 
 ## References
 
-- `docs/ops/OVERNIGHT_SPRINT_2026_04_02_TRUTH_SURFACE.md` — Active execution authority
+- `docs/ops/OVERNIGHT_SPRINT_2026_04_02_TRUTH_SURFACE.md` — Completed sprint (Plans #2-5)
 - `PLANNING_OPERATING_MODEL.md` — Canonical methodology and artifact dependency model
 - `STATIC_GRAPH_AND_RUNTIME_TRUTH.md` — Canonical split between static graph and runtime coordination state
 - `GETTING_STARTED.md` — Full adoption guide

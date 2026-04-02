@@ -5,13 +5,15 @@ three layers of discipline:
 
 ## AUTONOMOUS EXECUTION CONTRACT
 
-> **NEVER STOP unless there is a real blocker or an unresolved architectural decision not covered by the active sprint.**
-> A completed plan, a green test run, or a finished commit is not a stop condition.
+> **NEVER STOP.** See root CLAUDE.md for the canonical definition. Stop ONLY for:
+> (1) irreversible action affecting shared state, or (2) genuine architectural decision not pre-made in the plan.
+> A completed plan, a green test run, or a finished commit is NOT a stop condition.
 > Read the active tracker, execute the next unblocked phase, commit the verified slice, and continue.
 
 Active sprint tracker:
-- `docs/ops/OVERNIGHT_SPRINT_2026_04_02_RELATIONSHIPS_V2.md` — Relationships V2 implementation sprint
-- **NEVER STOP.** Execute all phases. Commit every slice. Read the tracker for next action.
+- No active sprint. Last completed: `docs/ops/OVERNIGHT_SPRINT_2026_04_02_RELATIONSHIPS_V2.md` (V2 infra delivered).
+- Next work: adopt V2 tools in a governed repo pilot, or implement Layer 3 (agent verification protocol).
+- See root CLAUDE.md for canonical NEVER STOP definition.
 
 Rules during continuous execution:
 - complete the current phase, update the tracker, and move immediately to the next phase

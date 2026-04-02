@@ -60,7 +60,7 @@ A portable framework where:
 | Tests | 149 tests (42 new for V2 tools) | ✅ Complete |
 | Self-import filter | Inference skips repo's own package imports | ✅ Complete |
 | Makefile targets | `make infer`, `make check-deps`, `make check-caps`, `make migrate-rels` | ✅ Complete |
-| **V2 adoption pilot** | Migrate a real governed repo's relationships.yaml to V2 | 📋 Next |
+| **V2 adoption pilot** | Migrate a real governed repo's relationships.yaml to V2 | ✅ Complete (llm_client: 4 couplings migrated, 425 inferred edges, read-gate verified) |
 | **Pre-commit enforcement** | Hook that validates locked couplings on commit | 📋 Planned |
 | **Agent verification protocol** | Bounded mission spec for "validated" couplings (Codex/Claude SDK) | 📋 Planned |
 
@@ -96,7 +96,7 @@ A portable framework where:
 
 ## What's Next (recommended priority order)
 
-1. **Phase 4: V2 adoption pilot** — Migrate one real governed repo (e.g., llm_client) to relationships.yaml V2. Prove the inference engine catches real deps. Prove the migration script works end-to-end.
+1. ~~**Phase 4: V2 adoption pilot**~~ ✅ Done — llm_client migrated, read-gate verified, inferred_deps.json committed.
 
 2. **Phase 4: Agent verification protocol** — Design the bounded mission spec for "validated" couplings. This unblocks both Phase 5 (semantic review) and the "no shoulds" enforcement model.
 

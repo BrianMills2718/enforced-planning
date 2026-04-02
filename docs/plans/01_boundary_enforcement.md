@@ -71,8 +71,8 @@ N/A — internal to enforced-planning.
 ## Acceptance Criteria
 
 - [x] Plan template has Capabilities section (formerly "Data Boundaries") with Input/Output Schema, Producer, Consumer tables
-- [ ] `check_plan_boundaries.py` correctly identifies cross-project plans
-- [ ] Hook warns (not blocks) on cross-project plans without boundaries
+- [x] `check_plan_capabilities.py` correctly identifies cross-project plans (keyword heuristics, opt-out support)
+- [x] Script warns (not blocks) on cross-project plans without Capabilities (`--strict` for CI)
 - [ ] Pattern 15 references boundary requirement
 - [ ] Existing plans in enforced-planning are not broken by the change
 

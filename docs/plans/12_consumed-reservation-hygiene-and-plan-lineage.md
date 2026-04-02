@@ -1,6 +1,6 @@
 # Plan #12: Consumed Reservation Hygiene and Plan Lineage
 
-**Status:** 📋 Planned
+**Status:** ✅ Complete
 **Type:** design
 **Priority:** High
 **Blocked By:** 6, 7, 9, 11
@@ -55,52 +55,54 @@
 
 ---
 
-## Questions To Resolve
+## Policy Decisions
 
-1. Should a consumed reservation with a missing worktree-local `plan_file` be:
-   - kept as-is and treated as a hard failure,
-   - rewritten to a canonical repo plan path when the canonical file exists,
-   - or archived into a different historical state?
-2. Should consumed reservations block reuse of the same plan number within the canonical repo namespace?
-3. Should repo-local `check_coordination_claims.py --check` surface historical consumed reservations by default, or only active work plus an explicit historical mode?
-4. What is the sanctioned cleanup path when a proof or temporary worktree is removed after consuming a reservation but before canonical landing?
-5. Which of these invariants belong in deterministic truth-surface validation versus registry-hygiene tooling?
+1. Consumed reservations remain immutable lineage records. They must not be silently deleted.
+2. Consumed reservations are split conceptually into two lifecycle states:
+   - `landed`: the reserved work consumed a plan number and landed into canonical repo history
+   - `historical-unlanded`: the reserved work consumed a plan number in a temporary/proof/worktree path but did not land into canonical repo history
+3. When consumed work lands canonically, lineage should point at canonical repo truth. The authoritative `plan_file` should be rewritten or canonicalized to the canonical repo plan path rather than left pointing at a temporary worktree path.
+4. When a temporary or proof worktree is removed before canonical landing, the reservation should not keep pretending it points at a live plan file. It should be moved into an explicit `historical-unlanded` state or equivalent archival representation.
+5. Repo-local truth-surface checks should not fail hard on `historical-unlanded` lineage by default. That state should appear as a separate hygiene/history category or warning class rather than as an ordinary local runtime failure.
+6. Repo-local truth-surface checks should fail hard when lineage claims a canonical landed state but the canonical plan file is missing or contradictory.
+7. Consumed plan numbers are not reusable within the canonical repo namespace. Temporary experimentation must use a separate proof/temporary mechanism rather than reusing a consumed canonical plan number.
+8. Worktree removal/cleanup must require explicit lineage resolution: canonicalize to landed history, archive as `historical-unlanded`, or block cleanup until one of those outcomes is chosen.
+9. Deterministic promotions from semantic findings are blocked until the implementation distinguishes landed lineage from historical-unlanded lineage.
 
 ---
 
-## Plan
+## Monitoring Concerns And Uncertainties
 
-### Phase A — Lineage Policy
+These do not block the policy decision, but they must be monitored in the implementation slice:
 
-Success criteria:
-- one explicit policy exists for consumed reservation lifecycle
-- plan-number reuse semantics are explicit
-- canonicalization versus hard-failure semantics are explicit
+1. Canonicalization may be lossy if the framework cannot reliably determine which canonical plan file corresponds to an older worktree-local consumed reservation.
+2. Some repos may already contain historical consumed reservations that refer to proof branches or transient worktrees with no canonical successor. The migration path for those records must be explicit and auditable.
+3. Disallowing consumed-number reuse is the cleanest lineage policy, but it may increase pressure on plan-number allocation in repos that currently create many disposable proof branches.
+4. Repo-local operators may still want optional visibility into `historical-unlanded` records during deep diagnostics even if those records are not part of the default hard-fail view.
+5. Cleanup tooling must not make it easy to misclassify landed work as `historical-unlanded` just to silence warnings.
+6. The distinction between registry-hygiene warnings and repo-local runtime failures must stay obvious in rendered status surfaces so operators do not underreact to true canonical-landed contradictions.
 
-### Phase B — Operator Surface Policy
+## Implementation Follow-On Shape
 
-Success criteria:
-- the framework states what repo-local operators should see by default
-- historical consumed reservations are either in or out of the default repo-local view intentionally, not accidentally
-
-### Phase C — Implementation Slice Definition
-
-Success criteria:
-- one bounded follow-on implementation plan is ready
-- it names the exact scripts/tests/docs to change and which uncertainties are already closed
+The next implementation slice should:
+- add explicit lineage state for consumed reservations or the minimal equivalent representation needed to distinguish landed from historical-unlanded history
+- add canonicalization on landing
+- add cleanup-path enforcement for temporary/proof worktrees
+- update repo-local rendering so historical-unlanded lineage appears separately from hard local failures
+- add migration or audit handling for pre-existing stale consumed reservations
 
 ---
 
 ## Acceptance Criteria
 
-- [ ] The framework documents one unambiguous consumed-reservation lifecycle policy.
-- [ ] The framework documents whether plan-number reuse is legal after consumed historical reservations.
-- [ ] The framework documents whether repo-local truth-surface validation should treat missing historical consumed reservation paths as local failures, downgraded hygiene warnings, or a separate category.
-- [ ] The next implementation slice can proceed without reopening the same lineage questions.
+- [x] The framework documents one unambiguous consumed-reservation lifecycle policy.
+- [x] The framework documents whether plan-number reuse is legal after consumed historical reservations.
+- [x] The framework documents whether repo-local truth-surface validation should treat missing historical consumed reservation paths as local failures, downgraded hygiene warnings, or a separate category.
+- [x] The next implementation slice can proceed without reopening the same lineage questions.
 
 ---
 
 ## Notes
 
 - The prompt-eval pilot already delivered the measured evidence needed for this plan.
-- The core uncertainty is policy, not code mechanics.
+- The core policy is now decided. Remaining uncertainty is in migration, rollout ergonomics, and how to represent lineage state most cleanly in the shared runtime registry.

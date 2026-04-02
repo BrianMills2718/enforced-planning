@@ -4,6 +4,16 @@
 **Type:** implementation  <!-- implementation | design -->
 **Priority:** High | Medium | Low
 **Blocked By:** None
+<!-- Dependency format:
+  - #N              same-project plan reference (checker validates it resolves)
+  - project#N       cross-project plan reference (checker validates project + plan exist)
+  - #N — condition  plan ref with human-readable condition (condition not parsed)
+  - [future] desc   conceptual/aspirational block, not a real plan reference
+  Examples:
+  - #5 — extraction pipeline must be proven first
+  - llm_client#17 — structured output API must ship
+  - [future] improved benchmark infrastructure
+-->
 **Blocks:** None
 
 ---

@@ -433,6 +433,55 @@ Use `dry_run` when:
 5. **Requires discipline about artifact contracts**
    The value of this pattern comes from explicit input/output schemas. If phases use hidden notebook state, the pattern collapses.
 
+
+## Integration with Data Contracts
+
+Journey notebooks are the **executable specification** of data contracts defined in the plan template's Data Boundaries section. The relationship:
+
+| Planning Layer | Artifact | Detail Level |
+|---------------|----------|-------------|
+| Plan template `## Data Boundaries` | Summary table | "produces X for consumer Y" |
+| Journey notebook cells | Executable pseudocode → real code | Pydantic schemas, input/output shapes, contract validation |
+| `@boundary` decorator in code | Runtime enforcement | Validates schemas at every call |
+| Contract registry | Machine-readable state | Tracks all boundaries, call counts, violations |
+| Dashboard `/contracts` page | Human visibility | Shows schemas, compatibility, violations |
+
+### Schema validation cells
+
+Between any two cells that cross a project boundary, add a **contract validation cell**:
+
+```python
+# CONTRACT CHECK: research_v3.findings → onto-canon6.import_research_v3_memo
+from research_v3.loop_models import Finding
+from onto_canon6.adapters.research_v3_import import ResearchV3ImportInput  # consumer schema
+
+producer_fields = set(Finding.model_json_schema().get("properties", {}).keys())
+consumer_required = set(ResearchV3ImportInput.model_json_schema().get("required", []))
+missing = consumer_required - producer_fields
+assert not missing, f"Contract violation: consumer needs {missing}"
+print(f"✓ Contract valid: {len(consumer_required)} required fields provided")
+```
+
+These cells run in **Phase 2** (schema validation) before any implementation begins. If a schema mismatch is found, the contract negotiation happens immediately — not after weeks of coding.
+
+### Notebook lifecycle maps to contract lifecycle
+
+| Notebook Phase | Contract State |
+|---------------|---------------|
+| Phase 1: Pseudocode | Schemas proposed (Pydantic models drafted) |
+| Phase 2: Schema validation | Schemas locked (validation cells pass) |
+| Phase 3: Real code | `@boundary` decorators added, registry populated |
+| Phase 4: End-to-end | Contracts enforced at runtime, dashboard shows green |
+
+### Cell header convention for boundaries
+
+```python
+# BOUNDARY: {producer_project}.{function_name} → {ConsumerSchema}
+# Contract: {contract_registry_name}
+# Status: ✓ validated | ○ proposed | ✗ mismatched
+# Plan: docs/plans/NN_name.md, Step N.N
+```
+
 ## Relationship to Other Patterns
 
 | Pattern | Relationship |
@@ -442,6 +491,7 @@ Use `dry_run` when:
 | [Acceptance-Gate-Driven Development](13_acceptance-gate-driven-development.md) | Journey notebooks can render gate progression phase by phase |
 | [Plan Workflow](15_plan-workflow.md) | Plans define the work; journey notebooks render that work as runnable phase sections |
 | [Engineering Workflow](34_engineering-workflow.md) | Journey notebooks can act as the visible walkthrough surface for the workflow outputs |
+| Data Contracts (`@boundary`, `BoundaryModel`) | Journey notebooks are the executable specification of boundary contracts; schema validation cells verify contracts before implementation |
 
 ## Origin
 

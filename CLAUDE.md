@@ -10,9 +10,8 @@ three layers of discipline:
 > Read the active tracker, execute the next unblocked phase, commit the verified slice, and continue.
 
 Active sprint tracker:
-- No active sprint (scoped-validation sprint complete 2026-04-02).
-- Start from `docs/plans/CLAUDE.md` to identify the next bounded sprint before coding.
-- Latest completed: `docs/ops/OVERNIGHT_SPRINT_2026_04_02_SCOPE.md` (Plan #9 scoped hardening after Plan #8 / Plan #6 closeout).
+- `docs/ops/OVERNIGHT_SPRINT_2026_04_02_RELATIONSHIPS_V2.md` — Relationships V2 implementation sprint
+- **NEVER STOP.** Execute all phases. Commit every slice. Read the tracker for next action.
 
 Rules during continuous execution:
 - complete the current phase, update the tracker, and move immediately to the next phase

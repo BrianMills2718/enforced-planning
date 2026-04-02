@@ -89,10 +89,24 @@
 
 ## Acceptance Criteria
 
+> Feature-level criteria (what the plan accomplishes):
+- [ ] [Feature criterion 1]
+- [ ] [Feature criterion 2]
+
+> Process criteria (quality gates):
 - [ ] Required tests pass
 - [ ] Full test suite passes
 - [ ] Type check passes
 - [ ] Docs updated
+
+---
+
+## Open Questions
+
+> Optional. Use when unknowns exist before implementation. See Pattern #28.
+
+- [ ] [Question 1] — Status: OPEN | Why it matters: [...]
+- [ ] [Question 2] — Status: RESOLVED | Answer: [...]
 
 ---
 

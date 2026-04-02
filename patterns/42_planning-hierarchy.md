@@ -158,11 +158,17 @@ Level 7: DASHBOARD + OBSERVABILITY
 
 ### Level 6: Tests + Acceptance Gates
 
-**What:** Automated proof that the implementation meets the plan's acceptance criteria.
+**What:** Automated proof that the implementation meets the plan's acceptance criteria. Two levels of tests:
+- **Unit/integration tests** (per-plan): verify individual plan steps work correctly
+- **Acceptance gates** (per-feature, Pattern #13): verify the feature works end-to-end with real (non-mocked) integration. Multiple plans may contribute to one gate.
+
+> Plans define "what to build"; acceptance gates define "what counts as done."
+> A plan is complete when its acceptance criteria pass. A gate is complete when its
+> real E2E tests pass with no mocks. These are different verification levels.
 
 **Where it lives:**
-- `tests/` per project
-- Acceptance gate YAML files (Pattern #13)
+- `tests/` per project (unit/integration)
+- Acceptance gate YAML files (Pattern #13, feature-level E2E proof)
 
 **References:** Level 3 (tests verify acceptance criteria), Level 4 (notebook is the integration test)
 

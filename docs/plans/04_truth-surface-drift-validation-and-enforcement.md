@@ -1,6 +1,6 @@
 # Plan #4: Truth-Surface Drift Validation and Enforcement
 
-**Status:** In Progress
+**Status:** Complete
 **Type:** implementation
 **Priority:** High
 **Blocked By:** None
@@ -92,16 +92,18 @@ another.
 
 ## Acceptance Criteria
 
-- [ ] Runtime truth-surface invariants are explicit and testable.
-- [ ] The validator distinguishes static-graph drift from runtime-state drift.
-- [ ] The first rollout/current-state surface can be derived from validator or
+- [x] Runtime truth-surface invariants are explicit and testable.
+- [x] The validator distinguishes static-graph drift from runtime-state drift.
+- [x] The first rollout/current-state surface can be derived from validator or
       audit output rather than hand-maintained prose alone.
 
 ---
 
 ## Open Questions
 
-- [ ] Which enforcement points should stay advisory first, and for how long,
+- [x] Which enforcement points should stay advisory first, and for how long,
       before hard-failing?
-- [ ] Should reservation and claim storage stay file-based for the first validator
+      - Resolved for first slice: keep repo-local wiring advisory by default until real governed repos adopt the config.
+- [x] Should reservation and claim storage stay file-based for the first validator
       slice, or move to SQLite first?
+      - Resolved for first slice: keep file-based storage; revisit SQLite when coordination moves beyond single-host scope.

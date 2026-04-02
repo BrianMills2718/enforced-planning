@@ -1,6 +1,6 @@
 # Plan #5: Truth-Surface Validator Completion Sprint
 
-**Status:** In Progress
+**Status:** Complete
 **Type:** implementation
 **Priority:** High
 **Blocked By:** None
@@ -114,18 +114,20 @@ Success criteria:
 
 ## Acceptance Criteria
 
-- [ ] The repo has one explicit active sprint tracker for this work.
-- [ ] Audit-output parity checks are implemented and tested.
-- [ ] Generated current-state rendering is implemented and tested.
-- [ ] Framework docs point operators to generated/runtime truth surfaces instead of hand-maintained status prose where applicable.
-- [ ] The sprint leaves a truthful next phase rather than an implied one.
+- [x] The repo has one explicit active sprint tracker for this work.
+- [x] Audit-output parity checks are implemented and tested.
+- [x] Generated current-state rendering is implemented and tested.
+- [x] Framework docs point operators to generated/runtime truth surfaces instead of hand-maintained status prose where applicable.
+- [x] The sprint leaves a truthful next phase rather than an implied one.
 
 ---
 
 ## Open Questions
 
-- [ ] Should the current-state renderer consume raw validator JSON only, or also support direct surface inputs for convenience?
-- [ ] Which workflow entrypoint should eventually host truth-surface validation by default: plan closeout, rollout closeout, or both?
+- [x] Should the current-state renderer consume raw validator JSON only, or also support direct surface inputs for convenience?
+      - Resolved for first slice: support validator config directly and raw JSON payloads.
+- [x] Which workflow entrypoint should eventually host truth-surface validation by default: plan closeout, rollout closeout, or both?
+      - Resolved for first slice: document the workflow first; defer mandatory wiring until repo-local adoption proves stable.
 
 ---
 

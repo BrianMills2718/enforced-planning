@@ -1,6 +1,6 @@
 # Overnight Sprint — 2026-04-02 — Truth Surface Completion
 
-**Status:** Active
+**Status:** Complete
 **Owner:** codex
 **Canonical Plan:** `docs/plans/05_truth-surface-validator-completion-sprint.md`
 **Depends On:** Plan #4 first validator slice already landed
@@ -45,7 +45,7 @@ Success criteria:
 
 ### Phase D — Workflow Wiring and Closeout
 
-Status: In progress
+Status: Complete
 Success criteria:
 - example workflow wiring or invocation guidance exists
 - Plan #4 progress notes are truthful
@@ -64,8 +64,8 @@ Success criteria:
 
 ## Current Phase
 
-Phase D
+Complete
 
 ## Next Action
 
-Document validator/renderer workflow wiring in framework entry docs and update closeout notes for Plan #4 and Plan #5.
+Next bounded follow-on: adopt the validator/renderer in a governed repo and prove advisory workflow wiring against a live rollout surface.

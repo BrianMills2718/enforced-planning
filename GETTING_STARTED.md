@@ -114,6 +114,20 @@ git branch -d test-setup
 
 If that worked, you're ready!
 
+### Step 5: Optional Truth-Surface Validation
+
+For repos with runtime coordination, rollout trackers, or reservation state,
+create a repo-local config from `templates/truth_surface_drift.yaml.example` and
+run:
+
+```bash
+python scripts/check_truth_surface_drift.py --config path/to/truth_surface_drift.yaml
+python scripts/render_truth_surface_status.py --config path/to/truth_surface_drift.yaml
+```
+
+This gives you a generated current-state summary driven by measured surfaces
+instead of hand-maintained tracker prose alone.
+
 ---
 
 ## Core Concepts

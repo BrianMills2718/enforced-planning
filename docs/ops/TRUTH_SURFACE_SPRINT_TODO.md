@@ -5,7 +5,7 @@
 - [x] Phase A — Sprint contract and entry surface
 - [x] Phase B — Audit-output parity checks
 - [x] Phase C — Generated current-state rendering
-- [ ] Phase D — Workflow wiring and closeout
+- [x] Phase D — Workflow wiring and closeout
 
 ## Immediate Next Actions
 

@@ -134,10 +134,27 @@ The framework separates **portable** scripts from **project-specific** extension
 2. Create project-specific scripts in `scripts/` as needed
 3. Project scripts can import from enforced-planning or replace them entirely
 
+## Truth-Surface Validation Workflow
+
+For coordination-heavy repos, keep one config file that names the active tracker,
+plan index, runtime registry, and any measured audit surface.
+
+```bash
+python scripts/check_truth_surface_drift.py --config path/to/truth_surface_drift.yaml
+python scripts/render_truth_surface_status.py --config path/to/truth_surface_drift.yaml
+```
+
+Use the validator to detect contradictions. Use the renderer to produce a compact
+current-state summary from validator output instead of hand-maintaining status
+prose.
+
+See `templates/truth_surface_drift.yaml.example` for the scaffold.
+
 ## Full Documentation
 
 See `patterns/` directory for detailed documentation of each pattern:
 - `PLANNING_OPERATING_MODEL.md` - Canonical methodology and artifact dependency model
+- `STATIC_GRAPH_AND_RUNTIME_TRUTH.md` - Static graph vs runtime coordination architecture
 - `patterns/01_README.md` - Pattern index (core + optional modules)
 - `patterns/15_plan-workflow.md` - How bounded plans work inside the operating model
 - `patterns/13_acceptance-gate-driven-development.md` - Full acceptance gate system

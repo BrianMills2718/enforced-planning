@@ -10,7 +10,8 @@ three layers of discipline:
 > Read the active tracker, execute the next unblocked phase, commit the verified slice, and continue.
 
 Active sprint tracker:
-- `docs/ops/OVERNIGHT_SPRINT_2026_04_02_TRUTH_SURFACE.md`
+- `docs/ops/OVERNIGHT_SPRINT_2026_04_02_TRUTH_SURFACE.md` while a sprint is active
+- otherwise start from `docs/plans/CLAUDE.md` and open the next bounded sprint before coding
 
 Rules during continuous execution:
 - complete the current phase, update the tracker, and move immediately to the next phase

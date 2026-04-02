@@ -66,7 +66,9 @@ another.
   to completed plans, and explicit tracker-pattern/registry conflict rules.
 - Second slice adds config-driven audit claim parity rules for comparing claimed
   text state against measured audit output.
-- Generated current-state rendering remains open.
+- Third slice adds `scripts/render_truth_surface_status.py` so validator findings
+  can be rendered into a deterministic current-state summary.
+- Workflow wiring and rollout-facing closeout guidance remain open.
 
 ---
 

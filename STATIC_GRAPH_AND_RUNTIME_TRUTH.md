@@ -86,6 +86,9 @@ relationship graph.
 
 Canonical role: compare static declarations and runtime facts.
 
+Generated current-state surfaces should be rendered from validator or audit
+output where feasible, rather than maintained as freehand prose.
+
 This layer answers:
 - does the active tracker reflect actual runtime progress?
 - does a consumed reservation point to a real plan file?

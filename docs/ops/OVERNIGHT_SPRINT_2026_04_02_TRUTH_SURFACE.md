@@ -37,7 +37,7 @@ Success criteria:
 
 ### Phase C — Generated Current-State Rendering
 
-Status: In progress
+Status: Complete
 Success criteria:
 - renderer emits deterministic summary text from validator output
 - tests cover clean and non-clean rendering
@@ -45,7 +45,7 @@ Success criteria:
 
 ### Phase D — Workflow Wiring and Closeout
 
-Status: Planned
+Status: In progress
 Success criteria:
 - example workflow wiring or invocation guidance exists
 - Plan #4 progress notes are truthful
@@ -64,8 +64,8 @@ Success criteria:
 
 ## Current Phase
 
-Phase C
+Phase D
 
 ## Next Action
 
-Create `scripts/render_truth_surface_status.py` and renderer tests for clean and non-clean summaries.
+Document validator/renderer workflow wiring in framework entry docs and update closeout notes for Plan #4 and Plan #5.

@@ -12,7 +12,7 @@
 | 8 | Truth-Surface Adoption Pilot Execution Sprint (`08_truth-surface-adoption-pilot-execution-sprint.md`) | High | ✅ Complete | 6, 7, default workflow wiring beyond advisory mode |
 | 9 | Scoped Truth-Surface Validation By Canonical Repo Identity (`09_scoped-truth-surface-validation.md`) | High | ✅ Complete | cleaner governed-repo adoption beyond the first pilot |
 | 10 | Framework Truth-Surface and Onboarding Reconciliation (`10_framework-truth-surface-and-onboarding-reconciliation.md`) | High | ✅ Complete | clearer consumer adoption and Plan #7 execution sprint |
-| 11 | Semantic Truth-Surface Review Execution Sprint (`11_semantic-truth-surface-review-execution-sprint.md`) | High | 📋 Planned | first implementation slice of optional semantic truth-surface review |
+| 11 | Semantic Truth-Surface Review Execution Sprint (`11_semantic-truth-surface-review-execution-sprint.md`) | High | 🚧 In Progress | first implementation slice of optional semantic truth-surface review |
 
 ## Status Key
 

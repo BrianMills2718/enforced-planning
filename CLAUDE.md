@@ -3,6 +3,21 @@
 A portable framework for AI-assisted software development that enforces
 three layers of discipline:
 
+## AUTONOMOUS EXECUTION CONTRACT
+
+> **NEVER STOP unless there is a real blocker or an unresolved architectural decision not covered by the active sprint.**
+> A completed plan, a green test run, or a finished commit is not a stop condition.
+> Read the active tracker, execute the next unblocked phase, commit the verified slice, and continue.
+
+Active sprint tracker:
+- `docs/ops/OVERNIGHT_SPRINT_2026_04_02_TRUTH_SURFACE.md`
+
+Rules during continuous execution:
+- complete the current phase, update the tracker, and move immediately to the next phase
+- log uncertainties in the tracker instead of silently stopping
+- commit every verified slice as its own rollback point
+- treat stale tracker pointers as governance regressions and fix them before relying on them
+
 1. **Enforced Planning** — Specifications locked before implementation.
    Question-driven investigation, plan workflow with `[Plan #N]` commits,
    acceptance gates.
@@ -61,7 +76,9 @@ make pr-auto  # ship
 
 ## References
 
+- `docs/ops/OVERNIGHT_SPRINT_2026_04_02_TRUTH_SURFACE.md` — Active execution authority
 - `PLANNING_OPERATING_MODEL.md` — Canonical methodology and artifact dependency model
+- `STATIC_GRAPH_AND_RUNTIME_TRUTH.md` — Canonical split between static graph and runtime coordination state
 - `GETTING_STARTED.md` — Full adoption guide
 - `patterns/01_README.md` — Pattern index with dependencies
 - `adr/` — Framework architecture decisions

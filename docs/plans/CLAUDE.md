@@ -6,6 +6,7 @@
 | 2 | Canonical Planning Operating Model (`02_canonical-planning-operating-model.md`) | High | ✅ Complete | 3, 4 |
 | 3 | Static Planning Graph and Runtime Truth-Surface Split (`03_static-planning-graph-and-runtime-truth-surface-split.md`) | High | ✅ Complete | 4 |
 | 4 | Truth-Surface Drift Validation and Enforcement (`04_truth-surface-drift-validation-and-enforcement.md`) | High | 🚧 In Progress | project-meta rollout hardening |
+| 5 | Truth-Surface Validator Completion Sprint (`05_truth-surface-validator-completion-sprint.md`) | High | 🚧 In Progress | portable rollout guidance, project-meta runtime truth adoption |
 
 ## Status Key
 

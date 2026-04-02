@@ -138,6 +138,7 @@ def check_file_existence(root: Path) -> list[str]:
         "CLAUDE.md.tests",
         "CLAUDE.md.docs-adr",
         "doc_coupling.yaml.example",
+        "relationships.yaml.example",
         "acceptance_gate.yaml.example",
     ]
     for t in templates:

@@ -1,128 +1,95 @@
 # Pattern: Documentation Graph
 
-> **STATUS: IMPLEMENTED** - Plan #215 (2026-01-25)
-> `relationships.yaml` is now the unified source of truth.
-> Scripts read from relationships.yaml with fallback to legacy configs.
-
 ## Problem
 
-Documentation relationships are scattered across multiple config files:
-- `governance.yaml` maps ADRs → code
-- `doc_coupling.yaml` maps code → docs
+Repositories need a machine-readable graph that answers static governance
+questions such as:
 
-This makes it impossible to trace: ADR → target architecture → current architecture → gaps → plans → code. Adding new relationship types requires new config files.
+- what docs must be read before editing a file?
+- what docs may need updating when a file changes?
+- what architecture or boundary docs govern a plan or subsystem?
+- what generated surfaces must stay in sync with source artifacts?
+
+At the same time, the ecosystem also has runtime coordination facts:
+- active claims
+- reservations
+- worktree state
+- rollout landing state
+- tracker progress
+
+These are not the same kind of truth. Mixing them into one graph makes the
+result too overloaded and hard to reason about.
 
 ## Solution
 
-Unify all documentation relationships into a single `relationships.yaml` with a nodes/edges schema.
+Use a **static documentation/planning graph** for durable relationships and keep
+**runtime coordination state** in separate stores.
 
-**Implementation:** `scripts/relationships.yaml` contains:
-- `adrs`: ADR metadata (number → title, file)
-- `governance`: ADR → source mappings (used by sync_governance.py)
-- `couplings`: source → doc mappings (used by check_doc_coupling.py)
+Canonical references:
+- [`../PLANNING_OPERATING_MODEL.md`](../PLANNING_OPERATING_MODEL.md) — defines the planning artifact dependency model
+- [`../STATIC_GRAPH_AND_RUNTIME_TRUTH.md`](../STATIC_GRAPH_AND_RUNTIME_TRUTH.md) — defines the static-vs-runtime split
 
-## Files
+## What This Pattern Owns
 
-| File | Purpose |
-|------|---------|
-| `scripts/relationships.yaml` | Single source of truth for all doc relationships |
-| `scripts/sync_governance.py` | Reads `governs` edges, embeds headers in code |
-| `scripts/check_doc_coupling.py` | Reads `documented_by` edges with `coupling: strict` |
-| `scripts/validate_plan.py` | Queries graph before implementation (the "gate") |
+This pattern owns the static graph, usually in `scripts/relationships.yaml`.
 
-## Schema
+It should cover:
+- required-reading defaults
+- source-to-doc update couplings
+- architecture / boundary / PRD authority links
+- plan / notebook / evidence alignment links
+- generated-surface sync checks
+- optional file-scope policy
+
+It should not store:
+- active claims or sessions
+- plan reservations as live state
+- current worktree status
+- tracker progress markers
+- canonical-root landing state
+
+## Canonical Shape
 
 ```yaml
-# scripts/relationships.yaml
-version: 1
+version: 2
 
-# Node namespaces - glob patterns for doc categories
-nodes:
-  adr: docs/adr/*.md
-  target: docs/architecture/target/*.md
-  current: docs/architecture/current/*.md
-  plans: docs/plans/*.md
-  gaps: docs/architecture/gaps/*.yaml
-  source: src/**/*.py
+required_reading:
+  defaults:
+    - CLAUDE.md
 
-# Edge types
-edge_types:
-  governs:      # ADR governs code/docs (embeds headers)
-  implements:   # Plan implements toward target
-  documented_by: # Code documented by architecture doc (CI enforcement)
-  vision_for:   # Target doc that current implements toward
-  details:      # Plan linked to detailed gap analysis
-
-# Relationships
-edges:
-  - from: adr/0001-everything-is-artifact
-    to: [target/01_README, source/src/world/artifacts.py]
-    type: governs
-
-  - from: source/src/world/ledger.py
-    to: current/resources
-    type: documented_by
-    coupling: strict  # CI fails if not updated together
+adrs: {}
+governance: []
+couplings: []
+architecture: []
+notebook_links: []
+capability_surfaces: []
+verify_sync: []
 ```
 
-## Setup
-
-1. **Create relationships.yaml** from existing configs:
-```bash
-# Merge governance.yaml + doc_coupling.yaml into relationships.yaml
-python scripts/migrate_to_relationships.py  # (not yet implemented — merge manually)
-```
-
-2. **Update scripts** to read new format (or use existing scripts until migrated)
-
-3. **Deprecate old configs** once migration complete
-
-## Usage
-
-```bash
-# Governance headers (same as before)
-python scripts/sync_governance.py --check
-python scripts/sync_governance.py --apply
-
-# Doc coupling (same as before)
-python scripts/check_doc_coupling.py --strict
-
-# NEW: Plan validation gate
-python scripts/validate_plan.py --plan 28
-# Shows: ADRs that govern, docs to update, uncertainties to resolve
-```
+Repos can adopt a smaller subset, but the graph should stay static and durable.
 
 ## Relationship to Other Patterns
 
-| Pattern | Status | Relationship |
-|---------|--------|--------------|
-| [ADR Governance](08_adr-governance.md) | Subsumed | `governs` edges replace `governance.yaml` |
-| [Doc-Code Coupling](10_doc-code-coupling.md) | Subsumed | `documented_by` edges replace `doc_coupling.yaml` |
-| [Conceptual Modeling](27_conceptual-modeling.md) | Complementary | Ontology/glossary are compression layers routed by this graph |
+| Pattern | Relationship |
+|---------|--------------|
+| [Plan Workflow](15_plan-workflow.md) | Plans cite the docs this graph routes them to |
+| [Question-Driven Planning](28_question-driven-planning.md) | Investigation produces the evidence that plans then cite |
+| [Gap Analysis](30_gap-analysis.md) | Plans link current vs target state against docs routed by this graph |
+| [Executable Journey Notebooks](36_executable-journey-notebooks.md) | Notebook links can be represented as static alignment edges |
+| [Planning Hierarchy](42_planning-hierarchy.md) | The graph supports the artifact model; it does not replace it |
 
-Both patterns remain valid until migration is complete. After migration, they become implementation details of this unified pattern.
+## Validation Model
 
-**Rationale:** See [META-ADR-0005](../adr/0005-hierarchical-context-compression.md) — the documentation graph is the routing layer for hierarchical context compression. Each documentation layer (glossary, ontology, domain model, ADRs, architecture docs) is a lossy compression of the codebase at a different zoom level. This graph determines which compression to inject for a given task.
+This pattern supports validators such as:
+- required-reading gates
+- doc-code coupling checks
+- plan validation against governing docs
+- generated-surface sync checks
 
-## Limitations
+Runtime truth-surface drift validation is a separate layer.
 
-- **Migration required** - Existing scripts need updating to read new format
-- **Single large file** - All relationships in one file (could split by namespace if too large)
-- **Learning curve** - Contributors must understand edge types
+## Transitional Guidance
 
-## Complementary: Validation Gate
-
-The graph enables a pre-implementation validation workflow:
-
-```bash
-$ python scripts/validate_plan.py --plan 28
-Checking Plan #28 against relationship graph...
-- ADRs that govern affected files: [0001, 0003]
-- Target docs to check consistency: [target/05_contracts.md]
-- Current docs that need updating: [current/artifacts_executor.md]
-- DESIGN_CLARIFICATIONS <70% items: [#7 Event system]
-
-⚠️  1 uncertainty found - discuss with user before implementing
-```
-
-The graph is the map; validation is the gate.
+Older repos may still use narrower templates such as `doc_coupling.yaml.example`
+or minimal `relationships.yaml` scaffolds. New repos should prefer the canonical
+`relationships.yaml.example` scaffold and keep runtime state elsewhere.

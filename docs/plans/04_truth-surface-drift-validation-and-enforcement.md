@@ -3,7 +3,7 @@
 **Status:** Planned
 **Type:** implementation
 **Priority:** High
-**Blocked By:** Plan #3
+**Blocked By:** None
 **Blocks:** project-meta rollout hardening, authoritative coordination closeout
 
 ---

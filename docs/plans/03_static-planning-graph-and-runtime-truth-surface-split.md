@@ -1,6 +1,6 @@
 # Plan #3: Static Planning Graph and Runtime Truth-Surface Split
 
-**Status:** Planned
+**Status:** Complete
 **Type:** design
 **Priority:** High
 **Blocked By:** None
@@ -87,21 +87,23 @@ or enforcement work lands.
 
 ## Acceptance Criteria
 
-- [ ] The framework states unambiguously which concerns belong in the static
+- [x] The framework states unambiguously which concerns belong in the static
       graph and which belong in runtime coordination state.
-- [ ] The next schema shape for `relationships.yaml` is defined in typed edge
+- [x] The next schema shape for `relationships.yaml` is defined in typed edge
       classes rather than generic “related docs” semantics.
-- [ ] The validator layer is described as a separate concern rather than hidden
+- [x] The validator layer is described as a separate concern rather than hidden
       inside the static graph.
 
 ---
 
 ## Open Questions
 
-- [ ] Should static-graph edge classes be encoded directly in `relationships.yaml`
+- [x] Should static-graph edge classes be encoded directly in `relationships.yaml`
       or in a versioned schema document that `relationships.yaml` conforms to?
-- [ ] How much plan/notebook/capability alignment should be encoded in the static
+      - Resolved: encode the edge classes directly in the canonical scaffold and document the semantics separately.
+- [x] How much plan/notebook/capability alignment should be encoded in the static
       graph versus discovered from plan parsing?
+      - Resolved: encode durable alignment surfaces in the graph; let plan parsing infer transient execution facts.
 
 ---
 

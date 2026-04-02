@@ -197,7 +197,10 @@ fi
 
 if [[ "$MODE" == "--full" ]]; then
     if [[ ! -f "$TARGET_DIR/scripts/relationships.yaml" ]]; then
-        if [[ -f "$SCRIPT_DIR/templates/doc_coupling.yaml.example" ]]; then
+        if [[ -f "$SCRIPT_DIR/templates/relationships.yaml.example" ]]; then
+            cp "$SCRIPT_DIR/templates/relationships.yaml.example" "$TARGET_DIR/scripts/relationships.yaml"
+            echo -e "  ${GREEN}Created: scripts/relationships.yaml${NC}"
+        elif [[ -f "$SCRIPT_DIR/templates/doc_coupling.yaml.example" ]]; then
             cp "$SCRIPT_DIR/templates/doc_coupling.yaml.example" "$TARGET_DIR/scripts/relationships.yaml"
             echo -e "  ${GREEN}Created: scripts/relationships.yaml${NC}"
         fi

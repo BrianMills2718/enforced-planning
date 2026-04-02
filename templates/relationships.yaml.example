@@ -1,0 +1,41 @@
+# Canonical static planning/governance graph scaffold.
+#
+# This file is for durable, git-tracked relationships between code, docs, plans,
+# capabilities, and generated surfaces. Do NOT put live runtime coordination
+# state here (active claims, reservations, landing state, tracker progress).
+
+version: 2
+
+required_reading:
+  defaults:
+    - CLAUDE.md
+
+adrs: {}
+
+governance: []
+
+couplings: []
+
+architecture: []
+
+# Optional: declare plan -> notebook / evidence alignment.
+notebook_links: []
+
+# Optional: declare enduring cross-project capability surfaces.
+capability_surfaces: []
+
+# Optional generated-surface sync checks.
+verify_sync: []
+
+# Optional scoped file coverage policy.
+# - managed: files under managed include that are NOT explicitly registered
+#   in governance/couplings/architecture will trigger policy actions.
+# - unmanaged: files outside managed scope.
+#
+# file_scope:
+#   managed:
+#     include: ["**"]
+#     exclude: [".venv/**", ".claude/**", "generated/**"]
+#     mode: warn
+#   unmanaged:
+#     mode: ignore

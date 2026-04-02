@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 from pathlib import Path
 
 from scripts.check_truth_surface_drift import Issue
@@ -40,6 +42,49 @@ def test_render_clean_summary() -> None:
     rendered = render_status([])
 
     assert rendered == "Truth Surface Status\n- Overall: clean\n- Issues: 0\n"
+
+
+def test_renderer_cli_runs_outside_repo_root(tmp_path: Path) -> None:
+    tracker = tmp_path / "tracker.md"
+    tracker.write_text("next action: nothing")
+    plan_index = tmp_path / "CLAUDE.md"
+    plan_index.write_text(
+        "# Implementation Plans\n| # | Gap | Priority | Status | Blocks |\n|---|-----|----------|--------|--------|\n"
+    )
+    registry = tmp_path / "registry.yaml"
+    registry.write_text("active_work: []\nplan_reservations: []\n")
+    config = tmp_path / "config.yaml"
+    config.write_text(
+        json.dumps({
+            "surfaces": {
+                "tracker_file": str(tracker),
+                "registry_file": str(registry),
+                "plan_index_file": str(plan_index),
+            },
+            "checks": {
+                "consumed_reservations_exist": {"severity": "fail"},
+                "no_active_work_for_complete_plans": {"severity": "fail"},
+            },
+        })
+    )
+
+    script_path = Path(__file__).resolve().parents[1] / "scripts" / "render_truth_surface_status.py"
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(script_path),
+            "--config",
+            str(config),
+        ],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert "Truth Surface Status" in result.stdout
+    assert "- Overall: clean" in result.stdout
 
 
 def test_load_issue_payload(tmp_path: Path) -> None:

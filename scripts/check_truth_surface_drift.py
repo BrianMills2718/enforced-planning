@@ -51,6 +51,14 @@ def _load_structured(path: Path) -> Any:
     return yaml.safe_load(path.read_text())
 
 
+def _resolve_surface_path(path_value: str, *, base_dir: Path) -> Path:
+    """Resolve a config-declared surface path relative to the config directory."""
+    path = Path(path_value).expanduser()
+    if not path.is_absolute():
+        path = base_dir / path
+    return path
+
+
 def _extract_path(data: Any, path: str) -> Any:
     """Extract a dotted path from nested dict/list data.
 
@@ -218,7 +226,7 @@ def _check_tracker_rules(
 
 
 def _check_audit_claim_rules(
-    tracker_text: str, rules: list[dict[str, Any]]
+    tracker_text: str, rules: list[dict[str, Any]], *, base_dir: Path
 ) -> list[Issue]:
     """Compare claimed text state against measured audit output via config rules."""
     issues: list[Issue] = []
@@ -246,7 +254,9 @@ def _check_audit_claim_rules(
                 f"source_pattern must define named group '{group_name}' for audit claim rules"
             )
         if audit_file not in audit_cache:
-            audit_cache[audit_file] = _load_structured(Path(audit_file).expanduser())
+            audit_cache[audit_file] = _load_structured(
+                _resolve_surface_path(audit_file, base_dir=base_dir)
+            )
         measured_value = _extract_path(audit_cache[audit_file], audit_json_path)
         if str(claim_value) != str(measured_value):
             issues.append(
@@ -269,20 +279,22 @@ def _check_audit_claim_rules(
 
 def run_checks(config_path: Path) -> list[Issue]:
     """Run all enabled checks from a truth-surface drift config."""
+    config_path = config_path.expanduser().resolve()
     config = _load_yaml(config_path)
+    config_dir = config_path.parent
     surfaces = config.get("surfaces", {})
     if not isinstance(surfaces, dict):
         raise ValueError("surfaces must be a mapping")
 
-    registry_file = Path(surfaces["registry_file"]).expanduser()
-    plan_index_file = Path(surfaces["plan_index_file"]).expanduser()
+    registry_file = _resolve_surface_path(str(surfaces["registry_file"]), base_dir=config_dir)
+    plan_index_file = _resolve_surface_path(str(surfaces["plan_index_file"]), base_dir=config_dir)
     tracker_file = surfaces.get("tracker_file")
 
     registry = _load_yaml(registry_file)
     plan_statuses = _parse_plan_index(plan_index_file)
     tracker_text = ""
     if tracker_file:
-        tracker_text = Path(str(tracker_file)).expanduser().read_text()
+        tracker_text = _resolve_surface_path(str(tracker_file), base_dir=config_dir).read_text()
 
     checks = config.get("checks", {})
     if not isinstance(checks, dict):
@@ -314,7 +326,7 @@ def run_checks(config_path: Path) -> list[Issue]:
     audit_cfg = checks.get("audit_claim_rules", {})
     if audit_cfg and tracker_text:
         rules = audit_cfg.get("rules", []) if isinstance(audit_cfg, dict) else []
-        issues.extend(_check_audit_claim_rules(tracker_text, rules))
+        issues.extend(_check_audit_claim_rules(tracker_text, rules, base_dir=config_dir))
 
     return sorted(issues, key=lambda issue: (_severity_rank(issue.severity), issue.code), reverse=True)
 

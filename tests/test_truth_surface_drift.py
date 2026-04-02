@@ -190,6 +190,68 @@ def test_tracker_pattern_conflict_warns(tmp_path: Path) -> None:
     assert issues[0].severity == "warn"
 
 
+def test_relative_surface_paths_resolve_from_config_dir(tmp_path: Path) -> None:
+    config_dir = tmp_path / "pilot"
+    config_dir.mkdir()
+    existing_plan = config_dir / "plan-1.md"
+    existing_plan.write_text("# plan")
+    registry = config_dir / "registry.yaml"
+    registry.write_text(
+        yaml.safe_dump(
+            {
+                "active_work": [],
+                "plan_reservations": [
+                    {"status": "consumed", "plan": 1, "plan_file": str(existing_plan)}
+                ],
+            }
+        )
+    )
+    plan_index = config_dir / "CLAUDE.md"
+    _write(
+        plan_index,
+        """
+        # Implementation Plans
+        | # | Gap | Priority | Status | Blocks |
+        |---|-----|----------|--------|--------|
+        | 1 | Example | High | 📋 Planned | None |
+        """,
+    )
+    tracker = config_dir / "tracker.md"
+    tracker.write_text("Governed audit status: PASS")
+    audit = config_dir / "audit.json"
+    audit.write_text('{"status": "PASS"}')
+    config = config_dir / "config.yaml"
+    config.write_text(
+        yaml.safe_dump(
+            {
+                "surfaces": {
+                    "tracker_file": "tracker.md",
+                    "registry_file": "registry.yaml",
+                    "plan_index_file": "CLAUDE.md",
+                },
+                "checks": {
+                    "consumed_reservations_exist": {"severity": "fail"},
+                    "no_active_work_for_complete_plans": {"severity": "fail"},
+                    "audit_claim_rules": {
+                        "rules": [
+                            {
+                                "source_pattern": r"Governed audit status: (?P<claim>\\w+)",
+                                "audit_file": "audit.json",
+                                "audit_json_path": "status",
+                                "severity": "fail",
+                            }
+                        ]
+                    },
+                },
+            }
+        )
+    )
+
+    issues = run_checks(config)
+
+    assert issues == []
+
+
 def test_audit_claim_mismatch_fails(tmp_path: Path) -> None:
     existing_plan = tmp_path / "plan-1.md"
     existing_plan.write_text("# plan")

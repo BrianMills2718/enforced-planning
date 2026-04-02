@@ -1,6 +1,6 @@
 # Overnight Sprint — 2026-04-02 — Semantic Truth-Surface Review
 
-**Status:** In Progress
+**Status:** Complete
 **Owner:** codex
 **Primary Plan:** `docs/plans/11_semantic-truth-surface-review-execution-sprint.md`
 **Underlying Goal:** implement the first optional semantic truth-surface review slice so deterministic and advisory semantic findings can coexist truthfully
@@ -44,13 +44,13 @@ Success criteria:
 
 ## Current Phase
 
-- Active phase: Phase A
-- Next action: wire this sprint into `CLAUDE.md`, mark Plan #11 in progress, then implement the semantic review entrypoint and prompt
+- Active phase: Complete
+- Next action: start the first governed-repo semantic-review pilot from a clean consumer worktree
 
 ## Open Uncertainties
 
-- Whether the active environment will expose `llm_client` through the public import path without extra setup. Working rule for this sprint: the runtime must fail loud with a clear instruction if shared infra is not installed correctly.
+- Running bare imports from `/home/brian/projects` can still resolve `llm_client/` as a namespace package. Repo-local execution from the governed repo root works after installing shared `llm_client`, and the runtime now fails loud if shared infra is unavailable.
 
 ## Rollback Points
 
-- Pending first verified slice
+- `b4c435a` — semantic-review sprint contract

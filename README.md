@@ -145,6 +145,18 @@ python scripts/check_truth_surface_drift.py --config truth_surface_drift.yaml
 python scripts/render_truth_surface_status.py --config truth_surface_drift.yaml
 ```
 
+When deterministic findings are green but the authority set still feels stale,
+misleading, or non-compendious, run the optional semantic review layer:
+
+```bash
+python scripts/review_truth_surface_semantic.py \
+  --config truth_surface_drift.yaml \
+  --output-json semantic_truth_surface_review.json
+python scripts/render_truth_surface_status.py \
+  --config truth_surface_drift.yaml \
+  --semantic-json semantic_truth_surface_review.json
+```
+
 Use the validator to detect contradictions. Use the renderer to produce a compact
 current-state summary from validator output instead of hand-maintaining status
 prose.
@@ -155,9 +167,9 @@ scoped config with `scope.repo_names` so unrelated ecosystem registry drift does
 not dominate the local result. Full unscoped runs are still useful for broader
 global coordination review.
 
-A later optional LLM/agent review layer should sit on top of deterministic
-validation for semantic drift, misleading prose, and missing cross-surface
-updates that exact rules cannot capture robustly.
+The semantic review layer is optional and advisory-only. It should sit on top of
+deterministic validation for semantic drift, misleading prose, and missing
+cross-surface updates that exact rules cannot capture robustly.
 
 See `truth_surface_drift.yaml.example` for the installed scaffold.
 

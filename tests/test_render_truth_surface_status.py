@@ -9,6 +9,7 @@ from pathlib import Path
 
 from scripts.check_truth_surface_drift import Issue
 from scripts.render_truth_surface_status import _load_issue_payload, render_status
+from scripts.review_truth_surface_semantic import SemanticReviewReport
 
 
 def test_render_nonempty_summary() -> None:
@@ -42,6 +43,41 @@ def test_render_clean_summary() -> None:
     rendered = render_status([])
 
     assert rendered == "Truth Surface Status\n- Overall: clean\n- Issues: 0\n"
+
+
+def test_render_with_semantic_findings_keeps_certainty_split() -> None:
+    issues = [
+        Issue(
+            code="consumed_reservation_missing_plan_file",
+            severity="fail",
+            message="Missing plan file.",
+            evidence={},
+        )
+    ]
+    semantic_report = SemanticReviewReport.model_validate(
+        {
+            "overview": "One advisory semantic warning remains.",
+            "findings": [
+                {
+                    "category": "stale_prose",
+                    "severity": "warn",
+                    "summary": "Tracker prose is stale.",
+                    "rationale": "The tracker still reads like the prior phase is active.",
+                    "evidence_refs": ["docs/ops/TRACKER.md"],
+                    "promotion_candidate": True,
+                    "promotion_rule_hint": "active tracker should not describe a completed phase as current",
+                }
+            ],
+        }
+    )
+
+    rendered = render_status(issues, semantic_report=semantic_report)
+
+    assert "- Overall: fail" in rendered
+    assert "- Semantic Review: warn" in rendered
+    assert "- Semantic Promotion Candidates: 1" in rendered
+    assert "Semantic Advisory Findings" in rendered
+    assert "[WARN] stale_prose" in rendered
 
 
 def test_renderer_cli_runs_outside_repo_root(tmp_path: Path) -> None:

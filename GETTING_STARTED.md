@@ -132,6 +132,21 @@ python scripts/render_truth_surface_status.py --config truth_surface_drift.yaml
 This gives you a generated current-state summary driven by measured surfaces
 instead of hand-maintained tracker prose alone.
 
+When deterministic checks still leave semantic drift questions such as stale
+prose or missing cross-surface updates, you can optionally add semantic review:
+
+```bash
+python scripts/review_truth_surface_semantic.py \
+  --config truth_surface_drift.yaml \
+  --output-json semantic_truth_surface_review.json
+python scripts/render_truth_surface_status.py \
+  --config truth_surface_drift.yaml \
+  --semantic-json semantic_truth_surface_review.json
+```
+
+This semantic layer is advisory-only in the first slice. It complements the
+deterministic validator; it does not replace it.
+
 ---
 
 ## Core Concepts

@@ -10,8 +10,8 @@ three layers of discipline:
 > Read the active tracker, execute the next unblocked phase, commit the verified slice, and continue.
 
 Active sprint tracker:
-- `docs/ops/OVERNIGHT_SPRINT_2026_04_02_SEMANTIC_REVIEW.md` — active semantic-review sprint. NEVER STOP until every unblocked phase in that tracker is complete and committed.
-- If this sprint closes, fall back to `docs/plans/CLAUDE.md` before starting new coding work.
+- No active sprint. The latest completed sprint is `docs/ops/OVERNIGHT_SPRINT_2026_04_02_SEMANTIC_REVIEW.md`.
+- Fall back to `docs/plans/CLAUDE.md` before starting new coding work.
 
 Rules during continuous execution:
 - complete the current phase, update the tracker, and move immediately to the next phase
@@ -77,7 +77,7 @@ make pr-auto  # ship
 
 ## References
 
-- `docs/ops/OVERNIGHT_SPRINT_2026_04_02_SEMANTIC_REVIEW.md` — Active sprint (Plan #11 execution)
+- `docs/ops/OVERNIGHT_SPRINT_2026_04_02_SEMANTIC_REVIEW.md` — Completed sprint (Plan #11 execution)
 - `docs/ops/OVERNIGHT_SPRINT_2026_04_02_FRAMEWORK_RECONCILIATION.md` — Completed sprint (Plan #10)
 - `docs/ops/OVERNIGHT_SPRINT_2026_04_02_SCOPE.md` — Completed sprint (Plan #9)
 - `docs/ops/OVERNIGHT_SPRINT_2026_04_02_TRUTH_SURFACE.md` — Completed sprint (Plans #2-5)

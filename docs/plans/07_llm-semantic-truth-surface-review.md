@@ -1,6 +1,6 @@
 # Plan #7: LLM Semantic Truth-Surface Review Layer
 
-**Status:** Planned
+**Status:** Complete
 **Type:** implementation
 **Priority:** High
 **Blocked By:** 6
@@ -87,24 +87,36 @@ cheaply or robustly.
 
 ## Acceptance Criteria
 
-- [ ] The framework documents a clear hybrid model: deterministic first, optional
+- [x] The framework documents a clear hybrid model: deterministic first, optional
       LLM review second.
-- [ ] One bounded semantic review entrypoint exists with structured output and
+- [x] One bounded semantic review entrypoint exists with structured output and
       explicit advisory semantics.
-- [ ] The implementation records which semantic findings are candidates for later
+- [x] The implementation records which semantic findings are candidates for later
       deterministic promotion.
-- [ ] Docs explain when semantic review is worth the cost and when exact checks
+- [x] Docs explain when semantic review is worth the cost and when exact checks
       are sufficient.
 
 ---
 
+## Measured Findings
+
+- The first semantic-review slice now exists in `scripts/review_truth_surface_semantic.py` and uses shared `llm_client` structured output with explicit `task=`, `trace_id=`, and `max_budget=` metadata.
+- Semantic findings remain advisory-only and render in a separate section beside deterministic findings through `scripts/render_truth_surface_status.py --semantic-json ...`.
+- The prompt contract now prefers deterministic rendered status plus a bounded evidence bundle over full raw truth-surface files.
+- A live smoke review succeeded from the repo root with `gemini/gemini-2.5-flash`, returned an empty advisory findings set on a clean sample config, and produced a merged rendered status.
+- One environment nuance remains important: running bare `python -c "from llm_client import ..."` from `/home/brian/projects` can still resolve the source repo as a namespace package. Repo-local execution from the governed repo root works correctly after installing shared `llm_client`.
+
 ## Open Questions
 
-- [ ] Should semantic review run only on demand, or as an opt-in closeout step
+- [x] Should semantic review run only on demand, or as an opt-in closeout step
       for coordination-heavy repos?
-- [ ] Which model/provider should be the default reviewer, and how should cost
+      - Resolved in the first slice: on demand / opt-in only. It is not automatic closeout behavior.
+- [x] Which model/provider should be the default reviewer, and how should cost
       ceilings be enforced?
-- [ ] How should the review prompt consume truth surfaces: raw files, rendered
+      - Resolved in the first slice: default to configurable `gemini/gemini-2.5-flash` with an explicit `--max-budget` ceiling passed through `llm_client`.
+- [x] How should the review prompt consume truth surfaces: raw files, rendered
       summaries, or both?
-- [ ] Which finding classes should remain permanently advisory because they are
+      - Resolved in the first slice: deterministic rendered status first, plus a bounded evidence bundle of selected surface excerpts.
+- [x] Which finding classes should remain permanently advisory because they are
       too interpretive for hard enforcement?
+      - Resolved in the first slice: stale prose, missing updates, and broader compendiousness concerns remain advisory until repeated evidence justifies deterministic promotion.

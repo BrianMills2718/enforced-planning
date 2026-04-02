@@ -44,6 +44,7 @@ mkdir -p "$TARGET_DIR/docs/plans"
 mkdir -p "$TARGET_DIR/scripts/meta"
 mkdir -p "$TARGET_DIR/hooks"
 mkdir -p "$TARGET_DIR/.claude/hooks"
+mkdir -p "$TARGET_DIR/prompts"
 
 if [[ "$MODE" == "--full" ]]; then
     mkdir -p "$TARGET_DIR/acceptance_gates"
@@ -76,6 +77,8 @@ CORE_SCRIPTS=(
 TRUTH_SURFACE_SCRIPTS=(
     "check_truth_surface_drift.py"
     "render_truth_surface_status.py"
+    "review_truth_surface_semantic.py"
+    "truth_surface_semantic_models.py"
 )
 
 for script in "${CORE_SCRIPTS[@]}"; do
@@ -211,6 +214,13 @@ if [[ ! -f "$TARGET_DIR/truth_surface_drift.yaml.example" ]]; then
     if [[ -f "$SCRIPT_DIR/templates/truth_surface_drift.yaml.example" ]]; then
         cp "$SCRIPT_DIR/templates/truth_surface_drift.yaml.example" "$TARGET_DIR/truth_surface_drift.yaml.example"
         echo -e "  ${GREEN}Created: truth_surface_drift.yaml.example${NC}"
+    fi
+fi
+
+if [[ ! -f "$TARGET_DIR/prompts/truth_surface_semantic_review.yaml" ]]; then
+    if [[ -f "$SCRIPT_DIR/prompts/truth_surface_semantic_review.yaml" ]]; then
+        cp "$SCRIPT_DIR/prompts/truth_surface_semantic_review.yaml" "$TARGET_DIR/prompts/truth_surface_semantic_review.yaml"
+        echo -e "  ${GREEN}Created: prompts/truth_surface_semantic_review.yaml${NC}"
     fi
 fi
 

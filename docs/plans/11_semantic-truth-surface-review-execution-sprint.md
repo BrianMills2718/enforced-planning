@@ -1,6 +1,6 @@
 # Plan #11: Semantic Truth-Surface Review Execution Sprint
 
-**Status:** In Progress
+**Status:** Complete
 **Type:** implementation
 **Priority:** High
 **Blocked By:** 7, 10
@@ -109,7 +109,17 @@ Pre-made decisions:
 
 ## Acceptance Criteria
 
-- [ ] Invocation mode, llm_client dependency, input shape, and default cost/model policy are explicit.
-- [ ] The first semantic-review slice is clearly advisory-only.
-- [ ] The rendering contract distinguishes deterministic findings from semantic findings.
-- [ ] Plan #7 can proceed without reopening these same operational questions.
+- [x] Invocation mode, llm_client dependency, input shape, and default cost/model policy are explicit.
+- [x] The first semantic-review slice is clearly advisory-only.
+- [x] The rendering contract distinguishes deterministic findings from semantic findings.
+- [x] Plan #7 can proceed without reopening these same operational questions.
+
+---
+
+## Measured Findings
+
+- `scripts/review_truth_surface_semantic.py` now provides the first bounded semantic-review entrypoint.
+- `scripts/truth_surface_semantic_models.py` holds the shared advisory output contract so renderer and reviewer can evolve without import cycles.
+- `scripts/render_truth_surface_status.py` now accepts `--semantic-json` and keeps semantic findings in a separate advisory section.
+- The installer now copies the semantic-review script, its shared model contract, and `prompts/truth_surface_semantic_review.yaml` into governed repos.
+- Live smoke evidence from a temporary clean config produced an empty semantic review report and a merged rendered status with `Semantic Review: clean`.

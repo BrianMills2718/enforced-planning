@@ -94,8 +94,12 @@ def _resolve_path(source_file: Path, ref: str, repo_root: Path) -> Path | None:
     return None
 
 
-def scan_file(file_path: Path, repo_root: Path) -> list[dict]:
+def scan_file(file_path: Path, repo_root: Path, repo_package: str = "") -> list[dict]:
     """Scan a single file for dependency references.
+
+    Args:
+        repo_package: If set, imports of this package are treated as internal
+                      (not cross-project). Auto-detected from repo name if empty.
 
     Returns list of {source, target, type, evidence, line_number}.
     """
@@ -136,7 +140,7 @@ def scan_file(file_path: Path, repo_root: Path) -> list[dict]:
             for m in PY_IMPORT.finditer(line):
                 module = m.group(1) or m.group(2)
                 top_package = module.split(".")[0]
-                if top_package in KNOWN_PACKAGES:
+                if top_package in KNOWN_PACKAGES and top_package != repo_package:
                     edges.append({
                         "source": rel_source,
                         "target": f"[cross-project:{top_package}]",
@@ -185,9 +189,27 @@ def scan_file(file_path: Path, repo_root: Path) -> list[dict]:
     return edges
 
 
+def _detect_repo_package(repo_root: Path) -> str:
+    """Detect the repo's own Python package name to filter self-imports."""
+    repo_name = repo_root.name
+    # Common patterns: repo name with underscores, or src/package_name/
+    candidates = [repo_name, repo_name.replace("-", "_")]
+    for c in candidates:
+        if c in KNOWN_PACKAGES:
+            return c
+    # Check src/ layout
+    src = repo_root / "src"
+    if src.exists():
+        for d in src.iterdir():
+            if d.is_dir() and d.name in KNOWN_PACKAGES:
+                return d.name
+    return ""
+
+
 def scan_repo(repo_root: Path) -> list[dict]:
     """Scan an entire repo for dependencies."""
     repo_root = repo_root.resolve()
+    repo_package = _detect_repo_package(repo_root)
     all_edges = []
 
     for path in repo_root.rglob("*"):
@@ -198,7 +220,7 @@ def scan_repo(repo_root: Path) -> list[dict]:
         if path.suffix not in SCANNABLE_EXTENSIONS:
             continue
 
-        all_edges.extend(scan_file(path, repo_root))
+        all_edges.extend(scan_file(path, repo_root, repo_package))
 
     # Deduplicate (same source→target pair with same type)
     seen = set()

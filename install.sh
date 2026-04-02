@@ -32,8 +32,8 @@ echo -e "${GREEN}Installing enforced-planning framework to: $TARGET_DIR${NC}"
 echo -e "Mode: $MODE"
 echo ""
 
-# Check if git repo
-if [[ ! -d "$TARGET_DIR/.git" ]]; then
+# Check if git repo. Git worktrees expose .git as a file, not a directory.
+if [[ ! -d "$TARGET_DIR/.git" && ! -f "$TARGET_DIR/.git" ]]; then
     echo -e "${RED}Error: $TARGET_DIR is not a git repository${NC}"
     exit 1
 fi

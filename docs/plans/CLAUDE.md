@@ -1,16 +1,20 @@
 # Implementation Plans
 
+See `ROADMAP.md` for the full phase map and recommended priority order.
+
 | # | Gap | Priority | Status | Blocks |
 |---|-----|----------|--------|--------|
-| 1 | Add Data Boundary Enforcement to Plan Template (`01_boundary_enforcement.md`) | High | 🚧 Partial (template done, enforcement tooling pending) | ecosystem-ops audit, DIGIMON audit |
-| 2 | Canonical Planning Operating Model (`02_canonical-planning-operating-model.md`) | High | ✅ Complete | 3, 4 |
-| 3 | Static Planning Graph and Runtime Truth-Surface Split (`03_static-planning-graph-and-runtime-truth-surface-split.md`) | High | ✅ Complete | 4 |
-| 4 | Truth-Surface Drift Validation and Enforcement (`04_truth-surface-drift-validation-and-enforcement.md`) | High | ✅ Complete | project-meta rollout hardening |
-| 5 | Truth-Surface Validator Completion Sprint (`05_truth-surface-validator-completion-sprint.md`) | High | ✅ Complete | portable rollout guidance, project-meta runtime truth adoption |
-| 6 | Governed Repo Truth-Surface Adoption Pilot (`06_governed-repo-truth-surface-adoption-pilot.md`) | High | ✅ Complete | default workflow wiring beyond advisory mode |
-| 7 | LLM Semantic Truth-Surface Review Layer (`07_llm-semantic-truth-surface-review.md`) | High | 📋 Planned | semantic truth-surface review beyond deterministic rules |
-| 8 | Truth-Surface Adoption Pilot Execution Sprint (`08_truth-surface-adoption-pilot-execution-sprint.md`) | High | ✅ Complete | 6, 7, default workflow wiring beyond advisory mode |
-| 9 | Scoped Truth-Surface Validation By Canonical Repo Identity (`09_scoped-truth-surface-validation.md`) | High | ✅ Complete | cleaner governed-repo adoption beyond the first pilot |
+| 1 | Capabilities enforcement in plan template (`01_boundary_enforcement.md`) | High | 🚧 Partial (template done, pre-commit hook pending) | ecosystem-ops audit, DIGIMON audit |
+| 2 | Canonical Planning Operating Model (`02_canonical-planning-operating-model.md`) | High | ✅ Complete | #3, #4 |
+| 3 | Static Graph / Runtime Truth Split (`03_static-planning-graph-and-runtime-truth-surface-split.md`) | High | ✅ Complete | #4 |
+| 4 | Truth-Surface Drift Validation (`04_truth-surface-drift-validation-and-enforcement.md`) | High | ✅ Complete | [future] project-meta rollout |
+| 5 | Validator Completion Sprint (`05_truth-surface-validator-completion-sprint.md`) | High | ✅ Complete | [future] portable rollout guidance |
+| 6 | Governed Repo Adoption Pilot (`06_governed-repo-truth-surface-adoption-pilot.md`) | High | ✅ Complete | [future] workflow wiring beyond advisory |
+| 7 | LLM Semantic Truth-Surface Review (`07_llm-semantic-truth-surface-review.md`) | High | 📋 Planned | #6 |
+| 8 | Adoption Pilot Execution Sprint (`08_truth-surface-adoption-pilot-execution-sprint.md`) | High | ✅ Complete | #6, #7 |
+| 9 | Scoped Validation By Repo Identity (`09_scoped-truth-surface-validation.md`) | High | ✅ Complete | [future] broader governed adoption |
+| 10 | Framework Onboarding Reconciliation (`10_framework-truth-surface-and-onboarding-reconciliation.md`) | Medium | 🚧 In Progress | [future] consumer adoption |
+| — | Relationships V2: inference engine + schema + migration (design doc, no numbered plan) | High | ✅ Complete | V2 adoption pilot |
 
 ## Status Key
 

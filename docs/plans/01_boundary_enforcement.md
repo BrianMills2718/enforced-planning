@@ -1,6 +1,6 @@
 # Plan #1: Add Data Boundary Enforcement to Plan Template
 
-**Status:** Planned
+**Status:** Partially Complete (template done, enforcement tooling pending)
 **Type:** implementation
 **Priority:** High
 **Blocked By:** None
@@ -70,7 +70,7 @@ N/A — internal to enforced-planning.
 
 ## Acceptance Criteria
 
-- [ ] Plan template has Data Boundaries section with Produces/Consumes tables
+- [x] Plan template has Capabilities section (formerly "Data Boundaries") with Input/Output Schema, Producer, Consumer tables
 - [ ] `check_plan_boundaries.py` correctly identifies cross-project plans
 - [ ] Hook warns (not blocks) on cross-project plans without boundaries
 - [ ] Pattern 15 references boundary requirement

@@ -31,7 +31,7 @@ Level 2.5: ADRs
 Level 3: PLANS
     "What steps, in what order, with what acceptance criteria?"
     ↓ specifies boundaries in
-Level 3.5: DATA BOUNDARIES (in plan template)
+Level 3.5: CAPABILITIES (in plan template)
     "What typed data crosses project lines?"
     ↓ concretized as
 Level 4: JOURNEY NOTEBOOKS
@@ -112,13 +112,15 @@ Level 7: DASHBOARD + OBSERVABILITY
 
 **References:** Level 2/2.5 (which spec and decisions this implements)
 
-**Required sections:** Status, Type, Priority, Blocked By, Blocks, Gap, References Reviewed, Files Affected, **Data Boundaries**, Steps, Required Tests, Acceptance Criteria
+**Required sections:** Status, Type, Priority, Blocked By, Blocks, Gap, References Reviewed, Files Affected, **Capabilities** (if cross-project), Steps, Required Tests, Acceptance Criteria
 
-### Level 3.5: Data Boundaries (in plan template)
+### Level 3.5: Capabilities (in plan template)
 
-**What:** The Produces/Consumes tables in the plan's Data Boundaries section. Declares what typed data crosses project lines.
+**What:** The Capabilities table in the plan template. Declares what typed data crosses project lines — each capability names its input/output Pydantic schemas, producer, consumer(s), and cost tier.
 
-**Where it lives:** Inside each plan file (Level 3)
+> Previously called "Data Boundaries". The template section is named "Capabilities" because a capability IS a tool IS a boundary IS a notebook cell — one definition, four views.
+
+**Where it lives:** Inside each plan file (Level 3), `## Capabilities` section
 
 **References:** Level 2 (boundary specs define the contracts)
 
@@ -132,7 +134,7 @@ Level 7: DASHBOARD + OBSERVABILITY
 - `notebooks/` per project
 - One notebook per user journey
 
-**References:** Level 3 (each cell links to a plan step), Level 3.5 (schemas from Data Boundaries)
+**References:** Level 3 (each cell links to a plan step), Level 3.5 (schemas from Capabilities table)
 
 **Key question it answers:** "Show me the data flowing through the system, step by step, with types."
 
@@ -142,7 +144,7 @@ Level 7: DASHBOARD + OBSERVABILITY
 
 **Where it lives:** Inside journey notebooks (Level 4)
 
-**References:** Level 3.5 (validates the declared boundaries)
+**References:** Level 3.5 (validates the declared capabilities/boundaries)
 
 **Key question it answers:** "Do the schemas actually align, or will this break at integration time?"
 
@@ -181,7 +183,7 @@ Before starting work on Plan #N:
 1. **Read Level 0** — understand the thesis (CLAUDE.md root)
 2. **Read Level 1** — which ROADMAP phase does this plan serve?
 3. **Read Level 2/2.5** — any boundary specs or ADRs relevant?
-4. **Read Level 3** — the plan itself (steps, criteria, data boundaries)
+4. **Read Level 3** — the plan itself (steps, criteria, capabilities)
 5. **Check Level 4** — is there a journey notebook? Check execution modes.
 6. **Run Level 4.5** — do schema validation cells pass?
 7. **Implement Level 5** — write code with `@boundary` decorators

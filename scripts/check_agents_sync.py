@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
-"""Check that generated AGENTS.md is in sync with canonical governance inputs.
-
-This validator compares the checked-in ``AGENTS.md`` file against the
-deterministic output of ``render_agents_md.py``. It is intended for local
-verification, hooks, and CI gates where manual drift must fail loudly.
-"""
+"""Check that generated AGENTS.md is in sync with canonical governance inputs."""
 
 from __future__ import annotations
 
@@ -12,12 +7,13 @@ import argparse
 import difflib
 from pathlib import Path
 
-from render_agents_md import render_agents_md
+from render_agents_md import DEFAULT_TEMPLATE  # type: ignore[import-not-found]
+from render_agents_md import render_agents_markdown  # type: ignore[import-not-found]
+from render_agents_md import resolve_inputs  # type: ignore[import-not-found]
 
 
 def parse_args() -> argparse.Namespace:
     """Parse CLI arguments for the sync checker."""
-
     parser = argparse.ArgumentParser(
         description="Check whether AGENTS.md matches canonical governance inputs",
     )
@@ -43,8 +39,8 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--template",
-        default="",
-        help="Accepted for compatibility; the canonical renderer chooses its own template logic.",
+        default=str(DEFAULT_TEMPLATE),
+        help="Path to the AGENTS markdown template",
     )
     parser.add_argument(
         "--check",
@@ -56,42 +52,48 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     """Compare current AGENTS.md to the deterministic rendered output."""
-
     args = parse_args()
     repo_root = Path(args.repo_root).resolve()
-    claude_path = repo_root / args.claude_file
-    output_path = repo_root / args.output_file
-    if not claude_path.exists():
-        print(f"Canonical CLAUDE file is missing: {claude_path}")
+    template_path = Path(args.template).resolve()
+    try:
+        inputs = resolve_inputs(
+            repo_root=repo_root,
+            claude_file=args.claude_file,
+            relationships_file=args.relationships_file,
+            output_file=args.output_file,
+            template_path=template_path,
+        )
+    except (FileNotFoundError, ValueError) as exc:
+        print(str(exc))
         return 1
 
-    if not output_path.exists():
-        print(f"Generated AGENTS file is missing: {output_path}")
+    if not inputs.output_path.exists():
+        print(f"Generated AGENTS file is missing: {inputs.output_path}")
         print(
             "Run: "
-            f"python {repo_root / 'scripts' / 'meta' / 'render_agents_md.py'} --repo-root {repo_root}"
+            f"python {repo_root / 'scripts' / 'render_agents_md.py'} --repo-root {repo_root}"
         )
         return 1
 
-    expected = render_agents_md(claude_path)
-    actual = output_path.read_text(encoding="utf-8")
+    expected = render_agents_markdown(inputs)
+    actual = inputs.output_path.read_text(encoding="utf-8")
     if actual == expected:
-        print(f"AGENTS.md is in sync: {output_path}")
+        print(f"AGENTS.md is in sync: {inputs.output_path}")
         return 0
 
     diff = "\n".join(
         difflib.unified_diff(
             actual.splitlines(),
             expected.splitlines(),
-            fromfile=str(output_path),
-            tofile=f"{output_path} (expected)",
+            fromfile=str(inputs.output_path),
+            tofile=f"{inputs.output_path} (expected)",
             lineterm="",
         )
     )
     print("AGENTS.md drift detected.")
     print(
         "Regenerate with: "
-        f"python {repo_root / 'scripts' / 'meta' / 'render_agents_md.py'} --repo-root {repo_root}"
+        f"python {repo_root / 'scripts' / 'render_agents_md.py'} --repo-root {repo_root}"
     )
     if diff:
         print(diff)

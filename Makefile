@@ -47,5 +47,17 @@ review-surfaces:  ## Run LLM semantic review of truth surfaces (REPO=path)
 plan-registry:  ## Build cross-repo plan registry (SCAN_DIR=~/projects)
 	python scripts/build_plan_registry.py --scan-dir $(SCAN_DIR) --output generated/plan_registry.json --summary
 
+ecosystem-deps:  ## Build ecosystem cross-repo dependency map from generated/inferred_*.json
+	python scripts/build_ecosystem_dep_map.py --output generated/ecosystem_dep_map.json --summary
+
+infer-all:  ## Infer deps across all governed repos in SCAN_DIR (writes generated/inferred_*.json)
+	@for repo in $$(ls -d $(SCAN_DIR)/*/); do \
+	  name=$$(basename $$repo); \
+	  if [ -f "$$repo/meta-process.yaml" ]; then \
+	    echo "Inferring $$name ..."; \
+	    python scripts/infer_dependencies.py $$repo --output generated/inferred_$$name.json; \
+	  fi; \
+	done
+
 status:  ## Git status
 	@git status --short --branch

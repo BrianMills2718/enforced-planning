@@ -84,7 +84,7 @@ A portable framework where:
 | Cross-repo plan index | Consumable plan registry across all repos | ✅ Complete (327 plans, 22 repos, `make plan-registry`) |
 | Visibility grammar | Bazel-style `__pkg__`/`__subpackages__` for doc governance scope | 📋 Deferred |
 | Distributed governance | Per-directory `.governance.yaml` (Buck2 pattern) | 📋 Deferred |
-| Ecosystem dependency map | Inference engine run across all active repos | ✅ Prototype (10 repos scanned) |
+| Ecosystem dependency map | Inference engine run across all active repos | ✅ Complete (22 repos, 14177 edges, 103 cross-repo; `make infer-all && make ecosystem-deps`) |
 
 ### Phase 7: Onboarding Reconciliation (COMPLETE)
 

@@ -1,6 +1,6 @@
 [project]
 name = "enforced-planning"
-version = "0.1.0"
+version = "1.0.0"
 description = "Portable framework for enforced planning, context gating, and doc-code alignment in AI-assisted development"
 requires-python = ">=3.11"
 dependencies = []

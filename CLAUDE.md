@@ -25,35 +25,36 @@ three layers of discipline:
 > - Any question answerable by reading the sprint plan → read and proceed
 
 Active sprint tracker:
-- **ACTIVE:** `docs/ops/SPRINT_2026_04_03_ALL_ISSUES.md` — full documentation
-  and technical debt resolution sprint. 7 phases, all architectural decisions
-  pre-made. Execute all phases continuously.
-- Last completed: Plan #12 cross-repo plan registry + ecosystem dep map (2026-04-03).
+- **COMPLETE:** `docs/ops/SPRINT_2026_04_03_ALL_ISSUES.md` — full documentation
+  and technical debt resolution sprint. 7 phases, all 23 sub-phases done.
+- Last completed: 2026-04-03 sprint — all phases 1-7 complete, 307 tests passing.
 
 Phase checklist (update as completed):
-- [ ] Phase 1a: Fix verify_coupling.py API
-- [ ] Phase 1b: Create Plan #12 file
-- [ ] Phase 1c: Replace ISSUES.md
-- [ ] Phase 2a: Archive docs/ops/ sprint docs
-- [ ] Phase 2b: Move TRAYCER_COMPARISON.md
-- [ ] Phase 2c: Add Claude-Code disclaimer to README/GETTING_STARTED
-- [ ] Phase 2d: Audit meta-process.yaml.example
-- [ ] Phase 2e: Define "trivial" concretely in Pattern 15
-- [ ] Phase 2f: Create V1→V2 migration guide
-- [ ] Phase 3a: Make POM explicitly canonical
-- [ ] Phase 3b: Reduce Pattern 42 to summary
-- [ ] Phase 3c: Update GETTING_STARTED to lead with POM
-- [ ] Phase 4a: Write "New Project Setup" guide
-- [ ] Phase 4b: Document functional config keys
-- [ ] Phase 5a: Create .pre-commit-hooks.yaml
-- [ ] Phase 5b: Create pre-commit-config.yaml.example template
-- [ ] Phase 5c: Update install.sh --pre-commit mode
-- [ ] Phase 5d: Update docs for pre-commit
-- [ ] Phase 6a: Tests for parse_plan.py
-- [ ] Phase 6b: Tests for sync_plan_status.py
-- [ ] Phase 6c: Tests for check_plan_tests.py
-- [ ] Phase 7a: Add Phase 8 to ROADMAP
-- [ ] Phase 7b: Document deferred item blockers
+- [x] Phase 1a: Fix verify_coupling.py API
+- [x] Phase 1b: Create Plan #12 file
+- [x] Phase 1c: Replace ISSUES.md
+- [x] Phase 2a: Archive docs/ops/ sprint docs
+- [x] Phase 2b: Move TRAYCER_COMPARISON.md
+- [x] Phase 2c: Add Claude-Code disclaimer to README/GETTING_STARTED
+- [x] Phase 2d: Audit meta-process.yaml.example
+- [x] Phase 2e: Define "trivial" concretely in Pattern 15
+- [x] Phase 2f: Create V1→V2 migration guide
+- [x] Phase 3a: Make POM explicitly canonical
+- [x] Phase 3b: Reduce Pattern 42 to summary
+- [x] Phase 3c: Update GETTING_STARTED to lead with POM
+- [x] Phase 4a: Write "New Project Setup" guide
+- [x] Phase 4b: Document functional config keys
+- [x] Phase 5a: Create .pre-commit-hooks.yaml
+- [x] Phase 5b: Create pre-commit-config.yaml.example template
+- [x] Phase 5c: Update install.sh --pre-commit mode
+- [x] Phase 5d: Update docs for pre-commit
+- [x] Phase 6a: Tests for parse_plan.py
+- [x] Phase 6b: Tests for sync_plan_status.py
+- [x] Phase 6c: Tests for check_plan_tests.py
+- [x] Phase 7a: Add Phase 8 to ROADMAP
+- [x] Phase 7b: Document deferred item blockers
+
+**Sprint complete — 2026-04-03. All 23 phases done. 307 tests pass.**
 
 Rules during continuous execution:
 - complete the current phase, update the tracker, and move immediately to the next phase

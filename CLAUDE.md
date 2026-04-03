@@ -11,8 +11,8 @@ three layers of discipline:
 > Read the active tracker, execute the next unblocked phase, commit the verified slice, and continue.
 
 Active sprint tracker:
-- No active sprint. Last completed: `docs/ops/OVERNIGHT_SPRINT_2026_04_02_RELATIONSHIPS_V2.md` (V2 infra delivered).
-- Next work: adopt V2 tools in a governed repo pilot, or implement Layer 3 (agent verification protocol).
+- No active sprint. Last completed: Plan #12 cross-repo plan registry + ecosystem dep map (2026-04-03). All Phases 1-7 complete.
+- Next work: Phase 5 promotion — convert `promotion_candidate` semantic review findings into deterministic checks. Run `make review-surfaces REPO=.` to see current candidates.
 - See root CLAUDE.md for canonical NEVER STOP definition.
 
 Rules during continuous execution:
@@ -44,7 +44,7 @@ templates are identical to the source.
 
 ```
 enforced-planning/
-├── patterns/        # 27 core patterns + opt-in modules
+├── patterns/        # Core patterns + opt-in modules (see patterns/01_README.md)
 ├── scripts/         # Baseline enforcement scripts
 ├── hooks/           # Git + Claude Code hook templates
 ├── templates/       # File templates for governed repos

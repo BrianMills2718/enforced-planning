@@ -6,7 +6,6 @@ No live LLM calls are made; verify_coupling mock pattern is reused.
 
 from __future__ import annotations
 
-import json
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -225,13 +224,15 @@ class TestReviewTruthSurfaces:
             "promotion_candidates": 0,
         }
 
+    def _make_review_result(self, data: dict | None = None) -> SemanticReviewResult:
+        """Build a SemanticReviewResult from dict (default: clean result)."""
+        return SemanticReviewResult.model_validate(data or self._make_result_data())
+
     def test_returns_semantic_review_result(self, tmp_path):
         (tmp_path / "CLAUDE.md").write_text("# CLAUDE")
 
         mock_complete = MagicMock()
-        mock_result = MagicMock()
-        mock_result.content = json.dumps(self._make_result_data())
-        mock_complete.return_value = mock_result
+        mock_complete.return_value = (self._make_review_result(), MagicMock())
 
         with patch("review_truth_surfaces._load_llm_client", return_value=mock_complete):
             result = review_truth_surfaces(tmp_path)
@@ -242,9 +243,7 @@ class TestReviewTruthSurfaces:
         (tmp_path / "CLAUDE.md").write_text("# CLAUDE")
 
         mock_complete = MagicMock()
-        mock_result = MagicMock()
-        mock_result.content = json.dumps(self._make_result_data())
-        mock_complete.return_value = mock_result
+        mock_complete.return_value = (self._make_review_result(), MagicMock())
 
         with patch("review_truth_surfaces._load_llm_client", return_value=mock_complete):
             review_truth_surfaces(tmp_path, max_budget=0.75)
@@ -256,9 +255,7 @@ class TestReviewTruthSurfaces:
         (tmp_path / "CLAUDE.md").write_text("# CLAUDE")
 
         mock_complete = MagicMock()
-        mock_result = MagicMock()
-        mock_result.content = json.dumps(self._make_result_data())
-        mock_complete.return_value = mock_result
+        mock_complete.return_value = (self._make_review_result(), MagicMock())
 
         with patch("review_truth_surfaces._load_llm_client", return_value=mock_complete):
             review_truth_surfaces(tmp_path)
@@ -293,11 +290,10 @@ class TestReviewTruthSurfaces:
             }
         ]
         result_data["promotion_candidates"] = 999  # LLM returned wrong count
+        llm_result = SemanticReviewResult.model_validate(result_data)
 
         mock_complete = MagicMock()
-        mock_result = MagicMock()
-        mock_result.content = json.dumps(result_data)
-        mock_complete.return_value = mock_result
+        mock_complete.return_value = (llm_result, MagicMock())
 
         with patch("review_truth_surfaces._load_llm_client", return_value=mock_complete):
             result = review_truth_surfaces(tmp_path)

@@ -73,7 +73,7 @@ A portable framework where:
 | #7 | LLM semantic truth-surface review | ✅ Complete (207 tests, review_truth_surfaces.py shipped) |
 | — | Promote stable LLM findings into deterministic checks | 📋 Planned (promotion_candidate field tracks this) |
 
-**Dependency:** Phase 4 agent verification protocol should be designed first — Plan #7 is a specialization of the same pattern (agent verifies coupling, reports finding).
+**Note:** Plan #7 (semantic review) and Plan #11 (agent verification protocol) both complete. Plan #7 specializes the verification pattern established by Plan #11.
 
 ### Phase 6: Cross-Repo Governance (GATE MET — READY TO START)
 

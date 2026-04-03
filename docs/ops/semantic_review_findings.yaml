@@ -1,5 +1,143 @@
-# Semantic review findings from LLM truth-surface review (Plan #7).
-# Appended by review_truth_surfaces.py each time a review is run.
-# Format: see Plan #7 (docs/plans/07_llm-semantic-truth-surface-review.md)
-# promotion_candidate=true findings are candidates for future deterministic checks.
-[]
+- repo: enforced-planning
+  reviewed_at: '2026-04-03T00:59:17+00:00'
+  agent: claude-sonnet-4-6
+  surfaces_reviewed:
+  - CLAUDE.md
+  - ROADMAP.md
+  - PLANNING_OPERATING_MODEL.md
+  - STATIC_GRAPH_AND_RUNTIME_TRUTH.md
+  - relationships.yaml
+  - docs/plans/CLAUDE.md
+  findings:
+  - finding_type: CROSS_DOC_DISAGREEMENT
+    severity: critical
+    doc_path: ROADMAP.md
+    evidence: "Phase 4 row: '**Agent verification protocol** | Bounded mission spec\
+      \ for \"validated\" couplings (`Plan #11`) | \u2705 Complete (181 tests, shipped)'\
+      \ but Phase 5 row: '#7 | LLM semantic truth-surface review | \u2705 Complete\
+      \ (207 tests, review_truth_surfaces.py shipped)' \u2014 Phase 5 dependency note\
+      \ says 'Phase 4 agent verification protocol should be designed first \u2014\
+      \ Plan #7 is a specialization of the same pattern' yet Plan #7 is listed as\
+      \ Complete and Plan #11 also Complete, while #7 predates #11 per docs/plans/CLAUDE.md\
+      \ ordering."
+    suggested_fix: "Remove or update the dependency note in Phase 5: 'Dependency:\
+      \ Phase 4 agent verification protocol should be designed first' \u2014 this\
+      \ constraint has already been resolved and the note is now misleading about\
+      \ sequencing history."
+    promotion_candidate: false
+    suggested_check: null
+  - finding_type: CROSS_DOC_DISAGREEMENT
+    severity: critical
+    doc_path: CLAUDE.md
+    evidence: "CLAUDE.md Active sprint tracker states: 'Next work: adopt V2 tools\
+      \ in a governed repo pilot, or implement Layer 3 (agent verification protocol).'\
+      \ But ROADMAP.md Phase 4 marks **V2 adoption pilot** \u2705 Complete and **Agent\
+      \ verification protocol** \u2705 Complete. Both suggested next-work items are\
+      \ already done."
+    suggested_fix: "Update CLAUDE.md active sprint tracker 'Next work' to reflect\
+      \ the actual next incomplete phase \u2014 Phase 5 promotion work or Phase 6\
+      \ Cross-Repo Governance (which ROADMAP.md marks as 'GATE MET \u2014 READY TO\
+      \ START')."
+    promotion_candidate: true
+    suggested_check: "Check that all items listed under 'Next work:' in CLAUDE.md\
+      \ active sprint tracker are NOT already marked \u2705 Complete in ROADMAP.md\
+      \ Phase 4 or Phase 5 tables."
+  - finding_type: STALE_PROSE
+    severity: important
+    doc_path: CLAUDE.md
+    evidence: "CLAUDE.md references: 'Last completed: `docs/ops/OVERNIGHT_SPRINT_2026_04_02_RELATIONSHIPS_V2.md`\
+      \ (V2 infra delivered)' \u2014 but ROADMAP.md shows that many subsequent phases\
+      \ completed after V2 infra: Plan #9 (Scoped Validation), Plan #10 (Framework\
+      \ Onboarding Reconciliation), Plan #11 (Agent Verification Protocol), Plan #12\
+      \ (Cross-Repo Plan Registry) are all \u2705 Complete."
+    suggested_fix: 'Update the ''Last completed'' sprint tracker entry to reference
+      the most recent completed sprint/plan (likely Plan #12 or the agent verification
+      protocol sprint).'
+    promotion_candidate: false
+    suggested_check: null
+  - finding_type: STALE_PROSE
+    severity: important
+    doc_path: ROADMAP.md
+    evidence: "Phase 5 dependency note: 'Dependency: Phase 4 agent verification protocol\
+      \ should be designed first \u2014 Plan #7 is a specialization of the same pattern\
+      \ (agent verifies coupling, reports finding).' Plan #7 is listed \u2705 Complete\
+      \ and Plan #11 (agent verification protocol) is \u2705 Complete. This forward-looking\
+      \ design rationale is now stale and historically inverted."
+    suggested_fix: 'Replace the dependency note with a retrospective note: ''Note:
+      Plan #7 (semantic review) and Plan #11 (agent verification protocol) both complete;
+      Plan #7 specializes the verification pattern established by Plan #11.'''
+    promotion_candidate: false
+    suggested_check: null
+  - finding_type: CROSS_DOC_DISAGREEMENT
+    severity: important
+    doc_path: docs/plans/CLAUDE.md
+    evidence: "docs/plans/CLAUDE.md lists Plan #7 'LLM Semantic Truth-Surface Review'\
+      \ with 'Blocks: #6' \u2014 meaning Plan #7 blocks Plan #6. But ROADMAP.md Phase\
+      \ 3 shows Plan #6 'Governed Repo Adoption Pilot' \u2705 Complete and lists it\
+      \ before Plan #7 in Phase 3 (Plans #4\u2013#9), while Plan #7 is in Phase 5.\
+      \ This 'Blocks' relationship contradicts the completion ordering and phase assignment."
+    suggested_fix: "Review the 'Blocks' column for Plan #7 \u2014 it should either\
+      \ be cleared (both are complete) or corrected to note that Plan #7 was blocked\
+      \ BY #6, not the reverse."
+    promotion_candidate: true
+    suggested_check: "Check that no plan listed as \u2705 Complete in docs/plans/CLAUDE.md\
+      \ 'Blocks' column references another plan that is also already \u2705 Complete\
+      \ and was completed earlier (lower plan number or earlier phase)."
+  - finding_type: MISLEADING_SUMMARY
+    severity: important
+    doc_path: CLAUDE.md
+    evidence: "CLAUDE.md Structure section states 'patterns/ # 27 core patterns +\
+      \ opt-in modules' \u2014 this count (27) appears to have been set at framework\
+      \ extraction time ('pre-extraction' in ROADMAP.md Phase 1). No mechanism is\
+      \ described to keep this count current as patterns are added, creating a likely\
+      \ stale number."
+    suggested_fix: Either update the count dynamically or replace '27 core patterns'
+      with a reference to 'patterns/01_README.md' which already lists patterns with
+      dependencies.
+    promotion_candidate: true
+    suggested_check: Programmatically count files in patterns/ directory and compare
+      against the number stated in CLAUDE.md Structure section comment.
+  - finding_type: UNDOCUMENTED_ASSUMPTION
+    severity: important
+    doc_path: relationships.yaml
+    evidence: relationships.yaml has no entries covering ROADMAP.md, CLAUDE.md, or
+      docs/plans/CLAUDE.md as sources or docs in any coupling. Given that CLAUDE.md
+      and ROADMAP.md are the primary truth surfaces for sprint state and phase status,
+      the assumption that they self-govern or require no coupling enforcement is never
+      stated.
+    suggested_fix: Add a comment in relationships.yaml explaining why ROADMAP.md and
+      CLAUDE.md are excluded from coupling rules, or add validated couplings between
+      ROADMAP.md and docs/plans/CLAUDE.md to catch cross-doc disagreements like the
+      one found above.
+    promotion_candidate: false
+    suggested_check: null
+  - finding_type: UNDOCUMENTED_ASSUMPTION
+    severity: advisory
+    doc_path: CLAUDE.md
+    evidence: CLAUDE.md Quick Start shows 'vim /path/to/project/meta-process.yaml'
+      as the configuration step, but no document in this truth surface defines what
+      fields meta-process.yaml accepts, what its schema is, or whether it is required.
+      GETTING_STARTED.md is referenced but not included in this review surface.
+    suggested_fix: Add a brief note in CLAUDE.md Quick Start pointing to schema documentation
+      for meta-process.yaml, or note that GETTING_STARTED.md documents the config
+      format.
+    promotion_candidate: false
+    suggested_check: null
+  - finding_type: STALE_PROSE
+    severity: advisory
+    doc_path: ROADMAP.md
+    evidence: "Phase 3 table includes Plan #6 'Governed Repo Adoption Pilot \u2705\
+      \ Complete' and Plan #8 'Adoption Pilot Execution Sprint \u2705 Complete'. However\
+      \ Phase 4 also marks 'V2 adoption pilot | Migrate a real governed repo's relationships.yaml\
+      \ to V2 | \u2705 Complete'. There are now three separate 'adoption pilot' items\
+      \ across phases with no explanatory note distinguishing their scopes \u2014\
+      \ likely confusing to a new reader."
+    suggested_fix: 'Add a brief parenthetical to each adoption pilot entry clarifying
+      scope: e.g. Phase 3 Plan #6 ''(truth-surface validator adoption)'', Phase 3
+      Plan #8 ''(execution sprint for #6)'', Phase 4 ''(V2 relationships.yaml adoption)''.'
+    promotion_candidate: false
+    suggested_check: null
+  summary: 'Surface has significant drift: CLAUDE.md sprint tracker lists two ''next
+    work'' items already marked complete in ROADMAP.md, and several stale dependency/sequencing
+    notes remain unfixed post-completion.'
+  promotion_candidates: 3

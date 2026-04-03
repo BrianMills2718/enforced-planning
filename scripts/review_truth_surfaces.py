@@ -195,8 +195,8 @@ Do not report stylistic issues, only substantive accuracy or agreement problems.
 def _load_llm_client():
     """Import llm_client lazily to allow tests without it installed."""
     try:
-        from llm_client import complete  # type: ignore[import]
-        return complete
+        from llm_client import call_llm_structured  # type: ignore[import]
+        return call_llm_structured
     except ImportError:
         return None
 
@@ -235,43 +235,34 @@ def review_truth_surfaces(
             promotion_candidates=0,
         )
 
-    complete = _load_llm_client()
-    if complete is None:
+    call_llm_structured = _load_llm_client()
+    if call_llm_structured is None:
         raise RuntimeError("llm_client not installed. pip install -e ~/projects/llm_client")
 
     user_content = build_review_context(surfaces, repo_name)
     effective_model = model or DEFAULT_MODEL
-    schema = SemanticReviewResult.model_json_schema()
 
-    result = complete(
+    review, _llm_result = call_llm_structured(
         model=effective_model,
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": user_content},
         ],
-        response_format={
-            "type": "json_schema",
-            "json_schema": {"name": "SemanticReviewResult", "schema": schema},
-        },
+        response_model=SemanticReviewResult,
         task="semantic_truth_surface_review",
         trace_id=trace_id or f"semantic-review-{repo_name}",
         max_budget=max_budget,
     )
 
-    raw = result.content if hasattr(result, "content") else result
-    data = json.loads(raw) if isinstance(raw, str) else raw
-
     # Ensure metadata fields are current (LLM may produce stale placeholders)
-    data["repo"] = repo_name
-    data["reviewed_at"] = datetime.now(tz=timezone.utc).isoformat(timespec="seconds")
-    data["agent"] = effective_model
-    data["surfaces_reviewed"] = list(surfaces.keys())
-
-    review = SemanticReviewResult.model_validate(data)
-    # Recompute promotion_candidates from the actual findings
-    review = review.model_copy(
-        update={"promotion_candidates": sum(1 for f in review.findings if f.promotion_candidate)}
-    )
+    review = review.model_copy(update={
+        "repo": repo_name,
+        "reviewed_at": datetime.now(tz=timezone.utc).isoformat(timespec="seconds"),
+        "agent": effective_model,
+        "surfaces_reviewed": list(surfaces.keys()),
+        # Recompute promotion_candidates from the actual findings
+        "promotion_candidates": sum(1 for f in review.findings if f.promotion_candidate),
+    })
     return review
 
 

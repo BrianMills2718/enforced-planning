@@ -6,7 +6,6 @@ real LLM calls. The verify_coupling() function itself is tested via monkeypatchi
 
 from __future__ import annotations
 
-import json
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -243,7 +242,7 @@ class TestVerifyCouplingFunction:
         )
 
     def test_passes_max_budget_to_llm(self):
-        """verify_coupling passes max_budget kwarg to llm_client.complete."""
+        """verify_coupling passes max_budget kwarg to llm_client.call_llm_structured."""
         # mock-ok: testing kwarg passing without real LLM call
         judgment_data = {
             "verdict": "CURRENT",
@@ -254,9 +253,7 @@ class TestVerifyCouplingFunction:
         }
 
         mock_complete = MagicMock()
-        mock_result = MagicMock()
-        mock_result.content = json.dumps(judgment_data)
-        mock_complete.return_value = mock_result
+        mock_complete.return_value = (VerificationJudgment.model_validate(judgment_data), MagicMock())
 
         with patch("verify_coupling._load_llm_client", return_value=mock_complete):
             verify_coupling(self._make_request(), max_budget=0.05)
@@ -275,9 +272,7 @@ class TestVerifyCouplingFunction:
         }
 
         mock_complete = MagicMock()
-        mock_result = MagicMock()
-        mock_result.content = json.dumps(judgment_data)
-        mock_complete.return_value = mock_result
+        mock_complete.return_value = (VerificationJudgment.model_validate(judgment_data), MagicMock())
 
         with patch("verify_coupling._load_llm_client", return_value=mock_complete):
             verify_coupling(self._make_request())
@@ -296,9 +291,7 @@ class TestVerifyCouplingFunction:
         }
 
         mock_complete = MagicMock()
-        mock_result = MagicMock()
-        mock_result.content = json.dumps(judgment_data)
-        mock_complete.return_value = mock_result
+        mock_complete.return_value = (VerificationJudgment.model_validate(judgment_data), MagicMock())
 
         with patch("verify_coupling._load_llm_client", return_value=mock_complete):
             result = verify_coupling(self._make_request())

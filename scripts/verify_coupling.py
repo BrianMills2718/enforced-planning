@@ -128,8 +128,8 @@ is still accurate. Produce a VerificationJudgment with:
 def _load_llm_client():
     """Import llm_client lazily to allow tests to run without it installed."""
     try:
-        from llm_client import complete  # type: ignore[import]
-        return complete
+        from llm_client import call_llm_structured  # type: ignore[import]
+        return call_llm_structured
     except ImportError:
         return None
 
@@ -170,34 +170,25 @@ def verify_coupling(
         RuntimeError: If llm_client is not available.
         ValueError: If the LLM returns an invalid judgment.
     """
-    complete = _load_llm_client()
-    if complete is None:
+    call_llm_structured = _load_llm_client()
+    if call_llm_structured is None:
         raise RuntimeError("llm_client not installed. pip install -e ~/projects/llm_client")
 
     effective_model = model or os.getenv("VERIFY_COUPLING_MODEL") or DEFAULT_MODEL
     user_content = build_context_package(request)
 
-    judgment_schema = VerificationJudgment.model_json_schema()
-    response_format = {
-        "type": "json_schema",
-        "json_schema": {"name": "VerificationJudgment", "schema": judgment_schema},
-    }
-
-    result = complete(
+    judgment, _llm_result = call_llm_structured(
         model=effective_model,
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": user_content},
         ],
-        response_format=response_format,
+        response_model=VerificationJudgment,
         task="verify_validated_coupling",
         trace_id=trace_id or f"verify-{request.coupling_id[:40]}",
         max_budget=max_budget,
     )
-
-    raw = result.content if hasattr(result, "content") else result
-    data = json.loads(raw) if isinstance(raw, str) else raw
-    return VerificationJudgment.model_validate(data)
+    return judgment
 
 
 def prepare_request(

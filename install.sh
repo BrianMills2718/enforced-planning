@@ -90,6 +90,7 @@ if [[ "$MODE" == "--full" ]]; then
         "render_truth_surface_status.py"
         "infer_dependencies.py"
         "migrate_relationships.py"
+        "check_locked_couplings.py"
     )
     for script in "${FULL_SCRIPTS[@]}"; do
         if [[ -f "$SCRIPT_DIR/scripts/$script" ]]; then

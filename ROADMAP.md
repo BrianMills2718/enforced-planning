@@ -61,7 +61,7 @@ A portable framework where:
 | Self-import filter | Inference skips repo's own package imports | ✅ Complete |
 | Makefile targets | `make infer`, `make check-deps`, `make check-caps`, `make migrate-rels` | ✅ Complete |
 | **V2 adoption pilot** | Migrate a real governed repo's relationships.yaml to V2 | ✅ Complete (llm_client: 4 couplings migrated, 425 inferred edges, read-gate verified) |
-| **Pre-commit enforcement** | Hook that validates locked couplings on commit | 📋 Planned |
+| **Pre-commit enforcement** | Hook that validates locked couplings on commit | ✅ Complete (`check_locked_couplings.py` wired into pre-commit, 24 tests) |
 | **Agent verification protocol** | Bounded mission spec for "validated" couplings (`Plan #11`) | ✅ Complete (181 tests, shipped) |
 
 ### Phase 5: Semantic Review Layer (PLANNED)
@@ -104,7 +104,7 @@ A portable framework where:
 
 4. ~~**Phase 7: Plan #10**~~ ✅ Done — installer, GETTING_STARTED, Plan #1, Plans #6/#8 all reconciled.
 
-5. **Phase 6: Cross-repo governance** — Gate met: V2 proven in 3 repos (enforced-planning, llm_client, data_contracts). Next: build cross-repo plan index and ecosystem dependency map.
+5. ~~**Phase 6: Cross-repo governance**~~ ✅ Done — plan registry (330 plans, 22 repos), ecosystem dep map (14177 edges, 103 cross-repo), `make plan-registry`, `make infer-all`, `make ecosystem-deps`.
 
 ## Design Principles
 

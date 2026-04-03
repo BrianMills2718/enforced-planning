@@ -33,7 +33,20 @@ if [[ -n "$GENERATOR" ]]; then
     fi
 fi
 
-# 2. Doc-coupling check (if script exists)
+# 2. Locked-coupling check (V2 relationships.yaml)
+LOCKED_COUPLINGS=$(find_script "check_locked_couplings.py")
+if [[ -n "$LOCKED_COUPLINGS" ]]; then
+    echo "Checking locked couplings..."
+    if ! python "$LOCKED_COUPLINGS" --strict 2>/dev/null; then
+        echo ""
+        echo "ERROR: Locked coupling violated — update the coupled docs and re-stage."
+        echo "Run 'python $LOCKED_COUPLINGS' to see violations."
+        echo ""
+        exit 1
+    fi
+fi
+
+# 4. Doc-coupling check (if script exists)
 DOC_COUPLING=$(find_script "check_doc_coupling.py")
 if [[ -n "$DOC_COUPLING" ]]; then
     echo "Checking doc-code coupling..."
@@ -46,7 +59,7 @@ if [[ -n "$DOC_COUPLING" ]]; then
     fi
 fi
 
-# 3. Mypy on changed src/ files (if mypy is installed)
+# 5. Mypy on changed src/ files (if mypy is installed)
 STAGED_SRC=$(echo "$STAGED_PY" | grep '^src/' || true)
 if [[ -n "$STAGED_SRC" ]] && command -v mypy >/dev/null 2>&1; then
     echo "Running mypy on changed files..."
@@ -58,7 +71,7 @@ if [[ -n "$STAGED_SRC" ]] && command -v mypy >/dev/null 2>&1; then
     fi
 fi
 
-# 4. Plan status consistency (if script exists and plan files staged)
+# 6. Plan status consistency (if script exists and plan files staged)
 SYNC_STATUS=$(find_script "sync_plan_status.py")
 if [[ -n "$SYNC_STATUS" ]]; then
     STAGED_PLANS=$(git diff --cached --name-only --diff-filter=ACM | grep '^docs/plans/' || true)
@@ -74,7 +87,7 @@ if [[ -n "$SYNC_STATUS" ]]; then
     fi
 fi
 
-# 5. Dead code check (if enabled in meta-process.yaml)
+# 7. Dead code check (if enabled in meta-process.yaml)
 DEAD_CODE=$(find_script "check_dead_code.py")
 if [[ -n "$DEAD_CODE" ]] && [[ -n "$STAGED_PY" ]]; then
     echo "Checking for dead code..."
@@ -87,7 +100,7 @@ if [[ -n "$DEAD_CODE" ]] && [[ -n "$STAGED_PY" ]]; then
     fi
 fi
 
-# 6. Branch divergence check
+# 8. Branch divergence check
 echo "Checking branch freshness..."
 git fetch origin 2>/dev/null || true
 

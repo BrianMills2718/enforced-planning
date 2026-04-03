@@ -57,6 +57,15 @@ planning:
 
 ## Quick Start (30 minutes)
 
+> **Tool compatibility:** This framework currently requires **Claude Code**. The hooks
+> (`.claude/hooks/`), CLAUDE.md convention, and read-gating enforcement are Claude
+> Code-specific. If you use Cursor, Windsurf, or Cline, the patterns and git hooks
+> are still useful, but the AI enforcement layer won't work until Phase 8.
+>
+> Read [`PLANNING_OPERATING_MODEL.md`](PLANNING_OPERATING_MODEL.md) first — it defines
+> the planning hierarchy that governs all work in this framework. Everything else in
+> this guide is an implementation of that model.
+
 ### Step 1: Install
 
 ```bash

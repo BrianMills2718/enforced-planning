@@ -1,6 +1,10 @@
 # Enforced Planning: AI-Assisted Development Framework
 
-A portable framework for coordinating AI coding assistants (Claude Code, etc.) on shared codebases.
+A portable framework for coordinating AI coding assistants on shared codebases.
+
+> **Tool compatibility:** Currently **Claude Code only**. Hooks (`.claude/hooks/`),
+> CLAUDE.md convention, and read-gating are Claude Code-specific. Patterns and git
+> hooks are tool-agnostic. Cursor/Windsurf/Cline support is planned (Phase 8).
 
 ## What This Solves
 

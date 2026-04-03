@@ -367,13 +367,21 @@ git commit -m "[Trivial] Update copyright year"
 git commit -m "[Trivial] Fix formatting in config"
 ```
 
-**Trivial criteria (all must be true):**
-- Less than 20 lines changed
-- No changes to `src/` (production code)
-- No new files created
-- No test changes (except fixing typos)
+**Trivial criteria — ALL of the following must be true:**
 
-**CI validates trivial commits** - if a `[Trivial]` commit exceeds limits, CI warns.
+1. **≤ 20 lines changed** (diff stat: `git diff --stat HEAD` line count, not file count)
+2. **No changes to production code directories** (`src/`, `lib/`, any directory your project considers production code)
+3. **No new public APIs, schemas, or behavioral changes** — adding a function, changing a return type, or altering observable behavior requires a plan even if < 20 lines
+4. **No new files created** — new files almost always represent new capability; use a plan
+5. **Reviewer judgment confirms genuinely minor** — when in doubt, use `[Plan #N]`
+
+**Edge cases:**
+- Renaming a variable across 25 files = NOT trivial (behavioral risk, needs plan)
+- Fixing a typo in 1 comment = trivial
+- Adding a `# type: ignore` = NOT trivial (hiding a type error may be a real bug)
+- Updating a version number in a comment = trivial
+
+**CI validates trivial commits** — if a `[Trivial]` commit exceeds limits, CI warns.
 
 **Why this exists:** Plans add value for significant work but create friction for tiny fixes. The 80/20 principle: most value comes from planning significant work, not typo fixes.
 

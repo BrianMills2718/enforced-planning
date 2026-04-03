@@ -15,9 +15,9 @@ meta_process:
     # Require "References Reviewed" section before implementation
     require_references_reviewed: true
     # Max lines for [Trivial] commits (no plan required)
-    trivial_threshold_lines: 20
+    trivial_threshold_lines: 20  # [PLANNED - not yet enforced by scripts; used as reference in Pattern 15]
     # Block trivial commits that touch src/
-    trivial_block_src: true
+    trivial_block_src: true  # [PLANNED - not yet enforced]
     # Plan file location
     plans_dir: "docs/plans"
 
@@ -56,21 +56,21 @@ meta_process:
 
   planning:
     # Investigate before coding
-    question_driven_planning: advisory  # disabled | advisory | required
+    question_driven_planning: advisory  # disabled | advisory | required  # [PLANNED - not yet enforced]
     # Preserve open questions across sessions
-    uncertainty_tracking: advisory      # disabled | advisory | required
+    uncertainty_tracking: advisory      # disabled | advisory | required  # [PLANNED - not yet enforced]
     # How blocked dependency probes affect planning/freeze gates
-    dependency_probe_policy: strict     # strict | warn | ignore
+    dependency_probe_policy: strict     # strict | warn | ignore  # [PLANNED - not yet enforced]
 
   capability_ownership:
     # Advisory-only first slice. Enable when the repo has live ownership or migration pressure.
-    enabled: false
+    enabled: false  # [PLANNED - not yet enforced]
     # Repo-local capability decomposition or boundary doc.
-    source_of_record: ""
+    source_of_record: ""  # [PLANNED - not yet enforced]
     # Require companion coverage in project-meta's shared capability registry.
-    shared_registry_required: false
+    shared_registry_required: false  # [PLANNED - not yet enforced]
     # Shared registry source_project key when registry coverage matters.
-    source_project: ""
+    source_project: ""  # [PLANNED - not yet enforced]
 
   # =============================================================================
   # QUALITY GATES (Configurable strictness)
@@ -139,11 +139,11 @@ meta_process:
   # =============================================================================
 
   messaging:
-    enabled: false
+    enabled: false  # [PLANNED - not yet enforced; send_message.py hardcodes paths]
     # Block edits until inbox is acknowledged
-    require_ack: true
+    require_ack: true  # [PLANNED - not yet enforced]
     # Message storage location
-    inbox_dir: ".claude/messages"
+    inbox_dir: ".claude/messages"  # [PLANNED - not yet enforced]
 
   # =============================================================================
   # CI CONFIGURATION

@@ -4,7 +4,7 @@ See `ROADMAP.md` for the full phase map and recommended priority order.
 
 | # | Gap | Priority | Status | Blocks |
 |---|-----|----------|--------|--------|
-| 1 | Capabilities enforcement in plan template (`01_boundary_enforcement.md`) | High | 🚧 Partial (template done, pre-commit hook pending) | ecosystem-ops audit, DIGIMON audit |
+| 1 | Capabilities enforcement in plan template (`01_boundary_enforcement.md`) | High | ✅ Complete (template + pre-commit hook wired, wires into check #6) | ecosystem-ops audit, DIGIMON audit |
 | 2 | Canonical Planning Operating Model (`02_canonical-planning-operating-model.md`) | High | ✅ Complete | #3, #4 |
 | 3 | Static Graph / Runtime Truth Split (`03_static-planning-graph-and-runtime-truth-surface-split.md`) | High | ✅ Complete | #4 |
 | 4 | Truth-Surface Drift Validation (`04_truth-surface-drift-validation-and-enforcement.md`) | High | ✅ Complete | [future] project-meta rollout |

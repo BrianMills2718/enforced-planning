@@ -32,7 +32,7 @@ A portable framework where:
 |------|------|--------|
 | #2 | Planning Operating Model (canonical methodology) | ✅ Complete |
 | #3 | Static Graph / Runtime Truth split | ✅ Complete |
-| #1 | Capabilities section in plan template | 🚧 Partial (template done, pre-commit hook pending) |
+| #1 | Capabilities section in plan template | ✅ Complete (template done, pre-commit hook wired as check #6) |
 
 ### Phase 3: Truth-Surface Validation (COMPLETE)
 

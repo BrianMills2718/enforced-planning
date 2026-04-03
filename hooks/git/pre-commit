@@ -71,7 +71,23 @@ if [[ -n "$STAGED_SRC" ]] && command -v mypy >/dev/null 2>&1; then
     fi
 fi
 
-# 6. Plan status consistency (if script exists and plan files staged)
+# 6. Capabilities section check on staged plan files
+CHECK_CAPS=$(find_script "check_plan_capabilities.py")
+if [[ -n "$CHECK_CAPS" ]]; then
+    STAGED_PLAN_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep '^docs/plans/.*\.md$' || true)
+    if [[ -n "$STAGED_PLAN_FILES" ]]; then
+        echo "Checking plan Capabilities sections..."
+        if ! python "$CHECK_CAPS" $STAGED_PLAN_FILES --strict 2>/dev/null; then
+            echo ""
+            echo "ERROR: Cross-project plan missing Capabilities section!"
+            echo "Run 'python $CHECK_CAPS docs/plans/' to see all warnings."
+            echo ""
+            exit 1
+        fi
+    fi
+fi
+
+# 7. Plan status consistency (if script exists and plan files staged)
 SYNC_STATUS=$(find_script "sync_plan_status.py")
 if [[ -n "$SYNC_STATUS" ]]; then
     STAGED_PLANS=$(git diff --cached --name-only --diff-filter=ACM | grep '^docs/plans/' || true)
@@ -87,7 +103,7 @@ if [[ -n "$SYNC_STATUS" ]]; then
     fi
 fi
 
-# 7. Dead code check (if enabled in meta-process.yaml)
+# 8. Dead code check (if enabled in meta-process.yaml)
 DEAD_CODE=$(find_script "check_dead_code.py")
 if [[ -n "$DEAD_CODE" ]] && [[ -n "$STAGED_PY" ]]; then
     echo "Checking for dead code..."
@@ -100,7 +116,7 @@ if [[ -n "$DEAD_CODE" ]] && [[ -n "$STAGED_PY" ]]; then
     fi
 fi
 
-# 8. Branch divergence check
+# 9. Branch divergence check
 echo "Checking branch freshness..."
 git fetch origin 2>/dev/null || true
 

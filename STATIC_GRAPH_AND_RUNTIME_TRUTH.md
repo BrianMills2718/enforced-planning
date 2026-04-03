@@ -107,6 +107,9 @@ It is the right layer for:
 - plan-status parity
 - tracker pattern vs registry contradictions
 - claimed state vs measured audit state
+- lineage-aware reservation hygiene, where canonical landed contradictions fail
+  but `historical-unlanded` history can remain visible without collapsing
+  repo-local status into false hard failures
 
 These checks should remain programmatic because they need high-confidence,
 repeatable failure semantics and should be eligible for hard enforcement.

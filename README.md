@@ -167,6 +167,12 @@ scoped config with `scope.repo_names` so unrelated ecosystem registry drift does
 not dominate the local result. Full unscoped runs are still useful for broader
 global coordination review.
 
+Consumed reservations are lineage-aware. Canonical landed contradictions should
+still fail, but `historical-unlanded` records should normally render as hygiene
+warnings rather than hard repo-local failures. Use
+`checks.consumed_reservations_exist.historical_unlanded_severity` in
+`truth_surface_drift.yaml` if a repo needs a different local posture.
+
 The semantic review layer is optional and advisory-only. It should sit on top of
 deterministic validation for semantic drift, misleading prose, and missing
 cross-surface updates that exact rules cannot capture robustly.

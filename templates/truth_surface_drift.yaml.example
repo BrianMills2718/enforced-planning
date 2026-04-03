@@ -16,6 +16,7 @@ surfaces:
 checks:
   consumed_reservations_exist:
     severity: fail
+    historical_unlanded_severity: warn
 
   no_active_work_for_complete_plans:
     severity: fail

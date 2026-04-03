@@ -49,6 +49,17 @@ def _canonical_repo_name(repo_root: Any, *, project: Any = None) -> str | None:
     return None
 
 
+def _canonical_repo_root(repo_root: Any) -> Path | None:
+    """Return the canonical repo root for one repo or worktree path when inferable."""
+    if not isinstance(repo_root, str) or not repo_root.strip():
+        return None
+    path = Path(repo_root).expanduser()
+    if path.parent.name.endswith("_worktrees"):
+        worktrees_dir = path.parent
+        return worktrees_dir.parent / worktrees_dir.name[: -len("_worktrees")]
+    return path
+
+
 def _load_yaml(path: Path) -> dict[str, Any]:
     """Load YAML from path, returning an empty mapping when the file is blank."""
     data = yaml.safe_load(path.read_text())
@@ -132,7 +143,11 @@ def _normalize_severity(value: Any, default: str = "fail") -> str:
 
 
 def _check_consumed_reservations_exist(
-    registry: dict[str, Any], severity: str, *, scoped_repo_names: set[str] | None = None
+    registry: dict[str, Any],
+    severity: str,
+    *,
+    historical_unlanded_severity: str,
+    scoped_repo_names: set[str] | None = None,
 ) -> list[Issue]:
     """Validate that consumed reservations still point to a real plan file."""
     issues: list[Issue] = []
@@ -146,6 +161,23 @@ def _check_consumed_reservations_exist(
             continue
         if reservation.get("status") != "consumed":
             continue
+        if reservation.get("lineage_state") == "historical-unlanded":
+            historical_plan_file = reservation.get("historical_plan_file")
+            history_suffix = (
+                f": {historical_plan_file}" if isinstance(historical_plan_file, str) and historical_plan_file else ""
+            )
+            issues.append(
+                Issue(
+                    code="historical_unlanded_consumed_reservation",
+                    severity=historical_unlanded_severity,
+                    message=(
+                        "Historical-unlanded consumed reservation remains in registry"
+                        f"{history_suffix}."
+                    ),
+                    evidence={"reservation": reservation, "canonical_repo": canonical_repo},
+                )
+            )
+            continue
         plan_file = reservation.get("plan_file")
         if not isinstance(plan_file, str) or not plan_file:
             issues.append(
@@ -157,13 +189,21 @@ def _check_consumed_reservations_exist(
                 )
             )
             continue
-        if not Path(plan_file).exists():
+        resolved_plan_file = Path(plan_file).expanduser()
+        canonical_repo_root = _canonical_repo_root(reservation.get("repo_root"))
+        if not resolved_plan_file.is_absolute() and canonical_repo_root is not None:
+            resolved_plan_file = canonical_repo_root / resolved_plan_file
+        if not resolved_plan_file.exists():
             issues.append(
                 Issue(
                     code="consumed_reservation_missing_plan_file",
                     severity=severity,
                     message=f"Consumed reservation points to missing plan file: {plan_file}",
-                    evidence={"reservation": reservation, "canonical_repo": canonical_repo},
+                    evidence={
+                        "reservation": reservation,
+                        "canonical_repo": canonical_repo,
+                        "resolved_plan_file": str(resolved_plan_file),
+                    },
                 )
             )
     return issues
@@ -345,10 +385,19 @@ def run_checks(config_path: Path) -> list[Issue]:
             consumed_cfg.get("severity") if isinstance(consumed_cfg, dict) else None,
             default="fail",
         )
+        historical_unlanded_severity = _normalize_severity(
+            (
+                consumed_cfg.get("historical_unlanded_severity")
+                if isinstance(consumed_cfg, dict)
+                else None
+            ),
+            default="warn",
+        )
         issues.extend(
             _check_consumed_reservations_exist(
                 registry,
                 severity,
+                historical_unlanded_severity=historical_unlanded_severity,
                 scoped_repo_names=scoped_repo_names,
             )
         )

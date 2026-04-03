@@ -16,6 +16,7 @@ See `ROADMAP.md` for the full phase map and recommended priority order.
 | 10 | Framework Onboarding Reconciliation (`10_framework-truth-surface-and-onboarding-reconciliation.md`) | Medium | ✅ Complete | [future] consumer adoption |
 | — | Relationships V2: inference engine + schema + migration (design doc, no numbered plan) | High | ✅ Complete | V2 adoption pilot |
 | 11 | Agent Verification Protocol for Validated Couplings (`11_agent-verification-protocol.md`) | High | ✅ Complete | #7 |
+| 12 | Cross-Repo Plan Registry (`build_plan_registry.py`, `make plan-registry`) | Medium | ✅ Complete (327 plans, 22 repos) | check_plan_deps cross-repo |
 
 ## Status Key
 

@@ -100,6 +100,12 @@ coupling checks) all use `meta-process.yaml` presence to discover governed repos
 | Claims + Worktrees | Prevent parallel AI instances from conflicting |
 | Inter-CC Messaging | Async communication between AI instances |
 
+Portable coordination now has two layers:
+- root `scripts/` owns the newer claim-v2, active-work registry, and shared
+  worktree-path helpers
+- `scripts/worktree-coordination/` owns the optional operational helpers such
+  as worktree creation, safe removal, PR finish, and messaging
+
 > **Most projects don't need the multi-CC module.** A branch-based workflow with one AI instance at a time is simpler and works well. See `patterns/worktree-coordination/README.md` if you need it.
 
 ## Configuration
@@ -194,6 +200,22 @@ validation for semantic drift, misleading prose, and missing cross-surface
 updates that exact rules cannot capture robustly.
 
 See `templates/truth_surface_drift.yaml.example` for the scaffold.
+
+## Portable Coordination Surfaces
+
+The first portable coordination wave now lives in these scripts:
+
+- `scripts/check_coordination_claims.py` — claim-v2 schema, overlap detection,
+  and claim management against `~/.claude/coordination/claims/`
+- `scripts/generate_active_work_registry.py` — generated JSON/markdown registry
+  from live claims
+- `scripts/worktree_paths.py` — canonical repo/worktree-root resolution helpers
+- `scripts/worktree-coordination/create_worktree.py` — sanctioned worktree
+  creation with optional scoped write-claim enforcement
+
+The older `scripts/worktree-coordination/check_claims.py` active-work system is
+still present for legacy/module compatibility. This wave does not delete or
+replace it.
 
 ## Full Documentation
 

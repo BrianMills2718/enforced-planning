@@ -4,10 +4,15 @@ This directory contains the optional portable worktree-coordination scripts.
 
 ## Use This Directory For
 
-- claim management
-- coordination dashboards
+- scoped worktree creation and cleanup
 - safe worktree cleanup
 - inter-agent messaging helpers
+
+## Keep One Level Up In `scripts/`
+
+- claim-v2 schema and overlap detection
+- generated active-work registry
+- canonical worktree-path helpers
 
 ## Working Rules
 

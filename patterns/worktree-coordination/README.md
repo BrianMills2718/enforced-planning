@@ -13,7 +13,8 @@ Enable this module when:
 
 ## What It Provides
 
-**Claims** — Branch-based coordination that prevents two instances from working on the same plan:
+**Claims** — Coordination that prevents two instances from writing the same
+scope at once:
 - See [18_claim-system.md](18_claim-system.md)
 
 **Worktree Enforcement** — File isolation via git worktrees so each instance has its own working directory:
@@ -47,8 +48,18 @@ The `block-cd-worktree.sh` hook (in `hooks/claude/worktree-coordination/`) enfor
 
 ## Related Scripts
 
-Located in `scripts/worktree-coordination/`:
-- `check_claims.py` — Claim management (create, release, list, validate)
+Portable coordination scripts now split across two locations:
+
+In `scripts/`:
+- `check_coordination_claims.py` — claim-v2 schema, overlap detection, and
+  live file-based claims
+- `generate_active_work_registry.py` — derived readable current-work registry
+- `worktree_paths.py` — canonical repo/worktree-root helpers
+
+In `scripts/worktree-coordination/`:
+- `check_claims.py` — legacy active-work claim management
+- `create_worktree.py` — sanctioned worktree creation with optional scoped
+  write-claim enforcement
 - `safe_worktree_remove.py` — Safe worktree removal with checks
 - `finish_pr.py` — PR merge + worktree cleanup + claim release
 - `check_messages.py` — Inter-instance inbox checking

@@ -17,6 +17,7 @@ See `ROADMAP.md` for the full phase map and recommended priority order.
 | — | Relationships V2: inference engine + schema + migration (design doc, no numbered plan) | High | ✅ Complete | V2 adoption pilot |
 | 11 | Agent Verification Protocol for Validated Couplings (`11_agent-verification-protocol.md`) | High | ✅ Complete | #7 |
 | 12 | Cross-Repo Plan Registry (`build_plan_registry.py`, `make plan-registry`) | Medium | ✅ Complete (327 plans, 22 repos) | check_plan_deps cross-repo |
+| 13 | Rename-Safe Merge Cleanup (`13_rename-safe-merge-cleanup.md`) | High | ✅ Complete | — |
 
 ## Status Key
 

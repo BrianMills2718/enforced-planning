@@ -33,27 +33,15 @@ three layers of discipline:
 > - Any question answerable by reading the sprint doc → read it, proceed
 
 Active sprint tracker:
-- **ACTIVE:** `docs/ops/SPRINT_2026_04_03_AUDIT_FOLLOWUP.md` — audit follow-up sprint.
-  6 phases. All architectural decisions pre-made. Execute all phases continuously.
-- **COMPLETE:** `docs/ops/SPRINT_2026_04_03_ALL_ISSUES.md` — prior sprint, all done.
+- **ACTIVE:** `docs/ops/SPRINT_2026_04_03_RENAME_SAFE_MERGE_CLEANUP.md` — rename-safe merge cleanup sprint.
+  4 phases. The architectural decision is pre-made: fix the authoritative helper first, then replay downstream.
+- **COMPLETE:** `docs/ops/SPRINT_2026_04_03_AUDIT_FOLLOWUP.md` — prior local sprint.
 
 Phase checklist (current sprint — update as completed):
-- [ ] Phase 1a: Add patterns 34+35 to 01_README.md
-- [ ] Phase 1b: Fix NEW_PROJECT_SETUP.md Step 3 broken commands
-- [ ] Phase 1c: Delete ISSUES_LEGACY_agent_ecology2.md
-- [ ] Phase 1d: Document verify_coupling.py model choice rationale
-- [ ] Phase 1e: Fix stale CLAUDE.md References section
-- [ ] Phase 2a: Bump pyproject.toml to 1.0.0
-- [ ] Phase 2b: Create and push v1.0.0 git tag
-- [ ] Phase 3a: Define notebook required threshold in POM
-- [ ] Phase 3b: Mirror notebook threshold in Pattern 36
-- [ ] Phase 3c: Define "governed repo" in README and GETTING_STARTED
-- [ ] Phase 3d: Fix Makefile infer-all (replace ls -d with find)
-- [ ] Phase 4a: Write scripts/render_agents_md.py
-- [ ] Phase 4b: Add make agents-md target; regenerate AGENTS.md
-- [ ] Phase 5a: Make Phase 8 gate measurable in ROADMAP.md
-- [ ] Phase 5b: Move permanently-deferred items to docs/backlog/
-- [ ] Phase 6a: Write tests/test_complete_plan.py (≥12 tests)
+- [ ] Phase A: Freeze failure and local sprint authority
+- [ ] Phase B: Patch authoritative helper
+- [ ] Phase C: Add deterministic verification
+- [ ] Phase D: Verify and close out
 
 Rules during continuous execution:
 - complete the current phase, update the tracker, and move immediately to the next phase

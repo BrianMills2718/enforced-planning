@@ -5,6 +5,7 @@
 **Priority:** High
 **Blocked By:** None
 **Blocks:** default workflow wiring beyond advisory mode
+**Follow-on:** Plan #9 (scoped validation by repo identity) — addressed the registry hygiene noise discovered in this pilot
 
 ---
 

@@ -62,7 +62,7 @@ Steps:
 
 Pre-made decisions:
 - Python script, ~200-400 lines
-- Scans: markdown links (`[text](path)`), file path strings, import statements, plan refs (`Plan #N`, `ADR-N`)
+- Scans: markdown links (`\[text\](path)`), file path strings, import statements, plan refs (`Plan #N`, `ADR-N`)
 - Output: JSON file with inferred edges `{source, target, type, evidence}`
 - Inline suppression: `<!-- governance: no-dep -->` or `# governance: no-dep`
 - CLI: `python scripts/infer_dependencies.py /path/to/repo [--output inferred.json]`

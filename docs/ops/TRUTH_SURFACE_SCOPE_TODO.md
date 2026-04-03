@@ -12,4 +12,4 @@ Make repo-local truth-surface validation actionable by separating local drift fr
 - [x] Phase C: update `prompt_eval` config to use scoped mode
 - [x] Phase C: rerun validator and renderer for `prompt_eval`
 - [x] Phase D: update framework docs and pilot recommendation from scoped replay
-- [ ] Phase D: commit the scoped-validation slice
+- [x] Phase D: commit the scoped-validation slice (committed as [Plan #9])

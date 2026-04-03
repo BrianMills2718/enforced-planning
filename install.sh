@@ -86,6 +86,10 @@ if [[ "$MODE" == "--full" ]]; then
         "sync_governance.py"
         "check_mock_usage.py"
         "check_locked_files.py"
+        "check_truth_surface_drift.py"
+        "render_truth_surface_status.py"
+        "infer_dependencies.py"
+        "migrate_relationships.py"
     )
     for script in "${FULL_SCRIPTS[@]}"; do
         if [[ -f "$SCRIPT_DIR/scripts/$script" ]]; then
@@ -209,6 +213,12 @@ if [[ "$MODE" == "--full" ]]; then
     if [[ ! -f "$TARGET_DIR/acceptance_gates/EXAMPLE.yaml" ]]; then
         cp "$SCRIPT_DIR/templates/acceptance_gate.yaml.example" "$TARGET_DIR/acceptance_gates/EXAMPLE.yaml"
         echo -e "  ${GREEN}Created: acceptance_gates/EXAMPLE.yaml${NC}"
+    fi
+
+    # Truth-surface drift config template
+    if [[ ! -f "$TARGET_DIR/scripts/truth_surface_drift.yaml.example" ]]; then
+        cp "$SCRIPT_DIR/templates/truth_surface_drift.yaml.example" "$TARGET_DIR/scripts/truth_surface_drift.yaml.example"
+        echo -e "  ${GREEN}Created: scripts/truth_surface_drift.yaml.example${NC}"
     fi
 fi
 

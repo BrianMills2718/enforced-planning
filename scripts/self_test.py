@@ -164,12 +164,17 @@ def check_file_existence(root: Path) -> list[str]:
 LINK_RE = re.compile(r"\[([^\]]*)\]\(([^)]+)\)")
 # Match fenced code blocks (``` ... ```)
 CODE_BLOCK_RE = re.compile(r"```.*?```", re.DOTALL)
+# Match inline code spans (`...`)
+INLINE_CODE_RE = re.compile(r"`[^`\n]+`")
 
 
 def _in_code_block(content: str, pos: int) -> bool:
-    """Check if position is inside a fenced code block."""
+    """Check if position is inside a fenced code block or inline code span."""
     for block in CODE_BLOCK_RE.finditer(content):
         if block.start() <= pos < block.end():
+            return True
+    for span in INLINE_CODE_RE.finditer(content):
+        if span.start() <= pos < span.end():
             return True
     return False
 

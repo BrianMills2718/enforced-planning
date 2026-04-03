@@ -86,13 +86,13 @@ A portable framework where:
 | Distributed governance | Per-directory `.governance.yaml` (Buck2 pattern) | 📋 Deferred |
 | Ecosystem dependency map | Inference engine run across all active repos | ✅ Prototype (10 repos scanned) |
 
-### Phase 7: Onboarding Reconciliation (IN PROGRESS)
+### Phase 7: Onboarding Reconciliation (COMPLETE)
 
 **Gate:** GETTING_STARTED.md, README, and pattern docs all align with the canonical operating model and V2 tooling.
 
 | Plan | What | Status |
 |------|------|--------|
-| #10 | Framework truth-surface and onboarding reconciliation | 🚧 In Progress |
+| #10 | Framework truth-surface and onboarding reconciliation | ✅ Complete |
 
 ## What's Next (recommended priority order)
 
@@ -102,7 +102,7 @@ A portable framework where:
 
 3. ~~**Phase 5: Plan #7**~~ ✅ Done — review_truth_surfaces.py shipped with 26 tests.
 
-4. **Phase 7: Plan #10** — Onboarding reconciliation. Lower priority because the framework is functional without it — it's about discoverability, not capability.
+4. ~~**Phase 7: Plan #10**~~ ✅ Done — installer, GETTING_STARTED, Plan #1, Plans #6/#8 all reconciled.
 
 5. **Phase 6: Cross-repo governance** — Only after V2 is proven in 3+ repos.
 

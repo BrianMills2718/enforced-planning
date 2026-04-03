@@ -1,20 +1,20 @@
-# Plan #1: Add Data Boundary Enforcement to Plan Template
+# Plan #1: Capabilities Enforcement in Plan Template
 
-**Status:** Partially Complete (template done, enforcement tooling pending)
+**Status:** Partially Complete (template done, pre-commit hook pending)
 **Type:** implementation
 **Priority:** High
 **Blocked By:** None
-**Blocks:** ecosystem-ops boundary audit, DIGIMON boundary audit
+**Blocks:** [future] ecosystem-ops capability audit, [future] DIGIMON capability audit
 
 ---
 
 ## Gap
 
-**Current:** The plan template has no Data Boundaries section. Plans that cross project boundaries don't declare their contracts upfront. Boundaries are defined retroactively (or not at all).
+**Current:** The plan template has a Capabilities section but no pre-commit hook enforces its presence. Plans that create or consume cross-project capabilities can omit the Capabilities table upfront.
 
-**Target:** Plans that create or consume cross-project data MUST declare boundary contracts before implementation. The template enforces this. A pre-commit hook warns on missing boundaries.
+**Target:** Plans that create or modify callable cross-project capabilities MUST declare their input/output schemas, producers, and consumers before implementation. The `check_plan_capabilities.py` script enforces this; a pre-commit hook warns on missing Capabilities sections for cross-project plans.
 
-**Why:** Without upfront boundary definition, integration bugs are discovered at runtime. Autonomous agents implement features without knowing what format downstream consumers expect.
+**Why:** Without upfront capability definition, integration bugs are discovered at runtime. Autonomous agents implement features without knowing what format downstream consumers expect.
 
 ---
 
@@ -29,10 +29,10 @@
 
 ## Files Affected
 
-- `templates/plan.md.template` (modify — add Data Boundaries section)
-- `scripts/check_plan_boundaries.py` (create — validation script)
-- `hooks/claude/pre-commit-plan-boundaries.sh` (create — hook script)
-- `patterns/15_plan-workflow.md` (modify — reference boundary requirement)
+- `templates/plan.md.template` (done — Capabilities section added)
+- `scripts/check_plan_capabilities.py` (done — validation script exists)
+- `hooks/claude/pre-commit-plan-boundaries.sh` (pending — hook script not yet created)
+- `patterns/15_plan-workflow.md` (pending — reference to Capabilities requirement)
 
 ---
 
@@ -48,11 +48,11 @@ N/A — internal to enforced-planning.
 
 ### Steps
 
-1. Add Data Boundaries section to `templates/plan.md.template`
-2. Create `scripts/check_plan_boundaries.py` — validates boundary section exists for cross-project plans
-3. Create hook script for pre-commit boundary checking
-4. Update pattern 15 to reference the boundary requirement
-5. Test: create a cross-project plan without boundaries, verify it warns
+1. ~~Add Capabilities section to `templates/plan.md.template`~~ ✅ Done
+2. ~~Create `scripts/check_plan_capabilities.py`~~ ✅ Done (replaced `check_plan_boundaries.py`)
+3. Create hook script for pre-commit Capabilities checking (pending)
+4. Update pattern 15 to reference the Capabilities requirement (pending)
+5. Test: create a cross-project plan without Capabilities, verify it warns (pending)
 
 ---
 

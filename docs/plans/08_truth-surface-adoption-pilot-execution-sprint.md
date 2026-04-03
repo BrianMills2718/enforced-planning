@@ -5,6 +5,7 @@
 **Priority:** High
 **Blocked By:** None
 **Blocks:** 6, 7, default workflow wiring beyond advisory mode
+**Follow-on:** Plan #9 (scoped validation) eliminated the registry noise exposed here; Plan #7 (semantic review) addressed the stale-prose backlog this sprint generated
 
 ---
 

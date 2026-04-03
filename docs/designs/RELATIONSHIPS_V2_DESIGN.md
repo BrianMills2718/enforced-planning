@@ -49,7 +49,7 @@ Every validation outcome must have a concrete agent-executable action:
 
 Automatically detect dependencies by scanning:
 
-1. **Markdown links** — `[text](../vision/FRAMEWORK.md)` creates a coupling
+1. **Markdown links** — `\[text\](../vision/FRAMEWORK.md)` creates a coupling
 2. **File path references** — any `vision/FRAMEWORK.md` string in code or docs
 3. **Import statements** — `from llm_client import ...` creates a cross-project coupling
 4. **Plan references** — `Plan #N`, `#N`, `ADR-N` create plan-to-plan or plan-to-ADR couplings

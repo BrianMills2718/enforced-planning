@@ -114,19 +114,33 @@ git branch -d test-setup
 
 If that worked, you're ready!
 
-### Step 5: Optional Truth-Surface Validation
+### Step 5: Optional Truth-Surface Validation (`--full` mode only)
 
 For repos with runtime coordination, rollout trackers, or reservation state,
-create a repo-local config from `templates/truth_surface_drift.yaml.example` and
-run:
+install with `--full` to get truth-surface tooling:
 
 ```bash
-python scripts/check_truth_surface_drift.py --config path/to/truth_surface_drift.yaml
-python scripts/render_truth_surface_status.py --config path/to/truth_surface_drift.yaml
+./install.sh /path/to/your/project --full
+```
+
+This installs `check_truth_surface_drift.py` and `render_truth_surface_status.py`
+into `scripts/meta/`, plus a config template at `scripts/truth_surface_drift.yaml.example`.
+Copy and customize the template, then run:
+
+```bash
+cp scripts/truth_surface_drift.yaml.example scripts/truth_surface_drift.yaml
+python scripts/meta/check_truth_surface_drift.py --config scripts/truth_surface_drift.yaml
+python scripts/meta/render_truth_surface_status.py --config scripts/truth_surface_drift.yaml
 ```
 
 This gives you a generated current-state summary driven by measured surfaces
 instead of hand-maintained tracker prose alone.
+
+Or call the scripts directly from the enforced-planning repo without installing:
+
+```bash
+python ~/projects/enforced-planning/scripts/check_truth_surface_drift.py --config scripts/truth_surface_drift.yaml
+```
 
 ---
 

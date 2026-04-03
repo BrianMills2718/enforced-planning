@@ -62,7 +62,7 @@ A portable framework where:
 | Makefile targets | `make infer`, `make check-deps`, `make check-caps`, `make migrate-rels` | ✅ Complete |
 | **V2 adoption pilot** | Migrate a real governed repo's relationships.yaml to V2 | ✅ Complete (llm_client: 4 couplings migrated, 425 inferred edges, read-gate verified) |
 | **Pre-commit enforcement** | Hook that validates locked couplings on commit | 📋 Planned |
-| **Agent verification protocol** | Bounded mission spec for "validated" couplings (Codex/Claude SDK) | 📋 Planned |
+| **Agent verification protocol** | Bounded mission spec for "validated" couplings (`Plan #11`) | 📋 Planned (plan written) |
 
 ### Phase 5: Semantic Review Layer (PLANNED)
 
@@ -98,7 +98,7 @@ A portable framework where:
 
 1. ~~**Phase 4: V2 adoption pilot**~~ ✅ Done — llm_client migrated, read-gate verified, inferred_deps.json committed.
 
-2. **Phase 4: Agent verification protocol** — Design the bounded mission spec for "validated" couplings. This unblocks both Phase 5 (semantic review) and the "no shoulds" enforcement model.
+2. **Phase 4: Agent verification protocol** — Plan #11 written. Implement `verify_coupling.py`, prompt template, fix applicator, `make verify-couplings`. This unblocks both Phase 5 (semantic review) and the "no shoulds" enforcement model.
 
 3. **Phase 5: Plan #7** — LLM semantic review layer. Specialization of the agent verification pattern.
 

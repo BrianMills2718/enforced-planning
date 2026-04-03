@@ -183,6 +183,24 @@ truthful:
 Compression is allowed only when it does not hide a real cross-project,
 multi-stage, or architectural concern.
 
+### When Is a Journey Notebook Required?
+
+A journey notebook is **required** when ALL of the following are true:
+- Implementation spans ≥ 2 distinct phases or stages (e.g., parse → validate → store)
+- AND at least one of:
+  - ≥ 2 scripts or modules are being created or significantly modified
+  - Work crosses a subsystem or repo boundary
+  - The phase sequence has non-obvious dependencies between outputs (output of phase N
+    is input to phase N+1 in a way that isn't self-evident from the plan)
+
+A journey notebook is **optional but recommended** when:
+- Work is a single linear script with clear input/output
+- Implementation is a straightforward extension of an existing pattern
+
+A journey notebook is **never required** when:
+- The trivial exemption applies (≤ 20 lines, no new APIs)
+- Single-file fix with a clear, self-contained acceptance criterion
+
 ## Relationship to Other Framework Artifacts
 
 - `patterns/28_question-driven-planning.md` defines investigation discipline.

@@ -3,6 +3,24 @@
 **Complexity:** Medium
 **Prerequisites:** Pattern #03 (Testing Strategy), Pattern #10 (Doc-Code Coupling), Pattern #15 (Plan Workflow), Pattern #34 (Engineering Workflow)
 
+## When Is a Notebook Required?
+
+> **Canonical threshold:** [`../PLANNING_OPERATING_MODEL.md`](../PLANNING_OPERATING_MODEL.md)
+> Compression Rules → "When Is a Journey Notebook Required?" — this pattern mirrors that
+> definition. When they conflict, the POM wins.
+
+A journey notebook is **required** when:
+- Implementation spans ≥ 2 distinct phases or stages (e.g., parse → validate → store)
+- AND at least one of: ≥ 2 scripts/modules being created or significantly modified;
+  work crosses a subsystem or repo boundary; phase sequence has non-obvious
+  output-to-input dependencies
+
+**Optional but recommended** for a single linear script with clear input/output.
+
+**Never required** for trivial changes (≤ 20 lines, no new APIs) or single-file fixes.
+
+---
+
 ## Problem
 
 Planning documents, code, tests, and notebook explorations often drift apart:

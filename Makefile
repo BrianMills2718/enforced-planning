@@ -57,12 +57,11 @@ ecosystem-deps:  ## Build ecosystem cross-repo dependency map from generated/inf
 	python scripts/build_ecosystem_dep_map.py --output generated/ecosystem_dep_map.json --summary
 
 infer-all:  ## Infer deps across all governed repos in SCAN_DIR (writes generated/inferred_*.json)
-	@for repo in $$(ls -d $(SCAN_DIR)/*/); do \
-	  name=$$(basename $$repo); \
-	  if [ -f "$$repo/meta-process.yaml" ]; then \
-	    echo "Inferring $$name ..."; \
-	    python scripts/infer_dependencies.py $$repo --output generated/inferred_$$name.json; \
-	  fi; \
+	@find $(SCAN_DIR) -maxdepth 2 -name "meta-process.yaml" | while read config; do \
+	  repo=$$(dirname "$$config"); \
+	  name=$$(basename "$$repo"); \
+	  echo "Inferring $$name ..."; \
+	  python scripts/infer_dependencies.py "$$repo" --output generated/inferred_$$name.json; \
 	done
 
 status:  ## Git status

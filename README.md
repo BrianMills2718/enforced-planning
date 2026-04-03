@@ -60,6 +60,22 @@ git checkout -b plan-N-description
 make pr-auto-check && make pr-auto   # ship
 ```
 
+## What Is a "Governed Repo"?
+
+A **governed repo** is any git repository that has this framework installed:
+
+```bash
+ls meta-process.yaml docs/plans/CLAUDE.md   # both present = governed
+```
+
+Specifically:
+1. `meta-process.yaml` exists at the repo root (installed by `./install.sh`)
+2. `docs/plans/CLAUDE.md` exists as the plan index
+3. Commits use `[Plan #N]` or `[Trivial]` prefixes (enforced by commit-msg hook)
+
+That's the minimum. The framework's scripts (dependency inference, plan registry,
+coupling checks) all use `meta-process.yaml` presence to discover governed repos.
+
 ## Patterns (Pick What You Need)
 
 ### Always Recommended (Low Overhead)

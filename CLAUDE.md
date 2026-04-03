@@ -5,56 +5,55 @@ three layers of discipline:
 
 ## AUTONOMOUS EXECUTION CONTRACT
 
-> ⚠️ **NEVER STOP — THIS IS AN ABSOLUTE RULE FOR THIS PROJECT** ⚠️
+> ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+> ⚠️  NEVER STOP — ABSOLUTE RULE, NO EXCEPTIONS  ⚠️
+> ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 >
-> Per Brian's explicit instruction (2026-04-03): run continuously through all
-> sprint phases. Do not pause, do not ask for confirmation, do not summarize
-> and wait. A completed phase is NOT a stop condition — update the tracker and
-> move immediately to the next phase.
+> Per Brian's explicit standing instruction: execute all sprint phases
+> continuously without pausing, confirming, summarizing-and-waiting,
+> or asking "should I continue?" A completed phase is NOT a stop
+> condition. A green test run is NOT a stop condition. Finishing a
+> commit is NOT a stop condition. Update the tracker and move
+> immediately to the next phase.
 >
-> **Legitimate stop conditions (ONLY these two):**
-> 1. Irreversible action affecting shared state (force push, drop table, delete prod data)
-> 2. Genuine architectural decision NOT pre-made in the active sprint plan
+> **ONLY TWO LEGITIMATE STOP CONDITIONS — nothing else qualifies:**
+> 1. An action that is BOTH irreversible AND affects shared state
+>    (force push to main, drop production table, delete prod data)
+> 2. A genuine architectural decision that is NOT pre-made in the
+>    active sprint plan AND cannot be safely defaulted
 >
-> **NOT stop conditions (keep going):**
-> - Completed phase or sub-phase → commit and continue
-> - Green test run → commit and continue
-> - Uncertainty about file location → check it and proceed
-> - Transient tool failure → retry once and proceed
-> - "Should I continue?" → YES, continue
-> - Any question answerable by reading the sprint plan → read and proceed
+> **EVERYTHING ELSE IS NOT A STOP CONDITION — keep executing:**
+> - Completed phase or sub-phase → commit, update checklist, next phase
+> - Green test suite → commit, continue
+> - File not found → read the directory, find it, proceed
+> - Uncertainty about wording → read the source file, pick the clearer option
+> - Transient tool failure → retry once, then proceed
+> - "Should I continue?" → the answer is always YES
+> - "Is this the right approach?" → if it's in the sprint plan, YES
+> - Any question answerable by reading the sprint doc → read it, proceed
 
 Active sprint tracker:
-- **COMPLETE:** `docs/ops/SPRINT_2026_04_03_ALL_ISSUES.md` — full documentation
-  and technical debt resolution sprint. 7 phases, all 23 sub-phases done.
-- Last completed: 2026-04-03 sprint — all phases 1-7 complete, 307 tests passing.
+- **ACTIVE:** `docs/ops/SPRINT_2026_04_03_AUDIT_FOLLOWUP.md` — audit follow-up sprint.
+  6 phases. All architectural decisions pre-made. Execute all phases continuously.
+- **COMPLETE:** `docs/ops/SPRINT_2026_04_03_ALL_ISSUES.md` — prior sprint, all done.
 
-Phase checklist (update as completed):
-- [x] Phase 1a: Fix verify_coupling.py API
-- [x] Phase 1b: Create Plan #12 file
-- [x] Phase 1c: Replace ISSUES.md
-- [x] Phase 2a: Archive docs/ops/ sprint docs
-- [x] Phase 2b: Move TRAYCER_COMPARISON.md
-- [x] Phase 2c: Add Claude-Code disclaimer to README/GETTING_STARTED
-- [x] Phase 2d: Audit meta-process.yaml.example
-- [x] Phase 2e: Define "trivial" concretely in Pattern 15
-- [x] Phase 2f: Create V1→V2 migration guide
-- [x] Phase 3a: Make POM explicitly canonical
-- [x] Phase 3b: Reduce Pattern 42 to summary
-- [x] Phase 3c: Update GETTING_STARTED to lead with POM
-- [x] Phase 4a: Write "New Project Setup" guide
-- [x] Phase 4b: Document functional config keys
-- [x] Phase 5a: Create .pre-commit-hooks.yaml
-- [x] Phase 5b: Create pre-commit-config.yaml.example template
-- [x] Phase 5c: Update install.sh --pre-commit mode
-- [x] Phase 5d: Update docs for pre-commit
-- [x] Phase 6a: Tests for parse_plan.py
-- [x] Phase 6b: Tests for sync_plan_status.py
-- [x] Phase 6c: Tests for check_plan_tests.py
-- [x] Phase 7a: Add Phase 8 to ROADMAP
-- [x] Phase 7b: Document deferred item blockers
-
-**Sprint complete — 2026-04-03. All 23 phases done. 307 tests pass.**
+Phase checklist (current sprint — update as completed):
+- [ ] Phase 1a: Add patterns 34+35 to 01_README.md
+- [ ] Phase 1b: Fix NEW_PROJECT_SETUP.md Step 3 broken commands
+- [ ] Phase 1c: Delete ISSUES_LEGACY_agent_ecology2.md
+- [ ] Phase 1d: Document verify_coupling.py model choice rationale
+- [ ] Phase 1e: Fix stale CLAUDE.md References section
+- [ ] Phase 2a: Bump pyproject.toml to 1.0.0
+- [ ] Phase 2b: Create and push v1.0.0 git tag
+- [ ] Phase 3a: Define notebook required threshold in POM
+- [ ] Phase 3b: Mirror notebook threshold in Pattern 36
+- [ ] Phase 3c: Define "governed repo" in README and GETTING_STARTED
+- [ ] Phase 3d: Fix Makefile infer-all (replace ls -d with find)
+- [ ] Phase 4a: Write scripts/render_agents_md.py
+- [ ] Phase 4b: Add make agents-md target; regenerate AGENTS.md
+- [ ] Phase 5a: Make Phase 8 gate measurable in ROADMAP.md
+- [ ] Phase 5b: Move permanently-deferred items to docs/backlog/
+- [ ] Phase 6a: Write tests/test_complete_plan.py (≥12 tests)
 
 Rules during continuous execution:
 - complete the current phase, update the tracker, and move immediately to the next phase
@@ -120,10 +119,10 @@ make pr-auto  # ship
 
 ## References
 
-- `docs/ops/OVERNIGHT_SPRINT_2026_04_02_TRUTH_SURFACE.md` — Completed sprint (Plans #2-5)
 - `PLANNING_OPERATING_MODEL.md` — Canonical methodology and artifact dependency model
 - `STATIC_GRAPH_AND_RUNTIME_TRUTH.md` — Canonical split between static graph and runtime coordination state
 - `GETTING_STARTED.md` — Full adoption guide
 - `patterns/01_README.md` — Pattern index with dependencies
 - `adr/` — Framework architecture decisions
-- Thesis: `project-meta/vision/ENFORCED_PLANNING_AND_DEV_ALIGNMENT_THESIS.md`
+- `docs/ops/SPRINT_2026_04_03_ALL_ISSUES.md` — Most recent completed sprint (all phases done)
+- `docs/ops/archive/` — All prior sprint documents

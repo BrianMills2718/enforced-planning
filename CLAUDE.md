@@ -5,15 +5,55 @@ three layers of discipline:
 
 ## AUTONOMOUS EXECUTION CONTRACT
 
-> **NEVER STOP.** See root CLAUDE.md for the canonical definition. Stop ONLY for:
-> (1) irreversible action affecting shared state, or (2) genuine architectural decision not pre-made in the plan.
-> A completed plan, a green test run, or a finished commit is NOT a stop condition.
-> Read the active tracker, execute the next unblocked phase, commit the verified slice, and continue.
+> ⚠️ **NEVER STOP — THIS IS AN ABSOLUTE RULE FOR THIS PROJECT** ⚠️
+>
+> Per Brian's explicit instruction (2026-04-03): run continuously through all
+> sprint phases. Do not pause, do not ask for confirmation, do not summarize
+> and wait. A completed phase is NOT a stop condition — update the tracker and
+> move immediately to the next phase.
+>
+> **Legitimate stop conditions (ONLY these two):**
+> 1. Irreversible action affecting shared state (force push, drop table, delete prod data)
+> 2. Genuine architectural decision NOT pre-made in the active sprint plan
+>
+> **NOT stop conditions (keep going):**
+> - Completed phase or sub-phase → commit and continue
+> - Green test run → commit and continue
+> - Uncertainty about file location → check it and proceed
+> - Transient tool failure → retry once and proceed
+> - "Should I continue?" → YES, continue
+> - Any question answerable by reading the sprint plan → read and proceed
 
 Active sprint tracker:
-- No active sprint. Last completed: Plan #12 cross-repo plan registry + ecosystem dep map (2026-04-03). All Phases 1-7 complete.
-- Next work: Phase 5 promotion — convert `promotion_candidate` semantic review findings into deterministic checks. Run `make review-surfaces REPO=.` to see current candidates.
-- See root CLAUDE.md for canonical NEVER STOP definition.
+- **ACTIVE:** `docs/ops/SPRINT_2026_04_03_ALL_ISSUES.md` — full documentation
+  and technical debt resolution sprint. 7 phases, all architectural decisions
+  pre-made. Execute all phases continuously.
+- Last completed: Plan #12 cross-repo plan registry + ecosystem dep map (2026-04-03).
+
+Phase checklist (update as completed):
+- [ ] Phase 1a: Fix verify_coupling.py API
+- [ ] Phase 1b: Create Plan #12 file
+- [ ] Phase 1c: Replace ISSUES.md
+- [ ] Phase 2a: Archive docs/ops/ sprint docs
+- [ ] Phase 2b: Move TRAYCER_COMPARISON.md
+- [ ] Phase 2c: Add Claude-Code disclaimer to README/GETTING_STARTED
+- [ ] Phase 2d: Audit meta-process.yaml.example
+- [ ] Phase 2e: Define "trivial" concretely in Pattern 15
+- [ ] Phase 2f: Create V1→V2 migration guide
+- [ ] Phase 3a: Make POM explicitly canonical
+- [ ] Phase 3b: Reduce Pattern 42 to summary
+- [ ] Phase 3c: Update GETTING_STARTED to lead with POM
+- [ ] Phase 4a: Write "New Project Setup" guide
+- [ ] Phase 4b: Document functional config keys
+- [ ] Phase 5a: Create .pre-commit-hooks.yaml
+- [ ] Phase 5b: Create pre-commit-config.yaml.example template
+- [ ] Phase 5c: Update install.sh --pre-commit mode
+- [ ] Phase 5d: Update docs for pre-commit
+- [ ] Phase 6a: Tests for parse_plan.py
+- [ ] Phase 6b: Tests for sync_plan_status.py
+- [ ] Phase 6c: Tests for check_plan_tests.py
+- [ ] Phase 7a: Add Phase 8 to ROADMAP
+- [ ] Phase 7b: Document deferred item blockers
 
 Rules during continuous execution:
 - complete the current phase, update the tracker, and move immediately to the next phase

@@ -98,13 +98,13 @@ A portable framework where:
 
 1. ~~**Phase 4: V2 adoption pilot**~~ ✅ Done — llm_client migrated, read-gate verified, inferred_deps.json committed.
 
-2. **Phase 4: Agent verification protocol** — Plan #11 written. Implement `verify_coupling.py`, prompt template, fix applicator, `make verify-couplings`. This unblocks both Phase 5 (semantic review) and the "no shoulds" enforcement model.
+2. ~~**Phase 4: Agent verification protocol**~~ ✅ Done — Plan #11 complete, verify_coupling.py + apply_coupling_fix.py shipped with 32 tests.
 
 3. ~~**Phase 5: Plan #7**~~ ✅ Done — review_truth_surfaces.py shipped with 26 tests.
 
 4. ~~**Phase 7: Plan #10**~~ ✅ Done — installer, GETTING_STARTED, Plan #1, Plans #6/#8 all reconciled.
 
-5. **Phase 6: Cross-repo governance** — Only after V2 is proven in 3+ repos.
+5. **Phase 6: Cross-repo governance** — V2 proven in 2 repos (enforced-planning, llm_client). Need 1 more before enabling cross-repo plan index and ecosystem dependency map.
 
 ## Design Principles
 

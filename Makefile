@@ -1,6 +1,6 @@
 ## enforced-planning — framework for enforced planning, context gating, doc-code alignment
 
-.PHONY: help test test-quick check lint infer check-deps check-caps migrate-rels verify-couplings review-surfaces status
+.PHONY: help test test-quick check lint infer check-deps check-caps migrate-rels verify-couplings review-surfaces plan-registry status
 
 REPO ?= .
 SCAN_DIR ?= ~/projects
@@ -41,6 +41,11 @@ verify-couplings:  ## Verify validated couplings via LLM agent (REPO=path, COMMI
 
 review-surfaces:  ## Run LLM semantic review of truth surfaces (REPO=path)
 	python scripts/review_truth_surfaces.py --repo $(REPO)
+
+## --- Phase 6: Cross-repo governance ---
+
+plan-registry:  ## Build cross-repo plan registry (SCAN_DIR=~/projects)
+	python scripts/build_plan_registry.py --scan-dir $(SCAN_DIR) --output generated/plan_registry.json --summary
 
 status:  ## Git status
 	@git status --short --branch

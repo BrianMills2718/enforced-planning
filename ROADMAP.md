@@ -82,9 +82,9 @@ A portable framework where:
 | Item | What | Status |
 |------|------|--------|
 | Cross-repo plan index | Consumable plan registry across all repos | ✅ Complete (327 plans, 22 repos, `make plan-registry`) |
-| Visibility grammar | Bazel-style `__pkg__`/`__subpackages__` for doc governance scope | 📋 Deferred → Phase 8 (blocked: no consumer yet) |
-| Distributed governance | Per-directory `.governance.yaml` (Buck2 pattern) | 📋 Deferred → Phase 8 (blocked: requires visibility grammar) |
 | Ecosystem dependency map | Inference engine run across all active repos | ✅ Complete (22 repos, 14177 edges, 103 cross-repo; `make infer-all && make ecosystem-deps`) |
+| Visibility grammar | Bazel-style `__pkg__`/`__subpackages__` for doc governance scope | 📋 Deferred — see `docs/backlog/DEFERRED_FEATURES.md` |
+| Distributed governance | Per-directory `.governance.yaml` (Buck2 pattern) | 📋 Deferred — see `docs/backlog/DEFERRED_FEATURES.md` |
 
 ### Phase 7: Onboarding Reconciliation (COMPLETE)
 
@@ -96,7 +96,15 @@ A portable framework where:
 
 ### Phase 8: Multi-Tool Support and Ecosystem Observability (PLANNED)
 
-**Gate:** Framework adopted by ≥ 3 different teams using different AI tools.
+**Gate (measurable proxy — verifiable within this repo):**
+All three conditions must be green before Phase 8 work begins:
+1. `.pre-commit-hooks.yaml` integration tested end-to-end with a non-Claude-Code tool (Codex or Cursor) — documented in `docs/evidence/phase8_precommit_test.md`
+2. `install.sh --pre-commit` verified in a repo that has no `.claude/` directory — documented in same evidence file
+3. `render_agents_md.py --dry-run` produces an AGENTS.md that a Codex agent can navigate without error — confirmed by running `make agents-md` and reviewing generated file
+
+> **Why a proxy gate?** "≥ 3 teams" is unverifiable from inside the repo. The proxy
+> gate above tests the same underlying capability (non-Claude-Code adoption is
+> possible) with artifacts that can be committed and reviewed here.
 
 | Item | What | Status |
 |------|------|--------|
@@ -104,18 +112,16 @@ A portable framework where:
 | Adoption automation | Governed repo registry + `make upgrade-framework` for version bumps | 📋 Planned |
 | Ecosystem dashboard | Aggregate plan status and dep map across all repos | 📋 Planned |
 | Framework self-measurement | Define and instrument success metrics (adoption rate, drift catch rate) | 📋 Planned |
-| Visibility grammar | Bazel-style `__pkg__`/`__subpackages__` for doc governance scope | 📋 Deferred from Phase 6 |
-| Distributed governance | Per-directory `.governance.yaml` (Buck2 pattern) | 📋 Deferred from Phase 6 |
 
 **Deferred item blockers:**
 
 | Item | Blocked By | Would Unblock |
 |------|-----------|--------------|
-| Visibility grammar | No consuming project has needed cross-dir scope control yet. Unblocks: teams with monorepo governance needs where file-level coupling is too granular. | Large monorepo adoption with >1 team |
-| Distributed governance | Requires visibility grammar first (needs scope model). Also needs a repo with >3 subdirectory teams. | Cross-team governance in monorepos |
 | Multi-tool hook support | No Cursor/Windsurf equivalent of `.claude/hooks/` is publicly documented yet. Unblocks: any non-CC adopter. | Phase 8 gate met |
 | Adoption automation | Need ≥ 5 governed repos before upgrade automation is worth building. Currently at ~3. | 5+ governed repos |
 | Framework self-measurement | Need baseline metrics before measuring improvement. Define metrics first. | Demonstrating framework ROI |
+
+**Long-term deferred (no near-term consumer):** Visibility grammar and distributed governance moved to `docs/backlog/DEFERRED_FEATURES.md`.
 
 ## What's Next (recommended priority order)
 

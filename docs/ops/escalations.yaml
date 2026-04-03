@@ -1,0 +1,5 @@
+# Escalation log for validated couplings requiring human review.
+# Appended by apply_coupling_fix.py for UNCERTAIN or STALE-without-fix verdicts.
+# Format: see Plan #11 (docs/plans/11_agent-verification-protocol.md)
+# Each entry has: coupling_id, commit, verdict, evidence, proposed_fix, created_at, resolved_at
+[]

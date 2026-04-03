@@ -1,0 +1,5 @@
+# Verification log for validated couplings.
+# Appended by apply_coupling_fix.py when a CURRENT or STALE+fixed verdict is made.
+# Format: see Plan #11 (docs/plans/11_agent-verification-protocol.md)
+# Regenerate staleness check: make check-couplings
+[]

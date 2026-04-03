@@ -1,6 +1,6 @@
 ## enforced-planning — framework for enforced planning, context gating, doc-code alignment
 
-.PHONY: help test test-quick check lint infer check-deps check-caps migrate-rels status
+.PHONY: help test test-quick check lint infer check-deps check-caps migrate-rels verify-couplings status
 
 REPO ?= .
 SCAN_DIR ?= ~/projects
@@ -32,6 +32,12 @@ check-caps:  ## Validate plan Capabilities sections (REPO=path to plans dir)
 
 migrate-rels:  ## Migrate relationships.yaml V1→V2 (REPO=path)
 	python scripts/migrate_relationships.py $(REPO)/relationships.yaml --dry-run
+
+## --- Agent verification protocol (Plan #11) ---
+
+verify-couplings:  ## Verify validated couplings via LLM agent (REPO=path, COMMIT=sha)
+	@echo "Verifying validated couplings in $(REPO)"
+	@python scripts/verify_coupling.py --help
 
 status:  ## Git status
 	@git status --short --branch

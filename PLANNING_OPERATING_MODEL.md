@@ -1,8 +1,9 @@
 # Planning Operating Model
 
-This document is the canonical methodology reference for `enforced-planning`.
-If another pattern, template, onboarding guide, or repo-local doc describes the
-planning hierarchy differently, this file wins.
+> **Canonical source.** This document defines the authoritative planning hierarchy
+> for the enforced-planning framework. Pattern 42 (planning-hierarchy) and Pattern 15
+> (plan-workflow) are compressed views of this document. GETTING_STARTED.md is the
+> adoption guide. When any of them conflict with this document, **this document wins.**
 
 ## Purpose
 

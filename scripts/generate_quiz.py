@@ -28,7 +28,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-import yaml
+import yaml  # type: ignore[import-untyped]
 
 
 def load_relationships(repo_root: Path) -> dict:  # type: ignore[type-arg]

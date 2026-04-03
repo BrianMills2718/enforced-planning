@@ -67,19 +67,24 @@ chmod +x .git/hooks/commit-msg .git/hooks/pre-commit
 ## 3. Verify
 
 ```bash
-# Test that the plan check works
+# Always available (--minimal and --full): test that plan check works
 python scripts/meta/check_plan_tests.py . --list
 
-# Test that locked coupling check works
-python scripts/meta/check_locked_couplings.py .
+# --full mode only: test that locked coupling check works
+# (skip this if you installed with --minimal)
+# python scripts/meta/check_locked_couplings.py .
 
-# Make a test commit (should pass with [Trivial] prefix)
-echo "# test" >> /tmp/test_file_delete_me.md
-git add /tmp/test_file_delete_me.md 2>/dev/null || true
-git commit -m "[Trivial] test hook setup" --allow-empty
-# If this fails with "invalid prefix", the commit-msg hook is working correctly
-# and your meta-process.yaml needs configuring (see next step)
+# Verify commit-msg hook fires correctly
+git commit --allow-empty -m "[Trivial] test hook setup"
+# Expected: commit succeeds (empty commit with valid prefix)
+# If you see "invalid prefix", the hook is active but meta-process.yaml
+# commits.valid_prefixes needs reviewing (see Step 4)
 ```
+
+> **`check_locked_couplings.py` missing?** This script is only installed by
+> `--full` mode. If you used `--minimal`, use `check_plan_tests.py` for
+> verification — it's always present. Install `--full` later if you need
+> V2 relationship enforcement.
 
 ---
 

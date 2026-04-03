@@ -36,6 +36,15 @@ DIFF_MAX_CHARS = 8_000   # ~200 lines at 40 chars/line
 DOC_MAX_CHARS = 20_000   # ~500 lines at 40 chars/line
 
 DEFAULT_MODEL = "gemini/gemini-2.5-flash"
+# Why Gemini instead of Claude for the default?
+# 1. Cost: gemini-2.5-flash is ~10x cheaper per token than claude-sonnet.
+#    verify_coupling fires once per locked coupling per commit — potentially
+#    dozens of calls in a busy repo. Cost adds up fast.
+# 2. Latency: faster first-token matters in a pre-commit loop where the
+#    developer is waiting.
+# review_truth_surfaces.py uses Claude because semantic doc review requires
+# stronger prose reasoning and happens much less frequently (not per-commit).
+# Override at runtime: VERIFY_COUPLING_MODEL env var or --model flag.
 DEFAULT_MAX_BUDGET = 0.05  # USD per coupling verification
 
 

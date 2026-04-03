@@ -37,6 +37,8 @@ These patterns work with a simple branch-based workflow. No special infrastructu
 | [External LLM Review](31_external-llm-review.md) | AI misses issues humans would catch | Low | — |
 | [Recurring Issue Tracking](32_recurring-issue-tracking.md) | Issues recur despite "fixes", going in circles | Low | — |
 | [Uncertainty Resolution](33_uncertainty-resolution.md) | Uncertainties listed but never resolved | Low | 29 |
+| [Engineering Workflow](34_engineering-workflow.md) | Architectural decisions exist in docs but not loaded before implementation, leading to contradictions and repeated mistakes | Medium | 02, 07, 10 |
+| [Cruft Lifecycle](35_cruft-lifecycle.md) | Codebases accumulate dead code and stale abstractions without a systematic detection and response process | Low | — |
 | [Executable Journey Notebooks](36_executable-journey-notebooks.md) | Plans stay abstract, notebooks drift, phase contracts remain invisible | Medium | 03, 10, 15, 34 |
 | [Context Engineering](37_context-engineering.md) | Agent quality degrades as context fills (context rot) | Medium | — |
 | [Agent Tool Design](38_agent-tool-design.md) | Poor tool descriptions cause agent failures; tool bloat wastes context | Medium | 37 |

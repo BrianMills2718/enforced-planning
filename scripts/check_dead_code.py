@@ -60,7 +60,7 @@ def _load_config(project_root: Path) -> dict[str, Any]:
         return defaults
 
     try:
-        import yaml
+        import yaml  # type: ignore[import-untyped]
     except ImportError:
         return defaults
 

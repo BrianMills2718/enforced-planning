@@ -64,5 +64,8 @@ infer-all:  ## Infer deps across all governed repos in SCAN_DIR (writes generate
 	  python scripts/infer_dependencies.py "$$repo" --output generated/inferred_$$name.json; \
 	done
 
+agents-md:  ## Regenerate AGENTS.md from CLAUDE.md (Codex-facing projection)
+	python scripts/render_agents_md.py --source CLAUDE.md --output AGENTS.md
+
 status:  ## Git status
 	@git status --short --branch

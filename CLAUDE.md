@@ -38,19 +38,19 @@ Active sprint tracker:
 - **COMPLETE:** `docs/ops/SPRINT_2026_04_03_ALL_ISSUES.md` — prior sprint, all done.
 
 Phase checklist (current sprint — update as completed):
-- [ ] Phase 1a: Add patterns 34+35 to 01_README.md
-- [ ] Phase 1b: Fix NEW_PROJECT_SETUP.md Step 3 broken commands
-- [ ] Phase 1c: Delete ISSUES_LEGACY_agent_ecology2.md
-- [ ] Phase 1d: Document verify_coupling.py model choice rationale
-- [ ] Phase 1e: Fix stale CLAUDE.md References section
-- [ ] Phase 2a: Bump pyproject.toml to 1.0.0
-- [ ] Phase 2b: Create and push v1.0.0 git tag
-- [ ] Phase 3a: Define notebook required threshold in POM
-- [ ] Phase 3b: Mirror notebook threshold in Pattern 36
-- [ ] Phase 3c: Define "governed repo" in README and GETTING_STARTED
-- [ ] Phase 3d: Fix Makefile infer-all (replace ls -d with find)
-- [ ] Phase 4a: Write scripts/render_agents_md.py
-- [ ] Phase 4b: Add make agents-md target; regenerate AGENTS.md
+- [x] Phase 1a: Add patterns 34+35 to 01_README.md
+- [x] Phase 1b: Fix NEW_PROJECT_SETUP.md Step 3 broken commands
+- [x] Phase 1c: Delete ISSUES_LEGACY_agent_ecology2.md
+- [x] Phase 1d: Document verify_coupling.py model choice rationale
+- [x] Phase 1e: Fix stale CLAUDE.md References section
+- [x] Phase 2a: Bump pyproject.toml to 1.0.0
+- [x] Phase 2b: Create and push v1.0.0 git tag
+- [x] Phase 3a: Define notebook required threshold in POM
+- [x] Phase 3b: Mirror notebook threshold in Pattern 36
+- [x] Phase 3c: Define "governed repo" in README and GETTING_STARTED
+- [x] Phase 3d: Fix Makefile infer-all (replace ls -d with find)
+- [x] Phase 4a: Write scripts/render_agents_md.py
+- [x] Phase 4b: Add make agents-md target; regenerate AGENTS.md
 - [ ] Phase 5a: Make Phase 8 gate measurable in ROADMAP.md
 - [ ] Phase 5b: Move permanently-deferred items to docs/backlog/
 - [ ] Phase 6a: Write tests/test_complete_plan.py (≥12 tests)
@@ -124,5 +124,5 @@ make pr-auto  # ship
 - `GETTING_STARTED.md` — Full adoption guide
 - `patterns/01_README.md` — Pattern index with dependencies
 - `adr/` — Framework architecture decisions
-- `docs/ops/SPRINT_2026_04_03_ALL_ISSUES.md` — Most recent completed sprint (all phases done)
+- `docs/ops/SPRINT_2026_04_03_AUDIT_FOLLOWUP.md` — Active sprint (audit follow-up, phases 1–4 done)
 - `docs/ops/archive/` — All prior sprint documents

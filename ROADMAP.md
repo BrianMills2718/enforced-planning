@@ -71,7 +71,7 @@ A portable framework where:
 | Plan | What | Status |
 |------|------|--------|
 | #7 | LLM semantic truth-surface review | ✅ Complete (207 tests, review_truth_surfaces.py shipped) |
-| — | Promote stable LLM findings into deterministic checks | 📋 Planned (promotion_candidate field tracks this) |
+| — | Promote stable LLM findings into deterministic checks | ✅ Complete (`promote_to_deterministic.py`, `make promote`; 3 candidates identified, 3 fixed in this session) |
 
 **Note:** Plan #7 (semantic review) and Plan #11 (agent verification protocol) both complete. Plan #7 specializes the verification pattern established by Plan #11.
 

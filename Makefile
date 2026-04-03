@@ -44,6 +44,12 @@ review-surfaces:  ## Run LLM semantic review of truth surfaces (REPO=path)
 
 ## --- Phase 6: Cross-repo governance ---
 
+review-surfaces:  ## Run LLM semantic review of truth surfaces (REPO=path)
+	python scripts/review_truth_surfaces.py --repo $(REPO) --output $(REPO)/docs/ops/semantic_review_findings.yaml
+
+promote:  ## Show promotion candidates from semantic review findings (REPO=path)
+	python scripts/promote_to_deterministic.py --findings $(REPO)/docs/ops/semantic_review_findings.yaml
+
 plan-registry:  ## Build cross-repo plan registry (SCAN_DIR=~/projects)
 	python scripts/build_plan_registry.py --scan-dir $(SCAN_DIR) --output generated/plan_registry.json --summary
 

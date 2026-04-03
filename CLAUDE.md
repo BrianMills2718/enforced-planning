@@ -33,8 +33,7 @@ three layers of discipline:
 > - Any question answerable by reading the sprint doc → read it, proceed
 
 Active sprint tracker:
-- **ACTIVE:** `docs/ops/SPRINT_2026_04_03_AUDIT_FOLLOWUP.md` — audit follow-up sprint.
-  6 phases. All architectural decisions pre-made. Execute all phases continuously.
+- **COMPLETE:** `docs/ops/SPRINT_2026_04_03_AUDIT_FOLLOWUP.md` — audit follow-up sprint. All 6 phases done.
 - **COMPLETE:** `docs/ops/SPRINT_2026_04_03_ALL_ISSUES.md` — prior sprint, all done.
 
 Phase checklist (current sprint — update as completed):
@@ -51,9 +50,9 @@ Phase checklist (current sprint — update as completed):
 - [x] Phase 3d: Fix Makefile infer-all (replace ls -d with find)
 - [x] Phase 4a: Write scripts/render_agents_md.py
 - [x] Phase 4b: Add make agents-md target; regenerate AGENTS.md
-- [ ] Phase 5a: Make Phase 8 gate measurable in ROADMAP.md
-- [ ] Phase 5b: Move permanently-deferred items to docs/backlog/
-- [ ] Phase 6a: Write tests/test_complete_plan.py (≥12 tests)
+- [x] Phase 5a: Make Phase 8 gate measurable in ROADMAP.md
+- [x] Phase 5b: Move permanently-deferred items to docs/backlog/
+- [x] Phase 6a: Write tests/test_complete_plan.py (≥12 tests)
 
 Rules during continuous execution:
 - complete the current phase, update the tracker, and move immediately to the next phase

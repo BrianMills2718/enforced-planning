@@ -70,8 +70,8 @@ A portable framework where:
 
 | Plan | What | Status |
 |------|------|--------|
-| #7 | LLM semantic truth-surface review | 📋 Planned |
-| — | Promote stable LLM findings into deterministic checks | 📋 Planned |
+| #7 | LLM semantic truth-surface review | ✅ Complete (207 tests, review_truth_surfaces.py shipped) |
+| — | Promote stable LLM findings into deterministic checks | 📋 Planned (promotion_candidate field tracks this) |
 
 **Dependency:** Phase 4 agent verification protocol should be designed first — Plan #7 is a specialization of the same pattern (agent verifies coupling, reports finding).
 
@@ -100,7 +100,7 @@ A portable framework where:
 
 2. **Phase 4: Agent verification protocol** — Plan #11 written. Implement `verify_coupling.py`, prompt template, fix applicator, `make verify-couplings`. This unblocks both Phase 5 (semantic review) and the "no shoulds" enforcement model.
 
-3. **Phase 5: Plan #7** — LLM semantic review layer. Specialization of the agent verification pattern.
+3. ~~**Phase 5: Plan #7**~~ ✅ Done — review_truth_surfaces.py shipped with 26 tests.
 
 4. **Phase 7: Plan #10** — Onboarding reconciliation. Lower priority because the framework is functional without it — it's about discoverability, not capability.
 

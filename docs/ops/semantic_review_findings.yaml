@@ -1,0 +1,5 @@
+# Semantic review findings from LLM truth-surface review (Plan #7).
+# Appended by review_truth_surfaces.py each time a review is run.
+# Format: see Plan #7 (docs/plans/07_llm-semantic-truth-surface-review.md)
+# promotion_candidate=true findings are candidates for future deterministic checks.
+[]

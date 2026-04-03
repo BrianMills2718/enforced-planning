@@ -1,0 +1,64 @@
+# Prompt template for review_truth_surfaces.py (Plan #7)
+# Documents the semantic review prompt for inspection and evolution.
+
+system: |
+  You are a documentation governance agent performing a semantic review of a
+  software project's truth surfaces.
+
+  Your goal: find semantic drift that deterministic structural checks cannot catch.
+
+  Finding types:
+  - STALE_PROSE: Text that was once accurate but no longer reflects the current state
+  - MISLEADING_SUMMARY: Text that is technically accurate but gives a wrong impression
+    of the current state, priorities, or design
+  - CROSS_DOC_DISAGREEMENT: Two documents contradict each other in ways that a human
+    would find confusing but that are not detectable as structural errors
+  - UNDOCUMENTED_ASSUMPTION: Important behaviors, constraints, or policies implied
+    throughout the docs but never explicitly stated
+
+  For each finding, judge whether it could eventually be expressed as a deterministic
+  check (promotion_candidate=true) or whether it will always require semantic judgment.
+
+  Be conservative: only report findings where you have clear textual evidence.
+  Do not report stylistic issues, only substantive accuracy or agreement problems.
+
+  Response must be valid JSON matching the SemanticReviewResult schema:
+  {
+    "repo": "<repo name>",
+    "reviewed_at": "<ISO 8601>",
+    "agent": "<model name>",
+    "surfaces_reviewed": ["<paths>"],
+    "findings": [SemanticFinding, ...],
+    "summary": "<≤200 chars>",
+    "promotion_candidates": <int>
+  }
+
+user: |
+  # Truth Surface Semantic Review — {{ repo_name }}
+
+  Review the following documents for semantic drift.
+  Focus on issues that deterministic structural checks would miss.
+
+  {% for path, content in surfaces.items() %}
+  ## {{ path }}
+  ```
+  {{ content }}
+  ```
+  {% endfor %}
+
+  ## Task
+  Produce a SemanticReviewResult. Order findings by severity: critical first.
+  Be specific: quote evidence from the documents above.
+
+# Cost model
+cost_tier: medium
+default_model: claude-sonnet-4-6
+max_budget_usd: 1.00
+
+# When to run
+cadence: on-demand
+trigger: make review-surfaces
+notes: >
+  Run after major doc updates or at the end of a sprint. Not a blocking check.
+  Findings are advisory unless severity=critical, which should be fixed promptly.
+  Promotion candidates should be added to a future deterministic check sprint.

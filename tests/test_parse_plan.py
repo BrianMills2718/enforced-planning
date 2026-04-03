@@ -230,3 +230,55 @@ def test_file_scope_does_not_match_partial_name() -> None:
     files = [{"path": "src/foo.py", "action": "modify"}]
     in_scope, _ = m.check_file_in_scope("src/foo_extra.py", files)  # type: ignore[attr-defined]
     assert not in_scope
+
+
+# ---------------------------------------------------------------------------
+# parse_steps / parse_acceptance_criteria
+# ---------------------------------------------------------------------------
+
+
+def test_parse_steps_reads_checkbox_plan_section() -> None:
+    """Checkbox lists in a Plan section should produce numbered step records."""
+    m = _load()
+    content = (
+        "## Plan\n"
+        "- [x] Freeze the scope\n"
+        "- [ ] Port the code\n"
+    )
+    result = m.parse_steps(content)  # type: ignore[attr-defined]
+    assert result == [
+        {"number": 1, "description": "Freeze the scope", "status": "done"},
+        {"number": 2, "description": "Port the code", "status": "not_started"},
+    ]
+
+
+def test_parse_steps_reads_pipe_table_statuses() -> None:
+    """Pipe-table steps should normalize their status strings."""
+    m = _load()
+    content = (
+        "## Steps\n"
+        "| Step | What | Status |\n"
+        "|------|------|--------|\n"
+        "| 1 | Freeze scope | Complete |\n"
+        "| 2 | Port code | In Progress |\n"
+    )
+    result = m.parse_steps(content)  # type: ignore[attr-defined]
+    assert result == [
+        {"number": 1, "description": "Freeze scope", "status": "done"},
+        {"number": 2, "description": "Port code", "status": "in_progress"},
+    ]
+
+
+def test_parse_acceptance_criteria_reads_checkbox_items() -> None:
+    """Acceptance-criteria checkboxes should preserve met/unmet state."""
+    m = _load()
+    content = (
+        "## Acceptance Criteria\n"
+        "- [x] Docs are truthful\n"
+        "- [ ] Tests pass upstream\n"
+    )
+    result = m.parse_acceptance_criteria(content)  # type: ignore[attr-defined]
+    assert result == [
+        {"description": "Docs are truthful", "met": True},
+        {"description": "Tests pass upstream", "met": False},
+    ]

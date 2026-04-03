@@ -1,5 +1,6 @@
 """Tests for scripts/complete_plan.py pure and mock-friendly functions."""
 
+import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -234,6 +235,53 @@ def test_run_unit_tests_failure(tmp_path: Path) -> None:
         passed, _ = run_unit_tests(tmp_path, verbose=False)
 
     assert passed is False
+
+
+def test_run_unit_tests_uses_interpreter_qualified_pytest(tmp_path: Path) -> None:
+    """Unit-test runner should invoke pytest through the current interpreter."""
+    commands: list[list[str]] = []
+
+    def fake_run(command: list[str], **_kwargs):
+        commands.append(command)
+        result = MagicMock()
+        result.returncode = 0
+        result.stdout = "=== 42 passed in 1.23s ==="
+        result.stderr = ""
+        return result
+
+    with patch("scripts.complete_plan.subprocess.run", side_effect=fake_run):
+        passed, summary = run_unit_tests(tmp_path, verbose=False)
+
+    assert passed is True
+    assert "42 passed" in summary
+    assert commands
+    assert commands[0][:3] == [sys.executable, "-m", "pytest"]
+
+
+def test_run_e2e_tests_uses_interpreter_qualified_pytest(tmp_path: Path) -> None:
+    """Smoke-test runner should also invoke pytest through the current interpreter."""
+    commands: list[list[str]] = []
+    e2e_dir = tmp_path / "tests" / "e2e"
+    e2e_dir.mkdir(parents=True)
+    (e2e_dir / "test_smoke.py").write_text("def test_smoke():\n    assert True\n")
+
+    def fake_run(command: list[str], **_kwargs):
+        commands.append(command)
+        result = MagicMock()
+        result.returncode = 0
+        result.stdout = "=== 1 passed in 0.01s ==="
+        result.stderr = ""
+        return result
+
+    with patch("scripts.complete_plan.subprocess.run", side_effect=fake_run):
+        from scripts.complete_plan import run_e2e_tests
+
+        passed, summary = run_e2e_tests(tmp_path, verbose=False)
+
+    assert passed is True
+    assert "PASSED" in summary
+    assert commands
+    assert commands[0][:3] == [sys.executable, "-m", "pytest"]
 
 
 # ---------------------------------------------------------------------------

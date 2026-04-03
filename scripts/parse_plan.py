@@ -87,7 +87,7 @@ def get_active_plan_number() -> int | None:
 
     if claims_file.exists():
         try:
-            import yaml
+            import yaml  # type: ignore[import-untyped]
             with open(claims_file) as f:
                 data = yaml.safe_load(f) or {}
 
@@ -145,7 +145,7 @@ def parse_files_affected(content: str) -> list[dict[str, Any]]:
 
     Returns list of dicts with 'path' and 'action' keys.
     """
-    files = []
+    files: list[dict[str, Any]] = []
 
     # Find Files Affected section
     match = re.search(
@@ -195,7 +195,7 @@ def parse_references_reviewed(content: str) -> list[dict[str, Any]]:
 
     Returns list of dicts with 'path', 'lines', and 'description' keys.
     """
-    refs = []
+    refs: list[dict[str, Any]] = []
 
     # Find References Reviewed section
     match = re.search(
@@ -250,6 +250,157 @@ def parse_references_reviewed(content: str) -> list[dict[str, Any]]:
     return refs
 
 
+def parse_steps(content: str) -> list[dict[str, Any]]:
+    """Parse steps from a plan's Steps, Plan, or similar section.
+
+    Handles multiple formats:
+    - Pipe tables: | 1 | Do X | Done |
+    - Numbered lists: 1. Do X
+    - Bullet checkboxes: - [x] Do X
+    - Heading-based steps: ### Step 1: Do X
+
+    Returns list of dicts with 'number', 'description', and 'status' keys.
+    """
+    steps: list[dict[str, Any]] = []
+
+    # Try multiple section headings
+    section = ""
+    for heading in ["Steps", "Plan", "Implementation Steps", "Task Pack"]:
+        match = re.search(
+            rf"##\s*{re.escape(heading)}\s*\n(.*?)(?=\n##\s[^#]|\Z)",
+            content,
+            re.IGNORECASE | re.DOTALL,
+        )
+        if match:
+            section = match.group(1).strip()
+            break
+
+    if not section:
+        # Fallback: look for any numbered list in the Plan section
+        match = re.search(
+            r"##\s*Plan\b.*?\n(.*?)(?=\n##\s[^#]|\Z)",
+            content,
+            re.IGNORECASE | re.DOTALL,
+        )
+        if match:
+            section = match.group(1).strip()
+
+    if not section:
+        return steps
+
+    step_num = 0
+
+    for line in section.split("\n"):
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+
+        # Format 1: Pipe table row | N | Description | Status |
+        table_match = re.match(
+            r"\|\s*(\d+)\s*\|\s*(.+?)\s*\|\s*(.+?)\s*\|",
+            line,
+        )
+        if table_match:
+            steps.append({
+                "number": int(table_match.group(1)),
+                "description": table_match.group(2).strip(),
+                "status": _normalize_status(table_match.group(3).strip()),
+            })
+            continue
+
+        # Skip table headers/separators
+        if re.match(r"^\|[-\s|:]+\|$", line):
+            continue
+        if re.match(r"^\|\s*(Step|#|Number)", line, re.IGNORECASE):
+            continue
+
+        # Format 2: Numbered list: 1. Do X or 1) Do X
+        num_match = re.match(r"(\d+)[.)]\s+(.+)", line)
+        if num_match:
+            step_num = int(num_match.group(1))
+            desc = num_match.group(2).strip()
+            status = "not_started"
+            # Check for inline status markers
+            if re.search(r"\(done\)|\(complete\)|✅|✓", desc, re.IGNORECASE):
+                status = "done"
+            elif re.search(r"\(in.?progress\)|🚧", desc, re.IGNORECASE):
+                status = "in_progress"
+            steps.append({
+                "number": step_num,
+                "description": re.sub(r"\s*\((?:done|complete|in.?progress)\)\s*", "", desc, flags=re.IGNORECASE).strip(),
+                "status": status,
+            })
+            continue
+
+        # Format 3: Checkbox list: - [x] Do X or - [ ] Do X
+        check_match = re.match(r"[-*]\s+\[([ xX])\]\s+(.+)", line)
+        if check_match:
+            step_num += 1
+            checked = check_match.group(1).lower() == "x"
+            steps.append({
+                "number": step_num,
+                "description": check_match.group(2).strip(),
+                "status": "done" if checked else "not_started",
+            })
+            continue
+
+        # Format 4: ### Step N: Description
+        heading_match = re.match(r"###\s*Step\s+(\d+)\s*[:.]\s*(.+)", line, re.IGNORECASE)
+        if heading_match:
+            steps.append({
+                "number": int(heading_match.group(1)),
+                "description": heading_match.group(2).strip(),
+                "status": "not_started",
+            })
+            continue
+
+    return steps
+
+
+def _normalize_status(raw: str) -> str:
+    """Normalize status strings to canonical values."""
+    lower = raw.lower().strip()
+    if any(w in lower for w in ["done", "complete", "✅", "verified"]):
+        return "done"
+    if any(w in lower for w in ["progress", "started", "🚧", "wip"]):
+        return "in_progress"
+    if any(w in lower for w in ["blocked", "⏸"]):
+        return "blocked"
+    if any(w in lower for w in ["not started", "planned", "📋", "pending"]):
+        return "not_started"
+    return raw
+
+
+def parse_acceptance_criteria(content: str) -> list[dict[str, Any]]:
+    """Parse acceptance criteria from a plan.
+
+    Looks for checkbox lists in Acceptance Criteria or Verification sections.
+    Returns list of dicts with 'description' and 'met' keys.
+    """
+    criteria: list[dict[str, Any]] = []
+
+    for heading in ["Acceptance Criteria", "Verification", "Success Criteria"]:
+        match = re.search(
+            rf"##\s*{re.escape(heading)}\s*\n(.*?)(?=\n##\s[^#]|\Z)",
+            content,
+            re.IGNORECASE | re.DOTALL,
+        )
+        if match:
+            section = match.group(1).strip()
+            for line in section.split("\n"):
+                line = line.strip()
+                check_match = re.match(r"[-*]\s+\[([ xX])\]\s+(.+)", line)
+                if check_match:
+                    criteria.append({
+                        "description": check_match.group(2).strip(),
+                        "met": check_match.group(1).lower() == "x",
+                    })
+            if criteria:
+                break
+
+    return criteria
+
+
 def check_file_in_scope(file_path: str, files_affected: list[dict[str, Any]]) -> tuple[bool, str]:
     """Check if a file is in the plan's declared scope.
 
@@ -292,6 +443,16 @@ def main() -> int:
         "--references-reviewed", "-r",
         action="store_true",
         help="Output the References Reviewed section"
+    )
+    parser.add_argument(
+        "--steps", "-s",
+        action="store_true",
+        help="Output the Steps/Plan section (numbered, checkbox, or table)"
+    )
+    parser.add_argument(
+        "--acceptance-criteria", "-a",
+        action="store_true",
+        help="Output acceptance criteria checkboxes"
     )
     parser.add_argument(
         "--check-file", "-c",
@@ -354,6 +515,37 @@ def main() -> int:
             print(f"  Plan: #{plan_number}")
 
         return 0 if in_scope else 2
+
+    # Handle --steps
+    if args.steps:
+        steps = parse_steps(content)
+        if args.json:
+            print(json.dumps({"plan": plan_number, "steps": steps}, indent=2))
+        else:
+            if not steps:
+                print(f"Plan #{plan_number}: No parseable steps found")
+                return 1
+            print(f"Plan #{plan_number} - Steps ({len(steps)} found):")
+            for step in steps:
+                status_marker = {"done": "✓", "in_progress": "→", "blocked": "⏸", "not_started": " "}.get(step["status"], "?")
+                print(f"  [{status_marker}] {step['number']}. {step['description']}")
+        return 0
+
+    # Handle --acceptance-criteria
+    if args.acceptance_criteria:
+        criteria = parse_acceptance_criteria(content)
+        if args.json:
+            print(json.dumps({"plan": plan_number, "acceptance_criteria": criteria}, indent=2))
+        else:
+            if not criteria:
+                print(f"Plan #{plan_number}: No acceptance criteria found")
+                return 1
+            met = sum(1 for c in criteria if c["met"])
+            print(f"Plan #{plan_number} - Acceptance Criteria ({met}/{len(criteria)} met):")
+            for c in criteria:
+                marker = "x" if c["met"] else " "
+                print(f"  [{marker}] {c['description']}")
+        return 0
 
     # Handle --files-affected
     if args.files_affected:

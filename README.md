@@ -30,19 +30,34 @@ capabilities, plans, notebooks, tests, code, and observability fit together is
 
 ## Quick Start
 
+### Recommended: pre-commit mode
+
 ```bash
-# 1. Install into your project
-./install.sh /path/to/your/project
+# Install using the pre-commit framework (recommended)
+./install.sh /path/to/your/project --pre-commit
 
-# 2. Configure what patterns to enable
+# Configure
 vim meta-process.yaml
+vim .pre-commit-config.yaml   # enable/disable hooks, pin rev to a release
 
-# 3. Start using
-git checkout -b plan-N-description   # Create feature branch
-# ... do work ...
-make pr-auto-check && make pr-auto   # Non-interactive ship
-# or: make pr-ready && make pr        # Interactive ship
-make finish BRANCH=X PR=N            # Merge + cleanup
+# Verify
+pre-commit run --all-files
+
+# Work
+git checkout -b plan-N-description
+git commit -m "[Plan #1] my change"   # hooks enforce format
+```
+
+### Alternative: raw bash hooks
+
+```bash
+# Install without pre-commit (for environments where pip is unavailable)
+./install.sh /path/to/your/project --minimal   # core patterns
+./install.sh /path/to/your/project --full      # all patterns + worktree coordination
+
+vim meta-process.yaml
+git checkout -b plan-N-description
+make pr-auto-check && make pr-auto   # ship
 ```
 
 ## Patterns (Pick What You Need)

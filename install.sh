@@ -1,6 +1,6 @@
 #!/bin/bash
 # Enforced Planning Installation Script
-# Usage: ./install.sh /path/to/target/project [--minimal|--full]
+# Usage: ./install.sh /path/to/target/project [--minimal|--full|--pre-commit]
 
 set -e
 
@@ -15,11 +15,14 @@ TARGET_DIR="${1:-.}"
 MODE="${2:---minimal}"
 
 if [[ "$TARGET_DIR" == "-h" || "$TARGET_DIR" == "--help" ]]; then
-    echo "Usage: $0 /path/to/project [--minimal|--full]"
+    echo "Usage: $0 /path/to/project [--minimal|--full|--pre-commit]"
     echo ""
     echo "Modes:"
-    echo "  --minimal  Install core patterns (plans, git hooks, doc-coupling)"
-    echo "  --full     Install all patterns including worktree coordination and acceptance gates"
+    echo "  --minimal     Install core patterns (plans, git hooks, doc-coupling)"
+    echo "  --full        Install all patterns including worktree coordination and acceptance gates"
+    echo "  --pre-commit  Install using the pre-commit framework (recommended)"
+    echo "                Creates .pre-commit-config.yaml instead of copying raw bash hooks."
+    echo "                Requires: pip install pre-commit"
     echo ""
     echo "After installation, edit meta-process.yaml to configure."
     exit 0
@@ -302,6 +305,47 @@ fi
 if [[ "$MODE" == "--full" ]] && [[ ! -f "$TARGET_DIR/docs/adr/CLAUDE.md" ]]; then
     cp "$SCRIPT_DIR/templates/CLAUDE.md.docs-adr" "$TARGET_DIR/docs/adr/CLAUDE.md"
     echo -e "  ${GREEN}Created: docs/adr/CLAUDE.md${NC}"
+fi
+
+echo ""
+# --pre-commit mode: create .pre-commit-config.yaml and install pre-commit
+if [[ "$MODE" == "--pre-commit" ]]; then
+    echo "Setting up pre-commit framework..."
+
+    # Check pre-commit is installed
+    if ! command -v pre-commit &>/dev/null; then
+        echo "Installing pre-commit..."
+        pip install pre-commit
+    fi
+
+    # Copy example config
+    if [[ ! -f "$TARGET_DIR/.pre-commit-config.yaml" ]]; then
+        cp "$SCRIPT_DIR/templates/pre-commit-config.yaml.example" "$TARGET_DIR/.pre-commit-config.yaml"
+        echo -e "  ${GREEN}Created: .pre-commit-config.yaml${NC}"
+        echo -e "  ${YELLOW}  → Edit .pre-commit-config.yaml to enable/disable hooks${NC}"
+        echo -e "  ${YELLOW}  → Update 'rev: v1.0.0' to pin a specific release${NC}"
+    else
+        echo -e "  ${YELLOW}Skipped: .pre-commit-config.yaml (already exists)${NC}"
+    fi
+
+    # Install the hooks
+    echo "Installing pre-commit hooks..."
+    git -C "$TARGET_DIR" config --unset core.hooksPath 2>/dev/null || true  # Remove raw hook override
+    pre-commit install --config "$TARGET_DIR/.pre-commit-config.yaml" --allow-missing-config 2>/dev/null || \
+        echo -e "  ${YELLOW}Note: Run 'pre-commit install' manually in your project directory${NC}"
+    pre-commit install --hook-type commit-msg --config "$TARGET_DIR/.pre-commit-config.yaml" --allow-missing-config 2>/dev/null || \
+        echo -e "  ${YELLOW}Note: Run 'pre-commit install --hook-type commit-msg' manually${NC}"
+
+    echo ""
+    echo -e "${GREEN}pre-commit installation complete!${NC}"
+    echo ""
+    echo "Next steps:"
+    echo "  1. Edit .pre-commit-config.yaml — enable hooks, pin rev to a release tag"
+    echo "  2. Edit meta-process.yaml to configure patterns"
+    echo "  3. pre-commit run --all-files   # verify all hooks pass"
+    echo "  4. git add .pre-commit-config.yaml meta-process.yaml"
+    echo "  5. git commit -m '[Trivial] install enforced-planning'"
+    exit 0
 fi
 
 echo ""

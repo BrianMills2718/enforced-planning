@@ -1,0 +1,55 @@
+# .pre-commit-config.yaml — enforced-planning hooks for your project
+#
+# Usage:
+#   1. Copy this file to your project root as .pre-commit-config.yaml
+#   2. pip install pre-commit
+#   3. pre-commit install              # installs the pre-commit hook
+#   4. pre-commit install --hook-type commit-msg  # installs commit-msg hook
+#   5. pre-commit run --all-files     # run all hooks on all files (CI)
+#
+# Update hook versions:
+#   pre-commit autoupdate
+#
+# Skip a hook for one commit:
+#   SKIP=locked-couplings git commit -m "[Plan #1] ..."
+
+repos:
+  - repo: https://github.com/BrianMills2718/enforced-planning
+    rev: v1.0.0  # pin to a tagged release; run `pre-commit autoupdate` to bump
+    hooks:
+      # Required: commit message format enforcement
+      - id: commit-msg-format
+
+      # Required: locked coupling enforcement (blocks commit if doc not staged)
+      - id: locked-couplings
+
+      # Recommended: plan capabilities section check
+      - id: plan-capabilities
+
+      # Optional: doc-code coupling check (requires doc_coupling.yaml)
+      # - id: doc-coupling
+
+      # Optional: plan status sync
+      # - id: plan-status
+
+      # Optional: dead code check (requires vulture; controlled by meta-process.yaml)
+      # - id: dead-code
+
+  # Standard hooks (not enforced-planning specific)
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-merge-conflict
+
+# Local hooks (optional, if you have project-specific scripts)
+# - repo: local
+#   hooks:
+#     - id: mypy
+#       name: mypy type check
+#       language: python
+#       entry: mypy src/
+#       types: [python]
+#       pass_filenames: false

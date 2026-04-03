@@ -1,0 +1,61 @@
+- id: commit-msg-format
+  name: Commit message prefix format
+  description: >
+    Validates that commit messages start with [Plan #N], [Trivial], or
+    [Unplanned] (or custom prefixes from meta-process.yaml commits.valid_prefixes).
+  language: python
+  entry: python hooks/git/commit-msg
+  stages: [commit-msg]
+  types: [text]
+
+- id: locked-couplings
+  name: Locked coupling enforcement
+  description: >
+    If a staged source file belongs to a `type: locked` coupling in
+    relationships.yaml (V2), the coupled documentation must also be staged
+    in the same commit. Prevents doc drift at commit time.
+  language: python
+  entry: python scripts/check_locked_couplings.py --strict
+  stages: [pre-commit]
+  pass_filenames: false
+
+- id: plan-capabilities
+  name: Plan capabilities section check
+  description: >
+    Checks that plan files staged for commit have a valid Capabilities section
+    (or are exempt). Ensures plans define their capability contracts before
+    implementation.
+  language: python
+  entry: python scripts/check_plan_capabilities.py
+  stages: [pre-commit]
+  types: [markdown]
+
+- id: doc-coupling
+  name: Doc-code coupling check
+  description: >
+    Validates that documentation coupled to source files (via doc_coupling.yaml)
+    is not diverging. Runs check_doc_coupling.py against staged changes.
+  language: python
+  entry: python scripts/check_doc_coupling.py
+  stages: [pre-commit]
+  pass_filenames: false
+
+- id: plan-status
+  name: Plan status sync
+  description: >
+    Syncs plan status in docs/plans/CLAUDE.md index based on plan file
+    frontmatter. Keeps the plan index consistent with individual plan files.
+  language: python
+  entry: python scripts/sync_plan_status.py
+  stages: [pre-commit]
+  pass_filenames: false
+
+- id: dead-code
+  name: Dead code check (opt-in)
+  description: >
+    Runs vulture dead-code scanner. Controlled by quality.dead_code in
+    meta-process.yaml. Only active when quality.dead_code.enabled is true.
+  language: python
+  entry: python scripts/check_dead_code.py
+  stages: [pre-commit]
+  pass_filenames: false

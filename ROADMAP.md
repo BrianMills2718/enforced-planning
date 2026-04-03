@@ -62,7 +62,7 @@ A portable framework where:
 | Makefile targets | `make infer`, `make check-deps`, `make check-caps`, `make migrate-rels` | ✅ Complete |
 | **V2 adoption pilot** | Migrate a real governed repo's relationships.yaml to V2 | ✅ Complete (llm_client: 4 couplings migrated, 425 inferred edges, read-gate verified) |
 | **Pre-commit enforcement** | Hook that validates locked couplings on commit | 📋 Planned |
-| **Agent verification protocol** | Bounded mission spec for "validated" couplings (`Plan #11`) | 📋 Planned (plan written) |
+| **Agent verification protocol** | Bounded mission spec for "validated" couplings (`Plan #11`) | ✅ Complete (181 tests, shipped) |
 
 ### Phase 5: Semantic Review Layer (PLANNED)
 

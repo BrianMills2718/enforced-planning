@@ -15,7 +15,7 @@ See `ROADMAP.md` for the full phase map and recommended priority order.
 | 9 | Scoped Validation By Repo Identity (`09_scoped-truth-surface-validation.md`) | High | ✅ Complete | [future] broader governed adoption |
 | 10 | Framework Onboarding Reconciliation (`10_framework-truth-surface-and-onboarding-reconciliation.md`) | Medium | 🚧 In Progress | [future] consumer adoption |
 | — | Relationships V2: inference engine + schema + migration (design doc, no numbered plan) | High | ✅ Complete | V2 adoption pilot |
-| 11 | Agent Verification Protocol for Validated Couplings (`11_agent-verification-protocol.md`) | High | 📋 Planned | #7 |
+| 11 | Agent Verification Protocol for Validated Couplings (`11_agent-verification-protocol.md`) | High | ✅ Complete | #7 |
 
 ## Status Key
 

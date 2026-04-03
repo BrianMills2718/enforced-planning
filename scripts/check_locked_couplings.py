@@ -180,7 +180,7 @@ def main() -> int:
     for v in violations:
         print(f"  Coupling: {v['coupling_description']}")
         print(f"    Staged source(s): {', '.join(v['sources_matched'])}")
-        print(f"    Required doc(s) not staged:")
+        print("    Required doc(s) not staged:")
         for doc in v["docs_required"]:
             print(f"      - {doc}")
         print()

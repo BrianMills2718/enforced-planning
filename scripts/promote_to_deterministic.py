@@ -184,7 +184,7 @@ def format_report(
         f"Total promotion candidates: {len(ranked)} ({len(stable)} stable, {len(unstable)} unstable)"
     )
     lines.append(
-        f"To increase stability: run `make review-surfaces` periodically and re-check."
+        "To increase stability: run `make review-surfaces` periodically and re-check."
     )
     return "\n".join(lines)
 

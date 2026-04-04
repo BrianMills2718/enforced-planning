@@ -144,4 +144,21 @@ if git rev-parse --verify "$REMOTE" >/dev/null 2>&1; then
     fi
 fi
 
+# 10. Terminology linter on staged .md files (if vocab pack and script exist)
+TERM_LINTER=$(find_script "check_terminology.py")
+VOCAB_PACK="$REPO_ROOT/generated/vocab_pack.jsonl"
+if [[ -n "$TERM_LINTER" ]] && [[ -f "$VOCAB_PACK" ]]; then
+    STAGED_MD=$(git diff --cached --name-only --diff-filter=ACM | grep '\.md$' | grep -v '^vision/archive/' | grep -v '^docs/ops/archive/' | grep -v '^tests/fixtures/' || true)
+    if [[ -n "$STAGED_MD" ]]; then
+        echo "Checking terminology in staged markdown files..."
+        if ! python "$TERM_LINTER" --files $STAGED_MD 2>/dev/null; then
+            echo ""
+            echo "ERROR: Deprecated terminology found in staged files!"
+            echo "Run 'python $TERM_LINTER --files <file>' to see violations."
+            echo ""
+            exit 1
+        fi
+    fi
+fi
+
 echo "Pre-commit checks passed!"

@@ -626,6 +626,25 @@ def main() -> int:
 
     if result.missing_strict or result.missing_adrs or result.missing_sections:
         return 1
+
+    # Soft notebook registry check — warn only, never blocks plan validation.
+    # Skipped in --json mode to preserve machine-readable output.
+    if not args.json:
+        notebook_checker = Path(__file__).parent / "check_notebook_registry.py"
+        if notebook_checker.exists():
+            nb_result = subprocess.run(
+                [sys.executable, str(notebook_checker), "--warn-only"],
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+            )
+            if nb_result.stdout.strip():
+                print("\nNOTEBOOK REGISTRY (soft check — non-blocking):")
+                for line in nb_result.stdout.strip().splitlines():
+                    print(f"  {line}")
+            if nb_result.returncode != 0 and nb_result.stderr.strip():
+                print(f"  notebook registry check error: {nb_result.stderr.strip()}")
+
     return 0
 
 

@@ -164,6 +164,7 @@ WORKTREE_TARGETS: tuple[str, ...] = (
     "session-heartbeat",
     "session-status",
     "session-finish",
+    "session-close",
 )
 
 WORKTREE_SCRIPT_PATHS: dict[str, tuple[str, ...]] = {
@@ -176,6 +177,7 @@ WORKTREE_SCRIPT_PATHS: dict[str, tuple[str, ...]] = {
     "session_heartbeat": ("scripts/meta/session_heartbeat.py",),
     "session_status": ("scripts/meta/session_status.py",),
     "session_finish": ("scripts/meta/session_finish.py",),
+    "session_close": ("scripts/meta/session_close.py",),
     "safe_worktree_remove": ("scripts/meta/worktree-coordination/safe_worktree_remove.py",),
 }
 

@@ -19,8 +19,8 @@ This repo is currently running in explicit continuous-execution mode.
   overnight work onto a dirty primary checkout.
 - Commit every verified slice so rollback is cheap and exact.
 - Merge and push verified slices from the root-anchored control session, then
-  clean the finished worktree and release the lane claim before starting the
-  next slice.
+  close the finished lane through the sanctioned atomic closeout path before
+  starting the next slice.
 - Name runtime sessions after the broader objective, not the local subtask or
   branch. The branch can be task-shaped; the session contract should be
   objective-shaped.
@@ -40,7 +40,7 @@ This repo is currently running in explicit continuous-execution mode.
   while that debt remains unresolved.
 - Continuous-run discipline is part of the architecture here, not a stylistic
   preference. Every bounded slice must end with: verified tests, commit,
-  merge/push, claim release, and worktree cleanup before the next slice begins.
+  merge/push, and sanctioned lane closeout before the next slice begins.
 
 Non-negotiable execution rules for continuous runs:
 
@@ -120,6 +120,7 @@ python scripts/session_start.py --help
 python scripts/session_heartbeat.py --help
 python scripts/session_status.py --help
 python scripts/session_finish.py --help
+python scripts/session_close.py --help
 
 # Tests
 pytest -q
@@ -137,6 +138,8 @@ make test
    changes.
 6. Treat the session lifecycle commands as part of sanctioned execution, not
    optional helper scripts.
+7. Use `session-close` or `make worktree-remove` for claimed lane cleanup; do
+   not manually split claim release from worktree removal.
 
 ## Notes
 

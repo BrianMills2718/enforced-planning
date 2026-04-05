@@ -46,6 +46,7 @@ See `ROADMAP.md` for the full phase map and recommended priority order.
 | 39 | Worktree-Aware Markdown-Link Validation And Root Resolution (`39_worktree-aware-markdown-link-validation-and-root-resolution.md`) | High | ✅ Complete | Shared checker now owns worktree/canonical-root path semantics with focused fallback tests |
 | 40 | Overnight Coordination Implementation Sprint (`40_overnight-coordination-implementation-sprint.md`) | High | ✅ Complete | Freeze slice order, blocker handling, and sprint-closeout rules for the current coordination push |
 | 41 | Documentation Authority Governance And Enforcement (`41_doc-authority-governance-and-enforcement.md`) | High | ✅ Complete | Freeze the canonical authority model, schema, and rollout shape for follow-on enforcement |
+| 42 | Atomic Closeout And Claimed Worktree Removal (`42_atomic-closeout-and-claimed-worktree-removal.md`) | High | ✅ Complete | Make claimed-lane cleanup one sanctioned operation instead of split release/remove steps |
 
 ## Status Key
 

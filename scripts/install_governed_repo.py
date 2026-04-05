@@ -55,6 +55,7 @@ SYNC_SUPPORT_FILES: dict[str, str] = {
     "scripts/check_doc_coupling.py": "scripts/check_doc_coupling.py",
     "scripts/check_markdown_links.py": "scripts/check_markdown_links.py",
     "scripts/meta/session_finish.py": "scripts/session_finish.py",
+    "scripts/meta/session_close.py": "scripts/session_close.py",
     "scripts/meta/session_heartbeat.py": "scripts/session_heartbeat.py",
     "scripts/meta/session_start.py": "scripts/session_start.py",
     "scripts/meta/session_status.py": "scripts/session_status.py",
@@ -74,6 +75,7 @@ SYNC_SUPPORT_FILES: dict[str, str] = {
 WORKTREE_ONLY_SYNC_SUPPORT_FILES: dict[str, str] = {
     "scripts/meta/check_coordination_claims.py": "scripts/check_coordination_claims.py",
     "scripts/meta/session_finish.py": "scripts/session_finish.py",
+    "scripts/meta/session_close.py": "scripts/session_close.py",
     "scripts/meta/session_heartbeat.py": "scripts/session_heartbeat.py",
     "scripts/meta/session_start.py": "scripts/session_start.py",
     "scripts/meta/session_status.py": "scripts/session_status.py",

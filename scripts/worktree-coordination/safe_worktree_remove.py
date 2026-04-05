@@ -359,9 +359,10 @@ def remove_worktree(worktree_path: str, force: bool = False) -> bool:
             branch_text = info.get("branch") or "unknown-branch"
             scope_text = info.get("scope") or "unknown-scope"
             print(
-                "   1. Close or release the claim first: "
-                f"python scripts/check_coordination_claims.py --release --agent {cc_id} "
-                f"--project {get_main_repo_root().name} --scope {scope_text}"
+                "   1. Use the canonical closeout flow instead: "
+                f"python scripts/session_close.py --agent {cc_id} "
+                f"--project {get_main_repo_root().name} --scope {scope_text} "
+                f"--worktree-path {worktree_path} --branch {branch_text}"
             )
             print(f"      Claim branch: {branch_text}")
         else:

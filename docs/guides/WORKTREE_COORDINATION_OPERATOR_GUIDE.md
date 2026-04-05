@@ -169,6 +169,8 @@ Canonical lifecycle commands:
 - `session-heartbeat`: refresh the lease and tracker timestamp
 - `session-status`: show live sessions derived from claims plus trackers
 - `session-finish`: refuse unsafe closeout and require clean or explicit handoff state
+- `session-close`: clean up a claimed lane end-to-end by removing the worktree,
+  deleting the local branch, and releasing the claim together
 
 Next lifecycle additions to keep the model truthful after crashes or intentional
 session closure:
@@ -266,13 +268,26 @@ inside that worktree breaks subsequent shell commands.
 Practical rule:
 
 - keep one control session anchored at the canonical repo root
-- run merge / finish / worktree removal from that root-anchored session
+- run merge / finish / closeout from that root-anchored session
 - do not delete a worktree from a session whose shell CWD is inside it
 
 The `block-cd-worktree.sh`, `warn-worktree-cwd.sh`, and
 `enforce-make-merge.sh` hooks enforce this safety rule for Claude Code style
 sessions. That safety rule does not mean worktrees are optional; it means
 cleanup must happen from a safe control session.
+
+## Atomic Closeout Rule
+
+Claim release and claimed-worktree cleanup must not be split into separate
+manual steps.
+
+- use `session-close` for direct CLI closeout
+- use `make worktree-remove BRANCH=...` in governed repos
+- do not run `session-finish --release-claim` and later try to remove the
+  worktree as a second operation
+
+The sanctioned closeout flow is idempotent for already-missing worktree or
+branch state so partial cleanup can be rerun safely.
 
 ## What Coordination Does And Does Not Do
 

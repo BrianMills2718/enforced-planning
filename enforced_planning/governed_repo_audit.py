@@ -804,6 +804,15 @@ def audit_repo(
         for c in read_gating["commands_missing"]:
             missing_required.append(f"hook-wiring:{c}")
 
+    worktree_entrypoints = checks["worktree_entrypoints"]
+    if worktree_entrypoints["expected"]:
+        if worktree_entrypoints["claims_enabled"] is False:
+            missing_required.append("meta-process.yaml claims.enabled for worktree opt-in")
+        if not all(worktree_entrypoints["targets_present"].values()):
+            missing_required.append("sanctioned Makefile worktree entrypoints")
+        if not all(worktree_entrypoints["scripts_present"].values()):
+            missing_required.append("sanctioned worktree coordination scripts")
+
     classification = "governed" if not missing_required else "partial"
     if relationships_state["status"] == "minimal":
         checks["relationships_yaml"]["warnings"] = [

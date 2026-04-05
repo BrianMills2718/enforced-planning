@@ -69,6 +69,10 @@ surfaces from them.
 5. Merge/push from the safe root-anchored control session.
 6. Release the claim when the lane is done.
 
+Mandatory rule: no live session without `plan_ref`, except explicitly marked
+unplanned emergency work. If work resumes in a new runtime, reattach it to the
+existing plan-bound lane instead of silently creating a new one.
+
 For the sanctioned repo-local `make worktree` flow, the default claim is a v2
 **program** claim with real `branch`, `worktree_path`, and `session_id`
 metadata. That keeps lane tracking healthy without inventing a fake broad
@@ -166,6 +170,14 @@ Canonical lifecycle commands:
 - `session-status`: show live sessions derived from claims plus trackers
 - `session-finish`: refuse unsafe closeout and require clean or explicit handoff state
 
+Next lifecycle additions to keep the model truthful after crashes or intentional
+session closure:
+
+- `session-resume`: attach a new runtime to an existing plan-bound lane
+- `session-handoff`: intentionally pause or transfer work with a durable note
+- `session-abandon`: explicitly mark a dead lane as abandoned instead of
+  leaving it stale forever
+
 Supported runtime adapters:
 
 - Codex: `CODEX_THREAD_ID`
@@ -174,6 +186,22 @@ Supported runtime adapters:
 
 Those adapters only resolve runtime identity. They do not change the session
 contract schema, the tracker schema, or the sanctioned repo lifecycle commands.
+
+## Crash / Resume Policy
+
+The coordination stack uses lease semantics, not perfect real-time presence.
+
+- if a machine crashes or a window closes, the session stops heartbeating
+- once the heartbeat ages out, the lane becomes stale
+- the next runtime must explicitly choose to resume, hand off, abandon, or
+  prune that lane
+
+Do not treat "I reopened the repo" as implicit recovery. Recovery must be
+explicitly attached to the same `project + plan_ref + scope` lane or declared
+as a new parallel lane.
+
+Parallel live lanes on the same `project + plan_ref + scope` should fail unless
+the operator explicitly allows parallelism.
 
 ## Consumer Rule
 
@@ -187,6 +215,32 @@ not introduce:
 
 Assignment and queue layers are allowed as routing layers only when they sit on
 top of the canonical claim/session lifecycle.
+
+## Authority Drift Policy
+
+Authority drift is what happens when a lane lands a new authoritative artifact
+but does not reconcile the separately owned authority surface that indexes,
+summarizes, or governs it.
+
+Policy:
+
+1. A lane may land authoritative artifacts in its claimed scope.
+2. A lane may not opportunistically edit a separately claimed authority
+   surface.
+3. A lane that creates authority drift must record a formal reconciliation
+   obligation.
+4. The lane owning the affected authority surface may not close while that
+   obligation remains unresolved.
+
+This is a hard gate, not a warning-only convention. Warnings are too easy to
+ignore during expedited execution.
+
+Near-term implementation expectation:
+
+- validators should detect unindexed or unreconciled authoritative artifacts
+- drift should be machine-visible even when overlap is forbidden
+- lane closeout should fail when the owning authority surface still has open
+  reconciliation debt
 
 ## Session Safety
 

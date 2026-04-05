@@ -43,6 +43,19 @@ The session layer answers:
 Important rule: the session layer extends the claim model. It does not create a
 second competing registry.
 
+Every live session must be explicitly plan-bound. A runtime session is not just
+"some shell in some worktree." It must declare:
+
+- project
+- plan reference
+- bounded scope
+- branch
+- worktree path
+- broader goal
+
+That rule is what makes resume, recovery, and duplicate-lane detection
+mechanically meaningful.
+
 ### 3. Lane Layer
 
 Lanes are derived from live claims.
@@ -84,6 +97,44 @@ It should answer:
 The queue may produce assignments, but it should still route work into the same
 claim/session lifecycle.
 
+## Recovery And Closeout Layer
+
+Crash recovery and intentional stop/resume are lifecycle problems, not ad hoc
+human conventions.
+
+The canonical operational states are:
+
+- `healthy`: live claim, truthful lifecycle, fresh heartbeat
+- `handoff`: intentionally paused or transferred with explicit note
+- `stale`: lifecycle or liveness facts show the claim is no longer truthful
+- `completed`: cleanly finished and closed
+
+The recovery rule is:
+
+- a new runtime must explicitly resume an existing plan-bound lane
+- it must not silently create a second active lane for the same
+  `project + plan_ref + scope`
+- stale lanes must be adjudicated as resumed, handed off, abandoned, or pruned
+
+This keeps crash recovery in the canonical claim/session lifecycle instead of
+leaving it to conversational memory.
+
+## Authority Reconciliation Layer
+
+Authoritative content and authoritative indexes are both truth surfaces, but
+they do not have identical ownership rules.
+
+The policy is:
+
+- a lane may land authoritative artifacts in its claimed scope
+- a lane may not opportunistically edit a separately claimed authority surface
+- if that landing creates index or authority drift, the lane must record a
+  formal reconciliation obligation
+- the lane owning the affected authority surface may not close while such an
+  obligation remains unresolved
+
+This avoids silent overlap and also avoids silent drift.
+
 ## Explicit Anti-Patterns
 
 These are rejected architectural directions:
@@ -92,6 +143,8 @@ These are rejected architectural directions:
 - tool-specific mutable identity registries parallel to claims
 - per-window assignment files used as session truth
 - queue systems that bypass claim creation and session bootstrap
+- sessions with no explicit plan attachment
+- closure gates that only warn on unresolved authority drift
 
 Those all recreate the split-brain problem in a different file.
 
@@ -115,9 +168,25 @@ Design the longer-term queue-based assignment/routing system on top of the
 claim/session model. Queue state may exist, but it must feed canonical session
 bootstrap rather than replace it.
 
+### Plan 37
+
+Make plan attachment mandatory for live sessions and add explicit recovery
+commands for resume, handoff, and abandon semantics after unclean exits.
+
+### Plan 38
+
+Add formal authority-drift reconciliation obligations and hard closeout gates
+so claimed authority surfaces cannot close with unresolved downstream drift.
+
 ## Target Rule
 
 Identity is resolved once, in the canonical coordination/session layer.
+
+Lifecycle state is also resolved there:
+
+- plan attachment is explicit
+- resume/abandon/handoff are explicit
+- authority drift is explicit and blocking at lane closeout
 
 Everything else:
 

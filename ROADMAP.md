@@ -144,6 +144,8 @@ and readable as bounded active lanes instead of only raw claims.
 | #33 | Assignment-layer session contract integration | 📋 Planned |
 | #34 | Weak-claim remediation and live-lane migration | 📋 Planned |
 | #35 | Queue-based assignment and session routing architecture | 📋 Planned |
+| #37 | Plan-bound session identity and resume lifecycle | 📋 Planned |
+| #38 | Authority-drift reconciliation gates | 📋 Planned |
 
 **Deferred item blockers:**
 
@@ -162,21 +164,30 @@ and readable as bounded active lanes instead of only raw claims.
    consume canonical session identity instead of inventing their own per-window
    truth surface.
 
-2. **Weak/stale live-lane remediation**
+2. **Plan-bound session recovery**
+   Land Plan #37 so every live session is explicitly attached to a plan-bound
+   lane and crash/restart handling becomes explicit resume/handoff/abandon
+   lifecycle instead of guesswork.
+
+3. **Weak/stale live-lane remediation**
    Land Plan #34 so the active registry reflects adjudicated lane state rather
    than legacy weak claims.
 
-3. **Queue/routing architecture freeze**
+4. **Authority-drift closeout gates**
+   Land Plan #38 so separately claimed authority surfaces cannot close while
+   unresolved reconciliation obligations still exist.
+
+5. **Queue/routing architecture freeze**
    Land Plan #35 so future task-queue or assignment work builds on the canonical
    claim/session model instead of creating parallel identity systems.
 
-4. **Mac mini pilot governed-repo rollout**
+6. **Mac mini pilot governed-repo rollout**
    Execute the first controlled pilot from `docs/guides/MAC_MINI_CONTINUOUS_AUTOMATION_BOOTSTRAP.md` using a sanctioned worktree lane.
 
-5. **Future implementation slice: ecosystem status renderer and metrics collection**
+7. **Future implementation slice: ecosystem status renderer and metrics collection**
    Implement `make ecosystem-status`, `generated/ecosystem_status.json`, and rendered operator metrics on top of Plans #21 and #22.
 
-6. **Project-meta topic-research adoption**
+8. **Project-meta topic-research adoption**
    Apply the portable topic-research pattern in `project-meta/research_synthesis`
    with manifests, ADR links, and freshness metadata for high-value topics.
 

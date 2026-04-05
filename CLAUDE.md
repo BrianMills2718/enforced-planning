@@ -20,11 +20,20 @@ This repo is currently running in explicit continuous-execution mode.
 - Name runtime sessions after the broader objective, not the local subtask or
   branch. The branch can be task-shaped; the session contract should be
   objective-shaped.
+- No live session is allowed to float free of a plan. Every live lane must be
+  explicitly attached to a numbered `plan_ref` unless it is marked as a visible
+  emergency/unplanned exception.
+- If a runtime dies and work must continue later, the next runtime must
+  explicitly resume the same plan-bound lane. Do not silently create a fresh
+  lane for the same conceptual work.
 - If a concern or uncertainty appears, document it in the active plan or sprint
   tracker immediately; do not leave it only in chat.
 - Do not build parallel coordination identity systems in downstream repos.
   Assignment, queueing, and operator surfaces must consume the canonical
   claim/session model owned here.
+- Authority drift against separately claimed truth surfaces must become formal,
+  machine-visible reconciliation debt. The owning lane is not allowed to close
+  while that debt remains unresolved.
 
 Non-negotiable execution rules for continuous runs:
 

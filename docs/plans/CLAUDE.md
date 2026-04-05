@@ -41,6 +41,8 @@ See `ROADMAP.md` for the full phase map and recommended priority order.
 | 34 | Weak-Claim Remediation And Live-Lane Migration (`34_weak-claim-remediation-and-live-lane-migration.md`) | High | 📋 Planned | Turn weak/stale active lanes into adjudicated lifecycle state |
 | 35 | Queue-Based Assignment And Session Routing Architecture (`35_queue-based-assignment-and-session-routing-architecture.md`) | Medium | 📋 Planned | Freeze the long-term routing layer on top of the claim/session model |
 | 36 | Research Synthesis Downstream Consistency (`36_research-synthesis-downstream-consistency.md`) | Medium | ✅ Complete | Keep portable active guidance aligned with project-meta's research-synthesis hot path |
+| 37 | Plan-Bound Session Identity And Resume Lifecycle (`37_plan-bound-session-identity-and-resume-lifecycle.md`) | High | 📋 Planned | Make crash recovery, resume, and duplicate-lane prevention explicit and plan-bound |
+| 38 | Authority-Drift Reconciliation Gates (`38_authority-drift-reconciliation-gates.md`) | High | 📋 Planned | Turn authority drift into closure-blocking reconciliation debt instead of warning-only residue |
 
 ## Status Key
 

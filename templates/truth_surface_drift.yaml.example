@@ -1,11 +1,12 @@
-# Illustrative scaffold only. Replace all paths and pattern rules with real
+# Illustrative scaffold only. Replace all paths and rule patterns with real
 # repo-local surfaces before running the validator.
 
 version: 1
 
-scope:
-  repo_names:
-    - agentic_scaffolding
+# Optional repo-local scope. Use canonical repo names, not worktree branch names.
+# scope:
+#   repo_names:
+#     - your_repo_name
 
 surfaces:
   tracker_file: docs/ops/ACTIVE_TRACKER.md
@@ -15,20 +16,23 @@ surfaces:
 checks:
   consumed_reservations_exist:
     severity: fail
+    historical_unlanded_severity: warn
 
   no_active_work_for_complete_plans:
     severity: fail
 
+  # Optional explicit tracker-vs-registry contradiction rules.
   tracker_next_action_claim_conflicts:
     rules:
-      - tracker_pattern: "create the agentic_scaffolding worktree"
-        project: agentic_scaffolding
-        scope: authoritative-coordination-wave9
+      - tracker_pattern: "create the .* worktree"
+        project: your_repo_name
+        scope: your-active-scope
         severity: fail
 
+  # Optional claimed-text-vs-measured-audit parity rules.
   audit_claim_rules:
     rules:
-      - source_pattern: "agentic_scaffolding adoption state: (?P<claim>\w+)"
-        audit_file: generated/coordination_rollout.json
-        audit_json_path: repo_results.agentic_scaffolding.coordination_adoption_state
+      - source_pattern: "coordination adoption state: (?P<claim>\\w+)"
+        audit_file: generated/truth_surface_audit.json
+        audit_json_path: repo_results.your_repo_name.coordination_adoption_state
         severity: fail

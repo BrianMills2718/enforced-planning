@@ -107,6 +107,9 @@ It is the right layer for:
 - plan-status parity
 - tracker pattern vs registry contradictions
 - claimed state vs measured audit state
+- lineage-aware reservation hygiene, where canonical landed contradictions fail
+  but `historical-unlanded` history can remain visible without collapsing
+  repo-local status into false hard failures
 
 These checks should remain programmatic because they need high-confidence,
 repeatable failure semantics and should be eligible for hard enforcement.
@@ -118,8 +121,9 @@ Some drift is still too semantic or too cross-cutting for exact rules alone:
   compendious
 
 Those cases should be handled by an **optional LLM/agent review layer** that
-reads the same truth surfaces and emits advisory findings. The framework should
-use a hybrid model:
+reads the same truth surfaces and emits advisory findings. The framework now has
+that first bounded entrypoint in `scripts/review_truth_surface_semantic.py`.
+The framework should use a hybrid model:
 
 1. deterministic validator for exact contradictions and hard failures
 2. optional LLM semantic review for ambiguity, misleading prose, and missing

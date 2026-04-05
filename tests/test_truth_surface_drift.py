@@ -7,7 +7,7 @@ from pathlib import Path
 
 import yaml
 
-from scripts.check_truth_surface_drift import _canonical_repo_name, run_checks
+from scripts.check_truth_surface_drift import _canonical_repo_name, _canonical_repo_root, run_checks
 
 
 def _write(path: Path, content: str) -> None:
@@ -198,6 +198,13 @@ def test_scope_derives_canonical_name_from_worktree_repo_root() -> None:
     )
 
 
+def test_scope_derives_canonical_root_from_worktree_repo_root() -> None:
+    assert _canonical_repo_root("/tmp/projects/prompt_eval") == Path("/tmp/projects/prompt_eval")
+    assert _canonical_repo_root(
+        "/tmp/projects/prompt_eval_worktrees/plan-15-truth-surface-pilot"
+    ) == Path("/tmp/projects/prompt_eval")
+
+
 def test_scope_filters_by_canonical_repo_identity(tmp_path: Path) -> None:
     registry = tmp_path / "registry.yaml"
     registry.write_text(
@@ -267,6 +274,124 @@ def test_scope_filters_by_canonical_repo_identity(tmp_path: Path) -> None:
     assert len(issues) == 1
     assert issues[0].code == "consumed_reservation_missing_plan_file"
     assert issues[0].evidence["canonical_repo"] == "prompt_eval"
+
+
+def test_historical_unlanded_consumed_reservation_warns_by_default(tmp_path: Path) -> None:
+    registry = tmp_path / "registry.yaml"
+    registry.write_text(
+        yaml.safe_dump(
+            {
+                "active_work": [],
+                "plan_reservations": [
+                    {
+                        "status": "consumed",
+                        "plan": 14,
+                        "project": "plan-60-prompt-eval-coordination",
+                        "repo_root": "/tmp/projects/prompt_eval_worktrees/plan-60-prompt-eval-coordination",
+                        "lineage_state": "historical-unlanded",
+                        "historical_plan_file": "docs/plans/14_authoritative-coordination-wave-1-rollout.md",
+                    }
+                ],
+            }
+        )
+    )
+    plan_index = tmp_path / "CLAUDE.md"
+    _write(
+        plan_index,
+        """
+        # Implementation Plans
+        | # | Gap | Priority | Status | Blocks |
+        |---|-----|----------|--------|--------|
+        | 14 | Example | High | ✅ Complete | None |
+        """,
+    )
+    tracker = tmp_path / "tracker.md"
+    tracker.write_text("next action: nothing")
+    config = tmp_path / "config.yaml"
+    config.write_text(
+        yaml.safe_dump(
+            {
+                "scope": {"repo_names": ["prompt_eval"]},
+                "surfaces": {
+                    "tracker_file": str(tracker),
+                    "registry_file": str(registry),
+                    "plan_index_file": str(plan_index),
+                },
+                "checks": {
+                    "consumed_reservations_exist": {"severity": "fail"},
+                    "no_active_work_for_complete_plans": False,
+                },
+            }
+        )
+    )
+
+    issues = run_checks(config)
+
+    assert len(issues) == 1
+    assert issues[0].code == "historical_unlanded_consumed_reservation"
+    assert issues[0].severity == "warn"
+
+
+def test_relative_landed_plan_file_resolves_against_canonical_repo_root(tmp_path: Path) -> None:
+    canonical_repo = tmp_path / "prompt_eval"
+    plan_file = canonical_repo / "docs" / "plans" / "15_semantic-truth-surface-review-pilot.md"
+    plan_file.parent.mkdir(parents=True)
+    plan_file.write_text("# plan\n")
+    registry = tmp_path / "registry.yaml"
+    registry.write_text(
+        yaml.safe_dump(
+            {
+                "active_work": [],
+                "plan_reservations": [
+                    {
+                        "status": "consumed",
+                        "plan": 15,
+                        "project": "plan-16-semantic-truth-surface-pilot",
+                        "repo_root": str(
+                            tmp_path
+                            / "prompt_eval_worktrees"
+                            / "plan-16-semantic-truth-surface-pilot"
+                        ),
+                        "lineage_state": "landed",
+                        "plan_file": "docs/plans/15_semantic-truth-surface-review-pilot.md",
+                    }
+                ],
+            }
+        )
+    )
+    plan_index = tmp_path / "CLAUDE.md"
+    _write(
+        plan_index,
+        """
+        # Implementation Plans
+        | # | Gap | Priority | Status | Blocks |
+        |---|-----|----------|--------|--------|
+        | 15 | Example | High | ✅ Complete | None |
+        """,
+    )
+    tracker = tmp_path / "tracker.md"
+    tracker.write_text("next action: nothing")
+    config = tmp_path / "config.yaml"
+    config.write_text(
+        yaml.safe_dump(
+            {
+                "scope": {"repo_names": ["prompt_eval"]},
+                "surfaces": {
+                    "tracker_file": str(tracker),
+                    "registry_file": str(registry),
+                    "plan_index_file": str(plan_index),
+                },
+                "checks": {
+                    "consumed_reservations_exist": {"severity": "fail"},
+                    "no_active_work_for_complete_plans": False,
+                },
+            }
+        )
+    )
+
+    issues = run_checks(config)
+
+    assert issues == []
 
 
 def test_relative_surface_paths_resolve_from_config_dir(tmp_path: Path) -> None:

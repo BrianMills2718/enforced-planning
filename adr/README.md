@@ -36,6 +36,8 @@ They do NOT cover:
 | [0006](0006-path-portability-first.md) | Path Portability First for Autonomous Tooling | Proposed |
 | [0007](0007-autonomous-workspace-portability-enforcement.md) | Autonomous Workspace Portability Enforcement | Proposed |
 | [0008](0008-adr-research-linkage.md) | ADRs Must Link to the Research That Informed Them | Accepted |
+| [0009](0009-doc-authority-governance-and-enforcement.md) | Governed Repos Must Declare Documentation Authority and Enforce It | Proposed |
+| [0010](0010-agent-memory-as-planning-input.md) | Agent Operational Memory Is a Required Planning Input | Accepted |
 
 ## Format
 

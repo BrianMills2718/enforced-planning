@@ -52,6 +52,9 @@ def test_generate_registry_outputs_json_and_markdown(tmp_path: Path) -> None:
             "claim_type": "write",
             "write_paths": ["scripts"],
             "plan_ref": "Plan #62",
+            "branch": "coordination-a",
+            "worktree_path": "~/projects/project-meta_worktrees/coordination-a",
+            "session_id": "claude-code-session",
             "status": "active",
         },
     )
@@ -69,6 +72,8 @@ def test_generate_registry_outputs_json_and_markdown(tmp_path: Path) -> None:
             "write_paths": ["scripts/generate_active_work_registry.py"],
             "plan_ref": "Plan #62",
             "branch": "plan-62-coordination-v2",
+            "worktree_path": "~/projects/project-meta_worktrees/plan-62-coordination-v2",
+            "session_id": "codex-session",
             "status": "active",
         },
     )
@@ -100,13 +105,30 @@ def test_generate_registry_outputs_json_and_markdown(tmp_path: Path) -> None:
     payload = json.loads(json_output.read_text(encoding="utf-8"))
     assert payload["claim_count"] == 3
     assert payload["claims_by_type"] == {"program": 1, "write": 2}
+    assert payload["health_summary"] == {
+        "overall_status": "attention",
+        "weak_claim_count": 1,
+        "hard_conflict_claim_count": 2,
+        "soft_overlap_claim_count": 0,
+    }
     codex_entry = next(entry for entry in payload["claims"] if entry["agent"] == "codex")
     assert codex_entry["interaction_summary"]["hard_conflict_count"] == 1
+    assert codex_entry["health_status"] == "healthy"
     assert any(note["severity"] == "hard_conflict" for note in codex_entry["conflict_notes"])
+    program_entry = next(entry for entry in payload["claims"] if entry["agent"] == "openclaw")
+    assert program_entry["health_status"] == "weak"
+    assert program_entry["health_issues"] == [
+        "missing_branch",
+        "missing_worktree_path",
+        "missing_session_id",
+    ]
     markdown = markdown_output.read_text(encoding="utf-8")
     assert "# Active Work Registry" in markdown
+    assert "## Coordination Health" in markdown
+    assert "## Health Notes" in markdown
     assert "coordination-v2-b" in markdown
     assert "hard=1" in markdown
+    assert "weak" in markdown
 
 
 def test_generate_registry_handles_empty_claim_set(tmp_path: Path) -> None:
@@ -130,5 +152,6 @@ def test_generate_registry_handles_empty_claim_set(tmp_path: Path) -> None:
     assert exit_code == 0
     payload = json.loads(json_output.read_text(encoding="utf-8"))
     assert payload["claim_count"] == 0
+    assert payload["health_summary"]["overall_status"] == "idle"
     assert payload["claims"] == []
     assert "No live claims." in markdown_output.read_text(encoding="utf-8")

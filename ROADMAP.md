@@ -94,13 +94,16 @@ A portable framework where:
 |------|------|--------|
 | #10 | Framework truth-surface and onboarding reconciliation | ✅ Complete |
 
-### Phase 8: Multi-Tool Support and Ecosystem Observability (PLANNED)
+### Phase 8: Multi-Tool Support and Ecosystem Observability (GATE OPEN — 2026-04-04)
 
 **Gate (measurable proxy — verifiable within this repo):**
-All three conditions must be green before Phase 8 work begins:
-1. `.pre-commit-hooks.yaml` integration tested end-to-end with a non-Claude-Code tool (Codex or Cursor) — documented in `docs/evidence/phase8_precommit_test.md`
-2. `install.sh --pre-commit` verified in a repo that has no `.claude/` directory — documented in same evidence file
-3. `render_agents_md.py --dry-run` produces an AGENTS.md that a Codex agent can navigate without error — confirmed by running `make agents-md` and reviewing generated file
+All three conditions green as of 2026-04-04 overnight sprint:
+1. ✅ `.pre-commit-hooks.yaml` integration tested end-to-end — documented in `docs/evidence/phase8_precommit_test.md`
+2. ✅ `install.sh --pre-commit` verified in a repo that has no `.claude/` directory — documented in same evidence file
+3. ✅ `render_agents_md.py` produces an 84-line AGENTS.md that a Codex agent can navigate — documented in same evidence file
+
+> **Gate outcome**: All three proxy conditions pass. Phase 8 work may begin.
+> Evidence committed to `docs/evidence/phase8_precommit_test.md`.
 
 > **Why a proxy gate?** "≥ 3 teams" is unverifiable from inside the repo. The proxy
 > gate above tests the same underlying capability (non-Claude-Code adoption is

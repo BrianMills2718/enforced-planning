@@ -108,6 +108,50 @@ git checkout -b plan-N-description
 make pr-auto  # ship
 ```
 
+## Commands
+
+```bash
+# Install enforced-planning into any project
+./install.sh /path/to/project                   # default (git hooks)
+./install.sh /path/to/project --pre-commit      # pre-commit framework mode
+./install.sh /path/to/project --minimal         # minimal baseline only
+
+# Render AGENTS.md (for Codex / non-CC tools)
+make agents-md                                   # regenerate AGENTS.md
+python scripts/render_agents_md.py --stdout     # preview to stdout
+
+# Run enforcement scripts
+python scripts/check_locked_couplings.py --strict   # locked coupling check
+python scripts/check_plan_capabilities.py           # plan capabilities check
+python scripts/sync_plan_status.py                  # sync plan index status
+
+# Tests
+pytest tests/ -v                                # full test suite (26 tests)
+make test                                       # same via Makefile
+
+# Pre-commit hooks
+pre-commit run --all-files                      # run all hooks (CI mode)
+pre-commit install                              # install into current repo
+```
+
+## Principles
+
+1. **Plan before code** — specifications locked before implementation
+2. **Fail loud** — no silent fallbacks; violations block commit or CI
+3. **Read-gate first** — agents must read governing docs before editing coupled files
+4. **Doc-code coupling** — when code changes, coupled docs must update
+5. **Observability** — every agent action is logged and traceable
+6. **Simplest thing that works** — don't over-engineer; three similar lines beat a premature abstraction
+
+## Workflow
+
+1. `git checkout -b plan-N-description`
+2. Open `docs/plans/NN_name.md` (copy from template)
+3. Fill in gap, acceptance criteria, steps
+4. Implement → test → commit with `[Plan #N]` prefix
+5. `make check` or `pre-commit run --all-files` before PR
+6. `python scripts/meta/complete_plan.py --plan N` to mark done
+
 ## Core Patterns (always recommended)
 
 - Plans: Track work with `[Plan #N]` commits and acceptance criteria

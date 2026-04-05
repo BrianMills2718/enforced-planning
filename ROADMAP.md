@@ -103,7 +103,7 @@ deprecated compatibility wrapper.
 pass, so the product surface now has one canonical installer story, one
 canonical semantic-review path, and a cleaner source-vs-installed doc split.
 
-### Phase 8: Multi-Tool Support and Ecosystem Observability (IN PLANNING)
+### Phase 8: Multi-Tool Support and Ecosystem Observability (DESIGN COMPLETE — IMPLEMENTATION NEXT)
 
 **Gate (measurable proxy — verifiable within this repo):**
 All three conditions green as of 2026-04-04 overnight sprint:
@@ -120,10 +120,10 @@ All three conditions green as of 2026-04-04 overnight sprint:
 
 | Plan | What | Status |
 |------|------|--------|
-| #19 | Multi-tool support matrix, support tiers, and rollout policy | 📋 Planned |
-| #20 | Governed-repo upgrade automation and registry model | 📋 Planned |
-| #21 | Ecosystem dashboard and status surfaces | 📋 Planned |
-| #22 | Framework self-measurement and ROI metrics | 📋 Planned |
+| #19 | Multi-tool support matrix, support tiers, and rollout policy | ✅ Complete |
+| #20 | Governed-repo upgrade automation and registry model | ✅ Complete |
+| #21 | Ecosystem dashboard and status surfaces | ✅ Complete |
+| #22 | Framework self-measurement and ROI metrics | ✅ Complete |
 
 **Deferred item blockers:**
 
@@ -131,25 +131,19 @@ All three conditions green as of 2026-04-04 overnight sprint:
 |------|-----------|--------------|
 | Multi-tool hook support | No Cursor/Windsurf equivalent of `.claude/hooks/` is publicly documented yet. Unblocks: any non-CC adopter. | Plan #19 support-tier decision + concrete adapter path |
 | Adoption automation | Need ≥ 5 governed repos before upgrade automation is worth building. Currently at ~3. | 5+ governed repos |
-| Framework self-measurement | Need baseline metrics before measuring improvement. Define metrics first. | Plan #22 metric definitions plus dashboard data path |
+| Framework self-measurement | Metric definitions are complete, but collection/reporting is not implemented yet. | future implementation slice on top of Plans #21 and #22 |
 
 **Long-term deferred (no near-term consumer):** Visibility grammar and distributed governance moved to `docs/backlog/DEFERRED_FEATURES.md`.
 
 ## What's Next (recommended priority order)
 
-1. **Plan #19: Multi-tool support matrix and rollout**
-   Define support tiers, canonical expectations, and what "portable" means by tool class.
+1. **Mac mini pilot governed-repo rollout**
+   Execute the first controlled pilot from `docs/guides/MAC_MINI_CONTINUOUS_AUTOMATION_BOOTSTRAP.md` using a sanctioned worktree lane.
 
-2. **Plan #20: Governed-repo upgrade automation**
-   Turn the current installer/sync model into an explicit upgrade path for multiple governed repos.
+2. **Future implementation slice: ecosystem status renderer and metrics collection**
+   Implement `make ecosystem-status`, `generated/ecosystem_status.json`, and rendered operator metrics on top of Plans #21 and #22.
 
-3. **Plan #21: Ecosystem dashboard and status surfaces**
-   Consolidate cross-repo status, plan queue, and dependency visibility into one operator surface.
-
-4. **Plan #22: Framework self-measurement and ROI**
-   Define metrics that show whether the framework is actually catching drift and improving adoption outcomes.
-
-5. **Project-meta topic-research adoption**
+3. **Project-meta topic-research adoption**
    Apply the portable topic-research pattern in `project-meta/research_texts`
    with manifests, ADR links, and freshness metadata for high-value topics.
 

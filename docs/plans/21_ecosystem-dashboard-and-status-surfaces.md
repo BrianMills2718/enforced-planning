@@ -1,6 +1,6 @@
 # Plan #21: Ecosystem Dashboard and Status Surfaces
 
-**Status:** Planned
+**Status:** Complete
 **Type:** design
 **Priority:** Medium
 **Blocked By:** None
@@ -96,8 +96,21 @@ create callable capability surfaces.
 
 ## Acceptance Criteria
 
-- [ ] The framework defines one canonical operator-facing status surface
-- [ ] The design states which existing outputs are reused vs replaced
-- [ ] The minimum viable dashboard/status slice is explicit
-- [ ] The roadmap points to a numbered dashboard/status plan
-- [ ] Declared checks pass
+- [x] The framework defines one canonical operator-facing status surface
+- [x] The design states which existing outputs are reused vs replaced
+- [x] The minimum viable dashboard/status slice is explicit
+- [x] The roadmap points to a numbered dashboard/status plan
+- [x] Declared checks pass
+
+---
+
+## Decision
+
+Dashboard/status work should:
+
+- make `generated/ecosystem_status.json` the machine-readable source of truth
+- render `docs/ops/ECOSYSTEM_STATUS.md` from that JSON for human operators
+- reuse plan registry, dependency map, governed-repo audit data, and future
+  explicit fleet registry inputs
+- treat `meta_status.py` and sprint docs as supporting coordination surfaces,
+  not the canonical ecosystem dashboard

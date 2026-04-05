@@ -122,13 +122,25 @@ git config core.hooksPath
 
 ## Cross-Tool Boundary
 
-Claude Code currently has the strongest native interactive enforcement path.
-For cross-tool governance:
+Hook support follows the canonical tool-support matrix:
+
+- `native-interactive`
+  - verified interactive hook parity
+- `portable-governed`
+  - generated governance surfaces and deterministic validators, but no native
+    read-gating parity
+- `legacy-compatible`
+  - compatibility-only rollout surfaces
+
+Claude Code is currently the only `native-interactive` path. For cross-tool governance:
 
 - `CLAUDE.md` remains the canonical human-readable governance file
 - `scripts/relationships.yaml` remains the canonical machine-readable graph
 - `AGENTS.md` remains a generated projection, not a second authority
 - deterministic validators remain the portability layer across tools
+
+See [PHASE8_TOOL_SUPPORT_MATRIX.md](../docs/designs/PHASE8_TOOL_SUPPORT_MATRIX.md)
+for the canonical tier definitions.
 
 ## See Also
 

@@ -18,6 +18,9 @@ The coordination model is claim-first and lane-readable:
 - sanctioned worktrees are the execution container for each bounded lane
 - the canonical claim CLI can auto-resolve session identity from supported
   tool runtimes and explicitly hydrate older live claims when needed
+- the sanctioned session lifecycle uses the same contract for Codex and Claude
+  Code; tool-specific identity discovery stays in adapters, not in the claim
+  schema
 - governed repos now install `scripts/meta/check_coordination_claims.py` as the
   canonical local entrypoint for sanctioned worktree lane claims
 
@@ -77,6 +80,25 @@ python scripts/meta/check_agents_sync.py --repo-root . --check
 python scripts/meta/file_context.py --json CLAUDE.md
 ```
 
+If the repo also opts into sanctioned worktree coordination, the installed
+workflow is:
+
+```bash
+make worktree BRANCH=plan-42-feature \
+  TASK="bounded implementation task" \
+  SESSION_GOAL="broader objective" \
+  SESSION_PHASE="current execution phase" \
+  PLAN=42
+
+make session-heartbeat BRANCH=plan-42-feature SESSION_PHASE="next concrete phase"
+make session-status
+make worktree-remove BRANCH=plan-42-feature
+```
+
+That flow is portable across Codex and Claude Code. The runtime-specific
+session identity is adapter-resolved under the hood; the claim/tracker contract
+stays the same.
+
 For the shortest adoption path, continue with
 [GETTING_STARTED.md](GETTING_STARTED.md).
 
@@ -91,6 +113,7 @@ The minimum mechanical governed-repo contract is:
 - `scripts/relationships.yaml`
 - generated `AGENTS.md`
 - installed validator/support files under `scripts/meta/`
+- installed session lifecycle entrypoints under `scripts/meta/` when worktree coordination is enabled
 - read-gating surfaces under `.claude/hooks/` and `.claude/settings.json`
 
 `scripts/audit_governed_repo.py --strict-governed` is the mechanical check for
@@ -122,6 +145,10 @@ your-project/
 │       ├── check_doc_coupling.py
 │       ├── file_context.py
 │       ├── render_agents_md.py
+│       ├── session_finish.py
+│       ├── session_heartbeat.py
+│       ├── session_start.py
+│       ├── session_status.py
 │       ├── sync_plan_status.py
 │       ├── validate_plan.py
 │       └── worktree-coordination/

@@ -88,6 +88,10 @@ After a successful minimum install, your repo should have:
 - `scripts/meta/check_doc_coupling.py`
 - `scripts/meta/file_context.py`
 - `scripts/meta/render_agents_md.py`
+- `scripts/meta/session_finish.py`
+- `scripts/meta/session_heartbeat.py`
+- `scripts/meta/session_start.py`
+- `scripts/meta/session_status.py`
 - `scripts/meta/sync_plan_status.py`
 - `scripts/meta/validate_plan.py`
 - `.claude/hooks/gate-edit.sh`
@@ -99,6 +103,8 @@ If the repo enables sanctioned worktree coordination, the canonical installed
 claim entrypoint is `scripts/meta/check_coordination_claims.py`. The sanctioned
 `make worktree` path creates a healthy v2 **program** claim by default so lane
 metadata stays truthful without inventing fake broad write ownership.
+The same sanctioned flow also starts a linked session contract and tracker, and
+it uses the same claim/tracker model for Codex and Claude Code.
 
 ## Verify The Install
 
@@ -169,6 +175,23 @@ Then work normally:
 git add -A
 git commit -m "[Plan #1] implement my feature"
 ```
+
+For sanctioned worktree repos, the bounded session flow is:
+
+```bash
+make worktree BRANCH=plan-1-my-feature \
+  TASK="implement my feature" \
+  SESSION_GOAL="broader objective" \
+  SESSION_PHASE="first implementation slice" \
+  PLAN=1
+
+make session-heartbeat BRANCH=plan-1-my-feature SESSION_PHASE="verification"
+make session-status
+make worktree-remove BRANCH=plan-1-my-feature
+```
+
+The same Make targets work for Codex and Claude Code. The runtime adapter
+chooses the `session_id`; the tracker and claim structure stay identical.
 
 ## Optional And Legacy Installer Modes
 

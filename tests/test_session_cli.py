@@ -178,3 +178,67 @@ def test_finish_session_releases_clean_claim(tmp_path: Path, monkeypatch: pytest
 
     assert payload["action"] == "released"
     assert not (claims_dir / "codex_enforced-planning_plan-31-session-cli-enforcement.yaml").exists()
+
+
+def test_start_session_auto_resolves_codex_runtime_session_id(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Codex should use the same session lifecycle contract without explicit session_id."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    monkeypatch.setenv("CODEX_THREAD_ID", "codex-thread-123")
+
+    payload = session_lifecycle.start_session(
+        agent="codex",
+        project="enforced-planning",
+        scope="plan-32-cross-tool-session-rollout",
+        intent="document and verify cross-tool session adapters and rollout",
+        repo_root="~/projects/enforced-planning",
+        worktree_path="~/projects/enforced-planning_worktrees/plan-32-cross-tool-session-rollout",
+        branch="plan-32-cross-tool-session-rollout",
+        broader_goal="Cross-Tool Session Adapter Rollout",
+        current_phase="codex adapter proof",
+        plan_ref="Plan #32",
+        tracker_dir=trackers_dir,
+    )
+
+    assert payload["session_id"] == "codex:codex-thread-123"
+
+
+def test_start_session_auto_resolves_claude_code_runtime_session_id(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Claude Code should produce the same claim/tracker contract shape."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    monkeypatch.setenv("CLAUDE_CODE_SSE_PORT", "7777")
+
+    payload = session_lifecycle.start_session(
+        agent="claude-code",
+        project="enforced-planning",
+        scope="plan-32-cross-tool-session-rollout",
+        intent="document and verify cross-tool session adapters and rollout",
+        repo_root="~/projects/enforced-planning",
+        worktree_path="~/projects/enforced-planning_worktrees/plan-32-cross-tool-session-rollout",
+        branch="plan-32-cross-tool-session-rollout",
+        broader_goal="Cross-Tool Session Adapter Rollout",
+        current_phase="claude code adapter proof",
+        plan_ref="Plan #32",
+        tracker_dir=trackers_dir,
+    )
+
+    claim_file = claims_dir / "claude-code_enforced-planning_plan-32-cross-tool-session-rollout.yaml"
+    loaded_claim = coordination_claims.normalize_claim(
+        yaml.safe_load(claim_file.read_text(encoding="utf-8")),
+        source_file=str(claim_file),
+    )
+    assert payload["session_id"] == "claude-code:sse:7777"
+    assert loaded_claim is not None
+    assert loaded_claim.session_name == "cross-tool-session-adapter-rollout"
+    assert loaded_claim.broader_goal == "Cross-Tool Session Adapter Rollout"

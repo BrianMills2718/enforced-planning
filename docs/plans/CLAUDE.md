@@ -36,7 +36,7 @@ See `ROADMAP.md` for the full phase map and recommended priority order.
 | 29 | Session Heartbeats and Agent Liveness (`29_session_heartbeats_and_agent_liveness.md`) | High | ✅ Complete | Heartbeat-backed session liveness for cross-agent lane ownership |
 | 30 | Session Bootstrap Contract and Tracker (`30_session_bootstrap_contract_and_tracker.md`) | High | ✅ Complete | Claim-linked session intent/tracker contract |
 | 31 | Session CLI and Governed-Repo Entrypoint Enforcement (`31_session_cli_and_governed_repo_entrypoint_enforcement.md`) | High | ✅ Complete | Mandatory session lifecycle in sanctioned repo flows |
-| 32 | Cross-Tool Session Adapters and Adoption Rollout (`32_cross_tool_session_adapters_and_adoption_rollout.md`) | High | 📋 Planned | Codex/Claude Code adapter parity and rollout |
+| 32 | Cross-Tool Session Adapters and Adoption Rollout (`32_cross_tool_session_adapters_and_adoption_rollout.md`) | High | ✅ Complete | Codex/Claude Code adapter parity and rollout |
 
 ## Status Key
 

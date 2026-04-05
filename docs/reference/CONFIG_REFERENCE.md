@@ -37,6 +37,11 @@ pretending it is mechanically enforced today.
 | `claims.enforce_in_ci` | bool | `false` | Not enforced by script | No effect |
 | `claims.claims_file` | string | `.claude/active-work.yaml` | Not enforced by script | No effect |
 
+Session lifecycle note: sanctioned session bootstrap and heartbeat do **not**
+require tool-specific config keys in `meta-process.yaml`. Codex and Claude Code
+resolve runtime identity through their adapters and populate the same claim and
+tracker contract.
+
 ## worktrees
 
 | Key | Type | Default | Read By | Default When Absent |
@@ -45,6 +50,11 @@ pretending it is mechanically enforced today.
 | `worktrees.protect_main` | bool | `true` | `check-hook-enabled.sh` | Hook active |
 | `worktrees.worktree_dir` | string | `"../worktrees"` | Not enforced by script | No effect |
 | `worktrees.safe_remove_only` | bool | `true` | Not enforced by script | No effect |
+
+Operational note: when `worktrees.enabled` is true and the sanctioned Makefile
+block is installed, governed repos are expected to expose `session-start`,
+`session-heartbeat`, `session-status`, and `session-finish` alongside the
+worktree targets.
 
 ## commits
 

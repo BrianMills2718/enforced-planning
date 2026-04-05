@@ -166,6 +166,15 @@ Canonical lifecycle commands:
 - `session-status`: show live sessions derived from claims plus trackers
 - `session-finish`: refuse unsafe closeout and require clean or explicit handoff state
 
+Supported runtime adapters:
+
+- Codex: `CODEX_THREAD_ID`
+- Claude Code: `CLAUDE_SESSION_ID` or `CLAUDE_CODE_SSE_PORT`
+- OpenClaw: `OPENCLAW_SESSION_ID` or `OPENCLAW_RUN_ID`
+
+Those adapters only resolve runtime identity. They do not change the session
+contract schema, the tracker schema, or the sanctioned repo lifecycle commands.
+
 ## Session Safety
 
 Some agent runtimes keep a persistent shell working directory. In those

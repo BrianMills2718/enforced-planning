@@ -1,6 +1,6 @@
 # Plan #32: Cross-Tool Session Adapters And Adoption Rollout
 
-**Status:** 📋 Planned
+**Status:** ✅ Complete
 **Type:** implementation
 **Priority:** High
 **Blocked By:** Plans #29, #30, and #31
@@ -54,3 +54,15 @@ for additional agents.
 | Command | What It Verifies |
 |---|---|
 | `PYTHONPATH=. pytest -q tests/test_check_coordination_claims.py tests/test_session_cli.py` | Codex/Claude Code session adapter behavior is correct |
+| `python scripts/self_test.py --docs` | README, quickstart, and operator docs stay coherent after adapter rollout |
+
+## Completion
+
+- [x] Codex and Claude Code session adapters are documented and tested
+- [x] Installer/operator docs explain the cross-tool contract
+- [x] Adoption rollout order across governed repos is explicit
+- [x] The common contract stays tool-agnostic
+
+## Verification
+
+- `PYTHONPATH=. pytest -q tests/test_check_coordination_claims.py tests/test_session_cli.py`

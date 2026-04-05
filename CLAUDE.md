@@ -2,6 +2,16 @@
 
 Source repo for the portable planning and governance framework.
 
+## Active Execution
+
+Brian has explicitly requested continuous execution for the current lane.
+
+- Active sprint authority: `~/projects/project-meta/docs/ops/OVERNIGHT_SPRINT_2026_04_04_COORDINATION_AND_GRAPH_RUNTIME.md`
+- Active plan authority: `~/projects/project-meta/docs/plans/90_coordination-hardening-and-graph-explicitification.md`
+- Worktree rule: plan-level changes stay in this repo worktree until verified and committed
+- Commit rule: every verified slice gets its own commit immediately
+- Coordination rule: active claims missing branch, worktree, session, or write scope are defects to surface, not healthy normal state
+
 ## Canonical Surfaces
 
 - `PLANNING_OPERATING_MODEL.md`

@@ -48,6 +48,61 @@ def test_start_session_creates_tracker_and_updates_claim(tmp_path: Path, monkeyp
     assert loaded_claim.broader_goal == "Cross-Project Session Lifecycle Enforcement"
     assert loaded_claim.tracker_path == payload["tracker_path"]
     assert Path(payload["tracker_path"]).exists()
+    assert payload["plan_ref"] == "Plan #31"
+
+
+def test_start_session_requires_plan_ref_without_unplanned_override(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Live sessions must declare a plan unless explicitly marked unplanned."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+
+    with pytest.raises(ValueError, match="plan_ref is required"):
+        session_lifecycle.start_session(
+            agent="codex",
+            project="enforced-planning",
+            scope="plan-37-session-recovery",
+            intent="implement plan-bound session lifecycle",
+            repo_root="~/projects/enforced-planning",
+            worktree_path="~/projects/enforced-planning_worktrees/plan-37-session-recovery",
+            branch="plan-37-session-recovery",
+            broader_goal="Plan Bound Session Recovery",
+            current_phase="bootstrap",
+            session_id="codex:test-session",
+            tracker_dir=trackers_dir,
+        )
+
+
+def test_start_session_marks_explicit_unplanned_work(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Unplanned work must still be explicit instead of silently plan-less."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+
+    payload = session_lifecycle.start_session(
+        agent="codex",
+        project="enforced-planning",
+        scope="emergency-hotfix",
+        intent="urgent sanctioned emergency work",
+        repo_root="~/projects/enforced-planning",
+        worktree_path="~/projects/enforced-planning_worktrees/emergency-hotfix",
+        branch="emergency-hotfix",
+        broader_goal="Emergency Coordination Hotfix",
+        current_phase="containment",
+        allow_unplanned=True,
+        session_id="codex:test-session",
+        tracker_dir=trackers_dir,
+    )
+
+    assert payload["plan_ref"] == "UNPLANNED"
 
 
 def test_heartbeat_session_updates_tracker_phase(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -178,6 +233,142 @@ def test_finish_session_releases_clean_claim(tmp_path: Path, monkeypatch: pytest
 
     assert payload["action"] == "released"
     assert not (claims_dir / "codex_enforced-planning_plan-31-session-cli-enforcement.yaml").exists()
+
+
+def test_handoff_session_marks_lane_for_resume(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Explicit handoff should keep the lane live but mark the recovery action."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    worktree = tmp_path / "worktree"
+    worktree.mkdir()
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+
+    started = session_lifecycle.start_session(
+        agent="codex",
+        project="enforced-planning",
+        scope="plan-37-session-recovery",
+        intent="implement plan-bound session lifecycle",
+        repo_root="~/projects/enforced-planning",
+        worktree_path=str(worktree),
+        branch="plan-37-session-recovery",
+        broader_goal="Plan Bound Session Recovery",
+        current_phase="mid-implementation",
+        plan_ref="Plan #37",
+        session_id="codex:test-session",
+        tracker_dir=trackers_dir,
+    )
+
+    payload = session_lifecycle.handoff_session(
+        agent="codex",
+        project="enforced-planning",
+        scope="plan-37-session-recovery",
+        note="resume tomorrow from a fresh runtime",
+    )
+    status_payload = session_lifecycle.status_sessions(project="enforced-planning", scope="plan-37-session-recovery")
+    tracker_payload = yaml.safe_load(Path(started["tracker_path"]).read_text(encoding="utf-8"))
+
+    assert payload["action"] == "handoff"
+    assert status_payload["sessions"][0]["claim_status"] == "handoff"
+    assert status_payload["sessions"][0]["recovery_action"] == "resume_or_finish_handoff"
+    assert tracker_payload["tracker"]["current_phase"] == "handoff required"
+
+
+def test_resume_session_rebinds_stale_or_handoff_lane(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Resume should attach a fresh runtime session to the same plan-bound lane."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    worktree = tmp_path / "worktree"
+    worktree.mkdir()
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+
+    started = session_lifecycle.start_session(
+        agent="codex",
+        project="enforced-planning",
+        scope="plan-37-session-recovery",
+        intent="implement plan-bound session lifecycle",
+        repo_root="~/projects/enforced-planning",
+        worktree_path=str(worktree),
+        branch="plan-37-session-recovery",
+        broader_goal="Plan Bound Session Recovery",
+        current_phase="mid-implementation",
+        plan_ref="Plan #37",
+        session_id="codex:old-session",
+        tracker_dir=trackers_dir,
+    )
+    session_lifecycle.handoff_session(
+        agent="codex",
+        project="enforced-planning",
+        scope="plan-37-session-recovery",
+        note="resume later",
+    )
+
+    payload = session_lifecycle.resume_session(
+        agent="codex",
+        project="enforced-planning",
+        scope="plan-37-session-recovery",
+        worktree_path=str(worktree),
+        branch="plan-37-session-recovery",
+        current_phase="fresh runtime resumed",
+        session_id="codex:new-session",
+        note="resumed after overnight stop",
+    )
+    tracker_payload = yaml.safe_load(Path(started["tracker_path"]).read_text(encoding="utf-8"))
+    status_payload = session_lifecycle.status_sessions(project="enforced-planning", scope="plan-37-session-recovery")
+
+    assert payload["action"] == "resumed"
+    assert payload["session_id"] == "codex:new-session"
+    assert status_payload["sessions"][0]["claim_status"] == "active"
+    assert status_payload["sessions"][0]["recovery_action"] == "continue"
+    assert tracker_payload["tracker"]["current_phase"] == "fresh runtime resumed"
+
+
+def test_abandon_session_removes_lane_from_live_status(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Abandoned lanes should stop participating in live session status."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    worktree = tmp_path / "worktree"
+    worktree.mkdir()
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+
+    started = session_lifecycle.start_session(
+        agent="codex",
+        project="enforced-planning",
+        scope="plan-37-session-recovery",
+        intent="implement plan-bound session lifecycle",
+        repo_root="~/projects/enforced-planning",
+        worktree_path=str(worktree),
+        branch="plan-37-session-recovery",
+        broader_goal="Plan Bound Session Recovery",
+        current_phase="mid-implementation",
+        plan_ref="Plan #37",
+        session_id="codex:test-session",
+        tracker_dir=trackers_dir,
+    )
+
+    payload = session_lifecycle.abandon_session(
+        agent="codex",
+        project="enforced-planning",
+        scope="plan-37-session-recovery",
+        note="machine crashed and work will not be resumed",
+    )
+    tracker_payload = yaml.safe_load(Path(started["tracker_path"]).read_text(encoding="utf-8"))
+    status_payload = session_lifecycle.status_sessions(project="enforced-planning", scope="plan-37-session-recovery")
+
+    assert payload["action"] == "abandoned"
+    assert status_payload["session_count"] == 0
+    assert tracker_payload["tracker"]["current_phase"] == "abandoned"
 
 
 def test_start_session_auto_resolves_codex_runtime_session_id(

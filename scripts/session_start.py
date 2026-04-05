@@ -36,6 +36,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--broader-goal", required=True)
     parser.add_argument("--current-phase", required=True)
     parser.add_argument("--plan")
+    parser.add_argument("--allow-unplanned", action="store_true")
+    parser.add_argument("--allow-parallel", action="store_true")
     parser.add_argument("--session-id")
     parser.add_argument("--session-name")
     parser.add_argument("--next-phase", action="append", default=[])
@@ -60,6 +62,8 @@ def main(argv: list[str] | None = None) -> int:
         broader_goal=args.broader_goal,
         current_phase=args.current_phase,
         plan_ref=args.plan,
+        allow_unplanned=args.allow_unplanned,
+        allow_parallel=args.allow_parallel,
         session_id=args.session_id,
         session_name=args.session_name,
         intended_next_phases=args.next_phase,

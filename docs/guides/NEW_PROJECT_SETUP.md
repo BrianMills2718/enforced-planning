@@ -146,8 +146,14 @@ These are not the canonical minimum install path:
   - legacy compatibility bootstrap for pre-commit hook distribution
 
 Truth-surface tooling also remains outside the minimum canonical install for
-now. Use the framework repo scripts directly or the legacy `--full` bootstrap
-until that surface converges.
+now. The canonical semantic-review entrypoint is:
+
+```bash
+python scripts/review_truth_surface_semantic.py --config /path/to/your/project/scripts/truth_surface_drift.yaml
+```
+
+Use that directly from the framework repo, or use the legacy `--full`
+bootstrap only if you intentionally want the older broader installed surface.
 
 ## 8. Common Problems
 

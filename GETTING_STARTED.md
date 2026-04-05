@@ -181,11 +181,14 @@ not the long-term sync authority.
 Truth-surface validation and semantic review are not part of the minimum
 canonical install yet.
 
-Until that converges:
+The canonical semantic-review path is:
 
-- run the truth-surface tools directly from the framework repo, or
-- use the legacy `install.sh --full` bootstrap if you deliberately want that
-  older installed surface
+```bash
+python scripts/review_truth_surface_semantic.py --config /path/to/your/project/scripts/truth_surface_drift.yaml
+```
+
+Use that directly from the framework repo, or use the legacy `install.sh --full`
+bootstrap only if you deliberately want the older broader installed surface.
 
 ## Next Reading
 

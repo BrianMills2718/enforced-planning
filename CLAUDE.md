@@ -89,18 +89,19 @@ enforced-planning/
 ├── templates/       # File templates for governed repos
 ├── adr/             # Framework-level architecture decisions
 ├── ci/              # CI workflow templates
-├── install.sh       # Install into a target project
+├── install.sh       # Convenience wrapper / legacy bootstrap entrypoint
 └── GETTING_STARTED.md
 ```
 
 ## Quick Start
 
 ```bash
-# Install into any project
-./install.sh /path/to/project
+# Canonical governed-repo install / upgrade
+python scripts/install_governed_repo.py --repo-root /path/to/project --write
+python scripts/audit_governed_repo.py --repo-root /path/to/project --strict-governed
 
-# Configure
-vim /path/to/project/meta-process.yaml
+# Convenience wrapper
+./install.sh /path/to/project
 
 # Work
 git checkout -b plan-N-description
@@ -111,10 +112,17 @@ make pr-auto  # ship
 ## Commands
 
 ```bash
-# Install enforced-planning into any project
-./install.sh /path/to/project                   # default (git hooks)
-./install.sh /path/to/project --pre-commit      # pre-commit framework mode
-./install.sh /path/to/project --minimal         # minimal baseline only
+# Canonical governed-repo installer
+python scripts/install_governed_repo.py --repo-root /path/to/project --write
+
+# Canonical audit
+python scripts/audit_governed_repo.py --repo-root /path/to/project --strict-governed
+
+# Convenience / legacy shell wrapper
+./install.sh /path/to/project
+./install.sh /path/to/project --worktree-only
+./install.sh /path/to/project --pre-commit
+./install.sh /path/to/project --full
 
 # Render AGENTS.md (for Codex / non-CC tools)
 make agents-md                                   # regenerate AGENTS.md
@@ -166,6 +174,7 @@ pre-commit install                              # install into current repo
 - `STATIC_GRAPH_AND_RUNTIME_TRUTH.md` — Canonical split between static graph and runtime coordination state
 - `GETTING_STARTED.md` — Full adoption guide
 - `patterns/01_README.md` — Pattern index with dependencies
+- `hooks/README.md` — Hook template reference surface
 - `adr/` — Framework architecture decisions
 - `docs/ops/SPRINT_2026_04_03_AUDIT_FOLLOWUP.md` — Active sprint (audit follow-up, phases 1–4 done)
 - `docs/ops/archive/` — All prior sprint documents

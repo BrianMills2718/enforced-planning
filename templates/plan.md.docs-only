@@ -28,6 +28,21 @@
 
 ---
 
+## Research Basis For This Slice
+
+> **RECOMMENDED for all plans; REQUIRED for design, cross-project, or
+> externally-informed work.**
+> Use this for prior investigations, reusable topic research, external sources,
+> or an explicit research skip statement.
+
+- `investigations/cross-project/2026-04-04-example.md` - prior doc-system investigation
+- `research/documentation/SYNTHESIS.md` - current reusable guidance
+
+If no additional research beyond repo-local references was needed, write:
+`No additional research beyond References Reviewed.`
+
+---
+
 ## Files Affected
 
 > **REQUIRED:** Declare upfront what files will be touched.

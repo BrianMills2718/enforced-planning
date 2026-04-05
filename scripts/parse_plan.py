@@ -4,6 +4,7 @@
 Extracts structured data from plan markdown files:
 - Files Affected section (what files the plan declares it will touch)
 - References Reviewed section (what code/docs were reviewed before planning)
+- Research Basis For This Slice section (what broader research informed the slice)
 
 Usage:
     # Get active plan's file scope
@@ -11,6 +12,9 @@ Usage:
 
     # Get active plan's references
     python scripts/parse_plan.py --references-reviewed
+
+    # Get active plan's research basis
+    python scripts/parse_plan.py --research-basis
 
     # Check if a file is in scope
     python scripts/parse_plan.py --check-file src/world/ledger.py
@@ -228,7 +232,71 @@ def parse_references_reviewed(content: str) -> list[dict[str, Any]]:
         )
 
         if ref_match:
-            path = ref_match.group(1).strip()
+            path = ref_match.group(1).strip().strip("`")
+            start_line = ref_match.group(2)
+            end_line = ref_match.group(3)
+            description = ref_match.group(4) or ""
+
+            if path and not path.startswith("#"):
+                ref_entry: dict[str, Any] = {"path": path}
+
+                if start_line:
+                    ref_entry["lines"] = {
+                        "start": int(start_line),
+                        "end": int(end_line) if end_line else int(start_line),
+                    }
+
+                if description:
+                    ref_entry["description"] = description.strip()
+
+                refs.append(ref_entry)
+
+    return refs
+
+
+def parse_research_basis(content: str) -> list[dict[str, Any]]:
+    """Parse the Research Basis For This Slice section from plan content.
+
+    Expected format:
+    ## Research Basis For This Slice
+    - investigations/cross-project/2026-04-04-example.md - compared options
+    - research/orchestration/SYNTHESIS.md - reusable recommendation
+
+    Returns list of dicts with 'path', optional 'lines', and optional
+    'description' keys. Literal skip statements are ignored.
+    """
+    refs: list[dict[str, Any]] = []
+
+    match = re.search(
+        r"##\s*Research\s*Basis\s*For\s*This\s*Slice\s*\n(.*?)(?=\n##|\n---|\Z)",
+        content,
+        re.IGNORECASE | re.DOTALL
+    )
+
+    if not match:
+        return refs
+
+    section = match.group(1)
+
+    for line in section.strip().split("\n"):
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+
+        line = re.sub(r"^[-*]\s*", "", line)
+
+        if line.startswith("No additional research beyond References Reviewed"):
+            continue
+        if line.startswith("No external research"):
+            continue
+
+        ref_match = re.match(
+            r"([^\s:]+)(?::(\d+)(?:-(\d+))?)?(?:\s*[-–]\s*(.+))?",
+            line
+        )
+
+        if ref_match:
+            path = ref_match.group(1).strip().strip("`")
             start_line = ref_match.group(2)
             end_line = ref_match.group(3)
             description = ref_match.group(4) or ""
@@ -445,6 +513,11 @@ def main() -> int:
         help="Output the References Reviewed section"
     )
     parser.add_argument(
+        "--research-basis",
+        action="store_true",
+        help="Output the Research Basis For This Slice section"
+    )
+    parser.add_argument(
         "--steps", "-s",
         action="store_true",
         help="Output the Steps/Plan section (numbered, checkbox, or table)"
@@ -590,9 +663,33 @@ def main() -> int:
 
         return 0
 
+    # Handle --research-basis
+    if args.research_basis:
+        refs = parse_research_basis(content)
+
+        if args.json:
+            print(json.dumps({
+                "plan": plan_number,
+                "research_basis": refs,
+            }))
+        else:
+            if not refs:
+                print(f"Plan #{plan_number}: No Research Basis For This Slice section found")
+                return 1
+
+            print(f"Plan #{plan_number} - Research Basis For This Slice:")
+            for ref in refs:
+                lines = ref.get("lines", {})
+                line_str = f":{lines['start']}-{lines['end']}" if lines else ""
+                desc = f" - {ref['description']}" if ref.get("description") else ""
+                print(f"  {ref['path']}{line_str}{desc}")
+
+        return 0
+
     # Default: show both
     files_affected = parse_files_affected(content)
     refs = parse_references_reviewed(content)
+    research = parse_research_basis(content)
 
     if args.json:
         print(json.dumps({
@@ -600,6 +697,7 @@ def main() -> int:
             "plan_file": str(plan_file),
             "files_affected": files_affected,
             "references_reviewed": refs,
+            "research_basis": research,
         }, indent=2))
     else:
         print(f"Plan #{plan_number}: {plan_file.name}")
@@ -609,6 +707,17 @@ def main() -> int:
         if files_affected:
             for entry in files_affected:
                 print(f"  {entry['path']} ({entry['action']})")
+        else:
+            print("  (none declared)")
+
+        print()
+        print("Research Basis For This Slice:")
+        if research:
+            for ref in research:
+                lines = ref.get("lines", {})
+                line_str = f":{lines['start']}-{lines['end']}" if lines else ""
+                desc = f" - {ref['description']}" if ref.get("description") else ""
+                print(f"  {ref['path']}{line_str}{desc}")
         else:
             print("  (none declared)")
 

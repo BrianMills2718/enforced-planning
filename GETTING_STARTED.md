@@ -33,6 +33,7 @@ artifact order and dependency model lives in
 | Pattern | What It Does | When to Use |
 |---------|--------------|-------------|
 | [Question-Driven Planning](patterns/28_question-driven-planning.md) | Surface questions BEFORE solutions | Always (low overhead) |
+| [Topic Research Synthesis](patterns/43_topic-research-synthesis.md) | Preserve reusable conclusions beyond one investigation | Cross-project or externally-informed work |
 | [Uncertainty Tracking](patterns/29_uncertainty-tracking.md) | Track unknowns across sessions | Medium+ projects |
 | [Conceptual Modeling](patterns/27_conceptual-modeling.md) | Define "what things ARE" | Complex architectures |
 
@@ -175,6 +176,7 @@ python ~/projects/enforced-planning/scripts/check_truth_surface_drift.py --confi
    - [CLAUDE.md Authoring](patterns/02_claude-md-authoring.md) - project context
    - [Plan Workflow](patterns/15_plan-workflow.md) - bounded work tracking
    - [Question-Driven Planning](patterns/28_question-driven-planning.md) - investigate before planning
+   - [Topic Research Synthesis](patterns/43_topic-research-synthesis.md) - make research compound across tasks
 
 2. **Set up your CLAUDE.md:**
    ```markdown
@@ -219,6 +221,7 @@ python ~/projects/enforced-planning/scripts/check_truth_surface_drift.py --confi
    Before implementing, make sure the plan has:
    - current vs target gap framing
    - references reviewed
+   - research basis for the slice, or an explicit statement that none was needed
    - required tests declared before code starts
    - any capability/boundary notes needed for cross-project work
 

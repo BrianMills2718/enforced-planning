@@ -45,6 +45,8 @@ These patterns work with a simple branch-based workflow. No special infrastructu
 | [Agent Harness Engineering](39_agent-harness-engineering.md) | Long-running tasks fail: one-shotting, premature completion, lost state | Medium | 37 |
 | [Agent-Drivable UI](40_agent-drivable-ui.md) | Critical UI workflows work only by manual clicking, so agents cannot prove them end to end | Medium | 39 |
 | [Bookend Context Preservation](41_bookend-context-preservation.md) | Long sessions lose task framing after compaction; agent drifts from original intent | Low | 37 |
+| [Planning Hierarchy](42_planning-hierarchy.md) | Need a compressed view of the canonical artifact dependency graph | High | 15, 28, 30, 36 |
+| [Topic Research Synthesis](43_topic-research-synthesis.md) | Research gets lost instead of compounding into reusable guidance | Medium | 28 |
 
 ## Worktree Coordination Module (opt-in)
 
@@ -68,6 +70,7 @@ See [worktree-coordination/README.md](worktree-coordination/README.md) for setup
 - CLAUDE.md Authoring - any project using AI coding assistants
 - Git Hooks - any project with CI
 - Question-Driven Planning - AI tendency to guess instead of investigate
+- Topic Research Synthesis - when findings should compound across ADRs and plans
 - Uncertainty Tracking - preserve context across sessions
 - Plan Workflow - for larger tasks with multiple steps
 

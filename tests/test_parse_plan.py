@@ -1,9 +1,9 @@
 """Tests for parse_plan.py — plan file parsing utilities.
 
 Covers the pure-function layer: parse_files_affected, parse_references_reviewed,
-check_file_in_scope, and get_plan_number_from_branch.  Git-dependent helpers
-(find_plan_file, get_active_plan_number) are not tested here because they
-require a real repository context.
+parse_research_basis, check_file_in_scope, and get_plan_number_from_branch.
+Git-dependent helpers (find_plan_file, get_active_plan_number) are not tested
+here because they require a real repository context.
 """
 
 from __future__ import annotations
@@ -156,6 +156,15 @@ def test_parse_references_reviewed_without_lines() -> None:
     assert result[0]["description"] == "overview"
 
 
+def test_parse_references_reviewed_strips_markdown_backticks() -> None:
+    """Backticked paths should parse to the raw path."""
+    m = _load()
+    content = "## References Reviewed\n- `docs/architecture.md` - overview\n"
+    result = m.parse_references_reviewed(content)  # type: ignore[attr-defined]
+    assert len(result) == 1
+    assert result[0]["path"] == "docs/architecture.md"
+
+
 def test_parse_references_reviewed_without_description() -> None:
     """References without a description have no 'description' key."""
     m = _load()
@@ -184,6 +193,63 @@ def test_parse_references_reviewed_multiple_entries() -> None:
     )
     result = m.parse_references_reviewed(content)  # type: ignore[attr-defined]
     assert len(result) == 3
+
+
+# ---------------------------------------------------------------------------
+# parse_research_basis
+# ---------------------------------------------------------------------------
+
+
+def test_parse_research_basis_with_line_range() -> None:
+    """Line ranges are captured for research references too."""
+    m = _load()
+    content = (
+        "## Research Basis For This Slice\n"
+        "- investigations/cross-project/example.md:12-30 - compared options\n"
+    )
+    result = m.parse_research_basis(content)  # type: ignore[attr-defined]
+    assert len(result) == 1
+    assert result[0]["path"] == "investigations/cross-project/example.md"
+    assert result[0]["lines"] == {"start": 12, "end": 30}
+    assert result[0]["description"] == "compared options"
+
+
+def test_parse_research_basis_without_description() -> None:
+    """Bare research references parse without a description."""
+    m = _load()
+    content = "## Research Basis For This Slice\n- research/topic/SYNTHESIS.md\n"
+    result = m.parse_research_basis(content)  # type: ignore[attr-defined]
+    assert len(result) == 1
+    assert result[0]["path"] == "research/topic/SYNTHESIS.md"
+    assert "description" not in result[0] or result[0].get("description") == ""
+
+
+def test_parse_research_basis_strips_markdown_backticks() -> None:
+    """Backticked research references should parse to the raw path."""
+    m = _load()
+    content = "## Research Basis For This Slice\n- `research/topic/SYNTHESIS.md` - reusable guidance\n"
+    result = m.parse_research_basis(content)  # type: ignore[attr-defined]
+    assert len(result) == 1
+    assert result[0]["path"] == "research/topic/SYNTHESIS.md"
+
+
+def test_parse_research_basis_ignores_explicit_skip_statements() -> None:
+    """Explicit skip statements should not be treated as file references."""
+    m = _load()
+    content = (
+        "## Research Basis For This Slice\n"
+        "- No additional research beyond References Reviewed.\n"
+    )
+    result = m.parse_research_basis(content)  # type: ignore[attr-defined]
+    assert result == []
+
+
+def test_parse_research_basis_missing_section_returns_empty() -> None:
+    """When no research basis section exists, return an empty list."""
+    m = _load()
+    content = "## References Reviewed\n- docs/README.md\n"
+    result = m.parse_research_basis(content)  # type: ignore[attr-defined]
+    assert result == []
 
 
 # ---------------------------------------------------------------------------

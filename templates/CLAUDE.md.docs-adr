@@ -37,7 +37,18 @@ What is the change that we're proposing and/or doing?
 
 ## Consequences
 What becomes easier or harder as a result of this decision?
+
+## Research Basis
+
+| Source | Relevance |
+|--------|-----------|
+| `investigations/.../YYYY-MM-DD-example.md` | What this investigation contributed to the decision |
+| `research/<topic>/SYNTHESIS.md` | What reusable topic conclusion informed the decision |
+| `https://example.com/source` | What external source contributed |
 ```
+
+If there is genuinely no research basis, write:
+`No external research — terminology/convention decision only.`
 
 ## Status Meanings
 

@@ -13,8 +13,10 @@ Architectural decisions get lost. Months later:
 1. Record each significant architectural decision as an ADR
 2. ADRs are **immutable** - once accepted, never edited
 3. If a decision changes, create a new ADR that supersedes the old one
-4. Link ADRs to source files via governance headers
-5. CI enforces governance sync
+4. Every ADR records its **Research Basis** or explicitly states that research
+   was skipped
+5. Link ADRs to source files via governance headers
+6. CI enforces governance sync
 
 ## Files
 
@@ -77,10 +79,21 @@ What is the change we're making?
 ### Negative
 - Trade-off 1
 
+## Research Basis
+
+| Source | Relevance |
+|--------|-----------|
+| `investigations/.../YYYY-MM-DD-example.md` | What this investigation contributed to the decision |
+| `research/<topic>/SYNTHESIS.md` | What reusable topic conclusion informed the decision |
+| `https://example.com/source` | What external source contributed |
+
 ## Related
 - Gap #N (if applicable)
 - Other ADRs
 ```
+
+If there is genuinely no research basis, write:
+`No external research — terminology/convention decision only.`
 
 ### 4. Create governance config (optional)
 
@@ -142,7 +155,7 @@ governance-sync:
 cp docs/adr/TEMPLATE.md docs/adr/0004-my-decision.md
 
 # 2. Edit the file
-# - Fill in Context, Decision, Consequences
+# - Fill in Context, Decision, Consequences, Research Basis
 # - Set Status: Proposed
 
 # 3. Submit PR for discussion
@@ -205,6 +218,8 @@ python scripts/sync_governance.py --apply
 - **One decision per ADR** - Don't bundle multiple decisions
 - **Context explains WHY** - Future readers need the reasoning
 - **Consequences are honest** - Include trade-offs and risks
+- **Research basis is traceable** - Link the investigation, synthesis, prior
+  art, or explicit skip
 - **Immutable** - Never edit accepted ADRs, supersede instead
 
 ## Customization
@@ -258,10 +273,13 @@ SEC-001 (security), API-001 (API design)...
 ## Best Practices
 
 1. **Write ADRs during design, not after** - Capture reasoning while fresh
-2. **Keep Context brief but complete** - Future readers need enough to understand
-3. **Be honest about trade-offs** - Negative consequences are valuable
-4. **Link bidirectionally** - ADRs reference code, code references ADRs
-5. **Review ADRs in PRs** - Architecture decisions deserve review
+2. **Prefer dated investigations over memory** - Link what you actually looked at
+3. **Promote reusable findings into topic research** - If the conclusion should
+   compound, keep a synthesis surface too
+4. **Keep Context brief but complete** - Future readers need enough to understand
+5. **Be honest about trade-offs** - Negative consequences are valuable
+6. **Link bidirectionally** - ADRs reference code, code references ADRs
+7. **Review ADRs in PRs** - Architecture decisions deserve review
 
 ## See Also
 

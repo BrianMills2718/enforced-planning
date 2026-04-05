@@ -38,6 +38,22 @@
 
 ---
 
+## Research Basis For This Slice
+
+> **RECOMMENDED for all plans; REQUIRED for design, cross-project, or
+> externally-informed work.**
+> Use this for dated investigations, topic syntheses, external sources, or an
+> explicit research skip statement.
+
+- `investigations/cross-project/2026-04-04-example.md` - investigation that informed this slice
+- `research/orchestration/SYNTHESIS.md` - reusable topic conclusion
+- `https://example.com/prior-art` - external prior art
+
+If no additional research beyond repo-local references was needed, write:
+`No additional research beyond References Reviewed.`
+
+---
+
 ## Capabilities
 
 > **REQUIRED if this plan creates or modifies callable functions that other projects use.**

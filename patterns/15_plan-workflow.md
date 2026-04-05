@@ -17,7 +17,9 @@ Result: orphan code, undocumented features, missed requirements.
 3. Status tracked in plan file AND index
 4. Commit messages link to plans: `[Plan #N]`
 5. TDD: define tests in plan before implementing
-6. This pattern is one layer inside the canonical operating model in
+6. Plans distinguish **repo-local references reviewed** from the broader
+   **research basis for the slice**
+7. This pattern is one layer inside the canonical operating model in
    `PLANNING_OPERATING_MODEL.md`; it does not replace investigation, gap
    analysis, capability/boundary definition, or journey notebooks where those
    are required
@@ -91,6 +93,22 @@ mkdir -p docs/plans
 - `src/world/ledger.py:120-150` - balance update logic
 - `docs/architecture/current/actions.md` - action design
 - `CLAUDE.md` - project conventions
+
+---
+
+## Research Basis For This Slice
+
+> **RECOMMENDED for all plans; REQUIRED for design, cross-project, or
+> externally-informed work.**
+> Use this section for dated investigations, topic syntheses, external sources,
+> production references, or an explicit research skip statement.
+
+- `investigations/cross-project/2026-04-04-example.md` - compared existing options
+- `research/orchestration/SYNTHESIS.md` - reusable current recommendation
+- `https://example.com/paper` - external prior art
+
+If no additional research beyond repo-local references was needed, write:
+`No additional research beyond References Reviewed.`
 
 ---
 
@@ -393,12 +411,15 @@ git commit -m "[Trivial] Fix formatting in config"
 | Trivial exemption | **`[Trivial]` prefix** | Reduces friction; CI validates size limits |
 | Files Affected section | **Required** | Forces planning, creates traceability, enables file-level claims |
 | References Reviewed section | **Required** | Forces exploration before coding, prevents CC guessing |
+| Research Basis For This Slice | **Context-dependent** | Makes reused research explicit without forcing heavy process onto every trivial local plan |
 
 ## Limitations
 
 - **Manual status updates** - Must remember to update both plan file and index.
 - **No enforcement** - Plans are advisory unless combined with hooks/CI.
 - **Stale plans** - Old plans may reference outdated code/structure.
+- **Research strictness is contextual** - not every trivial local plan needs
+  external or topic-level research, but the plan should say so explicitly
 
 ## Best Practices
 
@@ -439,5 +460,6 @@ for current development decisions, it belongs in the external archive.
 - [PR coordination pattern](worktree-coordination/21_pr-coordination.md) - Auto-updates plan status on merge
 - [Claim system pattern](worktree-coordination/18_claim-system.md) - Tracks who's working on which plan
 - [Question-Driven Planning](28_question-driven-planning.md) - The principle behind "References Reviewed"
+- [Topic Research Synthesis](43_topic-research-synthesis.md) - How reusable research feeds ADRs and plans
 - [Uncertainty Tracking](29_uncertainty-tracking.md) - Track open questions in plans
 - [Gap Analysis](30_gap-analysis.md) - Systematic gap identification that informs plan creation

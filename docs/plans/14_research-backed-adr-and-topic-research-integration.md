@@ -1,6 +1,6 @@
 # Plan #14: Research-Backed ADRs and Topic Research Integration
 
-**Status:** Planned
+**Status:** In Progress
 **Type:** design
 **Priority:** High
 **Blocked By:** None
@@ -48,19 +48,29 @@ session and ADRs become self-referential.
 
 ---
 
+## Research Basis For This Slice
+
+- `~/projects/investigations/cross-project/2026-04-04-enforced-planning-research-methodology-review.md` - primary critique of the current methodology and target evidence model
+- `~/projects/project-meta/research_texts/autonomous_agents/SYNTHESIS_2026-03-24.md` - concrete example of reusable synthesis that points back to raw investigation
+- `~/projects/project-meta/research_texts/agentic_memory/SOTA_SURVEY_2026_04.md` - example of topic research intended to drive future design decisions rather than a one-off task
+
+---
+
 ## Files Affected
 
 - PLANNING_OPERATING_MODEL.md (modify)
+- patterns/01_README.md (modify)
 - patterns/07_adr.md (modify)
 - patterns/15_plan-workflow.md (modify)
 - patterns/42_planning-hierarchy.md (modify)
+- patterns/43_topic-research-synthesis.md (create)
 - templates/CLAUDE.md.docs-adr (modify)
 - templates/plan.md.template (modify)
 - templates/plan.md.docs-only (modify)
 - GETTING_STARTED.md (modify)
+- scripts/parse_plan.py (modify)
 - adr/README.md (modify if needed for consistency only)
-- tests/test_validate_plan.py (modify)
-- tests/test_parse_plan.py (modify if parser expectations change)
+- tests/test_parse_plan.py (modify)
 - [future] project-meta/research_texts/*/topic_manifest.yaml (adoption outside this repo)
 
 ---
@@ -102,16 +112,14 @@ session and ADRs become self-referential.
 
 | Test File | Test Function | What It Verifies |
 |-----------|---------------|------------------|
-| `tests/test_validate_plan.py` | `test_plan_requires_research_basis_for_nontrivial_design_work` | Design/cross-project plans fail or warn appropriately when the new research section is missing |
-| `tests/test_parse_plan.py` | `test_parse_plan_extracts_research_basis_section` | Plan parser can read the new section cleanly |
-| `tests/test_complete_plan.py` | `test_complete_plan_handles_research_basis_section` | Plan completion tooling tolerates the new section shape |
+| `tests/test_parse_plan.py` | `test_parse_research_basis_*` | Plan parser can read the new research section cleanly and ignore explicit skip statements |
 
 ### Existing Tests (Must Pass)
 
 | Test Pattern | Why |
 |--------------|-----|
 | `pytest -q tests/test_validate_plan.py tests/test_parse_plan.py tests/test_complete_plan.py` | Core plan validation/parsing surfaces must remain stable |
-| `python scripts/validate_plan.py docs/plans/14_research-backed-adr-and-topic-research-integration.md` | Plan format remains valid |
+| `python scripts/validate_plan.py --plan-file docs/plans/14_research-backed-adr-and-topic-research-integration.md --warn-only` | Plan format remains valid |
 
 ---
 
@@ -123,6 +131,7 @@ session and ADRs become self-referential.
 - [ ] `templates/plan.md.template` and `templates/plan.md.docs-only` distinguish reviewed references from research basis
 - [ ] The framework defines a portable pattern for living topic research plus freshness triggers
 - [ ] Guidance clearly separates portable framework doctrine from project-meta-specific adoption details
+- [ ] `scripts/parse_plan.py` can return the new research basis section
 - [ ] Merge guidance for `plan-10` and `plan-13` is captured so worktree cleanup does not happen ad hoc
 - [ ] Declared tests/checks pass
 

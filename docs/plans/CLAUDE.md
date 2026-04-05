@@ -30,6 +30,7 @@ See `ROADMAP.md` for the full phase map and recommended priority order.
 | 23 | Mac Mini Transfer and Continuous Automation Bootstrap (`23_mac-mini-transfer-and-continuous-automation-bootstrap.md`) | High | ✅ Complete | — |
 | 24 | Coordination-State Packageization and Consistency Gate (`24_coordination-state-packageization-and-consistency-gate.md`) | High | ✅ Complete | — |
 | 25 | Lane Model and Active-Lane Registry (`25_lane-model-and-active-lane-registry.md`) | High | ✅ Complete | — |
+| 26 | Claim Session Auto-Hydration and Weak-Lane Remediation (`26_claim-session-auto-hydration-and-weak-lane-remediation.md`) | High | ✅ Complete | — |
 
 ## Status Key
 

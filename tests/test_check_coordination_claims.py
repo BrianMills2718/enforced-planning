@@ -162,7 +162,7 @@ def test_create_claim_requires_live_metadata_for_new_program_claims(
     claims_dir = tmp_path / "claims"
     monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
 
-    with pytest.raises(ValueError, match="--branch, --worktree-path, --session-id"):
+    with pytest.raises(ValueError, match="--branch, --worktree-path"):
         module.create_claim(
             "codex",
             "project-meta",
@@ -199,6 +199,112 @@ def test_create_claim_accepts_program_claim_with_live_metadata(
     assert payload["claim_type"] == "program"
     assert payload["branch"] == "plan-90-coordination-graph-runtime"
     assert payload["session_id"] == "codex-session-1"
+
+
+def test_create_claim_auto_resolves_codex_session_id(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """New claims should auto-populate session_id from the Codex runtime when available."""
+    module = _load_module()
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
+    monkeypatch.setenv("CODEX_THREAD_ID", "thread-123")
+
+    ok, _message = module.create_claim(
+        "codex",
+        "project-meta",
+        "coordination-v2",
+        "Patch claims tool",
+        plan_ref="Plan #62",
+        claim_type="write",
+        write_paths=["scripts/check_coordination_claims.py"],
+        branch="plan-62-coordination-v2",
+        worktree_path="~/projects/project-meta_worktrees/plan-62-coordination-v2",
+    )
+
+    assert ok
+    claim_file = claims_dir / "codex_project-meta_coordination-v2.yaml"
+    payload = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
+    assert payload["session_id"] == "codex:thread-123"
+
+
+def test_hydrate_session_ids_backfills_matching_live_claims(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Hydration should patch only matching live claims that are missing session IDs."""
+    module = _load_module()
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
+    monkeypatch.setenv("CODEX_THREAD_ID", "thread-456")
+    _write_claim(
+        claims_dir,
+        "missing.yaml",
+        {
+            "agent": "codex",
+            "claimed_at": "2026-04-05T12:00:00+00:00",
+            "expires_at": "2099-04-05T13:00:00+00:00",
+            "projects": ["project-meta"],
+            "scope": "branch-normalization",
+            "intent": "Normalize default branch",
+            "claim_type": "write",
+            "write_paths": ["docs/plans/91_cross-repo-default-branch-normalization.md"],
+            "branch": "plan-91-branch-normalization",
+            "worktree_path": "~/projects/project-meta_worktrees/plan-91-branch-normalization",
+            "status": "active",
+        },
+    )
+    _write_claim(
+        claims_dir,
+        "existing.yaml",
+        {
+            "agent": "codex",
+            "claimed_at": "2026-04-05T12:05:00+00:00",
+            "expires_at": "2099-04-05T13:05:00+00:00",
+            "projects": ["project-meta"],
+            "scope": "already-good",
+            "intent": "Keep existing session",
+            "claim_type": "write",
+            "write_paths": ["README.md"],
+            "branch": "plan-92-something",
+            "worktree_path": "~/projects/project-meta_worktrees/plan-92-something",
+            "session_id": "codex:preexisting",
+            "status": "active",
+        },
+    )
+    _write_claim(
+        claims_dir,
+        "other-project.yaml",
+        {
+            "agent": "codex",
+            "claimed_at": "2026-04-05T12:10:00+00:00",
+            "expires_at": "2099-04-05T13:10:00+00:00",
+            "projects": ["ecosystem-ops"],
+            "scope": "other-project",
+            "intent": "Different project",
+            "claim_type": "write",
+            "write_paths": ["CLAUDE.md"],
+            "branch": "plan-12-default-branch-normalization",
+            "worktree_path": "~/projects/ecosystem-ops_worktrees/plan-12-default-branch-normalization",
+            "status": "active",
+        },
+    )
+
+    updated_count, updated_scopes, resolved_session_id = module.hydrate_missing_session_ids(
+        agent="codex",
+        project="project-meta",
+    )
+
+    assert updated_count == 1
+    assert updated_scopes == ["branch-normalization"]
+    assert resolved_session_id == "codex:thread-456"
+    hydrated = yaml.safe_load((claims_dir / "missing.yaml").read_text(encoding="utf-8"))
+    assert hydrated["session_id"] == "codex:thread-456"
+    untouched = yaml.safe_load((claims_dir / "existing.yaml").read_text(encoding="utf-8"))
+    assert untouched["session_id"] == "codex:preexisting"
+    other_project = yaml.safe_load((claims_dir / "other-project.yaml").read_text(encoding="utf-8"))
+    assert "session_id" not in other_project
 
 
 def test_check_json_outputs_claims_and_candidate_conflict_classification(

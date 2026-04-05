@@ -71,6 +71,17 @@ If any of `branch`, `worktree_path`, `session_id`, or required write ownership
 is missing for a live write/program/research claim, the claim is weak and the
 registry should treat the lane as attention-worthy rather than healthy.
 
+The canonical v2 claim CLI now auto-resolves `session_id` from supported tool
+runtime env vars when possible. If older live claims are missing `session_id`,
+repair them explicitly with:
+
+```bash
+python scripts/check_coordination_claims.py --hydrate-session-ids --agent codex --project your-repo
+```
+
+Use narrower filters such as `--scope` or `--branch` when you only want to
+repair one bounded lane.
+
 ## Session Safety
 
 Some agent runtimes keep a persistent shell working directory. In those

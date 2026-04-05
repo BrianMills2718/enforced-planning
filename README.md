@@ -16,6 +16,8 @@ The coordination model is claim-first and lane-readable:
 - claim files are the canonical low-level source of truth
 - the active-work registry renders derived active lanes for operator use
 - sanctioned worktrees are the execution container for each bounded lane
+- the canonical claim CLI can auto-resolve session identity from supported
+  tool runtimes and explicitly hydrate older live claims when needed
 
 ## What This Solves
 

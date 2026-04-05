@@ -11,6 +11,12 @@ A portable framework for coordinating AI coding assistants on shared codebases.
 > docs, and deterministic validators through the normal repo interface. See
 > [docs/designs/PHASE8_TOOL_SUPPORT_MATRIX.md](docs/designs/PHASE8_TOOL_SUPPORT_MATRIX.md).
 
+The coordination model is claim-first and lane-readable:
+
+- claim files are the canonical low-level source of truth
+- the active-work registry renders derived active lanes for operator use
+- sanctioned worktrees are the execution container for each bounded lane
+
 ## What This Solves
 
 When AI instances work on a codebase:
@@ -174,6 +180,7 @@ convergence work is complete.
 
 - [PLANNING_OPERATING_MODEL.md](PLANNING_OPERATING_MODEL.md) - canonical methodology
 - [GETTING_STARTED.md](GETTING_STARTED.md) - first successful adoption path
+- [docs/guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md](docs/guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md) - canonical lane/worktree/claim operator contract
 - [patterns/01_README.md](patterns/01_README.md) - pattern catalog
 - [ROADMAP.md](ROADMAP.md) - forward queue and phase map
 - [STATIC_GRAPH_AND_RUNTIME_TRUTH.md](STATIC_GRAPH_AND_RUNTIME_TRUTH.md) - truth-surface architecture

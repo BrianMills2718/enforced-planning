@@ -20,6 +20,22 @@ The older repo-local `.claude/active-work.yaml` plus
 in some repos for compatibility. It is not the canonical cross-project
 coordination authority.
 
+## Canonical Terms
+
+- **claim**: the canonical low-level ownership record. Claims say who is
+  claiming which project/scope/write paths, on which branch/worktree, for what
+  intent.
+- **lane**: a bounded execution slice derived from one or more live claims.
+  In practice a lane is the operator-facing unit of work: one project, one
+  branch/worktree, one plan or bounded sprint, one mission.
+- **worktree**: the git checkout where a lane executes.
+- **plan**: the pre-made execution contract that tells the lane what success,
+  failure, and next actions mean.
+
+Important rule: **claims are canonical, lanes are derived**. Do not invent a
+second mutable lane registry by hand. Update claims; regenerate readable lane
+surfaces from them.
+
 ## Default Flow
 
 1. Keep the canonical repo checkout on `main` or `master`.
@@ -32,6 +48,28 @@ coordination authority.
    intentionally promoted.
 5. Merge back quickly. If a worktree starts owning root truth surfaces for
    days, it is no longer acting like a worktree slice.
+
+## Lane Lifecycle
+
+1. Define the bounded mission in a numbered plan or one temporary sprint/plan
+   document.
+2. Create the worktree/branch for that lane.
+3. Create a live claim with real ownership metadata:
+   - `project`
+   - `scope`
+   - `intent`
+   - `plan_ref`
+   - `branch`
+   - `worktree_path`
+   - `session_id`
+   - narrow `write_paths` for write claims
+4. Execute, commit verified slices, and keep docs/trackers truthful.
+5. Merge/push from the safe root-anchored control session.
+6. Release the claim when the lane is done.
+
+If any of `branch`, `worktree_path`, `session_id`, or required write ownership
+is missing for a live write/program/research claim, the claim is weak and the
+registry should treat the lane as attention-worthy rather than healthy.
 
 ## Session Safety
 
@@ -55,7 +93,7 @@ cleanup must happen from a safe control session.
 What it does:
 
 - records who claimed what scope
-- exposes a readable current-work registry
+- exposes a readable current-work registry, including derived active lanes
 - lets repos block conflicting or unsafe worktree flows
 - makes in-flight architectural decisions visible through `KNOWLEDGE.md`
 

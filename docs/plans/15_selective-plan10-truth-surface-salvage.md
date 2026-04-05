@@ -1,6 +1,6 @@
 # Plan #15: Selective Plan-10 Truth-Surface Salvage
 
-**Status:** In Progress
+**Status:** Complete
 **Type:** implementation
 **Priority:** High
 **Blocked By:** None
@@ -112,14 +112,19 @@ stale branch history that would corrupt current governance surfaces.
 
 ## Acceptance Criteria
 
-- [ ] `check_truth_surface_drift.py` distinguishes canonical landed lineage from `historical-unlanded` hygiene state
-- [ ] Relative consumed reservation plan paths resolve against canonical repo roots where possible
-- [ ] `templates/truth_surface_drift.yaml.example` documents the lineage-aware severity knob
-- [ ] `scripts/review_truth_surface_semantic.py` exists as an optional advisory entrypoint with structured output
-- [ ] `scripts/render_truth_surface_status.py` can merge semantic findings while preserving deterministic certainty levels
-- [ ] `README.md` and `STATIC_GRAPH_AND_RUNTIME_TRUTH.md` truthfully describe the hybrid deterministic + advisory model
-- [ ] No stale `plan-10` sprint pointers or conflicting branch-local plan numbering are replayed onto `main`
-- [ ] Declared tests pass
+- [x] `check_truth_surface_drift.py` distinguishes canonical landed lineage from `historical-unlanded` hygiene state
+- [x] Relative consumed reservation plan paths resolve against canonical repo roots where possible
+- [x] `templates/truth_surface_drift.yaml.example` documents the lineage-aware severity knob
+- [x] `scripts/review_truth_surface_semantic.py` exists as an optional advisory entrypoint with structured output
+- [x] `scripts/render_truth_surface_status.py` can merge semantic findings while preserving deterministic certainty levels
+- [x] `README.md` and `STATIC_GRAPH_AND_RUNTIME_TRUTH.md` truthfully describe the hybrid deterministic + advisory model
+- [x] No stale `plan-10` sprint pointers or conflicting branch-local plan numbering are replayed onto `main`
+- [x] Declared tests pass
+
+## Verification
+
+- `pytest -q tests/test_truth_surface_drift.py tests/test_render_truth_surface_status.py tests/test_semantic_truth_surface_review.py`
+- `python -m py_compile scripts/check_truth_surface_drift.py scripts/render_truth_surface_status.py scripts/review_truth_surface_semantic.py scripts/truth_surface_semantic_models.py`
 
 ---
 

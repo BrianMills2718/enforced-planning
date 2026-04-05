@@ -184,8 +184,22 @@ For coordination-heavy repos, keep one config file that names the active tracker
 plan index, runtime registry, and any measured audit surface.
 
 ```bash
-python scripts/check_truth_surface_drift.py --config path/to/truth_surface_drift.yaml
-python scripts/render_truth_surface_status.py --config path/to/truth_surface_drift.yaml
+cp templates/truth_surface_drift.yaml.example truth_surface_drift.yaml
+python scripts/check_truth_surface_drift.py --config truth_surface_drift.yaml
+python scripts/render_truth_surface_status.py --config truth_surface_drift.yaml
+```
+
+When deterministic findings are clean enough structurally but the authority set
+still feels stale, misleading, or non-compendious, run the optional semantic
+review layer:
+
+```bash
+python scripts/review_truth_surface_semantic.py \
+  --config truth_surface_drift.yaml \
+  --output-json semantic_truth_surface_review.json
+python scripts/render_truth_surface_status.py \
+  --config truth_surface_drift.yaml \
+  --semantic-json semantic_truth_surface_review.json
 ```
 
 Use the validator to detect contradictions. Use the renderer to produce a compact
@@ -198,9 +212,15 @@ scoped config with `scope.repo_names` so unrelated ecosystem registry drift does
 not dominate the local result. Full unscoped runs are still useful for broader
 global coordination review.
 
-A later optional LLM/agent review layer should sit on top of deterministic
-validation for semantic drift, misleading prose, and missing cross-surface
-updates that exact rules cannot capture robustly.
+Consumed reservations are lineage-aware. Canonical landed contradictions should
+still fail, but `historical-unlanded` records should normally render as hygiene
+warnings rather than hard repo-local failures. Use
+`checks.consumed_reservations_exist.historical_unlanded_severity` in
+`truth_surface_drift.yaml` if a repo needs a different posture.
+
+The semantic review layer is optional and advisory-only. It sits on top of
+deterministic validation for semantic drift, misleading prose, and missing
+cross-surface updates that exact rules cannot capture robustly.
 
 See `templates/truth_surface_drift.yaml.example` for the scaffold.
 

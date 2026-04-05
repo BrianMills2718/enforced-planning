@@ -1,6 +1,6 @@
 # Plan #22: Framework Self-Measurement and ROI
 
-**Status:** Planned
+**Status:** Complete
 **Type:** design
 **Priority:** Medium
 **Blocked By:** #21
@@ -91,8 +91,24 @@ create callable capability surfaces.
 
 ## Acceptance Criteria
 
-- [ ] The framework defines a canonical metric set for ROI and self-measurement
-- [ ] The design states data sources and trust boundaries for each metric
-- [ ] "Adoption" and "drift catch" are defined concretely
-- [ ] The plan depends explicitly on the dashboard/status surface
-- [ ] Declared checks pass
+- [x] The framework defines a canonical metric set for ROI and self-measurement
+- [x] The design states data sources and trust boundaries for each metric
+- [x] "Adoption" and "drift catch" are defined concretely
+- [x] The plan depends explicitly on the dashboard/status surface
+- [x] Declared checks pass
+
+---
+
+## Decision
+
+Framework self-measurement should:
+
+- reuse the canonical ecosystem-status surface rather than inventing a parallel
+  metrics dashboard
+- define adoption only as explicit-registry plus strict-governed-audit pass
+- count drift as caught only when findings are recorded and later resolved or
+  promoted
+- separate deterministic operational metrics from advisory semantic/usefulness
+  signals
+- defer financial ROI and productivity claims until baseline instrumentation
+  exists

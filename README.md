@@ -179,6 +179,7 @@ convergence work is complete.
 - [STATIC_GRAPH_AND_RUNTIME_TRUTH.md](STATIC_GRAPH_AND_RUNTIME_TRUTH.md) - truth-surface architecture
 - [docs/designs/GOVERNED_REPO_UPGRADE_AUTOMATION.md](docs/designs/GOVERNED_REPO_UPGRADE_AUTOMATION.md) - future fleet-upgrade design
 - [docs/designs/ECOSYSTEM_DASHBOARD_STATUS_SURFACES.md](docs/designs/ECOSYSTEM_DASHBOARD_STATUS_SURFACES.md) - canonical operator-status design
+- [docs/designs/FRAMEWORK_SELF_MEASUREMENT.md](docs/designs/FRAMEWORK_SELF_MEASUREMENT.md) - canonical measurement and ROI boundaries
 - [docs/reference/CONFIG_REFERENCE.md](docs/reference/CONFIG_REFERENCE.md) - config key reference
 
 ## Origin

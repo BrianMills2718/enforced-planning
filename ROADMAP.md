@@ -123,7 +123,7 @@ All three conditions green as of 2026-04-04 overnight sprint:
 | #19 | Multi-tool support matrix, support tiers, and rollout policy | ✅ Complete |
 | #20 | Governed-repo upgrade automation and registry model | ✅ Complete |
 | #21 | Ecosystem dashboard and status surfaces | ✅ Complete |
-| #22 | Framework self-measurement and ROI metrics | 📋 Planned |
+| #22 | Framework self-measurement and ROI metrics | ✅ Complete |
 
 **Deferred item blockers:**
 
@@ -131,22 +131,19 @@ All three conditions green as of 2026-04-04 overnight sprint:
 |------|-----------|--------------|
 | Multi-tool hook support | No Cursor/Windsurf equivalent of `.claude/hooks/` is publicly documented yet. Unblocks: any non-CC adopter. | Plan #19 support-tier decision + concrete adapter path |
 | Adoption automation | Need ≥ 5 governed repos before upgrade automation is worth building. Currently at ~3. | 5+ governed repos |
-| Framework self-measurement | Need baseline metrics before measuring improvement. Define metrics first. | Plan #22 metric definitions plus dashboard data path |
+| Framework self-measurement | Metric definitions are complete, but collection/reporting is not implemented yet. | future implementation slice on top of Plans #21 and #22 |
 
 **Long-term deferred (no near-term consumer):** Visibility grammar and distributed governance moved to `docs/backlog/DEFERRED_FEATURES.md`.
 
 ## What's Next (recommended priority order)
 
-1. **Plan #19: Multi-tool support matrix and rollout**
-   Define support tiers, canonical expectations, and what "portable" means by tool class.
-
-2. **Plan #22: Framework self-measurement and ROI**
-   Define metrics that show whether the framework is actually catching drift and improving adoption outcomes.
-
-3. **Plan #23: Mac mini transfer and continuous automation bootstrap**
+1. **Plan #23: Mac mini transfer and continuous automation bootstrap**
    Use the verified installer/audit path and the new Phase 8 queue to prepare the first controlled Mac mini rollout.
 
-4. **Project-meta topic-research adoption**
+2. **Future implementation slice: ecosystem status renderer and metrics collection**
+   Implement `make ecosystem-status`, `generated/ecosystem_status.json`, and rendered operator metrics on top of Plans #21 and #22.
+
+3. **Project-meta topic-research adoption**
    Apply the portable topic-research pattern in `project-meta/research_texts`
    with manifests, ADR links, and freshness metadata for high-value topics.
 

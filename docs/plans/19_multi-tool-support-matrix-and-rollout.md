@@ -1,6 +1,6 @@
 # Plan #19: Multi-Tool Support Matrix and Rollout
 
-**Status:** Planned
+**Status:** Complete
 **Type:** design
 **Priority:** High
 **Blocked By:** None
@@ -101,8 +101,23 @@ create callable capability surfaces.
 
 ## Acceptance Criteria
 
-- [ ] One support-tier vocabulary exists
-- [ ] `README.md`, `GETTING_STARTED.md`, and `hooks/README.md` use the same support matrix
-- [ ] The framework defines what evidence is needed to claim support for another tool
-- [ ] The roadmap points to the numbered plan rather than a vague multi-tool bucket
-- [ ] Declared checks pass
+- [x] One support-tier vocabulary exists
+- [x] `README.md`, `GETTING_STARTED.md`, and `hooks/README.md` use the same support matrix
+- [x] The framework defines what evidence is needed to claim support for another tool
+- [x] The roadmap points to the numbered plan rather than a vague multi-tool bucket
+- [x] Declared checks pass
+
+---
+
+## Decision
+
+The canonical support tiers are:
+
+- `native-interactive`
+- `portable-governed`
+- `legacy-compatible`
+- `unsupported`
+
+Claude Code is currently the only `native-interactive` tool. Other tools should
+not be claimed beyond `portable-governed` until a concrete workflow and
+committed evidence artifact exist.

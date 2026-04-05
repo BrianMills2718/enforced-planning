@@ -120,7 +120,7 @@ All three conditions green as of 2026-04-04 overnight sprint:
 
 | Plan | What | Status |
 |------|------|--------|
-| #19 | Multi-tool support matrix, support tiers, and rollout policy | 📋 Planned |
+| #19 | Multi-tool support matrix, support tiers, and rollout policy | 🚧 In Progress |
 | #20 | Governed-repo upgrade automation and registry model | 📋 Planned |
 | #21 | Ecosystem dashboard and status surfaces | 📋 Planned |
 | #22 | Framework self-measurement and ROI metrics | 📋 Planned |

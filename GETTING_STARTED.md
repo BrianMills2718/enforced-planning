@@ -13,9 +13,15 @@ For framework-source details, see [README.md](README.md).
 
 ## Tool Support
 
-- **Claude Code:** full minimum governed-repo experience, including read-gating
-- **Other tools:** can use plans, `AGENTS.md`, and deterministic validators, but
-  do not yet share the same native hook surface
+- **`native-interactive`:** Claude Code currently has the full minimum
+  governed-repo experience, including read-gating
+- **`portable-governed`:** other tools can use plans, `AGENTS.md`, and
+  deterministic validators, but do not yet share the same native hook surface
+- **`legacy-compatible`:** legacy bootstrap modes still exist, but are not the
+  canonical sync path
+
+See [docs/designs/PHASE8_TOOL_SUPPORT_MATRIX.md](docs/designs/PHASE8_TOOL_SUPPORT_MATRIX.md)
+for the canonical support-tier definitions.
 
 ## Before You Install
 

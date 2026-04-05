@@ -1,6 +1,6 @@
 # Plan #14: Research-Backed ADRs and Topic Research Integration
 
-**Status:** In Progress
+**Status:** Complete
 **Type:** design
 **Priority:** High
 **Blocked By:** None
@@ -125,23 +125,28 @@ session and ADRs become self-referential.
 
 ## Acceptance Criteria
 
-- [ ] `PLANNING_OPERATING_MODEL.md` names investigation memos and topic research syntheses as explicit artifact roles
-- [ ] `patterns/42_planning-hierarchy.md` reflects the same hierarchy truthfully
-- [ ] `patterns/07_adr.md` and `templates/CLAUDE.md.docs-adr` require `Research Basis`
-- [ ] `templates/plan.md.template` and `templates/plan.md.docs-only` distinguish reviewed references from research basis
-- [ ] The framework defines a portable pattern for living topic research plus freshness triggers
-- [ ] Guidance clearly separates portable framework doctrine from project-meta-specific adoption details
-- [ ] `scripts/parse_plan.py` can return the new research basis section
-- [ ] Merge guidance for `plan-10` and `plan-13` is captured so worktree cleanup does not happen ad hoc
-- [ ] Declared tests/checks pass
+- [x] `PLANNING_OPERATING_MODEL.md` names investigation memos and topic research syntheses as explicit artifact roles
+- [x] `patterns/42_planning-hierarchy.md` reflects the same hierarchy truthfully
+- [x] `patterns/07_adr.md` and `templates/CLAUDE.md.docs-adr` require `Research Basis`
+- [x] `templates/plan.md.template` and `templates/plan.md.docs-only` distinguish reviewed references from research basis
+- [x] The framework defines a portable pattern for living topic research plus freshness triggers
+- [x] Guidance clearly separates portable framework doctrine from project-meta-specific adoption details
+- [x] `scripts/parse_plan.py` can return the new research basis section
+- [x] Merge guidance for `plan-10` and `plan-13` is captured so worktree cleanup does not happen ad hoc
+- [x] Declared tests/checks pass
 
 ---
 
-## Open Questions
+## Decisions
 
-- [ ] Should the portable framework standardize a specific topic manifest filename and schema, or only describe the concept? — Status: OPEN | Why it matters: too much specificity may overfit project-meta; too little may make adoption inconsistent
-- [ ] Should missing plan-level research basis be blocking for all plans or only for non-trivial/design/cross-project plans? — Status: OPEN | Why it matters: strictness affects adoption friction
-- [ ] Should freshness be enforced mechanically or start as advisory metadata only? — Status: OPEN | Why it matters: freshness is valuable but hard to verify semantically
+- The portable framework names `topic_manifest.yaml` as the recommended
+  filename and shape, but keeps it optional so governed repos can adopt the
+  concept without overfitting to one ecosystem layout.
+- Missing `Research Basis For This Slice` is treated as blocking for non-trivial,
+  design, cross-project, or externally-informed plans, and recommended for
+  trivial local plans.
+- Topic freshness starts as advisory metadata. Repos should capture review dates,
+  SLAs, and refresh triggers before attempting blocking semantic freshness gates.
 
 ---
 

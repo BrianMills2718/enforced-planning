@@ -18,7 +18,7 @@ See `ROADMAP.md` for the full phase map and recommended priority order.
 | 11 | Agent Verification Protocol for Validated Couplings (`11_agent-verification-protocol.md`) | High | ✅ Complete | #7 |
 | 12 | Cross-Repo Plan Registry (`build_plan_registry.py`, `make plan-registry`) | Medium | ✅ Complete (327 plans, 22 repos) | check_plan_deps cross-repo |
 | 13 | Rename-Safe Merge Cleanup (`13_rename-safe-merge-cleanup.md`) | High | ✅ Complete | — |
-| 14 | Research-Backed ADRs and Topic Research Integration (`14_research-backed-adr-and-topic-research-integration.md`) | High | 🚧 In Progress | [future] project-meta topic research adoption |
+| 14 | Research-Backed ADRs and Topic Research Integration (`14_research-backed-adr-and-topic-research-integration.md`) | High | ✅ Complete | [future] project-meta topic research adoption |
 | 15 | Selective Plan-10 Truth-Surface Salvage (`15_selective-plan10-truth-surface-salvage.md`) | High | ✅ Complete | — |
 | 16 | Documentation and Adoption Surface Convergence (`16_documentation-and-adoption-surface-convergence.md`) | High | ✅ Complete | — |
 | 17 | Governed-Repo Installer Convergence (`17_governed-repo-installer-convergence.md`) | High | ✅ Complete | — |

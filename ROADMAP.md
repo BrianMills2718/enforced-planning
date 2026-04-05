@@ -137,12 +137,13 @@ All three conditions green as of 2026-04-04 overnight sprint:
 
 ## What's Next (recommended priority order)
 
-1. **Plan #14: Research-backed ADR and topic-research follow-through**
-   Finish the remaining policy and adoption work so research linkage is not just a local doctrine.
-
-2. **Phase 8 execution planning**
+1. **Phase 8 execution planning**
    Convert the open Phase 8 gate into bounded numbered plans for multi-tool support,
    upgrade automation, dashboarding, and framework self-measurement.
+
+2. **Project-meta topic-research adoption**
+   Apply the portable topic-research pattern in `project-meta/research_texts`
+   with manifests, ADR links, and freshness metadata for high-value topics.
 
 ## Design Principles
 

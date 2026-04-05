@@ -119,7 +119,7 @@ def looks_like_file_path(value: str) -> bool:
 
 def extract_inline_paths(line: str) -> list[str]:
     paths: list[str] = []
-    for match in re.finditer(r"\b([A-Za-z0-9_./-]+\.[A-Za-z0-9]{1,8})\b", line):
+    for match in re.finditer(r"\b([A-Za-z0-9_./-]+(?:\.[A-Za-z0-9_-]+)+)\b", line):
         value = match.group(1)
         if looks_like_file_path(value):
             paths.append(normalize(value))

@@ -622,6 +622,55 @@ def release_claim(agent: str, project: str, scope: str) -> tuple[bool, str]:
     return False, f"No claim found for {agent} → {project}:{scope}"
 
 
+def complete_claims_for_plan(
+    *,
+    project: str,
+    plan_ref: str,
+    note: str | None = None,
+) -> tuple[int, list[str]]:
+    """Mark matching live claims completed and return the affected scopes.
+
+    This is the lifecycle-closeout path for finished lanes: claims stop being
+    active coordination input, but the YAML records remain on disk as audit
+    history with an explicit `completed` status.
+    """
+
+    if not CLAIMS_DIR.exists():
+        return 0, []
+
+    now = datetime.now(timezone.utc).isoformat()
+    completed_scopes: list[str] = []
+    for claim_file in CLAIMS_DIR.glob("*.yaml"):
+        try:
+            data = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if not isinstance(data, dict):
+            continue
+        claim = normalize_claim(data, source_file=str(claim_file))
+        if claim is None or not claim.is_live():
+            continue
+        if project not in claim.projects:
+            continue
+        if claim.plan_ref != plan_ref:
+            continue
+        data["status"] = "completed"
+        data["updated_at"] = now
+        if note:
+            existing_notes = data.get("notes")
+            if isinstance(existing_notes, str) and existing_notes.strip():
+                if note not in existing_notes:
+                    data["notes"] = f"{existing_notes.rstrip()} | {note}"
+            else:
+                data["notes"] = note
+        claim_file.write_text(
+            yaml.safe_dump(data, default_flow_style=False, sort_keys=False),
+            encoding="utf-8",
+        )
+        completed_scopes.append(claim.scope)
+    return len(completed_scopes), sorted(completed_scopes)
+
+
 def prune_expired() -> int:
     """Remove expired claims and return the number pruned."""
     if not CLAIMS_DIR.exists():

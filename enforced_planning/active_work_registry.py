@@ -351,6 +351,34 @@ def write_registry_outputs(
     markdown_output.write_text(render_markdown(payload), encoding="utf-8")
 
 
+def refresh_registry(
+    *,
+    claims_dir: Path | None = None,
+    json_output: Path = DEFAULT_JSON_OUTPUT,
+    markdown_output: Path = DEFAULT_MARKDOWN_OUTPUT,
+) -> dict[str, Any]:
+    """Regenerate the registry and return the payload.
+
+    The claims directory override is temporary and restored before returning so
+    callers can refresh one repo's derivative outputs without mutating global
+    module state permanently.
+    """
+
+    previous_claims_dir = coordination_claims.CLAIMS_DIR
+    try:
+        if claims_dir is not None:
+            coordination_claims.CLAIMS_DIR = claims_dir
+        payload = build_registry_payload(claims=coordination_claims.check_claims())
+        write_registry_outputs(
+            payload=payload,
+            json_output=json_output,
+            markdown_output=markdown_output,
+        )
+        return payload
+    finally:
+        coordination_claims.CLAIMS_DIR = previous_claims_dir
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     """Parse CLI arguments for active-work registry generation."""
 
@@ -377,20 +405,13 @@ def main(argv: list[str] | None = None) -> int:
     """Generate the active-work registry from live coordination claims."""
 
     args = parse_args(argv)
-    if args.claims_dir:
-        coordination_claims.CLAIMS_DIR = Path(args.claims_dir).expanduser().resolve()
-
-    claims = coordination_claims.check_claims()
-    payload = build_registry_payload(claims=claims)
-
     json_output = Path(args.json_output).expanduser().resolve()
     markdown_output = Path(args.markdown_output).expanduser().resolve()
-    write_registry_outputs(
-        payload=payload,
+    payload = refresh_registry(
+        claims_dir=Path(args.claims_dir).expanduser().resolve() if args.claims_dir else None,
         json_output=json_output,
         markdown_output=markdown_output,
     )
-
     if args.stdout_json:
         print(json.dumps(payload, indent=2))
     else:

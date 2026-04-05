@@ -38,6 +38,9 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+from enforced_planning import active_work_registry, coordination_claims
+from enforced_planning.worktree_paths import resolve_canonical_repo_root
+
 # Plan #136: Timeout for test subprocess calls to prevent hanging forever
 TEST_TIMEOUT_SECONDS = 300  # 5 minutes
 
@@ -424,6 +427,51 @@ def update_plan_index(
     return True
 
 
+def sync_coordination_closeout(
+    *,
+    plan_number: int,
+    project_root: Path,
+    dry_run: bool = False,
+    verbose: bool = True,
+) -> tuple[int, list[str], dict[str, object] | None]:
+    """Close matching live claims and refresh derived active-work outputs."""
+
+    canonical_repo_root = resolve_canonical_repo_root(project_root)
+    project_name = canonical_repo_root.name
+    plan_ref = f"Plan #{plan_number}"
+    note = f"closed automatically by scripts/complete_plan.py for {plan_ref}"
+
+    if dry_run:
+        live_claims = coordination_claims.check_claims(project_name)
+        matching = [
+            claim.scope
+            for claim in live_claims
+            if claim.plan_ref == plan_ref
+        ]
+        if verbose:
+            print(
+                f"\n[5/5] Coordination closeout... DRY RUN "
+                f"({len(matching)} matching live claims, registry refresh skipped)"
+            )
+        return len(matching), sorted(matching), None
+
+    completed_count, completed_scopes = coordination_claims.complete_claims_for_plan(
+        project=project_name,
+        plan_ref=plan_ref,
+        note=note,
+    )
+    payload = active_work_registry.refresh_registry(
+        json_output=canonical_repo_root / "generated" / "runtime" / "active_work_registry.json",
+        markdown_output=canonical_repo_root / "generated" / "runtime" / "active_work_registry.md",
+    )
+    if verbose:
+        print(
+            f"\n[5/5] Coordination closeout... "
+            f"{completed_count} claims closed, {payload['claim_count']} live claims remain"
+        )
+    return completed_count, completed_scopes, payload
+
+
 def complete_plan(
     plan_number: int,
     project_root: Path,
@@ -521,8 +569,15 @@ def complete_plan(
         print("Fix the issues above and try again.")
         return False
 
-    # All passed - update plan file
+    # All passed - synchronize coordination state before marking the plan complete.
     commit, branch = get_git_info(project_root)
+
+    closed_count, closed_scopes, payload = sync_coordination_closeout(
+        plan_number=plan_number,
+        project_root=project_root,
+        dry_run=dry_run,
+        verbose=verbose,
+    )
 
     if verbose:
         print("\nAll checks passed!")
@@ -542,6 +597,10 @@ def complete_plan(
     if not dry_run:
         print(f"\n\u2705 Plan #{plan_number} marked COMPLETE")
         print(f"   Verification evidence recorded in {plan_file.name}")
+        if closed_count:
+            print(f"   Closed claims: {', '.join(closed_scopes)}")
+        if payload is not None:
+            print(f"   Active-work registry refreshed: {payload['claim_count']} live claims remain")
         print("\nNext steps:")
         print(f"   1. Commit changes: git add {plan_file}")
 

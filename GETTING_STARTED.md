@@ -105,7 +105,7 @@ python scripts/audit_governed_repo.py --repo-root /path/to/your/project --strict
 
 ## Configure `meta-process.yaml`
 
-Start with the minimum keys that are already meaningful:
+Start with the minimum keys that are already meaningful today:
 
 ```yaml
 meta_process:
@@ -114,7 +114,6 @@ meta_process:
   plans:
     enabled: true
     require_tests: true
-    require_references_reviewed: true
     plans_dir: "docs/plans"
 
   commits:
@@ -124,20 +123,16 @@ meta_process:
       - "\\[Trivial\\]"
       - "\\[Unplanned\\]"
 
-  planning:
-    question_driven_planning: advisory
-    uncertainty_tracking: advisory
-    dependency_probe_policy: strict
-
   quality:
     doc_coupling:
       enabled: true
-      strict: true
       config_file: "scripts/relationships.yaml"
 ```
 
 Use [docs/reference/CONFIG_REFERENCE.md](docs/reference/CONFIG_REFERENCE.md) to
-distinguish live keys from planned vocabulary.
+distinguish live keys from planned vocabulary. The template contains broader
+advisory/planned fields; omit them unless you are intentionally documenting
+future policy rather than configuring current script behavior.
 
 ## First Successful Workflow
 

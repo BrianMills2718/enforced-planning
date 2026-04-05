@@ -117,12 +117,16 @@ your-project/
         └── agents.md.template
 ```
 
-The target repo does **not** contain a copied `enforced-planning/` subtree.
+The target repo does contain a small installed `enforced_planning/` support
+package used by generated entrypoints. It does **not** contain a vendored copy
+of this full framework repo.
 
 ## Configuration
 
 The installed config file is `meta-process.yaml`. The authoritative reference
 is [docs/reference/CONFIG_REFERENCE.md](docs/reference/CONFIG_REFERENCE.md).
+The example below is limited to keys that have script effect today; the
+template and reference also document broader planned/advisory vocabulary.
 
 Example:
 
@@ -133,18 +137,11 @@ meta_process:
   plans:
     enabled: true
     require_tests: true
-    require_references_reviewed: true
     plans_dir: "docs/plans"
-
-  planning:
-    question_driven_planning: advisory
-    uncertainty_tracking: advisory
-    dependency_probe_policy: strict
 
   quality:
     doc_coupling:
       enabled: true
-      strict: true
       config_file: "scripts/relationships.yaml"
 ```
 

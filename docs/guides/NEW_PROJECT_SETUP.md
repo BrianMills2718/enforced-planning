@@ -78,9 +78,10 @@ contract.
 ## 5. Configure `meta-process.yaml`
 
 Use [docs/reference/CONFIG_REFERENCE.md](../reference/CONFIG_REFERENCE.md) for
-the authoritative key table.
+the authoritative key table. The example below is intentionally limited to
+keys that have script effect today.
 
-Recommended starting point:
+Mechanically meaningful starting point:
 
 ```yaml
 meta_process:
@@ -89,7 +90,6 @@ meta_process:
   plans:
     enabled: true
     require_tests: true
-    require_references_reviewed: true
     plans_dir: "docs/plans"
 
   commits:
@@ -99,15 +99,9 @@ meta_process:
       - "\\[Trivial\\]"
       - "\\[Unplanned\\]"
 
-  planning:
-    question_driven_planning: advisory
-    uncertainty_tracking: advisory
-    dependency_probe_policy: strict
-
   quality:
     doc_coupling:
       enabled: true
-      strict: true
       config_file: "scripts/relationships.yaml"
 ```
 

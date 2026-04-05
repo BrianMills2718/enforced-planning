@@ -239,7 +239,7 @@ def check_doc_surface_coherence(root: Path) -> list[str]:
     required_snippets = {
         "README.md": [
             "scripts/install_governed_repo.py --repo-root /path/to/your/project --write",
-            "The target repo does **not** contain a copied `enforced-planning/` subtree.",
+            "The target repo does contain a small installed `enforced_planning/` support",
         ],
         "GETTING_STARTED.md": [
             "It describes the **installed consumer** perspective only:",

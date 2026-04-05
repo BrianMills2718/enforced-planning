@@ -162,10 +162,13 @@ WORKTREE_TARGETS: tuple[str, ...] = (
     "worktree-remove",
 )
 
-WORKTREE_SCRIPT_PATHS: dict[str, str] = {
-    "create_worktree": "scripts/meta/worktree-coordination/create_worktree.py",
-    "check_claims": "scripts/meta/worktree-coordination/check_claims.py",
-    "safe_worktree_remove": "scripts/meta/worktree-coordination/safe_worktree_remove.py",
+WORKTREE_SCRIPT_PATHS: dict[str, tuple[str, ...]] = {
+    "create_worktree": ("scripts/meta/worktree-coordination/create_worktree.py",),
+    "check_coordination_claims": (
+        "scripts/meta/check_coordination_claims.py",
+        "scripts/meta/worktree-coordination/check_claims.py",
+    ),
+    "safe_worktree_remove": ("scripts/meta/worktree-coordination/safe_worktree_remove.py",),
 }
 
 
@@ -530,8 +533,11 @@ def _audit_worktree_entrypoints(repo_root: Path) -> dict[str, Any]:
         "meta_block_present": False,
         "targets_present": {target: False for target in WORKTREE_TARGETS},
         "scripts_present": {
-            key: (repo_root / relpath).exists()
-            for key, relpath in WORKTREE_SCRIPT_PATHS.items()
+            key: _check_paths(repo_root, candidates)["present"]
+            for key, candidates in WORKTREE_SCRIPT_PATHS.items()
+        },
+        "script_candidates": {
+            key: list(candidates) for key, candidates in WORKTREE_SCRIPT_PATHS.items()
         },
         "warnings": [],
         "error": config_error,

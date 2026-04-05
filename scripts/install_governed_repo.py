@@ -55,20 +55,20 @@ SYNC_SUPPORT_FILES: dict[str, str] = {
     "scripts/check_doc_coupling.py": "scripts/check_doc_coupling.py",
     "scripts/check_markdown_links.py": "scripts/check_markdown_links.py",
     "scripts/sync_plan_status.py": "scripts/sync_plan_status.py",
+    "scripts/meta/check_coordination_claims.py": "scripts/check_coordination_claims.py",
     "scripts/meta/check_agents_sync.py": "scripts/check_agents_sync.py",
     "scripts/meta/check_doc_coupling.py": "scripts/check_doc_coupling.py",
     "scripts/meta/file_context.py": "scripts/file_context.py",
     "scripts/meta/render_agents_md.py": "scripts/render_agents_md.py",
     "scripts/meta/sync_plan_status.py": "scripts/sync_plan_status.py",
     "scripts/meta/validate_plan.py": "scripts/validate_plan.py",
-    "scripts/meta/worktree-coordination/check_claims.py": "scripts/worktree-coordination/check_claims.py",
     "scripts/meta/worktree-coordination/create_worktree.py": "scripts/worktree-coordination/create_worktree.py",
     "scripts/meta/worktree-coordination/safe_worktree_remove.py": "scripts/worktree-coordination/safe_worktree_remove.py",
     "meta-process/templates/agents.md.template": "templates/agents.md.template",
 }
 
 WORKTREE_ONLY_SYNC_SUPPORT_FILES: dict[str, str] = {
-    "scripts/meta/worktree-coordination/check_claims.py": "scripts/worktree-coordination/check_claims.py",
+    "scripts/meta/check_coordination_claims.py": "scripts/check_coordination_claims.py",
     "scripts/meta/worktree-coordination/create_worktree.py": "scripts/worktree-coordination/create_worktree.py",
     "scripts/meta/worktree-coordination/safe_worktree_remove.py": "scripts/worktree-coordination/safe_worktree_remove.py",
 }

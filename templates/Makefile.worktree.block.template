@@ -1,18 +1,23 @@
 # >>> META-PROCESS WORKTREE TARGETS >>>
 WORKTREE_CREATE_SCRIPT := __WORKTREE_SCRIPT_ROOT__/create_worktree.py
 WORKTREE_REMOVE_SCRIPT := __WORKTREE_SCRIPT_ROOT__/safe_worktree_remove.py
-WORKTREE_CLAIMS_SCRIPT := __WORKTREE_SCRIPT_ROOT__/check_claims.py
+WORKTREE_CLAIMS_SCRIPT := __WORKTREE_SCRIPT_ROOT__/../check_coordination_claims.py
 WORKTREE_DIR ?= $(shell python "$(WORKTREE_CREATE_SCRIPT)" --repo-root . --print-default-worktree-dir)
 WORKTREE_START_POINT ?= HEAD
+WORKTREE_PROJECT ?= $(notdir $(CURDIR))
+WORKTREE_AGENT ?= $(shell if [ -n "$$CODEX_THREAD_ID" ]; then printf codex; elif [ -n "$$CLAUDE_SESSION_ID" ] || [ -n "$$CLAUDE_CODE_SSE_PORT" ]; then printf claude-code; elif [ -n "$$OPENCLAW_SESSION_ID" ] || [ -n "$$OPENCLAW_RUN_ID" ]; then printf openclaw; fi)
 
 .PHONY: worktree worktree-list worktree-remove
 
-worktree:  ## Create claimed worktree (BRANCH=name TASK="..." [PLAN=N])
+worktree:  ## Create claimed worktree (BRANCH=name TASK="..." [PLAN=N] [AGENT=name])
 ifndef BRANCH
 	$(error BRANCH is required. Usage: make worktree BRANCH=plan-42-feature TASK="Describe the task")
 endif
 ifndef TASK
 	$(error TASK is required. Usage: make worktree BRANCH=plan-42-feature TASK="Describe the task")
+endif
+ifndef WORKTREE_AGENT
+	$(error Unable to infer agent runtime. Set AGENT via WORKTREE_AGENT=codex|claude-code|openclaw)
 endif
 	@if [ ! -f "$(WORKTREE_CREATE_SCRIPT)" ]; then \
 		echo "Missing worktree coordination module: $(WORKTREE_CREATE_SCRIPT)"; \
@@ -24,10 +29,18 @@ endif
 		echo "Install or sync the sanctioned worktree-coordination module before using make worktree."; \
 		exit 1; \
 	fi
-	@python "$(WORKTREE_CLAIMS_SCRIPT)" --claim --id "$(BRANCH)" --task "$(TASK)" $(if $(PLAN),--plan $(PLAN),)
+	@python "$(WORKTREE_CLAIMS_SCRIPT)" --claim \
+		--agent "$(WORKTREE_AGENT)" \
+		--project "$(WORKTREE_PROJECT)" \
+		--scope "$(BRANCH)" \
+		--intent "$(TASK)" \
+		--claim-type program \
+		--branch "$(BRANCH)" \
+		--worktree-path "$(WORKTREE_DIR)/$(BRANCH)" \
+		$(if $(PLAN),--plan "Plan #$(PLAN)",)
 	@mkdir -p "$(WORKTREE_DIR)"
 	@if ! python "$(WORKTREE_CREATE_SCRIPT)" --repo-root . --path "$(WORKTREE_DIR)/$(BRANCH)" --branch "$(BRANCH)" --start-point "$(WORKTREE_START_POINT)"; then \
-		python "$(WORKTREE_CLAIMS_SCRIPT)" --release --id "$(BRANCH)" --force >/dev/null 2>&1 || true; \
+		python "$(WORKTREE_CLAIMS_SCRIPT)" --release --agent "$(WORKTREE_AGENT)" --project "$(WORKTREE_PROJECT)" --scope "$(BRANCH)" >/dev/null 2>&1 || true; \
 		exit 1; \
 	fi
 	@echo ""
@@ -52,5 +65,5 @@ endif
 		exit 1; \
 	fi
 	@python "$(WORKTREE_REMOVE_SCRIPT)" "$(WORKTREE_DIR)/$(BRANCH)"
-	@python "$(WORKTREE_CLAIMS_SCRIPT)" --release --id "$(BRANCH)" --force >/dev/null 2>&1 || true
+	@python "$(WORKTREE_CLAIMS_SCRIPT)" --release --agent "$(WORKTREE_AGENT)" --project "$(WORKTREE_PROJECT)" --scope "$(BRANCH)" >/dev/null 2>&1 || true
 # <<< META-PROCESS WORKTREE TARGETS <<<

@@ -14,11 +14,13 @@ and project-meta docs; do not treat them as competing operator handbooks.
 - Repo opt-in switch: `meta-process.yaml`
 - Sanctioned repo-local worktree interface: `make worktree`,
   `make worktree-list`, `make worktree-remove`
+- Canonical installed claim CLI for governed repos:
+  `scripts/meta/check_coordination_claims.py`
 
-The older repo-local `.claude/active-work.yaml` plus
-`scripts/meta/worktree-coordination/check_claims.py` surface is still present
-in some repos for compatibility. It is not the canonical cross-project
-coordination authority.
+The older repo-local `.claude/active-work.yaml` plus legacy
+`scripts/meta/worktree-coordination/check_claims.py` surface may still be
+present in some repos for compatibility. They are not the canonical
+cross-project coordination authority.
 
 ## Canonical Terms
 
@@ -67,16 +69,23 @@ surfaces from them.
 5. Merge/push from the safe root-anchored control session.
 6. Release the claim when the lane is done.
 
+For the sanctioned repo-local `make worktree` flow, the default claim is a v2
+**program** claim with real `branch`, `worktree_path`, and `session_id`
+metadata. That keeps lane tracking healthy without inventing a fake broad
+write-path claim for the whole repo.
+
 If any of `branch`, `worktree_path`, `session_id`, or required write ownership
 is missing for a live write/program/research claim, the claim is weak and the
 registry should treat the lane as attention-worthy rather than healthy.
 
 The canonical v2 claim CLI now auto-resolves `session_id` from supported tool
-runtime env vars when possible. If older live claims are missing `session_id`,
-repair them explicitly with:
+runtime env vars when possible. In governed repos the installed local entrypoint
+is `scripts/meta/check_coordination_claims.py`. In the framework repo the
+equivalent source entrypoint is `scripts/check_coordination_claims.py`. If older
+live claims are missing `session_id`, repair them explicitly with:
 
 ```bash
-python scripts/check_coordination_claims.py --hydrate-session-ids --agent codex --project your-repo
+python scripts/meta/check_coordination_claims.py --hydrate-session-ids --agent codex --project your-repo
 ```
 
 Use narrower filters such as `--scope` or `--branch` when you only want to

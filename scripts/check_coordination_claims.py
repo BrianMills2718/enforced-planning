@@ -7,8 +7,19 @@ import sys
 from pathlib import Path
 from typing import Any
 
-if str(Path(__file__).resolve().parents[1]) not in sys.path:
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+def _find_repo_root() -> Path:
+    """Resolve the nearest ancestor that contains the installed support package."""
+    current = Path(__file__).resolve()
+    for parent in current.parents:
+        if (parent / "enforced_planning").is_dir():
+            return parent
+    raise RuntimeError("Unable to locate repo root containing enforced_planning/")
+
+
+repo_root = _find_repo_root()
+if str(repo_root) not in sys.path:
+    sys.path.insert(0, str(repo_root))
 
 from enforced_planning import coordination_claims as _impl
 

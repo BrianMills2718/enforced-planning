@@ -84,6 +84,7 @@ After a successful minimum install, your repo should have:
 - `docs/plans/TEMPLATE.md`
 - `scripts/relationships.yaml`
 - `scripts/meta/check_agents_sync.py`
+- `scripts/meta/check_coordination_claims.py`
 - `scripts/meta/check_doc_coupling.py`
 - `scripts/meta/file_context.py`
 - `scripts/meta/render_agents_md.py`
@@ -93,6 +94,11 @@ After a successful minimum install, your repo should have:
 - `.claude/hooks/track-reads.sh`
 - `.claude/settings.json`
 - generated `AGENTS.md`
+
+If the repo enables sanctioned worktree coordination, the canonical installed
+claim entrypoint is `scripts/meta/check_coordination_claims.py`. The sanctioned
+`make worktree` path creates a healthy v2 **program** claim by default so lane
+metadata stays truthful without inventing fake broad write ownership.
 
 ## Verify The Install
 

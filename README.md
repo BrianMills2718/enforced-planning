@@ -18,6 +18,8 @@ The coordination model is claim-first and lane-readable:
 - sanctioned worktrees are the execution container for each bounded lane
 - the canonical claim CLI can auto-resolve session identity from supported
   tool runtimes and explicitly hydrate older live claims when needed
+- governed repos now install `scripts/meta/check_coordination_claims.py` as the
+  canonical local entrypoint for sanctioned worktree lane claims
 
 ## What This Solves
 
@@ -115,6 +117,7 @@ your-project/
 ├── scripts/
 │   ├── relationships.yaml
 │   └── meta/
+│       ├── check_coordination_claims.py
 │       ├── check_agents_sync.py
 │       ├── check_doc_coupling.py
 │       ├── file_context.py

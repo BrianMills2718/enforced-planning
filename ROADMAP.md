@@ -135,6 +135,7 @@ and readable as bounded active lanes instead of only raw claims.
 | #24 | Coordination-state packageization and consistency gate | ✅ Complete |
 | #25 | Lane model and active-lane registry | ✅ Complete |
 | #26 | Claim session auto-hydration and weak-lane remediation | ✅ Complete |
+| #27 | V2 worktree entrypoints and claim propagation | ✅ Complete |
 
 **Deferred item blockers:**
 
@@ -154,7 +155,11 @@ and readable as bounded active lanes instead of only raw claims.
 2. **Future implementation slice: ecosystem status renderer and metrics collection**
    Implement `make ecosystem-status`, `generated/ecosystem_status.json`, and rendered operator metrics on top of Plans #21 and #22.
 
-3. **Project-meta topic-research adoption**
+3. **Stale-claim lifecycle and cleanup automation**
+   Add a bounded lifecycle pass that flags or prunes claims whose worktrees are
+   gone, whose branches have landed, or whose TTL/state is no longer truthful.
+
+4. **Project-meta topic-research adoption**
    Apply the portable topic-research pattern in `project-meta/research_texts`
    with manifests, ADR links, and freshness metadata for high-value topics.
 

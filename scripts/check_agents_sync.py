@@ -5,11 +5,27 @@ from __future__ import annotations
 
 import argparse
 import difflib
+import sys
 from pathlib import Path
 
-from render_agents_md import DEFAULT_TEMPLATE  # type: ignore[import-not-found]
-from render_agents_md import render_agents_markdown  # type: ignore[import-not-found]
-from render_agents_md import resolve_inputs  # type: ignore[import-not-found]
+SCRIPT_PATH = Path(__file__).resolve()
+
+
+def _detect_repo_root(script_path: Path) -> Path:
+    """Resolve repo root for both canonical and installed script layouts."""
+
+    if script_path.parent.name == "meta" and script_path.parent.parent.name == "scripts":
+        return script_path.parents[2]
+    if script_path.parent.name == "scripts":
+        return script_path.parents[1]
+    return script_path.parents[1]
+
+
+REPO_ROOT = _detect_repo_root(SCRIPT_PATH)
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from enforced_planning.agents_rendering import build_renderer
 
 
 def _renderer_entrypoint(repo_root: Path) -> Path:
@@ -23,6 +39,34 @@ def _renderer_entrypoint(repo_root: Path) -> Path:
         if candidate.exists():
             return candidate
     return candidates[0]
+
+
+_RENDER_RUNTIME = build_renderer(_renderer_entrypoint(REPO_ROOT))
+DEFAULT_TEMPLATE = _RENDER_RUNTIME.default_template
+
+
+def resolve_inputs(
+    repo_root: Path,
+    claude_file: str = "CLAUDE.md",
+    relationships_file: str = "scripts/relationships.yaml",
+    output_file: str = "AGENTS.md",
+    template_path: Path = DEFAULT_TEMPLATE,
+):
+    """Resolve AGENTS canonical inputs for one repo layout."""
+
+    return _RENDER_RUNTIME.resolve_inputs(
+        repo_root=repo_root,
+        claude_file=claude_file,
+        relationships_file=relationships_file,
+        output_file=output_file,
+        template_path=template_path,
+    )
+
+
+def render_agents_markdown(inputs):
+    """Render AGENTS using the truthful local renderer runtime."""
+
+    return _RENDER_RUNTIME.render_agents_markdown(inputs)
 
 
 def parse_args() -> argparse.Namespace:

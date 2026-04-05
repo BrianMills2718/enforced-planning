@@ -45,6 +45,7 @@ MAKEFILE_WORKTREE_INSERTION_ANCHORS = (
 
 SYNC_SUPPORT_FILES: dict[str, str] = {
     "enforced_planning/__init__.py": "enforced_planning/__init__.py",
+    "enforced_planning/agents_rendering.py": "enforced_planning/agents_rendering.py",
     "enforced_planning/file_context.py": "enforced_planning/file_context.py",
     "scripts/check_doc_coupling.py": "scripts/check_doc_coupling.py",
     "scripts/check_markdown_links.py": "scripts/check_markdown_links.py",

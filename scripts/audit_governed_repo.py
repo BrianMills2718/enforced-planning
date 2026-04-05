@@ -24,13 +24,17 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from render_agents_md import render_agents_markdown as _render_agents_markdown
-from render_agents_md import resolve_inputs as _resolve_inputs
 from worktree_paths import resolve_canonical_repo_root
 import yaml  # type: ignore[import-untyped]
 
 
 FRAMEWORK_ROOT = Path(__file__).resolve().parents[1]
+if str(FRAMEWORK_ROOT) not in sys.path:
+    sys.path.insert(0, str(FRAMEWORK_ROOT))
+
+from enforced_planning.agents_rendering import build_renderer
+
+_FRAMEWORK_RENDERER = build_renderer(Path(__file__).resolve().parent / "render_agents_md.py")
 DEFAULT_SHARED_CAPABILITY_REGISTRY = (
     FRAMEWORK_ROOT / "scripts" / "capability_ownership_registry.yaml"
 )
@@ -80,7 +84,7 @@ def _load_repo_render_module(repo_root: Path) -> tuple[Any, Any]:
         finally:
             sys.modules.pop(module_name, None)
         return module.resolve_inputs, module.render_agents_markdown
-    return _resolve_inputs, _render_agents_markdown
+    return _FRAMEWORK_RENDERER.resolve_inputs, _FRAMEWORK_RENDERER.render_agents_markdown
 
 
 def parse_args() -> argparse.Namespace:

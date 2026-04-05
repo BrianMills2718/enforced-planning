@@ -43,6 +43,7 @@ See `ROADMAP.md` for the full phase map and recommended priority order.
 | 36 | Research Synthesis Downstream Consistency (`36_research-synthesis-downstream-consistency.md`) | Medium | ✅ Complete | Keep portable active guidance aligned with project-meta's research-synthesis hot path |
 | 37 | Plan-Bound Session Identity And Resume Lifecycle (`37_plan-bound-session-identity-and-resume-lifecycle.md`) | High | 📋 Planned | Make crash recovery, resume, and duplicate-lane prevention explicit and plan-bound |
 | 38 | Authority-Drift Reconciliation Gates (`38_authority-drift-reconciliation-gates.md`) | High | 📋 Planned | Turn authority drift into closure-blocking reconciliation debt instead of warning-only residue |
+| 39 | Worktree-Aware Markdown-Link Validation And Root Resolution (`39_worktree-aware-markdown-link-validation-and-root-resolution.md`) | High | 📋 Planned | Freeze ownership and the shared implementation path for markdown-link validation under worktree/canonical-root semantics |
 
 ## Status Key
 

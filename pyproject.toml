@@ -12,6 +12,9 @@ dev = ["pytest", "ruff", "mypy"]
 requires = ["setuptools>=68.0"]
 build-backend = "setuptools.build_meta"
 
+[tool.setuptools.packages.find]
+include = ["enforced_planning*"]
+
 [tool.ruff]
 line-length = 120
 

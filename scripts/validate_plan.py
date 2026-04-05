@@ -25,13 +25,23 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-ROOT = Path(__file__).resolve().parents[1]
+def _detect_repo_root(script_path: Path) -> Path:
+    """Resolve repo root for both canonical and installed script layouts."""
+    if script_path.parent.name == "meta" and script_path.parent.parent.name == "scripts":
+        return script_path.parents[2]
+    if script_path.parent.name == "scripts":
+        return script_path.parents[1]
+    return script_path.parents[1]
+
+
+ROOT = _detect_repo_root(Path(__file__).resolve())
 PLANS_DIR = ROOT / "docs" / "plans"
 
-if str(Path(__file__).resolve().parent) not in sys.path:
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
-from file_context import collect_context, load_relationships  # noqa: E402
+from enforced_planning.file_context import collect_context  # noqa: E402
+from enforced_planning.file_context import load_relationships  # noqa: E402
 
 
 PATH_CLEAN_RE = re.compile(r"[,;:.()]$")

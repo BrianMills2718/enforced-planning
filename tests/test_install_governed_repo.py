@@ -69,6 +69,8 @@ def test_install_governed_repo_dry_run_reports_expected_actions(tmp_path: Path) 
     assert "scaffold:scripts/relationships.yaml" in payload["actions"]
     assert "scaffold:docs/plans/CLAUDE.md" in payload["actions"]
     assert "scaffold:Makefile" in payload["actions"]
+    assert "install:enforced_planning/__init__.py" in payload["actions"]
+    assert "install:enforced_planning/file_context.py" in payload["actions"]
     assert "install:scripts/meta/file_context.py" in payload["actions"]
     assert "install:scripts/meta/render_agents_md.py" in payload["actions"]
     assert "install:scripts/meta/check_agents_sync.py" in payload["actions"]
@@ -103,6 +105,8 @@ def test_install_governed_repo_write_bootstraps_minimum_repo_and_passes_audit(
     assert (tmp_path / "docs" / "plans" / "CLAUDE.md").exists()
     assert (tmp_path / "docs" / "plans" / "TEMPLATE.md").exists()
     assert (tmp_path / "Makefile").exists()
+    assert (tmp_path / "enforced_planning" / "__init__.py").exists()
+    assert (tmp_path / "enforced_planning" / "file_context.py").exists()
     assert (tmp_path / "scripts" / "meta" / "file_context.py").exists()
     assert (tmp_path / "scripts" / "meta" / "render_agents_md.py").exists()
     assert (tmp_path / "scripts" / "meta" / "check_agents_sync.py").exists()
@@ -131,6 +135,21 @@ def test_install_governed_repo_write_bootstraps_minimum_repo_and_passes_audit(
         check=False,
     )
     assert sync_result.returncode == 0, sync_result.stdout + sync_result.stderr
+    file_context_result = subprocess.run(
+        [
+            sys.executable,
+            str(tmp_path / "scripts" / "meta" / "file_context.py"),
+            "--json",
+            "CLAUDE.md",
+        ],
+        cwd=str(tmp_path),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert file_context_result.returncode == 0, (
+        file_context_result.stdout + file_context_result.stderr
+    )
 
 
 def test_install_governed_repo_reports_and_syncs_drifted_validator(tmp_path: Path) -> None:

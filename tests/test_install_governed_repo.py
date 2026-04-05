@@ -10,6 +10,7 @@ from pathlib import Path
 
 PROJECT_META_ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = PROJECT_META_ROOT / "scripts" / "install_governed_repo.py"
+INSTALL_SH = PROJECT_META_ROOT / "install.sh"
 CANONICAL_FILE_CONTEXT = PROJECT_META_ROOT / "scripts" / "file_context.py"
 
 
@@ -66,6 +67,7 @@ def test_install_governed_repo_dry_run_reports_expected_actions(tmp_path: Path) 
     assert result.returncode == 0, result.stdout + result.stderr
     payload = json.loads(result.stdout)
     assert payload["write_mode"] is False
+    assert "scaffold:meta-process.yaml" in payload["actions"]
     assert "scaffold:scripts/relationships.yaml" in payload["actions"]
     assert "scaffold:docs/plans/CLAUDE.md" in payload["actions"]
     assert "scaffold:Makefile" in payload["actions"]
@@ -102,6 +104,7 @@ def test_install_governed_repo_write_bootstraps_minimum_repo_and_passes_audit(
     assert payload["post_audit"]["classification"] == "governed"
     assert (tmp_path / "AGENTS.md").exists()
     assert not (tmp_path / "AGENTS.md").is_symlink()
+    assert (tmp_path / "meta-process.yaml").exists()
     assert (tmp_path / "scripts" / "relationships.yaml").exists()
     assert (tmp_path / "docs" / "plans" / "CLAUDE.md").exists()
     assert (tmp_path / "docs" / "plans" / "TEMPLATE.md").exists()
@@ -380,6 +383,32 @@ def test_install_governed_repo_explicit_dry_run_reports_expected_actions(tmp_pat
     assert payload["write_mode"] is False
     assert payload["dry_run_mode"] is True
     assert payload["actions"]
+
+
+def test_install_sh_default_delegates_to_canonical_installer(tmp_path: Path) -> None:
+    """The shell wrapper should delegate the default path to the canonical installer."""
+    _write_minimal_claude(tmp_path)
+    subprocess.run(
+        ["git", "init", str(tmp_path)],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    result = subprocess.run(
+        ["bash", str(INSTALL_SH), str(tmp_path)],
+        cwd=str(PROJECT_META_ROOT),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "Delegating to canonical Python installer" in result.stdout
+    assert (tmp_path / "meta-process.yaml").exists()
+    assert (tmp_path / "AGENTS.md").exists()
+    assert (tmp_path / "scripts" / "relationships.yaml").exists()
+    assert (tmp_path / ".claude" / "hooks" / "gate-edit.sh").exists()
 
 
 def test_install_governed_repo_fails_loud_without_claude_md(tmp_path: Path) -> None:

@@ -65,7 +65,7 @@ the default behavior when absent.
 |-----|------|---------|---------|---------------------|
 | `quality.doc_coupling.enabled` | bool | `true` | `hooks/git/pre-commit` (check #3) | Doc coupling checked |
 | `quality.doc_coupling.strict` | bool | `true` | Not read (hardcoded block) | Block |
-| `quality.doc_coupling.config_file` | string | `"scripts/doc_coupling.yaml"` | `check_doc_coupling.py` | `scripts/doc_coupling.yaml` |
+| `quality.doc_coupling.config_file` | string | `"scripts/relationships.yaml"` | `check_doc_coupling.py` | `scripts/relationships.yaml` |
 | `quality.mock_policy.enabled` | bool | `true` | Not enforced by script | No effect |
 | `quality.mock_policy.require_mock_ok_comment` | bool | `true` | Not enforced by script | No effect |
 | `quality.adr_governance.enabled` | bool | `true` | Not enforced by script | No effect |

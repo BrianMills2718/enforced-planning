@@ -1,6 +1,13 @@
 #!/bin/bash
 # Enforced Planning Installation Script
-# Usage: ./install.sh /path/to/target/project [--minimal|--full|--pre-commit]
+# Usage: ./install.sh /path/to/target/project [--minimal|--full|--pre-commit|--worktree-only]
+#
+# Canonical governed-repo install/sync authority:
+#   python scripts/install_governed_repo.py --repo-root /path/to/target/project --write
+#
+# This shell wrapper now delegates the default minimum governed-repo bootstrap to
+# the canonical Python installer. Legacy `--full` and `--pre-commit` modes remain
+# as compatibility bootstrap paths and are not the long-term sync authority.
 
 set -e
 
@@ -13,18 +20,27 @@ NC='\033[0m' # No Color
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TARGET_DIR="${1:-.}"
 MODE="${2:---minimal}"
+PYTHON_BIN="${PYTHON:-python3}"
+
+if ! command -v "$PYTHON_BIN" >/dev/null 2>&1; then
+    PYTHON_BIN="python"
+fi
 
 if [[ "$TARGET_DIR" == "-h" || "$TARGET_DIR" == "--help" ]]; then
-    echo "Usage: $0 /path/to/project [--minimal|--full|--pre-commit]"
+    echo "Usage: $0 /path/to/project [--minimal|--full|--pre-commit|--worktree-only]"
     echo ""
     echo "Modes:"
-    echo "  --minimal     Install core patterns (plans, git hooks, doc-coupling)"
-    echo "  --full        Install all patterns including worktree coordination and acceptance gates"
-    echo "  --pre-commit  Install using the pre-commit framework (recommended)"
-    echo "                Creates .pre-commit-config.yaml instead of copying raw bash hooks."
-    echo "                Requires: pip install pre-commit"
+    echo "  --minimal        Canonical minimum governed-repo bootstrap (default)"
+    echo "                   Delegates to scripts/install_governed_repo.py --write"
+    echo "  --worktree-only  Canonical bounded sync for sanctioned worktree entrypoints only"
+    echo "                   Delegates to scripts/install_governed_repo.py --write --worktree-only"
+    echo "  --full           Legacy compatibility bootstrap for extra rollout surfaces"
+    echo "  --pre-commit     Legacy compatibility bootstrap with .pre-commit-config.yaml"
     echo ""
-    echo "After installation, edit meta-process.yaml to configure."
+    echo "Canonical installer authority:"
+    echo "  $PYTHON_BIN scripts/install_governed_repo.py --repo-root /path/to/project --write"
+    echo ""
+    echo "Prerequisite: target repo must already have a canonical CLAUDE.md."
     exit 0
 fi
 
@@ -40,6 +56,27 @@ if [[ ! -d "$TARGET_DIR/.git" ]]; then
     echo -e "${RED}Error: $TARGET_DIR is not a git repository${NC}"
     exit 1
 fi
+
+if [[ "$MODE" == "--minimal" || "$MODE" == "--worktree-only" ]]; then
+    echo -e "${GREEN}Delegating to canonical Python installer...${NC}"
+    INSTALL_ARGS=(
+        "$PYTHON_BIN"
+        "$SCRIPT_DIR/scripts/install_governed_repo.py"
+        "--repo-root"
+        "$TARGET_DIR"
+        "--write"
+    )
+    if [[ "$MODE" == "--worktree-only" ]]; then
+        INSTALL_ARGS+=("--worktree-only")
+    else
+        INSTALL_ARGS+=("--strict-governed")
+    fi
+    exec "${INSTALL_ARGS[@]}"
+fi
+
+echo -e "${YELLOW}Legacy bootstrap mode: $MODE${NC}"
+echo -e "${YELLOW}The canonical governed-repo sync/install contract lives in scripts/install_governed_repo.py.${NC}"
+echo ""
 
 # Create directories
 echo "Creating directories..."

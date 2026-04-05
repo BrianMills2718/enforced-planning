@@ -72,6 +72,7 @@ WORKTREE_ONLY_SYNC_SUPPORT_FILES: dict[str, str] = {
 }
 
 SCAFFOLD_TEMPLATES: dict[str, str] = {
+    "meta-process.yaml": "templates/meta-process.yaml.example",
     "docs/plans/CLAUDE.md": "templates/plans-index.md.template",
     "docs/plans/TEMPLATE.md": "templates/plan.md.template",
     "scripts/relationships.yaml": "templates/relationships.yaml.minimal",

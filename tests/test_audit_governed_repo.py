@@ -56,6 +56,10 @@ def _write_canonical_governance(repo_root: Path) -> None:
 def _write_governed_repo_scaffold(repo_root: Path) -> None:
     """Create a minimal mechanically governed repo for audit tests."""
     _write_canonical_governance(repo_root)
+    (repo_root / "meta-process.yaml").write_text(
+        "meta_process:\n  version: '1.0'\n",
+        encoding="utf-8",
+    )
     (repo_root / "docs" / "plans").mkdir(parents=True, exist_ok=True)
     (repo_root / "docs" / "plans" / "CLAUDE.md").write_text(
         "# Plans Index\n",
@@ -255,6 +259,7 @@ def test_audit_governed_repo_reports_partial_for_missing_contract(tmp_path: Path
     payload = json.loads(result.stdout)
     assert payload["classification"] == "partial"
     assert "canonical CLAUDE.md" in payload["missing_required"]
+    assert "meta-process.yaml" in payload["missing_required"]
     assert "scripts/relationships.yaml" in payload["missing_required"]
 
 

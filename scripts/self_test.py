@@ -2,15 +2,15 @@
 """Self-test for the enforced-planning framework.
 
 Verifies internal consistency:
-1. File existence - all files referenced by install.sh actually exist
-2. Link checker - all markdown cross-references resolve
-3. Install test - install to temp dir, make a commit, verify hooks work
+1. File existence - referenced framework files exist
+2. Link checker - markdown cross-references resolve
+3. Install test - canonical installer bootstraps a governed repo cleanly
 
 Usage:
     python enforced-planning/scripts/self_test.py              # All checks
-    python enforced-planning/scripts/self_test.py --files       # File existence only
-    python enforced-planning/scripts/self_test.py --links       # Link checker only
-    python enforced-planning/scripts/self_test.py --install     # Install test only
+    python enforced-planning/scripts/self_test.py --files      # File existence only
+    python enforced-planning/scripts/self_test.py --links      # Link checker only
+    python enforced-planning/scripts/self_test.py --install    # Install test only
 """
 
 import argparse
@@ -25,18 +25,18 @@ from urllib.parse import urlparse
 
 
 def find_framework_root() -> Path:
-    """Find meta-process/ directory relative to this script or CWD."""
-    # If running from within meta-process/scripts/
+    """Find the enforced-planning repo root relative to this script or CWD."""
+    # If running from within enforced-planning/scripts/
     script_dir = Path(__file__).resolve().parent
     if script_dir.name == "scripts" and (script_dir.parent / "install.sh").exists():
         return script_dir.parent
 
     # If running from repo root
     cwd = Path.cwd()
-    if (cwd / "meta-process" / "install.sh").exists():
-        return cwd / "meta-process"
+    if (cwd / "install.sh").exists() and (cwd / "scripts").is_dir():
+        return cwd
 
-    print("ERROR: Cannot find meta-process/ directory")
+    print("ERROR: Cannot find enforced-planning repo root")
     sys.exit(2)
 
 
@@ -44,11 +44,12 @@ def find_framework_root() -> Path:
 
 
 def check_file_existence(root: Path) -> list[str]:
-    """Verify all files referenced by install.sh exist."""
+    """Verify the key framework files referenced by install flows exist."""
     errors: list[str] = []
 
-    # Core scripts (from install.sh CORE_SCRIPTS array)
+    # Core scripts from the legacy shell bootstrap and source repo
     core_scripts = [
+        "install_governed_repo.py",
         "check_plan_tests.py",
         "check_plan_blockers.py",
         "check_dead_code.py",
@@ -214,7 +215,7 @@ def check_markdown_links(root: Path) -> list[str]:
             try:
                 resolved.relative_to(root.resolve())
             except ValueError:
-                # Link goes outside meta-process/ — can't validate
+                # Link goes outside enforced-planning/ — can't validate
                 continue
 
             if not resolved.exists():
@@ -230,7 +231,7 @@ def check_markdown_links(root: Path) -> list[str]:
 
 
 def check_install(root: Path) -> list[str]:
-    """Install to temp dir, make a commit, verify hooks work."""
+    """Install to temp dirs and verify the canonical installer contract."""
     errors: list[str] = []
 
     with tempfile.TemporaryDirectory(prefix="meta-process-test-") as tmpdir:
@@ -240,93 +241,127 @@ def check_install(root: Path) -> list[str]:
 
         # Initialize git repo
         _run(["git", "init", str(project)])
-        _run(["git", "-C", str(project), "config", "user.email", "test@test.com"])
-        _run(["git", "-C", str(project), "config", "user.name", "Test"])
-
-        # Create initial commit so we have a branch
-        readme = project / "README.md"
-        readme.write_text("# Test Project\n")
-        _run(["git", "-C", str(project), "add", "README.md"])
-        _run(
-            [
-                "git",
-                "-C",
-                str(project),
-                "commit",
-                "--no-verify",
-                "-m",
-                "Initial commit",
-            ]
+        canonical_claude = project / "CLAUDE.md"
+        canonical_claude.write_text(
+            "# Test Project\n\n"
+            "## Commands\n\n"
+            "```bash\npytest -q\n```\n\n"
+            "## Principles\n\n"
+            "1. Fail loud.\n\n"
+            "## Workflow\n\n"
+            "1. Read governance first.\n\n"
+            "## References\n\n"
+            "- `CLAUDE.md` - canonical governance\n",
+            encoding="utf-8",
         )
 
-        # Run minimal install
         install_script = str(root / "install.sh")
+        canonical_installer = str(root / "scripts" / "install_governed_repo.py")
         result = subprocess.run(
-            ["bash", install_script, str(project), "--minimal"],
+            [
+                sys.executable,
+                canonical_installer,
+                "--repo-root",
+                str(project),
+                "--write",
+                "--strict-governed",
+            ],
             capture_output=True,
             text=True,
         )
         if result.returncode != 0:
-            errors.append(f"install.sh --minimal failed:\n{result.stderr}")
+            errors.append(
+                "canonical install_governed_repo.py failed:\n"
+                f"stdout: {result.stdout}\n"
+                f"stderr: {result.stderr}"
+            )
             return errors
 
         # Verify expected files exist
         expected_files = [
+            "AGENTS.md",
             "meta-process.yaml",
-            "hooks/pre-commit",
-            "hooks/commit-msg",
-            "hooks/post-commit",
+            "scripts/relationships.yaml",
             "docs/plans/TEMPLATE.md",
             "docs/plans/CLAUDE.md",
             "CLAUDE.md",
-            "ISSUES.md",
-            "scripts/meta/parse_plan.py",
+            "Makefile",
+            "scripts/meta/check_agents_sync.py",
+            "scripts/meta/check_doc_coupling.py",
+            "scripts/meta/file_context.py",
+            "scripts/meta/render_agents_md.py",
+            "scripts/meta/sync_plan_status.py",
+            "scripts/meta/validate_plan.py",
             ".claude/settings.json",
             ".claude/hooks/track-reads.sh",
             ".claude/hooks/gate-edit.sh",
-            ".claude/hooks/post-edit-quiz.sh",
         ]
         for f in expected_files:
             if not (project / f).exists():
-                errors.append(f"Minimal install missing: {f}")
+                errors.append(f"Canonical install missing: {f}")
 
-        # Verify git hooks path is set
-        result = subprocess.run(
-            ["git", "-C", str(project), "config", "core.hooksPath"],
+        sync_result = subprocess.run(
+            [
+                sys.executable,
+                str(project / "scripts" / "meta" / "check_agents_sync.py"),
+                "--repo-root",
+                str(project),
+                "--check",
+            ],
             capture_output=True,
             text=True,
+            check=False,
         )
-        if result.stdout.strip() != "hooks":
+        if sync_result.returncode != 0:
             errors.append(
-                f"Git hooks path not set correctly: '{result.stdout.strip()}'"
+                "check_agents_sync.py failed after canonical install:\n"
+                f"stdout: {sync_result.stdout}\n"
+                f"stderr: {sync_result.stderr}"
             )
 
-        # Test 1: Good commit message should succeed
-        test_file = project / "test.txt"
-        test_file.write_text("hello\n")
-        _run(["git", "-C", str(project), "add", "test.txt"])
-        result = subprocess.run(
-            ["git", "-C", str(project), "commit", "-m", "[Trivial] Test commit"],
+        file_context_result = subprocess.run(
+            [
+                sys.executable,
+                str(project / "scripts" / "meta" / "file_context.py"),
+                "--json",
+                "CLAUDE.md",
+            ],
+            cwd=str(project),
             capture_output=True,
             text=True,
+            check=False,
         )
-        if result.returncode != 0:
+        if file_context_result.returncode != 0:
             errors.append(
-                f"Good commit blocked by hooks:\nstdout: {result.stdout}\nstderr: {result.stderr}"
+                "file_context.py failed after canonical install:\n"
+                f"stdout: {file_context_result.stdout}\n"
+                f"stderr: {file_context_result.stderr}"
             )
 
-        # Test 2: Bad commit message should be rejected
-        test_file.write_text("hello again\n")
-        _run(["git", "-C", str(project), "add", "test.txt"])
-        result = subprocess.run(
-            ["git", "-C", str(project), "commit", "-m", "bad message no prefix"],
+        # Verify the shell wrapper delegates to the canonical installer.
+        project_wrapper = tmp / "test-project-wrapper"
+        project_wrapper.mkdir()
+        _run(["git", "init", str(project_wrapper)])
+        (project_wrapper / "CLAUDE.md").write_text(
+            canonical_claude.read_text(encoding="utf-8"),
+            encoding="utf-8",
+        )
+        wrapper_result = subprocess.run(
+            ["bash", install_script, str(project_wrapper)],
             capture_output=True,
             text=True,
+            check=False,
         )
-        if result.returncode == 0:
-            errors.append("Bad commit message was NOT rejected by commit-msg hook")
+        if wrapper_result.returncode != 0:
+            errors.append(
+                "install.sh default wrapper failed:\n"
+                f"stdout: {wrapper_result.stdout}\n"
+                f"stderr: {wrapper_result.stderr}"
+            )
+        elif "Delegating to canonical Python installer" not in wrapper_result.stdout:
+            errors.append("install.sh default path did not announce canonical delegation")
 
-        # Test 3: Full install
+        # Legacy full bootstrap remains supported as a compatibility surface.
         project2 = tmp / "test-project-full"
         project2.mkdir()
         _run(["git", "init", str(project2)])
@@ -347,13 +382,17 @@ def check_install(root: Path) -> list[str]:
             ]
         )
 
-        result = subprocess.run(
+        legacy_result = subprocess.run(
             ["bash", install_script, str(project2), "--full"],
             capture_output=True,
             text=True,
         )
-        if result.returncode != 0:
-            errors.append(f"install.sh --full failed:\n{result.stderr}")
+        if legacy_result.returncode != 0:
+            errors.append(
+                "install.sh --full failed:\n"
+                f"stdout: {legacy_result.stdout}\n"
+                f"stderr: {legacy_result.stderr}"
+            )
             return errors
 
         full_expected = [

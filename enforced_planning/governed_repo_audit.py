@@ -331,7 +331,14 @@ def _load_meta_process_config(repo_root: Path) -> tuple[Path, dict[str, Any] | N
 
     Returns the config path, parsed mapping, and an optional parse error.
     """
+    repo_root = repo_root.resolve()
     config_path = repo_root / "meta-process.yaml"
+    if not config_path.exists():
+        canonical_repo_root = resolve_canonical_repo_root(repo_root)
+        if canonical_repo_root != repo_root:
+            fallback_path = canonical_repo_root / "meta-process.yaml"
+            if fallback_path.exists():
+                config_path = fallback_path
     if not config_path.exists():
         return config_path, None, None
     try:
@@ -701,6 +708,7 @@ def audit_repo(
     """Audit a repo against the mechanical governed-repo contract surface."""
     plans_path = repo_root / plans_dir
     plan_index = plans_path / "CLAUDE.md"
+    config_path, config, config_error = _load_meta_process_config(repo_root)
     relationships_state = _analyze_relationships_linkage(
         repo_root, relationships_file=relationships_file
     )
@@ -708,6 +716,13 @@ def audit_repo(
         "claude_md": {
             "present": (repo_root / claude_file).exists(),
             "path": claude_file,
+        },
+        "meta_process_yaml": {
+            "present": config_path.exists(),
+            "path": "meta-process.yaml",
+            "parse_error": config_error,
+            "valid": config_path.exists() and config_error is None,
+            "configured": config is not None,
         },
         "relationships_yaml": {
             "present": (repo_root / relationships_file).exists(),
@@ -755,6 +770,11 @@ def audit_repo(
     missing_required: list[str] = []
     if not checks["claude_md"]["present"]:
         missing_required.append("canonical CLAUDE.md")
+    meta_process = checks["meta_process_yaml"]
+    if not meta_process["present"]:
+        missing_required.append("meta-process.yaml")
+    elif not meta_process["valid"]:
+        missing_required.append("meta-process.yaml valid parseable mapping")
     if not checks["relationships_yaml"]["present"]:
         missing_required.append("scripts/relationships.yaml")
     elif relationships_state["status"] == "invalid":

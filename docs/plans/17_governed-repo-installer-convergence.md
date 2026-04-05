@@ -1,6 +1,6 @@
 # Plan #17: Governed-Repo Installer Convergence
 
-**Status:** Planned
+**Status:** Complete
 **Type:** design
 **Priority:** High
 **Blocked By:** None
@@ -47,11 +47,14 @@ confusion. The installer is the root of the governed-repo product surface.
 
 - install.sh (modify or deprecate)
 - scripts/install_governed_repo.py (modify)
+- enforced_planning/governed_repo_audit.py (modify)
 - tests/test_install_governed_repo.py (modify)
 - scripts/self_test.py (modify)
 - README.md (modify)
 - GETTING_STARTED.md (modify)
 - docs/guides/NEW_PROJECT_SETUP.md (modify)
+- templates/meta-process.yaml.example (modify)
+- docs/reference/CONFIG_REFERENCE.md (modify)
 - ROADMAP.md (modify if installer authority or phase status language changes)
 - docs/plans/17_governed-repo-installer-convergence.md (modify)
 - docs/plans/CLAUDE.md (modify)
@@ -94,16 +97,20 @@ confusion. The installer is the root of the governed-repo product surface.
 
 ## Acceptance Criteria
 
-- [ ] One installer path is explicitly canonical
-- [ ] The non-canonical installer path is either delegated, scoped narrowly, or deprecated
-- [ ] The documented installed file layout matches what tests assert
-- [ ] Mode semantics (`--minimal`, `--full`, `--pre-commit`, worktree sync) are documented without overlap or ambiguity
-- [ ] Installer-facing docs match the chosen authority
-- [ ] Declared checks pass
+- [x] One installer path is explicitly canonical
+- [x] The non-canonical installer path is either delegated, scoped narrowly, or deprecated
+- [x] The documented installed file layout matches what tests assert
+- [x] Mode semantics (`--minimal`, `--full`, `--pre-commit`, worktree sync) are documented without overlap or ambiguity
+- [x] Installer-facing docs match the chosen authority
+- [x] Declared checks pass
 
 ---
 
-## Open Questions
+## Decision
 
-- [ ] Should `install.sh` remain the public entrypoint for ergonomics while delegating all real logic to Python, or should the Python installer become the primary operator surface? — Status: OPEN | Why it matters: affects portability, testability, and future upgrade flow
+`scripts/install_governed_repo.py` is now the canonical governed-repo
+installer/upgrader. `install.sh` remains as:
 
+- a convenience wrapper for the default minimum install
+- a bounded `--worktree-only` wrapper
+- a legacy compatibility bootstrap for `--full` and `--pre-commit`

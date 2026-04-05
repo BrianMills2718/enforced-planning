@@ -82,7 +82,7 @@ meta_process:
       # Fail CI (true) or just warn (false)
       strict: true
       # Mapping file location
-      config_file: "scripts/doc_coupling.yaml"
+      config_file: "scripts/relationships.yaml"
 
     mock_policy:
       enabled: true
@@ -168,7 +168,7 @@ meta_process:
 
 # These are typically in separate files, not in meta-process.yaml:
 #
-# scripts/doc_coupling.yaml:
+# scripts/relationships.yaml:
 #   - sources: ["src/core/*.py"]
 #     docs: ["docs/architecture/core.md"]
 #

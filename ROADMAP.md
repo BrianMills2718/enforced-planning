@@ -99,8 +99,8 @@ canonical semantic-review path.
 | #10 | Framework truth-surface and onboarding reconciliation | ✅ Complete |
 
 **Follow-on gap:** Plan #10 closed the first reconciliation pass, but the top-level
-product surface still needs a second convergence pass now tracked in Plans #16,
-#17, and #18.
+product surface still needs a second convergence pass now tracked in Plans #16
+and #18. Plan #17 completed the installer-authority half of that cleanup.
 
 ### Phase 8: Multi-Tool Support and Ecosystem Observability (GATE OPEN — 2026-04-04)
 
@@ -136,20 +136,16 @@ All three conditions green as of 2026-04-04 overnight sprint:
 
 ## What's Next (recommended priority order)
 
-1. **Plan #17: Governed-repo installer convergence**
-   Align `install.sh` and `scripts/install_governed_repo.py` behind one
-   canonical installed-repo contract.
-
-2. **Plan #18: Truth-surface semantic review convergence**
+1. **Plan #18: Truth-surface semantic review convergence**
    Converge the duplicated semantic-review stacks onto one canonical path.
 
-3. **Plan #16: Documentation and adoption surface convergence**
+2. **Plan #16: Documentation and adoption surface convergence**
    Rewrite the top-level doc stack against the canonical installer and semantic-review decisions.
 
-4. **Plan #14: Research-backed ADR and topic-research follow-through**
+3. **Plan #14: Research-backed ADR and topic-research follow-through**
    Finish the remaining policy and adoption work so research linkage is not just a local doctrine.
 
-5. **Phase 8 execution planning**
+4. **Phase 8 execution planning**
    Convert the open Phase 8 gate into bounded numbered plans for multi-tool support,
    upgrade automation, dashboarding, and framework self-measurement.
 

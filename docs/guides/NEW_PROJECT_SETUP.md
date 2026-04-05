@@ -1,203 +1,188 @@
 # New Project Setup Guide
 
-**Goal:** Go from zero to your first governed commit in 15 minutes.
+Detailed operator guide for adopting the minimum governed-repo contract.
 
-> **Tool requirement:** Claude Code is required for AI enforcement hooks. Git and Python
-> 3.9+ are required for all modes.
-
----
+This is the longer companion to [GETTING_STARTED.md](../../GETTING_STARTED.md).
+It stays in the installed-consumer perspective: target repo layout, installed
+paths, and operator verification.
 
 ## 1. Prerequisites
 
-| Requirement | Version | Check |
-|------------|---------|-------|
-| Git | ≥ 2.30 | `git --version` |
-| Python | ≥ 3.9 | `python3 --version` |
-| Claude Code | any | `claude --version` |
-| pydantic | ≥ 2.0 | `pip show pydantic` |
-| pyyaml | any | `pip show pyyaml` |
+Your target repo needs:
 
-Install Python deps if needed:
-```bash
-pip install pydantic pyyaml
-```
+- git
+- Python 3.9+
+- a canonical `CLAUDE.md`
 
----
+The canonical installer will not invent project governance for you.
 
-## 2. Install
+## 2. Bootstrap The Minimum Governed Contract
+
+From the `enforced-planning` repo:
 
 ```bash
-# Clone the framework (or use it as a dependency)
-git clone git@github.com:BrianMills2718/enforced-planning.git ~/enforced-planning
-
-# Go to your project root
-cd /path/to/your/project
-
-# Install in minimal mode (recommended starting point)
-~/enforced-planning/install.sh . --minimal
-
-# OR install everything including acceptance gates and worktree coordination
-~/enforced-planning/install.sh . --full
+python scripts/install_governed_repo.py --repo-root /path/to/your/project --write
+python scripts/audit_governed_repo.py --repo-root /path/to/your/project --strict-governed
 ```
 
-**What `--minimal` installs:**
-- `meta-process.yaml` — your configuration file
-- `docs/plans/CLAUDE.md` — plan index template
-- `hooks/commit-msg` — commit prefix validation (git hook)
-- `hooks/pre-commit` — doc-coupling and plan checks (git hook)
-- `.claude/hooks/` — read-gating enforcement (Claude Code hooks)
-- `scripts/meta/` — utility scripts
-
-**What `--full` adds:**
-- `acceptance_gates/` — acceptance criteria YAML templates
-- `docs/adr/` — architecture decision record template
-- `scripts/meta/worktree-coordination/` — multi-agent worktree scripts
-
-### Install git hooks
+Equivalent convenience wrapper:
 
 ```bash
-# Symlink the hooks (or copy them)
-ln -sf "$(pwd)/hooks/commit-msg" .git/hooks/commit-msg
-ln -sf "$(pwd)/hooks/pre-commit" .git/hooks/pre-commit
-chmod +x .git/hooks/commit-msg .git/hooks/pre-commit
+./install.sh /path/to/your/project
 ```
 
----
+The shell wrapper is not a separate authority. Its default mode delegates to
+the canonical Python installer.
 
-## 3. Verify
+## 3. Installed Files
+
+Minimum canonical install:
+
+- `meta-process.yaml`
+- `docs/plans/CLAUDE.md`
+- `docs/plans/TEMPLATE.md`
+- `scripts/relationships.yaml`
+- `scripts/meta/check_agents_sync.py`
+- `scripts/meta/check_doc_coupling.py`
+- `scripts/meta/file_context.py`
+- `scripts/meta/render_agents_md.py`
+- `scripts/meta/sync_plan_status.py`
+- `scripts/meta/validate_plan.py`
+- `scripts/meta/worktree-coordination/check_claims.py`
+- `scripts/meta/worktree-coordination/create_worktree.py`
+- `scripts/meta/worktree-coordination/safe_worktree_remove.py`
+- `.claude/hooks/gate-edit.sh`
+- `.claude/hooks/track-reads.sh`
+- `.claude/settings.json`
+- `AGENTS.md`
+- `Makefile`
+
+## 4. Verify The Result
+
+From the target repo root:
 
 ```bash
-# Always available (--minimal and --full): test that plan check works
-python scripts/meta/check_plan_tests.py . --list
-
-# --full mode only: test that locked coupling check works
-# (skip this if you installed with --minimal)
-# python scripts/meta/check_locked_couplings.py .
-
-# Verify commit-msg hook fires correctly
-git commit --allow-empty -m "[Trivial] test hook setup"
-# Expected: commit succeeds (empty commit with valid prefix)
-# If you see "invalid prefix", the hook is active but meta-process.yaml
-# commits.valid_prefixes needs reviewing (see Step 4)
+python scripts/meta/check_agents_sync.py --repo-root . --check
+python scripts/meta/file_context.py --json CLAUDE.md
 ```
 
-> **`check_locked_couplings.py` missing?** This script is only installed by
-> `--full` mode. If you used `--minimal`, use `check_plan_tests.py` for
-> verification — it's always present. Install `--full` later if you need
-> V2 relationship enforcement.
+From the framework repo:
 
----
+```bash
+python scripts/audit_governed_repo.py --repo-root /path/to/your/project --strict-governed
+```
 
-## 4. Configure
+If the audit passes, the repo satisfies the minimum mechanical governed-repo
+contract.
 
-Edit `meta-process.yaml` in your project root. The keys that matter most for initial setup:
+## 5. Configure `meta-process.yaml`
 
-| Key | Default | What it does | Functional? |
-|-----|---------|-------------|-------------|
-| `plans.plans_dir` | `docs/plans` | Where plan files live | ✅ Yes |
-| `plans.require_tests` | `true` | Require "Required Tests" section | ✅ Yes (check_plan_tests.py) |
-| `commits.require_prefix` | `true` | Enforce `[Plan #N]`/`[Trivial]` prefix | ✅ Yes (commit-msg hook) |
-| `commits.valid_prefixes` | see file | Regex patterns for valid prefixes | ✅ Yes (commit-msg hook) |
-| `quality.dead_code.enabled` | `false` | Vulture dead-code scan | ✅ Yes (check_dead_code.py) |
-| `quality.dead_code.strict` | `false` | Block vs warn on dead code | ✅ Yes |
-| `plans.trivial_threshold_lines` | `20` | Reference for what "trivial" means | 📋 Planned |
-| `planning.question_driven_planning` | `advisory` | Investigation enforcement | 📋 Planned |
-| `planning.uncertainty_tracking` | `advisory` | Open question tracking | 📋 Planned |
-| `capability_ownership.*` | `false` | Capability registry enforcement | 📋 Planned |
-| `messaging.*` | `false` | Multi-agent inbox coordination | 📋 Planned |
+Use [docs/reference/CONFIG_REFERENCE.md](../reference/CONFIG_REFERENCE.md) for
+the authoritative key table.
 
-> **📋 Planned** = key exists in config file but no script reads it yet. Setting it has no effect.
+Recommended starting point:
 
-**Minimum viable config** (what you actually need):
 ```yaml
 meta_process:
   version: "1.0"
+
   plans:
     enabled: true
+    require_tests: true
+    require_references_reviewed: true
     plans_dir: "docs/plans"
+
   commits:
     require_prefix: true
     valid_prefixes:
       - "\\[Plan #\\d+\\]"
       - "\\[Trivial\\]"
+      - "\\[Unplanned\\]"
+
+  planning:
+    question_driven_planning: advisory
+    uncertainty_tracking: advisory
+    dependency_probe_policy: strict
+
+  quality:
+    doc_coupling:
+      enabled: true
+      strict: true
+      config_file: "scripts/relationships.yaml"
 ```
 
----
+## 6. First Plan
 
-## 5. Your First Plan
+From the target repo:
 
 ```bash
-# Create your first plan from template
-cp ~/enforced-planning/templates/plan.md.template docs/plans/01_my-first-feature.md
-
-# Edit the plan
-vim docs/plans/01_my-first-feature.md
-# Fill in: Gap, Target, Acceptance Criteria, Required Tests, Files Affected
-
-# Create a branch
 git checkout -b plan-1-my-first-feature
+cp docs/plans/TEMPLATE.md docs/plans/01_my-first-feature.md
+```
 
-# Do your work...
+Before implementation, make sure the plan declares:
 
-# Commit with plan prefix
-git add src/my_feature.py tests/test_my_feature.py
+- gap framing
+- references reviewed
+- research basis for the slice, or an explicit skip statement
+- required tests
+
+Then implement and commit:
+
+```bash
+git add -A
 git commit -m "[Plan #1] implement my first feature"
 ```
 
-**Commit prefix rules:**
-- `[Plan #N]` — requires an existing plan file with that number
-- `[Trivial]` — for tiny changes (≤ 20 lines, no src/, no new APIs)
-- `[Unplanned]` — emergency escape hatch; CI may warn
+## 7. Optional And Legacy Modes
 
----
+These are not the canonical minimum install path:
 
-## 6. Common Errors
+- `./install.sh /path/to/your/project --worktree-only`
+  - canonical bounded sync for sanctioned worktree entrypoints only
+- `./install.sh /path/to/your/project --full`
+  - legacy compatibility bootstrap for broader rollout surfaces
+- `./install.sh /path/to/your/project --pre-commit`
+  - legacy compatibility bootstrap for pre-commit hook distribution
 
-### "Invalid commit prefix"
+Truth-surface tooling also remains outside the minimum canonical install for
+now. Use the framework repo scripts directly or the legacy `--full` bootstrap
+until that surface converges.
 
-```
-ERROR: Commit message must start with [Plan #N], [Trivial], or [Unplanned].
-```
+## 8. Common Problems
 
-**Fix:** Add the prefix. Check `meta-process.yaml` `commits.valid_prefixes` if you
-want custom prefixes.
+### Audit says `missing canonical CLAUDE.md`
 
-### "Locked coupling violation"
+Create the root `CLAUDE.md` first. The installer will not invent it.
 
-```
-ERROR: src/core.py is in a locked coupling. docs/architecture.md must also be staged.
-```
+### Audit says `missing scripts/relationships.yaml`
 
-**Fix:** Stage the coupled doc along with your source change:
+Re-run the canonical installer in write mode:
+
 ```bash
-git add docs/architecture.md
-git commit -m "[Plan #1] update core + doc"
+python scripts/install_governed_repo.py --repo-root /path/to/your/project --write
 ```
 
-### "Plan #N not found"
+### `AGENTS.md` drifts later
 
-```
-ERROR: [Plan #5] referenced in commit but docs/plans/05_*.md not found
-```
+From the target repo:
 
-**Fix:** Create the plan file first, or use `[Trivial]` if the change is genuinely minor.
-
-### "Required Tests section missing"
-
-```
-WARNING: Plan #3 has no Required Tests section
+```bash
+python scripts/meta/check_agents_sync.py --repo-root . --check
+python scripts/meta/render_agents_md.py --repo-root . > AGENTS.md
 ```
 
-**Fix:** Add a `## Required Tests` section to your plan file listing what tests cover this plan.
+### `file_context.py` fails
 
-### "pyyaml not found"
+Check that the installed repo still has:
 
-**Fix:** `pip install pyyaml`
+- `CLAUDE.md`
+- `scripts/relationships.yaml`
+- `scripts/meta/file_context.py`
 
----
+## 9. Reference Docs
 
-## Full Config Reference
-
-See [`docs/reference/CONFIG_REFERENCE.md`](../reference/CONFIG_REFERENCE.md) for
-the complete table of every config key, which script reads it, and the default
-behavior when absent.
+- [GETTING_STARTED.md](../../GETTING_STARTED.md)
+- [PLANNING_OPERATING_MODEL.md](../../PLANNING_OPERATING_MODEL.md)
+- [docs/reference/CONFIG_REFERENCE.md](../reference/CONFIG_REFERENCE.md)
+- [patterns/01_README.md](../../patterns/01_README.md)

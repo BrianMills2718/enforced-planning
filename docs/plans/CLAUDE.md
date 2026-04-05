@@ -28,6 +28,7 @@ See `ROADMAP.md` for the full phase map and recommended priority order.
 | 21 | Ecosystem Dashboard and Status Surfaces (`21_ecosystem-dashboard-and-status-surfaces.md`) | Medium | ✅ Complete | — |
 | 22 | Framework Self-Measurement and ROI (`22_framework-self-measurement-and-roi.md`) | Medium | ✅ Complete | #21 |
 | 23 | Mac Mini Transfer and Continuous Automation Bootstrap (`23_mac-mini-transfer-and-continuous-automation-bootstrap.md`) | High | ✅ Complete | — |
+| 24 | Coordination-State Packageization and Consistency Gate (`24_coordination-state-packageization-and-consistency-gate.md`) | High | ✅ Complete | — |
 
 ## Status Key
 

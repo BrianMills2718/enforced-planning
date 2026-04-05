@@ -76,6 +76,7 @@ def test_install_governed_repo_dry_run_reports_expected_actions(tmp_path: Path) 
     assert "install:enforced_planning/file_context.py" in payload["actions"]
     assert "install:enforced_planning/notebook_registry_validation.py" in payload["actions"]
     assert "install:enforced_planning/plan_validation.py" in payload["actions"]
+    assert "install:scripts/meta/check_coordination_claims.py" in payload["actions"]
     assert "install:scripts/meta/file_context.py" in payload["actions"]
     assert "install:scripts/meta/render_agents_md.py" in payload["actions"]
     assert "install:scripts/meta/check_agents_sync.py" in payload["actions"]
@@ -116,6 +117,7 @@ def test_install_governed_repo_write_bootstraps_minimum_repo_and_passes_audit(
     assert (tmp_path / "enforced_planning" / "file_context.py").exists()
     assert (tmp_path / "enforced_planning" / "notebook_registry_validation.py").exists()
     assert (tmp_path / "enforced_planning" / "plan_validation.py").exists()
+    assert (tmp_path / "scripts" / "meta" / "check_coordination_claims.py").exists()
     assert (tmp_path / "scripts" / "meta" / "file_context.py").exists()
     assert (tmp_path / "scripts" / "meta" / "render_agents_md.py").exists()
     assert (tmp_path / "scripts" / "meta" / "check_agents_sync.py").exists()
@@ -126,10 +128,14 @@ def test_install_governed_repo_write_bootstraps_minimum_repo_and_passes_audit(
     assert "worktree:" in makefile_text
     assert "worktree-list:" in makefile_text
     assert "worktree-remove:" in makefile_text
-    assert "scripts/meta/worktree-coordination/check_claims.py" in makefile_text
+    assert "scripts/meta/worktree-coordination/../check_coordination_claims.py" in makefile_text
     assert "$(SCRIPTS_META)/worktree-coordination" not in makefile_text
     assert "--print-default-worktree-dir" in makefile_text
-    assert '--release --id "$(BRANCH)" --force' in makefile_text
+    assert '--agent "$(WORKTREE_AGENT)"' in makefile_text
+    assert '--project "$(WORKTREE_PROJECT)"' in makefile_text
+    assert '--scope "$(BRANCH)"' in makefile_text
+    assert '--claim-type program' in makefile_text
+    assert '--release --agent "$(WORKTREE_AGENT)" --project "$(WORKTREE_PROJECT)" --scope "$(BRANCH)"' in makefile_text
     sync_result = subprocess.run(
         [
             sys.executable,
@@ -237,7 +243,7 @@ def test_install_governed_repo_appends_makefile_meta_block_when_missing(
     assert "worktree:" in makefile_text
     assert "# >>> META-PROCESS WORKTREE TARGETS >>>" in makefile_text
     assert "# <<< META-PROCESS WORKTREE TARGETS <<<" in makefile_text
-    assert '--release --id "$(BRANCH)" --force' in makefile_text
+    assert '--release --agent "$(WORKTREE_AGENT)" --project "$(WORKTREE_PROJECT)" --scope "$(BRANCH)"' in makefile_text
 
 
 def test_install_governed_repo_syncs_worktree_block_into_existing_meta_makefile(
@@ -294,8 +300,9 @@ def test_install_governed_repo_syncs_worktree_block_into_existing_meta_makefile(
     makefile_text = (tmp_path / "Makefile").read_text(encoding="utf-8")
     assert "# >>> META-PROCESS WORKTREE TARGETS >>>" in makefile_text
     assert "WORKTREE_CREATE_SCRIPT := scripts/meta/worktree-coordination/create_worktree.py" in makefile_text
-    assert "WORKTREE_CLAIMS_SCRIPT := scripts/meta/worktree-coordination/check_claims.py" in makefile_text
+    assert "WORKTREE_CLAIMS_SCRIPT := scripts/meta/worktree-coordination/../check_coordination_claims.py" in makefile_text
     assert "WORKTREE_START_POINT ?= HEAD" in makefile_text
+    assert "WORKTREE_PROJECT ?= $(notdir $(CURDIR))" in makefile_text
     assert "worktree-list:" in makefile_text
     assert "worktree-remove:" in makefile_text
     assert "# --- During Implementation ---" in makefile_text
@@ -321,7 +328,7 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
     assert payload["worktree_only_mode"] is True
     assert sorted(payload["actions"]) == sorted(
         [
-            "install:scripts/meta/worktree-coordination/check_claims.py",
+            "install:scripts/meta/check_coordination_claims.py",
             "install:scripts/meta/worktree-coordination/create_worktree.py",
             "install:scripts/meta/worktree-coordination/safe_worktree_remove.py",
             "append:Makefile.worktree",
@@ -330,9 +337,7 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
     assert not (tmp_path / "scripts" / "relationships.yaml").exists()
     assert not (tmp_path / "AGENTS.md").exists()
     assert not (tmp_path / ".claude" / "hooks" / "gate-edit.sh").exists()
-    assert (
-        tmp_path / "scripts" / "meta" / "worktree-coordination" / "check_claims.py"
-    ).exists()
+    assert (tmp_path / "scripts" / "meta" / "check_coordination_claims.py").exists()
     assert (
         tmp_path / "scripts" / "meta" / "worktree-coordination" / "create_worktree.py"
     ).exists()

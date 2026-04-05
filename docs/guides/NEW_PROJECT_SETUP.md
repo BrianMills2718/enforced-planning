@@ -42,8 +42,8 @@ additional control surfaces the install makes available:
 
 - `Makefile`
   - shared entrypoints for validation and worktree operations
-- `scripts/meta/worktree-coordination/check_claims.py`
-  - validates sanctioned worktree claims
+- `scripts/meta/check_coordination_claims.py`
+  - canonical installed v2 claim entrypoint for sanctioned worktree lanes
 - `scripts/meta/worktree-coordination/create_worktree.py`
   - creates governed worktrees through the sanctioned path
 - `scripts/meta/worktree-coordination/safe_worktree_remove.py`
@@ -70,6 +70,10 @@ python scripts/audit_governed_repo.py --repo-root /path/to/your/project --strict
 
 If the audit passes, the repo satisfies the minimum mechanical governed-repo
 contract.
+
+If the repo uses the sanctioned worktree lane flow, `make worktree` creates a
+v2 **program** claim by default. That gives the lane real branch/worktree/session
+metadata without pretending the entire repo root is one narrow write scope.
 
 ## 5. Configure `meta-process.yaml`
 

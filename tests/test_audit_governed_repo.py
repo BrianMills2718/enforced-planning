@@ -186,8 +186,13 @@ def _write_worktree_coordination_surface(repo_root: Path) -> None:
     """Install the minimum local scripts and Makefile targets for worktree coordination."""
     scripts_dir = repo_root / "scripts" / "meta" / "worktree-coordination"
     scripts_dir.mkdir(parents=True, exist_ok=True)
-    for script_name in ("create_worktree.py", "safe_worktree_remove.py", "check_claims.py"):
+    for script_name in ("create_worktree.py", "safe_worktree_remove.py"):
         (scripts_dir / script_name).write_text('"""stub."""\n', encoding="utf-8")
+    (repo_root / "scripts" / "meta").mkdir(parents=True, exist_ok=True)
+    (repo_root / "scripts" / "meta" / "check_coordination_claims.py").write_text(
+        '"""stub."""\n',
+        encoding="utf-8",
+    )
 
     (repo_root / "Makefile").write_text(
         "\n".join(

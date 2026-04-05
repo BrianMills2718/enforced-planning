@@ -50,6 +50,8 @@ SYNC_SUPPORT_FILES: dict[str, str] = {
     "enforced_planning/__init__.py": "enforced_planning/__init__.py",
     "enforced_planning/agents_rendering.py": "enforced_planning/agents_rendering.py",
     "enforced_planning/file_context.py": "enforced_planning/file_context.py",
+    "enforced_planning/notebook_registry_validation.py": "enforced_planning/notebook_registry_validation.py",
+    "enforced_planning/plan_validation.py": "enforced_planning/plan_validation.py",
     "scripts/check_doc_coupling.py": "scripts/check_doc_coupling.py",
     "scripts/check_markdown_links.py": "scripts/check_markdown_links.py",
     "scripts/sync_plan_status.py": "scripts/sync_plan_status.py",

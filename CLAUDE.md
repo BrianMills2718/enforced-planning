@@ -2,15 +2,23 @@
 
 Source repo for the portable planning and governance framework.
 
-## Active Execution
+## Continuous Execution Contract
 
-Brian has explicitly requested continuous execution for the current lane.
+This repo is currently running in explicit continuous-execution mode.
 
-- Active sprint authority: `~/projects/project-meta/docs/ops/OVERNIGHT_SPRINT_2026_04_04_COORDINATION_AND_GRAPH_RUNTIME.md`
-- Active plan authority: `~/projects/project-meta/docs/plans/90_coordination-hardening-and-graph-explicitification.md`
-- Worktree rule: plan-level changes stay in this repo worktree until verified and committed
-- Commit rule: every verified slice gets its own commit immediately
-- Coordination rule: active claims missing branch, worktree, session, or write scope are defects to surface, not healthy normal state
+- Do not stop at plan creation, green tests, or one completed commit.
+- Execute the active numbered queue continuously until all planned phases are
+  complete or a documented stop condition is reached.
+- Work in sanctioned worktrees between merges/pushes rather than piling new
+  overnight work onto a dirty primary checkout.
+- Commit every verified slice so rollback is cheap and exact.
+- If a concern or uncertainty appears, document it in the active plan or sprint
+  tracker immediately; do not leave it only in chat.
+
+Only two stop conditions are legitimate:
+
+1. an irreversible action that affects shared state
+2. a genuine architectural decision not already pre-made in the active plan
 
 ## Canonical Surfaces
 
@@ -79,9 +87,10 @@ make test
 
 1. Use `docs/plans/CLAUDE.md` and `ROADMAP.md` to find the next bounded slice.
 2. Work from the matching numbered plan doc.
-3. Keep source-repo docs truthful when installer behavior, support tiers, or
+3. Prefer sanctioned worktrees for multi-phase or overnight execution lanes.
+4. Keep source-repo docs truthful when installer behavior, support tiers, or
    plan status changes.
-4. Run `python scripts/self_test.py` before landing documentation or installer
+5. Run `python scripts/self_test.py` before landing documentation or installer
    changes.
 
 ## Notes

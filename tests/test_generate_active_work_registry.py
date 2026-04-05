@@ -2,28 +2,12 @@
 
 from __future__ import annotations
 
-import importlib.util
 import json
-import sys
 from pathlib import Path
 
 import yaml  # type: ignore[import-untyped]
 
-
-MODULE_PATH = (
-    Path(__file__).resolve().parents[1] / "scripts" / "generate_active_work_registry.py"
-)
-
-
-def _load_module():
-    """Load the standalone registry generator script as a module."""
-    module_name = "generate_active_work_registry_module"
-    spec = importlib.util.spec_from_file_location(module_name, MODULE_PATH)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[module_name] = module
-    spec.loader.exec_module(module)
-    return module
+from enforced_planning import active_work_registry as module
 
 
 def _write_claim(claims_dir: Path, name: str, payload: dict) -> None:
@@ -34,7 +18,6 @@ def _write_claim(claims_dir: Path, name: str, payload: dict) -> None:
 
 def test_generate_registry_outputs_json_and_markdown(tmp_path: Path) -> None:
     """Registry generation should emit machine-readable and compact markdown views."""
-    module = _load_module()
     claims_dir = tmp_path / "claims"
     json_output = tmp_path / "generated" / "runtime" / "active_work_registry.json"
     markdown_output = tmp_path / "generated" / "runtime" / "active_work_registry.md"
@@ -133,7 +116,6 @@ def test_generate_registry_outputs_json_and_markdown(tmp_path: Path) -> None:
 
 def test_generate_registry_handles_empty_claim_set(tmp_path: Path) -> None:
     """Registry generation should still emit valid empty outputs when no claims exist."""
-    module = _load_module()
     claims_dir = tmp_path / "claims"
     json_output = tmp_path / "generated" / "runtime" / "active_work_registry.json"
     markdown_output = tmp_path / "generated" / "runtime" / "active_work_registry.md"

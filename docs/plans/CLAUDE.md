@@ -23,10 +23,12 @@ See `ROADMAP.md` for the full phase map and recommended priority order.
 | 16 | Documentation and Adoption Surface Convergence (`16_documentation-and-adoption-surface-convergence.md`) | High | ✅ Complete | — |
 | 17 | Governed-Repo Installer Convergence (`17_governed-repo-installer-convergence.md`) | High | ✅ Complete | — |
 | 18 | Truth-Surface Semantic Review Convergence (`18_truth-surface-semantic-review-convergence.md`) | High | ✅ Complete | — |
-| 19 | Multi-Tool Support Matrix and Rollout (`19_multi-tool-support-matrix-and-rollout.md`) | High | 📋 Planned | — |
-| 20 | Governed-Repo Upgrade Automation (`20_governed-repo-upgrade-automation.md`) | High | 📋 Planned | — |
-| 21 | Ecosystem Dashboard and Status Surfaces (`21_ecosystem-dashboard-and-status-surfaces.md`) | Medium | 📋 Planned | — |
-| 22 | Framework Self-Measurement and ROI (`22_framework-self-measurement-and-roi.md`) | Medium | 📋 Planned | #21 |
+| 19 | Multi-Tool Support Matrix and Rollout (`19_multi-tool-support-matrix-and-rollout.md`) | High | ✅ Complete | — |
+| 20 | Governed-Repo Upgrade Automation (`20_governed-repo-upgrade-automation.md`) | High | ✅ Complete | — |
+| 21 | Ecosystem Dashboard and Status Surfaces (`21_ecosystem-dashboard-and-status-surfaces.md`) | Medium | ✅ Complete | — |
+| 22 | Framework Self-Measurement and ROI (`22_framework-self-measurement-and-roi.md`) | Medium | ✅ Complete | #21 |
+| 23 | Mac Mini Transfer and Continuous Automation Bootstrap (`23_mac-mini-transfer-and-continuous-automation-bootstrap.md`) | High | ✅ Complete | — |
+| 24 | Coordination-State Packageization and Consistency Gate (`24_coordination-state-packageization-and-consistency-gate.md`) | High | ✅ Complete | — |
 
 ## Status Key
 

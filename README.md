@@ -2,11 +2,14 @@
 
 A portable framework for coordinating AI coding assistants on shared codebases.
 
-> **Tool support:** Claude Code currently has the strongest native support
-> because read-gating is enforced through `.claude/hooks/`. Other tools can
-> still consume the planning model, generated `AGENTS.md`, and deterministic
-> validators, but they do not yet share the same native interactive hook
-> surface.
+> **Tool support:** `enforced-planning` uses a four-tier support matrix:
+> `native-interactive`, `portable-governed`, `legacy-compatible`, and
+> `unsupported`.
+> Claude Code is the current `native-interactive` tool because read-gating is
+> enforced through `.claude/hooks/`. Other tools default to
+> `portable-governed` only when they can consume generated `AGENTS.md`, plan
+> docs, and deterministic validators through the normal repo interface. See
+> [docs/designs/PHASE8_TOOL_SUPPORT_MATRIX.md](docs/designs/PHASE8_TOOL_SUPPORT_MATRIX.md).
 
 ## What This Solves
 
@@ -34,6 +37,8 @@ python scripts/install_governed_repo.py --repo-root /path/to/your/project --writ
 ```
 
 That command owns the minimum governed-repo contract and ongoing sync story.
+Fleet-style upgrade automation remains a separate design layer built on top of
+that primitive rather than a second installer authority.
 
 `install.sh` still exists, but its role is narrower:
 
@@ -162,7 +167,8 @@ module.
   an opt-in layer.
 
 That boundary is intentional until the installer and semantic-review surfaces
-are part of the minimum installed contract.
+are part of the minimum installed contract, even though their source-repo
+convergence work is complete.
 
 ## Canonical Docs
 
@@ -171,6 +177,10 @@ are part of the minimum installed contract.
 - [patterns/01_README.md](patterns/01_README.md) - pattern catalog
 - [ROADMAP.md](ROADMAP.md) - forward queue and phase map
 - [STATIC_GRAPH_AND_RUNTIME_TRUTH.md](STATIC_GRAPH_AND_RUNTIME_TRUTH.md) - truth-surface architecture
+- [docs/guides/MAC_MINI_CONTINUOUS_AUTOMATION_BOOTSTRAP.md](docs/guides/MAC_MINI_CONTINUOUS_AUTOMATION_BOOTSTRAP.md) - controlled Mac mini rollout guide
+- [docs/designs/GOVERNED_REPO_UPGRADE_AUTOMATION.md](docs/designs/GOVERNED_REPO_UPGRADE_AUTOMATION.md) - future fleet-upgrade design
+- [docs/designs/ECOSYSTEM_DASHBOARD_STATUS_SURFACES.md](docs/designs/ECOSYSTEM_DASHBOARD_STATUS_SURFACES.md) - canonical operator-status design
+- [docs/designs/FRAMEWORK_SELF_MEASUREMENT.md](docs/designs/FRAMEWORK_SELF_MEASUREMENT.md) - canonical measurement and ROI boundaries
 - [docs/reference/CONFIG_REFERENCE.md](docs/reference/CONFIG_REFERENCE.md) - config key reference
 
 ## Origin

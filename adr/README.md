@@ -35,10 +35,11 @@ They do NOT cover:
 | [0005](0005-hierarchical-context-compression.md) | Documentation Layers Are Hierarchical Context Compression | Accepted |
 | [0006](0006-path-portability-first.md) | Path Portability First for Autonomous Tooling | Proposed |
 | [0007](0007-autonomous-workspace-portability-enforcement.md) | Autonomous Workspace Portability Enforcement | Proposed |
+| [0008](0008-adr-research-linkage.md) | ADRs Must Link to the Research That Informed Them | Accepted |
 
 ## Format
 
-Enforced-planning ADRs follow the same format as system ADRs:
+Enforced-planning ADRs follow this format (see ADR-0008 for the Research Basis requirement):
 
 ```markdown
 # META-ADR-NNNN: Title
@@ -54,7 +55,16 @@ What is the change that we're proposing and/or doing?
 
 ## Consequences
 What becomes easier or more difficult to do because of this change?
+
+## Research Basis
+
+| Source | Relevance |
+|--------|-----------|
+| [Name](url-or-path) | What this contributed to the decision |
 ```
+
+**The `Research Basis` section is required** (ADR-0008). If there is genuinely no research
+basis, write: `No external research — terminology/convention decision only.`
 
 ## Portability
 

@@ -1,6 +1,6 @@
 # Enforced Planning Framework — Roadmap
 
-**Updated:** 2026-04-02
+**Updated:** 2026-04-04
 **Canonical methodology:** `PLANNING_OPERATING_MODEL.md`
 
 ## Vision
@@ -75,6 +75,10 @@ A portable framework where:
 
 **Note:** Plan #7 (semantic review) and Plan #11 (agent verification protocol) both complete. Plan #7 specializes the verification pattern established by Plan #11.
 
+**Follow-on gap:** The repo now has both `review_truth_surfaces.py` and
+`review_truth_surface_semantic.py`. Plan #18 tracks convergence onto one
+canonical semantic-review path.
+
 ### Phase 6: Cross-Repo Governance (GATE MET — READY TO START)
 
 **Gate:** Multiple repos using V2 relationships.yaml with inference + enforcement + agent verification. Ecosystem-wide dependency map.
@@ -93,6 +97,10 @@ A portable framework where:
 | Plan | What | Status |
 |------|------|--------|
 | #10 | Framework truth-surface and onboarding reconciliation | ✅ Complete |
+
+**Follow-on gap:** Plan #10 closed the first reconciliation pass, but the top-level
+product surface still needs a second convergence pass now tracked in Plans #16,
+#17, and #18.
 
 ### Phase 8: Multi-Tool Support and Ecosystem Observability (GATE OPEN — 2026-04-04)
 
@@ -128,15 +136,22 @@ All three conditions green as of 2026-04-04 overnight sprint:
 
 ## What's Next (recommended priority order)
 
-1. ~~**Phase 4: V2 adoption pilot**~~ ✅ Done — llm_client migrated, read-gate verified, inferred_deps.json committed.
+1. **Plan #17: Governed-repo installer convergence**
+   Align `install.sh` and `scripts/install_governed_repo.py` behind one
+   canonical installed-repo contract.
 
-2. ~~**Phase 4: Agent verification protocol**~~ ✅ Done — Plan #11 complete, verify_coupling.py + apply_coupling_fix.py shipped with 32 tests.
+2. **Plan #18: Truth-surface semantic review convergence**
+   Converge the duplicated semantic-review stacks onto one canonical path.
 
-3. ~~**Phase 5: Plan #7**~~ ✅ Done — review_truth_surfaces.py shipped with 26 tests.
+3. **Plan #16: Documentation and adoption surface convergence**
+   Rewrite the top-level doc stack against the canonical installer and semantic-review decisions.
 
-4. ~~**Phase 7: Plan #10**~~ ✅ Done — installer, GETTING_STARTED, Plan #1, Plans #6/#8 all reconciled.
+4. **Plan #14: Research-backed ADR and topic-research follow-through**
+   Finish the remaining policy and adoption work so research linkage is not just a local doctrine.
 
-5. ~~**Phase 6: Cross-repo governance**~~ ✅ Done — plan registry (330 plans, 22 repos), ecosystem dep map (14177 edges, 103 cross-repo), `make plan-registry`, `make infer-all`, `make ecosystem-deps`.
+5. **Phase 8 execution planning**
+   Convert the open Phase 8 gate into bounded numbered plans for multi-tool support,
+   upgrade automation, dashboarding, and framework self-measurement.
 
 ## Design Principles
 

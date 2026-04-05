@@ -4,7 +4,7 @@ Observed problems, concerns, and technical debt for the **enforced-planning** fr
 
 Items start as **unconfirmed** observations and get triaged into confirmed issues, plans, or dismissed.
 
-**Last reviewed:** 2026-04-03
+**Last reviewed:** 2026-04-04
 
 ---
 
@@ -22,6 +22,88 @@ Items start as **unconfirmed** observations and get triaged into confirmed issue
 ---
 
 ## Open
+
+### MP-009: Installer authority split between `install.sh` and `install_governed_repo.py`
+
+| Field | Value |
+|-------|-------|
+| Status | `planned` |
+| Severity | high |
+| Reported | 2026-04-04 |
+
+The repo currently has two different governed-repo installation/sync stories:
+`install.sh` and `scripts/install_governed_repo.py`. They encode overlapping but
+not identical contracts, and the docs mostly describe the older shell path.
+
+**Plan:** `docs/plans/17_governed-repo-installer-convergence.md`
+
+---
+
+### MP-010: Two live semantic truth-surface review stacks
+
+| Field | Value |
+|-------|-------|
+| Status | `planned` |
+| Severity | high |
+| Reported | 2026-04-04 |
+
+The repo currently has both `scripts/review_truth_surfaces.py` and
+`scripts/review_truth_surface_semantic.py` live at once, with different inputs,
+schemas, docs, and Makefile wiring. The framework lacks one canonical semantic
+review path.
+
+**Plan:** `docs/plans/18_truth-surface-semantic-review-convergence.md`
+
+---
+
+### MP-011: Adoption docs disagree on installed paths, config keys, and support model
+
+| Field | Value |
+|-------|-------|
+| Status | `planned` |
+| Severity | high |
+| Reported | 2026-04-04 |
+
+`README.md`, `GETTING_STARTED.md`, `docs/guides/NEW_PROJECT_SETUP.md`, and
+`hooks/README.md` do not currently agree on what gets installed, where scripts
+live, how hooks are wired, which config keys are canonical, or how to describe
+non-Claude-Code support.
+
+**Plan:** `docs/plans/16_documentation-and-adoption-surface-convergence.md`
+
+---
+
+### MP-012: Top-level docs still over-center `agent_ecology2`
+
+| Field | Value |
+|-------|-------|
+| Status | `planned` |
+| Severity | medium |
+| Reported | 2026-04-04 |
+
+`README.md` and the pattern index still treat `agent_ecology2` as more than
+historical provenance. That makes the framework read like an extracted internal
+system instead of a standalone portable framework.
+
+**Plan:** `docs/plans/16_documentation-and-adoption-surface-convergence.md`
+
+---
+
+### MP-013: Roadmap and plan queue do not form a compendious forward-looking status surface
+
+| Field | Value |
+|-------|-------|
+| Status | `planned` |
+| Severity | medium |
+| Reported | 2026-04-04 |
+
+`ROADMAP.md` still contains stale "what's next" guidance where every listed item
+is already complete, while the newer follow-on work is only visible in review
+conversation and not yet reflected as a clear numbered queue.
+
+**Plan:** `docs/plans/16_documentation-and-adoption-surface-convergence.md`
+
+---
 
 ### MP-003: Large scripts untested
 

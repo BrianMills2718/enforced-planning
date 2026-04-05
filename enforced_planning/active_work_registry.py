@@ -73,6 +73,7 @@ def build_lane_entries(*, claim_entries: list[dict[str, Any]]) -> list[dict[str,
             worktree_path=claim.get("worktree_path"),
             branch=claim.get("branch"),
             session_id=claim.get("session_id"),
+            heartbeat_at=claim.get("heartbeat_at"),
             status=claim["status"],
             updated_at=claim.get("updated_at"),
             parent_scope=claim.get("parent_scope"),
@@ -91,8 +92,9 @@ def build_lane_entries(*, claim_entries: list[dict[str, Any]]) -> list[dict[str,
         informational = sum(item["interaction_summary"]["informational_count"] for item in items)
         health_issues = sorted({issue for item in items for issue in item["health_issues"]})
         lifecycle_issues = sorted({issue for item in items for issue in item.get("lifecycle_issues", [])})
+        liveness_issues = sorted({issue for item in items for issue in item.get("liveness_issues", [])})
         health_status = "healthy"
-        if lifecycle_issues:
+        if lifecycle_issues or liveness_issues:
             health_status = "stale"
         elif health_issues:
             health_status = "weak"
@@ -119,6 +121,7 @@ def build_lane_entries(*, claim_entries: list[dict[str, Any]]) -> list[dict[str,
                 "health_status": health_status,
                 "health_issues": health_issues,
                 "lifecycle_issues": lifecycle_issues,
+                "liveness_issues": liveness_issues,
                 "interaction_summary": {
                     "hard_conflict_count": hard_conflicts,
                     "soft_overlap_count": soft_overlaps,
@@ -157,6 +160,7 @@ def build_registry_payload(
         entry = claim.to_dict()
         health_issues = coordination_claims.claim_health_issues(claim)
         lifecycle_issues = coordination_claims.claim_lifecycle_issues(claim)
+        liveness_issues = coordination_claims.claim_liveness_issues(claim)
         entry["interaction_summary"] = {
             "hard_conflict_count": sum(1 for item in check_result.interactions if item.severity == "hard_conflict"),
             "soft_overlap_count": sum(1 for item in check_result.interactions if item.severity == "soft_overlap"),
@@ -165,6 +169,7 @@ def build_registry_payload(
         entry["health_status"] = coordination_claims.claim_runtime_status(claim)
         entry["health_issues"] = health_issues
         entry["lifecycle_issues"] = lifecycle_issues
+        entry["liveness_issues"] = liveness_issues
         entry["conflict_notes"] = [
             {
                 "severity": item.severity,
@@ -175,7 +180,7 @@ def build_registry_payload(
             }
             for item in check_result.interactions
         ]
-        if lifecycle_issues:
+        if lifecycle_issues or liveness_issues:
             stale_claim_count += 1
         elif health_issues:
             weak_claim_count += 1
@@ -262,6 +267,8 @@ def render_markdown(payload: dict[str, Any]) -> str:
             health = lane["health_status"]
             if lane.get("lifecycle_issues"):
                 health = f"{health} ({', '.join(lane['lifecycle_issues'])})"
+            if lane.get("liveness_issues"):
+                health = f"{health} ({', '.join(lane['liveness_issues'])})"
             if lane["health_issues"]:
                 health = f"{health} ({', '.join(lane['health_issues'])})"
             lines.append(
@@ -299,6 +306,8 @@ def render_markdown(payload: dict[str, Any]) -> str:
         health = claim["health_status"]
         if claim.get("lifecycle_issues"):
             health = f"{health} ({', '.join(claim['lifecycle_issues'])})"
+        if claim.get("liveness_issues"):
+            health = f"{health} ({', '.join(claim['liveness_issues'])})"
         if claim["health_issues"]:
             health = f"{health} ({', '.join(claim['health_issues'])})"
         lines.append(
@@ -320,12 +329,12 @@ def render_markdown(payload: dict[str, Any]) -> str:
     lines.extend(["", "## Health Notes", ""])
     any_health_notes = False
     for claim in payload["claims"]:
-        if not claim.get("lifecycle_issues") and not claim["health_issues"]:
+        if not claim.get("lifecycle_issues") and not claim.get("liveness_issues") and not claim["health_issues"]:
             continue
         any_health_notes = True
         lines.append(
             f"- `{claim['agent']}` / `{claim.get('project') or '-'}` / `{claim['scope']}` is `{claim['health_status']}`: "
-            + ", ".join((claim.get("lifecycle_issues") or []) + claim["health_issues"])
+            + ", ".join((claim.get("lifecycle_issues") or []) + (claim.get("liveness_issues") or []) + claim["health_issues"])
         )
     if not any_health_notes:
         lines.append("No weak live claims detected.")

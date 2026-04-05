@@ -227,3 +227,57 @@ def test_generate_registry_marks_stale_claims_and_lanes(tmp_path: Path) -> None:
     markdown = markdown_output.read_text(encoding="utf-8")
     assert "Stale claims" in markdown
     assert "stale (missing_worktree_on_disk)" in markdown
+
+
+def test_generate_registry_marks_stale_session_claims_and_lanes(tmp_path: Path, monkeypatch) -> None:
+    """Registry generation should classify stale session heartbeats as stale."""
+    claims_dir = tmp_path / "claims"
+    json_output = tmp_path / "generated" / "runtime" / "active_work_registry.json"
+    markdown_output = tmp_path / "generated" / "runtime" / "active_work_registry.md"
+    repo_root = tmp_path / "demo"
+    _init_git_repo(repo_root)
+    worktree_path = tmp_path / "demo_worktrees" / "plan-96-heartbeat"
+    worktree_path.mkdir(parents=True)
+    monkeypatch.setenv("COORDINATION_HEARTBEAT_STALE_MINUTES", "30")
+
+    _write_claim(
+        claims_dir,
+        "stale-session.yaml",
+        {
+            "agent": "codex",
+            "claimed_at": "2026-04-05T12:00:00+00:00",
+            "expires_at": "2099-04-05T13:00:00+00:00",
+            "projects": ["demo"],
+            "scope": "stale-session-lane",
+            "intent": "Stale session lane",
+            "claim_type": "write",
+            "write_paths": ["README.md"],
+            "plan_ref": "Plan #96",
+            "branch": "plan-96-heartbeat",
+            "worktree_path": str(worktree_path),
+            "session_id": "codex:thread-old",
+            "heartbeat_at": "2026-04-05T08:00:00+00:00",
+            "status": "active",
+        },
+    )
+
+    exit_code = module.main(
+        [
+            "--claims-dir",
+            str(claims_dir),
+            "--json-output",
+            str(json_output),
+            "--markdown-output",
+            str(markdown_output),
+        ]
+    )
+
+    assert exit_code == 0
+    payload = json.loads(json_output.read_text(encoding="utf-8"))
+    assert payload["health_summary"]["stale_claim_count"] == 1
+    assert payload["claims"][0]["health_status"] == "stale"
+    assert payload["claims"][0]["liveness_issues"] == ["stale_session_heartbeat"]
+    assert payload["lanes"][0]["health_status"] == "stale"
+    assert payload["lanes"][0]["liveness_issues"] == ["stale_session_heartbeat"]
+    markdown = markdown_output.read_text(encoding="utf-8")
+    assert "stale_session_heartbeat" in markdown

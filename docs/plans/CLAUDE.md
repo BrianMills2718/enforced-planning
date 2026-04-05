@@ -33,6 +33,10 @@ See `ROADMAP.md` for the full phase map and recommended priority order.
 | 26 | Claim Session Auto-Hydration and Weak-Lane Remediation (`26_claim-session-auto-hydration-and-weak-lane-remediation.md`) | High | ✅ Complete | — |
 | 27 | V2 Worktree Entrypoints and Claim Propagation (`27_v2_worktree_entrypoints_and_claim_propagation.md`) | High | ✅ Complete | Canonical governed-repo propagation of the v2 coordination surface |
 | 28 | Stale Claim Lifecycle and Cleanup Automation (`28_stale_claim_lifecycle_and_cleanup_automation.md`) | High | ✅ Complete | Truthful stale-lane diagnosis and bounded cleanup automation |
+| 29 | Session Heartbeats and Agent Liveness (`29_session_heartbeats_and_agent_liveness.md`) | High | ✅ Complete | Heartbeat-backed session liveness for cross-agent lane ownership |
+| 30 | Session Bootstrap Contract and Tracker (`30_session_bootstrap_contract_and_tracker.md`) | High | 📋 Planned | Claim-linked session intent/tracker contract |
+| 31 | Session CLI and Governed-Repo Entrypoint Enforcement (`31_session_cli_and_governed_repo_entrypoint_enforcement.md`) | High | 📋 Planned | Mandatory session lifecycle in sanctioned repo flows |
+| 32 | Cross-Tool Session Adapters and Adoption Rollout (`32_cross_tool_session_adapters_and_adoption_rollout.md`) | High | 📋 Planned | Codex/Claude Code adapter parity and rollout |
 
 ## Status Key
 

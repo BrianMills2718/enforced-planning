@@ -85,8 +85,18 @@ canonical stale diagnostics are:
 - `missing_worktree_on_disk`
 - `missing_branch_ref`
 - `branch_merged_to_default`
+- `stale_session_heartbeat`
 
 Stale outranks weak. A stale claim should be cleaned up, not merely tolerated.
+
+Liveness is heartbeat-backed:
+
+- `session_id` identifies which runtime session owns the lane
+- `heartbeat_at` says when that session last refreshed its lease
+- missing `heartbeat_at` on an older live claim is compatibility debt, not
+  automatically stale
+- once a claim has a heartbeat, an overly old heartbeat becomes
+  `stale_session_heartbeat`
 
 The canonical v2 claim CLI now auto-resolves `session_id` from supported tool
 runtime env vars when possible. In governed repos the installed local entrypoint
@@ -110,6 +120,16 @@ python scripts/meta/check_coordination_claims.py --prune-stale --json
 That command is intentionally separate from `--prune`, which only removes
 expired claims. Use `--prune-stale` when worktree/branch lifecycle drift has
 left a live claim no longer truthful.
+
+To refresh the heartbeat for the current live session, use:
+
+```bash
+python scripts/meta/check_coordination_claims.py --heartbeat --agent codex --project your-repo
+```
+
+For Claude Code, the same command shape applies with `--agent claude-code`.
+Session identity is auto-resolved from the supported runtime env vars when
+available.
 
 ## Session Safety
 

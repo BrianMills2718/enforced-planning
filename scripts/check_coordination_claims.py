@@ -86,6 +86,11 @@ def claim_runtime_status(claim: ClaimRecord) -> str:
     return _impl.claim_runtime_status(claim)
 
 
+def claim_liveness_issues(claim: ClaimRecord, *, now: Any | None = None) -> list[str]:
+    """Expose heartbeat-backed liveness diagnostics."""
+    return _impl.claim_liveness_issues(claim, now=now)
+
+
 def hydrate_missing_session_ids(*args: Any, **kwargs: Any) -> tuple[int, list[str], str]:
     """Delegate session-id hydration while honoring script-level CLAIMS_DIR overrides."""
     _sync_runtime_config()
@@ -114,6 +119,12 @@ def prune_stale() -> tuple[int, list[str]]:
     """Delegate stale-claim pruning while honoring script-level CLAIMS_DIR overrides."""
     _sync_runtime_config()
     return _impl.prune_stale()
+
+
+def heartbeat_claims(*args: Any, **kwargs: Any) -> tuple[int, list[str], str, str]:
+    """Delegate heartbeat refresh while honoring script-level CLAIMS_DIR overrides."""
+    _sync_runtime_config()
+    return _impl.heartbeat_claims(*args, **kwargs)
 
 
 def parse_args(argv: list[str] | None = None):

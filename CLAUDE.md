@@ -6,14 +6,29 @@ Source repo for the portable planning and governance framework.
 
 This repo is currently running in explicit continuous-execution mode.
 
+- Treat this as the canonical overnight execution contract for the repo, not a
+  soft preference.
 - Do not stop at plan creation, green tests, or one completed commit.
 - Execute the active numbered queue continuously until all planned phases are
   complete or a documented stop condition is reached.
 - Work in sanctioned worktrees between merges/pushes rather than piling new
   overnight work onto a dirty primary checkout.
 - Commit every verified slice so rollback is cheap and exact.
+- Merge and push verified slices from the root-anchored control session, then
+  clean the finished worktree and release the lane claim before starting the
+  next slice.
 - If a concern or uncertainty appears, document it in the active plan or sprint
   tracker immediately; do not leave it only in chat.
+
+Non-negotiable execution rules for continuous runs:
+
+1. every active implementation slice gets its own numbered plan
+2. every active implementation slice runs in its own sanctioned worktree
+3. every verified increment gets a commit before the next slice starts
+4. no finished slice is left only on a worktree branch; merge/push/cleanup is
+   part of completion, not optional follow-up
+5. if a stop condition is hit, document it in the active plan and repo tracker
+   before ending the session
 
 Only two stop conditions are legitimate:
 

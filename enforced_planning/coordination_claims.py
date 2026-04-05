@@ -34,6 +34,7 @@ DEFAULT_TTL_HOURS = 24  # Sprints run 24h; 2h caused false-expiry conflicts mid-
 LIVE_STATUSES = {"active", "blocked", "handoff"}
 CLAIM_TYPES = {"program", "write", "review", "research"}
 STRICT_LIVE_METADATA_CLAIM_TYPES = {"program", "write", "research"}
+DEFAULT_HEARTBEAT_STALE_MINUTES = 120
 SESSION_ENV_KEYS = {
     "codex": ("CODEX_THREAD_ID",),
     "claude-code": ("CLAUDE_SESSION_ID", "CLAUDE_CODE_SSE_PORT"),
@@ -57,6 +58,7 @@ class ClaimRecord:
     worktree_path: str | None
     branch: str | None
     session_id: str | None
+    heartbeat_at: str | None
     status: str
     updated_at: str | None
     parent_scope: str | None
@@ -139,6 +141,20 @@ def claim_health_issues(claim: ClaimRecord) -> list[str]:
 def claim_health_status(claim: ClaimRecord) -> str:
     """Classify one claim as healthy or weak for registry/reporting surfaces."""
     return "weak" if claim_health_issues(claim) else "healthy"
+
+
+def _heartbeat_stale_after() -> timedelta:
+    """Return the configured heartbeat freshness window."""
+    raw = os.environ.get("COORDINATION_HEARTBEAT_STALE_MINUTES", "").strip()
+    if not raw:
+        return timedelta(minutes=DEFAULT_HEARTBEAT_STALE_MINUTES)
+    try:
+        minutes = float(raw)
+    except ValueError:
+        return timedelta(minutes=DEFAULT_HEARTBEAT_STALE_MINUTES)
+    if minutes <= 0:
+        return timedelta(minutes=DEFAULT_HEARTBEAT_STALE_MINUTES)
+    return timedelta(minutes=minutes)
 
 
 def _run_git(repo_root: Path, args: list[str]) -> subprocess.CompletedProcess[str]:
@@ -224,9 +240,36 @@ def claim_lifecycle_issues(claim: ClaimRecord) -> list[str]:
     return issues
 
 
+def claim_liveness_issues(
+    claim: ClaimRecord,
+    *,
+    now: datetime | None = None,
+) -> list[str]:
+    """Return stale-session issues derived from heartbeat freshness.
+
+    Backward compatibility rule: a live claim with no `heartbeat_at` remains
+    readable and does not become stale solely because the heartbeat rollout has
+    not touched it yet.
+    """
+
+    if not claim.is_live():
+        return []
+    if not claim.session_id:
+        return []
+    if not claim.heartbeat_at:
+        return []
+    heartbeat = _parse_iso_datetime(claim.heartbeat_at)
+    if heartbeat is None:
+        return ["invalid_heartbeat_at"]
+    reference_now = now or datetime.now(timezone.utc)
+    if reference_now - heartbeat > _heartbeat_stale_after():
+        return ["stale_session_heartbeat"]
+    return []
+
+
 def claim_runtime_status(claim: ClaimRecord) -> str:
     """Classify one live claim across stale/weak/healthy states."""
-    if claim_lifecycle_issues(claim):
+    if claim_lifecycle_issues(claim) or claim_liveness_issues(claim):
         return "stale"
     return claim_health_status(claim)
 
@@ -378,6 +421,7 @@ def normalize_claim(data: dict[str, Any], *, source_file: str | None = None) -> 
             "worktree_path",
             "branch",
             "session_id",
+            "heartbeat_at",
             "status",
             "updated_at",
             "parent_scope",
@@ -398,6 +442,7 @@ def normalize_claim(data: dict[str, Any], *, source_file: str | None = None) -> 
         worktree_path=data.get("worktree_path") if isinstance(data.get("worktree_path"), str) else None,
         branch=data.get("branch") if isinstance(data.get("branch"), str) else None,
         session_id=data.get("session_id") if isinstance(data.get("session_id"), str) else None,
+        heartbeat_at=data.get("heartbeat_at") if isinstance(data.get("heartbeat_at"), str) else None,
         status=status,
         updated_at=data.get("updated_at") if isinstance(data.get("updated_at"), str) else None,
         parent_scope=data.get("parent_scope") if isinstance(data.get("parent_scope"), str) else None,
@@ -546,6 +591,7 @@ def build_candidate_claim(
     worktree_path: str | None = None,
     branch: str | None = None,
     session_id: str | None = None,
+    heartbeat_at: str | None = None,
     status: str = "active",
     parent_scope: str | None = None,
     notes: str | None = None,
@@ -575,6 +621,7 @@ def build_candidate_claim(
         worktree_path=worktree_path,
         branch=branch,
         session_id=resolved_session_id,
+        heartbeat_at=heartbeat_at,
         status=status,
         updated_at=updated_at,
         parent_scope=parent_scope,
@@ -616,6 +663,7 @@ def create_claim(
         worktree_path=worktree_path,
         branch=branch,
         session_id=session_id,
+        heartbeat_at=now.isoformat(),
         status=status,
         parent_scope=parent_scope,
         notes=notes,
@@ -694,6 +742,7 @@ def hydrate_missing_session_ids(
         if claim.session_id:
             continue
         data["session_id"] = resolved_session_id
+        data["heartbeat_at"] = now
         data["updated_at"] = now
         claim_file.write_text(
             yaml.safe_dump(data, default_flow_style=False, sort_keys=False),
@@ -701,6 +750,58 @@ def hydrate_missing_session_ids(
         )
         updated_scopes.append(claim.scope)
     return len(updated_scopes), sorted(updated_scopes), resolved_session_id
+
+
+def heartbeat_claims(
+    *,
+    agent: str,
+    project: str,
+    session_id: str | None = None,
+    scope: str | None = None,
+    branch: str | None = None,
+) -> tuple[int, list[str], str, str]:
+    """Refresh heartbeat metadata for matching live claims owned by one session."""
+
+    resolved_session_id = resolve_session_id(agent, session_id)
+    if not resolved_session_id:
+        raise ValueError(
+            "Unable to resolve a session ID. Pass --session-id explicitly or run from a supported tool runtime."
+        )
+
+    if not CLAIMS_DIR.exists():
+        return 0, [], resolved_session_id, datetime.now(timezone.utc).isoformat()
+
+    heartbeat_at = datetime.now(timezone.utc).isoformat()
+    updated_scopes: list[str] = []
+    for claim_file in CLAIMS_DIR.glob("*.yaml"):
+        try:
+            data = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if not isinstance(data, dict):
+            continue
+        claim = normalize_claim(data, source_file=str(claim_file))
+        if claim is None or not claim.is_live():
+            continue
+        if claim.agent != agent:
+            continue
+        if project not in claim.projects:
+            continue
+        if scope and claim.scope != scope:
+            continue
+        if branch and claim.branch != branch:
+            continue
+        if claim.session_id and claim.session_id != resolved_session_id:
+            continue
+        data["session_id"] = resolved_session_id
+        data["heartbeat_at"] = heartbeat_at
+        data["updated_at"] = heartbeat_at
+        claim_file.write_text(
+            yaml.safe_dump(data, default_flow_style=False, sort_keys=False),
+            encoding="utf-8",
+        )
+        updated_scopes.append(claim.scope)
+    return len(updated_scopes), sorted(updated_scopes), resolved_session_id, heartbeat_at
 
 
 def release_claim(agent: str, project: str, scope: str) -> tuple[bool, str]:
@@ -795,7 +896,7 @@ def prune_stale() -> tuple[int, list[str]]:
         claim = normalize_claim(data, source_file=str(claim_file))
         if claim is None or not claim.is_live():
             continue
-        if not claim_lifecycle_issues(claim):
+        if not (claim_lifecycle_issues(claim) or claim_liveness_issues(claim)):
             continue
         claim_file.unlink()
         removed_labels.append(f"{claim.primary_project()}:{claim.scope}")
@@ -820,6 +921,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--hydrate-session-ids",
         action="store_true",
         help="Fill in missing session_id metadata for matching live claims.",
+    )
+    group.add_argument(
+        "--heartbeat",
+        action="store_true",
+        help="Refresh heartbeat metadata for matching live claims owned by the current session.",
     )
 
     parser.add_argument("--agent", help="Agent brain name (claude-code, codex, openclaw)")
@@ -857,6 +963,7 @@ def _render_check_output(
                 "health_status": claim_runtime_status(claim),
                 "health_issues": claim_health_issues(claim),
                 "lifecycle_issues": claim_lifecycle_issues(claim),
+                "liveness_issues": claim_liveness_issues(claim),
             }
             for claim in claims
         ],
@@ -867,6 +974,7 @@ def _render_check_output(
             "candidate_health_status": claim_runtime_status(candidate),
             "candidate_health_issues": claim_health_issues(candidate),
             "candidate_lifecycle_issues": claim_lifecycle_issues(candidate),
+            "candidate_liveness_issues": claim_liveness_issues(candidate),
         }
     return payload
 
@@ -1029,6 +1137,39 @@ def main(argv: list[str] | None = None) -> int:
             print(
                 f"Hydrated {updated_count} claim(s) for {args.agent}:{args.project} "
                 f"with session_id={resolved_session_id}"
+            )
+        return 0
+
+    if args.heartbeat:
+        if not all([args.agent, args.project]):
+            raise SystemExit("--heartbeat requires --agent and --project")
+        try:
+            updated_count, updated_scopes, resolved_session_id, heartbeat_at = heartbeat_claims(
+                agent=args.agent,
+                project=args.project,
+                session_id=args.session_id,
+                scope=args.scope,
+                branch=args.branch,
+            )
+        except ValueError as exc:
+            if args.json:
+                print(json.dumps({"ok": False, "message": str(exc)}, indent=2))
+            else:
+                print(str(exc))
+            return 1
+        payload = {
+            "ok": True,
+            "updated_count": updated_count,
+            "updated_scopes": updated_scopes,
+            "session_id": resolved_session_id,
+            "heartbeat_at": heartbeat_at,
+        }
+        if args.json:
+            print(json.dumps(payload, indent=2))
+        else:
+            print(
+                f"Heartbeated {updated_count} claim(s) for {args.agent}:{args.project} "
+                f"with session_id={resolved_session_id} at {heartbeat_at}"
             )
         return 0
 

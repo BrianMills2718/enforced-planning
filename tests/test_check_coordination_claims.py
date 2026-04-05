@@ -6,6 +6,7 @@ import importlib.util
 import json
 import subprocess
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -238,6 +239,121 @@ def test_create_claim_auto_resolves_codex_session_id(
     claim_file = claims_dir / "codex_project-meta_coordination-v2.yaml"
     payload = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
     assert payload["session_id"] == "codex:thread-123"
+    assert isinstance(payload["heartbeat_at"], str)
+
+
+def test_heartbeat_claims_refreshes_codex_session(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Heartbeat refresh should stamp session_id and heartbeat_at for Codex-owned live claims."""
+    module = _load_module()
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
+    monkeypatch.setenv("CODEX_THREAD_ID", "thread-789")
+    _write_claim(
+        claims_dir,
+        "codex.yaml",
+        {
+            "agent": "codex",
+            "claimed_at": "2026-04-05T12:00:00+00:00",
+            "expires_at": "2099-04-05T13:00:00+00:00",
+            "projects": ["project-meta"],
+            "scope": "codex-heartbeat",
+            "intent": "Refresh heartbeat",
+            "claim_type": "write",
+            "write_paths": ["README.md"],
+            "branch": "plan-95-codex-heartbeat",
+            "worktree_path": str(tmp_path / "project-meta_worktrees" / "plan-95-codex-heartbeat"),
+            "status": "active",
+        },
+    )
+
+    updated_count, updated_scopes, session_id, heartbeat_at = module.heartbeat_claims(
+        agent="codex",
+        project="project-meta",
+        scope="codex-heartbeat",
+    )
+
+    assert updated_count == 1
+    assert updated_scopes == ["codex-heartbeat"]
+    assert session_id == "codex:thread-789"
+    assert isinstance(heartbeat_at, str)
+    payload = yaml.safe_load((claims_dir / "codex.yaml").read_text(encoding="utf-8"))
+    assert payload["session_id"] == "codex:thread-789"
+    assert payload["heartbeat_at"] == heartbeat_at
+
+
+def test_heartbeat_claims_refreshes_claude_code_session(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Heartbeat refresh should support Claude Code runtime session resolution."""
+    module = _load_module()
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
+    monkeypatch.setenv("CLAUDE_SESSION_ID", "claude-session-42")
+    _write_claim(
+        claims_dir,
+        "claude.yaml",
+        {
+            "agent": "claude-code",
+            "claimed_at": "2026-04-05T12:00:00+00:00",
+            "expires_at": "2099-04-05T13:00:00+00:00",
+            "projects": ["project-meta"],
+            "scope": "claude-heartbeat",
+            "intent": "Refresh heartbeat",
+            "claim_type": "write",
+            "write_paths": ["README.md"],
+            "branch": "plan-95-claude-heartbeat",
+            "worktree_path": str(tmp_path / "project-meta_worktrees" / "plan-95-claude-heartbeat"),
+            "status": "active",
+        },
+    )
+
+    updated_count, updated_scopes, session_id, heartbeat_at = module.heartbeat_claims(
+        agent="claude-code",
+        project="project-meta",
+        scope="claude-heartbeat",
+    )
+
+    assert updated_count == 1
+    assert updated_scopes == ["claude-heartbeat"]
+    assert session_id == "claude-code:claude-session-42"
+    assert isinstance(heartbeat_at, str)
+    payload = yaml.safe_load((claims_dir / "claude.yaml").read_text(encoding="utf-8"))
+    assert payload["session_id"] == "claude-code:claude-session-42"
+    assert payload["heartbeat_at"] == heartbeat_at
+
+
+def test_claim_liveness_issues_detect_stale_session_heartbeat(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Claims with a sufficiently old heartbeat should become stale by liveness."""
+    module = _load_module()
+    monkeypatch.setenv("COORDINATION_HEARTBEAT_STALE_MINUTES", "30")
+    claim = module.build_candidate_claim(
+        agent="codex",
+        project="project-meta",
+        scope="stale-heartbeat",
+        intent="Detect stale session",
+        claim_type="write",
+        write_paths=["README.md"],
+        branch="plan-95-stale-heartbeat",
+        worktree_path=str(tmp_path / "project-meta_worktrees" / "plan-95-stale-heartbeat"),
+        session_id="codex:thread-old",
+        heartbeat_at="2026-04-05T09:00:00+00:00",
+        status="active",
+    )
+
+    issues = module.claim_liveness_issues(
+        claim,
+        now=datetime(2026, 4, 5, 10, 0, tzinfo=timezone.utc),
+    )
+
+    assert issues == ["stale_session_heartbeat"]
+    assert module.claim_runtime_status(claim) == "stale"
 
 
 def test_claim_lifecycle_issues_detect_missing_worktree_on_disk(tmp_path: Path) -> None:
@@ -397,6 +513,7 @@ def test_hydrate_session_ids_backfills_matching_live_claims(
     assert untouched["session_id"] == "codex:preexisting"
     other_project = yaml.safe_load((claims_dir / "other-project.yaml").read_text(encoding="utf-8"))
     assert "session_id" not in other_project
+    assert "heartbeat_at" not in other_project
 
 
 def test_prune_stale_removes_only_mechanically_stale_claims(
@@ -511,3 +628,49 @@ def test_check_json_outputs_claims_and_candidate_conflict_classification(
     assert payload["check"]["has_hard_conflict"] is True
     assert payload["check"]["candidate_health_status"] == "weak"
     assert payload["check"]["interactions"][0]["severity"] == "hard_conflict"
+
+
+def test_check_json_outputs_stale_session_liveness_issue(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Structured JSON output should surface stale-session liveness issues."""
+    module = _load_module()
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
+    monkeypatch.setenv("COORDINATION_HEARTBEAT_STALE_MINUTES", "30")
+    _write_claim(
+        claims_dir,
+        "stale-session.yaml",
+        {
+            "agent": "codex",
+            "claimed_at": "2026-04-05T08:00:00+00:00",
+            "expires_at": "2099-04-05T13:00:00+00:00",
+            "projects": ["project-meta"],
+            "scope": "stale-session",
+            "intent": "Test stale session",
+            "claim_type": "write",
+            "write_paths": ["README.md"],
+            "branch": "plan-95-stale-session",
+            "worktree_path": str(tmp_path / "project-meta_worktrees" / "plan-95-stale-session"),
+            "session_id": "codex:thread-old",
+            "heartbeat_at": "2026-04-05T08:00:00+00:00",
+            "status": "active",
+        },
+    )
+
+    exit_code = module.main(
+        [
+            "--check",
+            "--json",
+            "--project",
+            "project-meta",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert exit_code == 0
+    assert payload["claims"][0]["health_status"] == "stale"
+    assert payload["claims"][0]["liveness_issues"] == ["stale_session_heartbeat"]

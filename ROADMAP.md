@@ -137,6 +137,10 @@ and readable as bounded active lanes instead of only raw claims.
 | #26 | Claim session auto-hydration and weak-lane remediation | ✅ Complete |
 | #27 | V2 worktree entrypoints and claim propagation | ✅ Complete |
 | #28 | Stale claim lifecycle and cleanup automation | ✅ Complete |
+| #29 | Session heartbeats and agent liveness | ✅ Complete |
+| #30 | Session bootstrap contract and tracker | 📋 Planned |
+| #31 | Session CLI and governed-repo entrypoint enforcement | 📋 Planned |
+| #32 | Cross-tool session adapters and adoption rollout | 📋 Planned |
 
 **Deferred item blockers:**
 
@@ -150,13 +154,25 @@ and readable as bounded active lanes instead of only raw claims.
 
 ## What's Next (recommended priority order)
 
-1. **Mac mini pilot governed-repo rollout**
+1. **Session bootstrap contract and tracker**
+   Land Plan #30 so broader goal, active trajectory, and restart-safe progress
+   stop living only in chat.
+
+2. **Session lifecycle CLI and sanctioned repo enforcement**
+   Land Plan #31 so governed repos can require `session-start`,
+   `session-heartbeat`, `session-status`, and `session-finish`.
+
+3. **Cross-tool adapter parity and rollout**
+   Land Plan #32 so the same session model works for Codex and Claude Code
+   before ecosystem rollout.
+
+4. **Mac mini pilot governed-repo rollout**
    Execute the first controlled pilot from `docs/guides/MAC_MINI_CONTINUOUS_AUTOMATION_BOOTSTRAP.md` using a sanctioned worktree lane.
 
-2. **Future implementation slice: ecosystem status renderer and metrics collection**
+5. **Future implementation slice: ecosystem status renderer and metrics collection**
    Implement `make ecosystem-status`, `generated/ecosystem_status.json`, and rendered operator metrics on top of Plans #21 and #22.
 
-3. **Project-meta topic-research adoption**
+6. **Project-meta topic-research adoption**
    Apply the portable topic-research pattern in `project-meta/research_texts`
    with manifests, ADR links, and freshness metadata for high-value topics.
 

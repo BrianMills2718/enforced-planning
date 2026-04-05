@@ -235,12 +235,27 @@ Policy:
 This is a hard gate, not a warning-only convention. Warnings are too easy to
 ignore during expedited execution.
 
-Near-term implementation expectation:
+Current implementation:
 
-- validators should detect unindexed or unreconciled authoritative artifacts
-- drift should be machine-visible even when overlap is forbidden
-- lane closeout should fail when the owning authority surface still has open
+- `scripts/validate_doc_authority.py --check` validates indexed authority drift
+- `scripts/validate_doc_authority.py --record-obligation ...` records formal
   reconciliation debt
+- `scripts/validate_doc_authority.py --list-obligations --json` shows current
+  open or resolved debt
+- `session-finish` now fails when the closing lane owns authority surfaces with
+  unresolved reconciliation obligations
+
+The v0 authority store lives beside claims:
+
+- `~/.claude/coordination/authority_obligations/*.yaml`
+
+Current bounded scope:
+
+- indexed authority surfaces such as plan indexes
+- `resolution_mode: manual` means the landing lane must record debt if overlap
+  is forbidden
+- `resolution_mode: generated` means the surface should be regenerated instead
+  of carrying durable manual debt
 
 ## Session Safety
 

@@ -1,6 +1,6 @@
 # Plan #38: Authority-Drift Reconciliation Gates
 
-**Status:** 📋 Planned
+**Status:** ✅ Complete
 **Type:** implementation
 **Priority:** High
 **Blocked By:** Plan #41 and the existing doc-authority architecture
@@ -90,3 +90,15 @@ reconciliation debt when overlap is forbidden but drift still exists.
 
 This plan turns "leave a note for the other lane" into a real coordination
 contract. The note must be machine-visible, durable, and closure-blocking.
+
+Implemented on 2026-04-05:
+
+- `enforced_planning/doc_authority.py` now validates indexed authority drift
+  and persists reconciliation obligations under
+  `~/.claude/coordination/authority_obligations/`
+- `scripts/validate_doc_authority.py` exposes check/record/list/resolve
+  lifecycle commands for the authority-drift surface
+- `session-finish` now fails closed when the lane owns an authority surface
+  with unresolved obligations
+- the framework's own plan-index authority surface now validates cleanly under
+  the new checker

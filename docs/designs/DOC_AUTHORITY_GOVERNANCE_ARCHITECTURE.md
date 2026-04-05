@@ -1,7 +1,7 @@
 # Design: Documentation Authority Governance and Enforcement
 
 **Date:** 2026-04-05
-**Status:** Proposed
+**Status:** Implemented v0
 
 ## Problem
 
@@ -104,6 +104,28 @@ The validator must run in three places:
 
 `make doc-truth-check` remains a human/agent entrypoint only.
 
+### Layer 5: Reconciliation Obligations
+
+When a lane lands an authoritative artifact but cannot edit the separately
+claimed authority surface that indexes it, the system records a reconciliation
+obligation instead of relying on chat memory.
+
+The v0 storage lives beside claims under:
+
+- `~/.claude/coordination/authority_obligations/*.yaml`
+
+Each obligation names:
+
+- project
+- concern
+- authority surface path
+- landed artifact path
+- required reconciliation action
+- creating lane
+- optional owning lane
+
+This keeps "do not silently overlap" and "do not silently drift" compatible.
+
 ## Relationship to Existing Framework Pieces
 
 | Existing Piece | Relationship |
@@ -113,6 +135,7 @@ The validator must run in three places:
 | `sync_plan_status.py` | remains the specialist plan-status validator; authority validator consumes its outcome or related metadata |
 | `check_truth_surface_drift.py` | complementary layer; authority validator is structural and canonical-surface focused |
 | semantic review | optional follow-on layer for canonical docs whose prose may still be misleading |
+| `session-finish` | hard-fails when the closing lane owns an authority surface that still has open reconciliation obligations |
 
 ## Canonical Data Model
 
@@ -132,10 +155,10 @@ Recommended fields:
 
 Recommended sections:
 
-- `required_concerns`
-- `allow_multi_canonical` exceptions
-- `duplicate_live_surface_rules`
-- `generated_surface_rules`
+- `indexed_authority_surfaces`
+- later: `required_concerns`
+- later: `allow_multi_canonical` exceptions
+- later: `generated_surface_rules`
 
 ## Enforcement Semantics
 
@@ -146,6 +169,9 @@ Recommended sections:
 - active handoff concern has more than one active doc
 - canonical concern declared in config but file missing or mis-tagged
 - derived doc missing configured canonical source reference
+- indexed authority drift with no owner claim
+- indexed authority drift with an owner claim but no recorded reconciliation obligation
+- lane closeout while owned authority obligations remain unresolved
 
 ### Warn Conditions
 
@@ -175,6 +201,8 @@ That layer should never replace structural blocking rules.
 - block duplicate canonical concerns
 - block duplicate active handoffs
 - require required concerns to be present
+- block unrecorded indexed-authority drift
+- block lane closeout while owned obligations remain unresolved
 
 ### Stage 3: Generated Surface Integration
 
@@ -209,14 +237,19 @@ should centralize.
    - Safe auto-fixes: generated pointers, index regeneration.
    - Unsafe auto-fixes: choosing which doc should become canonical.
 
-## Recommended Next Step
+## Implemented v0
 
-Implement a first shared slice with:
+The first shared slice now exists:
 
-- authority schema
-- repo config schema
-- deterministic validator
-- pre-commit hook
-- CI example wiring
+- authority schema reference
+- repo config schema for indexed authority surfaces
+- deterministic validator for indexed plan-authority drift
+- machine-visible reconciliation obligations
+- hard `session-finish` closeout gate for owning lanes
 
-Do not build semantic auto-repair or a cross-repo dashboard in the first slice.
+Still deferred:
+
+- full per-doc metadata enforcement
+- pre-commit hook wiring
+- CI example wiring beyond direct CLI use
+- semantic auto-repair and dashboards

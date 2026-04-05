@@ -40,34 +40,29 @@ last_verified_against:
 Suggested file: `scripts/doc_authority.yaml`
 
 ```yaml
-required_concerns:
-  - product-story
-  - roadmap
-  - active-plan-index
-
-canonical_map:
-  product-story: README.md
-  roadmap: ROADMAP.md
-  active-plan-index: docs/plans/CLAUDE.md
-
-singleton_concerns:
-  - active-handoff
-  - benchmark-status
-
-allow_multi_canonical: []
-
-derived_require_source_ref: true
+schema_version: 1
+indexed_authority_surfaces:
+  - concern: active-plan-index
+    kind: plan_index
+    authority_surface: docs/plans/CLAUDE.md
+    source_glob: docs/plans/[0-9]*_*.md
+    resolution_mode: manual
 ```
 
 ### Fields
 
 | Field | Type | Required | Meaning |
 |-------|------|----------|---------|
-| `required_concerns` | list[str] | no | Concerns that must exist in this repo |
-| `canonical_map` | mapping | recommended | Expected canonical file for each concern |
-| `singleton_concerns` | list[str] | recommended | Concerns that must have exactly one active canonical doc |
-| `allow_multi_canonical` | list[str] | optional | Explicit exceptions |
-| `derived_require_source_ref` | bool | optional | Whether derived docs must declare `canonical_source` |
+| `schema_version` | int | yes | Config schema version |
+| `indexed_authority_surfaces` | list[mapping] | yes for v0 | Indexed authority surfaces to validate deterministically |
+| `concern` | string | yes | Concern name for one indexed surface |
+| `kind` | enum | yes | `plan_index` in v0 |
+| `authority_surface` | path | yes | Canonical index/governance surface |
+| `source_glob` | glob | yes | Authoritative artifact set that the surface must index |
+| `resolution_mode` | enum | yes | `manual` or `generated`; generated surfaces should be regenerated rather than assigned durable debt |
+
+Later schema additions may restore broader concern maps, singleton rules, and
+per-doc metadata enforcement without changing the obligation model.
 
 ## Default Rules
 
@@ -90,6 +85,39 @@ Suggested deterministic failure codes:
 | `duplicate_active_handoff` | More than one active handoff-like concern |
 | `derived_missing_canonical_source` | Derived doc lacks upstream canonical pointer |
 | `required_concern_missing` | Repo config requires a concern with no matching active canonical doc |
+| `authority_surface_missing_artifact` | Indexed authority surface is missing a landed authoritative artifact |
+| `authority_surface_status_mismatch` | Indexed authority surface disagrees with the authoritative artifact status |
+| `missing_reconciliation_obligation` | Authority surface owner exists but drift was not recorded formally |
+| `unowned_authority_drift` | Drift exists and no active lane owns the authority surface |
+| `generated_authority_surface_requires_regeneration` | Generated authority surface drift must be fixed by regeneration |
+
+## Reconciliation Obligations
+
+Open obligations live under:
+
+- `~/.claude/coordination/authority_obligations/*.yaml`
+
+v0 obligation fields:
+
+```yaml
+obligation_id: enforced-planning-abc123def456
+project: enforced-planning
+concern: active-plan-index
+authority_surface: docs/plans/CLAUDE.md
+artifact_path: docs/plans/41_doc-authority-governance-and-enforcement.md
+required_action: add Plan #41 to docs/plans/CLAUDE.md
+created_by_agent: codex
+created_by_scope: authority-drift-reconciliation-gates
+plan_ref: Plan #41
+owner_scope: plan-index-maintenance
+status: open
+created_at: 2026-04-05T00:00:00+00:00
+resolved_at: null
+notes: optional
+```
+
+Owning lanes must resolve or clear the relevant obligations before
+`session-finish` can complete cleanly.
 
 ## Migration Guidance
 

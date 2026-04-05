@@ -15,13 +15,13 @@ policy, dashboard/status direction, or measurement direction.
 
 ## Acceptance Criteria
 
-- [ ] Plan #23 is complete
-- [ ] Plan #19 is complete
-- [ ] Plan #20 is complete
-- [ ] Plan #21 is complete
-- [ ] Plan #22 is complete
-- [ ] Mac mini bootstrap guide exists and is truthful
-- [ ] `ROADMAP.md`, `docs/plans/CLAUDE.md`, and `CLAUDE.md` all reflect the same queue state
+- [x] Plan #23 is complete
+- [x] Plan #19 is complete
+- [x] Plan #20 is complete
+- [x] Plan #21 is complete
+- [x] Plan #22 is complete
+- [x] Mac mini bootstrap guide exists and is truthful
+- [x] `ROADMAP.md`, `docs/plans/CLAUDE.md`, and `CLAUDE.md` all reflect the same queue state
 
 ## Stop Conditions
 

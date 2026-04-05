@@ -103,7 +103,7 @@ deprecated compatibility wrapper.
 pass, so the product surface now has one canonical installer story, one
 canonical semantic-review path, and a cleaner source-vs-installed doc split.
 
-### Phase 8: Multi-Tool Support and Ecosystem Observability (IN PLANNING)
+### Phase 8: Multi-Tool Support and Ecosystem Observability (DESIGN COMPLETE — IMPLEMENTATION NEXT)
 
 **Gate (measurable proxy — verifiable within this repo):**
 All three conditions green as of 2026-04-04 overnight sprint:
@@ -137,8 +137,8 @@ All three conditions green as of 2026-04-04 overnight sprint:
 
 ## What's Next (recommended priority order)
 
-1. **Plan #23: Mac mini transfer and continuous automation bootstrap**
-   Use the verified installer/audit path and the new Phase 8 queue to prepare the first controlled Mac mini rollout.
+1. **Mac mini pilot governed-repo rollout**
+   Execute the first controlled pilot from `docs/guides/MAC_MINI_CONTINUOUS_AUTOMATION_BOOTSTRAP.md` using a sanctioned worktree lane.
 
 2. **Future implementation slice: ecosystem status renderer and metrics collection**
    Implement `make ecosystem-status`, `generated/ecosystem_status.json`, and rendered operator metrics on top of Plans #21 and #22.

@@ -1,6 +1,6 @@
 # Plan #23: Mac Mini Transfer and Continuous Automation Bootstrap
 
-**Status:** In Progress
+**Status:** Complete
 **Type:** implementation
 **Priority:** High
 **Blocked By:** None
@@ -112,8 +112,20 @@ create callable capability surfaces.
 
 ## Acceptance Criteria
 
-- [ ] A 24-hour sprint tracker exists and sequences the overnight queue clearly
-- [ ] `CLAUDE.md` strongly encodes continuous execution, worktree-first operation, and commit discipline
-- [ ] A Mac mini bootstrap guide exists for framework transfer and first governed-repo rollout
-- [ ] Plans #19-#22 are executed or advanced truthfully within the sprint
-- [ ] Declared checks pass
+- [x] A 24-hour sprint tracker exists and sequences the overnight queue clearly
+- [x] `CLAUDE.md` strongly encodes continuous execution, worktree-first operation, and commit discipline
+- [x] A Mac mini bootstrap guide exists for framework transfer and first governed-repo rollout
+- [x] Plans #19-#22 are executed or advanced truthfully within the sprint
+- [x] Declared checks pass
+
+---
+
+## Decision
+
+The overnight bootstrap slice should close with:
+
+- a committed sprint tracker rather than an implicit chat queue
+- a Mac mini guide that treats the first rollout as a controlled pilot, not a
+  blind fleet migration
+- explicit worktree-first and commit-first policy in `CLAUDE.md`
+- Phase 8 design slices complete before the first real Mac mini pilot rollout

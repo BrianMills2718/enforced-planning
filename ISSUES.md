@@ -23,39 +23,6 @@ Items start as **unconfirmed** observations and get triaged into confirmed issue
 
 ## Open
 
-### MP-009: Installer authority split between `install.sh` and `install_governed_repo.py`
-
-| Field | Value |
-|-------|-------|
-| Status | `planned` |
-| Severity | high |
-| Reported | 2026-04-04 |
-
-The repo currently has two different governed-repo installation/sync stories:
-`install.sh` and `scripts/install_governed_repo.py`. They encode overlapping but
-not identical contracts, and the docs mostly describe the older shell path.
-
-**Plan:** `docs/plans/17_governed-repo-installer-convergence.md`
-
----
-
-### MP-010: Two live semantic truth-surface review stacks
-
-| Field | Value |
-|-------|-------|
-| Status | `planned` |
-| Severity | high |
-| Reported | 2026-04-04 |
-
-The repo currently has both `scripts/review_truth_surfaces.py` and
-`scripts/review_truth_surface_semantic.py` live at once, with different inputs,
-schemas, docs, and Makefile wiring. The framework lacks one canonical semantic
-review path.
-
-**Plan:** `docs/plans/18_truth-surface-semantic-review-convergence.md`
-
----
-
 ### MP-011: Adoption docs disagree on installed paths, config keys, and support model
 
 | Field | Value |
@@ -200,6 +167,37 @@ work artifacts that create noise when reading the directory.
 ---
 
 ## Resolved
+
+### MP-009: Installer authority split between `install.sh` and `install_governed_repo.py`
+
+| Field | Value |
+|-------|-------|
+| Status | `resolved` |
+| Severity | high |
+| Reported | 2026-04-04 |
+| Resolved | 2026-04-04 |
+
+`scripts/install_governed_repo.py` is now the canonical governed-repo
+installer/upgrader. `install.sh` delegates the default path and clearly scopes
+legacy compatibility modes.
+
+---
+
+### MP-010: Two live semantic truth-surface review stacks
+
+| Field | Value |
+|-------|-------|
+| Status | `resolved` |
+| Severity | high |
+| Reported | 2026-04-04 |
+| Resolved | 2026-04-04 |
+
+The config-driven semantic review path is now canonical:
+`scripts/review_truth_surface_semantic.py --config ...`. The repo-wide
+`review_truth_surfaces.py` path remains only as a deprecated compatibility
+wrapper, and promotion now consumes canonical append-only review history.
+
+---
 
 ### MP-001: Plan #12 file missing from docs/plans/
 

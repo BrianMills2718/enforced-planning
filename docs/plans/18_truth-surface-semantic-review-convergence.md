@@ -1,6 +1,6 @@
 # Plan #18: Truth-Surface Semantic Review Convergence
 
-**Status:** Planned
+**Status:** Complete
 **Type:** design
 **Priority:** High
 **Blocked By:** None
@@ -58,14 +58,16 @@ into deterministic checks.
 - scripts/truth_surface_semantic_models.py (modify if needed)
 - scripts/render_truth_surface_status.py (modify)
 - scripts/promote_to_deterministic.py (modify if needed)
-- prompts/review_truth_surfaces.yaml (modify or deprecate)
+- prompts/review_truth_surfaces.yaml (remove)
 - prompts/truth_surface_semantic_review.yaml (modify)
 - Makefile (modify)
 - tests/test_review_truth_surfaces.py (modify or remove)
 - tests/test_semantic_truth_surface_review.py (modify)
+- tests/test_promote_to_deterministic.py (modify)
 - ROADMAP.md (modify)
 - README.md (modify)
 - STATIC_GRAPH_AND_RUNTIME_TRUTH.md (modify)
+- ISSUES.md (modify)
 - docs/plans/18_truth-surface-semantic-review-convergence.md (modify)
 - docs/plans/CLAUDE.md (modify)
 
@@ -98,23 +100,30 @@ into deterministic checks.
 | Test Pattern | Why |
 |--------------|-----|
 | `python scripts/validate_plan.py --plan-file docs/plans/18_truth-surface-semantic-review-convergence.md --warn-only` | Plan remains valid |
-| `pytest -q tests/test_render_truth_surface_status.py tests/test_semantic_truth_surface_review.py tests/test_review_truth_surfaces.py tests/test_promote_to_deterministic.py` | Old and new semantic-review surfaces remain understood during convergence |
+| `pytest -q tests/test_render_truth_surface_status.py tests/test_semantic_truth_surface_review.py tests/test_review_truth_surfaces.py tests/test_promote_to_deterministic.py` | Canonical semantic-review path, compatibility wrapper, renderer, and promotion flow remain aligned |
 | `python -m py_compile scripts/review_truth_surfaces.py scripts/review_truth_surface_semantic.py scripts/truth_surface_semantic_models.py scripts/render_truth_surface_status.py scripts/promote_to_deterministic.py` | Semantic-review surface remains syntactically valid during convergence |
 
 ---
 
 ## Acceptance Criteria
 
-- [ ] One semantic-review entrypoint is canonical
-- [ ] One structured semantic-review output schema is canonical
-- [ ] Makefile and docs point to the same semantic-review path
-- [ ] The relationship between semantic review and promotion-to-deterministic is explicit
-- [ ] The deprecated or replaced path is removed or clearly scoped as legacy
-- [ ] Declared checks pass
+- [x] One semantic-review entrypoint is canonical
+- [x] One structured semantic-review output schema is canonical
+- [x] Makefile and docs point to the same semantic-review path
+- [x] The relationship between semantic review and promotion-to-deterministic is explicit
+- [x] The deprecated or replaced path is removed or clearly scoped as legacy
+- [x] Declared checks pass
 
 ---
 
-## Open Questions
+## Decision
 
-- [ ] Should the canonical semantic review remain repo-wide (`--repo`) or move fully to config-driven truth-surface bundles (`--config`)? — Status: OPEN | Why it matters: affects installed-governed-repo usability and integration with deterministic validator output
+The config-driven path is canonical:
 
+- `scripts/review_truth_surface_semantic.py --config ...`
+- latest payload written to `semantic_truth_surface_review.json`
+- append-only review history written to `semantic_truth_surface_review_history.json`
+- `promote_to_deterministic.py` reads the canonical history format
+
+`scripts/review_truth_surfaces.py` now remains only as a deprecated
+compatibility wrapper for callers still passing `--repo`.

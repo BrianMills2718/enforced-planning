@@ -35,6 +35,22 @@ DEFAULT_OUTPUT_JSON = Path("docs/ops/semantic_truth_surface_review.json")
 DEFAULT_HISTORY_JSON = Path("docs/ops/semantic_truth_surface_review_history.json")
 
 
+def _resolve_repo_root_from_config(config_path: Path) -> Path:
+    """Infer the target repo root from scripts/truth_surface_drift.yaml."""
+    config_path = config_path.expanduser().resolve()
+    return config_path.parent.parent
+
+
+def _resolve_output_path(path_arg: str | None, *, config_path: Path) -> Path | None:
+    """Resolve relative output/history paths against the target repo root."""
+    if not path_arg:
+        return None
+    path = Path(path_arg).expanduser()
+    if path.is_absolute():
+        return path
+    return _resolve_repo_root_from_config(config_path) / path
+
+
 def _load_llm_client_exports() -> tuple[Any, Any]:
     """Import shared llm_client entrypoints or fail loud with setup guidance."""
     try:
@@ -276,8 +292,9 @@ def main() -> int:
     )
 
     rendered = json.dumps(payload, indent=2, sort_keys=True)
-    output_path = Path(args.output_json).expanduser() if args.output_json else None
-    history_path = Path(args.history_json).expanduser() if args.history_json else None
+    config_path = Path(args.config).expanduser().resolve()
+    output_path = _resolve_output_path(args.output_json, config_path=config_path)
+    history_path = _resolve_output_path(args.history_json, config_path=config_path)
     if output_path is not None:
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text(rendered + "\n")

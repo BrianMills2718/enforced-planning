@@ -70,14 +70,15 @@ A portable framework where:
 
 | Plan | What | Status |
 |------|------|--------|
-| #7 | LLM semantic truth-surface review | ✅ Complete (207 tests, review_truth_surfaces.py shipped) |
+| #7 | LLM semantic truth-surface review | ✅ Complete (semantic review layer shipped; canonical path now `review_truth_surface_semantic.py`) |
 | — | Promote stable LLM findings into deterministic checks | ✅ Complete (`promote_to_deterministic.py`, `make promote`; 3 candidates identified, 3 fixed in this session) |
 
 **Note:** Plan #7 (semantic review) and Plan #11 (agent verification protocol) both complete. Plan #7 specializes the verification pattern established by Plan #11.
 
-**Follow-on gap:** The repo now has both `review_truth_surfaces.py` and
-`review_truth_surface_semantic.py`. Plan #18 tracks convergence onto one
-canonical semantic-review path.
+**Convergence outcome:** Plan #18 made the config-driven path canonical.
+`review_truth_surface_semantic.py` now owns semantic review, append-only review
+history, and promotion input. `review_truth_surfaces.py` remains only as a
+deprecated compatibility wrapper.
 
 ### Phase 6: Cross-Repo Governance (GATE MET — READY TO START)
 
@@ -136,16 +137,13 @@ All three conditions green as of 2026-04-04 overnight sprint:
 
 ## What's Next (recommended priority order)
 
-1. **Plan #18: Truth-surface semantic review convergence**
-   Converge the duplicated semantic-review stacks onto one canonical path.
-
-2. **Plan #16: Documentation and adoption surface convergence**
+1. **Plan #16: Documentation and adoption surface convergence**
    Rewrite the top-level doc stack against the canonical installer and semantic-review decisions.
 
-3. **Plan #14: Research-backed ADR and topic-research follow-through**
+2. **Plan #14: Research-backed ADR and topic-research follow-through**
    Finish the remaining policy and adoption work so research linkage is not just a local doctrine.
 
-4. **Phase 8 execution planning**
+3. **Phase 8 execution planning**
    Convert the open Phase 8 gate into bounded numbered plans for multi-tool support,
    upgrade automation, dashboarding, and framework self-measurement.
 

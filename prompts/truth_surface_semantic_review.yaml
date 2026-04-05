@@ -1,6 +1,6 @@
 name: truth_surface_semantic_review
-version: "1.0"
-description: Advisory semantic review for truth-surface drift that deterministic checks cannot express cleanly
+version: "1.1"
+description: Canonical advisory semantic review for truth-surface drift that deterministic checks cannot express cleanly
 messages:
   - role: system
     content: |
@@ -19,7 +19,7 @@ messages:
       - Prefer zero findings over weak findings
       - Every finding must cite the supplied evidence references
       - Mark `promotion_candidate=true` only when the finding looks precise enough to become a future deterministic rule
-      - If `promotion_candidate=true`, provide a short `promotion_rule_hint`
+      - If `promotion_candidate=true`, provide a short `promotion_rule_hint` that can survive repeated review runs
       - If there are no credible semantic issues, return an empty findings list
   - role: user
     content: |

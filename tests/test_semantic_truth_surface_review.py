@@ -11,6 +11,7 @@ from pathlib import Path
 import yaml
 
 from scripts.review_truth_surface_semantic import (
+    _resolve_output_path,
     _load_llm_client_exports,
     append_semantic_review_history,
     build_semantic_review_context,
@@ -174,6 +175,19 @@ def test_append_semantic_review_history_creates_append_only_json_list(tmp_path: 
     assert len(history) == 2
     assert history[0]["review"]["overview"] == "First run."
     assert history[1]["review"]["overview"] == "Second run."
+
+
+def test_resolve_output_path_anchors_relative_paths_to_target_repo(tmp_path: Path) -> None:
+    config_path = tmp_path / "repo" / "scripts" / "truth_surface_drift.yaml"
+    config_path.parent.mkdir(parents=True)
+    config_path.write_text("surfaces: {}\n")
+
+    resolved = _resolve_output_path(
+        "docs/ops/semantic_truth_surface_review.json",
+        config_path=config_path,
+    )
+
+    assert resolved == tmp_path / "repo" / "docs" / "ops" / "semantic_truth_surface_review.json"
 
 
 def test_load_llm_client_exports_fails_loud_without_public_api(monkeypatch) -> None:

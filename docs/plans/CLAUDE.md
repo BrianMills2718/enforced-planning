@@ -20,9 +20,9 @@ See `ROADMAP.md` for the full phase map and recommended priority order.
 | 13 | Rename-Safe Merge Cleanup (`13_rename-safe-merge-cleanup.md`) | High | ✅ Complete | — |
 | 14 | Research-Backed ADRs and Topic Research Integration (`14_research-backed-adr-and-topic-research-integration.md`) | High | 🚧 In Progress | [future] project-meta topic research adoption |
 | 15 | Selective Plan-10 Truth-Surface Salvage (`15_selective-plan10-truth-surface-salvage.md`) | High | ✅ Complete | — |
-| 16 | Documentation and Adoption Surface Convergence (`16_documentation-and-adoption-surface-convergence.md`) | High | 📋 Planned | #18 |
+| 16 | Documentation and Adoption Surface Convergence (`16_documentation-and-adoption-surface-convergence.md`) | High | 📋 Planned | — |
 | 17 | Governed-Repo Installer Convergence (`17_governed-repo-installer-convergence.md`) | High | ✅ Complete | — |
-| 18 | Truth-Surface Semantic Review Convergence (`18_truth-surface-semantic-review-convergence.md`) | High | 📋 Planned | — |
+| 18 | Truth-Surface Semantic Review Convergence (`18_truth-surface-semantic-review-convergence.md`) | High | ✅ Complete | — |
 
 ## Status Key
 

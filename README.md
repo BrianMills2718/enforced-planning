@@ -155,6 +155,9 @@ module.
 
 - Truth-surface validation and semantic-review tooling are not part of the
   minimum canonical install yet.
+- The canonical semantic-review entrypoint is
+  `python scripts/review_truth_surface_semantic.py --config ...`, which writes a
+  current JSON payload plus append-only review history.
 - Raw git-hook bootstrap and pre-commit bootstrap currently live behind legacy
   `install.sh --full` and `install.sh --pre-commit` flows.
 - Worktree-only sync is canonical, but broader multi-agent coordination remains

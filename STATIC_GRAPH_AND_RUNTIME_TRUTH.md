@@ -122,13 +122,14 @@ Some drift is still too semantic or too cross-cutting for exact rules alone:
 
 Those cases should be handled by an **optional LLM/agent review layer** that
 reads the same truth surfaces and emits advisory findings. The framework now has
-that first bounded entrypoint in `scripts/review_truth_surface_semantic.py`.
+that first bounded canonical entrypoint in
+`scripts/review_truth_surface_semantic.py --config ...`.
 The framework should use a hybrid model:
 
 1. deterministic validator for exact contradictions and hard failures
 2. optional LLM semantic review for ambiguity, misleading prose, and missing
    updates that static rules cannot enumerate cleanly
-3. promotion path from repeated high-precision LLM findings into new
+3. promotion path from repeated high-precision semantic-review history into new
    deterministic checks when the pattern becomes stable
 
 The LLM layer should complement the validator, not replace it.

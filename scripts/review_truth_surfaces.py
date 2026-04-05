@@ -22,6 +22,7 @@ from scripts.review_truth_surface_semantic import (  # noqa: E402
     DEFAULT_HISTORY_JSON,
     DEFAULT_OUTPUT_JSON,
     append_semantic_review_history,
+    _resolve_output_path,
     review_truth_surface_semantic,
 )
 
@@ -91,11 +92,18 @@ def main() -> int:
         trace_id=args.trace_id,
     )
     rendered = json.dumps(payload, indent=2, sort_keys=True)
-    output_path = args.output.expanduser()
+    output_path = _resolve_output_path(str(args.output), config_path=config_path)
+    if output_path is None:
+        print("Error: failed to resolve output path", file=sys.stderr)
+        return 1
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(rendered + "\n")
     if args.history_json:
-        append_semantic_review_history(args.history_json.expanduser(), payload)
+        history_path = _resolve_output_path(str(args.history_json), config_path=config_path)
+        if history_path is None:
+            print("Error: failed to resolve history path", file=sys.stderr)
+            return 1
+        append_semantic_review_history(history_path, payload)
     print(rendered)
     return 0
 

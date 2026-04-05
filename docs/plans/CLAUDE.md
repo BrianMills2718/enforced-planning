@@ -32,6 +32,7 @@ See `ROADMAP.md` for the full phase map and recommended priority order.
 | 25 | Lane Model and Active-Lane Registry (`25_lane-model-and-active-lane-registry.md`) | High | ✅ Complete | — |
 | 26 | Claim Session Auto-Hydration and Weak-Lane Remediation (`26_claim-session-auto-hydration-and-weak-lane-remediation.md`) | High | ✅ Complete | — |
 | 27 | V2 Worktree Entrypoints and Claim Propagation (`27_v2_worktree_entrypoints_and_claim_propagation.md`) | High | ✅ Complete | Canonical governed-repo propagation of the v2 coordination surface |
+| 28 | Stale Claim Lifecycle and Cleanup Automation (`28_stale_claim_lifecycle_and_cleanup_automation.md`) | High | ✅ Complete | Truthful stale-lane diagnosis and bounded cleanup automation |
 
 ## Status Key
 

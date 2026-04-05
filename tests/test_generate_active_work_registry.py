@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 
 import yaml  # type: ignore[import-untyped]
@@ -16,11 +17,30 @@ def _write_claim(claims_dir: Path, name: str, payload: dict) -> None:
     (claims_dir / name).write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
 
 
+def _init_git_repo(repo_root: Path) -> None:
+    """Create a minimal git repo with a configured identity."""
+    subprocess.run(["git", "init", "-b", "main", str(repo_root)], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(repo_root), "config", "user.name", "Test User"], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(repo_root), "config", "user.email", "test@example.com"], check=True, capture_output=True, text=True)
+    (repo_root / "README.md").write_text("seed\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(repo_root), "add", "README.md"], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(repo_root), "commit", "-m", "seed"], check=True, capture_output=True, text=True)
+
+
 def test_generate_registry_outputs_json_and_markdown(tmp_path: Path) -> None:
     """Registry generation should emit machine-readable and compact markdown views."""
     claims_dir = tmp_path / "claims"
     json_output = tmp_path / "generated" / "runtime" / "active_work_registry.json"
     markdown_output = tmp_path / "generated" / "runtime" / "active_work_registry.md"
+    repo_root = tmp_path / "project-meta"
+    _init_git_repo(repo_root)
+    subprocess.run(["git", "-C", str(repo_root), "branch", "coordination-a"], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(repo_root), "branch", "plan-62-coordination-v2"], check=True, capture_output=True, text=True)
+    worktrees_root = tmp_path / "project-meta_worktrees"
+    coordination_a = worktrees_root / "coordination-a"
+    coordination_b = worktrees_root / "plan-62-coordination-v2"
+    coordination_a.mkdir(parents=True)
+    coordination_b.mkdir(parents=True)
 
     _write_claim(
         claims_dir,
@@ -36,7 +56,7 @@ def test_generate_registry_outputs_json_and_markdown(tmp_path: Path) -> None:
             "write_paths": ["scripts"],
             "plan_ref": "Plan #62",
             "branch": "coordination-a",
-            "worktree_path": "~/projects/project-meta_worktrees/coordination-a",
+            "worktree_path": str(coordination_a),
             "session_id": "claude-code-session",
             "status": "active",
         },
@@ -55,7 +75,7 @@ def test_generate_registry_outputs_json_and_markdown(tmp_path: Path) -> None:
             "write_paths": ["scripts/generate_active_work_registry.py"],
             "plan_ref": "Plan #62",
             "branch": "plan-62-coordination-v2",
-            "worktree_path": "~/projects/project-meta_worktrees/plan-62-coordination-v2",
+            "worktree_path": str(coordination_b),
             "session_id": "codex-session",
             "status": "active",
         },
@@ -92,6 +112,7 @@ def test_generate_registry_outputs_json_and_markdown(tmp_path: Path) -> None:
     assert payload["lanes_by_project"] == {"project-meta": 3}
     assert payload["health_summary"] == {
         "overall_status": "attention",
+        "stale_claim_count": 0,
         "weak_claim_count": 1,
         "hard_conflict_claim_count": 2,
         "soft_overlap_claim_count": 0,
@@ -153,3 +174,56 @@ def test_generate_registry_handles_empty_claim_set(tmp_path: Path) -> None:
     assert payload["claims"] == []
     assert payload["lanes"] == []
     assert "No live claims." in markdown_output.read_text(encoding="utf-8")
+
+
+def test_generate_registry_marks_stale_claims_and_lanes(tmp_path: Path) -> None:
+    """Registry generation should classify stale claims separately from weak claims."""
+    claims_dir = tmp_path / "claims"
+    json_output = tmp_path / "generated" / "runtime" / "active_work_registry.json"
+    markdown_output = tmp_path / "generated" / "runtime" / "active_work_registry.md"
+    repo_root = tmp_path / "demo"
+    _init_git_repo(repo_root)
+    subprocess.run(["git", "-C", str(repo_root), "branch", "plan-95-stale"], check=True, capture_output=True, text=True)
+
+    _write_claim(
+        claims_dir,
+        "stale.yaml",
+        {
+            "agent": "codex",
+            "claimed_at": "2026-04-05T12:00:00+00:00",
+            "expires_at": "2099-04-05T13:00:00+00:00",
+            "projects": ["demo"],
+            "scope": "stale-lane",
+            "intent": "Stale lane",
+            "claim_type": "write",
+            "write_paths": ["README.md"],
+            "plan_ref": "Plan #95",
+            "branch": "plan-95-stale",
+            "worktree_path": str(tmp_path / "demo_worktrees" / "plan-95-stale"),
+            "session_id": "codex:test",
+            "status": "active",
+        },
+    )
+
+    exit_code = module.main(
+        [
+            "--claims-dir",
+            str(claims_dir),
+            "--json-output",
+            str(json_output),
+            "--markdown-output",
+            str(markdown_output),
+        ]
+    )
+
+    assert exit_code == 0
+    payload = json.loads(json_output.read_text(encoding="utf-8"))
+    assert payload["health_summary"]["stale_claim_count"] == 1
+    assert payload["health_summary"]["overall_status"] == "attention"
+    assert payload["claims"][0]["health_status"] == "stale"
+    assert payload["claims"][0]["lifecycle_issues"] == ["missing_worktree_on_disk"]
+    assert payload["lanes"][0]["health_status"] == "stale"
+    assert payload["lanes"][0]["lifecycle_issues"] == ["missing_worktree_on_disk"]
+    markdown = markdown_output.read_text(encoding="utf-8")
+    assert "Stale claims" in markdown
+    assert "stale (missing_worktree_on_disk)" in markdown

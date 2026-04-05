@@ -18,6 +18,7 @@ import yaml  # type: ignore[import-untyped]
 
 DEFAULT_SESSION_TRACKERS_DIR = Path.home() / ".claude" / "coordination" / "sessions"
 SESSION_TRACKER_SCHEMA_VERSION = 1
+UNPLANNED_PLAN_REF = "UNPLANNED"
 
 CLAIM_FIELD_NAMES = (
     "agent",
@@ -51,6 +52,19 @@ def _require_text(value: str, *, field_name: str) -> str:
     if not text:
         raise ValueError(f"{field_name} is required")
     return text
+
+
+def normalize_plan_ref(plan_ref: str | None, *, allow_unplanned: bool = False) -> str:
+    """Return a normalized plan marker or fail loud if none was declared."""
+
+    if isinstance(plan_ref, str) and plan_ref.strip():
+        return plan_ref.strip()
+    if allow_unplanned:
+        return UNPLANNED_PLAN_REF
+    raise ValueError(
+        "plan_ref is required for live sessions. "
+        "Pass a real numbered plan or explicitly allow unplanned work."
+    )
 
 
 def _clean_string_list(items: list[str] | None) -> list[str]:
@@ -122,6 +136,7 @@ class SessionContract:
         plan_ref: str | None = None,
         session_name: str | None = None,
         tracker_path: str | None = None,
+        allow_unplanned: bool = False,
     ) -> "SessionContract":
         """Build a validated session contract from bootstrap inputs."""
 
@@ -140,7 +155,7 @@ class SessionContract:
             project=_require_text(project, field_name="project"),
             scope=_require_text(scope, field_name="scope"),
             intent=_require_text(intent, field_name="intent"),
-            plan_ref=plan_ref.strip() if isinstance(plan_ref, str) and plan_ref.strip() else None,
+            plan_ref=normalize_plan_ref(plan_ref, allow_unplanned=allow_unplanned),
             repo_root=_require_text(repo_root, field_name="repo_root"),
             worktree_path=_require_text(worktree_path, field_name="worktree_path"),
             branch=_require_text(branch, field_name="branch"),

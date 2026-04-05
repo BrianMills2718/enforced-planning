@@ -161,6 +161,39 @@ def _iter_matching_live_claims(
     return filtered
 
 
+def _single_matching_live_claim(
+    *,
+    agent: str,
+    project: str,
+    scope: str,
+) -> coordination_claims.ClaimRecord:
+    """Return one live claim for a bounded lane or fail loud."""
+
+    claims = _iter_matching_live_claims(agent=agent, project=project, scope=scope)
+    if not claims:
+        raise ValueError(f"No live claim found for {agent} → {project}:{scope}")
+    if len(claims) > 1:
+        raise ValueError(f"Multiple live claims found for {agent} → {project}:{scope}")
+    return claims[0]
+
+
+def _claim_status(claim: coordination_claims.ClaimRecord) -> str:
+    """Return the current persisted status string for one claim."""
+
+    return claim.status
+
+
+def _recovery_action_for_claim(claim: coordination_claims.ClaimRecord) -> str:
+    """Return the operator action implied by one claim's lifecycle state."""
+
+    health_status = coordination_claims.claim_runtime_status(claim)
+    if claim.status == "handoff":
+        return "resume_or_finish_handoff"
+    if health_status == "stale":
+        return "resume_or_abandon_or_prune"
+    return "continue"
+
+
 def _worktree_is_clean(worktree_path: str) -> tuple[bool, str]:
     """Return whether one worktree has a clean git status."""
 
@@ -196,6 +229,8 @@ def start_session(
     stop_conditions: list[str] | None = None,
     notes: str | None = None,
     tracker_dir: Path = session_contracts.DEFAULT_SESSION_TRACKERS_DIR,
+    allow_unplanned: bool = False,
+    allow_parallel: bool = False,
 ) -> dict[str, Any]:
     """Create or refresh the session contract plus linked tracker artifact."""
 
@@ -217,7 +252,19 @@ def start_session(
         session_id=resolved_session_id,
         broader_goal=broader_goal,
         session_name=session_name,
+        allow_unplanned=allow_unplanned,
     )
+    matching_lane_claims = [
+        claim
+        for claim in _iter_matching_live_claims(project=project, scope=scope)
+        if claim.plan_ref == contract.plan_ref and claim.branch != branch
+    ]
+    if matching_lane_claims and not allow_parallel:
+        branches = ", ".join(sorted({claim.branch or "-" for claim in matching_lane_claims}))
+        raise ValueError(
+            "A live lane already exists for the same project + plan_ref + scope "
+            f"on branch(es): {branches}. Use explicit parallelism if this is intentional."
+        )
     tracker_path = session_contracts.session_tracker_path(contract, tracker_dir=tracker_dir)
     contract = contract.with_tracker_path(str(tracker_path))
     tracker = session_contracts.build_session_tracker(
@@ -258,6 +305,7 @@ def start_session(
         "session_name": contract.session_name,
         "broader_goal": contract.broader_goal,
         "tracker_path": str(tracker_path),
+        "plan_ref": contract.plan_ref,
     }
 
 
@@ -353,6 +401,7 @@ def status_sessions(
                 "stop_conditions": tracker_section.get("stop_conditions") if isinstance(tracker_section, dict) else [],
                 "notes": tracker_section.get("notes") if isinstance(tracker_section, dict) else None,
                 "tracker_updated_at": timestamps.get("updated_at") if isinstance(timestamps, dict) else None,
+                "recovery_action": _recovery_action_for_claim(claim),
             }
         )
     return {
@@ -373,12 +422,7 @@ def finish_session(
 ) -> dict[str, Any]:
     """Close out one session or fail loud if the worktree state is unsafe."""
 
-    claims = _iter_matching_live_claims(agent=agent, project=project, scope=scope)
-    if not claims:
-        raise ValueError(f"No live claim found for {agent} → {project}:{scope}")
-    if len(claims) > 1:
-        raise ValueError(f"Multiple live claims found for {agent} → {project}:{scope}")
-    claim = claims[0]
+    claim = _single_matching_live_claim(agent=agent, project=project, scope=scope)
 
     clean, dirty_details = _worktree_is_clean(worktree_path)
     updated_at = datetime.now(timezone.utc).isoformat()
@@ -432,5 +476,139 @@ def finish_session(
     return {
         "action": "completed",
         "clean": True,
+        "tracker_path": tracker_path_text,
+    }
+
+
+def resume_session(
+    *,
+    agent: str,
+    project: str,
+    scope: str,
+    worktree_path: str,
+    branch: str,
+    current_phase: str,
+    session_id: str | None = None,
+    note: str | None = None,
+) -> dict[str, Any]:
+    """Reattach a new runtime session to an existing plan-bound lane."""
+
+    claim = _single_matching_live_claim(agent=agent, project=project, scope=scope)
+    if not claim.plan_ref:
+        raise ValueError("Cannot resume a lane with no plan_ref")
+    if claim.branch and claim.branch != branch:
+        raise ValueError(f"Claim branch is {claim.branch}, not {branch}")
+    if claim.worktree_path and claim.worktree_path != worktree_path:
+        raise ValueError(f"Claim worktree is {claim.worktree_path}, not {worktree_path}")
+
+    resolved_session_id = coordination_claims.resolve_session_id(agent, session_id)
+    if not resolved_session_id:
+        raise ValueError("Unable to resolve a session ID for session-resume.")
+
+    updated_at = datetime.now(timezone.utc).isoformat()
+    claim_file = _claim_path(agent, project, scope)
+    payload = _load_claim_payload(agent, project, scope)
+    if payload is None:
+        raise ValueError(f"Claim file missing for {agent} → {project}:{scope}")
+
+    payload["status"] = "active"
+    payload["session_id"] = resolved_session_id
+    payload["heartbeat_at"] = updated_at
+    payload["updated_at"] = updated_at
+    payload["notes"] = note or "session resumed with a fresh runtime attachment"
+    _write_claim_payload(claim_file, payload)
+
+    tracker_path_text = claim.tracker_path
+    if tracker_path_text:
+        path = Path(tracker_path_text).expanduser()
+        if path.exists():
+            session_contracts.update_session_tracker(
+                path,
+                current_phase=current_phase,
+                notes=payload["notes"],
+                updated_at=updated_at,
+            )
+
+    return {
+        "action": "resumed",
+        "session_id": resolved_session_id,
+        "tracker_path": tracker_path_text,
+        "plan_ref": claim.plan_ref,
+    }
+
+
+def handoff_session(
+    *,
+    agent: str,
+    project: str,
+    scope: str,
+    note: str,
+    current_phase: str = "handoff required",
+) -> dict[str, Any]:
+    """Mark one live lane as intentionally handed off."""
+
+    claim = _single_matching_live_claim(agent=agent, project=project, scope=scope)
+    updated_at = datetime.now(timezone.utc).isoformat()
+    claim_file = _claim_path(agent, project, scope)
+    payload = _load_claim_payload(agent, project, scope)
+    if payload is None:
+        raise ValueError(f"Claim file missing for {agent} → {project}:{scope}")
+
+    payload["status"] = "handoff"
+    payload["updated_at"] = updated_at
+    payload["notes"] = note.strip()
+    _write_claim_payload(claim_file, payload)
+
+    tracker_path_text = claim.tracker_path
+    if tracker_path_text:
+        path = Path(tracker_path_text).expanduser()
+        if path.exists():
+            session_contracts.update_session_tracker(
+                path,
+                current_phase=current_phase,
+                notes=payload["notes"],
+                updated_at=updated_at,
+            )
+
+    return {
+        "action": "handoff",
+        "tracker_path": tracker_path_text,
+    }
+
+
+def abandon_session(
+    *,
+    agent: str,
+    project: str,
+    scope: str,
+    note: str,
+) -> dict[str, Any]:
+    """Mark one live lane as explicitly abandoned."""
+
+    claim = _single_matching_live_claim(agent=agent, project=project, scope=scope)
+    updated_at = datetime.now(timezone.utc).isoformat()
+    claim_file = _claim_path(agent, project, scope)
+    payload = _load_claim_payload(agent, project, scope)
+    if payload is None:
+        raise ValueError(f"Claim file missing for {agent} → {project}:{scope}")
+
+    payload["status"] = "abandoned"
+    payload["updated_at"] = updated_at
+    payload["notes"] = note.strip()
+    _write_claim_payload(claim_file, payload)
+
+    tracker_path_text = claim.tracker_path
+    if tracker_path_text:
+        path = Path(tracker_path_text).expanduser()
+        if path.exists():
+            session_contracts.update_session_tracker(
+                path,
+                current_phase="abandoned",
+                notes=payload["notes"],
+                updated_at=updated_at,
+            )
+
+    return {
+        "action": "abandoned",
         "tracker_path": tracker_path_text,
     }

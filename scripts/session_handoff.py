@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Show live session summaries derived from claims plus trackers."""
+"""Mark one sanctioned session as an explicit handoff."""
 
 from __future__ import annotations
 
@@ -26,33 +26,28 @@ from enforced_planning import session_lifecycle
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--project")
-    parser.add_argument("--agent")
-    parser.add_argument("--scope")
-    parser.add_argument("--branch")
+    parser.add_argument("--agent", required=True)
+    parser.add_argument("--project", required=True)
+    parser.add_argument("--scope", required=True)
+    parser.add_argument("--note", required=True)
+    parser.add_argument("--current-phase", default="handoff required")
     parser.add_argument("--json", action="store_true")
     return parser.parse_args(argv)
 
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
-    payload = session_lifecycle.status_sessions(
-        project=args.project,
+    payload = session_lifecycle.handoff_session(
         agent=args.agent,
+        project=args.project,
         scope=args.scope,
-        branch=args.branch,
+        note=args.note,
+        current_phase=args.current_phase,
     )
     if args.json:
         print(json.dumps(payload, indent=2, sort_keys=True))
-        return 0
-    print(f"Live sessions: {payload['session_count']}")
-    for session in payload["sessions"]:
-        print(
-            f"- {session['project']}:{session['scope']} "
-            f"[{session['health_status']}] "
-            f"{session['session_name']} :: {session['current_phase']} "
-            f"(recovery={session['recovery_action']})"
-        )
+    else:
+        print(payload["action"])
     return 0
 
 

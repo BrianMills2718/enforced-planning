@@ -33,7 +33,7 @@ still the active owner when the sprint reaches Plan #38, either:
 ## Progress
 
 - [x] Sprint order frozen in Plan #40
-- [ ] Plan #33 landed
+- [x] Plan #33 landed
 - [ ] Plan #37 landed
 - [ ] Plan #34 landed
 - [ ] Plan #39 landed
@@ -44,3 +44,4 @@ still the active owner when the sprint reaches Plan #38, either:
 - Continuous execution means moving to the next numbered slice after each clean
   landing, not stopping at one successful commit.
 - This file is the durable handoff surface if context compresses mid-sprint.
+- Current active slice: Plan #37 in `enforced-planning_worktrees/plan-37-session-recovery-implementation`.

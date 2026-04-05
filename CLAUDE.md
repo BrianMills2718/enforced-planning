@@ -144,3 +144,23 @@ make test
 - `AGENTS.md` is a generated mirror, not a second authority.
 - Historical sprint notes under `docs/ops/` are evidence artifacts, not the
   active planning queue.
+
+## Principles
+
+- Governance is mechanical: checks are deterministic, not advisory
+- Every repo gets the same contract surface (CLAUDE.md, AGENTS.md, validators, hooks)
+- Install is idempotent: running it twice leaves the repo in the same state
+- Source truth is in this repo; installed repos are consumers of generated artifacts
+
+## Workflow
+
+1. Make changes to framework source
+2. Run `python scripts/self_test.py` to validate
+3. Run `python scripts/install_governed_repo.py --repo-root <consumer> --write` to propagate
+
+## References
+
+- `PLANNING_OPERATING_MODEL.md` — canonical methodology
+- `docs/plans/CLAUDE.md` — implementation plan queue
+- `ROADMAP.md` — forward queue and phase map
+- `docs/guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md` — worktree and lane lifecycle

@@ -17,6 +17,9 @@ This repo is currently running in explicit continuous-execution mode.
 - Merge and push verified slices from the root-anchored control session, then
   clean the finished worktree and release the lane claim before starting the
   next slice.
+- Name runtime sessions after the broader objective, not the local subtask or
+  branch. The branch can be task-shaped; the session contract should be
+  objective-shaped.
 - If a concern or uncertainty appears, document it in the active plan or sprint
   tracker immediately; do not leave it only in chat.
 

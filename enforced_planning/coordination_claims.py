@@ -56,7 +56,11 @@ class ClaimRecord:
     write_paths: list[str]
     read_paths: list[str]
     worktree_path: str | None
+    repo_root: str | None
     branch: str | None
+    session_name: str | None
+    broader_goal: str | None
+    tracker_path: str | None
     session_id: str | None
     heartbeat_at: str | None
     status: str
@@ -419,7 +423,11 @@ def normalize_claim(data: dict[str, Any], *, source_file: str | None = None) -> 
             "write_paths",
             "read_paths",
             "worktree_path",
+            "repo_root",
             "branch",
+            "session_name",
+            "broader_goal",
+            "tracker_path",
             "session_id",
             "heartbeat_at",
             "status",
@@ -440,7 +448,11 @@ def normalize_claim(data: dict[str, Any], *, source_file: str | None = None) -> 
         write_paths=write_paths,
         read_paths=read_paths,
         worktree_path=data.get("worktree_path") if isinstance(data.get("worktree_path"), str) else None,
+        repo_root=data.get("repo_root") if isinstance(data.get("repo_root"), str) else None,
         branch=data.get("branch") if isinstance(data.get("branch"), str) else None,
+        session_name=data.get("session_name") if isinstance(data.get("session_name"), str) else None,
+        broader_goal=data.get("broader_goal") if isinstance(data.get("broader_goal"), str) else None,
+        tracker_path=data.get("tracker_path") if isinstance(data.get("tracker_path"), str) else None,
         session_id=data.get("session_id") if isinstance(data.get("session_id"), str) else None,
         heartbeat_at=data.get("heartbeat_at") if isinstance(data.get("heartbeat_at"), str) else None,
         status=status,
@@ -589,7 +601,11 @@ def build_candidate_claim(
     write_paths: list[str] | None = None,
     read_paths: list[str] | None = None,
     worktree_path: str | None = None,
+    repo_root: str | None = None,
     branch: str | None = None,
+    session_name: str | None = None,
+    broader_goal: str | None = None,
+    tracker_path: str | None = None,
     session_id: str | None = None,
     heartbeat_at: str | None = None,
     status: str = "active",
@@ -619,7 +635,11 @@ def build_candidate_claim(
         write_paths=normalized_write_paths,
         read_paths=normalized_read_paths,
         worktree_path=worktree_path,
+        repo_root=repo_root,
         branch=branch,
+        session_name=session_name,
+        broader_goal=broader_goal,
+        tracker_path=tracker_path,
         session_id=resolved_session_id,
         heartbeat_at=heartbeat_at,
         status=status,
@@ -643,7 +663,11 @@ def create_claim(
     write_paths: list[str] | None = None,
     read_paths: list[str] | None = None,
     worktree_path: str | None = None,
+    repo_root: str | None = None,
     branch: str | None = None,
+    session_name: str | None = None,
+    broader_goal: str | None = None,
+    tracker_path: str | None = None,
     session_id: str | None = None,
     status: str = "active",
     parent_scope: str | None = None,
@@ -661,7 +685,11 @@ def create_claim(
         write_paths=write_paths,
         read_paths=read_paths,
         worktree_path=worktree_path,
+        repo_root=repo_root,
         branch=branch,
+        session_name=session_name,
+        broader_goal=broader_goal,
+        tracker_path=tracker_path,
         session_id=session_id,
         heartbeat_at=now.isoformat(),
         status=status,

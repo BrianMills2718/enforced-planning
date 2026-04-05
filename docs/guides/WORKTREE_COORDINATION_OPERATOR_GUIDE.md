@@ -131,6 +131,34 @@ For Claude Code, the same command shape applies with `--agent claude-code`.
 Session identity is auto-resolved from the supported runtime env vars when
 available.
 
+## Session Contract Model
+
+The coordination stack uses one canonical mutable object plus one linked
+tracker:
+
+- the **claim** remains canonical for coordination-critical fields
+- the **session tracker** holds richer evolving execution context
+
+Claim-side session fields should stay compact:
+
+- `repo_root`
+- `session_name`
+- `broader_goal`
+- `tracker_path`
+
+Tracker-only session fields hold restart-safe execution context:
+
+- `current_phase`
+- `intended_next_phases`
+- `depends_on_repos`
+- `requires_shared_infra_changes`
+- `stop_conditions`
+- `notes`
+
+Important rule: do not name sessions after the immediate local task. A branch
+like `plan-31-hygiene-gate` is fine for git, but the session name should derive
+from the broader goal, such as `digimon-truthful-controller-grounding`.
+
 ## Session Safety
 
 Some agent runtimes keep a persistent shell working directory. In those

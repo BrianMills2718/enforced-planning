@@ -24,12 +24,31 @@ Governed repos get one sanctioned session lifecycle:
 and the sanctioned worktree/finish flows can require those surfaces when the
 repo opts in.
 
+## Files Expected
+
+- `enforced_planning/session_contracts.py`
+- `scripts/session_start.py`
+- `scripts/session_heartbeat.py`
+- `scripts/session_status.py`
+- `scripts/session_finish.py`
+- `scripts/install_governed_repo.py`
+- `templates/Makefile.worktree.block.template`
+- `tests/test_session_cli.py`
+- `tests/test_install_governed_repo.py`
+- `tests/test_audit_governed_repo.py`
+
 ## Decisions Pre-Made
 
 - Enforcement lives in shared infrastructure, not per-project ad hoc scripts.
 - `make worktree` remains the worktree entrypoint; session bootstrap becomes a
   required adjacent step or integrated wrapper, not a parallel tribal process.
 - Finish flows must refuse to clear a lane without commit/stash/handoff state.
+- `session-start` creates or refreshes the claim plus tracker in one command.
+- `session-heartbeat` refreshes the current session lease and tracker timestamp.
+- `session-status` reads claims plus trackers; it does not invent a second
+  mutable registry.
+- Governed repos opt into required session lifecycle through generated local
+  entrypoints under `scripts/meta/`.
 
 ## Acceptance Criteria
 
@@ -37,10 +56,10 @@ repo opts in.
 2. Governed repos can install or sync the lifecycle entrypoints.
 3. The sanctioned repo interface can require a live session contract.
 4. Finish/cleanup flows integrate with session closeout.
+5. Installer and audit surfaces can detect missing session lifecycle wiring.
 
 ## Required Tests
 
 | Command | What It Verifies |
 |---|---|
 | `PYTHONPATH=. pytest -q tests/test_session_cli.py tests/test_install_governed_repo.py tests/test_audit_governed_repo.py` | Session lifecycle CLI and governed-repo enforcement work together |
-

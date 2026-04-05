@@ -78,6 +78,16 @@ If any of `branch`, `worktree_path`, `session_id`, or required write ownership
 is missing for a live write/program/research claim, the claim is weak and the
 registry should treat the lane as attention-worthy rather than healthy.
 
+Stale is a different class of problem. A live claim is **stale** when the lane
+state is no longer truthful even though the claim still says `active`. The
+canonical stale diagnostics are:
+
+- `missing_worktree_on_disk`
+- `missing_branch_ref`
+- `branch_merged_to_default`
+
+Stale outranks weak. A stale claim should be cleaned up, not merely tolerated.
+
 The canonical v2 claim CLI now auto-resolves `session_id` from supported tool
 runtime env vars when possible. In governed repos the installed local entrypoint
 is `scripts/meta/check_coordination_claims.py`. In the framework repo the
@@ -90,6 +100,16 @@ python scripts/meta/check_coordination_claims.py --hydrate-session-ids --agent c
 
 Use narrower filters such as `--scope` or `--branch` when you only want to
 repair one bounded lane.
+
+To clean up claims that are mechanically provable stale, use:
+
+```bash
+python scripts/meta/check_coordination_claims.py --prune-stale --json
+```
+
+That command is intentionally separate from `--prune`, which only removes
+expired claims. Use `--prune-stale` when worktree/branch lifecycle drift has
+left a live claim no longer truthful.
 
 ## Session Safety
 

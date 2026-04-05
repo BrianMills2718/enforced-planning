@@ -76,6 +76,16 @@ def claim_health_status(claim: ClaimRecord) -> str:
     return _impl.claim_health_status(claim)
 
 
+def claim_lifecycle_issues(claim: ClaimRecord) -> list[str]:
+    """Expose stale-lifecycle diagnostics through the legacy script surface."""
+    return _impl.claim_lifecycle_issues(claim)
+
+
+def claim_runtime_status(claim: ClaimRecord) -> str:
+    """Expose combined stale/weak/healthy runtime classification."""
+    return _impl.claim_runtime_status(claim)
+
+
 def hydrate_missing_session_ids(*args: Any, **kwargs: Any) -> tuple[int, list[str], str]:
     """Delegate session-id hydration while honoring script-level CLAIMS_DIR overrides."""
     _sync_runtime_config()
@@ -98,6 +108,12 @@ def prune_expired() -> int:
     """Delegate claim pruning while honoring script-level CLAIMS_DIR overrides."""
     _sync_runtime_config()
     return _impl.prune_expired()
+
+
+def prune_stale() -> tuple[int, list[str]]:
+    """Delegate stale-claim pruning while honoring script-level CLAIMS_DIR overrides."""
+    _sync_runtime_config()
+    return _impl.prune_stale()
 
 
 def parse_args(argv: list[str] | None = None):

@@ -21,6 +21,7 @@ import argparse
 import json
 import os
 import posixpath
+import subprocess
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -138,6 +139,96 @@ def claim_health_issues(claim: ClaimRecord) -> list[str]:
 def claim_health_status(claim: ClaimRecord) -> str:
     """Classify one claim as healthy or weak for registry/reporting surfaces."""
     return "weak" if claim_health_issues(claim) else "healthy"
+
+
+def _run_git(repo_root: Path, args: list[str]) -> subprocess.CompletedProcess[str]:
+    """Run one git command for lifecycle diagnostics without throwing."""
+    return subprocess.run(
+        ["git", *args],
+        cwd=str(repo_root),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def _resolve_repo_root_from_worktree_path(worktree_path: str | None) -> Path | None:
+    """Resolve the canonical repo root from a claim worktree path when possible."""
+    if not worktree_path:
+        return None
+    expanded = Path(worktree_path).expanduser()
+    if expanded.exists():
+        result = _run_git(expanded, ["rev-parse", "--show-toplevel"])
+        if result.returncode == 0:
+            return Path(result.stdout.strip())
+    parent = expanded.parent
+    if parent.name.endswith("_worktrees"):
+        candidate = parent.parent / parent.name.removesuffix("_worktrees")
+        if candidate.exists():
+            result = _run_git(candidate, ["rev-parse", "--show-toplevel"])
+            if result.returncode == 0:
+                return Path(result.stdout.strip())
+    return None
+
+
+def _resolve_default_branch(repo_root: Path) -> str | None:
+    """Return the canonical default branch name for one repo when resolvable."""
+    remote_head = _run_git(repo_root, ["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"])
+    if remote_head.returncode == 0:
+        value = remote_head.stdout.strip()
+        if value.startswith("origin/"):
+            return value.split("/", 1)[1]
+        if value:
+            return value
+    for candidate in ("main", "master"):
+        branch_check = _run_git(repo_root, ["show-ref", "--verify", f"refs/heads/{candidate}"])
+        if branch_check.returncode == 0:
+            return candidate
+    return None
+
+
+def claim_lifecycle_issues(claim: ClaimRecord) -> list[str]:
+    """Return mechanically provable stale-lifecycle issues for one live claim."""
+    if not claim.is_live():
+        return []
+
+    issues: list[str] = []
+    repo_root = _resolve_repo_root_from_worktree_path(claim.worktree_path)
+    worktree_path = Path(claim.worktree_path).expanduser() if claim.worktree_path else None
+
+    if worktree_path is not None and not worktree_path.exists():
+        issues.append("missing_worktree_on_disk")
+
+    if claim.branch and repo_root is not None:
+        branch_ref = f"refs/heads/{claim.branch}"
+        branch_check = _run_git(repo_root, ["show-ref", "--verify", branch_ref])
+        branch_exists = branch_check.returncode == 0
+        if not branch_exists:
+            issues.append("missing_branch_ref")
+        else:
+            default_branch = _resolve_default_branch(repo_root)
+            if default_branch and default_branch != claim.branch:
+                branch_sha = _run_git(repo_root, ["rev-parse", branch_ref])
+                default_sha = _run_git(repo_root, ["rev-parse", f"refs/heads/{default_branch}"])
+                if branch_sha.returncode != 0 or default_sha.returncode != 0:
+                    return issues
+                if branch_sha.stdout.strip() == default_sha.stdout.strip():
+                    return issues
+                merged_check = _run_git(
+                    repo_root,
+                    ["merge-base", "--is-ancestor", branch_ref, f"refs/heads/{default_branch}"],
+                )
+                if merged_check.returncode == 0:
+                    issues.append("branch_merged_to_default")
+
+    return issues
+
+
+def claim_runtime_status(claim: ClaimRecord) -> str:
+    """Classify one live claim across stale/weak/healthy states."""
+    if claim_lifecycle_issues(claim):
+        return "stale"
+    return claim_health_status(claim)
 
 
 def validate_claim_for_creation(claim: ClaimRecord) -> None:
@@ -640,6 +731,28 @@ def prune_expired() -> int:
     return removed
 
 
+def prune_stale() -> tuple[int, list[str]]:
+    """Remove stale live claims and return the removal count plus scope labels."""
+    if not CLAIMS_DIR.exists():
+        return 0, []
+    removed_labels: list[str] = []
+    for claim_file in CLAIMS_DIR.glob("*.yaml"):
+        try:
+            data = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if not isinstance(data, dict):
+            continue
+        claim = normalize_claim(data, source_file=str(claim_file))
+        if claim is None or not claim.is_live():
+            continue
+        if not claim_lifecycle_issues(claim):
+            continue
+        claim_file.unlink()
+        removed_labels.append(f"{claim.primary_project()}:{claim.scope}")
+    return len(removed_labels), sorted(removed_labels)
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     """Parse CLI arguments for coordination-claim management."""
     parser = argparse.ArgumentParser(description="Cross-brain coordination claims")
@@ -649,6 +762,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     group.add_argument("--release", action="store_true", help="Release an existing claim")
     group.add_argument("--list", action="store_true", help="List all active claims")
     group.add_argument("--prune", action="store_true", help="Remove expired claims")
+    group.add_argument(
+        "--prune-stale",
+        action="store_true",
+        help="Remove mechanically stale live claims whose lifecycle state is no longer truthful.",
+    )
     group.add_argument(
         "--hydrate-session-ids",
         action="store_true",
@@ -687,8 +805,9 @@ def _render_check_output(
         "claims": [
             {
                 **claim.to_dict(),
-                "health_status": claim_health_status(claim),
+                "health_status": claim_runtime_status(claim),
                 "health_issues": claim_health_issues(claim),
+                "lifecycle_issues": claim_lifecycle_issues(claim),
             }
             for claim in claims
         ],
@@ -696,8 +815,9 @@ def _render_check_output(
     if candidate is not None:
         payload["check"] = {
             **evaluate_claim(candidate, active_claims=claims).to_dict(),
-            "candidate_health_status": claim_health_status(candidate),
+            "candidate_health_status": claim_runtime_status(candidate),
             "candidate_health_issues": claim_health_issues(candidate),
+            "candidate_lifecycle_issues": claim_lifecycle_issues(candidate),
         }
     return payload
 
@@ -818,6 +938,17 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps({"pruned": removed}, indent=2))
         else:
             print(f"Expired claims pruned: {removed}")
+        return 0
+
+    if args.prune_stale:
+        removed, removed_scopes = prune_stale()
+        payload = {"pruned": removed, "removed_scopes": removed_scopes}
+        if args.json:
+            print(json.dumps(payload, indent=2))
+        else:
+            print(f"Stale claims pruned: {removed}")
+            if removed_scopes:
+                print("Removed scopes: " + ", ".join(removed_scopes))
         return 0
 
     if args.hydrate_session_ids:

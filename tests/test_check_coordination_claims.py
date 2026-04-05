@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -29,6 +30,16 @@ def _write_claim(claims_dir: Path, name: str, payload: dict) -> None:
     """Write one YAML claim fixture into the temporary claims directory."""
     claims_dir.mkdir(parents=True, exist_ok=True)
     (claims_dir / name).write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
+
+
+def _init_git_repo(repo_root: Path) -> None:
+    """Create a minimal git repo with a configured identity."""
+    subprocess.run(["git", "init", "-b", "main", str(repo_root)], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(repo_root), "config", "user.name", "Test User"], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(repo_root), "config", "user.email", "test@example.com"], check=True, capture_output=True, text=True)
+    (repo_root / "README.md").write_text("seed\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(repo_root), "add", "README.md"], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(repo_root), "commit", "-m", "seed"], check=True, capture_output=True, text=True)
 
 
 def test_normalize_claim_reads_v1_schema_as_program_claim(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -229,6 +240,87 @@ def test_create_claim_auto_resolves_codex_session_id(
     assert payload["session_id"] == "codex:thread-123"
 
 
+def test_claim_lifecycle_issues_detect_missing_worktree_on_disk(tmp_path: Path) -> None:
+    """Claims should become stale when their declared worktree path no longer exists."""
+    module = _load_module()
+    repo_root = tmp_path / "demo"
+    _init_git_repo(repo_root)
+    subprocess.run(
+        ["git", "-C", str(repo_root), "branch", "plan-90-demo"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    missing_worktree = tmp_path / "demo_worktrees" / "plan-90-demo"
+
+    claim = module.build_candidate_claim(
+        agent="codex",
+        project="demo",
+        scope="demo-scope",
+        intent="Demo lifecycle issue",
+        claim_type="write",
+        write_paths=["README.md"],
+        branch="plan-90-demo",
+        worktree_path=str(missing_worktree),
+        session_id="codex:test",
+    )
+
+    assert module.claim_lifecycle_issues(claim) == ["missing_worktree_on_disk"]
+    assert module.claim_runtime_status(claim) == "stale"
+
+
+def test_claim_lifecycle_issues_detect_missing_branch_ref(tmp_path: Path) -> None:
+    """Claims should become stale when the declared branch ref no longer exists."""
+    module = _load_module()
+    repo_root = tmp_path / "demo"
+    _init_git_repo(repo_root)
+    worktree_path = tmp_path / "demo_worktrees" / "plan-91-missing-branch"
+    worktree_path.mkdir(parents=True)
+
+    claim = module.build_candidate_claim(
+        agent="codex",
+        project="demo",
+        scope="missing-branch",
+        intent="Demo missing branch",
+        claim_type="write",
+        write_paths=["README.md"],
+        branch="plan-91-missing-branch",
+        worktree_path=str(worktree_path),
+        session_id="codex:test",
+    )
+
+    assert module.claim_lifecycle_issues(claim) == ["missing_branch_ref"]
+    assert module.claim_runtime_status(claim) == "stale"
+
+
+def test_claim_lifecycle_issues_detect_branch_merged_to_default(tmp_path: Path) -> None:
+    """Claims should become stale once the claimed branch has landed on the default branch."""
+    module = _load_module()
+    repo_root = tmp_path / "demo"
+    _init_git_repo(repo_root)
+    subprocess.run(["git", "-C", str(repo_root), "checkout", "-b", "plan-92-landed"], check=True, capture_output=True, text=True)
+    (repo_root / "feature.txt").write_text("feature\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(repo_root), "add", "feature.txt"], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(repo_root), "commit", "-m", "feature"], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(repo_root), "checkout", "main"], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(repo_root), "merge", "--no-ff", "plan-92-landed", "-m", "merge feature"], check=True, capture_output=True, text=True)
+
+    claim = module.build_candidate_claim(
+        agent="codex",
+        project="demo",
+        scope="landed-branch",
+        intent="Demo landed branch",
+        claim_type="write",
+        write_paths=["README.md"],
+        branch="plan-92-landed",
+        worktree_path=str(repo_root),
+        session_id="codex:test",
+    )
+
+    assert module.claim_lifecycle_issues(claim) == ["branch_merged_to_default"]
+    assert module.claim_runtime_status(claim) == "stale"
+
+
 def test_hydrate_session_ids_backfills_matching_live_claims(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -305,6 +397,65 @@ def test_hydrate_session_ids_backfills_matching_live_claims(
     assert untouched["session_id"] == "codex:preexisting"
     other_project = yaml.safe_load((claims_dir / "other-project.yaml").read_text(encoding="utf-8"))
     assert "session_id" not in other_project
+
+
+def test_prune_stale_removes_only_mechanically_stale_claims(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Stale pruning should remove only claims with proven lifecycle issues."""
+    module = _load_module()
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
+    repo_root = tmp_path / "demo"
+    _init_git_repo(repo_root)
+    subprocess.run(["git", "-C", str(repo_root), "branch", "plan-93-healthy"], check=True, capture_output=True, text=True)
+    healthy_worktree = tmp_path / "demo_worktrees" / "plan-93-healthy"
+    healthy_worktree.mkdir(parents=True)
+
+    _write_claim(
+        claims_dir,
+        "stale.yaml",
+        {
+            "agent": "codex",
+            "claimed_at": "2026-04-05T12:00:00+00:00",
+            "expires_at": "2099-04-05T13:00:00+00:00",
+            "projects": ["demo"],
+            "scope": "stale-scope",
+            "intent": "Stale claim",
+            "claim_type": "write",
+            "write_paths": ["README.md"],
+            "branch": "plan-94-missing",
+            "worktree_path": str(tmp_path / "demo_worktrees" / "plan-94-missing"),
+            "session_id": "codex:test",
+            "status": "active",
+        },
+    )
+    _write_claim(
+        claims_dir,
+        "healthy.yaml",
+        {
+            "agent": "codex",
+            "claimed_at": "2026-04-05T12:05:00+00:00",
+            "expires_at": "2099-04-05T13:05:00+00:00",
+            "projects": ["demo"],
+            "scope": "healthy-scope",
+            "intent": "Healthy claim",
+            "claim_type": "write",
+            "write_paths": ["README.md"],
+            "branch": "plan-93-healthy",
+            "worktree_path": str(healthy_worktree),
+            "session_id": "codex:test",
+            "status": "active",
+        },
+    )
+
+    removed, removed_scopes = module.prune_stale()
+
+    assert removed == 1
+    assert removed_scopes == ["demo:stale-scope"]
+    assert not (claims_dir / "stale.yaml").exists()
+    assert (claims_dir / "healthy.yaml").exists()
 
 
 def test_check_json_outputs_claims_and_candidate_conflict_classification(

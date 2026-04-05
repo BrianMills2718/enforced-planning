@@ -175,6 +175,19 @@ Supported runtime adapters:
 Those adapters only resolve runtime identity. They do not change the session
 contract schema, the tracker schema, or the sanctioned repo lifecycle commands.
 
+## Consumer Rule
+
+Downstream coordination consumers such as assignment managers, dashboards, or
+future queue routers must consume canonical claim/session identity. They must
+not introduce:
+
+- a global singleton current-session file
+- their own per-window identity registry
+- a second mutable source of truth for session ownership
+
+Assignment and queue layers are allowed as routing layers only when they sit on
+top of the canonical claim/session lifecycle.
+
 ## Session Safety
 
 Some agent runtimes keep a persistent shell working directory. In those

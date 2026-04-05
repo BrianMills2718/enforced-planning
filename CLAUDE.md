@@ -22,6 +22,9 @@ This repo is currently running in explicit continuous-execution mode.
   objective-shaped.
 - If a concern or uncertainty appears, document it in the active plan or sprint
   tracker immediately; do not leave it only in chat.
+- Do not build parallel coordination identity systems in downstream repos.
+  Assignment, queueing, and operator surfaces must consume the canonical
+  claim/session model owned here.
 
 Non-negotiable execution rules for continuous runs:
 

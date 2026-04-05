@@ -141,6 +141,9 @@ and readable as bounded active lanes instead of only raw claims.
 | #30 | Session bootstrap contract and tracker | ✅ Complete |
 | #31 | Session CLI and governed-repo entrypoint enforcement | ✅ Complete |
 | #32 | Cross-tool session adapters and adoption rollout | ✅ Complete |
+| #33 | Assignment-layer session contract integration | 📋 Planned |
+| #34 | Weak-claim remediation and live-lane migration | 📋 Planned |
+| #35 | Queue-based assignment and session routing architecture | 📋 Planned |
 
 **Deferred item blockers:**
 
@@ -154,13 +157,26 @@ and readable as bounded active lanes instead of only raw claims.
 
 ## What's Next (recommended priority order)
 
-1. **Mac mini pilot governed-repo rollout**
+1. **Assignment-layer integration**
+   Land Plan #33 so downstream routing tools like `ecosystem-ops/assignment_manager.py`
+   consume canonical session identity instead of inventing their own per-window
+   truth surface.
+
+2. **Weak/stale live-lane remediation**
+   Land Plan #34 so the active registry reflects adjudicated lane state rather
+   than legacy weak claims.
+
+3. **Queue/routing architecture freeze**
+   Land Plan #35 so future task-queue or assignment work builds on the canonical
+   claim/session model instead of creating parallel identity systems.
+
+4. **Mac mini pilot governed-repo rollout**
    Execute the first controlled pilot from `docs/guides/MAC_MINI_CONTINUOUS_AUTOMATION_BOOTSTRAP.md` using a sanctioned worktree lane.
 
-2. **Future implementation slice: ecosystem status renderer and metrics collection**
+5. **Future implementation slice: ecosystem status renderer and metrics collection**
    Implement `make ecosystem-status`, `generated/ecosystem_status.json`, and rendered operator metrics on top of Plans #21 and #22.
 
-3. **Project-meta topic-research adoption**
+6. **Project-meta topic-research adoption**
    Apply the portable topic-research pattern in `project-meta/research_texts`
    with manifests, ADR links, and freshness metadata for high-value topics.
 

@@ -37,6 +37,9 @@ See `ROADMAP.md` for the full phase map and recommended priority order.
 | 30 | Session Bootstrap Contract and Tracker (`30_session_bootstrap_contract_and_tracker.md`) | High | ✅ Complete | Claim-linked session intent/tracker contract |
 | 31 | Session CLI and Governed-Repo Entrypoint Enforcement (`31_session_cli_and_governed_repo_entrypoint_enforcement.md`) | High | ✅ Complete | Mandatory session lifecycle in sanctioned repo flows |
 | 32 | Cross-Tool Session Adapters and Adoption Rollout (`32_cross_tool_session_adapters_and_adoption_rollout.md`) | High | ✅ Complete | Codex/Claude Code adapter parity and rollout |
+| 33 | Assignment-Layer Session Contract Integration (`33_assignment-layer-session-contract-integration.md`) | High | 📋 Planned | Make downstream routing consumers use canonical session identity |
+| 34 | Weak-Claim Remediation And Live-Lane Migration (`34_weak-claim-remediation-and-live-lane-migration.md`) | High | 📋 Planned | Turn weak/stale active lanes into adjudicated lifecycle state |
+| 35 | Queue-Based Assignment And Session Routing Architecture (`35_queue-based-assignment-and-session-routing-architecture.md`) | Medium | 📋 Planned | Freeze the long-term routing layer on top of the claim/session model |
 
 ## Status Key
 

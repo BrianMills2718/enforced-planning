@@ -49,6 +49,9 @@ See `ROADMAP.md` for the full phase map and recommended priority order.
 | 42 | Atomic Closeout And Claimed Worktree Removal (`42_atomic-closeout-and-claimed-worktree-removal.md`) | High | ✅ Complete | Make claimed-lane cleanup one sanctioned operation instead of split release/remove steps |
 | 43 | Publish-Lane Safety And Dirty Primary Checkout Handling (`43_publish-lane-safety-and-dirty-primary-checkout-handling.md`) | High | 🚧 In Progress | Make publish worktree creation fail loud when the canonical primary checkout is unsafe |
 | 44 | Interactive Startup Mode And Session-Owned Surface Policy (`44_interactive-startup-mode-and-session-owned-surface-policy.md`) | High | 📋 Planned | Distinguish interactive startup truth from autonomous routing/ownership semantics |
+| 45 | Planning Operating Model Fixes — ADR-0010 follow-through (`45_planning-operating-model-fixes.md`) | High | ✅ Complete | New-system-init memory recall, non-goals update, ADR-0010 link |
+| 46 | CLAUDE.md Ops-State Cleanup (`46_claude-md-ops-state-cleanup.md`) | High | ✅ Complete | Remove sprint order, fix canonical-surface contradiction |
+| 47 | Phase 9 Roadmap Definition (`47_phase9-roadmap-definition.md`) | Medium | ✅ Complete | Phase 9 fleet-adoption section added to ROADMAP.md |
 
 ## Status Key
 

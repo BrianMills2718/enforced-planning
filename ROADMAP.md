@@ -163,29 +163,42 @@ and readable as bounded active lanes instead of only raw claims.
 
 **Long-term deferred (no near-term consumer):** Visibility grammar and distributed governance moved to `docs/backlog/DEFERRED_FEATURES.md`.
 
-## What's Next (recommended priority order)
+## What's Next — Complete Plans #43, #44, #35
 
-1. **Publish-lane safety**
-   Land Plan #43 so publish worktrees fail loud when dirty primary checkouts
-   would otherwise create ambiguous control lanes.
+These three plans complete the Coordination Runtime Surface:
 
-2. **Startup-mode truthfulness**
-   Land Plan #44 so interactive startup surfaces and autonomous routing follow
-   one explicit ownership policy.
+1. **Plan #43 — Publish-lane safety** (🚧 In Progress)
+   Fail loud when publish worktrees are created with a dirty primary checkout.
 
-3. **Queue/routing architecture freeze**
-   Land Plan #35 so future task-queue or assignment work builds on the canonical
-   claim/session model instead of creating parallel identity systems.
+2. **Plan #44 — Startup-mode truthfulness** (📋 Planned)
+   Distinguish interactive startup truth from autonomous routing/ownership semantics.
 
-4. **Mac mini pilot governed-repo rollout**
-   Execute the first controlled pilot from `docs/guides/MAC_MINI_CONTINUOUS_AUTOMATION_BOOTSTRAP.md` using a sanctioned worktree lane.
+3. **Plan #35 — Queue/routing architecture freeze** (📋 Planned)
+   Freeze the canonical claim/session model so future task-queue work builds on it.
 
-5. **Future implementation slice: ecosystem status renderer and metrics collection**
-   Implement `make ecosystem-status`, `generated/ecosystem_status.json`, and rendered operator metrics on top of Plans #21 and #22.
+---
 
-6. **Project-meta topic-research adoption**
-   Apply the portable topic-research pattern in `project-meta/research_synthesis`
-   with manifests, ADR links, and freshness metadata for high-value topics.
+## Phase 9: Fleet Adoption and Framework Maintenance
+
+**Gate:** Plans #43, #44, and #35 all complete. Coordination Runtime Surface is closed.
+
+**Strategic choice:** Phase 9 is **fleet adoption and maintenance** — not a new capability
+phase. The framework capability set is complete. Phase 9 work is about deploying what
+exists and measuring it.
+
+| Item | What | Trigger |
+|------|------|---------|
+| Mac mini pilot | Execute first controlled pilot from `docs/guides/MAC_MINI_CONTINUOUS_AUTOMATION_BOOTSTRAP.md` | Plans #43/#44/#35 complete |
+| Upgrade automation rollout | `docs/designs/GOVERNED_REPO_UPGRADE_AUTOMATION.md` fleet-upgrade execution | ≥ 5 governed repos |
+| Ecosystem status renderer | `make ecosystem-status`, `generated/ecosystem_status.json`, operator metrics on top of Plans #21/#22 | Plans #43/#44/#35 complete |
+| Multi-tool adoption | Cursor/Windsurf hook adapters when their hook surfaces are publicly documented | External dependency: tool documentation |
+| Project-meta topic-research adoption | Apply portable topic-research pattern in `research_synthesis/` with manifests, ADR links, freshness metadata | Plans #43/#44/#35 complete |
+
+**What Phase 9 does NOT include (deferred — see `docs/backlog/DEFERRED_FEATURES.md`):**
+- Visibility grammar (Bazel-style `__pkg__` scoping) — no consuming project needs it yet
+- Distributed governance (per-directory `.governance.yaml`) — no multi-team repo yet
+
+**Phase 9 end state:** The framework is self-measuring, the ecosystem has ≥ 5 governed repos with active upgrade automation, and operator overhead is ≤ 30 min/day.
 
 ## Design Principles
 

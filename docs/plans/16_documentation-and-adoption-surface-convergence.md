@@ -1,6 +1,6 @@
 # Plan #16: Documentation and Adoption Surface Convergence
 
-**Status:** Planned
+**Status:** Complete
 **Type:** implementation
 **Priority:** High
 **Blocked By:** #17, #18
@@ -65,6 +65,7 @@ needs a stable product surface, not just a strong internal doctrine.
 - ROADMAP.md (modify)
 - patterns/01_README.md (modify)
 - CLAUDE.md (modify if the top-level quick-start/status pointers remain stale)
+- scripts/self_test.py (modify)
 - docs/designs/DOCUMENTATION_SURFACE_ARCHITECTURE.md (reference only unless refinements are needed)
 - ISSUES.md (modify for resolution status if complete)
 - docs/plans/16_documentation-and-adoption-surface-convergence.md (modify)
@@ -107,18 +108,18 @@ needs a stable product surface, not just a strong internal doctrine.
 
 ## Acceptance Criteria
 
-- [ ] `README.md` is source-repo-oriented and does not silently switch to installed-repo perspective
-- [ ] `GETTING_STARTED.md` describes the installed governed-repo layout and commands truthfully
-- [ ] `docs/guides/NEW_PROJECT_SETUP.md` no longer duplicates or contradicts the fast-path guide
-- [ ] `hooks/README.md` no longer competes with top-level install guidance
-- [ ] `ROADMAP.md` shows actual next work
-- [ ] Top-level docs use one tool-support matrix and one config vocabulary
-- [ ] `agent_ecology2` appears only as provenance, not as the explanatory frame
-- [ ] Declared checks pass
+- [x] `README.md` is source-repo-oriented and does not silently switch to installed-repo perspective
+- [x] `GETTING_STARTED.md` describes the installed governed-repo layout and commands truthfully
+- [x] `docs/guides/NEW_PROJECT_SETUP.md` no longer duplicates or contradicts the fast-path guide
+- [x] `hooks/README.md` no longer competes with top-level install guidance
+- [x] `ROADMAP.md` shows actual next work
+- [x] Top-level docs use one tool-support matrix and one config vocabulary
+- [x] `agent_ecology2` appears only as provenance, not as the explanatory frame
+- [x] Declared checks pass
 
 ---
 
-## Open Questions
+## Decision
 
-- [ ] Should `docs/guides/NEW_PROJECT_SETUP.md` be retained as a separate doc after convergence, or folded into `GETTING_STARTED.md`? — Status: OPEN | Why it matters: affects long-term doc clutter and duplication risk
-
+`docs/guides/NEW_PROJECT_SETUP.md` remains as the deeper operator guide.
+`GETTING_STARTED.md` stays the short first-success path.

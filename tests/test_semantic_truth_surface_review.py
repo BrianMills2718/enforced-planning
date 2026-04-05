@@ -11,8 +11,11 @@ from pathlib import Path
 import yaml
 
 from scripts.review_truth_surface_semantic import (
+    _resolve_output_path,
     _load_llm_client_exports,
+    append_semantic_review_history,
     build_semantic_review_context,
+    load_semantic_review_history,
     load_semantic_review_payload,
 )
 from scripts.truth_surface_semantic_models import SemanticReviewReport
@@ -115,6 +118,76 @@ def test_load_semantic_review_payload_reads_review_wrapper(tmp_path: Path) -> No
     assert isinstance(report, SemanticReviewReport)
     assert report.findings[0].category == "stale_prose"
     assert report.findings[0].promotion_candidate is True
+
+
+def test_load_semantic_review_payload_reads_latest_entry_from_history(tmp_path: Path) -> None:
+    payload = tmp_path / "semantic_history.json"
+    payload.write_text(
+        json.dumps(
+            [
+                {"review": {"overview": "Older run.", "findings": []}},
+                {
+                    "review": {
+                        "overview": "Latest run.",
+                        "findings": [
+                            {
+                                "category": "missing_update",
+                                "severity": "info",
+                                "summary": "A summary file was not refreshed.",
+                                "rationale": "The deterministic status changed but the summary did not.",
+                                "evidence_refs": ["docs/ops/TRACKER.md"],
+                                "promotion_candidate": False,
+                                "promotion_rule_hint": "",
+                            }
+                        ],
+                    }
+                },
+            ]
+        )
+    )
+
+    report = load_semantic_review_payload(payload)
+
+    assert report.overview == "Latest run."
+    assert report.findings[0].category == "missing_update"
+
+
+def test_append_semantic_review_history_creates_append_only_json_list(tmp_path: Path) -> None:
+    history_path = tmp_path / "semantic_history.json"
+    first = {
+        "review": {
+            "overview": "First run.",
+            "findings": [],
+        }
+    }
+    second = {
+        "review": {
+            "overview": "Second run.",
+            "findings": [],
+        }
+    }
+
+    append_semantic_review_history(history_path, first)
+    append_semantic_review_history(history_path, second)
+
+    history = load_semantic_review_history(history_path)
+
+    assert len(history) == 2
+    assert history[0]["review"]["overview"] == "First run."
+    assert history[1]["review"]["overview"] == "Second run."
+
+
+def test_resolve_output_path_anchors_relative_paths_to_target_repo(tmp_path: Path) -> None:
+    config_path = tmp_path / "repo" / "scripts" / "truth_surface_drift.yaml"
+    config_path.parent.mkdir(parents=True)
+    config_path.write_text("surfaces: {}\n")
+
+    resolved = _resolve_output_path(
+        "docs/ops/semantic_truth_surface_review.json",
+        config_path=config_path,
+    )
+
+    assert resolved == tmp_path / "repo" / "docs" / "ops" / "semantic_truth_surface_review.json"
 
 
 def test_load_llm_client_exports_fails_loud_without_public_api(monkeypatch) -> None:

@@ -1,9 +1,12 @@
 ## enforced-planning — framework for enforced planning, context gating, doc-code alignment
 
-.PHONY: help test test-quick check lint infer check-deps check-caps migrate-rels verify-couplings review-surfaces plan-registry status
+.PHONY: help test test-quick check lint infer check-deps check-caps migrate-rels verify-couplings review-surfaces promote plan-registry status
 
 REPO ?= .
 SCAN_DIR ?= ~/projects
+TRUTH_CONFIG ?= $(REPO)/scripts/truth_surface_drift.yaml
+SEMANTIC_REVIEW_JSON ?= $(REPO)/docs/ops/semantic_truth_surface_review.json
+SEMANTIC_REVIEW_HISTORY ?= $(REPO)/docs/ops/semantic_truth_surface_review_history.json
 
 help:  ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*##' $(MAKEFILE_LIST) | awk -F ':.*##' '{printf "%-20s %s\n", $$1, $$2}'
@@ -39,16 +42,11 @@ verify-couplings:  ## Verify validated couplings via LLM agent (REPO=path, COMMI
 	@echo "Verifying validated couplings in $(REPO)"
 	@python scripts/verify_coupling.py --help
 
-review-surfaces:  ## Run LLM semantic review of truth surfaces (REPO=path)
-	python scripts/review_truth_surfaces.py --repo $(REPO)
-
-## --- Phase 6: Cross-repo governance ---
-
-review-surfaces:  ## Run LLM semantic review of truth surfaces (REPO=path)
-	python scripts/review_truth_surfaces.py --repo $(REPO) --output $(REPO)/docs/ops/semantic_review_findings.yaml
+review-surfaces:  ## Run canonical semantic review of truth surfaces (TRUTH_CONFIG=path)
+	python scripts/review_truth_surface_semantic.py --config $(TRUTH_CONFIG) --output-json $(SEMANTIC_REVIEW_JSON) --history-json $(SEMANTIC_REVIEW_HISTORY)
 
 promote:  ## Show promotion candidates from semantic review findings (REPO=path)
-	python scripts/promote_to_deterministic.py --findings $(REPO)/docs/ops/semantic_review_findings.yaml
+	python scripts/promote_to_deterministic.py --findings $(SEMANTIC_REVIEW_HISTORY)
 
 plan-registry:  ## Build cross-repo plan registry (SCAN_DIR=~/projects)
 	python scripts/build_plan_registry.py --scan-dir $(SCAN_DIR) --output generated/plan_registry.json --summary

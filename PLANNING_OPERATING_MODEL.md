@@ -102,6 +102,8 @@ These are hard ordering rules:
 - No non-trivial ADR without a research basis section or explicit research skip.
 - No bounded plan without current vs target framing.
 - No cross-project plan without capability or boundary clarity.
+- No design, cross-project, or externally-informed plan without a declared
+  research basis for the slice or explicit research skip.
 - No implementation without declared required tests and acceptance criteria.
 - No closeout without verification evidence.
 
@@ -116,6 +118,8 @@ These are defaults that can be compressed for trivial work:
 - Create a journey notebook before coding when the work has multiple real
   interfaces or stages.
 - Write tests before code whenever feasible; at minimum, define them before code.
+- Start topic freshness metadata as advisory. Add blocking enforcement only
+  after the repo has enough stable topic research to validate it meaningfully.
 
 ### LLM System Design: Pattern-First Sizing
 

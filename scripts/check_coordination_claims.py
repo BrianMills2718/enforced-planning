@@ -31,6 +31,7 @@ CLAIMS_DIR = Path.home() / ".claude" / "coordination" / "claims"
 DEFAULT_TTL_HOURS = 24  # Sprints run 24h; 2h caused false-expiry conflicts mid-sprint
 LIVE_STATUSES = {"active", "blocked", "handoff"}
 CLAIM_TYPES = {"program", "write", "review", "research"}
+STRICT_LIVE_METADATA_CLAIM_TYPES = {"program", "write", "research"}
 
 
 @dataclass(frozen=True)
@@ -109,6 +110,50 @@ class ClaimCheckResult:
             "interactions": [item.to_dict() for item in self.interactions],
             "has_hard_conflict": bool(self.hard_conflicts),
         }
+
+
+def claim_health_issues(claim: ClaimRecord) -> list[str]:
+    """Return machine-readable health issues for one normalized claim."""
+    issues: list[str] = []
+    if not claim.projects:
+        issues.append("missing_project")
+    if claim.claim_type == "write" and not claim.write_paths:
+        issues.append("missing_write_paths")
+    if claim.is_live() and claim.claim_type in STRICT_LIVE_METADATA_CLAIM_TYPES:
+        if not claim.branch:
+            issues.append("missing_branch")
+        if not claim.worktree_path:
+            issues.append("missing_worktree_path")
+        if not claim.session_id:
+            issues.append("missing_session_id")
+    return issues
+
+
+def claim_health_status(claim: ClaimRecord) -> str:
+    """Classify one claim as healthy or weak for registry/reporting surfaces."""
+    return "weak" if claim_health_issues(claim) else "healthy"
+
+
+def validate_claim_for_creation(claim: ClaimRecord) -> None:
+    """Reject new claims that omit required ownership metadata for live coordination."""
+    issues = claim_health_issues(claim)
+    if not issues:
+        return
+    if not claim.is_live():
+        return
+    flag_map = {
+        "missing_project": "--project",
+        "missing_write_paths": "--write-path",
+        "missing_branch": "--branch",
+        "missing_worktree_path": "--worktree-path",
+        "missing_session_id": "--session-id",
+    }
+    required_flags = [flag_map[item] for item in issues if item in flag_map]
+    required_text = ", ".join(required_flags)
+    raise ValueError(
+        f"Active {claim.claim_type} claims require {required_text}. "
+        "Legacy claims remain readable, but new live claims must declare real ownership."
+    )
 
 
 def _safe_string_list(value: Any) -> list[str]:
@@ -461,6 +506,7 @@ def create_claim(
         expires_at=(now + timedelta(hours=ttl_hours)).isoformat(),
         updated_at=now.isoformat(),
     )
+    validate_claim_for_creation(candidate)
 
     check_result = evaluate_claim(candidate, active_claims=check_claims(project))
     if check_result.hard_conflicts:
@@ -552,10 +598,21 @@ def _render_check_output(
     """Build a structured report for list/check operations."""
     payload: dict[str, Any] = {
         "project": project,
-        "claims": [claim.to_dict() for claim in claims],
+        "claims": [
+            {
+                **claim.to_dict(),
+                "health_status": claim_health_status(claim),
+                "health_issues": claim_health_issues(claim),
+            }
+            for claim in claims
+        ],
     }
     if candidate is not None:
-        payload["check"] = evaluate_claim(candidate, active_claims=claims).to_dict()
+        payload["check"] = {
+            **evaluate_claim(candidate, active_claims=claims).to_dict(),
+            "candidate_health_status": claim_health_status(candidate),
+            "candidate_health_issues": claim_health_issues(candidate),
+        }
     return payload
 
 

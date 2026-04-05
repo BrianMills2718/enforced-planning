@@ -50,14 +50,20 @@ def build_registry_payload(*, claims_module: Any, claims: list[Any]) -> dict[str
     claims_by_project = Counter(claim.primary_project() or "(none)" for claim in sorted_claims)
 
     claim_entries: list[dict[str, Any]] = []
+    weak_claim_count = 0
+    hard_conflict_claim_count = 0
+    soft_overlap_claim_count = 0
     for claim in sorted_claims:
         check_result = claims_module.evaluate_claim(claim, active_claims=sorted_claims)
         entry = claim.to_dict()
+        health_issues = claims_module.claim_health_issues(claim)
         entry["interaction_summary"] = {
             "hard_conflict_count": sum(1 for item in check_result.interactions if item.severity == "hard_conflict"),
             "soft_overlap_count": sum(1 for item in check_result.interactions if item.severity == "soft_overlap"),
             "informational_count": sum(1 for item in check_result.interactions if item.severity == "informational"),
         }
+        entry["health_status"] = "weak" if health_issues else "healthy"
+        entry["health_issues"] = health_issues
         entry["conflict_notes"] = [
             {
                 "severity": item.severity,
@@ -68,13 +74,34 @@ def build_registry_payload(*, claims_module: Any, claims: list[Any]) -> dict[str
             }
             for item in check_result.interactions
         ]
+        if health_issues:
+            weak_claim_count += 1
+        if entry["interaction_summary"]["hard_conflict_count"] > 0:
+            hard_conflict_claim_count += 1
+        if entry["interaction_summary"]["soft_overlap_count"] > 0:
+            soft_overlap_claim_count += 1
         claim_entries.append(entry)
+
+    overall_status = "idle"
+    if claim_entries:
+        if weak_claim_count or hard_conflict_claim_count:
+            overall_status = "attention"
+        elif soft_overlap_claim_count:
+            overall_status = "warning"
+        else:
+            overall_status = "healthy"
 
     return {
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "claim_count": len(claim_entries),
         "claims_by_type": dict(sorted(claims_by_type.items())),
         "claims_by_project": dict(sorted(claims_by_project.items())),
+        "health_summary": {
+            "overall_status": overall_status,
+            "weak_claim_count": weak_claim_count,
+            "hard_conflict_claim_count": hard_conflict_claim_count,
+            "soft_overlap_claim_count": soft_overlap_claim_count,
+        },
         "claims": claim_entries,
     }
 
@@ -88,6 +115,13 @@ def render_markdown(payload: dict[str, Any]) -> str:
         "",
         f"Generated: `{payload['generated_at_utc']}`",
         f"Live claims: `{payload['claim_count']}`",
+        "",
+        "## Coordination Health",
+        "",
+        f"- Overall status: `{payload['health_summary']['overall_status']}`",
+        f"- Weak claims: `{payload['health_summary']['weak_claim_count']}`",
+        f"- Claims with hard conflicts: `{payload['health_summary']['hard_conflict_claim_count']}`",
+        f"- Claims with soft overlaps: `{payload['health_summary']['soft_overlap_claim_count']}`",
         "",
         "## Summary",
         "",
@@ -104,8 +138,8 @@ def render_markdown(payload: dict[str, Any]) -> str:
         lines.append("No live claims.")
         return "\n".join(lines) + "\n"
 
-    lines.append("| Agent | Project | Type | Scope | Branch | Write Paths | Plan | Status | Interactions |")
-    lines.append("|---|---|---|---|---|---|---|---|---|")
+    lines.append("| Agent | Project | Type | Scope | Branch | Worktree | Write Paths | Plan | Status | Health | Interactions |")
+    lines.append("|---|---|---|---|---|---|---|---|---|---|---|")
     for claim in payload["claims"]:
         interactions = claim["interaction_summary"]
         interaction_text = (
@@ -114,19 +148,38 @@ def render_markdown(payload: dict[str, Any]) -> str:
             f"info={interactions['informational_count']}"
         )
         write_paths = ", ".join(claim["write_paths"]) if claim["write_paths"] else "-"
+        health = claim["health_status"]
+        if claim["health_issues"]:
+            health = f"{health} ({', '.join(claim['health_issues'])})"
         lines.append(
-            "| {agent} | {project} | {claim_type} | {scope} | {branch} | {write_paths} | {plan_ref} | {status} | {interaction_text} |".format(
+            "| {agent} | {project} | {claim_type} | {scope} | {branch} | {worktree} | {write_paths} | {plan_ref} | {status} | {health} | {interaction_text} |".format(
                 agent=claim["agent"],
                 project=claim.get("project") or "-",
                 claim_type=claim["claim_type"],
                 scope=claim["scope"],
                 branch=claim.get("branch") or "-",
+                worktree=claim.get("worktree_path") or "-",
                 write_paths=write_paths,
                 plan_ref=claim.get("plan_ref") or "-",
                 status=claim["status"],
+                health=health,
                 interaction_text=interaction_text,
             )
         )
+
+    lines.extend(["", "## Health Notes", ""])
+    any_health_notes = False
+    for claim in payload["claims"]:
+        if not claim["health_issues"]:
+            continue
+        any_health_notes = True
+        lines.append(
+            f"- `{claim['agent']}` / `{claim.get('project') or '-'}` / `{claim['scope']}` is `weak`: "
+            + ", ".join(claim["health_issues"])
+        )
+    if not any_health_notes:
+        lines.append("No weak live claims detected.")
+    lines.append("")
 
     lines.extend(["", "## Conflict Notes", ""])
     any_notes = False

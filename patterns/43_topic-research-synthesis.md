@@ -105,6 +105,9 @@ The ADR `Research Basis` should prefer:
 3. external source or production source
 4. explicit research skip statement
 
+ADR research linkage is a strict doctrine: significant ADRs should either cite
+their evidence chain or say explicitly why research was skipped.
+
 ### When writing a plan
 
 Use:
@@ -112,6 +115,11 @@ Use:
 - `References Reviewed` for repo-local code/docs you examined before planning
 - `Research Basis For This Slice` for prior investigations, topic syntheses,
   external sources, or explicit research skip
+
+This section should be treated as:
+
+- strict for design, cross-project, or externally informed work
+- recommended for trivial local work where repo-local references are sufficient
 
 ### When refreshing a topic
 
@@ -121,6 +129,9 @@ Refresh the synthesis when:
 - a new ADR depends on the topic
 - runtime evidence contradicts the current recommendation
 - the freshness SLA or trigger is hit
+
+Freshness metadata should start as advisory rather than blocking. The point is
+to create reusable refresh triggers before attempting semantic enforcement.
 
 ## Recommended Sections for a Topic Synthesis
 

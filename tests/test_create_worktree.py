@@ -232,6 +232,8 @@ def test_create_worktree_rejects_conflicting_scoped_write_claim(tmp_path: Path) 
             "claim_type": "write",
             "write_paths": ["docs/ops"],
             "branch": "plan-62-conflict",
+            "worktree_path": "~/projects/repo_worktrees/plan-62-conflict",
+            "session_id": "codex-session",
             "status": "active",
         },
     )
@@ -247,6 +249,9 @@ def test_create_worktree_rejects_conflicting_scoped_write_claim(tmp_path: Path) 
             "intent": "Patch docs too",
             "claim_type": "write",
             "write_paths": ["docs"],
+            "branch": "claude-docs",
+            "worktree_path": "~/projects/repo_worktrees/claude-docs",
+            "session_id": "claude-session",
             "status": "active",
         },
     )
@@ -293,6 +298,8 @@ def test_create_worktree_allows_matching_scoped_write_claim(tmp_path: Path) -> N
             "claim_type": "write",
             "write_paths": ["docs/ops"],
             "branch": "plan-62-valid",
+            "worktree_path": "~/projects/repo_worktrees/plan-62-valid",
+            "session_id": "codex-session",
             "status": "active",
         },
     )
@@ -322,3 +329,49 @@ def test_create_worktree_allows_matching_scoped_write_claim(tmp_path: Path) -> N
     assert cleanup_result.returncode == 0, cleanup_result.stdout + cleanup_result.stderr
     delete_branch = _run_git(repo_root, "branch", "-D", "plan-62-valid")
     assert delete_branch.returncode == 0, delete_branch.stdout + delete_branch.stderr
+
+
+def test_create_worktree_rejects_weak_matching_write_claim(tmp_path: Path) -> None:
+    """Strict worktree enforcement should reject a matching claim that is still weak."""
+    module = _load_module()
+    repo_root = tmp_path / "repo"
+    worktree_path = tmp_path / "repo_worktrees" / "plan-90-weak-claim"
+    claims_dir = tmp_path / "claims"
+    _init_temp_repo(repo_root)
+
+    _write_claim(
+        claims_dir,
+        "codex.yaml",
+        {
+            "agent": "codex",
+            "claimed_at": "2026-04-02T08:00:00+00:00",
+            "expires_at": "2099-04-02T09:00:00+00:00",
+            "projects": ["repo"],
+            "scope": "coordination-v2",
+            "intent": "Patch docs",
+            "claim_type": "write",
+            "write_paths": ["docs/ops"],
+            "branch": "plan-90-weak-claim",
+            "status": "active",
+        },
+    )
+
+    result = module.create_worktree(
+        repo_root=repo_root,
+        worktree_path=worktree_path,
+        branch="plan-90-weak-claim",
+        start_point="HEAD",
+        split_brain_threshold=5,
+        keep_failed_worktree=False,
+        require_write_claim=True,
+        claim_agent="codex",
+        claim_project="repo",
+        claim_write_paths=["docs/ops/INDEX.md"],
+        claims_dir=claims_dir,
+    )
+
+    assert not result.ok
+    assert result.classification == "coordination-error"
+    assert "matching active write claim is weak" in result.message
+    assert "missing_worktree_path" in result.message
+    assert not worktree_path.exists()

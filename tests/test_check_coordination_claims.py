@@ -153,11 +153,30 @@ def test_build_candidate_claim_rejects_write_claim_without_write_paths() -> None
         )
 
 
-def test_create_claim_without_write_paths_stays_backward_compatible(
+def test_create_claim_requires_live_metadata_for_new_program_claims(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Legacy-style claim creation without write paths should still produce a broad program claim."""
+    """New active program claims should fail loudly without live ownership metadata."""
+    module = _load_module()
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
+
+    with pytest.raises(ValueError, match="--branch, --worktree-path, --session-id"):
+        module.create_claim(
+            "codex",
+            "project-meta",
+            "phase-6-ops-and-governance",
+            "Broad governance cleanup",
+            plan_ref="Plan #62",
+        )
+
+
+def test_create_claim_accepts_program_claim_with_live_metadata(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """New live program claims should succeed once ownership metadata is explicit."""
     module = _load_module()
     claims_dir = tmp_path / "claims"
     monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
@@ -168,6 +187,9 @@ def test_create_claim_without_write_paths_stays_backward_compatible(
         "phase-6-ops-and-governance",
         "Broad governance cleanup",
         plan_ref="Plan #62",
+        branch="plan-90-coordination-graph-runtime",
+        worktree_path="~/projects/project-meta_worktrees/plan-90-coordination-graph-runtime",
+        session_id="codex-session-1",
     )
 
     assert ok
@@ -175,7 +197,8 @@ def test_create_claim_without_write_paths_stays_backward_compatible(
     claim_file = claims_dir / "codex_project-meta_phase-6-ops-and-governance.yaml"
     payload = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
     assert payload["claim_type"] == "program"
-    assert payload["write_paths"] == []
+    assert payload["branch"] == "plan-90-coordination-graph-runtime"
+    assert payload["session_id"] == "codex-session-1"
 
 
 def test_check_json_outputs_claims_and_candidate_conflict_classification(
@@ -226,5 +249,8 @@ def test_check_json_outputs_claims_and_candidate_conflict_classification(
     payload = json.loads(captured.out)
     assert exit_code == 0
     assert len(payload["claims"]) == 1
+    assert payload["claims"][0]["health_status"] == "weak"
+    assert payload["claims"][0]["health_issues"] == ["missing_branch", "missing_worktree_path", "missing_session_id"]
     assert payload["check"]["has_hard_conflict"] is True
+    assert payload["check"]["candidate_health_status"] == "weak"
     assert payload["check"]["interactions"][0]["severity"] == "hard_conflict"

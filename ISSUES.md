@@ -23,101 +23,24 @@ Items start as **unconfirmed** observations and get triaged into confirmed issue
 
 ## Open
 
-### MP-009: Installer authority split between `install.sh` and `install_governed_repo.py`
-
-| Field | Value |
-|-------|-------|
-| Status | `planned` |
-| Severity | high |
-| Reported | 2026-04-04 |
-
-The repo currently has two different governed-repo installation/sync stories:
-`install.sh` and `scripts/install_governed_repo.py`. They encode overlapping but
-not identical contracts, and the docs mostly describe the older shell path.
-
-**Plan:** `docs/plans/17_governed-repo-installer-convergence.md`
+(No open framework documentation or planning-governance issues are currently tracked here.)
 
 ---
 
-### MP-010: Two live semantic truth-surface review stacks
-
-| Field | Value |
-|-------|-------|
-| Status | `planned` |
-| Severity | high |
-| Reported | 2026-04-04 |
-
-The repo currently has both `scripts/review_truth_surfaces.py` and
-`scripts/review_truth_surface_semantic.py` live at once, with different inputs,
-schemas, docs, and Makefile wiring. The framework lacks one canonical semantic
-review path.
-
-**Plan:** `docs/plans/18_truth-surface-semantic-review-convergence.md`
-
----
-
-### MP-011: Adoption docs disagree on installed paths, config keys, and support model
-
-| Field | Value |
-|-------|-------|
-| Status | `planned` |
-| Severity | high |
-| Reported | 2026-04-04 |
-
-`README.md`, `GETTING_STARTED.md`, `docs/guides/NEW_PROJECT_SETUP.md`, and
-`hooks/README.md` do not currently agree on what gets installed, where scripts
-live, how hooks are wired, which config keys are canonical, or how to describe
-non-Claude-Code support.
-
-**Plan:** `docs/plans/16_documentation-and-adoption-surface-convergence.md`
-
----
-
-### MP-012: Top-level docs still over-center `agent_ecology2`
-
-| Field | Value |
-|-------|-------|
-| Status | `planned` |
-| Severity | medium |
-| Reported | 2026-04-04 |
-
-`README.md` and the pattern index still treat `agent_ecology2` as more than
-historical provenance. That makes the framework read like an extracted internal
-system instead of a standalone portable framework.
-
-**Plan:** `docs/plans/16_documentation-and-adoption-surface-convergence.md`
-
----
-
-### MP-013: Roadmap and plan queue do not form a compendious forward-looking status surface
-
-| Field | Value |
-|-------|-------|
-| Status | `planned` |
-| Severity | medium |
-| Reported | 2026-04-04 |
-
-`ROADMAP.md` still contains stale "what's next" guidance where every listed item
-is already complete, while the newer follow-on work is only visible in review
-conversation and not yet reflected as a clear numbered queue.
-
-**Plan:** `docs/plans/16_documentation-and-adoption-surface-convergence.md`
-
----
+## Resolved
 
 ### MP-003: Large scripts untested
 
 | Field | Value |
 |-------|-------|
-| Status | `planned` |
+| Status | `resolved` |
 | Severity | medium |
 | Reported | 2026-04-03 |
+| Resolved | 2026-04-04 |
 
-`complete_plan.py` (597 lines), `parse_plan.py` (438 lines), `sync_plan_status.py` (456 lines),
-and `check_plan_tests.py` (552 lines) have no dedicated test files. If they break, no CI catch.
-
-**Plan:** Phase 6 of sprint `docs/ops/SPRINT_2026_04_03_ALL_ISSUES.md` — 35+ tests across the
-three highest-priority scripts.
+Dedicated test files now exist for the plan/governance scripts that previously
+lacked direct coverage, including `parse_plan.py`, `complete_plan.py`,
+`sync_plan_status.py`, and `check_plan_tests.py`.
 
 ---
 
@@ -125,15 +48,14 @@ three highest-priority scripts.
 
 | Field | Value |
 |-------|-------|
-| Status | `planned` |
+| Status | `resolved` |
 | Severity | low |
 | Reported | 2026-04-03 |
+| Resolved | 2026-04-04 |
 
-README calls the framework "portable" and lists "Claude Code, etc." as tool-compatible.
-The "etc." is empty — hooks (`.claude/hooks/`), CLAUDE.md convention, and read-gating are
-all Claude Code-specific. Cursor/Windsurf users will hit a dead end.
-
-**Plan:** Phase 2c of sprint — explicit tool compatibility callout in README and GETTING_STARTED.
+The top-level docs now explicitly describe the support matrix: Claude Code has
+the strongest native hook surface, while other tools use generated `AGENTS.md`
+and deterministic validators.
 
 ---
 
@@ -141,16 +63,15 @@ all Claude Code-specific. Cursor/Windsurf users will hit a dead end.
 
 | Field | Value |
 |-------|-------|
-| Status | `planned` |
+| Status | `resolved` |
 | Severity | low |
 | Reported | 2026-04-03 |
+| Resolved | 2026-04-04 |
 
-Several keys in `meta-process.yaml.example` are not consumed by any script:
-`planning.question_driven_planning`, `planning.uncertainty_tracking`,
-`planning.dependency_probe_policy`, `capability_ownership.*`, `messaging.*`.
-Adopters copy them and get placebo configuration.
-
-**Plan:** Phase 2d of sprint — audit every key, mark unimplemented ones `# [PLANNED]`.
+The config surface is now split: `templates/meta-process.yaml.example` is the
+minimal functional starter surface, while
+`templates/meta-process.future.yaml.example` carries broader planned/advisory
+vocabulary.
 
 ---
 
@@ -158,13 +79,13 @@ Adopters copy them and get placebo configuration.
 
 | Field | Value |
 |-------|-------|
-| Status | `planned` |
+| Status | `resolved` |
 | Severity | low |
 | Reported | 2026-04-03 |
+| Resolved | 2026-04-04 |
 
-Research document sitting at repo root alongside framework docs.
-
-**Plan:** Phase 2b of sprint — move to `docs/research/TRAYCER_COMPARISON.md`.
+The repo root no longer carries the stray research document that triggered this
+issue.
 
 ---
 
@@ -172,15 +93,14 @@ Research document sitting at repo root alongside framework docs.
 
 | Field | Value |
 |-------|-------|
-| Status | `planned` |
+| Status | `resolved` |
 | Severity | medium |
 | Reported | 2026-04-03 |
+| Resolved | 2026-04-04 |
 
-PLANNING_OPERATING_MODEL.md (143 lines), Pattern 42, and GETTING_STARTED.md all define
-the planning hierarchy. Each has slight variations. Adopters disagree on which is canonical.
-
-**Plan:** Phase 3 of sprint — POM becomes explicitly canonical; Pattern 42 reduced to summary;
-GETTING_STARTED leads with POM.
+`PLANNING_OPERATING_MODEL.md` is now explicitly canonical, Pattern 42 is the
+compressed view, and the adoption docs point back to the canonical source
+instead of trying to redefine the hierarchy independently.
 
 ---
 
@@ -188,18 +108,90 @@ GETTING_STARTED leads with POM.
 
 | Field | Value |
 |-------|-------|
-| Status | `planned` |
+| Status | `resolved` |
 | Severity | low |
 | Reported | 2026-04-03 |
+| Resolved | 2026-04-04 |
 
-9 `OVERNIGHT_SPRINT_*.md` and `TRUTH_SURFACE_*_TODO.md` files in `docs/ops/` are closed
-work artifacts that create noise when reading the directory.
-
-**Plan:** Phase 2a of sprint — move all to `docs/ops/archive/`.
+The earlier `OVERNIGHT_SPRINT_*` and `TRUTH_SURFACE_*_TODO` clutter was moved
+out of the root operator surface. Remaining `docs/ops/` files are a much
+smaller set of operator artifacts and sprint records.
 
 ---
 
-## Resolved
+### MP-011: Adoption docs disagree on installed paths, config keys, and support model
+
+| Field | Value |
+|-------|-------|
+| Status | `resolved` |
+| Severity | high |
+| Reported | 2026-04-04 |
+| Resolved | 2026-04-04 |
+
+`README.md`, `GETTING_STARTED.md`, `docs/guides/NEW_PROJECT_SETUP.md`, and
+`hooks/README.md` now agree on the canonical installer, installed paths,
+support matrix, and config vocabulary.
+
+---
+
+### MP-012: Top-level docs still over-center `agent_ecology2`
+
+| Field | Value |
+|-------|-------|
+| Status | `resolved` |
+| Severity | medium |
+| Reported | 2026-04-04 |
+| Resolved | 2026-04-04 |
+
+Top-level docs now keep `agent_ecology2` as provenance only instead of using it
+as the explanatory frame for adoption.
+
+---
+
+### MP-013: Roadmap and plan queue do not form a compendious forward-looking status surface
+
+| Field | Value |
+|-------|-------|
+| Status | `resolved` |
+| Severity | medium |
+| Reported | 2026-04-04 |
+| Resolved | 2026-04-04 |
+
+The roadmap and plan index now expose the live execution queue directly instead
+of relying on stale "what's next" prose.
+
+---
+
+### MP-009: Installer authority split between `install.sh` and `install_governed_repo.py`
+
+| Field | Value |
+|-------|-------|
+| Status | `resolved` |
+| Severity | high |
+| Reported | 2026-04-04 |
+| Resolved | 2026-04-04 |
+
+`scripts/install_governed_repo.py` is now the canonical governed-repo
+installer/upgrader. `install.sh` delegates the default path and clearly scopes
+legacy compatibility modes.
+
+---
+
+### MP-010: Two live semantic truth-surface review stacks
+
+| Field | Value |
+|-------|-------|
+| Status | `resolved` |
+| Severity | high |
+| Reported | 2026-04-04 |
+| Resolved | 2026-04-04 |
+
+The config-driven semantic review path is now canonical:
+`scripts/review_truth_surface_semantic.py --config ...`. The repo-wide
+`review_truth_surfaces.py` path remains only as a deprecated compatibility
+wrapper, and promotion now consumes canonical append-only review history.
+
+---
 
 ### MP-001: Plan #12 file missing from docs/plans/
 

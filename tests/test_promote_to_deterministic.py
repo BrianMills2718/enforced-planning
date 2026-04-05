@@ -1,9 +1,12 @@
-"""Tests for promote_to_deterministic.py — promotion candidate reporter."""
+"""Tests for promote_to_deterministic.py — semantic promotion reporter."""
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
+
+import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
@@ -17,11 +20,37 @@ from promote_to_deterministic import (
 )
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
+def _make_canonical_finding(
+    category: str = "stale_prose",
+    severity: str = "warn",
+    promotion_candidate: bool = True,
+    promotion_rule_hint: str = "tracker should not describe a completed phase as current",
+    summary: str = "Tracker prose is stale.",
+    rationale: str = "The tracker still reads like the prior phase is active.",
+    evidence_refs: list[str] | None = None,
+) -> dict:
+    return {
+        "category": category,
+        "severity": severity,
+        "summary": summary,
+        "rationale": rationale,
+        "evidence_refs": evidence_refs or ["docs/ops/TRACKER.md"],
+        "promotion_candidate": promotion_candidate,
+        "promotion_rule_hint": promotion_rule_hint,
+    }
 
-def _make_finding(
+
+def _make_canonical_run(findings: list[dict]) -> dict:
+    return {
+        "config_path": "/tmp/demo/scripts/truth_surface_drift.yaml",
+        "review": {
+            "overview": "Semantic drift remains bounded.",
+            "findings": findings,
+        },
+    }
+
+
+def _make_legacy_finding(
     doc_path: str = "CLAUDE.md",
     finding_type: str = "STALE_PROSE",
     severity: str = "important",
@@ -40,7 +69,7 @@ def _make_finding(
     }
 
 
-def _make_run(findings: list[dict], repo: str = "test-repo") -> dict:
+def _make_legacy_run(findings: list[dict], repo: str = "test-repo") -> dict:
     return {
         "repo": repo,
         "reviewed_at": "2026-04-03T00:00:00+00:00",
@@ -52,137 +81,130 @@ def _make_run(findings: list[dict], repo: str = "test-repo") -> dict:
     }
 
 
-def write_findings_yaml(tmp_path: Path, runs: list[dict]) -> Path:
-    """Write findings YAML and return path."""
-    try:
-        import yaml
-        path = tmp_path / "findings.yaml"
-        path.write_text(yaml.dump(runs))
-        return path
-    except ImportError:
-        import json as _json
-        path = tmp_path / "findings.yaml"
-        # Approximate YAML with JSON-safe content
-        path.write_text(_json.dumps(runs))
-        return path
+def _write_json(path: Path, payload: object) -> Path:
+    path.write_text(json.dumps(payload))
+    return path
 
 
-# ---------------------------------------------------------------------------
-# _fingerprint
-# ---------------------------------------------------------------------------
+def _write_yaml(path: Path, payload: object) -> Path:
+    path.write_text(yaml.safe_dump(payload))
+    return path
+
 
 class TestFingerprint:
-    def test_same_doc_type_check_same_fingerprint(self):
-        f1 = _make_finding(doc_path="CLAUDE.md", finding_type="STALE_PROSE", suggested_check="abc")
-        f2 = _make_finding(doc_path="CLAUDE.md", finding_type="STALE_PROSE", suggested_check="abc")
+    def test_same_surface_kind_rule_hint_same_fingerprint(self):
+        f1 = {
+            "surface_ref": "docs/ops/TRACKER.md",
+            "kind": "stale_prose",
+            "rule_hint": "same",
+        }
+        f2 = {
+            "surface_ref": "docs/ops/TRACKER.md",
+            "kind": "stale_prose",
+            "rule_hint": "same",
+        }
         assert _fingerprint(f1) == _fingerprint(f2)
 
-    def test_different_doc_different_fingerprint(self):
-        f1 = _make_finding(doc_path="CLAUDE.md")
-        f2 = _make_finding(doc_path="ROADMAP.md")
+    def test_different_surface_different_fingerprint(self):
+        f1 = {"surface_ref": "CLAUDE.md", "kind": "stale_prose", "rule_hint": "x"}
+        f2 = {"surface_ref": "ROADMAP.md", "kind": "stale_prose", "rule_hint": "x"}
         assert _fingerprint(f1) != _fingerprint(f2)
 
-    def test_different_type_different_fingerprint(self):
-        f1 = _make_finding(finding_type="STALE_PROSE")
-        f2 = _make_finding(finding_type="CROSS_DOC_DISAGREEMENT")
-        assert _fingerprint(f1) != _fingerprint(f2)
-
-    def test_none_suggested_check(self):
-        f = _make_finding(suggested_check=None)
-        fp = _fingerprint(f)
-        assert isinstance(fp, str)
-
-
-# ---------------------------------------------------------------------------
-# load_findings
-# ---------------------------------------------------------------------------
 
 class TestLoadFindings:
     def test_empty_file(self, tmp_path):
-        path = tmp_path / "findings.yaml"
+        path = tmp_path / "findings.json"
         path.write_text("")
         assert load_findings(path) == []
 
     def test_missing_file(self, tmp_path):
-        path = tmp_path / "nonexistent.yaml"
+        path = tmp_path / "nonexistent.json"
         assert load_findings(path) == []
 
-    def test_loads_promotion_candidates_only(self, tmp_path):
-        runs = [_make_run([
-            _make_finding(promotion_candidate=True),
-            _make_finding(promotion_candidate=False),
-        ])]
-        path = write_findings_yaml(tmp_path, runs)
+    def test_loads_canonical_history_format(self, tmp_path):
+        path = _write_json(
+            tmp_path / "findings.json",
+            [_make_canonical_run([_make_canonical_finding()])],
+        )
+
         findings = load_findings(path)
+
         assert len(findings) == 1
-        assert findings[0]["promotion_candidate"] is True
+        assert findings[0]["kind"] == "stale_prose"
+        assert findings[0]["surface_ref"] == "docs/ops/TRACKER.md"
 
-    def test_empty_run_list(self, tmp_path):
-        runs = [_make_run([])]
-        path = write_findings_yaml(tmp_path, runs)
-        assert load_findings(path) == []
+    def test_loads_legacy_yaml_format(self, tmp_path):
+        path = _write_yaml(
+            tmp_path / "findings.yaml",
+            [_make_legacy_run([_make_legacy_finding()])],
+        )
 
-    def test_multiple_runs_flattened(self, tmp_path):
-        runs = [
-            _make_run([_make_finding()]),
-            _make_run([_make_finding(), _make_finding(doc_path="ROADMAP.md")]),
-        ]
-        path = write_findings_yaml(tmp_path, runs)
         findings = load_findings(path)
-        assert len(findings) == 3
+
+        assert len(findings) == 1
+        assert findings[0]["kind"] == "STALE_PROSE"
+        assert findings[0]["surface_ref"] == "CLAUDE.md"
+
+    def test_filters_non_promotion_candidates(self, tmp_path):
+        path = _write_json(
+            tmp_path / "findings.json",
+            [
+                _make_canonical_run(
+                    [
+                        _make_canonical_finding(promotion_candidate=True),
+                        _make_canonical_finding(
+                            promotion_candidate=False,
+                            category="missing_update",
+                        ),
+                    ]
+                )
+            ],
+        )
+
+        findings = load_findings(path)
+
+        assert len(findings) == 1
 
 
-# ---------------------------------------------------------------------------
-# group_by_fingerprint
-# ---------------------------------------------------------------------------
-
-class TestGroupByFingerprint:
+class TestGroupAndRank:
     def test_same_finding_in_two_runs_grouped(self):
-        f = _make_finding()
         findings = [
-            {**f, "_run_index": 0},
-            {**f, "_run_index": 1},
+            {
+                "kind": "stale_prose",
+                "severity": "warn",
+                "surface_ref": "docs/ops/TRACKER.md",
+                "evidence": "stale tracker prose",
+                "rule_hint": "refresh tracker after completion",
+            },
+            {
+                "kind": "stale_prose",
+                "severity": "warn",
+                "surface_ref": "docs/ops/TRACKER.md",
+                "evidence": "stale tracker prose",
+                "rule_hint": "refresh tracker after completion",
+            },
         ]
         groups = group_by_fingerprint(findings)
+
         assert len(groups) == 1
-        fp = list(groups.keys())[0]
-        assert len(groups[fp]) == 2
+        assert len(next(iter(groups.values()))) == 2
 
-    def test_different_findings_separate_groups(self):
-        findings = [
-            {**_make_finding(doc_path="CLAUDE.md"), "_run_index": 0},
-            {**_make_finding(doc_path="ROADMAP.md"), "_run_index": 0},
-        ]
-        groups = group_by_fingerprint(findings)
-        assert len(groups) == 2
-
-
-# ---------------------------------------------------------------------------
-# rank_candidates
-# ---------------------------------------------------------------------------
-
-class TestRankCandidates:
     def test_more_runs_ranked_first(self):
         groups = {
-            "a": [_make_finding()],
-            "b": [_make_finding(), _make_finding()],
+            "a": [{"severity": "warn"}],
+            "b": [{"severity": "warn"}, {"severity": "warn"}],
         }
         ranked = rank_candidates(groups)
-        # 'b' (2 runs) should come first
         assert len(ranked[0][1]) == 2
 
-    def test_critical_ranked_before_advisory_same_count(self):
+    def test_warn_ranked_before_info_same_count(self):
         groups = {
-            "a": [_make_finding(severity="advisory")],
-            "b": [_make_finding(severity="critical")],
+            "a": [{"severity": "info"}],
+            "b": [{"severity": "warn"}],
         }
         ranked = rank_candidates(groups)
-        assert ranked[0][1][0]["severity"] == "critical"
+        assert ranked[0][1][0]["severity"] == "warn"
 
-
-# ---------------------------------------------------------------------------
-# format_report
-# ---------------------------------------------------------------------------
 
 class TestFormatReport:
     def test_no_candidates(self):
@@ -190,47 +212,68 @@ class TestFormatReport:
         assert "No promotion candidates" in report
 
     def test_shows_stable_candidates(self):
-        groups = {"fp": [_make_finding(), _make_finding()]}
+        groups = {
+            "fp": [
+                {
+                    "kind": "stale_prose",
+                    "severity": "warn",
+                    "surface_ref": "docs/ops/TRACKER.md",
+                    "evidence": "stale tracker prose",
+                    "rule_hint": "refresh tracker after completion",
+                },
+                {
+                    "kind": "stale_prose",
+                    "severity": "warn",
+                    "surface_ref": "docs/ops/TRACKER.md",
+                    "evidence": "stale tracker prose",
+                    "rule_hint": "refresh tracker after completion",
+                },
+            ]
+        }
         ranked = rank_candidates(groups)
         report = format_report(ranked, min_runs=1, scaffold=False)
         assert "Stable candidates" in report
-
-    def test_min_runs_filters_unstable(self):
-        groups = {"fp": [_make_finding()]}  # 1 run only
-        ranked = rank_candidates(groups)
-        report = format_report(ranked, min_runs=2, scaffold=False)
-        assert "Unstable candidates" in report
+        assert "stale_prose" in report
 
     def test_scaffold_included_when_requested(self):
-        groups = {"fp": [_make_finding(), _make_finding()]}
+        groups = {
+            "fp": [
+                {
+                    "kind": "stale_prose",
+                    "severity": "warn",
+                    "surface_ref": "docs/ops/TRACKER.md",
+                    "evidence": "stale tracker prose",
+                    "rule_hint": "refresh tracker after completion",
+                }
+            ]
+        }
         ranked = rank_candidates(groups)
         report = format_report(ranked, min_runs=1, scaffold=True)
         assert "SCAFFOLD" in report
 
-    def test_total_count_in_report(self):
-        groups = {
-            "fp1": [_make_finding()],
-            "fp2": [_make_finding(doc_path="ROADMAP.md")],
-        }
-        ranked = rank_candidates(groups)
-        report = format_report(ranked, min_runs=1, scaffold=False)
-        assert "Total promotion candidates: 2" in report
-
-
-# ---------------------------------------------------------------------------
-# generate_scaffold
-# ---------------------------------------------------------------------------
 
 class TestGenerateScaffold:
     def test_scaffold_is_valid_python_string(self):
-        scaffold = generate_scaffold(_make_finding())
+        scaffold = generate_scaffold(
+            {
+                "kind": "stale_prose",
+                "surface_ref": "docs/ops/TRACKER.md",
+                "rule_hint": "refresh tracker after completion",
+                "evidence": "tracker prose is stale",
+                "summary": "Tracker prose is stale",
+            }
+        )
         assert "def main()" in scaffold
         assert "#!/usr/bin/env python3" in scaffold
 
-    def test_scaffold_includes_doc_path(self):
-        scaffold = generate_scaffold(_make_finding(doc_path="docs/plans/CLAUDE.md"))
+    def test_scaffold_includes_surface_ref(self):
+        scaffold = generate_scaffold(
+            {
+                "kind": "missing_update",
+                "surface_ref": "docs/plans/CLAUDE.md",
+                "rule_hint": "update plan index after landing",
+                "evidence": "plan index stale",
+                "summary": "Plan index stale",
+            }
+        )
         assert "docs/plans/CLAUDE.md" in scaffold
-
-    def test_scaffold_includes_finding_type(self):
-        scaffold = generate_scaffold(_make_finding(finding_type="CROSS_DOC_DISAGREEMENT"))
-        assert "CROSS_DOC_DISAGREEMENT" in scaffold

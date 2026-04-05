@@ -269,3 +269,14 @@ def test_file_context_includes_required_reading_defaults(tmp_path: Path) -> None
     )
 
     assert context.required_reads == ["CLAUDE.md"]
+
+
+def test_extract_inline_paths_preserves_multi_dot_filenames() -> None:
+    """Validator path extraction should keep dotted template filenames intact."""
+
+    module = _load_module()
+    line = "- templates/CLAUDE.md.docs-adr (modify)"
+
+    paths = module.extract_inline_paths(line)
+
+    assert "templates/CLAUDE.md.docs-adr" in paths

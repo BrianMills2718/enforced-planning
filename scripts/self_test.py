@@ -5,11 +5,13 @@ Verifies internal consistency:
 1. File existence - referenced framework files exist
 2. Link checker - markdown cross-references resolve
 3. Install test - canonical installer bootstraps a governed repo cleanly
+4. Doc surface coherence - top-level docs do not regress to stale authority/config language
 
 Usage:
     python enforced-planning/scripts/self_test.py              # All checks
     python enforced-planning/scripts/self_test.py --files      # File existence only
     python enforced-planning/scripts/self_test.py --links      # Link checker only
+    python enforced-planning/scripts/self_test.py --docs       # Doc surface only
     python enforced-planning/scripts/self_test.py --install    # Install test only
 """
 
@@ -227,7 +229,118 @@ def check_markdown_links(root: Path) -> list[str]:
     return errors
 
 
-# --- Check 3: Install Test ---
+# --- Check 3: Doc Surface Coherence ---
+
+
+def check_doc_surface_coherence(root: Path) -> list[str]:
+    """Verify top-level doc surfaces keep the canonical product vocabulary."""
+    errors: list[str] = []
+
+    required_snippets = {
+        "README.md": [
+            "scripts/install_governed_repo.py --repo-root /path/to/your/project --write",
+            "The target repo does contain a small installed `enforced_planning/` support",
+        ],
+        "GETTING_STARTED.md": [
+            "It describes the **installed consumer** perspective only:",
+            "scripts/review_truth_surface_semantic.py --config /path/to/your/project/scripts/truth_surface_drift.yaml",
+        ],
+        "hooks/README.md": [
+            "This document is **not** the primary installation guide.",
+            "The canonical minimum governed-repo installer is:",
+        ],
+        "patterns/01_README.md": [
+            "This file is the pattern catalog, not the onboarding guide.",
+            "documented here as standalone framework patterns",
+        ],
+    }
+
+    forbidden_snippets = {
+        "README.md": [
+            "scripts/doc_coupling.yaml",
+            "strict_doc_coupling",
+        ],
+        "GETTING_STARTED.md": [
+            "strict_doc_coupling",
+            "scripts/doc_coupling.yaml",
+        ],
+        "docs/guides/NEW_PROJECT_SETUP.md": [
+            "strict_doc_coupling",
+            "scripts/doc_coupling.yaml",
+        ],
+        "hooks/README.md": [
+            "./install.sh /path/to/project --minimal",
+            "This copies hooks and configures git to use the `hooks/` directory.",
+        ],
+        "patterns/01_README.md": [
+            "These patterns emerged from the [agent_ecology]",
+        ],
+    }
+
+    for relpath, snippets in required_snippets.items():
+        content = (root / relpath).read_text(encoding="utf-8")
+        for snippet in snippets:
+            if snippet not in content:
+                errors.append(f"{relpath}: missing required doc-surface snippet: {snippet}")
+
+    for relpath, snippets in forbidden_snippets.items():
+        content = (root / relpath).read_text(encoding="utf-8")
+        for snippet in snippets:
+            if snippet in content:
+                errors.append(f"{relpath}: contains stale doc-surface snippet: {snippet}")
+
+    return errors
+
+
+def check_plan_surface_coherence(root: Path) -> list[str]:
+    """Verify plan index status agrees with the underlying plan files."""
+    errors: list[str] = []
+
+    index_path = root / "docs" / "plans" / "CLAUDE.md"
+    content = index_path.read_text(encoding="utf-8")
+
+    for line in content.splitlines():
+        if not line.startswith("|") or "`" not in line or ".md" not in line:
+            continue
+
+        parts = [part.strip() for part in line.strip("|").split("|")]
+        if len(parts) < 5 or not parts[0].isdigit():
+            continue
+
+        match = re.search(r"`([^`]+\.md)`", parts[1])
+        if not match:
+            continue
+
+        relpath = match.group(1)
+        plan_path = index_path.parent / relpath
+        if not plan_path.exists():
+            errors.append(f"docs/plans/CLAUDE.md: listed plan file missing: {relpath}")
+            continue
+
+        plan_text = plan_path.read_text(encoding="utf-8")
+        status_match = re.search(r"\*\*Status:\*\*\s*([^\n]+)", plan_text)
+        if not status_match:
+            errors.append(f"{relpath}: missing **Status:** field")
+            continue
+
+        row_status = parts[3]
+        file_status = status_match.group(1).strip()
+
+        if "✅ Complete" in row_status and "complete" not in file_status.lower():
+            errors.append(
+                f"docs/plans/CLAUDE.md vs {relpath}: index says complete but plan says '{file_status}'"
+            )
+        if "🚧 In Progress" in row_status and not any(
+            token in file_status.lower() for token in ("progress", "partial")
+        ):
+            errors.append(
+                f"docs/plans/CLAUDE.md vs {relpath}: index says in progress but plan says '{file_status}'"
+            )
+
+    return errors
+
+
+# --- Check 4: Install Test ---
 
 
 def check_install(root: Path) -> list[str]:
@@ -427,11 +540,12 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Enforced-planning framework self-test")
     parser.add_argument("--files", action="store_true", help="File existence check only")
     parser.add_argument("--links", action="store_true", help="Link checker only")
+    parser.add_argument("--docs", action="store_true", help="Doc surface coherence check only")
     parser.add_argument("--install", action="store_true", help="Install test only")
     args = parser.parse_args()
 
     # If no flags, run all
-    run_all = not (args.files or args.links or args.install)
+    run_all = not (args.files or args.links or args.docs or args.install)
 
     root = find_framework_root()
     print(f"Framework root: {root}")
@@ -448,6 +562,17 @@ def main() -> None:
     if run_all or args.links:
         print("=== Markdown Link Check ===")
         errors = check_markdown_links(root)
+        _report(errors)
+        all_errors.extend(errors)
+
+    if run_all or args.docs:
+        print("=== Doc Surface Check ===")
+        errors = check_doc_surface_coherence(root)
+        _report(errors)
+        all_errors.extend(errors)
+
+        print("=== Plan Surface Check ===")
+        errors = check_plan_surface_coherence(root)
         _report(errors)
         all_errors.extend(errors)
 

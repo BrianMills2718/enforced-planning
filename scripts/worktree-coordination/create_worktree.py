@@ -337,6 +337,20 @@ def verify_scoped_write_claim(
             f"write_paths=[{joined_paths}]. Create the narrow write claim first.",
         )
 
+    weak_matching_claims = [
+        (claim, claims_module.claim_health_issues(claim))
+        for claim in matching_claims
+        if claims_module.claim_health_issues(claim)
+    ]
+    if weak_matching_claims:
+        claim, issues = weak_matching_claims[0]
+        return (
+            False,
+            "Scoped write-claim enforcement failed: matching active write claim is weak — "
+            f"agent={claim.agent}, project={project_name}, scope={claim.scope}, "
+            f"issues=[{', '.join(issues)}]. Refresh the claim with explicit live ownership metadata first.",
+        )
+
     check_result = claims_module.evaluate_claim(candidate, active_claims=active_claims)
     hard_conflicts = check_result.hard_conflicts
     if hard_conflicts:

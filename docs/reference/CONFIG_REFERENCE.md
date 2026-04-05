@@ -3,7 +3,16 @@
 Complete table of every key in `meta-process.yaml`, which script reads it, and
 the default behavior when absent.
 
-**Source of truth:** `templates/meta-process.yaml.example`
+**Live starter source of truth:** `templates/meta-process.yaml.example`
+
+Consumer-facing quickstarts intentionally show only keys with script effect
+today. The template also carries planned/advisory vocabulary, which is labeled
+below when it is not yet enforced.
+
+`templates/meta-process.yaml.example` is the minimal functional starter
+surface. `templates/meta-process.future.yaml.example` carries broader reserved
+or advisory vocabulary for repos that want to document future policy without
+pretending it is mechanically enforced today.
 
 ---
 

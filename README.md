@@ -117,12 +117,17 @@ your-project/
         └── agents.md.template
 ```
 
-The target repo does **not** contain a copied `enforced-planning/` subtree.
+The target repo does contain a small installed `enforced_planning/` support
+package used by generated entrypoints. It does **not** contain a vendored copy
+of this full framework repo.
 
 ## Configuration
 
 The installed config file is `meta-process.yaml`. The authoritative reference
 is [docs/reference/CONFIG_REFERENCE.md](docs/reference/CONFIG_REFERENCE.md).
+The example below is limited to keys that have script effect today.
+`templates/meta-process.future.yaml.example` carries broader planned/advisory
+vocabulary that is not part of the minimum live config surface.
 
 Example:
 
@@ -133,18 +138,11 @@ meta_process:
   plans:
     enabled: true
     require_tests: true
-    require_references_reviewed: true
     plans_dir: "docs/plans"
-
-  planning:
-    question_driven_planning: advisory
-    uncertainty_tracking: advisory
-    dependency_probe_policy: strict
 
   quality:
     doc_coupling:
       enabled: true
-      strict: true
       config_file: "scripts/relationships.yaml"
 ```
 
@@ -155,13 +153,16 @@ module.
 
 - Truth-surface validation and semantic-review tooling are not part of the
   minimum canonical install yet.
+- The canonical semantic-review entrypoint is
+  `python scripts/review_truth_surface_semantic.py --config ...`, which writes a
+  current JSON payload plus append-only review history.
 - Raw git-hook bootstrap and pre-commit bootstrap currently live behind legacy
   `install.sh --full` and `install.sh --pre-commit` flows.
 - Worktree-only sync is canonical, but broader multi-agent coordination remains
   an opt-in layer.
 
 That boundary is intentional until the installer and semantic-review surfaces
-finish converging.
+are part of the minimum installed contract.
 
 ## Canonical Docs
 

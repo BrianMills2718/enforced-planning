@@ -19,7 +19,9 @@ Result: orphan code, undocumented features, missed requirements.
 5. TDD: define tests in plan before implementing
 6. Plans distinguish **repo-local references reviewed** from the broader
    **research basis for the slice**
-7. This pattern is one layer inside the canonical operating model in
+7. Cross-project plans declare a **Capabilities** section when they create or
+   modify callable surfaces other projects use
+8. This pattern is one layer inside the canonical operating model in
    `PLANNING_OPERATING_MODEL.md`; it does not replace investigation, gap
    analysis, capability/boundary definition, or journey notebooks where those
    are required
@@ -31,6 +33,7 @@ Result: orphan code, undocumented features, missed requirements.
 | `docs/plans/CLAUDE.md` | Master index of all plans |
 | `docs/plans/NN_name.md` | Individual plan files |
 | `scripts/check_plan_tests.py` | Verify plan test requirements |
+| `scripts/check_plan_capabilities.py` | Verify cross-project plans declare capabilities |
 | `scripts/sync_plan_status.py` | Keep plan/index in sync |
 
 ## Setup
@@ -109,6 +112,20 @@ mkdir -p docs/plans
 
 If no additional research beyond repo-local references was needed, write:
 `No additional research beyond References Reviewed.`
+
+---
+
+## Capabilities
+
+> **REQUIRED if this plan creates or modifies callable functions that other
+> projects use.**
+
+| Capability | Input Schema | Output Schema | Producer | Consumer(s) | Cost Tier |
+|-----------|-------------|---------------|----------|-------------|-----------|
+| `investigate(question)` | `str` | `InvestigationMemo` | research_v3 | grounded-research, onto-canon6 | expensive |
+
+> Skip this section for internal-only changes that do not create callable
+> capabilities.
 
 ---
 

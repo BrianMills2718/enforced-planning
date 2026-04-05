@@ -46,7 +46,7 @@ A portable framework where:
 | #8 | Adoption pilot execution sprint | ✅ Complete |
 | #9 | Scoped validation by canonical repo identity | ✅ Complete |
 
-### Phase 4: Relationships V2 — Inference + Agent Verification (IN PROGRESS)
+### Phase 4: Relationships V2 — Inference + Agent Verification (COMPLETE)
 
 **Gate:** Dependency inference engine running in CI; agent verification protocol for "validated" couplings; no "soft/warn" tier.
 
@@ -64,20 +64,21 @@ A portable framework where:
 | **Pre-commit enforcement** | Hook that validates locked couplings on commit | ✅ Complete (`check_locked_couplings.py` wired into pre-commit, 24 tests) |
 | **Agent verification protocol** | Bounded mission spec for "validated" couplings (`Plan #11`) | ✅ Complete (181 tests, shipped) |
 
-### Phase 5: Semantic Review Layer (PLANNED)
+### Phase 5: Semantic Review Layer (COMPLETE)
 
 **Gate:** LLM/agent layer that catches semantic drift (stale prose, misleading summaries) that deterministic checks can't express.
 
 | Plan | What | Status |
 |------|------|--------|
-| #7 | LLM semantic truth-surface review | ✅ Complete (207 tests, review_truth_surfaces.py shipped) |
+| #7 | LLM semantic truth-surface review | ✅ Complete (semantic review layer shipped; canonical path now `review_truth_surface_semantic.py`) |
 | — | Promote stable LLM findings into deterministic checks | ✅ Complete (`promote_to_deterministic.py`, `make promote`; 3 candidates identified, 3 fixed in this session) |
 
 **Note:** Plan #7 (semantic review) and Plan #11 (agent verification protocol) both complete. Plan #7 specializes the verification pattern established by Plan #11.
 
-**Follow-on gap:** The repo now has both `review_truth_surfaces.py` and
-`review_truth_surface_semantic.py`. Plan #18 tracks convergence onto one
-canonical semantic-review path.
+**Convergence outcome:** Plan #18 made the config-driven path canonical.
+`review_truth_surface_semantic.py` now owns semantic review, append-only review
+history, and promotion input. `review_truth_surfaces.py` remains only as a
+deprecated compatibility wrapper.
 
 ### Phase 6: Cross-Repo Governance (GATE MET — READY TO START)
 
@@ -98,11 +99,11 @@ canonical semantic-review path.
 |------|------|--------|
 | #10 | Framework truth-surface and onboarding reconciliation | ✅ Complete |
 
-**Follow-on gap:** Plan #10 closed the first reconciliation pass, but the top-level
-product surface still needs a second convergence pass now tracked in Plans #16
-and #18. Plan #17 completed the installer-authority half of that cleanup.
+**Follow-on result:** Plans #16, #17, and #18 completed the second convergence
+pass, so the product surface now has one canonical installer story, one
+canonical semantic-review path, and a cleaner source-vs-installed doc split.
 
-### Phase 8: Multi-Tool Support and Ecosystem Observability (GATE OPEN — 2026-04-04)
+### Phase 8: Multi-Tool Support and Ecosystem Observability (IN PLANNING)
 
 **Gate (measurable proxy — verifiable within this repo):**
 All three conditions green as of 2026-04-04 overnight sprint:
@@ -117,37 +118,40 @@ All three conditions green as of 2026-04-04 overnight sprint:
 > gate above tests the same underlying capability (non-Claude-Code adoption is
 > possible) with artifacts that can be committed and reviewed here.
 
-| Item | What | Status |
+| Plan | What | Status |
 |------|------|--------|
-| Multi-tool hook support | Cursor, Windsurf, Cline, Copilot equivalents for `.claude/hooks/` | 📋 Planned |
-| Adoption automation | Governed repo registry + `make upgrade-framework` for version bumps | 📋 Planned |
-| Ecosystem dashboard | Aggregate plan status and dep map across all repos | 📋 Planned |
-| Framework self-measurement | Define and instrument success metrics (adoption rate, drift catch rate) | 📋 Planned |
+| #19 | Multi-tool support matrix, support tiers, and rollout policy | 📋 Planned |
+| #20 | Governed-repo upgrade automation and registry model | 📋 Planned |
+| #21 | Ecosystem dashboard and status surfaces | 📋 Planned |
+| #22 | Framework self-measurement and ROI metrics | 📋 Planned |
 
 **Deferred item blockers:**
 
 | Item | Blocked By | Would Unblock |
 |------|-----------|--------------|
-| Multi-tool hook support | No Cursor/Windsurf equivalent of `.claude/hooks/` is publicly documented yet. Unblocks: any non-CC adopter. | Phase 8 gate met |
+| Multi-tool hook support | No Cursor/Windsurf equivalent of `.claude/hooks/` is publicly documented yet. Unblocks: any non-CC adopter. | Plan #19 support-tier decision + concrete adapter path |
 | Adoption automation | Need ≥ 5 governed repos before upgrade automation is worth building. Currently at ~3. | 5+ governed repos |
-| Framework self-measurement | Need baseline metrics before measuring improvement. Define metrics first. | Demonstrating framework ROI |
+| Framework self-measurement | Need baseline metrics before measuring improvement. Define metrics first. | Plan #22 metric definitions plus dashboard data path |
 
 **Long-term deferred (no near-term consumer):** Visibility grammar and distributed governance moved to `docs/backlog/DEFERRED_FEATURES.md`.
 
 ## What's Next (recommended priority order)
 
-1. **Plan #18: Truth-surface semantic review convergence**
-   Converge the duplicated semantic-review stacks onto one canonical path.
+1. **Plan #19: Multi-tool support matrix and rollout**
+   Define support tiers, canonical expectations, and what "portable" means by tool class.
 
-2. **Plan #16: Documentation and adoption surface convergence**
-   Rewrite the top-level doc stack against the canonical installer and semantic-review decisions.
+2. **Plan #20: Governed-repo upgrade automation**
+   Turn the current installer/sync model into an explicit upgrade path for multiple governed repos.
 
-3. **Plan #14: Research-backed ADR and topic-research follow-through**
-   Finish the remaining policy and adoption work so research linkage is not just a local doctrine.
+3. **Plan #21: Ecosystem dashboard and status surfaces**
+   Consolidate cross-repo status, plan queue, and dependency visibility into one operator surface.
 
-4. **Phase 8 execution planning**
-   Convert the open Phase 8 gate into bounded numbered plans for multi-tool support,
-   upgrade automation, dashboarding, and framework self-measurement.
+4. **Plan #22: Framework self-measurement and ROI**
+   Define metrics that show whether the framework is actually catching drift and improving adoption outcomes.
+
+5. **Project-meta topic-research adoption**
+   Apply the portable topic-research pattern in `project-meta/research_texts`
+   with manifests, ADR links, and freshness metadata for high-value topics.
 
 ## Design Principles
 

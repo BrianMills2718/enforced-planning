@@ -23,7 +23,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from render_agents_md import render_agents_md
+from render_agents_md import render_agents_markdown
+from render_agents_md import resolve_inputs
 from worktree_paths import resolve_canonical_repo_root
 import yaml  # type: ignore[import-untyped]
 
@@ -243,7 +244,19 @@ def _audit_agents(
         result["error"] = f"Canonical CLAUDE file is missing: {claude_path}"
         return result
 
-    expected = render_agents_md(claude_path)
+    try:
+        expected = render_agents_markdown(
+            resolve_inputs(
+                repo_root=repo_root,
+                claude_file=claude_file,
+                relationships_file=relationships_file,
+                output_file=agents_file,
+            )
+        )
+    except (FileNotFoundError, ValueError) as exc:
+        result["error"] = str(exc)
+        result["in_sync"] = False
+        return result
     result["refreshable"] = True
     if not output_path.exists():
         result["in_sync"] = False
@@ -624,12 +637,14 @@ def _refresh_agents(
     agents_file: str,
 ) -> str:
     """Render ``AGENTS.md`` for the target repo or fail loudly."""
-    claude_path = repo_root / claude_file
-    if not claude_path.exists():
-        raise FileNotFoundError(f"Canonical CLAUDE file is missing: {claude_path}")
-    output_path = repo_root / agents_file
-    rendered = render_agents_md(claude_path)
-    output_path.write_text(rendered, encoding="utf-8")
+    inputs = resolve_inputs(
+        repo_root=repo_root,
+        claude_file=claude_file,
+        relationships_file=relationships_file,
+        output_file=agents_file,
+    )
+    rendered = render_agents_markdown(inputs)
+    inputs.output_path.write_text(rendered, encoding="utf-8")
     return f"rendered:{agents_file}"
 
 

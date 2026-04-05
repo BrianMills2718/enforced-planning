@@ -100,13 +100,16 @@ coupling checks) all use `meta-process.yaml` presence to discover governed repos
 | Claims + Worktrees | Prevent parallel AI instances from conflicting |
 | Inter-CC Messaging | Async communication between AI instances |
 
+Authoritative operator workflow:
+- `docs/guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md`
+
 Portable coordination now has two layers:
 - root `scripts/` owns the newer claim-v2, active-work registry, and shared
   worktree-path helpers
 - `scripts/worktree-coordination/` owns the optional operational helpers such
   as worktree creation, safe removal, PR finish, and messaging
 
-> **Most projects don't need the multi-CC module.** A branch-based workflow with one AI instance at a time is simpler and works well. See `patterns/worktree-coordination/README.md` if you need it.
+> **Most projects don't need the multi-CC module.** A branch-based workflow with one AI instance at a time is simpler and works well. When you do need the module, use `docs/guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md` as the day-to-day workflow doc and `patterns/worktree-coordination/README.md` as the structural reference.
 
 ## Configuration
 
@@ -216,6 +219,10 @@ The first portable coordination wave now lives in these scripts:
 The older `scripts/worktree-coordination/check_claims.py` active-work system is
 still present for legacy/module compatibility. This wave does not delete or
 replace it.
+
+Use `docs/guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md` for one
+operator-facing workflow description. Treat pattern docs and rollout docs as
+design and migration context, not as competing primary instructions.
 
 ## Full Documentation
 

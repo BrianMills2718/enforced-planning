@@ -2,6 +2,10 @@
 
 Optional module for teams running **multiple AI coding instances concurrently** on the same codebase.
 
+Canonical operator instructions live in
+`docs/guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md`. This module README
+explains the moving parts and the portability boundary.
+
 ## When to Use This
 
 Enable this module when:
@@ -26,13 +30,19 @@ scope at once:
 **PR Coordination** — Tracks review requests between instances:
 - See [21_pr-coordination.md](21_pr-coordination.md)
 
-## CWD Safety
+## Session Safety
 
-When using worktrees, **never cd into a worktree directory**. The AI instance's working directory must always be the main repo root. If a worktree is deleted while the shell is inside it, all subsequent commands fail silently.
+Some agent runtimes keep a persistent shell CWD. In those environments, a
+session that deletes the worktree it is still sitting inside will poison the
+shell for later commands.
 
-Use `git -C worktrees/plan-N-foo` for git operations instead of changing directories.
+That is why the Claude hook stack blocks `cd worktrees/...` for the persistent
+Bash session and requires merge / finish / worktree removal from a control
+session anchored at the canonical repo root.
 
-The `block-cd-worktree.sh` hook (in `hooks/claude/worktree-coordination/`) enforces this automatically.
+This is a session-safety rule, not a claim that worktrees are unused. The
+worktree is still the isolated execution surface; the control session just must
+not delete it from inside itself.
 
 ## Setup
 
@@ -44,7 +54,8 @@ The `block-cd-worktree.sh` hook (in `hooks/claude/worktree-coordination/`) enfor
 
 2. Register worktree hooks in `.claude/settings.json` (see hook files in `hooks/claude/worktree-coordination/`)
 
-3. Add worktree targets to your Makefile (see `templates/Makefile.meta` for examples)
+3. Add worktree targets to your Makefile (see
+   `templates/Makefile.worktree.block.template`)
 
 ## Related Scripts
 
@@ -64,3 +75,6 @@ In `scripts/worktree-coordination/`:
 - `finish_pr.py` — PR merge + worktree cleanup + claim release
 - `check_messages.py` — Inter-instance inbox checking
 - `send_message.py` — Send messages between instances
+
+Use the claim-v2 surfaces for cross-project coordination truth. Keep
+`check_claims.py` only as the repo-local compatibility layer until convergence.

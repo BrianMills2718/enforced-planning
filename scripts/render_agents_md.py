@@ -211,6 +211,16 @@ def render_agents_markdown(inputs: CanonicalInputs) -> str:
     return rendered.strip() + "\n"
 
 
+def render_agents_md(claude_path: Path) -> str:
+    """Backwards-compatible wrapper around the explicit rendering API."""
+
+    inputs = resolve_inputs(
+        repo_root=claude_path.resolve().parent,
+        claude_file=claude_path.name,
+    )
+    return render_agents_markdown(inputs)
+
+
 def parse_args() -> argparse.Namespace:
     """Parse CLI arguments for the renderer."""
 

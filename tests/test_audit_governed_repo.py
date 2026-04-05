@@ -439,6 +439,36 @@ def test_audit_governed_repo_fails_strict_on_agents_drift(tmp_path: Path) -> Non
     assert "in-sync AGENTS.md" in payload["missing_required"]
 
 
+def test_audit_governed_repo_reports_agents_symlink_error_without_crashing(
+    tmp_path: Path,
+) -> None:
+    """Legacy repos with AGENTS symlinked to CLAUDE should audit as partial, not traceback."""
+    _write_governed_repo_scaffold(tmp_path)
+    (tmp_path / "AGENTS.md").symlink_to("CLAUDE.md")
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(AUDIT_SCRIPT),
+            "--repo-root",
+            str(tmp_path),
+            "--json",
+        ],
+        cwd=str(PROJECT_META_ROOT),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    payload = json.loads(result.stdout)
+    agents = payload["checks"]["agents_md"]
+    assert payload["classification"] == "partial"
+    assert agents["present"] is True
+    assert agents["in_sync"] is False
+    assert "symlink to CLAUDE.md" in agents["error"]
+
+
 def test_audit_governed_repo_fails_without_read_gating_hooks(
     tmp_path: Path,
 ) -> None:

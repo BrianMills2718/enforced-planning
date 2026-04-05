@@ -22,9 +22,9 @@ the default behavior when absent.
 
 | Key | Type | Default | Read By | Default When Absent |
 |-----|------|---------|---------|---------------------|
-| `claims.enabled` | bool | `true` | Not enforced by script | No effect |
+| `claims.enabled` | bool | `true` | `audit_governed_repo.py` (advisory worktree opt-in audit) | Audit treats missing flag as not opted in |
 | `claims.enforce_exclusivity` | bool | `true` | Not enforced by script | No effect |
-| `claims.require_for_worktree` | bool | `true` | Not enforced by script | No effect |
+| `claims.require_for_worktree` | bool | `true` | `audit_governed_repo.py` (advisory sanctioned-entrypoint expectation) | Audit does not expect sanctioned entrypoints unless another worktree signal requires them |
 | `claims.enforce_in_ci` | bool | `false` | Not enforced by script | No effect |
 | `claims.claims_file` | string | `.claude/active-work.yaml` | Not enforced by script | No effect |
 
@@ -32,7 +32,7 @@ the default behavior when absent.
 
 | Key | Type | Default | Read By | Default When Absent |
 |-----|------|---------|---------|---------------------|
-| `worktrees.enabled` | bool | `true` | `warn-worktree-cwd.sh`, `block-cd-worktree.sh` (via `check-hook-enabled.sh`) | Hook active |
+| `worktrees.enabled` | bool | `true` | `audit_governed_repo.py`; `warn-worktree-cwd.sh`, `block-cd-worktree.sh` (via `check-hook-enabled.sh`) | Audit treats repo as not opted in unless other worktree signals require entrypoints; hooks stay active when installed |
 | `worktrees.protect_main` | bool | `true` | `check-hook-enabled.sh` | Hook active |
 | `worktrees.worktree_dir` | string | `"../worktrees"` | Not enforced by script | No effect |
 | `worktrees.safe_remove_only` | bool | `true` | Not enforced by script | No effect |

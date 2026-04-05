@@ -47,6 +47,16 @@ Installed only with `install.sh --full`. For teams running multiple AI instances
 | `check-inbox.sh` | Edit/Write | Block edits if unread messages exist | Yes (optional) |
 | `notify-inbox-startup.sh` | Read/Glob | Warn about unread messages on startup | No (warning) |
 
+Authoritative operator workflow:
+- `docs/guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md`
+
+Important nuance:
+- `block-cd-worktree.sh` and `warn-worktree-cwd.sh` protect persistent-shell
+  sessions from deleting the worktree they are still sitting inside
+- they do not make worktrees optional
+- merge / finish / worktree removal should run from a root-anchored control
+  session
+
 ## Exit Codes
 
 All hooks use consistent exit codes:

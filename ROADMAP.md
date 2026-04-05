@@ -137,13 +137,10 @@ All three conditions green as of 2026-04-04 overnight sprint:
 
 ## What's Next (recommended priority order)
 
-1. **Plan #16: Documentation and adoption surface convergence**
-   Rewrite the top-level doc stack against the canonical installer and semantic-review decisions.
-
-2. **Plan #14: Research-backed ADR and topic-research follow-through**
+1. **Plan #14: Research-backed ADR and topic-research follow-through**
    Finish the remaining policy and adoption work so research linkage is not just a local doctrine.
 
-3. **Phase 8 execution planning**
+2. **Phase 8 execution planning**
    Convert the open Phase 8 gate into bounded numbered plans for multi-tool support,
    upgrade automation, dashboarding, and framework self-measurement.
 

@@ -11,6 +11,7 @@ Usage:
     python enforced-planning/scripts/self_test.py              # All checks
     python enforced-planning/scripts/self_test.py --files      # File existence only
     python enforced-planning/scripts/self_test.py --links      # Link checker only
+    python enforced-planning/scripts/self_test.py --docs       # Doc surface only
     python enforced-planning/scripts/self_test.py --install    # Install test only
 """
 

@@ -23,55 +23,6 @@ Items start as **unconfirmed** observations and get triaged into confirmed issue
 
 ## Open
 
-### MP-011: Adoption docs disagree on installed paths, config keys, and support model
-
-| Field | Value |
-|-------|-------|
-| Status | `planned` |
-| Severity | high |
-| Reported | 2026-04-04 |
-
-`README.md`, `GETTING_STARTED.md`, `docs/guides/NEW_PROJECT_SETUP.md`, and
-`hooks/README.md` do not currently agree on what gets installed, where scripts
-live, how hooks are wired, which config keys are canonical, or how to describe
-non-Claude-Code support.
-
-**Plan:** `docs/plans/16_documentation-and-adoption-surface-convergence.md`
-
----
-
-### MP-012: Top-level docs still over-center `agent_ecology2`
-
-| Field | Value |
-|-------|-------|
-| Status | `planned` |
-| Severity | medium |
-| Reported | 2026-04-04 |
-
-`README.md` and the pattern index still treat `agent_ecology2` as more than
-historical provenance. That makes the framework read like an extracted internal
-system instead of a standalone portable framework.
-
-**Plan:** `docs/plans/16_documentation-and-adoption-surface-convergence.md`
-
----
-
-### MP-013: Roadmap and plan queue do not form a compendious forward-looking status surface
-
-| Field | Value |
-|-------|-------|
-| Status | `planned` |
-| Severity | medium |
-| Reported | 2026-04-04 |
-
-`ROADMAP.md` still contains stale "what's next" guidance where every listed item
-is already complete, while the newer follow-on work is only visible in review
-conversation and not yet reflected as a clear numbered queue.
-
-**Plan:** `docs/plans/16_documentation-and-adoption-surface-convergence.md`
-
----
-
 ### MP-003: Large scripts untested
 
 | Field | Value |
@@ -167,6 +118,49 @@ work artifacts that create noise when reading the directory.
 ---
 
 ## Resolved
+
+### MP-011: Adoption docs disagree on installed paths, config keys, and support model
+
+| Field | Value |
+|-------|-------|
+| Status | `resolved` |
+| Severity | high |
+| Reported | 2026-04-04 |
+| Resolved | 2026-04-04 |
+
+`README.md`, `GETTING_STARTED.md`, `docs/guides/NEW_PROJECT_SETUP.md`, and
+`hooks/README.md` now agree on the canonical installer, installed paths,
+support matrix, and config vocabulary.
+
+---
+
+### MP-012: Top-level docs still over-center `agent_ecology2`
+
+| Field | Value |
+|-------|-------|
+| Status | `resolved` |
+| Severity | medium |
+| Reported | 2026-04-04 |
+| Resolved | 2026-04-04 |
+
+Top-level docs now keep `agent_ecology2` as provenance only instead of using it
+as the explanatory frame for adoption.
+
+---
+
+### MP-013: Roadmap and plan queue do not form a compendious forward-looking status surface
+
+| Field | Value |
+|-------|-------|
+| Status | `resolved` |
+| Severity | medium |
+| Reported | 2026-04-04 |
+| Resolved | 2026-04-04 |
+
+The roadmap and plan index now expose the live execution queue directly instead
+of relying on stale "what's next" prose.
+
+---
 
 ### MP-009: Installer authority split between `install.sh` and `install_governed_repo.py`
 

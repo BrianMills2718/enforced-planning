@@ -2,27 +2,13 @@
 
 from __future__ import annotations
 
-import importlib.util
 import json
-import sys
 from pathlib import Path
 
 import pytest
 import yaml  # type: ignore[import-untyped]
 
-
-MODULE_PATH = Path(__file__).resolve().parents[1] / "scripts" / "check_coordination_claims.py"
-
-
-def _load_module():
-    """Load the standalone coordination-claims script as a module."""
-    module_name = "check_coordination_claims_module"
-    spec = importlib.util.spec_from_file_location(module_name, MODULE_PATH)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[module_name] = module
-    spec.loader.exec_module(module)
-    return module
+from enforced_planning import coordination_claims as module
 
 
 def _write_claim(claims_dir: Path, name: str, payload: dict) -> None:
@@ -33,7 +19,6 @@ def _write_claim(claims_dir: Path, name: str, payload: dict) -> None:
 
 def test_normalize_claim_reads_v1_schema_as_program_claim(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Legacy v1 claims should normalize into the v2 in-memory record cleanly."""
-    module = _load_module()
     claims_dir = tmp_path / "claims"
     monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
     _write_claim(
@@ -64,7 +49,6 @@ def test_evaluate_claim_detects_parent_child_write_overlap_as_hard_conflict(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Write claims should hard-conflict on parent-directory and child-file overlap."""
-    module = _load_module()
     claims_dir = tmp_path / "claims"
     monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
     _write_claim(
@@ -104,7 +88,6 @@ def test_evaluate_claim_marks_review_vs_write_overlap_as_soft_overlap(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Review claims should warn, not hard-block, against active write claims."""
-    module = _load_module()
     claims_dir = tmp_path / "claims"
     monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
     _write_claim(
@@ -140,8 +123,6 @@ def test_evaluate_claim_marks_review_vs_write_overlap_as_soft_overlap(
 
 def test_build_candidate_claim_rejects_write_claim_without_write_paths() -> None:
     """New narrow write claims should fail loudly without explicit write paths."""
-    module = _load_module()
-
     with pytest.raises(ValueError, match="Write claims require at least one --write-path"):
         module.build_candidate_claim(
             agent="codex",
@@ -158,7 +139,6 @@ def test_create_claim_without_write_paths_stays_backward_compatible(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Legacy-style claim creation without write paths should still produce a broad program claim."""
-    module = _load_module()
     claims_dir = tmp_path / "claims"
     monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
 
@@ -184,7 +164,6 @@ def test_check_json_outputs_claims_and_candidate_conflict_classification(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     """Structured JSON output should include both claims and candidate conflict classification."""
-    module = _load_module()
     claims_dir = tmp_path / "claims"
     monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
     _write_claim(

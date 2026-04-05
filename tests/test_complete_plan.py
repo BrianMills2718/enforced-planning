@@ -209,6 +209,56 @@ def test_update_plan_index_dry_run_no_change(tmp_path: Path) -> None:
     assert index.read_text() == original
 
 
+def test_update_plan_index_live_updates_only_status_cell(tmp_path: Path) -> None:
+    """Live update should preserve every non-status cell in the matching row."""
+    index = tmp_path / "CLAUDE.md"
+    original = (
+        "# Implementation Plans\n\n"
+        "| # | Name | Priority | Status | Blocks |\n"
+        "|---|------|----------|--------|--------|\n"
+        "| 126 | [Worktree entrypoint contract parity](126_worktree-entrypoint-contract-parity.md) | Critical | 🚧 In Progress | 120, 121 |\n"
+        "| 127 | [Research synthesis forward cutover and alias enforcement](127_research-synthesis-forward-cutover-and-alias-enforcement.md) | High | 🚧 In Progress | - |\n"
+    )
+    index.write_text(original, encoding="utf-8")
+
+    result = update_plan_index(126, tmp_path, dry_run=False)
+
+    assert result is True
+    updated = index.read_text(encoding="utf-8").splitlines()
+    assert (
+        "| 126 | [Worktree entrypoint contract parity](126_worktree-entrypoint-contract-parity.md) | "
+        "Critical | ✅ Complete | 120, 121 |"
+    ) in updated
+    assert (
+        "| 127 | [Research synthesis forward cutover and alias enforcement](127_research-synthesis-forward-cutover-and-alias-enforcement.md) | "
+        "High | 🚧 In Progress | - |"
+    ) in updated
+
+
+def test_update_plan_index_does_not_mutate_status_key_table(tmp_path: Path) -> None:
+    """Only the numbered plan row should change; status-key rows are not plan rows."""
+    index = tmp_path / "CLAUDE.md"
+    original = (
+        "# Implementation Plans\n\n"
+        "| # | Name | Priority | Status | Blocks |\n"
+        "|---|------|----------|--------|--------|\n"
+        "| 126 | [Worktree entrypoint contract parity](126_worktree-entrypoint-contract-parity.md) | Critical | 🚧 In Progress | 120, 121 |\n"
+        "\n"
+        "## Status Key\n\n"
+        "| Status | Meaning |\n"
+        "|--------|---------|\n"
+        "| ✅ Complete | Implemented and verified |\n"
+    )
+    index.write_text(original, encoding="utf-8")
+
+    result = update_plan_index(126, tmp_path, dry_run=False)
+
+    assert result is True
+    updated = index.read_text(encoding="utf-8")
+    assert "| ✅ Complete | Implemented and verified |" in updated
+    assert updated.count("| ✅ Complete |") == 2
+
+
 # ---------------------------------------------------------------------------
 # run_unit_tests (mock subprocess)
 # ---------------------------------------------------------------------------

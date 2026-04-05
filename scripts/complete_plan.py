@@ -405,19 +405,22 @@ def update_plan_index(
         return False
 
     content = index_file.read_text()
+    lines = content.splitlines(keepends=True)
+    updated = False
 
-    # Find and update the plan row
-    # Pattern: | N | [Name](file.md) | Priority | Status | Blocks |
-    pattern = rf"(\|\s*{plan_number}\s*\|[^|]+\|[^|]+\|)\s*[^|]+(\s*\|)"
+    for index, line in enumerate(lines):
+        updated_line = _update_plan_index_row(line, plan_number)
+        if updated_line is None:
+            continue
+        lines[index] = updated_line
+        updated = True
+        break
 
-    # Use literal checkmark to avoid regex escape issues
-    checkmark = "\u2705"  # ✅
-    replacement = f"\\1 {checkmark} Complete \\2"
-    new_content = re.sub(pattern, replacement, content)
-
-    if new_content == content:
+    if not updated:
         print(f"  WARNING: Could not find plan #{plan_number} in index")
         return False
+
+    new_content = "".join(lines)
 
     if dry_run:
         print("[DRY RUN] Would update plans/CLAUDE.md index")
@@ -425,6 +428,44 @@ def update_plan_index(
 
     index_file.write_text(new_content)
     return True
+
+
+def _update_plan_index_row(line: str, plan_number: int) -> str | None:
+    """Update only the status cell for the targeted markdown-table plan row.
+
+    Returns the rewritten line when this is the matching plan row, otherwise
+    ``None``. Non-status cells are preserved byte-for-byte.
+    """
+    if not line.lstrip().startswith("|"):
+        return None
+
+    parts = line.split("|")
+    if len(parts) < 6:
+        return None
+
+    cells = parts[1:-1]
+    if len(cells) < 5:
+        return None
+
+    if cells[0].strip() != str(plan_number):
+        return None
+
+    status_index = 4  # parts[0] is the leading empty prefix before the first pipe
+    parts[status_index] = _rewrite_status_cell(parts[status_index], "✅ Complete")
+    return "|".join(parts)
+
+
+def _rewrite_status_cell(cell: str, new_status: str) -> str:
+    """Rewrite a markdown-table status cell while preserving surrounding whitespace."""
+    prefix_match = re.match(r"^\s*", cell)
+    suffix_match = re.search(r"\s*$", cell)
+    prefix = prefix_match.group(0) if prefix_match else " "
+    suffix = suffix_match.group(0) if suffix_match else " "
+    if not prefix:
+        prefix = " "
+    if not suffix:
+        suffix = " "
+    return f"{prefix}{new_status}{suffix}"
 
 
 def sync_coordination_closeout(

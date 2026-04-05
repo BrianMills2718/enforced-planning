@@ -38,10 +38,10 @@ Reviewed before freezing this sprint:
 - `docs/plans/CLAUDE.md`
 - active coordination registry state
 - in-progress `ecosystem-ops` Plan #33 worktree
-- active `enforced-planning` Plan #24 authority lane
+- active `enforced-planning` Plan #41 authority lane
 
 The main uncertainty is not what to do next. It is only whether Plan #38 can be
-landed immediately or must wait for the currently active Plan #24 authority
+landed immediately or must wait for the currently active Plan #41 authority
 lane.
 
 ## Execution Order
@@ -57,7 +57,7 @@ lane.
    Investigate and, if needed, implement shared worktree-aware markdown-link
    validation.
 5. **Plan #38**
-   Implement authority-drift reconciliation gates if the overlapping Plan #24
+   Implement authority-drift reconciliation gates if the overlapping Plan #41
    authority lane is either landed or can absorb the work without conflict.
 
 ## Decisions Pre-Made
@@ -67,7 +67,7 @@ lane.
 | Sprint discipline | Every slice runs in its own dedicated worktree | Rollback, review, and cleanup must stay cheap |
 | Commit policy | Every verified slice gets its own commit before moving on | Prevent invisible overnight work |
 | Merge policy | Root-anchored control session merges and pushes between slices | Avoid worktree-CWD cleanup hazards |
-| Plan #38 blocker | Do not silently overlap the active Plan #24 authority lane | Respect claimed authority surfaces |
+| Plan #38 blocker | Do not silently overlap the active Plan #41 authority lane | Respect claimed authority surfaces |
 | Weak/stale lanes | Use lifecycle tooling, not direct YAML edits, unless the tooling itself is the broken surface | Keep migration on the canonical path |
 
 ## Acceptance Criteria
@@ -93,7 +93,7 @@ Only these are real stop conditions:
 
 1. irreversible action affecting shared state
 2. a genuine architectural decision not already pre-made in the active plan
-3. Plan #38 cannot proceed without violating the active Plan #24 claim and no
+3. Plan #38 cannot proceed without violating the active Plan #41 claim and no
    safe ownership transfer exists
 
 Everything else is not a stop condition; it belongs in the sprint tracker and

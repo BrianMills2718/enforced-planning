@@ -141,13 +141,14 @@ and readable as bounded active lanes instead of only raw claims.
 | #30 | Session bootstrap contract and tracker | ✅ Complete |
 | #31 | Session CLI and governed-repo entrypoint enforcement | ✅ Complete |
 | #32 | Cross-tool session adapters and adoption rollout | ✅ Complete |
-| #33 | Assignment-layer session contract integration | 📋 Planned |
+| #33 | Assignment-layer session contract integration | ✅ Complete |
 | #34 | Weak-claim remediation and live-lane migration | ✅ Complete |
 | #35 | Queue-based assignment and session routing architecture | 📋 Planned |
 | #37 | Plan-bound session identity and resume lifecycle | ✅ Complete |
 | #38 | Authority-drift reconciliation gates | 📋 Planned |
 | #39 | Worktree-aware markdown-link validation and root resolution | ✅ Complete |
 | #40 | Overnight coordination implementation sprint | 🚧 In Progress |
+| #41 | Documentation authority governance and enforcement | ✅ Complete |
 
 **Deferred item blockers:**
 
@@ -161,44 +162,26 @@ and readable as bounded active lanes instead of only raw claims.
 
 ## What's Next (recommended priority order)
 
-1. **Assignment-layer integration**
-   Land Plan #33 so downstream routing tools like `ecosystem-ops/assignment_manager.py`
-   consume canonical session identity instead of inventing their own per-window
-   truth surface.
+1. **Authority-drift closeout gates**
+   Land Plan #38 now that the authority-governance design lane is frozen as
+   Plan #41 and can act as the canonical basis for closure-blocking
+   reconciliation debt.
 
-2. **Plan-bound session recovery**
-   Land Plan #37 so every live session is explicitly attached to a plan-bound
-   lane and crash/restart handling becomes explicit resume/handoff/abandon
-   lifecycle instead of guesswork.
+2. **Sprint closeout**
+   Finish Plan #40 by landing or explicitly blocking Plan #38 and leaving the
+   coordination sprint tracker truthful.
 
-3. **Weak/stale live-lane remediation**
-   Land Plan #34 so the active registry reflects adjudicated lane state rather
-   than legacy weak claims.
-
-4. **Authority-drift closeout gates**
-   Land Plan #38 so separately claimed authority surfaces cannot close while
-   unresolved reconciliation obligations still exist.
-
-5. **Worktree-aware markdown-link validation**
-   Land Plan #39 so markdown-link validation under active worktrees, canonical
-   roots, and downstream wrappers stays shared and truthful instead of drifting
-   into repo-local hacks.
-
-6. **Authority-drift closeout gates**
-   Land Plan #38 once the overlapping authority-governance ownership is safe,
-   and fail closed rather than silently overlapping the active surface.
-
-7. **Queue/routing architecture freeze**
+3. **Queue/routing architecture freeze**
    Land Plan #35 so future task-queue or assignment work builds on the canonical
    claim/session model instead of creating parallel identity systems.
 
-8. **Mac mini pilot governed-repo rollout**
+4. **Mac mini pilot governed-repo rollout**
    Execute the first controlled pilot from `docs/guides/MAC_MINI_CONTINUOUS_AUTOMATION_BOOTSTRAP.md` using a sanctioned worktree lane.
 
-9. **Future implementation slice: ecosystem status renderer and metrics collection**
+5. **Future implementation slice: ecosystem status renderer and metrics collection**
    Implement `make ecosystem-status`, `generated/ecosystem_status.json`, and rendered operator metrics on top of Plans #21 and #22.
 
-10. **Project-meta topic-research adoption**
+6. **Project-meta topic-research adoption**
    Apply the portable topic-research pattern in `project-meta/research_synthesis`
    with manifests, ADR links, and freshness metadata for high-value topics.
 

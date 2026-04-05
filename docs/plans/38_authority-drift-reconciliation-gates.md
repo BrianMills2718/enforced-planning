@@ -3,7 +3,7 @@
 **Status:** 📋 Planned
 **Type:** implementation
 **Priority:** High
-**Blocked By:** Plan #24 and the existing doc-authority architecture
+**Blocked By:** Plan #41 and the existing doc-authority architecture
 **Blocks:** truthful authority-surface ownership and safe lane closeout under concurrent work
 
 ## Gap

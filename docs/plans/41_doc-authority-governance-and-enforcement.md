@@ -1,6 +1,6 @@
-# Plan #24: Documentation Authority Governance and Enforcement
+# Plan #41: Documentation Authority Governance and Enforcement
 
-**Status:** Planned
+**Status:** ✅ Complete
 **Type:** design
 **Priority:** High
 **Blocked By:** None
@@ -61,7 +61,7 @@ cross-project runtime capability yet.
 
 ## Files Affected
 
-- `docs/plans/24_doc-authority-governance-and-enforcement.md` (create)
+- `docs/plans/41_doc-authority-governance-and-enforcement.md` (create)
 - `adr/0009-doc-authority-governance-and-enforcement.md` (create)
 - `docs/designs/DOC_AUTHORITY_GOVERNANCE_ARCHITECTURE.md` (create)
 - `docs/reference/DOC_AUTHORITY_SCHEMA.md` (create)
@@ -121,19 +121,19 @@ cross-project runtime capability yet.
 
 | Test Pattern | Why |
 |--------------|-----|
-| `python scripts/validate_plan.py --plan-file docs/plans/24_doc-authority-governance-and-enforcement.md --warn-only` | Plan remains valid |
+| `python scripts/validate_plan.py --plan-file docs/plans/41_doc-authority-governance-and-enforcement.md --warn-only` | Plan remains valid |
 | `python scripts/self_test.py --links --docs` | New governance docs integrate cleanly with existing surfaces |
 
 ---
 
 ## Acceptance Criteria
 
-- [ ] The framework defines a portable concern-level documentation authority model
-- [ ] The framework defines v0 doc metadata and repo-config schema
-- [ ] The validator contract specifies deterministic duplicate-authority failures
-- [ ] Enforcement points are explicit and blocking, not advisory-only
-- [ ] Rollout guidance is phased and avoids big-bang adoption
-- [ ] Declared checks pass
+- [x] The framework defines a portable concern-level documentation authority model
+- [x] The framework defines v0 doc metadata and repo-config schema
+- [x] The validator contract specifies deterministic duplicate-authority failures
+- [x] Enforcement points are explicit and blocking, not advisory-only
+- [x] Rollout guidance is phased and avoids big-bang adoption
+- [x] Declared checks pass
 
 ---
 
@@ -144,3 +144,14 @@ cross-project runtime capability yet.
 3. Does v1 need an explicit co-canonical exception mechanism?
 
 These do not block the first design slice.
+
+## Outcome
+
+Design artifacts landed on 2026-04-05:
+
+- `adr/0009-doc-authority-governance-and-enforcement.md`
+- `docs/designs/DOC_AUTHORITY_GOVERNANCE_ARCHITECTURE.md`
+- `docs/reference/DOC_AUTHORITY_SCHEMA.md`
+- `docs/research/2026-04-05-doc-authority-governance-notes.md`
+
+The follow-on implementation gate is Plan #38.

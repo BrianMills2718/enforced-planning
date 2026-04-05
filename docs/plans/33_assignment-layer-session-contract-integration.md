@@ -1,6 +1,6 @@
 # Plan #33: Assignment-Layer Session Contract Integration
 
-**Status:** 📋 Planned
+**Status:** ✅ Complete
 **Type:** implementation
 **Priority:** High
 **Blocked By:** Plan #32
@@ -62,3 +62,13 @@ of a parallel identity source.
 - If assignment semantics are overloaded between “who is this session?” and
   “what should it work on next?”, that ambiguity should be documented rather
   than papered over.
+
+## Outcome
+
+Implemented on 2026-04-05 in `ecosystem-ops`:
+
+- assignment lookup now prefers canonical session identity and broader-goal
+  session names over hardcoded tool labels
+- `assign-current` and `hook-inject` now consume the canonical coordination
+  surface instead of inventing a parallel identity source
+- focused assignment routing tests landed and passed

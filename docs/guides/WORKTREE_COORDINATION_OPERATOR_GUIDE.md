@@ -84,6 +84,11 @@ Opted-in repos are expected to expose:
 If a repo declares the opt-in flags but does not expose the sanctioned
 entrypoints and local scripts, that is contract drift and should be fixed.
 
+Maintenance commands:
+
+- `python scripts/audit_governed_repo.py --repo-root <repo> --json`
+- `python scripts/scan_coordination_mirrors.py --workspace-root ~/projects --fail-on-copied`
+
 ## Related Docs
 
 - `README.md` for framework overview

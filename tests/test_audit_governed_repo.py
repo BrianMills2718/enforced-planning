@@ -261,7 +261,7 @@ def test_audit_governed_repo_reports_partial_for_missing_contract(tmp_path: Path
 def test_audit_governed_repo_warns_when_worktree_entrypoints_are_missing(
     tmp_path: Path,
 ) -> None:
-    """Advisory audit should warn when worktree coordination is enabled but targets are absent."""
+    """Opted-in repos should fail the governed audit when sanctioned targets are absent."""
     _write_governed_repo_scaffold(tmp_path)
     _write_worktree_coordination_config(tmp_path)
 
@@ -282,11 +282,13 @@ def test_audit_governed_repo_warns_when_worktree_entrypoints_are_missing(
     assert result.returncode == 0, result.stdout + result.stderr
     payload = json.loads(result.stdout)
     check = payload["checks"]["worktree_entrypoints"]
+    assert payload["classification"] == "partial"
     assert check["expected"] is True
     assert check["claims_enabled"] is True
     assert check["targets_present"]["worktree"] is False
     assert check["targets_present"]["worktree-remove"] is False
     assert check["warnings"]
+    assert "sanctioned Makefile worktree entrypoints" in payload["missing_required"]
 
 
 def test_audit_governed_repo_reports_present_worktree_entrypoints(
@@ -324,7 +326,7 @@ def test_audit_governed_repo_reports_present_worktree_entrypoints(
 def test_audit_governed_repo_warns_when_worktrees_enabled_without_claims_enabled(
     tmp_path: Path,
 ) -> None:
-    """Sanctioned worktree opt-in should warn when claims are not enabled."""
+    """Sanctioned worktree opt-in should fail governed classification without claims.enabled."""
     _write_governed_repo_scaffold(tmp_path)
     _write_worktree_coordination_config(tmp_path, claims_enabled=False)
 
@@ -345,9 +347,11 @@ def test_audit_governed_repo_warns_when_worktrees_enabled_without_claims_enabled
     assert result.returncode == 0, result.stdout + result.stderr
     payload = json.loads(result.stdout)
     check = payload["checks"]["worktree_entrypoints"]
+    assert payload["classification"] == "partial"
     assert check["expected"] is True
     assert check["claims_enabled"] is False
     assert any("claims.enabled" in warning for warning in check["warnings"])
+    assert "meta-process.yaml claims.enabled for worktree opt-in" in payload["missing_required"]
 
 
 def test_audit_governed_repo_does_not_expect_worktree_opt_in_from_preinstalled_surface(
@@ -378,6 +382,52 @@ def test_audit_governed_repo_does_not_expect_worktree_opt_in_from_preinstalled_s
     assert all(check["scripts_present"].values())
     assert all(check["targets_present"].values())
     assert check["warnings"] == []
+
+
+def test_audit_governed_repo_uses_repo_local_renderer_for_agents_sync(
+    tmp_path: Path,
+) -> None:
+    """A repo-local renderer should define AGENTS sync truth for that repo."""
+    _write_governed_repo_scaffold(tmp_path)
+    renderer = tmp_path / "scripts" / "meta" / "render_agents_md.py"
+    renderer.write_text(
+        "\n".join(
+            [
+                "from pathlib import Path",
+                "",
+                "class Inputs:",
+                "    def __init__(self, output_path):",
+                "        self.output_path = output_path",
+                "",
+                "def resolve_inputs(repo_root, claude_file='CLAUDE.md', relationships_file='scripts/relationships.yaml', output_file='AGENTS.md', template_path=None):",
+                "    return Inputs(Path(repo_root) / output_file)",
+                "",
+                "def render_agents_markdown(inputs):",
+                "    return 'LOCAL RENDER\\n'",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "AGENTS.md").write_text("LOCAL RENDER\n", encoding="utf-8")
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(AUDIT_SCRIPT),
+            "--repo-root",
+            str(tmp_path),
+            "--json",
+        ],
+        cwd=str(PROJECT_META_ROOT),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["checks"]["agents_md"]["in_sync"] is True
 
 
 def test_audit_governed_repo_refreshes_agents_and_passes_strict(

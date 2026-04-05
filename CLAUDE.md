@@ -11,6 +11,10 @@ This repo is currently running in explicit continuous-execution mode.
 - Do not stop at plan creation, green tests, or one completed commit.
 - Execute the active numbered queue continuously until all planned phases are
   complete or a documented stop condition is reached.
+- For the current overnight coordination sprint, the execution order is
+  mandatory unless a documented blocker changes it: Plan #33 → Plan #37 →
+  Plan #34 → Plan #39 → Plan #38. Do not opportunistically reshuffle this
+  sequence in chat or ad hoc commit messages.
 - Work in sanctioned worktrees between merges/pushes rather than piling new
   overnight work onto a dirty primary checkout.
 - Commit every verified slice so rollback is cheap and exact.
@@ -34,6 +38,9 @@ This repo is currently running in explicit continuous-execution mode.
 - Authority drift against separately claimed truth surfaces must become formal,
   machine-visible reconciliation debt. The owning lane is not allowed to close
   while that debt remains unresolved.
+- Continuous-run discipline is part of the architecture here, not a stylistic
+  preference. Every bounded slice must end with: verified tests, commit,
+  merge/push, claim release, and worktree cleanup before the next slice begins.
 
 Non-negotiable execution rules for continuous runs:
 

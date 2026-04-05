@@ -147,6 +147,7 @@ and readable as bounded active lanes instead of only raw claims.
 | #37 | Plan-bound session identity and resume lifecycle | 📋 Planned |
 | #38 | Authority-drift reconciliation gates | 📋 Planned |
 | #39 | Worktree-aware markdown-link validation and root resolution | 📋 Planned |
+| #40 | Overnight coordination implementation sprint | 🚧 In Progress |
 
 **Deferred item blockers:**
 
@@ -183,17 +184,21 @@ and readable as bounded active lanes instead of only raw claims.
    roots, and downstream wrappers stays shared and truthful instead of drifting
    into repo-local hacks.
 
-6. **Queue/routing architecture freeze**
+6. **Authority-drift closeout gates**
+   Land Plan #38 once the overlapping authority-governance ownership is safe,
+   and fail closed rather than silently overlapping the active surface.
+
+7. **Queue/routing architecture freeze**
    Land Plan #35 so future task-queue or assignment work builds on the canonical
    claim/session model instead of creating parallel identity systems.
 
-7. **Mac mini pilot governed-repo rollout**
+8. **Mac mini pilot governed-repo rollout**
    Execute the first controlled pilot from `docs/guides/MAC_MINI_CONTINUOUS_AUTOMATION_BOOTSTRAP.md` using a sanctioned worktree lane.
 
-8. **Future implementation slice: ecosystem status renderer and metrics collection**
+9. **Future implementation slice: ecosystem status renderer and metrics collection**
    Implement `make ecosystem-status`, `generated/ecosystem_status.json`, and rendered operator metrics on top of Plans #21 and #22.
 
-9. **Project-meta topic-research adoption**
+10. **Project-meta topic-research adoption**
    Apply the portable topic-research pattern in `project-meta/research_synthesis`
    with manifests, ADR links, and freshness metadata for high-value topics.
 

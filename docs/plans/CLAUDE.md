@@ -44,6 +44,7 @@ See `ROADMAP.md` for the full phase map and recommended priority order.
 | 37 | Plan-Bound Session Identity And Resume Lifecycle (`37_plan-bound-session-identity-and-resume-lifecycle.md`) | High | 📋 Planned | Make crash recovery, resume, and duplicate-lane prevention explicit and plan-bound |
 | 38 | Authority-Drift Reconciliation Gates (`38_authority-drift-reconciliation-gates.md`) | High | 📋 Planned | Turn authority drift into closure-blocking reconciliation debt instead of warning-only residue |
 | 39 | Worktree-Aware Markdown-Link Validation And Root Resolution (`39_worktree-aware-markdown-link-validation-and-root-resolution.md`) | High | 📋 Planned | Freeze ownership and the shared implementation path for markdown-link validation under worktree/canonical-root semantics |
+| 40 | Overnight Coordination Implementation Sprint (`40_overnight-coordination-implementation-sprint.md`) | High | 🚧 In Progress | Freeze slice order, blocker handling, and sprint-closeout rules for the current coordination push |
 
 ## Status Key
 

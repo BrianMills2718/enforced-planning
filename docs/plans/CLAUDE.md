@@ -19,6 +19,7 @@ See `ROADMAP.md` for the full phase map and recommended priority order.
 | 12 | Cross-Repo Plan Registry (`build_plan_registry.py`, `make plan-registry`) | Medium | ✅ Complete (327 plans, 22 repos) | check_plan_deps cross-repo |
 | 13 | Rename-Safe Merge Cleanup (`13_rename-safe-merge-cleanup.md`) | High | ✅ Complete | — |
 | 14 | Research-Backed ADRs and Topic Research Integration (`14_research-backed-adr-and-topic-research-integration.md`) | High | 🚧 In Progress | [future] project-meta topic research adoption |
+| 15 | Selective Plan-10 Truth-Surface Salvage (`15_selective-plan10-truth-surface-salvage.md`) | High | 🚧 In Progress | — |
 
 ## Status Key
 

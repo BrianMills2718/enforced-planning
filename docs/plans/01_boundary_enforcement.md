@@ -1,6 +1,6 @@
 # Plan #1: Capabilities Enforcement in Plan Template
 
-**Status:** Partially Complete (template done, pre-commit hook pending)
+**Status:** Complete
 **Type:** implementation
 **Priority:** High
 **Blocked By:** None
@@ -31,8 +31,8 @@
 
 - `templates/plan.md.template` (done — Capabilities section added)
 - `scripts/check_plan_capabilities.py` (done — validation script exists)
-- `hooks/claude/pre-commit-plan-boundaries.sh` (pending — hook script not yet created)
-- `patterns/15_plan-workflow.md` (pending — reference to Capabilities requirement)
+- `hooks/git/pre-commit` (done — strict capabilities check wired for staged plan files)
+- `patterns/15_plan-workflow.md` (done — references Capabilities requirement)
 
 ---
 
@@ -50,9 +50,9 @@ N/A — internal to enforced-planning.
 
 1. ~~Add Capabilities section to `templates/plan.md.template`~~ ✅ Done
 2. ~~Create `scripts/check_plan_capabilities.py`~~ ✅ Done (replaced `check_plan_boundaries.py`)
-3. Create hook script for pre-commit Capabilities checking (pending)
-4. Update pattern 15 to reference the Capabilities requirement (pending)
-5. Test: create a cross-project plan without Capabilities, verify it warns (pending)
+3. Wire capabilities enforcement into `hooks/git/pre-commit` so staged plan files are checked. ✅ Done
+4. Update Pattern 15 to reference the Capabilities requirement. ✅ Done
+5. Verify existing plan surfaces remain clean under the checker. ✅ Done
 
 ---
 
@@ -73,11 +73,15 @@ N/A — internal to enforced-planning.
 - [x] Plan template has Capabilities section (formerly "Data Boundaries") with Input/Output Schema, Producer, Consumer tables
 - [x] `check_plan_capabilities.py` correctly identifies cross-project plans (keyword heuristics, opt-out support)
 - [x] Script warns (not blocks) on cross-project plans without Capabilities (`--strict` for CI)
-- [ ] Pattern 15 references boundary requirement
-- [ ] Existing plans in enforced-planning are not broken by the change
+- [x] Pattern 15 references boundary requirement
+- [x] Existing plans in enforced-planning are not broken by the change
 
 ---
 
 ## Notes
 
-Advisory for existing plans, mandatory for new. The 33 already-registered contracts in the ecosystem validate that the boundary pattern works — this plan just enforces it at planning time.
+Advisory for existing completed plans, mandatory for new or in-progress cross-project plans. The check now exists in three places:
+
+- `templates/plan.md.template` defines the Capabilities section
+- `scripts/check_plan_capabilities.py` validates it
+- `hooks/git/pre-commit` runs the checker on staged plan files

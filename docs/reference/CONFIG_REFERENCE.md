@@ -9,6 +9,11 @@ Consumer-facing quickstarts intentionally show only keys with script effect
 today. The template also carries planned/advisory vocabulary, which is labeled
 below when it is not yet enforced.
 
+`templates/meta-process.yaml.example` is the minimal functional starter
+surface. `templates/meta-process.future.yaml.example` carries broader reserved
+or advisory vocabulary for repos that want to document future policy without
+pretending it is mechanically enforced today.
+
 ---
 
 ## plans

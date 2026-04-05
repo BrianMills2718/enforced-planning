@@ -292,6 +292,54 @@ def check_doc_surface_coherence(root: Path) -> list[str]:
     return errors
 
 
+def check_plan_surface_coherence(root: Path) -> list[str]:
+    """Verify plan index status agrees with the underlying plan files."""
+    errors: list[str] = []
+
+    index_path = root / "docs" / "plans" / "CLAUDE.md"
+    content = index_path.read_text(encoding="utf-8")
+
+    for line in content.splitlines():
+        if not line.startswith("|") or "`" not in line or ".md" not in line:
+            continue
+
+        parts = [part.strip() for part in line.strip("|").split("|")]
+        if len(parts) < 5 or not parts[0].isdigit():
+            continue
+
+        match = re.search(r"`([^`]+\.md)`", parts[1])
+        if not match:
+            continue
+
+        relpath = match.group(1)
+        plan_path = index_path.parent / relpath
+        if not plan_path.exists():
+            errors.append(f"docs/plans/CLAUDE.md: listed plan file missing: {relpath}")
+            continue
+
+        plan_text = plan_path.read_text(encoding="utf-8")
+        status_match = re.search(r"\*\*Status:\*\*\s*([^\n]+)", plan_text)
+        if not status_match:
+            errors.append(f"{relpath}: missing **Status:** field")
+            continue
+
+        row_status = parts[3]
+        file_status = status_match.group(1).strip()
+
+        if "✅ Complete" in row_status and "complete" not in file_status.lower():
+            errors.append(
+                f"docs/plans/CLAUDE.md vs {relpath}: index says complete but plan says '{file_status}'"
+            )
+        if "🚧 In Progress" in row_status and not any(
+            token in file_status.lower() for token in ("progress", "partial")
+        ):
+            errors.append(
+                f"docs/plans/CLAUDE.md vs {relpath}: index says in progress but plan says '{file_status}'"
+            )
+
+    return errors
+
+
 # --- Check 4: Install Test ---
 
 
@@ -520,6 +568,11 @@ def main() -> None:
     if run_all or args.docs:
         print("=== Doc Surface Check ===")
         errors = check_doc_surface_coherence(root)
+        _report(errors)
+        all_errors.extend(errors)
+
+        print("=== Plan Surface Check ===")
+        errors = check_plan_surface_coherence(root)
         _report(errors)
         all_errors.extend(errors)
 

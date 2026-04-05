@@ -23,19 +23,24 @@ Items start as **unconfirmed** observations and get triaged into confirmed issue
 
 ## Open
 
+(No open framework documentation or planning-governance issues are currently tracked here.)
+
+---
+
+## Resolved
+
 ### MP-003: Large scripts untested
 
 | Field | Value |
 |-------|-------|
-| Status | `planned` |
+| Status | `resolved` |
 | Severity | medium |
 | Reported | 2026-04-03 |
+| Resolved | 2026-04-04 |
 
-`complete_plan.py` (597 lines), `parse_plan.py` (438 lines), `sync_plan_status.py` (456 lines),
-and `check_plan_tests.py` (552 lines) have no dedicated test files. If they break, no CI catch.
-
-**Plan:** Phase 6 of sprint `docs/ops/SPRINT_2026_04_03_ALL_ISSUES.md` — 35+ tests across the
-three highest-priority scripts.
+Dedicated test files now exist for the plan/governance scripts that previously
+lacked direct coverage, including `parse_plan.py`, `complete_plan.py`,
+`sync_plan_status.py`, and `check_plan_tests.py`.
 
 ---
 
@@ -43,15 +48,14 @@ three highest-priority scripts.
 
 | Field | Value |
 |-------|-------|
-| Status | `planned` |
+| Status | `resolved` |
 | Severity | low |
 | Reported | 2026-04-03 |
+| Resolved | 2026-04-04 |
 
-README calls the framework "portable" and lists "Claude Code, etc." as tool-compatible.
-The "etc." is empty — hooks (`.claude/hooks/`), CLAUDE.md convention, and read-gating are
-all Claude Code-specific. Cursor/Windsurf users will hit a dead end.
-
-**Plan:** Phase 2c of sprint — explicit tool compatibility callout in README and GETTING_STARTED.
+The top-level docs now explicitly describe the support matrix: Claude Code has
+the strongest native hook surface, while other tools use generated `AGENTS.md`
+and deterministic validators.
 
 ---
 
@@ -59,16 +63,15 @@ all Claude Code-specific. Cursor/Windsurf users will hit a dead end.
 
 | Field | Value |
 |-------|-------|
-| Status | `planned` |
+| Status | `resolved` |
 | Severity | low |
 | Reported | 2026-04-03 |
+| Resolved | 2026-04-04 |
 
-Several keys in `meta-process.yaml.example` are not consumed by any script:
-`planning.question_driven_planning`, `planning.uncertainty_tracking`,
-`planning.dependency_probe_policy`, `capability_ownership.*`, `messaging.*`.
-Adopters copy them and get placebo configuration.
-
-**Plan:** Phase 2d of sprint — audit every key, mark unimplemented ones `# [PLANNED]`.
+The config surface is now split: `templates/meta-process.yaml.example` is the
+minimal functional starter surface, while
+`templates/meta-process.future.yaml.example` carries broader planned/advisory
+vocabulary.
 
 ---
 
@@ -76,13 +79,13 @@ Adopters copy them and get placebo configuration.
 
 | Field | Value |
 |-------|-------|
-| Status | `planned` |
+| Status | `resolved` |
 | Severity | low |
 | Reported | 2026-04-03 |
+| Resolved | 2026-04-04 |
 
-Research document sitting at repo root alongside framework docs.
-
-**Plan:** Phase 2b of sprint — move to `docs/research/TRAYCER_COMPARISON.md`.
+The repo root no longer carries the stray research document that triggered this
+issue.
 
 ---
 
@@ -90,15 +93,14 @@ Research document sitting at repo root alongside framework docs.
 
 | Field | Value |
 |-------|-------|
-| Status | `planned` |
+| Status | `resolved` |
 | Severity | medium |
 | Reported | 2026-04-03 |
+| Resolved | 2026-04-04 |
 
-PLANNING_OPERATING_MODEL.md (143 lines), Pattern 42, and GETTING_STARTED.md all define
-the planning hierarchy. Each has slight variations. Adopters disagree on which is canonical.
-
-**Plan:** Phase 3 of sprint — POM becomes explicitly canonical; Pattern 42 reduced to summary;
-GETTING_STARTED leads with POM.
+`PLANNING_OPERATING_MODEL.md` is now explicitly canonical, Pattern 42 is the
+compressed view, and the adoption docs point back to the canonical source
+instead of trying to redefine the hierarchy independently.
 
 ---
 
@@ -106,18 +108,16 @@ GETTING_STARTED leads with POM.
 
 | Field | Value |
 |-------|-------|
-| Status | `planned` |
+| Status | `resolved` |
 | Severity | low |
 | Reported | 2026-04-03 |
+| Resolved | 2026-04-04 |
 
-9 `OVERNIGHT_SPRINT_*.md` and `TRUTH_SURFACE_*_TODO.md` files in `docs/ops/` are closed
-work artifacts that create noise when reading the directory.
-
-**Plan:** Phase 2a of sprint — move all to `docs/ops/archive/`.
+The earlier `OVERNIGHT_SPRINT_*` and `TRUTH_SURFACE_*_TODO` clutter was moved
+out of the root operator surface. Remaining `docs/ops/` files are a much
+smaller set of operator artifacts and sprint records.
 
 ---
-
-## Resolved
 
 ### MP-011: Adoption docs disagree on installed paths, config keys, and support model
 

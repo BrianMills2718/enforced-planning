@@ -125,8 +125,9 @@ of this full framework repo.
 
 The installed config file is `meta-process.yaml`. The authoritative reference
 is [docs/reference/CONFIG_REFERENCE.md](docs/reference/CONFIG_REFERENCE.md).
-The example below is limited to keys that have script effect today; the
-template and reference also document broader planned/advisory vocabulary.
+The example below is limited to keys that have script effect today.
+`templates/meta-process.future.yaml.example` carries broader planned/advisory
+vocabulary that is not part of the minimum live config surface.
 
 Example:
 
@@ -161,7 +162,7 @@ module.
   an opt-in layer.
 
 That boundary is intentional until the installer and semantic-review surfaces
-finish converging.
+are part of the minimum installed contract.
 
 ## Canonical Docs
 

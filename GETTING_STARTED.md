@@ -132,7 +132,8 @@ meta_process:
 Use [docs/reference/CONFIG_REFERENCE.md](docs/reference/CONFIG_REFERENCE.md) to
 distinguish live keys from planned vocabulary. The template contains broader
 advisory/planned fields; omit them unless you are intentionally documenting
-future policy rather than configuring current script behavior.
+future policy rather than configuring current script behavior. Those broader
+fields now live in `templates/meta-process.future.yaml.example`.
 
 ## First Successful Workflow
 

@@ -3,8 +3,8 @@
 Detailed operator guide for adopting the minimum governed-repo contract.
 
 This is the longer companion to [GETTING_STARTED.md](../../GETTING_STARTED.md).
-It stays in the installed-consumer perspective: target repo layout, installed
-paths, and operator verification.
+It stays in the installed-consumer perspective and focuses on operator
+verification, ongoing maintenance, troubleshooting, and optional rollout modes.
 
 ## 1. Prerequisites
 
@@ -34,28 +34,24 @@ Equivalent convenience wrapper:
 The shell wrapper is not a separate authority. Its default mode delegates to
 the canonical Python installer.
 
-## 3. Installed Files
+## 3. Operator-Facing Additions Beyond The Short Guide
 
-Minimum canonical install:
+[GETTING_STARTED.md](../../GETTING_STARTED.md) is the canonical first-success
+inventory for the minimum governed contract. Operators usually care about the
+additional control surfaces the install makes available:
 
-- `meta-process.yaml`
-- `docs/plans/CLAUDE.md`
-- `docs/plans/TEMPLATE.md`
-- `scripts/relationships.yaml`
-- `scripts/meta/check_agents_sync.py`
-- `scripts/meta/check_doc_coupling.py`
-- `scripts/meta/file_context.py`
-- `scripts/meta/render_agents_md.py`
-- `scripts/meta/sync_plan_status.py`
-- `scripts/meta/validate_plan.py`
-- `scripts/meta/worktree-coordination/check_claims.py`
-- `scripts/meta/worktree-coordination/create_worktree.py`
-- `scripts/meta/worktree-coordination/safe_worktree_remove.py`
-- `.claude/hooks/gate-edit.sh`
-- `.claude/hooks/track-reads.sh`
-- `.claude/settings.json`
-- `AGENTS.md`
 - `Makefile`
+  - shared entrypoints for validation and worktree operations
+- `scripts/meta/worktree-coordination/check_claims.py`
+  - validates sanctioned worktree claims
+- `scripts/meta/worktree-coordination/create_worktree.py`
+  - creates governed worktrees through the sanctioned path
+- `scripts/meta/worktree-coordination/safe_worktree_remove.py`
+  - bounded worktree cleanup path
+- `.claude/settings.json`
+  - read-gating hook wiring
+- `AGENTS.md`
+  - generated Codex/non-Claude projection of `CLAUDE.md`
 
 ## 4. Verify The Result
 
@@ -79,7 +75,8 @@ contract.
 
 Use [docs/reference/CONFIG_REFERENCE.md](../reference/CONFIG_REFERENCE.md) for
 the authoritative key table. The example below is intentionally limited to
-keys that have script effect today.
+keys that have script effect today. Broader planned/advisory vocabulary lives
+in `templates/meta-process.future.yaml.example`.
 
 Mechanically meaningful starting point:
 
@@ -185,4 +182,5 @@ Check that the installed repo still has:
 - [GETTING_STARTED.md](../../GETTING_STARTED.md)
 - [PLANNING_OPERATING_MODEL.md](../../PLANNING_OPERATING_MODEL.md)
 - [docs/reference/CONFIG_REFERENCE.md](../reference/CONFIG_REFERENCE.md)
+- [templates/meta-process.future.yaml.example](../../templates/meta-process.future.yaml.example)
 - [patterns/01_README.md](../../patterns/01_README.md)

@@ -3,7 +3,7 @@
 These helpers keep meta-process tools truthful when they run from a
 ``*_worktrees/<branch>`` checkout. The active worktree remains the write target,
 but canonical source files may still live in the main repo root when they are
-intentionally untracked in git, such as ``project-meta/research_texts``.
+intentionally untracked in git, such as ``project-meta/research_synthesis``.
 """
 
 from __future__ import annotations

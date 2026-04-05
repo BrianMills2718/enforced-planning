@@ -52,7 +52,7 @@ When tools return data for LLM consumption:
 | File | Purpose |
 |------|---------|
 | `~/.claude/skills/tool-design/SKILL.md` | Full tool design runbook |
-| `~/projects/project-meta/research_texts/agent_tools/` | Deep reference library |
+| `~/projects/project-meta/research_synthesis/agent_tools/` | Deep reference library |
 
 ## Setup
 

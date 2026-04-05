@@ -177,7 +177,7 @@ and readable as bounded active lanes instead of only raw claims.
    Implement `make ecosystem-status`, `generated/ecosystem_status.json`, and rendered operator metrics on top of Plans #21 and #22.
 
 6. **Project-meta topic-research adoption**
-   Apply the portable topic-research pattern in `project-meta/research_texts`
+   Apply the portable topic-research pattern in `project-meta/research_synthesis`
    with manifests, ADR links, and freshness metadata for high-value topics.
 
 ## Design Principles

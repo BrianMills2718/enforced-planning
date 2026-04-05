@@ -41,9 +41,9 @@ session and ADRs become self-referential.
 - `adr/README.md` - local ADR index and updated `Research Basis` doctrine
 - `adr/0008-adr-research-linkage.md` - accepted rule for ADR evidence linkage
 - `templates/CLAUDE.md.docs-adr` - portable ADR template surface that still needs propagation
-- `~/projects/project-meta/research_texts/CLAUDE.md` - current topic-oriented research library contract
-- `~/projects/project-meta/research_texts/autonomous_agents/SYNTHESIS_2026-03-24.md` - example of reusable synthesis pointing back to raw investigation
-- `~/projects/project-meta/research_texts/agentic_memory/SOTA_SURVEY_2026_04.md` - example of research intended to inform future design work
+- `~/projects/project-meta/research_synthesis/CLAUDE.md` - current topic-oriented research library contract
+- `~/projects/project-meta/research_synthesis/autonomous_agents/SYNTHESIS_2026-03-24.md` - example of reusable synthesis pointing back to raw investigation
+- `~/projects/project-meta/research_synthesis/agentic_memory/SOTA_SURVEY_2026_04.md` - example of research intended to inform future design work
 - `~/projects/investigations/cross-project/2026-04-04-enforced-planning-research-methodology-review.md` - critique and recommended target model
 
 ---
@@ -51,8 +51,8 @@ session and ADRs become self-referential.
 ## Research Basis For This Slice
 
 - `~/projects/investigations/cross-project/2026-04-04-enforced-planning-research-methodology-review.md` - primary critique of the current methodology and target evidence model
-- `~/projects/project-meta/research_texts/autonomous_agents/SYNTHESIS_2026-03-24.md` - concrete example of reusable synthesis that points back to raw investigation
-- `~/projects/project-meta/research_texts/agentic_memory/SOTA_SURVEY_2026_04.md` - example of topic research intended to drive future design decisions rather than a one-off task
+- `~/projects/project-meta/research_synthesis/autonomous_agents/SYNTHESIS_2026-03-24.md` - concrete example of reusable synthesis that points back to raw investigation
+- `~/projects/project-meta/research_synthesis/agentic_memory/SOTA_SURVEY_2026_04.md` - example of topic research intended to drive future design decisions rather than a one-off task
 
 ---
 
@@ -71,7 +71,7 @@ session and ADRs become self-referential.
 - scripts/parse_plan.py (modify)
 - adr/README.md (modify if needed for consistency only)
 - tests/test_parse_plan.py (modify)
-- [future] project-meta/research_texts/*/topic_manifest.yaml (adoption outside this repo)
+- [future] project-meta/research_synthesis/*/topic_manifest.yaml (adoption outside this repo)
 
 ---
 
@@ -94,7 +94,7 @@ session and ADRs become self-referential.
    - ADR `Research Basis` likely strict
    - plan `Research Basis For This Slice` likely strict for design/cross-project work, advisory for trivial local work
    - topic manifest freshness likely advisory first
-6. Document downstream adoption guidance for `project-meta/research_texts`
+6. Document downstream adoption guidance for `project-meta/research_synthesis`
    without hardcoding project-meta specifics into the portable pattern.
 7. Reconcile worktree merge strategy separately:
    - merge `plan-13`
@@ -164,7 +164,7 @@ session and ADRs become self-referential.
 The portable framework should define the doctrine. `project-meta` can then adopt
 it with:
 
-- topic folders under `research_texts/`
+- topic folders under `research_synthesis/`
 - a small topic manifest per folder
 - links from topic synthesis -> investigations -> ADRs -> capabilities
 - freshness triggers for high-value areas such as memory, orchestration, and

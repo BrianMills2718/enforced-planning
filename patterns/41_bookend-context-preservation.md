@@ -99,4 +99,4 @@ a mission file exists and remind the agent to re-read it.
 
 Derived from Claude Code's internal REACTIVE_COMPACT feature flag, analyzed
 from the leaked TypeScript source (March 2026). See
-`research_texts/agent_harness/MEMORY_AND_CONTEXT.md` for full analysis.
+`research_synthesis/agent_harness/MEMORY_AND_CONTEXT.md` for full analysis.

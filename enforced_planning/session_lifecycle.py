@@ -7,6 +7,7 @@ inventing a second coordination registry.
 
 from __future__ import annotations
 
+import os
 import subprocess
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -16,6 +17,7 @@ import yaml  # type: ignore[import-untyped]
 
 from enforced_planning import coordination_claims, session_contracts
 from enforced_planning import doc_authority
+from enforced_planning.worktree_paths import resolve_canonical_repo_root
 
 
 def _split_cli_values(values: list[str] | None) -> list[str]:
@@ -208,6 +210,102 @@ def _worktree_is_clean(worktree_path: str) -> tuple[bool, str]:
     if result.returncode != 0:
         raise RuntimeError((result.stderr or result.stdout).strip())
     return (not result.stdout.strip(), result.stdout.strip())
+
+
+def _claim_record_any_status(
+    *,
+    agent: str,
+    project: str,
+    scope: str,
+) -> tuple[coordination_claims.ClaimRecord, dict[str, Any], Path]:
+    """Load one claim regardless of current lifecycle status."""
+
+    claim_file = _claim_path(agent, project, scope)
+    payload = _load_claim_payload(agent, project, scope)
+    if payload is None:
+        raise ValueError(f"Claim file missing for {agent} → {project}:{scope}")
+    claim = coordination_claims.normalize_claim(payload, source_file=str(claim_file))
+    if claim is None:
+        raise ValueError(f"Claim file invalid for {agent} → {project}:{scope}")
+    return claim, payload, claim_file
+
+
+def _resolve_claim_repo_root(claim: coordination_claims.ClaimRecord) -> Path:
+    """Return the canonical repo root for one claim."""
+
+    if claim.repo_root:
+        return resolve_canonical_repo_root(Path(claim.repo_root).expanduser())
+    if claim.worktree_path:
+        return resolve_canonical_repo_root(Path(claim.worktree_path).expanduser())
+    raise ValueError(f"Claim {claim.scope} is missing repo_root and worktree_path")
+
+
+def _cwd_inside(path: Path) -> bool:
+    """Return whether the current shell cwd is inside the target path."""
+
+    try:
+        current_dir = Path(os.getcwd()).resolve()
+    except OSError:
+        return False
+    try:
+        current_dir.relative_to(path.resolve())
+        return True
+    except ValueError:
+        return False
+
+
+def _branch_exists(repo_root: Path, branch: str) -> bool:
+    """Return whether one local branch ref exists."""
+
+    result = subprocess.run(
+        ["git", "show-ref", "--verify", f"refs/heads/{branch}"],
+        cwd=str(repo_root),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return result.returncode == 0
+
+
+def _remove_worktree_path(repo_root: Path, worktree_path: Path) -> str:
+    """Remove one worktree path from a safe root-anchored control session."""
+
+    if not worktree_path.exists():
+        return "already_missing"
+    if _cwd_inside(worktree_path):
+        raise ValueError(
+            "Cannot close a session from a shell whose cwd is inside the target worktree. "
+            "Run closeout from the canonical repo root session instead."
+        )
+    result = subprocess.run(
+        ["git", "worktree", "remove", str(worktree_path)],
+        cwd=str(repo_root),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise RuntimeError((result.stderr or result.stdout).strip())
+    return "removed"
+
+
+def _delete_branch(repo_root: Path, branch: str | None) -> str:
+    """Delete one local branch after worktree cleanup."""
+
+    if not branch:
+        return "not_requested"
+    if not _branch_exists(repo_root, branch):
+        return "already_missing"
+    result = subprocess.run(
+        ["git", "branch", "-D", branch],
+        cwd=str(repo_root),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise RuntimeError((result.stderr or result.stdout).strip())
+    return "deleted"
 
 
 def start_session(
@@ -479,6 +577,86 @@ def finish_session(
     return {
         "action": "completed",
         "clean": True,
+        "tracker_path": tracker_path_text,
+    }
+
+
+def close_session(
+    *,
+    agent: str,
+    project: str,
+    scope: str,
+    worktree_path: str | None = None,
+    branch: str | None = None,
+    note: str | None = None,
+    delete_branch: bool = True,
+) -> dict[str, Any]:
+    """Finish, clean up, and release one claimed lane as a single sanctioned flow.
+
+    This is the canonical closeout path for claimed worktrees. It is intentionally
+    idempotent around already-missing worktree and branch state so that rerunning
+    a partially completed closeout can still release the claim cleanly.
+    """
+
+    claim, payload, claim_file = _claim_record_any_status(agent=agent, project=project, scope=scope)
+    resolved_worktree_path = Path(
+        worktree_path or claim.worktree_path or ""
+    ).expanduser()
+    resolved_branch = branch or claim.branch
+    repo_root = _resolve_claim_repo_root(claim)
+    updated_at = datetime.now(timezone.utc).isoformat()
+
+    if claim.write_paths:
+        doc_authority.assert_no_unresolved_owned_obligations(claim)
+
+    if resolved_worktree_path and resolved_worktree_path.exists():
+        clean, dirty_details = _worktree_is_clean(str(resolved_worktree_path))
+        if not clean:
+            raise ValueError(
+                "Worktree is dirty; commit or stash before session-close. "
+                f"Uncommitted state:\n{dirty_details}"
+            )
+
+    payload["status"] = "closing"
+    payload["updated_at"] = updated_at
+    payload["notes"] = note or "closing claimed lane via canonical session-close flow"
+    _write_claim_payload(claim_file, payload)
+
+    tracker_path_text = claim.tracker_path
+    if tracker_path_text:
+        tracker_path = Path(tracker_path_text).expanduser()
+        if tracker_path.exists():
+            session_contracts.update_session_tracker(
+                tracker_path,
+                current_phase="closing",
+                notes=payload["notes"],
+                updated_at=updated_at,
+            )
+
+    worktree_action = "not_requested"
+    branch_action = "kept"
+    if worktree_path or claim.worktree_path:
+        worktree_action = _remove_worktree_path(repo_root, resolved_worktree_path)
+    if delete_branch:
+        branch_action = _delete_branch(repo_root, resolved_branch)
+
+    coordination_claims.release_claim(agent, project, scope)
+
+    if tracker_path_text:
+        tracker_path = Path(tracker_path_text).expanduser()
+        if tracker_path.exists():
+            session_contracts.update_session_tracker(
+                tracker_path,
+                current_phase="closed",
+                notes=note or "session closed and claimed worktree cleaned up",
+                updated_at=datetime.now(timezone.utc).isoformat(),
+            )
+
+    return {
+        "action": "closed",
+        "worktree_action": worktree_action,
+        "branch_action": branch_action,
+        "released": True,
         "tracker_path": tracker_path_text,
     }
 

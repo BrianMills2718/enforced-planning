@@ -1,8 +1,5 @@
 #!/usr/bin/env python3
-"""Finish one sanctioned session without worktree cleanup.
-
-For claimed worktree cleanup plus claim release, use ``session_close.py``.
-"""
+"""Close one claimed lane: cleanup worktree/branch and release claim together."""
 
 from __future__ import annotations
 
@@ -32,29 +29,32 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--agent", required=True)
     parser.add_argument("--project", required=True)
     parser.add_argument("--scope", required=True)
-    parser.add_argument("--worktree-path", required=True)
+    parser.add_argument("--worktree-path")
+    parser.add_argument("--branch")
     parser.add_argument("--note")
-    parser.add_argument("--release-claim", action="store_true")
-    parser.add_argument("--allow-dirty-handoff", action="store_true")
+    parser.add_argument("--keep-branch", action="store_true")
     parser.add_argument("--json", action="store_true")
     return parser.parse_args(argv)
 
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
-    payload = session_lifecycle.finish_session(
+    payload = session_lifecycle.close_session(
         agent=args.agent,
         project=args.project,
         scope=args.scope,
         worktree_path=args.worktree_path,
+        branch=args.branch,
         note=args.note,
-        release_claim=args.release_claim,
-        allow_dirty_handoff=args.allow_dirty_handoff,
+        delete_branch=not args.keep_branch,
     )
     if args.json:
         print(json.dumps(payload, indent=2, sort_keys=True))
     else:
-        print(f"{payload['action']}: clean={payload['clean']}")
+        print(
+            f"{payload['action']}: worktree={payload['worktree_action']} "
+            f"branch={payload['branch_action']} released={payload['released']}"
+        )
     return 0
 
 

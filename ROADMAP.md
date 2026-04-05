@@ -149,6 +149,7 @@ and readable as bounded active lanes instead of only raw claims.
 | #39 | Worktree-aware markdown-link validation and root resolution | ✅ Complete |
 | #40 | Overnight coordination implementation sprint | ✅ Complete |
 | #41 | Documentation authority governance and enforcement | ✅ Complete |
+| #42 | Atomic closeout and claimed worktree removal | ✅ Complete |
 
 **Deferred item blockers:**
 

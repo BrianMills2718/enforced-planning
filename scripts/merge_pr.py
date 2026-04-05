@@ -111,24 +111,57 @@ def cleanup_worktree(branch: str) -> bool:
 
     print(f"🧹 Cleaning up local worktree for branch '{branch}'...")
 
-    # First, release any claim for this branch (PR merged = work is complete)
-    # This must happen before worktree removal, which is blocked by active claims
-    release_claim_for_branch(branch)
-
     safe_remove_script = find_existing_script(
+        [
+            "scripts/session_close.py",
+            "scripts/meta/session_close.py",
+        ]
+    )
+    if safe_remove_script:
+        repo_name = Path.cwd().resolve().name
+        agent = (
+            "codex"
+            if os.environ.get("CODEX_THREAD_ID")
+            else "claude-code"
+            if os.environ.get("CLAUDE_SESSION_ID") or os.environ.get("CLAUDE_CODE_SSE_PORT")
+            else "openclaw"
+            if os.environ.get("OPENCLAW_SESSION_ID") or os.environ.get("OPENCLAW_RUN_ID")
+            else None
+        )
+        if not agent:
+            cleanup_cmd = ["make", "worktree-remove", f"BRANCH={branch}"]
+            manual_cmd = f"make worktree-remove BRANCH={branch}"
+        else:
+            cleanup_cmd = [
+                "python",
+                str(safe_remove_script),
+                "--agent",
+                agent,
+                "--project",
+                repo_name,
+                "--scope",
+                branch,
+                "--worktree-path",
+                str(worktree_path),
+                "--branch",
+                branch,
+            ]
+            manual_cmd = " ".join(cleanup_cmd)
+    else:
+        safe_remove_script = find_existing_script(
         [
             "scripts/worktree-coordination/safe_worktree_remove.py",
             "scripts/meta/worktree-coordination/safe_worktree_remove.py",
             "scripts/safe_worktree_remove.py",
             "scripts/meta/safe_worktree_remove.py",
         ]
-    )
-    if safe_remove_script:
-        cleanup_cmd = ["python", str(safe_remove_script), str(worktree_path)]
-        manual_cmd = f"python {safe_remove_script} {worktree_path}"
-    else:
-        cleanup_cmd = ["make", "worktree-remove", f"BRANCH={branch}"]
-        manual_cmd = f"make worktree-remove BRANCH={branch}"
+        )
+        if safe_remove_script:
+            cleanup_cmd = ["python", str(safe_remove_script), str(worktree_path)]
+            manual_cmd = f"python {safe_remove_script} {worktree_path}"
+        else:
+            cleanup_cmd = ["make", "worktree-remove", f"BRANCH={branch}"]
+            manual_cmd = f"make worktree-remove BRANCH={branch}"
 
     result = run_cmd(cleanup_cmd, check=False)
 

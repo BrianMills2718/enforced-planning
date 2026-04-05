@@ -235,6 +235,126 @@ def test_finish_session_releases_clean_claim(tmp_path: Path, monkeypatch: pytest
     assert not (claims_dir / "codex_enforced-planning_plan-31-session-cli-enforcement.yaml").exists()
 
 
+def test_close_session_cleans_up_claimed_lane_atomically(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Session close should remove worktree, delete branch, and release claim together."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    repo_root = tmp_path / "repo"
+    worktree = tmp_path / "worktree"
+    repo_root.mkdir()
+    worktree.mkdir()
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+
+    session_lifecycle.start_session(
+        agent="codex",
+        project="enforced-planning",
+        scope="plan-42-atomic-closeout",
+        intent="implement atomic closeout lifecycle",
+        repo_root=str(repo_root),
+        worktree_path=str(worktree),
+        branch="plan-42-atomic-closeout",
+        broader_goal="Coordination Runtime Completion",
+        current_phase="atomic closeout proof",
+        plan_ref="Plan #42",
+        session_id="codex:test-session",
+        tracker_dir=trackers_dir,
+    )
+
+    calls: list[tuple[list[str], str | None]] = []
+
+    def _fake_run(cmd, cwd=None, capture_output=True, text=True, check=False):  # type: ignore[no-untyped-def]
+        calls.append((list(cmd), cwd))
+
+        class Result:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+
+        if cmd[:2] == ["git", "show-ref"]:
+            return Result()
+        if cmd[:3] == ["git", "worktree", "remove"]:
+            return Result()
+        if cmd[:3] == ["git", "branch", "-D"]:
+            return Result()
+        if cmd[:2] == ["git", "status"]:
+            return Result()
+        raise AssertionError(f"Unexpected command: {cmd}")
+
+    monkeypatch.setattr(session_lifecycle.subprocess, "run", _fake_run)
+
+    payload = session_lifecycle.close_session(
+        agent="codex",
+        project="enforced-planning",
+        scope="plan-42-atomic-closeout",
+        worktree_path=str(worktree),
+        branch="plan-42-atomic-closeout",
+    )
+
+    assert payload["action"] == "closed"
+    assert payload["worktree_action"] == "removed"
+    assert payload["branch_action"] == "deleted"
+    assert payload["released"] is True
+    assert not (claims_dir / "codex_enforced-planning_plan-42-atomic-closeout.yaml").exists()
+    assert any(cmd[:3] == ["git", "worktree", "remove"] for cmd, _ in calls)
+    assert any(cmd[:3] == ["git", "branch", "-D"] for cmd, _ in calls)
+
+
+def test_close_session_releases_claim_even_when_worktree_already_missing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Closeout reruns should still release the claim when cleanup partly already happened."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+
+    session_lifecycle.start_session(
+        agent="codex",
+        project="enforced-planning",
+        scope="plan-42-atomic-closeout",
+        intent="implement atomic closeout lifecycle",
+        repo_root=str(repo_root),
+        worktree_path=str(tmp_path / "missing-worktree"),
+        branch="plan-42-atomic-closeout",
+        broader_goal="Coordination Runtime Completion",
+        current_phase="rerun proof",
+        plan_ref="Plan #42",
+        session_id="codex:test-session",
+        tracker_dir=trackers_dir,
+    )
+
+    def _fake_run(cmd, cwd=None, capture_output=True, text=True, check=False):  # type: ignore[no-untyped-def]
+        class Result:
+            returncode = 1
+            stdout = ""
+            stderr = ""
+
+        if cmd[:2] == ["git", "show-ref"]:
+            return Result()
+        raise AssertionError(f"Unexpected command: {cmd}")
+
+    monkeypatch.setattr(session_lifecycle.subprocess, "run", _fake_run)
+
+    payload = session_lifecycle.close_session(
+        agent="codex",
+        project="enforced-planning",
+        scope="plan-42-atomic-closeout",
+        worktree_path=str(tmp_path / "missing-worktree"),
+        branch="plan-42-atomic-closeout",
+    )
+
+    assert payload["worktree_action"] == "already_missing"
+    assert payload["branch_action"] == "already_missing"
+    assert not (claims_dir / "codex_enforced-planning_plan-42-atomic-closeout.yaml").exists()
+
+
 def test_handoff_session_marks_lane_for_resume(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

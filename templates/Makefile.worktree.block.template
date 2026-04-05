@@ -6,6 +6,7 @@ WORKTREE_SESSION_START_SCRIPT := __WORKTREE_SCRIPT_ROOT__/../session_start.py
 WORKTREE_SESSION_HEARTBEAT_SCRIPT := __WORKTREE_SCRIPT_ROOT__/../session_heartbeat.py
 WORKTREE_SESSION_STATUS_SCRIPT := __WORKTREE_SCRIPT_ROOT__/../session_status.py
 WORKTREE_SESSION_FINISH_SCRIPT := __WORKTREE_SCRIPT_ROOT__/../session_finish.py
+WORKTREE_SESSION_CLOSE_SCRIPT := __WORKTREE_SCRIPT_ROOT__/../session_close.py
 WORKTREE_DIR ?= $(shell python "$(WORKTREE_CREATE_SCRIPT)" --repo-root . --print-default-worktree-dir)
 WORKTREE_START_POINT ?= HEAD
 WORKTREE_PROJECT ?= $(notdir $(CURDIR))
@@ -17,7 +18,7 @@ SESSION_DEPENDS ?=
 SESSION_STOP_CONDITIONS ?=
 SESSION_NOTE ?=
 
-.PHONY: worktree worktree-list worktree-remove session-start session-heartbeat session-status session-finish
+.PHONY: worktree worktree-list worktree-remove session-start session-heartbeat session-status session-finish session-close
 
 worktree:  ## Create claimed worktree (BRANCH=name TASK="..." [PLAN=N] [AGENT=name])
 ifndef BRANCH
@@ -152,6 +153,21 @@ endif
 		--worktree-path "$(WORKTREE_DIR)/$(BRANCH)" \
 		$(if $(SESSION_NOTE),--note "$(SESSION_NOTE)",)
 
+session-close:  ## Close the claimed lane for BRANCH=name: cleanup worktree + branch + claim together
+ifndef BRANCH
+	$(error BRANCH is required. Usage: make session-close BRANCH=plan-42-feature)
+endif
+ifndef WORKTREE_AGENT
+	$(error Unable to infer agent runtime. Set AGENT via WORKTREE_AGENT=codex|claude-code|openclaw)
+endif
+	@python "$(WORKTREE_SESSION_CLOSE_SCRIPT)" \
+		--agent "$(WORKTREE_AGENT)" \
+		--project "$(WORKTREE_PROJECT)" \
+		--scope "$(BRANCH)" \
+		--worktree-path "$(WORKTREE_DIR)/$(BRANCH)" \
+		--branch "$(BRANCH)" \
+		$(if $(SESSION_NOTE),--note "$(SESSION_NOTE)",)
+
 worktree-list:  ## Show claimed worktree coordination status
 	@if [ ! -f "$(WORKTREE_CLAIMS_SCRIPT)" ]; then \
 		echo "Missing worktree coordination module: $(WORKTREE_CLAIMS_SCRIPT)"; \
@@ -164,17 +180,10 @@ worktree-remove:  ## Safely remove worktree for BRANCH=name
 ifndef BRANCH
 	$(error BRANCH is required. Usage: make worktree-remove BRANCH=plan-42-feature)
 endif
-	@if [ ! -f "$(WORKTREE_REMOVE_SCRIPT)" ]; then \
-		echo "Missing worktree coordination module: $(WORKTREE_REMOVE_SCRIPT)"; \
-		echo "Install or sync the sanctioned worktree-coordination module before using make worktree-remove."; \
+	@if [ ! -f "$(WORKTREE_SESSION_CLOSE_SCRIPT)" ]; then \
+		echo "Missing session lifecycle module: $(WORKTREE_SESSION_CLOSE_SCRIPT)"; \
+		echo "Install or sync the sanctioned session lifecycle module before using make worktree-remove."; \
 		exit 1; \
 	fi
-	@python "$(WORKTREE_SESSION_FINISH_SCRIPT)" \
-		--agent "$(WORKTREE_AGENT)" \
-		--project "$(WORKTREE_PROJECT)" \
-		--scope "$(BRANCH)" \
-		--worktree-path "$(WORKTREE_DIR)/$(BRANCH)" \
-		--release-claim \
-		$(if $(SESSION_NOTE),--note "$(SESSION_NOTE)",)
-	@python "$(WORKTREE_REMOVE_SCRIPT)" "$(WORKTREE_DIR)/$(BRANCH)"
+	@$(MAKE) session-close BRANCH="$(BRANCH)" $(if $(SESSION_NOTE),SESSION_NOTE="$(SESSION_NOTE)",)
 # <<< META-PROCESS WORKTREE TARGETS <<<

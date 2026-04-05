@@ -81,6 +81,7 @@ def test_install_governed_repo_dry_run_reports_expected_actions(tmp_path: Path) 
     assert "install:scripts/meta/session_heartbeat.py" in payload["actions"]
     assert "install:scripts/meta/session_status.py" in payload["actions"]
     assert "install:scripts/meta/session_finish.py" in payload["actions"]
+    assert "install:scripts/meta/session_close.py" in payload["actions"]
     assert "install:scripts/meta/file_context.py" in payload["actions"]
     assert "install:scripts/meta/render_agents_md.py" in payload["actions"]
     assert "install:scripts/meta/check_agents_sync.py" in payload["actions"]
@@ -126,6 +127,7 @@ def test_install_governed_repo_write_bootstraps_minimum_repo_and_passes_audit(
     assert (tmp_path / "scripts" / "meta" / "session_heartbeat.py").exists()
     assert (tmp_path / "scripts" / "meta" / "session_status.py").exists()
     assert (tmp_path / "scripts" / "meta" / "session_finish.py").exists()
+    assert (tmp_path / "scripts" / "meta" / "session_close.py").exists()
     assert (tmp_path / "scripts" / "meta" / "file_context.py").exists()
     assert (tmp_path / "scripts" / "meta" / "render_agents_md.py").exists()
     assert (tmp_path / "scripts" / "meta" / "check_agents_sync.py").exists()
@@ -140,6 +142,7 @@ def test_install_governed_repo_write_bootstraps_minimum_repo_and_passes_audit(
     assert "session-heartbeat:" in makefile_text
     assert "session-status:" in makefile_text
     assert "session-finish:" in makefile_text
+    assert "session-close:" in makefile_text
     assert "scripts/meta/worktree-coordination/../check_coordination_claims.py" in makefile_text
     assert "scripts/meta/worktree-coordination/../session_start.py" in makefile_text
     assert "$(SCRIPTS_META)/worktree-coordination" not in makefile_text
@@ -257,7 +260,7 @@ def test_install_governed_repo_appends_makefile_meta_block_when_missing(
     assert "worktree:" in makefile_text
     assert "# >>> META-PROCESS WORKTREE TARGETS >>>" in makefile_text
     assert "# <<< META-PROCESS WORKTREE TARGETS <<<" in makefile_text
-    assert '--release --agent "$(WORKTREE_AGENT)" --project "$(WORKTREE_PROJECT)" --scope "$(BRANCH)"' in makefile_text
+    assert '$(MAKE) session-close BRANCH="$(BRANCH)"' in makefile_text
 
 
 def test_install_governed_repo_syncs_worktree_block_into_existing_meta_makefile(
@@ -346,6 +349,7 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
     assert sorted(payload["actions"]) == sorted(
         [
             "install:scripts/meta/check_coordination_claims.py",
+            "install:scripts/meta/session_close.py",
             "install:scripts/meta/session_finish.py",
             "install:scripts/meta/session_heartbeat.py",
             "install:scripts/meta/session_start.py",
@@ -363,6 +367,7 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
     assert (tmp_path / "scripts" / "meta" / "session_heartbeat.py").exists()
     assert (tmp_path / "scripts" / "meta" / "session_status.py").exists()
     assert (tmp_path / "scripts" / "meta" / "session_finish.py").exists()
+    assert (tmp_path / "scripts" / "meta" / "session_close.py").exists()
     assert (
         tmp_path / "scripts" / "meta" / "worktree-coordination" / "create_worktree.py"
     ).exists()
@@ -379,6 +384,7 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
     assert "worktree-remove:" in makefile_text
     assert "session-start:" in makefile_text
     assert "session-finish:" in makefile_text
+    assert "session-close:" in makefile_text
 
 
 def test_install_governed_repo_worktree_only_requires_existing_makefile(

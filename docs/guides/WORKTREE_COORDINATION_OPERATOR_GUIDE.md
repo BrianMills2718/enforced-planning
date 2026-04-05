@@ -9,8 +9,7 @@ and project-meta docs; do not treat them as competing operator handbooks.
 
 - Cross-project coordination claims: `~/.claude/coordination/claims/*.yaml`
 - Readable current-work snapshot: `~/.claude/coordination/active-work-registry.yaml`
-- Repo-local in-flight architectural decisions: each repo's `KNOWLEDGE.md`
-  `## Active Decisions`
+- Repo-local in-flight architectural decisions: `agent-memory recall 'active decisions' --project {project}` (ADR-0010: `agent_memory` is the canonical store; `KNOWLEDGE.md ## Active Decisions` is deprecated)
 - Repo opt-in switch: `meta-process.yaml`
 - Sanctioned repo-local worktree interface: `make worktree`,
   `make worktree-list`, `make worktree-remove`
@@ -309,7 +308,7 @@ What it does:
 - records who claimed what scope
 - exposes a readable current-work registry, including derived active lanes
 - lets repos block conflicting or unsafe worktree flows
-- makes in-flight architectural decisions visible through `KNOWLEDGE.md`
+- makes in-flight architectural decisions visible through `agent_memory` (query: `agent-memory recall 'active decisions' --project {project}`)
 
 What it does not do:
 
@@ -318,7 +317,7 @@ What it does not do:
 - automatic discovery of another agent mid-session
 
 Agents only see what has been written to claims, the active-work registry, or
-the repo's `KNOWLEDGE.md`. If those surfaces are stale, the agent view is stale.
+`agent_memory`. If those surfaces are stale, the agent view is stale.
 
 ## Repo Opt-In Contract
 

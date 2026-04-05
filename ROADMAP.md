@@ -80,7 +80,7 @@ A portable framework where:
 history, and promotion input. `review_truth_surfaces.py` remains only as a
 deprecated compatibility wrapper.
 
-### Phase 6: Cross-Repo Governance (GATE MET — READY TO START)
+### Phase 6: Cross-Repo Governance (COMPLETE — 2 items permanently deferred)
 
 **Gate:** Multiple repos using V2 relationships.yaml with inference + enforcement + agent verification. Ecosystem-wide dependency map.
 

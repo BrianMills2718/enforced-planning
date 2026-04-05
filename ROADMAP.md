@@ -150,6 +150,8 @@ and readable as bounded active lanes instead of only raw claims.
 | #40 | Overnight coordination implementation sprint | ✅ Complete |
 | #41 | Documentation authority governance and enforcement | ✅ Complete |
 | #42 | Atomic closeout and claimed worktree removal | ✅ Complete |
+| #43 | Publish-lane safety and dirty primary checkout handling | 🚧 In Progress |
+| #44 | Interactive startup mode and session-owned surface policy | 📋 Planned |
 
 **Deferred item blockers:**
 
@@ -163,17 +165,25 @@ and readable as bounded active lanes instead of only raw claims.
 
 ## What's Next (recommended priority order)
 
-1. **Queue/routing architecture freeze**
+1. **Publish-lane safety**
+   Land Plan #43 so publish worktrees fail loud when dirty primary checkouts
+   would otherwise create ambiguous control lanes.
+
+2. **Startup-mode truthfulness**
+   Land Plan #44 so interactive startup surfaces and autonomous routing follow
+   one explicit ownership policy.
+
+3. **Queue/routing architecture freeze**
    Land Plan #35 so future task-queue or assignment work builds on the canonical
    claim/session model instead of creating parallel identity systems.
 
-2. **Mac mini pilot governed-repo rollout**
+4. **Mac mini pilot governed-repo rollout**
    Execute the first controlled pilot from `docs/guides/MAC_MINI_CONTINUOUS_AUTOMATION_BOOTSTRAP.md` using a sanctioned worktree lane.
 
-3. **Future implementation slice: ecosystem status renderer and metrics collection**
+5. **Future implementation slice: ecosystem status renderer and metrics collection**
    Implement `make ecosystem-status`, `generated/ecosystem_status.json`, and rendered operator metrics on top of Plans #21 and #22.
 
-4. **Project-meta topic-research adoption**
+6. **Project-meta topic-research adoption**
    Apply the portable topic-research pattern in `project-meta/research_synthesis`
    with manifests, ADR links, and freshness metadata for high-value topics.
 

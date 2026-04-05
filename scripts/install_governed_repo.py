@@ -68,6 +68,7 @@ SYNC_SUPPORT_FILES: dict[str, str] = {
     "scripts/meta/sync_plan_status.py": "scripts/sync_plan_status.py",
     "scripts/meta/validate_plan.py": "scripts/validate_plan.py",
     "scripts/meta/worktree-coordination/create_worktree.py": "scripts/worktree-coordination/create_worktree.py",
+    "scripts/meta/worktree-coordination/create_publish_worktree.py": "scripts/worktree-coordination/create_publish_worktree.py",
     "scripts/meta/worktree-coordination/safe_worktree_remove.py": "scripts/worktree-coordination/safe_worktree_remove.py",
     "meta-process/templates/agents.md.template": "templates/agents.md.template",
 }
@@ -80,6 +81,7 @@ WORKTREE_ONLY_SYNC_SUPPORT_FILES: dict[str, str] = {
     "scripts/meta/session_start.py": "scripts/session_start.py",
     "scripts/meta/session_status.py": "scripts/session_status.py",
     "scripts/meta/worktree-coordination/create_worktree.py": "scripts/worktree-coordination/create_worktree.py",
+    "scripts/meta/worktree-coordination/create_publish_worktree.py": "scripts/worktree-coordination/create_publish_worktree.py",
     "scripts/meta/worktree-coordination/safe_worktree_remove.py": "scripts/worktree-coordination/safe_worktree_remove.py",
 }
 

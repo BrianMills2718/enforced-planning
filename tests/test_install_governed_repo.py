@@ -82,6 +82,7 @@ def test_install_governed_repo_dry_run_reports_expected_actions(tmp_path: Path) 
     assert "install:scripts/meta/session_status.py" in payload["actions"]
     assert "install:scripts/meta/session_finish.py" in payload["actions"]
     assert "install:scripts/meta/session_close.py" in payload["actions"]
+    assert "install:scripts/meta/worktree-coordination/create_publish_worktree.py" in payload["actions"]
     assert "install:scripts/meta/file_context.py" in payload["actions"]
     assert "install:scripts/meta/render_agents_md.py" in payload["actions"]
     assert "install:scripts/meta/check_agents_sync.py" in payload["actions"]
@@ -128,6 +129,9 @@ def test_install_governed_repo_write_bootstraps_minimum_repo_and_passes_audit(
     assert (tmp_path / "scripts" / "meta" / "session_status.py").exists()
     assert (tmp_path / "scripts" / "meta" / "session_finish.py").exists()
     assert (tmp_path / "scripts" / "meta" / "session_close.py").exists()
+    assert (
+        tmp_path / "scripts" / "meta" / "worktree-coordination" / "create_publish_worktree.py"
+    ).exists()
     assert (tmp_path / "scripts" / "meta" / "file_context.py").exists()
     assert (tmp_path / "scripts" / "meta" / "render_agents_md.py").exists()
     assert (tmp_path / "scripts" / "meta" / "check_agents_sync.py").exists()
@@ -355,6 +359,7 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
             "install:scripts/meta/session_start.py",
             "install:scripts/meta/session_status.py",
             "install:scripts/meta/worktree-coordination/create_worktree.py",
+            "install:scripts/meta/worktree-coordination/create_publish_worktree.py",
             "install:scripts/meta/worktree-coordination/safe_worktree_remove.py",
             "append:Makefile.worktree",
         ]
@@ -370,6 +375,13 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
     assert (tmp_path / "scripts" / "meta" / "session_close.py").exists()
     assert (
         tmp_path / "scripts" / "meta" / "worktree-coordination" / "create_worktree.py"
+    ).exists()
+    assert (
+        tmp_path
+        / "scripts"
+        / "meta"
+        / "worktree-coordination"
+        / "create_publish_worktree.py"
     ).exists()
     assert (
         tmp_path

@@ -11,10 +11,10 @@ This repo is currently running in explicit continuous-execution mode.
 - Do not stop at plan creation, green tests, or one completed commit.
 - Execute the active numbered queue continuously until all planned phases are
   complete or a documented stop condition is reached.
-- For the current overnight coordination sprint, the execution order is
-  mandatory unless a documented blocker changes it: Plan #33 → Plan #37 →
-  Plan #34 → Plan #39 → Plan #38. Do not opportunistically reshuffle this
-  sequence in chat or ad hoc commit messages.
+- For the current overnight coordination next-chain sprint, the execution order
+  is mandatory unless a documented blocker changes it: Plan #43 → Plan #44 →
+  Plan #35. Do not opportunistically reshuffle this sequence in chat or ad hoc
+  commit messages.
 - Work in sanctioned worktrees between merges/pushes rather than piling new
   overnight work onto a dirty primary checkout.
 - Commit every verified slice so rollback is cheap and exact.
@@ -72,6 +72,8 @@ Only two stop conditions are legitimate:
   - numbered implementation plan queue for this repo
 - `docs/guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md`
   - canonical definitions for claims, lanes, worktrees, and lane lifecycle
+- `docs/ops/SPRINT_2026_04_05_COORDINATION_NEXT_CHAIN.md`
+  - current overnight execution order for the next coordination batch
 - `docs/reference/CONFIG_REFERENCE.md`
   - authoritative config table, including which keys are not yet enforced
 

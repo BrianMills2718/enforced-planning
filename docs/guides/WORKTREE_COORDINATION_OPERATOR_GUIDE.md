@@ -171,6 +171,8 @@ Canonical lifecycle commands:
 - `session-finish`: refuse unsafe closeout and require clean or explicit handoff state
 - `session-close`: clean up a claimed lane end-to-end by removing the worktree,
   deleting the local branch, and releasing the claim together
+- `create_publish_worktree.py`: create a merge/push control worktree only when
+  the canonical main checkout is already clean
 
 Next lifecycle additions to keep the model truthful after crashes or intentional
 session closure:
@@ -288,6 +290,17 @@ manual steps.
 
 The sanctioned closeout flow is idempotent for already-missing worktree or
 branch state so partial cleanup can be rerun safely.
+
+## Publish-Lane Rule
+
+Publish lanes are control surfaces for shared-state actions such as merge and
+push. They should not be created from a dirty or unmerged canonical main
+checkout.
+
+- use `create_publish_worktree.py` for explicit publish-lane creation
+- do not improvise raw `git worktree add` from a dirty primary checkout
+- if the canonical main checkout is dirty, treat that as a publish blocker and
+  document it explicitly rather than creating an ambiguous publish lane
 
 ## What Coordination Does And Does Not Do
 

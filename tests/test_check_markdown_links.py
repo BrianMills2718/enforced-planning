@@ -73,3 +73,30 @@ def test_markdown_link_checker_expands_tilde_paths(tmp_path: Path, monkeypatch) 
     proc = _run_checker(a_md, tmp_path)
     assert proc.returncode == 0
     assert "Markdown link integrity OK" in proc.stdout
+
+
+def test_markdown_link_checker_falls_back_to_canonical_repo_root_for_worktree_links(tmp_path: Path) -> None:
+    """Missing worktree-local targets should resolve to the canonical repo root when safe."""
+
+    workspace = tmp_path / "workspace"
+    canonical_repo = workspace / "demo"
+    worktree_repo = workspace / "demo_worktrees" / "plan-x"
+    canonical_repo.mkdir(parents=True)
+    worktree_repo.mkdir(parents=True)
+
+    canonical_target = canonical_repo / "research_synthesis" / "guide.md"
+    canonical_target.parent.mkdir(parents=True, exist_ok=True)
+    canonical_target.write_text("# Guide\n", encoding="utf-8")
+
+    docs_dir = worktree_repo / "docs"
+    docs_dir.mkdir()
+    source_md = docs_dir / "generated.md"
+    source_md.write_text(
+        "# Generated\n\n[Guide](../research_synthesis/guide.md)\n",
+        encoding="utf-8",
+    )
+
+    proc = _run_checker(source_md, worktree_repo)
+
+    assert proc.returncode == 0
+    assert "Markdown link integrity OK" in proc.stdout

@@ -142,11 +142,11 @@ and readable as bounded active lanes instead of only raw claims.
 | #31 | Session CLI and governed-repo entrypoint enforcement | ✅ Complete |
 | #32 | Cross-tool session adapters and adoption rollout | ✅ Complete |
 | #33 | Assignment-layer session contract integration | 📋 Planned |
-| #34 | Weak-claim remediation and live-lane migration | 📋 Planned |
+| #34 | Weak-claim remediation and live-lane migration | ✅ Complete |
 | #35 | Queue-based assignment and session routing architecture | 📋 Planned |
-| #37 | Plan-bound session identity and resume lifecycle | 📋 Planned |
+| #37 | Plan-bound session identity and resume lifecycle | ✅ Complete |
 | #38 | Authority-drift reconciliation gates | 📋 Planned |
-| #39 | Worktree-aware markdown-link validation and root resolution | 📋 Planned |
+| #39 | Worktree-aware markdown-link validation and root resolution | ✅ Complete |
 | #40 | Overnight coordination implementation sprint | 🚧 In Progress |
 
 **Deferred item blockers:**

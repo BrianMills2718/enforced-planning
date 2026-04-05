@@ -1,6 +1,6 @@
 # Plan #34: Weak-Claim Remediation And Live-Lane Migration
 
-**Status:** 📋 Planned
+**Status:** ✅ Complete
 **Type:** implementation
 **Priority:** High
 **Blocked By:** Plans #29-32
@@ -19,6 +19,13 @@ Active high-value lanes are either:
 - hydrated onto the session lifecycle model
 - explicitly handed off
 - or pruned if the lifecycle truth is already broken
+
+## Outcome
+
+This remediation lane closed cleanly without manual claim edits. After Plans #33
+and #37 landed, the live registry no longer showed unattended weak or stale
+lanes, so no additional remediation commands were required for the current
+backlog.
 
 ## Decisions Pre-Made
 

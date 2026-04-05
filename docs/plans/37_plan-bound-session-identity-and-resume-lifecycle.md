@@ -1,6 +1,6 @@
 # Plan #37: Plan-Bound Session Identity And Resume Lifecycle
 
-**Status:** 📋 Planned
+**Status:** ✅ Complete
 **Type:** implementation
 **Priority:** High
 **Blocked By:** Plans #29-32
@@ -101,3 +101,10 @@ heartbeat expiry and a mandatory plan anchor for every resumed lane.
 This plan intentionally treats "resume" as a first-class lifecycle action. That
 is the missing piece between heartbeat-based liveness and trustworthy
 long-running execution.
+
+Implemented on 2026-04-05:
+
+- mandatory plan-bound session start with explicit unplanned override
+- duplicate live-lane prevention on `project + plan_ref + scope`
+- `session-resume`, `session-handoff`, and `session-abandon`
+- recovery-action reporting in session status

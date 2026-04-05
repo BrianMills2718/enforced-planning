@@ -34,9 +34,9 @@ still the active owner when the sprint reaches Plan #38, either:
 
 - [x] Sprint order frozen in Plan #40
 - [x] Plan #33 landed
-- [ ] Plan #37 landed
-- [ ] Plan #34 landed
-- [ ] Plan #39 landed
+- [x] Plan #37 landed
+- [x] Plan #34 landed
+- [x] Plan #39 landed
 - [ ] Plan #38 landed or explicitly blocked
 
 ## Notes
@@ -44,4 +44,7 @@ still the active owner when the sprint reaches Plan #38, either:
 - Continuous execution means moving to the next numbered slice after each clean
   landing, not stopping at one successful commit.
 - This file is the durable handoff surface if context compresses mid-sprint.
-- Current active slice: Plan #37 in `enforced-planning_worktrees/plan-37-session-recovery-implementation`.
+- Plan #34 closeout result: no manual remediation was needed because the live
+  registry became healthy after Plans #33 and #37 landed.
+- Current active slice: Plan #38 reassessment against the still-active Plan #24
+  authority-governance lane.

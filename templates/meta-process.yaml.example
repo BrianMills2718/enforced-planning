@@ -56,11 +56,6 @@ meta_process:
       paths: []               # specific paths to check (empty = project root)
       whitelist: ".vulture_whitelist.py"
 
-    type_checking:
-      enabled: true
-      # mypy strictness level
-      strict: true
-
   # =============================================================================
   # CI CONFIGURATION
   # =============================================================================

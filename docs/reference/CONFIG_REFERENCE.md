@@ -3,7 +3,7 @@
 Complete table of every key in `meta-process.yaml`, which script reads it, and
 the default behavior when absent.
 
-**Source of truth:** `templates/meta-process.yaml.example`
+**Live starter source of truth:** `templates/meta-process.yaml.example`
 
 Consumer-facing quickstarts intentionally show only keys with script effect
 today. The template also carries planned/advisory vocabulary, which is labeled

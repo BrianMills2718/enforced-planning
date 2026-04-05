@@ -90,9 +90,14 @@ This is consistent with the agent_ops vocabulary: `agent_ops:DecisionRecord` "se
 episodic and procedural memory formation" — it belongs in the memory store, not a
 markdown coordination file. `agent_ops:ScopeClaim` is already implemented as claims YAML.
 
-**Known gap**: `store_decision()` does not yet exist in agent_memory. Until it is added,
-decisions are stored as SemanticMemory with `category="decision"` tag. Plan to add
-`store_decision()` is tracked in agent_memory backlog.
+**Resolved (2026-04-05)**: `store_decision()` is now implemented in agent_memory
+(Plan #01). Usage:
+```python
+from agent_memory import store_decision
+store_decision(title="...", decision="...", rationale="...", project="repo-name")
+```
+CLI: `agent-memory store-decision --title "..." --decision "..." --rationale "..."`
+Retrieval: `agent-memory recall 'active decisions' --project {project}`
 
 ### 4. agent_ops vocabulary is the semantic model
 
@@ -116,8 +121,7 @@ agent_ops type names.
   root CLAUDE.md must be updated — see Plan A)
 - Agents working in repos without agent_memory MCP available need a fallback (read
   historical KNOWLEDGE.md if present; write via CLI fallback)
-- `store_decision()` needs to be implemented in agent_memory to fully supersede the
-  `## Active Decisions` markdown pattern
+- `store_decision()` is now implemented (agent_memory Plan #01 — resolved 2026-04-05)
 - governed_repo_audit.py should check for KNOWLEDGE.md presence as a historical signal
   (does this repo have knowledge to import?) but not as a required live artifact
 

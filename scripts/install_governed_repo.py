@@ -54,6 +54,10 @@ SYNC_SUPPORT_FILES: dict[str, str] = {
     "enforced_planning/plan_validation.py": "enforced_planning/plan_validation.py",
     "scripts/check_doc_coupling.py": "scripts/check_doc_coupling.py",
     "scripts/check_markdown_links.py": "scripts/check_markdown_links.py",
+    "scripts/meta/session_finish.py": "scripts/session_finish.py",
+    "scripts/meta/session_heartbeat.py": "scripts/session_heartbeat.py",
+    "scripts/meta/session_start.py": "scripts/session_start.py",
+    "scripts/meta/session_status.py": "scripts/session_status.py",
     "scripts/sync_plan_status.py": "scripts/sync_plan_status.py",
     "scripts/meta/check_coordination_claims.py": "scripts/check_coordination_claims.py",
     "scripts/meta/check_agents_sync.py": "scripts/check_agents_sync.py",
@@ -69,6 +73,10 @@ SYNC_SUPPORT_FILES: dict[str, str] = {
 
 WORKTREE_ONLY_SYNC_SUPPORT_FILES: dict[str, str] = {
     "scripts/meta/check_coordination_claims.py": "scripts/check_coordination_claims.py",
+    "scripts/meta/session_finish.py": "scripts/session_finish.py",
+    "scripts/meta/session_heartbeat.py": "scripts/session_heartbeat.py",
+    "scripts/meta/session_start.py": "scripts/session_start.py",
+    "scripts/meta/session_status.py": "scripts/session_status.py",
     "scripts/meta/worktree-coordination/create_worktree.py": "scripts/worktree-coordination/create_worktree.py",
     "scripts/meta/worktree-coordination/safe_worktree_remove.py": "scripts/worktree-coordination/safe_worktree_remove.py",
 }

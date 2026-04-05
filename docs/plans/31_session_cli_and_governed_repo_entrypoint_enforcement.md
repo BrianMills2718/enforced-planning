@@ -1,6 +1,6 @@
 # Plan #31: Session CLI And Governed-Repo Entrypoint Enforcement
 
-**Status:** 📋 Planned
+**Status:** ✅ Complete
 **Type:** implementation
 **Priority:** High
 **Blocked By:** Plans #29 and #30
@@ -36,6 +36,10 @@ repo opts in.
 - `tests/test_session_cli.py`
 - `tests/test_install_governed_repo.py`
 - `tests/test_audit_governed_repo.py`
+- `scripts/meta/session_start.py`
+- `scripts/meta/session_heartbeat.py`
+- `scripts/meta/session_status.py`
+- `scripts/meta/session_finish.py`
 
 ## Decisions Pre-Made
 
@@ -63,3 +67,16 @@ repo opts in.
 | Command | What It Verifies |
 |---|---|
 | `PYTHONPATH=. pytest -q tests/test_session_cli.py tests/test_install_governed_repo.py tests/test_audit_governed_repo.py` | Session lifecycle CLI and governed-repo enforcement work together |
+| `python scripts/self_test.py --docs` | Plan and operator docs stay coherent after lifecycle rollout |
+
+## Completion
+
+- [x] Canonical lifecycle CLI entrypoints exist
+- [x] Governed repos can install or sync the lifecycle entrypoints
+- [x] The sanctioned repo interface can require a live session contract
+- [x] Finish/cleanup flows integrate with session closeout
+- [x] Installer and audit surfaces detect missing lifecycle wiring
+
+## Verification
+
+- `PYTHONPATH=. pytest -q tests/test_session_cli.py tests/test_install_governed_repo.py tests/test_audit_governed_repo.py`

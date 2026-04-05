@@ -193,18 +193,35 @@ def _write_worktree_coordination_surface(repo_root: Path) -> None:
         '"""stub."""\n',
         encoding="utf-8",
     )
+    for relpath in (
+        "scripts/meta/session_start.py",
+        "scripts/meta/session_heartbeat.py",
+        "scripts/meta/session_status.py",
+        "scripts/meta/session_finish.py",
+    ):
+        file_path = repo_root / relpath
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        file_path.write_text('"""stub."""\n', encoding="utf-8")
 
     (repo_root / "Makefile").write_text(
         "\n".join(
             [
                 "# === META-PROCESS TARGETS ===",
-                ".PHONY: worktree worktree-list worktree-remove",
+                ".PHONY: worktree worktree-list worktree-remove session-start session-heartbeat session-status session-finish",
                 "worktree:",
                 "\t@echo create",
                 "worktree-list:",
                 "\t@echo list",
                 "worktree-remove:",
                 "\t@echo remove",
+                "session-start:",
+                "\t@echo start",
+                "session-heartbeat:",
+                "\t@echo heartbeat",
+                "session-status:",
+                "\t@echo status",
+                "session-finish:",
+                "\t@echo finish",
                 "",
             ]
         ),

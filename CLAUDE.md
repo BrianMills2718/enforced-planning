@@ -97,6 +97,10 @@ python scripts/check_plan_capabilities.py docs/plans/
 python scripts/render_agents_md.py --stdout
 python scripts/sync_plan_status.py
 python scripts/complete_plan.py --plan N
+python scripts/session_start.py --help
+python scripts/session_heartbeat.py --help
+python scripts/session_status.py --help
+python scripts/session_finish.py --help
 
 # Tests
 pytest -q
@@ -112,6 +116,8 @@ make test
    plan status changes.
 5. Run `python scripts/self_test.py` before landing documentation or installer
    changes.
+6. Treat the session lifecycle commands as part of sanctioned execution, not
+   optional helper scripts.
 
 ## Notes
 

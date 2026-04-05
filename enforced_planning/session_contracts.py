@@ -280,3 +280,52 @@ def write_session_tracker(
         encoding="utf-8",
     )
     return path
+
+
+def read_session_tracker(path: Path) -> dict[str, Any]:
+    """Load one tracker artifact and fail loud if the structure is invalid."""
+
+    raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if not isinstance(raw, dict):
+        raise ValueError(f"Session tracker at {path} must be a YAML mapping")
+    return raw
+
+
+def update_session_tracker(
+    path: Path,
+    *,
+    current_phase: str | None = None,
+    intended_next_phases: list[str] | None = None,
+    depends_on_repos: list[str] | None = None,
+    requires_shared_infra_changes: bool | None = None,
+    stop_conditions: list[str] | None = None,
+    notes: str | None = None,
+    updated_at: str | None = None,
+) -> dict[str, Any]:
+    """Update one existing tracker artifact in place and return the payload."""
+
+    payload = read_session_tracker(path)
+    tracker = payload.get("tracker")
+    timestamps = payload.get("timestamps")
+    if not isinstance(tracker, dict) or not isinstance(timestamps, dict):
+        raise ValueError(f"Session tracker at {path} is missing tracker/timestamps sections")
+
+    if current_phase is not None:
+        tracker["current_phase"] = _require_text(current_phase, field_name="current_phase")
+    if intended_next_phases is not None:
+        tracker["intended_next_phases"] = _clean_string_list(intended_next_phases)
+    if depends_on_repos is not None:
+        tracker["depends_on_repos"] = _clean_string_list(depends_on_repos)
+    if requires_shared_infra_changes is not None:
+        tracker["requires_shared_infra_changes"] = requires_shared_infra_changes
+    if stop_conditions is not None:
+        tracker["stop_conditions"] = _clean_string_list(stop_conditions)
+    if notes is not None:
+        tracker["notes"] = notes.strip()
+
+    timestamps["updated_at"] = updated_at or datetime.now(timezone.utc).isoformat()
+    path.write_text(
+        yaml.safe_dump(payload, default_flow_style=False, sort_keys=False),
+        encoding="utf-8",
+    )
+    return payload

@@ -159,6 +159,13 @@ Important rule: do not name sessions after the immediate local task. A branch
 like `plan-31-hygiene-gate` is fine for git, but the session name should derive
 from the broader goal, such as `digimon-truthful-controller-grounding`.
 
+Canonical lifecycle commands:
+
+- `session-start`: create or refresh the claim-linked session contract
+- `session-heartbeat`: refresh the lease and tracker timestamp
+- `session-status`: show live sessions derived from claims plus trackers
+- `session-finish`: refuse unsafe closeout and require clean or explicit handoff state
+
 ## Session Safety
 
 Some agent runtimes keep a persistent shell working directory. In those

@@ -160,6 +160,10 @@ WORKTREE_TARGETS: tuple[str, ...] = (
     "worktree",
     "worktree-list",
     "worktree-remove",
+    "session-start",
+    "session-heartbeat",
+    "session-status",
+    "session-finish",
 )
 
 WORKTREE_SCRIPT_PATHS: dict[str, tuple[str, ...]] = {
@@ -168,6 +172,10 @@ WORKTREE_SCRIPT_PATHS: dict[str, tuple[str, ...]] = {
         "scripts/meta/check_coordination_claims.py",
         "scripts/meta/worktree-coordination/check_claims.py",
     ),
+    "session_start": ("scripts/meta/session_start.py",),
+    "session_heartbeat": ("scripts/meta/session_heartbeat.py",),
+    "session_status": ("scripts/meta/session_status.py",),
+    "session_finish": ("scripts/meta/session_finish.py",),
     "safe_worktree_remove": ("scripts/meta/worktree-coordination/safe_worktree_remove.py",),
 }
 

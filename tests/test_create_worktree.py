@@ -276,6 +276,46 @@ def test_create_worktree_rejects_conflicting_scoped_write_claim(tmp_path: Path) 
     assert not worktree_path.exists()
 
 
+def test_verify_clean_main_root_reports_dirty_primary_checkout(tmp_path: Path) -> None:
+    """Publish-lane creation should fail loud when the canonical main checkout is dirty."""
+
+    module = _load_module()
+    repo_root = tmp_path / "repo"
+    _init_temp_repo(repo_root)
+    (repo_root / "README.md").write_text("dirty\n", encoding="utf-8")
+
+    ok, message = module.verify_clean_main_root(repo_root)
+
+    assert not ok
+    assert "canonical main checkout is not clean" in message
+    assert "classification=main-root-dirty" in message
+
+
+def test_create_worktree_blocks_dirty_main_root_when_required(tmp_path: Path) -> None:
+    """Optional main-root cleanliness enforcement should block publish worktree creation."""
+
+    module = _load_module()
+    repo_root = tmp_path / "repo"
+    worktree_path = tmp_path / "repo_worktrees" / "publish-lane"
+    _init_temp_repo(repo_root)
+    (repo_root / "README.md").write_text("dirty\n", encoding="utf-8")
+
+    result = module.create_worktree(
+        repo_root=repo_root,
+        worktree_path=worktree_path,
+        branch="publish-lane",
+        start_point="HEAD",
+        split_brain_threshold=5,
+        keep_failed_worktree=False,
+        require_clean_main_root=True,
+    )
+
+    assert not result.ok
+    assert result.classification == "main-root-dirty"
+    assert "canonical main checkout is not clean" in result.message
+    assert not worktree_path.exists()
+
+
 
 def test_create_worktree_allows_matching_scoped_write_claim(tmp_path: Path) -> None:
     """Strict worktree enforcement should allow a matching non-conflicting scoped claim."""

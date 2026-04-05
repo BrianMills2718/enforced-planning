@@ -61,6 +61,17 @@ class WorktreeCreationResult:
     coordination_message: str | None
 
 
+@dataclass(frozen=True)
+class CheckoutStateSummary:
+    """Summarize whether one checkout is safe to use as a control surface."""
+
+    clean: bool
+    unmerged: bool
+    entries: list[StatusEntry]
+    modified_count: int
+    untracked_count: int
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     """Parse CLI arguments for worktree creation."""
     parser = argparse.ArgumentParser(description=__doc__)
@@ -87,6 +98,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--require-write-claim",
         action="store_true",
         help="Require a matching scoped write claim before creating the worktree.",
+    )
+    parser.add_argument(
+        "--require-clean-main-root",
+        action="store_true",
+        help="Require the canonical main checkout to be clean before creating the worktree.",
     )
     parser.add_argument("--claim-agent", help="Agent name expected on the scoped write claim.")
     parser.add_argument(
@@ -237,6 +253,72 @@ def classify_summary(summary: WorktreeStatusSummary) -> str:
     return "dirty"
 
 
+def inspect_checkout_state(checkout_path: Path) -> CheckoutStateSummary:
+    """Inspect whether one checkout is safe to use as a control surface."""
+
+    result = run_git(
+        ["status", "--porcelain", "--untracked-files=all"],
+        cwd=checkout_path,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(
+            "Unable to inspect checkout status:\n"
+            f"{result.stderr or result.stdout}".strip()
+        )
+
+    entries: list[StatusEntry] = []
+    modified_count = 0
+    untracked_count = 0
+    unmerged = False
+
+    for raw_line in result.stdout.splitlines():
+        if not raw_line:
+            continue
+        if raw_line.startswith("?? "):
+            entries.append(StatusEntry(code="??", path=raw_line[3:]))
+            untracked_count += 1
+            continue
+        code = raw_line[:2]
+        path = raw_line[3:]
+        entries.append(StatusEntry(code=code, path=path))
+        if code in {"DD", "AU", "UD", "UA", "DU", "AA", "UU"}:
+            unmerged = True
+        else:
+            modified_count += 1
+
+    return CheckoutStateSummary(
+        clean=len(entries) == 0,
+        unmerged=unmerged,
+        entries=entries,
+        modified_count=modified_count,
+        untracked_count=untracked_count,
+    )
+
+
+def verify_clean_main_root(repo_root: Path) -> tuple[bool, str]:
+    """Require the canonical main checkout to be clean before publish-worktree creation."""
+
+    main_repo_root = resolve_main_repo_root(repo_root)
+    summary = inspect_checkout_state(main_repo_root)
+    if summary.clean:
+        return True, f"Canonical main checkout is clean: {main_repo_root}"
+
+    classification = "main-root-unmerged" if summary.unmerged else "main-root-dirty"
+    sample_entries = ", ".join(
+        f"{entry.code} {entry.path}" for entry in summary.entries[:8]
+    )
+    return (
+        False,
+        "Publish worktree creation blocked: canonical main checkout is not clean. "
+        f"classification={classification}; "
+        f"path={main_repo_root}; "
+        f"modified={summary.modified_count}; "
+        f"untracked={summary.untracked_count}; "
+        f"sample=[{sample_entries}]. "
+        "Do not create a publish lane from a dirty primary checkout; either clear the blocker first or keep the verified branch unpublished on trunk.",
+    )
+
+
 def cleanup_failed_worktree(
     repo_root: Path,
     worktree_path: Path,
@@ -381,6 +463,7 @@ def create_worktree(
     claim_project: str | None = None,
     claim_write_paths: list[str] | None = None,
     claims_dir: Path | None = None,
+    require_clean_main_root: bool = False,
 ) -> WorktreeCreationResult:
     """Create a worktree, inspect it immediately, and fail loud on unsafe state."""
     repo_root = repo_root.resolve()
@@ -408,6 +491,23 @@ def create_worktree(
                 classification="coordination-error",
                 cleanup_performed=False,
                 message=coordination_message,
+                status=None,
+                coordination_checked=coordination_checked,
+                coordination_message=coordination_message,
+            )
+
+    if require_clean_main_root:
+        clean_main_root, root_message = verify_clean_main_root(repo_root)
+        if not clean_main_root:
+            return WorktreeCreationResult(
+                ok=False,
+                repo_root=str(repo_root),
+                worktree_path=str(worktree_path),
+                branch=branch,
+                created_branch=False,
+                classification="main-root-dirty",
+                cleanup_performed=False,
+                message=root_message,
                 status=None,
                 coordination_checked=coordination_checked,
                 coordination_message=coordination_message,
@@ -558,6 +658,7 @@ def main(argv: list[str] | None = None) -> int:
             claim_project=args.claim_project,
             claim_write_paths=args.claim_write_path,
             claims_dir=claims_dir,
+            require_clean_main_root=args.require_clean_main_root,
         )
     except (RuntimeError, ValueError) as exc:
         error_result = WorktreeCreationResult(

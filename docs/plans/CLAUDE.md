@@ -47,6 +47,8 @@ See `ROADMAP.md` for the full phase map and recommended priority order.
 | 40 | Overnight Coordination Implementation Sprint (`40_overnight-coordination-implementation-sprint.md`) | High | ✅ Complete | Freeze slice order, blocker handling, and sprint-closeout rules for the current coordination push |
 | 41 | Documentation Authority Governance And Enforcement (`41_doc-authority-governance-and-enforcement.md`) | High | ✅ Complete | Freeze the canonical authority model, schema, and rollout shape for follow-on enforcement |
 | 42 | Atomic Closeout And Claimed Worktree Removal (`42_atomic-closeout-and-claimed-worktree-removal.md`) | High | ✅ Complete | Make claimed-lane cleanup one sanctioned operation instead of split release/remove steps |
+| 43 | Publish-Lane Safety And Dirty Primary Checkout Handling (`43_publish-lane-safety-and-dirty-primary-checkout-handling.md`) | High | 🚧 In Progress | Make publish worktree creation fail loud when the canonical primary checkout is unsafe |
+| 44 | Interactive Startup Mode And Session-Owned Surface Policy (`44_interactive-startup-mode-and-session-owned-surface-policy.md`) | High | 📋 Planned | Distinguish interactive startup truth from autonomous routing/ownership semantics |
 
 ## Status Key
 

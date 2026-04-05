@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import posixpath
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
@@ -32,6 +33,11 @@ DEFAULT_TTL_HOURS = 24  # Sprints run 24h; 2h caused false-expiry conflicts mid-
 LIVE_STATUSES = {"active", "blocked", "handoff"}
 CLAIM_TYPES = {"program", "write", "review", "research"}
 STRICT_LIVE_METADATA_CLAIM_TYPES = {"program", "write", "research"}
+SESSION_ENV_KEYS = {
+    "codex": ("CODEX_THREAD_ID",),
+    "claude-code": ("CLAUDE_SESSION_ID", "CLAUDE_CODE_SSE_PORT"),
+    "openclaw": ("OPENCLAW_SESSION_ID", "OPENCLAW_RUN_ID"),
+}
 
 
 @dataclass(frozen=True)
@@ -154,6 +160,25 @@ def validate_claim_for_creation(claim: ClaimRecord) -> None:
         f"Active {claim.claim_type} claims require {required_text}. "
         "Legacy claims remain readable, but new live claims must declare real ownership."
     )
+
+
+def resolve_session_id(agent: str, explicit_session_id: str | None = None) -> str | None:
+    """Return an explicit or environment-derived session identifier.
+
+    The result is scoped to the named agent so one tool runtime does not
+    accidentally borrow another tool's ambient session marker.
+    """
+
+    if explicit_session_id:
+        return explicit_session_id
+    for key in SESSION_ENV_KEYS.get(agent, ()):
+        raw_value = os.environ.get(key, "").strip()
+        if not raw_value:
+            continue
+        if agent == "claude-code" and key == "CLAUDE_CODE_SSE_PORT":
+            return f"claude-code:sse:{raw_value}"
+        return f"{agent}:{raw_value}"
+    return None
 
 
 def _safe_string_list(value: Any) -> list[str]:
@@ -440,6 +465,7 @@ def build_candidate_claim(
     """Build a normalized candidate claim from CLI or test inputs."""
     normalized_write_paths = [_normalize_repo_path(path) for path in (write_paths or [])]
     normalized_read_paths = [_normalize_repo_path(path) for path in (read_paths or [])]
+    resolved_session_id = resolve_session_id(agent, session_id)
     resolved_claim_type = claim_type or ("write" if normalized_write_paths else "program")
     if resolved_claim_type not in CLAIM_TYPES:
         raise ValueError(f"Unsupported claim type: {resolved_claim_type}")
@@ -457,7 +483,7 @@ def build_candidate_claim(
         read_paths=normalized_read_paths,
         worktree_path=worktree_path,
         branch=branch,
-        session_id=session_id,
+        session_id=resolved_session_id,
         status=status,
         updated_at=updated_at,
         parent_scope=parent_scope,
@@ -531,6 +557,61 @@ def create_claim(
     )
 
 
+def hydrate_missing_session_ids(
+    *,
+    agent: str,
+    project: str,
+    session_id: str | None = None,
+    scope: str | None = None,
+    branch: str | None = None,
+) -> tuple[int, list[str], str]:
+    """Fill in missing session IDs for matching live claims.
+
+    This is an explicit remediation tool for older live claims that were created
+    before automatic session capture was wired into the v2 claim surface.
+    """
+
+    resolved_session_id = resolve_session_id(agent, session_id)
+    if not resolved_session_id:
+        raise ValueError(
+            "Unable to resolve a session ID. Pass --session-id explicitly or run from a supported tool runtime."
+        )
+
+    if not CLAIMS_DIR.exists():
+        return 0, [], resolved_session_id
+
+    updated_scopes: list[str] = []
+    now = datetime.now(timezone.utc).isoformat()
+    for claim_file in CLAIMS_DIR.glob("*.yaml"):
+        try:
+            data = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if not isinstance(data, dict):
+            continue
+        claim = normalize_claim(data, source_file=str(claim_file))
+        if claim is None or not claim.is_live():
+            continue
+        if claim.agent != agent:
+            continue
+        if project not in claim.projects:
+            continue
+        if scope and claim.scope != scope:
+            continue
+        if branch and claim.branch != branch:
+            continue
+        if claim.session_id:
+            continue
+        data["session_id"] = resolved_session_id
+        data["updated_at"] = now
+        claim_file.write_text(
+            yaml.safe_dump(data, default_flow_style=False, sort_keys=False),
+            encoding="utf-8",
+        )
+        updated_scopes.append(claim.scope)
+    return len(updated_scopes), sorted(updated_scopes), resolved_session_id
+
+
 def release_claim(agent: str, project: str, scope: str) -> tuple[bool, str]:
     """Release an existing claim."""
     filename = _claim_filename(agent, project, scope)
@@ -568,6 +649,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     group.add_argument("--release", action="store_true", help="Release an existing claim")
     group.add_argument("--list", action="store_true", help="List all active claims")
     group.add_argument("--prune", action="store_true", help="Remove expired claims")
+    group.add_argument(
+        "--hydrate-session-ids",
+        action="store_true",
+        help="Fill in missing session_id metadata for matching live claims.",
+    )
 
     parser.add_argument("--agent", help="Agent brain name (claude-code, codex, openclaw)")
     parser.add_argument("--project", help="Project name")
@@ -732,6 +818,38 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps({"pruned": removed}, indent=2))
         else:
             print(f"Expired claims pruned: {removed}")
+        return 0
+
+    if args.hydrate_session_ids:
+        if not all([args.agent, args.project]):
+            raise SystemExit("--hydrate-session-ids requires --agent and --project")
+        try:
+            updated_count, updated_scopes, resolved_session_id = hydrate_missing_session_ids(
+                agent=args.agent,
+                project=args.project,
+                session_id=args.session_id,
+                scope=args.scope,
+                branch=args.branch,
+            )
+        except ValueError as exc:
+            if args.json:
+                print(json.dumps({"ok": False, "message": str(exc)}, indent=2))
+            else:
+                print(str(exc))
+            return 1
+        payload = {
+            "ok": True,
+            "updated_count": updated_count,
+            "updated_scopes": updated_scopes,
+            "session_id": resolved_session_id,
+        }
+        if args.json:
+            print(json.dumps(payload, indent=2))
+        else:
+            print(
+                f"Hydrated {updated_count} claim(s) for {args.agent}:{args.project} "
+                f"with session_id={resolved_session_id}"
+            )
         return 0
 
     return 0

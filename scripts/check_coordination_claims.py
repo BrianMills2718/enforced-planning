@@ -65,6 +65,12 @@ def claim_health_status(claim: ClaimRecord) -> str:
     return _impl.claim_health_status(claim)
 
 
+def hydrate_missing_session_ids(*args: Any, **kwargs: Any) -> tuple[int, list[str], str]:
+    """Delegate session-id hydration while honoring script-level CLAIMS_DIR overrides."""
+    _sync_runtime_config()
+    return _impl.hydrate_missing_session_ids(*args, **kwargs)
+
+
 def create_claim(*args: Any, **kwargs: Any) -> tuple[bool, str]:
     """Delegate claim creation while honoring script-level CLAIMS_DIR overrides."""
     _sync_runtime_config()

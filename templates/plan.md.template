@@ -31,10 +31,13 @@
 ## References Reviewed
 
 > **REQUIRED:** Cite specific code/docs reviewed before planning.
+> For any project with prior session history, run memory recall first:
+> `agent-memory recall '{topic}' --project {project}` (ADR-0010)
 
 - `src/example.py:45-89` - existing implementation
 - `docs/architecture/current/example.md` - current design
 - `CLAUDE.md` - project conventions
+- Memory context: `agent-memory recall '{topic}' --project {project}` — N findings
 
 ---
 

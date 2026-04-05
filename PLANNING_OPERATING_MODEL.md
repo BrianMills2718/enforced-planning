@@ -81,7 +81,7 @@ provided it records a durable architectural choice.
 | Questions | What do we need to verify first? | Investigation | Surface unknowns before planning |
 | Investigation memos | What did we learn when we looked? | ADR or plan | Dated, question-specific, usually immutable |
 | Topic research syntheses | What reusable conclusions already exist on this topic? | ADR, capability doc, or plan | Living topic memory; links investigations, prior art, and freshness triggers |
-| Current-state assessment | What exists now? | Gap analysis | Critical for legacy repos |
+| Current-state assessment | What exists now? | Gap analysis | Critical for legacy repos. Must include agent-memory recall for repos with prior session history (ADR-0010). |
 | Gap analysis | What delta matters now? | Roadmap or plan | Can be repeated throughout project life |
 | Capabilities / boundary docs / PRD surfaces | What enduring capability or contract are we shaping? | Roadmap | Cross-project work should define this early |
 | Roadmap / phases | What major gates and sequence matter? | Plan | Can be lightweight in small repos |
@@ -106,6 +106,11 @@ These are hard ordering rules:
   research basis for the slice or explicit research skip.
 - No implementation without declared required tests and acceptance criteria.
 - No closeout without verification evidence.
+- **No current-state assessment without a memory recall step.** For any project
+  with prior session history, run `agent-memory recall '{topic}' --project
+  {project}` (or equivalent MCP call) before writing the assessment. Undiscovered
+  operational findings from prior sessions are a correctness risk, not a
+  convenience. (ADR-0010)
 
 ### Recommended sequencing
 
@@ -175,9 +180,12 @@ For a new system or major new subsystem, use this order:
 
 For an existing repo, bootstrap in this order:
 
-1. Investigate the current implementation and documentation.
+1. Investigate the current implementation and documentation. **Run `agent-memory
+   recall '{topic}' --project {project}` first** — prior session findings are
+   source material, not noise.
 2. Write the investigation memo(s) that preserve what was learned.
-3. Write a current-state assessment.
+3. Write a current-state assessment (requires memory recall — see Strict
+   Dependencies).
 4. Define the north-star or intended target model.
 5. Run gap analysis against current vs target.
 6. Write or refresh the relevant topic research synthesis when the findings

@@ -149,7 +149,10 @@ All three conditions green as of 2026-04-04 overnight sprint:
 4. **Plan #22: Framework self-measurement and ROI**
    Define metrics that show whether the framework is actually catching drift and improving adoption outcomes.
 
-5. **Project-meta topic-research adoption**
+5. **Plan #23: Mac mini transfer and continuous automation bootstrap**
+   Use the verified installer/audit path and the new Phase 8 queue to prepare the first controlled Mac mini rollout.
+
+6. **Project-meta topic-research adoption**
    Apply the portable topic-research pattern in `project-meta/research_texts`
    with manifests, ADR links, and freshness metadata for high-value topics.
 

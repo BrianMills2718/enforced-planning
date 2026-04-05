@@ -162,7 +162,9 @@ The right pattern usually needs 50–200 lines of code, not a framework.
 
 For a new system or major new subsystem, use this order:
 
-1. Define the north star.
+1. Define the north star. **For any project with prior session history, run
+   `agent-memory recall '{topic}' --project {project}` first** — operational
+   findings from prior sessions are source material, not noise. (ADR-0010)
 2. List and investigate critical questions.
 3. Write the investigation memo(s) that answer those questions.
 4. Write or refresh the relevant topic research synthesis when conclusions
@@ -285,14 +287,22 @@ A journey notebook is **never required** when:
   operating model.
 - `templates/plan.md.template` is the bounded-plan scaffold derived from this
   operating model.
+- `adr/0010-agent-memory-as-planning-input.md` (ADR-0010) defines the required
+  agent-memory recall step inside Current-State Assessment and New System
+  Initialization. The strict dependency added in this document ("No
+  current-state assessment without a memory recall step") is governed by
+  ADR-0010.
 
 ## Non-Goals
 
 This document does not define:
 
-- runtime coordination state storage
-- tracker/registry drift validation
-- `relationships.yaml` schema details
+- specific claim, lane, or worktree lifecycle mechanics — see
+  `docs/guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md` and Plans #24-#42
+- session identity, heartbeat, and authority-drift contracts — implemented in
+  Plans #29-#31, #38
+- `relationships.yaml` schema details — see `docs/designs/RELATIONSHIPS_V2_DESIGN.md`
 
-Those belong in follow-on design and implementation plans once the planning
-operating model itself is canonical.
+Note: "runtime coordination state storage" and "tracker/registry drift
+validation" were listed here as future work but have since been implemented
+(Plans #24-#42). Those items have been removed from this non-goals list.

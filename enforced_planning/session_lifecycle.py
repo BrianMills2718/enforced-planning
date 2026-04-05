@@ -15,6 +15,7 @@ from typing import Any
 import yaml  # type: ignore[import-untyped]
 
 from enforced_planning import coordination_claims, session_contracts
+from enforced_planning import doc_authority
 
 
 def _split_cli_values(values: list[str] | None) -> list[str]:
@@ -460,6 +461,8 @@ def finish_session(
             "dirty_details": dirty_details,
             "tracker_path": tracker_path_text,
         }
+
+    doc_authority.assert_no_unresolved_owned_obligations(claim)
 
     if release_claim:
         coordination_claims.release_claim(agent, project, scope)

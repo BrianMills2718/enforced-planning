@@ -23,12 +23,9 @@ state split across chat, stray worktrees, or warning-only backlog.
 
 ## Active Concern
 
-Plan #38 overlaps conceptually with the active `enforced-planning` Plan #41
-authority-governance lane. Do not silently overlap that surface. If Plan #41 is
-still the active owner when the sprint reaches Plan #38, either:
-
-- coordinate the ownership transfer explicitly, or
-- leave Plan #38 as a documented blocker with exact follow-up state
+Plan #41 was published first and the stale authority-design lane was retired
+before Plan #38 implementation started. That resolved the only material
+ownership concern in the sprint.
 
 ## Progress
 
@@ -37,7 +34,7 @@ still the active owner when the sprint reaches Plan #38, either:
 - [x] Plan #37 landed
 - [x] Plan #34 landed
 - [x] Plan #39 landed
-- [ ] Plan #38 landed or explicitly blocked
+- [x] Plan #38 landed
 
 ## Notes
 
@@ -46,6 +43,7 @@ still the active owner when the sprint reaches Plan #38, either:
 - This file is the durable handoff surface if context compresses mid-sprint.
 - Plan #34 closeout result: no manual remediation was needed because the live
   registry became healthy after Plans #33 and #37 landed.
-- Current active slice: Plan #38 implementation after publishing Plan #41 as
-  the canonical authority-governance design lane.
-  authority-governance lane.
+- Plan #41 publication resolved the stale authority-lane blocker cleanly before
+  Plan #38 implementation.
+- Sprint result: all queued coordination slices landed, were pushed, and can be
+  closed out without residual coordination debt from this sprint.

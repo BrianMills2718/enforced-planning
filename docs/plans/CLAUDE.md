@@ -42,9 +42,9 @@ See `ROADMAP.md` for the full phase map and recommended priority order.
 | 35 | Queue-Based Assignment And Session Routing Architecture (`35_queue-based-assignment-and-session-routing-architecture.md`) | Medium | 📋 Planned | Freeze the long-term routing layer on top of the claim/session model |
 | 36 | Research Synthesis Downstream Consistency (`36_research-synthesis-downstream-consistency.md`) | Medium | ✅ Complete | Keep portable active guidance aligned with project-meta's research-synthesis hot path |
 | 37 | Plan-Bound Session Identity And Resume Lifecycle (`37_plan-bound-session-identity-and-resume-lifecycle.md`) | High | ✅ Complete | Plan-bound recovery lifecycle with resume, handoff, and abandon commands |
-| 38 | Authority-Drift Reconciliation Gates (`38_authority-drift-reconciliation-gates.md`) | High | 📋 Planned | Turn authority drift into closure-blocking reconciliation debt instead of warning-only residue |
+| 38 | Authority-Drift Reconciliation Gates (`38_authority-drift-reconciliation-gates.md`) | High | ✅ Complete | Turn authority drift into closure-blocking reconciliation debt instead of warning-only residue |
 | 39 | Worktree-Aware Markdown-Link Validation And Root Resolution (`39_worktree-aware-markdown-link-validation-and-root-resolution.md`) | High | ✅ Complete | Shared checker now owns worktree/canonical-root path semantics with focused fallback tests |
-| 40 | Overnight Coordination Implementation Sprint (`40_overnight-coordination-implementation-sprint.md`) | High | 🚧 In Progress | Freeze slice order, blocker handling, and sprint-closeout rules for the current coordination push |
+| 40 | Overnight Coordination Implementation Sprint (`40_overnight-coordination-implementation-sprint.md`) | High | ✅ Complete | Freeze slice order, blocker handling, and sprint-closeout rules for the current coordination push |
 | 41 | Documentation Authority Governance And Enforcement (`41_doc-authority-governance-and-enforcement.md`) | High | ✅ Complete | Freeze the canonical authority model, schema, and rollout shape for follow-on enforcement |
 
 ## Status Key

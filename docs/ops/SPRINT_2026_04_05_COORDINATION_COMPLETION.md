@@ -1,0 +1,46 @@
+# Coordination Completion Sprint — 2026-04-05
+
+## Mission
+
+Finish the currently queued coordination implementation work without leaving the
+state split across chat, stray worktrees, or warning-only backlog.
+
+## Execution Order
+
+1. Plan #33 — `ecosystem-ops` assignment/session integration
+2. Plan #37 — plan-bound session recovery lifecycle
+3. Plan #34 — weak/stale lane remediation
+4. Plan #39 — worktree-aware markdown-link validation
+5. Plan #38 — authority-drift closeout gates
+
+## Acceptance Criteria
+
+- each slice is landed or explicitly blocked on disk
+- each verified slice is committed, merged, pushed, and cleaned up
+- no new coordination identity surface is invented downstream
+- authority drift, stale sessions, and worktree-root ambiguity are all either
+  fixed or have explicit blocking ownership
+
+## Active Concern
+
+Plan #38 overlaps conceptually with the active `enforced-planning` Plan #24
+authority-governance lane. Do not silently overlap that surface. If Plan #24 is
+still the active owner when the sprint reaches Plan #38, either:
+
+- coordinate the ownership transfer explicitly, or
+- leave Plan #38 as a documented blocker with exact follow-up state
+
+## Progress
+
+- [x] Sprint order frozen in Plan #40
+- [ ] Plan #33 landed
+- [ ] Plan #37 landed
+- [ ] Plan #34 landed
+- [ ] Plan #39 landed
+- [ ] Plan #38 landed or explicitly blocked
+
+## Notes
+
+- Continuous execution means moving to the next numbered slice after each clean
+  landing, not stopping at one successful commit.
+- This file is the durable handoff surface if context compresses mid-sprint.

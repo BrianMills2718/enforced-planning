@@ -4,12 +4,16 @@ import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import yaml  # type: ignore[import-untyped]
+
+from enforced_planning import coordination_claims
 from scripts.complete_plan import (
     find_plan_file,
     get_git_info,
     get_human_review_section,
     get_plan_status,
     run_unit_tests,
+    sync_coordination_closeout,
     update_plan_file,
     update_plan_index,
 )
@@ -313,3 +317,117 @@ def test_get_git_info_handles_exception(tmp_path: Path) -> None:
 
     assert commit == "unknown"
     assert branch == "unknown"
+
+
+def test_sync_coordination_closeout_marks_matching_claims_completed_and_refreshes_registry(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """Completing a plan should close matching live claims and refresh derived registry outputs."""
+    project_root = tmp_path / "project-meta"
+    project_root.mkdir()
+    claims_dir = tmp_path / "claims"
+    claims_dir.mkdir()
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+
+    matching_claim = claims_dir / "matching.yaml"
+    matching_claim.write_text(
+        yaml.safe_dump(
+            {
+                "agent": "codex",
+                "claimed_at": "2026-04-05T00:00:00+00:00",
+                "expires_at": "2099-04-05T12:00:00+00:00",
+                "projects": ["project-meta"],
+                "scope": "lifecycle-automation",
+                "intent": "Implement lane lifecycle automation",
+                "claim_type": "write",
+                "write_paths": ["scripts/complete_plan.py"],
+                "branch": "plan-111-lifecycle-automation",
+                "worktree_path": str(project_root / "worktrees" / "plan-111"),
+                "session_id": "codex:session",
+                "plan_ref": "Plan #111",
+                "status": "active",
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+    other_claim = claims_dir / "other.yaml"
+    other_claim.write_text(
+        yaml.safe_dump(
+            {
+                "agent": "claude-code",
+                "claimed_at": "2026-04-05T00:00:00+00:00",
+                "expires_at": "2099-04-05T12:00:00+00:00",
+                "projects": ["project-meta"],
+                "scope": "another-lane",
+                "intent": "Unrelated active lane",
+                "claim_type": "write",
+                "write_paths": ["scripts/other.py"],
+                "branch": "plan-112-other",
+                "worktree_path": str(project_root / "worktrees" / "plan-112"),
+                "session_id": "claude:session",
+                "plan_ref": "Plan #112",
+                "status": "active",
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    closed_count, scopes, payload = sync_coordination_closeout(
+        plan_number=111,
+        project_root=project_root,
+        dry_run=False,
+        verbose=False,
+    )
+
+    assert closed_count == 1
+    assert scopes == ["lifecycle-automation"]
+    updated_matching = yaml.safe_load(matching_claim.read_text(encoding="utf-8"))
+    assert updated_matching["status"] == "completed"
+    assert "closed automatically by scripts/complete_plan.py for Plan #111" in updated_matching["notes"]
+    assert payload is not None
+    assert payload["claim_count"] == 1
+    assert payload["claims"][0]["scope"] == "another-lane"
+    assert (project_root / "generated" / "runtime" / "active_work_registry.json").exists()
+
+
+def test_sync_coordination_closeout_dry_run_reports_without_mutating_claims(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """Dry-run closeout should report matching claims without changing them."""
+    project_root = tmp_path / "project-meta"
+    project_root.mkdir()
+    claims_dir = tmp_path / "claims"
+    claims_dir.mkdir()
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+
+    claim_path = claims_dir / "matching.yaml"
+    original = {
+        "agent": "codex",
+        "claimed_at": "2026-04-05T00:00:00+00:00",
+        "expires_at": "2099-04-05T12:00:00+00:00",
+        "projects": ["project-meta"],
+        "scope": "lifecycle-automation",
+        "intent": "Implement lane lifecycle automation",
+        "claim_type": "write",
+        "write_paths": ["scripts/complete_plan.py"],
+        "branch": "plan-111-lifecycle-automation",
+        "worktree_path": str(project_root / "worktrees" / "plan-111"),
+        "session_id": "codex:session",
+        "plan_ref": "Plan #111",
+        "status": "active",
+    }
+    claim_path.write_text(yaml.safe_dump(original, sort_keys=False), encoding="utf-8")
+
+    closed_count, scopes, payload = sync_coordination_closeout(
+        plan_number=111,
+        project_root=project_root,
+        dry_run=True,
+        verbose=False,
+    )
+
+    assert closed_count == 1
+    assert scopes == ["lifecycle-automation"]
+    assert payload is None
+    assert yaml.safe_load(claim_path.read_text(encoding="utf-8")) == original

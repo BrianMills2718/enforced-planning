@@ -25,13 +25,11 @@ from typing import Any
 
 import yaml  # type: ignore[import-untyped]
 
-SCRIPT_DIR = Path(__file__).resolve().parent
-if str(SCRIPT_DIR) not in sys.path:
-    sys.path.insert(0, str(SCRIPT_DIR))
-
-from worktree_paths import detect_workspace_root  # noqa: E402
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from enforced_planning.worktree_paths import detect_workspace_root  # noqa: E402
 
 
 def _detect_workspace_root(repo_root: Path) -> Path:

@@ -24,7 +24,6 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from worktree_paths import resolve_canonical_repo_root
 import yaml  # type: ignore[import-untyped]
 
 
@@ -33,6 +32,7 @@ if str(FRAMEWORK_ROOT) not in sys.path:
     sys.path.insert(0, str(FRAMEWORK_ROOT))
 
 from enforced_planning.agents_rendering import build_renderer
+from enforced_planning.worktree_paths import resolve_canonical_repo_root
 
 _FRAMEWORK_RENDERER = build_renderer(Path(__file__).resolve().parent / "render_agents_md.py")
 DEFAULT_SHARED_CAPABILITY_REGISTRY = (

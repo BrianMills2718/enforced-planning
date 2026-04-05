@@ -8,26 +8,12 @@ intentionally untracked in git, such as ``project-meta/research_texts``.
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
-def detect_workspace_root(project_root: Path) -> Path:
-    """Resolve the shared workspace root from main or worktree checkouts."""
-    if project_root.parent.name.endswith("_worktrees"):
-        return project_root.parent.parent
-    return project_root.parent
-
-
-def resolve_canonical_repo_root(repo_root: Path) -> Path:
-    """Return the canonical repo root for a main checkout or worktree clone."""
-    resolved_repo_root = repo_root.resolve()
-    parent = resolved_repo_root.parent
-    if not parent.name.endswith("_worktrees"):
-        return resolved_repo_root
-
-    workspace_root = parent.parent
-    canonical_name = parent.name.removesuffix("_worktrees")
-    canonical_repo_root = (workspace_root / canonical_name).resolve()
-    if canonical_repo_root.exists():
-        return canonical_repo_root
-    return resolved_repo_root
+from enforced_planning.worktree_paths import detect_workspace_root
+from enforced_planning.worktree_paths import resolve_canonical_repo_root

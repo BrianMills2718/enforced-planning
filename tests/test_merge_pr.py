@@ -1,4 +1,4 @@
-"""Tests for scripts/merge_pr.py."""
+"""Tests for rename-safe merge helper cleanup behavior."""
 
 from __future__ import annotations
 
@@ -19,6 +19,15 @@ def _load() -> object:
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)  # type: ignore[union-attr]
     return module
+
+
+def completed_process(
+    args: list[str], returncode: int = 0, stdout: str = "", stderr: str = ""
+) -> subprocess.CompletedProcess[str]:
+    """Build a CompletedProcess[str] matching the helper contract."""
+    return subprocess.CompletedProcess(
+        args=args, returncode=returncode, stdout=stdout, stderr=stderr
+    )
 
 
 def test_find_existing_script_returns_first_existing(tmp_path: Path) -> None:
@@ -47,30 +56,113 @@ def test_find_existing_script_returns_none_when_missing(tmp_path: Path) -> None:
     assert found is None
 
 
-def test_cleanup_worktree_prefers_safe_remove_script(tmp_path: Path, monkeypatch) -> None:
-    """cleanup_worktree should prefer a discovered safe-remove script over make."""
+def test_cleanup_worktree_uses_safe_remove_script_with_discovered_path(
+    monkeypatch, tmp_path
+) -> None:
+    """Cleanup should follow the discovered worktree path, not branch-derived layout."""
     module = _load()
-    worktree_path = tmp_path / "wt"
-    worktree_path.mkdir()
-    safe_remove = tmp_path / "safe_worktree_remove.py"
+    monkeypatch.chdir(tmp_path)
+    safe_remove = (
+        tmp_path
+        / "scripts"
+        / "meta"
+        / "worktree-coordination"
+        / "safe_worktree_remove.py"
+    )
+    safe_remove.parent.mkdir(parents=True)
     safe_remove.write_text("#!/usr/bin/env python3\n", encoding="utf-8")
 
-    # mock-ok: command orchestration around git/gh is external-process glue; this
-    # unit test isolates the path-selection behavior instead of invoking real CLIs.
-    monkeypatch.setattr(module, "find_worktree_for_branch", lambda _branch: worktree_path)
-    monkeypatch.setattr(module, "release_claim_for_branch", lambda _branch: True)
-    monkeypatch.setattr(module, "find_existing_script", lambda _paths: safe_remove)
+    discovered_path = tmp_path / "worktrees" / "tmp-plan-69-llm-client-resync"
+    observed_calls: list[list[str]] = []
 
-    seen: list[list[str]] = []
+    monkeypatch.setattr(
+        module, "find_worktree_for_branch", lambda branch: discovered_path
+    )
+    monkeypatch.setattr(module, "release_claim_for_branch", lambda branch: True)
 
-    def _fake_run_cmd(cmd: list[str], check: bool = True, capture: bool = True) -> subprocess.CompletedProcess[str]:
-        seen.append(cmd)
-        return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+    def fake_run_cmd(
+        cmd, check: bool = True, capture: bool = True
+    ) -> subprocess.CompletedProcess[str]:
+        observed_calls.append(cmd)
+        return completed_process(cmd)
 
-    monkeypatch.setattr(module, "run_cmd", _fake_run_cmd)
+    monkeypatch.setattr(module, "run_cmd", fake_run_cmd)
 
-    result = module.cleanup_worktree("plan-83-example")  # type: ignore[attr-defined]
+    assert (
+        module.cleanup_worktree("codex/llm-client-worktree-block-resync") is True
+    )
+    assert observed_calls == [
+        [
+            "python",
+            "scripts/meta/worktree-coordination/safe_worktree_remove.py",
+            str(discovered_path),
+        ]
+    ]
 
-    assert result is True
-    assert seen == [["python", str(safe_remove), str(worktree_path)]]
 
+def test_cleanup_worktree_falls_back_to_make_when_safe_remove_missing(
+    monkeypatch, tmp_path
+) -> None:
+    """Fallback should preserve the old make-based path only when no safe remover exists."""
+    module = _load()
+    monkeypatch.chdir(tmp_path)
+
+    discovered_path = tmp_path / "worktrees" / "branch-dir"
+    observed_calls: list[list[str]] = []
+
+    monkeypatch.setattr(
+        module, "find_worktree_for_branch", lambda branch: discovered_path
+    )
+    monkeypatch.setattr(module, "release_claim_for_branch", lambda branch: True)
+
+    def fake_run_cmd(
+        cmd, check: bool = True, capture: bool = True
+    ) -> subprocess.CompletedProcess[str]:
+        observed_calls.append(cmd)
+        return completed_process(cmd)
+
+    monkeypatch.setattr(module, "run_cmd", fake_run_cmd)
+
+    assert module.cleanup_worktree("codex/example") is True
+    assert observed_calls == [["make", "worktree-remove", "BRANCH=codex/example"]]
+
+
+def test_cleanup_worktree_reports_manual_safe_remove_command_on_failure(
+    monkeypatch, tmp_path, capsys
+) -> None:
+    """Failure output should guide operators to the path-based cleanup command."""
+    module = _load()
+    monkeypatch.chdir(tmp_path)
+    safe_remove = (
+        tmp_path
+        / "scripts"
+        / "meta"
+        / "worktree-coordination"
+        / "safe_worktree_remove.py"
+    )
+    safe_remove.parent.mkdir(parents=True)
+    safe_remove.write_text("#!/usr/bin/env python3\n", encoding="utf-8")
+
+    discovered_path = tmp_path / "worktrees" / "tmp-plan-69-llm-client-resync"
+
+    monkeypatch.setattr(
+        module, "find_worktree_for_branch", lambda branch: discovered_path
+    )
+    monkeypatch.setattr(module, "release_claim_for_branch", lambda branch: True)
+    monkeypatch.setattr(
+        module,
+        "run_cmd",
+        lambda cmd, check=True, capture=True: completed_process(
+            cmd, returncode=1, stderr="cleanup failed"
+        ),
+    )
+
+    assert (
+        module.cleanup_worktree("codex/llm-client-worktree-block-resync") is False
+    )
+    captured = capsys.readouterr()
+    assert "cleanup failed" in captured.out
+    assert (
+        "Run manually: python scripts/meta/worktree-coordination/safe_worktree_remove.py "
+        f"{discovered_path}"
+    ) in captured.out

@@ -1,0 +1,157 @@
+# Plan #14: Research-Backed ADRs and Topic Research Integration
+
+**Status:** Planned
+**Type:** design
+**Priority:** High
+**Blocked By:** None
+**Blocks:** [future] project-meta topic research manifest adoption
+
+---
+
+## Gap
+
+**Current:** `enforced-planning` already requires investigation before planning
+and now locally requires ADR `Research Basis` via ADR-0008, but research is not
+yet a first-class artifact in the planning hierarchy. The ADR pattern/template
+surfaces are inconsistent with ADR-0008, plans do not distinguish local file
+review from reusable research, and there is no portable pattern for topic-level
+research that compounds over time.
+
+**Target:** The portable framework names research and investigation as explicit
+artifacts with clear roles. ADRs, plans, and capability docs can all point to
+durable evidence surfaces. Templates and patterns are aligned. The framework
+also documents how governed repos can maintain living topic research linked to
+ADRs, capabilities, and refresh triggers.
+
+**Why:** A decision without a recoverable evidence chain becomes unauditable.
+Agents need a durable path from "what was researched" to "what was decided" to
+"what should be refreshed now." Without that path, research stays local to one
+session and ADRs become self-referential.
+
+---
+
+## References Reviewed
+
+- `PLANNING_OPERATING_MODEL.md` - current canonical artifact dependency graph
+- `patterns/07_adr.md` - current ADR pattern still reflects the pre-ADR-0008 template
+- `patterns/15_plan-workflow.md` - current plan structure and `References Reviewed`
+- `patterns/28_question-driven-planning.md` - investigation-before-plan discipline
+- `patterns/30_gap-analysis.md` - current-vs-target framing
+- `patterns/42_planning-hierarchy.md` - compressed hierarchy view
+- `adr/README.md` - local ADR index and updated `Research Basis` doctrine
+- `adr/0008-adr-research-linkage.md` - accepted rule for ADR evidence linkage
+- `templates/CLAUDE.md.docs-adr` - portable ADR template surface that still needs propagation
+- `~/projects/project-meta/research_texts/CLAUDE.md` - current topic-oriented research library contract
+- `~/projects/project-meta/research_texts/autonomous_agents/SYNTHESIS_2026-03-24.md` - example of reusable synthesis pointing back to raw investigation
+- `~/projects/project-meta/research_texts/agentic_memory/SOTA_SURVEY_2026_04.md` - example of research intended to inform future design work
+- `~/projects/investigations/cross-project/2026-04-04-enforced-planning-research-methodology-review.md` - critique and recommended target model
+
+---
+
+## Files Affected
+
+- PLANNING_OPERATING_MODEL.md (modify)
+- patterns/07_adr.md (modify)
+- patterns/15_plan-workflow.md (modify)
+- patterns/42_planning-hierarchy.md (modify)
+- templates/CLAUDE.md.docs-adr (modify)
+- templates/plan.md.template (modify)
+- templates/plan.md.docs-only (modify)
+- GETTING_STARTED.md (modify)
+- adr/README.md (modify if needed for consistency only)
+- tests/test_validate_plan.py (modify)
+- tests/test_parse_plan.py (modify if parser expectations change)
+- [future] project-meta/research_texts/*/topic_manifest.yaml (adoption outside this repo)
+
+---
+
+## Plan
+
+### Steps
+
+1. Promote research and investigation to named artifacts in the planning
+   operating model and compressed hierarchy pattern.
+2. Propagate ADR-0008 through the portable ADR pattern and ADR template
+   surfaces so the doctrine and scaffolds match.
+3. Extend the plan template to distinguish:
+   - `References Reviewed`
+   - `Research Basis For This Slice`
+4. Define a portable topic research pattern for governed repos:
+   - dated investigation memo vs living topic synthesis
+   - optional lightweight topic manifest
+   - freshness triggers and ownership
+5. Decide what enforcement should be blocking vs advisory:
+   - ADR `Research Basis` likely strict
+   - plan `Research Basis For This Slice` likely strict for design/cross-project work, advisory for trivial local work
+   - topic manifest freshness likely advisory first
+6. Document downstream adoption guidance for `project-meta/research_texts`
+   without hardcoding project-meta specifics into the portable pattern.
+7. Reconcile worktree merge strategy separately:
+   - merge `plan-13`
+   - selectively salvage `plan-10`
+   - prune empty worktrees after audit
+
+---
+
+## Required Tests
+
+> **REQUIRED BEFORE IMPLEMENTATION:** declare the tests and checks that will
+> prove the framework changes are coherent.
+
+### New Tests (TDD)
+
+| Test File | Test Function | What It Verifies |
+|-----------|---------------|------------------|
+| `tests/test_validate_plan.py` | `test_plan_requires_research_basis_for_nontrivial_design_work` | Design/cross-project plans fail or warn appropriately when the new research section is missing |
+| `tests/test_parse_plan.py` | `test_parse_plan_extracts_research_basis_section` | Plan parser can read the new section cleanly |
+| `tests/test_complete_plan.py` | `test_complete_plan_handles_research_basis_section` | Plan completion tooling tolerates the new section shape |
+
+### Existing Tests (Must Pass)
+
+| Test Pattern | Why |
+|--------------|-----|
+| `pytest -q tests/test_validate_plan.py tests/test_parse_plan.py tests/test_complete_plan.py` | Core plan validation/parsing surfaces must remain stable |
+| `python scripts/validate_plan.py docs/plans/14_research-backed-adr-and-topic-research-integration.md` | Plan format remains valid |
+
+---
+
+## Acceptance Criteria
+
+- [ ] `PLANNING_OPERATING_MODEL.md` names investigation memos and topic research syntheses as explicit artifact roles
+- [ ] `patterns/42_planning-hierarchy.md` reflects the same hierarchy truthfully
+- [ ] `patterns/07_adr.md` and `templates/CLAUDE.md.docs-adr` require `Research Basis`
+- [ ] `templates/plan.md.template` and `templates/plan.md.docs-only` distinguish reviewed references from research basis
+- [ ] The framework defines a portable pattern for living topic research plus freshness triggers
+- [ ] Guidance clearly separates portable framework doctrine from project-meta-specific adoption details
+- [ ] Merge guidance for `plan-10` and `plan-13` is captured so worktree cleanup does not happen ad hoc
+- [ ] Declared tests/checks pass
+
+---
+
+## Open Questions
+
+- [ ] Should the portable framework standardize a specific topic manifest filename and schema, or only describe the concept? — Status: OPEN | Why it matters: too much specificity may overfit project-meta; too little may make adoption inconsistent
+- [ ] Should missing plan-level research basis be blocking for all plans or only for non-trivial/design/cross-project plans? — Status: OPEN | Why it matters: strictness affects adoption friction
+- [ ] Should freshness be enforced mechanically or start as advisory metadata only? — Status: OPEN | Why it matters: freshness is valuable but hard to verify semantically
+
+---
+
+## Notes
+
+### Recommended Merge Sequence For Current Worktrees
+
+1. Commit or stash current local changes on `enforced-planning` main before any merge work.
+2. Merge `plan-13-rename-safe-merge-cleanup` first; it is small and low-risk.
+3. Do not merge `plan-10-framework-reconciliation` wholesale; salvage still-valid changes by theme.
+4. Audit `plan-74` through `plan-83`, then prune if they remain empty relative to main.
+
+### Downstream Adoption Shape
+
+The portable framework should define the doctrine. `project-meta` can then adopt
+it with:
+
+- topic folders under `research_texts/`
+- a small topic manifest per folder
+- links from topic synthesis -> investigations -> ADRs -> capabilities
+- freshness triggers for high-value areas such as memory, orchestration, and
+  tool design

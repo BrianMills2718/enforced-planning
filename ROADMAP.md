@@ -1,6 +1,6 @@
 # Enforced Planning Framework — Roadmap
 
-**Updated:** 2026-04-04
+**Updated:** 2026-04-05
 **Canonical methodology:** `PLANNING_OPERATING_MODEL.md`
 
 ## Vision
@@ -125,6 +125,16 @@ All three conditions green as of 2026-04-04 overnight sprint:
 | #21 | Ecosystem dashboard and status surfaces | ✅ Complete |
 | #22 | Framework self-measurement and ROI metrics | ✅ Complete |
 
+### Coordination Runtime Surface (PACKAGEIZED — LANE MODEL COMPLETE)
+
+**Gate:** Live coordination state is package-backed, mechanically consistent,
+and readable as bounded active lanes instead of only raw claims.
+
+| Plan | What | Status |
+|------|------|--------|
+| #24 | Coordination-state packageization and consistency gate | ✅ Complete |
+| #25 | Lane model and active-lane registry | ✅ Complete |
+
 **Deferred item blockers:**
 
 | Item | Blocked By | Would Unblock |
@@ -137,13 +147,18 @@ All three conditions green as of 2026-04-04 overnight sprint:
 
 ## What's Next (recommended priority order)
 
-1. **Mac mini pilot governed-repo rollout**
+1. **Weak-lane claim hydration and stale-lane cleanup**
+   The new lane registry makes the current debt explicit: many live lanes are
+   still weak because their claims omit `session_id`. The next slice should fix
+   claim creation/defaults or systematically reconcile those live claims.
+
+2. **Mac mini pilot governed-repo rollout**
    Execute the first controlled pilot from `docs/guides/MAC_MINI_CONTINUOUS_AUTOMATION_BOOTSTRAP.md` using a sanctioned worktree lane.
 
-2. **Future implementation slice: ecosystem status renderer and metrics collection**
+3. **Future implementation slice: ecosystem status renderer and metrics collection**
    Implement `make ecosystem-status`, `generated/ecosystem_status.json`, and rendered operator metrics on top of Plans #21 and #22.
 
-3. **Project-meta topic-research adoption**
+4. **Project-meta topic-research adoption**
    Apply the portable topic-research pattern in `project-meta/research_texts`
    with manifests, ADR links, and freshness metadata for high-value topics.
 

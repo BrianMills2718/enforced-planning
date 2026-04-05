@@ -87,13 +87,25 @@ def test_generate_registry_outputs_json_and_markdown(tmp_path: Path) -> None:
     assert exit_code == 0
     payload = json.loads(json_output.read_text(encoding="utf-8"))
     assert payload["claim_count"] == 3
+    assert payload["lane_count"] == 3
     assert payload["claims_by_type"] == {"program": 1, "write": 2}
+    assert payload["lanes_by_project"] == {"project-meta": 3}
     assert payload["health_summary"] == {
         "overall_status": "attention",
         "weak_claim_count": 1,
         "hard_conflict_claim_count": 2,
         "soft_overlap_claim_count": 0,
     }
+    execution_lane = next(
+        lane for lane in payload["lanes"] if lane["branch"] == "plan-62-coordination-v2"
+    )
+    assert execution_lane["claim_count"] == 1
+    assert execution_lane["health_status"] == "attention"
+    fallback_lane = next(
+        lane for lane in payload["lanes"] if lane["fallback_scope"] == "phase-6-ops-and-governance"
+    )
+    assert fallback_lane["health_status"] == "weak"
+    assert fallback_lane["claim_count"] == 1
     codex_entry = next(entry for entry in payload["claims"] if entry["agent"] == "codex")
     assert codex_entry["interaction_summary"]["hard_conflict_count"] == 1
     assert codex_entry["health_status"] == "healthy"
@@ -108,8 +120,10 @@ def test_generate_registry_outputs_json_and_markdown(tmp_path: Path) -> None:
     markdown = markdown_output.read_text(encoding="utf-8")
     assert "# Active Work Registry" in markdown
     assert "## Coordination Health" in markdown
+    assert "## Active Lanes" in markdown
     assert "## Health Notes" in markdown
     assert "coordination-v2-b" in markdown
+    assert "phase-6-ops-and-governance" in markdown
     assert "hard=1" in markdown
     assert "weak" in markdown
 
@@ -134,6 +148,8 @@ def test_generate_registry_handles_empty_claim_set(tmp_path: Path) -> None:
     assert exit_code == 0
     payload = json.loads(json_output.read_text(encoding="utf-8"))
     assert payload["claim_count"] == 0
+    assert payload["lane_count"] == 0
     assert payload["health_summary"]["overall_status"] == "idle"
     assert payload["claims"] == []
+    assert payload["lanes"] == []
     assert "No live claims." in markdown_output.read_text(encoding="utf-8")

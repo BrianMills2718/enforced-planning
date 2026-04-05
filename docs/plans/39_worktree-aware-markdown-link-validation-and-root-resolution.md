@@ -3,7 +3,7 @@
 **Status:** ✅ Complete
 **Type:** investigation + implementation
 **Priority:** High
-**Blocked By:** Plan #24 and the existing shared markdown-link checker
+**Blocked By:** Plan #41 and the existing shared markdown-link checker
 **Blocks:** truthful markdown-link validation in active worktree lanes across governed repos
 
 ## Gap

@@ -23,8 +23,8 @@ state split across chat, stray worktrees, or warning-only backlog.
 
 ## Active Concern
 
-Plan #38 overlaps conceptually with the active `enforced-planning` Plan #24
-authority-governance lane. Do not silently overlap that surface. If Plan #24 is
+Plan #38 overlaps conceptually with the active `enforced-planning` Plan #41
+authority-governance lane. Do not silently overlap that surface. If Plan #41 is
 still the active owner when the sprint reaches Plan #38, either:
 
 - coordinate the ownership transfer explicitly, or
@@ -46,5 +46,6 @@ still the active owner when the sprint reaches Plan #38, either:
 - This file is the durable handoff surface if context compresses mid-sprint.
 - Plan #34 closeout result: no manual remediation was needed because the live
   registry became healthy after Plans #33 and #37 landed.
-- Current active slice: Plan #38 reassessment against the still-active Plan #24
+- Current active slice: Plan #38 implementation after publishing Plan #41 as
+  the canonical authority-governance design lane.
   authority-governance lane.

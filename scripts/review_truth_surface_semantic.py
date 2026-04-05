@@ -31,6 +31,10 @@ from scripts.check_truth_surface_drift import (  # noqa: E402
 from scripts.truth_surface_semantic_models import SemanticReviewReport  # noqa: E402
 
 
+DEFAULT_OUTPUT_JSON = Path("docs/ops/semantic_truth_surface_review.json")
+DEFAULT_HISTORY_JSON = Path("docs/ops/semantic_truth_surface_review_history.json")
+
+
 def _load_llm_client_exports() -> tuple[Any, Any]:
     """Import shared llm_client entrypoints or fail loud with setup guidance."""
     try:
@@ -196,8 +200,33 @@ def review_truth_surface_semantic(
 def load_semantic_review_payload(path: Path) -> SemanticReviewReport:
     """Load a semantic review JSON payload from disk."""
     payload = json.loads(path.read_text())
+    if isinstance(payload, list):
+        if not payload:
+            raise ValueError(f"Semantic review history is empty: {path}")
+        payload = payload[-1]
     review = payload.get("review", payload)
     return SemanticReviewReport.model_validate(review)
+
+
+def load_semantic_review_history(path: Path) -> list[dict[str, Any]]:
+    """Load one or more semantic review payloads from disk."""
+    payload = json.loads(path.read_text())
+    if isinstance(payload, list):
+        return payload
+    if isinstance(payload, dict):
+        return [payload]
+    raise ValueError(f"Expected semantic review payload or history list in {path}")
+
+
+def append_semantic_review_history(path: Path, payload: dict[str, Any]) -> None:
+    """Append one semantic review payload to a JSON history file."""
+    path = path.expanduser()
+    history: list[dict[str, Any]] = []
+    if path.exists():
+        history = load_semantic_review_history(path)
+    history.append(payload)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(history, indent=2, sort_keys=True) + "\n")
 
 
 def main() -> int:
@@ -226,7 +255,16 @@ def main() -> int:
         default=4000,
         help="Maximum characters to include from each evidence surface",
     )
-    parser.add_argument("--output-json", help="Optional output file for the review payload")
+    parser.add_argument(
+        "--output-json",
+        default=str(DEFAULT_OUTPUT_JSON),
+        help="Output file for the latest semantic-review payload",
+    )
+    parser.add_argument(
+        "--history-json",
+        default=str(DEFAULT_HISTORY_JSON),
+        help="Optional append-only JSON history file for repeated semantic reviews",
+    )
     args = parser.parse_args()
 
     review, payload = review_truth_surface_semantic(
@@ -238,10 +276,15 @@ def main() -> int:
     )
 
     rendered = json.dumps(payload, indent=2, sort_keys=True)
-    if args.output_json:
-        Path(args.output_json).expanduser().write_text(rendered + "\n")
+    output_path = Path(args.output_json).expanduser() if args.output_json else None
+    history_path = Path(args.history_json).expanduser() if args.history_json else None
+    if output_path is not None:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(rendered + "\n")
     else:
         print(rendered)
+    if history_path is not None:
+        append_semantic_review_history(history_path, payload)
 
     return 0
 

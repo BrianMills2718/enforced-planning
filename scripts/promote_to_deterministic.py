@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Promote stable LLM semantic findings into candidate deterministic checks.
+"""Promote stable semantic-review findings into candidate deterministic checks.
 
-Reads semantic review findings from docs/ops/semantic_review_findings.yaml
-and identifies findings that are candidates for promotion to deterministic
-checks (promotion_candidate=True). Stable findings — those appearing in
-multiple review runs without being resolved — are strongest candidates.
+Reads semantic review history from the canonical config-driven semantic-review
+payloads and identifies findings that are candidates for promotion to
+deterministic checks (promotion_candidate=True). Stable findings — those
+appearing in multiple review runs without being resolved — are strongest
+candidates.
 
 Output:
     Prints a report of promotion candidates ranked by stability (run count).
@@ -13,7 +14,7 @@ Output:
 
 Usage:
     python promote_to_deterministic.py
-    python promote_to_deterministic.py --findings docs/ops/semantic_review_findings.yaml
+    python promote_to_deterministic.py --findings docs/ops/semantic_truth_surface_review_history.json
     python promote_to_deterministic.py --min-runs 2    # only stable findings
     python promote_to_deterministic.py --scaffold      # emit check scaffolds
 """
@@ -34,43 +35,94 @@ except ImportError:
     sys.exit(2)
 
 
-# ---------------------------------------------------------------------------
-# Core logic
-# ---------------------------------------------------------------------------
+DEFAULT_FINDINGS_PATH = Path("docs/ops/semantic_truth_surface_review_history.json")
 
 def _fingerprint(finding: dict[str, Any]) -> str:
     """Build a stable fingerprint for a finding (for grouping across runs)."""
-    # Use doc_path + finding_type as the fingerprint key
-    # suggested_check may be None or vary slightly between runs
-    doc = finding.get("doc_path", "")
-    ftype = finding.get("finding_type", "")
-    suggested = (finding.get("suggested_check") or "").strip()[:100]
-    return f"{doc}|{ftype}|{suggested}"
+    surface = finding.get("surface_ref", "")
+    kind = finding.get("kind", "")
+    rule_hint = (finding.get("rule_hint") or "").strip()[:160]
+    return f"{surface}|{kind}|{rule_hint}"
+
+
+def _load_structured(path: Path) -> Any:
+    """Load JSON first, then YAML as a legacy fallback."""
+    content = path.read_text(encoding="utf-8").strip()
+    if not content:
+        return []
+    try:
+        return json.loads(content)
+    except json.JSONDecodeError:
+        return yaml.safe_load(content)
+
+
+def _normalize_legacy_finding(finding: dict[str, Any]) -> dict[str, Any]:
+    """Normalize one legacy repo-wide semantic finding."""
+    return {
+        "kind": finding.get("finding_type", ""),
+        "severity": finding.get("severity", "advisory"),
+        "surface_ref": finding.get("doc_path", ""),
+        "summary": finding.get("suggested_fix") or finding.get("evidence", ""),
+        "evidence": finding.get("evidence", ""),
+        "rule_hint": finding.get("suggested_check") or "",
+        "promotion_candidate": bool(finding.get("promotion_candidate")),
+    }
+
+
+def _normalize_canonical_finding(finding: dict[str, Any]) -> dict[str, Any]:
+    """Normalize one canonical config-driven semantic finding."""
+    evidence_refs = finding.get("evidence_refs") or []
+    surface_ref = ", ".join(evidence_refs[:2]) if isinstance(evidence_refs, list) else ""
+    return {
+        "kind": finding.get("category", ""),
+        "severity": finding.get("severity", "info"),
+        "surface_ref": surface_ref,
+        "summary": finding.get("summary", ""),
+        "evidence": finding.get("rationale", ""),
+        "rule_hint": finding.get("promotion_rule_hint") or "",
+        "promotion_candidate": bool(finding.get("promotion_candidate")),
+    }
+
+
+def _iter_runs(raw: Any) -> list[dict[str, Any]]:
+    """Normalize raw findings/history data into a list of run dictionaries."""
+    if isinstance(raw, list):
+        return [run for run in raw if isinstance(run, dict)]
+    if isinstance(raw, dict):
+        return [raw]
+    return []
 
 
 def load_findings(findings_path: Path) -> list[dict[str, Any]]:
-    """Load all review runs from the findings YAML file.
+    """Load all review runs from canonical or legacy semantic-review files.
 
     Returns a flat list of finding dicts, each annotated with 'run_index'.
     """
     if not findings_path.exists():
         return []
-    content = findings_path.read_text(encoding="utf-8").strip()
-    if not content:
-        return []
-    data = yaml.safe_load(content)
-    if not isinstance(data, list):
-        return []
+    data = _load_structured(findings_path)
 
     flat: list[dict[str, Any]] = []
-    for run_idx, run in enumerate(data):
-        if not isinstance(run, dict):
-            continue
-        for finding in run.get("findings", []):
+    for run_idx, run in enumerate(_iter_runs(data)):
+        findings = run.get("findings", [])
+        if "review" in run and isinstance(run["review"], dict):
+            findings = run["review"].get("findings", [])
+
+        for finding in findings:
             if not isinstance(finding, dict):
                 continue
-            if finding.get("promotion_candidate"):
-                flat.append({**finding, "_run_index": run_idx, "_run_repo": run.get("repo", "")})
+            if "category" in finding:
+                normalized = _normalize_canonical_finding(finding)
+            else:
+                normalized = _normalize_legacy_finding(finding)
+            if normalized.get("promotion_candidate"):
+                flat.append(
+                    {
+                        **normalized,
+                        "_run_index": run_idx,
+                        "_run_repo": run.get("repo", run.get("config_path", "")),
+                    }
+                )
     return flat
 
 
@@ -88,7 +140,13 @@ def rank_candidates(
     groups: dict[str, list[dict[str, Any]]],
 ) -> list[tuple[str, list[dict[str, Any]]]]:
     """Return groups sorted by stability (count, then severity)."""
-    severity_order = {"critical": 0, "important": 1, "advisory": 2}
+    severity_order = {
+        "critical": 0,
+        "important": 1,
+        "warn": 2,
+        "advisory": 3,
+        "info": 4,
+    }
 
     def sort_key(item: tuple[str, list[dict[str, Any]]]) -> tuple[int, int]:
         _, findings = item
@@ -100,10 +158,10 @@ def rank_candidates(
 
 def generate_scaffold(finding: dict[str, Any]) -> str:
     """Generate a Python check scaffold for a promotable finding."""
-    doc = finding.get("doc_path", "UNKNOWN")
-    finding_type = finding.get("finding_type", "UNKNOWN")
-    suggested = finding.get("suggested_check") or "(no suggested check text)"
-    evidence = finding.get("evidence", "")[:200]
+    surface_ref = finding.get("surface_ref", "UNKNOWN")
+    finding_type = finding.get("kind", "UNKNOWN")
+    suggested = finding.get("rule_hint") or "(no suggested check text)"
+    evidence = (finding.get("evidence") or finding.get("summary", ""))[:200]
 
     return f"""\
 #!/usr/bin/env python3
@@ -111,7 +169,7 @@ def generate_scaffold(finding: dict[str, Any]) -> str:
 
 Origin:
     Finding type: {finding_type}
-    Doc: {doc}
+    Surface: {surface_ref}
     Evidence: {evidence}
     LLM suggested check: {suggested}
 
@@ -124,7 +182,7 @@ import sys
 # Return exit code 0 on pass, 1 on failure.
 
 def main() -> int:
-    print("TODO: implement {finding_type} check for {doc}")
+    print("TODO: implement {finding_type} check for {surface_ref}")
     return 0
 
 if __name__ == "__main__":
@@ -156,12 +214,12 @@ def format_report(
         for _, findings in stable:
             f = findings[0]
             lines.append(
-                f"  [{f['severity'].upper()}] {f['finding_type']}"
-                f" — {f['doc_path']} ({len(findings)} run(s))"
+                f"  [{f['severity'].upper()}] {f['kind']}"
+                f" — {f['surface_ref'] or 'unspecified surface'} ({len(findings)} run(s))"
             )
             lines.append(f"  Evidence: {f['evidence'][:120]}...")
-            if f.get("suggested_check"):
-                lines.append(f"  Check: {f['suggested_check']}")
+            if f.get("rule_hint"):
+                lines.append(f"  Check: {f['rule_hint']}")
             if scaffold:
                 lines.append("\n--- SCAFFOLD ---")
                 lines.append(generate_scaffold(f))
@@ -173,11 +231,11 @@ def format_report(
         for _, findings in unstable:
             f = findings[0]
             lines.append(
-                f"  [{f['severity'].upper()}] {f['finding_type']}"
-                f" — {f['doc_path']} ({len(findings)} run(s))"
+                f"  [{f['severity'].upper()}] {f['kind']}"
+                f" — {f['surface_ref'] or 'unspecified surface'} ({len(findings)} run(s))"
             )
-            if f.get("suggested_check"):
-                lines.append(f"  Check: {f['suggested_check']}")
+            if f.get("rule_hint"):
+                lines.append(f"  Check: {f['rule_hint']}")
             lines.append("")
 
     lines.append(
@@ -201,8 +259,8 @@ def main() -> int:
     parser.add_argument(
         "--findings",
         type=Path,
-        default=Path("docs/ops/semantic_review_findings.yaml"),
-        help="Path to semantic review findings YAML",
+        default=DEFAULT_FINDINGS_PATH,
+        help="Path to semantic review history (canonical JSON, legacy YAML supported)",
     )
     parser.add_argument(
         "--min-runs",

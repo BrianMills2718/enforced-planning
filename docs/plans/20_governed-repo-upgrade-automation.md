@@ -1,6 +1,6 @@
 # Plan #20: Governed-Repo Upgrade Automation
 
-**Status:** Planned
+**Status:** Complete
 **Type:** design
 **Priority:** High
 **Blocked By:** None
@@ -100,8 +100,20 @@ create callable capability surfaces.
 
 ## Acceptance Criteria
 
-- [ ] The framework defines how governed repos are registered or discovered
-- [ ] The upgrade workflow has explicit dry-run/apply/rollback semantics
-- [ ] The design states how local dirt and partial governed repos are handled
-- [ ] The roadmap points to a numbered automation plan instead of a vague placeholder
-- [ ] Declared checks pass
+- [x] The framework defines how governed repos are registered or discovered
+- [x] The upgrade workflow has explicit dry-run/apply/rollback semantics
+- [x] The design states how local dirt and partial governed repos are handled
+- [x] The roadmap points to a numbered automation plan instead of a vague placeholder
+- [x] Declared checks pass
+
+---
+
+## Decision
+
+Upgrade automation should:
+
+- use an explicit governed-repo registry rather than discovery by scan
+- compose the existing installer and audit primitives
+- treat dry-run as mandatory
+- block write-mode upgrades on local dirt or partial governed state
+- use branch/worktree rollback rather than bespoke file-snapshot rollback

@@ -120,8 +120,8 @@ All three conditions green as of 2026-04-04 overnight sprint:
 
 | Plan | What | Status |
 |------|------|--------|
-| #19 | Multi-tool support matrix, support tiers, and rollout policy | 🚧 In Progress |
-| #20 | Governed-repo upgrade automation and registry model | 📋 Planned |
+| #19 | Multi-tool support matrix, support tiers, and rollout policy | ✅ Complete |
+| #20 | Governed-repo upgrade automation and registry model | ✅ Complete |
 | #21 | Ecosystem dashboard and status surfaces | 📋 Planned |
 | #22 | Framework self-measurement and ROI metrics | 📋 Planned |
 
@@ -140,19 +140,16 @@ All three conditions green as of 2026-04-04 overnight sprint:
 1. **Plan #19: Multi-tool support matrix and rollout**
    Define support tiers, canonical expectations, and what "portable" means by tool class.
 
-2. **Plan #20: Governed-repo upgrade automation**
-   Turn the current installer/sync model into an explicit upgrade path for multiple governed repos.
-
-3. **Plan #21: Ecosystem dashboard and status surfaces**
+2. **Plan #21: Ecosystem dashboard and status surfaces**
    Consolidate cross-repo status, plan queue, and dependency visibility into one operator surface.
 
-4. **Plan #22: Framework self-measurement and ROI**
+3. **Plan #22: Framework self-measurement and ROI**
    Define metrics that show whether the framework is actually catching drift and improving adoption outcomes.
 
-5. **Plan #23: Mac mini transfer and continuous automation bootstrap**
+4. **Plan #23: Mac mini transfer and continuous automation bootstrap**
    Use the verified installer/audit path and the new Phase 8 queue to prepare the first controlled Mac mini rollout.
 
-6. **Project-meta topic-research adoption**
+5. **Project-meta topic-research adoption**
    Apply the portable topic-research pattern in `project-meta/research_texts`
    with manifests, ADR links, and freshness metadata for high-value topics.
 

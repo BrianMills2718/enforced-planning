@@ -37,6 +37,8 @@ python scripts/install_governed_repo.py --repo-root /path/to/your/project --writ
 ```
 
 That command owns the minimum governed-repo contract and ongoing sync story.
+Fleet-style upgrade automation remains a separate design layer built on top of
+that primitive rather than a second installer authority.
 
 `install.sh` still exists, but its role is narrower:
 
@@ -174,6 +176,7 @@ are part of the minimum installed contract.
 - [patterns/01_README.md](patterns/01_README.md) - pattern catalog
 - [ROADMAP.md](ROADMAP.md) - forward queue and phase map
 - [STATIC_GRAPH_AND_RUNTIME_TRUTH.md](STATIC_GRAPH_AND_RUNTIME_TRUTH.md) - truth-surface architecture
+- [docs/designs/GOVERNED_REPO_UPGRADE_AUTOMATION.md](docs/designs/GOVERNED_REPO_UPGRADE_AUTOMATION.md) - future fleet-upgrade design
 - [docs/reference/CONFIG_REFERENCE.md](docs/reference/CONFIG_REFERENCE.md) - config key reference
 
 ## Origin

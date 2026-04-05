@@ -52,6 +52,8 @@ See `ROADMAP.md` for the full phase map and recommended priority order.
 | 45 | Planning Operating Model Fixes — ADR-0010 follow-through (`45_planning-operating-model-fixes.md`) | High | ✅ Complete | New-system-init memory recall, non-goals update, ADR-0010 link |
 | 46 | CLAUDE.md Ops-State Cleanup (`46_claude-md-ops-state-cleanup.md`) | High | ✅ Complete | Remove sprint order, fix canonical-surface contradiction |
 | 47 | Phase 9 Roadmap Definition (`47_phase9-roadmap-definition.md`) | Medium | ✅ Complete | Phase 9 fleet-adoption section added to ROADMAP.md |
+| 48 | ADR-0010 Guide Propagation (`48_adr0010-guide-propagation.md`) | High | ✅ Complete | WORKTREE guide + ROADMAP Phase 6 label |
+| 49 | Canonical Continuous Execution Contract (`49_canonical-execution-contract.md`) | Medium | ✅ Complete | Canonical execution contract pattern in enforced-planning |
 
 ## Status Key
 

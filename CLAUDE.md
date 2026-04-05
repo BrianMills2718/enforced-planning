@@ -68,6 +68,8 @@ Only two stop conditions are legitimate:
   - numbered implementation plan queue for this repo
 - `docs/guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md`
   - canonical definitions for claims, lanes, worktrees, and lane lifecycle
+- `docs/guides/CONTINUOUS_EXECUTION_CONTRACT.md`
+  - canonical portable pattern for overnight/continuous autonomous execution
 - `docs/reference/CONFIG_REFERENCE.md`
   - authoritative config table, including which keys are not yet enforced
 

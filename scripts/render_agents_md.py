@@ -23,8 +23,39 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_TEMPLATE = REPO_ROOT / "templates" / "agents.md.template"
+SCRIPT_PATH = Path(__file__).resolve()
+
+
+def _detect_repo_root(script_path: Path) -> Path:
+    """Resolve the target repo root for both canonical and installed entrypoints.
+
+    The canonical framework keeps this script at ``scripts/render_agents_md.py``.
+    Governed repos install the same script at ``scripts/meta/render_agents_md.py``.
+    Template and sibling-script discovery must work in both layouts.
+    """
+
+    if script_path.parent.name == "meta" and script_path.parent.parent.name == "scripts":
+        return script_path.parents[2]
+    if script_path.parent.name == "scripts":
+        return script_path.parents[1]
+    return script_path.parents[1]
+
+
+def _default_template_path(repo_root: Path) -> Path:
+    """Return the truthful default template path for this repo layout."""
+
+    candidates = (
+        repo_root / "templates" / "agents.md.template",
+        repo_root / "meta-process" / "templates" / "agents.md.template",
+    )
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return candidates[0]
+
+
+REPO_ROOT = _detect_repo_root(SCRIPT_PATH)
+DEFAULT_TEMPLATE = _default_template_path(REPO_ROOT)
 
 SECTION_RE = re.compile(
     r"^##\s+(?P<heading>[^\n]+)\n(?P<body>.*?)(?=^##\s|\Z)",
@@ -177,9 +208,9 @@ def render_agents_markdown(inputs: CanonicalInputs) -> str:
         relationships_text.encode("utf-8")
     ).hexdigest()[:12]
 
-    generator_relpath = _repo_relative(Path(__file__).resolve(), inputs.repo_root)
+    generator_relpath = _repo_relative(SCRIPT_PATH, inputs.repo_root)
     sync_checker_relpath = _repo_relative(
-        REPO_ROOT / "scripts" / "check_agents_sync.py",
+        SCRIPT_PATH.with_name("check_agents_sync.py"),
         inputs.repo_root,
     )
     claude_relpath = _repo_relative(inputs.claude_path, inputs.repo_root)

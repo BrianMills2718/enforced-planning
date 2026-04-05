@@ -17,14 +17,15 @@ The audit is intentionally conservative:
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import re
 import sys
 from pathlib import Path
 from typing import Any
 
-from render_agents_md import render_agents_markdown
-from render_agents_md import resolve_inputs
+from render_agents_md import render_agents_markdown as _render_agents_markdown
+from render_agents_md import resolve_inputs as _resolve_inputs
 from worktree_paths import resolve_canonical_repo_root
 import yaml  # type: ignore[import-untyped]
 
@@ -47,6 +48,39 @@ VALIDATOR_CANDIDATES: dict[str, tuple[str, ...]] = {
     ),
     "check_markdown_links": ("scripts/check_markdown_links.py",),
 }
+
+
+def _load_repo_render_module(repo_root: Path) -> tuple[Any, Any]:
+    """Return the truthful render helpers for one repo layout.
+
+    Governed repos install the renderer at ``scripts/meta/render_agents_md.py``.
+    The framework repo keeps the canonical renderer at ``scripts/render_agents_md.py``.
+    When the repo has an installed local renderer, use it so generated provenance
+    markers match the repo-local maintenance surface.
+    """
+
+    candidates = (
+        repo_root / "scripts" / "meta" / "render_agents_md.py",
+        repo_root / "scripts" / "render_agents_md.py",
+    )
+    for candidate in candidates:
+        if not candidate.exists():
+            continue
+        module_name = "_repo_render_agents_md"
+        spec = importlib.util.spec_from_file_location(
+            module_name,
+            candidate,
+        )
+        if spec is None or spec.loader is None:
+            raise RuntimeError(f"Failed to load AGENTS renderer spec from {candidate}")
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[module_name] = module
+        try:
+            spec.loader.exec_module(module)
+        finally:
+            sys.modules.pop(module_name, None)
+        return module.resolve_inputs, module.render_agents_markdown
+    return _resolve_inputs, _render_agents_markdown
 
 
 def parse_args() -> argparse.Namespace:
@@ -244,6 +278,7 @@ def _audit_agents(
         result["error"] = f"Canonical CLAUDE file is missing: {claude_path}"
         return result
 
+    resolve_inputs, render_agents_markdown = _load_repo_render_module(repo_root)
     try:
         expected = render_agents_markdown(
             resolve_inputs(
@@ -637,6 +672,7 @@ def _refresh_agents(
     agents_file: str,
 ) -> str:
     """Render ``AGENTS.md`` for the target repo or fail loudly."""
+    resolve_inputs, render_agents_markdown = _load_repo_render_module(repo_root)
     inputs = resolve_inputs(
         repo_root=repo_root,
         claude_file=claude_file,

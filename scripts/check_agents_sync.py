@@ -12,6 +12,19 @@ from render_agents_md import render_agents_markdown  # type: ignore[import-not-f
 from render_agents_md import resolve_inputs  # type: ignore[import-not-found]
 
 
+def _renderer_entrypoint(repo_root: Path) -> Path:
+    """Return the truthful render entrypoint path for this repo layout."""
+
+    candidates = (
+        repo_root / "scripts" / "meta" / "render_agents_md.py",
+        repo_root / "scripts" / "render_agents_md.py",
+    )
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return candidates[0]
+
+
 def parse_args() -> argparse.Namespace:
     """Parse CLI arguments for the sync checker."""
     parser = argparse.ArgumentParser(
@@ -71,7 +84,7 @@ def main() -> int:
         print(f"Generated AGENTS file is missing: {inputs.output_path}")
         print(
             "Run: "
-            f"python {repo_root / 'scripts' / 'render_agents_md.py'} --repo-root {repo_root}"
+            f"python {_renderer_entrypoint(repo_root)} --repo-root {repo_root}"
         )
         return 1
 
@@ -93,7 +106,7 @@ def main() -> int:
     print("AGENTS.md drift detected.")
     print(
         "Regenerate with: "
-        f"python {repo_root / 'scripts' / 'render_agents_md.py'} --repo-root {repo_root}"
+        f"python {_renderer_entrypoint(repo_root)} --repo-root {repo_root}"
     )
     if diff:
         print(diff)

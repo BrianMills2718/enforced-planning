@@ -122,7 +122,7 @@ All three conditions green as of 2026-04-04 overnight sprint:
 |------|------|--------|
 | #19 | Multi-tool support matrix, support tiers, and rollout policy | ✅ Complete |
 | #20 | Governed-repo upgrade automation and registry model | ✅ Complete |
-| #21 | Ecosystem dashboard and status surfaces | 📋 Planned |
+| #21 | Ecosystem dashboard and status surfaces | ✅ Complete |
 | #22 | Framework self-measurement and ROI metrics | 📋 Planned |
 
 **Deferred item blockers:**
@@ -140,16 +140,13 @@ All three conditions green as of 2026-04-04 overnight sprint:
 1. **Plan #19: Multi-tool support matrix and rollout**
    Define support tiers, canonical expectations, and what "portable" means by tool class.
 
-2. **Plan #21: Ecosystem dashboard and status surfaces**
-   Consolidate cross-repo status, plan queue, and dependency visibility into one operator surface.
-
-3. **Plan #22: Framework self-measurement and ROI**
+2. **Plan #22: Framework self-measurement and ROI**
    Define metrics that show whether the framework is actually catching drift and improving adoption outcomes.
 
-4. **Plan #23: Mac mini transfer and continuous automation bootstrap**
+3. **Plan #23: Mac mini transfer and continuous automation bootstrap**
    Use the verified installer/audit path and the new Phase 8 queue to prepare the first controlled Mac mini rollout.
 
-5. **Project-meta topic-research adoption**
+4. **Project-meta topic-research adoption**
    Apply the portable topic-research pattern in `project-meta/research_texts`
    with manifests, ADR links, and freshness metadata for high-value topics.
 

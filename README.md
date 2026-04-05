@@ -167,7 +167,8 @@ module.
   an opt-in layer.
 
 That boundary is intentional until the installer and semantic-review surfaces
-are part of the minimum installed contract.
+are part of the minimum installed contract, even though their source-repo
+convergence work is complete.
 
 ## Canonical Docs
 
@@ -177,6 +178,7 @@ are part of the minimum installed contract.
 - [ROADMAP.md](ROADMAP.md) - forward queue and phase map
 - [STATIC_GRAPH_AND_RUNTIME_TRUTH.md](STATIC_GRAPH_AND_RUNTIME_TRUTH.md) - truth-surface architecture
 - [docs/designs/GOVERNED_REPO_UPGRADE_AUTOMATION.md](docs/designs/GOVERNED_REPO_UPGRADE_AUTOMATION.md) - future fleet-upgrade design
+- [docs/designs/ECOSYSTEM_DASHBOARD_STATUS_SURFACES.md](docs/designs/ECOSYSTEM_DASHBOARD_STATUS_SURFACES.md) - canonical operator-status design
 - [docs/reference/CONFIG_REFERENCE.md](docs/reference/CONFIG_REFERENCE.md) - config key reference
 
 ## Origin

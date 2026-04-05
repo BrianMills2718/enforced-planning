@@ -1,6 +1,6 @@
 # Plan #39: Worktree-Aware Markdown-Link Validation And Root Resolution
 
-**Status:** 📋 Planned
+**Status:** ✅ Complete
 **Type:** investigation + implementation
 **Priority:** High
 **Blocked By:** Plan #24 and the existing shared markdown-link checker
@@ -94,3 +94,11 @@ piece is a truthful worktree/canonical-root resolution contract.
 
 This plan exists to stop a coordination/worktree problem from being mistaken for
 a local documentation quirk.
+
+Implemented on 2026-04-05:
+
+- canonical checker now bootstraps its own import path like the other shared
+  framework scripts
+- missing worktree-local repo targets can map safely to the canonical repo root
+  when the path is lexically inside the same repo
+- focused tests now cover the worktree-to-canonical-root fallback behavior

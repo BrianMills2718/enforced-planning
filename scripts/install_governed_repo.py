@@ -22,11 +22,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from audit_governed_repo import _refresh_agents
-from audit_governed_repo import audit_repo
-from generate_hook_wiring import TargetRepo
-from generate_hook_wiring import apply_generation as apply_hook_generation
-from generate_hook_wiring import plan_generation as plan_hook_generation
+if str(Path(__file__).resolve().parents[1]) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from enforced_planning.governed_repo_audit import _refresh_agents
+from enforced_planning.governed_repo_audit import audit_repo
+from enforced_planning.hook_wiring import TargetRepo
+from enforced_planning.hook_wiring import apply_generation as apply_hook_generation
+from enforced_planning.hook_wiring import plan_generation as plan_hook_generation
 
 
 FRAMEWORK_ROOT = Path(__file__).resolve().parents[1]

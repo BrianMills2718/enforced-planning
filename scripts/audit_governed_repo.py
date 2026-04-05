@@ -17,14 +17,15 @@ The audit is intentionally conservative:
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import re
 import sys
 from pathlib import Path
 from typing import Any
 
-from render_agents_md import render_agents_markdown
-from render_agents_md import resolve_inputs
+from render_agents_md import render_agents_markdown as _render_agents_markdown
+from render_agents_md import resolve_inputs as _resolve_inputs
 from worktree_paths import resolve_canonical_repo_root
 import yaml  # type: ignore[import-untyped]
 
@@ -47,6 +48,39 @@ VALIDATOR_CANDIDATES: dict[str, tuple[str, ...]] = {
     ),
     "check_markdown_links": ("scripts/check_markdown_links.py",),
 }
+
+
+def _load_repo_render_module(repo_root: Path) -> tuple[Any, Any]:
+    """Return the truthful render helpers for one repo layout.
+
+    Governed repos install the renderer at ``scripts/meta/render_agents_md.py``.
+    The framework repo keeps the canonical renderer at ``scripts/render_agents_md.py``.
+    When the repo has an installed local renderer, use it so generated provenance
+    markers match the repo-local maintenance surface.
+    """
+
+    candidates = (
+        repo_root / "scripts" / "meta" / "render_agents_md.py",
+        repo_root / "scripts" / "render_agents_md.py",
+    )
+    for candidate in candidates:
+        if not candidate.exists():
+            continue
+        module_name = "_repo_render_agents_md"
+        spec = importlib.util.spec_from_file_location(
+            module_name,
+            candidate,
+        )
+        if spec is None or spec.loader is None:
+            raise RuntimeError(f"Failed to load AGENTS renderer spec from {candidate}")
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[module_name] = module
+        try:
+            spec.loader.exec_module(module)
+        finally:
+            sys.modules.pop(module_name, None)
+        return module.resolve_inputs, module.render_agents_markdown
+    return _resolve_inputs, _render_agents_markdown
 
 
 def parse_args() -> argparse.Namespace:
@@ -244,6 +278,7 @@ def _audit_agents(
         result["error"] = f"Canonical CLAUDE file is missing: {claude_path}"
         return result
 
+    resolve_inputs, render_agents_markdown = _load_repo_render_module(repo_root)
     try:
         expected = render_agents_markdown(
             resolve_inputs(
@@ -483,10 +518,13 @@ def _audit_worktree_entrypoints(repo_root: Path) -> dict[str, Any]:
         "makefile_path": "Makefile",
         "meta_block_present": False,
         "targets_present": {target: False for target in WORKTREE_TARGETS},
+        "missing_targets": [],
         "scripts_present": {
             key: (repo_root / relpath).exists()
             for key, relpath in WORKTREE_SCRIPT_PATHS.items()
         },
+        "missing_scripts": [],
+        "required_failures": [],
         "warnings": [],
         "error": config_error,
     }
@@ -516,16 +554,20 @@ def _audit_worktree_entrypoints(repo_root: Path) -> dict[str, Any]:
         result["worktrees_enabled"] = worktrees_enabled
         result["expected"] = claims_require_for_worktree or worktrees_enabled
         if worktrees_enabled and not claims_enabled:
-            result["warnings"].append(
+            message = (
                 "worktrees.enabled is true but claims.enabled is not true; sanctioned worktree opt-in expects both"
             )
+            result["warnings"].append(message)
+            result["required_failures"].append(message)
 
     makefile_path = repo_root / "Makefile"
     if not makefile_path.exists():
         if result["expected"]:
-            result["warnings"].append(
+            message = (
                 "worktree coordination is enabled but Makefile does not expose sanctioned worktree entrypoints"
             )
+            result["warnings"].append(message)
+            result["required_failures"].append(message)
         return result
 
     makefile_text = makefile_path.read_text(encoding="utf-8")
@@ -542,21 +584,27 @@ def _audit_worktree_entrypoints(repo_root: Path) -> dict[str, Any]:
             for target, present in result["targets_present"].items()
             if not present
         ]
+        result["missing_targets"] = missing_targets
         if missing_targets:
-            result["warnings"].append(
+            message = (
                 "sanctioned worktree entrypoints missing from Makefile: "
                 + ", ".join(missing_targets)
             )
+            result["warnings"].append(message)
+            result["required_failures"].append(message)
         missing_scripts = [
             key
             for key, present in result["scripts_present"].items()
             if not present
         ]
+        result["missing_scripts"] = missing_scripts
         if missing_scripts:
-            result["warnings"].append(
+            message = (
                 "worktree coordination scripts missing for sanctioned entrypoints: "
                 + ", ".join(missing_scripts)
             )
+            result["warnings"].append(message)
+            result["required_failures"].append(message)
 
     return result
 
@@ -637,6 +685,7 @@ def _refresh_agents(
     agents_file: str,
 ) -> str:
     """Render ``AGENTS.md`` for the target repo or fail loudly."""
+    resolve_inputs, render_agents_markdown = _load_repo_render_module(repo_root)
     inputs = resolve_inputs(
         repo_root=repo_root,
         claude_file=claude_file,
@@ -743,6 +792,17 @@ def audit_repo(
             missing_required.append("hook:.claude/settings.json")
         for c in read_gating["commands_missing"]:
             missing_required.append(f"hook-wiring:{c}")
+
+    worktree_entrypoints = checks["worktree_entrypoints"]
+    if worktree_entrypoints["expected"]:
+        if worktree_entrypoints["claims_enabled"] is not True:
+            missing_required.append("meta-process.yaml claims.enabled for worktree opt-in")
+        if not worktree_entrypoints["makefile_present"]:
+            missing_required.append("sanctioned Makefile worktree entrypoints")
+        for target in worktree_entrypoints.get("missing_targets", []):
+            missing_required.append(f"worktree-target:{target}")
+        for script_name in worktree_entrypoints.get("missing_scripts", []):
+            missing_required.append(f"worktree-script:{script_name}")
 
     classification = "governed" if not missing_required else "partial"
     if relationships_state["status"] == "minimal":

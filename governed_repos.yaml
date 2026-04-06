@@ -1,0 +1,51 @@
+version: 1
+repos:
+  - id: enforced-planning
+    path: ~/projects/enforced-planning
+    tier: source
+  - id: llm_client
+    path: ~/projects/llm_client
+    tier: governed
+  - id: prompt_eval
+    path: ~/projects/prompt_eval
+    tier: governed
+  - id: open_web_retrieval
+    path: ~/projects/open_web_retrieval
+    tier: governed
+  - id: agentic_scaffolding
+    path: ~/projects/agentic_scaffolding
+    tier: governed
+  - id: project-meta
+    path: ~/projects/project-meta
+    tier: governed
+  - id: agent_memory
+    path: ~/projects/agent_memory
+    tier: governed
+  - id: ecosystem-ops
+    path: ~/projects/ecosystem-ops
+    tier: governed
+  - id: moltbot
+    path: ~/projects/moltbot
+    tier: governed
+  - id: qualitative_coding
+    path: ~/projects/qualitative_coding
+    tier: governed
+  - id: orgchart
+    path: ~/projects/orgchart
+    tier: governed
+  - id: trajectory
+    path: ~/projects/trajectory
+    tier: governed
+  - id: grounded-research
+    path: ~/projects/grounded-research
+    tier: governed
+  - id: research_v3
+    path: ~/projects/research_v3
+    tier: governed
+  - id: data_contracts
+    path: ~/projects/data_contracts
+    tier: governed
+  - id: osint_tools
+    path: ~/projects/osint_tools
+    tier: governed
+# Note: agent_ecology2 intentionally excluded (PR #1148 pending merge)

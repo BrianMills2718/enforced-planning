@@ -1,7 +1,8 @@
 ## enforced-planning — framework for enforced planning, context gating, doc-code alignment
 
-.PHONY: help test test-quick check lint infer check-deps check-caps migrate-rels verify-couplings review-surfaces promote plan-registry status
+.PHONY: help test test-quick check lint infer check-deps check-caps migrate-rels verify-couplings review-surfaces promote plan-registry ecosystem-status status
 
+PYTHON ?= python3
 REPO ?= .
 SCAN_DIR ?= ~/projects
 TRUTH_CONFIG ?= $(REPO)/scripts/truth_surface_drift.yaml
@@ -50,6 +51,9 @@ promote:  ## Show promotion candidates from semantic review findings (REPO=path)
 
 plan-registry:  ## Build cross-repo plan registry (SCAN_DIR=~/projects)
 	python scripts/build_plan_registry.py --scan-dir $(SCAN_DIR) --output generated/plan_registry.json --summary
+
+ecosystem-status: ## Build ecosystem status JSON and rendered markdown surface
+	$(PYTHON) scripts/ecosystem_status.py
 
 ecosystem-deps:  ## Build ecosystem cross-repo dependency map from generated/inferred_*.json
 	python scripts/build_ecosystem_dep_map.py --output generated/ecosystem_dep_map.json --summary

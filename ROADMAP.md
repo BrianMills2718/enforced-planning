@@ -174,7 +174,7 @@ exists and measuring it.
 | Item | What | Trigger |
 |------|------|---------|
 | Mac mini pilot | Execute first controlled pilot from `docs/guides/MAC_MINI_CONTINUOUS_AUTOMATION_BOOTSTRAP.md` | Plans #43/#44/#35 complete |
-| Upgrade automation rollout | `scripts/upgrade_governed_repos.py` implemented (2026-04-05); 16/16 repos dry-run ok. Trigger met — ready for write-mode rollout. | ✅ Script shipped |
+| Upgrade automation rollout | `scripts/upgrade_governed_repos.py` implemented (2026-04-05); 16/16 repos dry-run ok. Write-mode rollout **deferred to Mac mini pilot** — run repo-by-repo after pilot confirms unattended dry-run runs clean. See Plan #51. | ✅ Script shipped; write-mode pending Mac mini pilot |
 | Ecosystem status renderer | `make ecosystem-status`, `generated/ecosystem_status.json`, operator metrics on top of Plans #21/#22 | Plans #43/#44/#35 complete |
 | Multi-tool adoption | Cursor/Windsurf hook adapters when their hook surfaces are publicly documented | External dependency: tool documentation |
 | Project-meta topic-research adoption | Apply portable topic-research pattern in `research_synthesis/` with manifests, ADR links, freshness metadata | Plans #43/#44/#35 complete |

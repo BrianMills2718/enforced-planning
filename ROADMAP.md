@@ -143,15 +143,15 @@ and readable as bounded active lanes instead of only raw claims.
 | #32 | Cross-tool session adapters and adoption rollout | ✅ Complete |
 | #33 | Assignment-layer session contract integration | ✅ Complete |
 | #34 | Weak-claim remediation and live-lane migration | ✅ Complete |
-| #35 | Queue-based assignment and session routing architecture | 📋 Planned |
+| #35 | Queue-based assignment and session routing architecture | ✅ Complete |
 | #37 | Plan-bound session identity and resume lifecycle | ✅ Complete |
 | #38 | Authority-drift reconciliation gates | ✅ Complete |
 | #39 | Worktree-aware markdown-link validation and root resolution | ✅ Complete |
 | #40 | Overnight coordination implementation sprint | ✅ Complete |
 | #41 | Documentation authority governance and enforcement | ✅ Complete |
 | #42 | Atomic closeout and claimed worktree removal | ✅ Complete |
-| #43 | Publish-lane safety and dirty primary checkout handling | 🚧 In Progress |
-| #44 | Interactive startup mode and session-owned surface policy | 📋 Planned |
+| #43 | Publish-lane safety and dirty primary checkout handling | ✅ Complete |
+| #44 | Interactive startup mode and session-owned surface policy | ✅ Complete |
 
 **Deferred item blockers:**
 
@@ -163,24 +163,9 @@ and readable as bounded active lanes instead of only raw claims.
 
 **Long-term deferred (no near-term consumer):** Visibility grammar and distributed governance moved to `docs/backlog/DEFERRED_FEATURES.md`.
 
-## What's Next — Complete Plans #43, #44, #35
-
-These three plans complete the Coordination Runtime Surface:
-
-1. **Plan #43 — Publish-lane safety** (🚧 In Progress)
-   Fail loud when publish worktrees are created with a dirty primary checkout.
-
-2. **Plan #44 — Startup-mode truthfulness** (📋 Planned)
-   Distinguish interactive startup truth from autonomous routing/ownership semantics.
-
-3. **Plan #35 — Queue/routing architecture freeze** (📋 Planned)
-   Freeze the canonical claim/session model so future task-queue work builds on it.
-
----
-
 ## Phase 9: Fleet Adoption and Framework Maintenance
 
-**Gate:** Plans #43, #44, and #35 all complete. Coordination Runtime Surface is closed.
+**Gate:** Plans #43, #44, and #35 all complete. ✅ Gate met (2026-04-05). Coordination Runtime Surface is closed.
 
 **Strategic choice:** Phase 9 is **fleet adoption and maintenance** — not a new capability
 phase. The framework capability set is complete. Phase 9 work is about deploying what

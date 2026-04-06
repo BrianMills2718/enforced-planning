@@ -1,6 +1,6 @@
 # Plan #44: Interactive Startup Mode And Session-Owned Surface Policy
 
-**Status:** 📋 Planned
+**Status:** ✅ Complete
 **Type:** design
 **Priority:** High
 **Blocked By:** Plan #43 publish-lane safety

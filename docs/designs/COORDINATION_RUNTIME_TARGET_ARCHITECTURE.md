@@ -135,6 +135,49 @@ The policy is:
 
 This avoids silent overlap and also avoids silent drift.
 
+## Startup Surfaces
+
+Startup surfaces are the information shown to an agent or operator when a
+session first opens. They must follow a strict ownership rule.
+
+### Interactive vs Autonomous Session Types
+
+**Interactive sessions** are human-driven (Claude Code interactive window,
+Codex terminal, operator shell). They have no pre-assigned work at open time
+and must not auto-adopt stale assignments.
+
+**Autonomous sessions** are machine-driven (cron, overnight agent, pipeline).
+They run against a pre-made plan and must be claim-bound before starting work.
+
+### Startup Ownership Rule
+
+A startup surface may display an assignment as *current* only if the current
+session explicitly owns it via a claim. Specifically:
+
+- For interactive sessions: if no claim exists for this session, show no
+  current assignment. Do not surface a generic fallback file as if it were
+  an active assignment.
+- For autonomous sessions: the startup surface is the sprint tracker and the
+  claim registry. A generic assignment file is not a sufficient routing signal
+  for unattended execution.
+- Other sessions' claims may be shown as *global context*, but must be labeled
+  as such and never phrased as "your current work."
+
+### Generic Fallback Files
+
+Files like `claude-code.yaml` or `assignment.yaml` are compatibility-only
+routing hints. They are not session identity. Do not promote them to startup
+truth. If a repo still routes interactive sessions through a generic fallback
+file, that is a coordination debt item — not a valid startup surface.
+
+### Documented Failure Mode (2026-04-05)
+
+A stale `claude-code.yaml` showing `theory-forge` as the current assignment
+was displayed to a new interactive session that had never claimed that work.
+Root cause: the startup brief used the generic fallback file as session truth.
+Resolution: startup display must be claim-gated. Only session-owned claims
+qualify as "current assignment."
+
 ## Explicit Anti-Patterns
 
 These are rejected architectural directions:

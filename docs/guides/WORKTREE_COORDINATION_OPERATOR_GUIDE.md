@@ -340,6 +340,39 @@ Maintenance commands:
 - `python scripts/audit_governed_repo.py --repo-root <repo> --json`
 - `python scripts/scan_coordination_mirrors.py --workspace-root ~/projects --fail-on-copied`
 
+## Startup Surface Ownership Policy
+
+Startup surfaces (the brief, assignment file, or claim state shown at session
+open) must respect a strict ownership rule:
+
+**Interactive sessions** (human-driven Claude Code windows, Codex terminals):
+- display only work that the *current session* explicitly owns via claim
+- if no claim exists for this session, show no assignment — do not surface
+  generic fallback files as if they were a current assignment
+- other sessions' claims may be shown as *global context*, but must be labeled
+  as such and never phrased as "your current work"
+
+**Autonomous sessions** (cron, overnight runs, agent pipelines):
+- must create or resume an explicit plan-bound claim before starting work
+- must not proceed with work that has no verifiable claim ownership
+- startup surfaces for autonomous sessions are the claim registry and sprint
+  tracker; generic assignment files are not sufficient
+
+**Generic fallback files** (e.g. `claude-code.yaml`, `assignment.yaml`):
+- treated as routing *hints* only — not as session identity
+- do not promote generic files to "current session" truth at startup
+- if a repo still uses a generic fallback file, log a coordination drift warning
+  and proceed without auto-adopting the assignment
+
+**Failure mode to avoid:** A stale generic assignment file surfacing as the
+current session's assignment when the actual operator just opened a new
+interactive window. This was observed live on 2026-04-05: `claude-code.yaml`
+showed `theory-forge` as the session's work when the session had never claimed
+it. Resolution: startup display must be claim-gated, not fallback-file-gated.
+
+See `docs/designs/COORDINATION_RUNTIME_TARGET_ARCHITECTURE.md` for the
+architecture basis of this policy (Startup Surfaces section).
+
 ## Related Docs
 
 - `README.md` for framework overview

@@ -299,6 +299,61 @@ def check_doc_coupling(project_root: Path, verbose: bool = True) -> tuple[bool, 
     return True, "passed"
 
 
+def _check_trace_evaluable_advisory(plan_file: Path, verbose: bool = True) -> str | None:
+    """Advisory check: warn if plan declares trace_evaluable:true without evidence.
+
+    Returns a warning string if the plan should have trace_eval evidence but
+    doesn't yet.  Returns None when the plan is compliant or exempt.
+
+    This check is ADVISORY — it never prevents plan completion.
+    Promotion to a hard block is tracked in the evidence ledger (Plan #132).
+    """
+    import re
+
+    content = plan_file.read_text()
+
+    if verbose:
+        print("\n[5/4+] Trace evaluable advisory check...")
+
+    # Find the declaration
+    value: str | None = None
+    for line in content.split("\n"):
+        m = re.match(r"`?trace_evaluable:\s*(true|false)\s*(?:#.*)?`?", line.strip())
+        if m:
+            value = m.group(1)
+            break
+
+    if value is None:
+        # Not declared — advisory skip
+        return None
+
+    if value == "false":
+        # Explicitly opted out — no warning
+        return None
+
+    # Declared true — check for evidence link
+    if "evidence_link:" not in content:
+        warning = "plan declares trace_evaluable:true but has no evidence_link field"
+        if verbose:
+            print(f"  ⚠ ADVISORY: {warning}")
+            print("    Add evidence_link: <path_to_trace_result.json> before closing")
+            print("    (This is advisory — see docs/ops/trace_evaluable_evidence_ledger.md)")
+        return warning
+
+    # Has the field — check if it's still blank
+    m = re.search(r"evidence_link:\s*(.+)", content)
+    if m and m.group(1).strip() in {"", '""', "''"}:
+        warning = "plan declares trace_evaluable:true but evidence_link is still empty"
+        if verbose:
+            print(f"  ⚠ ADVISORY: {warning}")
+            print("    Populate evidence_link: with the path to trace_result.json")
+        return warning
+
+    if verbose:
+        print("  ✓ trace_evaluable evidence link present")
+    return None
+
+
 def get_git_info(project_root: Path) -> tuple[str, str]:
     """Get current git commit and branch.
 
@@ -595,6 +650,9 @@ def complete_plan(
     if not doc_passed:
         all_passed = False
 
+    # 5. Trace-evaluable advisory check (advisory — never blocks; Plan #132 policy)
+    trace_warning = _check_trace_evaluable_advisory(plan_file, verbose)
+
     # Summary
     if verbose:
         print(f"\n{'='*60}")
@@ -604,6 +662,10 @@ def complete_plan(
         print(f"  E2E smoke:       {'PASS' if e2e_smoke_passed else 'FAIL'}")
         print(f"  E2E real (LLM):  {'PASS' if e2e_real_passed else 'FAIL'}")
         print(f"  Doc coupling:    {'PASS' if doc_passed else 'FAIL'}")
+        if trace_warning:
+            print(f"  Trace eval:      WARN  ← {trace_warning}")
+        else:
+            print("  Trace eval:      ok")
 
     if not all_passed:
         print(f"\nFAILED: Plan #{plan_number} cannot be marked complete.")

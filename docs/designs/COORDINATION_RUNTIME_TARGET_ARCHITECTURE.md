@@ -86,16 +86,66 @@ global singleton session marker.
 
 ### 5. Queue Layer
 
-The queue layer is future-facing.
+The queue layer is future-facing. It sits *above* assignments, not below claims.
 
-It should answer:
+It answers:
 
-- what work is available
-- what priority order applies
-- what preconditions must be true before claiming the next item
+- what work is available and has not been claimed
+- what priority order applies at this moment
+- what preconditions must be satisfied before a session may claim the next item
 
-The queue may produce assignments, but it should still route work into the same
-claim/session lifecycle.
+The queue may produce assignments, but it must route work into the same
+claim/session lifecycle. Queue dispatch is not session identity.
+
+#### Layer Boundaries (explicit)
+
+| Layer | What it owns | What it does not own |
+|-------|-------------|---------------------|
+| Queue | Available work items, priority order, preconditions | Session identity, lane state, worktree paths |
+| Assignment | Routing hints for which project/category to work on | Ownership — an assignment file does not mean a claim exists |
+| Claim | Who owns what scope right now | Queue state — the queue does not read from claims directly |
+| Session | Current objective, phase, stop conditions | Queue membership — sessions are not automatically re-queued |
+| Lane | Derived operator view of a live claim | Queue position — lanes do not imply queue advancement |
+
+The single most important rule: **queue dispatch ends in `session-start` + claim creation**. If the queue routed a session to work but no claim was created, the routing is not enforceable. The claim is the proof of ownership; the queue is the source of the next item to claim.
+
+#### Precondition Semantics
+
+Before a session may claim a queue item, the queue layer should verify:
+
+1. No live claim already exists for the same `project + scope + plan_ref` combination
+2. The item's declared blockers are either resolved or explicitly bypassed
+3. If human override is in effect, the override is recorded (not silently applied)
+
+#### Human Override Rule
+
+Human-assigned routing may coexist with queue dispatch, but the queue state
+must remain inspectable and bounded. If a human explicitly assigns a session to
+out-of-order work, that assignment must still produce a canonical claim. The
+queue may be paused or bypassed, not superseded invisibly.
+
+#### Queue Implementation Roadmap (follow-on)
+
+This design is intentionally implementation-deferred. A concrete follow-on
+program does not require reopening the architecture, because the boundaries are
+now explicit. The follow-on steps are:
+
+1. **Queue storage**: a flat YAML file (`~/.claude/coordination/queue.yaml`) per
+   workspace, listing work items with `item_id`, `project`, `plan_ref`, `priority`,
+   `blockers`, and `status` (available/claimed/completed).
+
+2. **Claim-on-start routing**: extend `session-start` to optionally accept
+   `--queue-pop` which atomically: marks the next available item as claimed,
+   creates the claim, and emits the session bootstrap context.
+
+3. **Queue inspection**: `make queue-status` prints available/claimed/completed
+   items with blockers, analogous to `make lane-list`.
+
+4. **Human override integration**: an explicit `make queue-assign ITEM=N SESSION=X`
+   command that records the override reason and still creates a canonical claim.
+
+These steps do not change the claim/session/lane model — they add a structured
+source of "what to claim next" on top of it.
 
 ## Recovery And Closeout Layer
 

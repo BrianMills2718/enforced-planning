@@ -39,7 +39,7 @@ See `ROADMAP.md` for the full phase map and recommended priority order.
 | 32 | Cross-Tool Session Adapters and Adoption Rollout (`32_cross_tool_session_adapters_and_adoption_rollout.md`) | High | ✅ Complete | Codex/Claude Code adapter parity and rollout |
 | 33 | Assignment-Layer Session Contract Integration (`33_assignment-layer-session-contract-integration.md`) | High | ✅ Complete | Make downstream routing consumers use canonical session identity |
 | 34 | Weak-Claim Remediation And Live-Lane Migration (`34_weak-claim-remediation-and-live-lane-migration.md`) | High | ✅ Complete | Registry now healthy; no further remediation required for the current backlog |
-| 35 | Queue-Based Assignment And Session Routing Architecture (`35_queue-based-assignment-and-session-routing-architecture.md`) | Medium | 📋 Planned | Freeze the long-term routing layer on top of the claim/session model |
+| 35 | Queue-Based Assignment And Session Routing Architecture (`35_queue-based-assignment-and-session-routing-architecture.md`) | Medium | ✅ Complete | Freeze the long-term routing layer on top of the claim/session model |
 | 36 | Research Synthesis Downstream Consistency (`36_research-synthesis-downstream-consistency.md`) | Medium | ✅ Complete | Keep portable active guidance aligned with project-meta's research-synthesis hot path |
 | 37 | Plan-Bound Session Identity And Resume Lifecycle (`37_plan-bound-session-identity-and-resume-lifecycle.md`) | High | ✅ Complete | Plan-bound recovery lifecycle with resume, handoff, and abandon commands |
 | 38 | Authority-Drift Reconciliation Gates (`38_authority-drift-reconciliation-gates.md`) | High | ✅ Complete | Turn authority drift into closure-blocking reconciliation debt instead of warning-only residue |

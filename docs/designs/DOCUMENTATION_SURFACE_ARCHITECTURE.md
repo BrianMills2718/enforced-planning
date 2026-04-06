@@ -1,7 +1,7 @@
 # Design: Documentation Surface Architecture and Convergence
 
 **Date:** 2026-04-04
-**Status:** Proposed
+**Status:** Accepted (Open decisions #2 and #3 deferred to Phase 9 convergence work; Decision #1 resolved — see Open Decisions)
 
 ## Problem
 
@@ -135,9 +135,6 @@ Ordered by first-pass reader flow:
 
 ## Open Decisions
 
-- should `install.sh` delegate to `scripts/install_governed_repo.py`, or vice
-  versa?
-- should semantic review stay repo-wide (`--repo`) or config-driven
-  (`--config`) as the canonical interface?
-- should `docs/guides/NEW_PROJECT_SETUP.md` remain as a separate detailed guide,
-  or be folded into `GETTING_STARTED.md` after convergence?
+- ~~should `install.sh` delegate to `scripts/install_governed_repo.py`, or vice versa?~~ **Resolved (2026-04-05):** `scripts/install_governed_repo.py` is the canonical installer. `install.sh` is a convenience wrapper and legacy compatibility entrypoint. See CLAUDE.md.
+- **Open:** should semantic review stay repo-wide (`--repo`) or config-driven (`--config`) as the canonical interface? (Deferred to Phase 9 semantic-review convergence work.)
+- **Open:** should `docs/guides/NEW_PROJECT_SETUP.md` remain as a separate detailed guide, or be folded into `GETTING_STARTED.md` after convergence? (Deferred to Phase 9.)

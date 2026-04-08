@@ -50,10 +50,12 @@ meta_process:
       config_file: "scripts/relationships.yaml"
 
     dead_code:
-      enabled: false          # opt-in per repo
-      strict: false           # false = warn only, true = block commit
+      enabled: true           # source repo enforces dead-code detection on demand
+      strict: true            # fail the target when dead code is detected
       min_confidence: 80      # vulture confidence threshold (60-100)
-      paths: []               # specific paths to check (empty = project root)
+      paths:                  # bounded repo-local surface; avoids noisy temp files
+        - "enforced_planning"
+        - "scripts"
       whitelist: ".vulture_whitelist.py"
 
   # =============================================================================

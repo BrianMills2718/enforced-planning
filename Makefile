@@ -1,8 +1,8 @@
 ## enforced-planning — framework for enforced planning, context gating, doc-code alignment
 
-.PHONY: help test test-quick check lint infer check-deps check-caps migrate-rels verify-couplings review-surfaces promote plan-registry ecosystem-status status
+.PHONY: help test test-quick check lint dead-code infer check-deps check-caps migrate-rels verify-couplings review-surfaces promote plan-registry ecosystem-status status
 
-PYTHON ?= python3
+PYTHON ?= $(if $(wildcard .venv/bin/python),.venv/bin/python,python3)
 REPO ?= .
 SCAN_DIR ?= ~/projects
 TRUTH_CONFIG ?= $(REPO)/scripts/truth_surface_drift.yaml
@@ -22,6 +22,9 @@ check: lint test-quick  ## Run lint + tests
 
 lint:  ## Run ruff linter
 	ruff check scripts/ tests/ --ignore=F401
+
+dead-code:  ## Run dead code detection
+	$(PYTHON) scripts/check_dead_code.py
 
 ## --- Relationships V2 tools ---
 

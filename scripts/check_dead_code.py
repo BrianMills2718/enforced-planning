@@ -28,7 +28,7 @@ class Finding:
     line: int
     name: str
     kind: str
-    confidence: int
+    confidence: int | None
 
 
 @dataclass
@@ -40,6 +40,7 @@ class Result:
     tool_output: str = ""
     tool_available: bool = True
     error: str = ""
+    exit_code: int | None = None
 
 
 def _load_config(project_root: Path) -> dict[str, Any]:
@@ -59,12 +60,17 @@ def _load_config(project_root: Path) -> dict[str, Any]:
     if not config_path.is_file():
         return defaults
 
+    raw_text = config_path.read_text(encoding="utf-8")
+
     try:
         import yaml  # type: ignore[import-untyped]
     except ImportError:
-        return defaults
+        dead_code = _load_dead_code_config_without_yaml(raw_text)
+        for key, default in defaults.items():
+            dead_code.setdefault(key, default)
+        return dead_code
 
-    raw = yaml.safe_load(config_path.read_text())
+    raw = yaml.safe_load(raw_text)
     if not isinstance(raw, dict):
         return defaults
 
@@ -77,13 +83,100 @@ def _load_config(project_root: Path) -> dict[str, Any]:
     return dead_code
 
 
+def _coerce_yaml_scalar(raw_value: str) -> Any:
+    """Convert a small YAML scalar into a Python value."""
+
+    value = raw_value.strip()
+    if not value:
+        return ""
+    if value.startswith(("'", '"')) and value.endswith(("'", '"')) and len(value) >= 2:
+        return value[1:-1]
+    if value.lower() == "true":
+        return True
+    if value.lower() == "false":
+        return False
+    if value == "[]":
+        return []
+    if re.fullmatch(r"-?\d+", value):
+        return int(value)
+    return value
+
+
+def _load_dead_code_config_without_yaml(raw_text: str) -> dict[str, Any]:
+    """Parse only the quality.dead_code block when PyYAML is unavailable."""
+
+    dead_code: dict[str, Any] = {}
+    meta_indent: int | None = None
+    quality_indent: int | None = None
+    dead_code_indent: int | None = None
+    list_key: str | None = None
+
+    for line in raw_text.splitlines():
+        content = line.split("#", 1)[0].rstrip()
+        if not content.strip():
+            continue
+        indent = len(content) - len(content.lstrip(" "))
+        stripped = content.strip()
+
+        if stripped in {"meta_process:", "meta-process:"}:
+            meta_indent = indent
+            quality_indent = None
+            dead_code_indent = None
+            list_key = None
+            continue
+
+        if meta_indent is None or indent <= meta_indent:
+            continue
+
+        if stripped == "quality:":
+            quality_indent = indent
+            dead_code_indent = None
+            list_key = None
+            continue
+
+        if quality_indent is None or indent <= quality_indent:
+            continue
+
+        if stripped == "dead_code:":
+            dead_code_indent = indent
+            list_key = None
+            continue
+
+        if dead_code_indent is None:
+            continue
+        if indent <= dead_code_indent:
+            break
+
+        if stripped.startswith("- ") and list_key is not None:
+            existing = dead_code.setdefault(list_key, [])
+            if isinstance(existing, list):
+                existing.append(_coerce_yaml_scalar(stripped[2:]))
+            continue
+
+        match = re.match(r"(?P<key>[A-Za-z0-9_]+):\s*(?P<value>.*)$", stripped)
+        if not match:
+            continue
+
+        key = match.group("key")
+        raw_value = match.group("value")
+        if raw_value == "":
+            dead_code[key] = []
+            list_key = key
+            continue
+
+        dead_code[key] = _coerce_yaml_scalar(raw_value)
+        list_key = None
+
+    return dead_code
+
+
 def _parse_vulture_line(line: str) -> Finding | None:
     """Parse a vulture output line into a Finding.
 
     Format: path.py:123: unused function 'foo' (90% confidence)
     """
     match = re.match(
-        r"(.+?):(\d+): (unused \w+) '(\w+)' \((\d+)% confidence\)", line
+        r"(.+?):(\d+): (unused [^']+) '([^']+)' \((\d+)% confidence\)", line
     )
     if match:
         return Finding(
@@ -96,6 +189,86 @@ def _parse_vulture_line(line: str) -> Finding | None:
     return None
 
 
+def _parse_knip_item(issue_type: str, file_path: str, item: Any) -> Finding | None:
+    """Convert one JSON knip issue item into a normalized finding."""
+
+    kind = issue_type.strip().replace("_", "-").replace(" ", "-")
+    if isinstance(item, str):
+        return Finding(
+            file=file_path,
+            line=1,
+            name=item,
+            kind=kind,
+            confidence=None,
+        )
+    if not isinstance(item, dict):
+        return None
+
+    name = next(
+        (
+            value
+            for key in ("name", "symbol", "issue", "identifier", "text", "path")
+            if isinstance((value := item.get(key)), str) and value
+        ),
+        Path(file_path).name if file_path else "<unknown>",
+    )
+    line = item.get("line")
+    if not isinstance(line, int) or line < 1:
+        line = 1
+    return Finding(
+        file=file_path or "<unknown>",
+        line=line,
+        name=name,
+        kind=kind,
+        confidence=None,
+    )
+
+
+def _parse_knip_report(output: str) -> list[Finding]:
+    """Parse the JSON reporter output from knip."""
+
+    raw = output.strip()
+    if not raw:
+        return []
+
+    payload = json.loads(raw)
+    if not isinstance(payload, dict):
+        raise ValueError("knip JSON reporter returned a non-object payload")
+
+    findings: list[Finding] = []
+
+    files = payload.get("files")
+    if isinstance(files, list):
+        for entry in files:
+            finding = _parse_knip_item("unused-file", "<unknown>", entry)
+            if finding is not None:
+                if isinstance(entry, dict):
+                    path = entry.get("file") or entry.get("path") or entry.get("name")
+                    if isinstance(path, str) and path:
+                        finding.file = path
+                        finding.name = Path(path).name
+                elif isinstance(entry, str):
+                    finding.file = entry
+                    finding.name = Path(entry).name
+                findings.append(finding)
+
+    issues = payload.get("issues")
+    if isinstance(issues, list):
+        for issue in issues:
+            if not isinstance(issue, dict):
+                continue
+            file_path = issue.get("file") if isinstance(issue.get("file"), str) else "<unknown>"
+            for issue_type, items in issue.items():
+                if issue_type == "file" or not isinstance(items, list):
+                    continue
+                for item in items:
+                    finding = _parse_knip_item(issue_type, file_path, item)
+                    if finding is not None:
+                        findings.append(finding)
+
+    return findings
+
+
 def _run_vulture(
     project_root: Path,
     paths: list[str],
@@ -103,7 +276,7 @@ def _run_vulture(
     whitelist: str,
 ) -> Result:
     """Run vulture for Python dead code detection."""
-    cmd = ["python", "-m", "vulture"]
+    cmd = [sys.executable, "-m", "vulture"]
     if paths:
         cmd.extend(paths)
     else:
@@ -116,12 +289,19 @@ def _run_vulture(
 
     try:
         proc = subprocess.run(
-            cmd, cwd=str(project_root), capture_output=True, text=True, timeout=120
+            cmd,
+            cwd=str(project_root),
+            capture_output=True,
+            text=True,
+            timeout=120,
+            check=False,
         )
-    except FileNotFoundError:
-        return Result(passed=True, tool_available=False, error="vulture not installed")
     except subprocess.TimeoutExpired:
-        return Result(passed=True, error="vulture timed out after 120s")
+        return Result(
+            passed=False,
+            tool_available=True,
+            error="vulture timed out after 120s",
+        )
 
     findings: list[Finding] = []
     for line in proc.stdout.strip().splitlines():
@@ -129,25 +309,108 @@ def _run_vulture(
         if f:
             findings.append(f)
 
-    return Result(passed=True, findings=findings, tool_output=proc.stdout.strip())
+    tool_output = "\n".join(
+        part for part in (proc.stdout.strip(), proc.stderr.strip()) if part
+    )
+    if findings:
+        return Result(
+            passed=True,
+            findings=findings,
+            tool_output=tool_output,
+            exit_code=proc.returncode,
+        )
+
+    if "No module named vulture" in proc.stderr:
+        return Result(
+            passed=False,
+            tool_available=False,
+            error="vulture is required when dead_code is enabled",
+            tool_output=tool_output,
+            exit_code=proc.returncode,
+        )
+
+    if proc.returncode != 0:
+        return Result(
+            passed=False,
+            error=f"vulture failed with exit code {proc.returncode}",
+            tool_output=tool_output,
+            exit_code=proc.returncode,
+        )
+
+    return Result(
+        passed=True,
+        findings=[],
+        tool_output=tool_output,
+        exit_code=proc.returncode,
+    )
 
 
 def _run_knip(project_root: Path) -> Result:
     """Run knip for TypeScript dead code detection."""
     try:
         proc = subprocess.run(
-            ["npx", "knip", "--reporter", "compact"],
+            ["npx", "knip", "--reporter", "json"],
             cwd=str(project_root),
             capture_output=True,
             text=True,
             timeout=120,
+            check=False,
         )
     except FileNotFoundError:
-        return Result(passed=True, tool_available=False, error="npx/knip not available")
+        return Result(
+            passed=False,
+            tool_available=False,
+            error="npx/knip is required when dead_code is enabled",
+        )
     except subprocess.TimeoutExpired:
-        return Result(passed=True, error="knip timed out after 120s")
+        return Result(
+            passed=False,
+            tool_available=True,
+            error="knip timed out after 120s",
+        )
 
-    return Result(passed=True, tool_output=proc.stdout.strip())
+    tool_output = "\n".join(
+        part for part in (proc.stdout.strip(), proc.stderr.strip()) if part
+    )
+    try:
+        findings = _parse_knip_report(proc.stdout)
+    except json.JSONDecodeError as exc:
+        return Result(
+            passed=False,
+            error=f"knip did not return valid JSON: {exc}",
+            tool_output=tool_output,
+            exit_code=proc.returncode,
+        )
+    except ValueError as exc:
+        return Result(
+            passed=False,
+            error=str(exc),
+            tool_output=tool_output,
+            exit_code=proc.returncode,
+        )
+
+    if findings:
+        return Result(
+            passed=True,
+            findings=findings,
+            tool_output=tool_output,
+            exit_code=proc.returncode,
+        )
+
+    if proc.returncode != 0:
+        return Result(
+            passed=False,
+            error=f"knip failed with exit code {proc.returncode}",
+            tool_output=tool_output,
+            exit_code=proc.returncode,
+        )
+
+    return Result(
+        passed=True,
+        findings=[],
+        tool_output=tool_output,
+        exit_code=proc.returncode,
+    )
 
 
 def check_dead_code(project_root: Path) -> Result:
@@ -158,6 +421,8 @@ def check_dead_code(project_root: Path) -> Result:
     In strict mode, findings cause passed=False.
     """
     config = _load_config(project_root)
+    if not config.get("enabled"):
+        return Result(passed=True)
 
     # Detect language
     if (project_root / "package.json").is_file():
@@ -169,6 +434,10 @@ def check_dead_code(project_root: Path) -> Result:
             min_confidence=config.get("min_confidence", 80),
             whitelist=config.get("whitelist", ".vulture_whitelist.py"),
         )
+
+    if result.error:
+        result.passed = False
+        return result
 
     if config.get("strict") and result.findings:
         result.passed = False
@@ -194,6 +463,7 @@ def main() -> None:
         "findings": [asdict(f) for f in result.findings],
         "tool_available": result.tool_available,
         "error": result.error,
+        "exit_code": result.exit_code,
     }
     json.dump(output, sys.stdout, indent=2)
     print()

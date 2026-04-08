@@ -8,8 +8,10 @@ project root that has the tool disabled so no subprocess is invoked.
 from __future__ import annotations
 
 import importlib.util
+import builtins
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 
 SCRIPTS_DIR = Path(__file__).resolve().parents[1] / "scripts"
@@ -105,6 +107,38 @@ def test_load_config_missing_dead_code_section_returns_defaults(tmp_path: Path) 
     assert config["enabled"] is False
 
 
+def test_load_config_falls_back_without_pyyaml(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """The dead-code block still loads when PyYAML is unavailable."""
+    m = _load()
+    (tmp_path / "meta-process.yaml").write_text(
+        "meta_process:\n"
+        "  quality:\n"
+        "    dead_code:\n"
+        "      enabled: true\n"
+        "      strict: true\n"
+        "      min_confidence: 90\n"
+        "      paths:\n"
+        "        - \"enforced_planning\"\n",
+        encoding="utf-8",
+    )
+
+    original_import = builtins.__import__
+
+    def fake_import(name, *args, **kwargs):  # type: ignore[no-untyped-def]
+        if name == "yaml":
+            raise ImportError("yaml intentionally unavailable for this test")
+        return original_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+    config = m._load_config(tmp_path)  # type: ignore[attr-defined]
+    assert config["enabled"] is True
+    assert config["strict"] is True
+    assert config["min_confidence"] == 90
+    assert config["paths"] == ["enforced_planning"]
+
+
 # ---------------------------------------------------------------------------
 # check_dead_code — disabled path (no subprocess invoked)
 # ---------------------------------------------------------------------------
@@ -118,3 +152,95 @@ def test_check_dead_code_skips_when_disabled(tmp_path: Path) -> None:
     # Tool is not available in the test env, so passed=True and no findings
     assert result.passed
     assert result.findings == []
+
+
+def test_run_vulture_fails_loud_when_module_missing(tmp_path: Path, monkeypatch) -> None:
+    """Missing vulture is a hard failure when the check is enabled."""
+    m = _load()
+
+    def fake_run(*args, **kwargs):  # type: ignore[no-untyped-def]
+        return SimpleNamespace(
+            returncode=1,
+            stdout="",
+            stderr="/usr/bin/python: No module named vulture",
+        )
+
+    monkeypatch.setattr(m.subprocess, "run", fake_run)  # type: ignore[attr-defined]
+    result = m._run_vulture(tmp_path, [], 80, ".vulture_whitelist.py")  # type: ignore[attr-defined]
+    assert not result.passed
+    assert not result.tool_available
+    assert "required" in result.error
+
+
+def test_check_dead_code_strict_fails_on_vulture_findings(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """Strict mode fails when vulture reports findings."""
+    m = _load()
+    (tmp_path / "meta-process.yaml").write_text(
+        "meta_process:\n"
+        "  quality:\n"
+        "    dead_code:\n"
+        "      enabled: true\n"
+        "      strict: true\n",
+        encoding="utf-8",
+    )
+
+    def fake_run(*args, **kwargs):  # type: ignore[no-untyped-def]
+        return SimpleNamespace(
+            returncode=3,
+            stdout="src/mod.py:12: unused function 'orphan' (90% confidence)\n",
+            stderr="",
+        )
+
+    monkeypatch.setattr(m.subprocess, "run", fake_run)  # type: ignore[attr-defined]
+    result = m.check_dead_code(tmp_path)  # type: ignore[attr-defined]
+    assert not result.passed
+    assert len(result.findings) == 1
+    assert result.findings[0].name == "orphan"
+
+
+def test_run_knip_parses_json_findings(tmp_path: Path, monkeypatch) -> None:
+    """Knip JSON findings are normalized into the shared Finding shape."""
+    m = _load()
+
+    def fake_run(*args, **kwargs):  # type: ignore[no-untyped-def]
+        return SimpleNamespace(
+            returncode=1,
+            stdout=(
+                '{"files":["src/unused.ts"],'
+                '"issues":[{"file":"src/app.ts","exports":[{"name":"deadExport","line":9}]}]}'
+            ),
+            stderr="",
+        )
+
+    monkeypatch.setattr(m.subprocess, "run", fake_run)  # type: ignore[attr-defined]
+    result = m._run_knip(tmp_path)  # type: ignore[attr-defined]
+    assert result.passed
+    assert [finding.kind for finding in result.findings] == ["unused-file", "exports"]
+    assert result.findings[0].file == "src/unused.ts"
+    assert result.findings[1].name == "deadExport"
+    assert result.findings[1].line == 9
+
+
+def test_check_dead_code_enabled_fails_when_knip_output_is_invalid(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """Invalid knip output fails loudly instead of silently passing."""
+    m = _load()
+    (tmp_path / "meta-process.yaml").write_text(
+        "meta_process:\n"
+        "  quality:\n"
+        "    dead_code:\n"
+        "      enabled: true\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "package.json").write_text("{}", encoding="utf-8")
+
+    def fake_run(*args, **kwargs):  # type: ignore[no-untyped-def]
+        return SimpleNamespace(returncode=2, stdout="not-json", stderr="knip exploded")
+
+    monkeypatch.setattr(m.subprocess, "run", fake_run)  # type: ignore[attr-defined]
+    result = m.check_dead_code(tmp_path)  # type: ignore[attr-defined]
+    assert not result.passed
+    assert "valid JSON" in result.error

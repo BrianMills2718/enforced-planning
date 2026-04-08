@@ -57,6 +57,7 @@ meta_process:
         - "enforced_planning"
         - "scripts"
       whitelist: ".vulture_whitelist.py"
+      audit_file: "dead_code_audit.json"
 
   # =============================================================================
   # CI CONFIGURATION

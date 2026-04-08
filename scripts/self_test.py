@@ -51,6 +51,7 @@ def check_file_existence(root: Path) -> list[str]:
 
     # Core scripts from the legacy shell bootstrap and source repo
     core_scripts = [
+        "audit_dead_code.py",
         "install_governed_repo.py",
         "check_plan_tests.py",
         "check_plan_blockers.py",
@@ -61,6 +62,7 @@ def check_file_existence(root: Path) -> list[str]:
         "merge_pr.py",
         "pr_auto.py",
         "generate_quiz.py",
+        "validate_dead_code_audit.py",
     ]
     for s in core_scripts:
         if not (root / "scripts" / s).exists():
@@ -399,11 +401,14 @@ def check_install(root: Path) -> list[str]:
             "docs/plans/CLAUDE.md",
             "CLAUDE.md",
             "Makefile",
+            "scripts/meta/audit_dead_code.py",
             "scripts/meta/check_agents_sync.py",
+            "scripts/meta/check_dead_code.py",
             "scripts/meta/check_doc_coupling.py",
             "scripts/meta/file_context.py",
             "scripts/meta/render_agents_md.py",
             "scripts/meta/sync_plan_status.py",
+            "scripts/meta/validate_dead_code_audit.py",
             "scripts/meta/validate_plan.py",
             ".claude/settings.json",
             ".claude/hooks/track-reads.sh",

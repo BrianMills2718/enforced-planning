@@ -76,12 +76,15 @@ def test_install_governed_repo_dry_run_reports_expected_actions(tmp_path: Path) 
     assert "install:enforced_planning/file_context.py" in payload["actions"]
     assert "install:enforced_planning/notebook_registry_validation.py" in payload["actions"]
     assert "install:enforced_planning/plan_validation.py" in payload["actions"]
+    assert "install:scripts/meta/audit_dead_code.py" in payload["actions"]
+    assert "install:scripts/meta/check_dead_code.py" in payload["actions"]
     assert "install:scripts/meta/check_coordination_claims.py" in payload["actions"]
     assert "install:scripts/meta/session_start.py" in payload["actions"]
     assert "install:scripts/meta/session_heartbeat.py" in payload["actions"]
     assert "install:scripts/meta/session_status.py" in payload["actions"]
     assert "install:scripts/meta/session_finish.py" in payload["actions"]
     assert "install:scripts/meta/session_close.py" in payload["actions"]
+    assert "install:scripts/meta/validate_dead_code_audit.py" in payload["actions"]
     assert "install:scripts/meta/worktree-coordination/create_publish_worktree.py" in payload["actions"]
     assert "install:scripts/meta/file_context.py" in payload["actions"]
     assert "install:scripts/meta/render_agents_md.py" in payload["actions"]
@@ -123,12 +126,15 @@ def test_install_governed_repo_write_bootstraps_minimum_repo_and_passes_audit(
     assert (tmp_path / "enforced_planning" / "file_context.py").exists()
     assert (tmp_path / "enforced_planning" / "notebook_registry_validation.py").exists()
     assert (tmp_path / "enforced_planning" / "plan_validation.py").exists()
+    assert (tmp_path / "scripts" / "meta" / "audit_dead_code.py").exists()
+    assert (tmp_path / "scripts" / "meta" / "check_dead_code.py").exists()
     assert (tmp_path / "scripts" / "meta" / "check_coordination_claims.py").exists()
     assert (tmp_path / "scripts" / "meta" / "session_start.py").exists()
     assert (tmp_path / "scripts" / "meta" / "session_heartbeat.py").exists()
     assert (tmp_path / "scripts" / "meta" / "session_status.py").exists()
     assert (tmp_path / "scripts" / "meta" / "session_finish.py").exists()
     assert (tmp_path / "scripts" / "meta" / "session_close.py").exists()
+    assert (tmp_path / "scripts" / "meta" / "validate_dead_code_audit.py").exists()
     assert (
         tmp_path / "scripts" / "meta" / "worktree-coordination" / "create_publish_worktree.py"
     ).exists()

@@ -197,6 +197,7 @@ def test_check_dead_code_strict_fails_on_vulture_findings(
     result = m.check_dead_code(tmp_path)  # type: ignore[attr-defined]
     assert not result.passed
     assert len(result.findings) == 1
+    assert len(result.actionable_findings) == 1
     assert result.findings[0].name == "orphan"
 
 
@@ -244,3 +245,80 @@ def test_check_dead_code_enabled_fails_when_knip_output_is_invalid(
     result = m.check_dead_code(tmp_path)  # type: ignore[attr-defined]
     assert not result.passed
     assert "valid JSON" in result.error
+
+
+def test_check_dead_code_strict_allows_reviewed_retained_finding(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """Strict mode ignores findings that have an explicit retained disposition."""
+    m = _load()
+    (tmp_path / "meta-process.yaml").write_text(
+        "meta_process:\n"
+        "  quality:\n"
+        "    dead_code:\n"
+        "      enabled: true\n"
+        "      strict: true\n"
+        "      audit_file: dead_code_audit.json\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "dead_code_audit.json").write_text(
+        '{\n'
+        '  "version": 1,\n'
+        '  "findings": [\n'
+        '    {\n'
+        '      "file": "src/mod.py",\n'
+        '      "line": 12,\n'
+        '      "name": "orphan",\n'
+        '      "kind": "unused-function",\n'
+        '      "detector": "vulture",\n'
+        '      "confidence": 90,\n'
+        '      "disposition": "keep_false_positive",\n'
+        '      "note": "dynamic lookup in plugin tests",\n'
+        '      "plan_ref": null\n'
+        '    }\n'
+        '  ]\n'
+        '}\n',
+        encoding="utf-8",
+    )
+
+    def fake_run(*args, **kwargs):  # type: ignore[no-untyped-def]
+        return SimpleNamespace(
+            returncode=3,
+            stdout="src/mod.py:12: unused function 'orphan' (90% confidence)\n",
+            stderr="",
+        )
+
+    monkeypatch.setattr(m.subprocess, "run", fake_run)  # type: ignore[attr-defined]
+    result = m.check_dead_code(tmp_path)  # type: ignore[attr-defined]
+    assert result.passed
+    assert len(result.findings) == 1
+    assert len(result.reviewed_findings) == 1
+    assert result.actionable_findings == []
+
+
+def test_check_dead_code_invalid_audit_file_fails_loud(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """Malformed audit files fail the check instead of silently passing."""
+    m = _load()
+    (tmp_path / "meta-process.yaml").write_text(
+        "meta_process:\n"
+        "  quality:\n"
+        "    dead_code:\n"
+        "      enabled: true\n"
+        "      strict: true\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "dead_code_audit.json").write_text("{not-json}\n", encoding="utf-8")
+
+    def fake_run(*args, **kwargs):  # type: ignore[no-untyped-def]
+        return SimpleNamespace(
+            returncode=3,
+            stdout="src/mod.py:12: unused function 'orphan' (90% confidence)\n",
+            stderr="",
+        )
+
+    monkeypatch.setattr(m.subprocess, "run", fake_run)  # type: ignore[attr-defined]
+    result = m.check_dead_code(tmp_path)  # type: ignore[attr-defined]
+    assert not result.passed
+    assert "Expecting property name" in result.error

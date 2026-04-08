@@ -55,6 +55,7 @@ meta_process:
       min_confidence: 80      # vulture confidence threshold (60-100)
       paths: []               # specific paths to check (empty = project root)
       whitelist: ".vulture_whitelist.py"
+      audit_file: "dead_code_audit.json"
 
   # =============================================================================
   # CI CONFIGURATION

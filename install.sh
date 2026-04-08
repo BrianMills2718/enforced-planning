@@ -102,6 +102,8 @@ fi
 # Copy scripts
 echo "Copying scripts..."
 CORE_SCRIPTS=(
+    "audit_dead_code.py"
+    "validate_dead_code_audit.py"
     "check_plan_tests.py"
     "check_plan_blockers.py"
     "check_dead_code.py"

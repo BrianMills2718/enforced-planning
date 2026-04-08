@@ -15,9 +15,17 @@ import json
 import re
 import subprocess
 import sys
+from datetime import datetime, timezone
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
+
+RETAINED_FINDING_DISPOSITIONS = (
+    "keep_reexport",
+    "keep_false_positive",
+    "keep_planned_feature",
+    "framework_sync",
+)
 
 
 @dataclass
@@ -37,10 +45,14 @@ class Result:
 
     passed: bool
     findings: list[Finding] = field(default_factory=list)
+    reviewed_findings: list[Finding] = field(default_factory=list)
+    actionable_findings: list[Finding] = field(default_factory=list)
     tool_output: str = ""
     tool_available: bool = True
     error: str = ""
     exit_code: int | None = None
+    detector: str | None = None
+    audit_file: str | None = None
 
 
 def _load_config(project_root: Path) -> dict[str, Any]:
@@ -56,6 +68,7 @@ def _load_config(project_root: Path) -> dict[str, Any]:
         "min_confidence": 80,
         "paths": [],
         "whitelist": ".vulture_whitelist.py",
+        "audit_file": "dead_code_audit.json",
     }
     if not config_path.is_file():
         return defaults
@@ -189,6 +202,71 @@ def _parse_vulture_line(line: str) -> Finding | None:
     return None
 
 
+def finding_signature(finding: Finding, detector: str | None) -> str:
+    """Return the stable review signature for a finding."""
+
+    return "::".join(
+        [
+            detector or "unknown",
+            finding.file,
+            finding.kind,
+            finding.name,
+        ]
+    )
+
+
+def _current_timestamp() -> str:
+    """Return a stable UTC timestamp string."""
+
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _load_audit_payload(project_root: Path, audit_file: str) -> dict[str, Any]:
+    """Load the reviewed dead-code audit file when present."""
+
+    path = project_root / audit_file
+    if not path.is_file():
+        return {"version": 1, "generated_at": None, "findings": []}
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError(f"{audit_file} must contain a JSON object")
+    findings = payload.get("findings")
+    if findings is None:
+        payload["findings"] = []
+    elif not isinstance(findings, list):
+        raise ValueError(f"{audit_file} field 'findings' must be a list")
+    return payload
+
+
+def _retained_audit_entries(
+    project_root: Path, audit_file: str
+) -> tuple[dict[str, dict[str, Any]], list[dict[str, Any]]]:
+    """Return retained audit entries keyed by signature plus the raw list."""
+
+    payload = _load_audit_payload(project_root, audit_file)
+    findings = payload.get("findings", [])
+    retained: dict[str, dict[str, Any]] = {}
+    if not isinstance(findings, list):
+        raise ValueError(f"{audit_file} field 'findings' must be a list")
+    for index, entry in enumerate(findings, start=1):
+        if not isinstance(entry, dict):
+            raise ValueError(f"{audit_file} finding #{index} must be an object")
+        disposition = entry.get("disposition")
+        if disposition not in RETAINED_FINDING_DISPOSITIONS:
+            continue
+        detector = entry.get("detector")
+        file_path = entry.get("file")
+        kind = entry.get("kind")
+        name = entry.get("name")
+        if not all(isinstance(value, str) and value for value in (detector, file_path, kind, name)):
+            raise ValueError(
+                f"{audit_file} retained finding #{index} must include non-empty detector/file/kind/name"
+            )
+        signature = "::".join([detector, file_path, kind, name])
+        retained[signature] = entry
+    return retained, findings
+
+
 def _parse_knip_item(issue_type: str, file_path: str, item: Any) -> Finding | None:
     """Convert one JSON knip issue item into a normalized finding."""
 
@@ -316,8 +394,10 @@ def _run_vulture(
         return Result(
             passed=True,
             findings=findings,
+            actionable_findings=list(findings),
             tool_output=tool_output,
             exit_code=proc.returncode,
+            detector="vulture",
         )
 
     if "No module named vulture" in proc.stderr:
@@ -327,6 +407,7 @@ def _run_vulture(
             error="vulture is required when dead_code is enabled",
             tool_output=tool_output,
             exit_code=proc.returncode,
+            detector="vulture",
         )
 
     if proc.returncode != 0:
@@ -335,13 +416,16 @@ def _run_vulture(
             error=f"vulture failed with exit code {proc.returncode}",
             tool_output=tool_output,
             exit_code=proc.returncode,
+            detector="vulture",
         )
 
     return Result(
         passed=True,
         findings=[],
+        actionable_findings=[],
         tool_output=tool_output,
         exit_code=proc.returncode,
+        detector="vulture",
     )
 
 
@@ -361,12 +445,14 @@ def _run_knip(project_root: Path) -> Result:
             passed=False,
             tool_available=False,
             error="npx/knip is required when dead_code is enabled",
+            detector="knip",
         )
     except subprocess.TimeoutExpired:
         return Result(
             passed=False,
             tool_available=True,
             error="knip timed out after 120s",
+            detector="knip",
         )
 
     tool_output = "\n".join(
@@ -380,6 +466,7 @@ def _run_knip(project_root: Path) -> Result:
             error=f"knip did not return valid JSON: {exc}",
             tool_output=tool_output,
             exit_code=proc.returncode,
+            detector="knip",
         )
     except ValueError as exc:
         return Result(
@@ -387,14 +474,17 @@ def _run_knip(project_root: Path) -> Result:
             error=str(exc),
             tool_output=tool_output,
             exit_code=proc.returncode,
+            detector="knip",
         )
 
     if findings:
         return Result(
             passed=True,
             findings=findings,
+            actionable_findings=list(findings),
             tool_output=tool_output,
             exit_code=proc.returncode,
+            detector="knip",
         )
 
     if proc.returncode != 0:
@@ -403,22 +493,24 @@ def _run_knip(project_root: Path) -> Result:
             error=f"knip failed with exit code {proc.returncode}",
             tool_output=tool_output,
             exit_code=proc.returncode,
+            detector="knip",
         )
 
     return Result(
         passed=True,
         findings=[],
+        actionable_findings=[],
         tool_output=tool_output,
         exit_code=proc.returncode,
+        detector="knip",
     )
 
 
-def check_dead_code(project_root: Path) -> Result:
-    """Run dead code detection for a project.
+def scan_dead_code(project_root: Path) -> Result:
+    """Run the raw dead-code detector without applying review policy.
 
     Reads config from meta-process.yaml. Auto-detects language from
     project contents (package.json → TypeScript, *.py → Python).
-    In strict mode, findings cause passed=False.
     """
     config = _load_config(project_root)
     if not config.get("enabled"):
@@ -435,11 +527,44 @@ def check_dead_code(project_root: Path) -> Result:
             whitelist=config.get("whitelist", ".vulture_whitelist.py"),
         )
 
+    result.audit_file = str(config.get("audit_file", "dead_code_audit.json"))
+    if result.findings and not result.actionable_findings:
+        result.actionable_findings = list(result.findings)
+    return result
+
+
+def check_dead_code(project_root: Path) -> Result:
+    """Run dead code detection and apply reviewed-retention policy."""
+
+    config = _load_config(project_root)
+    if not config.get("enabled"):
+        return Result(passed=True)
+
+    result = scan_dead_code(project_root)
     if result.error:
         result.passed = False
         return result
 
-    if config.get("strict") and result.findings:
+    audit_file = str(config.get("audit_file", "dead_code_audit.json"))
+    result.audit_file = audit_file
+    try:
+        retained_entries, _ = _retained_audit_entries(project_root, audit_file)
+    except (ValueError, json.JSONDecodeError) as exc:
+        result.passed = False
+        result.error = str(exc)
+        return result
+    reviewed: list[Finding] = []
+    actionable: list[Finding] = []
+    for finding in result.findings:
+        signature = finding_signature(finding, result.detector)
+        if signature in retained_entries:
+            reviewed.append(finding)
+        else:
+            actionable.append(finding)
+    result.reviewed_findings = reviewed
+    result.actionable_findings = actionable
+
+    if config.get("strict") and actionable:
         result.passed = False
 
     return result
@@ -459,8 +584,14 @@ def main() -> None:
     result = check_dead_code(project_root)
     output = {
         "passed": result.passed,
+        "detector": result.detector,
         "findings_count": len(result.findings),
         "findings": [asdict(f) for f in result.findings],
+        "reviewed_findings_count": len(result.reviewed_findings),
+        "reviewed_findings": [asdict(f) for f in result.reviewed_findings],
+        "actionable_findings_count": len(result.actionable_findings),
+        "actionable_findings": [asdict(f) for f in result.actionable_findings],
+        "audit_file": result.audit_file,
         "tool_available": result.tool_available,
         "error": result.error,
         "exit_code": result.exit_code,

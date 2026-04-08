@@ -35,6 +35,9 @@ repos:
       # Optional: dead code check (requires vulture; controlled by meta-process.yaml)
       # - id: dead-code
 
+      # Optional: dead code review validation (requires dead_code_audit.json when findings are retained)
+      # - id: dead-code-review
+
   # Standard hooks (not enforced-planning specific)
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.5.0

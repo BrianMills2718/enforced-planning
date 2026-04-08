@@ -93,6 +93,7 @@ worktree targets.
 | `quality.dead_code.min_confidence` | int | `80` | `check_dead_code.py` | 80% confidence threshold |
 | `quality.dead_code.paths` | list | `[]` | `check_dead_code.py` | Project root |
 | `quality.dead_code.whitelist` | string | `".vulture_whitelist.py"` | `check_dead_code.py` | `.vulture_whitelist.py` |
+| `quality.dead_code.audit_file` | string | `"dead_code_audit.json"` | `check_dead_code.py`, `audit_dead_code.py`, `validate_dead_code_audit.py` | `dead_code_audit.json` |
 | `quality.type_checking.enabled` | bool | `true` | Not enforced by script | No effect |
 | `quality.type_checking.strict` | bool | `true` | Not enforced by script | No effect |
 

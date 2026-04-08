@@ -59,3 +59,14 @@
   entry: python scripts/check_dead_code.py
   stages: [pre-commit]
   pass_filenames: false
+
+- id: dead-code-review
+  name: Reviewed dead code validation (opt-in)
+  description: >
+    Validates that current dead-code findings either disappear or have an
+    explicit reviewed retention decision in dead_code_audit.json. Planned
+    retained findings must point at an active numbered plan.
+  language: python
+  entry: python scripts/validate_dead_code_audit.py
+  stages: [pre-commit]
+  pass_filenames: false

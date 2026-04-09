@@ -154,6 +154,21 @@ def test_check_dead_code_skips_when_disabled(tmp_path: Path) -> None:
     assert result.findings == []
 
 
+def test_repo_python_prefers_repo_venv(tmp_path: Path) -> None:
+    """Repo-local .venv Python wins over the current interpreter."""
+    m = _load()
+    repo_python = tmp_path / ".venv" / "bin" / "python"
+    repo_python.parent.mkdir(parents=True)
+    repo_python.write_text("", encoding="utf-8")
+    assert m._repo_python(tmp_path) == str(repo_python)  # type: ignore[attr-defined]
+
+
+def test_repo_python_falls_back_to_current_interpreter(tmp_path: Path) -> None:
+    """When no repo-local .venv exists, use the current interpreter."""
+    m = _load()
+    assert m._repo_python(tmp_path) == sys.executable  # type: ignore[attr-defined]
+
+
 def test_run_vulture_fails_loud_when_module_missing(tmp_path: Path, monkeypatch) -> None:
     """Missing vulture is a hard failure when the check is enabled."""
     m = _load()
@@ -170,6 +185,22 @@ def test_run_vulture_fails_loud_when_module_missing(tmp_path: Path, monkeypatch)
     assert not result.passed
     assert not result.tool_available
     assert "required" in result.error
+
+
+def test_run_vulture_uses_repo_python_when_available(tmp_path: Path, monkeypatch) -> None:
+    """The vulture subprocess should run under the repo-local interpreter."""
+    m = _load()
+    repo_python = tmp_path / ".venv" / "bin" / "python"
+    repo_python.parent.mkdir(parents=True)
+    repo_python.write_text("", encoding="utf-8")
+
+    def fake_run(cmd, **kwargs):  # type: ignore[no-untyped-def]
+        assert cmd[0] == str(repo_python)
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(m.subprocess, "run", fake_run)  # type: ignore[attr-defined]
+    result = m._run_vulture(tmp_path, [], 80, ".vulture_whitelist.py")  # type: ignore[attr-defined]
+    assert result.passed
 
 
 def test_check_dead_code_strict_fails_on_vulture_findings(

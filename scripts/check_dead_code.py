@@ -55,6 +55,24 @@ class Result:
     audit_file: str | None = None
 
 
+def _repo_python(project_root: Path) -> str:
+    """Return the repo-local Python interpreter when one is available.
+
+    Dead-code hooks may run under a generic interpreter that lacks repo-local
+    tooling. Governed repos standardize on a per-repo `.venv`, so use that
+    interpreter for Python-based checks when present.
+    """
+
+    candidates = [
+        project_root / ".venv" / "bin" / "python",
+        project_root / ".venv" / "Scripts" / "python.exe",
+    ]
+    for candidate in candidates:
+        if candidate.is_file():
+            return str(candidate)
+    return sys.executable
+
+
 def _load_config(project_root: Path) -> dict[str, Any]:
     """Load dead_code config from meta-process.yaml.
 
@@ -354,7 +372,7 @@ def _run_vulture(
     whitelist: str,
 ) -> Result:
     """Run vulture for Python dead code detection."""
-    cmd = [sys.executable, "-m", "vulture"]
+    cmd = [_repo_python(project_root), "-m", "vulture"]
     if paths:
         cmd.extend(paths)
     else:

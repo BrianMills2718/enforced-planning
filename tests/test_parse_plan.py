@@ -253,6 +253,34 @@ def test_parse_research_basis_missing_section_returns_empty() -> None:
 
 
 # ---------------------------------------------------------------------------
+# parse_research_citations
+# ---------------------------------------------------------------------------
+
+
+def test_parse_research_citations_reads_header_list() -> None:
+    """Header list values should parse as citation strings."""
+    m = _load()
+    content = '**research_citations:** ["agent_memory:sm-0123", "agent_memory:ep-0456"]\n'
+    result = m.parse_research_citations(content)  # type: ignore[attr-defined]
+    assert result == ["agent_memory:sm-0123", "agent_memory:ep-0456"]
+
+
+def test_parse_research_citations_missing_field_returns_empty() -> None:
+    """Absent metadata should normalize to an empty list."""
+    m = _load()
+    result = m.parse_research_citations("# Plan\n")  # type: ignore[attr-defined]
+    assert result == []
+
+
+def test_parse_research_citations_ignores_invalid_yaml() -> None:
+    """Malformed values should not crash the parser surface."""
+    m = _load()
+    content = "**research_citations:** [agent_memory:sm-0123\n"
+    result = m.parse_research_citations(content)  # type: ignore[attr-defined]
+    assert result == []
+
+
+# ---------------------------------------------------------------------------
 # check_file_in_scope
 # ---------------------------------------------------------------------------
 

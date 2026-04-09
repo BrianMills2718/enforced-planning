@@ -111,6 +111,10 @@ These are hard ordering rules:
   {project}` (or equivalent MCP call) before writing the assessment. Undiscovered
   operational findings from prior sessions are a correctness risk, not a
   convenience. (ADR-0010)
+- When prior agent-session findings materially inform a bounded plan, record
+  the specific cited memory entry IDs in the plan header as
+  `research_citations: ["agent_memory:<entry_id>"]` so provenance is visible to
+  validators and reviewers.
 
 ### Recommended sequencing
 

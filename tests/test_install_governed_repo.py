@@ -73,11 +73,14 @@ def test_install_governed_repo_dry_run_reports_expected_actions(tmp_path: Path) 
     assert "scaffold:Makefile" in payload["actions"]
     assert "install:enforced_planning/__init__.py" in payload["actions"]
     assert "install:enforced_planning/agents_rendering.py" in payload["actions"]
+    assert "install:enforced_planning/concern_routing.py" in payload["actions"]
     assert "install:enforced_planning/file_context.py" in payload["actions"]
     assert "install:enforced_planning/notebook_registry_validation.py" in payload["actions"]
     assert "install:enforced_planning/plan_validation.py" in payload["actions"]
+    assert "install:enforced_planning/push_safety.py" in payload["actions"]
     assert "install:scripts/meta/audit_dead_code.py" in payload["actions"]
     assert "install:scripts/meta/check_dead_code.py" in payload["actions"]
+    assert "install:scripts/meta/check_push_safety.py" in payload["actions"]
     assert "install:scripts/meta/check_coordination_claims.py" in payload["actions"]
     assert "install:scripts/meta/session_start.py" in payload["actions"]
     assert "install:scripts/meta/session_heartbeat.py" in payload["actions"]
@@ -86,6 +89,8 @@ def test_install_governed_repo_dry_run_reports_expected_actions(tmp_path: Path) 
     assert "install:scripts/meta/session_close.py" in payload["actions"]
     assert "install:scripts/meta/validate_dead_code_audit.py" in payload["actions"]
     assert "install:scripts/meta/worktree-coordination/create_publish_worktree.py" in payload["actions"]
+    assert "install:scripts/meta/worktree-coordination/create_review_claim.py" in payload["actions"]
+    assert "install:scripts/meta/worktree-coordination/raise_concern.py" in payload["actions"]
     assert "install:scripts/meta/file_context.py" in payload["actions"]
     assert "install:scripts/meta/render_agents_md.py" in payload["actions"]
     assert "install:scripts/meta/check_agents_sync.py" in payload["actions"]
@@ -123,11 +128,14 @@ def test_install_governed_repo_write_bootstraps_minimum_repo_and_passes_audit(
     assert (tmp_path / "Makefile").exists()
     assert (tmp_path / "enforced_planning" / "__init__.py").exists()
     assert (tmp_path / "enforced_planning" / "agents_rendering.py").exists()
+    assert (tmp_path / "enforced_planning" / "concern_routing.py").exists()
     assert (tmp_path / "enforced_planning" / "file_context.py").exists()
     assert (tmp_path / "enforced_planning" / "notebook_registry_validation.py").exists()
     assert (tmp_path / "enforced_planning" / "plan_validation.py").exists()
+    assert (tmp_path / "enforced_planning" / "push_safety.py").exists()
     assert (tmp_path / "scripts" / "meta" / "audit_dead_code.py").exists()
     assert (tmp_path / "scripts" / "meta" / "check_dead_code.py").exists()
+    assert (tmp_path / "scripts" / "meta" / "check_push_safety.py").exists()
     assert (tmp_path / "scripts" / "meta" / "check_coordination_claims.py").exists()
     assert (tmp_path / "scripts" / "meta" / "session_start.py").exists()
     assert (tmp_path / "scripts" / "meta" / "session_heartbeat.py").exists()
@@ -137,6 +145,12 @@ def test_install_governed_repo_write_bootstraps_minimum_repo_and_passes_audit(
     assert (tmp_path / "scripts" / "meta" / "validate_dead_code_audit.py").exists()
     assert (
         tmp_path / "scripts" / "meta" / "worktree-coordination" / "create_publish_worktree.py"
+    ).exists()
+    assert (
+        tmp_path / "scripts" / "meta" / "worktree-coordination" / "create_review_claim.py"
+    ).exists()
+    assert (
+        tmp_path / "scripts" / "meta" / "worktree-coordination" / "raise_concern.py"
     ).exists()
     assert (tmp_path / "scripts" / "meta" / "file_context.py").exists()
     assert (tmp_path / "scripts" / "meta" / "render_agents_md.py").exists()
@@ -153,8 +167,13 @@ def test_install_governed_repo_write_bootstraps_minimum_repo_and_passes_audit(
     assert "session-status:" in makefile_text
     assert "session-finish:" in makefile_text
     assert "session-close:" in makefile_text
+    assert "review-claim:" in makefile_text
+    assert "raise-concern:" in makefile_text
+    assert "push-check:" in makefile_text
     assert "scripts/meta/worktree-coordination/../check_coordination_claims.py" in makefile_text
     assert "scripts/meta/worktree-coordination/../session_start.py" in makefile_text
+    assert "scripts/meta/worktree-coordination/create_review_claim.py" in makefile_text
+    assert "scripts/meta/worktree-coordination/raise_concern.py" in makefile_text
     assert "$(SCRIPTS_META)/worktree-coordination" not in makefile_text
     assert "--print-default-worktree-dir" in makefile_text
     assert '--agent "$(WORKTREE_AGENT)"' in makefile_text
@@ -358,7 +377,11 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
     assert payload["worktree_only_mode"] is True
     assert sorted(payload["actions"]) == sorted(
         [
+            "install:enforced_planning/__init__.py",
+            "install:enforced_planning/concern_routing.py",
+            "install:enforced_planning/push_safety.py",
             "install:scripts/meta/check_coordination_claims.py",
+            "install:scripts/meta/check_push_safety.py",
             "install:scripts/meta/session_close.py",
             "install:scripts/meta/session_finish.py",
             "install:scripts/meta/session_heartbeat.py",
@@ -366,6 +389,8 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
             "install:scripts/meta/session_status.py",
             "install:scripts/meta/worktree-coordination/create_worktree.py",
             "install:scripts/meta/worktree-coordination/create_publish_worktree.py",
+            "install:scripts/meta/worktree-coordination/create_review_claim.py",
+            "install:scripts/meta/worktree-coordination/raise_concern.py",
             "install:scripts/meta/worktree-coordination/safe_worktree_remove.py",
             "append:Makefile.worktree",
         ]

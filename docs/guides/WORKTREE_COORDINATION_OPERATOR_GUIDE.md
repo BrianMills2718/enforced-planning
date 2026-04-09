@@ -12,9 +12,12 @@ and project-meta docs; do not treat them as competing operator handbooks.
 - Repo-local in-flight architectural decisions: `agent-memory recall 'active decisions' --project {project}` (ADR-0010: `agent_memory` is the canonical store; `KNOWLEDGE.md ## Active Decisions` is deprecated)
 - Repo opt-in switch: `meta-process.yaml`
 - Sanctioned repo-local worktree interface: `make worktree`,
-  `make worktree-list`, `make worktree-remove`
+  `make worktree-list`, `make worktree-remove`, `make review-claim`,
+  `make raise-concern`
 - Canonical installed claim CLI for governed repos:
   `scripts/meta/check_coordination_claims.py`
+- Canonical push gate for governed repos:
+  `scripts/meta/check_push_safety.py` / `make push-check`
 
 The older repo-local `.claude/active-work.yaml` plus legacy
 `scripts/meta/worktree-coordination/check_claims.py` surface may still be
@@ -65,8 +68,9 @@ surfaces from them.
    - `session_id`
    - narrow `write_paths` for write claims
 4. Execute, commit verified slices, and keep docs/trackers truthful.
-5. Merge/push from the safe root-anchored control session.
-6. Release the claim when the lane is done.
+5. Run `make push-check` before publishing from the safe root-anchored control session.
+6. Merge/push from the safe root-anchored control session.
+7. Release the claim when the lane is done.
 
 Mandatory rule: no live session without `plan_ref`, except explicitly marked
 unplanned emergency work. If work resumes in a new runtime, reattach it to the
@@ -315,6 +319,13 @@ What it does not do:
 - real-time presence
 - automatic conflict resolution
 - automatic discovery of another agent mid-session
+
+What concern routing adds:
+
+- `make review-claim` marks review intent on another lane's write paths
+- `make raise-concern` routes the concern to a PR comment when the target branch
+  is already published, otherwise to the repo-local inbox channel
+- review overlap is visible coordination state, not silent out-of-band chatter
 
 Agents only see what has been written to claims, the active-work registry, or
 `agent_memory`. If those surfaces are stale, the agent view is stale.

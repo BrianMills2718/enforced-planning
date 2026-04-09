@@ -56,6 +56,7 @@ def check_file_existence(root: Path) -> list[str]:
         "check_plan_tests.py",
         "check_plan_blockers.py",
         "check_dead_code.py",
+        "check_push_safety.py",
         "complete_plan.py",
         "parse_plan.py",
         "sync_plan_status.py",
@@ -87,6 +88,8 @@ def check_file_existence(root: Path) -> list[str]:
         "meta_status.py",
         "check_messages.py",
         "send_message.py",
+        "create_review_claim.py",
+        "raise_concern.py",
     ]
     for s in wt_scripts:
         if not (root / "scripts" / "worktree-coordination" / s).exists():

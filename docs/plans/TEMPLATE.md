@@ -3,6 +3,9 @@
 **Status:** Planned
 **Type:** implementation  <!-- implementation | design -->
 **Priority:** High | Medium | Low
+**phase_ref:** "Phase X.Y"  <!-- roadmap phase -->
+**goal_ref:** "goal-id"     <!-- see vision/08_GOAL_TAXONOMY.md -->
+**adrs_referenced:** []     <!-- e.g. ["ADR-0010"] -->
 **Blocked By:** None
 <!-- Dependency format:
   - #N              same-project plan reference (checker validates it resolves)
@@ -54,6 +57,24 @@
 
 If no additional research beyond repo-local references was needed, write:
 `No additional research beyond References Reviewed.`
+
+---
+
+## Multi-Repo Coordination
+
+> **Required for plans that touch more than one repository.** Delete this section
+> for single-repo plans.
+
+| Repo | Files Modified | Merge Strategy |
+|------|---------------|----------------|
+| `repo-a` | `src/file.py` (modify) | Merge first |
+| `repo-b` | `src/other.py` (create) | Merge after repo-a |
+
+**Coordination notes:** e.g., "repo-b Step 3 reads the output of repo-a Step 2;
+sequence strictly."
+
+**Write-claim footprint:** e.g., "claim `repo-a/src/file.py` and `repo-b/src/other.py`;
+release both before handing off."
 
 ---
 

@@ -74,10 +74,16 @@ def test_install_governed_repo_dry_run_reports_expected_actions(tmp_path: Path) 
     assert "install:enforced_planning/__init__.py" in payload["actions"]
     assert "install:enforced_planning/agents_rendering.py" in payload["actions"]
     assert "install:enforced_planning/concern_routing.py" in payload["actions"]
+    assert "install:enforced_planning/coordination_claims.py" in payload["actions"]
+    assert "install:enforced_planning/coordination_consistency.py" in payload["actions"]
+    assert "install:enforced_planning/doc_authority.py" in payload["actions"]
     assert "install:enforced_planning/file_context.py" in payload["actions"]
     assert "install:enforced_planning/notebook_registry_validation.py" in payload["actions"]
     assert "install:enforced_planning/plan_validation.py" in payload["actions"]
     assert "install:enforced_planning/push_safety.py" in payload["actions"]
+    assert "install:enforced_planning/session_contracts.py" in payload["actions"]
+    assert "install:enforced_planning/session_lifecycle.py" in payload["actions"]
+    assert "install:enforced_planning/worktree_paths.py" in payload["actions"]
     assert "install:scripts/meta/audit_dead_code.py" in payload["actions"]
     assert "install:scripts/meta/check_dead_code.py" in payload["actions"]
     assert "install:scripts/meta/check_push_safety.py" in payload["actions"]
@@ -129,10 +135,16 @@ def test_install_governed_repo_write_bootstraps_minimum_repo_and_passes_audit(
     assert (tmp_path / "enforced_planning" / "__init__.py").exists()
     assert (tmp_path / "enforced_planning" / "agents_rendering.py").exists()
     assert (tmp_path / "enforced_planning" / "concern_routing.py").exists()
+    assert (tmp_path / "enforced_planning" / "coordination_claims.py").exists()
+    assert (tmp_path / "enforced_planning" / "coordination_consistency.py").exists()
+    assert (tmp_path / "enforced_planning" / "doc_authority.py").exists()
     assert (tmp_path / "enforced_planning" / "file_context.py").exists()
     assert (tmp_path / "enforced_planning" / "notebook_registry_validation.py").exists()
     assert (tmp_path / "enforced_planning" / "plan_validation.py").exists()
     assert (tmp_path / "enforced_planning" / "push_safety.py").exists()
+    assert (tmp_path / "enforced_planning" / "session_contracts.py").exists()
+    assert (tmp_path / "enforced_planning" / "session_lifecycle.py").exists()
+    assert (tmp_path / "enforced_planning" / "worktree_paths.py").exists()
     assert (tmp_path / "scripts" / "meta" / "audit_dead_code.py").exists()
     assert (tmp_path / "scripts" / "meta" / "check_dead_code.py").exists()
     assert (tmp_path / "scripts" / "meta" / "check_push_safety.py").exists()
@@ -379,7 +391,13 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
         [
             "install:enforced_planning/__init__.py",
             "install:enforced_planning/concern_routing.py",
+            "install:enforced_planning/coordination_claims.py",
+            "install:enforced_planning/coordination_consistency.py",
+            "install:enforced_planning/doc_authority.py",
             "install:enforced_planning/push_safety.py",
+            "install:enforced_planning/session_contracts.py",
+            "install:enforced_planning/session_lifecycle.py",
+            "install:enforced_planning/worktree_paths.py",
             "install:scripts/meta/check_coordination_claims.py",
             "install:scripts/meta/check_push_safety.py",
             "install:scripts/meta/session_close.py",

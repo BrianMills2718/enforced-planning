@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import importlib.util
 import builtins
+import subprocess
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -163,6 +164,32 @@ def test_repo_python_prefers_repo_venv(tmp_path: Path) -> None:
     assert m._repo_python(tmp_path) == str(repo_python)  # type: ignore[attr-defined]
 
 
+def test_repo_python_prefers_canonical_repo_venv_from_worktree(tmp_path: Path) -> None:
+    """Worktree checkout should reuse the canonical repo `.venv` interpreter."""
+
+    m = _load()
+    repo_root = tmp_path / "demo"
+    subprocess.run(["git", "init", "-b", "main", str(repo_root)], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(repo_root), "config", "user.name", "Test User"], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(repo_root), "config", "user.email", "test@example.com"], check=True, capture_output=True, text=True)
+    (repo_root / "README.md").write_text("seed\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(repo_root), "add", "README.md"], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(repo_root), "commit", "-m", "seed"], check=True, capture_output=True, text=True)
+    worktree_root = tmp_path / "demo_worktrees" / "plan-42-demo"
+    subprocess.run(
+        ["git", "-C", str(repo_root), "worktree", "add", str(worktree_root), "-b", "plan-42-demo", "main"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    repo_python = repo_root / ".venv" / "bin" / "python"
+    repo_python.parent.mkdir(parents=True)
+    repo_python.write_text("", encoding="utf-8")
+
+    assert m._repo_python(worktree_root) == str(repo_python)  # type: ignore[attr-defined]
+
+
 def test_repo_python_falls_back_to_current_interpreter(tmp_path: Path) -> None:
     """When no repo-local .venv exists, use the current interpreter."""
     m = _load()
@@ -193,8 +220,11 @@ def test_run_vulture_uses_repo_python_when_available(tmp_path: Path, monkeypatch
     repo_python = tmp_path / ".venv" / "bin" / "python"
     repo_python.parent.mkdir(parents=True)
     repo_python.write_text("", encoding="utf-8")
+    original_run = m.subprocess.run  # type: ignore[attr-defined]
 
     def fake_run(cmd, **kwargs):  # type: ignore[no-untyped-def]
+        if cmd[0] == "git":
+            return original_run(cmd, **kwargs)
         assert cmd[0] == str(repo_python)
         return SimpleNamespace(returncode=0, stdout="", stderr="")
 

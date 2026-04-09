@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import subprocess
 from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
 import yaml  # type: ignore[import-untyped]
@@ -211,6 +212,43 @@ def test_extract_json_block_keeps_multiline_payload_after_cli_noise() -> None:
 ]"""
 
 
+def test_load_active_decisions_filters_to_semantic_decision_records(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Active-decision loading should ignore semantically similar non-decision memories."""
+
+    raw_payload = """TIMEOUT_DISABLED[embed]: timeout=60s ignored.
+[
+  {
+    "memory_type": "semantic",
+    "record_id": "sm-keep",
+    "project": "demo",
+    "primary_task": "decision",
+    "memory_subtype": "decision",
+    "semantic_summary": "[DECISION] keep branch discipline",
+    "tags": ["decision", "in-flight"]
+  },
+  {
+    "memory_type": "semantic",
+    "record_id": "sm-drop",
+    "project": "demo",
+    "primary_task": "best-practice",
+    "memory_subtype": "best-practice",
+    "semantic_summary": "Unrelated finding",
+    "tags": ["best-practice"]
+  }
+]"""
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        Mock(return_value=subprocess.CompletedProcess(args=["agent-memory"], returncode=0, stdout=raw_payload, stderr="")),
+    )
+
+    records = push_safety.load_active_decisions("demo")
+
+    assert [record["record_id"] for record in records] == ["sm-keep"]
+
+
 def test_create_review_claim_uses_target_branch_as_parent_scope(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -290,7 +328,17 @@ def test_route_concern_uses_local_message_when_no_pr_exists(
 def test_load_active_decisions_ignores_prefix_noise(monkeypatch: pytest.MonkeyPatch) -> None:
     """CLI noise before the JSON payload should not break raw decision parsing."""
 
-    payload = "TIMEOUT_DISABLED[embed]: ignored\n[{\"content\": \"test\"}]"
+    payload = """TIMEOUT_DISABLED[embed]: ignored
+[
+  {
+    "memory_type": "semantic",
+    "record_id": "sm-test",
+    "primary_task": "decision",
+    "memory_subtype": "decision",
+    "tags": ["decision"],
+    "content": "test"
+  }
+]"""
 
     def _fake_run(*args, **kwargs):  # type: ignore[no-untyped-def]
         return subprocess.CompletedProcess(args=["agent-memory"], returncode=0, stdout=payload, stderr="")
@@ -299,4 +347,4 @@ def test_load_active_decisions_ignores_prefix_noise(monkeypatch: pytest.MonkeyPa
 
     records = push_safety.load_active_decisions("demo")
 
-    assert records == [{"content": "test"}]
+    assert [record["record_id"] for record in records] == ["sm-test"]

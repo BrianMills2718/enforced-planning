@@ -154,6 +154,8 @@ def load_active_decisions(project: str, *, limit: int = 5) -> list[dict[str, Any
             "active decisions",
             "--project",
             project,
+            "--type",
+            "semantic",
             "--raw",
             "--limit",
             str(limit),
@@ -170,7 +172,19 @@ def load_active_decisions(project: str, *, limit: int = 5) -> list[dict[str, Any
     decoded = json.loads(payload)
     if not isinstance(decoded, list):
         raise RuntimeError("agent-memory recall --raw must return a JSON array")
-    return [item for item in decoded if isinstance(item, dict)]
+    semantic_records = [item for item in decoded if isinstance(item, dict)]
+    decision_records = [
+        item
+        for item in semantic_records
+        if item.get("memory_type") == "semantic"
+        and (item.get("memory_subtype") == "decision" or item.get("primary_task") == "decision")
+    ]
+    in_flight_decisions = [
+        item
+        for item in decision_records
+        if "in-flight" in item.get("tags", [])
+    ]
+    return in_flight_decisions or decision_records
 
 
 def _claim_overlap_for_paths(

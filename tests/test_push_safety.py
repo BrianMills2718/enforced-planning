@@ -194,6 +194,23 @@ def test_push_check_uses_canonical_project_name_from_worktree_path(
     assert payload["canonical_repo_root"] == str(repo_root)
 
 
+def test_extract_json_block_keeps_multiline_payload_after_cli_noise() -> None:
+    """CLI warning prefixes should not truncate the JSON payload to one line."""
+
+    raw_text = """TIMEOUT_DISABLED[embed]: timeout=60s ignored.
+[
+  {
+    "content": "Keep scoring stable until Plan #9 closes."
+  }
+]"""
+
+    assert push_safety._extract_json_block(raw_text) == """[
+  {
+    "content": "Keep scoring stable until Plan #9 closes."
+  }
+]"""
+
+
 def test_create_review_claim_uses_target_branch_as_parent_scope(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

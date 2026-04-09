@@ -6,6 +6,7 @@
 **phase_ref:** "Phase X.Y"  <!-- roadmap phase -->
 **goal_ref:** "goal-id"     <!-- see vision/08_GOAL_TAXONOMY.md -->
 **adrs_referenced:** []     <!-- e.g. ["ADR-0010"] -->
+**research_citations:** []  <!-- e.g. ["agent_memory:sm-0123"] -->
 **Blocked By:** None
 <!-- Dependency format:
   - #N              same-project plan reference (checker validates it resolves)
@@ -57,6 +58,10 @@
 
 If no additional research beyond repo-local references was needed, write:
 `No additional research beyond References Reviewed.`
+
+If this slice materially relies on prior agent-session findings, record those
+IDs in `research_citations` using `agent_memory:<entry_id>`. Use this section
+for repo-local, investigation, synthesis, and external references as usual.
 
 ---
 

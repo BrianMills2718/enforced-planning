@@ -5,6 +5,7 @@ Extracts structured data from plan markdown files:
 - Files Affected section (what files the plan declares it will touch)
 - References Reviewed section (what code/docs were reviewed before planning)
 - Research Basis For This Slice section (what broader research informed the slice)
+- research_citations header metadata (which prior agent-memory findings informed the plan)
 
 Usage:
     # Get active plan's file scope
@@ -33,6 +34,8 @@ import subprocess
 import sys
 from pathlib import Path
 from typing import Any
+
+import yaml  # type: ignore[import-untyped]
 
 
 def get_main_repo_root() -> Path:
@@ -318,6 +321,43 @@ def parse_research_basis(content: str) -> list[dict[str, Any]]:
     return refs
 
 
+def _extract_metadata_value(content: str, field_name: str) -> str | None:
+    """Extract one bolded plan-header metadata field value."""
+    match = re.search(
+        rf"^\*\*{re.escape(field_name)}:\*\*\s*(.+?)\s*$",
+        content,
+        re.IGNORECASE | re.MULTILINE,
+    )
+    if not match:
+        return None
+    value = re.sub(r"<!--.*?-->", "", match.group(1)).strip()
+    return value or None
+
+
+def parse_research_citations(content: str) -> list[str]:
+    """Parse the optional research_citations header field as a list of strings."""
+    raw_value = _extract_metadata_value(content, "research_citations")
+    if raw_value is None:
+        return []
+
+    try:
+        loaded = yaml.safe_load(raw_value)
+    except yaml.YAMLError:
+        return []
+
+    if loaded in (None, ""):
+        return []
+    if not isinstance(loaded, list):
+        return []
+
+    citations: list[str] = []
+    for item in loaded:
+        value = str(item).strip()
+        if value:
+            citations.append(value)
+    return citations
+
+
 def parse_steps(content: str) -> list[dict[str, Any]]:
     """Parse steps from a plan's Steps, Plan, or similar section.
 
@@ -518,6 +558,11 @@ def main() -> int:
         help="Output the Research Basis For This Slice section"
     )
     parser.add_argument(
+        "--research-citations",
+        action="store_true",
+        help="Output the research_citations header field"
+    )
+    parser.add_argument(
         "--steps", "-s",
         action="store_true",
         help="Output the Steps/Plan section (numbered, checkbox, or table)"
@@ -686,10 +731,31 @@ def main() -> int:
 
         return 0
 
+    # Handle --research-citations
+    if args.research_citations:
+        citations = parse_research_citations(content)
+
+        if args.json:
+            print(json.dumps({
+                "plan": plan_number,
+                "research_citations": citations,
+            }))
+        else:
+            if not citations:
+                print(f"Plan #{plan_number}: No research_citations declared")
+                return 1
+
+            print(f"Plan #{plan_number} - research_citations:")
+            for citation in citations:
+                print(f"  {citation}")
+
+        return 0
+
     # Default: show both
     files_affected = parse_files_affected(content)
     refs = parse_references_reviewed(content)
     research = parse_research_basis(content)
+    citations = parse_research_citations(content)
 
     if args.json:
         print(json.dumps({
@@ -698,6 +764,7 @@ def main() -> int:
             "files_affected": files_affected,
             "references_reviewed": refs,
             "research_basis": research,
+            "research_citations": citations,
         }, indent=2))
     else:
         print(f"Plan #{plan_number}: {plan_file.name}")
@@ -718,6 +785,14 @@ def main() -> int:
                 line_str = f":{lines['start']}-{lines['end']}" if lines else ""
                 desc = f" - {ref['description']}" if ref.get("description") else ""
                 print(f"  {ref['path']}{line_str}{desc}")
+        else:
+            print("  (none declared)")
+
+        print()
+        print("research_citations:")
+        if citations:
+            for citation in citations:
+                print(f"  {citation}")
         else:
             print("  (none declared)")
 

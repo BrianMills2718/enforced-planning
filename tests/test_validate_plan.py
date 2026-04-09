@@ -242,6 +242,98 @@ def test_validate_plan_module_uses_repo_root_not_scripts_dir() -> None:
     assert file_context_module.REPO_ROOT == REPO_ROOT
 
 
+def test_validate_plan_reports_research_citation_warnings(tmp_path: Path) -> None:
+    module = _load_module()
+    plan_file = tmp_path / "05_sample.md"
+    config_file = tmp_path / "relationships.yaml"
+    config_file.write_text(_relationships_config(), encoding="utf-8")
+
+    plan_file.write_text(
+        "\n".join(
+            [
+                "# Sample Plan",
+                "**Status:** Draft",
+                "**research_citations:** [bad-entry, bad-entry]",
+                "",
+                "## Gap",
+                "Current: something. Target: better. Why: provenance matters.",
+                "",
+                "## Files Affected",
+                "- src/module.py",
+                "",
+                "## References Reviewed",
+                "- docs/current.md",
+                "- Memory context: `agent-memory recall 'topic' --project repo` — 2 findings",
+                "",
+                "## Acceptance Criteria",
+                "- [ ] Document provenance",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = module.validate_plan(
+        plan_file=plan_file,
+        plan_number=5,
+        relationships=module.load_relationships(config_path=config_file),
+    )
+
+    warning_codes = {warning["code"] for warning in result.warnings}
+    assert "invalid_research_citation_entry" in warning_codes
+    assert "duplicate_research_citation" in warning_codes
+    assert "missing_research_citations" not in warning_codes
+    assert result.research_citations == ["bad-entry", "bad-entry"]
+
+
+def test_validate_plan_warns_when_prior_session_provenance_lacks_citations(tmp_path: Path) -> None:
+    module = _load_module()
+    plan_file = tmp_path / "06_sample.md"
+    config_file = tmp_path / "relationships.yaml"
+    config_file.write_text(_relationships_config(), encoding="utf-8")
+
+    plan_file.write_text(
+        "\n".join(
+            [
+                "# Sample Plan",
+                "**Status:** Draft",
+                "**research_citations:** []",
+                "",
+                "## Gap",
+                "Current: something. Target: better. Why: provenance matters.",
+                "",
+                "## Files Affected",
+                "- src/module.py",
+                "",
+                "## References Reviewed",
+                "- docs/current.md",
+                "- confirmed via direct DB query in prior session",
+                "",
+                "## Acceptance Criteria",
+                "- [ ] Document provenance",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = module.validate_plan(
+        plan_file=plan_file,
+        plan_number=6,
+        relationships=module.load_relationships(config_path=config_file),
+    )
+
+    assert any(
+        warning["code"] == "missing_research_citations"
+        for warning in result.warnings
+    )
+    payload = result.to_payload()
+    assert any(
+        warning["code"] == "missing_research_citations"
+        for warning in payload["warnings"]
+    )
+
+
 def test_file_context_includes_required_reading_defaults(tmp_path: Path) -> None:
     """File context should include repo-wide required-reading defaults."""
 

@@ -56,6 +56,7 @@ See `ROADMAP.md` for the full phase map and recommended priority order.
 | 49 | Canonical Continuous Execution Contract (`49_canonical-execution-contract.md`) | Medium | ✅ Complete | Canonical execution contract pattern in enforced-planning |
 | 50 | Ecosystem Status Renderer (`50_ecosystem-status-renderer.md`) | Medium | ✅ Complete | `make ecosystem-status` builds fleet JSON + Markdown summary |
 | 51 | Upgrade Automation Implementation and Write-Mode Rollout (`51_upgrade-automation-implementation-and-write-mode-rollout.md`) | High | ✅ Complete (impl shipped; write-mode rollout deferred to Mac mini pilot) | Phase 9 fleet write-mode rollout |
+| 53 | Agent-Memory Research Citations And Validation (`53_agent-memory-research-citations-and-validation.md`) | High | ✅ Complete | Structured prior-session provenance field and validator coverage |
 
 ## Status Key
 

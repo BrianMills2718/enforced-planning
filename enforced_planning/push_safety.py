@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from enforced_planning import coordination_claims
+from enforced_planning.worktree_paths import resolve_canonical_repo_root
 
 
 @dataclass(frozen=True)
@@ -194,17 +195,18 @@ def evaluate_push_safety(
 ) -> dict[str, Any]:
     """Evaluate whether the current branch is safe to push as-is."""
 
-    resolved_repo_root = resolve_repo_root(repo_root)
-    resolved_project = project or resolved_repo_root.name
-    resolved_branch = branch or current_branch(resolved_repo_root)
-    default_branch = resolve_default_branch(resolved_repo_root)
+    active_repo_root = resolve_repo_root(repo_root)
+    canonical_repo_root = resolve_canonical_repo_root(active_repo_root)
+    resolved_project = project or canonical_repo_root.name
+    resolved_branch = branch or current_branch(active_repo_root)
+    default_branch = resolve_default_branch(active_repo_root)
     if not default_branch:
         raise RuntimeError("Unable to resolve the default branch for push-check.")
 
     issues: list[PushCheckFinding] = []
     warnings: list[PushCheckFinding] = []
 
-    if _working_tree_dirty(resolved_repo_root):
+    if _working_tree_dirty(active_repo_root):
         issues.append(
             PushCheckFinding(
                 code="dirty_worktree",
@@ -232,7 +234,7 @@ def evaluate_push_safety(
             )
         )
 
-    upstream = current_upstream(resolved_repo_root)
+    upstream = current_upstream(active_repo_root)
     ahead = 0
     behind = 0
     if upstream is None:
@@ -244,7 +246,7 @@ def evaluate_push_safety(
             )
         )
     else:
-        ahead, behind = ahead_behind(resolved_repo_root, upstream)
+        ahead, behind = ahead_behind(active_repo_root, upstream)
         if behind > 0:
             issues.append(
                 PushCheckFinding(
@@ -254,7 +256,7 @@ def evaluate_push_safety(
                 )
             )
 
-    changed_paths = changed_paths_since_default(resolved_repo_root, default_branch)
+    changed_paths = changed_paths_since_default(active_repo_root, default_branch)
     if not changed_paths:
         warnings.append(
             PushCheckFinding(
@@ -320,7 +322,8 @@ def evaluate_push_safety(
 
     return {
         "ok": not issues,
-        "repo_root": str(resolved_repo_root),
+        "repo_root": str(active_repo_root),
+        "canonical_repo_root": str(canonical_repo_root),
         "project": resolved_project,
         "branch": resolved_branch,
         "default_branch": default_branch,

@@ -149,6 +149,51 @@ def test_push_check_warns_on_active_decisions_without_blocking(
     assert any(item["code"] == "active_decisions_present" for item in payload["warnings"])
 
 
+def test_push_check_uses_canonical_project_name_from_worktree_path(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Worktree push-check should use the canonical repo name for claim lookup."""
+
+    repo_root = tmp_path / "demo"
+    _init_git_repo(repo_root)
+    worktree_root = tmp_path / "demo_worktrees" / "plan-42-demo"
+    subprocess.run(
+        ["git", "-C", str(repo_root), "worktree", "add", str(worktree_root), "-b", "plan-42-demo", "main"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    monkeypatch.setattr(push_safety, "load_active_decisions", lambda project, limit=5: [])
+    _write_claim(
+        claims_dir,
+        "current.yaml",
+        {
+            "agent": "codex",
+            "claimed_at": "2026-04-09T10:00:00+00:00",
+            "expires_at": "2099-04-09T11:00:00+00:00",
+            "projects": ["demo"],
+            "scope": "plan-42-demo",
+            "intent": "Own current branch",
+            "claim_type": "program",
+            "branch": "plan-42-demo",
+            "worktree_path": str(worktree_root),
+            "session_id": "codex:thread-1",
+            "status": "active",
+        },
+    )
+
+    payload = push_safety.evaluate_push_safety(worktree_root)
+
+    assert payload["ok"]
+    assert payload["project"] == "demo"
+    assert payload["branch_claim_count"] == 1
+    assert payload["canonical_repo_root"] == str(repo_root)
+
+
 def test_create_review_claim_uses_target_branch_as_parent_scope(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

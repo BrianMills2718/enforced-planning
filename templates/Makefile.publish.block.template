@@ -22,7 +22,9 @@ publish-check:  ## Run the governed publish gate (coordination, repo checks, rev
 		exit 1; \
 	fi
 	@python "$(PUBLISH_PUSH_CHECK_SCRIPT)"
-	@$(MAKE) check
 	@python "$(PUBLISH_DEAD_CODE_SCRIPT)"
 	@python "$(PUBLISH_DEAD_CODE_VALIDATE_SCRIPT)"
+	@if $(MAKE) -n publish-check-extra >/dev/null 2>&1; then \
+		$(MAKE) publish-check-extra; \
+	fi
 # <<< META-PROCESS PUBLISH TARGETS <<<

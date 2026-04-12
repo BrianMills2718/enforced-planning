@@ -112,6 +112,8 @@ it uses the same claim/tracker model for Codex and Claude Code.
 The canonical minimum install also activates repo-local git hooks with local
 `core.hooksPath=hooks`, so commit and publish enforcement does not depend on a
 developer remembering extra commands.
+Repos that want stricter publish gates can define a `publish-check-extra`
+target; the canonical `publish-check` target runs it when present.
 
 ## Verify The Install
 

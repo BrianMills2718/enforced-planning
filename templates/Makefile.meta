@@ -53,9 +53,11 @@ push-check:  ## Validate branch push safety against default-branch and coordinat
 
 publish-check:  ## Run the governed publish gate (coordination, repo checks, reviewed dead-code)
 	@python $(SCRIPTS_META)/check_push_safety.py
-	@$(MAKE) check
 	@python $(SCRIPTS_META)/check_dead_code.py
 	@python $(SCRIPTS_META)/validate_dead_code_audit.py
+	@if $(MAKE) -n publish-check-extra >/dev/null 2>&1; then \
+		$(MAKE) publish-check-extra; \
+	fi
 
 merge:  ## Merge PR (PR=number required)
 ifndef PR

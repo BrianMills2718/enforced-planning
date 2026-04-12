@@ -50,6 +50,9 @@ additional control surfaces the install makes available:
   - bounded worktree cleanup path
 - `hooks/pre-push`
   - blocks branch publish until `make publish-check` passes
+- `publish-check-extra` (optional)
+  - repo-local extension point for additional publish gates beyond coordination
+    and reviewed dead-code
 - `.claude/settings.json`
   - read-gating hook wiring
 - `AGENTS.md`

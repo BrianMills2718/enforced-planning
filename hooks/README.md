@@ -40,7 +40,9 @@ surfaces:
 | `hooks/post-commit` | Remind about unpushed commits |
 
 For git repos, the canonical installer also sets local `core.hooksPath=hooks`
-so those repo-local hook templates are actually active.
+so those repo-local hook templates are actually active. `publish-check`
+enforces coordination and reviewed dead-code by default; repos may extend it
+with an optional `publish-check-extra` target.
 
 ## Legacy And Optional Hook Surfaces
 

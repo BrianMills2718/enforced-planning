@@ -454,7 +454,7 @@ Use `dry_run` when:
 
 ## Integration with Capabilities and Data Contracts
 
-Journey notebooks are the **executable specification** of capabilities defined in the plan template's Capabilities section. Each notebook cell corresponds to one capability from the plan's Capabilities table. A capability IS a tool IS a boundary IS a notebook cell — one definition, multiple views.
+Journey notebooks are the **executable specification** of capabilities defined in the plan template's Capabilities section. Each notebook cell corresponds to one capability or execution step from the plan's Capabilities table. Capabilities, tools, boundaries, and notebook cells are related views over the same architecture, but they are not identical objects: the capability is the abstract function, a tool is a reusable callable implementation, a boundary is the governed typed seam, and the notebook cell is the executable planning or validation artifact.
 
 | Planning Layer | Artifact | Detail Level |
 |---------------|----------|-------------|

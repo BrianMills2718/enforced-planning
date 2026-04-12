@@ -4,7 +4,7 @@ This directory contains portable git hook templates.
 
 ## Use This Directory For
 
-- pre-commit, commit-msg, and post-commit hook templates shipped by the
+- pre-commit, pre-push, commit-msg, and post-commit hook templates shipped by the
   framework
 
 ## Working Rules

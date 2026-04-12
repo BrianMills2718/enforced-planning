@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -35,9 +36,13 @@ from enforced_planning.hook_wiring import plan_generation as plan_hook_generatio
 FRAMEWORK_ROOT = Path(__file__).resolve().parents[1]
 MAKEFILE_META_MARKER = "# === META-PROCESS TARGETS ==="
 MAKEFILE_TEMPLATE = "templates/Makefile.meta"
+MAKEFILE_PUBLISH_TEMPLATE = "templates/Makefile.publish.block.template"
 MAKEFILE_WORKTREE_TEMPLATE = "templates/Makefile.worktree.block.template"
+MAKEFILE_PUBLISH_BLOCK_START = "# >>> META-PROCESS PUBLISH TARGETS >>>"
+MAKEFILE_PUBLISH_BLOCK_END = "# <<< META-PROCESS PUBLISH TARGETS <<<"
 MAKEFILE_WORKTREE_BLOCK_START = "# >>> META-PROCESS WORKTREE TARGETS >>>"
 MAKEFILE_WORKTREE_BLOCK_END = "# <<< META-PROCESS WORKTREE TARGETS <<<"
+MAKEFILE_PUBLISH_INSERTION_ANCHORS = ("# --- Help ---",)
 MAKEFILE_WORKTREE_INSERTION_ANCHORS = (
     "# --- During Implementation ---",
     "# --- PR Workflow ---",
@@ -87,6 +92,10 @@ SYNC_SUPPORT_FILES: dict[str, str] = {
     "scripts/meta/worktree-coordination/create_review_claim.py": "scripts/worktree-coordination/create_review_claim.py",
     "scripts/meta/worktree-coordination/raise_concern.py": "scripts/worktree-coordination/raise_concern.py",
     "scripts/meta/worktree-coordination/safe_worktree_remove.py": "scripts/worktree-coordination/safe_worktree_remove.py",
+    "hooks/commit-msg": "hooks/git/commit-msg",
+    "hooks/pre-commit": "hooks/git/pre-commit",
+    "hooks/pre-push": "hooks/git/pre-push",
+    "hooks/post-commit": "hooks/git/post-commit",
     "meta-process/templates/agents.md.template": "templates/agents.md.template",
 }
 
@@ -186,6 +195,56 @@ def _render_makefile_worktree_block(script_root: str) -> str:
     return template.replace("__WORKTREE_SCRIPT_ROOT__", script_root)
 
 
+def _render_makefile_publish_block(script_root: str) -> str:
+    """Render the sanctioned publish block for one Makefile consumer."""
+    template = _load_source_text(MAKEFILE_PUBLISH_TEMPLATE)
+    return template.replace("__SCRIPT_ROOT__", script_root)
+
+
+def _sync_makefile_publish_block(current_makefile: str) -> tuple[str, str | None]:
+    """Return synced Makefile text plus the installer action needed, if any."""
+    block = _render_makefile_publish_block("scripts/meta").rstrip()
+    normalized = current_makefile.rstrip("\n")
+    if MAKEFILE_PUBLISH_BLOCK_START in normalized:
+        start = normalized.index(MAKEFILE_PUBLISH_BLOCK_START)
+        end = normalized.index(MAKEFILE_PUBLISH_BLOCK_END) + len(MAKEFILE_PUBLISH_BLOCK_END)
+        existing_block = normalized[start:end].rstrip()
+        if existing_block == block:
+            return normalized + "\n", None
+        updated = normalized[:start].rstrip()
+        if updated:
+            updated += "\n\n"
+        updated += block
+        trailing = normalized[end:].strip("\n")
+        if trailing:
+            updated += "\n\n" + trailing
+        return updated + "\n", "sync:Makefile.publish"
+
+    insertion_index: int | None = None
+    for anchor in MAKEFILE_PUBLISH_INSERTION_ANCHORS:
+        index = normalized.find(anchor)
+        if index != -1:
+            insertion_index = index
+            break
+
+    if insertion_index is None:
+        updated = normalized
+        if updated:
+            updated += "\n\n"
+        updated += block
+        return updated + "\n", "append:Makefile.publish"
+
+    before = normalized[:insertion_index].rstrip("\n")
+    after = normalized[insertion_index:].lstrip("\n")
+    updated = before
+    if updated:
+        updated += "\n\n"
+    updated += block
+    if after:
+        updated += "\n\n" + after
+    return updated + "\n", "append:Makefile.publish"
+
+
 def _sync_makefile_worktree_block(current_makefile: str) -> tuple[str, str | None]:
     """Return synced Makefile text plus the installer action needed, if any."""
     block = _render_makefile_worktree_block("scripts/meta/worktree-coordination").rstrip()
@@ -276,13 +335,20 @@ def _plan_static_support(repo_root: Path, *, worktree_only: bool) -> InstallPlan
             actions.append("scaffold:Makefile")
             scaffolded_files.append("Makefile")
             # Include worktree block so the Makefile is complete on first install.
-            with_worktree, _ = _sync_makefile_worktree_block(makefile_template)
+            with_publish, _ = _sync_makefile_publish_block(makefile_template)
+            with_worktree, _ = _sync_makefile_worktree_block(with_publish)
             file_writes[makefile_path] = with_worktree
     else:
         current_makefile = makefile_path.read_text(encoding="utf-8")
-        synced_makefile, makefile_action = _sync_makefile_worktree_block(current_makefile)
-        if makefile_action:
-            actions.append(makefile_action)
+        synced_makefile = current_makefile
+        if not worktree_only:
+            synced_makefile, publish_action = _sync_makefile_publish_block(synced_makefile)
+            if publish_action:
+                actions.append(publish_action)
+        synced_makefile, worktree_action = _sync_makefile_worktree_block(synced_makefile)
+        if worktree_action:
+            actions.append(worktree_action)
+        if synced_makefile != current_makefile:
             file_writes[makefile_path] = synced_makefile
 
     return InstallPlan(
@@ -347,7 +413,10 @@ def _apply_file_writes(file_writes: dict[Path, str]) -> None:
     for path, content in file_writes.items():
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
-        if path.suffix == ".sh":
+        if path.suffix == ".sh" or (
+            path.parent.name == "hooks"
+            and path.name in {"commit-msg", "pre-commit", "pre-push", "post-commit"}
+        ):
             path.chmod(0o755)
 
 
@@ -362,6 +431,36 @@ def _write_agents(repo_root: Path) -> str:
         claude_file="CLAUDE.md",
         relationships_file="scripts/relationships.yaml",
         agents_file="AGENTS.md",
+    )
+
+
+def _hooks_path_action(repo_root: Path) -> str | None:
+    """Return the hook-path config action when this git repo needs one."""
+    result = subprocess.run(
+        ["git", "-C", str(repo_root), "rev-parse", "--git-dir"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        return None
+
+    current = subprocess.run(
+        ["git", "-C", str(repo_root), "config", "--get", "core.hooksPath"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if current.returncode == 0 and current.stdout.strip() == "hooks":
+        return None
+    return "config:core.hooksPath=hooks"
+
+
+def _apply_hooks_path(repo_root: Path) -> None:
+    """Activate repo-local hooks for one governed git repo."""
+    subprocess.run(
+        ["git", "-C", str(repo_root), "config", "--local", "core.hooksPath", "hooks"],
+        check=True,
     )
 
 
@@ -395,6 +494,9 @@ def install_or_plan(
         hook_actions, hook_writes, _ = plan_hook_generation(_hook_target(repo_root))
         actions.extend(hook_actions)
         file_writes.update(hook_writes)
+        hooks_path_action = _hooks_path_action(repo_root)
+        if hooks_path_action is not None:
+            actions.append(hooks_path_action)
 
     if not worktree_only:
         agent_actions, agent_blockers = _plan_agents_refresh(
@@ -419,6 +521,8 @@ def install_or_plan(
             applied_actions.extend(actions)
             if not skip_hook_wiring and not worktree_only:
                 apply_hook_generation(_hook_target(repo_root), hook_writes)
+                if hooks_path_action is not None:
+                    _apply_hooks_path(repo_root)
             if not worktree_only and _needs_agents_refresh(
                 pre_audit,
                 relationships_will_change=relationships_will_change,

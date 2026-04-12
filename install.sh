@@ -161,7 +161,7 @@ fi
 
 # Copy git hooks
 echo "Copying git hooks..."
-for hook in commit-msg pre-commit post-commit; do
+for hook in commit-msg pre-commit pre-push post-commit; do
     if [[ -f "$SCRIPT_DIR/hooks/git/$hook" ]]; then
         cp "$SCRIPT_DIR/hooks/git/$hook" "$TARGET_DIR/hooks/"
         chmod +x "$TARGET_DIR/hooks/$hook"

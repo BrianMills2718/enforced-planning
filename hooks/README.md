@@ -26,16 +26,21 @@ The canonical minimum governed-repo installer is:
 python scripts/install_governed_repo.py --repo-root /path/to/repo --write
 ```
 
-That minimum path installs and wires only the read-gating hook surface:
+That minimum path installs and wires the read-gating and publish-path hook
+surfaces:
 
 | Installed Path | Purpose |
 |---|---|
 | `.claude/hooks/gate-edit.sh` | Block edits until required reading is satisfied |
 | `.claude/hooks/track-reads.sh` | Record document reads for gating |
 | `.claude/settings.json` | Wires the `Read` and `Edit|Write` hook commands |
+| `hooks/pre-commit` | Run staged validation checks before commit |
+| `hooks/pre-push` | Block publish until `publish-check` passes |
+| `hooks/commit-msg` | Enforce commit prefix conventions |
+| `hooks/post-commit` | Remind about unpushed commits |
 
-This minimum path does **not** currently install the broader raw git-hook stack
-or the larger Claude hook template set.
+For git repos, the canonical installer also sets local `core.hooksPath=hooks`
+so those repo-local hook templates are actually active.
 
 ## Legacy And Optional Hook Surfaces
 
@@ -58,11 +63,11 @@ The source repo includes these git hook templates:
 | Hook | Purpose |
 |---|---|
 | `pre-commit` | Run staged validation checks before commit |
+| `pre-push` | Enforce the governed publish gate before branch push |
 | `commit-msg` | Enforce commit prefix conventions |
 | `post-commit` | Advisory reminder about unpushed commits |
 
-These remain reference/legacy rollout assets until the broader hook-distribution
-story is fully converged.
+These are now part of the canonical governed-repo install surface.
 
 ## Claude Hook Templates
 

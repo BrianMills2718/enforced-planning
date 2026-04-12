@@ -48,6 +48,8 @@ additional control surfaces the install makes available:
   - creates governed worktrees through the sanctioned path
 - `scripts/meta/worktree-coordination/safe_worktree_remove.py`
   - bounded worktree cleanup path
+- `hooks/pre-push`
+  - blocks branch publish until `make publish-check` passes
 - `.claude/settings.json`
   - read-gating hook wiring
 - `AGENTS.md`

@@ -116,6 +116,21 @@ if [[ -n "$DEAD_CODE" ]] && [[ -n "$STAGED_PY" ]]; then
     fi
 fi
 
+# 8b. Reviewed dead-code audit validation (if script exists)
+DEAD_CODE_AUDIT=$(find_script "validate_dead_code_audit.py")
+STAGED_DEAD_CODE_AUDIT=$(git diff --cached --name-only --diff-filter=ACM | grep '^dead_code_audit\.json$' || true)
+STAGED_META_PROCESS=$(git diff --cached --name-only --diff-filter=ACM | grep '^meta-process\.yaml$' || true)
+if [[ -n "$DEAD_CODE_AUDIT" ]] && { [[ -n "$STAGED_PY" ]] || [[ -n "$STAGED_DEAD_CODE_AUDIT" ]] || [[ -n "$STAGED_META_PROCESS" ]]; }; then
+    echo "Validating reviewed dead-code audit..."
+    if ! python "$DEAD_CODE_AUDIT" 2>/dev/null; then
+        echo ""
+        echo "ERROR: Reviewed dead-code audit is invalid!"
+        echo "Run 'python $DEAD_CODE_AUDIT' to see missing or stale dispositions."
+        echo ""
+        exit 1
+    fi
+fi
+
 # 9. Branch divergence check
 echo "Checking branch freshness..."
 git fetch origin 2>/dev/null || true

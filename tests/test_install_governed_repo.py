@@ -71,6 +71,10 @@ def test_install_governed_repo_dry_run_reports_expected_actions(tmp_path: Path) 
     assert "scaffold:scripts/relationships.yaml" in payload["actions"]
     assert "scaffold:docs/plans/CLAUDE.md" in payload["actions"]
     assert "scaffold:Makefile" in payload["actions"]
+    assert "install:hooks/commit-msg" in payload["actions"]
+    assert "install:hooks/pre-commit" in payload["actions"]
+    assert "install:hooks/pre-push" in payload["actions"]
+    assert "install:hooks/post-commit" in payload["actions"]
     assert "install:enforced_planning/__init__.py" in payload["actions"]
     assert "install:enforced_planning/agents_rendering.py" in payload["actions"]
     assert "install:enforced_planning/concern_routing.py" in payload["actions"]
@@ -101,6 +105,7 @@ def test_install_governed_repo_dry_run_reports_expected_actions(tmp_path: Path) 
     assert "install:scripts/meta/render_agents_md.py" in payload["actions"]
     assert "install:scripts/meta/check_agents_sync.py" in payload["actions"]
     assert "install:meta-process/templates/agents.md.template" in payload["actions"]
+    assert "append:Makefile.publish" not in payload["actions"]
     assert "sync:.claude/hooks/gate-edit.sh" in payload["actions"]
     assert "render:AGENTS.md" in payload["actions"]
     assert payload["dry_run_mode"] is True
@@ -132,6 +137,10 @@ def test_install_governed_repo_write_bootstraps_minimum_repo_and_passes_audit(
     assert (tmp_path / "docs" / "plans" / "CLAUDE.md").exists()
     assert (tmp_path / "docs" / "plans" / "TEMPLATE.md").exists()
     assert (tmp_path / "Makefile").exists()
+    assert (tmp_path / "hooks" / "commit-msg").exists()
+    assert (tmp_path / "hooks" / "pre-commit").exists()
+    assert (tmp_path / "hooks" / "pre-push").exists()
+    assert (tmp_path / "hooks" / "post-commit").exists()
     assert (tmp_path / "enforced_planning" / "__init__.py").exists()
     assert (tmp_path / "enforced_planning" / "agents_rendering.py").exists()
     assert (tmp_path / "enforced_planning" / "concern_routing.py").exists()
@@ -174,6 +183,7 @@ def test_install_governed_repo_write_bootstraps_minimum_repo_and_passes_audit(
     assert "worktree:" in makefile_text
     assert "worktree-list:" in makefile_text
     assert "worktree-remove:" in makefile_text
+    assert "publish-check:" in makefile_text
     assert "session-start:" in makefile_text
     assert "session-heartbeat:" in makefile_text
     assert "session-status:" in makefile_text
@@ -295,10 +305,14 @@ def test_install_governed_repo_appends_makefile_meta_block_when_missing(
 
     assert result.returncode == 0, result.stdout + result.stderr
     payload = json.loads(result.stdout)
+    assert "append:Makefile.publish" in payload["actions"]
     assert "append:Makefile.worktree" in payload["actions"]
     makefile_text = (tmp_path / "Makefile").read_text(encoding="utf-8")
     assert "help:" in makefile_text
+    assert "publish-check:" in makefile_text
     assert "worktree:" in makefile_text
+    assert "# >>> META-PROCESS PUBLISH TARGETS >>>" in makefile_text
+    assert "# <<< META-PROCESS PUBLISH TARGETS <<<" in makefile_text
     assert "# >>> META-PROCESS WORKTREE TARGETS >>>" in makefile_text
     assert "# <<< META-PROCESS WORKTREE TARGETS <<<" in makefile_text
     assert '$(MAKE) session-close BRANCH="$(BRANCH)"' in makefile_text
@@ -354,8 +368,11 @@ def test_install_governed_repo_syncs_worktree_block_into_existing_meta_makefile(
 
     assert result.returncode == 0, result.stdout + result.stderr
     payload = json.loads(result.stdout)
+    assert "append:Makefile.publish" in payload["actions"]
     assert "append:Makefile.worktree" in payload["actions"]
     makefile_text = (tmp_path / "Makefile").read_text(encoding="utf-8")
+    assert "# >>> META-PROCESS PUBLISH TARGETS >>>" in makefile_text
+    assert "publish-check:  ## Run the governed publish gate" in makefile_text
     assert "# >>> META-PROCESS WORKTREE TARGETS >>>" in makefile_text
     assert "WORKTREE_CREATE_SCRIPT := scripts/meta/worktree-coordination/create_worktree.py" in makefile_text
     assert "WORKTREE_CLAIMS_SCRIPT := scripts/meta/worktree-coordination/../check_coordination_claims.py" in makefile_text
@@ -512,6 +529,15 @@ def test_install_sh_default_delegates_to_canonical_installer(tmp_path: Path) -> 
     assert (tmp_path / "AGENTS.md").exists()
     assert (tmp_path / "scripts" / "relationships.yaml").exists()
     assert (tmp_path / ".claude" / "hooks" / "gate-edit.sh").exists()
+    assert (tmp_path / "hooks" / "pre-push").exists()
+    hooks_path = subprocess.run(
+        ["git", "-C", str(tmp_path), "config", "--get", "core.hooksPath"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert hooks_path.returncode == 0
+    assert hooks_path.stdout.strip() == "hooks"
 
 
 def test_install_governed_repo_fails_loud_without_claude_md(tmp_path: Path) -> None:

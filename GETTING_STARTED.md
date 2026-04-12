@@ -94,6 +94,10 @@ After a successful minimum install, your repo should have:
 - `scripts/meta/session_status.py`
 - `scripts/meta/sync_plan_status.py`
 - `scripts/meta/validate_plan.py`
+- `hooks/pre-commit`
+- `hooks/pre-push`
+- `hooks/commit-msg`
+- `hooks/post-commit`
 - `.claude/hooks/gate-edit.sh`
 - `.claude/hooks/track-reads.sh`
 - `.claude/settings.json`
@@ -105,6 +109,9 @@ claim entrypoint is `scripts/meta/check_coordination_claims.py`. The sanctioned
 metadata stays truthful without inventing fake broad write ownership.
 The same sanctioned flow also starts a linked session contract and tracker, and
 it uses the same claim/tracker model for Codex and Claude Code.
+The canonical minimum install also activates repo-local git hooks with local
+`core.hooksPath=hooks`, so commit and publish enforcement does not depend on a
+developer remembering extra commands.
 
 ## Verify The Install
 

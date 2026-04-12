@@ -32,7 +32,7 @@ check:  ## Run all checks (test, mypy, lint)
 	@echo "All checks passed!"
 
 # --- PR Workflow ---
-.PHONY: pr-ready pr merge finish pr-auto-check pr-auto push-check
+.PHONY: pr-ready pr merge finish pr-auto-check pr-auto push-check publish-check
 
 pr-ready:  ## Rebase on main and push
 	@git fetch origin main
@@ -50,6 +50,12 @@ pr-auto:  ## Autonomous PR create + auto-merge request (non-interactive)
 
 push-check:  ## Validate branch push safety against default-branch and coordination state
 	@python $(SCRIPTS_META)/check_push_safety.py
+
+publish-check:  ## Run the governed publish gate (coordination, repo checks, reviewed dead-code)
+	@python $(SCRIPTS_META)/check_push_safety.py
+	@$(MAKE) check
+	@python $(SCRIPTS_META)/check_dead_code.py
+	@python $(SCRIPTS_META)/validate_dead_code_audit.py
 
 merge:  ## Merge PR (PR=number required)
 ifndef PR
@@ -114,6 +120,7 @@ help-meta:  ## Show enforced-planning targets
 	@echo "    pr-auto-check   Preflight autonomous PR flow"
 	@echo "    pr-auto         Non-interactive PR + auto-merge request"
 	@echo "    push-check      Validate branch push safety"
+	@echo "    publish-check   Run the governed publish gate"
 	@echo "    merge           Merge PR (PR=number)"
 	@echo "    finish          Merge + cleanup (BRANCH=name PR=number)"
 	@echo ""

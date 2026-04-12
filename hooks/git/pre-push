@@ -1,0 +1,26 @@
+#!/bin/bash
+# Pre-push hook (portable enforced-planning template)
+# Enforces the governed publish path before a branch reaches the remote.
+
+set -e
+
+REPO_ROOT=$(git rev-parse --show-toplevel)
+cd "$REPO_ROOT"
+
+if [[ ! -f "$REPO_ROOT/Makefile" ]]; then
+    echo ""
+    echo "ERROR: Governed publish path requires a Makefile with publish-check."
+    echo ""
+    exit 1
+fi
+
+if ! make -n publish-check >/dev/null 2>&1; then
+    echo ""
+    echo "ERROR: Missing publish-check target."
+    echo "Sync the governed Makefile publish block before pushing."
+    echo ""
+    exit 1
+fi
+
+echo "Running publish-check..."
+make publish-check

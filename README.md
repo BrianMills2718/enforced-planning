@@ -115,6 +115,7 @@ The minimum mechanical governed-repo contract is:
 - installed validator/support files under `scripts/meta/`
 - installed session lifecycle entrypoints under `scripts/meta/` when worktree coordination is enabled
 - read-gating surfaces under `.claude/hooks/` and `.claude/settings.json`
+- repo-local git hooks under `hooks/` with local `core.hooksPath=hooks`
 
 `scripts/audit_governed_repo.py --strict-governed` is the mechanical check for
 that contract.

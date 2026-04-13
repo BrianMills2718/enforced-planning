@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Validate that cross-project plans have a Capabilities section.
+"""Validate that plans expose capability metadata at the planning layer.
 
 Plans that create or modify callable functions used by other projects
 MUST declare their capabilities (input/output schemas, producer, consumer).
-Internal-only plans may skip the section.
+Capability-bearing plans must also carry the goal-graph header fields
+``phase_ref`` and ``goal_ref``. Internal-only plans may skip the section.
 
 Detection heuristic: a plan is "cross-project" if it:
   1. Has Files Affected spanning multiple projects, OR
@@ -30,6 +31,35 @@ BOUNDARY_KEYWORDS = {
     "cross-project", "downstream", "upstream", "import from",
     "export to", "Pydantic model", "schema", "contract",
 }
+
+REQUIRED_GOAL_GRAPH_FIELDS = ("phase_ref", "goal_ref")
+PLACEHOLDER_HEADER_VALUES = {
+    "phase_ref": {"Phase X.Y", "Phase X", "phase x.y"},
+    "goal_ref": {"goal-id"},
+}
+
+
+def _extract_header_value(text: str, field_name: str) -> str | None:
+    """Return one plan header value, or None when the field is missing/unset."""
+    match = re.search(rf"^\*\*{re.escape(field_name)}:\*\*\s*(.+)$", text, re.MULTILINE)
+    if not match:
+        return None
+    value = match.group(1).strip()
+    if not value:
+        return None
+    normalized = value.strip().strip('"').strip("'")
+    if normalized in PLACEHOLDER_HEADER_VALUES.get(field_name, set()):
+        return None
+    return normalized
+
+
+def _missing_goal_graph_fields(text: str) -> list[str]:
+    """Return required goal-graph header fields that are missing or still placeholders."""
+    missing = []
+    for field_name in REQUIRED_GOAL_GRAPH_FIELDS:
+        if _extract_header_value(text, field_name) is None:
+            missing.append(field_name)
+    return missing
 
 
 def check_plan(path: Path) -> dict:
@@ -64,6 +94,7 @@ def check_plan(path: Path) -> dict:
 
     # Check for Capabilities section
     has_capabilities = bool(re.search(r"^## Capabilities", text, re.MULTILINE))
+    missing_goal_graph_fields = _missing_goal_graph_fields(text) if has_capabilities else []
 
     # Check if plan mentions skip instruction
     # Explicit opt-out: plan says it's internal
@@ -85,9 +116,15 @@ def check_plan(path: Path) -> dict:
     is_cross_project = (len(signals) >= 2 or has_consumer_table) and not explicit_internal
 
     # Determine status
-    if has_capabilities:
+    if has_capabilities and missing_goal_graph_fields:
+        status = "warning"
+        message = (
+            "Capabilities section present but missing goal-graph header fields: "
+            + ", ".join(missing_goal_graph_fields)
+        )
+    elif has_capabilities:
         status = "ok"
-        message = "Has Capabilities section"
+        message = "Has Capabilities section and goal-graph headers"
     elif not is_cross_project:
         status = "ok"
         message = "Internal plan — no Capabilities required"
@@ -100,6 +137,7 @@ def check_plan(path: Path) -> dict:
         "has_capabilities": has_capabilities,
         "is_cross_project": is_cross_project,
         "signals": signals,
+        "missing_goal_graph_fields": missing_goal_graph_fields,
         "status": status,
         "message": message,
     }
@@ -108,7 +146,7 @@ def check_plan(path: Path) -> dict:
 def main():
     """Entry point."""
     parser = argparse.ArgumentParser(
-        description="Check plan files for Capabilities section compliance",
+        description="Check plan files for capability and goal-graph metadata compliance",
     )
     parser.add_argument("paths", nargs="+", help="Plan files or directories to check")
     parser.add_argument("--strict", action="store_true", help="Exit 1 on any warning")

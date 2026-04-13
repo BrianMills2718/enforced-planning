@@ -57,6 +57,7 @@ See `ROADMAP.md` for the full phase map and recommended priority order.
 | 50 | Ecosystem Status Renderer (`50_ecosystem-status-renderer.md`) | Medium | ✅ Complete | `make ecosystem-status` builds fleet JSON + Markdown summary |
 | 51 | Upgrade Automation Implementation and Write-Mode Rollout (`51_upgrade-automation-implementation-and-write-mode-rollout.md`) | High | ✅ Complete (impl shipped; write-mode rollout deferred to Mac mini pilot) | Phase 9 fleet write-mode rollout |
 | 53 | Agent-Memory Research Citations And Validation (`53_agent-memory-research-citations-and-validation.md`) | High | ✅ Complete | Structured prior-session provenance field and validator coverage |
+| 54 | Recursive Documentation Spine And Required-Read Closure (`54_recursive-documentation-spine-and-required-read-closure.md`) | High | 📋 Planned | [future] recursive doc-spine validation and read-gating rollout |
 
 ## Status Key
 

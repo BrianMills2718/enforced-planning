@@ -146,7 +146,7 @@
   - `git push -u origin plan-53-prompt-eval-publish-check-extra`
 - `research_v3`
   - `PATH=.venv/bin:$PATH make check`
-  - result: deferred because test collection fails with `ModuleNotFoundError: No module named 'followthemoney'`
+  - result: explicitly deferred for this wave because test collection fails with `ModuleNotFoundError: No module named 'followthemoney'`
 - `llm_client`
   - `PATH=.venv/bin:$PATH make check`
   - result: deferred because `ruff check llm_client/ tests/` reports 317 issues

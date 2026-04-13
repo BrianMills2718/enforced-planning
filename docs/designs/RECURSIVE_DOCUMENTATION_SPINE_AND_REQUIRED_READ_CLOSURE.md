@@ -55,6 +55,8 @@ This is a documentation-shape problem, not just a missing-doc problem.
    analysis, and north-star definition. The new design should make those
    surfaces more enforceable, not invent a parallel planning hierarchy.
 3. Small repos must be able to compress roles truthfully into one document.
+4. The first implementation must be dogfooded in `enforced-planning` before the
+   framework asks downstream repos to adopt it.
 
 ## Core Idea
 
@@ -358,6 +360,20 @@ The hook should then enforce:
 
 ## Rollout
 
+### Stage 0: Dogfood In `enforced-planning`
+
+Before downstream rollout, the framework must adopt the contract itself:
+
+- declare its own root execution brief
+- declare explicit `north_star`, `current_state`, `gap_summary`, `roadmap`, and
+  `active_plan_index` concerns
+- wire `primary_parent` and `primary_spec` for the framework's own planning and
+  governance surfaces
+- prove that the read-closure experience is useful rather than burdensome during
+  real framework work
+
+Downstream rollout should stay blocked until this stage is complete.
+
 ### Stage 1: Advisory Metadata
 
 - repos declare root execution brief
@@ -406,7 +422,7 @@ This is not a generic docs lint problem.
 
 ## Migration Example
 
-For a repo like DIGIMON:
+For a repo like DIGIMON, after dogfooding succeeds in `enforced-planning`:
 
 - `START_HERE.md` or a new execution brief becomes the root
 - `CURRENT_STATUS.md`, roadmap, and authority map become required concerns

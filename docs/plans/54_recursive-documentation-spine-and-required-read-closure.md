@@ -41,7 +41,8 @@ documentation spine:
    summary, with the option for one doc to satisfy multiple concerns in small
    repos,
 6. role-based size and required-read budgets,
-7. deterministic validator and read-gating semantics.
+7. deterministic validator and read-gating semantics,
+8. explicit dogfooding in `enforced-planning` before downstream rollout.
 
 **Why:** Agents and humans need progressive disclosure with enforced ancestry.
 Without it, doc volume grows while the top-level architecture and active gate
@@ -97,6 +98,9 @@ No additional research beyond References Reviewed.
 5. Define role-based size budgets and required-read budget limits.
 6. Define the dedicated-config schema extension, validator rules, read-gating
    integration points, and rollout stages.
+7. Define the dogfooding requirement: `enforced-planning` is the first repo to
+   adopt the recursive doc-spine contract before the framework requires it
+   elsewhere.
 
 ---
 
@@ -121,6 +125,7 @@ No additional research beyond References Reviewed.
 - [ ] The design allows one doc to satisfy multiple concerns in small repos while still supporting deeper recursive decomposition in larger repos
 - [ ] The design uses role-based size/read budgets instead of fixed hand-maintained tiers
 - [ ] The design remains compatible with Plan #41's dedicated-config decision for the first implementation slice
+- [ ] The design states clearly that `enforced-planning` is the first-adopter dogfood repo before downstream rollout
 
 > Process criteria (quality gates):
 - [ ] Declared checks pass
@@ -140,5 +145,8 @@ No additional research beyond References Reviewed.
 - This is a design slice, not the implementation rollout. It should freeze the
   model first, then let a later implementation slice wire validators, hooks, and
   migration tooling.
+- The first implementation slice should land in `enforced-planning` itself so the
+  framework proves the operator experience before it asks other repos to adopt
+  the same contract.
 - The intended improvement is not "more docs." It is explicit progressive
   disclosure with a bounded mandatory context surface.

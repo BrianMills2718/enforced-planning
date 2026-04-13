@@ -58,6 +58,7 @@ See `ROADMAP.md` for the full phase map and recommended priority order.
 | 51 | Upgrade Automation Implementation and Write-Mode Rollout (`51_upgrade-automation-implementation-and-write-mode-rollout.md`) | High | ✅ Complete (impl shipped; write-mode rollout deferred to Mac mini pilot) | Phase 9 fleet write-mode rollout |
 | 52 | Coordination Publish Discipline And Reviewed Dead-Code Rollout (`52_coordination-publish-discipline-and-reviewed-dead-code-rollout.md`) | High | ✅ Complete | Phase 9 publish contract and reviewed dead-code rollout shipped across governed repos |
 | 53 | Publish-Check-Extra Graduation Wave 1 (`53_publish-check-extra-graduation-wave-1.md`) | High | ✅ Complete | Phase 9 wave-1 graduation shipped for `agentic_scaffolding` and `prompt_eval`; `research_v3` and `llm_client` truthfully deferred |
+| 55 | Fleet Dead-Code Completion (`55_fleet-dead-code-completion.md`) | High | 📋 Planned | Phase 9 remaining-repo queue for reviewed dead-code rollout, baseline repair, and explicit deferrals |
 
 ## Status Key
 

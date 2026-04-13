@@ -1,13 +1,13 @@
 # Plan #53: Publish-Check-Extra Graduation Wave 1
 
-**Status:** In Progress
+**Status:** Complete
 **Type:** implementation
 **Priority:** High
 **phase_ref:** "Phase 9"
 **goal_ref:** "fleet-adoption"
 **adrs_referenced:** ["ADR-0010"]
 **Blocked By:** #52
-**Blocks:** Stronger repo-local publish enforcement across governed repos
+**Blocks:** Phase 9 stronger repo-local publish enforcement across governed repos
 
 ---
 
@@ -114,14 +114,42 @@
 
 ## Acceptance Criteria
 
-- [ ] Plan #52 is marked complete in the plan surface
-- [ ] Plan #53 exists and defines the repo-graduation rule, order, and defer policy
-- [ ] `ROADMAP.md` Phase 9 distinguishes the shared minimum publish contract from repo-specific `publish-check-extra` graduation
-- [ ] `agentic_scaffolding` publishes through `publish-check-extra := make check`
-- [ ] `prompt_eval` publishes through `publish-check-extra := make check`, or is explicitly documented as deferred with a truthful blocker
-- [ ] `research_v3` is either graduated or explicitly deferred with a truthful blocker classification
-- [ ] `llm_client` is explicitly deferred unless `make check` is proven cheaply repairable
-- [ ] Required tests pass for `enforced-planning` and every graduated repo
+- [x] Plan #52 is marked complete in the plan surface
+- [x] Plan #53 exists and defines the repo-graduation rule, order, and defer policy
+- [x] `ROADMAP.md` Phase 9 distinguishes the shared minimum publish contract from repo-specific `publish-check-extra` graduation
+- [x] `agentic_scaffolding` publishes through `publish-check-extra := make check`
+- [x] `prompt_eval` publishes through `publish-check-extra := make check`, or is explicitly documented as deferred with a truthful blocker
+- [x] `research_v3` is either graduated or explicitly deferred with a truthful blocker classification
+- [x] `llm_client` is explicitly deferred unless `make check` is proven cheaply repairable
+- [x] Required tests pass for `enforced-planning` and every graduated repo
+
+---
+
+## Verification Notes
+
+- `enforced-planning`
+  - `python scripts/check_markdown_links.py ROADMAP.md docs/plans/52_coordination-publish-discipline-and-reviewed-dead-code-rollout.md docs/plans/53_publish-check-extra-graduation-wave-1.md docs/plans/CLAUDE.md`
+  - `python scripts/self_test.py --links --docs`
+- `agentic_scaffolding`
+  - branch `plan-53-agentic-scaffolding-publish-check-extra`
+  - commits `e4a4f86` and `16b9fcd`
+  - `make check`
+  - `make publish-check`
+  - `git push -u origin plan-53-agentic-scaffolding-publish-check-extra`
+- `prompt_eval`
+  - branch `plan-53-prompt-eval-publish-check-extra`
+  - commit `2d1bd2d`
+  - `make check`
+  - `python scripts/meta/check_doc_coupling.py`
+  - `python scripts/check_markdown_links.py CLAUDE.md docs/plans/CLAUDE.md scripts/CLAUDE.md docs/plans/12_governed-baseline-repair-for-active-stack-candidacy.md docs/plans/13_linkage-deepening-and-capability-ownership.md`
+  - `make publish-check`
+  - `git push -u origin plan-53-prompt-eval-publish-check-extra`
+- `research_v3`
+  - `PATH=.venv/bin:$PATH make check`
+  - result: deferred because test collection fails with `ModuleNotFoundError: No module named 'followthemoney'`
+- `llm_client`
+  - `PATH=.venv/bin:$PATH make check`
+  - result: deferred because `ruff check llm_client/ tests/` reports 317 issues
 
 ---
 

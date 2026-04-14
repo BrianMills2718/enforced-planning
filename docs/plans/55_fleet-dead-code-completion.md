@@ -122,7 +122,8 @@ No additional research beyond References Reviewed.
 
 - `grounded-research`: complete on `plan-55-grounded-research-dead-code` (`9471041` pushed). Reviewed dead-code governance is installed and passing. Repo-local cleanup removed the dead findings in `models.py`, `shared_export.py`, `tyler_v1_adapters.py`, and `verify.py`. The lane also made the repo environment truthful enough for verification by declaring `httpx`, `beautifulsoup4`, and `pytest-asyncio`, and by teaching mypy to treat shared ecosystem packages (`llm_client`, `data_contracts`, `epistemic_contracts`, `open_web_retrieval`) as external imports.
 - `epistemic-contracts`: complete on `plan-55-epistemic-contracts-dead-code` (`1f2cfe7` pushed). No repo-local dead findings required cleanup; the repo closed after installing the reviewed dead-code contract, enabling the repo-local dead-code targets, freezing the 23 inherited wrapper findings as `framework_sync`, and verifying publish-check through push.
-- Wave 2A remaining queue: `orgchart`, `qualitative_coding`, `ufotrust`, `utils`.
+- `orgchart`: blocked-on-baseline. The only governed checkout is `20251008_mvp`, which is already ahead of `origin/20251008_mvp` by three local commits. Starting a dead-code lane from that tip would publish unrelated local history; starting from `origin/master` would discard the only known governed baseline. The repo needs an explicit baseline-reconciliation lane before dead-code execution starts.
+- Wave 2A remaining queue: `qualitative_coding`, `ufotrust`, `utils`.
 
 ---
 

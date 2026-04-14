@@ -13,7 +13,7 @@
 
 ## Gap
 
-**Current:** Phase 9 already shipped the dead-code framework, the reviewed-audit contract, the publish-path enforcement layer, and the first governed consumer wave. `agentic_scaffolding` and `prompt_eval` now enforce `publish-check-extra := make check`; `research_v3` and `llm_client` are explicitly deferred on truthful blockers. `grounded-research` is now complete on branch `plan-55-grounded-research-dead-code` with the reviewed dead-code contract installed, repo-local findings cleaned, reviewed framework-sync audit entries frozen, and publish-check verified through push. The rest of the eligible fleet still has no closed outcome yet. Some repos do not yet have the reviewed dead-code contract rolled in, some are locally dirty before any worktree lane starts, and some already have partial governed surfaces without a reviewed audit.
+**Current:** Phase 9 already shipped the dead-code framework, the reviewed-audit contract, the publish-path enforcement layer, and the first governed consumer wave. `agentic_scaffolding` and `prompt_eval` now enforce `publish-check-extra := make check`; `research_v3` and `llm_client` are explicitly deferred on truthful blockers. `grounded-research` and `epistemic-contracts` are now complete under Plan #55 with the reviewed dead-code contract installed, reviewed framework-sync audit entries frozen, and publish-check verified through push. `grounded-research` also required a small truthfulness repair to declare the runtime/test dependencies it was already using. The rest of the eligible fleet still has no closed outcome yet. Some repos do not yet have the reviewed dead-code contract rolled in, some are locally dirty before any worktree lane starts, and some already have partial governed surfaces without a reviewed audit.
 
 **Target:** One explicit fleet-completion campaign that says:
 - which remaining repos are in scope,
@@ -121,7 +121,8 @@ No additional research beyond References Reviewed.
 ### Execution Status
 
 - `grounded-research`: complete on `plan-55-grounded-research-dead-code` (`9471041` pushed). Reviewed dead-code governance is installed and passing. Repo-local cleanup removed the dead findings in `models.py`, `shared_export.py`, `tyler_v1_adapters.py`, and `verify.py`. The lane also made the repo environment truthful enough for verification by declaring `httpx`, `beautifulsoup4`, and `pytest-asyncio`, and by teaching mypy to treat shared ecosystem packages (`llm_client`, `data_contracts`, `epistemic_contracts`, `open_web_retrieval`) as external imports.
-- Wave 2A remaining queue: `epistemic-contracts`, `orgchart`, `qualitative_coding`, `ufotrust`, `utils`.
+- `epistemic-contracts`: complete on `plan-55-epistemic-contracts-dead-code` (`1f2cfe7` pushed). No repo-local dead findings required cleanup; the repo closed after installing the reviewed dead-code contract, enabling the repo-local dead-code targets, freezing the 23 inherited wrapper findings as `framework_sync`, and verifying publish-check through push.
+- Wave 2A remaining queue: `orgchart`, `qualitative_coding`, `ufotrust`, `utils`.
 
 ---
 

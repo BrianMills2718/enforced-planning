@@ -1,6 +1,6 @@
 # Plan #55: Fleet Dead-Code Completion
 
-**Status:** Planned
+**Status:** In Progress
 **Type:** implementation
 **Priority:** High
 **phase_ref:** "Phase 9"
@@ -13,7 +13,7 @@
 
 ## Gap
 
-**Current:** Phase 9 already shipped the dead-code framework, the reviewed-audit contract, the publish-path enforcement layer, and the first governed consumer wave. `agentic_scaffolding` and `prompt_eval` now enforce `publish-check-extra := make check`; `research_v3` and `llm_client` are explicitly deferred on truthful blockers. But the rest of the eligible fleet still has no frozen execution order for dead-code completion. Some repos do not yet have the reviewed dead-code contract rolled in, some are locally dirty before any worktree lane starts, and some already have partial governed surfaces without a reviewed audit.
+**Current:** Phase 9 already shipped the dead-code framework, the reviewed-audit contract, the publish-path enforcement layer, and the first governed consumer wave. `agentic_scaffolding` and `prompt_eval` now enforce `publish-check-extra := make check`; `research_v3` and `llm_client` are explicitly deferred on truthful blockers. `grounded-research` is now complete on branch `plan-55-grounded-research-dead-code` with the reviewed dead-code contract installed, repo-local findings cleaned, reviewed framework-sync audit entries frozen, and publish-check verified through push. The rest of the eligible fleet still has no closed outcome yet. Some repos do not yet have the reviewed dead-code contract rolled in, some are locally dirty before any worktree lane starts, and some already have partial governed surfaces without a reviewed audit.
 
 **Target:** One explicit fleet-completion campaign that says:
 - which remaining repos are in scope,
@@ -118,6 +118,11 @@ No additional research beyond References Reviewed.
      - deferred: explicit blocker recorded in the repo and the upstream tracker
      - blocked-on-baseline: specific prerequisite lane created before dead-code audit starts
 
+### Execution Status
+
+- `grounded-research`: complete on `plan-55-grounded-research-dead-code` (`9471041` pushed). Reviewed dead-code governance is installed and passing. Repo-local cleanup removed the dead findings in `models.py`, `shared_export.py`, `tyler_v1_adapters.py`, and `verify.py`. The lane also made the repo environment truthful enough for verification by declaring `httpx`, `beautifulsoup4`, and `pytest-asyncio`, and by teaching mypy to treat shared ecosystem packages (`llm_client`, `data_contracts`, `epistemic_contracts`, `open_web_retrieval`) as external imports.
+- Wave 2A remaining queue: `epistemic-contracts`, `orgchart`, `qualitative_coding`, `ufotrust`, `utils`.
+
 ---
 
 ## Required Tests
@@ -138,11 +143,11 @@ No additional research beyond References Reviewed.
 ## Acceptance Criteria
 
 - [ ] Plan #55 exists and names the remaining in-scope repos for dead-code completion
-- [ ] The plan states which repos are already complete and which are explicitly deferred
-- [ ] The plan defines the remaining execution waves and the repo order inside them
-- [ ] The plan states the per-repo exit states: complete, deferred, or blocked-on-baseline
-- [ ] `ROADMAP.md` Phase 9 includes the remaining fleet dead-code completion campaign
-- [ ] Required plan/doc validation passes
+- [x] The plan states which repos are already complete and which are explicitly deferred
+- [x] The plan defines the remaining execution waves and the repo order inside them
+- [x] The plan states the per-repo exit states: complete, deferred, or blocked-on-baseline
+- [x] `ROADMAP.md` Phase 9 includes the remaining fleet dead-code completion campaign
+- [x] Required plan/doc validation passes
 
 ---
 

@@ -72,6 +72,21 @@ indexed_authority_surfaces:
     )
 
 
+def _write_doc_spine_fixture(repo_root: Path) -> None:
+    _write(repo_root / "EXECUTION_BRIEF.md", "brief\n")
+    _write(repo_root / "PLANNING_OPERATING_MODEL.md", "north star\n")
+    _write(repo_root / "docs/overview/CURRENT_STATE.md", "current\n")
+    _write(repo_root / "docs/overview/GAP_SUMMARY.md", "gap\n")
+    _write(repo_root / "docs/plans/CLAUDE.md", "# Plans\n")
+    _write(repo_root / "docs/plans/55_test.md", "# Plan #55: Test\n")
+    _write(repo_root / "adr/0009-doc-authority-governance-and-enforcement.md", "adr 9\n")
+    _write(repo_root / "adr/0010-agent-memory-as-planning-input.md", "adr 10\n")
+
+
+def _write_doc_spine_config(repo_root: Path, body: str) -> None:
+    _write(repo_root / "scripts" / "doc_authority.yaml", body)
+
+
 def _init_git_repo(repo_root: Path) -> None:
     subprocess.run(["git", "init", "-b", "main"], cwd=repo_root, check=True, capture_output=True)
     subprocess.run(["git", "config", "user.email", "codex@example.com"], cwd=repo_root, check=True)
@@ -207,3 +222,246 @@ def test_finish_session_fails_when_lane_owns_unresolved_authority_obligation(tmp
 
     assert "unresolved reconciliation obligations" in message
     assert "docs/plans/CLAUDE.md" in message
+
+
+def test_validate_doc_authority_fails_when_required_concern_missing(tmp_path: Path) -> None:
+    repo_root = tmp_path / "demo"
+    _write_doc_spine_fixture(repo_root)
+    _write_doc_spine_config(
+        repo_root,
+        """schema_version: 2
+indexed_authority_surfaces: []
+doc_spine:
+  root_doc: EXECUTION_BRIEF.md
+  required_concerns: [execution_brief, north_star, current_state, gap_summary, roadmap, active_plan_index]
+role_budgets: {}
+docs:
+  - path: EXECUTION_BRIEF.md
+    authority: canonical
+    doc_status: active
+    concerns: [execution_brief]
+    role: execution_brief
+    primary_parent: null
+  - path: PLANNING_OPERATING_MODEL.md
+    authority: canonical
+    doc_status: active
+    concerns: [north_star]
+    role: summary
+    primary_parent: EXECUTION_BRIEF.md
+  - path: docs/overview/CURRENT_STATE.md
+    authority: canonical
+    doc_status: active
+    concerns: [current_state]
+    role: summary
+    primary_parent: EXECUTION_BRIEF.md
+  - path: ROADMAP.md
+    authority: canonical
+    doc_status: active
+    concerns: [roadmap]
+    role: summary
+    primary_parent: EXECUTION_BRIEF.md
+  - path: docs/plans/CLAUDE.md
+    authority: canonical
+    doc_status: active
+    concerns: [active_plan_index]
+    role: reference
+    primary_parent: EXECUTION_BRIEF.md
+code_surfaces: []
+""",
+    )
+    _write(repo_root / "ROADMAP.md", "roadmap\n")
+
+    issues = doc_authority.validate_doc_authority(repo_root)
+
+    assert any(issue.code == "required_concern_missing" and issue.concern == "gap_summary" for issue in issues)
+
+
+def test_validate_doc_authority_fails_on_primary_parent_cycle(tmp_path: Path) -> None:
+    repo_root = tmp_path / "demo"
+    _write_doc_spine_fixture(repo_root)
+    _write(repo_root / "ROADMAP.md", "roadmap\n")
+    _write_doc_spine_config(
+        repo_root,
+        """schema_version: 2
+indexed_authority_surfaces: []
+doc_spine:
+  root_doc: EXECUTION_BRIEF.md
+  required_concerns: [execution_brief, north_star, current_state, gap_summary, roadmap, active_plan_index]
+role_budgets: {}
+docs:
+  - path: EXECUTION_BRIEF.md
+    authority: canonical
+    doc_status: active
+    concerns: [execution_brief]
+    role: execution_brief
+    primary_parent: null
+  - path: PLANNING_OPERATING_MODEL.md
+    authority: canonical
+    doc_status: active
+    concerns: [north_star]
+    role: summary
+    primary_parent: EXECUTION_BRIEF.md
+  - path: docs/overview/CURRENT_STATE.md
+    authority: canonical
+    doc_status: active
+    concerns: [current_state]
+    role: summary
+    primary_parent: docs/overview/GAP_SUMMARY.md
+  - path: docs/overview/GAP_SUMMARY.md
+    authority: canonical
+    doc_status: active
+    concerns: [gap_summary]
+    role: summary
+    primary_parent: docs/overview/CURRENT_STATE.md
+  - path: ROADMAP.md
+    authority: canonical
+    doc_status: active
+    concerns: [roadmap]
+    role: summary
+    primary_parent: EXECUTION_BRIEF.md
+  - path: docs/plans/CLAUDE.md
+    authority: canonical
+    doc_status: active
+    concerns: [active_plan_index]
+    role: reference
+    primary_parent: EXECUTION_BRIEF.md
+code_surfaces: []
+""",
+    )
+
+    issues = doc_authority.validate_doc_authority(repo_root)
+
+    assert any(issue.code == "doc_spine_cycle" for issue in issues)
+
+
+def test_validate_doc_authority_fails_when_code_surface_primary_spec_missing(tmp_path: Path) -> None:
+    repo_root = tmp_path / "demo"
+    _write_doc_spine_fixture(repo_root)
+    _write(repo_root / "ROADMAP.md", "roadmap\n")
+    _write_doc_spine_config(
+        repo_root,
+        """schema_version: 2
+indexed_authority_surfaces: []
+doc_spine:
+  root_doc: EXECUTION_BRIEF.md
+  required_concerns: [execution_brief, north_star, current_state, gap_summary, roadmap, active_plan_index]
+role_budgets: {}
+docs:
+  - path: EXECUTION_BRIEF.md
+    authority: canonical
+    doc_status: active
+    concerns: [execution_brief]
+    role: execution_brief
+    primary_parent: null
+  - path: PLANNING_OPERATING_MODEL.md
+    authority: canonical
+    doc_status: active
+    concerns: [north_star]
+    role: summary
+    primary_parent: EXECUTION_BRIEF.md
+  - path: docs/overview/CURRENT_STATE.md
+    authority: canonical
+    doc_status: active
+    concerns: [current_state]
+    role: summary
+    primary_parent: EXECUTION_BRIEF.md
+  - path: docs/overview/GAP_SUMMARY.md
+    authority: canonical
+    doc_status: active
+    concerns: [gap_summary]
+    role: summary
+    primary_parent: EXECUTION_BRIEF.md
+  - path: ROADMAP.md
+    authority: canonical
+    doc_status: active
+    concerns: [roadmap]
+    role: summary
+    primary_parent: EXECUTION_BRIEF.md
+  - path: docs/plans/CLAUDE.md
+    authority: canonical
+    doc_status: active
+    concerns: [active_plan_index]
+    role: reference
+    primary_parent: EXECUTION_BRIEF.md
+code_surfaces:
+  - paths: [enforced_planning/doc_authority.py]
+    primary_spec: docs/plans/missing.md
+""",
+    )
+
+    issues = doc_authority.validate_doc_authority(repo_root)
+
+    assert any(issue.code == "code_surface_primary_spec_missing" for issue in issues)
+
+
+def test_validate_doc_authority_warns_when_required_read_budget_exceeded(tmp_path: Path) -> None:
+    repo_root = tmp_path / "demo"
+    _write_doc_spine_fixture(repo_root)
+    _write(repo_root / "ROADMAP.md", "roadmap\n")
+    _write(repo_root / "enforced_planning/doc_authority.py", "code\n")
+    _write_doc_spine_config(
+        repo_root,
+        """schema_version: 2
+indexed_authority_surfaces: []
+doc_spine:
+  root_doc: EXECUTION_BRIEF.md
+  required_concerns: [execution_brief, north_star, current_state, gap_summary, roadmap, active_plan_index]
+  max_required_read_docs: 2
+role_budgets: {}
+docs:
+  - path: EXECUTION_BRIEF.md
+    authority: canonical
+    doc_status: active
+    concerns: [execution_brief]
+    role: execution_brief
+    primary_parent: null
+  - path: PLANNING_OPERATING_MODEL.md
+    authority: canonical
+    doc_status: active
+    concerns: [north_star]
+    role: summary
+    primary_parent: EXECUTION_BRIEF.md
+  - path: docs/overview/CURRENT_STATE.md
+    authority: canonical
+    doc_status: active
+    concerns: [current_state]
+    role: summary
+    primary_parent: EXECUTION_BRIEF.md
+  - path: docs/overview/GAP_SUMMARY.md
+    authority: canonical
+    doc_status: active
+    concerns: [gap_summary]
+    role: summary
+    primary_parent: EXECUTION_BRIEF.md
+    required_context:
+      - path: docs/overview/CURRENT_STATE.md
+        reason: current context
+  - path: ROADMAP.md
+    authority: canonical
+    doc_status: active
+    concerns: [roadmap]
+    role: summary
+    primary_parent: EXECUTION_BRIEF.md
+  - path: docs/plans/CLAUDE.md
+    authority: canonical
+    doc_status: active
+    concerns: [active_plan_index]
+    role: reference
+    primary_parent: EXECUTION_BRIEF.md
+  - path: docs/plans/55_test.md
+    authority: canonical
+    doc_status: active
+    concerns: []
+    role: plan
+    primary_parent: docs/overview/GAP_SUMMARY.md
+code_surfaces:
+  - paths: [enforced_planning/doc_authority.py]
+    primary_spec: docs/plans/55_test.md
+""",
+    )
+
+    issues = doc_authority.validate_doc_authority(repo_root)
+
+    budget_issues = [issue for issue in issues if issue.code == "required_read_budget_exceeded"]
+    assert budget_issues
+    assert all(issue.severity == "warn" for issue in budget_issues)

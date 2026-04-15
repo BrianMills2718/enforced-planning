@@ -157,3 +157,4 @@ No additional research beyond References Reviewed.
 
 - This campaign is not “run vulture everywhere.” The contract is: install or sync the reviewed dead-code surface, classify findings, validate them mechanically, and publish from a claimed branch.
 - `publish-check-extra` graduation is a separate follow-on question. For the remaining fleet, the first objective is reviewed dead-code completion under the shared publish gate unless a repo already has a truthful green `make check`.
+- Cross-repo unfinished-work handoff: `docs/ops/2026-04-14-plan-55-fleet-dead-code-handoff.md`

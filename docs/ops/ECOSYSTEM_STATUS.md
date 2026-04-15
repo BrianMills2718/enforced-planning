@@ -1,14 +1,14 @@
 # Ecosystem Status
 
-Generated: 2026-04-06T03:17:34.835646+00:00
+Generated: 2026-04-06T03:19:20.030312+00:00
 
 ## Fleet
 
 | Metric | Count |
 |--------|-------|
 | Total repos | 16 |
-| Governed | 14 |
-| Partial | 2 |
+| Governed | 16 |
+| Partial | 0 |
 | Legacy / not found / error | 0 |
 
 ### Repo Classification
@@ -21,8 +21,8 @@ Generated: 2026-04-06T03:17:34.835646+00:00
 | open_web_retrieval | governed | governed |
 | agentic_scaffolding | governed | governed |
 | project-meta | governed | governed |
-| agent_memory | governed | partial |
-| ecosystem-ops | governed | partial |
+| agent_memory | governed | governed |
+| ecosystem-ops | governed | governed |
 | moltbot | governed | governed |
 | qualitative_coding | governed | governed |
 | orgchart | governed | governed |

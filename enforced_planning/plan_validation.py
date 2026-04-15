@@ -379,6 +379,9 @@ def get_plan_file(
 def collect_plan_requirements(
     file_paths: list[str],
     relationships: dict[str, Any],
+    *,
+    repo_root: Path = ROOT,
+    authority_config_path: Path | None = None,
 ) -> tuple[set[str], set[str], set[int], list[tuple[str, int, str]]]:
     """Collect required docs and ADRs implied by affected files."""
     required_docs_strict: set[str] = set()
@@ -387,8 +390,18 @@ def collect_plan_requirements(
     governance: list[tuple[str, int, str]] = []
 
     for file_path in file_paths:
-        ctx = collect_context(file_path, relationships)
-        if not ctx.governance and not ctx.current_arch_docs and not ctx.coupled_docs:
+        ctx = collect_context(
+            file_path,
+            relationships,
+            repo_root=repo_root,
+            authority_config_path=authority_config_path,
+        )
+        if (
+            not ctx.governance
+            and not ctx.current_arch_docs
+            and not ctx.coupled_docs
+            and not ctx.doc_spine_reads
+        ):
             continue
 
         for adr in ctx.governance:
@@ -399,6 +412,7 @@ def collect_plan_requirements(
         required_docs_strict.update(ctx.target_arch_docs)
         required_docs_strict.update(ctx.gap_docs)
         required_docs_strict.update(ctx.plan_refs)
+        required_docs_strict.update(ctx.doc_spine_reads)
 
         for coupling in ctx.coupled_docs:
             target = normalize(coupling["path"])
@@ -486,7 +500,14 @@ class ValidationResult:
         }
 
 
-def validate_plan(plan_file: Path, plan_number: int | None, relationships: dict[str, Any]) -> ValidationResult:
+def validate_plan(
+    plan_file: Path,
+    plan_number: int | None,
+    relationships: dict[str, Any],
+    *,
+    repo_root: Path = ROOT,
+    authority_config_path: Path | None = None,
+) -> ValidationResult:
     """Validate one plan file against required docs, ADRs, and section rules."""
     content = read_text(plan_file)
     title, status = parse_plan_status(content)
@@ -498,10 +519,16 @@ def validate_plan(plan_file: Path, plan_number: int | None, relationships: dict[
     research_citations, warnings = _parse_research_citations(content)
     uncertainties = parse_uncertainty_register(content)
     covered = {normalize(p) for p in set(affected) | set(references)}
+    try:
+        covered.add(normalize(str(plan_file.relative_to(repo_root))))
+    except ValueError:
+        pass
 
     required_strict, required_soft, adr_nums, governance = collect_plan_requirements(
         affected,
         relationships,
+        repo_root=repo_root,
+        authority_config_path=authority_config_path,
     )
     required_strict_norm = {normalize(p) for p in required_strict}
     required_soft_norm = {normalize(p) for p in required_soft}
@@ -807,7 +834,12 @@ def main(
         repo_root=base_repo_root,
         config_path=args.config,
     )
-    result = validate_plan(plan_path, plan_number, relationships)
+    result = validate_plan(
+        plan_path,
+        plan_number,
+        relationships,
+        repo_root=base_repo_root,
+    )
     acknowledged = _apply_acknowledgments(result, ack_file=args.ack_file)
 
     if args.json:

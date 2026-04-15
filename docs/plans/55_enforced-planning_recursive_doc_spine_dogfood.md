@@ -58,7 +58,10 @@ methodology into a real self-hosted contract instead of a design-only claim.
 - `docs/plans/41_doc-authority-governance-and-enforcement.md` - existing dedicated-config decision and authority-governance rollout
 - `docs/designs/DOC_AUTHORITY_GOVERNANCE_ARCHITECTURE.md` - current authority layers and validator scope
 - `docs/reference/DOC_AUTHORITY_SCHEMA.md` - current v0 schema that this slice will extend
+- `EXECUTION_BRIEF.md` - root execution brief that this repo will now dogfood explicitly
 - `PLANNING_OPERATING_MODEL.md` - current north-star / methodology surface for this repo
+- `docs/overview/CURRENT_STATE.md` - durable current-state surface for the bounded dogfood slice
+- `docs/overview/GAP_SUMMARY.md` - bounded gap surface that the implementation plan rolls up into
 - `README.md` - current top-level overview surface that should remain overview, not become the root execution brief
 - `ROADMAP.md` - current phase map and active execution queue
 - `docs/ops/ECOSYSTEM_STATUS.md` - generated fleet status surface that should not be reused as the durable current-state concern
@@ -69,6 +72,8 @@ methodology into a real self-hosted contract instead of a design-only claim.
 - `relationships.yaml` - existing relationships/read-gating config that must remain the coupling surface, not the new spine home
 - `tests/test_validate_doc_authority.py` - current authority validator tests
 - `tests/test_validate_plan.py` - current plan validation tests
+- `adr/0009-doc-authority-governance-and-enforcement.md` - governing ADR for the dedicated authority-config model
+- `adr/0010-agent-memory-as-planning-input.md` - governing ADR for memory-aware planning inputs
 - `tests/test_file_context_scope.py` - current file-context and scope-policy tests
 
 ---

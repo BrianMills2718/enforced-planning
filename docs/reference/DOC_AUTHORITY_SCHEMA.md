@@ -1,43 +1,26 @@
-# Reference: Document Authority Schema v0
+# Reference: Document Authority Schema
 
 ## Purpose
 
-This schema describes the minimum portable metadata and repo config needed for
-documentation authority governance.
+This schema defines the machine-readable documentation-authority contract for a
+governed repo.
 
-It is intentionally small. The goal is to make authority explicit and
-validatable, not to invent a large doc CMS inside git.
+It has two layers:
 
-## Per-Document Metadata
+- indexed authority surfaces for deterministic drift checks such as plan indexes
+- an optional recursive documentation spine for bounded ancestry and required
+  read closure
 
-Recommended YAML frontmatter:
+The goal is to make documentation authority explicit and validatable without
+turning git into a full document-management system.
 
-```yaml
-authority: canonical
-concern: benchmark-status
-doc_status: active
-supersedes: []
-superseded_by: null
-canonical_source: null
-last_verified_against:
-  - results/MuSiQue_latest.json
-```
+## Schema Versions
 
-### Fields
+### Schema v1
 
-| Field | Type | Required | Meaning |
-|-------|------|----------|---------|
-| `authority` | enum | yes | `canonical`, `derived`, `working`, or `historical` |
-| `concern` | string | yes for authority-bearing docs | Concern this doc belongs to |
-| `doc_status` | enum | yes | `active`, `superseded`, or `archived` |
-| `supersedes` | list[str] | no | Older docs intentionally replaced by this doc |
-| `superseded_by` | string or null | no | Newer doc that replaces this one |
-| `canonical_source` | string or null | required for derived docs | Path to upstream canonical doc |
-| `last_verified_against` | list[str] | optional | Artifacts, code surfaces, or configs used to verify the doc |
+Schema v1 supports indexed authority surfaces only.
 
-## Repo Config
-
-Suggested file: `scripts/doc_authority.yaml`
+Example:
 
 ```yaml
 schema_version: 1
@@ -49,47 +32,172 @@ indexed_authority_surfaces:
     resolution_mode: manual
 ```
 
+### Schema v2
+
+Schema v2 keeps the indexed authority surface rules and adds the bounded
+recursive documentation spine.
+
+Example:
+
+```yaml
+schema_version: 2
+indexed_authority_surfaces:
+  - concern: active-plan-index
+    kind: plan_index
+    authority_surface: docs/plans/CLAUDE.md
+    source_glob: docs/plans/[0-9]*_*.md
+    resolution_mode: manual
+
+doc_spine:
+  root_doc: EXECUTION_BRIEF.md
+  required_concerns:
+    - execution_brief
+    - north_star
+    - current_state
+    - gap_summary
+    - roadmap
+    - active_plan_index
+  max_required_read_docs: 7
+  max_required_read_words: 8000
+
+role_budgets:
+  execution_brief:
+    max_words: 1200
+  summary:
+    max_words: 2000
+  plan:
+    max_words: 3500
+
+docs:
+  - path: EXECUTION_BRIEF.md
+    authority: canonical
+    doc_status: active
+    concerns: [execution_brief]
+    role: execution_brief
+    primary_parent: null
+
+  - path: docs/overview/GAP_SUMMARY.md
+    authority: canonical
+    doc_status: active
+    concerns: [gap_summary]
+    role: summary
+    primary_parent: EXECUTION_BRIEF.md
+    required_context:
+      - path: docs/overview/CURRENT_STATE.md
+        reason: Gap summaries are only meaningful when read against current state.
+
+  - path: docs/plans/55_example.md
+    authority: canonical
+    doc_status: active
+    concerns: []
+    role: plan
+    primary_parent: docs/overview/GAP_SUMMARY.md
+    governed_by:
+      - adr/0009-doc-authority-governance-and-enforcement.md
+
+code_surfaces:
+  - paths:
+      - enforced_planning/doc_authority.py
+      - tests/test_validate_doc_authority.py
+    primary_spec: docs/plans/55_example.md
+```
+
+## Indexed Authority Surfaces
+
+These rules validate summary or index files against their authoritative artifact
+sets.
+
 ### Fields
 
 | Field | Type | Required | Meaning |
 |-------|------|----------|---------|
-| `schema_version` | int | yes | Config schema version |
-| `indexed_authority_surfaces` | list[mapping] | yes for v0 | Indexed authority surfaces to validate deterministically |
 | `concern` | string | yes | Concern name for one indexed surface |
-| `kind` | enum | yes | `plan_index` in v0 |
-| `authority_surface` | path | yes | Canonical index/governance surface |
+| `kind` | enum | yes | `plan_index` in the current implementation |
+| `authority_surface` | path | yes | Canonical index or summary surface |
 | `source_glob` | glob | yes | Authoritative artifact set that the surface must index |
-| `resolution_mode` | enum | yes | `manual` or `generated`; generated surfaces should be regenerated rather than assigned durable debt |
+| `resolution_mode` | enum | yes | `manual` or `generated` |
 
-Later schema additions may restore broader concern maps, singleton rules, and
-per-doc metadata enforcement without changing the obligation model.
+## Recursive Doc Spine
 
-## Default Rules
+The doc spine models progressive disclosure.
 
-Unless the repo config overrides them:
+### `doc_spine`
 
-- each concern may have at most one active canonical doc
-- `historical` docs should not be `active`
-- `derived` docs should not be canonical for a singleton concern
-- `working` docs are never source-of-truth
+| Field | Type | Required | Meaning |
+|-------|------|----------|---------|
+| `root_doc` | path | yes for v2 | Root execution brief for the repo |
+| `required_concerns` | list[str] | yes for v2 | Concerns that must exist somewhere in the active spine |
+| `max_required_read_docs` | int | no | Warning threshold for total mandatory docs in one code-surface closure |
+| `max_required_read_words` | int | no | Warning threshold for total mandatory words in one code-surface closure |
 
-## Failure Codes
+### `role_budgets`
 
-Suggested deterministic failure codes:
+Per-role document size budgets.
 
-| Code | Meaning |
-|------|---------|
-| `duplicate_active_canonical_concern` | More than one active canonical doc for a concern |
-| `canonical_map_mismatch` | Config says one file is canonical but doc metadata disagrees |
-| `active_doc_marked_superseded` | Active doc has incompatible lifecycle metadata |
-| `duplicate_active_handoff` | More than one active handoff-like concern |
-| `derived_missing_canonical_source` | Derived doc lacks upstream canonical pointer |
-| `required_concern_missing` | Repo config requires a concern with no matching active canonical doc |
-| `authority_surface_missing_artifact` | Indexed authority surface is missing a landed authoritative artifact |
-| `authority_surface_status_mismatch` | Indexed authority surface disagrees with the authoritative artifact status |
-| `missing_reconciliation_obligation` | Authority surface owner exists but drift was not recorded formally |
-| `unowned_authority_drift` | Drift exists and no active lane owns the authority surface |
-| `generated_authority_surface_requires_regeneration` | Generated authority surface drift must be fixed by regeneration |
+| Field | Type | Required | Meaning |
+|-------|------|----------|---------|
+| `max_words` | int | optional | Max allowed words for docs with this role |
+| `summary_max_words` | int | optional | Optional summary-block limit for long-form roles |
+
+### `docs`
+
+Authority-bearing docs in the recursive spine.
+
+| Field | Type | Required | Meaning |
+|-------|------|----------|---------|
+| `path` | path | yes | Repo-relative document path |
+| `authority` | enum | yes | `canonical`, `derived`, `working`, or `historical` |
+| `doc_status` | enum | yes | `active`, `superseded`, or `archived` |
+| `concerns` | list[str] | yes | Concerns satisfied by this doc; may be empty for leaf plan/spec docs |
+| `role` | string | yes | Role used for size-budget validation |
+| `primary_parent` | path or null | yes | Parent doc in the abstraction spine; `null` only for the root doc |
+| `governed_by` | list[path] | no | ADR or policy docs that govern this doc |
+| `required_context` | list[mapping] | no | Additional mandatory reads not captured by ancestry |
+
+### `required_context` entry
+
+| Field | Type | Required | Meaning |
+|-------|------|----------|---------|
+| `path` | path | yes | Mandatory extra read |
+| `reason` | string | yes | Why the extra read is required |
+| `when` | string | no | Optional work-type selector such as `behavior_change` |
+
+### `code_surfaces`
+
+Bounded file or glob sets that map code changes to one leaf spec.
+
+| Field | Type | Required | Meaning |
+|-------|------|----------|---------|
+| `paths` | list[path/glob] | yes | Managed code-surface paths |
+| `primary_spec` | path | yes | Leaf doc the code surface is governed by |
+
+## Validation Semantics
+
+### Structural failures
+
+The current implementation blocks on:
+
+- missing `root_doc`
+- missing required concerns
+- missing authority docs
+- non-root docs without `primary_parent`
+- root docs with `primary_parent`
+- unknown `primary_parent`
+- ancestry cycles
+- missing `required_context.reason`
+- missing `required_context.path`
+- missing `governed_by` paths
+- code surfaces whose `primary_spec` does not exist in `docs`
+- existing indexed-surface failures such as plan-index drift and missing
+  reconciliation obligations
+
+### Warning-only checks in v2
+
+The current implementation warns on:
+
+- role budget overages
+- required-read doc count overages
+- required-read word count overages
 
 ## Reconciliation Obligations
 
@@ -97,7 +205,10 @@ Open obligations live under:
 
 - `~/.claude/coordination/authority_obligations/*.yaml`
 
-v0 obligation fields:
+They are used for indexed authority drift when the authoritative artifact lands
+before the separately claimed authority surface can be updated.
+
+Example:
 
 ```yaml
 obligation_id: enforced-planning-abc123def456
@@ -116,23 +227,33 @@ resolved_at: null
 notes: optional
 ```
 
-Owning lanes must resolve or clear the relevant obligations before
-`session-finish` can complete cleanly.
+## Failure Codes
 
-## Migration Guidance
+Representative deterministic failure codes:
 
-Phase-in order:
-
-1. add metadata only to canonical docs
-2. declare a small concern map
-3. validate in warn-only mode
-4. enforce singleton concerns
-5. expand to derived and historical docs
+- `required_concern_missing`
+- `duplicate_active_canonical_concern`
+- `root_doc_missing`
+- `root_doc_has_parent`
+- `doc_spine_orphan_doc`
+- `doc_spine_missing_primary_parent`
+- `doc_spine_cycle`
+- `required_context_missing_reason`
+- `required_context_path_missing`
+- `governed_by_path_missing`
+- `code_surface_primary_spec_missing`
+- `role_budget_exceeded`
+- `required_read_budget_exceeded`
+- `authority_surface_missing_artifact`
+- `authority_surface_status_mismatch`
+- `missing_reconciliation_obligation`
+- `unowned_authority_drift`
+- `generated_authority_surface_requires_regeneration`
 
 ## Notes
 
-- This schema is intentionally compatible with later integration into
-  `relationships.yaml`, but that merge is not assumed in v0.
-- Paths should remain repo-relative.
-- Validation should fail loudly on malformed metadata rather than silently
-  treating the doc as ungoverned.
+- Paths remain repo-relative.
+- Validation should fail loudly on malformed config or malformed authority
+  structure.
+- The first recursive-spine implementation remains in `scripts/doc_authority.yaml`.
+  It does not yet merge into `relationships.yaml`.

@@ -73,6 +73,16 @@ adrs:
 """
 
 
+def _relationships_config_empty() -> str:
+    return """required_reading:
+  defaults: []
+governance: []
+couplings: []
+architecture: []
+adrs: {}
+"""
+
+
 def test_validate_plan_detects_missing_strict_docs_and_adr(tmp_path: Path) -> None:
     module = _load_module()
     plan_file = tmp_path / "01_sample.md"
@@ -361,6 +371,158 @@ def test_file_context_includes_required_reading_defaults(tmp_path: Path) -> None
     )
 
     assert context.required_reads == ["CLAUDE.md"]
+
+
+def _write(path: Path, content: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8")
+
+
+def _doc_spine_authority_config() -> str:
+    return """schema_version: 2
+indexed_authority_surfaces: []
+doc_spine:
+  root_doc: EXECUTION_BRIEF.md
+  required_concerns: [execution_brief, current_state, gap_summary]
+role_budgets: {}
+docs:
+  - path: EXECUTION_BRIEF.md
+    authority: canonical
+    doc_status: active
+    concerns: [execution_brief]
+    role: execution_brief
+    primary_parent: null
+  - path: docs/overview/CURRENT_STATE.md
+    authority: canonical
+    doc_status: active
+    concerns: [current_state]
+    role: summary
+    primary_parent: EXECUTION_BRIEF.md
+  - path: docs/overview/GAP_SUMMARY.md
+    authority: canonical
+    doc_status: active
+    concerns: [gap_summary]
+    role: summary
+    primary_parent: EXECUTION_BRIEF.md
+    required_context:
+      - path: docs/overview/CURRENT_STATE.md
+        reason: Gap summary needs current state.
+  - path: docs/plans/55_test.md
+    authority: canonical
+    doc_status: active
+    concerns: []
+    role: plan
+    primary_parent: docs/overview/GAP_SUMMARY.md
+code_surfaces:
+  - paths: [src/module.py]
+    primary_spec: docs/plans/55_test.md
+"""
+
+
+def test_validate_plan_requires_doc_spine_closure_for_managed_surface(tmp_path: Path) -> None:
+    module = _load_module()
+    repo_root = tmp_path / "repo"
+    config_file = repo_root / "relationships.yaml"
+    authority_file = repo_root / "scripts/doc_authority.yaml"
+    plan_file = repo_root / "docs/plans/07_sample.md"
+
+    config_file.parent.mkdir(parents=True, exist_ok=True)
+    config_file.write_text(_relationships_config_empty(), encoding="utf-8")
+    authority_file.parent.mkdir(parents=True, exist_ok=True)
+    authority_file.write_text(_doc_spine_authority_config(), encoding="utf-8")
+    _write(repo_root / "EXECUTION_BRIEF.md", "brief\n")
+    _write(repo_root / "docs/overview/CURRENT_STATE.md", "current\n")
+    _write(repo_root / "docs/overview/GAP_SUMMARY.md", "gap\n")
+    _write(repo_root / "docs/plans/55_test.md", "plan\n")
+    _write(repo_root / "src/module.py", "code\n")
+
+    plan_file.write_text(
+        "\n".join(
+            [
+                "# Sample Plan",
+                "**Status:** Draft",
+                "",
+                "## Gap",
+                "Current: something. Target: better. Why: needed.",
+                "",
+                "## Files Affected",
+                "- src/module.py",
+                "",
+                "## References Reviewed",
+                "- src/module.py",
+                "",
+                "## Acceptance Criteria",
+                "- [ ] Implement closure",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = module.validate_plan(
+        plan_file=plan_file,
+        plan_number=7,
+        relationships=module.load_relationships(config_path=config_file),
+        repo_root=repo_root,
+        authority_config_path=authority_file,
+    )
+
+    assert {"docs/plans/55_test.md", "docs/overview/GAP_SUMMARY.md", "EXECUTION_BRIEF.md", "docs/overview/CURRENT_STATE.md"}.issubset(result.missing_strict)
+
+
+def test_validate_plan_accepts_plan_when_doc_spine_closure_is_cited(tmp_path: Path) -> None:
+    module = _load_module()
+    repo_root = tmp_path / "repo"
+    config_file = repo_root / "relationships.yaml"
+    authority_file = repo_root / "scripts/doc_authority.yaml"
+    plan_file = repo_root / "docs/plans/08_sample.md"
+
+    config_file.parent.mkdir(parents=True, exist_ok=True)
+    config_file.write_text(_relationships_config_empty(), encoding="utf-8")
+    authority_file.parent.mkdir(parents=True, exist_ok=True)
+    authority_file.write_text(_doc_spine_authority_config(), encoding="utf-8")
+    _write(repo_root / "EXECUTION_BRIEF.md", "brief\n")
+    _write(repo_root / "docs/overview/CURRENT_STATE.md", "current\n")
+    _write(repo_root / "docs/overview/GAP_SUMMARY.md", "gap\n")
+    _write(repo_root / "docs/plans/55_test.md", "plan\n")
+    _write(repo_root / "src/module.py", "code\n")
+
+    plan_file.write_text(
+        "\n".join(
+            [
+                "# Sample Plan",
+                "**Status:** Draft",
+                "",
+                "## Gap",
+                "Current: something. Target: better. Why: needed.",
+                "",
+                "## Files Affected",
+                "- src/module.py",
+                "",
+                "## References Reviewed",
+                "- src/module.py",
+                "- docs/plans/55_test.md",
+                "- docs/overview/GAP_SUMMARY.md",
+                "- EXECUTION_BRIEF.md",
+                "- docs/overview/CURRENT_STATE.md",
+                "",
+                "## Acceptance Criteria",
+                "- [ ] Implement closure",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = module.validate_plan(
+        plan_file=plan_file,
+        plan_number=8,
+        relationships=module.load_relationships(config_path=config_file),
+        repo_root=repo_root,
+        authority_config_path=authority_file,
+    )
+
+    assert result.missing_strict == set()
 
 
 def test_extract_inline_paths_preserves_multi_dot_filenames() -> None:

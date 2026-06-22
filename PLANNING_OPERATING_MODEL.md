@@ -19,28 +19,32 @@ an agent:
 
 ## Core Principles
 
-1. **Question-driven before planning.** Unknowns are surfaced and investigated
+1. **Modality diagnosis before design.** Before planning a non-trivial slice,
+   classify each part as deductive/plan-first, exploratory/ladder, or hybrid.
+   Use plan-first contracts where consequences are predictable; use instruments
+   and readouts where behavior is emergent or parameter values would be guesses.
+2. **Question-driven before planning.** Unknowns are surfaced and investigated
    before committing to an implementation plan.
-2. **Research should compound, not reset.** Dated investigations answer a
+3. **Research should compound, not reset.** Dated investigations answer a
    specific question; topic research syntheses preserve reusable conclusions so
    future ADRs and plans can build on them.
-3. **Gap-driven planning.** Plans implement an explicit delta between current
+4. **Gap-driven planning.** Plans implement an explicit delta between current
    state and target state.
-4. **Capabilities and boundaries define enduring shape.** The reusable
+5. **Capabilities and boundaries define enduring shape.** The reusable
    capability or boundary contract comes before roadmap sequencing because it
    determines what the system is trying to become.
-5. **Roadmaps sequence validated gaps.** Phases exist to order major gates once
+6. **Roadmaps sequence validated gaps.** Phases exist to order major gates once
    the enduring shape is clear enough.
-6. **Plans are bounded execution contracts.** They pre-make local decisions,
+7. **Plans are bounded execution contracts.** They pre-make local decisions,
    define tests, and state acceptance criteria.
-7. **Journey notebooks concretize phase contracts.** For non-trivial multi-stage
+8. **Journey notebooks concretize phase contracts.** For non-trivial multi-stage
    work, the notebook renders the end-to-end journey as executable phase
    sections.
-8. **Tests and gates are pre-code artifacts.** They should be defined before
+9. **Tests and gates are pre-code artifacts.** They should be defined before
    implementation and follow TDD where feasible.
-9. **Observability is part of the contract.** It is not a postscript. Long-lived
+10. **Observability is part of the contract.** It is not a postscript. Long-lived
    or production-facing work is incomplete without a visibility surface.
-10. **ADRs are cross-cutting decisions, not just another linear level.** They
+11. **ADRs are cross-cutting decisions, not just another linear level.** They
    record durable choices whenever a capability, boundary, roadmap, or plan
    needs one, and they must record the research basis behind the choice or say
    explicitly that research was skipped.
@@ -55,6 +59,7 @@ matters is the dependency structure.
 
 ```text
 North Star / Thesis
+    -> Modality Diagnosis
     -> Questions
     -> Investigation Memos
     -> Topic Research Syntheses
@@ -78,6 +83,7 @@ provided it records a durable architectural choice.
 | Artifact | Primary question | Must exist before | Notes |
 |----------|------------------|-------------------|-------|
 | North star / thesis | Why does this system exist? | Roadmap | May be brief in small repos; still must exist |
+| Modality diagnosis | Which parts are predictable enough to specify, and which need instruments/readouts first? | Design, investigation, or plan | Required for non-trivial design/planning. Split hybrid work: specify known contracts, instrument unknown behavior. |
 | Questions | What do we need to verify first? | Investigation | Surface unknowns before planning |
 | Investigation memos | What did we learn when we looked? | ADR or plan | Dated, question-specific, usually immutable |
 | Topic research syntheses | What reusable conclusions already exist on this topic? | ADR, capability doc, or plan | Living topic memory; links investigations, prior art, and freshness triggers |
@@ -98,6 +104,8 @@ provided it records a durable architectural choice.
 
 These are hard ordering rules:
 
+- No non-trivial design or bounded plan without a modality diagnosis:
+  deductive/plan-first, exploratory/ladder, or hybrid with explicit partition.
 - No bounded plan without prior investigation or explicit unresolved questions.
 - No non-trivial ADR without a research basis section or explicit research skip.
 - No bounded plan without current vs target framing.
@@ -105,6 +113,9 @@ These are hard ordering rules:
 - No design, cross-project, or externally-informed plan without a declared
   research basis for the slice or explicit research skip.
 - No implementation without declared required tests and acceptance criteria.
+- No exploratory slice without a declared instrument, readout, and step-down path
+  to concrete cases. The readout is the exploratory analog of an acceptance
+  criterion: it defines what signal will end or redirect the exploration.
 - No closeout without verification evidence.
 - **No current-state assessment without a memory recall step.** For any project
   with prior session history, run `agent-memory recall '{topic}' --project
@@ -121,6 +132,9 @@ These are hard ordering rules:
 These are defaults that can be compressed for trivial work:
 
 - Define or refine the north star before expanding roadmap detail.
+- Diagnose modality before choosing the planning protocol. Do not force
+  plan-first detail onto emergent behavior, and do not build exploratory
+  instruments for facts the field or local code already makes knowable.
 - Write or refresh the relevant topic research synthesis before creating ADRs for
   cross-project or externally-informed work.
 - Write capability/boundary surfaces before phase sequencing.
@@ -129,6 +143,22 @@ These are defaults that can be compressed for trivial work:
 - Write tests before code whenever feasible; at minimum, define them before code.
 - Start topic freshness metadata as advisory. Add blocking enforcement only
   after the repo has enough stable topic research to validate it meaningfully.
+
+### Modality-Aware Planning
+
+The operating model is plan-first only for the parts of work where design
+consequences are predictable. Before design, classify the work:
+
+| Mode | Use when | Planning artifact |
+|------|----------|-------------------|
+| Deductive / plan-first | Correctness and failure modes are knowable before implementation; tests can be written up front. | Contracts, schemas, pre-made decisions, required tests, acceptance criteria. |
+| Exploratory / ladder | Behavior is emergent; parameter values would be guesses; the right shape cannot be predicted from theory alone. | Simplest defensible guess, cheapest instrument, readout, and step-down path from aggregate signal to concrete cases. |
+| Hybrid | Architecture and contracts are specifiable, but some parameters or effects must be learned from the running system. | Partition: specify and gate the known surfaces; instrument and read out the unknown surfaces. |
+
+This does not weaken the plan requirement. It prevents fake precision. A plan
+for exploratory work still states what will be built and how progress will be
+read, but it does not pretend to know a threshold or schema that only the
+running system can reveal.
 
 ### LLM System Design: Pattern-First Sizing
 
@@ -169,18 +199,19 @@ For a new system or major new subsystem, use this order:
 1. Define the north star. **For any project with prior session history, run
    `agent-memory recall '{topic}' --project {project}` first** — operational
    findings from prior sessions are source material, not noise. (ADR-0010)
-2. List and investigate critical questions.
-3. Write the investigation memo(s) that answer those questions.
-4. Write or refresh the relevant topic research synthesis when conclusions
+2. Diagnose the modality of each major part: deductive, exploratory, or hybrid.
+3. List and investigate critical questions.
+4. Write the investigation memo(s) that answer those questions.
+5. Write or refresh the relevant topic research synthesis when conclusions
    should compound beyond the current task.
-5. Describe the desired capabilities and boundaries.
-6. Record ADRs for major architectural choices.
-7. Create the roadmap and phase gates.
-8. Write the first bounded plan.
-9. Create the journey notebook if the slice is multi-stage.
-10. Define tests/gates.
-11. Implement code.
-12. Add observability and evidence collection.
+6. Describe the desired capabilities and boundaries.
+7. Record ADRs for major architectural choices.
+8. Create the roadmap and phase gates.
+9. Write the first bounded plan.
+10. Create the journey notebook if the slice is multi-stage.
+11. Define tests/gates or exploratory readouts.
+12. Implement code.
+13. Add observability and evidence collection.
 
 ## Legacy Repo Bootstrap
 
@@ -193,14 +224,16 @@ For an existing repo, bootstrap in this order:
 3. Write a current-state assessment (requires memory recall — see Strict
    Dependencies).
 4. Define the north-star or intended target model.
-5. Run gap analysis against current vs target.
-6. Write or refresh the relevant topic research synthesis when the findings
+5. Diagnose the modality of each meaningful gap before deciding whether it needs
+   plan-first specification or exploratory instrumentation.
+6. Run gap analysis against current vs target.
+7. Write or refresh the relevant topic research synthesis when the findings
    should be reusable outside the immediate task.
-7. Write capability/boundary docs for the enduring surfaces that matter.
-8. Derive or refresh the roadmap.
-9. Write the first bounded plan against the highest-value gap.
-10. Create the notebook/tests/gates for that slice.
-11. Implement and verify.
+8. Write capability/boundary docs for the enduring surfaces that matter.
+9. Derive or refresh the roadmap.
+10. Write the first bounded plan against the highest-value gap.
+11. Create the notebook/tests/gates or exploratory readouts for that slice.
+12. Implement and verify.
 
 This bootstrap order matters because legacy repos often fail when agents plan
 against aspirational architecture without assessing the actual current state.

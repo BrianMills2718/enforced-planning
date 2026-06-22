@@ -96,6 +96,16 @@ make finish BRANCH=X PR=N  # Merge + cleanup
 
 ## How to Build
 
+Before choosing a planning protocol, classify the work:
+
+- **Deductive / plan-first:** consequences are predictable enough to specify;
+  use contracts, tests, acceptance criteria, and failure-mode tables.
+- **Exploratory / ladder:** behavior is emergent or parameter values would be
+  guesses; build the cheapest instrument, define the readout, and keep a path
+  back to concrete cases.
+- **Hybrid:** specify and gate known surfaces; instrument unknown surfaces until
+  evidence is strong enough to promote them into contracts.
+
 ### Design (before writing code)
 
 Every non-trivial piece of work follows this sequence. Each step depends on the
@@ -120,6 +130,7 @@ Not every project needs every step. Scale the sequence to the complexity.
 Every plan must be concrete enough that an agent can execute autonomously:
 
 - **Gap**: what exists now vs what we want (requirements)
+- **Modality assessment**: what is deductive, exploratory, or hybrid
 - **Research**: what was investigated before planning (references reviewed)
 - **Acceptance criteria**: what passes and what fails
 - **Failure modes**: what can go wrong and how to diagnose it

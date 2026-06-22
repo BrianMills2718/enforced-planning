@@ -43,6 +43,25 @@ If no additional research beyond repo-local references was needed, write:
 
 ---
 
+## Modality Assessment
+
+> **REQUIRED for non-trivial design or bounded documentation plans.** Classify
+> each meaningful part before choosing a planning protocol.
+
+| Part | Mode | Why | Planning Treatment |
+|------|------|-----|--------------------|
+| `known-doc-contract` | Deductive / plan-first | The authoritative source and pass/fail checks are knowable. | Specify docs, links, validation commands, and acceptance criteria. |
+| `unknown-reader-need` | Exploratory / ladder | The useful shape must be learned from review, navigation, or usage. | Build the cheapest doc/view instrument, define the readout, and preserve step-down to concrete examples. |
+| `mixed-doc-surface` | Hybrid | Some policy is fixed, but organization or emphasis must be learned. | Gate the fixed policy; instrument the uncertain surface until it can be promoted. |
+
+**Exploratory readout:** What observable signal will end, redirect, or promote
+the exploration?
+
+**Step-down path:** How will a failing aggregate, metric, or review signal lead
+back to the concrete docs or examples that explain it?
+
+---
+
 ## Files Affected
 
 > **REQUIRED:** Declare upfront what files will be touched.

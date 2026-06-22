@@ -7,16 +7,20 @@ Work happens without tracking. AI assistants implement features without:
 - Linking to requirements
 - Following consistent structure
 - Ensuring tests exist before code starts
+- Distinguishing predictable engineering work from exploratory work where the
+  running system must reveal the right value or shape
 
 Result: orphan code, undocumented features, missed requirements.
 
 ## Solution
 
 1. Every significant change has a "plan" document
-2. Plans define: gap (current vs target), changes, tests, verification
+2. Plans define: modality, gap (current vs target), changes, tests/readouts,
+   verification
 3. Status tracked in plan file AND index
 4. Commit messages link to plans: `[Plan #N]`
-5. TDD: define tests in plan before implementing
+5. TDD: define tests in plan before implementing when the slice is deductive;
+   define instruments and readouts before exploring when the slice is exploratory
 6. Plans distinguish **repo-local references reviewed** from the broader
    **research basis for the slice**
 7. Cross-project plans declare a **Capabilities** section when they create or
@@ -25,6 +29,24 @@ Result: orphan code, undocumented features, missed requirements.
    `PLANNING_OPERATING_MODEL.md`; it does not replace investigation, gap
    analysis, capability/boundary definition, or journey notebooks where those
    are required
+
+## Modality Diagnosis Rule
+
+Before writing the plan body, classify the work:
+
+- **Deductive / plan-first:** correctness and failure modes are knowable before
+  implementation. Pre-make decisions, write contracts, and define tests.
+- **Exploratory / ladder:** behavior is emergent or parameter values would be
+  guesses. Build the cheapest instrument, define the readout, and include a way
+  to step from aggregate signal down to concrete cases.
+- **Hybrid:** split the work. Specify and gate the predictable architecture or
+  contracts; instrument the unknown behavior. Do not fake precision on open
+  surfaces.
+
+The plan requirement still applies in exploratory mode. The plan states what
+instrument will be built, what observable readout will guide the next decision,
+and when the exploratory surface can be promoted back into specified + gated
+deductive mode.
 
 ## Files
 
@@ -84,6 +106,19 @@ mkdir -p docs/plans
 **Current:** What exists now
 
 **Target:** What we want
+
+---
+
+## Modality
+
+**Mode:** Deductive | Exploratory | Hybrid
+
+**Rationale:** Why this mode fits the work.
+
+**Protocol:** For deductive parts, list the contracts/tests that can be
+specified before implementation. For exploratory parts, list the simplest
+defensible guess, the instrument to build, the readout, and the step-down path
+to concrete cases. For hybrid work, partition both.
 
 ---
 
@@ -155,6 +190,9 @@ If no additional research beyond repo-local references was needed, write:
 
 ## Required Tests
 
+For exploratory work, replace or supplement tests with the readout/instrument
+checks that prove the exploration is agent-drivable and inspectable.
+
 ### New Tests (TDD)
 
 | Test File | Test Function | What It Verifies |
@@ -173,6 +211,7 @@ If no additional research beyond repo-local references was needed, write:
 ## Verification
 
 - [ ] Required tests pass
+- [ ] Exploratory readouts/instruments were exercised, if applicable
 - [ ] Full test suite passes
 - [ ] Type check passes
 - [ ] Docs updated

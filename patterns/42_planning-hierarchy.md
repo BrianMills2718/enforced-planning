@@ -16,6 +16,7 @@ Certain dependencies are non-negotiable; others can be compressed for trivial wo
 | Layer | Primary question |
 |-------|-----------------|
 | North star / thesis | Why does this system exist? |
+| Modality diagnosis | Which parts can be specified now, and which require an instrument/readout? |
 | Questions | What must be verified before planning? |
 | Investigation memos | What did we learn when we looked? |
 | Topic research syntheses | What reusable conclusions should future work start from? |
@@ -33,10 +34,13 @@ Certain dependencies are non-negotiable; others can be compressed for trivial wo
 ## Non-negotiable Dependencies
 
 - No plan without investigation or explicit unresolved questions
+- No non-trivial design or plan without modality diagnosis
 - No non-trivial ADR without a research basis or explicit research skip
 - No plan without current-vs-target framing
 - No cross-project plan without capability/boundary clarity
 - No implementation without declared tests and acceptance criteria
+- No exploratory slice without an instrument, readout, and step-down path to
+  concrete cases
 - No closeout without verification evidence
 
 ## Relationship to Other Patterns

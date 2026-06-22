@@ -57,6 +57,25 @@ If no additional research beyond repo-local references was needed, write:
 
 ---
 
+## Modality Assessment
+
+> **REQUIRED for non-trivial design or bounded implementation plans.** Classify
+> each meaningful part before choosing a planning protocol.
+
+| Part | Mode | Why | Planning Treatment |
+|------|------|-----|--------------------|
+| `known-contract-surface` | Deductive / plan-first | Correctness and failure modes are predictable. | Specify contracts, tests, acceptance criteria, and failure modes before implementation. |
+| `unknown-behavior-surface` | Exploratory / ladder | Behavior is emergent or parameter values would be guesses. | Build the cheapest instrument, define the readout, and preserve step-down to concrete cases. |
+| `mixed-surface` | Hybrid | Architecture is knowable, but some parameter/effect must be learned. | Gate the known contract; instrument the unknown part until it can be promoted. |
+
+**Exploratory readout:** What observable signal will end, redirect, or promote
+the exploration?
+
+**Step-down path:** How will a failing aggregate, metric, or gate lead back to
+the concrete cases that explain it?
+
+---
+
 ## Capabilities
 
 > **REQUIRED if this plan creates or modifies callable functions that other projects use.**

@@ -10,6 +10,8 @@ This validator enforces the subtree-instruction contract for any governed repo:
 ``AGENTS.md`` is a **root-level artifact only** — it is generated (not
 symlinked) at the repo root by ``render_agents_md.py``.  Subdirectories
 must NOT have ``AGENTS.md`` files (neither symlinks nor regular files).
+The default audit is read-only. Use ``--cleanup-stale-agents`` to remove
+old symlink-based subdirectory mirrors left by earlier versions.
 The ``--sync-agents`` flag is retained for backward compatibility but is
 now a no-op that emits a deprecation warning.
 """
@@ -137,6 +139,11 @@ def parse_args() -> argparse.Namespace:
         "--sync-agents",
         action="store_true",
         help="[DEPRECATED] No-op. AGENTS.md is root-level only; subdirectory symlinks are no longer created.",
+    )
+    parser.add_argument(
+        "--cleanup-stale-agents",
+        action="store_true",
+        help="Remove stale symlink-based subdirectory AGENTS.md mirrors.",
     )
     parser.add_argument(
         "--check",
@@ -305,8 +312,9 @@ def _audit_included_directory(
     relpath: str,
     *,
     actions: list[str],
+    cleanup_stale_agents: bool,
 ) -> DirectoryAudit:
-    """Audit one included subtree directory and clean up stale AGENTS.md."""
+    """Audit one included subtree directory."""
 
     dir_path = repo_root / relpath
     errors: list[str] = []
@@ -323,11 +331,10 @@ def _audit_included_directory(
             errors=errors,
         )
 
-    # Clean up stale AGENTS.md symlinks left by older versions of this script.
-    # AGENTS.md is a root-level artifact only; subdirectories must not have one.
-    action = _cleanup_subdirectory_agents(dir_path, relpath)
-    if action is not None:
-        actions.append(action)
+    if cleanup_stale_agents:
+        action = _cleanup_subdirectory_agents(dir_path, relpath)
+        if action is not None:
+            actions.append(action)
 
     claude_path = dir_path / "CLAUDE.md"
     agents_path = dir_path / "AGENTS.md"
@@ -362,20 +369,22 @@ def audit_subtree_instructions(
     registry_path: Path,
     *,
     sync_agents: bool = False,
+    cleanup_stale_agents: bool = False,
 ) -> SubtreeAuditResult:
     """Audit subtree instruction coverage for one repo root.
 
     The ``sync_agents`` parameter is accepted for backward compatibility
     but is now a no-op (with deprecation warning).  AGENTS.md is a
-    root-level artifact only; subdirectories should not have one.
+    root-level artifact only; subdirectories should not have one. Cleanup
+    requires the explicit ``cleanup_stale_agents`` flag.
     """
 
     if sync_agents:
         warnings.warn(
             "--sync-agents is deprecated and now a no-op. "
             "AGENTS.md is a root-level artifact only; subdirectory "
-            "AGENTS.md symlinks are no longer created. Existing stale "
-            "symlinks will be cleaned up automatically during audit.",
+            "AGENTS.md symlinks are no longer created. Use "
+            "--cleanup-stale-agents to remove existing stale symlinks.",
             DeprecationWarning,
             stacklevel=2,
         )
@@ -411,6 +420,7 @@ def audit_subtree_instructions(
             repo_root,
             entry.path,
             actions=result.actions,
+            cleanup_stale_agents=cleanup_stale_agents,
         )
         result.directories.append(directory_audit)
         result.errors.extend(directory_audit.errors)
@@ -430,6 +440,7 @@ def main() -> int:
             repo_root,
             registry_path,
             sync_agents=args.sync_agents,
+            cleanup_stale_agents=args.cleanup_stale_agents,
         )
     except (FileNotFoundError, ValueError, yaml.YAMLError) as exc:
         if args.json:

@@ -60,6 +60,7 @@ See `ROADMAP.md` for the full phase map and recommended priority order.
 | 54 | Recursive Documentation Spine And Required-Read Closure (`54_recursive-documentation-spine-and-required-read-closure.md`) | High | 📋 Planned | [future] recursive doc-spine validation and read-gating rollout |
 | 55 | Enforced-Planning Recursive Doc Spine Dogfood (`55_enforced-planning_recursive_doc_spine_dogfood.md`) | High | 📋 Planned | [future] downstream recursive doc-spine rollout to governed repos |
 | 56 | Modality-Aware Planning Protocol (`56_modality-aware-planning-protocol.md`) | High | ✅ Complete | Design-plan skill folded into canonical planning methodology |
+| 57 | Plan Status Index Parser Compatibility (`57_plan-status-index-parser-compatibility.md`) | High | ✅ Complete | sync_plan_status parser now supports current Implementation Plans index |
 
 ## Status Key
 

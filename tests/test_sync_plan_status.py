@@ -178,6 +178,24 @@ _INDEX_CONTENT = textwrap.dedent("""\
 
 """)
 
+_IMPLEMENTATION_INDEX_CONTENT = textwrap.dedent("""\
+    # Implementation Plans
+
+    See `ROADMAP.md` for the full phase map and recommended priority order.
+
+    | # | Gap | Priority | Status | Blocks |
+    |---|-----|----------|--------|--------|
+    | 1 | Capabilities enforcement (`01_boundary_enforcement.md`) | High | ✅ Complete | ecosystem-ops audit |
+    | 2 | Canonical Planning Operating Model (`02_canonical-planning-operating-model.md`) | High | ✅ Complete | #3, #4 |
+    | 56 | Modality-Aware Planning (`56_modality-aware-planning-protocol.md`) | High | ✅ Complete | [future] validator enforcement |
+
+    ## Status Key
+
+    | Status | Meaning |
+    |--------|---------|
+    | ✅ Complete | Implemented and verified |
+""")
+
 
 def test_parse_index_table_basic(tmp_path: Path) -> None:
     """Three rows in the index table are all parsed."""
@@ -202,6 +220,17 @@ def test_parse_index_table_status_emojis(tmp_path: Path) -> None:
     assert "🚧" in result[3]["status_emoji"]
 
 
+def test_parse_index_table_current_implementation_plans_format(tmp_path: Path) -> None:
+    """Current Implementation Plans table format is parsed by header cells."""
+    m = _load()
+    index_path = tmp_path / "CLAUDE.md"
+    index_path.write_text(_IMPLEMENTATION_INDEX_CONTENT, encoding="utf-8")
+    result = m.parse_index_table(index_path)  # type: ignore[attr-defined]
+    assert sorted(result) == [1, 2, 56]
+    assert result[1]["title_cell"].startswith("Capabilities enforcement")
+    assert result[56]["blocks"] == "[future] validator enforcement"
+
+
 def test_parse_index_table_nonexistent_returns_empty(tmp_path: Path) -> None:
     """Non-existent index file returns empty dict."""
     m = _load()
@@ -209,11 +238,14 @@ def test_parse_index_table_nonexistent_returns_empty(tmp_path: Path) -> None:
     assert result == {}
 
 
-def test_parse_index_table_no_gap_summary_section(tmp_path: Path) -> None:
-    """File without Gap Summary section returns empty dict."""
+def test_parse_index_table_without_plan_index_table_returns_empty(tmp_path: Path) -> None:
+    """File without a plan-index table returns empty dict."""
     m = _load()
     index_path = tmp_path / "CLAUDE.md"
-    index_path.write_text("# Just a heading\nSome text.\n", encoding="utf-8")
+    index_path.write_text(
+        "# Just a heading\n\n| Name | Value |\n|---|---|\n| x | y |\n",
+        encoding="utf-8",
+    )
     result = m.parse_index_table(index_path)  # type: ignore[attr-defined]
     assert result == {}
 

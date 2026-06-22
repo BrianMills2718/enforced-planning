@@ -153,4 +153,4 @@ Make it programmatic only if future plans keep missing or faking the diagnosis.
 and reported every numbered plan as missing from the index. The index is visibly
 populated; the script currently searches for an older `## Gap Summary` heading
 while this repo uses `# Implementation Plans`. That parser compatibility issue
-is a follow-up enforcement cleanup, not part of this documentation slice.
+is fixed by Plan #57.

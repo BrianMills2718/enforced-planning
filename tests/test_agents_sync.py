@@ -9,8 +9,11 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-RENDER_SCRIPT = REPO_ROOT / "scripts" / "render_agents_md.py"
 CHECK_SCRIPT = REPO_ROOT / "scripts" / "check_agents_sync.py"
+# Prefer scripts/meta/ entrypoint when it exists (enforced-planning governs itself).
+_META_RENDER = REPO_ROOT / "scripts" / "meta" / "render_agents_md.py"
+_SRC_RENDER = REPO_ROOT / "scripts" / "render_agents_md.py"
+RENDER_SCRIPT = _META_RENDER if _META_RENDER.exists() else _SRC_RENDER
 
 
 def _load_render_module():

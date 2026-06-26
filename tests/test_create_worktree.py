@@ -165,13 +165,14 @@ def test_get_default_worktree_dir_uses_canonical_repo_root_from_worktree(
     """Canonical default worktree dir should be stable across root and linked worktree contexts."""
     module = _load_module()
     repo_root = tmp_path / "repo"
-    linked_worktree = tmp_path / "repo_worktrees" / "plan-42-proof"
+    # Worktrees live inside the repo under worktrees/<branch>/ per current policy.
+    linked_worktree = repo_root / "worktrees" / "plan-42-proof"
     _init_temp_repo(repo_root)
 
     add_result = _run_git(repo_root, "worktree", "add", "-b", "plan-42-proof", str(linked_worktree))
     assert add_result.returncode == 0, add_result.stdout + add_result.stderr
 
-    expected = tmp_path / "repo_worktrees"
+    expected = repo_root / "worktrees"
     assert module.get_default_worktree_dir(repo_root) == expected
     assert module.get_default_worktree_dir(linked_worktree) == expected
 

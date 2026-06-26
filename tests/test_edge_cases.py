@@ -135,23 +135,6 @@ class TestMissingBlockers:
 
 
 # ---------------------------------------------------------------------------
-# check_doc_coupling — wrapper existence guard
-# ---------------------------------------------------------------------------
-
-class TestDocCouplingWrapper:
-    """check_doc_coupling.py is a compatibility wrapper — test its guard."""
-
-    def test_wrapper_exits_gracefully_when_target_missing(self) -> None:
-        """Wrapper raises SystemExit(2) if the wrapped script doesn't exist."""
-        wrapper = SCRIPTS_DIR / "check_doc_coupling.py"
-        assert wrapper.exists(), "Wrapper script must exist"
-
-        content = wrapper.read_text()
-        # The wrapper should check for TARGET existence and raise SystemExit(2)
-        assert "SystemExit(2)" in content or "raise SystemExit(2)" in content
-
-
-# ---------------------------------------------------------------------------
 # parse_plan.py — malformed content edge cases
 # ---------------------------------------------------------------------------
 

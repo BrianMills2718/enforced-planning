@@ -149,6 +149,7 @@ def parse_args() -> argparse.Namespace:
 HOOK_FILES: tuple[str, ...] = (
     ".claude/hooks/gate-edit.sh",
     ".claude/hooks/track-reads.sh",
+    ".claude/hooks/check-hook-enabled.sh",
 )
 
 HOOK_COMMANDS: tuple[str, ...] = (

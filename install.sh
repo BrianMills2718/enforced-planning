@@ -191,6 +191,7 @@ done
 if [[ "$MODE" == "--full" ]]; then
     # Worktree coordination hooks (opt-in module)
     WORKTREE_CLAUDE_HOOKS=(
+        "check-hook-enabled.sh"
         "protect-main.sh"
         "block-cd-worktree.sh"
         "block-worktree-remove.sh"

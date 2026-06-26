@@ -32,6 +32,9 @@ FRAMEWORK_ROOT = Path(__file__).resolve().parents[1]
 HOOK_FILES: dict[str, str] = {
     ".claude/hooks/gate-edit.sh": "hooks/claude/gate-edit.sh",
     ".claude/hooks/track-reads.sh": "hooks/claude/track-reads.sh",
+    # Required by worktree-coordination hooks (block-cd-worktree, warn-worktree-cwd).
+    # Install unconditionally so repos that later add worktree hooks don't break.
+    ".claude/hooks/check-hook-enabled.sh": "hooks/claude/check-hook-enabled.sh",
 }
 
 # Support Python scripts sourced from this canonical framework.
@@ -214,6 +217,19 @@ def plan_generation(target: TargetRepo) -> tuple[list[str], dict[Path, str], str
             actions.append(f"sync:{target_relpath}")
             file_writes[target_path] = content
 
+    # If worktree-coordination hooks are present, ensure check-hook-enabled.sh is
+    # also present there — those hooks source it from their own $SCRIPT_DIR.
+    wt_hooks_dir = target.root / ".claude" / "hooks" / "worktree-coordination"
+    if wt_hooks_dir.exists():
+        wt_enabled = wt_hooks_dir / "check-hook-enabled.sh"
+        source_enabled = FRAMEWORK_ROOT / "hooks" / "claude" / "check-hook-enabled.sh"
+        content = source_enabled.read_text(encoding="utf-8")
+        current = wt_enabled.read_text(encoding="utf-8") if wt_enabled.exists() else None
+        if current != content:
+            rel = ".claude/hooks/worktree-coordination/check-hook-enabled.sh"
+            actions.append(f"sync:{rel}")
+            file_writes[wt_enabled] = content
+
     settings = _read_json_file(target.settings_file)
     read_hooks = _ensure_matcher_block(settings, event_name="PostToolUse", matcher="Read")
     edit_hooks = _ensure_matcher_block(settings, event_name="PreToolUse", matcher="Edit|Write")
@@ -251,6 +267,27 @@ def apply_generation(target: TargetRepo, file_writes: dict[Path, str]) -> None:
             path.chmod(0o755)
 
 
+def validate_hooks(target: TargetRepo) -> list[str]:
+    """Syntax-check every installed .sh hook with bash -n. Returns error strings."""
+
+    import subprocess
+
+    errors: list[str] = []
+    hooks_dir = target.root / ".claude" / "hooks"
+    if not hooks_dir.exists():
+        return errors
+    for sh_file in sorted(hooks_dir.rglob("*.sh")):
+        result = subprocess.run(
+            ["bash", "-n", str(sh_file)],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            rel = _relative(sh_file, target.root)
+            errors.append(f"syntax error in {rel}: {result.stderr.strip()}")
+    return errors
+
+
 def main(argv: list[str] | None = None) -> int:
     """Entry point for dry-run or applied hook-wiring generation."""
 
@@ -262,12 +299,14 @@ def main(argv: list[str] | None = None) -> int:
         print(str(exc), file=sys.stderr)
         return 1
 
+    validation_errors: list[str] = []
     if args.write:
         apply_generation(target, file_writes)
+        validation_errors = validate_hooks(target)
 
     payload = {
         "repo_root": str(target.root),
-        "status": "PASS",
+        "status": "FAIL" if validation_errors else "PASS",
         "write_mode": args.write,
         "actions": actions,
         "changed_files": [
@@ -278,6 +317,7 @@ def main(argv: list[str] | None = None) -> int:
             _relative(target.relationships_file, target.root),
             _relative(target.file_context_file, target.root),
         ],
+        "validation_errors": validation_errors,
     }
 
     if args.json:
@@ -290,8 +330,12 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"- {action}")
         else:
             print("No changes needed.")
+        if validation_errors:
+            print("Hook validation errors:", file=sys.stderr)
+            for err in validation_errors:
+                print(f"  {err}", file=sys.stderr)
 
-    return 0
+    return 1 if validation_errors else 0
 
 
 if __name__ == "__main__":

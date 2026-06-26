@@ -1,0 +1,17 @@
+---
+doc-role: wiki-manifest
+freshness: 2026-06-25
+---
+
+# Wiki Manifest — Enforced Planning
+
+id: enforced-planning
+portfolio_tier: personal
+description: >
+  Enforced Planning
+
+sources:
+  - path: ../README.md
+    role: overview
+  - path: ../CLAUDE.md
+    role: instructions

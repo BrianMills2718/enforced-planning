@@ -5,6 +5,11 @@ execution in governed repos. When a repo's CLAUDE.md references this doc, the
 rules here are authoritative. Local CLAUDE.md sections may summarize; this doc
 defines the precise terms.
 
+This contract is an instance of **loop engineering** (coined June 2026): designing
+a repeatable agent workflow with explicit stopping conditions, where the stopping
+conditions are defined once and the agent runs until they are met. The two stop
+conditions below are the loop's termination predicate.
+
 ---
 
 ## When This Contract Applies
@@ -66,16 +71,16 @@ Uncommitted work is invisible, unrecoverable, and unreviewed.
 
 ### Worktree Discipline
 
-Every Plan-level phase runs in a dedicated worktree:
+Every Plan-level phase runs in a dedicated worktree inside the repo:
 ```
-git worktree add ~/worktrees/<repo>-plan<N>-<date> -b plan-<N>-<slug>
+git worktree add <repo>/worktrees/plan<N>-<slug> -b plan-<N>-<slug>
 ```
 
-After a phase is verified:
+`worktrees/` must be in the repo's `.gitignore`. After a phase is verified:
 1. Commit in the worktree
 2. Merge to canonical branch (main)
 3. Push
-4. Remove the worktree: `git worktree remove ~/worktrees/<repo>-plan<N>-<date>`
+4. Remove the worktree: `git worktree remove <repo>/worktrees/plan<N>-<slug>`
 5. Delete the branch: `git branch -d plan-<N>-<slug>`
 6. Update the sprint tracker
 7. Begin the next slice

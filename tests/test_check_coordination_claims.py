@@ -674,3 +674,54 @@ def test_check_json_outputs_stale_session_liveness_issue(
     assert exit_code == 0
     assert payload["claims"][0]["health_status"] == "stale"
     assert payload["claims"][0]["liveness_issues"] == ["stale_session_heartbeat"]
+
+
+def test_unregistered_format_claim_files_surface_in_list(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Free-form .md/.txt claim files must be reported, not silently ignored.
+
+    2026-07-06 adversarial review: 10 live Codex free-form claims were invisible
+    to --list because loading globbed *.yaml only.
+    """
+    module = _load_module()
+    claims_dir = tmp_path / "claims"
+    _write_claim(
+        claims_dir,
+        "claude-code_project-meta_main.yaml",
+        {
+            "agent": "claude-code",
+            "claimed_at": "2099-01-01T00:00:00+00:00",
+            "expires_at": "2099-01-02T00:00:00+00:00",
+            "projects": ["project-meta"],
+            "scope": "main",
+            "intent": "test",
+            "claim_type": "program",
+            "status": "active",
+            "schema_version": 2,
+        },
+    )
+    (claims_dir / "codex-freeform-claim.md").write_text("# Claim: editing scripts\n", encoding="utf-8")
+    (claims_dir / "legacy-note.txt").write_text("codex: doing things\n", encoding="utf-8")
+    monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
+
+    files = module.unregistered_claim_files()
+    assert [Path(f).name for f in files] == ["codex-freeform-claim.md", "legacy-note.txt"]
+
+    exit_code = module.main(["--list", "--json"])
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert exit_code == 0
+    assert len(payload["claims"]) == 1
+    assert [Path(f).name for f in payload["unregistered_claim_files"]] == [
+        "codex-freeform-claim.md",
+        "legacy-note.txt",
+    ]
+
+    exit_code = module.main(["--list"])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert "unregistered format" in captured.err
+    assert "codex-freeform-claim.md" in captured.err

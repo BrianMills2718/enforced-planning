@@ -22,6 +22,7 @@ import json
 import os
 import posixpath
 import subprocess
+import sys
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -486,6 +487,23 @@ def _load_claims() -> list[ClaimRecord]:
         if claim is not None:
             claims.append(claim)
     return claims
+
+
+def unregistered_claim_files() -> list[str]:
+    """Return claim-dir files that coordination tooling cannot parse as claims.
+
+    Every file in the claims directory is a claim by convention. Free-form
+    `.md`/`.txt` claims (observed from Codex sessions, 2026-07-06) are invisible
+    to listing/conflict/registry tooling; surfacing them loudly is the fix for
+    that silent blind spot.
+    """
+    if not CLAIMS_DIR.exists():
+        return []
+    return sorted(
+        str(path)
+        for path in CLAIMS_DIR.iterdir()
+        if path.is_file() and path.suffix.lower() not in {".yaml", ".yml"}
+    )
 
 
 def _claim_filename(agent: str, project: str, scope: str) -> str:
@@ -995,6 +1013,7 @@ def _render_check_output(
             }
             for claim in claims
         ],
+        "unregistered_claim_files": unregistered_claim_files(),
     }
     if candidate is not None:
         payload["check"] = {
@@ -1064,6 +1083,15 @@ def main(argv: list[str] | None = None) -> int:
         if args.json:
             print(json.dumps(_render_check_output(claims=claims, project=args.project, candidate=None), indent=2))
             return 0
+        unregistered = unregistered_claim_files()
+        if unregistered:
+            print(
+                f"⚠ {len(unregistered)} claim file(s) in unregistered format — invisible to "
+                "coordination tooling; refile via `make claim` / --claim:",
+                file=sys.stderr,
+            )
+            for path in unregistered:
+                print(f"    {path}", file=sys.stderr)
         if not claims:
             print("No active claims.")
             return 0

@@ -109,6 +109,12 @@ def release_claim(*args: Any, **kwargs: Any) -> tuple[bool, str]:
     return _impl.release_claim(*args, **kwargs)
 
 
+def unregistered_claim_files() -> list[str]:
+    """Delegate unregistered-format claim detection while honoring script-level CLAIMS_DIR overrides."""
+    _sync_runtime_config()
+    return _impl.unregistered_claim_files()
+
+
 def prune_expired() -> int:
     """Delegate claim pruning while honoring script-level CLAIMS_DIR overrides."""
     _sync_runtime_config()

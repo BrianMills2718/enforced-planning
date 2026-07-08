@@ -27,6 +27,7 @@ from enforced_planning import coordination_claims as _impl
 CLAIMS_DIR = _impl.CLAIMS_DIR
 DEFAULT_TTL_HOURS = _impl.DEFAULT_TTL_HOURS
 LIVE_STATUSES = _impl.LIVE_STATUSES
+COMPLETED_STATUSES = _impl.COMPLETED_STATUSES
 CLAIM_TYPES = _impl.CLAIM_TYPES
 STRICT_LIVE_METADATA_CLAIM_TYPES = _impl.STRICT_LIVE_METADATA_CLAIM_TYPES
 
@@ -125,6 +126,12 @@ def prune_stale() -> tuple[int, list[str]]:
     """Delegate stale-claim pruning while honoring script-level CLAIMS_DIR overrides."""
     _sync_runtime_config()
     return _impl.prune_stale()
+
+
+def prune_completed() -> tuple[int, list[str]]:
+    """Delegate completed-claim pruning while honoring script-level CLAIMS_DIR overrides."""
+    _sync_runtime_config()
+    return _impl.prune_completed()
 
 
 def heartbeat_claims(*args: Any, **kwargs: Any) -> tuple[int, list[str], str, str]:

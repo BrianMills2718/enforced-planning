@@ -575,6 +575,52 @@ def test_prune_stale_removes_only_mechanically_stale_claims(
     assert (claims_dir / "healthy.yaml").exists()
 
 
+def test_prune_completed_removes_only_completed_claims(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Completed pruning must not remove active claims, even when expired."""
+    module = _load_module()
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
+    base_payload = {
+        "agent": "codex",
+        "claimed_at": "2026-04-05T12:00:00+00:00",
+        "expires_at": "2026-04-05T13:00:00+00:00",
+        "projects": ["demo"],
+        "intent": "Cleanup claim",
+        "claim_type": "program",
+    }
+    _write_claim(
+        claims_dir,
+        "completed.yaml",
+        {**base_payload, "scope": "completed-scope", "status": "completed"},
+    )
+    _write_claim(
+        claims_dir,
+        "complete.yaml",
+        {**base_payload, "scope": "complete-scope", "status": "complete"},
+    )
+    _write_claim(
+        claims_dir,
+        "expired-active.yaml",
+        {**base_payload, "scope": "expired-active-scope", "status": "active"},
+    )
+
+    exit_code = module.main(["--prune-completed", "--json"])
+
+    payload = json.loads(capsys.readouterr().out)
+    assert exit_code == 0
+    assert payload == {
+        "pruned": 2,
+        "removed_scopes": ["demo:complete-scope", "demo:completed-scope"],
+    }
+    assert not (claims_dir / "completed.yaml").exists()
+    assert not (claims_dir / "complete.yaml").exists()
+    assert (claims_dir / "expired-active.yaml").exists()
+
+
 def test_check_json_outputs_claims_and_candidate_conflict_classification(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

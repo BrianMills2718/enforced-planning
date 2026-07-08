@@ -128,6 +128,15 @@ That command is intentionally separate from `--prune`, which only removes
 expired claims. Use `--prune-stale` when worktree/branch lifecycle drift has
 left a live claim no longer truthful.
 
+To remove claims that are already explicitly closed, use:
+
+```bash
+python scripts/meta/check_coordination_claims.py --prune-completed --json
+```
+
+That command only removes valid YAML claims whose status is `complete` or
+`completed`. It does not prune active claims, even when their TTL has elapsed.
+
 To refresh the heartbeat for the current live session, use:
 
 ```bash

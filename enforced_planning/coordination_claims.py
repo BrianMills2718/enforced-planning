@@ -13,6 +13,7 @@ Usage:
     check_coordination_claims.py --release --agent AGENT --project PROJECT --scope SCOPE
     check_coordination_claims.py --list
     check_coordination_claims.py --prune
+    check_coordination_claims.py --prune-completed
 """
 
 from __future__ import annotations
@@ -33,6 +34,7 @@ import yaml  # type: ignore[import-untyped]
 CLAIMS_DIR = Path.home() / ".claude" / "coordination" / "claims"
 DEFAULT_TTL_HOURS = 24  # Sprints run 24h; 2h caused false-expiry conflicts mid-sprint
 LIVE_STATUSES = {"active", "blocked", "handoff"}
+COMPLETED_STATUSES = {"complete", "completed"}
 CLAIM_TYPES = {"program", "write", "review", "research"}
 STRICT_LIVE_METADATA_CLAIM_TYPES = {"program", "write", "research"}
 DEFAULT_HEARTBEAT_STALE_MINUTES = 120
@@ -949,6 +951,35 @@ def prune_stale() -> tuple[int, list[str]]:
     return len(removed_labels), sorted(removed_labels)
 
 
+def prune_completed() -> tuple[int, list[str]]:
+    """Remove claims already marked complete/completed.
+
+    This is intentionally narrower than ``prune_expired``: it never removes a
+    live active/blocked/handoff claim solely because its TTL elapsed. Use it for
+    housekeeping completed claim history after the claim's audit value has been
+    captured elsewhere.
+    """
+
+    if not CLAIMS_DIR.exists():
+        return 0, []
+    removed_labels: list[str] = []
+    for claim_file in CLAIMS_DIR.glob("*.yaml"):
+        try:
+            data = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if not isinstance(data, dict):
+            continue
+        claim = normalize_claim(data, source_file=str(claim_file))
+        if claim is None:
+            continue
+        if claim.status.strip().lower() not in COMPLETED_STATUSES:
+            continue
+        claim_file.unlink()
+        removed_labels.append(f"{claim.primary_project()}:{claim.scope}")
+    return len(removed_labels), sorted(removed_labels)
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     """Parse CLI arguments for coordination-claim management."""
     parser = argparse.ArgumentParser(description="Cross-brain coordination claims")
@@ -962,6 +993,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--prune-stale",
         action="store_true",
         help="Remove mechanically stale live claims whose lifecycle state is no longer truthful.",
+    )
+    group.add_argument(
+        "--prune-completed",
+        action="store_true",
+        help="Remove valid YAML claims already marked complete/completed; never prunes live claims.",
     )
     group.add_argument(
         "--hydrate-session-ids",
@@ -1160,6 +1196,17 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(payload, indent=2))
         else:
             print(f"Stale claims pruned: {removed}")
+            if removed_scopes:
+                print("Removed scopes: " + ", ".join(removed_scopes))
+        return 0
+
+    if args.prune_completed:
+        removed, removed_scopes = prune_completed()
+        payload = {"pruned": removed, "removed_scopes": removed_scopes}
+        if args.json:
+            print(json.dumps(payload, indent=2))
+        else:
+            print(f"Completed claims pruned: {removed}")
             if removed_scopes:
                 print("Removed scopes: " + ", ".join(removed_scopes))
         return 0

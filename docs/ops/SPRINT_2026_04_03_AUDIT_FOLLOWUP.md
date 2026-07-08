@@ -110,12 +110,13 @@ still shows history.
 ### 1e. Fix stale CLAUDE.md References section
 
 **Problem:** CLAUDE.md References section points to
-`docs/ops/OVERNIGHT_SPRINT_2026_04_02_TRUTH_SURFACE.md` which was archived to
-`docs/ops/archive/`. The link is broken.
+`docs/ops/OVERNIGHT_SPRINT_2026_04_02_TRUTH_SURFACE.md`, a retired sprint
+artifact. The link is broken.
 
-**Fix:** Replace that reference with a pointer to the current sprint doc and archive:
+**Fix:** Replace that reference with a pointer to the current sprint doc and
+central archive log:
 ```
-- `docs/ops/archive/` — completed sprint documents
+- `~/archive/enforced-planning/wiki/log.md` — completed sprint documents
 - `docs/ops/SPRINT_2026_04_03_ALL_ISSUES.md` — most recent full sprint
 ```
 

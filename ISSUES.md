@@ -23,7 +23,35 @@ Items start as **unconfirmed** observations and get triaged into confirmed issue
 
 ## Open
 
-(No open framework documentation or planning-governance issues are currently tracked here.)
+### MP-014: Default terminology check points to a missing generated pack/generator
+
+| Field | Value |
+|-------|-------|
+| Status | `confirmed` |
+| Severity | medium |
+| Reported | 2026-07-08 |
+| Next Step | Create a plan to either generate `generated/vocab_pack.jsonl` in enforced-planning or point the terminology linter at the canonical ecosystem vocab pack. |
+
+`python scripts/check_terminology.py --glob '**/*.md'` fails before scanning
+because `generated/vocab_pack.jsonl` is absent and the suggested
+`scripts/generate_vocab_pack.py` entrypoint does not exist in this repo.
+
+---
+
+### MP-015: Full pytest has pre-existing governed-repo audit failures
+
+| Field | Value |
+|-------|-------|
+| Status | `confirmed` |
+| Severity | medium |
+| Reported | 2026-07-08 |
+| Next Step | Create a focused plan to reconcile audit classification expectations with the current `audit_governed_repo.py` behavior, and separately harden `scripts/meta/render_agents_md.py` import-root detection. |
+
+`PYTHONPATH=. python -m pytest tests/test_audit_governed_repo.py -q` fails in
+the clean primary checkout with 7 audit-classification failures. Plain
+`python -m pytest tests/test_agents_sync.py -q` also fails in the primary
+checkout because `scripts/meta/render_agents_md.py` calculates its import root
+as `scripts/` instead of the repo root when executed by path.
 
 ---
 
@@ -114,8 +142,9 @@ instead of trying to redefine the hierarchy independently.
 | Resolved | 2026-04-04 |
 
 The earlier `OVERNIGHT_SPRINT_*` and `TRUTH_SURFACE_*_TODO` clutter was moved
-out of the root operator surface. Remaining `docs/ops/` files are a much
-smaller set of operator artifacts and sprint records.
+out of the root operator surface. Those retired records are recoverable through
+`~/archive/enforced-planning/wiki/log.md`. Remaining `docs/ops/` files are a
+much smaller set of operator artifacts and sprint records.
 
 ---
 

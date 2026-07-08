@@ -6,7 +6,7 @@ for any string in a term's ``do_not_use`` list. Exits 1 if violations are found,
 0 if clean.
 
 Excluded by default:
-- ``vision/archive/``, ``docs/ops/archive/``, ``vision/archive/``
+- ``vision/archive/``, ``docs/plans/archive/``
 - ``tests/fixtures/``, ``tests/fixtures``
 - Any ``*.jsonl`` file (the pack itself)
 - The ``## Legacy / Do Not Use`` section of the canonical glossary
@@ -33,7 +33,6 @@ DEFAULT_GLOSSARY = REPO_ROOT / "vision" / "06_GLOSSARY.md"
 # Path prefixes/patterns that are always excluded
 EXCLUDED_PATH_PREFIXES = (
     "vision/archive/",
-    "docs/ops/archive/",
     "docs/plans/archive/",
     "tests/fixtures/",
     "generated/",

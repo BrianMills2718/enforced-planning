@@ -103,9 +103,11 @@ Write a new ISSUES.md with:
 **Problem:** 9 sprint/TODO documents in docs/ops/ are closed work artifacts.
 They create noise when reading the ops directory.
 
-**Fix:** Move all `OVERNIGHT_SPRINT_*.md` and `TRUTH_SURFACE_*_TODO.md` files
-to `docs/ops/archive/`. Keep only `semantic_review_findings.yaml`,
-`verification_log.yaml`, `escalations.yaml`, and the new sprint doc.
+**Fix:** Move all `OVERNIGHT_SPRINT_*.md` and `TRUTH_SURFACE_*_TODO.md`
+historical files out of the active operator surface. These retired records are
+recoverable through `~/archive/enforced-planning/wiki/log.md`. Keep only
+`semantic_review_findings.yaml`, `verification_log.yaml`, `escalations.yaml`,
+and the new sprint doc.
 
 **Acceptance:** `ls docs/ops/*.md | wc -l` ≤ 2.
 

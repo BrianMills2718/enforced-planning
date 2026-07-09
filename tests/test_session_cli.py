@@ -2,12 +2,96 @@
 
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 
 import pytest
 import yaml
 
 from enforced_planning import coordination_claims, session_lifecycle
+
+
+def _git(cwd: Path, *args: str) -> str:
+    """Run one real Git command for lifecycle integration fixtures."""
+
+    result = subprocess.run(
+        ["git", *args],
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr or result.stdout
+    return result.stdout.strip()
+
+
+def _real_repo_with_worktree(tmp_path: Path) -> tuple[Path, Path, str]:
+    """Create a real canonical repo plus an in-repo linked task worktree."""
+
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    branch = "plan-59-safe-closeout"
+    _git(repo_root, "init", "-b", "main")
+    _git(repo_root, "config", "user.email", "tests@example.com")
+    _git(repo_root, "config", "user.name", "Test User")
+    (repo_root / ".gitignore").write_text("worktrees/\n", encoding="utf-8")
+    (repo_root / "README.md").write_text("baseline\n", encoding="utf-8")
+    _git(repo_root, "add", ".gitignore", "README.md")
+    _git(repo_root, "commit", "-m", "initial")
+
+    worktree = repo_root / "worktrees" / branch
+    _git(repo_root, "worktree", "add", "-b", branch, str(worktree), "main")
+    (worktree / "feature.txt").write_text("unique work\n", encoding="utf-8")
+    _git(worktree, "add", "feature.txt")
+    _git(worktree, "commit", "-m", "feature")
+    return repo_root, worktree, branch
+
+
+def _start_real_closeout_claim(
+    *,
+    repo_root: Path,
+    worktree: Path,
+    branch: str,
+    claims_dir: Path,
+    trackers_dir: Path,
+) -> Path:
+    """Create one claim/tracker pair for a real-Git closeout fixture."""
+
+    session_lifecycle.start_session(
+        agent="codex",
+        project="enforced-planning",
+        scope=branch,
+        intent="prove merge-or-disposition closeout",
+        repo_root=str(repo_root),
+        worktree_path=str(worktree),
+        branch=branch,
+        broader_goal="Safe Worktree Lifecycle",
+        current_phase="closeout controls",
+        plan_ref="Plan #59",
+        session_id="codex:test-session",
+        tracker_dir=trackers_dir,
+    )
+    return claims_dir / f"codex_enforced-planning_{branch}.yaml"
+
+
+def test_worktree_lifecycle_policy_rejects_overlapping_dispositions(tmp_path: Path) -> None:
+    """Policy configuration must fail loud when one outcome has two meanings."""
+
+    config_path = tmp_path / "worktree_lifecycle.yaml"
+    config_path.write_text(
+        """\
+schema_version: 1
+dispositions:
+  merged: merged
+  non_closeable: [active]
+  recovery_required: [archived]
+  discard_requires_authorization: [archived]
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="groups overlap"):
+        session_lifecycle._load_worktree_lifecycle_policy(config_path)
 
 
 def test_start_session_creates_tracker_and_updates_claim(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -235,79 +319,318 @@ def test_finish_session_releases_clean_claim(tmp_path: Path, monkeypatch: pytest
     assert not (claims_dir / "codex_enforced-planning_plan-31-session-cli-enforcement.yaml").exists()
 
 
-def test_close_session_cleans_up_claimed_lane_atomically(
+def test_close_session_rejects_clean_unmerged_branch_before_mutation(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Session close should remove worktree, delete branch, and release claim together."""
+    """Negative control: clean committed work must not be silently deleted."""
 
     claims_dir = tmp_path / "claims"
     trackers_dir = tmp_path / "sessions"
-    repo_root = tmp_path / "repo"
-    worktree = tmp_path / "worktree"
-    repo_root.mkdir()
-    worktree.mkdir()
     monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
-
-    session_lifecycle.start_session(
-        agent="codex",
-        project="enforced-planning",
-        scope="plan-42-atomic-closeout",
-        intent="implement atomic closeout lifecycle",
-        repo_root=str(repo_root),
-        worktree_path=str(worktree),
-        branch="plan-42-atomic-closeout",
-        broader_goal="Coordination Runtime Completion",
-        current_phase="atomic closeout proof",
-        plan_ref="Plan #42",
-        session_id="codex:test-session",
-        tracker_dir=trackers_dir,
+    repo_root, worktree, branch = _real_repo_with_worktree(tmp_path)
+    claim_file = _start_real_closeout_claim(
+        repo_root=repo_root,
+        worktree=worktree,
+        branch=branch,
+        claims_dir=claims_dir,
+        trackers_dir=trackers_dir,
     )
 
-    calls: list[tuple[list[str], str | None]] = []
+    with pytest.raises(ValueError, match="not integrated"):
+        session_lifecycle.close_session(
+            agent="codex",
+            project="enforced-planning",
+            scope=branch,
+        )
 
-    def _fake_run(cmd, cwd=None, capture_output=True, text=True, check=False):  # type: ignore[no-untyped-def]
-        calls.append((list(cmd), cwd))
+    assert worktree.exists()
+    assert _git(repo_root, "show-ref", "--verify", f"refs/heads/{branch}")
+    claim_payload = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
+    assert claim_payload["status"] == "active"
 
-        class Result:
-            returncode = 0
-            stdout = ""
-            stderr = ""
 
-        if cmd[:2] == ["git", "show-ref"]:
-            return Result()
-        if cmd[:3] == ["git", "worktree", "remove"]:
-            return Result()
-        if cmd[:3] == ["git", "branch", "-D"]:
-            return Result()
-        if cmd[:2] == ["git", "status"]:
-            return Result()
-        raise AssertionError(f"Unexpected command: {cmd}")
+def test_close_session_closes_branch_merged_to_default(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Positive control: a merged lane closes and keeps disposition history."""
 
-    monkeypatch.setattr(session_lifecycle.subprocess, "run", _fake_run)
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    repo_root, worktree, branch = _real_repo_with_worktree(tmp_path)
+    claim_file = _start_real_closeout_claim(
+        repo_root=repo_root,
+        worktree=worktree,
+        branch=branch,
+        claims_dir=claims_dir,
+        trackers_dir=trackers_dir,
+    )
+    _git(repo_root, "merge", "--no-ff", branch, "-m", "merge feature")
 
     payload = session_lifecycle.close_session(
         agent="codex",
         project="enforced-planning",
-        scope="plan-42-atomic-closeout",
-        worktree_path=str(worktree),
-        branch="plan-42-atomic-closeout",
+        scope=branch,
     )
 
     assert payload["action"] == "closed"
-    assert payload["worktree_action"] == "removed"
-    assert payload["branch_action"] == "deleted"
-    assert payload["released"] is True
-    assert not (claims_dir / "codex_enforced-planning_plan-42-atomic-closeout.yaml").exists()
-    assert any(cmd[:3] == ["git", "worktree", "remove"] for cmd, _ in calls)
-    assert any(cmd[:3] == ["git", "branch", "-D"] for cmd, _ in calls)
+    assert payload["disposition"] == "merged"
+    assert not worktree.exists()
+    branch_check = subprocess.run(
+        ["git", "show-ref", "--verify", f"refs/heads/{branch}"],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert branch_check.returncode != 0
+    claim_payload = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
+    assert claim_payload["status"] == "completed"
+    assert claim_payload["disposition"] == "merged"
 
 
-def test_close_session_releases_claim_even_when_worktree_already_missing(
+def test_close_session_rejects_unpushed_default_branch_before_mutation(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Closeout reruns should still release the claim when cleanup partly already happened."""
+    """Negative control: merged work remains live until canonical main is pushed."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    repo_root, worktree, branch = _real_repo_with_worktree(tmp_path)
+    _start_real_closeout_claim(
+        repo_root=repo_root,
+        worktree=worktree,
+        branch=branch,
+        claims_dir=claims_dir,
+        trackers_dir=trackers_dir,
+    )
+    remote_default_ref = "refs/remotes/origin/main"
+    _git(repo_root, "update-ref", remote_default_ref, "refs/heads/main")
+    _git(repo_root, "merge", "--no-ff", branch, "-m", "merge feature")
+
+    with pytest.raises(ValueError, match="Push the default branch before closeout"):
+        session_lifecycle.close_session(
+            agent="codex",
+            project="enforced-planning",
+            scope=branch,
+        )
+    assert worktree.exists()
+
+    _git(repo_root, "update-ref", remote_default_ref, "refs/heads/main")
+    payload = session_lifecycle.close_session(
+        agent="codex",
+        project="enforced-planning",
+        scope=branch,
+    )
+    assert payload["default_branch_pushed"] is True
+
+
+def test_close_session_keeps_canonical_root_after_worktree_removal(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """In-repo worktree paths must resolve the canonical root before removal."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    repo_root, worktree, branch = _real_repo_with_worktree(tmp_path)
+    claim_file = _start_real_closeout_claim(
+        repo_root=repo_root,
+        worktree=worktree,
+        branch=branch,
+        claims_dir=claims_dir,
+        trackers_dir=trackers_dir,
+    )
+    _git(repo_root, "merge", "--no-ff", branch, "-m", "merge feature")
+    claim_payload = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
+    claim_payload.pop("repo_root")
+    claim_file.write_text(yaml.safe_dump(claim_payload, sort_keys=False), encoding="utf-8")
+
+    payload = session_lifecycle.close_session(
+        agent="codex",
+        project="enforced-planning",
+        scope=branch,
+    )
+
+    assert payload["worktree_action"] == "removed"
+    assert payload["branch_action"] == "deleted"
+    assert repo_root.exists()
+
+
+def test_close_session_rejects_unknown_disposition(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Unknown disposition values must fail before any cleanup mutation."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    repo_root, worktree, branch = _real_repo_with_worktree(tmp_path)
+    _start_real_closeout_claim(
+        repo_root=repo_root,
+        worktree=worktree,
+        branch=branch,
+        claims_dir=claims_dir,
+        trackers_dir=trackers_dir,
+    )
+
+    with pytest.raises(ValueError, match="Unsupported worktree disposition"):
+        session_lifecycle.close_session(
+            agent="codex",
+            project="enforced-planning",
+            scope=branch,
+            disposition="forgotten",
+        )
+    assert worktree.exists()
+
+
+def test_close_session_archives_unique_branch_with_durable_recovery_ref(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A non-merge closeout may delete locally only after durable ref proof."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    repo_root, worktree, branch = _real_repo_with_worktree(tmp_path)
+    claim_file = _start_real_closeout_claim(
+        repo_root=repo_root,
+        worktree=worktree,
+        branch=branch,
+        claims_dir=claims_dir,
+        trackers_dir=trackers_dir,
+    )
+    recovery_ref = f"refs/remotes/origin/{branch}"
+    _git(repo_root, "update-ref", recovery_ref, f"refs/heads/{branch}")
+
+    payload = session_lifecycle.close_session(
+        agent="codex",
+        project="enforced-planning",
+        scope=branch,
+        disposition="archived",
+        disposition_reason="preserve the reviewed experiment without merging it",
+        recovery_ref=recovery_ref,
+    )
+
+    assert payload["disposition"] == "archived"
+    assert _git(repo_root, "show-ref", "--verify", recovery_ref)
+    claim_payload = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
+    assert claim_payload["status"] == "completed"
+    assert claim_payload["recovery_ref"] == recovery_ref
+
+
+def test_close_session_requires_durable_ref_for_retained_unique_commits(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Negative control: retained unique work needs an independent recovery ref."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    repo_root, worktree, branch = _real_repo_with_worktree(tmp_path)
+    _start_real_closeout_claim(
+        repo_root=repo_root,
+        worktree=worktree,
+        branch=branch,
+        claims_dir=claims_dir,
+        trackers_dir=trackers_dir,
+    )
+
+    with pytest.raises(ValueError, match="requires --recovery-ref"):
+        session_lifecycle.close_session(
+            agent="codex",
+            project="enforced-planning",
+            scope=branch,
+            disposition="archived",
+            disposition_reason="preserve for possible later review",
+        )
+    assert worktree.exists()
+
+
+def test_close_session_requires_explicit_unique_discard_authorization(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Negative control: abandonment never silently authorizes unique deletion."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    repo_root, worktree, branch = _real_repo_with_worktree(tmp_path)
+    _start_real_closeout_claim(
+        repo_root=repo_root,
+        worktree=worktree,
+        branch=branch,
+        claims_dir=claims_dir,
+        trackers_dir=trackers_dir,
+    )
+
+    with pytest.raises(ValueError, match="requires --allow-discard-unique"):
+        session_lifecycle.close_session(
+            agent="codex",
+            project="enforced-planning",
+            scope=branch,
+            disposition="abandoned",
+            disposition_reason="experiment rejected after review",
+        )
+    assert worktree.exists()
+
+
+def test_close_session_abandons_unique_branch_only_with_explicit_authorization(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Positive control: explicit abandonment records and performs unique deletion."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    repo_root, worktree, branch = _real_repo_with_worktree(tmp_path)
+    claim_file = _start_real_closeout_claim(
+        repo_root=repo_root,
+        worktree=worktree,
+        branch=branch,
+        claims_dir=claims_dir,
+        trackers_dir=trackers_dir,
+    )
+
+    payload = session_lifecycle.close_session(
+        agent="codex",
+        project="enforced-planning",
+        scope=branch,
+        disposition="abandoned",
+        disposition_reason="experiment rejected after explicit review",
+        allow_discard_unique=True,
+    )
+
+    assert payload["disposition"] == "abandoned"
+    assert not worktree.exists()
+    branch_check = subprocess.run(
+        ["git", "show-ref", "--verify", f"refs/heads/{branch}"],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert branch_check.returncode != 0
+    claim_payload = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
+    assert claim_payload["status"] == "completed"
+    assert claim_payload["disposition"] == "abandoned"
+
+
+def test_close_session_completes_claim_even_when_worktree_already_missing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Closeout reruns should retain completed history after partial cleanup."""
 
     claims_dir = tmp_path / "claims"
     trackers_dir = tmp_path / "sessions"
@@ -352,7 +675,10 @@ def test_close_session_releases_claim_even_when_worktree_already_missing(
 
     assert payload["worktree_action"] == "already_missing"
     assert payload["branch_action"] == "already_missing"
-    assert not (claims_dir / "codex_enforced-planning_plan-42-atomic-closeout.yaml").exists()
+    claim_file = claims_dir / "codex_enforced-planning_plan-42-atomic-closeout.yaml"
+    claim_payload = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
+    assert claim_payload["status"] == "completed"
+    assert claim_payload["disposition"] == "merged"
 
 
 def test_handoff_session_marks_lane_for_resume(

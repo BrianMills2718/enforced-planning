@@ -23,6 +23,28 @@ Items start as **unconfirmed** observations and get triaged into confirmed issue
 
 ## Open
 
+### MP-016: Atomic closeout can delete unmerged work and lose its root anchor
+
+| Field | Value |
+|-------|-------|
+| Status | `resolved` — Plan #59 |
+| Severity | critical |
+| Reported | 2026-07-09 |
+
+`session-close` currently treats a clean worktree as deletion-safe and calls
+`git branch -D` without proving integration or recording a non-merge
+disposition. A live Plan #212 closeout also removed its worktree before branch
+deletion, then failed because an updated claim lacked `repo_root` and canonical
+root resolution returned the soon-to-be-removed in-repo worktree. Plan #59 adds
+real-Git positive/negative controls, worktree-aware root resolution, and a
+validate-before-mutate merge/disposition preflight.
+
+**Resolution:** Plan #59 added real-Git merge and non-merge controls, safe
+default deletion, explicit recovery/discard evidence, in-repo canonical-root
+resolution, completed claim audit history, and installer propagation. The 44
+focused lifecycle/installer/location tests, framework self-test, ruff, and
+strict mypy checks pass.
+
 ### MP-014: Default terminology check points to a missing generated pack/generator
 
 | Field | Value |

@@ -18,6 +18,8 @@ and project-meta docs; do not treat them as competing operator handbooks.
   `scripts/meta/check_coordination_claims.py`
 - Canonical push gate for governed repos:
   `scripts/meta/check_push_safety.py` / `make push-check`
+- Canonical closeout disposition vocabulary:
+  `enforced_planning/worktree_lifecycle.yaml`
 
 The older repo-local `.claude/active-work.yaml` plus legacy
 `scripts/meta/worktree-coordination/check_claims.py` surface may still be
@@ -42,16 +44,21 @@ surfaces from them.
 
 ## Default Flow
 
-1. Keep the canonical repo checkout on `main` or `master`.
-2. Create one sibling worktree per bounded task:
-   `git worktree add ../<repo>_worktrees/<branch> -b <branch> <trunk>`.
-   In sanctioned repos prefer `make worktree BRANCH=... TASK="..." [PLAN=N]`.
+1. Keep the canonical repo checkout clean and on its canonical default branch,
+   normally `main`. Use it as the root-anchored integration/control session,
+   not as an implementation lane.
+2. Create one claimed linked worktree per bounded task inside the repo:
+   `<repo>/worktrees/<branch>/`. Ensure `worktrees/` is in `.gitignore`.
+   In sanctioned repos use
+   `make worktree BRANCH=... TASK="..." [PLAN=N]`; do not create new lanes in
+   `~/worktrees/`, `_worktrees/`, `<repo>_worktrees/`, or ad hoc sibling paths.
 3. Give each worktree one mission and one plan or one bounded temporary plan
    doc. Do not let a worktree become a second long-lived control plane.
 4. Keep generated proof artifacts inside the worktree until they are
    intentionally promoted.
-5. Merge back quickly. If a worktree starts owning root truth surfaces for
-   days, it is no longer acting like a worktree slice.
+5. Merge desired work back quickly. If a worktree starts owning root truth
+   surfaces for days without an active owner, next action, and review trigger,
+   it is no longer acting like a bounded worktree slice.
 
 ## Lane Lifecycle
 
@@ -70,7 +77,28 @@ surfaces from them.
 4. Execute, commit verified slices, and keep docs/trackers truthful.
 5. Run `make push-check` before publishing from the safe root-anchored control session.
 6. Merge/push from the safe root-anchored control session.
-7. Release the claim when the lane is done.
+7. Record the lane disposition and use `session-close` to make the claim
+   non-live, retain its completed audit record, remove the worktree, and safely
+   delete the local branch.
+
+The default disposition for completed desired work is `merged`. Every finished,
+stale, or out-of-policy lane must have one disposition before cleanup:
+
+- `merged`: intended changes are integrated into the canonical default branch
+- `active`: lane remains owned with a current next action and review trigger
+- `handoff`: another runtime or owner is expected to resume the same lane
+- `superseded`: equivalent or replacement work is already authoritative
+- `abandoned`: unique work is intentionally discarded with explicit rationale
+- `archived`: unique work has durable recovery state outside the local branch
+- `migrated`: the lane continues in a correctly located replacement worktree
+
+Cleanliness is not a disposition. A clean worktree can still contain committed
+work that is absent from the canonical default branch.
+
+The exact closeable/non-closeable vocabulary and recovery/discard classes are
+loaded from `enforced_planning/worktree_lifecycle.yaml`. Invalid, blank,
+duplicate, or overlapping configuration fails at import rather than silently
+changing closeout semantics.
 
 Mandatory rule: no live session without `plan_ref`, except explicitly marked
 unplanned emergency work. If work resumes in a new runtime, reattach it to the
@@ -182,7 +210,8 @@ Canonical lifecycle commands:
 - `session-status`: show live sessions derived from claims plus trackers
 - `session-finish`: refuse unsafe closeout and require clean or explicit handoff state
 - `session-close`: clean up a claimed lane end-to-end by removing the worktree,
-  deleting the local branch, and releasing the claim together
+  safely deleting the local branch, and releasing the claim together after
+  merge/disposition preflight
 - `create_publish_worktree.py`: create a merge/push control worktree only when
   the canonical main checkout is already clean
 
@@ -302,6 +331,51 @@ manual steps.
 
 The sanctioned closeout flow is idempotent for already-missing worktree or
 branch state so partial cleanup can be rerun safely.
+
+Atomicity does not replace integration safety. Before any mutation,
+`session-close` must establish one of these conditions:
+
+1. the local branch is already integrated into the canonical default branch;
+   or
+2. the operator supplied an explicit supported non-merge disposition and the
+   closeout preflight proved that unique commits will remain recoverable or are
+   intentionally abandoned.
+
+The default closeout path does not merge automatically. Merge and verification
+remain explicit root-anchored control-session actions. `git branch -D` must not
+be used as a substitute for merge/disposition evidence.
+
+Normal merged closeout:
+
+```bash
+make session-close BRANCH=plan-59-safe-closeout
+```
+
+Explicit archive closeout for an unmerged branch whose exact tip remains on a
+durable remote or tag ref:
+
+```bash
+make session-close \
+  BRANCH=experiment-branch \
+  WORKTREE_DISPOSITION=archived \
+  WORKTREE_DISPOSITION_REASON="preserve reviewed experiment without merging" \
+  WORKTREE_RECOVERY_REF=refs/remotes/origin/experiment-branch
+```
+
+Intentional abandonment of unique commits is exceptional and requires both a
+reason and `WORKTREE_ALLOW_DISCARD_UNIQUE=1`. `active` and `handoff` are valid
+lane dispositions but are not valid `session-close` outcomes because their
+work remains live.
+
+Successful closeout retains the claim YAML with `status: completed`, the
+disposition, default-branch result, reason, recovery ref when used, and close
+timestamp. It is no longer active coordination state. Explicit
+`--prune-completed` housekeeping may remove completed history later.
+
+Branch lifetime and worktree lifetime are separate. A substantial remote
+feature branch may remain after its inactive local worktree is removed and can
+be recreated when work resumes. Persistent worktrees are reserved for active,
+owned lanes with a plan/claim, pushed upstream, next action, and review trigger.
 
 ## Publish-Lane Rule
 

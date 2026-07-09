@@ -80,13 +80,25 @@ git worktree add <repo>/worktrees/plan<N>-<slug> -b plan-<N>-<slug>
 1. Commit in the worktree
 2. Merge to canonical branch (main)
 3. Push
-4. Remove the worktree: `git worktree remove <repo>/worktrees/plan<N>-<slug>`
-5. Delete the branch: `git branch -d plan-<N>-<slug>`
+4. Record the `merged` disposition and close the claimed lane through the
+   sanctioned `session-close` / `make worktree-remove` path
+5. Confirm the worktree was removed and the local branch was safely deleted
 6. Update the sprint tracker
 7. Begin the next slice
 
 A finished worktree that has not been merged, pushed, and removed is
 operational clutter. The cleanup step is mandatory, not optional.
+
+If a lane is intentionally not merged, it is not a normally completed slice.
+Record one explicit non-merge disposition (`active`, `handoff`, `superseded`,
+`abandoned`, `archived`, or `migrated`) with the evidence required by the
+operator guide. Never infer deletion safety from a clean checkout, and never
+mass-merge stale branches merely to make the worktree list shorter.
+
+A long-lived branch does not require a long-lived checkout. Keep the branch on
+its remote when needed; remove an inactive worktree and recreate it when work
+resumes. Keep a worktree only while the lane is actively owned and has a next
+action plus review trigger.
 
 ### Push Discipline
 

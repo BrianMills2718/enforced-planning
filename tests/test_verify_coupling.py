@@ -280,6 +280,47 @@ class TestVerifyCouplingFunction:
         called_kwargs = mock_complete.call_args.kwargs
         assert "task" in called_kwargs
 
+    def test_default_trace_id_is_unique_per_run(self):
+        """verify_coupling mints a unique default trace_id while keeping the prefix stable."""
+        judgment_data = {
+            "verdict": "CURRENT",
+            "confidence": "high",
+            "evidence": "No change.",
+            "proposed_fix": None,
+            "escalate": False,
+        }
+
+        mock_complete = MagicMock()
+        mock_complete.return_value = (VerificationJudgment.model_validate(judgment_data), MagicMock())
+
+        with patch("verify_coupling._load_llm_client", return_value=mock_complete):
+            verify_coupling(self._make_request())
+            verify_coupling(self._make_request())
+
+        first_trace_id = mock_complete.call_args_list[0].kwargs["trace_id"]
+        second_trace_id = mock_complete.call_args_list[1].kwargs["trace_id"]
+        assert first_trace_id != second_trace_id
+        assert first_trace_id.startswith("verify-src/foo.py")
+        assert second_trace_id.startswith("verify-src/foo.py")
+
+    def test_explicit_trace_id_override_is_preserved(self):
+        """verify_coupling keeps explicit trace IDs for reproducible reruns."""
+        judgment_data = {
+            "verdict": "CURRENT",
+            "confidence": "high",
+            "evidence": "No change.",
+            "proposed_fix": None,
+            "escalate": False,
+        }
+
+        mock_complete = MagicMock()
+        mock_complete.return_value = (VerificationJudgment.model_validate(judgment_data), MagicMock())
+
+        with patch("verify_coupling._load_llm_client", return_value=mock_complete):
+            verify_coupling(self._make_request(), trace_id="reproducible-trace")
+
+        assert mock_complete.call_args.kwargs["trace_id"] == "reproducible-trace"
+
     def test_returns_verification_judgment(self):
         """verify_coupling returns a VerificationJudgment instance."""
         judgment_data = {

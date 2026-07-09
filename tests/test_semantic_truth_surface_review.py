@@ -17,6 +17,7 @@ from scripts.review_truth_surface_semantic import (
     build_semantic_review_context,
     load_semantic_review_history,
     load_semantic_review_payload,
+    review_truth_surface_semantic,
 )
 from scripts.truth_surface_semantic_models import SemanticReviewReport
 
@@ -200,3 +201,75 @@ def test_load_llm_client_exports_fails_loud_without_public_api(monkeypatch) -> N
         assert "llm_client" in str(exc)
     else:  # pragma: no cover
         raise AssertionError("Expected llm_client import contract failure")
+
+
+def test_semantic_review_default_trace_id_is_unique(monkeypatch, tmp_path: Path) -> None:
+    calls: list[dict[str, object]] = []
+
+    def fake_render_prompt(**_kwargs: object) -> list[dict[str, str]]:
+        return [{"role": "user", "content": "review this"}]
+
+    def fake_call_llm_structured(*_args: object, **kwargs: object) -> tuple[SemanticReviewReport, object]:
+        calls.append(dict(kwargs))
+        report = SemanticReviewReport(overview="No findings.", findings=[])
+        return report, types.SimpleNamespace(cost=0.01, model="fake-model")
+
+    monkeypatch.setattr(
+        "scripts.review_truth_surface_semantic._load_llm_client_exports",
+        lambda: (fake_call_llm_structured, fake_render_prompt),
+    )
+    monkeypatch.setattr(
+        "scripts.review_truth_surface_semantic.build_semantic_review_context",
+        lambda config_path, *, max_evidence_chars=4000: {
+            "config_path": str(config_path),
+            "rendered_status": "ok",
+            "deterministic_issues": [],
+            "registry_summary": {},
+            "evidence_surfaces": [],
+        },
+    )
+
+    review_truth_surface_semantic(tmp_path / "truth.yaml", model="fake-model", max_budget=0.5, trace_id=None)
+    review_truth_surface_semantic(tmp_path / "truth.yaml", model="fake-model", max_budget=0.5, trace_id=None)
+
+    first_trace_id = str(calls[0]["trace_id"])
+    second_trace_id = str(calls[1]["trace_id"])
+    assert first_trace_id != second_trace_id
+    assert first_trace_id.startswith("enforced_planning.semantic_truth_surface_review.")
+    assert second_trace_id.startswith("enforced_planning.semantic_truth_surface_review.")
+
+
+def test_semantic_review_preserves_explicit_trace_id(monkeypatch, tmp_path: Path) -> None:
+    calls: list[dict[str, object]] = []
+
+    def fake_render_prompt(**_kwargs: object) -> list[dict[str, str]]:
+        return [{"role": "user", "content": "review this"}]
+
+    def fake_call_llm_structured(*_args: object, **kwargs: object) -> tuple[SemanticReviewReport, object]:
+        calls.append(dict(kwargs))
+        report = SemanticReviewReport(overview="No findings.", findings=[])
+        return report, types.SimpleNamespace(cost=0.01, model="fake-model")
+
+    monkeypatch.setattr(
+        "scripts.review_truth_surface_semantic._load_llm_client_exports",
+        lambda: (fake_call_llm_structured, fake_render_prompt),
+    )
+    monkeypatch.setattr(
+        "scripts.review_truth_surface_semantic.build_semantic_review_context",
+        lambda config_path, *, max_evidence_chars=4000: {
+            "config_path": str(config_path),
+            "rendered_status": "ok",
+            "deterministic_issues": [],
+            "registry_summary": {},
+            "evidence_surfaces": [],
+        },
+    )
+
+    review_truth_surface_semantic(
+        tmp_path / "truth.yaml",
+        model="fake-model",
+        max_budget=0.5,
+        trace_id="reproducible-review",
+    )
+
+    assert calls[0]["trace_id"] == "reproducible-review"

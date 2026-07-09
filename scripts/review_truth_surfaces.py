@@ -56,8 +56,8 @@ def main() -> int:
     parser.add_argument("--max-budget", type=float, default=0.50)
     parser.add_argument(
         "--trace-id",
-        default="enforced_planning/semantic_truth_surface_review",
-        help="Trace ID for observability",
+        default=None,
+        help="Trace ID for observability; defaults to a run-unique ID",
     )
     parser.add_argument("--dry-run", action="store_true", help="Show the resolved canonical config path")
     args = parser.parse_args()

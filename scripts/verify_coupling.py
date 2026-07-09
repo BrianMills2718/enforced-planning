@@ -22,6 +22,7 @@ import argparse
 import json
 import os
 import sys
+import uuid
 from pathlib import Path
 from typing import Literal
 
@@ -46,6 +47,14 @@ DEFAULT_MODEL = "gemini/gemini-2.5-flash"
 # stronger prose reasoning and happens much less frequently (not per-commit).
 # Override at runtime: VERIFY_COUPLING_MODEL env var or --model flag.
 DEFAULT_MAX_BUDGET = 0.05  # USD per coupling verification
+
+
+def make_trace_id(prefix: str) -> str:
+    """Mint a run-unique llm_client trace ID under a stable correlation prefix."""
+    prefix = prefix.rstrip(".")
+    if not prefix:
+        raise ValueError("trace ID prefix must not be empty")
+    return f"{prefix}.{uuid.uuid4().hex}"
 
 
 class VerificationRequest(BaseModel):
@@ -170,7 +179,9 @@ def verify_coupling(
         request: Context package for the coupling check.
         model: Model override. Defaults to DEFAULT_MODEL or VERIFY_COUPLING_MODEL env var.
         max_budget: Cost ceiling in USD. Defaults to DEFAULT_MAX_BUDGET.
-        trace_id: Optional trace ID for llm_client observability.
+        trace_id: Optional trace ID for llm_client observability. When omitted,
+            a run-unique trace ID is minted so repeatable gates do not exhaust
+            per-trace budgets across valid reruns.
 
     Returns:
         VerificationJudgment with verdict, confidence, evidence, fix, escalate.
@@ -194,7 +205,7 @@ def verify_coupling(
         ],
         response_model=VerificationJudgment,
         task="verify_validated_coupling",
-        trace_id=trace_id or f"verify-{request.coupling_id[:40]}",
+        trace_id=trace_id or make_trace_id(f"verify-{request.coupling_id[:40]}"),
         max_budget=max_budget,
     )
     return judgment

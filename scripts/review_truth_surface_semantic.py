@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -33,6 +34,15 @@ from scripts.truth_surface_semantic_models import SemanticReviewReport  # noqa: 
 
 DEFAULT_OUTPUT_JSON = Path("docs/ops/semantic_truth_surface_review.json")
 DEFAULT_HISTORY_JSON = Path("docs/ops/semantic_truth_surface_review_history.json")
+DEFAULT_TRACE_ID_PREFIX = "enforced_planning.semantic_truth_surface_review"
+
+
+def make_trace_id(prefix: str) -> str:
+    """Mint a run-unique llm_client trace ID under a stable correlation prefix."""
+    prefix = prefix.rstrip(".")
+    if not prefix:
+        raise ValueError("trace ID prefix must not be empty")
+    return f"{prefix}.{uuid.uuid4().hex}"
 
 
 def _resolve_repo_root_from_config(config_path: Path) -> Path:
@@ -173,12 +183,13 @@ def review_truth_surface_semantic(
     *,
     model: str,
     max_budget: float,
-    trace_id: str,
+    trace_id: str | None,
     max_evidence_chars: int = 4000,
 ) -> tuple[SemanticReviewReport, dict[str, Any]]:
     """Run the semantic review and return the parsed report plus metadata."""
     call_llm_structured, render_prompt = _load_llm_client_exports()
     context = build_semantic_review_context(config_path, max_evidence_chars=max_evidence_chars)
+    effective_trace_id = trace_id or make_trace_id(DEFAULT_TRACE_ID_PREFIX)
     messages = render_prompt(
         template_path=PROMPT_PATH,
         rendered_status=context["rendered_status"],
@@ -193,12 +204,12 @@ def review_truth_surface_semantic(
         messages,
         response_model=SemanticReviewReport,
         task="enforced_planning.truth_surface.semantic_review",
-        trace_id=trace_id,
+        trace_id=effective_trace_id,
         max_budget=max_budget,
     )
     payload = {
         "model": model,
-        "trace_id": trace_id,
+        "trace_id": effective_trace_id,
         "max_budget": max_budget,
         "config_path": context["config_path"],
         "deterministic_issues": context["deterministic_issues"],
@@ -262,8 +273,8 @@ def main() -> int:
     )
     parser.add_argument(
         "--trace-id",
-        default="enforced_planning/semantic_truth_surface_review",
-        help="Trace ID for shared observability",
+        default=None,
+        help="Trace ID for shared observability; defaults to a run-unique ID",
     )
     parser.add_argument(
         "--max-evidence-chars",

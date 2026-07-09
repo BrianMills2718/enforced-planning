@@ -86,6 +86,18 @@ changes occur in a separate `llm_client` worktree after this branch lands.
 - `Makefile`
 - `scripts/session_close.py`
 - `scripts/meta/session_close.py`
+- `scripts/check_coordination_claims.py`
+- `scripts/meta/check_coordination_claims.py`
+- `scripts/session_finish.py`
+- `scripts/meta/session_finish.py`
+- `scripts/session_heartbeat.py`
+- `scripts/meta/session_heartbeat.py`
+- `scripts/session_start.py`
+- `scripts/meta/session_start.py`
+- `scripts/session_status.py`
+- `scripts/meta/session_status.py`
+- `scripts/worktree-coordination/safe_worktree_remove.py`
+- `scripts/meta/worktree-coordination/safe_worktree_remove.py`
 - `scripts/install_governed_repo.py`
 - `templates/Makefile.worktree.block.template`
 - `tests/test_session_cli.py`
@@ -128,6 +140,7 @@ changes occur in a separate `llm_client` worktree after this branch lands.
 | `pytest -q tests/test_session_cli.py` | Session lifecycle behavior and idempotence |
 | `pytest -q tests/test_install_governed_repo.py tests/test_create_worktree.py` | Installer and location contract |
 | `python scripts/self_test.py` | Framework-wide source/install consistency |
+| worktree-only installer test with Ruff | Every portable Python file copied into consumers passes Ruff, not only the edited subset |
 | `PYTHONPATH=. pytest -q` | Full regression suite; known MP-015 baseline failures must not increase |
 
 ---

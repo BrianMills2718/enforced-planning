@@ -460,6 +460,23 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
     assert "--disposition" in close_help.stdout
     assert "--recovery-ref" in close_help.stdout
 
+    portable_lint = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "ruff",
+            "check",
+            str(tmp_path / "enforced_planning"),
+            str(tmp_path / "scripts" / "meta"),
+            "--ignore=F401",
+        ],
+        cwd=str(PROJECT_META_ROOT),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert portable_lint.returncode == 0, portable_lint.stdout + portable_lint.stderr
+
 
 def test_install_governed_repo_worktree_only_requires_existing_makefile(
     tmp_path: Path,

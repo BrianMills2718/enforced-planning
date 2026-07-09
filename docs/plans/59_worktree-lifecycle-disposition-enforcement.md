@@ -1,6 +1,6 @@
 # Plan #59: Worktree lifecycle disposition enforcement
 
-**Status:** In Progress
+**Status:** Complete
 **Type:** implementation
 **Priority:** Critical
 **phase_ref:** "Phase 9 fleet adoption"
@@ -105,7 +105,7 @@ changes occur in a separate `llm_client` worktree after this branch lands.
 | 3 | Add a merged-branch positive control and non-merge validation controls. | Complete |
 | 4 | Implement read-only preflight and safe branch deletion. | Complete |
 | 5 | Update CLI/templates/operator docs and installer propagation. | Complete |
-| 6 | Run focused and full verification; commit and merge the framework slice. | In progress |
+| 6 | Run focused and full verification; commit and merge the framework slice. | Complete |
 
 ---
 

@@ -8,18 +8,18 @@ validated non-merge disposition.
 
 ## Acceptance Criteria
 
-- [ ] Closeout validates every precondition before mutating worktree, branch,
+- [x] Closeout validates every precondition before mutating worktree, branch,
       claim, or tracker state.
-- [ ] A clean unmerged branch is rejected by a negative-control test.
-- [ ] A branch merged into the canonical default branch closes atomically in a
+- [x] A clean unmerged branch is rejected by a negative-control test.
+- [x] A branch merged into the canonical default branch closes atomically in a
       positive-control test.
-- [ ] A supported explicit non-merge disposition has durable recovery evidence
+- [x] A supported explicit non-merge disposition has durable recovery evidence
       before local branch deletion.
-- [ ] Default closeout uses safe branch deletion and never treats `-D` as merge
+- [x] Default closeout uses safe branch deletion and never treats `-D` as merge
       evidence.
-- [ ] Operator and continuous-execution docs distinguish worktree lifecycle
+- [x] Operator and continuous-execution docs distinguish worktree lifecycle
       from branch lifecycle and use `<repo>/worktrees/<branch>/`.
-- [ ] Installer tests prove governed consumers receive the same behavior.
+- [x] Installer tests prove governed consumers receive the same behavior.
 
 ## Constraints
 
@@ -30,7 +30,7 @@ validated non-merge disposition.
 
 ## Current Phase
 
-Full framework verification before commit, merge, and consumer rollout.
+Framework merged and pushed; consumer rollout is the next cross-repo slice.
 
 ## Completed
 
@@ -59,10 +59,10 @@ Full framework verification before commit, merge, and consumer rollout.
   verification, strict `1|true|yes` parsing for destructive Make authorization,
   a real abandonment positive control, and a fail-loud configurable lifecycle
   vocabulary installed from `enforced_planning/worktree_lifecycle.yaml`.
+- 2026-07-09: Commit `eb82823` merged to `main` as `d1a1bee`; both the topic
+  branch and updated default branch were pushed to `origin`.
 
 ## Next
 
-1. Commit, push, merge, and push the verified framework slice.
-2. Mark Plan #59 complete after the merge is observed on `main`.
-3. Propagate the canonical framework into a claimed `llm_client` worktree.
-4. Re-grade Plan #212 coverage from live consumer evidence.
+1. Propagate the canonical framework into a claimed `llm_client` worktree.
+2. Re-grade Plan #212 coverage from live consumer evidence.

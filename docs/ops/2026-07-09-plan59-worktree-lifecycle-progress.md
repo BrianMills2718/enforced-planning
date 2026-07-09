@@ -61,6 +61,13 @@ Framework merged and pushed; consumer rollout is the next cross-repo slice.
   vocabulary installed from `enforced_planning/worktree_lifecycle.yaml`.
 - 2026-07-09: Commit `eb82823` merged to `main` as `d1a1bee`; both the topic
   branch and updated default branch were pushed to `origin`.
+- 2026-07-09: A downstream `llm_client` Ruff run exposed `E402` in the installed
+  coordination-claims facade. The earlier Ruff command covered selected edited
+  files but omitted this installer-propagated wrapper. Added the intentional
+  post-path-setup import suppressions and added a test that installs then lints
+  the complete portable worktree-only Python surface. A broad `make lint` probe
+  found 123 pre-existing repository-wide errors, so it is recorded separately
+  rather than misrepresented as a Plan #59 regression.
 
 ## Next
 

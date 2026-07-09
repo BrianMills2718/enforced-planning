@@ -21,7 +21,7 @@ repo_root = _find_repo_root()
 if str(repo_root) not in sys.path:
     sys.path.insert(0, str(repo_root))
 
-from enforced_planning import coordination_claims as _impl
+from enforced_planning import coordination_claims as _impl  # noqa: E402
 
 
 CLAIMS_DIR = _impl.CLAIMS_DIR

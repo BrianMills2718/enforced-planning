@@ -23,6 +23,23 @@ Items start as **unconfirmed** observations and get triaged into confirmed issue
 
 ## Open
 
+### MP-017: Repository-wide Ruff target has 123 baseline errors
+
+| Field | Value |
+|-------|-------|
+| Status | `confirmed` |
+| Severity | medium |
+| Reported | 2026-07-09 |
+
+`make lint` reports 123 errors, primarily `E402` in package-backed
+compatibility facades plus six fixable `F541` findings. It therefore cannot
+currently serve as a truthful whole-repository gate. Until a dedicated cleanup
+restores the gate, plans must state and run the complete affected and
+installer-propagated Python closure instead of an arbitrary edited subset.
+
+**Next:** Create a repository-wide wrapper lint cleanup plan, then restore
+`make lint` as an enforceable gate.
+
 ### MP-016: Atomic closeout can delete unmerged work and lose its root anchor
 
 | Field | Value |

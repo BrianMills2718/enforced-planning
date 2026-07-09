@@ -133,6 +133,10 @@ def test_install_governed_repo_write_bootstraps_minimum_repo_and_passes_audit(
     assert (tmp_path / "enforced_planning" / "notebook_registry_validation.py").exists()
     assert (tmp_path / "enforced_planning" / "plan_validation.py").exists()
     assert (tmp_path / "enforced_planning" / "push_safety.py").exists()
+    assert (tmp_path / "enforced_planning" / "session_contracts.py").exists()
+    assert (tmp_path / "enforced_planning" / "session_lifecycle.py").exists()
+    assert (tmp_path / "enforced_planning" / "worktree_lifecycle.yaml").exists()
+    assert (tmp_path / "enforced_planning" / "worktree_paths.py").exists()
     assert (tmp_path / "scripts" / "meta" / "audit_dead_code.py").exists()
     assert (tmp_path / "scripts" / "meta" / "check_dead_code.py").exists()
     assert (tmp_path / "scripts" / "meta" / "check_push_safety.py").exists()
@@ -182,6 +186,9 @@ def test_install_governed_repo_write_bootstraps_minimum_repo_and_passes_audit(
     assert 'SESSION_GOAL is required' in makefile_text
     assert 'SESSION_PHASE is required' in makefile_text
     assert '--claim-type program' in makefile_text
+    assert "WORKTREE_DISPOSITION ?= merged" in makefile_text
+    assert '--disposition "$(WORKTREE_DISPOSITION)"' in makefile_text
+    assert "$(filter 1 true yes,$(WORKTREE_ALLOW_DISCARD_UNIQUE))" in makefile_text
     sync_result = subprocess.run(
         [
             sys.executable,
@@ -379,7 +386,13 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
         [
             "install:enforced_planning/__init__.py",
             "install:enforced_planning/concern_routing.py",
+            "install:enforced_planning/coordination_claims.py",
+            "install:enforced_planning/doc_authority.py",
             "install:enforced_planning/push_safety.py",
+            "install:enforced_planning/session_contracts.py",
+            "install:enforced_planning/session_lifecycle.py",
+            "install:enforced_planning/worktree_lifecycle.yaml",
+            "install:enforced_planning/worktree_paths.py",
             "install:scripts/meta/check_coordination_claims.py",
             "install:scripts/meta/check_push_safety.py",
             "install:scripts/meta/session_close.py",
@@ -404,6 +417,10 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
     assert (tmp_path / "scripts" / "meta" / "session_status.py").exists()
     assert (tmp_path / "scripts" / "meta" / "session_finish.py").exists()
     assert (tmp_path / "scripts" / "meta" / "session_close.py").exists()
+    assert (tmp_path / "enforced_planning" / "session_contracts.py").exists()
+    assert (tmp_path / "enforced_planning" / "session_lifecycle.py").exists()
+    assert (tmp_path / "enforced_planning" / "worktree_lifecycle.yaml").exists()
+    assert (tmp_path / "enforced_planning" / "worktree_paths.py").exists()
     assert (
         tmp_path / "scripts" / "meta" / "worktree-coordination" / "create_worktree.py"
     ).exists()
@@ -428,6 +445,20 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
     assert "session-start:" in makefile_text
     assert "session-finish:" in makefile_text
     assert "session-close:" in makefile_text
+    assert "WORKTREE_DISPOSITION ?= merged" in makefile_text
+    assert '--disposition "$(WORKTREE_DISPOSITION)"' in makefile_text
+    assert "$(filter 1 true yes,$(WORKTREE_ALLOW_DISCARD_UNIQUE))" in makefile_text
+
+    close_help = subprocess.run(
+        [sys.executable, str(tmp_path / "scripts" / "meta" / "session_close.py"), "--help"],
+        cwd=str(tmp_path),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert close_help.returncode == 0, close_help.stdout + close_help.stderr
+    assert "--disposition" in close_help.stdout
+    assert "--recovery-ref" in close_help.stdout
 
 
 def test_install_governed_repo_worktree_only_requires_existing_makefile(

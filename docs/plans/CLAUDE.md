@@ -62,6 +62,7 @@ See `ROADMAP.md` for the full phase map and recommended priority order.
 | 56 | Modality-Aware Planning Protocol (`56_modality-aware-planning-protocol.md`) | High | ✅ Complete | Design-plan skill folded into canonical planning methodology |
 | 57 | Plan Status Index Parser Compatibility (`57_plan-status-index-parser-compatibility.md`) | High | ✅ Complete | sync_plan_status parser now supports current Implementation Plans index |
 | 58 | Ops Archive Centralization (`58_ops-archive-centralization.md`) | Medium | ✅ Complete | Completed ops sprint notes moved to central archive |
+| 59 | Worktree Lifecycle Disposition Enforcement (`59_worktree-lifecycle-disposition-enforcement.md`) | Critical | 🚧 In Progress | Merge-or-disposition preflight and safe closeout propagation |
 
 ## Status Key
 

@@ -358,6 +358,64 @@ def test_run_demo_rejects_tampered_verifier(tmp_path: Path) -> None:
     assert exc_info.value.path == "Makefile"
 
 
+def test_run_demo_rejects_tampered_loop_spec(tmp_path: Path) -> None:
+    """Swapping the verifier selector in loop-spec.json fails before any run.
+
+    The loop spec both names the verifier command and lists the guarded-file
+    hashes, so it is the root of the verifier trust chain. Anchoring its digest
+    in the install receipt closes the bypass where an attacker points the
+    verifier at an always-passing command instead of tampering a guarded file.
+    """
+
+    spec = _spec(tmp_path)
+    materialize_cleanroom(spec)
+    loop_spec_path = spec.root / "loop-spec.json"
+    payload = json.loads(loop_spec_path.read_text(encoding="utf-8"))
+    payload["verifier"]["command"] = ["true"]
+    payload["require_initial_failure"] = False
+    loop_spec_path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+
+    with pytest.raises(CleanroomError) as exc_info:
+        run_demo_loop(spec.root)
+
+    assert exc_info.value.code == "loop_spec_integrity_failed"
+    assert exc_info.value.path == "loop-spec.json"
+
+
+def test_verify_flags_tampered_loop_spec(tmp_path: Path) -> None:
+    """Verification reports a verifier-selector tamper as an integrity error."""
+
+    spec = _spec(tmp_path)
+    materialize_cleanroom(spec)
+    loop_spec_path = spec.root / "loop-spec.json"
+    payload = json.loads(loop_spec_path.read_text(encoding="utf-8"))
+    payload["verifier"]["command"] = ["true"]
+    loop_spec_path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+
+    report = verify_cleanroom(spec.root, projects_root=spec.projects_root)
+
+    assert report.verdict == "fail"
+    assert any(finding.check_id == "verifier_chain_integrity" for finding in report.findings)
+
+
+def test_verify_root_inside_projects_root_does_not_crash(tmp_path: Path) -> None:
+    """Verifying a root inside the projects workspace reports, never raises.
+
+    The re-render path must not depend on the workspace-location guard; it only
+    needs the expected file names, so it skips that check instead of hardcoding
+    a home projects root that could raise mid-verification.
+    """
+
+    projects_root = tmp_path / "workspace" / "projects"
+    inside_root = projects_root / "cleanroom"
+    inside_root.mkdir(parents=True)
+
+    report = verify_cleanroom(inside_root, projects_root=projects_root)
+
+    assert report.verdict == "fail"
+    assert any(finding.check_id == "root_external" for finding in report.findings)
+
+
 def test_run_demo_records_exact_worker_action_failure(tmp_path: Path) -> None:
     """A failed declarative precondition remains diagnosable in the receipt."""
 

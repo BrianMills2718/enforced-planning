@@ -74,15 +74,23 @@ class CleanroomSpec:
         component_source: str = "local-enforced-planning",
         policy_pack_name: str = "example-policy-pack",
         consumer_projects: list[dict[str, str]] | None = None,
+        _skip_root_location_check: bool = False,
     ) -> "CleanroomSpec":
-        """Validate user inputs and return a normalized clean-room spec."""
+        """Validate user inputs and return a normalized clean-room spec.
+
+        ``_skip_root_location_check`` is set only for re-rendering an already
+        materialized tree, where the workspace-location guard is irrelevant
+        (nothing is written) and would otherwise depend on a projects root the
+        caller may not have supplied.
+        """
 
         revision = component_revision.strip()
         if not SAFE_SCALAR_RE.fullmatch(revision):
             raise CleanroomError("invalid_component_revision", "component_revision must be a single safe scalar")
         normalized_root = _resolve_path(root)
         normalized_projects_root = _resolve_path(projects_root or Path.home() / "projects")
-        _require_outside_projects_root(normalized_root, normalized_projects_root)
+        if not _skip_root_location_check:
+            _require_outside_projects_root(normalized_root, normalized_projects_root)
         instance = instance_id.strip()
         if not IDENTIFIER_RE.fullmatch(instance):
             raise CleanroomError("invalid_instance_id", "instance_id must be a lowercase portable identifier")
@@ -194,6 +202,7 @@ class InstallReceipt:
     component_revision: str
     owned_files: list[str]
     owned_directories: list[str]
+    owned_file_digests: dict[str, str] = field(default_factory=dict)
     verdict: Literal["materialized"] = "materialized"
 
     def unsigned_dict(self) -> dict[str, Any]:
@@ -206,6 +215,7 @@ class InstallReceipt:
             "component_revision": self.component_revision,
             "owned_files": self.owned_files,
             "owned_directories": self.owned_directories,
+            "owned_file_digests": self.owned_file_digests,
             "verdict": self.verdict,
         }
 
@@ -226,6 +236,7 @@ class InstallReceipt:
             component_revision=str(payload["component_revision"]),
             owned_files=[str(item) for item in payload.get("owned_files", [])],
             owned_directories=[str(item) for item in payload.get("owned_directories", [])],
+            owned_file_digests={str(key): str(value) for key, value in dict(payload.get("owned_file_digests", {})).items()},
         )
 
 
@@ -548,6 +559,7 @@ def materialize_cleanroom(spec: CleanroomSpec) -> InstallReceipt:
         component_revision=spec.component_revision,
         owned_files=sorted(files),
         owned_directories=plan.directories,
+        owned_file_digests={relative_path: _sha256(content) for relative_path, content in files.items()},
     )
     receipt_path = _receipt_path(spec.root)
     receipt_path.parent.mkdir(parents=True, exist_ok=True)
@@ -569,6 +581,7 @@ def verify_cleanroom(root: str | Path, *, projects_root: str | Path | None = Non
         "no_secret_sentinel",
         "no_personal_sentinels",
         "no_workspace_symlinks",
+        "verifier_chain_integrity",
     ]
     findings: list[Finding] = []
 
@@ -595,6 +608,7 @@ def verify_cleanroom(root: str | Path, *, projects_root: str | Path | None = Non
     receipt = _load_receipt(normalized_root, findings)
     if receipt is not None:
         findings.extend(_validate_receipt_paths(normalized_root, receipt))
+        findings.extend(_verifier_chain_findings(normalized_root, receipt))
 
     expected_files = set(_render_files_for_existing(normalized_root, receipt).keys())
     for relative_path in sorted(expected_files | {RECEIPT_RELATIVE_PATH}):
@@ -623,6 +637,30 @@ def verify_cleanroom(root: str | Path, *, projects_root: str | Path | None = Non
 
     findings.extend(_scan_tree(normalized_root, normalized_projects_root))
     return VerificationReport(operation="verify", root=str(normalized_root), checks=checks, findings=findings)
+
+
+def _verifier_chain_findings(root: Path, receipt: InstallReceipt) -> list[Finding]:
+    """Flag a materialized loop spec whose content diverged from the receipt digest.
+
+    The loop spec is never legitimately mutated by a run (only repair-target
+    files change), so a content mismatch means the verifier selector was
+    tampered after materialization.
+    """
+
+    expected = receipt.owned_file_digests.get(LOOP_SPEC_RELATIVE_PATH)
+    if expected is None:
+        return []
+    target = _safe_join(root, LOOP_SPEC_RELATIVE_PATH)
+    if target.is_file() and _sha256(target.read_text(encoding="utf-8")) != expected:
+        return [
+            Finding(
+                check_id="verifier_chain_integrity",
+                severity="error",
+                message="loop spec content does not match the recorded install receipt digest",
+                path=LOOP_SPEC_RELATIVE_PATH,
+            )
+        ]
+    return []
 
 
 def _declared_project_ids(path: Path) -> list[str]:
@@ -748,6 +786,7 @@ def run_demo_loop(
     if install_receipt is None or findings:
         first = findings[0]
         raise CleanroomError(first.check_id, first.message, path=first.path)
+    _verify_loop_spec_integrity(normalized_root, install_receipt)
     loop_spec = load_loop_spec(normalized_root)
     iteration_limit = loop_spec.max_iterations if max_iterations is None else max_iterations
     if iteration_limit < 0:
@@ -916,6 +955,31 @@ def verify_loop_trace(trace_path: str | Path) -> LoopTraceVerification:
     return LoopTraceVerification("verify-trace", str(normalized_path), findings)
 
 
+def _verify_loop_spec_integrity(root: Path, receipt: InstallReceipt) -> None:
+    """Fail before trusting the loop spec if its content diverges from the receipt.
+
+    The loop spec both selects the verifier command and declares the guarded-file
+    hash list, so it is the root of the verifier trust chain. Anchoring its
+    content digest in the install receipt closes the asymmetry where a tampered
+    verifier *script* was detected but a tampered verifier *selector* was not.
+    """
+
+    expected = receipt.owned_file_digests.get(LOOP_SPEC_RELATIVE_PATH)
+    if expected is None:
+        raise CleanroomError(
+            "loop_spec_integrity_unanchored",
+            "install receipt records no loop-spec digest to anchor verifier integrity",
+            path=LOOP_SPEC_RELATIVE_PATH,
+        )
+    target = _safe_join(root, LOOP_SPEC_RELATIVE_PATH)
+    if not target.is_file() or _sha256(target.read_text(encoding="utf-8")) != expected:
+        raise CleanroomError(
+            "loop_spec_integrity_failed",
+            "loop spec content does not match the recorded install receipt digest",
+            path=LOOP_SPEC_RELATIVE_PATH,
+        )
+
+
 def _verify_guarded_files(root: Path, guarded_files: list[GuardedFile]) -> None:
     """Fail before verification when a declared verifier source has changed."""
 
@@ -1034,6 +1098,7 @@ def _register_owned_file(root: Path, receipt: InstallReceipt, relative_path: str
         component_revision=receipt.component_revision,
         owned_files=sorted([*receipt.owned_files, relative_path]),
         owned_directories=receipt.owned_directories,
+        owned_file_digests=receipt.owned_file_digests,
     )
     _receipt_path(root).write_text(json.dumps(updated.to_dict(), indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
@@ -1120,7 +1185,7 @@ def _render_files_for_existing(root: Path, receipt: InstallReceipt | None) -> di
     revision = receipt.component_revision if receipt is not None else "unknown"
     config_path = root / CONSUMER_CONFIG_RELATIVE_PATH
     metadata = load_consumer_config(config_path) if config_path.exists() else {}
-    spec = CleanroomSpec.build(root=root, component_revision=revision, projects_root=Path.home() / "projects", **metadata)
+    spec = CleanroomSpec.build(root=root, component_revision=revision, _skip_root_location_check=True, **metadata)
     return _render_files(spec)
 
 

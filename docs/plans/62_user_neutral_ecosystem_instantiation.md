@@ -91,10 +91,15 @@ Required invariants:
 
 ## Current Slice Disposition
 
-The first implementation wedge is complete: neutral metadata is validated,
-captured in generated output, and rejected when it contains personal sentinels.
-Project-inventory parameterization and an independent consumer usability
-exercise remain the next increment.
+Neutral metadata validation, project-inventory parameterization, and generic
+placeholder-project materialization are complete: a consumer config is
+validated, captured in generated output, rejected when it contains personal
+sentinels or unsafe identifiers, and non-default inventories materialize
+matching placeholder projects that pass the root verifier (commit a3a5dbc). The
+remaining increment is a genuinely independent consumer usability exercise (run
+by a clean session or another person, not the maintainer suite) and real
+project source/build adapters replacing the placeholders; the independent
+onboarding criterion stays graded C until then.
 
 ## Evidence Grades At Start
 

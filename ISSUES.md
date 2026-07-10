@@ -299,6 +299,13 @@ and unpack `(judgment, _llm_result)` tuple. Updated 3 test mocks. 288 tests pass
 `PYTHONPATH=/home/brian/projects/enforced-planning pytest -q` after Plan #62
 reported 538 passed, 1 skipped, and 8 failed. Seven failures are governed-repo
 classification/read-gating fixture expectations; one is legacy
-`<repo>_worktrees/<branch>` canonical-link fallback. The Plan #62 targeted suite
-passes 29/29. Diagnose these separately before claiming the entire repository
-green.
+`<repo>_worktrees/<branch>` canonical-link fallback. Diagnose these separately
+before claiming the entire repository green.
+
+Update 2026-07-09 (audit): the failing count is not stable — a full-suite run
+also surfaced up to four additional `tests/test_agents_sync.py` failures (total
+8–12) that do not reproduce when that file is run alone, indicating a
+test-isolation/ordering issue in the agents-sync fixtures. Still unrelated to
+the clean-room work. The clean-room targeted suite passes 30/30 (three new
+audit negative controls: tampered loop-spec on run and verify, and a
+root-inside-projects verify that no longer crashes).

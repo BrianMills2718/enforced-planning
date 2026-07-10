@@ -608,7 +608,7 @@ def verify_cleanroom(root: str | Path, *, projects_root: str | Path | None = Non
     receipt = _load_receipt(normalized_root, findings)
     if receipt is not None:
         findings.extend(_validate_receipt_paths(normalized_root, receipt))
-        findings.extend(_verifier_chain_findings(normalized_root, receipt))
+        findings.extend(_verifier_chain_findings(normalized_root))
 
     expected_files = set(_render_files_for_existing(normalized_root, receipt).keys())
     for relative_path in sorted(expected_files | {RECEIPT_RELATIVE_PATH}):
@@ -639,24 +639,22 @@ def verify_cleanroom(root: str | Path, *, projects_root: str | Path | None = Non
     return VerificationReport(operation="verify", root=str(normalized_root), checks=checks, findings=findings)
 
 
-def _verifier_chain_findings(root: Path, receipt: InstallReceipt) -> list[Finding]:
-    """Flag a materialized loop spec whose content diverged from the receipt digest.
+def _verifier_chain_findings(root: Path) -> list[Finding]:
+    """Flag a loop spec that diverges from the executing component contract.
 
     The loop spec is never legitimately mutated by a run (only repair-target
     files change), so a content mismatch means the verifier selector was
     tampered after materialization.
     """
 
-    expected = receipt.owned_file_digests.get(LOOP_SPEC_RELATIVE_PATH)
-    if expected is None:
-        return []
+    expected = _sha256(_loop_spec_json())
     target = _safe_join(root, LOOP_SPEC_RELATIVE_PATH)
     if target.is_file() and _sha256(target.read_text(encoding="utf-8")) != expected:
         return [
             Finding(
                 check_id="verifier_chain_integrity",
                 severity="error",
-                message="loop spec content does not match the recorded install receipt digest",
+                message="loop spec content does not match the executing component's canonical contract",
                 path=LOOP_SPEC_RELATIVE_PATH,
             )
         ]
@@ -786,7 +784,7 @@ def run_demo_loop(
     if install_receipt is None or findings:
         first = findings[0]
         raise CleanroomError(first.check_id, first.message, path=first.path)
-    _verify_loop_spec_integrity(normalized_root, install_receipt)
+    _verify_loop_spec_integrity(normalized_root)
     loop_spec = load_loop_spec(normalized_root)
     iteration_limit = loop_spec.max_iterations if max_iterations is None else max_iterations
     if iteration_limit < 0:
@@ -955,27 +953,21 @@ def verify_loop_trace(trace_path: str | Path) -> LoopTraceVerification:
     return LoopTraceVerification("verify-trace", str(normalized_path), findings)
 
 
-def _verify_loop_spec_integrity(root: Path, receipt: InstallReceipt) -> None:
-    """Fail before trusting the loop spec if its content diverges from the receipt.
+def _verify_loop_spec_integrity(root: Path) -> None:
+    """Fail before trusting a loop spec not anchored by executing component code.
 
     The loop spec both selects the verifier command and declares the guarded-file
-    hash list, so it is the root of the verifier trust chain. Anchoring its
-    content digest in the install receipt closes the asymmetry where a tampered
-    verifier *script* was detected but a tampered verifier *selector* was not.
+    hash list, so it is the root of the generated verifier chain. Comparing it
+    with the canonical contract rendered by the executing component avoids
+    trusting a receipt that an artifact-level attacker can also recompute.
     """
 
-    expected = receipt.owned_file_digests.get(LOOP_SPEC_RELATIVE_PATH)
-    if expected is None:
-        raise CleanroomError(
-            "loop_spec_integrity_unanchored",
-            "install receipt records no loop-spec digest to anchor verifier integrity",
-            path=LOOP_SPEC_RELATIVE_PATH,
-        )
+    expected = _sha256(_loop_spec_json())
     target = _safe_join(root, LOOP_SPEC_RELATIVE_PATH)
     if not target.is_file() or _sha256(target.read_text(encoding="utf-8")) != expected:
         raise CleanroomError(
             "loop_spec_integrity_failed",
-            "loop spec content does not match the recorded install receipt digest",
+            "loop spec content does not match the executing component's canonical contract",
             path=LOOP_SPEC_RELATIVE_PATH,
         )
 

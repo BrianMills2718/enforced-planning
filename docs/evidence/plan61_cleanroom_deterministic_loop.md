@@ -59,12 +59,13 @@ selector (`verifier.command -> ["true"]`, `require_initial_failure -> false`)
 produced a passing `run-demo` and a passing `verify-trace` while the real
 `make verify` still failed.
 
-Fix: the install receipt now records `owned_file_digests` for every generated
-file. `run_demo_loop` verifies the `loop-spec.json` digest before trusting the
-spec (`loop_spec_integrity_failed`), and `verify_cleanroom` reports a tampered
-selector as `verifier_chain_integrity`. Negative controls
+Fix: the install receipt records `owned_file_digests` for generated-file drift,
+but verifier authorization is anchored separately: `run_demo_loop` compares
+`loop-spec.json` with the canonical contract rendered by the executing
+component before trusting it (`loop_spec_integrity_failed`). `verify_cleanroom`
+reports divergence as `verifier_chain_integrity`. Negative controls
 `test_run_demo_rejects_tampered_loop_spec` and
-`test_verify_flags_tampered_loop_spec` cover both surfaces. The digest anchor is
-still an unkeyed checksum (an editor who also rewrites the receipt and recomputes
-its digest is out of scope, as above), but the leaf-vs-selector asymmetry is
-closed: tampering any link in the verifier trust chain is now detected.
+`test_verify_flags_tampered_loop_spec` cover unilateral selector tampering;
+`test_run_demo_rejects_joint_loop_spec_and_receipt_forgery` proves that rewriting
+the mutable receipt and recomputing its checksum cannot authorize a forged
+selector. The executing component is the explicit local root of trust.

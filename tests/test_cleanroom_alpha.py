@@ -382,6 +382,28 @@ def test_run_demo_rejects_tampered_loop_spec(tmp_path: Path) -> None:
     assert exc_info.value.path == "loop-spec.json"
 
 
+def test_run_demo_rejects_joint_loop_spec_and_receipt_forgery(tmp_path: Path) -> None:
+    """Recomputing the mutable receipt cannot authorize a forged verifier selector."""
+
+    spec = _spec(tmp_path)
+    materialize_cleanroom(spec)
+    loop_spec_path = spec.root / "loop-spec.json"
+    loop_payload = json.loads(loop_spec_path.read_text(encoding="utf-8"))
+    loop_payload["verifier"]["command"] = ["true"]
+    loop_payload["require_initial_failure"] = False
+    loop_spec_path.write_text(json.dumps(loop_payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    receipt_path = spec.root / RECEIPT_RELATIVE_PATH
+    receipt_payload = json.loads(receipt_path.read_text(encoding="utf-8"))
+    receipt_payload["owned_file_digests"]["loop-spec.json"] = hashlib.sha256(loop_spec_path.read_bytes()).hexdigest()
+    receipt_path.write_text(json.dumps(_resign_receipt(receipt_payload), indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    with pytest.raises(CleanroomError) as exc_info:
+        run_demo_loop(spec.root)
+
+    assert exc_info.value.code == "loop_spec_integrity_failed"
+
+
 def test_verify_flags_tampered_loop_spec(tmp_path: Path) -> None:
     """Verification reports a verifier-selector tamper as an integrity error."""
 

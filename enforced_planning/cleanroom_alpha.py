@@ -58,6 +58,7 @@ class CleanroomSpec:
     projects_root: Path = field(default_factory=lambda: Path(os.environ.get("PROJECTS_ROOT", str(Path.home() / "projects"))))
     component_source: str = "local-enforced-planning"
     policy_pack_name: str = "example-policy-pack"
+    consumer_projects: tuple[tuple[str, str], ...] = (("shared-lib", "projects/shared-lib"), ("hello-app", "projects/hello-app"))
 
     @classmethod
     def build(
@@ -69,6 +70,7 @@ class CleanroomSpec:
         projects_root: str | Path | None = None,
         component_source: str = "local-enforced-planning",
         policy_pack_name: str = "example-policy-pack",
+        consumer_projects: list[dict[str, str]] | None = None,
     ) -> "CleanroomSpec":
         """Validate user inputs and return a normalized clean-room spec."""
 
@@ -85,6 +87,7 @@ class CleanroomSpec:
         policy = policy_pack_name.strip()
         if not source or not policy:
             raise CleanroomError("missing_consumer_metadata", "component_source and policy_pack_name are required")
+        projects = _validate_consumer_projects(consumer_projects)
         return cls(
             root=normalized_root,
             component_revision=revision,
@@ -92,10 +95,11 @@ class CleanroomSpec:
             projects_root=normalized_projects_root,
             component_source=source,
             policy_pack_name=policy,
+            consumer_projects=projects,
         )
 
 
-def load_consumer_config(path: str | Path) -> dict[str, str]:
+def load_consumer_config(path: str | Path) -> dict[str, Any]:
     """Load and validate user-neutral metadata without importing workspace state."""
 
     config_path = _resolve_path(path)
@@ -105,12 +109,35 @@ def load_consumer_config(path: str | Path) -> dict[str, str]:
         raise CleanroomError("invalid_consumer_config", f"consumer config is not valid JSON: {exc}", path=str(config_path)) from exc
     if not isinstance(payload, dict):
         raise CleanroomError("invalid_consumer_config", "consumer config must be a JSON object", path=str(config_path))
-    values = {key: str(payload.get(key, "")).strip() for key in ("instance_id", "component_source", "policy_pack_name")}
+    values: dict[str, Any] = {key: str(payload.get(key, "")).strip() for key in ("instance_id", "component_source", "policy_pack_name")}
     if any(not value for value in values.values()):
         raise CleanroomError("invalid_consumer_config", "instance_id, component_source, and policy_pack_name are required", path=str(config_path))
     if any(sentinel.lower() in json.dumps(payload).lower() for sentinel in PERSONAL_SENTINELS):
         raise CleanroomError("personal_config_leak", "consumer config contains a personal sentinel", path=str(config_path))
+    values["consumer_projects"] = payload.get("projects")
+    _validate_consumer_projects(values["consumer_projects"])
     return values
+
+
+def _validate_consumer_projects(projects: list[dict[str, str]] | None) -> tuple[tuple[str, str], ...]:
+    """Validate consumer project identity and root-relative paths."""
+
+    if projects is None:
+        return (("shared-lib", "projects/shared-lib"), ("hello-app", "projects/hello-app"))
+    if not isinstance(projects, list) or not projects:
+        raise CleanroomError("invalid_project_inventory", "projects must be a non-empty list")
+    result: list[tuple[str, str]] = []
+    for item in projects:
+        if not isinstance(item, dict):
+            raise CleanroomError("invalid_project_inventory", "each project must be an object")
+        project_id, relative_path = str(item.get("project_id", "")).strip(), str(item.get("relative_path", "")).strip()
+        path = Path(relative_path)
+        if not project_id or not relative_path or path.is_absolute() or ".." in path.parts:
+            raise CleanroomError("invalid_project_inventory", "project ids and root-relative paths are required")
+        result.append((project_id, relative_path))
+    if len({item[0] for item in result}) != len(result) or len({item[1] for item in result}) != len(result):
+        raise CleanroomError("duplicate_project_inventory", "project ids and paths must be unique")
+    return tuple(result)
 
 
 @dataclass(frozen=True)
@@ -1095,7 +1122,7 @@ def _render_files(spec: CleanroomSpec) -> dict[str, str]:
         "cleanroom.yaml": _cleanroom_yaml(spec),
         CONSUMER_CONFIG_RELATIVE_PATH: _consumer_config_json(spec),
         "component-lock.yaml": _component_lock_yaml(spec),
-        "inventory/projects.yaml": _projects_inventory_yaml(),
+        "inventory/projects.yaml": _projects_inventory_yaml(spec),
         "policy-pack/README.md": _policy_readme(),
         "policy-pack/registry.yaml": _policy_registry_yaml(),
         "procedures/README.md": _procedures_readme(),
@@ -1144,6 +1171,10 @@ verify:
 def _cleanroom_yaml(spec: CleanroomSpec) -> str:
     """Return the user-editable clean-room configuration."""
 
+    project_lines = []
+    for project_id, relative_path in spec.consumer_projects:
+        role = "library" if project_id == "shared-lib" else "application"
+        project_lines.extend([f"  - project_id: {project_id}", f"    relative_path: {relative_path}", f"    role: {role}"])
     return f"""schema_version: 1
 instance_id: {spec.instance_id}
 components:
@@ -1151,12 +1182,7 @@ components:
     source_uri: {spec.component_source}
     revision: {spec.component_revision}
 projects:
-  - project_id: shared-lib
-    relative_path: projects/shared-lib
-    role: library
-  - project_id: hello-app
-    relative_path: projects/hello-app
-    role: application
+{chr(10).join(project_lines)}
 demo_loop:
   loop_id: repair-known-failure
   verifier_command: make verify
@@ -1226,18 +1252,14 @@ components:
 """
 
 
-def _projects_inventory_yaml() -> str:
+def _projects_inventory_yaml(spec: CleanroomSpec) -> str:
     """Return the synthetic project inventory."""
 
-    return """schema_version: 1
-projects:
-  - project_id: shared-lib
-    relative_path: projects/shared-lib
-    role: library
-  - project_id: hello-app
-    relative_path: projects/hello-app
-    role: application
-"""
+    lines = ["schema_version: 1", "projects:"]
+    for project_id, relative_path in spec.consumer_projects:
+        role = "library" if project_id == "shared-lib" else "application"
+        lines.extend([f"  - project_id: {project_id}", f"    relative_path: {relative_path}", f"    role: {role}"])
+    return "\n".join(lines) + "\n"
 
 
 def _policy_readme() -> str:

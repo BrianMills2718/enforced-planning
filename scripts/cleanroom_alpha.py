@@ -104,6 +104,7 @@ def _build_spec(args: argparse.Namespace) -> CleanroomSpec:
     instance_id = metadata.get("instance_id", args.instance_id)
     component_source = metadata.get("component_source", "local-enforced-planning")
     policy_pack_name = metadata.get("policy_pack_name", "example-policy-pack")
+    consumer_projects = metadata.get("consumer_projects")
     return CleanroomSpec.build(
         root=args.root,
         instance_id=instance_id,
@@ -111,6 +112,7 @@ def _build_spec(args: argparse.Namespace) -> CleanroomSpec:
         projects_root=args.projects_root,
         component_source=component_source,
         policy_pack_name=policy_pack_name,
+        consumer_projects=consumer_projects,
     )
 
 

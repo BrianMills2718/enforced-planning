@@ -19,7 +19,7 @@ For a consumer-owned instance, create a neutral JSON metadata file and pass it
 to `plan` and `apply`:
 
 ```json
-{"instance_id":"acme-alpha","component_source":"git://example/governance","policy_pack_name":"acme-baseline"}
+{"instance_id":"acme-alpha","component_source":"git://example/governance","policy_pack_name":"acme-baseline","projects":[{"project_id":"shared-lib","relative_path":"projects/shared-lib"},{"project_id":"hello-app","relative_path":"projects/hello-app"}]}
 ```
 
 ```bash

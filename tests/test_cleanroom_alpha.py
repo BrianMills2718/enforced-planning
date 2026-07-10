@@ -87,6 +87,16 @@ def test_consumer_config_rejects_personal_sentinel(tmp_path: Path) -> None:
     assert exc_info.value.code == "personal_config_leak"
 
 
+def test_consumer_config_rejects_duplicate_project_paths(tmp_path: Path) -> None:
+    """Consumer inventory cannot contain ambiguous duplicate identities or paths."""
+
+    config = tmp_path / "consumer.json"
+    config.write_text(json.dumps({"instance_id": "acme", "component_source": "example", "policy_pack_name": "baseline", "projects": [{"project_id": "one", "relative_path": "projects/one"}, {"project_id": "two", "relative_path": "projects/one"}]}), encoding="utf-8")
+    with pytest.raises(CleanroomError) as exc_info:
+        load_consumer_config(config)
+    assert exc_info.value.code == "duplicate_project_inventory"
+
+
 def test_materialize_verify_status_and_reset(tmp_path: Path) -> None:
     """The happy path plans, applies, verifies, reports status, and resets."""
 

@@ -27,6 +27,8 @@ python scripts/cleanroom_alpha.py --consumer-config consumer.json --root /tmp/ac
 python scripts/cleanroom_alpha.py --consumer-config consumer.json --root /tmp/acme-cleanroom apply
 ```
 
+A copy-ready neutral template lives in `consumer-template/consumer.json`.
+
 The config contains identity and ownership metadata only; it must not contain
 absolute home paths, credentials, or a personal project inventory.
 

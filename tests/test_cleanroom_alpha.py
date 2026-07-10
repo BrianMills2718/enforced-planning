@@ -114,6 +114,16 @@ def test_cli_consumer_config_external_onboarding(tmp_path: Path) -> None:
     assert json.loads(reset.stdout)["verdict"] == "reset"
 
 
+def test_checked_in_consumer_template_is_neutral() -> None:
+    """The copy-ready example contains no maintainer-specific identity."""
+
+    template = REPO_ROOT / "examples" / "cleanroom-ecosystem" / "consumer-template" / "consumer.json"
+    payload = template.read_text(encoding="utf-8")
+    assert "/home/brian" not in payload
+    assert "BrianMills2718" not in payload
+    assert "SECRET_SENTINEL" not in payload
+
+
 def test_materialize_verify_status_and_reset(tmp_path: Path) -> None:
     """The happy path plans, applies, verifies, reports status, and resets."""
 

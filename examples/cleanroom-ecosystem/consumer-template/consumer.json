@@ -1,0 +1,15 @@
+{
+  "instance_id": "example-alpha",
+  "component_source": "git://example.invalid/loop-engineering",
+  "policy_pack_name": "example-baseline",
+  "projects": [
+    {
+      "project_id": "shared-lib",
+      "relative_path": "projects/shared-lib"
+    },
+    {
+      "project_id": "hello-app",
+      "relative_path": "projects/hello-app"
+    }
+  ]
+}

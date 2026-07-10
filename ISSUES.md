@@ -294,3 +294,11 @@ and unpack `(judgment, _llm_result)` tuple. Updated 3 test mocks. 288 tests pass
 ## Dismissed
 
 (No dismissed items yet.)
+## 2026-07-09 — broad test suite has eight unrelated governance/worktree failures
+
+`PYTHONPATH=/home/brian/projects/enforced-planning pytest -q` after Plan #62
+reported 538 passed, 1 skipped, and 8 failed. Seven failures are governed-repo
+classification/read-gating fixture expectations; one is legacy
+`<repo>_worktrees/<branch>` canonical-link fallback. The Plan #62 targeted suite
+passes 29/29. Diagnose these separately before claiming the entire repository
+green.

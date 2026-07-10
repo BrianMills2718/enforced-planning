@@ -362,9 +362,10 @@ def test_run_demo_rejects_tampered_loop_spec(tmp_path: Path) -> None:
     """Swapping the verifier selector in loop-spec.json fails before any run.
 
     The loop spec both names the verifier command and lists the guarded-file
-    hashes, so it is the root of the verifier trust chain. Anchoring its digest
-    in the install receipt closes the bypass where an attacker points the
-    verifier at an always-passing command instead of tampering a guarded file.
+    hashes, so it is the root of the verifier trust chain. Comparing it to the
+    executing component's canonical contract closes the bypass where an attacker
+    points the verifier at an always-passing command instead of tampering a
+    guarded file.
     """
 
     spec = _spec(tmp_path)
@@ -544,3 +545,47 @@ def test_cli_json_smoke(tmp_path: Path) -> None:
 
     reset = subprocess.run(common + ["reset"], check=True, text=True, capture_output=True)
     assert json.loads(reset.stdout)["verdict"] == "reset"
+
+
+def test_cli_accepts_json_after_subcommand(tmp_path: Path) -> None:
+    """Agent calls may place the inert JSON affordance after the subcommand."""
+
+    root = tmp_path / "external" / "cleanroom"
+    projects_root = tmp_path / "workspace" / "projects"
+    projects_root.mkdir(parents=True)
+    common = [
+        sys.executable,
+        str(SCRIPT),
+        "--root",
+        str(root),
+        "--projects-root",
+        str(projects_root),
+        "--component-revision",
+        "test-revision",
+    ]
+
+    plan = subprocess.run(common + ["plan", "--json"], check=True, text=True, capture_output=True)
+    assert json.loads(plan.stdout)["verdict"] == "planned"
+
+    apply = subprocess.run(common + ["apply", "--json"], check=True, text=True, capture_output=True)
+    assert json.loads(apply.stdout)["verdict"] == "materialized"
+
+    run_demo = subprocess.run(common + ["run-demo", "--json"], check=True, text=True, capture_output=True)
+    run_payload = json.loads(run_demo.stdout)
+    assert run_payload["verdict"] == "pass"
+
+    trace_path = root / TRACE_DIRECTORY_RELATIVE_PATH / f"{run_payload['run_id']}.json"
+    trace_check = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT),
+            "verify-trace",
+            "--trace-path",
+            str(trace_path),
+            "--json",
+        ],
+        check=True,
+        text=True,
+        capture_output=True,
+    )
+    assert json.loads(trace_check.stdout)["verdict"] == "pass"

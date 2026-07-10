@@ -39,8 +39,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--json", action="store_true", help="Emit JSON output; accepted for explicit agent calls")
     subparsers = parser.add_subparsers(dest="command")
     for command in ("plan", "apply", "verify", "status", "reset"):
-        subparsers.add_parser(command)
+        command_parser = subparsers.add_parser(command)
+        command_parser.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help=argparse.SUPPRESS)
     run_parser = subparsers.add_parser("run-demo")
+    run_parser.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help=argparse.SUPPRESS)
     run_parser.add_argument(
         "--worker-mode",
         choices=("repair", "no-op", "self-certify", "interrupt-after-action"),
@@ -49,6 +51,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     run_parser.add_argument("--max-iterations", type=int, default=None, help="Override the loop-spec iteration budget")
     trace_parser = subparsers.add_parser("verify-trace")
+    trace_parser.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help=argparse.SUPPRESS)
     trace_parser.add_argument("--trace-path", required=True, help="Canonical loop receipt to validate")
     return parser
 

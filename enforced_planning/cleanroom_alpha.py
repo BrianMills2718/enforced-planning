@@ -23,6 +23,7 @@ PROJECT_IDS = ("hello-app", "shared-lib")
 SECRET_SENTINEL = "SECRET_SENTINEL"
 PERSONAL_SENTINELS = ("/home/brian", "BrianMills2718")
 DEFAULT_INSTANCE_ID = "cleanroom-alpha"
+CONSUMER_CONFIG_RELATIVE_PATH = "consumer-config.json"
 RECEIPT_RELATIVE_PATH = ".loop-engineering/state/install_receipt.json"
 LOOP_SPEC_RELATIVE_PATH = "loop-spec.json"
 TRACE_DIRECTORY_RELATIVE_PATH = ".loop-engineering/traces"
@@ -55,6 +56,8 @@ class CleanroomSpec:
     component_revision: str
     instance_id: str = DEFAULT_INSTANCE_ID
     projects_root: Path = field(default_factory=lambda: Path(os.environ.get("PROJECTS_ROOT", str(Path.home() / "projects"))))
+    component_source: str = "local-enforced-planning"
+    policy_pack_name: str = "example-policy-pack"
 
     @classmethod
     def build(
@@ -64,6 +67,8 @@ class CleanroomSpec:
         component_revision: str,
         instance_id: str = DEFAULT_INSTANCE_ID,
         projects_root: str | Path | None = None,
+        component_source: str = "local-enforced-planning",
+        policy_pack_name: str = "example-policy-pack",
     ) -> "CleanroomSpec":
         """Validate user inputs and return a normalized clean-room spec."""
 
@@ -76,12 +81,36 @@ class CleanroomSpec:
         instance = instance_id.strip()
         if not instance:
             raise CleanroomError("missing_instance_id", "instance_id is required")
+        source = component_source.strip()
+        policy = policy_pack_name.strip()
+        if not source or not policy:
+            raise CleanroomError("missing_consumer_metadata", "component_source and policy_pack_name are required")
         return cls(
             root=normalized_root,
             component_revision=revision,
             instance_id=instance,
             projects_root=normalized_projects_root,
+            component_source=source,
+            policy_pack_name=policy,
         )
+
+
+def load_consumer_config(path: str | Path) -> dict[str, str]:
+    """Load and validate user-neutral metadata without importing workspace state."""
+
+    config_path = _resolve_path(path)
+    try:
+        payload = json.loads(config_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise CleanroomError("invalid_consumer_config", f"consumer config is not valid JSON: {exc}", path=str(config_path)) from exc
+    if not isinstance(payload, dict):
+        raise CleanroomError("invalid_consumer_config", "consumer config must be a JSON object", path=str(config_path))
+    values = {key: str(payload.get(key, "")).strip() for key in ("instance_id", "component_source", "policy_pack_name")}
+    if any(not value for value in values.values()):
+        raise CleanroomError("invalid_consumer_config", "instance_id, component_source, and policy_pack_name are required", path=str(config_path))
+    if any(sentinel.lower() in json.dumps(payload).lower() for sentinel in PERSONAL_SENTINELS):
+        raise CleanroomError("personal_config_leak", "consumer config contains a personal sentinel", path=str(config_path))
+    return values
 
 
 @dataclass(frozen=True)
@@ -1064,6 +1093,7 @@ def _render_files(spec: CleanroomSpec) -> dict[str, str]:
         "Makefile": _root_makefile(),
         LOOP_SPEC_RELATIVE_PATH: _loop_spec_json(),
         "cleanroom.yaml": _cleanroom_yaml(spec),
+        CONSUMER_CONFIG_RELATIVE_PATH: _consumer_config_json(spec),
         "component-lock.yaml": _component_lock_yaml(spec),
         "inventory/projects.yaml": _projects_inventory_yaml(),
         "policy-pack/README.md": _policy_readme(),
@@ -1118,7 +1148,7 @@ def _cleanroom_yaml(spec: CleanroomSpec) -> str:
 instance_id: {spec.instance_id}
 components:
   - component_id: governance
-    source_uri: local-enforced-planning
+    source_uri: {spec.component_source}
     revision: {spec.component_revision}
 projects:
   - project_id: shared-lib
@@ -1133,6 +1163,21 @@ demo_loop:
   max_iterations: 3
   max_cost_usd: 0
 """
+
+
+def _consumer_config_json(spec: CleanroomSpec) -> str:
+    """Return the normalized consumer-owned metadata captured in the fixture."""
+
+    return json.dumps(
+        {
+            "schema_version": 1,
+            "instance_id": spec.instance_id,
+            "component_source": spec.component_source,
+            "policy_pack_name": spec.policy_pack_name,
+        },
+        indent=2,
+        sort_keys=True,
+    ) + "\n"
 
 
 def _loop_spec_json() -> str:
@@ -1176,7 +1221,7 @@ def _component_lock_yaml(spec: CleanroomSpec) -> str:
     return f"""schema_version: 1
 components:
   - component_id: governance
-    source_uri: local-enforced-planning
+    source_uri: {spec.component_source}
     revision: {spec.component_revision}
 """
 

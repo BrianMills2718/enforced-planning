@@ -18,6 +18,7 @@ from enforced_planning.cleanroom_alpha import CleanroomError
 from enforced_planning.cleanroom_alpha import CleanroomSpec
 from enforced_planning.cleanroom_alpha import current_git_revision
 from enforced_planning.cleanroom_alpha import materialize_cleanroom
+from enforced_planning.cleanroom_alpha import load_consumer_config
 from enforced_planning.cleanroom_alpha import plan_cleanroom
 from enforced_planning.cleanroom_alpha import reset_cleanroom
 from enforced_planning.cleanroom_alpha import run_demo_loop
@@ -34,6 +35,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--instance-id", default="cleanroom-alpha", help="Clean-room instance id")
     parser.add_argument("--component-revision", default=None, help="Immutable governance component revision")
     parser.add_argument("--projects-root", default=None, help="Projects workspace root used for isolation checks")
+    parser.add_argument("--consumer-config", default=None, help="JSON file containing consumer-owned instance metadata")
     parser.add_argument("--json", action="store_true", help="Emit JSON output; accepted for explicit agent calls")
     subparsers = parser.add_subparsers(dest="command")
     for command in ("plan", "apply", "verify", "status", "reset"):
@@ -98,11 +100,17 @@ def _build_spec(args: argparse.Namespace) -> CleanroomSpec:
     """Build a clean-room spec from CLI arguments."""
 
     revision = args.component_revision or current_git_revision(REPO_ROOT)
+    metadata = load_consumer_config(args.consumer_config) if args.consumer_config else {}
+    instance_id = metadata.get("instance_id", args.instance_id)
+    component_source = metadata.get("component_source", "local-enforced-planning")
+    policy_pack_name = metadata.get("policy_pack_name", "example-policy-pack")
     return CleanroomSpec.build(
         root=args.root,
-        instance_id=args.instance_id,
+        instance_id=instance_id,
         component_revision=revision,
         projects_root=args.projects_root,
+        component_source=component_source,
+        policy_pack_name=policy_pack_name,
     )
 
 

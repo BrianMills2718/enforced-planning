@@ -16,6 +16,7 @@ from enforced_planning.cleanroom_alpha import CleanroomSpec
 from enforced_planning.cleanroom_alpha import RECEIPT_RELATIVE_PATH
 from enforced_planning.cleanroom_alpha import TRACE_DIRECTORY_RELATIVE_PATH
 from enforced_planning.cleanroom_alpha import materialize_cleanroom
+from enforced_planning.cleanroom_alpha import load_consumer_config
 from enforced_planning.cleanroom_alpha import plan_cleanroom
 from enforced_planning.cleanroom_alpha import reset_cleanroom
 from enforced_planning.cleanroom_alpha import run_demo_loop
@@ -60,6 +61,30 @@ def test_plan_rejects_workspace_root(tmp_path: Path) -> None:
         )
 
     assert exc_info.value.code == "root_under_workspace"
+
+
+def test_consumer_config_is_user_neutral_and_materialized(tmp_path: Path) -> None:
+    """Consumer metadata is validated and copied without personal workspace context."""
+
+    config = tmp_path / "consumer.json"
+    config.write_text(json.dumps({"instance_id": "acme-alpha", "component_source": "git://example/governance", "policy_pack_name": "acme-baseline"}), encoding="utf-8")
+    metadata = load_consumer_config(config)
+    spec = CleanroomSpec.build(root=tmp_path / "external" / "cleanroom", component_revision="test", projects_root=tmp_path / "projects", **metadata)
+    materialize_cleanroom(spec)
+    captured = json.loads((spec.root / "consumer-config.json").read_text(encoding="utf-8"))
+    assert captured["instance_id"] == "acme-alpha"
+    assert captured["policy_pack_name"] == "acme-baseline"
+    assert "/home/brian" not in json.dumps(captured)
+
+
+def test_consumer_config_rejects_personal_sentinel(tmp_path: Path) -> None:
+    """A consumer config cannot smuggle personal workspace identity into the template."""
+
+    config = tmp_path / "consumer.json"
+    config.write_text(json.dumps({"instance_id": "acme", "component_source": "/home/brian/private", "policy_pack_name": "baseline"}), encoding="utf-8")
+    with pytest.raises(CleanroomError) as exc_info:
+        load_consumer_config(config)
+    assert exc_info.value.code == "personal_config_leak"
 
 
 def test_materialize_verify_status_and_reset(tmp_path: Path) -> None:

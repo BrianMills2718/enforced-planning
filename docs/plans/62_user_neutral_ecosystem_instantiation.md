@@ -80,6 +80,22 @@ Required invariants:
 5. Audit personal leakage, path traversal, determinism, and reset boundaries;
    update the concern register before the next adapter slice.
 
+## Files Affected
+
+- `enforced_planning/cleanroom_alpha.py`
+- `scripts/cleanroom_alpha.py`
+- `tests/test_cleanroom_alpha.py`
+- `examples/cleanroom-ecosystem/README.md`
+- `notebooks/notebook_registry.yaml`
+- `docs/evidence/plan62_user_neutral_ecosystem_instantiation.md`
+
+## Current Slice Disposition
+
+The first implementation wedge is complete: neutral metadata is validated,
+captured in generated output, and rejected when it contains personal sentinels.
+Project-inventory parameterization and an independent consumer usability
+exercise remain the next increment.
+
 ## Evidence Grades At Start
 
 | Criterion | Grade | Evidence class |

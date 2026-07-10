@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import uuid
@@ -27,6 +28,8 @@ CONSUMER_CONFIG_RELATIVE_PATH = "consumer-config.json"
 RECEIPT_RELATIVE_PATH = ".loop-engineering/state/install_receipt.json"
 LOOP_SPEC_RELATIVE_PATH = "loop-spec.json"
 TRACE_DIRECTORY_RELATIVE_PATH = ".loop-engineering/traces"
+IDENTIFIER_RE = re.compile(r"^[a-z][a-z0-9]*(?:[-_][a-z0-9]+)*$")
+SAFE_SCALAR_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/@+-]*$")
 
 
 class CleanroomError(RuntimeError):
@@ -75,18 +78,20 @@ class CleanroomSpec:
         """Validate user inputs and return a normalized clean-room spec."""
 
         revision = component_revision.strip()
-        if not revision:
-            raise CleanroomError("missing_component_revision", "component_revision is required")
+        if not SAFE_SCALAR_RE.fullmatch(revision):
+            raise CleanroomError("invalid_component_revision", "component_revision must be a single safe scalar")
         normalized_root = _resolve_path(root)
         normalized_projects_root = _resolve_path(projects_root or Path.home() / "projects")
         _require_outside_projects_root(normalized_root, normalized_projects_root)
         instance = instance_id.strip()
-        if not instance:
-            raise CleanroomError("missing_instance_id", "instance_id is required")
+        if not IDENTIFIER_RE.fullmatch(instance):
+            raise CleanroomError("invalid_instance_id", "instance_id must be a lowercase portable identifier")
         source = component_source.strip()
         policy = policy_pack_name.strip()
-        if not source or not policy:
-            raise CleanroomError("missing_consumer_metadata", "component_source and policy_pack_name are required")
+        if not SAFE_SCALAR_RE.fullmatch(source):
+            raise CleanroomError("invalid_component_source", "component_source must be a single safe scalar")
+        if not IDENTIFIER_RE.fullmatch(policy):
+            raise CleanroomError("invalid_policy_pack_name", "policy_pack_name must be a lowercase portable identifier")
         projects = _validate_consumer_projects(consumer_projects)
         return cls(
             root=normalized_root,
@@ -132,7 +137,7 @@ def _validate_consumer_projects(projects: list[dict[str, str]] | None) -> tuple[
             raise CleanroomError("invalid_project_inventory", "each project must be an object")
         project_id, relative_path = str(item.get("project_id", "")).strip(), str(item.get("relative_path", "")).strip()
         path = Path(relative_path)
-        if not project_id or relative_path != f"projects/{project_id}" or path.is_absolute() or ".." in path.parts:
+        if not IDENTIFIER_RE.fullmatch(project_id) or relative_path != f"projects/{project_id}" or path.is_absolute() or ".." in path.parts:
             raise CleanroomError("invalid_project_inventory", "project ids and root-relative paths are required")
         result.append((project_id, relative_path))
     if len({item[0] for item in result}) != len(result) or len({item[1] for item in result}) != len(result):
@@ -1123,14 +1128,14 @@ def _render_files(spec: CleanroomSpec) -> dict[str, str]:
     """Render all deterministic files for the clean-room fixture."""
 
     files = {
-        "README.md": _root_readme(),
+        "README.md": _root_readme(spec),
         "Makefile": _root_makefile(spec),
         "cleanroom.yaml": _cleanroom_yaml(spec),
         CONSUMER_CONFIG_RELATIVE_PATH: _consumer_config_json(spec),
         "component-lock.yaml": _component_lock_yaml(spec),
         "inventory/projects.yaml": _projects_inventory_yaml(spec),
-        "policy-pack/README.md": _policy_readme(),
-        "policy-pack/registry.yaml": _policy_registry_yaml(),
+        "policy-pack/README.md": _policy_readme(spec),
+        "policy-pack/registry.yaml": _policy_registry_yaml(spec),
         "procedures/README.md": _procedures_readme(),
         "generated/instructions.md": _generated_instructions(),
     }
@@ -1143,9 +1148,21 @@ def _render_files(spec: CleanroomSpec) -> dict[str, str]:
     return files
 
 
-def _root_readme() -> str:
+def _root_readme(spec: CleanroomSpec) -> str:
     """Return the root README content for generated users."""
 
+    if not _is_demo_fixture(spec):
+        return """# Loop-Engineering Clean Room
+
+This generated alpha contains consumer-declared placeholder projects. Each
+placeholder exposes `make verify`; replace it through a consumer-owned source
+and build adapter before using the ecosystem for real work.
+
+- `inventory/projects.yaml` is the project inventory authority.
+- `policy-pack/registry.yaml` is example policy content.
+- `.loop-engineering/state/` stores lifecycle receipts.
+- No deterministic repair demo is installed for custom inventories.
+"""
     return """# Loop-Engineering Clean Room
 
 This generated directory is a synthetic alpha fixture for testing portable
@@ -1184,6 +1201,12 @@ def _cleanroom_yaml(spec: CleanroomSpec) -> str:
     for project_id, relative_path in spec.consumer_projects:
         role = "library" if project_id == "shared-lib" else "application"
         project_lines.extend([f"  - project_id: {project_id}", f"    relative_path: {relative_path}", f"    role: {role}"])
+    demo = """demo_loop:
+  loop_id: repair-known-failure
+  verifier_command: make verify
+  max_iterations: 3
+  max_cost_usd: 0
+""" if _is_demo_fixture(spec) else ""
     return f"""schema_version: 1
 instance_id: {spec.instance_id}
 components:
@@ -1192,11 +1215,7 @@ components:
     revision: {spec.component_revision}
 projects:
 {chr(10).join(project_lines)}
-demo_loop:
-  loop_id: repair-known-failure
-  verifier_command: make verify
-  max_iterations: 3
-  max_cost_usd: 0
+{demo}
 """
 
 
@@ -1290,20 +1309,21 @@ def _projects_inventory_yaml(spec: CleanroomSpec) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _policy_readme() -> str:
+def _policy_readme(spec: CleanroomSpec) -> str:
     """Return the policy-pack README content."""
 
-    return """# Example Policy Pack
+    return f"""# Policy Pack: {spec.policy_pack_name}
 
 These rules are synthetic. They demonstrate where a user would place their own
 ecosystem policy without importing private workspace policy.
 """
 
 
-def _policy_registry_yaml() -> str:
+def _policy_registry_yaml(spec: CleanroomSpec) -> str:
     """Return a minimal synthetic policy registry."""
 
-    return """schema_version: 1
+    return f"""schema_version: 1
+policy_pack_name: {spec.policy_pack_name}
 policies:
   - policy_id: require-make-verify
     level: suggestion

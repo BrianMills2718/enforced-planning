@@ -24,7 +24,7 @@ supply-chain boundary.
 | A5 verified repair loop | A | repair-loop test and fresh external run |
 | Independent success certification | A | self-certification negative control |
 | Bounded stop conditions | A | no-op and zero-budget tests |
-| Canonical trace integrity | A | digest and transition-order tests |
+| Canonical trace checksum integrity | A | unrecomputed mutation and transition-order tests |
 | Verifier integrity | A | guarded verifier tamper test |
 | Interruption truthfulness | A | interrupted receipt test |
 | Generic runner boundary | A | source scan and declarative loop-spec |
@@ -40,7 +40,11 @@ supply-chain boundary.
 
 ## Disposition
 
-This proves portable state, worker, verifier, stop, budget, trace, reset,
+This proves portable state, worker, verifier, stop, budget, trace checksums, reset,
 tamper, and interruption contracts. Production security, authentication,
 signed provenance, hostile-code isolation, and a real agent adapter remain
 explicitly deferred.
+
+The trace and install-receipt digests are unkeyed checksums. They detect
+accidental or unilateral mutation, not an adversary who can rewrite the artifact
+and recompute its digest; no cryptographic tamper-resistance is claimed.

@@ -97,6 +97,37 @@ def test_consumer_config_rejects_duplicate_project_paths(tmp_path: Path) -> None
     assert exc_info.value.code == "duplicate_project_inventory"
 
 
+@pytest.mark.parametrize(
+    ("field", "value", "code"),
+    [
+        ("component_source", "safe\nprojects:\n  - injected: true", "invalid_component_source"),
+        ("policy_pack_name", "baseline: injected", "invalid_policy_pack_name"),
+        ("instance_id", "alpha;touch-pwn", "invalid_instance_id"),
+    ],
+)
+def test_consumer_config_rejects_serialization_injection(tmp_path: Path, field: str, value: str, code: str) -> None:
+    """Consumer scalar fields cannot change generated YAML or commands."""
+
+    payload = {"instance_id": "acme", "component_source": "example", "policy_pack_name": "baseline"}
+    payload[field] = value
+    config = tmp_path / "consumer.json"
+    config.write_text(json.dumps(payload), encoding="utf-8")
+    metadata = load_consumer_config(config)
+    with pytest.raises(CleanroomError) as exc_info:
+        CleanroomSpec.build(root=tmp_path / "external", component_revision="test", projects_root=tmp_path / "projects", **metadata)
+    assert exc_info.value.code == code
+
+
+def test_consumer_config_rejects_makefile_command_injection(tmp_path: Path) -> None:
+    """Project ids containing Make/shell metacharacters fail before rendering."""
+
+    config = tmp_path / "consumer.json"
+    config.write_text(json.dumps({"instance_id": "acme", "component_source": "example", "policy_pack_name": "baseline", "projects": [{"project_id": "x;touch-pwn", "relative_path": "projects/x;touch-pwn"}]}), encoding="utf-8")
+    with pytest.raises(CleanroomError) as exc_info:
+        load_consumer_config(config)
+    assert exc_info.value.code == "invalid_project_inventory"
+
+
 def test_custom_inventory_materializes_generic_project_adapter(tmp_path: Path) -> None:
     """A custom manifest drives matching placeholder projects and verification."""
 

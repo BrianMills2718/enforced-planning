@@ -21,7 +21,7 @@ fixture begins in a passing state.
 **Target:** Add a deterministic, zero-LLM loop that observes the declared
 `hello-app` failure, applies one declarative repair, reruns an independent
 verifier, stops only on verifier success or configured limits, and writes a
-tamper-evident canonical loop receipt.
+checksummed canonical loop receipt.
 
 **Why:** This proves the portable state, worker, verifier, stop, trace, budget,
 and interruption contracts before authentication, model variance, or cost are
@@ -154,7 +154,7 @@ the demo needs.
 - [x] Zero iteration budget, repeated verifier failure, and verifier tampering fail loudly.
 - [x] The canonical receipt records before/after state digests, verifier command
   and results, action status, budget use, component revision, stop reason, and timestamps.
-- [x] Trace tampering is detected and an interrupted run remains valid but unsuccessful.
+- [x] Unrecomputed trace mutation is detected and an interrupted run remains valid but unsuccessful.
 - [x] The generic runner contains no `hello-app`, `shared-lib`, or expected-message knowledge.
 - [x] Required tests, notebook validation, plan validation, external-root exercise,
   markdown checks, and `self_test.py` pass.
@@ -170,7 +170,7 @@ Pre-implementation baseline recorded before enforcing the Slice 2 gates:
 | A5 verified repair loop | D | doc | test | known failing fixture repaired | no-op repeated failure |
 | Independent success certification | D | doc | test | verifier passes after repair | self-certifying worker |
 | Bounded stop conditions | D | doc | test | success within max iterations | zero/exhausted iteration budget |
-| Canonical trace integrity | D | doc | test | valid receipt verifies | mutated receipt digest |
+| Canonical trace checksum integrity | D | doc | test | valid receipt verifies | unrecomputed receipt mutation |
 | Verifier integrity | D | doc | test | guarded verifier unchanged | verifier file mutation |
 | Interruption truthfulness | D | doc | test | complete run receipt | interrupted in-progress receipt |
 | Generic runner boundary | D | doc | test | declarative action succeeds | source scan for fixture names |

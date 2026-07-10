@@ -4,10 +4,12 @@ Status: implementation wedge complete; full plan remains in progress.
 
 ## Verified
 
-- `pytest -q tests/test_cleanroom_alpha.py tests/test_check_notebook_registry.py` — 29 passed.
+- `pytest -q tests/test_cleanroom_alpha.py tests/test_check_notebook_registry.py` — 33 passed.
 - Consumer metadata is rendered into `consumer-config.json`.
 - Personal sentinel input fails with `personal_config_leak`.
 - Consumer project ids and root-relative paths are validated for duplicates and traversal.
+- Make/shell metacharacters and multiline YAML injection inputs fail before rendering.
+- `policy_pack_name` labels the rendered policy pack and registry.
 - Notebook registry validation and `git diff --check` pass.
 
 ## Honest Grades

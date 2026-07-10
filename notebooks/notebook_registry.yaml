@@ -93,8 +93,8 @@ journeys:
           - docs/evidence/plan60_cleanroom_alpha.md
       - phase_id: run_demo_loop
         title: Run Deterministic Verified Loop
-        status: planned
-        execution_mode: stub
+        status: proven
+        execution_mode: live
         purpose: Observe a known failure, apply a declarative repair, independently verify it, and stop within explicit budgets.
         input_artifact: external root plus LoopSpec
         output_artifact: LoopRunReceipt

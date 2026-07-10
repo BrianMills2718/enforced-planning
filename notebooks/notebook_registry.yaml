@@ -6,7 +6,9 @@ journeys:
     notebook_mode: mixed
     related_docs:
       - docs/plans/60_loop_engineering_cleanroom_alpha.md
+      - docs/plans/61_cleanroom_deterministic_verified_loop.md
       - docs/evidence/plan60_cleanroom_alpha.md
+      - docs/evidence/plan61_cleanroom_deterministic_loop.md
     related_code:
       - enforced_planning/cleanroom_alpha.py
       - scripts/cleanroom_alpha.py
@@ -14,11 +16,12 @@ journeys:
       - tests/test_cleanroom_alpha.py
     related_evidence:
       - docs/evidence/plan60_cleanroom_alpha.md
+      - docs/evidence/plan61_cleanroom_deterministic_loop.md
     phases:
       - phase_id: plan_cleanroom
         title: Plan Clean Room
-        status: partial
-        execution_mode: stub
+        status: proven
+        execution_mode: live
         purpose: Convert a root and component revision into a dry-run materialization plan.
         input_artifact: CleanroomSpec
         output_artifact: MaterializationPlan
@@ -35,8 +38,8 @@ journeys:
           - docs/evidence/plan60_cleanroom_alpha.md
       - phase_id: materialize_cleanroom
         title: Materialize Clean Room
-        status: partial
-        execution_mode: stub
+        status: proven
+        execution_mode: live
         purpose: Write the synthetic fixture tree and install receipt into an external root.
         input_artifact: MaterializationPlan
         output_artifact: InstallReceipt
@@ -53,8 +56,8 @@ journeys:
           - docs/evidence/plan60_cleanroom_alpha.md
       - phase_id: verify_cleanroom
         title: Verify Clean Room
-        status: partial
-        execution_mode: stub
+        status: proven
+        execution_mode: live
         purpose: Check isolation, synthetic inventory, policy shape, receipts, and sentinel failures.
         input_artifact: external root plus InstallReceipt
         output_artifact: VerificationReport
@@ -71,8 +74,8 @@ journeys:
           - docs/evidence/plan60_cleanroom_alpha.md
       - phase_id: reset_cleanroom
         title: Reset Clean Room
-        status: partial
-        execution_mode: stub
+        status: proven
+        execution_mode: live
         purpose: Remove receipt-owned artifacts while refusing tampered receipt paths.
         input_artifact: external root plus InstallReceipt
         output_artifact: ResetReport
@@ -87,3 +90,22 @@ journeys:
           - tests/test_cleanroom_alpha.py
         evidence:
           - docs/evidence/plan60_cleanroom_alpha.md
+      - phase_id: run_demo_loop
+        title: Run Deterministic Verified Loop
+        status: planned
+        execution_mode: stub
+        purpose: Observe a known failure, apply a declarative repair, independently verify it, and stop within explicit budgets.
+        input_artifact: external root plus LoopSpec
+        output_artifact: LoopRunReceipt
+        acceptance:
+          - The initial verifier failure and final verifier success are both recorded.
+          - Self-certification, verifier tampering, trace tampering, and exhausted budgets fail loudly.
+          - Interrupted execution remains durable and never reports success.
+        docs:
+          - docs/plans/61_cleanroom_deterministic_verified_loop.md
+        code:
+          - enforced_planning/cleanroom_alpha.py
+        tests:
+          - tests/test_cleanroom_alpha.py
+        evidence:
+          - docs/evidence/plan61_cleanroom_deterministic_loop.md

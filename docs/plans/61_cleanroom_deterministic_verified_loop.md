@@ -1,6 +1,6 @@
 # Plan #61: Clean-Room Deterministic Verified Loop
 
-**Status:** In Progress
+**Status:** Complete
 **Type:** implementation
 **Priority:** High
 **phase_ref:** "Shareable loop-engineering alpha"
@@ -90,9 +90,9 @@ the demo needs.
 
 ### Capability Validation
 
-- [ ] Input/output dataclasses have explicit JSON representations.
-- [ ] Every capability is importable and reachable through JSON CLI commands.
-- [ ] Invalid paths, verifier guards, trace digests, and transitions fail loudly.
+- [x] Input/output dataclasses have explicit JSON representations.
+- [x] Every capability is importable and reachable through JSON CLI commands.
+- [x] Invalid paths, verifier guards, trace digests, and transitions fail loudly.
 - [x] Journey notebook contains the planned loop contract before code changes.
 
 ---
@@ -148,15 +148,15 @@ the demo needs.
 
 ## Acceptance Criteria
 
-- [ ] A5: the first verifier run fails, one declared action repairs the fixture,
+- [x] A5: the first verifier run fails, one declared action repairs the fixture,
   an independent verifier passes, and the loop stops within three iterations.
-- [ ] The worker cannot self-certify; only a verifier pass yields success.
-- [ ] Zero iteration budget, repeated verifier failure, and verifier tampering fail loudly.
-- [ ] The canonical receipt records before/after state digests, verifier command
+- [x] The worker cannot self-certify; only a verifier pass yields success.
+- [x] Zero iteration budget, repeated verifier failure, and verifier tampering fail loudly.
+- [x] The canonical receipt records before/after state digests, verifier command
   and results, action status, budget use, component revision, stop reason, and timestamps.
-- [ ] Trace tampering is detected and an interrupted run remains valid but unsuccessful.
-- [ ] The generic runner contains no `hello-app`, `shared-lib`, or expected-message knowledge.
-- [ ] Required tests, notebook validation, plan validation, external-root exercise,
+- [x] Trace tampering is detected and an interrupted run remains valid but unsuccessful.
+- [x] The generic runner contains no `hello-app`, `shared-lib`, or expected-message knowledge.
+- [x] Required tests, notebook validation, plan validation, external-root exercise,
   markdown checks, and `self_test.py` pass.
 
 ---

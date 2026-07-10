@@ -64,7 +64,7 @@ See `ROADMAP.md` for the full phase map and recommended priority order.
 | 58 | Ops Archive Centralization (`58_ops-archive-centralization.md`) | Medium | ✅ Complete | Completed ops sprint notes moved to central archive |
 | 59 | Worktree Lifecycle Disposition Enforcement (`59_worktree-lifecycle-disposition-enforcement.md`) | Critical | ✅ Complete | Merge-or-disposition preflight and safe closeout propagation |
 | 60 | Loop-Engineering Clean-Room Alpha Slice 1 (`60_loop_engineering_cleanroom_alpha.md`) | High | ✅ Complete | External materialize/verify/reset alpha for shareable ecosystem fixture |
-| 61 | Clean-Room Deterministic Verified Loop (`61_cleanroom_deterministic_verified_loop.md`) | High | 🚧 In Progress | C3/A5 loop, trace, verifier, and stop-contract proof |
+| 61 | Clean-Room Deterministic Verified Loop (`61_cleanroom_deterministic_verified_loop.md`) | High | ✅ Complete | C3/A5 loop, trace, verifier, and stop-contract proof |
 
 ## Status Key
 

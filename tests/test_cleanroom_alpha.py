@@ -88,6 +88,7 @@ def test_materialize_verify_status_and_reset(tmp_path: Path) -> None:
     assert reset.verdict == "reset"
     assert "README.md" in reset.removed_paths
     assert status_cleanroom(spec.root).verdict == "absent"
+    assert not any(spec.root.iterdir())
 
 
 def test_apply_refuses_foreign_overwrite(tmp_path: Path) -> None:

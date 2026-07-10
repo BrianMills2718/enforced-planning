@@ -1026,6 +1026,7 @@ def _planned_directories(files: dict[str, str]) -> set[str]:
     """Return every directory the generated fixture owns."""
 
     directories = {
+        ".loop-engineering",
         ".loop-engineering/state",
         ".loop-engineering/traces",
         ".loop-engineering/receipts",

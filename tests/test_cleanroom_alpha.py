@@ -91,14 +91,14 @@ def test_consumer_config_rejects_duplicate_project_paths(tmp_path: Path) -> None
     """Consumer inventory cannot contain ambiguous duplicate identities or paths."""
 
     config = tmp_path / "consumer.json"
-    config.write_text(json.dumps({"instance_id": "acme", "component_source": "example", "policy_pack_name": "baseline", "projects": [{"project_id": "one", "relative_path": "projects/one"}, {"project_id": "two", "relative_path": "projects/one"}]}), encoding="utf-8")
+    config.write_text(json.dumps({"instance_id": "acme", "component_source": "example", "policy_pack_name": "baseline", "projects": [{"project_id": "one", "relative_path": "projects/one"}, {"project_id": "one", "relative_path": "projects/one"}]}), encoding="utf-8")
     with pytest.raises(CleanroomError) as exc_info:
         load_consumer_config(config)
     assert exc_info.value.code == "duplicate_project_inventory"
 
 
-def test_custom_inventory_cannot_claim_materialization(tmp_path: Path) -> None:
-    """A custom manifest fails verification until project adapters materialize it."""
+def test_custom_inventory_materializes_generic_project_adapter(tmp_path: Path) -> None:
+    """A custom manifest drives matching placeholder projects and verification."""
 
     spec = CleanroomSpec.build(
         root=tmp_path / "external" / "cleanroom",
@@ -108,8 +108,9 @@ def test_custom_inventory_cannot_claim_materialization(tmp_path: Path) -> None:
     )
     materialize_cleanroom(spec)
     report = verify_cleanroom(spec.root, projects_root=spec.projects_root)
-    assert report.verdict == "fail"
-    assert any(finding.check_id == "inventory_materialization_mismatch" for finding in report.findings)
+    assert report.verdict == "pass"
+    assert (spec.root / "projects" / "one" / "project.json").exists()
+    subprocess.run(["make", "verify"], cwd=spec.root, check=True, capture_output=True, text=True)
 
 
 def test_cli_consumer_config_external_onboarding(tmp_path: Path) -> None:
@@ -220,7 +221,7 @@ def test_verify_rejects_undeclared_project(tmp_path: Path) -> None:
     report = verify_cleanroom(spec.root, projects_root=spec.projects_root)
 
     assert report.verdict == "fail"
-    assert any(finding.check_id == "synthetic_inventory" for finding in report.findings)
+    assert any(finding.check_id == "inventory_materialization_mismatch" for finding in report.findings)
 
 
 def test_reset_rejects_tampered_receipt_escape(tmp_path: Path) -> None:

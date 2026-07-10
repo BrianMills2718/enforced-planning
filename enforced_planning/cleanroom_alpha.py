@@ -132,7 +132,7 @@ def _validate_consumer_projects(projects: list[dict[str, str]] | None) -> tuple[
             raise CleanroomError("invalid_project_inventory", "each project must be an object")
         project_id, relative_path = str(item.get("project_id", "")).strip(), str(item.get("relative_path", "")).strip()
         path = Path(relative_path)
-        if not project_id or not relative_path or path.is_absolute() or ".." in path.parts:
+        if not project_id or relative_path != f"projects/{project_id}" or path.is_absolute() or ".." in path.parts:
             raise CleanroomError("invalid_project_inventory", "project ids and root-relative paths are required")
         result.append((project_id, relative_path))
     if len({item[0] for item in result}) != len(result) or len({item[1] for item in result}) != len(result):
@@ -559,7 +559,7 @@ def verify_cleanroom(root: str | Path, *, projects_root: str | Path | None = Non
         "root_external",
         "receipt_present",
         "receipt_paths_owned",
-        "synthetic_inventory",
+        "inventory_materialization",
         "required_files_present",
         "no_secret_sentinel",
         "no_personal_sentinels",
@@ -605,23 +605,14 @@ def verify_cleanroom(root: str | Path, *, projects_root: str | Path | None = Non
 
     project_dir = normalized_root / "projects"
     actual_projects = sorted(path.name for path in project_dir.iterdir() if path.is_dir()) if project_dir.exists() else []
-    if actual_projects != sorted(PROJECT_IDS):
-        findings.append(
-            Finding(
-                check_id="synthetic_inventory",
-                severity="error",
-                message=f"expected only {sorted(PROJECT_IDS)}, found {actual_projects}",
-                path="projects",
-            )
-        )
     declared_projects = _declared_project_ids(normalized_root / "inventory" / "projects.yaml")
-    if declared_projects and declared_projects != sorted(PROJECT_IDS):
+    if actual_projects != declared_projects:
         findings.append(
             Finding(
                 check_id="inventory_materialization_mismatch",
                 severity="error",
-                message="consumer inventory is declared but the synthetic fixture directories were not materialized from it",
-                path="inventory/projects.yaml",
+                message=f"declared projects {declared_projects} do not match materialized directories {actual_projects}",
+                path="projects",
             )
         )
 
@@ -1109,10 +1100,6 @@ def _planned_directories(files: dict[str, str]) -> set[str]:
         "policy-pack",
         "procedures",
         "projects",
-        "projects/hello-app",
-        "projects/hello-app/src",
-        "projects/shared-lib",
-        "projects/shared-lib/src",
     }
     for relative_path in files:
         parent = Path(relative_path).parent
@@ -1126,17 +1113,18 @@ def _render_files_for_existing(root: Path, receipt: InstallReceipt | None) -> di
     """Render expected files using an existing receipt revision when available."""
 
     revision = receipt.component_revision if receipt is not None else "unknown"
-    spec = CleanroomSpec(root=root, component_revision=revision)
+    config_path = root / CONSUMER_CONFIG_RELATIVE_PATH
+    metadata = load_consumer_config(config_path) if config_path.exists() else {}
+    spec = CleanroomSpec.build(root=root, component_revision=revision, projects_root=Path.home() / "projects", **metadata)
     return _render_files(spec)
 
 
 def _render_files(spec: CleanroomSpec) -> dict[str, str]:
     """Render all deterministic files for the clean-room fixture."""
 
-    return {
+    files = {
         "README.md": _root_readme(),
-        "Makefile": _root_makefile(),
-        LOOP_SPEC_RELATIVE_PATH: _loop_spec_json(),
+        "Makefile": _root_makefile(spec),
         "cleanroom.yaml": _cleanroom_yaml(spec),
         CONSUMER_CONFIG_RELATIVE_PATH: _consumer_config_json(spec),
         "component-lock.yaml": _component_lock_yaml(spec),
@@ -1144,13 +1132,15 @@ def _render_files(spec: CleanroomSpec) -> dict[str, str]:
         "policy-pack/README.md": _policy_readme(),
         "policy-pack/registry.yaml": _policy_registry_yaml(),
         "procedures/README.md": _procedures_readme(),
-        "projects/shared-lib/Makefile": _shared_lib_makefile(),
-        "projects/shared-lib/src/cleanroom_shared.py": _shared_lib_module(),
-        "projects/hello-app/Makefile": _hello_app_makefile(),
-        "projects/hello-app/src/hello_app.py": _hello_app_module(),
-        "projects/hello-app/src/expected_message.txt": "hello-app uses wrong-lib\n",
         "generated/instructions.md": _generated_instructions(),
     }
+    if _is_demo_fixture(spec):
+        files.update({LOOP_SPEC_RELATIVE_PATH: _loop_spec_json(), "projects/shared-lib/Makefile": _shared_lib_makefile(), "projects/shared-lib/src/cleanroom_shared.py": _shared_lib_module(), "projects/hello-app/Makefile": _hello_app_makefile(), "projects/hello-app/src/hello_app.py": _hello_app_module(), "projects/hello-app/src/expected_message.txt": "hello-app uses wrong-lib\n"})
+    else:
+        for project_id, relative_path in spec.consumer_projects:
+            files[f"{relative_path}/Makefile"] = _generic_project_makefile()
+            files[f"{relative_path}/project.json"] = _generic_project_json(project_id)
+    return files
 
 
 def _root_readme() -> str:
@@ -1175,14 +1165,15 @@ The generated demo intentionally starts with one failing expectation. The
 """
 
 
-def _root_makefile() -> str:
+def _root_makefile(spec: CleanroomSpec | None = None) -> str:
     """Return a root Makefile with a deterministic verification command."""
 
-    return """.PHONY: verify
+    projects = spec.consumer_projects if spec is not None else (("shared-lib", "projects/shared-lib"), ("hello-app", "projects/hello-app"))
+    commands = "\n".join(f"\t$(MAKE) -C {relative_path} verify" for _, relative_path in projects)
+    return f""".PHONY: verify
 
 verify:
-\t$(MAKE) -C projects/shared-lib verify
-\t$(MAKE) -C projects/hello-app verify
+{commands}
 """
 
 
@@ -1218,10 +1209,29 @@ def _consumer_config_json(spec: CleanroomSpec) -> str:
             "instance_id": spec.instance_id,
             "component_source": spec.component_source,
             "policy_pack_name": spec.policy_pack_name,
+            "projects": [{"project_id": project_id, "relative_path": relative_path} for project_id, relative_path in spec.consumer_projects],
         },
         indent=2,
         sort_keys=True,
     ) + "\n"
+
+
+def _is_demo_fixture(spec: CleanroomSpec) -> bool:
+    """Return whether the requested inventory is the deterministic repair demo."""
+
+    return spec.consumer_projects == (("shared-lib", "projects/shared-lib"), ("hello-app", "projects/hello-app"))
+
+
+def _generic_project_makefile() -> str:
+    """Return the minimal verifier interface for a consumer project placeholder."""
+
+    return ".PHONY: verify\n\nverify:\n\tpython3 -m json.tool project.json >/dev/null\n"
+
+
+def _generic_project_json(project_id: str) -> str:
+    """Return a deterministic placeholder manifest owned by the consumer adapter."""
+
+    return json.dumps({"project_id": project_id, "status": "adapter-placeholder"}, indent=2, sort_keys=True) + "\n"
 
 
 def _loop_spec_json() -> str:

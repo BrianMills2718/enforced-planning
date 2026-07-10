@@ -27,6 +27,14 @@ Out of scope for this slice: production sandboxing, signed supply-chain
 verification, hosted control planes, real LLM agents, and migration of Brian’s
 personal project inventory.
 
+## Research Reviewed
+
+- `docs/plans/60_loop_engineering_cleanroom_alpha.md` — existing clean-room ownership and isolation contract.
+- `docs/plans/61_cleanroom_deterministic_verified_loop.md` — verified loop, receipt, and trace boundaries.
+- `examples/cleanroom-ecosystem/README.md` — current consumer-facing onboarding surface.
+- `enforced_planning/cleanroom_alpha.py` — current generated fixture and lifecycle implementation.
+- `project-meta/docs/ops/ADR-2026-06-26-ecosystem-organization-four-buckets.md` — portable versus personal ownership boundary.
+
 ## Modality
 
 The schema and isolation checks are deductive: acceptance tests can be written
@@ -88,4 +96,3 @@ Required invariants:
 - “Shareable” does not mean safe for hostile repositories; retain alpha wording.
 - The first independent-consumer exercise should be run by someone or a clean
   session that does not rely on Brian-specific assumptions.
-

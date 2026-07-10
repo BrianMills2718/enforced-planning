@@ -1,9 +1,9 @@
 # Clean-Room Ecosystem Example
 
-This directory is the canonical source location for the generated clean-room
-alpha fixture. Slice 1 currently implements the fixture in
-`enforced_planning.cleanroom_alpha`; this directory anchors the future template
-surface so the generated external instance does not become source authority.
+This directory anchors the canonical source location for the generated
+clean-room alpha. `enforced_planning.cleanroom_alpha` currently implements the
+fixture generator and deterministic verified loop; generated external
+instances are disposable evidence, never source authority.
 
 Use the CLI from the repository root:
 
@@ -11,5 +11,21 @@ Use the CLI from the repository root:
 python scripts/cleanroom_alpha.py --root /tmp/loop-engineering-cleanroom plan
 python scripts/cleanroom_alpha.py --root /tmp/loop-engineering-cleanroom apply
 python scripts/cleanroom_alpha.py --root /tmp/loop-engineering-cleanroom verify
+python scripts/cleanroom_alpha.py --root /tmp/loop-engineering-cleanroom run-demo
 python scripts/cleanroom_alpha.py --root /tmp/loop-engineering-cleanroom reset
 ```
+
+`run-demo` starts from one intentional `hello-app` failure, applies the repair
+declared in generated `loop-spec.json`, and succeeds only after `make verify`
+passes. It writes a canonical receipt under `.loop-engineering/traces/`.
+
+Negative-control modes are agent-drivable too:
+
+```bash
+python scripts/cleanroom_alpha.py --root /tmp/loop-engineering-cleanroom run-demo --worker-mode self-certify --max-iterations 1
+python scripts/cleanroom_alpha.py --root /tmp/loop-engineering-cleanroom run-demo --worker-mode no-op --max-iterations 1
+python scripts/cleanroom_alpha.py --root /tmp/loop-engineering-cleanroom verify-trace --trace-path /tmp/loop-engineering-cleanroom/.loop-engineering/traces/RUN_ID.json
+```
+
+Reset and apply again between demo modes because the successful repair changes
+the disposable fixture state.

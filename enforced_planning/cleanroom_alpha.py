@@ -1,9 +1,8 @@
-"""Build and verify a portable clean-room loop-engineering alpha fixture.
+"""Build and exercise a portable clean-room loop-engineering alpha fixture.
 
-This module owns the deterministic Slice 1 surface: plan, materialize, verify,
-status, and reset for a synthetic external ecosystem. It intentionally does not
-run an agent loop; `run-demo` is a deferred Slice 2 command exposed by the CLI
-so automation can discover the boundary without receiving false success.
+The module owns the deterministic generator lifecycle plus a zero-LLM verified
+loop. Fixture-specific repair knowledge is rendered into ``loop-spec.json``;
+the runner itself only interprets guarded commands and declarative actions.
 """
 
 from __future__ import annotations
@@ -13,7 +12,9 @@ import json
 import os
 import shutil
 import subprocess
+import uuid
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
 
@@ -23,6 +24,8 @@ SECRET_SENTINEL = "SECRET_SENTINEL"
 PERSONAL_SENTINELS = ("/home/brian", "BrianMills2718")
 DEFAULT_INSTANCE_ID = "cleanroom-alpha"
 RECEIPT_RELATIVE_PATH = ".loop-engineering/state/install_receipt.json"
+LOOP_SPEC_RELATIVE_PATH = "loop-spec.json"
+TRACE_DIRECTORY_RELATIVE_PATH = ".loop-engineering/traces"
 
 
 class CleanroomError(RuntimeError):
@@ -132,8 +135,8 @@ class InstallReceipt:
     owned_directories: list[str]
     verdict: Literal["materialized"] = "materialized"
 
-    def to_dict(self) -> dict[str, Any]:
-        """Return the install receipt as JSON-safe data."""
+    def unsigned_dict(self) -> dict[str, Any]:
+        """Return install ownership content covered by its integrity digest."""
 
         return {
             "operation": self.operation,
@@ -144,6 +147,12 @@ class InstallReceipt:
             "owned_directories": self.owned_directories,
             "verdict": self.verdict,
         }
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return the integrity-bound install receipt as JSON-safe data."""
+
+        unsigned = self.unsigned_dict()
+        return {**unsigned, "receipt_sha256": _canonical_json_sha256(unsigned)}
 
     @classmethod
     def from_dict(cls, payload: dict[str, Any]) -> "InstallReceipt":
@@ -252,6 +261,169 @@ class ResetReport:
             "operation": self.operation,
             "root": self.root,
             "removed_paths": self.removed_paths,
+            "findings": [finding.to_dict() for finding in self.findings],
+            "verdict": self.verdict,
+        }
+
+
+@dataclass(frozen=True)
+class GuardedFile:
+    """One verifier source whose content must match the materialized contract."""
+
+    relative_path: str
+    sha256: str
+
+
+@dataclass(frozen=True)
+class DeclarativeTextReplacement:
+    """A bounded text replacement supplied by fixture config, not runner code."""
+
+    action_id: str
+    relative_path: str
+    old_text: str
+    new_text: str
+
+
+@dataclass(frozen=True)
+class LoopSpec:
+    """Validated deterministic loop inputs loaded from the generated fixture."""
+
+    loop_id: str
+    verifier_command: list[str]
+    guarded_files: list[GuardedFile]
+    max_iterations: int
+    max_cost_usd: float
+    require_initial_failure: bool
+    actions: list[DeclarativeTextReplacement]
+
+
+@dataclass(frozen=True)
+class LoopTransition:
+    """One independently verified state observation and optional worker action."""
+
+    sequence: int
+    iteration: int
+    timestamp_utc: str
+    state_before_sha256: str
+    verifier_command: list[str]
+    verifier_exit_code: int
+    verifier_verdict: Literal["pass", "fail"]
+    verifier_stdout_sha256: str
+    verifier_stderr_sha256: str
+    worker_mode: str
+    action_id: str | None
+    action_status: Literal[
+        "none",
+        "applied",
+        "no_op",
+        "self_certification_rejected",
+        "failed",
+    ]
+    action_error_code: str | None
+    action_error_message: str | None
+    action_error_path: str | None
+    state_after_sha256: str
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return the transition as canonical JSON-safe data."""
+
+        return {
+            "sequence": self.sequence,
+            "iteration": self.iteration,
+            "timestamp_utc": self.timestamp_utc,
+            "state_before_sha256": self.state_before_sha256,
+            "verifier_command": self.verifier_command,
+            "verifier_exit_code": self.verifier_exit_code,
+            "verifier_verdict": self.verifier_verdict,
+            "verifier_stdout_sha256": self.verifier_stdout_sha256,
+            "verifier_stderr_sha256": self.verifier_stderr_sha256,
+            "worker_mode": self.worker_mode,
+            "action_id": self.action_id,
+            "action_status": self.action_status,
+            "action_error_code": self.action_error_code,
+            "action_error_message": self.action_error_message,
+            "action_error_path": self.action_error_path,
+            "state_after_sha256": self.state_after_sha256,
+        }
+
+
+@dataclass
+class LoopRunReceipt:
+    """Canonical loop trace shared by the runner, tests, and future adapters."""
+
+    operation: Literal["run-demo"]
+    schema_version: int
+    run_id: str
+    loop_id: str
+    root: str
+    component_revision: str
+    started_at_utc: str
+    completed_at_utc: str | None
+    status: Literal["running", "completed", "interrupted", "failed"]
+    stop_reason: str | None
+    iterations_used: int
+    max_iterations: int
+    cost_used_usd: float
+    max_cost_usd: float
+    transitions: list[LoopTransition]
+    trace_sha256: str = ""
+
+    @property
+    def verdict(self) -> Literal["pass", "fail"]:
+        """Return pass only for a completed run stopped by verifier success."""
+
+        if self.status == "completed" and self.stop_reason == "verifier_satisfied":
+            return "pass"
+        return "fail"
+
+    def unsigned_dict(self) -> dict[str, Any]:
+        """Return receipt content covered by the trace digest."""
+
+        return {
+            "operation": self.operation,
+            "schema_version": self.schema_version,
+            "run_id": self.run_id,
+            "loop_id": self.loop_id,
+            "root": self.root,
+            "component_revision": self.component_revision,
+            "started_at_utc": self.started_at_utc,
+            "completed_at_utc": self.completed_at_utc,
+            "status": self.status,
+            "stop_reason": self.stop_reason,
+            "iterations_used": self.iterations_used,
+            "max_iterations": self.max_iterations,
+            "cost_used_usd": self.cost_used_usd,
+            "max_cost_usd": self.max_cost_usd,
+            "transitions": [transition.to_dict() for transition in self.transitions],
+            "verdict": self.verdict,
+        }
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return the signed receipt as JSON-safe data."""
+
+        return {**self.unsigned_dict(), "trace_sha256": self.trace_sha256}
+
+
+@dataclass(frozen=True)
+class LoopTraceVerification:
+    """Integrity and semantic validation result for a stored loop receipt."""
+
+    operation: Literal["verify-trace"]
+    trace_path: str
+    findings: list[Finding]
+
+    @property
+    def verdict(self) -> Literal["pass", "fail"]:
+        """Return pass only when the trace has no error findings."""
+
+        return "fail" if any(item.severity == "error" for item in self.findings) else "pass"
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return the trace verification as JSON-safe data."""
+
+        return {
+            "operation": self.operation,
+            "trace_path": self.trace_path,
             "findings": [finding.to_dict() for finding in self.findings],
             "verdict": self.verdict,
         }
@@ -446,17 +618,366 @@ def reset_cleanroom(root: str | Path) -> ResetReport:
     return ResetReport(operation="reset", root=str(normalized_root), removed_paths=removed, findings=findings)
 
 
-def run_demo_deferred(root: str | Path) -> dict[str, Any]:
-    """Return an explicit Slice 2 deferral payload for the future demo loop."""
+def load_loop_spec(root: str | Path) -> LoopSpec:
+    """Load and validate the generated declarative loop contract."""
 
     normalized_root = _resolve_path(root)
+    spec_path = _safe_join(normalized_root, LOOP_SPEC_RELATIVE_PATH)
+    try:
+        payload = json.loads(spec_path.read_text(encoding="utf-8"))
+        verifier = payload["verifier"]
+        budget = payload["budget"]
+        command = verifier["command"]
+        if not isinstance(command, list) or not command or not all(isinstance(item, str) and item for item in command):
+            raise ValueError("verifier.command must be a non-empty argv string list")
+        max_iterations = int(budget["max_iterations"])
+        max_cost_usd = float(budget["max_cost_usd"])
+        if max_iterations < 0:
+            raise ValueError("budget.max_iterations must be non-negative")
+        if max_cost_usd < 0:
+            raise ValueError("budget.max_cost_usd must be non-negative")
+        guarded_files = [
+            GuardedFile(relative_path=str(item["relative_path"]), sha256=str(item["sha256"]))
+            for item in verifier["guarded_files"]
+        ]
+        actions = [
+            DeclarativeTextReplacement(
+                action_id=str(item["action_id"]),
+                relative_path=str(item["relative_path"]),
+                old_text=str(item["old_text"]),
+                new_text=str(item["new_text"]),
+            )
+            for item in payload["actions"]
+        ]
+        return LoopSpec(
+            loop_id=str(payload["loop_id"]),
+            verifier_command=command,
+            guarded_files=guarded_files,
+            max_iterations=max_iterations,
+            max_cost_usd=max_cost_usd,
+            require_initial_failure=bool(payload["require_initial_failure"]),
+            actions=actions,
+        )
+    except FileNotFoundError as exc:
+        raise CleanroomError("loop_spec_missing", "loop spec is missing", path=LOOP_SPEC_RELATIVE_PATH) from exc
+    except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
+        raise CleanroomError("loop_spec_invalid", f"loop spec is invalid: {exc}", path=LOOP_SPEC_RELATIVE_PATH) from exc
+
+
+def run_demo_loop(
+    root: str | Path,
+    *,
+    worker_mode: Literal["repair", "no-op", "self-certify", "interrupt-after-action"] = "repair",
+    max_iterations: int | None = None,
+) -> LoopRunReceipt:
+    """Run a bounded deterministic worker whose success only the verifier certifies."""
+
+    normalized_root = _resolve_path(root)
+    findings: list[Finding] = []
+    install_receipt = _load_receipt(normalized_root, findings)
+    if install_receipt is None or findings:
+        first = findings[0]
+        raise CleanroomError(first.check_id, first.message, path=first.path)
+    loop_spec = load_loop_spec(normalized_root)
+    iteration_limit = loop_spec.max_iterations if max_iterations is None else max_iterations
+    if iteration_limit < 0:
+        raise CleanroomError("invalid_iteration_budget", "max_iterations must be non-negative")
+    _verify_guarded_files(normalized_root, loop_spec.guarded_files)
+
+    receipt = LoopRunReceipt(
+        operation="run-demo",
+        schema_version=1,
+        run_id=uuid.uuid4().hex,
+        loop_id=loop_spec.loop_id,
+        root=".",
+        component_revision=install_receipt.component_revision,
+        started_at_utc=_utc_now(),
+        completed_at_utc=None,
+        status="running",
+        stop_reason=None,
+        iterations_used=0,
+        max_iterations=iteration_limit,
+        cost_used_usd=0,
+        max_cost_usd=loop_spec.max_cost_usd,
+        transitions=[],
+    )
+    trace_relative_path = f"{TRACE_DIRECTORY_RELATIVE_PATH}/{receipt.run_id}.json"
+    _register_owned_file(normalized_root, install_receipt, trace_relative_path)
+    _write_loop_trace(normalized_root, trace_relative_path, receipt)
+
+    while True:
+        _verify_guarded_files(normalized_root, loop_spec.guarded_files)
+        state_before = _state_digest(normalized_root)
+        verifier = _run_verifier(normalized_root, loop_spec.verifier_command)
+        is_initial_observation = not receipt.transitions
+
+        if verifier["verdict"] == "pass":
+            receipt.transitions.append(
+                _transition(
+                    receipt=receipt,
+                    state_before=state_before,
+                    verifier=verifier,
+                    worker_mode=worker_mode,
+                    action_id=None,
+                    action_status="none",
+                    state_after=state_before,
+                )
+            )
+            receipt.status = "failed" if is_initial_observation and loop_spec.require_initial_failure else "completed"
+            receipt.stop_reason = "initial_failure_not_observed" if receipt.status == "failed" else "verifier_satisfied"
+            receipt.completed_at_utc = _utc_now()
+            _write_loop_trace(normalized_root, trace_relative_path, receipt)
+            return receipt
+
+        if receipt.iterations_used >= iteration_limit:
+            receipt.transitions.append(
+                _transition(
+                    receipt=receipt,
+                    state_before=state_before,
+                    verifier=verifier,
+                    worker_mode=worker_mode,
+                    action_id=None,
+                    action_status="none",
+                    state_after=state_before,
+                )
+            )
+            receipt.status = "failed"
+            receipt.stop_reason = "iteration_budget_exhausted"
+            receipt.completed_at_utc = _utc_now()
+            _write_loop_trace(normalized_root, trace_relative_path, receipt)
+            return receipt
+
+        action_id: str | None = None
+        action_status: Literal["applied", "no_op", "self_certification_rejected", "failed"]
+        try:
+            if worker_mode in {"repair", "interrupt-after-action"}:
+                action = loop_spec.actions[receipt.iterations_used]
+                action_id = action.action_id
+                _apply_text_replacement(normalized_root, action)
+                action_status = "applied"
+            elif worker_mode == "no-op":
+                action_status = "no_op"
+            elif worker_mode == "self-certify":
+                action_status = "self_certification_rejected"
+            else:
+                raise CleanroomError("unknown_worker_mode", f"unsupported worker mode: {worker_mode}")
+        except (CleanroomError, IndexError) as exc:
+            action_status = "failed"
+            if isinstance(exc, CleanroomError):
+                action_error_code = exc.code
+                action_error_message = str(exc)
+                action_error_path = exc.path
+            else:
+                action_error_code = "worker_action_missing"
+                action_error_message = "no declarative worker action remains for this iteration"
+                action_error_path = None
+            receipt.iterations_used += 1
+            receipt.transitions.append(
+                _transition(
+                    receipt=receipt,
+                    state_before=state_before,
+                    verifier=verifier,
+                    worker_mode=worker_mode,
+                    action_id=action_id,
+                    action_status=action_status,
+                    state_after=_state_digest(normalized_root),
+                    action_error_code=action_error_code,
+                    action_error_message=action_error_message,
+                    action_error_path=action_error_path,
+                )
+            )
+            receipt.status = "failed"
+            receipt.stop_reason = "worker_action_failed"
+            receipt.completed_at_utc = _utc_now()
+            _write_loop_trace(normalized_root, trace_relative_path, receipt)
+            if isinstance(exc, CleanroomError):
+                return receipt
+            return receipt
+
+        receipt.iterations_used += 1
+        receipt.transitions.append(
+            _transition(
+                receipt=receipt,
+                state_before=state_before,
+                verifier=verifier,
+                worker_mode=worker_mode,
+                action_id=action_id,
+                action_status=action_status,
+                state_after=_state_digest(normalized_root),
+            )
+        )
+        if worker_mode == "interrupt-after-action":
+            receipt.status = "interrupted"
+            receipt.stop_reason = "interrupted_after_action"
+            receipt.completed_at_utc = _utc_now()
+            _write_loop_trace(normalized_root, trace_relative_path, receipt)
+            return receipt
+        _write_loop_trace(normalized_root, trace_relative_path, receipt)
+
+
+def verify_loop_trace(trace_path: str | Path) -> LoopTraceVerification:
+    """Verify the digest and success invariants of a canonical loop receipt."""
+
+    normalized_path = _resolve_path(trace_path)
+    findings: list[Finding] = []
+    try:
+        payload = json.loads(normalized_path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError) as exc:
+        findings.append(Finding("trace_readable", "error", f"trace cannot be read: {exc}", str(normalized_path)))
+        return LoopTraceVerification("verify-trace", str(normalized_path), findings)
+
+    recorded_digest = payload.get("trace_sha256")
+    unsigned = {key: value for key, value in payload.items() if key != "trace_sha256"}
+    if not isinstance(recorded_digest, str) or recorded_digest != _canonical_json_sha256(unsigned):
+        findings.append(Finding("trace_digest", "error", "trace digest does not match canonical content", str(normalized_path)))
+
+    transitions = payload.get("transitions")
+    if not isinstance(transitions, list):
+        findings.append(Finding("trace_transitions", "error", "transitions must be a list", str(normalized_path)))
+        transitions = []
+    sequences = [item.get("sequence") for item in transitions if isinstance(item, dict)]
+    if sequences != list(range(len(transitions))):
+        findings.append(Finding("trace_sequence", "error", "transition sequence is not contiguous", str(normalized_path)))
+
+    if payload.get("verdict") == "pass":
+        last_verdict = transitions[-1].get("verifier_verdict") if transitions and isinstance(transitions[-1], dict) else None
+        if payload.get("status") != "completed" or payload.get("stop_reason") != "verifier_satisfied" or last_verdict != "pass":
+            findings.append(Finding("trace_success_invariant", "error", "passing trace lacks independent final verifier success", str(normalized_path)))
+    return LoopTraceVerification("verify-trace", str(normalized_path), findings)
+
+
+def _verify_guarded_files(root: Path, guarded_files: list[GuardedFile]) -> None:
+    """Fail before verification when a declared verifier source has changed."""
+
+    for guarded in guarded_files:
+        target = _safe_join(root, guarded.relative_path)
+        if not target.is_file() or _sha256(target.read_text(encoding="utf-8")) != guarded.sha256:
+            raise CleanroomError(
+                "verifier_integrity_failed",
+                "guarded verifier content does not match the loop spec",
+                path=guarded.relative_path,
+            )
+
+
+def _run_verifier(root: Path, command: list[str]) -> dict[str, Any]:
+    """Run the independent verifier without a shell and retain evidence hashes."""
+
+    try:
+        result = subprocess.run(command, cwd=root, text=True, capture_output=True, check=False)
+    except OSError as exc:
+        raise CleanroomError("verifier_unavailable", f"verifier could not run: {exc}") from exc
     return {
-        "operation": "run-demo",
-        "root": str(normalized_root),
-        "verdict": "deferred",
-        "code": "deferred_slice_2",
-        "message": "deterministic loop execution is intentionally deferred to Slice 2",
+        "command": list(command),
+        "exit_code": result.returncode,
+        "verdict": "pass" if result.returncode == 0 else "fail",
+        "stdout_sha256": _sha256(result.stdout),
+        "stderr_sha256": _sha256(result.stderr),
     }
+
+
+def _transition(
+    *,
+    receipt: LoopRunReceipt,
+    state_before: str,
+    verifier: dict[str, Any],
+    worker_mode: str,
+    action_id: str | None,
+    action_status: Literal["none", "applied", "no_op", "self_certification_rejected", "failed"],
+    state_after: str,
+    action_error_code: str | None = None,
+    action_error_message: str | None = None,
+    action_error_path: str | None = None,
+) -> LoopTransition:
+    """Build one ordered transition from verifier and worker observations."""
+
+    return LoopTransition(
+        sequence=len(receipt.transitions),
+        iteration=receipt.iterations_used,
+        timestamp_utc=_utc_now(),
+        state_before_sha256=state_before,
+        verifier_command=list(verifier["command"]),
+        verifier_exit_code=int(verifier["exit_code"]),
+        verifier_verdict=verifier["verdict"],
+        verifier_stdout_sha256=str(verifier["stdout_sha256"]),
+        verifier_stderr_sha256=str(verifier["stderr_sha256"]),
+        worker_mode=worker_mode,
+        action_id=action_id,
+        action_status=action_status,
+        action_error_code=action_error_code,
+        action_error_message=action_error_message,
+        action_error_path=action_error_path,
+        state_after_sha256=state_after,
+    )
+
+
+def _apply_text_replacement(root: Path, action: DeclarativeTextReplacement) -> None:
+    """Apply one exact declarative replacement with a single-match precondition."""
+
+    target = _safe_join(root, action.relative_path)
+    if not target.is_file():
+        raise CleanroomError("worker_target_missing", "worker action target is missing", path=action.relative_path)
+    content = target.read_text(encoding="utf-8")
+    if content.count(action.old_text) != 1:
+        raise CleanroomError(
+            "worker_precondition_failed",
+            "worker replacement requires exactly one old-text match",
+            path=action.relative_path,
+        )
+    target.write_text(content.replace(action.old_text, action.new_text, 1), encoding="utf-8")
+
+
+def _state_digest(root: Path) -> str:
+    """Hash authoritative instance files while excluding changing local loop state."""
+
+    entries: list[str] = []
+    for path in sorted(root.rglob("*")):
+        if not path.is_file() or path.is_symlink():
+            continue
+        relative = path.relative_to(root).as_posix()
+        if relative.startswith(".loop-engineering/"):
+            continue
+        entries.append(f"{relative}\0{hashlib.sha256(path.read_bytes()).hexdigest()}")
+    return _sha256("\n".join(entries))
+
+
+def _write_loop_trace(root: Path, relative_path: str, receipt: LoopRunReceipt) -> None:
+    """Atomically persist the latest truthful receipt after every transition."""
+
+    trace_path = _safe_join(root, relative_path)
+    trace_path.parent.mkdir(parents=True, exist_ok=True)
+    receipt.trace_sha256 = _canonical_json_sha256(receipt.unsigned_dict())
+    temp_path = trace_path.with_suffix(".tmp")
+    temp_path.write_text(json.dumps(receipt.to_dict(), indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    os.replace(temp_path, trace_path)
+
+
+def _register_owned_file(root: Path, receipt: InstallReceipt, relative_path: str) -> None:
+    """Add a runtime-produced receipt to the install ownership manifest."""
+
+    _safe_join(root, relative_path)
+    if relative_path in receipt.owned_files:
+        return
+    updated = InstallReceipt(
+        operation="apply",
+        root=receipt.root,
+        instance_id=receipt.instance_id,
+        component_revision=receipt.component_revision,
+        owned_files=sorted([*receipt.owned_files, relative_path]),
+        owned_directories=receipt.owned_directories,
+    )
+    _receipt_path(root).write_text(json.dumps(updated.to_dict(), indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def _canonical_json_sha256(payload: dict[str, Any]) -> str:
+    """Hash a JSON object using a stable compact representation."""
+
+    return _sha256(json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True))
+
+
+def _utc_now() -> str:
+    """Return a timezone-aware timestamp for observable loop transitions."""
+
+    return datetime.now(UTC).isoformat()
 
 
 def _resolve_path(path: str | Path) -> Path:
@@ -540,6 +1061,7 @@ def _render_files(spec: CleanroomSpec) -> dict[str, str]:
     return {
         "README.md": _root_readme(),
         "Makefile": _root_makefile(),
+        LOOP_SPEC_RELATIVE_PATH: _loop_spec_json(),
         "cleanroom.yaml": _cleanroom_yaml(spec),
         "component-lock.yaml": _component_lock_yaml(spec),
         "inventory/projects.yaml": _projects_inventory_yaml(),
@@ -550,6 +1072,7 @@ def _render_files(spec: CleanroomSpec) -> dict[str, str]:
         "projects/shared-lib/src/cleanroom_shared.py": _shared_lib_module(),
         "projects/hello-app/Makefile": _hello_app_makefile(),
         "projects/hello-app/src/hello_app.py": _hello_app_module(),
+        "projects/hello-app/src/expected_message.txt": "hello-app uses wrong-lib\n",
         "generated/instructions.md": _generated_instructions(),
     }
 
@@ -568,7 +1091,11 @@ Important locations:
 - `inventory/projects.yaml` lists the synthetic projects.
 - `policy-pack/registry.yaml` contains example policy rules.
 - `.loop-engineering/state/` stores receipts and local state.
+- `loop-spec.json` declares the deterministic verifier, budgets, and demo repair.
 - `generated/` contains derived outputs and is never authority.
+
+The generated demo intentionally starts with one failing expectation. The
+`run-demo` command observes, repairs, independently verifies, and traces it.
 """
 
 
@@ -605,6 +1132,41 @@ demo_loop:
   max_iterations: 3
   max_cost_usd: 0
 """
+
+
+def _loop_spec_json() -> str:
+    """Return the declarative deterministic loop and verifier-integrity contract."""
+
+    payload = {
+        "schema_version": 1,
+        "loop_id": "repair-known-failure",
+        "require_initial_failure": True,
+        "verifier": {
+            "command": ["make", "verify"],
+            "guarded_files": [
+                {"relative_path": "Makefile", "sha256": _sha256(_root_makefile())},
+                {
+                    "relative_path": "projects/hello-app/Makefile",
+                    "sha256": _sha256(_hello_app_makefile()),
+                },
+                {
+                    "relative_path": "projects/shared-lib/Makefile",
+                    "sha256": _sha256(_shared_lib_makefile()),
+                },
+            ],
+        },
+        "budget": {"max_iterations": 3, "max_cost_usd": 0},
+        "actions": [
+            {
+                "action_id": "repair-expected-message",
+                "kind": "replace_text",
+                "relative_path": "projects/hello-app/src/expected_message.txt",
+                "old_text": "hello-app uses wrong-lib\n",
+                "new_text": "hello-app uses shared-lib\n",
+            }
+        ],
+    }
+    return json.dumps(payload, indent=2, sort_keys=True) + "\n"
 
 
 def _component_lock_yaml(spec: CleanroomSpec) -> str:
@@ -661,8 +1223,8 @@ def _procedures_readme() -> str:
 
     return """# Procedures
 
-Slice 1 installs only this placeholder. Versioned cross-client procedures are a
-later distribution concern.
+The alpha installs only this placeholder. Versioned cross-client procedures
+remain a later distribution concern.
 """
 
 
@@ -695,7 +1257,7 @@ def _hello_app_makefile() -> str:
     return """.PHONY: verify
 
 verify:
-\tPYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:../shared-lib/src python -c "from hello_app import message; assert message() == 'hello-app uses shared-lib'"
+\tPYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:../shared-lib/src python -c "from pathlib import Path; from hello_app import message; expected = Path('src/expected_message.txt').read_text().strip(); assert message() == expected, (message(), expected)"
 """
 
 
@@ -746,6 +1308,17 @@ def _load_receipt(root: Path, findings: list[Finding]) -> InstallReceipt | None:
         return None
     try:
         payload = json.loads(receipt_path.read_text(encoding="utf-8"))
+        recorded_digest = payload.pop("receipt_sha256")
+        if not isinstance(recorded_digest, str) or recorded_digest != _canonical_json_sha256(payload):
+            findings.append(
+                Finding(
+                    check_id="receipt_integrity",
+                    severity="error",
+                    message="install receipt digest does not match its ownership content",
+                    path=RECEIPT_RELATIVE_PATH,
+                )
+            )
+            return None
         return InstallReceipt.from_dict(payload)
     except (json.JSONDecodeError, KeyError, TypeError) as exc:
         findings.append(
@@ -763,6 +1336,8 @@ def _validate_receipt_paths(root: Path, receipt: InstallReceipt) -> list[Finding
     """Return findings for receipt paths that are unsafe or missing."""
 
     findings: list[Finding] = []
+    generated_files = set(_render_files_for_existing(root, receipt))
+    generated_directories = _planned_directories(_render_files_for_existing(root, receipt))
     for relative_path in receipt.owned_files + receipt.owned_directories:
         try:
             target = _safe_join(root, relative_path)
@@ -772,6 +1347,28 @@ def _validate_receipt_paths(root: Path, receipt: InstallReceipt) -> list[Finding
                     check_id="receipt_path_escape",
                     severity="error",
                     message=str(exc),
+                    path=relative_path,
+                )
+            )
+            continue
+        if relative_path in receipt.owned_files and relative_path not in generated_files:
+            is_trace = relative_path.startswith(f"{TRACE_DIRECTORY_RELATIVE_PATH}/") and relative_path.endswith(".json")
+            if not is_trace or verify_loop_trace(target).verdict != "pass":
+                findings.append(
+                    Finding(
+                        check_id="receipt_foreign_path",
+                        severity="error",
+                        message="receipt claims a file not produced by the generator or a valid loop run",
+                        path=relative_path,
+                    )
+                )
+                continue
+        if relative_path in receipt.owned_directories and relative_path not in generated_directories:
+            findings.append(
+                Finding(
+                    check_id="receipt_foreign_path",
+                    severity="error",
+                    message="receipt claims a directory not produced by the generator",
                     path=relative_path,
                 )
             )

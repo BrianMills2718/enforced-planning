@@ -20,9 +20,10 @@ from enforced_planning.cleanroom_alpha import current_git_revision
 from enforced_planning.cleanroom_alpha import materialize_cleanroom
 from enforced_planning.cleanroom_alpha import plan_cleanroom
 from enforced_planning.cleanroom_alpha import reset_cleanroom
-from enforced_planning.cleanroom_alpha import run_demo_deferred
+from enforced_planning.cleanroom_alpha import run_demo_loop
 from enforced_planning.cleanroom_alpha import status_cleanroom
 from enforced_planning.cleanroom_alpha import verify_cleanroom
+from enforced_planning.cleanroom_alpha import verify_loop_trace
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -35,8 +36,18 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--projects-root", default=None, help="Projects workspace root used for isolation checks")
     parser.add_argument("--json", action="store_true", help="Emit JSON output; accepted for explicit agent calls")
     subparsers = parser.add_subparsers(dest="command")
-    for command in ("plan", "apply", "verify", "status", "reset", "run-demo"):
+    for command in ("plan", "apply", "verify", "status", "reset"):
         subparsers.add_parser(command)
+    run_parser = subparsers.add_parser("run-demo")
+    run_parser.add_argument(
+        "--worker-mode",
+        choices=("repair", "no-op", "self-certify", "interrupt-after-action"),
+        default="repair",
+        help="Deterministic worker behavior used for positive and negative controls",
+    )
+    run_parser.add_argument("--max-iterations", type=int, default=None, help="Override the loop-spec iteration budget")
+    trace_parser = subparsers.add_parser("verify-trace")
+    trace_parser.add_argument("--trace-path", required=True, help="Canonical loop receipt to validate")
     return parser
 
 
@@ -75,7 +86,11 @@ def _run_command(args: argparse.Namespace, command: str) -> tuple[dict[str, Any]
         report = reset_cleanroom(args.root)
         return report.to_dict(), 0 if report.verdict == "reset" else 1
     if command == "run-demo":
-        return run_demo_deferred(args.root), 2
+        receipt = run_demo_loop(args.root, worker_mode=args.worker_mode, max_iterations=args.max_iterations)
+        return receipt.to_dict(), 0 if receipt.verdict == "pass" else 1
+    if command == "verify-trace":
+        report = verify_loop_trace(args.trace_path)
+        return report.to_dict(), 0 if report.verdict == "pass" else 1
     raise CleanroomError("unknown_command", f"unknown command: {command}")
 
 

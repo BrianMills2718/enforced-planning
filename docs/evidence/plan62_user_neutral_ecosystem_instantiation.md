@@ -4,7 +4,7 @@ Status: implementation wedge complete; full plan remains in progress.
 
 ## Verified
 
-- `pytest -q tests/test_cleanroom_alpha.py tests/test_check_notebook_registry.py` — 26 passed.
+- `pytest -q tests/test_cleanroom_alpha.py tests/test_check_notebook_registry.py` — 27 passed.
 - Consumer metadata is rendered into `consumer-config.json`.
 - Personal sentinel input fails with `personal_config_leak`.
 - Consumer project ids and root-relative paths are validated for duplicates and traversal.
@@ -17,7 +17,7 @@ Status: implementation wedge complete; full plan remains in progress.
 | User-neutral metadata contract | B | importable implementation plus tests |
 | Isolation and personal-data exclusion | A | positive materialization and sentinel negative control |
 | Deterministic rendering | B | existing plan-hash contract; consumer metadata wedge covered |
-| Independent onboarding | F | not yet exercised by an independent consumer |
+| Independent onboarding | C | fresh external-root CLI exercise; still run from the maintainer test suite |
 
 ## Remaining Gap
 

@@ -97,6 +97,23 @@ def test_consumer_config_rejects_duplicate_project_paths(tmp_path: Path) -> None
     assert exc_info.value.code == "duplicate_project_inventory"
 
 
+def test_cli_consumer_config_external_onboarding(tmp_path: Path) -> None:
+    """A fresh consumer can use only the neutral config and CLI lifecycle."""
+
+    config = tmp_path / "consumer.json"
+    config.write_text(json.dumps({"instance_id": "acme-alpha", "component_source": "example-component", "policy_pack_name": "acme-baseline"}), encoding="utf-8")
+    root = tmp_path / "acme-cleanroom"
+    projects_root = tmp_path / "consumer-projects"
+    projects_root.mkdir()
+    common = [sys.executable, str(SCRIPT), "--consumer-config", str(config), "--root", str(root), "--projects-root", str(projects_root), "--component-revision", "consumer-test", "--json"]
+    apply = subprocess.run(common + ["apply"], check=True, text=True, capture_output=True)
+    assert json.loads(apply.stdout)["instance_id"] == "acme-alpha"
+    verify = subprocess.run(common + ["verify"], check=True, text=True, capture_output=True)
+    assert json.loads(verify.stdout)["verdict"] == "pass"
+    reset = subprocess.run(common + ["reset"], check=True, text=True, capture_output=True)
+    assert json.loads(reset.stdout)["verdict"] == "reset"
+
+
 def test_materialize_verify_status_and_reset(tmp_path: Path) -> None:
     """The happy path plans, applies, verifies, reports status, and resets."""
 

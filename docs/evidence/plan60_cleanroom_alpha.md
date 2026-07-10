@@ -12,6 +12,8 @@ Status: Slice 1 implementation verified.
   docs/plans/60_loop_engineering_cleanroom_alpha.md --warn-only` passed.
 - External fixture exercise passed in a fresh `/tmp` root:
   `apply`, `verify`, generated fixture `make verify`, and `reset`.
+- External home instance `/home/brian/loop-engineering-cleanroom` materialized,
+  verified, and passed its generated `make verify`.
 - `python scripts/check_markdown_links.py
   docs/plans/60_loop_engineering_cleanroom_alpha.md
   docs/evidence/plan60_cleanroom_alpha.md
@@ -24,3 +26,6 @@ Status: Slice 1 implementation verified.
 - 2026-07-09: First implementation reached Slice 1 acceptance. The
   deterministic loop remains explicitly deferred to Slice 2; `run-demo` returns
   a machine-readable `deferred_slice_2` result instead of faking success.
+- 2026-07-09: External home materialization exposed that absolute install
+  receipt roots leak personal paths into generated state. Receipt roots now use
+  `.` while CLI reports still show the operator-facing root path.

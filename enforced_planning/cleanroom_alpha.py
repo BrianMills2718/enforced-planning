@@ -310,7 +310,7 @@ def materialize_cleanroom(spec: CleanroomSpec) -> InstallReceipt:
 
     receipt = InstallReceipt(
         operation="apply",
-        root=str(spec.root),
+        root=".",
         instance_id=spec.instance_id,
         component_revision=spec.component_revision,
         owned_files=sorted(files),

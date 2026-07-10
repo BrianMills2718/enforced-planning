@@ -61,6 +61,7 @@ def test_materialize_verify_status_and_reset(tmp_path: Path) -> None:
 
     receipt = materialize_cleanroom(spec)
     assert receipt.verdict == "materialized"
+    assert receipt.root == "."
     assert (spec.root / RECEIPT_RELATIVE_PATH).exists()
 
     report = verify_cleanroom(spec.root, projects_root=spec.projects_root)

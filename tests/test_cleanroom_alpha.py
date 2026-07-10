@@ -97,6 +97,21 @@ def test_consumer_config_rejects_duplicate_project_paths(tmp_path: Path) -> None
     assert exc_info.value.code == "duplicate_project_inventory"
 
 
+def test_custom_inventory_cannot_claim_materialization(tmp_path: Path) -> None:
+    """A custom manifest fails verification until project adapters materialize it."""
+
+    spec = CleanroomSpec.build(
+        root=tmp_path / "external" / "cleanroom",
+        component_revision="test",
+        projects_root=tmp_path / "projects",
+        consumer_projects=[{"project_id": "one", "relative_path": "projects/one"}],
+    )
+    materialize_cleanroom(spec)
+    report = verify_cleanroom(spec.root, projects_root=spec.projects_root)
+    assert report.verdict == "fail"
+    assert any(finding.check_id == "inventory_materialization_mismatch" for finding in report.findings)
+
+
 def test_cli_consumer_config_external_onboarding(tmp_path: Path) -> None:
     """A fresh consumer can use only the neutral config and CLI lifecycle."""
 

@@ -614,9 +614,27 @@ def verify_cleanroom(root: str | Path, *, projects_root: str | Path | None = Non
                 path="projects",
             )
         )
+    declared_projects = _declared_project_ids(normalized_root / "inventory" / "projects.yaml")
+    if declared_projects and declared_projects != sorted(PROJECT_IDS):
+        findings.append(
+            Finding(
+                check_id="inventory_materialization_mismatch",
+                severity="error",
+                message="consumer inventory is declared but the synthetic fixture directories were not materialized from it",
+                path="inventory/projects.yaml",
+            )
+        )
 
     findings.extend(_scan_tree(normalized_root, normalized_projects_root))
     return VerificationReport(operation="verify", root=str(normalized_root), checks=checks, findings=findings)
+
+
+def _declared_project_ids(path: Path) -> list[str]:
+    """Read project ids from the generated simple YAML inventory."""
+
+    if not path.exists():
+        return []
+    return sorted(line.split(":", 1)[1].strip() for line in path.read_text(encoding="utf-8").splitlines() if line.strip().startswith("- project_id:"))
 
 
 def status_cleanroom(root: str | Path) -> StatusReport:

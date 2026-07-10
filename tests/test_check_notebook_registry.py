@@ -187,6 +187,86 @@ def test_validate_notebook_registry_accepts_valid_registry(tmp_path: Path) -> No
     assert result.journeys_checked == ["demo_journey"]
 
 
+def test_validate_notebook_registry_accepts_repo_relative_paths(tmp_path: Path) -> None:
+    module = _load_module()
+    workspace_root = tmp_path / "workspace"
+    repo_root = workspace_root / "repo"
+    (repo_root / "notebooks").mkdir(parents=True)
+    (repo_root / "docs").mkdir()
+    (repo_root / "src").mkdir()
+    (repo_root / "tests").mkdir()
+
+    (repo_root / "docs" / "plan.md").write_text("# plan\n", encoding="utf-8")
+    (repo_root / "docs" / "evidence.md").write_text("# evidence\n", encoding="utf-8")
+    (repo_root / "src" / "runtime.py").write_text('"""runtime"""\n', encoding="utf-8")
+    (repo_root / "tests" / "test_runtime.py").write_text(
+        "def test_placeholder():\n    assert True\n",
+        encoding="utf-8",
+    )
+    _write_notebook(
+        repo_root / "notebooks" / "demo.ipynb",
+        journey_id="repo_relative_journey",
+        notebook_mode="mixed",
+        phase_ids=["phase_one"],
+        phase_blocks=[
+            "## Phase 1: Phase One\n"
+            "Purpose: Demonstrate one repo-relative phase.\n"
+            "Input -> Output: raw_input -> live_output\n"
+            "Acceptance Criteria:\n"
+            "- Contract is visible.\n"
+            "Status: planned\n"
+            "Execution Mode: stub\n",
+        ],
+    )
+    registry_path = repo_root / "notebooks" / "notebook_registry.yaml"
+    registry_path.write_text(
+        """
+version: 1
+journeys:
+  - journey_id: repo_relative_journey
+    title: repo_relative_journey
+    notebook: notebooks/demo.ipynb
+    notebook_mode: mixed
+    related_docs:
+      - docs/plan.md
+    related_code:
+      - src/runtime.py
+    related_tests:
+      - tests/test_runtime.py
+    related_evidence:
+      - docs/evidence.md
+    phases:
+      - phase_id: phase_one
+        title: Phase One
+        purpose: Demonstrate one repo-relative phase.
+        input_artifact: raw_input
+        output_artifact: live_output
+        acceptance:
+          - Contract is visible.
+        status: planned
+        execution_mode: stub
+        docs:
+          - docs/plan.md
+        code:
+          - src/runtime.py
+        tests:
+          - tests/test_runtime.py
+        evidence:
+          - docs/evidence.md
+    """,
+        encoding="utf-8",
+    )
+
+    module.WORKSPACE_ROOT = workspace_root
+    result = module.validate_notebook_registry(
+        module.load_notebook_registry(registry_path),
+        registry_path=registry_path,
+    )
+
+    assert result.ok
+    assert result.errors == []
+
+
 def test_validate_notebook_registry_rejects_invalid_phase_status(tmp_path: Path) -> None:
     module = _load_module()
     workspace_root, registry_path = _create_demo_workspace(tmp_path)

@@ -63,6 +63,7 @@ See `ROADMAP.md` for the full phase map and recommended priority order.
 | 57 | Plan Status Index Parser Compatibility (`57_plan-status-index-parser-compatibility.md`) | High | ✅ Complete | sync_plan_status parser now supports current Implementation Plans index |
 | 58 | Ops Archive Centralization (`58_ops-archive-centralization.md`) | Medium | ✅ Complete | Completed ops sprint notes moved to central archive |
 | 59 | Worktree Lifecycle Disposition Enforcement (`59_worktree-lifecycle-disposition-enforcement.md`) | Critical | ✅ Complete | Merge-or-disposition preflight and safe closeout propagation |
+| 60 | Loop-Engineering Clean-Room Alpha Slice 1 (`60_loop_engineering_cleanroom_alpha.md`) | High | ✅ Complete | External materialize/verify/reset alpha for shareable ecosystem fixture |
 
 ## Status Key
 

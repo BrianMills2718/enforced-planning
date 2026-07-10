@@ -1,0 +1,89 @@
+version: 1
+journeys:
+  - journey_id: loop_engineering_cleanroom_alpha
+    title: Loop-Engineering Clean-Room Alpha
+    notebook: notebooks/00_loop_engineering_cleanroom_alpha.ipynb
+    notebook_mode: mixed
+    related_docs:
+      - docs/plans/60_loop_engineering_cleanroom_alpha.md
+      - docs/evidence/plan60_cleanroom_alpha.md
+    related_code:
+      - enforced_planning/cleanroom_alpha.py
+      - scripts/cleanroom_alpha.py
+    related_tests:
+      - tests/test_cleanroom_alpha.py
+    related_evidence:
+      - docs/evidence/plan60_cleanroom_alpha.md
+    phases:
+      - phase_id: plan_cleanroom
+        title: Plan Clean Room
+        status: partial
+        execution_mode: stub
+        purpose: Convert a root and component revision into a dry-run materialization plan.
+        input_artifact: CleanroomSpec
+        output_artifact: MaterializationPlan
+        acceptance:
+          - Root path validation rejects workspace roots and escaping paths.
+          - Planned writes are explicit and machine-readable.
+        docs:
+          - docs/plans/60_loop_engineering_cleanroom_alpha.md
+        code:
+          - enforced_planning/cleanroom_alpha.py
+        tests:
+          - tests/test_cleanroom_alpha.py
+        evidence:
+          - docs/evidence/plan60_cleanroom_alpha.md
+      - phase_id: materialize_cleanroom
+        title: Materialize Clean Room
+        status: partial
+        execution_mode: stub
+        purpose: Write the synthetic fixture tree and install receipt into an external root.
+        input_artifact: MaterializationPlan
+        output_artifact: InstallReceipt
+        acceptance:
+          - Apply writes only declared files and directories.
+          - Apply refuses foreign overwrites.
+        docs:
+          - docs/plans/60_loop_engineering_cleanroom_alpha.md
+        code:
+          - enforced_planning/cleanroom_alpha.py
+        tests:
+          - tests/test_cleanroom_alpha.py
+        evidence:
+          - docs/evidence/plan60_cleanroom_alpha.md
+      - phase_id: verify_cleanroom
+        title: Verify Clean Room
+        status: partial
+        execution_mode: stub
+        purpose: Check isolation, synthetic inventory, policy shape, receipts, and sentinel failures.
+        input_artifact: external root plus InstallReceipt
+        output_artifact: VerificationReport
+        acceptance:
+          - Generated fixture passes verification.
+          - Negative controls fail with exact check ids.
+        docs:
+          - docs/plans/60_loop_engineering_cleanroom_alpha.md
+        code:
+          - enforced_planning/cleanroom_alpha.py
+        tests:
+          - tests/test_cleanroom_alpha.py
+        evidence:
+          - docs/evidence/plan60_cleanroom_alpha.md
+      - phase_id: reset_cleanroom
+        title: Reset Clean Room
+        status: partial
+        execution_mode: stub
+        purpose: Remove receipt-owned artifacts while refusing tampered receipt paths.
+        input_artifact: external root plus InstallReceipt
+        output_artifact: ResetReport
+        acceptance:
+          - Reset removes owned paths.
+          - Reset refuses paths outside the clean-room root.
+        docs:
+          - docs/plans/60_loop_engineering_cleanroom_alpha.md
+        code:
+          - enforced_planning/cleanroom_alpha.py
+        tests:
+          - tests/test_cleanroom_alpha.py
+        evidence:
+          - docs/evidence/plan60_cleanroom_alpha.md

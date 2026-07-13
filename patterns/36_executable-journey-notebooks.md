@@ -9,15 +9,18 @@
 > Compression Rules → "When Is a Journey Notebook Required?" — this pattern mirrors that
 > definition. When they conflict, the POM wins.
 
-A journey notebook is **required** when:
-- Implementation spans ≥ 2 distinct phases or stages (e.g., parse → validate → store)
-- AND at least one of: ≥ 2 scripts/modules being created or significantly modified;
-  work crosses a subsystem or repo boundary; phase sequence has non-obvious
-  output-to-input dependencies
+A journey notebook is **required** only when implementation has a non-obvious
+dependency across at least two phases, the plan names a decision the executable
+walkthrough will license, and a typed fixture, ordinary test, direct probe,
+diagram, or real UI cannot answer that decision more cheaply.
 
-**Optional but recommended** for a single linear script with clear input/output.
+It is **optional** as an explanatory walkthrough after canonical contracts exist
+elsewhere. Optional notebooks are not gates.
 
-**Never required** for trivial changes (≤ 20 lines, no new APIs) or single-file fixes.
+It is **never required** merely because work is multi-stage, crosses modules or
+repositories, or exceeds a line-count threshold. It is also unnecessary for
+trivial fixes, exploratory probes, or seams already made concrete by fixtures
+and tests.
 
 ---
 
@@ -46,9 +49,11 @@ Without a disciplined notebook representation, teams lose three things at once:
 
 ## Solution
 
-Use **one notebook per end-to-end user journey** as an **executable phase specification**.
+Use **one notebook per end-to-end user journey** as an **executable review
+walkthrough** when the threshold above is met.
 
-The notebook is not the runtime. It is the clearest human-readable rendering of:
+The notebook is neither the runtime nor the contract authority. It is a
+human-readable rendering of:
 
 1. the journey's phases
 2. the input and output artifact for each phase
@@ -56,7 +61,10 @@ The notebook is not the runtime. It is the clearest human-readable rendering of:
 4. the current implementation mode for each phase
 5. the expected output shape even when a phase is not fully implemented yet
 
-The notebook should stay runnable from the beginning, even if some phases are not yet implemented, by making unfinished phases emit **explicit provisional artifacts** rather than blocking the whole journey.
+The notebook should stay runnable from the beginning, even if some phases are
+not yet implemented, by making unfinished phases emit **explicit provisional
+artifacts** rather than blocking the whole journey. Those artifacts and schemas
+must be imported from canonical modules or fixture files once they exist.
 
 ### Core idea
 
@@ -80,8 +88,26 @@ This creates a **continuous notebook** where later sections can still run even i
 - Not a license to keep critical implementation only in notebooks
 - Not proof that a phase works just because the notebook runs
 - Not a replacement for plans, ADRs, tests, or evidence artifacts
+- Not a second implementation of schemas, fingerprints, compiler logic, or
+  acceptance invariants
+- Not a perpetual approval gate after the named design decision is resolved
 
-The notebook is a **journey representation**, not the sole source of truth.
+The notebook is a **journey projection**, never the source of truth.
+
+### Authority and promotion rule
+
+During early design, a notebook may make a contract proposal tangible. Once the
+proposal is accepted:
+
+1. move the contract into importable package models and fixtures;
+2. move its invariants into ordinary tests;
+3. change notebook cells to import and render those authorities;
+4. remove the notebook approval gate; and
+5. retire the notebook if the remaining walkthrough no longer changes a
+   decision or materially improves comprehension.
+
+Review and release gates attach to canonical tests and evidence, not to a second
+copy of the same logic in notebook cells.
 
 ### Workspace and archive truthfulness
 
@@ -454,12 +480,19 @@ Use `dry_run` when:
 
 ## Integration with Capabilities and Data Contracts
 
-Journey notebooks are the **executable specification** of capabilities defined in the plan template's Capabilities section. Each notebook cell corresponds to one capability or execution step from the plan's Capabilities table. Capabilities, tools, boundaries, and notebook cells are related views over the same architecture, but they are not identical objects: the capability is the abstract function, a tool is a reusable callable implementation, a boundary is the governed typed seam, and the notebook cell is the executable planning or validation artifact.
+Journey notebooks are an **executable projection** of capabilities defined in
+the plan template's Capabilities section. A notebook cell may demonstrate one
+capability or execution step, but imports its models, fixtures, and callable
+logic from canonical modules. Capabilities, tools, boundaries, and notebook
+cells are related views over the same architecture, but they are not identical
+objects: the capability is the abstract function, a tool is a reusable callable
+implementation, a boundary is the governed typed seam, and the notebook cell is
+a temporary planning or explanatory view.
 
 | Planning Layer | Artifact | Detail Level |
 |---------------|----------|-------------|
 | Plan template `## Capabilities` | Summary table | "capability X: input → output, producer → consumer(s)" |
-| Journey notebook cells | Executable pseudocode → real code | Pydantic schemas, input/output shapes, contract validation |
+| Journey notebook cells | Executable proposal → imported walkthrough | Render canonical schemas, fixtures, and validation results |
 | `@boundary` decorator in code | Runtime enforcement | Validates schemas at every call |
 | `@tool` decorator in code | Agent discoverability | Registers callable capability in tool registry |
 | Contract registry | Machine-readable state | Tracks all boundaries, call counts, violations |
@@ -481,14 +514,16 @@ assert not missing, f"Contract violation: consumer needs {missing}"
 print(f"✓ Contract valid: {len(consumer_required)} required fields provided")
 ```
 
-These cells run in **Phase 2** (schema validation) before any implementation begins. If a schema mismatch is found, the contract negotiation happens immediately — not after weeks of coding.
+These cells may run in **Phase 2** (schema validation) before implementation
+when they resolve a named contract decision. Once the seam is accepted, move the
+check into an ordinary test and have the notebook display that canonical result.
 
 ### Notebook lifecycle maps to contract lifecycle
 
 | Notebook Phase | Contract State |
 |---------------|---------------|
 | Phase 1: Pseudocode | Schemas proposed (Pydantic models drafted) |
-| Phase 2: Schema validation | Schemas locked (validation cells pass) |
+| Phase 2: Schema validation | Proposal reviewed; canonical models and tests become authoritative |
 | Phase 3: Real code | `@boundary` decorators added, registry populated |
 | Phase 4: End-to-end | Contracts enforced at runtime, dashboard shows green |
 
@@ -522,7 +557,7 @@ For cells that validate schema compatibility between producer and consumer (as o
 | [Acceptance-Gate-Driven Development](13_acceptance-gate-driven-development.md) | Journey notebooks can render gate progression phase by phase |
 | [Plan Workflow](15_plan-workflow.md) | Plans define the work; journey notebooks render that work as runnable phase sections |
 | [Engineering Workflow](34_engineering-workflow.md) | Journey notebooks can act as the visible walkthrough surface for the workflow outputs |
-| Capabilities and Data Contracts (`@tool`, `@boundary`, `BoundaryModel`) | Journey notebooks are the executable specification of capabilities and boundary contracts; each cell maps to one capability from the plan's Capabilities table |
+| Capabilities and Data Contracts (`@tool`, `@boundary`, `BoundaryModel`) | Journey notebooks project canonical capabilities and boundary contracts into an executable walkthrough; cells import rather than redefine them |
 
 ## Origin
 

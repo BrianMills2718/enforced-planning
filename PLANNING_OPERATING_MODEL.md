@@ -37,9 +37,10 @@ an agent:
    the enduring shape is clear enough.
 7. **Plans are bounded execution contracts.** They pre-make local decisions,
    define tests, and state acceptance criteria.
-8. **Journey notebooks concretize phase contracts.** For non-trivial multi-stage
-   work, the notebook renders the end-to-end journey as executable phase
-   sections.
+8. **Journey notebooks are decision-scoped projections.** When a non-obvious
+   multi-stage seam needs an executable walkthrough to resolve a named review
+   decision, a notebook renders the journey by importing canonical contracts
+   and fixtures. It is not a second contract authority or a permanent gate.
 9. **Tests and gates are pre-code artifacts.** They should be defined before
    implementation and follow TDD where feasible.
 10. **Observability is part of the contract.** It is not a postscript. Long-lived
@@ -68,7 +69,7 @@ North Star / Thesis
     -> Capabilities / Boundary Docs / PRD surfaces
     -> Roadmap / Phases
     -> Bounded Plan
-    -> Journey Notebook (when the work is non-trivial and multi-stage)
+    -> Journey Notebook (only when an executable walkthrough resolves a named decision)
     -> Tests / Gates
     -> Code
     -> Observability / Runtime evidence
@@ -93,9 +94,9 @@ provided it records a durable architectural choice.
 | Roadmap / phases | What major gates and sequence matter? | Plan | Can be lightweight in small repos |
 | ADRs | What durable design choice did we make? | Implementation of affected change | Cross-cutting; must include research basis or explicit skip |
 | Plan | What bounded slice are we executing now? | Code | Must define acceptance criteria, required tests, and the research basis for the slice when the work is non-trivial |
-| Journey notebook | How does the slice work end-to-end? | Proof for non-trivial multi-stage work | Required when phases/interfaces are easy to hand-wave |
+| Journey notebook | Which named decision becomes clearer when this slice runs end to end? | Resolution of that decision, when no cheaper artifact suffices | Review projection only; canonical contracts and proof remain in package code, fixtures, tests, and evidence |
 | Tests / gates | What counts as pass/fail? | Code | Should be predeclared and preferably written first |
-| Code | What is the implementation? | Closeout | Must follow the plan/notebook/contracts |
+| Code | What is the implementation? | Closeout | Must follow canonical plans and contracts; notebooks may render but do not own them |
 | Observability | How do we see behavior and drift? | Operational use / long-running execution | Required for runtime confidence |
 
 ## What Is Strict vs. What Is Recommended
@@ -138,8 +139,9 @@ These are defaults that can be compressed for trivial work:
 - Write or refresh the relevant topic research synthesis before creating ADRs for
   cross-project or externally-informed work.
 - Write capability/boundary surfaces before phase sequencing.
-- Create a journey notebook before coding when the work has multiple real
-  interfaces or stages.
+- Create a journey notebook before coding only when a named decision needs an
+  executable view of non-obvious phase dependencies and a typed fixture, test,
+  probe, diagram, or real UI is insufficient.
 - Write tests before code whenever feasible; at minimum, define them before code.
 - Start topic freshness metadata as advisory. Add blocking enforcement only
   after the repo has enough stable topic research to validate it meaningfully.
@@ -208,7 +210,7 @@ For a new system or major new subsystem, use this order:
 7. Record ADRs for major architectural choices.
 8. Create the roadmap and phase gates.
 9. Write the first bounded plan.
-10. Create the journey notebook if the slice is multi-stage.
+10. Create a journey notebook only if it satisfies the decision-scoped threshold.
 11. Define tests/gates or exploratory readouts.
 12. Implement code.
 13. Add observability and evidence collection.
@@ -232,7 +234,9 @@ For an existing repo, bootstrap in this order:
 8. Write capability/boundary docs for the enduring surfaces that matter.
 9. Derive or refresh the roadmap.
 10. Write the first bounded plan against the highest-value gap.
-11. Create the notebook/tests/gates or exploratory readouts for that slice.
+11. Create the smallest useful contract artifact, tests/gates, or exploratory
+    readouts for that slice; add a notebook only when it satisfies the
+    decision-scoped threshold.
 12. Implement and verify.
 
 This bootstrap order matters because legacy repos often fail when agents plan
@@ -249,8 +253,9 @@ against aspirational architecture without assessing the actual current state.
 - **Boundary docs** describe ownership and contract edges between components or
   repos.
 - **Plans** describe the next bounded change against those surfaces.
-- **Journey notebooks** render the bounded change end-to-end so humans and
-  agents can inspect the real phase contracts.
+- **Journey notebooks** render a bounded change end-to-end when that executable
+  view resolves a named decision. They import the real phase contracts rather
+  than defining copies.
 
 A good rule of thumb:
 
@@ -275,6 +280,8 @@ That means:
 - required tests belong in the plan before implementation starts
 - journey notebooks should state phase-level acceptance conditions before live
   code is written
+- notebook execution is explanatory evidence, not a substitute for ordinary
+  tests or runtime evidence
 - acceptance gates define what “done” means at feature level
 - writing tests first is the default expectation where feasible
 
@@ -295,21 +302,36 @@ multi-stage, or architectural concern.
 
 ### When Is a Journey Notebook Required?
 
-A journey notebook is **required** when ALL of the following are true:
-- Implementation spans ≥ 2 distinct phases or stages (e.g., parse → validate → store)
-- AND at least one of:
-  - ≥ 2 scripts or modules are being created or significantly modified
-  - Work crosses a subsystem or repo boundary
-  - The phase sequence has non-obvious dependencies between outputs (output of phase N
-    is input to phase N+1 in a way that isn't self-evident from the plan)
+A journey notebook is **required** only when ALL of the following are true:
 
-A journey notebook is **optional but recommended** when:
-- Work is a single linear script with clear input/output
-- Implementation is a straightforward extension of an existing pattern
+- implementation spans at least two phases with a non-obvious output-to-input
+  dependency;
+- the plan names a concrete human or agent decision that an executable
+  walkthrough will license; and
+- a typed fixture, ordinary test, direct probe, diagram, or real UI cannot answer
+  that decision as clearly for less maintenance cost.
 
-A journey notebook is **never required** when:
-- The trivial exemption applies (≤ 20 lines, no new APIs)
-- Single-file fix with a clear, self-contained acceptance criterion
+A journey notebook is **optional** when it materially improves onboarding or
+explanation after the contracts are already canonical elsewhere. Optional
+notebooks must not become merge, implementation, or release gates.
+
+A journey notebook is **never required** merely because work is multi-stage,
+crosses modules or repositories, or exceeds a line-count threshold. It is also
+not required for trivial changes, self-contained fixes, exploratory probes, or
+work whose seams are already made concrete by typed fixtures and tests.
+
+### Notebook Authority and Retirement
+
+- The notebook is a projection of canonical package models, fixtures, and
+  functions. Do not redefine schemas, digests, compiler logic, or acceptance
+  invariants in cells.
+- A notebook approval gate applies only to the named unresolved decision and
+  expires when that decision is recorded. It must not block unrelated compiler
+  or runtime implementation afterward.
+- Once ordinary tests own the accepted invariant, verification targets those
+  tests. The notebook may remain as a thin import-and-render walkthrough.
+- Retire the notebook when it no longer changes a review decision or explains
+  the journey more effectively than maintained documentation and tests.
 
 ## Relationship to Other Framework Artifacts
 

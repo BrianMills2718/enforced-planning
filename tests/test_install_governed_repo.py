@@ -13,6 +13,23 @@ SCRIPT = PROJECT_META_ROOT / "scripts" / "install_governed_repo.py"
 INSTALL_SH = PROJECT_META_ROOT / "install.sh"
 CANONICAL_FILE_CONTEXT = PROJECT_META_ROOT / "scripts" / "file_context.py"
 CANONICAL_FILE_CONTEXT_MODULE = PROJECT_META_ROOT / "enforced_planning" / "file_context.py"
+RELATIONSHIP_CONTEXT_ROLLOUT_PATHS = {
+    ".claude/hooks/check-hook-enabled.sh",
+    ".claude/hooks/gate-edit.sh",
+    ".claude/hooks/track-reads.sh",
+    ".claude/settings.json",
+    "Makefile",
+    "enforced_planning/context_packet.py",
+    "enforced_planning/docstring_wiki.py",
+    "enforced_planning/impact_obligations.py",
+    "enforced_planning/relationship_context.py",
+    "scripts/check_required_reading.py",
+    "scripts/meta/context_packet.py",
+    "scripts/meta/docstring_wiki.py",
+    "scripts/meta/hook_log.py",
+    "scripts/meta/impact_obligations.py",
+    "scripts/meta/relationship_context.py",
+}
 
 
 def _write_minimal_claude(repo_root: Path) -> None:
@@ -127,6 +144,11 @@ def test_relationship_context_only_rollout_is_bounded_and_runnable(tmp_path: Pat
     assert "render:AGENTS.md" not in dry_payload["actions"]
     assert not any("check_dead_code" in action for action in dry_payload["actions"])
     assert "append:Makefile.relationship-context" in dry_payload["actions"]
+    action_paths = {
+        "Makefile" if action.endswith(":Makefile.relationship-context") else action.split(":", 1)[1]
+        for action in dry_payload["actions"]
+    }
+    assert action_paths == RELATIONSHIP_CONTEXT_ROLLOUT_PATHS
 
     written = _run(
         "--repo-root",
@@ -212,6 +234,29 @@ def test_relationship_context_only_rejects_unmarked_make_target(tmp_path: Path) 
     payload = json.loads(result.stdout)
     assert any("unmarked relationship-context Make targets" in item for item in payload["blockers"])
     assert makefile.read_text(encoding="utf-8") == original
+
+
+def test_relationship_context_only_rejects_malformed_make_markers(tmp_path: Path) -> None:
+    """A partial generated block must block all writes rather than compound corruption."""
+
+    _prepare_relationship_context_target(tmp_path)
+    makefile = tmp_path / "Makefile"
+    original = "# <<< RELATIONSHIP CONTEXT TARGETS <<<\nhelp:\n\t@echo local\n"
+    makefile.write_text(original, encoding="utf-8")
+
+    result = _run(
+        "--repo-root",
+        str(tmp_path),
+        "--relationship-context-only",
+        "--write",
+        "--json",
+        cwd=PROJECT_META_ROOT,
+    )
+    assert result.returncode == 1
+    payload = json.loads(result.stdout)
+    assert any("malformed relationship-context Makefile markers" in item for item in payload["blockers"])
+    assert makefile.read_text(encoding="utf-8") == original
+    assert not (tmp_path / "enforced_planning" / "context_packet.py").exists()
 
 
 def test_installer_rejects_multiple_bounded_scopes(tmp_path: Path) -> None:

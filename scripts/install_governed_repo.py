@@ -246,11 +246,25 @@ def _sync_makefile_relationship_block(
 
     block = _render_makefile_relationship_block()
     normalized = current_makefile.rstrip("\n")
-    if MAKEFILE_RELATIONSHIP_BLOCK_START in normalized:
-        if MAKEFILE_RELATIONSHIP_BLOCK_END not in normalized:
-            return current_makefile, None, "unterminated relationship-context Makefile block"
+    start_count = normalized.count(MAKEFILE_RELATIONSHIP_BLOCK_START)
+    end_count = normalized.count(MAKEFILE_RELATIONSHIP_BLOCK_END)
+    if start_count or end_count:
+        if start_count != 1 or end_count != 1:
+            return (
+                current_makefile,
+                None,
+                "malformed relationship-context Makefile markers: "
+                f"starts={start_count}, ends={end_count}",
+            )
         start = normalized.index(MAKEFILE_RELATIONSHIP_BLOCK_START)
-        end = normalized.index(MAKEFILE_RELATIONSHIP_BLOCK_END) + len(
+        end_start = normalized.index(MAKEFILE_RELATIONSHIP_BLOCK_END)
+        if end_start < start:
+            return (
+                current_makefile,
+                None,
+                "malformed relationship-context Makefile markers: end precedes start",
+            )
+        end = end_start + len(
             MAKEFILE_RELATIONSHIP_BLOCK_END
         )
         existing = normalized[start:end].rstrip()

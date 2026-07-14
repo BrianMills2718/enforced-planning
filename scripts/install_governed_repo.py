@@ -53,6 +53,10 @@ SYNC_SUPPORT_FILES: dict[str, str] = {
     "enforced_planning/coordination_claims.py": "enforced_planning/coordination_claims.py",
     "enforced_planning/doc_authority.py": "enforced_planning/doc_authority.py",
     "enforced_planning/file_context.py": "enforced_planning/file_context.py",
+    "enforced_planning/relationship_context.py": "enforced_planning/relationship_context.py",
+    "enforced_planning/context_packet.py": "enforced_planning/context_packet.py",
+    "enforced_planning/impact_obligations.py": "enforced_planning/impact_obligations.py",
+    "enforced_planning/docstring_wiki.py": "enforced_planning/docstring_wiki.py",
     "enforced_planning/worktree_paths.py": "enforced_planning/worktree_paths.py",
     "enforced_planning/notebook_registry_validation.py": "enforced_planning/notebook_registry_validation.py",
     "enforced_planning/plan_validation.py": "enforced_planning/plan_validation.py",
@@ -78,6 +82,10 @@ SYNC_SUPPORT_FILES: dict[str, str] = {
     "scripts/meta/check_dead_code.py": "scripts/check_dead_code.py",
     "scripts/meta/check_push_safety.py": "scripts/check_push_safety.py",
     "scripts/meta/file_context.py": "scripts/file_context.py",
+    "scripts/meta/relationship_context.py": "scripts/relationship_context.py",
+    "scripts/meta/context_packet.py": "scripts/context_packet.py",
+    "scripts/meta/impact_obligations.py": "scripts/impact_obligations.py",
+    "scripts/meta/docstring_wiki.py": "scripts/docstring_wiki.py",
     "scripts/meta/render_agents_md.py": "scripts/render_agents_md.py",
     "scripts/meta/sync_plan_status.py": "scripts/sync_plan_status.py",
     "scripts/meta/validate_dead_code_audit.py": "scripts/validate_dead_code_audit.py",
@@ -393,7 +401,20 @@ def install_or_plan(
 
     if not skip_hook_wiring and not worktree_only:
         hook_actions, hook_writes, _ = plan_hook_generation(_hook_target(repo_root))
-        actions.extend(hook_actions)
+        duplicate_hook_paths = set(file_writes).intersection(hook_writes)
+        for path in duplicate_hook_paths:
+            if file_writes[path] != hook_writes[path]:
+                raise RuntimeError(f"conflicting canonical installer content for {path}")
+        actions.extend(
+            action
+            for action in hook_actions
+            if repo_root / action.split(":", 1)[1] not in duplicate_hook_paths
+        )
+        hook_writes = {
+            path: content
+            for path, content in hook_writes.items()
+            if path not in duplicate_hook_paths
+        }
         file_writes.update(hook_writes)
 
     if not worktree_only:

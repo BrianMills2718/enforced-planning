@@ -204,6 +204,50 @@ def test_unresolved_neighbor_and_untracked_target_are_explicit(tmp_path: Path) -
         build_context_packet(repo, "src/missing.py", relationships)
 
 
+def test_untracked_new_file_gets_path_relationship_context_when_allowed(tmp_path: Path) -> None:
+    """Write hooks can contextualize a new path without pretending source content exists."""
+
+    repo = _repo(tmp_path)
+    relationships = {
+        "relationships": [
+            {
+                "source": "src/**/*.py",
+                "target": "docs/requirements.md",
+                "relation": "implements",
+                "reason": "Source files implement the reviewed requirements.",
+            }
+        ]
+    }
+
+    packet = build_context_packet(
+        repo,
+        "src/new_service.py",
+        relationships,
+        allow_untracked_target=True,
+    )
+
+    assert packet.items[0].path == "src/new_service.py"
+    assert packet.items[0].summary is None
+    assert any(item.path == "docs/requirements.md" for item in packet.items)
+    assert [diagnostic.code for diagnostic in packet.diagnostics] == [
+        "target-untracked-new-file"
+    ]
+
+
+def test_untracked_new_file_cannot_claim_a_symbol(tmp_path: Path) -> None:
+    """A symbol selector requires parseable tracked source, not a path-only placeholder."""
+
+    repo = _repo(tmp_path)
+    with pytest.raises(ContextPacketError, match="cannot resolve a Python symbol"):
+        build_context_packet(
+            repo,
+            "src/new_service.py",
+            {},
+            target_symbol="authorize",
+            allow_untracked_target=True,
+        )
+
+
 def test_packet_json_contains_no_absolute_workspace_path(tmp_path: Path) -> None:
     """Hook payloads remain portable and expose only repository-relative provenance."""
 

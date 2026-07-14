@@ -18,7 +18,10 @@ from typing import Any, Literal, TypeAlias
 import yaml  # type: ignore[import-untyped]
 
 from enforced_planning.relationship_context import ArtifactRecord
+from enforced_planning.relationship_context import Diagnostic
 from enforced_planning.relationship_context import InventoryReport
+from enforced_planning.relationship_context import classify_artifact
+from enforced_planning.relationship_context import classify_format
 from enforced_planning.relationship_context import inventory_repository
 
 
@@ -408,6 +411,7 @@ def build_context_packet(
     target_symbol: str | None = None,
     max_items: int = 20,
     max_chars: int = 8_000,
+    allow_untracked_target: bool = False,
 ) -> ContextPacket:
     """Resolve and budget source-derived context for one edit target."""
 
@@ -419,7 +423,25 @@ def build_context_packet(
     by_path = {artifact.path: artifact for artifact in inventory.artifacts}
     target_artifact = by_path.get(target_path)
     if target_artifact is None:
-        raise ContextPacketError(f"target {target_path!r} is not Git-tracked")
+        if not allow_untracked_target:
+            raise ContextPacketError(f"target {target_path!r} is not Git-tracked")
+        if target_symbol is not None:
+            raise ContextPacketError("an untracked target cannot resolve a Python symbol")
+        target_artifact = ArtifactRecord(
+            path=target_path,
+            format=classify_format(target_path),
+            classification=classify_artifact(target_path),
+            working_tree_state="missing",
+            summary=None,
+            summary_source=None,
+            symbols=(),
+            diagnostics=(
+                Diagnostic(
+                    code="target-untracked-new-file",
+                    message="Edit target is not Git-tracked yet; relationship context is path-derived.",
+                ),
+            ),
+        )
 
     candidates: list[ContextItem] = [
         _context_item(
@@ -433,6 +455,14 @@ def build_context_packet(
         )
     ]
     diagnostics: list[ContextDiagnostic] = []
+    if target_path not in by_path:
+        diagnostics.append(
+            ContextDiagnostic(
+                code="target-untracked-new-file",
+                message="Edit target is not Git-tracked yet; relationship context is path-derived.",
+                selector=target_path,
+            )
+        )
     for spec in relationship_specs(relationships):
         source_match = any(_selector_matches(selector, target_path, target_symbol) for selector in spec.sources)
         target_match = any(_selector_matches(selector, target_path, target_symbol) for selector in spec.targets)
@@ -524,7 +554,7 @@ def _load_relationships(repo_root: Path, config_path: str | Path) -> dict[str, A
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Run the portable context-packet CLI for one tracked edit target."""
+    """Run the portable context-packet CLI for one edit target."""
 
     parser = argparse.ArgumentParser(description="Build bounded source-derived context for one tracked artifact")
     parser.add_argument("target", help="Repository-relative tracked path")
@@ -533,6 +563,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--config", default="scripts/relationships.yaml")
     parser.add_argument("--max-items", type=int, default=20)
     parser.add_argument("--max-chars", type=int, default=8_000)
+    parser.add_argument(
+        "--allow-untracked-target",
+        action="store_true",
+        help="Resolve path-level context for a new file that is not Git-tracked yet.",
+    )
     parser.add_argument("--pretty", action="store_true")
     args = parser.parse_args(argv)
     try:
@@ -544,6 +579,7 @@ def main(argv: list[str] | None = None) -> int:
             target_symbol=args.symbol,
             max_items=args.max_items,
             max_chars=args.max_chars,
+            allow_untracked_target=args.allow_untracked_target,
         )
     except (ContextPacketError, OSError) as exc:
         parser.exit(2, f"context-packet: {exc}\n")

@@ -279,14 +279,18 @@ def _normalized_failure_detail(
     failure_type = outcome_node.get("type", "")
     message = outcome_node.get("message", "")
     traceback = outcome_node.text or ""
-    detail = "\n".join((failure_type, message, traceback))
+    detail = "\n".join((failure_type, message, traceback)).replace("\\", "/")
     root_variants = {
         str(project_root),
         str(project_root.resolve()),
     }
     for root_variant in sorted(root_variants, key=len, reverse=True):
-        detail = detail.replace(root_variant, "<worktree>")
-    detail = detail.replace("\\", "/")
+        detail = detail.replace(root_variant.replace("\\", "/"), "<worktree>")
+    detail = re.sub(
+        r"(?:[A-Za-z]:)?(?:/[^/\s'\"\]]+)*/pytest-of-[^/\s'\"\]]+/pytest-\d+",
+        "<pytest-tmp>",
+        detail,
+    )
     detail_hash = hashlib.sha256(detail.encode("utf-8", errors="replace")).hexdigest()
     excerpt = " ".join(detail.split())[:500]
     return detail_hash, excerpt

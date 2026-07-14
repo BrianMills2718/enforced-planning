@@ -5,7 +5,7 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-from scripts.complete_plan import compare_repository_health
+from scripts.complete_plan import compare_repository_health, parse_pytest_junit
 
 
 def _run_git(repo: Path, *args: str) -> str:
@@ -175,3 +175,40 @@ def test_unavailable_baseline_blocks_completion(tmp_path: Path) -> None:
     assert comparison.status == "unavailable"
     assert comparison.baseline is None
     assert "merge base" in comparison.reason.lower()
+
+
+def test_pytest_session_directory_does_not_change_failure_identity(tmp_path: Path) -> None:
+    """Volatile pytest session IDs must not turn the same failure into a regression."""
+    reports: list[Path] = []
+    for session_id in (1448, 1449):
+        report = tmp_path / f"pytest-{session_id}.xml"
+        report.write_text(
+            f"""<?xml version="1.0" encoding="utf-8"?>
+<testsuites tests="1" failures="1" errors="0" skipped="0">
+  <testsuite name="pytest" tests="1" failures="1" errors="0" skipped="0">
+    <testcase classname="tests.test_sample" name="test_temp_path" file="tests/test_sample.py">
+      <failure type="subprocess.CalledProcessError" message="Command used /tmp/pytest-of-brian/pytest-{session_id}/test_temp_path0/input.txt">trace at /tmp/pytest-of-brian/pytest-{session_id}/test_temp_path0/input.txt</failure>
+    </testcase>
+  </testsuite>
+</testsuites>
+""",
+            encoding="utf-8",
+        )
+        reports.append(report)
+
+    parsed = [
+        parse_pytest_junit(
+            report,
+            project_root=Path("/repo/current"),
+            commit="abc123",
+            command=("python", "-m", "pytest"),
+            returncode=1,
+            output="",
+        )
+        for report in reports
+    ]
+
+    first_failure = parsed[0].failures[0]
+    second_failure = parsed[1].failures[0]
+    assert first_failure.detail_hash == second_failure.detail_hash
+    assert "<pytest-tmp>/test_temp_path0/input.txt" in first_failure.detail_excerpt

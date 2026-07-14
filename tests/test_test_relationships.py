@@ -213,11 +213,11 @@ def test_report_finds_unproved_mock_only_unit_only_and_missing_negative(tmp_path
     }
     report = audit_test_relationships(repo, data)
     codes = {finding.code for finding in report.findings}
-    assert "REQUIREMENT_UNPROVED" in codes
+    assert "REQUIREMENT_WITHOUT_TEST_EVIDENCE" in codes
     assert "AUTHORITY_SYNTHETIC_ONLY" in codes
     assert "AUTHORITY_UNIT_ONLY" in codes
     assert "HIGH_RISK_NO_NEGATIVE_CONTROL" in codes
-    assert report.proved_requirement_count == 1
+    assert report.requirements_with_evidence_count == 1
     assert report.declared_requirement_count == 2
 
 

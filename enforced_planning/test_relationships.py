@@ -98,7 +98,7 @@ class TestAuditReport:
     linked_test_count: int
     semantically_linked_test_count: int
     declared_requirement_count: int
-    proved_requirement_count: int
+    requirements_with_evidence_count: int
     reviewed_edge_count: int
     tests: tuple[TestCaseRecord, ...]
     requirements: tuple[RequirementRecord, ...]
@@ -135,7 +135,8 @@ class TestAuditReport:
             f"- Tests linked by reviewed edges: **{self.linked_test_count}**",
             f"- Tests linked by semantically complete edges: **{self.semantically_linked_test_count}**",
             f"- Reviewed test edges: **{self.reviewed_edge_count}**",
-            f"- Declared requirements proved: **{self.proved_requirement_count}/{self.declared_requirement_count}**",
+            "- Declared requirements with reviewed test evidence: "
+            f"**{self.requirements_with_evidence_count}/{self.declared_requirement_count}**",
             f"- Findings: **{len(self.findings)}**",
             "",
             "## Findings",
@@ -418,7 +419,7 @@ def audit_test_relationships(
         if not proof:
             findings.append(
                 _finding(
-                    "REQUIREMENT_UNPROVED",
+                    "REQUIREMENT_WITHOUT_TEST_EVIDENCE",
                     "high" if requirement.risk_level in {"high", "critical"} else "moderate",
                     requirement.requirement_id,
                     "Declared requirement has no reviewed test relationship.",
@@ -485,7 +486,11 @@ def audit_test_relationships(
             )
 
     findings.sort(key=lambda finding: (finding.code, finding.subject, finding.message))
-    proved = {requirement.requirement_id for requirement in requirements if edges_by_requirement.get(requirement.requirement_id)}
+    requirements_with_evidence = {
+        requirement.requirement_id
+        for requirement in requirements
+        if edges_by_requirement.get(requirement.requirement_id)
+    }
     return TestAuditReport(
         schema_version=1,
         mode="report_only",
@@ -493,7 +498,7 @@ def audit_test_relationships(
         linked_test_count=len(linked_ids),
         semantically_linked_test_count=len(semantically_linked_ids),
         declared_requirement_count=len(requirements),
-        proved_requirement_count=len(proved),
+        requirements_with_evidence_count=len(requirements_with_evidence),
         reviewed_edge_count=len(edges),
         tests=tests,
         requirements=requirements,

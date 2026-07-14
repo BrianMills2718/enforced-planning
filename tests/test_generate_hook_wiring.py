@@ -49,6 +49,9 @@ def test_generate_hook_wiring_dry_run_reports_expected_changes(tmp_path: Path) -
     assert "sync:.claude/hooks/track-reads.sh" in payload["actions"]
     assert "sync:scripts/check_required_reading.py" in payload["actions"]
     assert "sync:scripts/meta/hook_log.py" in payload["actions"]
+    assert "sync:scripts/meta/context_packet.py" in payload["actions"]
+    assert "sync:enforced_planning/context_packet.py" in payload["actions"]
+    assert "sync:enforced_planning/relationship_context.py" in payload["actions"]
     assert "sync:.claude/settings.json" in payload["actions"]
 
 
@@ -117,6 +120,9 @@ def test_generate_hook_wiring_writes_files_and_merges_settings(tmp_path: Path) -
     assert (tmp_path / ".claude" / "hooks" / "track-reads.sh").exists()
     assert (tmp_path / "scripts" / "check_required_reading.py").exists()
     assert (tmp_path / "scripts" / "meta" / "hook_log.py").exists()
+    assert (tmp_path / "scripts" / "meta" / "context_packet.py").exists()
+    assert (tmp_path / "enforced_planning" / "context_packet.py").exists()
+    assert (tmp_path / "enforced_planning" / "relationship_context.py").exists()
 
 
 def test_generate_hook_wiring_is_idempotent(tmp_path: Path) -> None:

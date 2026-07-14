@@ -9,6 +9,7 @@ artifacts required for read-gating to work:
 - `.claude/hooks/track-reads.sh`
 - `scripts/check_required_reading.py`
 - `scripts/meta/hook_log.py`
+- `scripts/meta/context_packet.py` and its static inventory support
 - `.claude/settings.json` hook entries for `Read` and `Edit|Write`
 
 The target repo must already expose a machine-readable relationships graph and
@@ -41,6 +42,9 @@ HOOK_FILES: dict[str, str] = {
 SUPPORT_FILES: dict[str, str] = {
     "scripts/check_required_reading.py": "scripts/check_required_reading.py",
     "scripts/meta/hook_log.py": "scripts/hook_log.py",
+    "scripts/meta/context_packet.py": "scripts/context_packet.py",
+    "enforced_planning/context_packet.py": "enforced_planning/context_packet.py",
+    "enforced_planning/relationship_context.py": "enforced_planning/relationship_context.py",
 }
 
 READ_HOOK = {

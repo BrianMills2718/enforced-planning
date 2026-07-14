@@ -4,6 +4,7 @@
 # Configuration
 SCRIPTS_META := scripts/meta
 PLANS_DIR := docs/plans
+PYTHON ?= $(if $(wildcard .venv/bin/python),.venv/bin/python,python3)
 GITHUB_ACCOUNT ?= BrianMills2718
 PR_AUTO_EXPECTED_REPO ?= $(notdir $(CURDIR))
 
@@ -83,6 +84,27 @@ ifndef PLAN
 endif
 	@python $(SCRIPTS_META)/complete_plan.py --plan $(PLAN)
 
+# --- Relationship Context ---
+.PHONY: relationship-context context-packet impact-obligations docstring-wiki docstring-wiki-check
+
+relationship-context:  ## Inventory source-derived summaries for every tracked artifact
+	@$(PYTHON) $(SCRIPTS_META)/relationship_context.py --repo-root . --pretty
+
+context-packet:  ## Show bounded edit context (TARGET=path required)
+ifndef TARGET
+	$(error TARGET is required. Usage: make context-packet TARGET=src/service.py)
+endif
+	@$(PYTHON) $(SCRIPTS_META)/context_packet.py --repo-root . --pretty $(TARGET)
+
+impact-obligations:  ## Report changed-file reconciliation obligations (BASE=revision optional)
+	@$(PYTHON) $(SCRIPTS_META)/impact_obligations.py --repo-root . --pretty --base $(or $(BASE),HEAD)
+
+docstring-wiki:  ## Regenerate the source-derived docstring wiki
+	@$(PYTHON) $(SCRIPTS_META)/docstring_wiki.py --repo-root . --write
+
+docstring-wiki-check:  ## Fail when the generated docstring wiki is missing or stale
+	@$(PYTHON) $(SCRIPTS_META)/docstring_wiki.py --repo-root . --check
+
 # --- Quality ---
 .PHONY: dead-code dead-code-audit dead-code-validate
 
@@ -121,6 +143,13 @@ help-meta:  ## Show enforced-planning targets
 	@echo "    dead-code       Run dead code detection"
 	@echo "    dead-code-audit Refresh reviewed dead-code audit file"
 	@echo "    dead-code-validate Validate reviewed dead-code dispositions"
+	@echo ""
+	@echo "  Relationship context:"
+	@echo "    relationship-context Inventory source-derived tracked-artifact summaries"
+	@echo "    context-packet      Show bounded edit context (TARGET=path)"
+	@echo "    impact-obligations  Report changed-file reconciliation obligations"
+	@echo "    docstring-wiki      Regenerate the source-derived docstring wiki"
+	@echo "    docstring-wiki-check Check generated wiki freshness"
 	@echo ""
 	@echo "  Plans:"
 	@echo "    plan-tests      Check plan tests (PLAN=N)"

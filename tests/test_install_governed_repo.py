@@ -75,6 +75,10 @@ def test_install_governed_repo_dry_run_reports_expected_actions(tmp_path: Path) 
     assert "install:enforced_planning/agents_rendering.py" in payload["actions"]
     assert "install:enforced_planning/concern_routing.py" in payload["actions"]
     assert "install:enforced_planning/file_context.py" in payload["actions"]
+    assert "install:enforced_planning/relationship_context.py" in payload["actions"]
+    assert "install:enforced_planning/context_packet.py" in payload["actions"]
+    assert "install:enforced_planning/impact_obligations.py" in payload["actions"]
+    assert "install:enforced_planning/docstring_wiki.py" in payload["actions"]
     assert "install:enforced_planning/notebook_registry_validation.py" in payload["actions"]
     assert "install:enforced_planning/plan_validation.py" in payload["actions"]
     assert "install:enforced_planning/push_safety.py" in payload["actions"]
@@ -92,12 +96,17 @@ def test_install_governed_repo_dry_run_reports_expected_actions(tmp_path: Path) 
     assert "install:scripts/meta/worktree-coordination/create_review_claim.py" in payload["actions"]
     assert "install:scripts/meta/worktree-coordination/raise_concern.py" in payload["actions"]
     assert "install:scripts/meta/file_context.py" in payload["actions"]
+    assert "install:scripts/meta/relationship_context.py" in payload["actions"]
+    assert "install:scripts/meta/context_packet.py" in payload["actions"]
+    assert "install:scripts/meta/impact_obligations.py" in payload["actions"]
+    assert "install:scripts/meta/docstring_wiki.py" in payload["actions"]
     assert "install:scripts/meta/render_agents_md.py" in payload["actions"]
     assert "install:scripts/meta/check_agents_sync.py" in payload["actions"]
     assert "install:meta-process/templates/agents.md.template" in payload["actions"]
     assert "sync:.claude/hooks/gate-edit.sh" in payload["actions"]
     assert "render:AGENTS.md" in payload["actions"]
     assert payload["dry_run_mode"] is True
+    assert len(payload["actions"]) == len(set(payload["actions"]))
     assert not (tmp_path / "AGENTS.md").exists()
 
 
@@ -130,6 +139,10 @@ def test_install_governed_repo_write_bootstraps_minimum_repo_and_passes_audit(
     assert (tmp_path / "enforced_planning" / "agents_rendering.py").exists()
     assert (tmp_path / "enforced_planning" / "concern_routing.py").exists()
     assert (tmp_path / "enforced_planning" / "file_context.py").exists()
+    assert (tmp_path / "enforced_planning" / "relationship_context.py").exists()
+    assert (tmp_path / "enforced_planning" / "context_packet.py").exists()
+    assert (tmp_path / "enforced_planning" / "impact_obligations.py").exists()
+    assert (tmp_path / "enforced_planning" / "docstring_wiki.py").exists()
     assert (tmp_path / "enforced_planning" / "notebook_registry_validation.py").exists()
     assert (tmp_path / "enforced_planning" / "plan_validation.py").exists()
     assert (tmp_path / "enforced_planning" / "push_safety.py").exists()
@@ -157,6 +170,10 @@ def test_install_governed_repo_write_bootstraps_minimum_repo_and_passes_audit(
         tmp_path / "scripts" / "meta" / "worktree-coordination" / "raise_concern.py"
     ).exists()
     assert (tmp_path / "scripts" / "meta" / "file_context.py").exists()
+    assert (tmp_path / "scripts" / "meta" / "relationship_context.py").exists()
+    assert (tmp_path / "scripts" / "meta" / "context_packet.py").exists()
+    assert (tmp_path / "scripts" / "meta" / "impact_obligations.py").exists()
+    assert (tmp_path / "scripts" / "meta" / "docstring_wiki.py").exists()
     assert (tmp_path / "scripts" / "meta" / "render_agents_md.py").exists()
     assert (tmp_path / "scripts" / "meta" / "check_agents_sync.py").exists()
     assert (tmp_path / "meta-process" / "templates" / "agents.md.template").exists()
@@ -252,6 +269,41 @@ def test_install_governed_repo_reports_and_syncs_drifted_validator(tmp_path: Pat
     assert drifted_path.read_text(encoding="utf-8") == CANONICAL_FILE_CONTEXT.read_text(
         encoding="utf-8"
     )
+
+
+def test_installed_context_packet_wrapper_resolves_target_repo_root(tmp_path: Path) -> None:
+    """The ``scripts/meta`` installation layout must import and inventory the target repo."""
+
+    _write_minimal_claude(tmp_path)
+    installed = _run(
+        "--repo-root",
+        str(tmp_path),
+        "--write",
+        "--json",
+        cwd=PROJECT_META_ROOT,
+    )
+    assert installed.returncode == 0, installed.stdout + installed.stderr
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    subprocess.run(["git", "-C", str(tmp_path), "add", "-A"], check=True)
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(tmp_path / "scripts" / "meta" / "context_packet.py"),
+            "CLAUDE.md",
+            "--repo-root",
+            str(tmp_path),
+        ],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["target"] == "CLAUDE.md"
+    assert payload["items"][0]["path"] == "CLAUDE.md"
 
 
 def test_install_governed_repo_is_idempotent_after_write(tmp_path: Path) -> None:

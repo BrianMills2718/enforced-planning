@@ -23,6 +23,25 @@ Items start as **unconfirmed** observations and get triaged into confirmed issue
 
 ## Open
 
+### MP-018: Registered worktree residency is not a lifecycle invariant
+
+| Field | Value |
+|-------|-------|
+| Status | `planned` — Plan #68 |
+| Severity | high |
+| Reported | 2026-07-14 |
+
+The coordination consistency checker reports unclaimed linked worktrees only
+as warnings, ordinary session status is claim-centric, and the July 9 path
+migration did not disposition the historical sibling-layout backlog. Twelve
+clean but claimless worktrees therefore remained registered under the retired
+`<repo>_worktrees/` convention until a manual audit archived their exact remote
+heads and removed the checkouts.
+
+**Next:** Plan #68 adds a repository-local audit path, distinct sanctioned-root
+classification, and tested opt-in enforcement without pretending Git can make
+semantic merge/discard decisions.
+
 ### MP-017: Repository-wide Ruff target has 123 baseline errors
 
 | Field | Value |

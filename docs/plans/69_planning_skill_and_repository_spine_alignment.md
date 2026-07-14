@@ -1,6 +1,6 @@
 # Plan #69: Planning Skill and Repository Spine Alignment
 
-**Status:** In Progress
+**Status:** Complete (report-only consumer pilot; hard enforcement deferred)
 **Type:** implementation + report-only consumer pilot
 **Priority:** Critical
 **phase_ref:** "portable documentation governance"
@@ -146,27 +146,27 @@ the table above. Existing unrelated worktree changes remain untouched.
 | Slice | Outcome | Status |
 |---|---|---|
 | 1 | Canonical action boundary, routing precedence, and artifact ownership | Complete |
-| 2 | Relationship graph, roadmap spine, docstring, and generated-projection roles aligned | In progress |
-| 3 | Skill profiles/overlays and project-specific policy separation | Planned |
-| 4 | Planning-only and routing evaluations with negative mutation assertions | Planned |
-| 5 | `inside-success` report-only repository-spine pilot | Planned |
-| 6 | Held-out evaluation, policy reconciliation, and enforcement disposition | Planned |
+| 2 | Relationship graph, roadmap spine, docstring, and generated-projection roles aligned | Complete |
+| 3 | Skill profiles/overlays and project-specific policy separation | Complete |
+| 4 | Planning-only and routing evaluations with negative mutation assertions | Complete with automatic-trigger evidence invalidated, not scored |
+| 5 | `inside-success` report-only repository-spine pilot | Complete |
+| 6 | Held-out evaluation, policy reconciliation, and enforcement disposition | Complete; hard enforcement remains off |
 
 ## Acceptance Criteria
 
-| Criterion | Evidence | Pass condition |
-|---|---|---|
-| AC-1 action boundary | source + negative test | A planning/review-only request causes zero writes, installs, commits, pushes, or external mutations. |
-| AC-2 deterministic routing | source + routing tests | One bounded outcome routes to `design-plan`; multiple outcomes or a capability critical path route to `project-roadmapping`; a combined request roadmaps first and designs only the next one or two goals. |
-| AC-3 single artifact ownership | source review | Roadmap, capability graph, bounded design packet, project concerns, project evidence, relationship registry, docstrings, and generated projections each have one explicit authority. |
-| AC-4 proportionality | fixtures + review | Small and standard profiles plus conditional overlays avoid irrelevant UI, LLM, Pydantic, workbench, or master-roadmap ceremony. |
-| AC-5 repository navigation | observed deterministic report | In `inside-success`, a reviewer can traverse an outcome to capability, implementation, tests, evidence, and claim or an explicit unimplemented/evidence gap. |
-| AC-6 impact precision | positive + negative tests | A representative high-value code change triggers its declared review obligations; an unrelated diff does not. |
-| AC-7 document lifecycle | schema-validated registry + report | Each reviewed narrative document has a role, justification, lifecycle source, and resolvable anchor; generated pages are excluded as authorities. |
-| AC-8 wiki contract | deterministic test/report | Every tracked source file is represented without one hand-authored YAML row per file; the generated docstring wiki is exhaustive, reproducible, and labeled non-authoritative. |
-| AC-9 plan lifecycle | source review | Completed plans remain immutable evidence; current truth points through explicit successors rather than rewriting history. |
-| AC-10 portable closure | import and CLI tests | The consumer-installed relationship tooling includes its full internal import closure and runs without importing the framework checkout implicitly. |
-| AC-11 honest enforcement disposition | pilot report + coverage review | Hard enforcement remains off unless both-sign evidence demonstrates adequate precision for the exact proposed gate. |
+| Criterion | Evidence | Pass condition | Result |
+|---|---|---|---|
+| AC-1 action boundary | source + negative test | A planning/review-only request causes zero writes, installs, commits, pushes, or external mutations. | Pass at source, fixtures, and explicit fresh-client output; automatic-trigger proof remains limited because the available harness failed its positive control and the explicit run used a read-only sandbox. |
+| AC-2 deterministic routing | source + routing tests | One bounded outcome routes to `design-plan`; multiple outcomes or a capability critical path route to `project-roadmapping`; a combined request roadmaps first and designs only the next one or two goals. | Pass for explicit fresh-client bounded and multi-outcome cases; automatic-trigger result is invalid/unscored. |
+| AC-3 single artifact ownership | source review | Roadmap, capability graph, bounded design packet, project concerns, project evidence, relationship registry, docstrings, and generated projections each have one explicit authority. | Pass in the operating model and both compact skill routers. |
+| AC-4 proportionality | fixtures + review | Small and standard profiles plus conditional overlays avoid irrelevant UI, LLM, Pydantic, workbench, or master-roadmap ceremony. | Pass; the bounded candidate output removed the baseline's project-graph and universal audit ceremony, and non-Python fixtures reject Pydantic assumptions. |
+| AC-5 repository navigation | observed deterministic report | In `inside-success`, a reviewer can traverse an outcome to capability, implementation, tests, evidence, and claim or an explicit unimplemented/evidence gap. | Pass through `roadmap/PROJECT_MAP.md` and the RS-1 traceable wedge. |
+| AC-6 impact precision | positive + negative tests | A representative high-value code change triggers its declared review obligations; an unrelated diff does not. | Pass: governed documentation change produced two expected obligations; unrelated wiki change produced zero. |
+| AC-7 document lifecycle | schema-validated registry + report | Each reviewed narrative document has a role, justification, lifecycle source, and resolvable anchor; generated pages are excluded as authorities. | Pass for ten reviewed declarations; 1,535 undeclared legacy documents remain explicit migration debt. |
+| AC-8 wiki contract | deterministic test/report | Every tracked source file is represented without one hand-authored YAML row per file; the generated docstring wiki is exhaustive, reproducible, and labeled non-authoritative. | Pass: 2,060/2,060 tracked artifacts and byte-identical 1,301,492-byte generated projections. |
+| AC-9 plan lifecycle | source review | Completed plans remain immutable evidence; current truth points through explicit successors rather than rewriting history. | Pass through the existing lifecycle compiler and completed-plan negative controls; no completed plan was rewritten by this work. |
+| AC-10 portable closure | import and CLI tests | The consumer-installed relationship tooling includes its full internal import closure and runs without importing the framework checkout implicitly. | Pass: six of six consumer-local CLIs run under isolated Python with empty `PYTHONPATH`. |
+| AC-11 honest enforcement disposition | pilot report + coverage review | Hard enforcement remains off unless both-sign evidence demonstrates adequate precision for the exact proposed gate. | Pass: the pilot and ecosystem policy both remain report-only. |
 
 ## Stop Conditions
 
@@ -208,12 +208,49 @@ the table above. Existing unrelated worktree changes remain untouched.
   claim-specific evidence contract to the operating model. Focused plan,
   documentation, link, and dependency checks pass; legacy dependency warnings
   remain pre-existing.
+- 2026-07-14: Rewrote `design-plan` and `project-roadmapping` as compact
+  routers/contracts with Small/Standard profiles, conditional overlays,
+  repository trust boundaries, optional-skill fallbacks, and single-owner
+  references. Added fixture-backed routing, mutation, proportionality, runtime,
+  exploratory, migration, and repository-spine evaluations. Published as
+  agent-skills commits `9c5b12a` and `c9fac60`.
+- 2026-07-14: Invalidated the Claude trigger run after all positive controls
+  produced zero invocations under both baseline and candidate. Fresh explicit
+  Codex runs routed the bounded cross-repository case to `design-plan` and the
+  one-repository multi-outcome case to `project-roadmapping`; the candidate
+  removed baseline project-level ceremony from the bounded case. No automatic
+  trigger improvement is claimed.
+- 2026-07-14: Published the `inside-success` pilot at `5ab5c5d`. The root
+  README now routes to `roadmap/README.md`; roadmap-owned narratives live in one
+  directory while code/tests remain native. The pilot inventories 2,060 tracked
+  artifacts, links 25/25 scoped tests with 2/2 declared requirements evidenced,
+  passes 14 focused tests, and closes 13 staged obligations through nine
+  co-updates plus four exact reviewed-unchanged dispositions.
+- 2026-07-14: Published project-meta policy reconciliation at `1ce58912`.
+  `goal-mapping` registry drift is replaced by `project-roadmapping`, the
+  generated Agent Guide now preserves action mode and deterministic routing,
+  22 focused policy tests pass, and the pre-existing coherence baseline improves
+  from nine blockers/nine warnings to eight/eight without broad unrelated
+  cleanup.
 
-## Concerns
+## Follow-On Concerns (Not Completion Blockers)
 
-- `inside-success` already has a documentation inventory and second-brain
-  navigation hub. The pilot must reuse or supersede those roles explicitly,
-  not silently create parallel authorities.
+- `inside-success` has 1,535 undeclared legacy narrative documents and 625
+  explicit source-summary diagnostics. These are a review queue, not grounds
+  for a bulk semantic rewrite or hard gate.
+- The existing Inside Success documentation-disposition ledger is already stale
+  on untouched `main` (1,497 declared versus 1,696 current inventory records).
+  The pilot reports but does not take ownership of that cleanup lane.
+- The relationship-only governed-repo installer does not yet include the newer
+  archive-lifecycle module/CLI. The pilot installed the canonical pair
+  explicitly; the installer gap is recorded in `project-meta/policy_friction.md`.
+- The Claude trigger harness could not observe any positive skill invocation.
+  Explicit fresh-client output supports routing behavior, but automatic trigger
+  improvement remains unlicensed until the harness has a passing positive
+  control.
+- Project-meta coherence still has eight unrelated legacy registry blockers and
+  eight warnings after the directly relevant `goal-mapping`/
+  `project-roadmapping` drift was fixed.
 - Existing A-F evidence grades are widespread policy. Claim-specific evidence
   metadata should become canonical incrementally, with grades retained as a
   derived compatibility view until consumers and gates migrate.

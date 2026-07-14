@@ -321,6 +321,19 @@ def _expand_selectors(selectors: tuple[str, ...], inventory: InventoryReport) ->
     return tuple(sorted(found, key=lambda item: (item[0], item[1] or "")))
 
 
+def expand_selectors(selectors: tuple[str, ...], inventory: InventoryReport) -> tuple[tuple[str, str | None], ...]:
+    """Expand file/symbol selectors for context and reconciliation consumers."""
+
+    return _expand_selectors(selectors, inventory)
+
+
+def selector_path_matches(selector: str, path: str) -> bool:
+    """Match only the file component of a selector for file-level change sets."""
+
+    selector_path, _symbol = _split_selector(selector)
+    return _glob_matches(path, selector_path)
+
+
 def _context_item(
     artifact: ArtifactRecord,
     *,
@@ -545,6 +558,8 @@ __all__ = [
     "ContextPacketError",
     "RelationshipSpec",
     "build_context_packet",
+    "expand_selectors",
     "main",
     "relationship_specs",
+    "selector_path_matches",
 ]

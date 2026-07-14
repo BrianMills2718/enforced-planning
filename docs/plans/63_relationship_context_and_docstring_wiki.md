@@ -88,7 +88,7 @@ C8 generated wiki + consumer rollout
 | 0 | Contract and policy ownership fixed | Complete |
 | 1 | Read-only exact tracked-file inventory and actual-summary extraction | Complete |
 | 2 | Relationship schema extension and bounded `ContextPacket` | Complete |
-| 3 | Changed-node impact obligations and audited dispositions | Not started |
+| 3 | Changed-node impact obligations and audited dispositions | Complete |
 | 4 | Active/completed plan lifecycle freshness with negative controls | Not started |
 | 5 | Deterministic CLI/JSON docstring wiki and sync check | Not started |
 | 6 | Installer/hook adapters and report-only `onto-canon6` pilot | Not started |
@@ -123,6 +123,16 @@ the target and report omitted neighbors. A live symbol packet for
 `enforced_planning/context_packet.py::build_context_packet` injected its actual
 function docstring plus repository-default `CLAUDE.md` context with source
 provenance and no diagnostics.
+
+**Slice 3 evidence (2026-07-14):** the focused suite passes 24/24 with strict
+mypy and Ruff clean. Negative controls reject empty/unknown dispositions,
+duplicate or stale ids, stale review fingerprints, untracked supersession
+targets, dangling edge targets, and deleted linked artifacts presented as
+updates.
+The review token hashes the exact staged/working-tree binary diff; a test
+changes a staged file twice under the same `HEAD` and proves the first review
+token no longer matches. The CLI remains report-only unless explicitly invoked
+with `--strict`.
 
 ## Later Acceptance Criteria
 

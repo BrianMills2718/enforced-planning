@@ -140,3 +140,23 @@ repository-relative globs with optional `::qualified.symbol` suffixes.
 summary from the selected source artifact. Packets always include the target,
 rank declared semantic neighbors before legacy edges, enforce configurable
 item/character budgets, and report unresolved or omitted context.
+
+## Impact Obligation Extension (Slice 3)
+
+A changed source path matching an outgoing edge with maintenance
+`reconcile`, `regenerate`, or `block` creates one deterministic
+`ImpactObligation` per resolved target. `lineage_only` edges remain context but
+create no obligation.
+
+An obligation is satisfied when the linked target changed in the same Git
+comparison or a reviewed disposition is valid:
+
+- `verified_unchanged` requires a substantive reason and exact review
+  fingerprint;
+- `superseded` additionally requires a tracked successor authority; or
+- `blocked` preserves explicit unresolved debt and keeps strict mode red.
+
+The review fingerprint hashes `HEAD`, comparison base, staged/working-tree
+mode, and the exact binary diff. It therefore changes when an uncommitted edit
+changes even if `HEAD` does not. Timestamp-only, stale-revision, duplicate-id,
+unknown-status, and untracked-successor dispositions fail loudly.

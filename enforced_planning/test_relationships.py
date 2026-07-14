@@ -15,7 +15,7 @@ import json
 from pathlib import Path, PurePosixPath
 from typing import Any, Literal, TypeAlias
 
-import yaml  # type: ignore[import-untyped]
+import yaml  # type: ignore[import-untyped, unused-ignore]
 
 from enforced_planning.relationship_context import InventoryReport
 from enforced_planning.relationship_context import inventory_repository

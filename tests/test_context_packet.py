@@ -248,6 +248,15 @@ def test_untracked_new_file_cannot_claim_a_symbol(tmp_path: Path) -> None:
         )
 
 
+@pytest.mark.parametrize("target", ["/tmp/outside.py", "src/../outside.py"])
+def test_target_path_must_remain_repository_relative(tmp_path: Path, target: str) -> None:
+    """Context output cannot leak or traverse beyond its governed repository."""
+
+    repo = _repo(tmp_path)
+    with pytest.raises(ContextPacketError, match="repository-relative path"):
+        build_context_packet(repo, target, {}, allow_untracked_target=True)
+
+
 def test_packet_json_contains_no_absolute_workspace_path(tmp_path: Path) -> None:
     """Hook payloads remain portable and expose only repository-relative provenance."""
 

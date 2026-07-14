@@ -98,3 +98,17 @@ def test_gate_surfaces_packet_failure_without_blocking_report_only_edit(tmp_path
     context = payload["hookSpecificOutput"]["additionalContext"]
     assert "RELATIONSHIP CONTEXT ERROR (report-only; edit allowed)" in context
     assert "malformed relationship graph" in context
+
+
+def test_gate_skips_file_outside_its_repository(tmp_path: Path) -> None:
+    """One repository hook must not contextualize or expose an external edit path."""
+
+    repo = _repo(
+        tmp_path,
+        context_script='raise AssertionError("context CLI must not run")\n',
+    )
+
+    result = _invoke(repo, tmp_path / "outside.py")
+
+    assert result.returncode == 0
+    assert result.stdout == ""

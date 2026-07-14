@@ -159,6 +159,10 @@ resolve_repo_root() {
 normalize_repo_path() {
     local raw_path="$1"
     local rel_path="$raw_path"
+    if [[ "$raw_path" == /* && "$raw_path" != "$REPO_ROOT/"* ]]; then
+        printf '%s' ""
+        return 0
+    fi
     if [[ "$raw_path" == "$REPO_ROOT/"* ]]; then
         rel_path="${raw_path#$REPO_ROOT/}"
     fi
@@ -246,6 +250,11 @@ fi
 
 if [[ -z "$FILE_PATH" ]]; then
     log_gate_decision "skip" "missing file path" "0" "0"
+    exit 0
+fi
+
+if [[ -z "$REL_PATH" ]]; then
+    log_gate_decision "skip" "file path is outside repository" "0" "0"
     exit 0
 fi
 

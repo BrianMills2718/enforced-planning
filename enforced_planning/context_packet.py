@@ -12,7 +12,7 @@ import argparse
 from dataclasses import asdict, dataclass, replace
 import fnmatch
 import json
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Literal, TypeAlias
 
 import yaml  # type: ignore[import-untyped]
@@ -426,6 +426,9 @@ def build_context_packet(
         raise ContextPacketError("max_items must be at least 1")
     if max_chars < 1:
         raise ContextPacketError("max_chars must be positive")
+    target_parts = PurePosixPath(target_path)
+    if not target_path or target_parts.is_absolute() or ".." in target_parts.parts:
+        raise ContextPacketError("target must be a repository-relative path without traversal")
     inventory = inventory_repository(repo_root)
     by_path = {artifact.path: artifact for artifact in inventory.artifacts}
     target_artifact = by_path.get(target_path)

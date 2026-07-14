@@ -87,7 +87,7 @@ C8 generated wiki + consumer rollout
 |---|---|---|
 | 0 | Contract and policy ownership fixed | Complete |
 | 1 | Read-only exact tracked-file inventory and actual-summary extraction | Complete |
-| 2 | Relationship schema extension and bounded `ContextPacket` | Not started |
+| 2 | Relationship schema extension and bounded `ContextPacket` | Complete |
 | 3 | Changed-node impact obligations and audited dispositions | Not started |
 | 4 | Active/completed plan lifecycle freshness with negative controls | Not started |
 | 5 | Deterministic CLI/JSON docstring wiki and sync check | Not started |
@@ -112,8 +112,17 @@ pass. A live self-inventory exactly matched all 418 `git ls-files` paths,
 extracted 342 artifact summaries, and reported 287 missing Python docstrings
 without enforcing them. Repository-wide gates remain independently red on the
 documented MP-015 (12 pre-existing pytest failures) and MP-017 (123 pre-existing
-Ruff findings) baselines; this slice adds zero Ruff findings and five passing
+Ruff findings) baselines; this slice adds zero Ruff findings and six passing
 tests.
+
+**Slice 2 evidence (2026-07-14):** the combined inventory/context suite passes
+13/13. Negative controls reject copied registry summaries, unsupported/vague
+edges, unresolved targets, and untracked edit targets. Recursive-glob tests
+cover both `src/x.py` and `src/nested/x.py`; deterministic budget tests retain
+the target and report omitted neighbors. A live symbol packet for
+`enforced_planning/context_packet.py::build_context_packet` injected its actual
+function docstring plus repository-default `CLAUDE.md` context with source
+provenance and no diagnostics.
 
 ## Later Acceptance Criteria
 

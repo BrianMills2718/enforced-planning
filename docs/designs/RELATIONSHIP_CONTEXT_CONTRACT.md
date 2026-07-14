@@ -118,3 +118,25 @@ Slice 1 emits inventory and summaries only. It does **not** yet:
 - render HTML/MediaWiki.
 
 Those depend on proving this source inventory is exhaustive and stable.
+
+## Context Packet Extension (Slice 2)
+
+`ContextPacket` joins inventory records to reviewed `relationships` edges and
+the existing `couplings`, `governance`, `architecture`, and
+`required_reading` sections. Explicit edges use:
+
+```yaml
+relationships:
+  - source: src/service.py::authorize
+    target: docs/requirements.md
+    relation: implements
+    reason: The symbol implements the governed-request requirement.
+    maintenance: reconcile
+```
+
+`source`/`target` accept a selector or list of selectors. Selectors are
+repository-relative globs with optional `::qualified.symbol` suffixes.
+`relationships.yaml` may not contain summary prose; the packet resolves every
+summary from the selected source artifact. Packets always include the target,
+rank declared semantic neighbors before legacy edges, enforce configurable
+item/character budgets, and report unresolved or omitted context.

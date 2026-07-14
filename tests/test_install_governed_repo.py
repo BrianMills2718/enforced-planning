@@ -125,8 +125,8 @@ def _prepare_relationship_context_target(repo_root: Path) -> None:
 
 def test_worktree_block_uses_canonical_project_name_from_linked_checkout(tmp_path: Path) -> None:
     """Session targets must not treat a linked worktree directory as the project name."""
-    repo_root = tmp_path / "demo"
-    repo_root.mkdir()
+    repo_root = tmp_path / "parent with spaces" / "demo"
+    repo_root.mkdir(parents=True)
     subprocess.run(["git", "init", "-q", "-b", "main", str(repo_root)], check=True)
     subprocess.run(["git", "-C", str(repo_root), "config", "user.name", "Test"], check=True)
     subprocess.run(["git", "-C", str(repo_root), "config", "user.email", "test@example.com"], check=True)
@@ -718,7 +718,11 @@ def test_install_governed_repo_syncs_worktree_block_into_existing_meta_makefile(
     assert "WORKTREE_CLAIMS_SCRIPT := scripts/meta/worktree-coordination/../check_coordination_claims.py" in makefile_text
     assert "WORKTREE_SESSION_START_SCRIPT := scripts/meta/worktree-coordination/../session_start.py" in makefile_text
     assert "WORKTREE_START_POINT ?= HEAD" in makefile_text
-    assert "WORKTREE_PROJECT ?= $(shell git rev-parse --git-common-dir | xargs dirname | xargs basename)" in makefile_text
+    assert (
+        'WORKTREE_PROJECT ?= $(shell common_dir="$$(git rev-parse --path-format=absolute '
+        '--git-common-dir)" && basename "$$(dirname "$$common_dir")")'
+        in makefile_text
+    )
     assert "session-start:" in makefile_text
     assert "session-finish:" in makefile_text
     assert "worktree-list:" in makefile_text

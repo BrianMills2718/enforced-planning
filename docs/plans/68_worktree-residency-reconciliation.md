@@ -125,6 +125,9 @@ Slice 1 is the entire bounded change: repository-local scope → registered-path
 | Push safety inferred the branch-directory name as the project and truncated pretty-printed decision JSON. | resolved | Added real-worktree and multi-line JSON controls; the live push gate now passes. |
 | Local concern routing reports success while writing into the caller checkout. | deferred | Removed both undelivered files, restored clean worktrees, and recorded MP-019 for a dedicated routing fix. |
 | `make session-status` used the same branch-directory project identity. | resolved | Canonicalized `WORKTREE_PROJECT` in both source and installer template; real linked-worktree target now reports live sessions. |
+| The first canonical-project Make expression split Git paths on whitespace. | resolved | Replaced the `xargs` pipeline with a quoted shell expression and moved the real-Git fixture beneath a parent directory containing spaces. |
+| The verification-gap corpus is already dirty and has two active exclusive claims. | deferred | Preserve the failure analysis here; append the reusable `happy-path-only` entry only after the existing `project-meta/verification_gap_log.md` owners release or land their work. |
+| AC6's first recorded live count became stale after Plan #66 merged and closed. | resolved | Re-ran the target, recorded the current 3-total/2-auxiliary observation, and clarified that the invariant is zero issues—not a fixed worktree count. |
 
 ## Verification
 
@@ -144,13 +147,13 @@ Slice 1 is the entire bounded change: repository-local scope → registered-path
 | AC3 retired path report visibility | A | test | warning-mode negative fixture |
 | AC4 retired path enforcement | A | test | hard-failure negative fixture plus sanctioned positive control |
 | AC5 claimless sanctioned worktree remains report-only | A | test | unclaimed in-repo fixture exits zero with warning |
-| AC6 cleaned real repository reconciles claims and worktrees | B | observed | live Make target: 4 linked worktrees total, 3 live auxiliary lanes, 0 hard issues, 0 warnings |
+| AC6 cleaned real repository reconciles claims and worktrees | B | observed | latest live Make target: 3 linked worktrees total, 2 live auxiliary lanes, 0 hard issues, 0 warnings; counts are point-in-time evidence rather than a fixed invariant |
 | AC7 push safety canonical project identity | A | test | real-Git claimed in-repo worktree fixture and live push gate |
 | AC8 multi-line active-decision parsing | A | test | prefix-noise plus pretty-printed JSON fixture and live agent-memory output |
-| AC9 linked-worktree Make project identity | A | test + observed | real Git-worktree Make evaluation and live `make session-status` |
+| AC9 linked-worktree Make project identity | A | test + observed | real Git-worktree Make evaluation beneath a whitespace-containing parent path and live `make session-status` |
 
 Distribution: A=8, B=1, C=0, D=0, F=0. The enforced path rule has both signs at grade A. Five previously claimless sanctioned worktrees received explicit merged/archive dispositions and were removed without deleting their recovery branches; the remaining auxiliary worktrees all have live claims.
 
 ## Review result
 
-The proportional adversarial review found two blockers: non-portable `realpath` use and an existing push-safety canonical-identity/parser failure. Both were fixed and their exact counterexamples rerun. Pre-landing review found no remaining security, data-safety, LLM-boundary, observability, configuration, dead-code, schema, or test blockers within this slice. Verdict: proceed to draft review; do not merge ahead of active Plan #67 index reconciliation.
+The proportional adversarial review found two blockers: non-portable `realpath` use and an existing push-safety canonical-identity/parser failure. The subsequent pre-landing audit found that the first Make canonicalization expression split paths on whitespace. All three counterexamples now have regression controls. No remaining security, data-safety, LLM-boundary, observability, configuration, dead-code, schema, or test blockers were found within this slice. Verdict: proceed to draft review; do not merge ahead of active Plan #67 index reconciliation.

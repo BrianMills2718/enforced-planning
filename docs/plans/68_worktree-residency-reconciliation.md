@@ -119,6 +119,8 @@ Slice 1 is the entire bounded change: repository-local scope → registered-path
 | The sanctioned creator reuses one Codex thread ID across Plan #66 and Plan #68 tracker records. | deferred | Claims and tracker paths remain distinct; record separately rather than expanding this plan. |
 | Plan #67 currently owns unmerged edits to `docs/plans/CLAUDE.md`. | mitigated | Do not edit the plan index in this branch; relate this plan through `relationships.yaml` and reconcile the index after Plan #67 lands. |
 | Existing stale instructions still advertise `<repo>_worktrees/`. | deferred | Fix after path-policy behavior lands, in a separate documentation slice that avoids the other agent's documentation-policy work. |
+| The first Make target used the GNU `realpath` command. | resolved | Replaced it with the existing Python canonical-root helper and reran the live worktree target. |
+| Push safety inferred the branch-directory name as the project and truncated pretty-printed decision JSON. | resolved | Added real-worktree and multi-line JSON controls; the live push gate now passes. |
 
 ## Verification
 
@@ -128,3 +130,22 @@ Slice 1 is the entire bounded change: repository-local scope → registered-path
 - Ruff and strict mypy over the changed Python closure.
 - Real repository-local JSON audit from this worktree.
 - Proportional pre-landing review and cleanup.
+
+## Post-implementation coverage report
+
+| Criterion | Grade | Evidence class | Evidence |
+|---|---|---|---|
+| AC1 repository-local claim scope | A | test | unrelated-project claim fixture is excluded only in explicit local mode |
+| AC2 sanctioned path passes | A | test | real-Git in-repo worktree fixture |
+| AC3 retired path report visibility | A | test | warning-mode negative fixture |
+| AC4 retired path enforcement | A | test | hard-failure negative fixture plus sanctioned positive control |
+| AC5 claimless sanctioned worktree remains report-only | A | test | unclaimed in-repo fixture exits zero with warning |
+| AC6 cleaned real repository has no path violations | B | observed | live Make target: 9 linked worktrees, 0 hard issues, 5 claimless warnings |
+| AC7 push safety canonical project identity | A | test | real-Git claimed in-repo worktree fixture and live push gate |
+| AC8 multi-line active-decision parsing | A | test | prefix-noise plus pretty-printed JSON fixture and live agent-memory output |
+
+Distribution: A=7, B=1, C=0, D=0, F=0. The enforced path rule has both signs at grade A. The remaining five claimless sanctioned worktrees are intentionally visible rather than falsely dispositioned.
+
+## Review result
+
+The proportional adversarial review found two blockers: non-portable `realpath` use and an existing push-safety canonical-identity/parser failure. Both were fixed and their exact counterexamples rerun. Pre-landing review found no remaining security, data-safety, LLM-boundary, observability, configuration, dead-code, schema, or test blockers within this slice. Verdict: proceed to draft review; do not merge ahead of active Plan #67 index reconciliation.

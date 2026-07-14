@@ -220,9 +220,10 @@ the table above. Existing unrelated worktree changes remain untouched.
   one-repository multi-outcome case to `project-roadmapping`; the candidate
   removed baseline project-level ceremony from the bounded case. No automatic
   trigger improvement is claimed.
-- 2026-07-14: Published the `inside-success` pilot at `5ab5c5d`. The root
-  README now routes to `roadmap/README.md`; roadmap-owned narratives live in one
-  directory while code/tests remain native. The pilot inventories 2,060 tracked
+- 2026-07-14: Published the `inside-success` pilot at `5ab5c5d` with clickable
+  native-authority navigation completed at `1df6925`. The root README now
+  routes to `roadmap/README.md`; roadmap-owned narratives live in one directory
+  while code/tests remain native. The pilot inventories 2,060 tracked
   artifacts, links 25/25 scoped tests with 2/2 declared requirements evidenced,
   passes 14 focused tests, and closes 13 staged obligations through nine
   co-updates plus four exact reviewed-unchanged dispositions.

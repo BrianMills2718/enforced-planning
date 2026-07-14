@@ -49,7 +49,9 @@ repository-green completion. If it fails, the completion tool reruns the same
 - A baseline failure whose test file changed in the plan blocks completion;
   lexical identity alone cannot prove the failure is unchanged.
 - An unchanged failure reproduced in the same worktree layout remains visible
-  repository debt but does not block the bounded plan.
+  repository debt but does not block the bounded plan. Exact checkout roots,
+  worktree-derived checkout labels, and pytest session roots are normalized;
+  the surrounding assertion message and traceback remain part of the hash.
 - A missing, timed-out, or unparsable baseline is `unavailable`, not a pass, and
   blocks completion.
 

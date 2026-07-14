@@ -212,3 +212,43 @@ def test_pytest_session_directory_does_not_change_failure_identity(tmp_path: Pat
     second_failure = parsed[1].failures[0]
     assert first_failure.detail_hash == second_failure.detail_hash
     assert "<pytest-tmp>/test_temp_path0/input.txt" in first_failure.detail_excerpt
+
+
+def test_worktree_basename_does_not_change_failure_identity(tmp_path: Path) -> None:
+    """A worktree-derived project label is layout noise, not changed behavior."""
+    repo = tmp_path / "project-meta"
+    (repo / ".git").mkdir(parents=True)
+    worktrees = repo / "worktrees"
+    roots = [worktrees / "feature-branch", worktrees / ".completion-baseline-123"]
+    reports: list[Path] = []
+    for index, root in enumerate(roots):
+        root.mkdir(parents=True)
+        report = tmp_path / f"worktree-{index}.xml"
+        report.write_text(
+            f"""<?xml version="1.0" encoding="utf-8"?>
+<testsuites tests="1" failures="1" errors="0" skipped="0">
+  <testsuite name="pytest" tests="1" failures="1" errors="0" skipped="0">
+    <testcase classname="tests.test_session" name="test_project_label" file="tests/test_session.py">
+      <failure type="AssertionError" message="expected Memory (project-meta)">actual Memory ({root.name})</failure>
+    </testcase>
+  </testsuite>
+</testsuites>
+""",
+            encoding="utf-8",
+        )
+        reports.append(report)
+
+    parsed = [
+        parse_pytest_junit(
+            report,
+            project_root=root,
+            commit="abc123",
+            command=("python", "-m", "pytest"),
+            returncode=1,
+            output="",
+        )
+        for report, root in zip(reports, roots, strict=True)
+    ]
+
+    assert parsed[0].failures[0].detail_hash == parsed[1].failures[0].detail_hash
+    assert "actual Memory (<checkout>)" in parsed[0].failures[0].detail_excerpt

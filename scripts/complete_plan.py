@@ -286,6 +286,13 @@ def _normalized_failure_detail(
     }
     for root_variant in sorted(root_variants, key=len, reverse=True):
         detail = detail.replace(root_variant.replace("\\", "/"), "<worktree>")
+    canonical_root = resolve_canonical_repo_root(project_root)
+    if canonical_root.resolve() != project_root.resolve():
+        detail = re.sub(
+            rf"(?<![\w.-]){re.escape(project_root.name)}(?![\w.-])",
+            "<checkout>",
+            detail,
+        )
     detail = re.sub(
         r"(?:[A-Za-z]:)?(?:/[^/\s'\"\]]+)*/pytest-of-[^/\s'\"\]]+/pytest-\d+",
         "<pytest-tmp>",

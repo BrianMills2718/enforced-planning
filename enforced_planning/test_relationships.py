@@ -96,6 +96,7 @@ class TestAuditReport:
     mode: str
     scoped_test_count: int
     linked_test_count: int
+    semantically_linked_test_count: int
     declared_requirement_count: int
     proved_requirement_count: int
     reviewed_edge_count: int
@@ -132,6 +133,7 @@ class TestAuditReport:
             "",
             f"- Authored tests in scope: **{self.scoped_test_count}**",
             f"- Tests linked by reviewed edges: **{self.linked_test_count}**",
+            f"- Tests linked by semantically complete edges: **{self.semantically_linked_test_count}**",
             f"- Reviewed test edges: **{self.reviewed_edge_count}**",
             f"- Declared requirements proved: **{self.proved_requirement_count}/{self.declared_requirement_count}**",
             f"- Findings: **{len(self.findings)}**",
@@ -316,6 +318,19 @@ def _finding(
     return TestAuditFinding(code, severity, subject, message, tuple(sorted(set(related))))
 
 
+def _edge_is_complete(edge: TestEdge) -> bool:
+    """Return whether an edge carries every policy-required test semantic."""
+
+    return bool(
+        edge.requirement_refs
+        and edge.level
+        and edge.polarity
+        and edge.execution_realism
+        and edge.failure_modes
+        and edge.risk_level
+    )
+
+
 def audit_test_relationships(
     repo_root: Path,
     relationships: dict[str, Any],
@@ -341,6 +356,12 @@ def audit_test_relationships(
         for edge in edges
     }
     linked_ids = {test_id for matches in matched_by_edge.values() for test_id in matches}
+    semantically_linked_ids = {
+        test_id
+        for edge in edges
+        if _edge_is_complete(edge)
+        for test_id in matched_by_edge[edge.edge_id]
+    }
     findings: list[TestAuditFinding] = []
 
     for test in tests:
@@ -470,6 +491,7 @@ def audit_test_relationships(
         mode="report_only",
         scoped_test_count=len(tests),
         linked_test_count=len(linked_ids),
+        semantically_linked_test_count=len(semantically_linked_ids),
         declared_requirement_count=len(requirements),
         proved_requirement_count=len(proved),
         reviewed_edge_count=len(edges),

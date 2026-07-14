@@ -41,6 +41,13 @@ plans, and ADRs before implementation. Deterministic checks and tests verify
 the implementation after the fact. The full artifact dependency model lives in
 [PLANNING_OPERATING_MODEL.md](PLANNING_OPERATING_MODEL.md).
 
+The relationship graph can also describe why important tests exist: the
+requirement or acceptance criterion proved, implementation boundary, test
+level, positive/negative polarity, execution realism, and covered failure
+mode. `make test-relationships REPO=/path/to/repo` reports missing or weak
+linkage without treating aggregate test count as quality evidence or deleting
+tests automatically.
+
 ## Installer Authority
 
 The canonical governed-repo installer and upgrader is:

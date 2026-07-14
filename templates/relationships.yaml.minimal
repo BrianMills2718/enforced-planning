@@ -8,6 +8,15 @@ governance: []
 couplings: []
 architecture: []
 adrs: {}
+requirements: []
+relationships: []
+
+# Optional report-only test-quality audit scope. Reviewed ``tests`` edges can
+# link cohesive files or individual ``file.py::test_symbol`` selectors to
+# requirements, boundaries, levels, polarity, realism, and failure modes.
+# test_audit:
+#   include: ["tests/**/*.py", "tests/*.py"]
+#   mode: report_only
 
 # Optional scoped file coverage policy.
 # - managed: files under managed include that are NOT explicitly registered

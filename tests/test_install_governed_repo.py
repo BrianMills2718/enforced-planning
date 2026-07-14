@@ -23,12 +23,14 @@ RELATIONSHIP_CONTEXT_ROLLOUT_PATHS = {
     "enforced_planning/docstring_wiki.py",
     "enforced_planning/impact_obligations.py",
     "enforced_planning/relationship_context.py",
+    "enforced_planning/test_relationships.py",
     "scripts/check_required_reading.py",
     "scripts/meta/context_packet.py",
     "scripts/meta/docstring_wiki.py",
     "scripts/meta/hook_log.py",
     "scripts/meta/impact_obligations.py",
     "scripts/meta/relationship_context.py",
+    "scripts/meta/test_relationships.py",
 }
 
 
@@ -166,6 +168,7 @@ def test_relationship_context_only_rollout_is_bounded_and_runnable(tmp_path: Pat
         "context_packet.py",
         "impact_obligations.py",
         "docstring_wiki.py",
+        "test_relationships.py",
     ):
         assert (tmp_path / "scripts" / "meta" / name).exists()
         assert (tmp_path / "enforced_planning" / name).exists()
@@ -192,6 +195,7 @@ def test_relationship_context_only_rollout_is_bounded_and_runnable(tmp_path: Pat
         ["make", "impact-obligations", "BASE=HEAD"],
         ["make", "docstring-wiki"],
         ["make", "docstring-wiki-check"],
+        ["make", "test-relationships"],
     )
     for command in commands:
         result = subprocess.run(

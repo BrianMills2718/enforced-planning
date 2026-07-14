@@ -60,6 +60,7 @@ SYNC_SUPPORT_FILES: dict[str, str] = {
     "enforced_planning/context_packet.py": "enforced_planning/context_packet.py",
     "enforced_planning/impact_obligations.py": "enforced_planning/impact_obligations.py",
     "enforced_planning/docstring_wiki.py": "enforced_planning/docstring_wiki.py",
+    "enforced_planning/test_relationships.py": "enforced_planning/test_relationships.py",
     "enforced_planning/worktree_paths.py": "enforced_planning/worktree_paths.py",
     "enforced_planning/notebook_registry_validation.py": "enforced_planning/notebook_registry_validation.py",
     "enforced_planning/plan_validation.py": "enforced_planning/plan_validation.py",
@@ -89,6 +90,7 @@ SYNC_SUPPORT_FILES: dict[str, str] = {
     "scripts/meta/context_packet.py": "scripts/context_packet.py",
     "scripts/meta/impact_obligations.py": "scripts/impact_obligations.py",
     "scripts/meta/docstring_wiki.py": "scripts/docstring_wiki.py",
+    "scripts/meta/test_relationships.py": "scripts/test_relationships.py",
     "scripts/meta/render_agents_md.py": "scripts/render_agents_md.py",
     "scripts/meta/sync_plan_status.py": "scripts/sync_plan_status.py",
     "scripts/meta/validate_dead_code_audit.py": "scripts/validate_dead_code_audit.py",
@@ -130,10 +132,12 @@ RELATIONSHIP_CONTEXT_SYNC_SUPPORT_FILES: dict[str, str] = {
     "enforced_planning/context_packet.py": "enforced_planning/context_packet.py",
     "enforced_planning/impact_obligations.py": "enforced_planning/impact_obligations.py",
     "enforced_planning/docstring_wiki.py": "enforced_planning/docstring_wiki.py",
+    "enforced_planning/test_relationships.py": "enforced_planning/test_relationships.py",
     "scripts/meta/relationship_context.py": "scripts/relationship_context.py",
     "scripts/meta/context_packet.py": "scripts/context_packet.py",
     "scripts/meta/impact_obligations.py": "scripts/impact_obligations.py",
     "scripts/meta/docstring_wiki.py": "scripts/docstring_wiki.py",
+    "scripts/meta/test_relationships.py": "scripts/test_relationships.py",
 }
 
 RELATIONSHIP_CONTEXT_TARGETS = (
@@ -142,6 +146,7 @@ RELATIONSHIP_CONTEXT_TARGETS = (
     "impact-obligations",
     "docstring-wiki",
     "docstring-wiki-check",
+    "test-relationships",
 )
 
 SCAFFOLD_TEMPLATES: dict[str, str] = {

@@ -1,6 +1,6 @@
 # Plan #65: Report-Only Document Archive Lifecycle
 
-**Status:** In Progress
+**Status:** Complete (report-only; semantic eligibility and enforcement deferred)
 **Type:** implementation
 **Priority:** High
 **phase_ref:** "Document lifecycle P2"
@@ -58,7 +58,7 @@ been promoted remains outside this deterministic compiler.
 | 2 | Expose explicit archive effects on normalized relationship edges | Complete |
 | 3 | Compile exhaustive documentation coverage and candidate blockers | Complete |
 | 4 | Verify focused and full suites, then adversarially audit the slice | Complete |
-| 5 | Commit and publish the isolated branch | Not started |
+| 5 | Commit and publish the isolated branch | Complete — PR #6 |
 
 ## Acceptance Criteria
 
@@ -128,6 +128,12 @@ mypy enforced_planning/context_packet.py enforced_planning/archive_lifecycle.py
   by this plan.
 - Excluding those two baseline-failing test modules, the current branch passes
   595 tests with 1 skipped.
+- The repository push-safety Make target could not resolve the project from the
+  policy-compliant nested worktree, then failed parsing non-empty pretty JSON
+  from `agent-memory`. The healthy exact-path Plan 65 claim and non-overlap with
+  Plan 64 were verified directly before the normal push. The defect is recorded
+  in `~/.claude/workflow_observations.md`; the canonical policy-friction log was
+  not edited because another live claim owns it.
 
 ## Ongoing Maintenance Rule
 

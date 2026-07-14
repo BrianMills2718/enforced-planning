@@ -121,3 +121,8 @@ enabling hard enforcement.
 - “Linked” and “semantically linked” are intentionally separate metrics: a
   broad legacy suite edge is useful context, but cannot count as behavioral
   evidence until its authority and test semantics are reviewed.
+- Post-merge audit found and repaired one false-evidence path: incomplete,
+  unmatched, source-dangling, or undeclared-requirement edges could previously
+  inflate the requirement-evidence count. Evidence eligibility now requires a
+  complete edge, at least one authored-test match, declared requirement refs,
+  and resolvable local requirement source files.

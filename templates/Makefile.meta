@@ -15,7 +15,7 @@ status:  ## Show git status
 	@git status --short --branch
 
 # --- During Implementation ---
-.PHONY: test test-quick check
+.PHONY: test test-quick check check-agents-sync
 
 test:  ## Run pytest
 	pytest tests/ -v
@@ -24,6 +24,9 @@ test-quick:  ## Run pytest (no traceback)
 	pytest tests/ -q --tb=no
 
 check:  ## Run all checks (test, mypy, lint)
+	@echo "Checking generated AGENTS.md synchronization..."
+	@$(PYTHON) $(SCRIPTS_META)/check_agents_sync.py --repo-root . --check
+	@echo ""
 	@echo "Running tests..."
 	@pytest tests/ -q --tb=short
 	@echo ""
@@ -31,6 +34,9 @@ check:  ## Run all checks (test, mypy, lint)
 	@mypy src/ --ignore-missing-imports
 	@echo ""
 	@echo "All checks passed!"
+
+check-agents-sync:  ## Validate generated AGENTS.md matches canonical governance inputs
+	@$(PYTHON) $(SCRIPTS_META)/check_agents_sync.py --repo-root . --check
 
 # --- PR Workflow ---
 .PHONY: pr-ready pr merge finish pr-auto-check pr-auto push-check

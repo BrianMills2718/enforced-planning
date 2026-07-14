@@ -194,6 +194,10 @@ drift, reject unmarked Make target collisions, run all five installed Make
 targets, and prove a second run is idempotent. A disposable checkout of
 onto-canon6 `573c819` planned exactly 11 bounded actions with zero blockers or
 drift; packet, impact, wiki write, and wiki check all executed successfully.
+The same audit found that a consumer's generated `AGENTS.md` relationship hash
+could drift while its normal gate stayed green. The canonical Make template now
+runs `check-agents-sync` from `check`; an installed-layout negative control
+mutates `AGENTS.md` and proves the gate fails with the regeneration command.
 
 ## Acceptance Criteria Disposition
 

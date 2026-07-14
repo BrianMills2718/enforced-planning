@@ -39,6 +39,8 @@ MAKEFILE_TEMPLATE = "templates/Makefile.meta"
 MAKEFILE_WORKTREE_TEMPLATE = "templates/Makefile.worktree.block.template"
 MAKEFILE_WORKTREE_BLOCK_START = "# >>> META-PROCESS WORKTREE TARGETS >>>"
 MAKEFILE_WORKTREE_BLOCK_END = "# <<< META-PROCESS WORKTREE TARGETS <<<"
+MAKEFILE_RELATIONSHIP_BLOCK_START = "# >>> RELATIONSHIP CONTEXT TARGETS >>>"
+MAKEFILE_RELATIONSHIP_BLOCK_END = "# <<< RELATIONSHIP CONTEXT TARGETS <<<"
 MAKEFILE_WORKTREE_INSERTION_ANCHORS = (
     "# --- During Implementation ---",
     "# --- PR Workflow ---",
@@ -123,6 +125,25 @@ WORKTREE_ONLY_SYNC_SUPPORT_FILES: dict[str, str] = {
     "scripts/meta/worktree-coordination/safe_worktree_remove.py": "scripts/worktree-coordination/safe_worktree_remove.py",
 }
 
+RELATIONSHIP_CONTEXT_SYNC_SUPPORT_FILES: dict[str, str] = {
+    "enforced_planning/relationship_context.py": "enforced_planning/relationship_context.py",
+    "enforced_planning/context_packet.py": "enforced_planning/context_packet.py",
+    "enforced_planning/impact_obligations.py": "enforced_planning/impact_obligations.py",
+    "enforced_planning/docstring_wiki.py": "enforced_planning/docstring_wiki.py",
+    "scripts/meta/relationship_context.py": "scripts/relationship_context.py",
+    "scripts/meta/context_packet.py": "scripts/context_packet.py",
+    "scripts/meta/impact_obligations.py": "scripts/impact_obligations.py",
+    "scripts/meta/docstring_wiki.py": "scripts/docstring_wiki.py",
+}
+
+RELATIONSHIP_CONTEXT_TARGETS = (
+    "relationship-context",
+    "context-packet",
+    "impact-obligations",
+    "docstring-wiki",
+    "docstring-wiki-check",
+)
+
 SCAFFOLD_TEMPLATES: dict[str, str] = {
     "meta-process.yaml": "templates/meta-process.yaml.example",
     "docs/plans/CLAUDE.md": "templates/plans-index.md.template",
@@ -167,12 +188,21 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Do not sync the generic read-gating hook stack.",
     )
-    parser.add_argument(
+    scope = parser.add_mutually_exclusive_group()
+    scope.add_argument(
         "--worktree-only",
         action="store_true",
         help=(
             "Only sync the sanctioned Makefile worktree block plus the local "
             "worktree-coordination scripts."
+        ),
+    )
+    scope.add_argument(
+        "--relationship-context-only",
+        action="store_true",
+        help=(
+            "Only sync the relationship inventory, context packet, impact, "
+            "docstring-wiki, Make, and read-gating hook surfaces."
         ),
     )
     parser.add_argument(
@@ -193,6 +223,65 @@ def _render_makefile_worktree_block(script_root: str) -> str:
     """Render the sanctioned worktree block for one Makefile consumer."""
     template = _load_source_text(MAKEFILE_WORKTREE_TEMPLATE)
     return template.replace("__WORKTREE_SCRIPT_ROOT__", script_root)
+
+
+def _render_makefile_relationship_block() -> str:
+    """Extract the canonical marked relationship-context block."""
+
+    template = _load_source_text(MAKEFILE_TEMPLATE)
+    try:
+        start = template.index(MAKEFILE_RELATIONSHIP_BLOCK_START)
+        end = template.index(MAKEFILE_RELATIONSHIP_BLOCK_END) + len(
+            MAKEFILE_RELATIONSHIP_BLOCK_END
+        )
+    except ValueError as exc:
+        raise RuntimeError("canonical Makefile template lacks relationship-context markers") from exc
+    return template[start:end].rstrip()
+
+
+def _sync_makefile_relationship_block(
+    current_makefile: str,
+) -> tuple[str, str | None, str | None]:
+    """Sync the bounded relationship block or report an unmarked collision."""
+
+    block = _render_makefile_relationship_block()
+    normalized = current_makefile.rstrip("\n")
+    if MAKEFILE_RELATIONSHIP_BLOCK_START in normalized:
+        if MAKEFILE_RELATIONSHIP_BLOCK_END not in normalized:
+            return current_makefile, None, "unterminated relationship-context Makefile block"
+        start = normalized.index(MAKEFILE_RELATIONSHIP_BLOCK_START)
+        end = normalized.index(MAKEFILE_RELATIONSHIP_BLOCK_END) + len(
+            MAKEFILE_RELATIONSHIP_BLOCK_END
+        )
+        existing = normalized[start:end].rstrip()
+        if existing == block:
+            return normalized + "\n", None, None
+        updated = normalized[:start].rstrip()
+        if updated:
+            updated += "\n\n"
+        updated += block
+        trailing = normalized[end:].strip("\n")
+        if trailing:
+            updated += "\n\n" + trailing
+        return updated + "\n", "sync:Makefile.relationship-context", None
+
+    collisions = [
+        target
+        for target in RELATIONSHIP_CONTEXT_TARGETS
+        if any(
+            line.startswith(f"{target}:")
+            for line in normalized.splitlines()
+        )
+    ]
+    if collisions:
+        return (
+            current_makefile,
+            None,
+            "unmarked relationship-context Make targets already exist: "
+            + ", ".join(collisions),
+        )
+    prefix = normalized + "\n\n" if normalized else ""
+    return prefix + block + "\n", "append:Makefile.relationship-context", None
 
 
 def _sync_makefile_worktree_block(current_makefile: str) -> tuple[str, str | None]:
@@ -239,7 +328,12 @@ def _sync_makefile_worktree_block(current_makefile: str) -> tuple[str, str | Non
     return updated + "\n", "append:Makefile.worktree"
 
 
-def _plan_static_support(repo_root: Path, *, worktree_only: bool) -> InstallPlan:
+def _plan_static_support(
+    repo_root: Path,
+    *,
+    worktree_only: bool,
+    relationship_context_only: bool,
+) -> InstallPlan:
     """Plan scaffold and sync writes for static support files."""
     actions: list[str] = []
     scaffolded_files: list[str] = []
@@ -251,7 +345,7 @@ def _plan_static_support(repo_root: Path, *, worktree_only: bool) -> InstallPlan
     if not claude_path.exists():
         blockers.append("missing canonical CLAUDE.md")
 
-    if not worktree_only:
+    if not worktree_only and not relationship_context_only:
         for target_relpath, source_relpath in SCAFFOLD_TEMPLATES.items():
             target_path = repo_root / target_relpath
             if target_path.exists():
@@ -260,9 +354,12 @@ def _plan_static_support(repo_root: Path, *, worktree_only: bool) -> InstallPlan
             scaffolded_files.append(target_relpath)
             file_writes[target_path] = _load_source_text(source_relpath)
 
-    support_files = (
-        WORKTREE_ONLY_SYNC_SUPPORT_FILES if worktree_only else SYNC_SUPPORT_FILES
-    )
+    if worktree_only:
+        support_files = WORKTREE_ONLY_SYNC_SUPPORT_FILES
+    elif relationship_context_only:
+        support_files = RELATIONSHIP_CONTEXT_SYNC_SUPPORT_FILES
+    else:
+        support_files = SYNC_SUPPORT_FILES
     for target_relpath, source_relpath in support_files.items():
         target_path = repo_root / target_relpath
         canonical = _load_source_text(source_relpath)
@@ -279,8 +376,9 @@ def _plan_static_support(repo_root: Path, *, worktree_only: bool) -> InstallPlan
     makefile_path = repo_root / "Makefile"
     makefile_template = _load_source_text(MAKEFILE_TEMPLATE)
     if not makefile_path.exists():
-        if worktree_only:
-            blockers.append("missing Makefile for --worktree-only rollout")
+        if worktree_only or relationship_context_only:
+            mode = "--worktree-only" if worktree_only else "--relationship-context-only"
+            blockers.append(f"missing Makefile for {mode} rollout")
         else:
             actions.append("scaffold:Makefile")
             scaffolded_files.append("Makefile")
@@ -289,7 +387,16 @@ def _plan_static_support(repo_root: Path, *, worktree_only: bool) -> InstallPlan
             file_writes[makefile_path] = with_worktree
     else:
         current_makefile = makefile_path.read_text(encoding="utf-8")
-        synced_makefile, makefile_action = _sync_makefile_worktree_block(current_makefile)
+        if relationship_context_only:
+            synced_makefile, makefile_action, makefile_blocker = (
+                _sync_makefile_relationship_block(current_makefile)
+            )
+            if makefile_blocker:
+                blockers.append(makefile_blocker)
+        else:
+            synced_makefile, makefile_action = _sync_makefile_worktree_block(
+                current_makefile
+            )
         if makefile_action:
             actions.append(makefile_action)
             file_writes[makefile_path] = synced_makefile
@@ -380,9 +487,14 @@ def install_or_plan(
     write: bool,
     skip_hook_wiring: bool,
     worktree_only: bool,
+    relationship_context_only: bool,
 ) -> dict[str, Any]:
     """Plan or apply the governed-repo installer actions for one repo."""
-    static_plan = _plan_static_support(repo_root, worktree_only=worktree_only)
+    static_plan = _plan_static_support(
+        repo_root,
+        worktree_only=worktree_only,
+        relationship_context_only=relationship_context_only,
+    )
     actions = list(static_plan.actions)
     scaffolded_files = list(static_plan.scaffolded_files)
     drift_files = list(static_plan.drift_files)
@@ -391,6 +503,14 @@ def install_or_plan(
         runtime_error = context_runtime_error(repo_root)
         if runtime_error:
             blockers.append(runtime_error)
+    if relationship_context_only:
+        relationships_path = repo_root / "scripts" / "relationships.yaml"
+        if not relationships_path.exists():
+            blockers.append("missing scripts/relationships.yaml for relationship-context rollout")
+        if not skip_hook_wiring and not (repo_root / "scripts" / "meta" / "file_context.py").exists():
+            blockers.append("missing scripts/meta/file_context.py for relationship-context hook rollout")
+        if not skip_hook_wiring and not (repo_root / "enforced_planning" / "file_context.py").exists():
+            blockers.append("missing enforced_planning/file_context.py for relationship-context hook rollout")
     file_writes = dict(static_plan.file_writes)
     relationships_will_change = any(
         path == repo_root / "scripts" / "relationships.yaml" for path in file_writes
@@ -422,7 +542,7 @@ def install_or_plan(
         }
         file_writes.update(hook_writes)
 
-    if not worktree_only:
+    if not worktree_only and not relationship_context_only:
         agent_actions, agent_blockers = _plan_agents_refresh(
             repo_root,
             relationships_present_or_planned=(
@@ -445,7 +565,7 @@ def install_or_plan(
             applied_actions.extend(actions)
             if not skip_hook_wiring and not worktree_only:
                 apply_hook_generation(_hook_target(repo_root), hook_writes)
-            if not worktree_only and _needs_agents_refresh(
+            if not worktree_only and not relationship_context_only and _needs_agents_refresh(
                 pre_audit,
                 relationships_will_change=relationships_will_change,
             ):
@@ -463,6 +583,7 @@ def install_or_plan(
         "write_mode": write,
         "dry_run_mode": not write,
         "worktree_only_mode": worktree_only,
+        "relationship_context_only_mode": relationship_context_only,
         "actions": actions,
         "applied_actions": applied_actions,
         "scaffolded_files": scaffolded_files,
@@ -512,6 +633,7 @@ def main(argv: list[str] | None = None) -> int:
         write=args.write,
         skip_hook_wiring=args.skip_hook_wiring,
         worktree_only=args.worktree_only,
+        relationship_context_only=args.relationship_context_only,
     )
 
     if args.json:

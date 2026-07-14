@@ -12,6 +12,7 @@ PROJECT_META_ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = PROJECT_META_ROOT / "scripts" / "install_governed_repo.py"
 INSTALL_SH = PROJECT_META_ROOT / "install.sh"
 CANONICAL_FILE_CONTEXT = PROJECT_META_ROOT / "scripts" / "file_context.py"
+CANONICAL_FILE_CONTEXT_MODULE = PROJECT_META_ROOT / "enforced_planning" / "file_context.py"
 
 
 def _write_minimal_claude(repo_root: Path) -> None:
@@ -65,6 +66,166 @@ def _run(*args: str, cwd: Path) -> subprocess.CompletedProcess[str]:
         text=True,
         check=False,
     )
+
+
+def _prepare_relationship_context_target(repo_root: Path) -> None:
+    """Create an existing governed repo eligible for the bounded rollout."""
+
+    _write_minimal_claude(repo_root)
+    (repo_root / "Makefile").write_text("help:\n\t@echo demo\n", encoding="utf-8")
+    relationships = repo_root / "scripts" / "relationships.yaml"
+    relationships.parent.mkdir(parents=True, exist_ok=True)
+    relationships.write_text("version: 2\nrelationships: []\n", encoding="utf-8")
+    file_context = repo_root / "scripts" / "meta" / "file_context.py"
+    file_context.parent.mkdir(parents=True, exist_ok=True)
+    file_context.write_text(CANONICAL_FILE_CONTEXT.read_text(encoding="utf-8"), encoding="utf-8")
+    file_context_module = repo_root / "enforced_planning" / "file_context.py"
+    file_context_module.parent.mkdir(parents=True, exist_ok=True)
+    file_context_module.write_text(
+        CANONICAL_FILE_CONTEXT_MODULE.read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    subprocess.run(["git", "init", "-q", str(repo_root)], check=True)
+    subprocess.run(["git", "-C", str(repo_root), "add", "-A"], check=True)
+    subprocess.run(
+        [
+            "git",
+            "-C",
+            str(repo_root),
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.com",
+            "commit",
+            "-qm",
+            "baseline",
+        ],
+        check=True,
+    )
+
+
+def test_relationship_context_only_rollout_is_bounded_and_runnable(tmp_path: Path) -> None:
+    """The narrow rollout must install only its declared surface and execute it."""
+
+    _prepare_relationship_context_target(tmp_path)
+    agents = tmp_path / "AGENTS.md"
+    agents.write_text("unrelated authority\n", encoding="utf-8")
+    unrelated = tmp_path / "scripts" / "meta" / "check_dead_code.py"
+    unrelated.write_text("unrelated local drift\n", encoding="utf-8")
+
+    dry_run = _run(
+        "--repo-root",
+        str(tmp_path),
+        "--relationship-context-only",
+        "--json",
+        cwd=PROJECT_META_ROOT,
+    )
+    assert dry_run.returncode == 0, dry_run.stdout + dry_run.stderr
+    dry_payload = json.loads(dry_run.stdout)
+    assert dry_payload["relationship_context_only_mode"] is True
+    assert dry_payload["scaffolded_files"] == []
+    assert "render:AGENTS.md" not in dry_payload["actions"]
+    assert not any("check_dead_code" in action for action in dry_payload["actions"])
+    assert "append:Makefile.relationship-context" in dry_payload["actions"]
+
+    written = _run(
+        "--repo-root",
+        str(tmp_path),
+        "--relationship-context-only",
+        "--write",
+        "--json",
+        cwd=PROJECT_META_ROOT,
+    )
+    assert written.returncode == 0, written.stdout + written.stderr
+    assert agents.read_text(encoding="utf-8") == "unrelated authority\n"
+    assert unrelated.read_text(encoding="utf-8") == "unrelated local drift\n"
+    for name in (
+        "relationship_context.py",
+        "context_packet.py",
+        "impact_obligations.py",
+        "docstring_wiki.py",
+    ):
+        assert (tmp_path / "scripts" / "meta" / name).exists()
+        assert (tmp_path / "enforced_planning" / name).exists()
+
+    subprocess.run(["git", "-C", str(tmp_path), "add", "-A"], check=True)
+    subprocess.run(
+        [
+            "git",
+            "-C",
+            str(tmp_path),
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.com",
+            "commit",
+            "-qm",
+            "rollout",
+        ],
+        check=True,
+    )
+    commands = (
+        ["make", "relationship-context"],
+        ["make", "context-packet", "TARGET=CLAUDE.md"],
+        ["make", "impact-obligations", "BASE=HEAD"],
+        ["make", "docstring-wiki"],
+        ["make", "docstring-wiki-check"],
+    )
+    for command in commands:
+        result = subprocess.run(
+            command,
+            cwd=tmp_path,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == 0, f"{command}: {result.stdout}{result.stderr}"
+
+    second = _run(
+        "--repo-root",
+        str(tmp_path),
+        "--relationship-context-only",
+        "--json",
+        cwd=PROJECT_META_ROOT,
+    )
+    assert second.returncode == 0, second.stdout + second.stderr
+    assert json.loads(second.stdout)["actions"] == []
+
+
+def test_relationship_context_only_rejects_unmarked_make_target(tmp_path: Path) -> None:
+    """Existing unowned targets must block instead of being duplicated or replaced."""
+
+    _prepare_relationship_context_target(tmp_path)
+    makefile = tmp_path / "Makefile"
+    original = "context-packet:\n\t@echo local\n"
+    makefile.write_text(original, encoding="utf-8")
+
+    result = _run(
+        "--repo-root",
+        str(tmp_path),
+        "--relationship-context-only",
+        "--write",
+        "--json",
+        cwd=PROJECT_META_ROOT,
+    )
+    assert result.returncode == 1
+    payload = json.loads(result.stdout)
+    assert any("unmarked relationship-context Make targets" in item for item in payload["blockers"])
+    assert makefile.read_text(encoding="utf-8") == original
+
+
+def test_installer_rejects_multiple_bounded_scopes(tmp_path: Path) -> None:
+    """Worktree-only and relationship-only are distinct, exclusive rollout modes."""
+
+    result = _run(
+        "--repo-root",
+        str(tmp_path),
+        "--worktree-only",
+        "--relationship-context-only",
+        cwd=PROJECT_META_ROOT,
+    )
+    assert result.returncode == 2
+    assert "not allowed with argument" in result.stderr
 
 
 def test_install_governed_repo_dry_run_reports_expected_actions(tmp_path: Path) -> None:

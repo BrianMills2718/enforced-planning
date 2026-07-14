@@ -68,6 +68,9 @@ See `ROADMAP.md` for the full phase map and recommended priority order.
 | 62 | User-Neutral Ecosystem Instantiation (`62_user_neutral_ecosystem_instantiation.md`) | High | 📋 Planned | Consumer-owned inventory/config boundary for shareable adoption |
 | 63 | Relationship Context and Docstring Wiki (`63_relationship_context_and_docstring_wiki.md`) | Critical | ✅ Complete (report-only rollout; hard enforcement deferred) | reviewed consumer edges and calibrated enforcement |
 | 64 | Requirement-Linked Test Relationships (`64_requirement_linked_test_relationships.md`) | High | ✅ Complete (report-only pilot; enforcement deferred) | reviewed expansion before any consolidation or hard gate |
+| 65 | Document Archive Lifecycle Report (`65_document_archive_lifecycle_report.md`) | High | ✅ Complete (report-only; mutation deferred) | reviewed lifecycle evidence before semantic automation |
+| 66 | Semantic Document Lifecycle Assessment (`66_semantic_document_lifecycle_assessment.md`) | High | ✅ Complete (design only; implementation deferred) | calibrated semantic lifecycle pilot |
+| 69 | Planning Skill and Repository Spine Alignment (`69_planning_skill_and_repository_spine_alignment.md`) | Critical | 🚧 In Progress | report-only Inside Success pilot and policy reconciliation |
 
 ## Status Key
 

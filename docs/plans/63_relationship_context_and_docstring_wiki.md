@@ -89,7 +89,7 @@ C8 generated wiki + consumer rollout
 | 1 | Read-only exact tracked-file inventory and actual-summary extraction | Complete |
 | 2 | Relationship schema extension and bounded `ContextPacket` | Complete |
 | 3 | Changed-node impact obligations and audited dispositions | Complete |
-| 4 | Active/completed plan lifecycle freshness with negative controls | Not started |
+| 4 | Active/completed plan lifecycle freshness with negative controls | Complete |
 | 5 | Deterministic CLI/JSON docstring wiki and sync check | Not started |
 | 6 | Installer/hook adapters and report-only `onto-canon6` pilot | Not started |
 | 7 | Evidence review and calibrated new-debt enforcement | Not started |
@@ -133,6 +133,12 @@ The review token hashes the exact staged/working-tree binary diff; a test
 changes a staged file twice under the same `HEAD` and proves the first review
 token no longer matches. The CLI remains report-only unless explicitly invoked
 with `--strict`.
+
+**Slice 4 evidence (2026-07-14):** the focused suite passes 31/31 including the
+successor-authority negative control. Tests prove active plans can update
+with code, completed plans cannot auto-satisfy by rewriting their historical
+file, completed plans can point to a tracked documentation successor, and
+missing/unknown lifecycle status remains unresolved.
 
 ## Later Acceptance Criteria
 

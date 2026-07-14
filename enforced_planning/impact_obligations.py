@@ -27,6 +27,7 @@ from enforced_planning.relationship_context import inventory_repository
 
 DispositionStatus: TypeAlias = Literal["verified_unchanged", "superseded", "blocked"]
 ObligationStatus: TypeAlias = Literal["updated", "verified_unchanged", "superseded", "unresolved", "blocked"]
+PlanLifecycle: TypeAlias = Literal["active", "planned", "blocked", "completed", "superseded", "archived", "unknown"]
 
 
 class ImpactObligationError(RuntimeError):
@@ -56,6 +57,7 @@ class ImpactObligation:
     reason: str
     maintenance: str
     provenance: str
+    related_lifecycle: str | None
     status: ObligationStatus
     disposition_reason: str | None
     successor: str | None
@@ -222,6 +224,38 @@ def _apply_disposition(
     return "verified_unchanged", disposition.reason, None
 
 
+def plan_lifecycle(path: Path) -> PlanLifecycle:
+    """Classify a plan's declared status without treating its filename as truth."""
+
+    try:
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return "unknown"
+    status = ""
+    for line in text.splitlines()[:40]:
+        stripped = line.strip()
+        if stripped.casefold().startswith("**status:**"):
+            status = stripped.split(":**", 1)[1].strip().casefold()
+            break
+        if stripped.casefold().startswith("status:"):
+            status = stripped.split(":", 1)[1].strip().casefold()
+            break
+    status = status.replace("✅", "").replace("🚧", "").replace("📋", "").replace("⏸️", "").strip()
+    if "supersed" in status:
+        return "superseded"
+    if "archive" in status:
+        return "archived"
+    if any(word in status for word in ("complete", "completed", "done")):
+        return "completed"
+    if "block" in status or "paused" in status:
+        return "blocked"
+    if "plan" in status or "draft" in status or "proposed" in status:
+        return "planned"
+    if "active" in status or "progress" in status or "execut" in status:
+        return "active"
+    return "unknown"
+
+
 def build_impact_report(
     repo_root: Path,
     changed: tuple[str, ...],
@@ -262,7 +296,12 @@ def build_impact_report(
                     continue
                 seen_ids.add(obligation_id)
                 related_available = artifacts_by_path[related_path].working_tree_state == "present"
-                if related_path in changed_set and related_available:
+                lifecycle: PlanLifecycle | None = None
+                if spec.relation == "planned_by" and related_available:
+                    lifecycle = plan_lifecycle(repo_root / related_path)
+                historical_plan = lifecycle in {"completed", "superseded", "archived"}
+                malformed_plan = lifecycle == "unknown"
+                if related_path in changed_set and related_available and not historical_plan and not malformed_plan:
                     status: ObligationStatus = "updated"
                     disposition_reason: str | None = "Linked artifact changed in the same comparison."
                     successor = None
@@ -275,6 +314,20 @@ def build_impact_report(
                     )
                     if not related_available and status == "unresolved":
                         disposition_reason = "Linked artifact is missing or a non-readable symlink in the working tree."
+                    elif historical_plan and status == "unresolved":
+                        disposition_reason = (
+                            f"Linked plan is {lifecycle}; preserve history and reconcile through an exact-review "
+                            "disposition or tracked successor/current-state authority."
+                        )
+                    elif malformed_plan and status == "unresolved":
+                        disposition_reason = "Linked plan has no recognized lifecycle status and cannot satisfy freshness."
+                    if historical_plan and status == "superseded" and successor is not None:
+                        successor_artifact = artifacts_by_path[successor]
+                        if successor_artifact.classification != "documentation":
+                            raise ImpactObligationError(
+                                f"completed-plan obligation {obligation_id} successor must be documentation authority: "
+                                f"{successor}"
+                            )
                 obligations.append(
                     ImpactObligation(
                         obligation_id=obligation_id,
@@ -285,6 +338,7 @@ def build_impact_report(
                         reason=spec.reason,
                         maintenance=spec.maintenance,
                         provenance=spec.provenance,
+                        related_lifecycle=lifecycle,
                         status=status,
                         disposition_reason=disposition_reason,
                         successor=successor,
@@ -360,5 +414,6 @@ __all__ = [
     "current_revision",
     "load_dispositions",
     "main",
+    "plan_lifecycle",
     "review_revision",
 ]

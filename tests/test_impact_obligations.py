@@ -12,6 +12,7 @@ from enforced_planning.impact_obligations import ReconciliationDisposition
 from enforced_planning.impact_obligations import build_impact_report
 from enforced_planning.impact_obligations import changed_paths
 from enforced_planning.impact_obligations import load_dispositions
+from enforced_planning.impact_obligations import plan_lifecycle
 from enforced_planning.impact_obligations import review_revision
 
 
@@ -33,6 +34,10 @@ def _repo(tmp_path: Path) -> tuple[Path, str]:
     _write(repo / "docs/requirements.md", "# Requirements\n\n## Purpose\n\nDefine request behavior.\n")
     _write(repo / "docs/current.md", "# Current State\n\n## Status\n\nRequests are served.\n")
     _write(repo / "docs/successor.md", "# Successor\n\n## Purpose\n\nCarry newer truth.\n")
+    _write(repo / "docs/plans/active.md", "# Active Plan\n\n**Status:** In Progress\n")
+    _write(repo / "docs/plans/completed.md", "# Completed Plan\n\n**Status:** Complete\n")
+    _write(repo / "docs/plans/archived.md", "# Archived Plan\n\n**Status:** Archived\n")
+    _write(repo / "docs/plans/malformed.md", "# Plan Without Status\n")
     subprocess.run(["git", "-C", str(repo), "add", "-A"], check=True)
     subprocess.run(["git", "-C", str(repo), "commit", "-m", "seed"], check=True, capture_output=True)
     revision = subprocess.run(
@@ -317,3 +322,148 @@ def test_deleted_linked_target_is_not_treated_as_updated(tmp_path: Path) -> None
     assert report.unresolved_count == 1
     assert report.obligations[0].status == "unresolved"
     assert "missing" in (report.obligations[0].disposition_reason or "")
+
+
+@pytest.mark.parametrize(
+    ("name", "expected"),
+    [
+        ("active.md", "active"),
+        ("completed.md", "completed"),
+        ("archived.md", "archived"),
+        ("malformed.md", "unknown"),
+    ],
+)
+def test_plan_lifecycle_uses_declared_status(tmp_path: Path, name: str, expected: str) -> None:
+    """Plan freshness follows declared lifecycle rather than filename inference."""
+
+    repo, _revision = _repo(tmp_path)
+
+    assert plan_lifecycle(repo / "docs/plans" / name) == expected
+
+
+def test_active_plan_update_satisfies_but_completed_plan_edit_does_not(tmp_path: Path) -> None:
+    """Completed history cannot masquerade as the living plan for new code work."""
+
+    repo, revision = _repo(tmp_path)
+    active_edge = {
+        "relationships": [
+            {
+                "source": "src/service.py",
+                "target": "docs/plans/active.md",
+                "relation": "planned_by",
+                "reason": "Active plan owns this implementation.",
+                "maintenance": "reconcile",
+            }
+        ]
+    }
+    completed_edge = {
+        "relationships": [
+            {
+                "source": "src/service.py",
+                "target": "docs/plans/completed.md",
+                "relation": "planned_by",
+                "reason": "Historical plan records the earlier implementation.",
+                "maintenance": "reconcile",
+            }
+        ]
+    }
+
+    active = build_impact_report(
+        repo,
+        ("docs/plans/active.md", "src/service.py"),
+        active_edge,
+        revision=revision,
+    )
+    completed = build_impact_report(
+        repo,
+        ("docs/plans/completed.md", "src/service.py"),
+        completed_edge,
+        revision=revision,
+    )
+
+    assert active.obligations[0].status == "updated"
+    assert active.obligations[0].related_lifecycle == "active"
+    assert completed.obligations[0].status == "unresolved"
+    assert completed.obligations[0].related_lifecycle == "completed"
+    assert "preserve history" in (completed.obligations[0].disposition_reason or "")
+
+
+def test_completed_plan_can_point_to_tracked_successor_authority(tmp_path: Path) -> None:
+    """A completed plan reconciles through a successor instead of rewritten history."""
+
+    repo, revision = _repo(tmp_path)
+    relationships = {
+        "relationships": [
+            {
+                "source": "src/service.py",
+                "target": "docs/plans/completed.md",
+                "relation": "planned_by",
+                "reason": "Historical plan records the earlier implementation.",
+                "maintenance": "reconcile",
+            }
+        ]
+    }
+    initial = build_impact_report(repo, ("src/service.py",), relationships, revision=revision)
+    disposition = ReconciliationDisposition(
+        obligation_id=initial.obligations[0].obligation_id,
+        status="superseded",
+        reason="The new authority carries this implementation forward.",
+        reviewed_revision=revision,
+        successor="docs/successor.md",
+    )
+
+    report = build_impact_report(
+        repo,
+        ("src/service.py",),
+        relationships,
+        revision=revision,
+        dispositions=(disposition,),
+    )
+
+    assert report.unresolved_count == 0
+    assert report.obligations[0].status == "superseded"
+    assert report.obligations[0].related_lifecycle == "completed"
+
+    invalid = ReconciliationDisposition(
+        obligation_id=initial.obligations[0].obligation_id,
+        status="superseded",
+        reason="Implementation code is not a replacement plan authority.",
+        reviewed_revision=revision,
+        successor="src/service.py",
+    )
+    with pytest.raises(ImpactObligationError, match="successor must be documentation authority"):
+        build_impact_report(
+            repo,
+            ("src/service.py",),
+            relationships,
+            revision=revision,
+            dispositions=(invalid,),
+        )
+
+
+def test_plan_without_recognized_status_cannot_auto_satisfy(tmp_path: Path) -> None:
+    """Malformed plan metadata remains visible even when the file also changed."""
+
+    repo, revision = _repo(tmp_path)
+    relationships = {
+        "relationships": [
+            {
+                "source": "src/service.py",
+                "target": "docs/plans/malformed.md",
+                "relation": "planned_by",
+                "reason": "Plan is expected to own this implementation.",
+                "maintenance": "reconcile",
+            }
+        ]
+    }
+
+    report = build_impact_report(
+        repo,
+        ("docs/plans/malformed.md", "src/service.py"),
+        relationships,
+        revision=revision,
+    )
+
+    assert report.unresolved_count == 1
+    assert report.obligations[0].related_lifecycle == "unknown"
+    assert "no recognized lifecycle" in (report.obligations[0].disposition_reason or "")

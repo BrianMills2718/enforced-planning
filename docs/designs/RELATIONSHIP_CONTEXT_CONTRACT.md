@@ -160,3 +160,14 @@ The review fingerprint hashes `HEAD`, comparison base, staged/working-tree
 mode, and the exact binary diff. It therefore changes when an uncommitted edit
 changes even if `HEAD` does not. Timestamp-only, stale-revision, duplicate-id,
 unknown-status, and untracked-successor dispositions fail loudly.
+
+## Plan Lifecycle Extension (Slice 4)
+
+For `planned_by` edges, the compiler reads the target plan's declared
+`Status` field. Active/planned plans changed in the same comparison satisfy
+normally. Completed, superseded, and archived plans are historical: changing
+their file does not automatically satisfy a new implementation obligation.
+They require an exact-review disposition or a tracked documentation successor
+such as a new plan or current-state authority. A plan with no recognized status
+also cannot auto-satisfy. This keeps living plans current without rewriting
+completed execution history into present truth.

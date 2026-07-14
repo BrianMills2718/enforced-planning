@@ -18,6 +18,37 @@ couplings: []
 
 architecture: []
 
+# Optional behavioral authorities. Keep requirement prose in the referenced
+# source; this graph stores only stable identity, provenance, and risk.
+requirements:
+  - id: EXAMPLE-AC1
+    source: docs/plans/001_example.md#acceptance-criteria
+    risk_level: high
+
+# Reviewed semantic edges. Existing file-level ``tests`` edges without the
+# optional fields remain valid but the report-only audit identifies the missing
+# semantics. Use a file selector for a cohesive suite or ``file.py::symbol``
+# when tests in one file prove materially different requirements/risks.
+relationships:
+  - source: tests/test_example.py::test_invalid_input_fails
+    target: src/example.py::parse_input
+    relation: tests
+    requirement_refs: [EXAMPLE-AC1]
+    level: integration
+    polarity: negative_control
+    execution_realism: isolated_runtime
+    failure_modes: [invalid_input_accepted]
+    risk_level: high
+    reason: Proves invalid external input cannot enter accepted state.
+    maintenance: reconcile
+
+# Optional report scope. This is visibility configuration, not a hard gate.
+test_audit:
+  include:
+    - tests/**/*.py
+    - tests/*.py
+  mode: report_only
+
 # Optional: declare plan -> notebook / evidence alignment.
 notebook_links: []
 

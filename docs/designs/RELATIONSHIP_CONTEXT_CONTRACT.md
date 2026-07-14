@@ -182,3 +182,21 @@ the repository's configured generated-artifact policy; in this source repo
 `generated/` is ignored, so the compiler/check are committed while the 272 KB
 projection is regenerated locally rather than forced into documentation
 history.
+
+## Hook And Consumer Rollout (Slices 6-7)
+
+The governed-repo installer copies the compiler modules and CLIs into the
+consumer and exposes inventory, packet, impact, and wiki Make targets. The
+`PreToolUse` edit hook composes required-reading output with a bounded context
+packet. It uses the repository virtualenv when present and reports packet
+failures in context without blocking edits during visibility-first rollout.
+
+New-file `Write` requests are represented by a path-derived target with an
+explicit `target-untracked-new-file` diagnostic. This mode can match file-level
+selectors but cannot claim a Python symbol before parseable source exists.
+
+The first `onto-canon6` pilot proved plan-level context and deterministic wiki
+generation, while also proving that strict maintenance enforcement would be
+premature: the consumer declares no code couplings and has substantial
+unclassified docstring debt. The static contracts are complete; consumer hard
+gates remain a separate evidence-gated rollout decision.

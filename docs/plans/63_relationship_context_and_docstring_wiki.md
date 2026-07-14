@@ -1,6 +1,6 @@
 # Plan #63: Relationship Context and Docstring Wiki
 
-**Status:** In Progress
+**Status:** Complete (report-only rollout; hard enforcement deferred by evidence)
 **Type:** design + implementation
 **Priority:** Critical
 **phase_ref:** "portable documentation governance"
@@ -91,8 +91,8 @@ C8 generated wiki + consumer rollout
 | 3 | Changed-node impact obligations and audited dispositions | Complete |
 | 4 | Active/completed plan lifecycle freshness with negative controls | Complete |
 | 5 | Deterministic CLI/JSON docstring wiki and sync check | Complete |
-| 6 | Installer/hook adapters and report-only `onto-canon6` pilot | Not started |
-| 7 | Evidence review and calibrated new-debt enforcement | Not started |
+| 6 | Installer/hook adapters and report-only `onto-canon6` pilot | Complete |
+| 7 | Evidence review and calibrated new-debt enforcement | Complete: no hard gate enabled |
 
 ## Slice 1 Acceptance Criteria
 
@@ -149,7 +149,26 @@ framework render produced `generated/docstring_wiki.md` (272,101 bytes) and
 ignores `generated/`, so the reproducible generator/check are committed rather
 than forcing the projection into narrative history.
 
-## Later Acceptance Criteria
+**Slice 6 evidence (2026-07-14):** the installer now ships all four portable
+modules/CLIs and matching Make targets. The edit hook injects the bounded
+packet after required-reading succeeds; compiler errors are explicit in the
+injected context but remain report-only. New untracked `Write` targets receive
+path-derived context rather than being skipped. Installed-layout and shell-hook
+negative controls pass. The `onto-canon6` pilot at `90f46bb` inventoried 1,465
+tracked files in 0.94 seconds and produced a 7,151-character Plan 0141 packet in
+1.00 second. Full evidence: `docs/evidence/plan63_onto_canon6_pilot.md`.
+
+**Slice 7 evidence and disposition (2026-07-14):** hard enforcement remains
+off. The pilot found 363 existing Python-docstring findings across 75 files,
+and a real five-file commit produced zero impact obligations because the
+consumer graph has no code couplings. Plan/document context is useful; code
+context currently contains only source-local meaning plus `CLAUDE.md`. Enabling
+strict mode now would either preserve false confidence (no edges) or create
+noisy bulk debt (ungraded docstrings). A later consumer rollout must first add
+reviewed high-value code edges, define classification-specific coverage, and
+replay real diffs to calibrate false obligations.
+
+## Acceptance Criteria Disposition
 
 - Context packet budgets and provenance pass deterministic tests.
 - Changing linked code produces an unresolved obligation negative control.
@@ -157,7 +176,8 @@ than forcing the projection into narrative history.
 - Active plan drift fails; completed plan history is not forced to mutate.
 - Generated wiki hand edits and stale output fail sync checks.
 - Consumer rollout remains report-only until coverage and false-positive
-  evidence is reviewed.
+  evidence is reviewed. **Pass:** the pilot was reviewed and explicitly
+  rejected premature hard enforcement.
 
 ## Failure Modes
 
@@ -178,6 +198,8 @@ than forcing the projection into narrative history.
 - Exhaustive inventory includes files that should not require prose. Artifact
   classification and exclusions must be explicit before coverage is graded.
 - Hooks differ by client; the CLI/JSON contract is the portable authority.
+- The first consumer has useful plan-level relationships but no code couplings;
+  plan freshness cannot be enforced until those edges exist.
 
 ## Stop Conditions
 

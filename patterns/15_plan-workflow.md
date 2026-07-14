@@ -29,6 +29,9 @@ Result: orphan code, undocumented features, missed requirements.
    `PLANNING_OPERATING_MODEL.md`; it does not replace investigation, gap
    analysis, capability/boundary definition, or journey notebooks where those
    are required
+9. Plans assign checks to boundary, increment, or terminal verification lanes
+   and declare a gate-time budget. Broad terminal evidence is not rerun at every
+   deterministic intermediate checkpoint.
 
 ## Modality Diagnosis Rule
 
@@ -210,10 +213,22 @@ checks that prove the exploration is agent-drivable and inspectable.
 
 ## Verification
 
-- [ ] Required tests pass
+**Current stage:** PoC | Pilot | Product | Production
+**Next decision:** [decision]
+**Gate-time budget:** [time or number of gate passes]
+**Stopping rule:** [condition]
+
+| Lane | Trigger | Checks / Evidence | Evidence Reuse Key | Decision Protected |
+|------|---------|-------------------|--------------------|--------------------|
+| Boundary | Before irreversible/shared/one-use action, if any | Exact action-specific checks | commit + dependency/config identity | [decision] |
+| Increment | Before intermediate commit | Affected tests and focused checks | commit + dependency/config/command identity | [decision] |
+| Terminal | Closeout, merge, release, or works/done claim | Full relevant suite and evidence reconciliation | commit + dependency/config/command identity | [decision] |
+
+- [ ] Any declared boundary gate passed immediately before its protected action
+- [ ] Increment gate passed for the affected surface
 - [ ] Exploratory readouts/instruments were exercised, if applicable
-- [ ] Full test suite passes
-- [ ] Type check passes
+- [ ] Terminal gate passed before closeout or a works/done claim
+- [ ] Reused evidence matches its declared reuse key
 - [ ] Docs updated
 - [ ] If this plan deleted files/classes: checked for orphaned references (imports, iterations, tests)
 

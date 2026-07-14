@@ -108,6 +108,21 @@ def test_symbol_edge_links_exactly_one_authored_test(tmp_path: Path) -> None:
     assert "tests/test_orphan.py::test_orphan" in unlinked
 
 
+def test_edges_outside_selected_scope_do_not_create_false_empty_findings(tmp_path: Path) -> None:
+    """A bounded pilot ignores reviewed suites deliberately outside its include scope."""
+
+    repo = _repo(tmp_path)
+    outside = _complete_edge(selector="tests/elsewhere/test_other.py")
+    report = audit_test_relationships(
+        repo,
+        {"relationships": [outside]},
+        includes=("tests/test_service.py",),
+    )
+    assert report.scoped_test_count == 2
+    assert report.reviewed_edge_count == 0
+    assert "TEST_SELECTOR_EMPTY" not in {finding.code for finding in report.findings}
+
+
 def test_implementation_to_test_direction_is_supported(tmp_path: Path) -> None:
     """Existing implementation-to-test edges normalize like new test-to-code edges."""
 

@@ -301,6 +301,13 @@ def _selector_matches(selector: str, test: TestCaseRecord) -> bool:
     return not separator or symbol == test.qualified_name
 
 
+def _selector_in_scope(selector: str, includes: tuple[str, ...]) -> bool:
+    """Return whether a reviewed test selector belongs to the requested audit scope."""
+
+    path = selector.partition("::")[0]
+    return not includes or any(fnmatch.fnmatch(path, pattern) for pattern in includes)
+
+
 def _finding(
     code: str, severity: str, subject: str, message: str, related: tuple[str, ...] = ()
 ) -> TestAuditFinding:
@@ -320,7 +327,11 @@ def audit_test_relationships(
     inventory = inventory_repository(repo_root)
     tests = inventory_tests(inventory, includes)
     requirements = parse_requirements(relationships)
-    edges = parse_test_edges(relationships)
+    edges = tuple(
+        edge
+        for edge in parse_test_edges(relationships)
+        if any(_selector_in_scope(selector, includes) for selector in edge.test_selectors)
+    )
     matched_by_edge: dict[str, tuple[str, ...]] = {
         edge.edge_id: tuple(
             test.test_id

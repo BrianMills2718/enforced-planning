@@ -296,3 +296,19 @@ def test_load_active_decisions_ignores_prefix_noise(monkeypatch: pytest.MonkeyPa
     records = push_safety.load_active_decisions("demo")
 
     assert records == [{"content": "test"}]
+
+
+def test_load_active_decisions_preserves_multiline_json_after_prefix_noise(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Pretty-printed raw output must remain a complete JSON document after noise removal."""
+    payload = 'TIMEOUT_DISABLED[embed]: ignored\n[\n  {"content": "test"}\n]\n'
+
+    def _fake_run(*args, **kwargs):  # type: ignore[no-untyped-def]
+        return subprocess.CompletedProcess(args=["agent-memory"], returncode=0, stdout=payload, stderr="")
+
+    monkeypatch.setattr(subprocess, "run", _fake_run)
+
+    records = push_safety.load_active_decisions("demo")
+
+    assert records == [{"content": "test"}]

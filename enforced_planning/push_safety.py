@@ -136,10 +136,11 @@ def _branch_claims(project: str, branch: str) -> list[coordination_claims.ClaimR
 def _extract_json_block(raw_text: str) -> str:
     """Strip CLI noise before the first JSON token so parsing stays deterministic."""
 
-    for line in raw_text.splitlines():
+    lines = raw_text.splitlines()
+    for index, line in enumerate(lines):
         stripped = line.strip()
         if stripped.startswith("[") or stripped.startswith("{"):
-            return stripped
+            return "\n".join([stripped, *lines[index + 1 :]])
     return raw_text
 
 

@@ -123,6 +123,42 @@ def _prepare_relationship_context_target(repo_root: Path) -> None:
     )
 
 
+def test_worktree_block_uses_canonical_project_name_from_linked_checkout(tmp_path: Path) -> None:
+    """Session targets must not treat a linked worktree directory as the project name."""
+    repo_root = tmp_path / "demo"
+    repo_root.mkdir()
+    subprocess.run(["git", "init", "-q", "-b", "main", str(repo_root)], check=True)
+    subprocess.run(["git", "-C", str(repo_root), "config", "user.name", "Test"], check=True)
+    subprocess.run(["git", "-C", str(repo_root), "config", "user.email", "test@example.com"], check=True)
+    (repo_root / "README.md").write_text("demo\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(repo_root), "add", "README.md"], check=True)
+    subprocess.run(["git", "-C", str(repo_root), "commit", "-qm", "baseline"], check=True)
+    worktree = repo_root / "worktrees" / "plan-68-demo"
+    subprocess.run(
+        ["git", "-C", str(repo_root), "worktree", "add", "-b", "plan-68-demo", str(worktree)],
+        check=True,
+    )
+
+    result = subprocess.run(
+        [
+            "make",
+            "-s",
+            "-f",
+            str(PROJECT_META_ROOT / "Makefile"),
+            "--eval",
+            "print-worktree-project:\n\t@echo $(WORKTREE_PROJECT)",
+            "print-worktree-project",
+        ],
+        cwd=str(worktree),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.stdout.strip() == "demo"
+
+
 def test_relationship_context_only_rollout_is_bounded_and_runnable(tmp_path: Path) -> None:
     """The narrow rollout must install only its declared surface and execute it."""
 
@@ -682,7 +718,7 @@ def test_install_governed_repo_syncs_worktree_block_into_existing_meta_makefile(
     assert "WORKTREE_CLAIMS_SCRIPT := scripts/meta/worktree-coordination/../check_coordination_claims.py" in makefile_text
     assert "WORKTREE_SESSION_START_SCRIPT := scripts/meta/worktree-coordination/../session_start.py" in makefile_text
     assert "WORKTREE_START_POINT ?= HEAD" in makefile_text
-    assert "WORKTREE_PROJECT ?= $(notdir $(CURDIR))" in makefile_text
+    assert "WORKTREE_PROJECT ?= $(shell git rev-parse --git-common-dir | xargs dirname | xargs basename)" in makefile_text
     assert "session-start:" in makefile_text
     assert "session-finish:" in makefile_text
     assert "worktree-list:" in makefile_text

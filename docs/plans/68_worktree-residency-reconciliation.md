@@ -39,6 +39,7 @@ This is a deductive extension of `enforced_planning.coordination_consistency`, n
 6. An unclaimed checkout under the sanctioned root remains a warning, preserving the semantic-disposition boundary.
 7. Push safety resolves repository identity from the canonical checkout rather than a worktree branch-directory name.
 8. Push safety preserves complete pretty-printed JSON after stripping `agent-memory` prefix diagnostics.
+9. Worktree lifecycle Make targets resolve the canonical project name from a linked checkout.
 
 ### Boundaries and data flow
 
@@ -89,6 +90,7 @@ This extends an existing internal framework capability. It does not introduce a 
 | AC6 | Real repository audit passes after cleanup with every auxiliary worktree claimed | observed | B after execution | live workspace command | retired path recreated would fail |
 | AC7 | Push safety recognizes the live branch claim from an in-repo worktree | test | F — reproduced failure during implementation | real-Git claimed worktree | branch-directory name must not become project identity |
 | AC8 | Multi-line active-decision output parses after prefix noise | test | F — reproduced failure during live push-check | one-line JSON remains valid | pretty-printed JSON with prefix noise must parse completely |
+| AC9 | `make session-status` sees live sessions from a linked checkout | test + observed | F — reproduced as zero live sessions | real Git-worktree Make evaluation | branch-directory name must not become project identity |
 
 Enforcement is licensed only after AC2 and AC4 both have automated controls. AC1 prevents the local Make target from failing on unrelated ecosystem claims.
 
@@ -122,6 +124,7 @@ Slice 1 is the entire bounded change: repository-local scope → registered-path
 | The first Make target used the GNU `realpath` command. | resolved | Replaced it with the existing Python canonical-root helper and reran the live worktree target. |
 | Push safety inferred the branch-directory name as the project and truncated pretty-printed decision JSON. | resolved | Added real-worktree and multi-line JSON controls; the live push gate now passes. |
 | Local concern routing reports success while writing into the caller checkout. | deferred | Removed both undelivered files, restored clean worktrees, and recorded MP-019 for a dedicated routing fix. |
+| `make session-status` used the same branch-directory project identity. | resolved | Canonicalized `WORKTREE_PROJECT` in both source and installer template; real linked-worktree target now reports live sessions. |
 
 ## Verification
 
@@ -144,8 +147,9 @@ Slice 1 is the entire bounded change: repository-local scope → registered-path
 | AC6 cleaned real repository reconciles claims and worktrees | B | observed | live Make target: 4 linked worktrees total, 3 live auxiliary lanes, 0 hard issues, 0 warnings |
 | AC7 push safety canonical project identity | A | test | real-Git claimed in-repo worktree fixture and live push gate |
 | AC8 multi-line active-decision parsing | A | test | prefix-noise plus pretty-printed JSON fixture and live agent-memory output |
+| AC9 linked-worktree Make project identity | A | test + observed | real Git-worktree Make evaluation and live `make session-status` |
 
-Distribution: A=7, B=1, C=0, D=0, F=0. The enforced path rule has both signs at grade A. Five previously claimless sanctioned worktrees received explicit merged/archive dispositions and were removed without deleting their recovery branches; the remaining auxiliary worktrees all have live claims.
+Distribution: A=8, B=1, C=0, D=0, F=0. The enforced path rule has both signs at grade A. Five previously claimless sanctioned worktrees received explicit merged/archive dispositions and were removed without deleting their recovery branches; the remaining auxiliary worktrees all have live claims.
 
 ## Review result
 

@@ -138,6 +138,26 @@ the concrete cases that explain it?
 
 ---
 
+## Verification Strategy
+
+> **REQUIRED:** choose checks proportionate to the current stage and next
+> decision. Boundary checks protect irreversible actions; increment checks
+> protect affected changes; terminal checks support closeout or a works/done
+> claim.
+
+**Current stage:** PoC | Pilot | Product | Production
+**Next decision:** What this slice must enable someone to decide
+**Gate-time budget:** Maximum verification time or gate passes for this slice
+**Stopping rule:** When to narrow/defer a gate or end an exploratory loop
+
+| Lane | Trigger | Checks / Evidence | Evidence Reuse Key | Decision Protected |
+|------|---------|-------------------|--------------------|--------------------|
+| Boundary | Before [irreversible/shared/one-use action], if any | Exact input/config/permission/resource checks | source commit + dependency/config identity | [decision] |
+| Increment | Before intermediate commit | Affected tests and focused type/lint/contract checks | source commit + dependency/config/command identity | [decision] |
+| Terminal | Phase closeout, merge, release, or works/done claim | Full relevant suite, coverage/authority/trace reconciliation, cleanup | source commit + dependency/config/command identity | [decision] |
+
+---
+
 ## Acceptance Criteria
 
 > Feature-level criteria (what the plan accomplishes):
@@ -148,6 +168,10 @@ the concrete cases that explain it?
 - [ ] Required tests pass
 - [ ] Repository health recorded; no new or changed-test baseline failures
 - [ ] Type check passes
+- [ ] Any declared boundary gate passed immediately before its protected action
+- [ ] Increment gate passed for the affected surface
+- [ ] Terminal gate passed before closeout or a works/done claim
+- [ ] Evidence reuse, if any, matches the declared reuse key
 - [ ] Docs updated
 
 ---

@@ -49,6 +49,10 @@ an agent:
    record durable choices whenever a capability, boundary, roadmap, or plan
    needs one, and they must record the research basis behind the choice or say
    explicitly that research was skipped.
+12. **Verification is stage-aware.** Protect irreversible boundaries when they
+   occur, verify the affected surface at each increment, and reserve broad
+   authority and closeout suites for terminal claims. A check that does not
+   protect the current decision is ceremony, not rigor.
 
 ## The Model
 
@@ -297,6 +301,44 @@ fully-green repository state. See META-ADR-0011.
 
 Not every task can be fully test-first in practice, but no task should start
 implementation without a declared verification strategy.
+
+### Verification Lanes and Gate Budgets
+
+Every planned check belongs to one of three lanes. The plan records the lane,
+trigger, decision protected, and evidence reuse key.
+
+| Lane | Trigger | Minimum evidence | What it does not prove |
+|------|---------|------------------|------------------------|
+| **Boundary** | Immediately before an irreversible, shared-state, external, or one-use action | Exact input, configuration, model, budget, permission, and resource-availability checks relevant to that action | That the feature or phase is complete |
+| **Increment** | Before an intermediate commit or handoff | Affected tests plus focused type, lint, contract, and documentation checks | That unrelated surfaces or the whole project remain ready to ship |
+| **Terminal** | Phase closeout, merge, release, or a claim that the capability works or is done | Full relevant suite, evidence/coverage reconciliation, authority projections, trace review, and cleanup required by the claim | Future production qualities outside the declared stage |
+
+The following rules prevent both under-verification and gate inflation:
+
+- **Declare a gate-time budget and stopping rule per slice.** State how much
+  verification time or how many gate passes are proportionate to the next
+  decision. When the budget is exceeded, remove, defer, or narrow controls that
+  do not protect that decision. Immediate safety, legal, data-loss, and
+  irreversible shared-state risks may override the budget.
+- **Name the protected decision.** For every gate, ask: if this check were
+  removed, could the current decision become invalid? If not, move it to the
+  appropriate later lane or delete it.
+- **Reuse unchanged evidence.** Broad evidence may be reused only when its
+  source commit, dependency revision or lock, configuration, and command are
+  unchanged. Record those values rather than rerunning a suite by habit.
+- **Do not manufacture authority transitions.** A new authority pass is needed
+  when permission changes, a one-use external resource is about to be consumed,
+  shared state changed, or a terminal claim is issued. Producing another
+  deterministic intermediate artifact does not itself create a new authority
+  boundary.
+- **Record LLM traces during observation; review before interpretation.** The
+  exact full trace must exist when an observation is collected. Semantic
+  interpretation, selection, promotion, or a claim that the pipeline works must
+  wait for full-trace review. A bounded PoC may use direct exact-trace review;
+  it need not first build a generic trace-gating framework.
+- **Treat the full suite as terminal by default.** Run it earlier only when a
+  shared contract changed, the affected surface cannot be isolated, or an
+  existing repository hook requires it.
 
 ## Compression Rules
 

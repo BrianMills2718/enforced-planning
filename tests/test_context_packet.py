@@ -56,6 +56,7 @@ def _relationships() -> dict[str, object]:
                 "relation": "implements",
                 "reason": "The function implements the governed-request requirement.",
                 "maintenance": "reconcile",
+                "archive_effect": "blocks_archive",
             },
             {
                 "source": "src/service.py",
@@ -103,6 +104,7 @@ def test_symbol_packet_uses_actual_docstrings_and_bidirectional_edges(tmp_path: 
     )
 
     assert packet.target == "src/service.py::authorize"
+    assert packet.schema_version == 2
     by_relation = {(item.relation, item.direction): item for item in packet.items}
     target = by_relation[("self", "self")]
     assert target.summary == "Decide whether a principal can access one resource."
@@ -111,6 +113,7 @@ def test_symbol_packet_uses_actual_docstrings_and_bidirectional_edges(tmp_path: 
     requirement = by_relation[("implements", "outgoing")]
     assert requirement.summary == "Define governed request behavior."
     assert requirement.provenance == "relationships[0]"
+    assert requirement.archive_effect == "blocks_archive"
     test = by_relation[("tests", "incoming")]
     assert test.path == "tests/test_service.py"
     assert test.summary == "Verify governed request behavior."
@@ -164,6 +167,32 @@ def test_registry_summary_duplication_and_malformed_edges_fail_loudly() -> None:
     }
     with pytest.raises(ContextPacketError, match="must explain why"):
         relationship_specs(no_reason)
+
+    unsupported_archive_effect = {
+        "relationships": [
+            {
+                "source": "src/a.py",
+                "target": "docs/a.md",
+                "relation": "implements",
+                "reason": "The source implements the document.",
+                "archive_effect": "probably_safe",
+            }
+        ]
+    }
+    with pytest.raises(ContextPacketError, match="unsupported archive effect"):
+        relationship_specs(unsupported_archive_effect)
+
+
+def test_missing_and_legacy_archive_effects_require_review() -> None:
+    """Unclassified retention semantics cannot silently become safe or blocking."""
+
+    relationships = _relationships()
+    specs = relationship_specs(relationships)
+
+    assert specs[0].archive_effect == "blocks_archive"
+    assert specs[1].archive_effect == "review_required"
+    assert specs[-1].provenance == "couplings[0]"
+    assert specs[-1].archive_effect == "review_required"
 
 
 def test_packet_budget_is_deterministic_and_reports_omissions(tmp_path: Path) -> None:

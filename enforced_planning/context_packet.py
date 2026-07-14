@@ -27,6 +27,12 @@ from enforced_planning.relationship_context import inventory_repository
 
 Direction: TypeAlias = Literal["self", "outgoing", "incoming"]
 MaintenanceAction: TypeAlias = Literal["regenerate", "reconcile", "block", "lineage_only"]
+ArchiveEffect: TypeAlias = Literal[
+    "blocks_archive",
+    "redirect_before_archive",
+    "lineage_only",
+    "review_required",
+]
 
 ALLOWED_RELATIONS = {
     "acceptance_evidence",
@@ -43,6 +49,13 @@ ALLOWED_RELATIONS = {
     "updates",
 }
 ALLOWED_MAINTENANCE = {"regenerate", "reconcile", "block", "lineage_only"}
+ALLOWED_ARCHIVE_EFFECTS = {
+    "blocks_archive",
+    "redirect_before_archive",
+    "lineage_only",
+    "review_required",
+}
+CONTEXT_PACKET_SCHEMA_VERSION = 2
 RELATION_PRIORITY = {
     "self": 0,
     "governed_by": 10,
@@ -73,6 +86,7 @@ class RelationshipSpec:
     relation: str
     reason: str
     maintenance: MaintenanceAction
+    archive_effect: ArchiveEffect
     provenance: str
 
 
@@ -96,6 +110,7 @@ class ContextItem:
     direction: Direction
     reason: str
     maintenance: str
+    archive_effect: str
     provenance: str
     summary: str | None
     summary_source: str | None
@@ -161,6 +176,8 @@ def _validate_spec(spec: RelationshipSpec) -> RelationshipSpec:
         raise ContextPacketError(f"{spec.provenance} has unsupported relation {spec.relation!r}")
     if spec.maintenance not in ALLOWED_MAINTENANCE:
         raise ContextPacketError(f"{spec.provenance} has unsupported maintenance action {spec.maintenance!r}")
+    if spec.archive_effect not in ALLOWED_ARCHIVE_EFFECTS:
+        raise ContextPacketError(f"{spec.provenance} has unsupported archive effect {spec.archive_effect!r}")
     if not spec.reason.strip():
         raise ContextPacketError(f"{spec.provenance} must explain why the relationship exists")
     return spec
@@ -181,12 +198,14 @@ def relationship_specs(relationships: dict[str, Any]) -> tuple[RelationshipSpec,
             raise ContextPacketError(f"{provenance} duplicates source summary prose; summaries must be extracted")
         relation = str(edge.get("relation", "")).strip()
         maintenance = str(edge.get("maintenance", "reconcile")).strip()
+        archive_effect = str(edge.get("archive_effect", "review_required")).strip()
         spec = RelationshipSpec(
             sources=_to_strings(edge.get("sources", edge.get("source", edge.get("from")))),
             targets=_to_strings(edge.get("targets", edge.get("target", edge.get("to")))),
             relation=relation,
             reason=str(edge.get("reason", "")).strip(),
             maintenance=maintenance,  # type: ignore[arg-type]
+            archive_effect=archive_effect,  # type: ignore[arg-type]
             provenance=provenance,
         )
         specs.append(_validate_spec(spec))
@@ -202,6 +221,7 @@ def relationship_specs(relationships: dict[str, Any]) -> tuple[RelationshipSpec,
                     relation="updates",
                     reason=str(edge.get("description") or "Source change may require coupled documentation review."),
                     maintenance="reconcile",
+                    archive_effect="review_required",
                     provenance=f"couplings[{index}]",
                 )
             )
@@ -226,6 +246,7 @@ def relationship_specs(relationships: dict[str, Any]) -> tuple[RelationshipSpec,
                     relation="governed_by",
                     reason=str(edge.get("context") or "Governing architecture decision."),
                     maintenance="reconcile",
+                    archive_effect="review_required",
                     provenance=f"governance[{index}]",
                 )
             )
@@ -259,6 +280,7 @@ def relationship_specs(relationships: dict[str, Any]) -> tuple[RelationshipSpec,
                             relation=relation,
                             reason=reason,
                             maintenance="reconcile" if relation != "targets" else "lineage_only",
+                            archive_effect="review_required",
                             provenance=f"architecture[{index}].{declared_fields[0]}",
                         )
                     )
@@ -273,6 +295,7 @@ def relationship_specs(relationships: dict[str, Any]) -> tuple[RelationshipSpec,
                 relation="required_reading",
                 reason="Repository-default context required before edits.",
                 maintenance="lineage_only",
+                archive_effect="review_required",
                 provenance="required_reading.defaults",
             )
         )
@@ -352,6 +375,7 @@ def _context_item(
     direction: Direction,
     reason: str,
     maintenance: str,
+    archive_effect: str,
     provenance: str,
 ) -> ContextItem:
     """Bind one artifact or symbol's actual source summary to an edge."""
@@ -365,6 +389,7 @@ def _context_item(
             direction=direction,
             reason=reason,
             maintenance=maintenance,
+            archive_effect=archive_effect,
             provenance=provenance,
             summary=artifact.summary,
             summary_source=artifact.summary_source,
@@ -382,6 +407,7 @@ def _context_item(
         direction=direction,
         reason=reason,
         maintenance=maintenance,
+        archive_effect=archive_effect,
         provenance=provenance,
         summary=symbol.docstring,
         summary_source="python:symbol-docstring" if symbol.docstring else None,
@@ -461,6 +487,7 @@ def build_context_packet(
             direction="self",
             reason="Source-local context for the requested edit target.",
             maintenance="lineage_only",
+            archive_effect="lineage_only",
             provenance="inventory",
         )
     ]
@@ -500,6 +527,7 @@ def build_context_packet(
                     direction="outgoing" if source_match else "incoming",
                     reason=spec.reason,
                     maintenance=spec.maintenance,
+                    archive_effect=spec.archive_effect,
                     provenance=spec.provenance,
                 )
             )
@@ -538,7 +566,7 @@ def build_context_packet(
             )
         )
     return ContextPacket(
-        schema_version=1,
+        schema_version=CONTEXT_PACKET_SCHEMA_VERSION,
         target=f"{target_path}::{target_symbol}" if target_symbol else target_path,
         max_items=max_items,
         max_chars=max_chars,
@@ -598,6 +626,7 @@ def main(argv: list[str] | None = None) -> int:
 
 
 __all__ = [
+    "ArchiveEffect",
     "ContextDiagnostic",
     "ContextItem",
     "ContextPacket",

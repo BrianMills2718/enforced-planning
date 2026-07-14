@@ -225,3 +225,61 @@ gates remain a separate evidence-gated rollout decision.
 The shell hook adapter is currently Claude Code-specific. The CLI/JSON
 contract is client-neutral and agent-drivable, but Codex automatic pre-edit
 injection remains a separate adapter rather than an implied capability.
+
+## Document Archive Lifecycle Extension (Slice 8)
+
+The report-only lifecycle compiler extends relationship declarations with a
+retirement concern that is independent from edit maintenance:
+
+```yaml
+documents:
+  - path: docs/plans/63_relationship_context_and_docstring_wiki.md
+    role: historical_evidence
+    justification:
+      anchored_to: docs/designs/RELATIONSHIP_CONTEXT_CONTRACT.md
+      reason: Records the accepted implementation history for this contract.
+    lifecycle_source: document_status
+
+relationships:
+  - source: docs/designs/RELATIONSHIP_CONTEXT_CONTRACT.md
+    target: docs/plans/63_relationship_context_and_docstring_wiki.md
+    relation: supersedes
+    reason: The contract is the current authority while the plan records lineage.
+    maintenance: lineage_only
+    archive_effect: lineage_only
+```
+
+`archive_effect` accepts `blocks_archive`, `redirect_before_archive`,
+`lineage_only`, or `review_required`. It does not reuse `maintenance`: edit
+reconciliation and archive disposition answer different questions. Missing
+effects on explicit or legacy edges normalize to `review_required` so unknown
+retention semantics never silently become safe. Adding the field advances the
+context-packet JSON contract to schema version 2.
+
+Document declarations use exact repository-relative paths. Each declaration
+assigns one role and one purpose-bearing justification; repeated declarations
+may assign additional roles to the same document. The compiler reads only an
+explicit source-local `Status` field for lifecycle. It does not infer lifecycle
+from filenames, age, inbound-link counts, or document prose.
+
+The report inventories every Git-tracked narrative Markdown document and emits
+declared/undeclared coverage plus candidate-specific edge impacts and blockers:
+
+- non-terminal or unknown source-local lifecycle;
+- missing role/justification declarations;
+- unresolved justification anchors;
+- unresolved `blocks_archive` edges;
+- redirects required by `redirect_before_archive`; and
+- ambiguous `review_required` edges.
+
+`lineage_only` remains visible but creates no mechanical blocker. Even when no
+blocker remains, the only positive report state is
+`semantic_review_required`. This slice has no `eligible`, `approved`, reviewer
+revision, or content-hash authorization field. An LLM agent or human must still
+assess durable-claim promotion, evidence retention, redundancy, and competing
+interpretations before a later archive workflow can authorize a transition.
+
+The P2 schema uses current repository paths as identity and exact declarations
+for narrative Markdown. Stable identity across moves, artifact-family rules
+for generated/vendored/fixture material, revision-bound semantic assessments,
+archive-log integration, tombstones, and hard enforcement remain later slices.

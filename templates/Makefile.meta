@@ -94,7 +94,7 @@ endif
 # --- Relationship Context ---
 SCRIPTS_META ?= scripts/meta
 RELATIONSHIP_CONTEXT_PYTHON := $(if $(strip $(PYTHON)),$(PYTHON),$(if $(wildcard .venv/bin/python),.venv/bin/python,python3))
-.PHONY: relationship-context context-packet impact-obligations docstring-wiki docstring-wiki-check
+.PHONY: relationship-context context-packet impact-obligations docstring-wiki docstring-wiki-check test-relationships
 
 relationship-context:  ## Inventory source-derived summaries for every tracked artifact
 	@$(RELATIONSHIP_CONTEXT_PYTHON) $(SCRIPTS_META)/relationship_context.py --repo-root . --pretty
@@ -113,6 +113,9 @@ docstring-wiki:  ## Regenerate the source-derived docstring wiki
 
 docstring-wiki-check:  ## Fail when the generated docstring wiki is missing or stale
 	@$(RELATIONSHIP_CONTEXT_PYTHON) $(SCRIPTS_META)/docstring_wiki.py --repo-root . --check
+
+test-relationships:  ## Report requirement/risk-linked test quality without hard enforcement
+	@$(RELATIONSHIP_CONTEXT_PYTHON) $(SCRIPTS_META)/test_relationships.py --repo-root .
 # <<< RELATIONSHIP CONTEXT TARGETS <<<
 
 # --- Quality ---

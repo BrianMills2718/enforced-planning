@@ -23,6 +23,43 @@ Items start as **unconfirmed** observations and get triaged into confirmed issue
 
 ## Open
 
+### MP-019: Local concern routing writes into the caller checkout
+
+| Field | Value |
+|-------|-------|
+| Status | `confirmed` |
+| Severity | medium |
+| Reported | 2026-07-14 |
+
+Routing a concern to another active branch without an open PR writes the inbox
+file beneath the `--repo-root` supplied by the caller. From a linked worktree,
+that dirties the sender checkout; from the canonical root, it dirties `main`.
+Neither location is a durable target-session inbox, and the reported `ok: true`
+can therefore overstate delivery.
+
+**Next:** Define one canonical ignored cross-session inbox or route through the
+coordination/session store, then add a two-worktree delivery test that proves
+the target runtime can discover the message without dirtying either checkout.
+
+### MP-018: Registered worktree residency is not a lifecycle invariant
+
+| Field | Value |
+|-------|-------|
+| Status | `planned` — Plan #68 |
+| Severity | high |
+| Reported | 2026-07-14 |
+
+The coordination consistency checker reports unclaimed linked worktrees only
+as warnings, ordinary session status is claim-centric, and the July 9 path
+migration did not disposition the historical sibling-layout backlog. Twelve
+clean but claimless worktrees therefore remained registered under the retired
+`<repo>_worktrees/` convention until a manual audit archived their exact remote
+heads and removed the checkouts.
+
+**Next:** Plan #68 adds a repository-local audit path, distinct sanctioned-root
+classification, and tested opt-in enforcement without pretending Git can make
+semantic merge/discard decisions.
+
 ### MP-017: Repository-wide Ruff target has 123 baseline errors
 
 | Field | Value |

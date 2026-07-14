@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from enforced_planning import coordination_claims
+from enforced_planning.worktree_paths import resolve_canonical_repo_root
 
 
 @dataclass(frozen=True)
@@ -135,10 +136,11 @@ def _branch_claims(project: str, branch: str) -> list[coordination_claims.ClaimR
 def _extract_json_block(raw_text: str) -> str:
     """Strip CLI noise before the first JSON token so parsing stays deterministic."""
 
-    for line in raw_text.splitlines():
+    lines = raw_text.splitlines()
+    for index, line in enumerate(lines):
         stripped = line.strip()
         if stripped.startswith("[") or stripped.startswith("{"):
-            return stripped
+            return "\n".join([stripped, *lines[index + 1 :]])
     return raw_text
 
 
@@ -195,7 +197,7 @@ def evaluate_push_safety(
     """Evaluate whether the current branch is safe to push as-is."""
 
     resolved_repo_root = resolve_repo_root(repo_root)
-    resolved_project = project or resolved_repo_root.name
+    resolved_project = project or resolve_canonical_repo_root(resolved_repo_root).name
     resolved_branch = branch or current_branch(resolved_repo_root)
     default_branch = resolve_default_branch(resolved_repo_root)
     if not default_branch:

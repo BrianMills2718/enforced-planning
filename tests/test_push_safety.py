@@ -149,6 +149,64 @@ def test_push_check_warns_on_active_decisions_without_blocking(
     assert any(item["code"] == "active_decisions_present" for item in payload["warnings"])
 
 
+def test_push_check_uses_canonical_project_identity_from_in_repo_worktree(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A sanctioned worktree should match claims scoped to its canonical repository."""
+    repo_root = tmp_path / "demo"
+    _init_git_repo(repo_root)
+    worktree = repo_root / "worktrees" / "plan-68-demo"
+    subprocess.run(
+        ["git", "-C", str(repo_root), "worktree", "add", "-b", "plan-68-demo", str(worktree)],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    (worktree / "feature.py").write_text("print('hi')\n", encoding="utf-8")
+    subprocess.run(
+        ["git", "-C", str(worktree), "add", "feature.py"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(worktree), "commit", "-m", "feature"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    monkeypatch.setattr(push_safety, "load_active_decisions", lambda project, limit=5: [])
+    _write_claim(
+        claims_dir,
+        "current.yaml",
+        {
+            "agent": "codex",
+            "claimed_at": "2026-04-09T10:00:00+00:00",
+            "expires_at": "2099-04-09T11:00:00+00:00",
+            "projects": ["demo"],
+            "scope": "plan-68-demo",
+            "intent": "Own the sanctioned worktree branch",
+            "claim_type": "program",
+            "branch": "plan-68-demo",
+            "worktree_path": str(worktree),
+            "session_id": "codex:thread-68",
+            "status": "active",
+        },
+    )
+
+    payload = push_safety.evaluate_push_safety(worktree)
+
+    assert payload["ok"]
+    assert payload["project"] == "demo"
+    assert payload["repo_root"] == str(worktree)
+    assert payload["branch_claim_count"] == 1
+    assert not any(item["code"] == "missing_branch_claim" for item in payload["issues"])
+
+
 def test_create_review_claim_uses_target_branch_as_parent_scope(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

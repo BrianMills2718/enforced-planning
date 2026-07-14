@@ -37,6 +37,7 @@ This is a deductive extension of `enforced_planning.coordination_consistency`, n
 4. Explicit enforcement mode turns the same violation into a hard failure.
 5. A claimed checkout under the sanctioned root passes the path rule.
 6. An unclaimed checkout under the sanctioned root remains a warning, preserving the semantic-disposition boundary.
+7. Push safety resolves repository identity from the canonical checkout rather than a worktree branch-directory name.
 
 ### Boundaries and data flow
 
@@ -85,6 +86,7 @@ This extends an existing internal framework capability. It does not introduce a 
 | AC4 | Retired sibling path fails in enforcement mode | test | D — plan only | sanctioned path still exits 0 | `<repo>_worktrees/plan-x` exits 1 with the path issue |
 | AC5 | Claimless sanctioned worktree remains warning-only | test | C — existing fixture, but old fixture uses the retired path | existing unclaimed warning behavior | path-policy enforcement does not misclassify semantic inactivity |
 | AC6 | Real repository audit passes after retired-path cleanup while reporting current claimless debt | observed | B after execution | live workspace command | retired path recreated would fail |
+| AC7 | Push safety recognizes the live branch claim from an in-repo worktree | test | F — reproduced failure during implementation | real-Git claimed worktree | branch-directory name must not become project identity |
 
 Enforcement is licensed only after AC2 and AC4 both have automated controls. AC1 prevents the local Make target from failing on unrelated ecosystem claims.
 
@@ -120,6 +122,7 @@ Slice 1 is the entire bounded change: repository-local scope → registered-path
 
 - Focused real-Git tests for selected-repo scope and both path-policy signs.
 - Existing coordination consistency tests.
+- Existing push-safety tests plus the in-repo worktree identity regression.
 - Ruff and strict mypy over the changed Python closure.
 - Real repository-local JSON audit from this worktree.
 - Proportional pre-landing review and cleanup.

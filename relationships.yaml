@@ -33,7 +33,9 @@ governance:
 couplings:
   - sources:
       - "enforced_planning/coordination_consistency.py"
+      - "enforced_planning/push_safety.py"
       - "tests/test_check_coordination_consistency.py"
+      - "tests/test_push_safety.py"
       - "Makefile"
     docs:
       - "docs/plans/68_worktree-residency-reconciliation.md"

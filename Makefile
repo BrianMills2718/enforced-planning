@@ -1,6 +1,6 @@
 ## enforced-planning — framework for enforced planning, context gating, doc-code alignment
 
-.PHONY: help test test-quick check lint dead-code dead-code-audit dead-code-validate push-check infer check-deps check-caps migrate-rels verify-couplings review-surfaces promote plan-registry ecosystem-status docstring-wiki docstring-wiki-check test-relationships status
+.PHONY: help test test-quick check lint dead-code dead-code-audit dead-code-validate push-check coordination-consistency infer check-deps check-caps migrate-rels verify-couplings review-surfaces promote plan-registry ecosystem-status docstring-wiki docstring-wiki-check test-relationships status
 
 PYTHON ?= $(if $(wildcard .venv/bin/python),.venv/bin/python,python3)
 REPO ?= .
@@ -32,8 +32,18 @@ dead-code-audit:  ## Refresh reviewed dead-code audit file
 dead-code-validate:  ## Validate reviewed dead-code dispositions
 	$(PYTHON) scripts/validate_dead_code_audit.py
 
-push-check:  ## Validate branch push safety against default-branch and coordination state
+push-check: coordination-consistency  ## Validate branch push safety against default-branch and coordination state
 	$(PYTHON) scripts/check_push_safety.py
+
+coordination-consistency:  ## Audit local claims/worktrees and reject out-of-policy checkout paths
+	@repo_root="$$($(PYTHON) -c 'from pathlib import Path; from enforced_planning.worktree_paths import resolve_canonical_repo_root; print(resolve_canonical_repo_root(Path.cwd()))')"; \
+	workspace_root="$$(dirname "$$repo_root")"; \
+	repo="$$(basename "$$repo_root")"; \
+	$(PYTHON) scripts/check_coordination_consistency.py \
+		--workspace-root "$$workspace_root" \
+		--repo "$$repo" \
+		--scope-claims-to-repos \
+		--enforce-sanctioned-worktree-root
 
 ## --- Relationships V2 tools ---
 

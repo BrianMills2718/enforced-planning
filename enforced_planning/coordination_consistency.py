@@ -158,12 +158,22 @@ def _worktree_matches_claim(
     return False
 
 
+def _is_within_directory(*, path: Path, directory: Path) -> bool:
+    """Return whether ``path`` is a strict descendant of ``directory`` after resolution."""
+    try:
+        relative_path = path.expanduser().resolve().relative_to(directory.expanduser().resolve())
+    except ValueError:
+        return False
+    return relative_path != Path(".")
+
+
 def build_consistency_report(
     *,
     claims: list[coordination_claims.ClaimRecord],
     repo_roots: dict[str, Path],
     registry_json_path: Path | None = None,
     registry_markdown_path: Path | None = None,
+    enforce_sanctioned_worktree_root: bool = False,
 ) -> dict[str, Any]:
     """Return a structured coordination consistency report."""
     worktrees = load_repo_worktrees(repo_roots)
@@ -295,6 +305,22 @@ def build_consistency_report(
             continue
         if worktree.is_main_worktree:
             continue
+        sanctioned_root = Path(worktree.repo_root) / "worktrees"
+        if not _is_within_directory(path=Path(worktree.path), directory=sanctioned_root):
+            severity = "hard" if enforce_sanctioned_worktree_root else "warning"
+            issues.append(
+                ConsistencyIssue(
+                    severity=severity,
+                    code="worktree-outside-sanctioned-root",
+                    repo=worktree.repo,
+                    message=(
+                        f"Linked worktree {worktree.path} is outside the sanctioned root "
+                        f"{sanctioned_root}."
+                    ),
+                    branch=worktree.branch,
+                    worktree_path=worktree.path,
+                )
+            )
         if (worktree.repo, worktree.path) not in matched_worktrees:
             issues.append(
                 ConsistencyIssue(
@@ -360,6 +386,7 @@ def build_consistency_report(
         "issues": [issue.to_dict() for issue in issues],
         "hard_issue_count": sum(1 for issue in issues if issue.severity == "hard"),
         "warning_count": sum(1 for issue in issues if issue.severity == "warning"),
+        "enforce_sanctioned_worktree_root": enforce_sanctioned_worktree_root,
         "claims": [claim.to_dict() for claim in claims],
         "worktrees": [worktree.to_dict() for worktree in worktrees],
     }
@@ -391,6 +418,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--registry-markdown",
         help="Optional registry markdown file to compare against the live claim state.",
     )
+    parser.add_argument(
+        "--scope-claims-to-repos",
+        action="store_true",
+        help="Audit only live claims whose primary project is one of the selected repositories.",
+    )
+    parser.add_argument(
+        "--enforce-sanctioned-worktree-root",
+        action="store_true",
+        help="Hard-fail linked worktrees outside each selected repository's worktrees/ directory.",
+    )
     parser.add_argument("--json", action="store_true", help="Emit structured JSON output.")
     return parser.parse_args(argv)
 
@@ -405,11 +442,14 @@ def main(argv: list[str] | None = None) -> int:
         coordination_claims.CLAIMS_DIR = Path(args.claims_dir).expanduser().resolve()
 
     claims = coordination_claims.check_claims()
+    if args.scope_claims_to_repos:
+        claims = [claim for claim in claims if claim.primary_project() in repo_roots]
     report = build_consistency_report(
         claims=claims,
         repo_roots=repo_roots,
         registry_json_path=Path(args.registry_json).expanduser().resolve() if args.registry_json else None,
         registry_markdown_path=Path(args.registry_markdown).expanduser().resolve() if args.registry_markdown else None,
+        enforce_sanctioned_worktree_root=args.enforce_sanctioned_worktree_root,
     )
 
     if args.json:

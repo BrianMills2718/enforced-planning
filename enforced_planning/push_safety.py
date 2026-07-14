@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from enforced_planning import coordination_claims
+from enforced_planning.worktree_paths import resolve_canonical_repo_root
 
 
 @dataclass(frozen=True)
@@ -195,7 +196,7 @@ def evaluate_push_safety(
     """Evaluate whether the current branch is safe to push as-is."""
 
     resolved_repo_root = resolve_repo_root(repo_root)
-    resolved_project = project or resolved_repo_root.name
+    resolved_project = project or resolve_canonical_repo_root(resolved_repo_root).name
     resolved_branch = branch or current_branch(resolved_repo_root)
     default_branch = resolve_default_branch(resolved_repo_root)
     if not default_branch:

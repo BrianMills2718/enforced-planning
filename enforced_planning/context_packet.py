@@ -232,17 +232,24 @@ def relationship_specs(relationships: dict[str, Any]) -> tuple[RelationshipSpec,
         )
 
     architecture_fields = (
-        ("current_docs", "documents_current", "Current architecture truth."),
-        ("target_docs", "targets", "Target architecture direction."),
-        ("gap_docs", "updates", "Known gap affecting this surface."),
-        ("plan_refs", "planned_by", "Active or historical plan for this surface."),
+        (("current_docs", "current"), "documents_current", "Current architecture truth."),
+        (("target_docs", "target"), "targets", "Target architecture direction."),
+        (("gap_docs", "gaps"), "updates", "Known gap affecting this surface."),
+        (("plan_refs",), "planned_by", "Active or historical plan for this surface."),
     )
     for index, edge in enumerate(relationships.get("architecture", []) or []):
         if not isinstance(edge, dict):
             continue
         sources = _to_strings(edge.get("source_patterns", edge.get("sources", edge.get("source"))))
-        for field, relation, reason in architecture_fields:
-            architecture_targets = _to_strings(edge.get(field))
+        for fields, relation, reason in architecture_fields:
+            declared_fields = [field for field in fields if edge.get(field) is not None]
+            if len(declared_fields) > 1:
+                raise ContextPacketError(
+                    f"architecture[{index}] declares duplicate aliases {', '.join(fields)}"
+                )
+            architecture_targets = _to_strings(
+                edge.get(declared_fields[0]) if declared_fields else None
+            )
             if architecture_targets:
                 specs.append(
                     _validate_spec(
@@ -252,7 +259,7 @@ def relationship_specs(relationships: dict[str, Any]) -> tuple[RelationshipSpec,
                             relation=relation,
                             reason=reason,
                             maintenance="reconcile" if relation != "targets" else "lineage_only",
-                            provenance=f"architecture[{index}].{field}",
+                            provenance=f"architecture[{index}].{declared_fields[0]}",
                         )
                     )
                 )

@@ -281,3 +281,41 @@ def test_recursive_glob_matches_files_at_root_and_nested_levels(tmp_path: Path) 
 
     assert [item.path for item in root_packet.items] == ["src/service.py", "docs/adr.md"]
     assert [item.path for item in nested_packet.items] == ["src/nested/worker.py", "docs/adr.md"]
+
+
+def test_legacy_architecture_current_key_resolves_current_state_context(tmp_path: Path) -> None:
+    """Existing governed repos use ``current``; migration cannot silently lose that edge."""
+
+    repo = _repo(tmp_path)
+    relationships = {
+        "architecture": [
+            {
+                "sources": ["src/service.py"],
+                "current": ["docs/requirements.md"],
+            }
+        ]
+    }
+
+    packet = build_context_packet(repo, "src/service.py", relationships)
+
+    current = next(item for item in packet.items if item.path == "docs/requirements.md")
+    assert current.relation == "documents_current"
+    assert current.provenance == "architecture[0].current"
+
+
+def test_architecture_aliases_cannot_be_declared_twice(tmp_path: Path) -> None:
+    """Mixed V1/V2 aliases fail loudly instead of producing ambiguous duplicate edges."""
+
+    repo = _repo(tmp_path)
+    relationships = {
+        "architecture": [
+            {
+                "sources": ["src/service.py"],
+                "current": ["docs/requirements.md"],
+                "current_docs": ["docs/requirements.md"],
+            }
+        ]
+    }
+
+    with pytest.raises(ContextPacketError, match="duplicate aliases current_docs, current"):
+        build_context_packet(repo, "src/service.py", relationships)

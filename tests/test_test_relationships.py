@@ -101,7 +101,14 @@ def test_symbol_edge_links_exactly_one_authored_test(tmp_path: Path) -> None:
     repo = _repo(tmp_path)
     report = audit_test_relationships(
         repo,
-        {"relationships": [_complete_edge(selector="tests/test_service.py::test_positive")]},
+        {
+            "requirements": [
+                {"id": "REQ-1", "source": "docs/plans/001.md#goal", "risk_level": "high"}
+            ],
+            "relationships": [
+                _complete_edge(selector="tests/test_service.py::test_positive")
+            ],
+        },
     )
     assert report.linked_test_count == 1
     assert report.semantically_linked_test_count == 1
@@ -219,6 +226,62 @@ def test_report_finds_unproved_mock_only_unit_only_and_missing_negative(tmp_path
     assert "HIGH_RISK_NO_NEGATIVE_CONTROL" in codes
     assert report.requirements_with_evidence_count == 1
     assert report.declared_requirement_count == 2
+
+
+@pytest.mark.parametrize("defect", ["unknown_ref", "empty_selector", "incomplete_edge"])
+def test_invalid_edges_cannot_inflate_requirement_evidence(
+    tmp_path: Path, defect: str
+) -> None:
+    """Only complete, matched, authority-resolved edges count as evidence."""
+
+    repo = _repo(tmp_path)
+    edge = _complete_edge(selector="tests/test_service.py::test_positive")
+    if defect == "unknown_ref":
+        edge["requirement_refs"] = ["REQ-UNKNOWN"]
+    elif defect == "empty_selector":
+        edge["source"] = "tests/test_service.py::test_does_not_exist"
+    else:
+        edge.pop("failure_modes")
+    data = {
+        "requirements": [
+            {"id": "REQ-1", "source": "docs/plans/001.md#goal", "risk_level": "high"}
+        ],
+        "relationships": [edge],
+    }
+
+    report = audit_test_relationships(repo, data)
+    codes = {finding.code for finding in report.findings}
+
+    assert report.requirements_with_evidence_count == 0
+    assert report.semantically_linked_test_count == 0
+    assert "REQUIREMENT_WITHOUT_TEST_EVIDENCE" in codes
+    if defect == "unknown_ref":
+        assert "UNKNOWN_REQUIREMENT_REF" in codes
+    elif defect == "empty_selector":
+        assert "TEST_SELECTOR_EMPTY" in codes
+    else:
+        assert "TEST_EDGE_INCOMPLETE" in codes
+
+
+def test_missing_requirement_source_cannot_count_as_evidence(tmp_path: Path) -> None:
+    """A dangling requirement source cannot become behavioral authority."""
+
+    repo = _repo(tmp_path)
+    report = audit_test_relationships(
+        repo,
+        {
+            "requirements": [
+                {"id": "REQ-1", "source": "docs/plans/missing.md#goal", "risk_level": "high"}
+            ],
+            "relationships": [_complete_edge()],
+        },
+    )
+
+    codes = {finding.code for finding in report.findings}
+    assert report.requirements_with_evidence_count == 0
+    assert report.semantically_linked_test_count == 0
+    assert "REQUIREMENT_SOURCE_MISSING" in codes
+    assert "REQUIREMENT_WITHOUT_TEST_EVIDENCE" in codes
 
 
 def test_complete_mixed_proof_avoids_false_risk_findings(tmp_path: Path) -> None:

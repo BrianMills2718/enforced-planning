@@ -332,6 +332,15 @@ def _edge_is_complete(edge: TestEdge) -> bool:
     )
 
 
+def _requirement_source_exists(repo_root: Path, requirement: RequirementRecord) -> bool:
+    """Return whether a requirement's source authority resolves to a local file."""
+
+    source_path = requirement.source.partition("#")[0]
+    if not source_path or Path(source_path).is_absolute():
+        return False
+    return (repo_root / source_path).is_file()
+
+
 def audit_test_relationships(
     repo_root: Path,
     relationships: dict[str, Any],
@@ -343,6 +352,14 @@ def audit_test_relationships(
     inventory = inventory_repository(repo_root)
     tests = inventory_tests(inventory, includes)
     requirements = parse_requirements(relationships)
+    declared_requirement_ids = {
+        requirement.requirement_id for requirement in requirements
+    }
+    valid_requirement_ids = {
+        requirement.requirement_id
+        for requirement in requirements
+        if _requirement_source_exists(repo_root, requirement)
+    }
     edges = tuple(
         edge
         for edge in parse_test_edges(relationships)
@@ -357,10 +374,17 @@ def audit_test_relationships(
         for edge in edges
     }
     linked_ids = {test_id for matches in matched_by_edge.values() for test_id in matches}
+    evidence_eligible_edges = {
+        edge.edge_id
+        for edge in edges
+        if _edge_is_complete(edge)
+        and matched_by_edge[edge.edge_id]
+        and set(edge.requirement_refs) <= valid_requirement_ids
+    }
     semantically_linked_ids = {
         test_id
         for edge in edges
-        if _edge_is_complete(edge)
+        if edge.edge_id in evidence_eligible_edges
         for test_id in matched_by_edge[edge.edge_id]
     }
     findings: list[TestAuditFinding] = []
@@ -377,6 +401,17 @@ def audit_test_relationships(
             )
 
     for edge in edges:
+        unknown_refs = sorted(set(edge.requirement_refs) - declared_requirement_ids)
+        for requirement_ref in unknown_refs:
+            findings.append(
+                _finding(
+                    "UNKNOWN_REQUIREMENT_REF",
+                    "high",
+                    edge.edge_id,
+                    f"Test edge references undeclared requirement {requirement_ref!r}.",
+                    (requirement_ref,),
+                )
+            )
         if not matched_by_edge[edge.edge_id]:
             findings.append(
                 _finding(
@@ -410,8 +445,22 @@ def audit_test_relationships(
                 )
             )
 
+    for requirement in requirements:
+        if requirement.requirement_id not in valid_requirement_ids:
+            findings.append(
+                _finding(
+                    "REQUIREMENT_SOURCE_MISSING",
+                    "high",
+                    requirement.requirement_id,
+                    "Declared requirement source does not resolve to a local file.",
+                    (requirement.source,),
+                )
+            )
+
     edges_by_requirement: dict[str, list[TestEdge]] = {}
     for edge in edges:
+        if edge.edge_id not in evidence_eligible_edges:
+            continue
         for requirement_ref in edge.requirement_refs:
             edges_by_requirement.setdefault(requirement_ref, []).append(edge)
     for requirement in requirements:

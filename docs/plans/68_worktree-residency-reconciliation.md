@@ -121,6 +121,7 @@ Slice 1 is the entire bounded change: repository-local scope → registered-path
 | Existing stale instructions still advertise `<repo>_worktrees/`. | deferred | Fix after path-policy behavior lands, in a separate documentation slice that avoids the other agent's documentation-policy work. |
 | The first Make target used the GNU `realpath` command. | resolved | Replaced it with the existing Python canonical-root helper and reran the live worktree target. |
 | Push safety inferred the branch-directory name as the project and truncated pretty-printed decision JSON. | resolved | Added real-worktree and multi-line JSON controls; the live push gate now passes. |
+| Local concern routing reports success while writing into the caller checkout. | deferred | Removed both undelivered files, restored clean worktrees, and recorded MP-019 for a dedicated routing fix. |
 
 ## Verification
 

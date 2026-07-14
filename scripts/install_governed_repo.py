@@ -29,6 +29,7 @@ from enforced_planning.governed_repo_audit import _refresh_agents
 from enforced_planning.governed_repo_audit import audit_repo
 from enforced_planning.hook_wiring import TargetRepo
 from enforced_planning.hook_wiring import apply_generation as apply_hook_generation
+from enforced_planning.hook_wiring import context_runtime_error
 from enforced_planning.hook_wiring import plan_generation as plan_hook_generation
 
 
@@ -386,6 +387,10 @@ def install_or_plan(
     scaffolded_files = list(static_plan.scaffolded_files)
     drift_files = list(static_plan.drift_files)
     blockers = list(static_plan.blockers)
+    if not worktree_only:
+        runtime_error = context_runtime_error(repo_root)
+        if runtime_error:
+            blockers.append(runtime_error)
     file_writes = dict(static_plan.file_writes)
     relationships_will_change = any(
         path == repo_root / "scripts" / "relationships.yaml" for path in file_writes

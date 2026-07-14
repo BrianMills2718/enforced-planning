@@ -168,6 +168,20 @@ noisy bulk debt (ungraded docstrings). A later consumer rollout must first add
 reviewed high-value code edges, define classification-specific coverage, and
 replay real diffs to calibrate false obligations.
 
+**Post-merge audit correction (2026-07-14):** the initial extractor indexed
+only public callables even though the generated surface was described as a
+whole-codebase docstring wiki. An AST counterexample found 407 documented
+private functions/methods missing from the framework projection. The extractor
+now indexes all direct module/class callables while only treating missing
+docstrings on public callables as coverage debt; the same counterexample now
+reports 0 omissions. A second negative control showed installer tests borrowed
+PyYAML from the framework host and did not prove the target hook interpreter
+could run. Hook generation and governed-repo installation now probe the exact
+repo-local `.venv/bin/python` (or `python3`) and fail before writes when PyYAML
+is unavailable. Automatic injection is currently implemented for Claude Code;
+Codex and other clients use the same CLI/JSON contract until they have a native
+pre-edit adapter.
+
 ## Acceptance Criteria Disposition
 
 - Context packet budgets and provenance pass deterministic tests.
@@ -198,6 +212,8 @@ replay real diffs to calibrate false obligations.
 - Exhaustive inventory includes files that should not require prose. Artifact
   classification and exclusions must be explicit before coverage is graded.
 - Hooks differ by client; the CLI/JSON contract is the portable authority.
+- Automated pre-edit injection is Claude Code-specific in this implementation;
+  portable CLI support is not equivalent to an installed Codex hook.
 - The first consumer has useful plan-level relationships but no code couplings;
   plan freshness cannot be enforced until those edges exist.
 

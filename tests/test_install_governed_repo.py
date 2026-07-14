@@ -47,6 +47,15 @@ def _write_minimal_claude(repo_root: Path) -> None:
     )
 
 
+def _write_python_without_yaml(repo_root: Path) -> None:
+    """Create a target virtualenv entrypoint that fails the PyYAML probe."""
+
+    interpreter = repo_root / ".venv" / "bin" / "python"
+    interpreter.parent.mkdir(parents=True, exist_ok=True)
+    interpreter.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
+    interpreter.chmod(0o755)
+
+
 def _run(*args: str, cwd: Path) -> subprocess.CompletedProcess[str]:
     """Run the governed-repo installer and capture structured output."""
     return subprocess.run(
@@ -108,6 +117,26 @@ def test_install_governed_repo_dry_run_reports_expected_actions(tmp_path: Path) 
     assert payload["dry_run_mode"] is True
     assert len(payload["actions"]) == len(set(payload["actions"]))
     assert not (tmp_path / "AGENTS.md").exists()
+
+
+def test_installer_blocks_write_when_target_runtime_lacks_yaml(tmp_path: Path) -> None:
+    """The installer must not claim runnable context tools via the host environment."""
+
+    _write_minimal_claude(tmp_path)
+    _write_python_without_yaml(tmp_path)
+
+    result = _run(
+        "--repo-root",
+        str(tmp_path),
+        "--write",
+        "--json",
+        cwd=PROJECT_META_ROOT,
+    )
+
+    assert result.returncode == 1
+    payload = json.loads(result.stdout)
+    assert any("cannot import PyYAML" in blocker for blocker in payload["blockers"])
+    assert not (tmp_path / "scripts" / "meta" / "context_packet.py").exists()
 
 
 def test_install_governed_repo_write_bootstraps_minimum_repo_and_passes_audit(

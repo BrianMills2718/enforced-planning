@@ -47,9 +47,10 @@ or treats generated output as authority.
 ### `SymbolRecord`
 
 Stable identity is `<path>::<qualified_name>`. Line numbers are provenance, not
-identity. Initial symbol scope is module, classes, and public functions/methods.
-Private symbols remain discoverable later but do not count toward public
-docstring coverage in Slice 1.
+identity. Symbol scope is the module, classes, and direct module/class
+functions or methods, including private callables. Their real docstrings appear
+in generated navigation. Undocumented private helpers do not count toward
+public-docstring coverage; representation and mandatory coverage are separate.
 
 ### `InventoryReport`
 
@@ -190,6 +191,10 @@ consumer and exposes inventory, packet, impact, and wiki Make targets. The
 `PreToolUse` edit hook composes required-reading output with a bounded context
 packet. It uses the repository virtualenv when present and reports packet
 failures in context without blocking edits during visibility-first rollout.
+Before writing hook support, the installer probes the exact interpreter the
+hook will select (`.venv/bin/python`, otherwise `python3`) for the declared
+PyYAML runtime dependency. Framework-host packages cannot satisfy that check
+on behalf of the consumer.
 
 New-file `Write` requests are represented by a path-derived target with an
 explicit `target-untracked-new-file` diagnostic. This mode can match file-level
@@ -200,3 +205,7 @@ generation, while also proving that strict maintenance enforcement would be
 premature: the consumer declares no code couplings and has substantial
 unclassified docstring debt. The static contracts are complete; consumer hard
 gates remain a separate evidence-gated rollout decision.
+
+The shell hook adapter is currently Claude Code-specific. The CLI/JSON
+contract is client-neutral and agent-drivable, but Codex automatic pre-edit
+injection remains a separate adapter rather than an implied capability.

@@ -33,6 +33,10 @@ class Service:
     def run(self, goal: str) -> str:
         """Run one governed project goal."""
         return goal
+
+def _normalize_goal(goal: str) -> str:
+    """Normalize one internal goal before execution."""
+    return goal.strip()
 ''',
     )
     _write(repo / "docs/decision.md", "# Decision\n\n## Decision\n\nUse source-local summaries.\n")
@@ -70,6 +74,7 @@ def test_wiki_lists_every_tracked_artifact_and_actual_symbol_docstrings(tmp_path
     assert "Serve project knowledge." in rendered
     assert "Coordinate project-level knowledge operations." in rendered
     assert "Run one governed project goal." in rendered
+    assert "Normalize one internal goal before execution." in rendered
     assert "Use source-local summaries." in rendered
     assert "python-docstring-missing" in rendered
     assert "Generated wiki projection; self-content intentionally omitted." in rendered

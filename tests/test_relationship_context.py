@@ -69,6 +69,7 @@ def public(value: int | None = None) -> str:
     return str(value)
 
 def _private() -> None:
+    """Perform one internal implementation step."""
     pass
 ''',
     )
@@ -84,10 +85,27 @@ def _private() -> None:
     assert danger.summary == "Explain why the dangerous module exists."
     assert danger.summary_source == "python:module-docstring"
     symbols = {symbol.qualified_name: symbol for symbol in danger.symbols}
-    assert set(symbols) == {"<module>", "Worker", "Worker.run", "public"}
+    assert set(symbols) == {"<module>", "Worker", "Worker.run", "public", "_private"}
     assert symbols["Worker.run"].signature == "async run(self, item: str, *, retries: int = 2) -> bool"
     assert symbols["Worker.run"].docstring == "Run the item under the configured retry policy."
     assert symbols["public"].symbol_id == "src/danger.py::public"
+    assert symbols["_private"].docstring == "Perform one internal implementation step."
+
+
+def test_undocumented_private_callable_is_visible_without_mandatory_debt(tmp_path: Path) -> None:
+    """Private helpers remain navigable while coverage policy stays classification-aware."""
+
+    repo = _git_repo(tmp_path)
+    _write(
+        repo / "src/private.py",
+        '"""Private helper fixture."""\n\ndef _helper() -> None:\n    pass\n',
+    )
+    _track_all(repo)
+
+    artifact = inventory_repository(repo).artifacts[0]
+
+    assert [symbol.qualified_name for symbol in artifact.symbols] == ["<module>", "_helper"]
+    assert artifact.diagnostics == ()
 
 
 def test_missing_and_invalid_python_context_is_explicit(tmp_path: Path) -> None:

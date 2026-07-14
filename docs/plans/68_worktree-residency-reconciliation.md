@@ -1,6 +1,6 @@
 # Plan #68: Worktree residency reconciliation
 
-**Status:** In Progress
+**Status:** Ready for Review
 **Type:** implementation
 **Priority:** Critical
 **phase_ref:** Phase 9 fleet adoption
@@ -86,7 +86,7 @@ This extends an existing internal framework capability. It does not introduce a 
 | AC3 | Retired sibling path is visible in report mode | test | D — plan only | issue code appears as warning | n/a |
 | AC4 | Retired sibling path fails in enforcement mode | test | D — plan only | sanctioned path still exits 0 | `<repo>_worktrees/plan-x` exits 1 with the path issue |
 | AC5 | Claimless sanctioned worktree remains warning-only | test | C — existing fixture, but old fixture uses the retired path | existing unclaimed warning behavior | path-policy enforcement does not misclassify semantic inactivity |
-| AC6 | Real repository audit passes after retired-path cleanup while reporting current claimless debt | observed | B after execution | live workspace command | retired path recreated would fail |
+| AC6 | Real repository audit passes after cleanup with every auxiliary worktree claimed | observed | B after execution | live workspace command | retired path recreated would fail |
 | AC7 | Push safety recognizes the live branch claim from an in-repo worktree | test | F — reproduced failure during implementation | real-Git claimed worktree | branch-directory name must not become project identity |
 | AC8 | Multi-line active-decision output parses after prefix noise | test | F — reproduced failure during live push-check | one-line JSON remains valid | pretty-printed JSON with prefix noise must parse completely |
 
@@ -140,11 +140,11 @@ Slice 1 is the entire bounded change: repository-local scope → registered-path
 | AC3 retired path report visibility | A | test | warning-mode negative fixture |
 | AC4 retired path enforcement | A | test | hard-failure negative fixture plus sanctioned positive control |
 | AC5 claimless sanctioned worktree remains report-only | A | test | unclaimed in-repo fixture exits zero with warning |
-| AC6 cleaned real repository has no path violations | B | observed | live Make target: 9 linked worktrees, 0 hard issues, 5 claimless warnings |
+| AC6 cleaned real repository reconciles claims and worktrees | B | observed | live Make target: 4 linked worktrees total, 3 live auxiliary lanes, 0 hard issues, 0 warnings |
 | AC7 push safety canonical project identity | A | test | real-Git claimed in-repo worktree fixture and live push gate |
 | AC8 multi-line active-decision parsing | A | test | prefix-noise plus pretty-printed JSON fixture and live agent-memory output |
 
-Distribution: A=7, B=1, C=0, D=0, F=0. The enforced path rule has both signs at grade A. The remaining five claimless sanctioned worktrees are intentionally visible rather than falsely dispositioned.
+Distribution: A=7, B=1, C=0, D=0, F=0. The enforced path rule has both signs at grade A. Five previously claimless sanctioned worktrees received explicit merged/archive dispositions and were removed without deleting their recovery branches; the remaining auxiliary worktrees all have live claims.
 
 ## Review result
 

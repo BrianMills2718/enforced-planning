@@ -90,7 +90,7 @@ C8 generated wiki + consumer rollout
 | 2 | Relationship schema extension and bounded `ContextPacket` | Complete |
 | 3 | Changed-node impact obligations and audited dispositions | Complete |
 | 4 | Active/completed plan lifecycle freshness with negative controls | Complete |
-| 5 | Deterministic CLI/JSON docstring wiki and sync check | Not started |
+| 5 | Deterministic CLI/JSON docstring wiki and sync check | Complete |
 | 6 | Installer/hook adapters and report-only `onto-canon6` pilot | Not started |
 | 7 | Evidence review and calibrated new-debt enforcement | Not started |
 
@@ -139,6 +139,15 @@ successor-authority negative control. Tests prove active plans can update
 with code, completed plans cannot auto-satisfy by rewriting their historical
 file, completed plans can point to a tracked documentation successor, and
 missing/unknown lifecycle status remains unresolved.
+
+**Slice 5 evidence (2026-07-14):** the focused suite passes 35/35. Tests prove
+all tracked paths and actual symbol docstrings appear, generated self-content
+does not recurse, output is byte-deterministic and workspace-neutral, source
+changes make it stale, and hand edits/missing output fail check mode. A live
+framework render produced `generated/docstring_wiki.md` (272,101 bytes) and
+`python scripts/docstring_wiki.py --check` passes. The repository intentionally
+ignores `generated/`, so the reproducible generator/check are committed rather
+than forcing the projection into narrative history.
 
 ## Later Acceptance Criteria
 

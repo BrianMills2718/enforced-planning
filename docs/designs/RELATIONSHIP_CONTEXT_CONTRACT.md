@@ -171,3 +171,14 @@ They require an exact-review disposition or a tracked documentation successor
 such as a new plan or current-state authority. A plan with no recognized status
 also cannot auto-satisfy. This keeps living plans current without rewriting
 completed execution history into present truth.
+
+## Generated Docstring Wiki (Slice 5)
+
+The Markdown wiki lists every tracked artifact under its governance
+classification, then includes source-derived artifact summaries, documented
+Python symbols, signatures, lines, and coverage finding codes. The renderer
+supports write and byte-for-byte check modes. Generated output remains under
+the repository's configured generated-artifact policy; in this source repo
+`generated/` is ignored, so the compiler/check are committed while the 272 KB
+projection is regenerated locally rather than forced into documentation
+history.

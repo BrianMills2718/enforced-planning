@@ -1,6 +1,6 @@
 ## enforced-planning — framework for enforced planning, context gating, doc-code alignment
 
-.PHONY: help test test-quick check lint dead-code dead-code-audit dead-code-validate push-check infer check-deps check-caps migrate-rels verify-couplings review-surfaces promote plan-registry ecosystem-status status
+.PHONY: help test test-quick check lint dead-code dead-code-audit dead-code-validate push-check infer check-deps check-caps migrate-rels verify-couplings review-surfaces promote plan-registry ecosystem-status docstring-wiki docstring-wiki-check status
 
 PYTHON ?= $(if $(wildcard .venv/bin/python),.venv/bin/python,python3)
 REPO ?= .
@@ -48,6 +48,12 @@ check-caps:  ## Validate plan Capabilities sections (REPO=path to plans dir)
 
 migrate-rels:  ## Migrate relationships.yaml V1→V2 (REPO=path)
 	python scripts/migrate_relationships.py $(REPO)/relationships.yaml --dry-run
+
+docstring-wiki:  ## Regenerate the source-derived docstring wiki (REPO=path)
+	$(PYTHON) scripts/docstring_wiki.py --repo-root $(REPO) --write
+
+docstring-wiki-check:  ## Fail if the source-derived docstring wiki is missing or stale
+	$(PYTHON) scripts/docstring_wiki.py --repo-root $(REPO) --check
 
 ## --- Agent verification protocol (Plan #11) ---
 

@@ -472,6 +472,41 @@ def test_install_governed_repo_write_bootstraps_minimum_repo_and_passes_audit(
     )
 
 
+def test_installed_make_gate_rejects_stale_agents_projection(tmp_path: Path) -> None:
+    """The canonical Make gate must discriminate a stale generated mirror."""
+
+    _write_minimal_claude(tmp_path)
+    installed = _run(
+        "--repo-root",
+        str(tmp_path),
+        "--write",
+        "--json",
+        cwd=PROJECT_META_ROOT,
+    )
+    assert installed.returncode == 0, installed.stdout + installed.stderr
+
+    current = subprocess.run(
+        ["make", "check-agents-sync"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert current.returncode == 0, current.stdout + current.stderr
+
+    agents = tmp_path / "AGENTS.md"
+    agents.write_text(agents.read_text(encoding="utf-8") + "\nmanual drift\n", encoding="utf-8")
+    stale = subprocess.run(
+        ["make", "check-agents-sync"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert stale.returncode != 0
+    assert "AGENTS.md drift detected" in stale.stdout
+
+
 def test_install_governed_repo_reports_and_syncs_drifted_validator(tmp_path: Path) -> None:
     """Dry-run should report drift and write mode should restore canonical support files."""
     _write_minimal_claude(tmp_path)

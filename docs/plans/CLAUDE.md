@@ -67,7 +67,7 @@ See `ROADMAP.md` for the full phase map and recommended priority order.
 | 61 | Clean-Room Deterministic Verified Loop (`61_cleanroom_deterministic_verified_loop.md`) | High | ✅ Complete | C3/A5 loop, trace, verifier, and stop-contract proof |
 | 62 | User-Neutral Ecosystem Instantiation (`62_user_neutral_ecosystem_instantiation.md`) | High | 📋 Planned | Consumer-owned inventory/config boundary for shareable adoption |
 | 63 | Relationship Context and Docstring Wiki (`63_relationship_context_and_docstring_wiki.md`) | Critical | ✅ Complete (report-only rollout; hard enforcement deferred by evidence) | Portable relationship context and source-derived docstring inventory |
-| 64 | Scoped Plan Completion and Repository Health (`64_scoped-plan-completion-and-repository-health.md`) | High | 🚧 In Progress | Relevant-regression completion without inheriting unrelated repository debt |
+| 66 | Scoped Plan Completion and Repository Health (`66_scoped-plan-completion-and-repository-health.md`) | High | 🚧 In Progress | Relevant-regression completion without inheriting unrelated repository debt |
 
 ## Status Key
 

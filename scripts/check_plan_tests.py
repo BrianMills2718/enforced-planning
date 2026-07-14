@@ -237,7 +237,8 @@ def find_test_class(content: str, func_name: str) -> str | None:
 
         # Check for function (may be indented if in class)
         if func_pattern.search(line):
-            return current_class
+            indentation = len(line) - len(line.lstrip())
+            return current_class if indentation else None
 
     return None
 

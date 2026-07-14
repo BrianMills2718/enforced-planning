@@ -554,7 +554,7 @@ def test_required_plan_tests_block_before_repository_health(tmp_path: Path) -> N
     """A failed declared change gate stops before the global suite runs."""
     plans = tmp_path / "docs" / "plans"
     plans.mkdir(parents=True)
-    (plans / "64_plan.md").write_text("**Status:** 🚧 In Progress\n", encoding="utf-8")
+    (plans / "66_plan.md").write_text("**Status:** 🚧 In Progress\n", encoding="utf-8")
 
     # mock-ok: orchestration order is the behavior under test; the runners have
     # separate real-process controls.
@@ -562,7 +562,7 @@ def test_required_plan_tests_block_before_repository_health(tmp_path: Path) -> N
         patch("scripts.complete_plan.run_required_plan_tests", return_value=(False, "failed")),
         patch("scripts.complete_plan.compare_repository_health") as repository_health,
     ):
-        result = complete_plan(64, tmp_path, verbose=False)
+        result = complete_plan(66, tmp_path, verbose=False)
 
     assert result is False
     repository_health.assert_not_called()
@@ -572,10 +572,10 @@ def test_degraded_repository_writes_scoped_status(tmp_path: Path) -> None:
     """Allowed baseline debt is preserved in the plan's completion label."""
     plans = tmp_path / "docs" / "plans"
     plans.mkdir(parents=True)
-    plan = plans / "64_plan.md"
+    plan = plans / "66_plan.md"
     plan.write_text("**Status:** 🚧 In Progress\n", encoding="utf-8")
     (plans / "CLAUDE.md").write_text(
-        "| 64 | Plan | High | 🚧 In Progress | — |\n",
+        "| 66 | Plan | High | 🚧 In Progress | — |\n",
         encoding="utf-8",
     )
 
@@ -587,10 +587,10 @@ def test_degraded_repository_writes_scoped_status(tmp_path: Path) -> None:
         patch("scripts.complete_plan.run_e2e_tests", return_value=(True, "skipped")),
         patch("scripts.complete_plan.run_real_e2e_tests", return_value=(True, "skipped")),
         patch("scripts.complete_plan.check_doc_coupling", return_value=(True, "passed")),
-        patch("scripts.complete_plan.write_repository_health_evidence", return_value=Path("docs/evidence/plan64.json")),
+        patch("scripts.complete_plan.write_repository_health_evidence", return_value=Path("docs/evidence/plan66.json")),
         patch("scripts.complete_plan.sync_coordination_closeout", return_value=(0, [], {"claim_count": 0})),
     ):
-        result = complete_plan(64, tmp_path, verbose=False)
+        result = complete_plan(66, tmp_path, verbose=False)
 
     assert result is True
     updated = plan.read_text(encoding="utf-8")

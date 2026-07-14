@@ -146,6 +146,17 @@ class TestFindTestClass:
         result = find_test_class(content, "test_nonexistent")
         assert result is None
 
+    def test_top_level_function_after_class_returns_none(self):
+        content = (
+            "class TestFoo:\n"
+            "    def test_method(self):\n"
+            "        pass\n\n"
+            "def test_standalone():\n"
+            "    pass\n"
+        )
+        result = find_test_class(content, "test_standalone")
+        assert result is None
+
 
 # ---------------------------------------------------------------------------
 # check_test_exists

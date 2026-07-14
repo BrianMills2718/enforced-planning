@@ -86,6 +86,7 @@ mkdir -p docs/plans
 | ⏸️ Blocked | Waiting on dependency |
 | ❌ Needs Plan | Gap identified, no plan yet |
 | ✅ Complete | Implemented and verified |
+| ✅ Complete (scoped; repository baseline degraded) | Required change evidence passed; unchanged repository debt remains visible |
 ```
 
 ### 3. Create a plan template
@@ -212,7 +213,7 @@ checks that prove the exploration is agent-drivable and inspectable.
 
 - [ ] Required tests pass
 - [ ] Exploratory readouts/instruments were exercised, if applicable
-- [ ] Full test suite passes
+- [ ] Repository health recorded; no new or changed-test baseline failures
 - [ ] Type check passes
 - [ ] Docs updated
 - [ ] If this plan deleted files/classes: checked for orphaned references (imports, iterations, tests)

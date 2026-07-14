@@ -8,10 +8,15 @@ import yaml  # type: ignore[import-untyped]
 
 from enforced_planning import coordination_claims
 from scripts.complete_plan import (
+    RepositoryHealthComparison,
+    TestRunResult as RepositoryTestRunResult,
+    complete_plan,
+    check_doc_coupling,
     find_plan_file,
     get_git_info,
     get_human_review_section,
     get_plan_status,
+    run_required_plan_tests,
     run_unit_tests,
     sync_coordination_closeout,
     update_plan_file,
@@ -312,6 +317,35 @@ def test_run_unit_tests_uses_interpreter_qualified_pytest(tmp_path: Path) -> Non
     assert commands[0][:3] == [sys.executable, "-m", "pytest"]
 
 
+def test_run_required_plan_tests_uses_companion_script(tmp_path: Path) -> None:
+    """The blocking change gate uses the portable required-test runner."""
+    mock_result = MagicMock(returncode=0, stdout="All required tests pass!", stderr="")
+
+    # mock-ok: this verifies the exact subprocess boundary; real required tests
+    # are exercised by check_plan_tests.py's own suite.
+    with patch("scripts.complete_plan.subprocess.run", return_value=mock_result) as run:
+        passed, summary = run_required_plan_tests(tmp_path, 64, verbose=False)
+
+    assert passed is True
+    assert "required tests pass" in summary.lower()
+    command = run.call_args.args[0]
+    assert command[0] == sys.executable
+    assert command[-2:] == ["--plan", "64"]
+
+
+def test_doc_coupling_unavailable_is_blocking(tmp_path: Path) -> None:
+    """A missing or crashed doc-coupling runner cannot be reported as pass."""
+    failed = MagicMock(returncode=2, stdout="", stderr="missing script")
+
+    # mock-ok: fail-loud subprocess handling is the behavior under test.
+    with patch("scripts.complete_plan.subprocess.run", return_value=failed) as run:
+        passed, summary = check_doc_coupling(tmp_path, verbose=False)
+
+    assert passed is False
+    assert "exit 2" in summary
+    assert run.call_args.args[0][0] == sys.executable
+
+
 def test_run_e2e_tests_uses_interpreter_qualified_pytest(tmp_path: Path) -> None:
     """Smoke-test runner should also invoke pytest through the current interpreter."""
     commands: list[list[str]] = []
@@ -481,3 +515,105 @@ def test_sync_coordination_closeout_dry_run_reports_without_mutating_claims(
     assert scopes == ["lifecycle-automation"]
     assert payload is None
     assert yaml.safe_load(claim_path.read_text(encoding="utf-8")) == original
+
+
+def _green_test_run() -> RepositoryTestRunResult:
+    """Return compact green repository evidence for orchestration tests."""
+    return RepositoryTestRunResult(
+        available=True,
+        commit="abc1234",
+        command=(sys.executable, "-m", "pytest", "tests/"),
+        returncode=0,
+        summary="2 passed",
+        test_count=2,
+        passed_count=2,
+        skipped_count=0,
+        failures=(),
+        error=None,
+    )
+
+
+def _degraded_comparison() -> RepositoryHealthComparison:
+    """Return an allowed baseline-degraded comparison for wiring tests."""
+    run = _green_test_run()
+    return RepositoryHealthComparison(
+        status="baseline_degraded",
+        allowed=True,
+        reason="one unchanged baseline failure",
+        baseline_ref="origin/main",
+        baseline_commit="abc1234",
+        current=run,
+        baseline=run,
+        changed_paths=("docs/example.md",),
+        new_failures=(),
+        changed_baseline_failures=(),
+    )
+
+
+def test_required_plan_tests_block_before_repository_health(tmp_path: Path) -> None:
+    """A failed declared change gate stops before the global suite runs."""
+    plans = tmp_path / "docs" / "plans"
+    plans.mkdir(parents=True)
+    (plans / "64_plan.md").write_text("**Status:** 🚧 In Progress\n", encoding="utf-8")
+
+    # mock-ok: orchestration order is the behavior under test; the runners have
+    # separate real-process controls.
+    with (
+        patch("scripts.complete_plan.run_required_plan_tests", return_value=(False, "failed")),
+        patch("scripts.complete_plan.compare_repository_health") as repository_health,
+    ):
+        result = complete_plan(64, tmp_path, verbose=False)
+
+    assert result is False
+    repository_health.assert_not_called()
+
+
+def test_degraded_repository_writes_scoped_status(tmp_path: Path) -> None:
+    """Allowed baseline debt is preserved in the plan's completion label."""
+    plans = tmp_path / "docs" / "plans"
+    plans.mkdir(parents=True)
+    plan = plans / "64_plan.md"
+    plan.write_text("**Status:** 🚧 In Progress\n", encoding="utf-8")
+    (plans / "CLAUDE.md").write_text(
+        "| 64 | Plan | High | 🚧 In Progress | — |\n",
+        encoding="utf-8",
+    )
+
+    # mock-ok: verifies final verdict wiring and mutation after independently
+    # tested runner/comparator contracts.
+    with (
+        patch("scripts.complete_plan.run_required_plan_tests", return_value=(True, "2 passed")),
+        patch("scripts.complete_plan.compare_repository_health", return_value=_degraded_comparison()),
+        patch("scripts.complete_plan.run_e2e_tests", return_value=(True, "skipped")),
+        patch("scripts.complete_plan.run_real_e2e_tests", return_value=(True, "skipped")),
+        patch("scripts.complete_plan.check_doc_coupling", return_value=(True, "passed")),
+        patch("scripts.complete_plan.write_repository_health_evidence", return_value=Path("docs/evidence/plan64.json")),
+        patch("scripts.complete_plan.sync_coordination_closeout", return_value=(0, [], {"claim_count": 0})),
+    ):
+        result = complete_plan(64, tmp_path, verbose=False)
+
+    assert result is True
+    updated = plan.read_text(encoding="utf-8")
+    assert "✅ Complete (scoped; repository baseline degraded)" in updated
+    assert "status: baseline_degraded" in updated
+    assert "required: 2 passed" in updated
+
+
+def test_policy_surfaces_separate_change_gate_from_repository_health() -> None:
+    """Canonical active guidance must not restore unconditional full-green closure."""
+    repo_root = Path(__file__).resolve().parents[1]
+    operating_model = (repo_root / "PLANNING_OPERATING_MODEL.md").read_text(encoding="utf-8")
+    verification_pattern = (repo_root / "patterns" / "17_verification-enforcement.md").read_text(
+        encoding="utf-8"
+    )
+    for template in (
+        repo_root / "templates" / "plan.md.template",
+        repo_root / "docs" / "plans" / "TEMPLATE.md",
+    ):
+        assert "Full test suite passes" not in template.read_text(encoding="utf-8")
+
+    assert "change gate" in operating_model
+    assert "repository health" in operating_model
+    assert "baseline-degraded" in operating_model
+    assert "required tests as an always-blocking change gate" in verification_pattern
+    assert "--require-repository-green" in verification_pattern

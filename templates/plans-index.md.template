@@ -16,6 +16,7 @@ Track all implementation work here.
 | In Progress | Being worked on |
 | Blocked | Waiting on dependency |
 | Complete | Implemented and verified |
+| Complete (scoped; repository baseline degraded) | Required change evidence passed; unchanged repository debt remains visible |
 
 ## Creating a New Plan
 
@@ -41,4 +42,6 @@ git commit -m "[Trivial] Fix typo in README"
 python scripts/meta/complete_plan.py --plan N
 ```
 
-This verifies tests pass and records completion evidence.
+This verifies the plan-required change gate, compares repository health with a
+same-layout merge-base run when needed, and records both verdicts. Use
+`--require-repository-green` for release or promotion gates.

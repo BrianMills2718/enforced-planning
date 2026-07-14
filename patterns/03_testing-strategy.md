@@ -194,11 +194,11 @@ python scripts/complete_plan.py --plan N
 ```
 
 The script:
-1. Runs unit tests
-2. Runs E2E smoke tests
-3. Checks doc-coupling
-4. Records evidence in plan file
-5. Only then updates status to Complete
+1. Runs the plan-declared required tests as the blocking change gate
+2. Runs the non-E2E repository suite and records machine-readable health
+3. Compares a red run with the merge base in a same-layout sibling worktree
+4. Blocks new/changed-test failures, E2E failures, and doc-coupling failures
+5. Records ordinary or scoped/baseline-degraded completion evidence
 
 ### 3. Plan Test Definition Validation
 
@@ -212,10 +212,12 @@ The `check_plan_tests.py` script validates:
 Before merging a plan PR:
 
 ```bash
-# All must pass
-pytest tests/ -v
+# The completion command runs both the scoped gate and repository-health comparison
 python scripts/check_plan_tests.py --plan N
 python scripts/complete_plan.py --plan N --dry-run
+
+# Use the stronger form for release/promotion gates
+python scripts/complete_plan.py --plan N --dry-run --require-repository-green
 ```
 
 ## Writing Good Acceptance Tests

@@ -287,6 +287,7 @@ def test_install_governed_repo_dry_run_reports_expected_actions(tmp_path: Path) 
     assert "scaffold:docs/plans/CLAUDE.md" in payload["actions"]
     assert "scaffold:Makefile" in payload["actions"]
     assert "install:enforced_planning/__init__.py" in payload["actions"]
+    assert "install:enforced_planning/active_work_registry.py" in payload["actions"]
     assert "install:enforced_planning/agents_rendering.py" in payload["actions"]
     assert "install:enforced_planning/concern_routing.py" in payload["actions"]
     assert "install:enforced_planning/file_context.py" in payload["actions"]
@@ -298,6 +299,8 @@ def test_install_governed_repo_dry_run_reports_expected_actions(tmp_path: Path) 
     assert "install:enforced_planning/plan_validation.py" in payload["actions"]
     assert "install:enforced_planning/push_safety.py" in payload["actions"]
     assert "install:scripts/meta/audit_dead_code.py" in payload["actions"]
+    assert "install:scripts/meta/check_plan_tests.py" in payload["actions"]
+    assert "install:scripts/meta/complete_plan.py" in payload["actions"]
     assert "install:scripts/meta/check_dead_code.py" in payload["actions"]
     assert "install:scripts/meta/check_push_safety.py" in payload["actions"]
     assert "install:scripts/meta/check_coordination_claims.py" in payload["actions"]
@@ -371,6 +374,7 @@ def test_install_governed_repo_write_bootstraps_minimum_repo_and_passes_audit(
     assert (tmp_path / "docs" / "plans" / "TEMPLATE.md").exists()
     assert (tmp_path / "Makefile").exists()
     assert (tmp_path / "enforced_planning" / "__init__.py").exists()
+    assert (tmp_path / "enforced_planning" / "active_work_registry.py").exists()
     assert (tmp_path / "enforced_planning" / "agents_rendering.py").exists()
     assert (tmp_path / "enforced_planning" / "concern_routing.py").exists()
     assert (tmp_path / "enforced_planning" / "file_context.py").exists()
@@ -386,6 +390,8 @@ def test_install_governed_repo_write_bootstraps_minimum_repo_and_passes_audit(
     assert (tmp_path / "enforced_planning" / "worktree_lifecycle.yaml").exists()
     assert (tmp_path / "enforced_planning" / "worktree_paths.py").exists()
     assert (tmp_path / "scripts" / "meta" / "audit_dead_code.py").exists()
+    assert (tmp_path / "scripts" / "meta" / "check_plan_tests.py").exists()
+    assert (tmp_path / "scripts" / "meta" / "complete_plan.py").exists()
     assert (tmp_path / "scripts" / "meta" / "check_dead_code.py").exists()
     assert (tmp_path / "scripts" / "meta" / "check_push_safety.py").exists()
     assert (tmp_path / "scripts" / "meta" / "check_coordination_claims.py").exists()

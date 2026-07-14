@@ -172,7 +172,7 @@ release both before handing off."
 
 > Process criteria (quality gates):
 - [ ] Required tests pass
-- [ ] Full test suite passes
+- [ ] Repository health recorded; no new or changed-test baseline failures
 - [ ] Type check passes
 - [ ] Docs updated
 

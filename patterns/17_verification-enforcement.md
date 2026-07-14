@@ -12,12 +12,17 @@ Without mandatory verification:
 ## Solution
 
 Require a verification script to mark plans as complete. The script:
-1. Runs required tests (unit + E2E smoke)
-2. Checks doc-code coupling
-3. Records evidence in the plan file
-4. Updates status only if all checks pass
+1. Runs the plan-declared required tests as an always-blocking change gate
+2. Runs the repository-wide non-E2E suite as a separately reported health check
+3. If repository health is red, reruns the identical suite at the merge base in
+   a detached sibling worktree and blocks only new or changed-test failures
+4. Runs applicable E2E and doc-code coupling checks
+5. Records both verdicts and updates status only when the change gate passes and
+   repository evidence is green or baseline-degraded without regression
 
-**Key principle:** The status update is gated by actual test runs, not promises.
+**Key principle:** Completion proves the bounded change and reports repository
+health honestly. It does not silently pass missing evidence or make one plan
+repair every unrelated pre-existing failure.
 
 ## Files
 
@@ -71,15 +76,22 @@ python scripts/complete_plan.py --plan 35 --dry-run
 
 # Skip E2E for documentation-only plans
 python scripts/complete_plan.py --plan 35 --skip-e2e
+
+# Stronger release/promotion claim: baseline debt is not accepted
+python scripts/complete_plan.py --plan 35 --require-repository-green
 ```
 
 ### What the script does
 
-1. **Unit tests** - Runs `pytest tests/ --ignore=tests/e2e/`
-2. **E2E smoke** - Runs `pytest tests/e2e/test_smoke.py`
-3. **Doc coupling** - Runs `python scripts/check_doc_coupling.py --strict`
-4. **Evidence** - Records results in plan file
-5. **Status** - Updates to "Complete" only if all pass
+1. **Required tests** - Runs `check_plan_tests.py --plan N`; missing/failing tests block
+2. **Repository health** - Runs `pytest tests/ --ignore=tests/e2e/` with JUnit evidence
+3. **Baseline comparison** - On failure, repeats step 2 at the merge base in a
+   same-layout sibling worktree
+4. **Regression decision** - Blocks current-only failures and baseline failures
+   whose test file changed
+5. **E2E/doc coupling** - Preserves the plan's applicable blocking checks
+6. **Evidence/status** - Records `green` or `baseline_degraded`; unavailable
+   comparison evidence blocks
 
 ### Evidence format
 
@@ -92,10 +104,15 @@ After completion, plan files include:
 ```yaml
 completed_by: scripts/complete_plan.py
 timestamp: 2026-01-12T10:30:00Z
+completion_scope: scoped
 tests:
-  unit: 145/145 passed
+  required: All required tests pass!
+  repository_non_e2e: 145 passed, 0 skipped, 2 failed
   e2e_smoke: PASSED (8.2s)
   doc_coupling: passed
+repository_health:
+  status: baseline_degraded
+  evidence: docs/evidence/plan35_repository_health.json
 commit: a9ba628
 ```
 ```
@@ -128,6 +145,10 @@ python scripts/complete_plan.py --plan N --skip-e2e
 
 - **Not a substitute for thorough testing** - Smoke tests catch crashes, not subtle bugs
 - **Requires test infrastructure** - You need working tests first
+- **Pytest-specific comparison** - Other runners need a machine-readable result adapter
+- **Identity is not root cause** - A same-named failing test can change cause; changed
+  test files therefore block, and required-test scope remains important
+- **Degraded runs cost more** - A red current suite requires a second merge-base run
 - **Can be bypassed** - Determined users can edit files manually (git history shows this)
 - **Doesn't verify correctness** - Only verifies that tests pass, not that implementation is right
 

@@ -51,6 +51,7 @@ MAKEFILE_WORKTREE_INSERTION_ANCHORS = (
 
 SYNC_SUPPORT_FILES: dict[str, str] = {
     "enforced_planning/__init__.py": "enforced_planning/__init__.py",
+    "enforced_planning/active_work_registry.py": "enforced_planning/active_work_registry.py",
     "enforced_planning/agents_rendering.py": "enforced_planning/agents_rendering.py",
     "enforced_planning/concern_routing.py": "enforced_planning/concern_routing.py",
     "enforced_planning/coordination_claims.py": "enforced_planning/coordination_claims.py",
@@ -81,6 +82,8 @@ SYNC_SUPPORT_FILES: dict[str, str] = {
     "scripts/meta/check_coordination_claims.py": "scripts/check_coordination_claims.py",
     "scripts/meta/check_agents_sync.py": "scripts/check_agents_sync.py",
     "scripts/meta/audit_dead_code.py": "scripts/audit_dead_code.py",
+    "scripts/meta/check_plan_tests.py": "scripts/check_plan_tests.py",
+    "scripts/meta/complete_plan.py": "scripts/complete_plan.py",
     "scripts/meta/check_doc_coupling.py": "scripts/check_doc_coupling.py",
     "scripts/meta/check_dead_code.py": "scripts/check_dead_code.py",
     "scripts/meta/check_push_safety.py": "scripts/check_push_safety.py",

@@ -76,3 +76,4 @@ See `ROADMAP.md` for the full phase map and recommended priority order.
 | 📋 Planned | Ready to implement |
 | 🚧 In Progress | Being worked on |
 | ✅ Complete | Implemented and verified |
+| ✅ Complete (scoped; repository baseline degraded) | Required change evidence passed; unchanged repository debt remains visible |

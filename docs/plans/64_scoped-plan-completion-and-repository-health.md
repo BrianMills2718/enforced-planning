@@ -208,7 +208,11 @@ status: "Complete (scoped; repository baseline degraded)"
 ## Files Affected
 
 - `scripts/complete_plan.py`
+- `scripts/check_plan_tests.py`
+- `scripts/install_governed_repo.py`
 - `tests/test_complete_plan.py`
+- `tests/test_check_plan_tests.py`
+- `tests/test_install_governed_repo.py`
 - `tests/test_completion_repository_health.py`
 - `PLANNING_OPERATING_MODEL.md`
 - `patterns/03_testing-strategy.md`
@@ -256,6 +260,9 @@ status: "Complete (scoped; repository baseline degraded)"
 | `tests/test_completion_repository_health.py` | `test_unavailable_baseline_blocks_completion` | Missing comparison never becomes a pass |
 | `tests/test_complete_plan.py` | `test_required_plan_tests_block_before_repository_health` | Declared change gate is wired as blocking |
 | `tests/test_complete_plan.py` | `test_degraded_repository_writes_scoped_status` | Status and evidence preserve degraded health truth |
+| `tests/test_complete_plan.py` | `test_doc_coupling_unavailable_is_blocking` | Missing/crashed coupling evidence cannot silently pass |
+| `tests/test_check_plan_tests.py` | `test_run_tests_uses_current_python_interpreter` | Required tests use the same Python environment as completion |
+| `tests/test_complete_plan.py` | `test_policy_surfaces_separate_change_gate_from_repository_health` | Canonical policy/templates preserve the two-verdict model |
 
 ### Existing Tests (Must Pass)
 

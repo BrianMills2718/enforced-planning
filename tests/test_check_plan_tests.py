@@ -8,17 +8,17 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-
-import pytest
+from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
 from check_plan_tests import (
-    TestRequirement,
+    TestRequirement as RequiredTestSpec,
     check_test_exists,
     find_plan_files,
     find_test_class,
     parse_plan_file,
+    run_tests,
 )
 
 
@@ -157,23 +157,39 @@ class TestCheckTestExists:
         test_file = tmp_path / "tests" / "test_something.py"
         test_file.parent.mkdir()
         test_file.write_text("def test_basic(): pass\n")
-        req = TestRequirement(file="tests/test_something.py")
+        req = RequiredTestSpec(file="tests/test_something.py")
         assert check_test_exists(req, tmp_path) is True
 
     def test_file_missing_returns_false(self, tmp_path: Path):
-        req = TestRequirement(file="tests/test_missing.py")
+        req = RequiredTestSpec(file="tests/test_missing.py")
         assert check_test_exists(req, tmp_path) is False
 
     def test_function_exists_in_file(self, tmp_path: Path):
         test_file = tmp_path / "tests" / "test_foo.py"
         test_file.parent.mkdir()
         test_file.write_text("def test_my_func(): pass\n")
-        req = TestRequirement(file="tests/test_foo.py", function="test_my_func")
+        req = RequiredTestSpec(file="tests/test_foo.py", function="test_my_func")
         assert check_test_exists(req, tmp_path) is True
 
     def test_function_missing_from_file_returns_false(self, tmp_path: Path):
         test_file = tmp_path / "tests" / "test_foo.py"
         test_file.parent.mkdir()
         test_file.write_text("def test_other(): pass\n")
-        req = TestRequirement(file="tests/test_foo.py", function="test_missing")
+        req = RequiredTestSpec(file="tests/test_foo.py", function="test_missing")
         assert check_test_exists(req, tmp_path) is False
+
+
+def test_run_tests_uses_current_python_interpreter(tmp_path: Path) -> None:
+    """Required plan tests must run in the completion process environment."""
+    test_file = tmp_path / "tests" / "test_example.py"
+    test_file.parent.mkdir()
+    test_file.write_text("def test_example(): assert True\n", encoding="utf-8")
+    requirement = RequiredTestSpec(file="tests/test_example.py", function="test_example")
+    completed = MagicMock(returncode=0, stdout="passed", stderr="")
+
+    # mock-ok: exact subprocess argv is the contract under test.
+    with patch("check_plan_tests.subprocess.run", return_value=completed) as run:
+        exit_code, _output = run_tests([requirement], tmp_path)
+
+    assert exit_code == 0
+    assert run.call_args.args[0][:3] == [sys.executable, "-m", "pytest"]

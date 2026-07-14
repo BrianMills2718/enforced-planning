@@ -196,6 +196,22 @@ hook will select (`.venv/bin/python`, otherwise `python3`) for the declared
 PyYAML runtime dependency. Framework-host packages cannot satisfy that check
 on behalf of the consumer.
 
+Existing consumers use the bounded rollout mode:
+
+```bash
+python scripts/install_governed_repo.py \
+  --repo-root /path/to/consumer \
+  --relationship-context-only \
+  --write
+```
+
+This mode requires the consumer's canonical `CLAUDE.md`,
+`scripts/relationships.yaml`, Makefile, and existing file-context runtime. It
+does not scaffold governance, refresh `AGENTS.md`, or synchronize unrelated
+framework files. The generated Make section is marker-owned and idempotent;
+an unmarked target-name collision blocks the entire write so repository-local
+commands are never silently replaced.
+
 New-file `Write` requests are represented by a path-derived target with an
 explicit `target-untracked-new-file` diagnostic. This mode can match file-level
 selectors but cannot claim a Python symbol before parseable source exists.

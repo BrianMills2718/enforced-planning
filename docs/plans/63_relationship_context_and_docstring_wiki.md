@@ -182,6 +182,19 @@ is unavailable. Automatic injection is currently implemented for Claude Code;
 Codex and other clients use the same CLI/JSON contract until they have a native
 pre-edit adapter.
 
+**Consumer-rollout audit correction (2026-07-14):** the default governed-repo
+installer contained all four modules and wrappers, but applying it to an
+existing consumer also planned 21 unrelated framework synchronizations. The
+narrow hook generator was safer but omitted the impact/wiki CLIs and Make
+targets. The installer now exposes `--relationship-context-only`: it requires
+an existing governed repo, installs only the four runtime modules, four CLI
+wrappers, marked Make block, and existing read/edit hook support, and never
+scaffolds plans or regenerates `AGENTS.md`. Tests preserve unrelated local
+drift, reject unmarked Make target collisions, run all five installed Make
+targets, and prove a second run is idempotent. A disposable checkout of
+onto-canon6 `573c819` planned exactly 11 bounded actions with zero blockers or
+drift; packet, impact, wiki write, and wiki check all executed successfully.
+
 ## Acceptance Criteria Disposition
 
 - Context packet budgets and provenance pass deterministic tests.

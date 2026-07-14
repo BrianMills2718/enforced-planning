@@ -106,6 +106,31 @@ Finally, automated edit injection is certified only for the installed Claude
 Code hook. Codex can invoke the same context packet through CLI/JSON, but no
 Codex-native automatic pre-edit adapter was built or observed in this pilot.
 
+## Bounded Consumer Rollout Addendum
+
+The post-pilot rollout audit found that the default installer would synchronize
+21 unrelated framework files in the calibrated consumer. The hook-only
+generator avoided that churn but did not install the impact/wiki CLIs or Make
+targets. The new bounded mode was therefore exercised against a disposable
+checkout of onto-canon6 `573c819`:
+
+```text
+python scripts/install_governed_repo.py \
+  --repo-root /tmp/onto-context-rollout-audit \
+  --relationship-context-only --json
+blockers=[]
+actions=11
+drift_files=[]
+```
+
+The 11 actions were exactly four runtime modules, four installed wrappers, the
+marked Make block, and two changed hook files. After applying them, the local
+semantic-authoring packet contained 5 items / 2,827 characters with no
+diagnostics, impact reporting executed, and both `make docstring-wiki` and
+`make docstring-wiki-check` passed. No plan, `AGENTS.md`, validator, or unrelated
+framework mirror was changed. The integration test additionally preserves
+deliberately drifted unrelated files and runs all five generated Make targets.
+
 ## Artifacts Consulted
 
 - `onto-canon6/scripts/relationships.yaml`

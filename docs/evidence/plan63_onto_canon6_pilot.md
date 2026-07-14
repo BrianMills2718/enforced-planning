@@ -89,6 +89,23 @@ then replay real diffs and measure false obligations. Hard enforcement is
 eligible only when a changed implementation with a declared edge reliably
 creates the intended obligation and unrelated changes do not.
 
+## Post-Merge Audit Addendum
+
+The original focused suite proved public symbol extraction but did not test the
+stronger whole-codebase wiki claim. A full AST comparison found 407 documented
+private callables absent from the framework inventory. After repair, the same
+comparison reports `omitted_private_docstrings=0`; undocumented private helpers
+remain visible without becoming mandatory coverage debt.
+
+The original installer integration test also ran under the host interpreter,
+masking whether a consumer `.venv` contained PyYAML. New negative controls give
+the target a Python executable that rejects `import yaml`; both hook generation
+and full installation now fail before writes with `cannot import PyYAML`.
+
+Finally, automated edit injection is certified only for the installed Claude
+Code hook. Codex can invoke the same context packet through CLI/JSON, but no
+Codex-native automatic pre-edit adapter was built or observed in this pilot.
+
 ## Artifacts Consulted
 
 - `onto-canon6/scripts/relationships.yaml`

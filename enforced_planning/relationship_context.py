@@ -256,7 +256,12 @@ def _render_signature(node: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
 
 
 def _python_symbols(path: str, tree: ast.Module) -> tuple[SymbolRecord, ...]:
-    """Extract module, class, and public callable records in source order."""
+    """Extract module, class, and callable records in source order.
+
+    Private callables remain part of the source-derived navigation surface when
+    they have docstrings. Coverage policy is separate: undocumented private
+    helpers are represented but do not create mandatory-docstring findings.
+    """
 
     module_line = 1
     if (
@@ -278,7 +283,7 @@ def _python_symbols(path: str, tree: ast.Module) -> tuple[SymbolRecord, ...]:
     ]
 
     def visit(body: list[ast.stmt], parents: tuple[str, ...] = ()) -> None:
-        """Walk nested classes while excluding private callable implementation detail."""
+        """Walk nested classes and their direct methods without executing source."""
 
         for node in body:
             if isinstance(node, ast.ClassDef):
@@ -294,7 +299,7 @@ def _python_symbols(path: str, tree: ast.Module) -> tuple[SymbolRecord, ...]:
                     )
                 )
                 visit(node.body, (*parents, node.name))
-            elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and not node.name.startswith("_"):
+            elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 qualified = ".".join((*parents, node.name))
                 records.append(
                     SymbolRecord(
@@ -328,7 +333,10 @@ def _python_record(repo_root: Path, path: str, classification: ArtifactClassific
     symbols = _python_symbols(path, tree)
     diagnostics: list[Diagnostic] = []
     for symbol in symbols:
-        if symbol.docstring is None:
+        callable_is_private = symbol.kind in {"function", "method"} and symbol.qualified_name.rsplit(".", 1)[
+            -1
+        ].startswith("_")
+        if symbol.docstring is None and not callable_is_private:
             diagnostics.append(
                 Diagnostic(
                     "python-docstring-missing",

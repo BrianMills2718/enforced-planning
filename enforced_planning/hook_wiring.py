@@ -21,6 +21,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import shutil
+import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -70,6 +73,39 @@ class TargetRepo:
     settings_file: Path
 
 
+def context_runtime_error(repo_root: Path) -> str | None:
+    """Return a fail-loud prerequisite error for the hook's actual Python runtime.
+
+    Installed context tools parse ``relationships.yaml`` with PyYAML. Tests run
+    under the framework interpreter can mask a target virtualenv that lacks the
+    dependency, so probe the same interpreter selected by ``gate-edit.sh``.
+    """
+
+    venv_python = repo_root / ".venv" / "bin" / "python"
+    interpreter = (
+        str(venv_python)
+        if venv_python.is_file() and os.access(venv_python, os.X_OK)
+        else shutil.which("python3")
+    )
+    if interpreter is None:
+        return "relationship context requires python3 or a repo-local .venv/bin/python"
+    try:
+        result = subprocess.run(
+            [interpreter, "-c", "import yaml"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError as exc:
+        return f"relationship context runtime {interpreter} cannot execute: {exc}"
+    if result.returncode:
+        return (
+            f"relationship context runtime {interpreter} cannot import PyYAML; "
+            "declare/install PyYAML>=6.0 before hook rollout"
+        )
+    return None
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     """Parse CLI arguments for hook-wiring generation."""
 
@@ -110,6 +146,10 @@ def _resolve_target(repo_root_arg: str) -> TargetRepo:
         raise FileNotFoundError(
             f"Missing file-context resolver required for read-gating: {file_context_file}"
         )
+
+    runtime_error = context_runtime_error(repo_root)
+    if runtime_error:
+        raise FileNotFoundError(runtime_error)
 
     settings_file = repo_root / ".claude" / "settings.json"
     return TargetRepo(

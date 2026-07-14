@@ -23,6 +23,15 @@ def _scaffold_target_repo(repo_root: Path) -> None:
     )
 
 
+def _write_python_without_yaml(repo_root: Path) -> None:
+    """Install a target-runtime probe that deterministically rejects PyYAML imports."""
+
+    interpreter = repo_root / ".venv" / "bin" / "python"
+    interpreter.parent.mkdir(parents=True, exist_ok=True)
+    interpreter.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
+    interpreter.chmod(0o755)
+
+
 def test_generate_hook_wiring_dry_run_reports_expected_changes(tmp_path: Path) -> None:
     """Dry-run output should describe the files the generator would install."""
 
@@ -187,3 +196,21 @@ def test_generate_hook_wiring_fails_without_file_context(tmp_path: Path) -> None
 
     assert result.returncode == 1
     assert "Missing file-context resolver required for read-gating" in result.stderr
+
+
+def test_generate_hook_wiring_fails_when_target_python_lacks_yaml(tmp_path: Path) -> None:
+    """Host dependencies cannot stand in for the interpreter the installed hook uses."""
+
+    _scaffold_target_repo(tmp_path)
+    _write_python_without_yaml(tmp_path)
+
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT), "--repo-root", str(tmp_path)],
+        cwd=str(PROJECT_META_ROOT),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 1
+    assert "cannot import PyYAML" in result.stderr

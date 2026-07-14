@@ -35,6 +35,7 @@ See meta/patterns/17_verification-enforcement.md for the full pattern.
 """
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -47,8 +48,21 @@ from dataclasses import asdict, dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
 
-from enforced_planning import active_work_registry, coordination_claims
-from enforced_planning.worktree_paths import resolve_canonical_repo_root
+
+def _ensure_local_package_importable() -> None:
+    """Add the nearest governed-repo root for direct installed-script execution."""
+    for parent in Path(__file__).resolve().parents:
+        if (parent / "enforced_planning").is_dir():
+            parent_text = str(parent)
+            if parent_text not in sys.path:
+                sys.path.insert(0, parent_text)
+            return
+
+
+_ensure_local_package_importable()
+
+from enforced_planning import active_work_registry, coordination_claims  # noqa: E402
+from enforced_planning.worktree_paths import resolve_canonical_repo_root  # noqa: E402
 
 # Plan #136: Timeout for test subprocess calls to prevent hanging forever
 TEST_TIMEOUT_SECONDS = 300  # 5 minutes
@@ -61,6 +75,8 @@ class TestFailure:
     identity: str
     file: str | None
     outcome: str
+    detail_hash: str
+    detail_excerpt: str
 
 
 @dataclass(frozen=True)
@@ -254,6 +270,28 @@ def _parse_count(value: str | None) -> int:
     return parsed
 
 
+def _normalized_failure_detail(
+    outcome_node: ET.Element,
+    *,
+    project_root: Path,
+) -> tuple[str, str]:
+    """Return a path-neutral failure hash plus a bounded diagnostic excerpt."""
+    failure_type = outcome_node.get("type", "")
+    message = outcome_node.get("message", "")
+    traceback = outcome_node.text or ""
+    detail = "\n".join((failure_type, message, traceback))
+    root_variants = {
+        str(project_root),
+        str(project_root.resolve()),
+    }
+    for root_variant in sorted(root_variants, key=len, reverse=True):
+        detail = detail.replace(root_variant, "<worktree>")
+    detail = detail.replace("\\", "/")
+    detail_hash = hashlib.sha256(detail.encode("utf-8", errors="replace")).hexdigest()
+    excerpt = " ".join(detail.split())[:500]
+    return detail_hash, excerpt
+
+
 def parse_pytest_junit(
     report_path: Path,
     *,
@@ -317,11 +355,17 @@ def parse_pytest_junit(
             if classname and classname not in identity_parts:
                 identity_parts.append(classname)
             identity_parts.extend([name, outcome])
+            detail_hash, detail_excerpt = _normalized_failure_detail(
+                outcome_node,
+                project_root=project_root,
+            )
             failures.append(
                 TestFailure(
                     identity="::".join(identity_parts),
                     file=file_path,
                     outcome=outcome,
+                    detail_hash=detail_hash,
+                    detail_excerpt=detail_excerpt,
                 )
             )
         failures.sort(key=lambda failure: failure.identity)
@@ -475,6 +519,42 @@ def _resolve_baseline_commit(project_root: Path, baseline_ref: str) -> tuple[str
     return result.stdout.strip(), None
 
 
+def _select_baseline_ref(
+    project_root: Path,
+    requested_ref: str | None,
+) -> tuple[str | None, str | None]:
+    """Select a portable default-branch ref without guessing past known candidates."""
+    if requested_ref:
+        return requested_ref, None
+
+    symbolic = subprocess.run(
+        ["git", "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"],
+        cwd=project_root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    candidates: list[str] = []
+    if symbolic.returncode == 0 and symbolic.stdout.strip():
+        candidates.append(symbolic.stdout.strip())
+    candidates.extend(["origin/main", "origin/master", "main", "master"])
+
+    for candidate in dict.fromkeys(candidates):
+        exists = subprocess.run(
+            ["git", "rev-parse", "--verify", "--quiet", f"{candidate}^{{commit}}"],
+            cwd=project_root,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if exists.returncode == 0:
+            return candidate, None
+    return None, (
+        "unable to auto-detect a baseline ref; pass --baseline-ref with the "
+        "repository's default branch"
+    )
+
+
 def _changed_paths(project_root: Path, baseline_commit: str) -> tuple[tuple[str, ...], str | None]:
     """Return tracked and untracked paths changed from the comparison commit."""
     diff = subprocess.run(
@@ -568,7 +648,7 @@ def _run_baseline_suite(
 def compare_repository_health(
     project_root: Path,
     *,
-    baseline_ref: str = "origin/main",
+    baseline_ref: str | None = None,
     verbose: bool = True,
 ) -> RepositoryHealthComparison:
     """Compare current non-E2E failures with a same-layout merge-base run."""
@@ -580,7 +660,7 @@ def compare_repository_health(
             status="unavailable",
             allowed=False,
             reason=current.error or "current repository evidence unavailable",
-            baseline_ref=baseline_ref,
+            baseline_ref=baseline_ref or "<auto>",
             baseline_commit=None,
             current=current,
             baseline=None,
@@ -593,7 +673,7 @@ def compare_repository_health(
             status="green",
             allowed=True,
             reason="repository-wide non-E2E suite passed",
-            baseline_ref=baseline_ref,
+            baseline_ref=baseline_ref or "<auto>",
             baseline_commit=None,
             current=current,
             baseline=None,
@@ -602,13 +682,31 @@ def compare_repository_health(
             changed_baseline_failures=(),
         )
 
-    baseline_commit, baseline_error = _resolve_baseline_commit(project_root, baseline_ref)
+    resolved_baseline_ref, ref_error = _select_baseline_ref(project_root, baseline_ref)
+    if resolved_baseline_ref is None:
+        return RepositoryHealthComparison(
+            status="unavailable",
+            allowed=False,
+            reason=ref_error or "unable to select a baseline ref",
+            baseline_ref=baseline_ref or "<auto>",
+            baseline_commit=None,
+            current=current,
+            baseline=None,
+            changed_paths=(),
+            new_failures=(),
+            changed_baseline_failures=(),
+        )
+
+    baseline_commit, baseline_error = _resolve_baseline_commit(
+        project_root,
+        resolved_baseline_ref,
+    )
     if baseline_commit is None:
         return RepositoryHealthComparison(
             status="unavailable",
             allowed=False,
             reason=baseline_error or "unable to resolve merge base",
-            baseline_ref=baseline_ref,
+            baseline_ref=resolved_baseline_ref,
             baseline_commit=None,
             current=current,
             baseline=None,
@@ -622,7 +720,7 @@ def compare_repository_health(
             status="unavailable",
             allowed=False,
             reason=changed_error,
-            baseline_ref=baseline_ref,
+            baseline_ref=resolved_baseline_ref,
             baseline_commit=baseline_commit,
             current=current,
             baseline=None,
@@ -641,7 +739,7 @@ def compare_repository_health(
             status="unavailable",
             allowed=False,
             reason=baseline.error or "baseline repository evidence unavailable",
-            baseline_ref=baseline_ref,
+            baseline_ref=resolved_baseline_ref,
             baseline_commit=baseline_commit,
             current=current,
             baseline=baseline,
@@ -656,9 +754,13 @@ def compare_repository_health(
     changed_path_set = set(changed_paths)
     changed_baseline: list[str] = []
     for identity in sorted(set(current_by_identity) & set(baseline_by_identity)):
-        current_file = current_by_identity[identity].file
-        baseline_file = baseline_by_identity[identity].file
+        current_failure = current_by_identity[identity]
+        baseline_failure = baseline_by_identity[identity]
+        current_file = current_failure.file
+        baseline_file = baseline_failure.file
         if (
+            current_failure.detail_hash != baseline_failure.detail_hash
+            or
             (current_file is not None and current_file in changed_path_set)
             or (baseline_file is not None and baseline_file in changed_path_set)
             or (current_file is None and baseline_file is None and changed_paths)
@@ -672,13 +774,14 @@ def compare_repository_health(
             reason_parts.append(f"{len(new_failures)} new failure(s)")
         if changed_baseline_failures:
             reason_parts.append(
-                f"{len(changed_baseline_failures)} baseline failure(s) overlap changed test files"
+                f"{len(changed_baseline_failures)} baseline failure(s) changed evidence "
+                "or overlap changed test files"
             )
         return RepositoryHealthComparison(
             status="regressed",
             allowed=False,
             reason="; ".join(reason_parts),
-            baseline_ref=baseline_ref,
+            baseline_ref=resolved_baseline_ref,
             baseline_commit=baseline_commit,
             current=current,
             baseline=baseline,
@@ -694,7 +797,7 @@ def compare_repository_health(
             f"{current.failure_count} current failure(s) reproduce at the same-layout merge base; "
             "no new or changed-test failure"
         ),
-        baseline_ref=baseline_ref,
+        baseline_ref=resolved_baseline_ref,
         baseline_commit=baseline_commit,
         current=current,
         baseline=baseline,
@@ -1209,7 +1312,7 @@ def complete_plan(
     skip_real_e2e: bool = False,
     force: bool = False,
     human_verified: bool = False,
-    baseline_ref: str = "origin/main",
+    baseline_ref: str | None = None,
     require_repository_green: bool = False,
     verbose: bool = True,
 ) -> bool:
@@ -1439,8 +1542,8 @@ def main() -> int:
     )
     parser.add_argument(
         "--baseline-ref",
-        default="origin/main",
-        help="Git ref whose merge base is the repository-health control (default: origin/main)",
+        default=None,
+        help="Git ref whose merge base is the repository-health control (default: auto-detect)",
     )
     parser.add_argument(
         "--require-repository-green",

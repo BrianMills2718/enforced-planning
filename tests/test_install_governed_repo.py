@@ -392,6 +392,15 @@ def test_install_governed_repo_write_bootstraps_minimum_repo_and_passes_audit(
     assert (tmp_path / "scripts" / "meta" / "audit_dead_code.py").exists()
     assert (tmp_path / "scripts" / "meta" / "check_plan_tests.py").exists()
     assert (tmp_path / "scripts" / "meta" / "complete_plan.py").exists()
+    for installed_script in ("check_plan_tests.py", "complete_plan.py"):
+        help_result = subprocess.run(
+            [sys.executable, str(tmp_path / "scripts" / "meta" / installed_script), "--help"],
+            cwd=tmp_path,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert help_result.returncode == 0, help_result.stdout + help_result.stderr
     assert (tmp_path / "scripts" / "meta" / "check_dead_code.py").exists()
     assert (tmp_path / "scripts" / "meta" / "check_push_safety.py").exists()
     assert (tmp_path / "scripts" / "meta" / "check_coordination_claims.py").exists()

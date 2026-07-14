@@ -79,7 +79,8 @@ semantics, not a third-party runner feature.
 3. A green repository suite licenses ordinary `Complete`.
 4. A red current suite triggers the identical command at the merge base in a
    detached sibling worktree using the same interpreter.
-5. New failures and failures in changed baseline test files block completion.
+5. New failures, changed normalized failure evidence, and failures in changed
+   baseline test files block completion.
 6. Only unchanged baseline failures license scoped/degraded completion.
 7. Baseline setup, execution, or result-parsing failure is `unavailable` and
    blocks completion.
@@ -177,9 +178,10 @@ sequenceDiagram
 ### Derived schema
 
 The implementation uses frozen dataclasses for `TestFailure`, `TestRunResult`,
-and `RepositoryHealthComparison`. Plan evidence renders a compact YAML summary;
-the complete machine-readable comparison is written as a JSON evidence artifact.
-No persistent allowlist schema is introduced.
+and `RepositoryHealthComparison`. `TestFailure` carries a stable identity plus a
+path-neutral hash and bounded excerpt of failure details. Plan evidence renders
+a compact YAML summary; the complete machine-readable comparison is written as
+a JSON evidence artifact. No persistent allowlist schema is introduced.
 
 ### Backward verdict pass
 
@@ -255,8 +257,10 @@ status: "Complete (scoped; repository baseline degraded)"
 | Test File | Test Function | What It Verifies |
 |---|---|---|
 | `tests/test_completion_repository_health.py` | `test_unchanged_worktree_failure_is_baseline_debt` | Same-layout failure on both commits permits scoped completion |
+| `tests/test_completion_repository_health.py` | `test_green_repository_does_not_create_baseline_worktree` | Green repositories complete without a second suite run |
 | `tests/test_completion_repository_health.py` | `test_new_failure_blocks_completion` | Current-only failure is a regression |
 | `tests/test_completion_repository_health.py` | `test_changed_baseline_test_file_blocks_completion` | Same test identity cannot bypass overlap guard |
+| `tests/test_completion_repository_health.py` | `test_changed_failure_cause_blocks_even_when_test_file_is_unchanged` | Same node ID with different failure evidence is a regression |
 | `tests/test_completion_repository_health.py` | `test_unavailable_baseline_blocks_completion` | Missing comparison never becomes a pass |
 | `tests/test_complete_plan.py` | `test_required_plan_tests_block_before_repository_health` | Declared change gate is wired as blocking |
 | `tests/test_complete_plan.py` | `test_degraded_repository_writes_scoped_status` | Status and evidence preserve degraded health truth |
@@ -310,7 +314,8 @@ coverage-report procedure.
 
 ## Pre-Made Decisions
 
-1. Baseline defaults to the merge base with `origin/main` and is CLI-configurable.
+1. Baseline defaults to the merge base with the auto-detected remote/default
+   branch and is CLI-configurable.
 2. Comparison uses exact JUnit test identities, not terminal-output regexes.
 3. The baseline runs only after a current failure, avoiding a second run on
    healthy repositories.
@@ -323,7 +328,7 @@ coverage-report procedure.
 
 | Concern | Status | Disposition / promotion trigger |
 |---|---|---|
-| Same node identity can fail for a different source-level cause | mitigated | changed-test-file overlap blocks; revisit after reliable impact mapping |
+| Same node identity can fail for a different source-level cause | mitigated | normalized failure-detail changes and changed-test-file overlap block; revisit after reliable impact mapping |
 | Double suite runtime on degraded repos | accepted | only red current runs pay the cost; revisit if it becomes disproportionate |
 | Non-pytest consumers | deferred | add an adapter only when a real consumer requires it |
 | Durable waivers for changed known failures | deferred | design only after an actual justified case; no silent bypass now |
@@ -335,3 +340,42 @@ coverage-report procedure.
    machine-readable and symmetric.
 2. Do not mutate consumer test files to manufacture a green baseline.
 3. Do not expand this slice into general CI or flaky-test management.
+
+## Adversarial Review
+
+**Charter:** pilot-stage deterministic governance tooling; the next decision is
+whether source-repo dogfood and one consumer dry run are licensed; budget is
+three blocker groups and one discovery pass; non-goals are release automation,
+flaky-test quarantine, non-pytest runners, and generalized impact mapping; stop
+when the green, degraded, new-failure, changed-cause, changed-test, and
+unavailable cases discriminate correctly.
+
+**Causal path:** plan-required manifest → blocking change result; current JUnit
+run → same-layout merge-base JUnit run when red → identity/detail/changed-path
+comparison → completion verdict → durable status and evidence.
+
+Two blockers were found and fixed:
+
+1. The initial comparator used only test identity plus changed-test-file
+   overlap. A real counterexample changed `app.py` so the same unchanged test
+   failed with different values; the comparator incorrectly returned
+   `baseline_degraded`. Failure records now include a path-neutral hash of the
+   JUnit type/message/traceback. The original counterexample now returns
+   `regressed`.
+2. The initial default hardcoded `origin/main`. A local Git repository with a
+   valid `main` branch but no remote therefore returned `unavailable` unless an
+   agent supplied a flag. Baseline selection now prefers the remote default and
+   then checks explicit `origin/main`, `origin/master`, `main`, and `master`
+   candidates. The no-remote real-Git control now selects `main` and passes.
+3. The canonical installer copied the new completion script and its package
+   dependencies, but invoking `scripts/meta/complete_plan.py --help` in a clean
+   consumer failed because direct script execution put only `scripts/meta/` on
+   `sys.path`. The script now locates the nearest governed-repo root containing
+   `enforced_planning/` before importing it. The installed-layout execution
+   control now passes for both completion scripts.
+
+No additional current blocker survived the bounded pass. Flaky failures,
+non-pytest adapters, durable waivers, and generalized source-to-test impact
+mapping remain explicitly deferred.
+
+**Verdict:** proceed to source-repo dogfood and a bounded consumer dry run.

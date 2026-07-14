@@ -31,8 +31,11 @@ def _make_worktree_repo(tmp_path: Path) -> tuple[Path, Path]:
 
     tests_dir = repo / "tests"
     tests_dir.mkdir()
+    (repo / "app.py").write_text("def value():\n    return 1\n", encoding="utf-8")
     (tests_dir / "test_baseline.py").write_text(
         """from pathlib import Path
+
+from app import value
 
 
 def test_sibling_path_assumption():
@@ -41,6 +44,10 @@ def test_sibling_path_assumption():
 
 def test_control_passes():
     assert True
+
+
+def test_source_behavior():
+    assert value() == 2
 """,
         encoding="utf-8",
     )
@@ -61,17 +68,31 @@ def test_unchanged_worktree_failure_is_baseline_debt(tmp_path: Path) -> None:
 
     comparison = compare_repository_health(
         worktree,
-        baseline_ref="main",
         verbose=False,
     )
 
     assert comparison.allowed is True
     assert comparison.status == "baseline_degraded"
-    assert comparison.current.failure_count == 1
+    assert comparison.baseline_ref == "main"
+    assert comparison.current.failure_count == 2
     assert comparison.baseline is not None
-    assert comparison.baseline.failure_count == 1
+    assert comparison.baseline.failure_count == 2
     assert comparison.new_failures == ()
     assert comparison.changed_baseline_failures == ()
+    assert not list((repo / "worktrees").glob(".completion-baseline-*"))
+
+
+def test_green_repository_does_not_create_baseline_worktree(tmp_path: Path) -> None:
+    """A green current run completes without paying for a control checkout."""
+    repo, worktree = _make_worktree_repo(tmp_path)
+    (repo / "worktrees" / "required-sibling").mkdir()
+    (worktree / "app.py").write_text("def value():\n    return 2\n", encoding="utf-8")
+
+    comparison = compare_repository_health(worktree, verbose=False)
+
+    assert comparison.allowed is True
+    assert comparison.status == "green"
+    assert comparison.baseline is None
     assert not list((repo / "worktrees").glob(".completion-baseline-*"))
 
 
@@ -113,8 +134,31 @@ def test_changed_baseline_test_file_blocks_completion(tmp_path: Path) -> None:
     assert comparison.allowed is False
     assert comparison.status == "regressed"
     assert comparison.new_failures == ()
-    assert len(comparison.changed_baseline_failures) == 1
-    assert "test_sibling_path_assumption" in comparison.changed_baseline_failures[0]
+    assert len(comparison.changed_baseline_failures) == 2
+    assert any(
+        "test_sibling_path_assumption" in failure
+        for failure in comparison.changed_baseline_failures
+    )
+
+
+def test_changed_failure_cause_blocks_even_when_test_file_is_unchanged(tmp_path: Path) -> None:
+    """A same-named failure with different evidence is a regression."""
+    _, worktree = _make_worktree_repo(tmp_path)
+    (worktree / "app.py").write_text("def value():\n    return 0\n", encoding="utf-8")
+
+    comparison = compare_repository_health(
+        worktree,
+        baseline_ref="main",
+        verbose=False,
+    )
+
+    assert comparison.allowed is False
+    assert comparison.status == "regressed"
+    assert comparison.new_failures == ()
+    assert any(
+        "test_source_behavior" in failure
+        for failure in comparison.changed_baseline_failures
+    )
 
 
 def test_unavailable_baseline_blocks_completion(tmp_path: Path) -> None:
@@ -131,4 +175,3 @@ def test_unavailable_baseline_blocks_completion(tmp_path: Path) -> None:
     assert comparison.status == "unavailable"
     assert comparison.baseline is None
     assert "merge base" in comparison.reason.lower()
-

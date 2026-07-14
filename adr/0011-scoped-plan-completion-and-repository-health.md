@@ -37,10 +37,13 @@ required tests block completion.
 
 The repository-wide non-E2E suite still runs. If it passes, the plan records a
 repository-green completion. If it fails, the completion tool reruns the same
-suite at the merge base in a detached sibling worktree, using the same Python
-interpreter and command, then compares machine-readable test identities.
+  suite at the merge base in a detached sibling worktree, using the same Python
+  interpreter and command, then compares machine-readable test identities and
+  normalized failure-detail hashes.
 
 - A failure absent from the baseline blocks completion as a new regression.
+- A matching test identity whose normalized failure details changed blocks;
+  a stable name alone is not evidence of the same failure.
 - A baseline failure whose test file changed in the plan blocks completion;
   lexical identity alone cannot prove the failure is unchanged.
 - An unchanged failure reproduced in the same worktree layout remains visible
@@ -109,8 +112,8 @@ is designed.
 ### Negative
 
 - A degraded current run costs a second suite execution.
-- Test identity comparison cannot prove two failures have the same root cause;
-  the changed-test-file rule is a conservative partial guard.
+- Normalized failure details can still collide or change because of noisy
+  diagnostics; the comparison deliberately favors blocking uncertain changes.
 - Source changes can alter the cause of an unchanged test failure without
   changing its test identity. Required-test selection and future impact mapping
   remain important.
@@ -122,7 +125,7 @@ is designed.
 Revisit this decision if any of the following occurs:
 
 1. A plan introduces a regression that the required tests omit and the
-   baseline comparison classifies as unchanged.
+   identity-plus-detail comparison classifies as unchanged.
 2. Baseline worktrees routinely cannot reproduce consumer environments.
 3. Suite runtime makes same-commit comparison disproportionate; a signed,
    expiring baseline artifact may then be preferable.
@@ -139,4 +142,3 @@ Revisit this decision if any of the following occurs:
 | [Pytest skip/xfail guidance](https://docs.pytest.org/en/stable/how-to/skipping.html) | Alternative expected-failure mechanism and its reporting tradeoffs. |
 | [Git worktree documentation](https://git-scm.com/docs/git-worktree.html) | Supported detached sibling checkout mechanism for the merge-base control run. |
 | `adr/0003-plan-gate-hierarchy.md` | Existing authority separating plan completion from stronger E2E acceptance gates. |
-

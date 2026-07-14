@@ -15,7 +15,8 @@ Require a verification script to mark plans as complete. The script:
 1. Runs the plan-declared required tests as an always-blocking change gate
 2. Runs the repository-wide non-E2E suite as a separately reported health check
 3. If repository health is red, reruns the identical suite at the merge base in
-   a detached sibling worktree and blocks only new or changed-test failures
+   a detached sibling worktree and blocks new identities, changed normalized
+   failure details, or changed-test failures
 4. Runs applicable E2E and doc-code coupling checks
 5. Records both verdicts and updates status only when the change gate passes and
    repository evidence is green or baseline-degraded without regression
@@ -87,8 +88,9 @@ python scripts/complete_plan.py --plan 35 --require-repository-green
 2. **Repository health** - Runs `pytest tests/ --ignore=tests/e2e/` with JUnit evidence
 3. **Baseline comparison** - On failure, repeats step 2 at the merge base in a
    same-layout sibling worktree
-4. **Regression decision** - Blocks current-only failures and baseline failures
-   whose test file changed
+4. **Regression decision** - Blocks current-only failures, matching identities
+   with changed normalized failure details, and baseline failures whose test
+   file changed
 5. **E2E/doc coupling** - Preserves the plan's applicable blocking checks
 6. **Evidence/status** - Records `green` or `baseline_degraded`; unavailable
    comparison evidence blocks
@@ -146,8 +148,9 @@ python scripts/complete_plan.py --plan N --skip-e2e
 - **Not a substitute for thorough testing** - Smoke tests catch crashes, not subtle bugs
 - **Requires test infrastructure** - You need working tests first
 - **Pytest-specific comparison** - Other runners need a machine-readable result adapter
-- **Identity is not root cause** - A same-named failing test can change cause; changed
-  test files therefore block, and required-test scope remains important
+- **Identity/detail is not complete impact mapping** - Normalized diagnostics
+  catch changed causes visible in JUnit, while changed test files also block;
+  required-test scope remains important
 - **Degraded runs cost more** - A red current suite requires a second merge-base run
 - **Can be bypassed** - Determined users can edit files manually (git history shows this)
 - **Doesn't verify correctness** - Only verifies that tests pass, not that implementation is right

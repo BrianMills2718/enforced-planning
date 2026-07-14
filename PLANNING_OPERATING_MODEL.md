@@ -289,8 +289,9 @@ Plan completion separates the **change gate** from **repository health**. The
 plan's declared tests and applicable acceptance checks must pass. The full
 repository suite still runs, but a bounded plan may close with an explicit
 baseline-degraded status when the identical suite reproduces only unchanged
-failures at the merge base in the same worktree layout. New failures, failures
-in changed baseline test files, and unavailable comparison evidence block.
+failures at the merge base in the same worktree layout. New failures, changed
+normalized failure details, failures in changed baseline test files, and
+unavailable comparison evidence block.
 Release, promotion, and periodic health gates may require the stronger
 fully-green repository state. See META-ADR-0011.
 

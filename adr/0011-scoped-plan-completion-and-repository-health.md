@@ -42,6 +42,8 @@ repository-green completion. If it fails, the completion tool reruns the same
   normalized failure-detail hashes.
 
 - A failure absent from the baseline blocks completion as a new regression.
+- Pytest runs with full assertion-value verbosity before normalization. A
+  path-length-dependent truncated representation is not comparable evidence.
 - A matching test identity whose normalized failure details changed blocks;
   a stable name alone is not evidence of the same failure.
 - A baseline failure whose test file changed in the plan blocks completion;

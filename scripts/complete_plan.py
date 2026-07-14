@@ -457,7 +457,7 @@ def run_repository_test_suite(
             *_pytest_command(),
             "tests/",
             "--ignore=tests/e2e/",
-            "-v",
+            "-vv",
             "--tb=short",
             f"--junitxml={report_path}",
         )

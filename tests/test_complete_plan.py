@@ -17,6 +17,7 @@ from scripts.complete_plan import (
     get_human_review_section,
     get_plan_status,
     run_required_plan_tests,
+    run_repository_test_suite,
     run_unit_tests,
     sync_coordination_closeout,
     update_plan_file,
@@ -331,6 +332,44 @@ def test_run_required_plan_tests_uses_companion_script(tmp_path: Path) -> None:
     command = run.call_args.args[0]
     assert command[0] == sys.executable
     assert command[-2:] == ["--plan", "64"]
+
+
+def test_repository_suite_requests_untruncated_failure_evidence(tmp_path: Path) -> None:
+    """Repository comparison must receive full values before path normalization."""
+    commands: list[tuple[str, ...]] = []
+
+    def fake_run(command: tuple[str, ...], **_kwargs):
+        commands.append(command)
+        report_argument = next(part for part in command if part.startswith("--junitxml="))
+        report_path = Path(report_argument.removeprefix("--junitxml="))
+        report_path.write_text(
+            """<?xml version="1.0" encoding="utf-8"?>
+<testsuites tests="1" failures="1" errors="0" skipped="0">
+  <testsuite tests="1" failures="1" errors="0" skipped="0">
+    <testcase classname="tests.test_sample" name="test_failure" file="tests/test_sample.py">
+      <failure type="AssertionError" message="assert 1 == 2">assert 1 == 2</failure>
+    </testcase>
+  </testsuite>
+</testsuites>
+""",
+            encoding="utf-8",
+        )
+        return MagicMock(returncode=1, stdout="", stderr="")
+
+    # mock-ok: command construction is the contract under test; real current
+    # and baseline pytest processes are covered by repository-health controls.
+    with patch("scripts.complete_plan.subprocess.run", side_effect=fake_run):
+        result = run_repository_test_suite(
+            tmp_path,
+            commit="abc123",
+            verbose=False,
+        )
+
+    assert result.available is True
+    assert result.failure_count == 1
+    assert commands
+    assert "-vv" in commands[0]
+    assert "-v" not in commands[0]
 
 
 def test_doc_coupling_unavailable_is_blocking(tmp_path: Path) -> None:

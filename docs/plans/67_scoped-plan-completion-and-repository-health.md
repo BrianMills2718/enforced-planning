@@ -79,12 +79,14 @@ semantics, not a third-party runner feature.
 3. A green repository suite licenses ordinary `Complete`.
 4. A red current suite triggers the identical command at the merge base in a
    detached sibling worktree using the same interpreter.
-5. New failures, changed normalized failure evidence, and failures in changed
+5. Comparison captures untruncated pytest assertion values before normalizing
+   checkout roots and run-generated pytest temporary-session roots.
+6. New failures, changed normalized failure evidence, and failures in changed
    baseline test files block completion.
-6. Only unchanged baseline failures license scoped/degraded completion.
-7. Baseline setup, execution, or result-parsing failure is `unavailable` and
+7. Only unchanged baseline failures license scoped/degraded completion.
+8. Baseline setup, execution, or result-parsing failure is `unavailable` and
    blocks completion.
-8. Evidence records the baseline commit, commands, counts, identities, changed
+9. Evidence records the baseline commit, commands, counts, identities, changed
    paths, and verdict.
 
 ### Boundary diagram

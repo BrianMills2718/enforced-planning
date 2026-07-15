@@ -12,11 +12,13 @@
 
 ## Authorization and execution profile
 
-Brian authorized this planning work on 2026-07-15. This document does not
-authorize implementation. The future implementation owner must review the plan,
-claim the exact paths, and explicitly activate it before changing runtime code.
+Brian authorized the original planning work on 2026-07-15 and authorized the
+bounded Codex app-server steering spike on 2026-07-15 after reviewing external
+prior art. This authorization covers only Slice 0's disposable instrument and
+retained readout. It does not authorize the mailbox implementation, a managed
+fleet migration, a Codex fork, or Hermes adoption.
 
-- Request mode: `plan_only`
+- Request mode: `plan_and_implement` for Slice 0 only
 - Design depth: Standard
 - Execution profile: `production-internal` — coordination state can redirect
   work in shared repositories, but all current operators are trusted.
@@ -32,9 +34,9 @@ delivery by itself.
 
 ## Non-goals
 
-- Do not promise real-time interruption of a running agent.
-- Do not build a background daemon, chat product, task queue, or assignment
-  scheduler.
+- Do not claim arbitrary existing standalone CLI sessions are steerable.
+- Do not build a production background daemon, chat product, task queue, or
+  assignment scheduler before Slice 0 resolves the app-server ownership seam.
 - Do not redefine session, claim, lane, or plan authority.
 - Do not automatically resolve write conflicts or authorize another lane.
 - Do not require GitHub or network access for the local mailbox path.
@@ -53,7 +55,9 @@ that the target session observed the message.
 through the existing session/claim registry, stores immutable messages and
 append-only observation/acknowledgement receipts, and supports lifecycle polling
 from both client adapters. PR comments remain a declared fallback projection
-for published lanes, not the mailbox authority.
+for published lanes, not the mailbox authority. Managed Codex sessions may also
+receive an event-driven delivery acceleration through their owning app-server;
+lifecycle polling remains recovery for offline or unmanaged clients.
 
 **Why:** Missing delivery semantics forces Brian to copy messages between
 agents, while broad claims can unnecessarily stall unrelated work because no
@@ -101,12 +105,24 @@ reliable request/acknowledgement channel exists.
   inbox has no reliable Codex delivery path
 - `investigations/cross-project/2026-07-15-cross-agent-communication-channel.md`
   — exact Plan 121 collision and delivery-path investigation
+- `investigations/cross-project/2026-07-15-tailscale-ask-ui-and-codex-session-ids.md`
+  — observed mapping between live Codex processes and native thread IDs
+- `investigations/cross-project/2026-07-15-event-driven-agent-messaging-landscape.md`
+  — current Codex, OpenHands, AutoGen, Hermes, Letta, and terminal-injection
+  prior art; establishes runtime ownership as the live-delivery seam
+- OpenAI Codex app-server documentation for `thread/start`, `turn/start`,
+  `turn/steer`, version-generated protocol schemas, and streamed notifications
+- OpenAI Codex issue #15299 and discussion #21558 — normal TUI inbound MCP
+  notifications and multi-client app-server co-presence remain unsupported
 - Memory recall: `agent-memory recall 'cross-agent messaging inbox Codex Claude
   coordination' --project enforced-planning` returned no relevant architectural
   finding.
 
-No external research is required. The design is constrained by observed local
-client and coordination contracts.
+The external research changed one earlier assumption: Codex has a concrete
+native steering API when the controller owns the app-server session. The open
+question is no longer whether injection exists; it is whether a broker-owned
+session can support the desired operator workflow without a fork or unsupported
+second-client attachment.
 
 ## Modality assessment
 
@@ -114,7 +130,8 @@ client and coordination contracts.
 |---|---|---|---|
 | Message identity, lifecycle, persistence, and acknowledgement | Deductive | State and failure modes are predictable. | Freeze typed contracts and both-sign tests first. |
 | Client lifecycle polling | Hybrid | Supported lifecycle boundaries are known, but actual visibility in live clients must be observed. | Deterministic adapter tests plus one Claude↔Codex pilot. |
-| Real-time interruption | Exploratory/out of scope | The host may not expose an injection callback. | Make no such claim; revisit only when a concrete host API exists. |
+| Managed Codex event delivery | Exploratory | App-server exposes `turn/steer` and `turn/start`, but multi-client/TUI ownership is unsettled. | Run one isolated version-pinned spike before designing a broker. |
+| Unmanaged-client delivery | Hybrid | Lifecycle boundaries are known, but latency depends on client activity. | Retain durable polling and label it eventual. |
 
 ## Requirements
 
@@ -127,7 +144,9 @@ client and coordination contracts.
 | M67-5 | Offline recipients retain unexpired messages; expired messages remain auditable and cannot masquerade as active. | mailbox store/projection | Offline/expiry both-sign tests. |
 | M67-6 | Published-lane PR comments are a durable fallback or projection, not evidence of mailbox observation. | concern router | Route result names its evidence ceiling. |
 | M67-7 | Installed governed repos receive the same wrappers and documentation without copied business logic. | installer | Clean install/upgrade fixture invokes the package-backed commands. |
-| M67-8 | The framework reports its actual capability as lifecycle-polled, not real-time. | docs/support matrix | Terminology check rejects unsupported delivery claims. |
+| M67-8 | The framework reports capability per runtime: managed app-server delivery may be event-driven when observed; unmanaged clients remain lifecycle-polled. | docs/support matrix | Terminology check rejects unsupported delivery claims and requires the applicable ownership boundary. |
+| M67-9 | A managed Codex app-server session can accept one correlated message during an active turn and one while idle without patching Codex. | Slice 0 instrument | Version-pinned event transcript contains accepted `turn/steer`, later `turn/completed`, and a second `turn/start` on the same thread. |
+| M67-10 | Runtime acceptance remains distinct from agent observation and acknowledgement. | delivery projection | The spike records protocol acceptance and model-visible evidence separately and never synthesizes acknowledgement. |
 
 Passing these checks would prove a bounded local cross-client mailbox. It would
 not prove low-latency delivery, remote multi-host synchronization, reliable
@@ -143,6 +162,7 @@ GitHub notification, or asynchronous interruption of a running agent.
 | Core service/CLI | Send, poll, acknowledge operations | typed requests/results | validation or persistence fails | Tool-specific identity discovery |
 | Client adapters | Session identity discovery and lifecycle invocation | environment/session context -> core requests | current session cannot be resolved | Owning message semantics or storage |
 | Concern router | Optional PR-comment projection/fallback | message reference + branch | remote publication fails | Claiming PR comment equals observation |
+| Managed Codex delivery adapter | Accelerating one persisted message into a broker-owned Codex thread | message + registered thread/turn -> runtime receipt | endpoint/version is unavailable, turn is not steerable, or expected turn changed | Owning mailbox truth, scraping transcripts, or attaching to arbitrary standalone TUIs |
 
 ## Domain model and lifecycle
 
@@ -153,22 +173,25 @@ Session/Claim registry
 CoordinationMessage (immutable)
         │ 0..n append-only receipts
         ▼
-MessageReceipt: observed | acknowledged
+MessageReceipt: runtime_accepted | observed | acknowledged
         │ derive at read time
         ▼
-MessageStatusView: persisted | observed | acknowledged | expired
+MessageStatusView: persisted | runtime_accepted | observed | acknowledged | expired
 ```
 
 `CoordinationMessage` owns content and routing intent. It never contains a
 mutable `status`. `MessageReceipt` records a recipient observation or explicit
-acknowledgement. Expiry is derived from `expires_at` and the requested `as_of`
-time, not written back into the message.
+acknowledgement. A `runtime_accepted` receipt says only that the addressed host
+accepted `turn/steer` or `turn/start`; it does not prove the model processed the
+message. Expiry is derived from `expires_at` and the requested `as_of` time, not
+written back into the message.
 
 Allowed transitions are:
 
 ```text
 persisted -> observed -> acknowledged
 persisted -> acknowledged        # acknowledgement implies observation
+persisted -> runtime_accepted -> observed -> acknowledged
 persisted/observed -> expired     # derived when unacknowledged at as_of
 ```
 
@@ -215,6 +238,11 @@ implementation review only if the requirements and lifecycle remain intact.
 | `poll_messages` | current session + `as_of` + filters | ordered message views; optional observation receipts | unresolved session, corrupt record |
 | `acknowledge_message` | current session + message ID + disposition | acknowledgement receipt + status view | wrong recipient, missing/expired policy violation, conflicting receipt |
 | `message_status` | message ID + `as_of` | derived status and receipt chain | missing/corrupt record |
+
+The managed Codex adapter is not added to the production contract until Slice
+0 resolves the ownership seam. The spike uses the installed Codex-generated
+JSON Schema rather than a hand-maintained protocol model and retains the exact
+CLI version with its event transcript.
 
 The existing coordination root remains the storage authority. Code must resolve
 it through the established configuration/path helper; no hardcoded home path is
@@ -273,7 +301,9 @@ successful file write or PR comment cannot synthesize an acknowledgement.
 | State authority | Immutable JSON message plus append-only receipts | Mutating Markdown status loses event history. Revisit only if the coordination store adopts a transactional event backend. |
 | Identity | Reuse session/claim IDs | Inbox-directory names create a second identity system. |
 | Delivery semantics | `persisted`, `observed`, `acknowledged` | One `delivered` boolean overclaims what a file write proves. |
-| Polling | Lifecycle-bound polling in both clients | Filesystem watcher/daemon adds operations without solving host injection. Revisit if a supported orchestrator callback exists. |
+| Delivery | Durable mailbox plus capability-specific acceleration | Lifecycle-only polling is too latent for managed sessions; push-only delivery loses offline messages. |
+| Managed Codex seam | App-server `turn/steer`/`turn/start`, conditional on Slice 0 | Hermes changes runtimes; tmux keystrokes are untyped; inbound MCP notifications do not enter normal Codex TUI sessions today. |
+| Polling | Lifecycle-bound polling as recovery in both clients | A filesystem watcher alone cannot inject into unmanaged hosts. |
 | Published lanes | PR comment as fallback/projection | GitHub notification is not a mailbox acknowledgement. |
 | Migration | One-way import or tombstone for legacy unread messages; no dual-write after cutover | Permanent dual-write preserves two authorities. |
 
@@ -282,6 +312,43 @@ slice must promote these decisions into an ADR before rollout. Until then this
 plan is the bounded decision authority.
 
 ## Risk-ordered slices
+
+### Slice 0 — Codex-native steering dependency spike
+
+- Launch one disposable local Codex app-server owned by the instrument.
+- Generate or consume protocol definitions from the installed Codex version.
+- Start one thread and turn, then submit a uniquely identified `turn/steer`
+  against the exact active turn.
+- After completion, submit a second uniquely identified `turn/start` on the
+  same idle thread.
+- Retain a redacted JSONL protocol transcript, Codex version, command identity,
+  thread/turn/message IDs, and a concise readout.
+- Do not connect a second TUI client, patch Codex, implement mailbox storage, or
+  generalize the instrument into a daemon.
+
+**Success readout:** both protocol calls are accepted on the intended native
+thread/turn, the active-turn injected marker becomes model-visible before that
+turn completes, and the idle-turn marker is processed in the next turn.
+
+**Disproof/inconclusive:** stop and retain evidence if `turn/steer` is rejected,
+the marker is not model-visible, a second client or Codex patch is required, or
+the installed protocol cannot be used without guessed fields. Passing proves a
+single broker-owned Codex session is steerable; it does not prove TUI
+co-presence, Claude parity, fleet migration, or durable delivery.
+
+**Observed 2026-07-15:** the bounded dependency question passed on installed
+Codex `0.144.1`, with an important lifecycle limitation. After waiting for the
+native `turn/started` event, the app server accepted `turn/steer` for the exact
+active turn and the injected marker appeared in agent output. The same thread
+then accepted a new `turn/start` while idle and produced the second marker. No
+Codex patch or second client was required. However, terminal-event delivery was
+not reliable: one run omitted `turn/completed` after an agent answer, and the
+clean no-tool run emitted `turn/completed` for the steered turn but not for the
+following idle turn before the 120-second timeout. Therefore managed steering
+is a viable acceleration seam, but a production adapter must recover through
+status reconciliation and must not depend on every terminal notification.
+Evidence and the bounded claim are summarized in
+`docs/evidence/plan67_codex_app_server_spike/README.md`.
 
 ### Slice 1 — Canonical message and acknowledgement walking skeleton
 
@@ -341,7 +408,8 @@ at the terminal claim because this plan changes shared coordination contracts.
 | C67-4 | Governed-repo install/upgrade exposes the shared commands without copied logic. | clean fixture test | F — planned only |
 | C67-5 | One live bidirectional pilot retains message and acknowledgement evidence. | observed run + retained receipts | F — planned only |
 | C67-6 | Legacy inbox and PR comments cannot masquerade as acknowledged delivery. | negative tests + docs check | F — planned only |
-| C67-7 | Support claims remain lifecycle-polled and do not promise real-time interruption. | source/docs test | F — planned only |
+| C67-7 | Support claims distinguish managed event-driven delivery from lifecycle-polled recovery and do not promise arbitrary-session interruption. | source/docs test | D — plan wording corrected; implementation docs not built |
+| C67-8 | One installed-version Codex app-server session accepts and processes correlated active-turn and idle-turn messages without a fork. | observed protocol transcript + bounded instrument test | B — observed on Codex 0.144.1; terminal-event reliability defect retained |
 
 ## Files Affected
 
@@ -356,6 +424,8 @@ this list against the reviewed codebase before activation.
 - `enforced_planning/concern_routing.py`
 - installer templates/config reference/operator guide/support matrix
 - focused tests and one retained live-pilot evidence record
+- temporary Slice 0 instrument and retained readout under a clearly exploratory
+  path; remove or promote it after the decision
 - ADR only if the seam is promoted to a public cross-repository contract
 
 ## Failure and recovery
@@ -371,6 +441,7 @@ this list against the reviewed codebase before activation.
 
 ## Next action
 
-The future owner should perform an isolated review of this plan, reconcile it
-with any newer coordination-runtime changes, then activate Slice 1 in a claimed
-worktree. No implementation should begin from this planning commit.
+Slice 0 is complete. The result supports an app-server-owned event-delivery
+acceleration backed by durable lifecycle recovery; it does not support arbitrary
+TUI injection or terminal-event-only state tracking. Slice 1 remains planned
+and requires separate implementation authorization.

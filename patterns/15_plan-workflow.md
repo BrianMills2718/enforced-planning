@@ -214,9 +214,17 @@ checks that prove the exploration is agent-drivable and inspectable.
 ## Verification
 
 **Current stage:** PoC | Pilot | Product | Production
+**Execution profile:** poc | pilot | production-internal | production-external
 **Next decision:** [decision]
 **Gate-time budget:** [time or number of gate passes]
 **Stopping rule:** [condition]
+
+Select the profile from the slice's claim, users/exposure, reversibility, and
+shared-state effect. `production-internal` requires operational reliability,
+data integrity, recovery, and observability without importing generic public
+security or release ceremony. `production-external` adds those controls when
+untrusted/public/distributed boundaries justify them. Universal secret,
+destructive-action, evidence, and LLM full-trace protections still apply.
 
 | Lane | Trigger | Checks / Evidence | Evidence Reuse Key | Decision Protected |
 |------|---------|-------------------|--------------------|--------------------|

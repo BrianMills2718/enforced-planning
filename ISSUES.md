@@ -23,6 +23,23 @@ Items start as **unconfirmed** observations and get triaged into confirmed issue
 
 ## Open
 
+### MP-018: Markdown-link fallback test uses the retired worktree layout
+
+| Field | Value |
+|-------|-------|
+| Status | `confirmed` |
+| Severity | low |
+| Reported | 2026-07-15 |
+
+`test_markdown_link_checker_falls_back_to_canonical_repo_root_for_worktree_links`
+constructs `<repo>_worktrees/<branch>`, so the focused test fails even though
+current policy requires `<repo>/worktrees/<branch>`. The changed policy documents
+pass direct link validation; this stale fixture should be updated in a separate
+affected-code increment.
+
+**Next:** Rebuild the fixture under the in-repository worktree convention and
+retain a negative control for paths that are not governed worktrees.
+
 ### MP-017: Repository-wide Ruff target has 123 baseline errors
 
 | Field | Value |

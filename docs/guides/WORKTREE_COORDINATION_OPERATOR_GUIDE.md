@@ -133,6 +133,27 @@ Liveness is heartbeat-backed:
 - once a claim has a heartbeat, an overly old heartbeat becomes
   `stale_session_heartbeat`
 
+Advancement is tracked separately from liveness. A heartbeat proves that a
+runtime is present; it does not prove that the lane is moving. New claims carry
+one complete progress event:
+
+- `progress_at`: when advancement was explicitly recorded
+- `progress_kind`: `claim_started`, `verified_commit`, `new_diagnostic`,
+  `blocker`, or `handoff`
+- `progress_ref`: the plan, commit, diagnostic, issue, or handoff reference
+- `next_action`: the concrete next step
+
+All four fields travel together. A live claim with a fresh heartbeat becomes
+`stalled` when its progress event is older than
+`COORDINATION_PROGRESS_STALE_MINUTES` (60 minutes by default). `stalled` is a
+reporting and recovery state: it never releases, prunes, or transfers the
+claim. Stale lifecycle or heartbeat evidence still outranks stalled progress.
+Older claims with no progress event remain compatible during rollout.
+
+A known long-running operation may declare both `expected_quiet_until` and
+`quiet_reason`. The exception is visible and suppresses the stall only through
+that explicit ISO timestamp; it does not renew `progress_at`.
+
 The canonical v2 claim CLI now auto-resolves `session_id` from supported tool
 runtime env vars when possible. In governed repos the installed local entrypoint
 is `scripts/meta/check_coordination_claims.py`. In the framework repo the
@@ -174,6 +195,25 @@ python scripts/meta/check_coordination_claims.py --heartbeat --agent codex --pro
 For Claude Code, the same command shape applies with `--agent claude-code`.
 Session identity is auto-resolved from the supported runtime env vars when
 available.
+
+To record actual advancement for the current owning session, use the same
+canonical claim entrypoint:
+
+```bash
+python scripts/meta/check_coordination_claims.py \
+  --progress \
+  --agent codex \
+  --project your-repo \
+  --scope plan-70-progress-leases \
+  --progress-kind verified_commit \
+  --progress-ref 20fb340 \
+  --next-action "run the focused regression suite"
+```
+
+For a bounded quiet interval, also pass `--expected-quiet-until` and
+`--quiet-reason` together. The command refuses an unknown event kind, malformed
+quiet deadline, incomplete event, or update from a session that does not own
+the matching claim. A heartbeat command never changes these progress fields.
 
 ## Session Contract Model
 
@@ -238,6 +278,8 @@ The coordination stack uses lease semantics, not perfect real-time presence.
 
 - if a machine crashes or a window closes, the session stops heartbeating
 - once the heartbeat ages out, the lane becomes stale
+- if heartbeats stay fresh but progress expires, the lane becomes stalled and
+  status output shows its last event and `next_action`
 - the next runtime must explicitly choose to resume, hand off, abandon, or
   prune that lane
 

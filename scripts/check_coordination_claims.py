@@ -82,14 +82,19 @@ def claim_lifecycle_issues(claim: ClaimRecord) -> list[str]:
     return _impl.claim_lifecycle_issues(claim)
 
 
-def claim_runtime_status(claim: ClaimRecord) -> str:
+def claim_runtime_status(claim: ClaimRecord, *, now: Any | None = None) -> str:
     """Expose combined stale/weak/healthy runtime classification."""
-    return _impl.claim_runtime_status(claim)
+    return _impl.claim_runtime_status(claim, now=now)
 
 
 def claim_liveness_issues(claim: ClaimRecord, *, now: Any | None = None) -> list[str]:
     """Expose heartbeat-backed liveness diagnostics."""
     return _impl.claim_liveness_issues(claim, now=now)
+
+
+def claim_progress_issues(claim: ClaimRecord, *, now: Any | None = None) -> list[str]:
+    """Expose progress-lease diagnostics through the legacy script surface."""
+    return _impl.claim_progress_issues(claim, now=now)
 
 
 def hydrate_missing_session_ids(*args: Any, **kwargs: Any) -> tuple[int, list[str], str]:
@@ -138,6 +143,12 @@ def heartbeat_claims(*args: Any, **kwargs: Any) -> tuple[int, list[str], str, st
     """Delegate heartbeat refresh while honoring script-level CLAIMS_DIR overrides."""
     _sync_runtime_config()
     return _impl.heartbeat_claims(*args, **kwargs)
+
+
+def record_progress_claims(*args: Any, **kwargs: Any) -> tuple[int, list[str], str, str]:
+    """Delegate progress recording while honoring script-level CLAIMS_DIR overrides."""
+    _sync_runtime_config()
+    return _impl.record_progress_claims(*args, **kwargs)
 
 
 def parse_args(argv: list[str] | None = None):

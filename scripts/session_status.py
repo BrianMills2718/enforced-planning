@@ -53,6 +53,12 @@ def main(argv: list[str] | None = None) -> int:
             f"{session['session_name']} :: {session['current_phase']} "
             f"(recovery={session['recovery_action']})"
         )
+        if session.get("progress_issues"):
+            print(
+                f"  progress={','.join(session['progress_issues'])}; "
+                f"last={session.get('progress_kind') or '-'}:{session.get('progress_ref') or '-'}; "
+                f"next={session.get('next_action') or '-'}"
+            )
     return 0
 
 

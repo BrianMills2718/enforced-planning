@@ -38,6 +38,8 @@ COMPLETED_STATUSES = {"complete", "completed"}
 CLAIM_TYPES = {"program", "write", "review", "research"}
 STRICT_LIVE_METADATA_CLAIM_TYPES = {"program", "write", "research"}
 DEFAULT_HEARTBEAT_STALE_MINUTES = 120
+DEFAULT_PROGRESS_STALE_MINUTES = 60
+PROGRESS_KINDS = {"claim_started", "verified_commit", "new_diagnostic", "blocker", "handoff"}
 SESSION_ENV_KEYS = {
     "codex": ("CODEX_THREAD_ID",),
     "claude-code": ("CLAUDE_SESSION_ID", "CLAUDE_CODE_SSE_PORT"),
@@ -66,6 +68,12 @@ class ClaimRecord:
     tracker_path: str | None
     session_id: str | None
     heartbeat_at: str | None
+    progress_at: str | None
+    progress_kind: str | None
+    progress_ref: str | None
+    next_action: str | None
+    expected_quiet_until: str | None
+    quiet_reason: str | None
     status: str
     updated_at: str | None
     parent_scope: str | None
@@ -161,6 +169,20 @@ def _heartbeat_stale_after() -> timedelta:
         return timedelta(minutes=DEFAULT_HEARTBEAT_STALE_MINUTES)
     if minutes <= 0:
         return timedelta(minutes=DEFAULT_HEARTBEAT_STALE_MINUTES)
+    return timedelta(minutes=minutes)
+
+
+def _progress_stale_after() -> timedelta:
+    """Return the configured maximum interval without recorded progress."""
+    raw = os.environ.get("COORDINATION_PROGRESS_STALE_MINUTES", "").strip()
+    if not raw:
+        return timedelta(minutes=DEFAULT_PROGRESS_STALE_MINUTES)
+    try:
+        minutes = float(raw)
+    except ValueError as exc:
+        raise ValueError("COORDINATION_PROGRESS_STALE_MINUTES must be a positive number.") from exc
+    if minutes <= 0:
+        raise ValueError("COORDINATION_PROGRESS_STALE_MINUTES must be a positive number.")
     return timedelta(minutes=minutes)
 
 
@@ -274,10 +296,50 @@ def claim_liveness_issues(
     return []
 
 
-def claim_runtime_status(claim: ClaimRecord) -> str:
-    """Classify one live claim across stale/weak/healthy states."""
-    if claim_lifecycle_issues(claim) or claim_liveness_issues(claim):
+def claim_progress_issues(
+    claim: ClaimRecord,
+    *,
+    now: datetime | None = None,
+) -> list[str]:
+    """Return advancement issues without changing or invalidating ownership.
+
+    Legacy claims with no progress event remain readable during rollout. Once
+    any progress field is present, the core event must be complete. A bounded
+    quiet interval suppresses the deadline only until its declared end.
+    """
+    if not claim.is_live():
+        return []
+    progress_values = (claim.progress_at, claim.progress_kind, claim.progress_ref, claim.next_action)
+    if not any(progress_values):
+        return []
+    if not all(progress_values):
+        return ["incomplete_progress_event"]
+    if claim.progress_kind not in PROGRESS_KINDS:
+        return ["invalid_progress_kind"]
+    progress_at = _parse_iso_datetime(claim.progress_at)
+    if progress_at is None:
+        return ["invalid_progress_at"]
+    quiet_values = (claim.expected_quiet_until, claim.quiet_reason)
+    if any(quiet_values) and not all(quiet_values):
+        return ["incomplete_quiet_interval"]
+    reference_now = now or datetime.now(timezone.utc)
+    if claim.expected_quiet_until:
+        quiet_until = _parse_iso_datetime(claim.expected_quiet_until)
+        if quiet_until is None:
+            return ["invalid_expected_quiet_until"]
+        if reference_now <= quiet_until:
+            return []
+    if reference_now - progress_at > _progress_stale_after():
+        return ["stalled_progress_lease"]
+    return []
+
+
+def claim_runtime_status(claim: ClaimRecord, *, now: datetime | None = None) -> str:
+    """Classify one live claim with stale liveness outranking stalled progress."""
+    if claim_lifecycle_issues(claim) or claim_liveness_issues(claim, now=now):
         return "stale"
+    if claim_progress_issues(claim, now=now):
+        return "stalled"
     return claim_health_status(claim)
 
 
@@ -433,6 +495,12 @@ def normalize_claim(data: dict[str, Any], *, source_file: str | None = None) -> 
             "tracker_path",
             "session_id",
             "heartbeat_at",
+            "progress_at",
+            "progress_kind",
+            "progress_ref",
+            "next_action",
+            "expected_quiet_until",
+            "quiet_reason",
             "status",
             "updated_at",
             "parent_scope",
@@ -458,6 +526,14 @@ def normalize_claim(data: dict[str, Any], *, source_file: str | None = None) -> 
         tracker_path=data.get("tracker_path") if isinstance(data.get("tracker_path"), str) else None,
         session_id=data.get("session_id") if isinstance(data.get("session_id"), str) else None,
         heartbeat_at=data.get("heartbeat_at") if isinstance(data.get("heartbeat_at"), str) else None,
+        progress_at=data.get("progress_at") if isinstance(data.get("progress_at"), str) else None,
+        progress_kind=data.get("progress_kind") if isinstance(data.get("progress_kind"), str) else None,
+        progress_ref=data.get("progress_ref") if isinstance(data.get("progress_ref"), str) else None,
+        next_action=data.get("next_action") if isinstance(data.get("next_action"), str) else None,
+        expected_quiet_until=(
+            data.get("expected_quiet_until") if isinstance(data.get("expected_quiet_until"), str) else None
+        ),
+        quiet_reason=data.get("quiet_reason") if isinstance(data.get("quiet_reason"), str) else None,
         status=status,
         updated_at=data.get("updated_at") if isinstance(data.get("updated_at"), str) else None,
         parent_scope=data.get("parent_scope") if isinstance(data.get("parent_scope"), str) else None,
@@ -628,6 +704,12 @@ def build_candidate_claim(
     tracker_path: str | None = None,
     session_id: str | None = None,
     heartbeat_at: str | None = None,
+    progress_at: str | None = None,
+    progress_kind: str | None = None,
+    progress_ref: str | None = None,
+    next_action: str | None = None,
+    expected_quiet_until: str | None = None,
+    quiet_reason: str | None = None,
     status: str = "active",
     parent_scope: str | None = None,
     notes: str | None = None,
@@ -662,6 +744,12 @@ def build_candidate_claim(
         tracker_path=tracker_path,
         session_id=resolved_session_id,
         heartbeat_at=heartbeat_at,
+        progress_at=progress_at,
+        progress_kind=progress_kind,
+        progress_ref=progress_ref,
+        next_action=next_action,
+        expected_quiet_until=expected_quiet_until,
+        quiet_reason=quiet_reason,
         status=status,
         updated_at=updated_at,
         parent_scope=parent_scope,
@@ -712,6 +800,10 @@ def create_claim(
         tracker_path=tracker_path,
         session_id=session_id,
         heartbeat_at=now.isoformat(),
+        progress_at=now.isoformat(),
+        progress_kind="claim_started",
+        progress_ref=plan_ref or scope,
+        next_action=intent,
         status=status,
         parent_scope=parent_scope,
         notes=notes,
@@ -824,8 +916,8 @@ def heartbeat_claims(
     for claim_file in CLAIMS_DIR.glob("*.yaml"):
         try:
             data = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
-        except Exception:
-            continue
+        except (OSError, yaml.YAMLError) as exc:
+            raise RuntimeError(f"Unable to read progress claim {claim_file}: {exc}") from exc
         if not isinstance(data, dict):
             continue
         claim = normalize_claim(data, source_file=str(claim_file))
@@ -850,6 +942,83 @@ def heartbeat_claims(
         )
         updated_scopes.append(claim.scope)
     return len(updated_scopes), sorted(updated_scopes), resolved_session_id, heartbeat_at
+
+
+def record_progress_claims(
+    *,
+    agent: str,
+    project: str,
+    progress_kind: str,
+    progress_ref: str,
+    next_action: str,
+    session_id: str | None = None,
+    scope: str | None = None,
+    branch: str | None = None,
+    expected_quiet_until: str | None = None,
+    quiet_reason: str | None = None,
+) -> tuple[int, list[str], str, str]:
+    """Record a complete progress event on matching claims owned by one session."""
+    resolved_session_id = resolve_session_id(agent, session_id)
+    if not resolved_session_id:
+        raise ValueError(
+            "Unable to resolve a session ID. Pass --session-id explicitly or run from a supported tool runtime."
+        )
+    if progress_kind not in PROGRESS_KINDS:
+        raise ValueError(f"Unsupported progress kind: {progress_kind}")
+    if not progress_ref.strip() or not next_action.strip():
+        raise ValueError("--progress-ref and --next-action must be non-empty.")
+    if bool(expected_quiet_until) != bool(quiet_reason):
+        raise ValueError("--expected-quiet-until and --quiet-reason must be supplied together.")
+    if expected_quiet_until and _parse_iso_datetime(expected_quiet_until) is None:
+        raise ValueError("--expected-quiet-until must be a valid ISO timestamp.")
+
+    progress_at = datetime.now(timezone.utc).isoformat()
+    if not CLAIMS_DIR.exists():
+        return 0, [], resolved_session_id, progress_at
+
+    updated_scopes: list[str] = []
+    for claim_file in CLAIMS_DIR.glob("*.yaml"):
+        try:
+            data = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if not isinstance(data, dict):
+            continue
+        claim = normalize_claim(data, source_file=str(claim_file))
+        if claim is None or not claim.is_live() or claim.agent != agent or project not in claim.projects:
+            continue
+        if scope and claim.scope != scope:
+            continue
+        if branch and claim.branch != branch:
+            continue
+        if claim.session_id != resolved_session_id:
+            continue
+        data.update(
+            {
+                "session_id": resolved_session_id,
+                "progress_at": progress_at,
+                "progress_kind": progress_kind,
+                "progress_ref": progress_ref,
+                "next_action": next_action,
+                "updated_at": progress_at,
+            }
+        )
+        if expected_quiet_until:
+            data["expected_quiet_until"] = expected_quiet_until
+            data["quiet_reason"] = quiet_reason
+        else:
+            data.pop("expected_quiet_until", None)
+            data.pop("quiet_reason", None)
+        claim_file.write_text(
+            yaml.safe_dump(data, default_flow_style=False, sort_keys=False),
+            encoding="utf-8",
+        )
+        updated_scopes.append(claim.scope)
+    if not updated_scopes:
+        raise ValueError(
+            f"No matching live claim owned by session {resolved_session_id} for {agent}:{project}."
+        )
+    return len(updated_scopes), sorted(updated_scopes), resolved_session_id, progress_at
 
 
 def release_claim(agent: str, project: str, scope: str) -> tuple[bool, str]:
@@ -1009,6 +1178,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Refresh heartbeat metadata for matching live claims owned by the current session.",
     )
+    group.add_argument(
+        "--progress",
+        action="store_true",
+        help="Record a durable progress event without refreshing the heartbeat clock.",
+    )
 
     parser.add_argument("--agent", help="Agent brain name (claude-code, codex, openclaw)")
     parser.add_argument("--project", help="Project name")
@@ -1025,6 +1199,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--status", default="active", help="Claim status (default: active)")
     parser.add_argument("--parent-scope", help="Parent/broad-scope identifier")
     parser.add_argument("--notes", help="Freeform notes")
+    parser.add_argument("--progress-kind", choices=sorted(PROGRESS_KINDS), help="Recorded progress event kind")
+    parser.add_argument("--progress-ref", help="Commit, diagnostic, blocker, or handoff reference")
+    parser.add_argument("--next-action", help="Concrete next action after the recorded event")
+    parser.add_argument("--expected-quiet-until", help="ISO deadline for one bounded quiet interval")
+    parser.add_argument("--quiet-reason", help="Reason no progress event is expected before the quiet deadline")
     parser.add_argument("--json", action="store_true", help="Output as JSON")
 
     return parser.parse_args(argv)
@@ -1046,6 +1225,7 @@ def _render_check_output(
                 "health_issues": claim_health_issues(claim),
                 "lifecycle_issues": claim_lifecycle_issues(claim),
                 "liveness_issues": claim_liveness_issues(claim),
+                "progress_issues": claim_progress_issues(claim),
             }
             for claim in claims
         ],
@@ -1058,6 +1238,7 @@ def _render_check_output(
             "candidate_health_issues": claim_health_issues(candidate),
             "candidate_lifecycle_issues": claim_lifecycle_issues(candidate),
             "candidate_liveness_issues": claim_liveness_issues(candidate),
+            "candidate_progress_issues": claim_progress_issues(candidate),
         }
     return payload
 
@@ -1273,6 +1454,46 @@ def main(argv: list[str] | None = None) -> int:
             print(
                 f"Heartbeated {updated_count} claim(s) for {args.agent}:{args.project} "
                 f"with session_id={resolved_session_id} at {heartbeat_at}"
+            )
+        return 0
+
+    if args.progress:
+        if not all([args.agent, args.project, args.progress_kind, args.progress_ref, args.next_action]):
+            raise SystemExit(
+                "--progress requires --agent, --project, --progress-kind, --progress-ref, and --next-action"
+            )
+        try:
+            updated_count, updated_scopes, resolved_session_id, progress_at = record_progress_claims(
+                agent=args.agent,
+                project=args.project,
+                progress_kind=args.progress_kind,
+                progress_ref=args.progress_ref,
+                next_action=args.next_action,
+                session_id=args.session_id,
+                scope=args.scope,
+                branch=args.branch,
+                expected_quiet_until=args.expected_quiet_until,
+                quiet_reason=args.quiet_reason,
+            )
+        except ValueError as exc:
+            if args.json:
+                print(json.dumps({"ok": False, "message": str(exc)}, indent=2))
+            else:
+                print(str(exc))
+            return 1
+        payload = {
+            "ok": True,
+            "updated_count": updated_count,
+            "updated_scopes": updated_scopes,
+            "session_id": resolved_session_id,
+            "progress_at": progress_at,
+        }
+        if args.json:
+            print(json.dumps(payload, indent=2))
+        else:
+            print(
+                f"Recorded {args.progress_kind} progress on {updated_count} claim(s) "
+                f"for {args.agent}:{args.project} at {progress_at}"
             )
         return 0
 

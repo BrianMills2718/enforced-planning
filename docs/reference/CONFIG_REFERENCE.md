@@ -42,6 +42,17 @@ require tool-specific config keys in `meta-process.yaml`. Codex and Claude Code
 resolve runtime identity through their adapters and populate the same claim and
 tracker contract.
 
+Progress leases are runtime-configured independently of repository policy:
+
+| Environment variable | Type | Default | Read By | Invalid/Absent Behavior |
+|---|---|---|---|---|
+| `COORDINATION_PROGRESS_STALE_MINUTES` | positive number | `60` | `coordination_claims.py` | Absent uses 60 minutes; invalid values fail loud |
+
+This deadline changes report-only `stalled` classification. It does not expire,
+release, prune, or transfer a claim. Use the claim CLI's paired
+`expected_quiet_until` and `quiet_reason` fields for a visible, bounded
+operation-specific exception rather than changing the fleet default.
+
 ## worktrees
 
 | Key | Type | Default | Read By | Default When Absent |

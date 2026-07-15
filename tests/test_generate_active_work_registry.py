@@ -113,6 +113,7 @@ def test_generate_registry_outputs_json_and_markdown(tmp_path: Path) -> None:
     assert payload["health_summary"] == {
         "overall_status": "attention",
         "stale_claim_count": 0,
+        "stalled_claim_count": 0,
         "weak_claim_count": 1,
         "hard_conflict_claim_count": 2,
         "soft_overlap_claim_count": 0,
@@ -281,3 +282,71 @@ def test_generate_registry_marks_stale_session_claims_and_lanes(tmp_path: Path, 
     assert payload["lanes"][0]["liveness_issues"] == ["stale_session_heartbeat"]
     markdown = markdown_output.read_text(encoding="utf-8")
     assert "stale_session_heartbeat" in markdown
+
+
+def test_generate_registry_marks_live_nonadvancing_claim_and_lane_stalled(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    """Registry output should expose progress stalls without declaring liveness stale."""
+    claims_dir = tmp_path / "claims"
+    json_output = tmp_path / "generated" / "runtime" / "active_work_registry.json"
+    markdown_output = tmp_path / "generated" / "runtime" / "active_work_registry.md"
+    worktree_path = tmp_path / "demo" / "worktrees" / "plan-70-progress"
+    worktree_path.mkdir(parents=True)
+    monkeypatch.setenv("COORDINATION_PROGRESS_STALE_MINUTES", "60")
+    _write_claim(
+        claims_dir,
+        "stalled-progress.yaml",
+        {
+            "agent": "codex",
+            "claimed_at": "2026-04-05T12:00:00+00:00",
+            "expires_at": "2099-04-05T13:00:00+00:00",
+            "projects": ["demo"],
+            "scope": "stalled-progress",
+            "intent": "Expose lack of progress",
+            "claim_type": "program",
+            "plan_ref": "Plan #70",
+            "worktree_path": str(worktree_path),
+            "session_id": "codex:test",
+            "heartbeat_at": "2099-04-05T12:00:00+00:00",
+            "progress_at": "2026-04-05T12:00:00+00:00",
+            "progress_kind": "verified_commit",
+            "progress_ref": "abc123",
+            "next_action": "finish or hand off the bounded increment",
+            "expected_quiet_until": "2026-04-05T13:00:00+00:00",
+            "quiet_reason": "bounded repository regression",
+            "status": "active",
+        },
+    )
+
+    assert module.main(
+        [
+            "--claims-dir",
+            str(claims_dir),
+            "--json-output",
+            str(json_output),
+            "--markdown-output",
+            str(markdown_output),
+        ]
+    ) == 0
+
+    payload = json.loads(json_output.read_text(encoding="utf-8"))
+    assert payload["health_summary"]["stalled_claim_count"] == 1
+    assert payload["health_summary"]["stale_claim_count"] == 0
+    assert payload["claims"][0]["health_status"] == "stalled"
+    assert payload["claims"][0]["progress_issues"] == ["stalled_progress_lease"]
+    assert payload["lanes"][0]["health_status"] == "stalled"
+    assert payload["lanes"][0]["progress_issues"] == ["stalled_progress_lease"]
+    assert payload["lanes"][0]["progress_refs"] == ["abc123"]
+    assert payload["lanes"][0]["next_actions"] == ["finish or hand off the bounded increment"]
+    assert payload["lanes"][0]["quiet_intervals"] == [
+        {
+            "expected_quiet_until": "2026-04-05T13:00:00+00:00",
+            "quiet_reason": "bounded repository regression",
+        }
+    ]
+    markdown = markdown_output.read_text(encoding="utf-8")
+    assert "stalled_progress_lease" in markdown
+    assert "finish or hand off the bounded increment" in markdown
+    assert "bounded repository regression" in markdown

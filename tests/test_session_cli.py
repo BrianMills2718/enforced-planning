@@ -9,6 +9,7 @@ import pytest
 import yaml
 
 from enforced_planning import coordination_claims, session_lifecycle
+from scripts import session_status
 
 
 def _git(cwd: Path, *args: str) -> str:
@@ -133,6 +134,56 @@ def test_start_session_creates_tracker_and_updates_claim(tmp_path: Path, monkeyp
     assert loaded_claim.tracker_path == payload["tracker_path"]
     assert Path(payload["tracker_path"]).exists()
     assert payload["plan_ref"] == "Plan #31"
+    status_payload = session_lifecycle.status_sessions(
+        project="enforced-planning",
+        scope="plan-31-session-cli-enforcement",
+    )
+    session = status_payload["sessions"][0]
+    assert session["progress_kind"] == "claim_started"
+    assert session["progress_ref"] == "Plan #31"
+    assert session["next_action"] == "implement session lifecycle CLI and governed repo enforcement"
+    assert session["progress_issues"] == []
+
+
+def test_session_status_cli_explains_stalled_progress(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Text status should give an agent the last event and exact next action."""
+    claims_dir = tmp_path / "claims"
+    claims_dir.mkdir()
+    worktree = tmp_path / "worktree"
+    worktree.mkdir()
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    monkeypatch.setenv("COORDINATION_PROGRESS_STALE_MINUTES", "1")
+    claim = {
+        "agent": "codex",
+        "claimed_at": "2026-04-05T12:00:00+00:00",
+        "expires_at": "2099-04-05T13:00:00+00:00",
+        "projects": ["enforced-planning"],
+        "scope": "plan-70-progress-leases",
+        "intent": "Expose stalled work",
+        "claim_type": "program",
+        "branch": "plan-70-progress-leases",
+        "worktree_path": str(worktree),
+        "session_id": "codex:test",
+        "heartbeat_at": "2099-04-05T12:00:00+00:00",
+        "progress_at": "2026-04-05T12:00:00+00:00",
+        "progress_kind": "verified_commit",
+        "progress_ref": "abc123",
+        "next_action": "finish the focused regression suite",
+        "status": "active",
+    }
+    (claims_dir / "codex.yaml").write_text(yaml.safe_dump(claim), encoding="utf-8")
+
+    assert session_status.main(["--project", "enforced-planning"]) == 0
+
+    output = capsys.readouterr().out
+    assert "[stalled]" in output
+    assert "recovery=record_progress_or_handoff" in output
+    assert "last=verified_commit:abc123" in output
+    assert "next=finish the focused regression suite" in output
 
 
 def test_start_session_requires_plan_ref_without_unplanned_override(
@@ -720,6 +771,7 @@ def test_handoff_session_marks_lane_for_resume(
     assert payload["action"] == "handoff"
     assert status_payload["sessions"][0]["claim_status"] == "handoff"
     assert status_payload["sessions"][0]["recovery_action"] == "resume_or_finish_handoff"
+    assert status_payload["sessions"][0]["progress_kind"] == "handoff"
     assert tracker_payload["tracker"]["current_phase"] == "handoff required"
 
 

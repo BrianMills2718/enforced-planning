@@ -208,6 +208,15 @@ def _upsert_session_claim(
         "expires_at": expires_at,
         "claim_type": existing.claim_type or claim_type,
     }
+    if not existing.progress_at:
+        payload.update(
+            {
+                "progress_at": now.isoformat(),
+                "progress_kind": "claim_started",
+                "progress_ref": plan_ref or scope,
+                "next_action": intent,
+            }
+        )
     _write_claim_payload(path, payload)
     return "updated"
 
@@ -266,6 +275,8 @@ def _recovery_action_for_claim(claim: coordination_claims.ClaimRecord) -> str:
         return "resume_or_finish_handoff"
     if health_status == "stale":
         return "resume_or_abandon_or_prune"
+    if health_status == "stalled":
+        return "record_progress_or_handoff"
     return "continue"
 
 
@@ -722,6 +733,13 @@ def status_sessions(
                 "tracker_path": claim.tracker_path,
                 "claim_status": claim.status,
                 "health_status": coordination_claims.claim_runtime_status(claim),
+                "progress_at": claim.progress_at,
+                "progress_kind": claim.progress_kind,
+                "progress_ref": claim.progress_ref,
+                "next_action": claim.next_action,
+                "expected_quiet_until": claim.expected_quiet_until,
+                "quiet_reason": claim.quiet_reason,
+                "progress_issues": coordination_claims.claim_progress_issues(claim),
                 "current_phase": tracker_section.get("current_phase") if isinstance(tracker_section, dict) else None,
                 "intended_next_phases": tracker_section.get("intended_next_phases") if isinstance(tracker_section, dict) else [],
                 "depends_on_repos": tracker_section.get("depends_on_repos") if isinstance(tracker_section, dict) else [],
@@ -966,6 +984,12 @@ def resume_session(
     payload["session_id"] = resolved_session_id
     payload["heartbeat_at"] = updated_at
     payload["updated_at"] = updated_at
+    payload["progress_at"] = updated_at
+    payload["progress_kind"] = "claim_started"
+    payload["progress_ref"] = claim.plan_ref or claim.scope
+    payload["next_action"] = current_phase
+    payload.pop("expected_quiet_until", None)
+    payload.pop("quiet_reason", None)
     payload["notes"] = note or "session resumed with a fresh runtime attachment"
     _write_claim_payload(claim_file, payload)
 
@@ -1008,6 +1032,12 @@ def handoff_session(
     payload["status"] = "handoff"
     payload["updated_at"] = updated_at
     payload["notes"] = note.strip()
+    payload["progress_at"] = updated_at
+    payload["progress_kind"] = "handoff"
+    payload["progress_ref"] = claim.plan_ref or claim.scope
+    payload["next_action"] = "resume or explicitly close the handed-off lane"
+    payload.pop("expected_quiet_until", None)
+    payload.pop("quiet_reason", None)
     _write_claim_payload(claim_file, payload)
 
     tracker_path_text = claim.tracker_path

@@ -1,6 +1,6 @@
 # Plan #70: Progress Leases And Stalled-Lane Visibility
 
-**Status:** In Progress
+**Status:** Complete (index reconciliation deferred to the overlapping roadmap owner)
 **Type:** implementation
 **Priority:** High
 **phase_ref:** "Coordination runtime maintenance"
@@ -368,6 +368,31 @@ mistaken for enforcement evidence.
 | AC5: legacy claims remain compatible | test | A | Uninstrumented claim keeps prior status. |
 | AC6: operator and agent surfaces show exact recovery context | test | A | JSON, Markdown, and session CLI assertions pass. |
 | AC7: policy and implementation agree | source+test | A | Operator guide/config docs match tested fields and defaults. |
+
+## Coverage
+
+| Requirement | Grade | Evidence class | Evidence |
+|---|---|---|---|
+| AC1: heartbeat and progress are independent | A | source + test | `test_heartbeat_claims_refreshes_codex_session` preserves all progress fields. |
+| AC2: live but non-advancing becomes stalled | A | source + test | Frozen-clock classifier plus registry claim/lane test. |
+| AC3: quiet intervals are visible and bounded | A | source + test | Before/after deadline test plus claim/lane JSON fields. |
+| AC4: stalled state cannot seize ownership | A | source + test | Real YAML-store negative test proves `prune_stale` removes zero stalled-only claims. |
+| AC5: legacy claims remain compatible | A | source + test | Legacy no-progress fixture retains its prior healthy classification. |
+| AC6: exact recovery context reaches operators and agents | A | source + test | Registry Markdown and real session-status text assertions include event/reference/next action. |
+| AC7: policy and implementation agree | A | source + test | Operator guide, configuration reference, classifier tests, doc self-test, and link check agree. |
+
+Coverage distribution: **A 7/7 (100%)** for the bounded report-only slice. The
+focused coordination/session suite passes 58 tests. The full repository run is
+baseline-red: with the repo on `PYTHONPATH`, 637 pass, 1 skips, and eight
+unrelated governed-repo/retired-worktree-layout tests fail identically on
+`main`. Without an installed editable environment, four additional subprocess
+import tests fail; this worktree has no `.venv`. These baseline failures do not
+weaken the Plan 70 criteria, but they prevent claiming a globally green suite.
+
+Negative controls cover heartbeat laundering, wrong-session progress writes,
+expired quiet intervals, stalled-only pruning, and stale-over-stalled
+precedence. No hard enforcement gate was added; Slice 1 remains visibility
+only.
 
 ## Concern Register
 

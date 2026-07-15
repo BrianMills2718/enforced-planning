@@ -211,6 +211,10 @@ def test_create_claim_accepts_program_claim_with_live_metadata(
     assert payload["claim_type"] == "program"
     assert payload["branch"] == "plan-90-coordination-graph-runtime"
     assert payload["session_id"] == "codex-session-1"
+    assert payload["progress_kind"] == "claim_started"
+    assert payload["progress_ref"] == "Plan #62"
+    assert payload["next_action"] == "Broad governance cleanup"
+    assert isinstance(payload["progress_at"], str)
 
 
 def test_create_claim_auto_resolves_codex_session_id(
@@ -265,6 +269,10 @@ def test_heartbeat_claims_refreshes_codex_session(
             "write_paths": ["README.md"],
             "branch": "plan-95-codex-heartbeat",
             "worktree_path": str(tmp_path / "project-meta_worktrees" / "plan-95-codex-heartbeat"),
+            "progress_at": "2026-04-05T12:05:00+00:00",
+            "progress_kind": "verified_commit",
+            "progress_ref": "abc123",
+            "next_action": "run focused verification",
             "status": "active",
         },
     )
@@ -282,6 +290,249 @@ def test_heartbeat_claims_refreshes_codex_session(
     payload = yaml.safe_load((claims_dir / "codex.yaml").read_text(encoding="utf-8"))
     assert payload["session_id"] == "codex:thread-789"
     assert payload["heartbeat_at"] == heartbeat_at
+    assert payload["progress_at"] == "2026-04-05T12:05:00+00:00"
+    assert payload["progress_kind"] == "verified_commit"
+    assert payload["progress_ref"] == "abc123"
+    assert payload["next_action"] == "run focused verification"
+
+
+def test_record_progress_claims_writes_complete_owned_event(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The owning session should record one complete durable progress event."""
+    module = _load_module()
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
+    monkeypatch.setenv("CODEX_THREAD_ID", "thread-progress")
+    _write_claim(
+        claims_dir,
+        "codex.yaml",
+        {
+            "agent": "codex",
+            "claimed_at": "2026-04-05T12:00:00+00:00",
+            "expires_at": "2099-04-05T13:00:00+00:00",
+            "projects": ["project-meta"],
+            "scope": "progress-lease",
+            "intent": "Record progress",
+            "claim_type": "program",
+            "branch": "plan-70-progress",
+            "worktree_path": str(tmp_path / "worktrees" / "plan-70-progress"),
+            "session_id": "codex:thread-progress",
+            "status": "active",
+        },
+    )
+
+    updated_count, updated_scopes, session_id, progress_at = module.record_progress_claims(
+        agent="codex",
+        project="project-meta",
+        progress_kind="blocker",
+        progress_ref="ISSUES.md#coordinate-proof",
+        next_action="repair the coordinate proof before broadening scope",
+        scope="progress-lease",
+    )
+
+    assert updated_count == 1
+    assert updated_scopes == ["progress-lease"]
+    assert session_id == "codex:thread-progress"
+    payload = yaml.safe_load((claims_dir / "codex.yaml").read_text(encoding="utf-8"))
+    assert payload["progress_at"] == progress_at
+    assert payload["progress_kind"] == "blocker"
+    assert payload["progress_ref"] == "ISSUES.md#coordinate-proof"
+    assert payload["next_action"] == "repair the coordinate proof before broadening scope"
+
+
+def test_record_progress_claims_rejects_wrong_session(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A present runtime must not be able to claim another session's advancement."""
+    module = _load_module()
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
+    monkeypatch.setenv("CODEX_THREAD_ID", "intruder")
+    _write_claim(
+        claims_dir,
+        "codex.yaml",
+        {
+            "agent": "codex",
+            "claimed_at": "2026-04-05T12:00:00+00:00",
+            "expires_at": "2099-04-05T13:00:00+00:00",
+            "projects": ["project-meta"],
+            "scope": "owned-lane",
+            "intent": "Protect ownership",
+            "claim_type": "program",
+            "session_id": "codex:owner",
+            "status": "active",
+        },
+    )
+
+    with pytest.raises(ValueError, match="No matching live claim owned by session codex:intruder"):
+        module.record_progress_claims(
+            agent="codex",
+            project="project-meta",
+            progress_kind="new_diagnostic",
+            progress_ref="trace-1",
+            next_action="inspect the trace",
+            scope="owned-lane",
+        )
+
+
+def test_progress_deadline_distinguishes_stalled_from_stale_and_legacy(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Fresh liveness with expired progress stalls; stale liveness still outranks it."""
+    module = _load_module()
+    monkeypatch.setenv("COORDINATION_PROGRESS_STALE_MINUTES", "60")
+    worktree_path = tmp_path / "worktrees" / "plan-70-progress"
+    worktree_path.mkdir(parents=True)
+    common = {
+        "agent": "codex",
+        "project": "demo",
+        "intent": "Exercise progress deadline",
+        "claim_type": "program",
+        "branch": "plan-70-progress",
+        "worktree_path": str(worktree_path),
+        "session_id": "codex:test",
+        "status": "active",
+    }
+    stalled = module.build_candidate_claim(
+        scope="stalled",
+        heartbeat_at="2026-04-05T09:55:00+00:00",
+        progress_at="2026-04-05T08:00:00+00:00",
+        progress_kind="verified_commit",
+        progress_ref="abc123",
+        next_action="finish the bounded repair",
+        **common,
+    )
+    stale = module.build_candidate_claim(
+        scope="stale",
+        heartbeat_at="2026-04-05T07:00:00+00:00",
+        progress_at="2026-04-05T08:00:00+00:00",
+        progress_kind="verified_commit",
+        progress_ref="abc123",
+        next_action="finish the bounded repair",
+        **common,
+    )
+    legacy = module.build_candidate_claim(
+        scope="legacy",
+        heartbeat_at="2026-04-05T09:55:00+00:00",
+        **common,
+    )
+    now = datetime(2026, 4, 5, 10, 0, tzinfo=timezone.utc)
+
+    assert module.claim_progress_issues(stalled, now=now) == ["stalled_progress_lease"]
+    assert module.claim_runtime_status(stalled, now=now) == "stalled"
+    assert module.claim_runtime_status(stale, now=now) == "stale"
+    assert module.claim_progress_issues(legacy, now=now) == []
+    assert module.claim_runtime_status(legacy, now=now) == "healthy"
+
+
+def test_expected_quiet_interval_is_bounded(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A declared long operation should suppress stalls only until its deadline."""
+    module = _load_module()
+    monkeypatch.setenv("COORDINATION_PROGRESS_STALE_MINUTES", "30")
+    claim = module.build_candidate_claim(
+        agent="codex",
+        project="demo",
+        scope="quiet",
+        intent="Run a long test",
+        claim_type="program",
+        branch="plan-70-progress",
+        worktree_path=str(tmp_path / "worktrees" / "plan-70-progress"),
+        session_id="codex:test",
+        heartbeat_at="2026-04-05T09:55:00+00:00",
+        progress_at="2026-04-05T08:00:00+00:00",
+        progress_kind="verified_commit",
+        progress_ref="abc123",
+        next_action="inspect the full-suite result",
+        expected_quiet_until="2026-04-05T10:15:00+00:00",
+        quiet_reason="full repository suite is running",
+        status="active",
+    )
+
+    assert module.claim_progress_issues(
+        claim,
+        now=datetime(2026, 4, 5, 10, 0, tzinfo=timezone.utc),
+    ) == []
+    assert module.claim_progress_issues(
+        claim,
+        now=datetime(2026, 4, 5, 10, 16, tzinfo=timezone.utc),
+    ) == ["stalled_progress_lease"]
+
+
+def test_invalid_progress_deadline_config_fails_loud(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A malformed fleet deadline must not silently change classification policy."""
+    module = _load_module()
+    monkeypatch.setenv("COORDINATION_PROGRESS_STALE_MINUTES", "eventually")
+    claim = module.build_candidate_claim(
+        agent="codex",
+        project="demo",
+        scope="invalid-config",
+        intent="Reject malformed policy",
+        claim_type="program",
+        branch="plan-70-progress",
+        worktree_path=str(tmp_path),
+        session_id="codex:test",
+        progress_at="2026-04-05T08:00:00+00:00",
+        progress_kind="verified_commit",
+        progress_ref="abc123",
+        next_action="fix the configuration",
+        status="active",
+    )
+
+    with pytest.raises(ValueError, match="must be a positive number"):
+        module.claim_progress_issues(
+            claim,
+            now=datetime(2026, 4, 5, 10, 0, tzinfo=timezone.utc),
+        )
+
+
+def test_prune_stale_does_not_remove_stalled_progress_claim(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Progress visibility must never seize or discard claim ownership."""
+    module = _load_module()
+    claims_dir = tmp_path / "claims"
+    worktree = tmp_path / "repo" / "worktrees" / "plan-70-progress"
+    worktree.mkdir(parents=True)
+    monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
+    monkeypatch.setenv("COORDINATION_PROGRESS_STALE_MINUTES", "1")
+    _write_claim(
+        claims_dir,
+        "stalled.yaml",
+        {
+            "agent": "codex",
+            "claimed_at": "2026-04-05T12:00:00+00:00",
+            "expires_at": "2099-04-05T13:00:00+00:00",
+            "projects": ["demo"],
+            "scope": "stalled",
+            "intent": "Preserve stalled work",
+            "claim_type": "program",
+            "worktree_path": str(worktree),
+            "session_id": "codex:test",
+            "heartbeat_at": "2099-04-05T12:00:00+00:00",
+            "progress_at": "2026-04-05T12:00:00+00:00",
+            "progress_kind": "verified_commit",
+            "progress_ref": "abc123",
+            "next_action": "handoff or finish",
+            "status": "active",
+        },
+    )
+
+    removed, scopes = module.prune_stale()
+
+    assert removed == 0
+    assert scopes == []
+    assert (claims_dir / "stalled.yaml").exists()
 
 
 def test_heartbeat_claims_refreshes_claude_code_session(

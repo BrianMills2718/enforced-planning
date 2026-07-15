@@ -53,6 +53,41 @@ an agent:
    occur, verify the affected surface at each increment, and reserve broad
    authority and closeout suites for terminal claims. A check that does not
    protect the current decision is ceremony, not rigor.
+13. **Controls follow an explicit execution profile.** Select controls from the
+   claim, exposure, reversibility, and shared-state effect of the current slice.
+   A specialized procedure cannot silently promote a PoC into production work.
+
+## Execution Profiles
+
+Every non-trivial plan declares one execution profile. The profile controls the
+minimum planning and verification bundle for that slice; it does not describe
+the maturity of the entire repository. A mature product can run a `poc` slice,
+and one plan can promote to a stronger profile only after its stated trigger.
+
+| Profile | Use when | Required now | Normally deferred |
+|---------|----------|--------------|-------------------|
+| `poc` | A reversible experiment must answer one bounded technical or product question | Frozen hypothesis and success criterion, bounded inputs/execution, focused checks, retained readout, and full traces before interpreting LLM output | Global authority expansion, full-suite closeout, generalized infrastructure, deployment, and controls unrelated to the experiment |
+| `pilot` | Representative users, data, or integrations must show that an end-to-end workflow is usable and repeatable | Explicit boundaries and contracts, representative evaluation, replayable evidence, integration checks, and an operator or agent path | Production scale, broad compatibility, and operational controls not exercised by the pilot |
+| `production-internal` | Trusted operators use a long-lived capability in a controlled environment | Reliability, data integrity, recovery, actionable observability, migration/dependency handling, and the concrete access or secret protections required by its real boundaries | Public threat modeling, external compatibility guarantees, release ceremony, and distribution controls without a demonstrated need |
+| `production-external` | Untrusted users, public access, distribution, or shared critical state creates external obligations | The internal-production bundle plus explicit threat model, authentication/authorization where applicable, release and rollback controls, compatibility, and operational response | Only controls shown irrelevant by a recorded boundary analysis |
+
+Profile selection is not a security waiver. Every profile still protects secrets,
+requires confirmation for destructive shared-state actions, fails loudly, retains
+evidence proportional to its claims, and reviews full LLM traces before semantic
+use. Additional security or release work requires a concrete boundary, threat,
+distribution, legal, or recovery reason; “production” alone is not sufficient.
+
+Plans record:
+
+- execution profile and the claim it permits
+- users/exposure, reversibility, and shared-state effect
+- controls required now and controls explicitly deferred
+- the observable trigger for promotion to another profile
+
+When rules conflict, the universal protections above apply first, then the
+declared execution profile, then specialized procedures. A skill may refine how
+an applicable control is performed; it may not expand the slice or import a
+higher profile without naming the failure mode it protects.
 
 ## The Model
 
@@ -304,6 +339,10 @@ trigger, decision protected, and evidence reuse key.
 | **Terminal** | Phase closeout, merge, release, or a claim that the capability works or is done | Full relevant suite, evidence/coverage reconciliation, authority projections, trace review, and cleanup required by the claim | Future production qualities outside the declared stage |
 
 The following rules prevent both under-verification and gate inflation:
+
+- **Apply the declared execution profile first.** Verification lanes schedule
+  the controls required by that profile; they do not add every control available
+  to later profiles. Profile promotion is a separate, explicit decision.
 
 - **Declare a gate-time budget and stopping rule per slice.** State how much
   verification time or how many gate passes are proportionate to the next

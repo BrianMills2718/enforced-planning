@@ -146,9 +146,15 @@ the concrete cases that explain it?
 > claim.
 
 **Current stage:** PoC | Pilot | Product | Production
+**Execution profile:** poc | pilot | production-internal | production-external
 **Next decision:** What this slice must enable someone to decide
 **Gate-time budget:** Maximum verification time or gate passes for this slice
 **Stopping rule:** When to narrow/defer a gate or end an exploratory loop
+
+**Profile basis:** users/exposure, reversibility, shared-state effect, and claim
+**Required now:** Controls that protect this slice's actual decision
+**Explicitly deferred:** Higher-profile controls without a current failure mode
+**Promotion trigger:** Observable condition that requires a different profile
 
 | Lane | Trigger | Checks / Evidence | Evidence Reuse Key | Decision Protected |
 |------|---------|-------------------|--------------------|--------------------|

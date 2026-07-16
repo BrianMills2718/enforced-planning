@@ -1,6 +1,6 @@
 # Plan #100: Native Codex Mailbox Lifecycle Delivery
 
-**Status:** In progress
+**Status:** Complete
 **Goal:** Make persisted cross-agent requests visible to active Codex recipients
 without relying on human relay or optional manual lifecycle commands.
 **Repairs:** Plan #67 C67-3/C67-5/C67-7 verification gap
@@ -86,3 +86,26 @@ Passing proves lifecycle-triggered delivery for installed Claude and Codex
 clients and a live bounded receipt chain. It does not prove interruption of an
 idle unmanaged client, guaranteed latency without lifecycle activity, or that a
 recipient completed the requested work.
+
+## Completion Record
+
+- Framework implementation: `enforced-planning` commits `b6118ec` and
+  `15457d8`; 48 focused tests, Ruff, strict mypy, and framework self-test pass.
+- Inside Success rollout: commit `8806c8e`; bounded installer rerun is
+  idempotent with no blockers.
+- Installed contract chain: message `msg_c187690c4d18985188538afa3a1e8580`
+  produced observation receipt `rcpt_f4ec2a5bff3ff31bb70aa0873923eeb9`
+  and acknowledgement receipt `rcpt_a9b73c2f3b46755ee557e70994f7e7ae`.
+- Real native-client control: Codex thread
+  `019f6c48-2118-78f3-a60f-bf0806e632db` resumed with the reviewed project
+  hook and reported `msg_9358a988aa2e282408ae0fad4f459e55` plus subject
+  `Native resumed-session proof` without tools. Independent canonical status
+  then showed observation receipt `rcpt_29273069ac90797a258e4b7e2014305d`
+  and exact-recipient acknowledgement receipt
+  `rcpt_a4ff204dbc8c8f699aa8e170fc972fd8`.
+- Acknowledged-message negative control: a later direct lifecycle invocation
+  emitted no mailbox context for the acknowledged request.
+
+Users must still trust new or changed project hooks once through Codex `/hooks`.
+An idle unmanaged client is not asynchronously interrupted; delivery occurs on
+the next configured lifecycle event.

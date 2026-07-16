@@ -47,12 +47,16 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     print(f"Live sessions: {payload['session_count']}")
     for session in payload["sessions"]:
+        session_name = session["session_name"] or "<missing-session-name>"
+        current_phase = session["current_phase"] or "<missing-current-phase>"
         print(
             f"- {session['project']}:{session['scope']} "
             f"[{session['health_status']}] "
-            f"{session['session_name']} :: {session['current_phase']} "
+            f"{session_name} :: {current_phase} "
             f"(recovery={session['recovery_action']})"
         )
+        if session["health_issues"]:
+            print(f"  issues={','.join(session['health_issues'])}")
     return 0
 
 

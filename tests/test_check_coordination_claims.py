@@ -356,6 +356,36 @@ def test_claim_liveness_issues_detect_stale_session_heartbeat(
     assert module.claim_runtime_status(claim) == "stale"
 
 
+def test_plan_bound_claim_without_session_contract_is_weak(tmp_path: Path) -> None:
+    """A Plan 0141-shaped path claim must not appear healthy without its session contract."""
+
+    module = _load_module()
+    worktree = tmp_path / "onto-canon6" / "worktrees" / "plan0141-canonical-record-evidence"
+    worktree.mkdir(parents=True)
+    claim = module.build_candidate_claim(
+        agent="codex",
+        project="onto-canon6",
+        scope="plan0141-canonical-record-evidence",
+        intent="Add canonical-record evidence",
+        plan_ref="Plan #0141 Greer row 10302 vertical slice",
+        claim_type="write",
+        write_paths=["src/onto_canon6/document_map/complete_document_semantic_v2.py"],
+        branch="plan0141-canonical-record-evidence",
+        worktree_path=str(worktree),
+        session_id="codex:onto-canon6:plan0141-canonical-record-evidence:20260716",
+        status="active",
+    )
+
+    assert module.claim_health_status(claim) == "weak"
+    assert module.claim_health_issues(claim) == [
+        "missing_repo_root",
+        "missing_session_name",
+        "missing_broader_goal",
+        "missing_tracker_path",
+    ]
+
+
+
 def test_claim_lifecycle_issues_detect_missing_worktree_on_disk(tmp_path: Path) -> None:
     """Claims should become stale when their declared worktree path no longer exists."""
     module = _load_module()

@@ -57,7 +57,11 @@ def test_generate_registry_outputs_json_and_markdown(tmp_path: Path) -> None:
             "plan_ref": "Plan #62",
             "branch": "coordination-a",
             "worktree_path": str(coordination_a),
+            "repo_root": str(repo_root),
             "session_id": "claude-code-session",
+            "session_name": "coordination-v2",
+            "broader_goal": "Coordination V2",
+            "tracker_path": str(tmp_path / "sessions" / "claude.yaml"),
             "status": "active",
         },
     )
@@ -76,7 +80,11 @@ def test_generate_registry_outputs_json_and_markdown(tmp_path: Path) -> None:
             "plan_ref": "Plan #62",
             "branch": "plan-62-coordination-v2",
             "worktree_path": str(coordination_b),
+            "repo_root": str(repo_root),
             "session_id": "codex-session",
+            "session_name": "coordination-v2",
+            "broader_goal": "Coordination V2",
+            "tracker_path": str(tmp_path / "sessions" / "codex.yaml"),
             "status": "active",
         },
     )

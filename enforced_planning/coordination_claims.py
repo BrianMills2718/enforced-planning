@@ -37,6 +37,13 @@ LIVE_STATUSES = {"active", "blocked", "handoff"}
 COMPLETED_STATUSES = {"complete", "completed"}
 CLAIM_TYPES = {"program", "write", "review", "research"}
 STRICT_LIVE_METADATA_CLAIM_TYPES = {"program", "write", "research"}
+CREATION_BLOCKING_HEALTH_ISSUES = {
+    "missing_project",
+    "missing_write_paths",
+    "missing_branch",
+    "missing_worktree_path",
+    "missing_session_id",
+}
 DEFAULT_HEARTBEAT_STALE_MINUTES = 120
 SESSION_ENV_KEYS = {
     "codex": ("CODEX_THREAD_ID",),
@@ -142,6 +149,15 @@ def claim_health_issues(claim: ClaimRecord) -> list[str]:
             issues.append("missing_worktree_path")
         if not claim.session_id:
             issues.append("missing_session_id")
+        if claim.plan_ref and claim.session_id:
+            if not claim.repo_root:
+                issues.append("missing_repo_root")
+            if not claim.session_name:
+                issues.append("missing_session_name")
+            if not claim.broader_goal:
+                issues.append("missing_broader_goal")
+            if not claim.tracker_path:
+                issues.append("missing_tracker_path")
     return issues
 
 
@@ -283,7 +299,11 @@ def claim_runtime_status(claim: ClaimRecord) -> str:
 
 def validate_claim_for_creation(claim: ClaimRecord) -> None:
     """Reject new claims that omit required ownership metadata for live coordination."""
-    issues = claim_health_issues(claim)
+    issues = [
+        issue
+        for issue in claim_health_issues(claim)
+        if issue in CREATION_BLOCKING_HEALTH_ISSUES
+    ]
     if not issues:
         return
     if not claim.is_live():

@@ -127,3 +127,21 @@ def test_require_active_distinguishes_unfrozen_lane(tmp_path: Path) -> None:
     assert check_batch(repo) is None
     with pytest.raises(VerificationBatchError, match="no active"):
         check_batch(repo, require_active=True)
+
+
+def test_source_wrapper_runs_from_in_repo_worktree_layout(tmp_path: Path) -> None:
+    """The agent-facing CLI resolves its package without an editable install."""
+
+    repo = _repo(tmp_path)
+    wrapper = Path(__file__).resolve().parents[1] / "scripts" / "verification_batch.py"
+
+    result = subprocess.run(
+        ["python", str(wrapper), "--repo-root", str(repo), "--json", "check"],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert '"active": false' in result.stdout

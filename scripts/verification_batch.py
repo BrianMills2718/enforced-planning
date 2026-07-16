@@ -9,10 +9,19 @@ from pathlib import Path
 import sys
 from typing import Any
 
-from enforced_planning.verification_batch import VerificationBatchError
-from enforced_planning.verification_batch import check_batch
-from enforced_planning.verification_batch import freeze_batch
-from enforced_planning.verification_batch import thaw_batch
+
+for parent in Path(__file__).resolve().parents:
+    if (parent / "enforced_planning").is_dir():
+        if str(parent) not in sys.path:
+            sys.path.insert(0, str(parent))
+        break
+else:
+    raise RuntimeError("cannot locate installed enforced_planning package")
+
+from enforced_planning.verification_batch import VerificationBatchError  # noqa: E402
+from enforced_planning.verification_batch import check_batch  # noqa: E402
+from enforced_planning.verification_batch import freeze_batch  # noqa: E402
+from enforced_planning.verification_batch import thaw_batch  # noqa: E402
 
 
 def _parser() -> argparse.ArgumentParser:

@@ -515,7 +515,10 @@ def _validate_closeout_preflight(
             default_remote_ref=default_remote_ref,
             default_branch_pushed=default_branch_pushed,
             recovery_ref=None,
-            force_delete_branch=False,
+            # Git's ordinary -d check substitutes a configured feature upstream
+            # for HEAD. The explicit checks above already proved the stronger
+            # authority: this tip is in the pushed canonical default branch.
+            force_delete_branch=delete_branch,
         )
 
     if normalized_disposition not in (

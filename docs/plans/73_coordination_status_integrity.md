@@ -238,6 +238,10 @@ Completed on 2026-07-16.
   current and clean at `9d70cef4`; feature status reports the current remote
   default separately; `session-status` reports the rollout claim healthy; and
   `make session-heartbeat` updated exactly one canonical claim.
+- Final closeout dogfood reproduced a stale feature-upstream edge case after
+  canonical-default merge proof. Closeout now bypasses Git's feature-upstream
+  `branch -d` heuristic only after proving the branch tip is contained in the
+  pushed default branch; the exact divergent-upstream regression test passes.
 - AC1–AC10 achieved grade A: each criterion has source plus deterministic test
   evidence, with the bounded consumer path additionally observed live.
 

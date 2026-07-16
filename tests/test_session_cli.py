@@ -627,6 +627,60 @@ def test_close_session_closes_branch_merged_to_default(
     assert claim_payload["disposition"] == "merged"
 
 
+def test_close_session_deletes_merged_branch_with_stale_feature_upstream(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Explicit default-merge proof must outrank a stale feature upstream."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    repo_root, worktree, branch = _real_repo_with_worktree(tmp_path)
+    _start_real_closeout_claim(
+        repo_root=repo_root,
+        worktree=worktree,
+        branch=branch,
+        claims_dir=claims_dir,
+        trackers_dir=trackers_dir,
+    )
+    _git(repo_root, "merge", "--no-ff", branch, "-m", "merge feature")
+    stale_base = _git(repo_root, "rev-parse", "main~1")
+    stale_upstream_tip = _git(
+        repo_root,
+        "commit-tree",
+        f"{stale_base}^{{tree}}",
+        "-p",
+        stale_base,
+        "-m",
+        "divergent feature upstream",
+    )
+    _git(repo_root, "remote", "add", "origin", str(repo_root))
+    _git(repo_root, "update-ref", f"refs/remotes/origin/{branch}", stale_upstream_tip)
+    _git(repo_root, "config", f"branch.{branch}.remote", "origin")
+    _git(repo_root, "config", f"branch.{branch}.merge", f"refs/heads/{branch}")
+
+    payload = session_lifecycle.close_session(
+        agent="codex",
+        project="enforced-planning",
+        scope=branch,
+    )
+
+    assert payload["action"] == "closed"
+    assert payload["merged_to_default"] is True
+    assert payload["force_delete_branch"] is True
+    assert payload["branch_action"] == "deleted"
+    assert not worktree.exists()
+    branch_check = subprocess.run(
+        ["git", "show-ref", "--verify", f"refs/heads/{branch}"],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert branch_check.returncode != 0
+
+
 def test_close_session_rejects_unpushed_default_branch_before_mutation(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

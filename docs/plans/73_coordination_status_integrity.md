@@ -1,8 +1,9 @@
 # Plan #73: Coordination Status Integrity
 
-**Status:** 🚧 In Progress
+**Status:** ✅ Complete
 **Type:** implementation
 **Priority:** Critical
+**Landscape disposition:** inline
 **Blocked By:** None
 **Blocks:** trustworthy continuous multi-agent execution status
 
@@ -13,6 +14,32 @@ an incomplete plan-bound claim as current, healthy coordination authority.
 
 This plan reuses the existing claim, session, lane-registry, and worktree
 closeout contracts. It does not create a new plan-owner registry.
+
+## User Outcome
+
+When Brian asks whether a plan is stuck or which agent owns it, the ordinary
+status commands answer from current repository authority and complete live
+session records. They do not report an old checkout or an incomplete claim as
+healthy.
+
+## Canonical Behavioral Example
+
+**Starting input/state:** two agents work on Plan 0141 while the canonical
+default checkout may be behind its fetched remote.
+
+**Action:** run repository and session status, then activate the second lane.
+
+**Expected observable result:** current authority is reported exactly; one
+unparented `program` claim is the coordinator; the second claim names it as
+`parent_scope`; and both sessions are healthy.
+
+**Behavioral evidence:** observed real OntoCanon consumer slice.
+
+**Substrate/process evidence:** deterministic stale/current, incomplete-claim,
+hierarchy, concurrent-activation, installer, and consumer tests.
+
+**Failure signal:** a stale checkout exits successfully, an incomplete claim is
+healthy, a heartbeat updates zero claims, or two coordinator roots activate.
 
 ## Gap
 
@@ -36,6 +63,20 @@ References reviewed before implementation:
 - `templates/Makefile.meta`
 - the retained OntoCanon Plan 0141 incomplete claim and 171-commit stale-root
   reproduction recorded in the cross-project investigation
+
+## Landscape And Prior Art
+
+**Alternatives:** add a second plan-owner registry; infer ownership from file
+claims alone; or reuse the existing claim/session hierarchy. The first two were
+rejected because they create split authority or cannot represent coordination.
+
+**Project implications:** canonical claims remain the only mutable ownership
+authority; `program` plus `parent_scope` represents plan coordination; status
+refreshes remote metadata without changing worktree bytes; existing closeout
+owns cleanup.
+
+**Refresh trigger:** reconsider only if coordination moves beyond one shared
+local claim registry or a remote lease service becomes an explicit requirement.
 
 ## Current And Target Delta
 
@@ -141,6 +182,16 @@ Target:
 | AC9 | The sanctioned session-start CLI/Make path can declare `claim_type` and `parent_scope`, while a single standalone session remains backward-compatible. | test | A |
 | AC10 | The derived active-work payload and Markdown identify each normalized plan root and its child scopes without creating mutable hierarchy state. | test | A |
 
+## Plan
+
+### Critical Path Classification
+
+| Increment | Class | Observable result |
+|---|---|---|
+| Freshness and session-health repair | `direct_blocker` | Status can be trusted before substantive work resumes. |
+| Root/child claim hierarchy | `direct_blocker` | Parallel plan ownership is unambiguous. |
+| Installer and OntoCanon adoption | `enabler` | The shared behavior is usable in the affected consumer. |
+
 ## Thin Slices
 
 1. **Freshness instrument:** typed Git status plus the stale/current/unknown
@@ -165,6 +216,30 @@ PYTHONPATH=. pytest -q \
   tests/test_install_governed_repo.py
 python scripts/self_test.py --docs
 ```
+
+## Completion Evidence
+
+Completed on 2026-07-16.
+
+- Shared implementation and the installed-entrypoint repair are on Enforced
+  Planning `main` at `434e487`.
+- The focused repository-status, claim, session, registry, and installer suite
+  passed: 83 tests. The post-repair installer suite passed: 23 tests. Changed
+  code passed Ruff and strict mypy in the shared source environment.
+- The full Enforced Planning suite produced the same 12 pre-existing failures
+  on the Plan 73 branch and untouched `main`; Plan 73 introduced no additional
+  failure. The failures are the recorded environment/baseline issues in agent
+  projection, governed-repo fixture, and worktree-link tests.
+- OntoCanon consumed the exact governed coordination profile in commit
+  `9d70cef4`, now on its `main`. The installer is idempotent with no blockers,
+  all five mirror/import tests pass, the complete OntoCanon pytest suite exits
+  successfully, and changed files pass Ruff.
+- Observed OntoCanon runtime evidence: canonical `make status` reports `main`
+  current and clean at `9d70cef4`; feature status reports the current remote
+  default separately; `session-status` reports the rollout claim healthy; and
+  `make session-heartbeat` updated exactly one canonical claim.
+- AC1–AC10 achieved grade A: each criterion has source plus deterministic test
+  evidence, with the bounded consumer path additionally observed live.
 
 ## Rollback
 

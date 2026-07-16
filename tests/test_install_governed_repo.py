@@ -226,14 +226,15 @@ def test_coordination_messages_only_rollout_is_bounded_runnable_and_idempotent(
     assert written.returncode == 0, written.stdout + written.stderr
     for relative in MAILBOX_ROLLOUT_PATHS:
         assert (tmp_path / relative).exists()
-    help_result = subprocess.run(
-        [sys.executable, str(tmp_path / "scripts/meta/coordination_messages.py"), "--help"],
-        cwd=str(tmp_path),
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert help_result.returncode == 0, help_result.stdout + help_result.stderr
+    for wrapper in ("coordination_inbox.py", "coordination_messages.py"):
+        help_result = subprocess.run(
+            [sys.executable, str(tmp_path / "scripts/meta" / wrapper), "--help"],
+            cwd=str(tmp_path),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert help_result.returncode == 0, help_result.stdout + help_result.stderr
 
     repeat = _run(
         "--repo-root",
@@ -296,14 +297,15 @@ def test_coordination_messages_only_supports_upstream_bootstrap_consumers(
     action_paths = {action.split(":", 1)[1] for action in payload["actions"]}
     assert action_paths == MAILBOX_COMMON_ROLLOUT_PATHS
     assert not (tmp_path / "enforced_planning").exists()
-    help_result = subprocess.run(
-        [sys.executable, str(tmp_path / "scripts/meta/coordination_inbox.py"), "--help"],
-        cwd=str(tmp_path),
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert help_result.returncode == 0, help_result.stdout + help_result.stderr
+    for wrapper in ("coordination_inbox.py", "coordination_messages.py"):
+        help_result = subprocess.run(
+            [sys.executable, str(tmp_path / "scripts/meta" / wrapper), "--help"],
+            cwd=str(tmp_path),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert help_result.returncode == 0, help_result.stdout + help_result.stderr
 
 
 def test_relationship_context_only_rollout_is_bounded_and_runnable(tmp_path: Path) -> None:

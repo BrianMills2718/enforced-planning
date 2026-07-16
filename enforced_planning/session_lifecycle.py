@@ -675,6 +675,12 @@ def heartbeat_session(
         scope=scope,
         branch=branch,
     )
+    if updated_count == 0:
+        raise ValueError(
+            "Heartbeat matched no live claim for "
+            f"agent={agent}, project={project}, scope={scope or '<any>'}, "
+            f"branch={branch or '<any>'}, session_id={resolved_session_id}."
+        )
     tracker_paths_updated: list[str] = []
     for claim in _iter_matching_live_claims(
         agent=agent,

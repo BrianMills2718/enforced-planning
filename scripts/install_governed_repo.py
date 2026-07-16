@@ -68,6 +68,7 @@ SYNC_SUPPORT_FILES: dict[str, str] = {
     "enforced_planning/notebook_registry_validation.py": "enforced_planning/notebook_registry_validation.py",
     "enforced_planning/plan_validation.py": "enforced_planning/plan_validation.py",
     "enforced_planning/push_safety.py": "enforced_planning/push_safety.py",
+    "enforced_planning/repository_status.py": "enforced_planning/repository_status.py",
     "enforced_planning/session_contracts.py": "enforced_planning/session_contracts.py",
     "enforced_planning/session_lifecycle.py": "enforced_planning/session_lifecycle.py",
     "enforced_planning/worktree_lifecycle.yaml": "enforced_planning/worktree_lifecycle.yaml",
@@ -81,6 +82,7 @@ SYNC_SUPPORT_FILES: dict[str, str] = {
     "scripts/meta/session_heartbeat.py": "scripts/session_heartbeat.py",
     "scripts/meta/session_start.py": "scripts/session_start.py",
     "scripts/meta/session_status.py": "scripts/session_status.py",
+    "scripts/meta/project_status.py": "scripts/project_status.py",
     "scripts/meta/session_resume.py": "scripts/session_resume.py",
     "scripts/coordination_inbox.py": "scripts/coordination_inbox.py",
     "scripts/coordination_hook.py": "scripts/coordination_hook.py",
@@ -121,6 +123,7 @@ WORKTREE_ONLY_SYNC_SUPPORT_FILES: dict[str, str] = {
     "enforced_planning/coordination_messages.py": "enforced_planning/coordination_messages.py",
     "enforced_planning/doc_authority.py": "enforced_planning/doc_authority.py",
     "enforced_planning/push_safety.py": "enforced_planning/push_safety.py",
+    "enforced_planning/repository_status.py": "enforced_planning/repository_status.py",
     "enforced_planning/session_contracts.py": "enforced_planning/session_contracts.py",
     "enforced_planning/session_lifecycle.py": "enforced_planning/session_lifecycle.py",
     "enforced_planning/verification_batch.py": "enforced_planning/verification_batch.py",
@@ -132,6 +135,7 @@ WORKTREE_ONLY_SYNC_SUPPORT_FILES: dict[str, str] = {
     "scripts/meta/session_heartbeat.py": "scripts/session_heartbeat.py",
     "scripts/meta/session_start.py": "scripts/session_start.py",
     "scripts/meta/session_status.py": "scripts/session_status.py",
+    "scripts/meta/project_status.py": "scripts/project_status.py",
     "scripts/meta/session_resume.py": "scripts/session_resume.py",
     "scripts/meta/verification_batch.py": "scripts/verification_batch.py",
     "scripts/coordination_inbox.py": "scripts/coordination_inbox.py",
@@ -394,6 +398,38 @@ def _sync_makefile_worktree_block(current_makefile: str) -> tuple[str, str | Non
     return updated + "\n", "append:Makefile.worktree"
 
 
+def _sync_makefile_status_target(
+    current_makefile: str,
+) -> tuple[str, str | None, str | None]:
+    """Replace the exact legacy status recipe with fail-closed freshness status."""
+
+    canonical_lines = [
+        "PROJECT_STATUS_PYTHON ?= $(if $(strip $(PYTHON)),$(PYTHON),$(if $(wildcard .venv/bin/python),.venv/bin/python,python3))",
+        "PROJECT_STATUS_SCRIPT ?= scripts/meta/project_status.py",
+        "status:  ## Verify repository authority freshness and show branch status",
+        "\t@$(PROJECT_STATUS_PYTHON) $(PROJECT_STATUS_SCRIPT) --repo-root .",
+    ]
+    canonical = "\n".join(canonical_lines)
+    if canonical in current_makefile:
+        return current_makefile, None, None
+
+    lines = current_makefile.splitlines()
+    status_indexes = [index for index, line in enumerate(lines) if line.startswith("status:")]
+    if not status_indexes:
+        prefix = current_makefile.rstrip()
+        updated = f"{prefix}\n\n{canonical}\n" if prefix else f"{canonical}\n"
+        return updated, "append:Makefile.status", None
+    if len(status_indexes) != 1:
+        return current_makefile, None, f"multiple status Make targets: {len(status_indexes)}"
+
+    index = status_indexes[0]
+    legacy_recipe = "\t@git status --short --branch"
+    if index + 1 >= len(lines) or lines[index + 1] != legacy_recipe:
+        return current_makefile, None, "unrecognized status Make target; refusing to overwrite"
+    lines[index : index + 2] = canonical_lines
+    return "\n".join(lines).rstrip() + "\n", "sync:Makefile.status", None
+
+
 def _plan_static_support(
     repo_root: Path,
     *,
@@ -467,6 +503,8 @@ def _plan_static_support(
             file_writes[makefile_path] = with_worktree
     else:
         current_makefile = makefile_path.read_text(encoding="utf-8")
+        makefile_action: str | None = None
+        status_action: str | None = None
         if relationship_context_only:
             synced_makefile, makefile_action, makefile_blocker = (
                 _sync_makefile_relationship_block(current_makefile)
@@ -474,11 +512,21 @@ def _plan_static_support(
             if makefile_blocker:
                 blockers.append(makefile_blocker)
         else:
-            synced_makefile, makefile_action = _sync_makefile_worktree_block(
+            status_synced, status_action, status_blocker = _sync_makefile_status_target(
                 current_makefile
             )
+            if status_blocker:
+                blockers.append(status_blocker)
+                synced_makefile, makefile_action = current_makefile, None
+            else:
+                synced_makefile, makefile_action = _sync_makefile_worktree_block(
+                    status_synced
+                )
+                if status_action:
+                    actions.append(status_action)
         if makefile_action:
             actions.append(makefile_action)
+        if makefile_action or status_action:
             file_writes[makefile_path] = synced_makefile
 
     return InstallPlan(

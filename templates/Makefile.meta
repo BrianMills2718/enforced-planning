@@ -11,8 +11,10 @@ PR_AUTO_EXPECTED_REPO ?= $(notdir $(CURDIR))
 # --- Session Start ---
 .PHONY: status
 
-status:  ## Show git status
-	@git status --short --branch
+PROJECT_STATUS_PYTHON ?= $(if $(strip $(PYTHON)),$(PYTHON),$(if $(wildcard .venv/bin/python),.venv/bin/python,python3))
+PROJECT_STATUS_SCRIPT ?= scripts/meta/project_status.py
+status:  ## Verify repository authority freshness and show branch status
+	@$(PROJECT_STATUS_PYTHON) $(PROJECT_STATUS_SCRIPT) --repo-root .
 
 # --- During Implementation ---
 .PHONY: test test-quick check check-agents-sync

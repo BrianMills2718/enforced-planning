@@ -34,6 +34,14 @@
   negative fixture cases pass 9 focused tests; Ruff and strict mypy pass. This
   is **A/source + both-sign test** evidence for structural conformance only;
   usefulness and freshness resolution remain open for the report-only pilot.
+- **Slice 2 — implemented; integration open (2026-07-16):** shared-skill commit
+  `3b673557fe23948528ed3cf7441b29f6eb2a2eae` preserves both skill missions and trigger descriptions while
+  correcting exhaustive-relationship and universal-concern ownership claims,
+  adding reciprocal `RoadmapGoalHandoff` / `DesignPacketResult` guidance, and
+  adding focused regression tests. Both skill validators and all 20 repository
+  behavior tests pass. The feature branch is pushed but not integrated; the
+  live cross-client sync gate correctly remains pointed at canonical `main` and
+  is therefore not evidence for this unmerged branch.
 
 ---
 

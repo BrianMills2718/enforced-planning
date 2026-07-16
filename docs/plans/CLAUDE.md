@@ -71,6 +71,7 @@ See `ROADMAP.md` for the full phase map and recommended priority order.
 | 67 | Cross-Client Mailbox and Acknowledgement (`67_cross_client_mailbox_and_acknowledgement.md`) | High | ✅ Complete | Trustworthy Claude Code ↔ Codex coordination without human copy/paste |
 | 68 | Bounded Mailbox Fleet Rollout (`68_bounded_mailbox_fleet_rollout.md`) | High | ✅ Complete | Mailbox adoption without unrelated governance drift |
 | 71 | Effective-Policy Resolution Pilot (`71_effective-policy-resolution-pilot.md`) | High | 📋 Planned | truthful project policy resolution, explanation, and staged enforcement |
+| 72 | Engineering Control-Plane System Model and Planning Handoff (`72_engineering-control-plane-system-model-and-planning-handoff.md`) | High | 🚧 In Progress | explicit roadmap-to-design transport and bounded skill alignment |
 | 100 | Native Codex Mailbox Lifecycle Delivery (`100_codex_mailbox_lifecycle_delivery.md`) | Critical | ✅ Complete | reliable request observation without human relay |
 
 ## Status Key

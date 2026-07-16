@@ -257,6 +257,21 @@ def test_validate_plan_module_uses_repo_root_not_scripts_dir() -> None:
     assert file_context_module.REPO_ROOT == REPO_ROOT
 
 
+def test_parse_plan_status_strips_markdown_emphasis() -> None:
+    module = _load_module()
+
+    cases = {
+        "# Plan\n**Status:** Working plan\n": "Working plan",
+        "# Plan\n**Status**: Complete\n": "Complete",
+        "# Plan\n*Status:* Draft\n": "Draft",
+        "# Plan\nStatus: Planned\n": "Planned",
+    }
+
+    for content, expected in cases.items():
+        _, status = module.parse_plan_status(content)
+        assert status == expected
+
+
 def test_validate_plan_reports_research_citation_warnings(tmp_path: Path) -> None:
     module = _load_module()
     plan_file = tmp_path / "05_sample.md"

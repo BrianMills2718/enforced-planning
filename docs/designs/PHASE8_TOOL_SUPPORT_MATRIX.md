@@ -21,8 +21,8 @@ Define one support-tier vocabulary for `enforced-planning` so "portable" and
 
 | Tool / Surface Class | Tier | Notes |
 |----------------------|------|-------|
-| Claude Code | `native-interactive` | Canonical read-gating path via `.claude/hooks/` |
-| Terminal/CLI agents that can read repo files and run scripts | `portable-governed` | Use `AGENTS.md`, plan docs, and deterministic validators |
+| Claude Code | `native-interactive` | Canonical read-gating and read-boundary mailbox polling via `.claude/hooks/`; no arbitrary-turn interruption claim |
+| Codex and terminal/CLI agents that can read repo files and run scripts | `portable-governed` | Use `AGENTS.md`, plan docs, deterministic validators, and lifecycle-polled mailbox commands |
 | Generated `AGENTS.md` consumers without hook parity | `portable-governed` | Governance is portable, but interactive read-gating is not |
 | `install.sh --full` / `install.sh --pre-commit` rollout | `legacy-compatible` | Compatibility surfaces, not canonical sync authority |
 | Tools without documented integration evidence | `unsupported` | Do not claim support until evidence is committed |
@@ -37,6 +37,7 @@ Define one support-tier vocabulary for `enforced-planning` so "portable" and
 | canonical installer / audit path | yes | yes | partial | no claim |
 | interactive read-gating parity | yes | no | partial/legacy | no |
 | semantic review workflow | source-repo CLI | source-repo CLI | legacy wrapper possible | no claim |
+| canonical mailbox send/poll/acknowledge | lifecycle + Claude read hook | lifecycle/CLI polling | JSON-mailbox redirect only | no claim |
 
 ## Promotion Rules
 

@@ -28,6 +28,8 @@ from enforced_planning import coordination_claims
 SCHEMA_VERSION: Literal["1.0"] = "1.0"
 DEFAULT_TTL_SECONDS = 86_400
 MAX_NOTE_LENGTH = 2_000
+DEFAULT_NOTICE_BODY_LENGTH = 500
+DEFAULT_NOTICE_MESSAGE_LIMIT = 20
 MessageState = Literal["persisted", "runtime_accepted", "observed", "acknowledged", "expired"]
 
 
@@ -327,6 +329,16 @@ class AcknowledgementResult(StrictContract):
     receipt_path: str = Field(min_length=1, description="Evidence path to the canonical acknowledgement receipt.")
     status: MessageStatusView = Field(description="Status projected after appending the receipt.")
     idempotent_replay: bool = Field(description="Whether an identical receipt already existed.")
+
+
+class SessionInboxNotice(StrictContract):
+    """Compact agent-facing projection of one lifecycle mailbox poll."""
+
+    session_id: str = Field(min_length=1, description="Canonical session identity whose inbox was polled.")
+    project: str = Field(min_length=1, description="Project filter applied to the poll.")
+    active_count: int = Field(ge=0, description="Number of non-expired messages visible to the session.")
+    message_ids: tuple[str, ...] = Field(description="Canonical active message IDs in creation order.")
+    summary: str = Field(description="Bounded text suitable for injection into an agent lifecycle response.")
 
 
 def _canonical_json(value: Any) -> bytes:
@@ -703,6 +715,72 @@ def default_message_root(claims_dir: Path | None = None) -> Path:
     """Derive the mailbox authority beside the configured canonical claims directory."""
 
     return (claims_dir or coordination_claims.CLAIMS_DIR).expanduser().resolve().parent / "messages-v1"
+
+
+def poll_session_inbox(
+    *,
+    agent: str,
+    project: str,
+    session_id: str | None = None,
+    observe: bool = True,
+    claims_dir: Path | None = None,
+    root: Path | None = None,
+    max_body_chars: int = DEFAULT_NOTICE_BODY_LENGTH,
+    max_messages: int = DEFAULT_NOTICE_MESSAGE_LIMIT,
+) -> SessionInboxNotice:
+    """Resolve one live agent session and return an agent-visible mailbox notice.
+
+    Lifecycle adapters call this only after their claim is live. Observation
+    evidence therefore means the notice reached an agent-facing command result,
+    not merely that a background process scanned storage.
+    """
+
+    if max_body_chars < 1 or max_messages < 1:
+        raise ValueError("max_body_chars and max_messages must be positive")
+    resolved_session_id = coordination_claims.resolve_session_id(agent, session_id)
+    if not resolved_session_id:
+        raise UnknownSessionError(
+            f"Unable to resolve a canonical session ID for agent {agent!r}; "
+            "pass session_id or run from a supported client runtime"
+        )
+    resolved_claims_dir = (claims_dir or coordination_claims.CLAIMS_DIR).expanduser().resolve()
+    store = CoordinationMessageStore(
+        root=root or default_message_root(resolved_claims_dir),
+        claims_dir=resolved_claims_dir,
+    )
+    result = store.poll(
+        PollMessagesRequest(
+            current_session_id=resolved_session_id,
+            project=project,
+            observe=observe,
+        )
+    )
+    active = tuple(view for view in result.messages if not view.expired)
+    if active:
+        displayed = active[:max_messages]
+        rendered_messages: list[str] = []
+        for view in displayed:
+            content = view.message.body or f"content_ref={view.message.content_ref}"
+            compact_content = " ".join(content.split())
+            if len(compact_content) > max_body_chars:
+                compact_content = compact_content[: max_body_chars - 1] + "…"
+            rendered_messages.append(
+                f"{view.message.message_id} [{view.message.kind}] "
+                f"{view.message.subject}: {compact_content}"
+            )
+        details = "; ".join(rendered_messages)
+        remainder = len(active) - len(displayed)
+        suffix = f"; {remainder} more not shown" if remainder else ""
+        summary = f"coordination mailbox: {len(active)} active message(s): {details}{suffix}"
+    else:
+        summary = "coordination mailbox: no active messages"
+    return SessionInboxNotice(
+        session_id=resolved_session_id,
+        project=project,
+        active_count=len(active),
+        message_ids=tuple(view.message.message_id for view in active[:max_messages]),
+        summary=summary,
+    )
 
 
 def _request_json(raw: str) -> str:

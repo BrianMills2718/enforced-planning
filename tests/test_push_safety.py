@@ -179,11 +179,11 @@ def test_create_review_claim_uses_target_branch_as_parent_scope(
     assert claim_payload["write_paths"] == ["src/demo.py", "tests/test_demo.py"]
 
 
-def test_route_concern_uses_local_message_when_no_pr_exists(
+def test_route_concern_uses_canonical_mailbox_when_no_pr_exists(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Unpublished branches should receive concerns through the local inbox."""
+    """Unpublished branches should receive concerns through the canonical mailbox."""
 
     repo_root = tmp_path / "demo"
     _init_git_repo(repo_root)
@@ -191,6 +191,23 @@ def test_route_concern_uses_local_message_when_no_pr_exists(
     claims_dir = tmp_path / "claims"
     monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
     monkeypatch.setattr(concern_routing, "_open_pr_for_branch", lambda repo_root, branch: None)
+    monkeypatch.setenv("CODEX_THREAD_ID", "sender-123")
+    _write_claim(
+        claims_dir,
+        "sender.yaml",
+        {
+            "agent": "codex",
+            "claimed_at": "2026-04-09T10:00:00+00:00",
+            "expires_at": "2099-04-09T11:00:00+00:00",
+            "projects": ["demo"],
+            "scope": "review-lane",
+            "intent": "Review target lane",
+            "claim_type": "program",
+            "branch": "review-lane",
+            "session_id": "codex:sender-123",
+            "status": "active",
+        },
+    )
     _write_claim(
         claims_dir,
         "target.yaml",
@@ -205,6 +222,7 @@ def test_route_concern_uses_local_message_when_no_pr_exists(
             "branch": "plan-99-target",
             "worktree_path": str(tmp_path / "demo_worktrees" / "plan-99-target"),
             "session_name": "target-lane-session",
+            "session_id": "claude-code:target-456",
             "status": "active",
         },
     )
@@ -219,10 +237,49 @@ def test_route_concern_uses_local_message_when_no_pr_exists(
     )
 
     assert payload["ok"]
-    assert payload["route"] == "local_message"
-    inbox_file = Path(payload["destination"])
-    assert inbox_file.exists()
-    assert "Boundary concern" in inbox_file.read_text(encoding="utf-8")
+    assert payload["route"] == "coordination_mailbox"
+    assert payload["recipient"] == "claude-code:target-456"
+    assert payload["evidence_state"] == "persisted"
+    message_file = Path(payload["destination"])
+    assert message_file.exists()
+    assert "Boundary concern" in message_file.read_text(encoding="utf-8")
+    assert not (repo_root / ".claude" / "messages").exists()
+
+
+def test_route_concern_labels_pr_comment_as_fallback_publication(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A successful PR comment must never masquerade as mailbox observation."""
+
+    repo_root = tmp_path / "demo"
+    _init_git_repo(repo_root)
+    monkeypatch.setattr(
+        concern_routing,
+        "_open_pr_for_branch",
+        lambda repo_root, branch: {
+            "number": 42,
+            "url": "https://example.invalid/pull/42",
+        },
+    )
+    monkeypatch.setattr(
+        concern_routing,
+        "_run_gh",
+        lambda repo_root, args: subprocess.CompletedProcess(args=args, returncode=0, stdout="", stderr=""),
+    )
+
+    payload = concern_routing.route_concern(
+        repo_root=repo_root,
+        agent="codex",
+        project="demo",
+        target_branch="published-lane",
+        subject="Review concern",
+        content="Please inspect the boundary.",
+    )
+
+    assert payload["route"] == "pr_comment"
+    assert payload["evidence_state"] == "fallback_published"
+    assert payload["message_id"] is None
 
 
 def test_load_active_decisions_ignores_prefix_noise(monkeypatch: pytest.MonkeyPatch) -> None:

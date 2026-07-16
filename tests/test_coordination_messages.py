@@ -29,6 +29,7 @@ from enforced_planning.coordination_messages import (
     PersistedMessageResult,
     RecordCollisionError,
     SendMessageRequest,
+    SessionInboxNotice,
     UnknownSessionError,
     WrongRecipientError,
 )
@@ -332,6 +333,7 @@ def test_public_contract_fields_have_decode_time_descriptions() -> None:
         PersistedMessageResult,
         MessagePollResult,
         AcknowledgementResult,
+        SessionInboxNotice,
     )
     missing = [
         f"{model.__name__}.{name}"
@@ -354,6 +356,43 @@ def test_legacy_markdown_inbox_is_not_consulted(
     (legacy / "fake.md").write_text("status: acknowledged\n", encoding="utf-8")
     result = store.poll(PollMessagesRequest(current_session_id=CLAUDE_SESSION, as_of=NOW))
     assert result.messages == ()
+
+
+@pytest.mark.parametrize(
+    "script_path",
+    [
+        "scripts/worktree-coordination/send_message.py",
+        "scripts/worktree-coordination/check_messages.py",
+    ],
+)
+def test_legacy_markdown_commands_are_fail_loud_tombstones(script_path: str) -> None:
+    """No supported command may continue writing or mutating the retired authority."""
+
+    result = subprocess.run(
+        ["python", script_path],
+        cwd=Path(__file__).resolve().parents[1],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 2
+    assert "Legacy Markdown" in result.stderr
+
+
+def test_claude_hook_paths_never_scan_the_legacy_markdown_inbox() -> None:
+    """Current and compatibility hooks must share the JSON mailbox authority."""
+
+    repo_root = Path(__file__).resolve().parents[1]
+    hook_paths = (
+        repo_root / "hooks/claude/notify-coordination-messages.sh",
+        repo_root / "hooks/claude/worktree-coordination/check-inbox.sh",
+        repo_root / "hooks/claude/worktree-coordination/notify-inbox-startup.sh",
+    )
+    for path in hook_paths:
+        content = path.read_text(encoding="utf-8")
+        assert ".claude/messages" not in content
+        assert "coordination_inbox.py" in content
+        assert "git worktree list --porcelain" in content
 
 
 @pytest.mark.parametrize("script_path", ["scripts/coordination_messages.py", "scripts/meta/coordination_messages.py"])
@@ -386,3 +425,40 @@ def test_json_cli_runs_the_same_package_send_path(
     payload = json.loads(result.stdout)
     assert payload["message"]["recipient_session_id"] == CLAUDE_SESSION
     assert Path(payload["message_path"]).is_file()
+
+
+def test_agent_inbox_cli_injects_notice_and_observation_evidence(
+    mailbox: tuple[CoordinationMessageStore, Path, Path],
+) -> None:
+    """A client-facing poll must expose the message and append exact observation evidence."""
+
+    store, claims_dir, root = mailbox
+    persisted = store.send(_send_request(idempotency_key="notice"))
+    result = subprocess.run(
+        [
+            "python",
+            "scripts/coordination_inbox.py",
+            "--agent",
+            "claude-code",
+            "--project",
+            "enforced-planning",
+            "--session-id",
+            CLAUDE_SESSION,
+            "--claims-dir",
+            str(claims_dir),
+            "--root",
+            str(root),
+            "--json",
+        ],
+        cwd=Path(__file__).resolve().parents[1],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr or result.stdout
+    payload = json.loads(result.stdout)
+    assert payload["message_ids"] == [persisted.message.message_id]
+    assert "Narrow the docs claim" in payload["summary"]
+    status = store.status(MessageStatusRequest(message_id=persisted.message.message_id))
+    assert status.state == "observed"
+    assert len(status.receipt_paths) == 1

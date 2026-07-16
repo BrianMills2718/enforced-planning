@@ -79,6 +79,7 @@ def main(argv: list[str] | None = None) -> int:
             f"{payload['action']}: {payload['session_name']} "
             f"({payload['broader_goal']}) -> {payload['tracker_path']}"
         )
+        print(payload["coordination_mailbox"]["summary"])
     return 0
 
 

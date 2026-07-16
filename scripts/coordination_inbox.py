@@ -11,7 +11,6 @@ from pathlib import Path
 
 def _bootstrap_package() -> None:
     """Load a local installed package or the target repo's upstream bootstrap."""
-
     current = Path(__file__).resolve()
     for parent in current.parents:
         if (parent / "enforced_planning").is_dir():
@@ -40,7 +39,6 @@ from enforced_planning import coordination_messages  # noqa: E402
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     """Parse an agent-drivable inbox poll command."""
-
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--agent", required=True)
     parser.add_argument("--project", required=True)
@@ -54,7 +52,6 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     """Poll, optionally append observation evidence, and render the notice."""
-
     args = parse_args(argv)
     try:
         notice = coordination_messages.poll_session_inbox(

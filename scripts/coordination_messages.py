@@ -9,7 +9,6 @@ from pathlib import Path
 
 def _bootstrap_package() -> None:
     """Load a local installed package or the target repo's upstream bootstrap."""
-
     current = Path(__file__).resolve()
     for parent in current.parents:
         if (parent / "enforced_planning").is_dir():

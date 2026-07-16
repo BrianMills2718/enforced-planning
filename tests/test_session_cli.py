@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import subprocess
+import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
@@ -214,6 +216,78 @@ def test_start_session_creates_parented_child_and_rejects_second_root(
         )
     assert not (claims_dir / "openclaw_onto-canon6_plan0141-second-root.yaml").exists()
     assert not list((trackers_dir / "onto-canon6").glob("*second-root*.yaml"))
+
+
+def test_concurrent_legacy_claim_activation_serializes_hierarchy_refresh(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Legacy reservations must not concurrently refresh into duplicate roots."""
+
+    claims_dir = tmp_path / "claims"
+    claims_dir.mkdir()
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    original_validate = coordination_claims.validate_claim_hierarchy_for_creation
+
+    def delayed_validate(*args, **kwargs):
+        original_validate(*args, **kwargs)
+        time.sleep(0.05)
+
+    monkeypatch.setattr(
+        coordination_claims,
+        "validate_claim_hierarchy_for_creation",
+        delayed_validate,
+    )
+    for index, agent in enumerate(("codex", "claude-code"), start=1):
+        scope = f"plan141-legacy-{index}"
+        payload = {
+            "agent": agent,
+            "projects": ["onto-canon6"],
+            "scope": scope,
+            "intent": "legacy Plan 0141 reservation",
+            "claim_type": "program",
+            "plan_ref": "Plan #0141",
+            "branch": scope,
+            "worktree_path": str(tmp_path / "onto-canon6" / "worktrees" / scope),
+            "status": "active",
+        }
+        path = claims_dir / coordination_claims._claim_filename(
+            agent,
+            "onto-canon6",
+            scope,
+        )
+        path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
+
+    def activate(index: int) -> tuple[bool, str]:
+        agent = ("codex", "claude-code")[index - 1]
+        scope = f"plan141-legacy-{index}"
+        try:
+            result = session_lifecycle._upsert_session_claim(
+                agent=agent,
+                project="onto-canon6",
+                scope=scope,
+                intent="activate legacy Plan 0141 reservation",
+                plan_ref="Plan #0141",
+                repo_root=str(tmp_path / "onto-canon6"),
+                worktree_path=str(tmp_path / "onto-canon6" / "worktrees" / scope),
+                branch=scope,
+                session_id=f"{agent}:session",
+                broader_goal="Complete Plan 0141",
+                session_name=f"plan141-legacy-{index}",
+                tracker_path=str(tmp_path / "sessions" / f"{scope}.yaml"),
+                claim_type="program",
+            )
+        except ValueError as error:
+            return False, str(error)
+        return True, result
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(executor.map(activate, (1, 2)))
+
+    assert sum(1 for ok, _message in results if ok) == 1
+    assert sum("multiple_program_roots" in message for _ok, message in results) == 1
+    claims = coordination_claims.check_claims("onto-canon6")
+    assert sum(claim.session_id is not None for claim in claims) == 1
 
 
 def test_status_sessions_routes_incomplete_plan_claim_to_contract_repair(

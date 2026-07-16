@@ -156,11 +156,20 @@ the concrete cases that explain it?
 **Explicitly deferred:** Higher-profile controls without a current failure mode
 **Promotion trigger:** Observable condition that requires a different profile
 
+**Git dependency posture:** For each moving Git dependency, record the clean
+authorized execution commit, required capability commit/ancestry, observed
+upstream ref and reviewed snapshot, current validation stage
+(`exploratory | integration | release`), drift disposition, and rationale.
+Exploration may report upstream-only movement while execution stays frozen;
+integration requires a relevance judgment and blocks movement beyond its
+reviewed snapshot; release uses an immutable blocking pin. Name the command
+that independently requires the declared stage.
+
 | Lane | Trigger | Checks / Evidence | Evidence Reuse Key | Decision Protected |
 |------|---------|-------------------|--------------------|--------------------|
-| Boundary | Before [irreversible/shared/one-use action], if any | Exact input/config/permission/resource checks | source commit + dependency/config identity | [decision] |
-| Increment | Before intermediate commit | Affected tests and focused type/lint/contract checks | source commit + dependency/config/command identity | [decision] |
-| Terminal | Phase closeout, merge, release, or works/done claim | Full relevant suite, coverage/authority/trace reconciliation, cleanup | source commit + dependency/config/command identity | [decision] |
+| Boundary | Before [irreversible/shared/one-use action], if any | Exact input/config/permission/resource checks | source commit + authorized execution revision + config identity | [decision] |
+| Increment | Before intermediate commit | Affected tests and focused type/lint/contract checks | source commit + authorized execution revision + config/command identity | [decision] |
+| Terminal | Phase closeout, merge, release, or works/done claim | Full relevant suite, dependency relevance, coverage/authority/trace reconciliation, cleanup | source commit + reviewed dependency snapshot/pin + config/command identity | [decision] |
 
 ---
 

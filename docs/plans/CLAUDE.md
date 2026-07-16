@@ -69,7 +69,7 @@ See `ROADMAP.md` for the full phase map and recommended priority order.
 | 63 | Relationship Context and Docstring Wiki (`63_relationship_context_and_docstring_wiki.md`) | Critical | ✅ Complete (report-only rollout; hard enforcement deferred) | reviewed consumer edges and calibrated enforcement |
 | 64 | Requirement-Linked Test Relationships (`64_requirement_linked_test_relationships.md`) | High | ✅ Complete (report-only pilot; enforcement deferred) | reviewed expansion before any consolidation or hard gate |
 | 67 | Cross-Client Mailbox and Acknowledgement (`67_cross_client_mailbox_and_acknowledgement.md`) | High | ✅ Complete | Trustworthy Claude Code ↔ Codex coordination without human copy/paste |
-| 68 | Bounded Mailbox Fleet Rollout (`68_bounded_mailbox_fleet_rollout.md`) | High | 🚧 In Progress | Mailbox adoption without unrelated governance drift |
+| 68 | Bounded Mailbox Fleet Rollout (`68_bounded_mailbox_fleet_rollout.md`) | High | ✅ Complete | Mailbox adoption without unrelated governance drift |
 
 ## Status Key
 

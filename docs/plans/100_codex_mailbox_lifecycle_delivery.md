@@ -61,6 +61,16 @@ Codex UUIDs with `codex:` to match canonical claim identities.
 - acknowledged request is absent from later hook output;
 - installer dry-run may touch only the declared mailbox allowlist.
 
+## Verification Gap Found During Rollout
+
+The first Inside Success rollout exposed that the clean installer fixture had
+preloaded `coordination_claims.py` and the other lifecycle dependencies. A real
+partial local package did not have them, so the installed mailbox CLI failed at
+import time. The installer now owns the complete local dependency closure and
+the fixture starts from the same partial-package condition. This finding is
+retained here because the ecosystem verification-gap log was actively claimed
+by another lane when discovered.
+
 ## Verification
 
 ```bash

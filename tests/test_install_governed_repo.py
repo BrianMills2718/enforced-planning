@@ -50,10 +50,14 @@ MAILBOX_COMMON_ROLLOUT_PATHS = {
 }
 
 MAILBOX_ROLLOUT_PATHS = MAILBOX_COMMON_ROLLOUT_PATHS | {
+    "enforced_planning/coordination_claims.py",
     "enforced_planning/coordination_messages.py",
+    "enforced_planning/doc_authority.py",
     "enforced_planning/push_safety.py",
+    "enforced_planning/session_contracts.py",
     "enforced_planning/session_lifecycle.py",
     "enforced_planning/worktree_lifecycle.yaml",
+    "enforced_planning/worktree_paths.py",
 }
 
 
@@ -147,17 +151,11 @@ def _prepare_relationship_context_target(repo_root: Path) -> None:
 
 
 def _prepare_mailbox_target(repo_root: Path) -> None:
-    """Create the prerequisite governed session substrate without mailbox files."""
+    """Create a partial local package like a real incrementally governed repo."""
 
     _write_minimal_claude(repo_root)
     required = (
         "enforced_planning/__init__.py",
-        "enforced_planning/coordination_claims.py",
-        "enforced_planning/doc_authority.py",
-        "enforced_planning/push_safety.py",
-        "enforced_planning/session_contracts.py",
-        "enforced_planning/worktree_lifecycle.yaml",
-        "enforced_planning/worktree_paths.py",
     )
     for relative in required:
         source = PROJECT_META_ROOT / relative
@@ -301,7 +299,7 @@ def test_coordination_messages_only_supports_upstream_bootstrap_consumers(
     action_paths = {action.split(":", 1)[1] for action in payload["actions"]}
     assert action_paths == MAILBOX_COMMON_ROLLOUT_PATHS
     assert not (tmp_path / "enforced_planning").exists()
-    for wrapper in ("coordination_inbox.py", "coordination_messages.py"):
+    for wrapper in ("coordination_hook.py", "coordination_inbox.py", "coordination_messages.py"):
         help_result = subprocess.run(
             [sys.executable, str(tmp_path / "scripts/meta" / wrapper), "--help"],
             cwd=str(tmp_path),

@@ -172,10 +172,14 @@ COORDINATION_MESSAGES_SHARED_FILES: dict[str, str] = {
 }
 
 COORDINATION_MESSAGES_LOCAL_PACKAGE_FILES: dict[str, str] = {
+    "enforced_planning/coordination_claims.py": "enforced_planning/coordination_claims.py",
     "enforced_planning/coordination_messages.py": "enforced_planning/coordination_messages.py",
+    "enforced_planning/doc_authority.py": "enforced_planning/doc_authority.py",
     "enforced_planning/push_safety.py": "enforced_planning/push_safety.py",
+    "enforced_planning/session_contracts.py": "enforced_planning/session_contracts.py",
     "enforced_planning/session_lifecycle.py": "enforced_planning/session_lifecycle.py",
     "enforced_planning/worktree_lifecycle.yaml": "enforced_planning/worktree_lifecycle.yaml",
+    "enforced_planning/worktree_paths.py": "enforced_planning/worktree_paths.py",
 }
 
 RELATIONSHIP_CONTEXT_TARGETS = (

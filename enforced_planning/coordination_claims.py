@@ -19,12 +19,15 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import fcntl
 import json
 import os
 import posixpath
 import re
 import subprocess
 import sys
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -51,6 +54,22 @@ SESSION_ENV_KEYS = {
     "claude-code": ("CLAUDE_SESSION_ID", "CLAUDE_CODE_SSE_PORT"),
     "openclaw": ("OPENCLAW_SESSION_ID", "OPENCLAW_RUN_ID"),
 }
+
+
+@contextmanager
+def claim_registry_lock() -> Iterator[None]:
+    """Serialize claim check-and-write mutations across local agent processes."""
+
+    claims_dir = CLAIMS_DIR.expanduser().resolve()
+    claims_dir.parent.mkdir(parents=True, exist_ok=True)
+    lock_path = claims_dir.parent / f".{claims_dir.name}.lock"
+    with lock_path.open("a+", encoding="utf-8") as lock_file:
+        lock_path.chmod(0o600)
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
 
 
 @dataclass(frozen=True)
@@ -883,25 +902,26 @@ def create_claim(
     )
     validate_claim_for_creation(candidate)
 
-    active_claims = check_claims(project)
-    validate_claim_hierarchy_for_creation(candidate, active_claims=active_claims)
-    check_result = evaluate_claim(candidate, active_claims=active_claims)
-    if check_result.hard_conflicts:
-        formatted = "; ".join(
-            f"{item.other_agent} ({item.other_scope}: {', '.join(item.overlapping_write_paths)})"
-            for item in check_result.hard_conflicts
-        )
-        return False, f"CONFLICT: active write claim overlap in '{project}' — {formatted}"
+    with claim_registry_lock():
+        active_claims = check_claims(project)
+        validate_claim_hierarchy_for_creation(candidate, active_claims=active_claims)
+        check_result = evaluate_claim(candidate, active_claims=active_claims)
+        if check_result.hard_conflicts:
+            formatted = "; ".join(
+                f"{item.other_agent} ({item.other_scope}: {', '.join(item.overlapping_write_paths)})"
+                for item in check_result.hard_conflicts
+            )
+            return False, f"CONFLICT: active write claim overlap in '{project}' — {formatted}"
 
-    CLAIMS_DIR.mkdir(parents=True, exist_ok=True)
-    filename = _claim_filename(agent, project, scope)
-    claim_payload = candidate.to_dict()
-    claim_payload.pop("source_file", None)
-    claim_payload.pop("project", None)
-    (CLAIMS_DIR / filename).write_text(
-        yaml.safe_dump(claim_payload, default_flow_style=False, sort_keys=False),
-        encoding="utf-8",
-    )
+        CLAIMS_DIR.mkdir(parents=True, exist_ok=True)
+        filename = _claim_filename(agent, project, scope)
+        claim_payload = candidate.to_dict()
+        claim_payload.pop("source_file", None)
+        claim_payload.pop("project", None)
+        (CLAIMS_DIR / filename).write_text(
+            yaml.safe_dump(claim_payload, default_flow_style=False, sort_keys=False),
+            encoding="utf-8",
+        )
     return True, (
         f"Claimed: {agent} → {project}:{scope} "
         f"[{candidate.claim_type}] (expires in {ttl_hours}h)"

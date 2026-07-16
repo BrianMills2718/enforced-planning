@@ -1,6 +1,6 @@
 # Plan #68: Bounded Mailbox Fleet Rollout
 
-**Status:** In Progress
+**Status:** Complete
 **Type:** implementation
 **Priority:** High
 **phase_ref:** "Phase 9 — fleet adoption and framework maintenance"
@@ -53,7 +53,7 @@ bootstrap consumers while rejecting repos with neither substrate.
 | C68-1 | Dry-run changes only the declared mailbox allowlist. | both-sign fixture test | A — exact local/upstream allowlist tests |
 | C68-2 | Write mode installs runnable wrappers and the exact hook/settings entry idempotently. | clean install + repeat test | A — both deployment profiles run and repeat cleanly |
 | C68-3 | A target missing the existing session substrate fails before mutation. | negative test | A — no-local/no-bootstrap target rejects before writes |
-| C68-4 | Project Meta, OntoCanon, and DIGIMON dry-runs show bounded mailbox-only changes, with rollout staged outside active feature lanes. | target dry-run evidence | B — Project Meta 9 changes/no blocker; OntoCanon 13/no blocker; DIGIMON 9 planned changes plus explicit missing-substrate blocker |
+| C68-4 | Project Meta, OntoCanon, and DIGIMON dry-runs show bounded mailbox-only changes, with rollout staged outside active feature lanes. | target dry-run and landed target evidence | A — Project Meta 9-file upstream rollout in PR #76; OntoCanon 13-file local-package rollout in PR #162; DIGIMON 9-file upstream rollout plus its reviewed bootstrap in PR #58 |
 
 ## Failure modes and recovery
 
@@ -94,8 +94,15 @@ if a caller requests a custom directory that the installed registry cannot
 honor. A compatibility test covers the older signature without silently
 ignoring caller configuration.
 
-## Next action
+## Completion record
 
-Land the verified framework profile, then open isolated Project Meta and
-OntoCanon rollout branches. Keep DIGIMON blocked until its owning agent chooses
-local-package or upstream-bootstrap governance adoption.
+Completed on 2026-07-15. Project Meta and DIGIMON use thin upstream bootstrap
+profiles; OntoCanon retains its vendored local package. Both installed mailbox
+CLIs executed against live target sessions, hook/settings syntax passed, and
+each repeat installer run produced zero actions. No feature, ontology,
+retrieval, graph, benchmark, or Foundation-adapter implementation was included.
+
+DIGIMON Plan 123 records its remaining migration boundary: its SQLite registry
+continues to own repo-local plan reservations and active-work navigation, while
+the shared filesystem claim registry owns mailbox recipient identity. The
+mailbox rollout does not claim those authorities are unified.

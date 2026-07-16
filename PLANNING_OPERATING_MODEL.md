@@ -355,6 +355,14 @@ The following rules prevent both under-verification and gate inflation:
 - **Reuse unchanged evidence.** Broad evidence may be reused only when its
   source commit, dependency revision or lock, configuration, and command are
   unchanged. Record those values rather than rerunning a suite by habit.
+- **Freeze terminal verification as an immutable batch.** When a terminal suite
+  or independent review begins, bind the protected decision and command to the
+  exact clean branch head. Reject untracked files by default; any narrowly
+  allowlisted operational path is part of the freeze record. Queue later ready work into the next integration
+  batch; shared-authority ownership is not permission to expand the frozen
+  batch. Reopen only for a blocker in the frozen scope, record why the prior
+  evidence was invalidated, apply the fix, and start a new batch. Never absorb
+  unrelated work and treat repeated full-suite runs as the normal remedy.
 - **Separate executing dependencies from moving upstream refs.** Evidence binds
   to the exact clean revision whose bytes executed and to any required
   capability ancestry. During exploration, later movement of an observed

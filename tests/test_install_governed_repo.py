@@ -482,6 +482,7 @@ def test_install_governed_repo_dry_run_reports_expected_actions(tmp_path: Path) 
     assert "install:enforced_planning/relationship_context.py" in payload["actions"]
     assert "install:enforced_planning/context_packet.py" in payload["actions"]
     assert "install:enforced_planning/impact_obligations.py" in payload["actions"]
+    assert "install:enforced_planning/verification_batch.py" in payload["actions"]
     assert "install:enforced_planning/docstring_wiki.py" in payload["actions"]
     assert "install:enforced_planning/notebook_registry_validation.py" in payload["actions"]
     assert "install:enforced_planning/plan_validation.py" in payload["actions"]
@@ -503,6 +504,7 @@ def test_install_governed_repo_dry_run_reports_expected_actions(tmp_path: Path) 
     assert "install:scripts/meta/relationship_context.py" in payload["actions"]
     assert "install:scripts/meta/context_packet.py" in payload["actions"]
     assert "install:scripts/meta/impact_obligations.py" in payload["actions"]
+    assert "install:scripts/meta/verification_batch.py" in payload["actions"]
     assert "install:scripts/meta/docstring_wiki.py" in payload["actions"]
     assert "install:scripts/meta/render_agents_md.py" in payload["actions"]
     assert "install:scripts/meta/check_agents_sync.py" in payload["actions"]
@@ -566,6 +568,7 @@ def test_install_governed_repo_write_bootstraps_minimum_repo_and_passes_audit(
     assert (tmp_path / "enforced_planning" / "relationship_context.py").exists()
     assert (tmp_path / "enforced_planning" / "context_packet.py").exists()
     assert (tmp_path / "enforced_planning" / "impact_obligations.py").exists()
+    assert (tmp_path / "enforced_planning" / "verification_batch.py").exists()
     assert (tmp_path / "enforced_planning" / "docstring_wiki.py").exists()
     assert (tmp_path / "enforced_planning" / "notebook_registry_validation.py").exists()
     assert (tmp_path / "enforced_planning" / "plan_validation.py").exists()
@@ -597,6 +600,7 @@ def test_install_governed_repo_write_bootstraps_minimum_repo_and_passes_audit(
     assert (tmp_path / "scripts" / "meta" / "relationship_context.py").exists()
     assert (tmp_path / "scripts" / "meta" / "context_packet.py").exists()
     assert (tmp_path / "scripts" / "meta" / "impact_obligations.py").exists()
+    assert (tmp_path / "scripts" / "meta" / "verification_batch.py").exists()
     assert (tmp_path / "scripts" / "meta" / "docstring_wiki.py").exists()
     assert (tmp_path / "scripts" / "meta" / "render_agents_md.py").exists()
     assert (tmp_path / "scripts" / "meta" / "check_agents_sync.py").exists()
@@ -614,6 +618,9 @@ def test_install_governed_repo_write_bootstraps_minimum_repo_and_passes_audit(
     assert "session-close:" in makefile_text
     assert "review-claim:" in makefile_text
     assert "raise-concern:" in makefile_text
+    assert "verification-batch-freeze:" in makefile_text
+    assert "verification-batch-check:" in makefile_text
+    assert "verification-batch-thaw:" in makefile_text
     assert "push-check:" in makefile_text
     assert "scripts/meta/worktree-coordination/../check_coordination_claims.py" in makefile_text
     assert "scripts/meta/worktree-coordination/../session_start.py" in makefile_text

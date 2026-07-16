@@ -165,6 +165,13 @@ integration requires a relevance judgment and blocks movement beyond its
 reviewed snapshot; release uses an immutable blocking pin. Name the command
 that independently requires the declared stage.
 
+**Terminal verification batch:** Before a terminal suite or independent review,
+freeze the clean exact branch head, protected decision, and verification command.
+Reject untracked files unless a narrow operational path is explicitly recorded.
+Queue later ready work behind this batch. If a blocker in the frozen scope
+requires a change, record the invalidation reason, thaw, fix, and open a new
+batch; unrelated scope expansion is not a valid thaw reason.
+
 | Lane | Trigger | Checks / Evidence | Evidence Reuse Key | Decision Protected |
 |------|---------|-------------------|--------------------|--------------------|
 | Boundary | Before [irreversible/shared/one-use action], if any | Exact input/config/permission/resource checks | source commit + authorized execution revision + config identity | [decision] |

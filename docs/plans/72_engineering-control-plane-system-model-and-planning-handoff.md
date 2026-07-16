@@ -17,15 +17,18 @@
 
 ## Progress
 
-- **Slice 0 — implemented; integration open (2026-07-16):** Project Meta commit
-  `21505063dcceec0bce7f0830fc2d03a26c1b489f` adds the seven-system feedback
+- **Slice 0 — complete (2026-07-16):** Project Meta commit
+  `21505063dcceec0bce7f0830fc2d03a26c1b489f` added the seven-system feedback
   model to `vision/02_FRAMEWORK.md`, records the accepted decision and rejected
   alternatives in a distinct ADR, and links the decision through the existing
-  relationship and navigation surfaces. Direct lint, link, authority, generated
-  agent-doc, relationship, and 25 focused tests passed. The branch is pushed but
-  not yet integrated into Project Meta `main`, so AC-1 remains open. The semantic
-  architecture claim remains **D/source + accepted decision** rather than
-  pretending the deterministic checks independently validate its usefulness.
+  relationship and navigation surfaces. Project Meta PR #104 merged as
+  `a027a2bafc420628cddf37067a46392d304de967`. Direct lint, link, authority,
+  generated-agent-doc, relationship, and YAML checks passed after integration;
+  the focused suite reported 26 passed and the two already-recorded retired-
+  worktree fixture failures. AC-1's publication requirement is satisfied. The
+  semantic architecture claim remains **D/source + accepted decision** rather
+  than pretending the deterministic checks independently validate its
+  usefulness.
 - **Slice 1 — complete (2026-07-16):**
   `enforced_planning.planning_handoff` now owns frozen Pydantic records,
   deterministic cross-record identity checks, generated JSON Schemas, and an
@@ -34,23 +37,23 @@
   negative fixture cases pass 9 focused tests; Ruff and strict mypy pass. This
   is **A/source + both-sign test** evidence for structural conformance only;
   usefulness and freshness resolution remain open for the report-only pilot.
-- **Slice 2 — implemented; integration open (2026-07-16):** shared-skill commit
+- **Slice 2 — complete (2026-07-16):** shared-skill commit
   `3b673557fe23948528ed3cf7441b29f6eb2a2eae` preserves both skill missions and trigger descriptions while
   correcting exhaustive-relationship and universal-concern ownership claims,
   adding reciprocal `RoadmapGoalHandoff` / `DesignPacketResult` guidance, and
-  adding focused regression tests. Both skill validators and all 20 repository
-  behavior tests pass. The feature branch is pushed but not integrated; the
-  live cross-client sync gate correctly remains pointed at canonical `main` and
-  is therefore not evidence for this unmerged branch.
+  adding focused regression tests. Agent-skills PR #14 merged as
+  `8e4aaf89937415b95c15a3249cec16b06e1e0888`; both skill validators, all 21
+  repository behavior tests, and the live four-surface skill sync gate pass.
 - **Slice 3 — evaluation corpus implemented; model execution open
   (2026-07-16):** shared-skill commit
   `eaefb826a32d00489732dd520c5872941dae38af` adds reciprocal handoff cases covering a large single-repository
   initiative, a bounded cross-repository change, roadmap output without future
   schemas, exact design consumption, unsupported priority conflict, and
   delta-only roadmap implications. All 21 repository behavior tests and both
-  skill validators pass. This is **A/source + structural test** evidence that
-  the expectations are present and coherent, not a fresh model-behavior score;
-  no score is claimed until the harness runs with a passing positive control.
+  skill validators pass, and the cases are integrated through agent-skills PR
+  #14. This is **A/source + structural test** evidence that the expectations are
+  present and coherent, not a fresh model-behavior score; no score is claimed
+  until the harness runs with a passing positive control.
 
 ---
 

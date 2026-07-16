@@ -188,12 +188,15 @@ def _in_code_block(content: str, pos: int) -> bool:
 
 
 def check_markdown_links(root: Path) -> list[str]:
-    """Verify all relative markdown links resolve to existing files."""
+    """Verify relative links in the current checkout, excluding managed worktrees."""
     errors: list[str] = []
 
     for md_file in root.rglob("*.md"):
-        content = md_file.read_text(errors="replace")
         rel_path = md_file.relative_to(root)
+        if rel_path.parts and rel_path.parts[0] == "worktrees":
+            continue
+
+        content = md_file.read_text(errors="replace")
 
         for match in LINK_RE.finditer(content):
             link_text = match.group(1)

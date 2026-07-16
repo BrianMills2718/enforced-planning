@@ -336,6 +336,45 @@ def plan_generation(
     return actions, file_writes, rendered_settings
 
 
+def plan_coordination_message_generation(
+    target: TargetRepo,
+) -> tuple[list[str], dict[Path, str], str]:
+    """Plan only the mailbox hook, adapters, and one settings entry.
+
+    Fleet rollout uses this bounded profile so adopting coordination messages
+    cannot silently refresh unrelated read-gating or relationship-context files.
+    """
+
+    actions: list[str] = []
+    file_writes: dict[Path, str] = {}
+    for target_relpath, source_relpath in MAILBOX_HOOK_FILES.items():
+        source_path = FRAMEWORK_ROOT / source_relpath
+        target_path = target.root / target_relpath
+        content = source_path.read_text(encoding="utf-8")
+        current = target_path.read_text(encoding="utf-8") if target_path.exists() else None
+        if current != content:
+            actions.append(f"sync:{target_relpath}")
+            file_writes[target_path] = content
+
+    settings = _read_json_file(target.settings_file)
+    read_hooks = _ensure_matcher_block(settings, event_name="PostToolUse", matcher="Read")
+    changed = _ensure_hook_command(
+        read_hooks,
+        MAILBOX_HOOK,
+        after_command="bash .claude/hooks/track-reads.sh",
+    )
+    rendered_settings = _render_settings(settings)
+    current_settings = (
+        target.settings_file.read_text(encoding="utf-8")
+        if target.settings_file.exists()
+        else None
+    )
+    if current_settings != rendered_settings or changed:
+        actions.append("sync:.claude/settings.json")
+        file_writes[target.settings_file] = rendered_settings
+    return actions, file_writes, rendered_settings
+
+
 def apply_generation(target: TargetRepo, file_writes: dict[Path, str]) -> None:
     """Write the generated files to disk."""
 

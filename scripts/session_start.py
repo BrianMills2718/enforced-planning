@@ -51,6 +51,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--allow-parallel", action="store_true")
     parser.add_argument("--session-id")
     parser.add_argument("--session-name")
+    parser.add_argument("--claim-type", choices=["program", "write", "review", "research"])
+    parser.add_argument("--parent-scope")
+    parser.add_argument("--write-path", action="append", default=[])
+    parser.add_argument("--read-path", action="append", default=[])
     parser.add_argument("--next-phase", action="append", default=[])
     parser.add_argument("--depends-on", action="append", default=[])
     parser.add_argument("--stop-condition", action="append", default=[])
@@ -78,6 +82,10 @@ def main(argv: list[str] | None = None) -> int:
         allow_parallel=args.allow_parallel,
         session_id=args.session_id,
         session_name=args.session_name,
+        claim_type=args.claim_type,
+        parent_scope=args.parent_scope,
+        write_paths=args.write_path or None,
+        read_paths=args.read_path or None,
         intended_next_phases=args.next_phase,
         depends_on_repos=args.depends_on,
         requires_shared_infra_changes=args.requires_shared_infra_changes,

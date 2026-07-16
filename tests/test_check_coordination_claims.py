@@ -33,6 +33,36 @@ def _write_claim(claims_dir: Path, name: str, payload: dict) -> None:
     (claims_dir / name).write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
 
 
+def _plan_session_claim(
+    module,
+    *,
+    agent: str,
+    scope: str,
+    claim_type: str,
+    parent_scope: str | None = None,
+    plan_ref: str = "Plan #0141",
+):
+    """Build one complete live claim for hierarchy validation tests."""
+
+    return module.build_candidate_claim(
+        agent=agent,
+        project="onto-canon6",
+        scope=scope,
+        intent=f"work in {scope}",
+        plan_ref=plan_ref,
+        claim_type=claim_type,
+        write_paths=[f"src/{scope}.py"] if claim_type == "write" else [],
+        repo_root="~/projects/onto-canon6",
+        worktree_path=f"~/projects/onto-canon6/worktrees/{scope}",
+        branch=scope,
+        session_name=scope,
+        broader_goal="Complete Plan 0141",
+        tracker_path=f"~/.claude/coordination/sessions/onto-canon6/{scope}.yaml",
+        session_id=f"{agent}:{scope}",
+        parent_scope=parent_scope,
+    )
+
+
 def _init_git_repo(repo_root: Path) -> None:
     """Create a minimal git repo with a configured identity."""
     subprocess.run(["git", "init", "-b", "main", str(repo_root)], check=True, capture_output=True, text=True)
@@ -383,6 +413,80 @@ def test_plan_bound_claim_without_session_contract_is_weak(tmp_path: Path) -> No
         "missing_broader_goal",
         "missing_tracker_path",
     ]
+
+
+def test_parallel_plan_claims_require_one_root_and_parented_children() -> None:
+    """Parallel Plan 0141 lanes should reuse one program root and parent scope."""
+
+    module = _load_module()
+    root = _plan_session_claim(
+        module,
+        agent="codex",
+        scope="plan0141-root",
+        claim_type="program",
+        plan_ref="Plan #0141 complete document graph",
+    )
+    child = _plan_session_claim(
+        module,
+        agent="claude-code",
+        scope="plan0141-review",
+        claim_type="write",
+        parent_scope="plan0141-root",
+        plan_ref="Plan #141 reviewer slice",
+    )
+
+    assert module.normalize_plan_identity(root.plan_ref) == "Plan #141"
+    assert module.claim_hierarchy_issues(root, active_claims=[root, child]) == []
+    assert module.claim_hierarchy_issues(child, active_claims=[root, child]) == []
+
+
+def test_parallel_plan_claims_reject_rootless_duplicate_root_and_wrong_parent() -> None:
+    """Every invalid parallel hierarchy shape should name its exact defect."""
+
+    module = _load_module()
+    write_a = _plan_session_claim(
+        module,
+        agent="codex",
+        scope="plan0141-write-a",
+        claim_type="write",
+    )
+    write_b = _plan_session_claim(
+        module,
+        agent="claude-code",
+        scope="plan0141-write-b",
+        claim_type="write",
+    )
+    assert module.claim_hierarchy_issues(write_a, active_claims=[write_a, write_b]) == [
+        "missing_program_root"
+    ]
+
+    root_a = _plan_session_claim(
+        module,
+        agent="codex",
+        scope="plan0141-root-a",
+        claim_type="program",
+    )
+    root_b = _plan_session_claim(
+        module,
+        agent="claude-code",
+        scope="plan0141-root-b",
+        claim_type="program",
+    )
+    assert module.claim_hierarchy_issues(root_b, active_claims=[root_a, root_b]) == [
+        "multiple_program_roots"
+    ]
+
+    wrong_parent = _plan_session_claim(
+        module,
+        agent="claude-code",
+        scope="plan0141-child",
+        claim_type="write",
+        parent_scope="not-the-root",
+    )
+    assert module.claim_hierarchy_issues(
+        wrong_parent,
+        active_claims=[root_a, wrong_parent],
+    ) == ["missing_parent_claim", "wrong_parent_scope"]
 
 
 

@@ -49,11 +49,14 @@ def main(argv: list[str] | None = None) -> int:
     for session in payload["sessions"]:
         session_name = session["session_name"] or "<missing-session-name>"
         current_phase = session["current_phase"] or "<missing-current-phase>"
+        hierarchy = session["hierarchy_role"]
+        if session["parent_scope"]:
+            hierarchy = f"{hierarchy}:parent={session['parent_scope']}"
         print(
             f"- {session['project']}:{session['scope']} "
             f"[{session['health_status']}] "
             f"{session_name} :: {current_phase} "
-            f"(recovery={session['recovery_action']})"
+            f"(hierarchy={hierarchy}; recovery={session['recovery_action']})"
         )
         if session["health_issues"]:
             print(f"  issues={','.join(session['health_issues'])}")

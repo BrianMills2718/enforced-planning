@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import argparse
 import sys
 from pathlib import Path
 from typing import Any
@@ -77,14 +78,34 @@ def claim_health_status(claim: ClaimRecord) -> str:
     return _impl.claim_health_status(claim)
 
 
+def normalize_plan_identity(plan_ref: str | None) -> str | None:
+    """Expose normalized numbered-plan identity through the legacy surface."""
+
+    return _impl.normalize_plan_identity(plan_ref)
+
+
+def claim_hierarchy_issues(
+    claim: ClaimRecord,
+    *,
+    active_claims: list[ClaimRecord],
+) -> list[str]:
+    """Expose root/child hierarchy diagnostics through the legacy surface."""
+
+    return _impl.claim_hierarchy_issues(claim, active_claims=active_claims)
+
+
 def claim_lifecycle_issues(claim: ClaimRecord) -> list[str]:
     """Expose stale-lifecycle diagnostics through the legacy script surface."""
     return _impl.claim_lifecycle_issues(claim)
 
 
-def claim_runtime_status(claim: ClaimRecord) -> str:
+def claim_runtime_status(
+    claim: ClaimRecord,
+    *,
+    active_claims: list[ClaimRecord] | None = None,
+) -> str:
     """Expose combined stale/weak/healthy runtime classification."""
-    return _impl.claim_runtime_status(claim)
+    return _impl.claim_runtime_status(claim, active_claims=active_claims)
 
 
 def claim_liveness_issues(claim: ClaimRecord, *, now: Any | None = None) -> list[str]:
@@ -140,7 +161,7 @@ def heartbeat_claims(*args: Any, **kwargs: Any) -> tuple[int, list[str], str, st
     return _impl.heartbeat_claims(*args, **kwargs)
 
 
-def parse_args(argv: list[str] | None = None):
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     """Expose CLI argument parsing through the legacy script surface."""
     return _impl.parse_args(argv)
 

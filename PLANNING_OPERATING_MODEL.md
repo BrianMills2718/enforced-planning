@@ -66,6 +66,14 @@ an agent:
    implementation plan. Until that example works on the smallest real slice,
    only vertical work and evidence-backed direct blockers belong on the critical
    path; enablers and hardening do not advance product status by themselves.
+16. **Choose from first principles before benchmarking.** Derive decisions from
+   goals, requirements, failure modes, boundaries, reversibility, and established
+   evidence. Importance or blockage alone does not justify comparison. Benchmark
+   only an irreducibly empirical uncertainty when candidates meet a common
+   minimum capability contract, the result can change the decision, and testing
+   costs less than a reversible choice. If fairness requires fully building and
+   polishing multiple options, choose behind a replaceable boundary and validate
+   the selected implementation against its own requirements.
 
 ## Execution Profiles
 
@@ -76,7 +84,7 @@ and one plan can promote to a stronger profile only after its stated trigger.
 
 | Profile | Use when | Required now | Normally deferred |
 |---------|----------|--------------|-------------------|
-| `poc` | A reversible experiment must answer one bounded technical or product question | Frozen hypothesis and success criterion, bounded inputs/execution, focused checks, one smallest-real-path readout, and full traces before interpreting LLM output | Held-out/golden-set expansion, comparative quality thresholds or model selection, independent eval sign-off, global authority expansion, full-suite closeout, generalized infrastructure, deployment, and controls unrelated to the experiment—unless the named PoC decision is itself a quality-based kill/continue or selection decision |
+| `poc` | A reversible experiment must answer one bounded technical or product question | Frozen hypothesis and success criterion, bounded inputs/execution, focused checks, one smallest-real-path readout, and full traces before interpreting LLM output | Held-out/golden-set expansion, comparative quality thresholds or model selection, independent eval sign-off, global authority expansion, full-suite closeout, generalized infrastructure, deployment, and controls unrelated to the experiment. A named selection decision still requires the first-principles comparison test above. |
 | `pilot` | Representative users, data, or integrations must show that an end-to-end workflow is usable and repeatable | Explicit boundaries and contracts, representative evaluation, replayable evidence, integration checks, and an operator or agent path | Production scale, broad compatibility, and operational controls not exercised by the pilot |
 | `production-internal` | Trusted operators use a long-lived capability in a controlled environment | Reliability, data integrity, recovery, actionable observability, migration/dependency handling, and the concrete access or secret protections required by its real boundaries | Public threat modeling, external compatibility guarantees, release ceremony, and distribution controls without a demonstrated need |
 | `production-external` | Untrusted users, public access, distribution, or shared critical state creates external obligations | The internal-production bundle plus explicit threat model, authentication/authorization where applicable, release and rollback controls, compatibility, and operational response | Only controls shown irrelevant by a recorded boundary analysis |
@@ -130,8 +138,8 @@ replay the example, and reset the plan around the smallest failing behavior.
 For exploratory or LLM-mediated behavior, the example may initially be a
 frozen fixture and full trace. The next promotion step uses the same behavioral
 contract on one smallest real input; it does not require a model comparison,
-large benchmark, or generalized infrastructure unless the current decision
-specifically depends on one.
+large benchmark, or generalized infrastructure. A comparative evaluation enters
+the plan only after the first-principles comparison test above is satisfied.
 
 ## The Model
 

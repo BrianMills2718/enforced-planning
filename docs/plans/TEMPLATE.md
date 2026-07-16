@@ -114,6 +114,15 @@ architecture, ADRs, or plan decisions change because of the comparison.
 **Refresh trigger:** Name the date, dependency change, new evidence, or decision
 that requires this landscape to be reviewed again.
 
+**Decision method:** Resolve alternatives from goals, requirements, failure
+modes, boundaries, reversibility, and established evidence by default. A
+blocking decision does not itself justify a bakeoff. Add comparative evaluation
+only for an irreducibly empirical uncertainty when candidates meet a common
+minimum capability contract, the result can change the decision, and testing is
+cheaper than choosing behind a replaceable boundary. If fair comparison requires
+fully building and polishing multiple options, make the reversible choice and
+validate it against its own requirements.
+
 ---
 
 ## Modality Assessment

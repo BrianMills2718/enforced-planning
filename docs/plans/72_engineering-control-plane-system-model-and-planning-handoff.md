@@ -44,6 +44,17 @@
   adding focused regression tests. Agent-skills PR #14 merged as
   `8e4aaf89937415b95c15a3249cec16b06e1e0888`; both skill validators, all 21
   repository behavior tests, and the live four-surface skill sync gate pass.
+- **Slice 2A — naming and landscape alignment implemented, integration open
+  (2026-07-16):** agent-skills commit `af6a3fc` renames the procedures to
+  `initiative-roadmap` and `bounded-design` without changing their ownership
+  boundary. It adds a mandatory `linked | inline | exempt-trivial` landscape
+  disposition, maximum justified planning, explicit business-rule ownership,
+  fixture-first boundary seams, derived dashboard projections, and explicit
+  roadmap adoption/revision/decline of design handbacks. Both skills pass the
+  skill validator, all 23 repository behavior tests pass, and trigger-overlap
+  screening reports zero collisions. Client-surface sync remains a post-merge
+  integration check because the sync validator intentionally points clients at
+  canonical main rather than a feature worktree.
 - **Slice 3 — evaluation corpus implemented; model execution open
   (2026-07-16):** shared-skill commit
   `eaefb826a32d00489732dd520c5872941dae38af` adds reciprocal handoff cases covering a large single-repository
@@ -59,16 +70,16 @@
 
 ## Mission
 
-Make `project-roadmapping` and `design-plan` consumers of one
+Make `initiative-roadmap` and `bounded-design` consumers of one
 implementation-independent engineering control-plane architecture, then define
 the smallest explicit handoff between project direction and a bounded design
 packet.
 
 This plan preserves the accepted routing distinction:
 
-- `project-roadmapping` owns initiative direction across several outcomes,
+- `initiative-roadmap` owns initiative direction across several outcomes,
   capability families, phases, or dependencies.
-- `design-plan` owns one bounded implementation-ready outcome, even when that
+- `bounded-design` owns one bounded implementation-ready outcome, even when that
   outcome crosses repositories.
 
 Repository count is not the discriminator. The skills are procedure entrypoints,
@@ -144,7 +155,7 @@ bounded change.
 - Enforced Planning `context_packet.py`, `relationship_context.py`, and
   `RELATIONSHIP_CONTEXT_CONTRACT.md` — existing bounded context compiler and
   reviewed relationship seam.
-- `project-roadmapping` and `design-plan` skills, references, trigger cases, and
+- `initiative-roadmap` and `bounded-design` skills, references, trigger cases, and
   focused tests.
 - Plan 69 branch `80b84fe` — historical alignment work and Inside Success pilot;
   reviewed as evidence, not merged wholesale because it diverges from current
@@ -272,7 +283,7 @@ the whole graph and must not silently approve inferred purpose or authority.
 
 ## Responsibility Matrix
 
-| Concern | `project-roadmapping` | `design-plan` | Shared/owning system |
+| Concern | `initiative-roadmap` | `bounded-design` | Shared/owning system |
 |---|---|---|---|
 | Request mode and mutation authority | Apply and retain inline | Apply and retain inline | Planning operating model; repository/user authority remains higher |
 | Durable purpose, actor, problem, desired outcome | Own at initiative scale | Consume; restate only the bounded objective | Intent and authority system |
@@ -293,12 +304,13 @@ the whole graph and must not silently approve inferred purpose or authority.
 
 ### Mission and trigger disposition
 
-No renamed or merged skill is needed. The concise contract is:
+The skills remain separate, but their names now describe the routed outcome
+more clearly. The concise contract is:
 
-- **`project-roadmapping`:** set initiative direction across multiple
+- **`initiative-roadmap`:** set initiative direction across multiple
   stakeholder outcomes, capability families, phases, or dependencies; select
   the next one or two bounded goals and hand them to design.
-- **`design-plan`:** derive one bounded outcome from observable requirements
+- **`bounded-design`:** derive one bounded outcome from observable requirements
   through boundaries, domain concepts, contracts, schema disposition, runtime
   reconciliation, risk-ordered slices, and evidence.
 
@@ -311,8 +323,8 @@ are needed, roadmap first and design only the selected near-term goals.
 | Capability | Producer/owner | Consumer | Boundary claim |
 |---|---|---|---|
 | Define the engineering control-plane system model | Project Meta framework authority | Roadmaps, planning methods, operations, and agents | A repository-independent responsibility model maps to implementations without transferring their native authority. |
-| Select and hand off one roadmap goal | Project roadmap authority / `project-roadmapping` | `design-plan` | One immutable selection snapshot references current authorities and does not become mutable project status. |
-| Derive one bounded design packet | `design-plan` and the packet's project owner | implementation agents and roadmap owner | Requirements, boundaries, contracts, slices, and evidence are bounded to the selected goal. |
+| Select and hand off one roadmap goal | Project roadmap authority / `initiative-roadmap` | `bounded-design` | One immutable selection snapshot references current authorities and does not become mutable project status. |
+| Derive one bounded design packet | `bounded-design` and the packet's project owner | implementation agents and roadmap owner | Requirements, boundaries, contracts, slices, and evidence are bounded to the selected goal. |
 | Return design implications | Design packet | Project roadmap authority | The result proposes scoped deltas; it cannot mutate strategy or capability priority by implication. |
 | Compile bounded context | Existing Enforced Planning context compiler | Roadmapping, design, and execution procedures | Selected context preserves source authority, revision, freshness, conflict, and selection reason. |
 | Resolve policy and assurance | Project Meta Plan 225 + Enforced Planning Plan 71 | planning and execution adapters | This plan consumes effective policy results and does not redefine policy meaning or enforcement. |
@@ -466,16 +478,26 @@ round-trips without becoming a second status source.
 
 ### Slice 2 — Thin skill alignment
 
-- Keep existing mission statements and trigger descriptions unless focused
-  tests demonstrate a routing defect.
-- Correct `project-roadmapping`'s exhaustive-`relationships.yaml` claim.
+- Preserve the mission boundary while using the clearer names
+  `initiative-roadmap` and `bounded-design`.
+- Correct `initiative-roadmap`'s exhaustive-`relationships.yaml` claim.
 - Correct both skills' universal concern-register wording.
 - Link the handoff reference from both skills and state which fields each owns.
 - Keep request authority, trust boundaries, and routing guardrails visible in
   both entrypoint skills.
+- Require an internal-landscape disposition and external prior-art review when
+  a material architecture, shared-capability, standard, or lock-in choice is
+  open.
+- Preserve the full predictable design chain through business rules, contracts,
+  schema, and both-sign fixtures; isolate only genuinely unknown behavior as an
+  exploratory readout.
+- Return structured project/capability deltas for derived ecosystem-dashboard
+  views and require roadmap-owner reconciliation of design implications.
 
 **Acceptance:** Structural tests show reciprocal routing, consistent ownership,
-and the shared contract link. No broad skill rewrite or merger occurs.
+the shared contract link, landscape disposition, fixture-first design, derived
+dashboard projection, and explicit handback reconciliation. No skill merger
+occurs.
 
 ### Slice 3 — Focused evaluation
 
@@ -558,8 +580,8 @@ future implementation evidence.
 
 ### Agent skills
 
-- `.agents/skills/project-roadmapping/SKILL.md`
-- `.agents/skills/design-plan/SKILL.md`
+- `.agents/skills/initiative-roadmap/SKILL.md`
+- `.agents/skills/bounded-design/SKILL.md`
 - the smallest relevant references and focused eval/test fixtures
 
 Do not pre-create files merely to satisfy this list. Reuse an existing authority
@@ -567,7 +589,7 @@ when it can own the decision or contract without ambiguity.
 
 ## Stop Conditions
 
-1. Do not merge `project-roadmapping` and `design-plan`.
+1. Do not merge `initiative-roadmap` and `bounded-design`.
 2. Do not merge the stale Plan 69 branch wholesale; selectively reconcile only
    still-valid deltas against current main.
 3. Do not create a new top-level vision, universal engineering ontology, graph
@@ -599,6 +621,10 @@ when it can own the decision or contract without ambiguity.
    and routing rules in both skill entrypoints.
 7. **Greenfield review:** use once to challenge current boundaries, then record
    accepted deltas through normal framework/ADR authority.
+8. **Skill names:** use `initiative-roadmap` for multi-outcome direction and
+   `bounded-design` for one implementation-ready outcome. Preserve the routing
+   distinction and do not retain aliases that create two discoverable names for
+   one procedure.
 
 ## Explicitly Unresolved
 

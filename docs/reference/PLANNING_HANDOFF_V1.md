@@ -2,7 +2,7 @@
 
 **Status:** Pilot contract
 **Owner:** Enforced Planning
-**Scope:** Transport between `project-roadmapping` and one `design-plan` packet
+**Scope:** Transport between `initiative-roadmap` and one `bounded-design` packet
 **Non-authority:** This contract does not select current work, own roadmap
 priority, or store handoff state.
 

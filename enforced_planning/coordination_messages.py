@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import inspect
 import json
 import os
 import sys
@@ -395,8 +396,16 @@ class CoordinationMessageStore:
 
     def _live_claims(self, project: str | None = None) -> list[coordination_claims.ClaimRecord]:
         """Read canonical live identity records without introducing another registry."""
-
-        return coordination_claims.check_claims(project, claims_dir=self.claims_dir)
+        parameters = inspect.signature(coordination_claims.check_claims).parameters
+        if "claims_dir" in parameters:
+            return coordination_claims.check_claims(project, claims_dir=self.claims_dir)
+        canonical_claims_dir = Path(coordination_claims.CLAIMS_DIR).expanduser().resolve()
+        if self.claims_dir != canonical_claims_dir:
+            raise CoordinationMessageError(
+                "Installed claim registry cannot read a custom claims directory; "
+                "upgrade enforced_planning.coordination_claims before overriding claims_dir"
+            )
+        return coordination_claims.check_claims(project)
 
     def _require_live_session(self, session_id: str) -> None:
         """Fail when a caller or exact recipient is absent from live claims."""

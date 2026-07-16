@@ -23,7 +23,17 @@ from typing import Any
 import yaml
 
 
-SCRIPT_ROOT = Path(__file__).resolve().parents[2]
+def _find_framework_root() -> Path:
+    """Find the repository root from either supported script layout."""
+
+    current = Path(__file__).resolve()
+    for parent in current.parents:
+        if (parent / "enforced_planning").is_dir():
+            return parent
+    raise RuntimeError("Unable to locate repository root containing enforced_planning/")
+
+
+SCRIPT_ROOT = _find_framework_root()
 if str(SCRIPT_ROOT) not in sys.path:
     sys.path.insert(0, str(SCRIPT_ROOT))
 

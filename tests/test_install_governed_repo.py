@@ -887,6 +887,7 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
     """Worktree-only mode should sync only the sanctioned worktree surface."""
     _write_minimal_claude(tmp_path)
     (tmp_path / "Makefile").write_text("help:\n\t@echo hello\n", encoding="utf-8")
+    (tmp_path / ".gitignore").write_text("__pycache__/\n", encoding="utf-8")
 
     result = _run(
         "--repo-root",
@@ -910,6 +911,7 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
             "install:enforced_planning/push_safety.py",
             "install:enforced_planning/session_contracts.py",
             "install:enforced_planning/session_lifecycle.py",
+            "install:enforced_planning/verification_batch.py",
             "install:enforced_planning/worktree_lifecycle.yaml",
             "install:enforced_planning/worktree_paths.py",
             "install:scripts/meta/check_coordination_claims.py",
@@ -920,6 +922,7 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
             "install:scripts/meta/session_start.py",
             "install:scripts/meta/session_status.py",
             "install:scripts/meta/session_resume.py",
+            "install:scripts/meta/verification_batch.py",
             "install:scripts/coordination_inbox.py",
             "install:scripts/coordination_messages.py",
             "install:scripts/meta/coordination_inbox.py",
@@ -940,6 +943,7 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
     assert (tmp_path / "scripts" / "meta" / "session_heartbeat.py").exists()
     assert (tmp_path / "scripts" / "meta" / "session_status.py").exists()
     assert (tmp_path / "scripts" / "meta" / "session_resume.py").exists()
+    assert (tmp_path / "scripts" / "meta" / "verification_batch.py").exists()
     assert (tmp_path / "scripts" / "coordination_inbox.py").exists()
     assert (tmp_path / "scripts" / "coordination_messages.py").exists()
     assert (tmp_path / "scripts" / "meta" / "coordination_messages.py").exists()
@@ -948,6 +952,7 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
     assert (tmp_path / "scripts" / "meta" / "session_close.py").exists()
     assert (tmp_path / "enforced_planning" / "session_contracts.py").exists()
     assert (tmp_path / "enforced_planning" / "session_lifecycle.py").exists()
+    assert (tmp_path / "enforced_planning" / "verification_batch.py").exists()
     assert (tmp_path / "enforced_planning" / "worktree_lifecycle.yaml").exists()
     assert (tmp_path / "enforced_planning" / "worktree_paths.py").exists()
     assert (
@@ -974,6 +979,9 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
     assert "session-start:" in makefile_text
     assert "session-finish:" in makefile_text
     assert "session-close:" in makefile_text
+    assert "verification-batch-freeze:" in makefile_text
+    assert "verification-batch-check:" in makefile_text
+    assert "verification-batch-thaw:" in makefile_text
     assert "WORKTREE_DISPOSITION ?= merged" in makefile_text
     assert '--disposition "$(WORKTREE_DISPOSITION)"' in makefile_text
     assert "$(filter 1 true yes,$(WORKTREE_ALLOW_DISCARD_UNIQUE))" in makefile_text
@@ -988,6 +996,61 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
     assert close_help.returncode == 0, close_help.stdout + close_help.stderr
     assert "--disposition" in close_help.stdout
     assert "--recovery-ref" in close_help.stdout
+
+    subprocess.run(["git", "init", "-q", "-b", "main", str(tmp_path)], check=True)
+    subprocess.run(["git", "-C", str(tmp_path), "add", "-A"], check=True)
+    subprocess.run(
+        [
+            "git",
+            "-C",
+            str(tmp_path),
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.com",
+            "commit",
+            "-qm",
+            "installed worktree surface",
+        ],
+        check=True,
+    )
+    make_environment = [f"PYTHON={sys.executable}"]
+    freeze = subprocess.run(
+        [
+            "make",
+            "-C",
+            str(tmp_path),
+            "verification-batch-freeze",
+            *make_environment,
+            "DECISION=Verify installed terminal batch controls",
+            "VERIFY_COMMAND=make check",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert freeze.returncode == 0, freeze.stdout + freeze.stderr
+    check = subprocess.run(
+        ["make", "-C", str(tmp_path), "verification-batch-check", *make_environment],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert check.returncode == 0, check.stdout + check.stderr
+    thaw = subprocess.run(
+        [
+            "make",
+            "-C",
+            str(tmp_path),
+            "verification-batch-thaw",
+            *make_environment,
+            "REASON=Both-sign installer test complete",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert thaw.returncode == 0, thaw.stdout + thaw.stderr
 
     portable_lint = subprocess.run(
         [

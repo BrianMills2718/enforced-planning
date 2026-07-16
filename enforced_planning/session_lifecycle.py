@@ -193,70 +193,79 @@ def _upsert_session_claim(
             raise ValueError(message)
         return "created"
 
-    existing = coordination_claims.normalize_claim(existing_payload, source_file=str(path))
-    if existing is None:
-        raise ValueError(f"Existing claim at {path} is invalid")
-    if existing.agent != agent:
-        raise ValueError(f"Claim at {path} belongs to {existing.agent}, not {agent}")
-    if existing.session_id and existing.session_id != session_id:
-        raise ValueError(
-            f"Claim at {path} belongs to session {existing.session_id}, not {session_id}"
+    with coordination_claims.claim_registry_lock():
+        refreshed_payload = _load_claim_payload(agent, project, scope)
+        if refreshed_payload is None:
+            raise ValueError(
+                f"Claim at {path} disappeared during session activation; retry session start"
+            )
+        existing = coordination_claims.normalize_claim(
+            refreshed_payload,
+            source_file=str(path),
+        )
+        if existing is None:
+            raise ValueError(f"Existing claim at {path} is invalid")
+        if existing.agent != agent:
+            raise ValueError(f"Claim at {path} belongs to {existing.agent}, not {agent}")
+        if existing.session_id and existing.session_id != session_id:
+            raise ValueError(
+                f"Claim at {path} belongs to session {existing.session_id}, not {session_id}"
+            )
+
+        effective_claim_type = claim_type or existing.claim_type
+        effective_write_paths = existing.write_paths if write_paths is None else write_paths
+        effective_read_paths = existing.read_paths if read_paths is None else read_paths
+        effective_parent_scope = existing.parent_scope if parent_scope is None else parent_scope
+        candidate = coordination_claims.build_candidate_claim(
+            agent=agent,
+            project=project,
+            scope=scope,
+            intent=intent,
+            plan_ref=plan_ref,
+            claim_type=effective_claim_type,
+            write_paths=effective_write_paths,
+            read_paths=effective_read_paths,
+            repo_root=repo_root,
+            worktree_path=worktree_path,
+            branch=branch,
+            session_id=session_id,
+            session_name=session_name,
+            broader_goal=broader_goal,
+            tracker_path=tracker_path,
+            parent_scope=effective_parent_scope,
+        )
+        coordination_claims.validate_claim_hierarchy_for_creation(
+            candidate,
+            active_claims=coordination_claims.check_claims(project),
         )
 
-    effective_claim_type = claim_type or existing.claim_type
-    effective_write_paths = existing.write_paths if write_paths is None else write_paths
-    effective_read_paths = existing.read_paths if read_paths is None else read_paths
-    effective_parent_scope = existing.parent_scope if parent_scope is None else parent_scope
-    candidate = coordination_claims.build_candidate_claim(
-        agent=agent,
-        project=project,
-        scope=scope,
-        intent=intent,
-        plan_ref=plan_ref,
-        claim_type=effective_claim_type,
-        write_paths=effective_write_paths,
-        read_paths=effective_read_paths,
-        repo_root=repo_root,
-        worktree_path=worktree_path,
-        branch=branch,
-        session_id=session_id,
-        session_name=session_name,
-        broader_goal=broader_goal,
-        tracker_path=tracker_path,
-        parent_scope=effective_parent_scope,
-    )
-    coordination_claims.validate_claim_hierarchy_for_creation(
-        candidate,
-        active_claims=coordination_claims.check_claims(project),
-    )
-
-    expires_at = existing.expires_at or (now + timedelta(hours=ttl_hours)).isoformat()
-    payload = {
-        **existing_payload,
-        "agent": agent,
-        "project": project,
-        "projects": [project],
-        "scope": scope,
-        "intent": intent,
-        "plan_ref": plan_ref,
-        "repo_root": repo_root,
-        "worktree_path": worktree_path,
-        "branch": branch,
-        "session_id": session_id,
-        "session_name": session_name,
-        "broader_goal": broader_goal,
-        "tracker_path": tracker_path,
-        "status": "active",
-        "heartbeat_at": now.isoformat(),
-        "updated_at": now.isoformat(),
-        "claimed_at": existing.claimed_at or now.isoformat(),
-        "expires_at": expires_at,
-        "claim_type": effective_claim_type,
-        "write_paths": effective_write_paths,
-        "read_paths": effective_read_paths,
-        "parent_scope": effective_parent_scope,
-    }
-    _write_claim_payload(path, payload)
+        expires_at = existing.expires_at or (now + timedelta(hours=ttl_hours)).isoformat()
+        payload = {
+            **refreshed_payload,
+            "agent": agent,
+            "project": project,
+            "projects": [project],
+            "scope": scope,
+            "intent": intent,
+            "plan_ref": plan_ref,
+            "repo_root": repo_root,
+            "worktree_path": worktree_path,
+            "branch": branch,
+            "session_id": session_id,
+            "session_name": session_name,
+            "broader_goal": broader_goal,
+            "tracker_path": tracker_path,
+            "status": "active",
+            "heartbeat_at": now.isoformat(),
+            "updated_at": now.isoformat(),
+            "claimed_at": existing.claimed_at or now.isoformat(),
+            "expires_at": expires_at,
+            "claim_type": effective_claim_type,
+            "write_paths": effective_write_paths,
+            "read_paths": effective_read_paths,
+            "parent_scope": effective_parent_scope,
+        }
+        _write_claim_payload(path, payload)
     return "updated"
 
 

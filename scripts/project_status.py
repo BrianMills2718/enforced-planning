@@ -31,7 +31,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo-root", type=Path, default=Path.cwd())
-    parser.add_argument("--fetch-timeout-seconds", type=float, default=30.0)
+    parser.add_argument(
+        "--fetch-timeout-seconds",
+        type=float,
+        default=repository_status.DEFAULT_FETCH_TIMEOUT_SECONDS,
+    )
     parser.add_argument("--json", action="store_true")
     return parser.parse_args(argv)
 

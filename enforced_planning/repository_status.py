@@ -109,18 +109,18 @@ def _current_branch(repo_root: Path) -> str | None:
     return result.stdout.strip() if result.returncode == 0 and result.stdout.strip() else None
 
 
-def _remote_name(repo_root: Path, current_branch: str | None) -> str | None:
-    """Resolve the configured remote, preferring the current branch then origin."""
+def _remote_name(repo_root: Path, default_branch: str | None) -> str | None:
+    """Resolve authority remote from the default branch, then fall back to origin."""
 
-    if current_branch:
-        configured = _run_git(repo_root, ["config", "--get", f"branch.{current_branch}.remote"])
-        value = configured.stdout.strip()
-        if configured.returncode == 0 and value and value != ".":
-            return value
     remotes = _run_git(repo_root, ["remote"])
     if remotes.returncode != 0:
         return None
     names = [line.strip() for line in remotes.stdout.splitlines() if line.strip()]
+    if default_branch:
+        configured = _run_git(repo_root, ["config", "--get", f"branch.{default_branch}.remote"])
+        value = configured.stdout.strip()
+        if configured.returncode == 0 and value in names and value != ".":
+            return value
     if "origin" in names:
         return "origin"
     return names[0] if names else None
@@ -205,7 +205,7 @@ def inspect_repository(
     current_branch = _current_branch(root)
     dirty_result = _run_git(root, ["status", "--porcelain"])
     worktree_dirty = bool(dirty_result.stdout.strip()) if dirty_result.returncode == 0 else None
-    remote_name = _remote_name(root, current_branch)
+    remote_name = _remote_name(root, None)
     if not remote_name:
         return _unknown(
             repo_root=root,
@@ -230,6 +230,9 @@ def inspect_repository(
             fetch_error="missing_default_branch",
             worktree_dirty=worktree_dirty,
         )
+    tracked_remote_name = _remote_name(root, default_branch)
+    if tracked_remote_name:
+        remote_name = tracked_remote_name
 
     if not fetch_remote:
         return _unknown(

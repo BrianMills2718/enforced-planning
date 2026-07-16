@@ -113,6 +113,26 @@ def test_current_feature_is_not_mislabeled_by_stale_local_default(
     assert result.behind_count == 1
 
 
+def test_feature_remote_does_not_replace_default_branch_authority(
+    tmp_path: Path,
+) -> None:
+    """A feature's fork remote must not replace main's tracked origin."""
+
+    repo, _remote = _repo_with_remote(tmp_path)
+    fork = tmp_path / "fork.git"
+    _git(tmp_path, "init", "--bare", str(fork))
+    _git(repo, "remote", "add", "fork", str(fork))
+    _git(repo, "switch", "-c", "feature")
+    _git(repo, "config", "branch.feature.remote", "fork")
+
+    result = repository_status.inspect_repository(repo, fetch_remote=True)
+
+    assert result.status == "feature"
+    assert result.exit_code == 0
+    assert result.remote_name == "origin"
+    assert result.default_status == "current"
+
+
 def test_unreachable_remote_is_freshness_unknown_not_current(tmp_path: Path) -> None:
     """A failed metadata refresh must not license a current-authority claim."""
 

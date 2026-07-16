@@ -797,6 +797,7 @@ def test_install_governed_repo_appends_makefile_meta_block_when_missing(
     """Write mode should append the sanctioned worktree block to an existing Makefile."""
     _write_minimal_claude(tmp_path)
     (tmp_path / "Makefile").write_text("help:\n\t@echo hello\n", encoding="utf-8")
+
     result = _run(
         "--repo-root",
         str(tmp_path),

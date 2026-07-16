@@ -6,6 +6,8 @@ import importlib.util
 import json
 import subprocess
 import sys
+import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -487,6 +489,56 @@ def test_parallel_plan_claims_reject_rootless_duplicate_root_and_wrong_parent() 
         wrong_parent,
         active_claims=[root_a, wrong_parent],
     ) == ["missing_parent_claim", "wrong_parent_scope"]
+
+
+def test_concurrent_program_root_creation_serializes_check_and_write(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Concurrent agents must not both pass the one-root check before writing."""
+
+    module = _load_module()
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
+    original_validate = module._impl.validate_claim_hierarchy_for_creation
+
+    def delayed_validate(*args, **kwargs):
+        original_validate(*args, **kwargs)
+        time.sleep(0.05)
+
+    monkeypatch.setattr(
+        module._impl,
+        "validate_claim_hierarchy_for_creation",
+        delayed_validate,
+    )
+
+    def create_root(index: int) -> tuple[bool, str]:
+        scope = f"plan77-root-{index}"
+        try:
+            return module.create_claim(
+                agent=f"agent-{index}",
+                project="demo",
+                scope=scope,
+                intent="coordinate Plan 77",
+                plan_ref="Plan #77",
+                claim_type="program",
+                repo_root=str(tmp_path / "demo"),
+                worktree_path=str(tmp_path / "demo" / "worktrees" / scope),
+                branch=scope,
+                session_id=f"agent-{index}:session",
+                session_name="coordinate-plan-77",
+                broader_goal="Coordinate Plan 77",
+                tracker_path=str(tmp_path / "sessions" / f"{scope}.yaml"),
+            )
+        except ValueError as error:
+            return False, str(error)
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(executor.map(create_root, (1, 2)))
+
+    assert sum(1 for ok, _message in results if ok) == 1
+    assert sum("multiple_program_roots" in message for _ok, message in results) == 1
+    assert len(list(claims_dir.glob("*.yaml"))) == 1
 
 
 

@@ -137,7 +137,7 @@ Target:
 | AC5 | The observed Plan 0141-shaped claim is `weak` with missing repo/goal/session/tracker issues; session status never prints `healthy None :: None`. | test | A |
 | AC6 | A claim produced by the sanctioned session-start path remains healthy. | test | A |
 | AC7 | Installed governed repos receive the shared project-status adapter and Make target. | test | A |
-| AC8 | Two live sessions for the same normalized project/plan identity are healthy only with exactly one root `program` claim and correctly parented subordinate claims; duplicate roots, rootless parallel claims, and wrong parents fail loud. | test | A |
+| AC8 | Two live sessions for the same normalized project/plan identity are healthy only with exactly one root `program` claim and correctly parented subordinate claims; sequential or concurrent duplicate roots, rootless parallel claims, and wrong parents fail loud. | test | A |
 | AC9 | The sanctioned session-start CLI/Make path can declare `claim_type` and `parent_scope`, while a single standalone session remains backward-compatible. | test | A |
 | AC10 | The derived active-work payload and Markdown identify each normalized plan root and its child scopes without creating mutable hierarchy state. | test | A |
 

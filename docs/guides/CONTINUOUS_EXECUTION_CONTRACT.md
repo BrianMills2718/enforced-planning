@@ -29,7 +29,7 @@ tracker, move to the next slice, keep executing.
 
 ---
 
-## The Only Two Legitimate Stop Conditions
+## The Legitimate Stop Conditions
 
 1. **An action that is BOTH irreversible AND affects shared state.** Examples:
    force push to a shared branch, drop a production table, delete production
@@ -43,8 +43,15 @@ tracker, move to the next slice, keep executing.
    document the gap in the sprint tracker and move to the next unblocked slice.
    Do not stop to ask unless every remaining slice is blocked by the same gap.
 
+3. **No safe, authorized, evidence-supported, goal-advancing next action remains
+   after bounded investigation.** Do not invent a new phase merely to remain
+   active, retain a write claim while waiting, or repeatedly poll unchanged
+   external state. Persist the current state, evidence, owner or blocker, and
+   exact resume event; release or narrow claims; then return control.
+
 Everything else — uncertainty, tool failure, partial results, blocked
-individual task, "should I continue?" — is NOT a stop condition.
+individual task, "should I continue?" — is NOT a stop condition while a bounded
+next action remains.
 
 ---
 
@@ -125,7 +132,8 @@ A blocked individual task is not a stop condition. When a task is blocked:
 3. Keep executing until there is no safe high-value unblocked work remaining
 
 Only stop when every remaining slice in the sprint is blocked by the same gap
-that qualifies as stop condition #2.
+that qualifies as stop condition #2, or bounded investigation confirms stop
+condition #3.
 
 ---
 
@@ -148,6 +156,8 @@ When a stop condition IS reached:
 2. Commit all verified work
 3. Push
 4. Leave precise notes in the tracker so the next session can resume
+5. Record the owner or blocker and exact resume event
+6. Release or narrow claims that no longer authorize active work
 
 ---
 

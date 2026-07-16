@@ -48,10 +48,13 @@ Non-negotiable execution rules for continuous runs:
 5. if a stop condition is hit, document it in the active plan and repo tracker
    before ending the session
 
-Only two stop conditions are legitimate:
+Only these stop conditions are legitimate:
 
 1. an irreversible action that affects shared state
 2. a genuine architectural decision not already pre-made in the active plan
+3. no safe, authorized, evidence-supported, goal-advancing next action remains
+   after bounded investigation; persist a resumable handoff and return control
+   instead of manufacturing work or passively polling
 
 ## Canonical Surfaces
 

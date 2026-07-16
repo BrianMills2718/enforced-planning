@@ -1,0 +1,23 @@
+agent: codex
+claimed_at: '2026-07-16T00:20:42.935383+00:00'
+expires_at: '2026-07-17T00:20:42.935383+00:00'
+projects: [mailbox-pilot]
+scope: codex-lane
+intent: Plan 67 bidirectional pilot
+claim_type: review
+write_paths: [docs]
+read_paths: []
+worktree_path: null
+repo_root: null
+branch: null
+session_name: null
+broader_goal: null
+tracker_path: null
+session_id: codex:pilot-67
+heartbeat_at: '2026-07-16T00:20:42.935383+00:00'
+status: active
+updated_at: '2026-07-16T00:20:42.935383+00:00'
+parent_scope: null
+notes: null
+plan_ref: null
+schema_version: 2

@@ -56,6 +56,7 @@ def test_generate_hook_wiring_dry_run_reports_expected_changes(tmp_path: Path) -
     assert payload["write_mode"] is False
     assert "sync:.claude/hooks/gate-edit.sh" in payload["actions"]
     assert "sync:.claude/hooks/track-reads.sh" in payload["actions"]
+    assert "sync:.claude/hooks/notify-coordination-messages.sh" in payload["actions"]
     assert "sync:scripts/check_required_reading.py" in payload["actions"]
     assert "sync:scripts/meta/hook_log.py" in payload["actions"]
     assert "sync:scripts/meta/context_packet.py" in payload["actions"]
@@ -123,6 +124,7 @@ def test_generate_hook_wiring_writes_files_and_merges_settings(tmp_path: Path) -
     ]
     assert [hook["command"] for hook in posttool["hooks"]] == [
         "bash .claude/hooks/track-reads.sh",
+        "bash .claude/hooks/notify-coordination-messages.sh",
     ]
 
     assert (tmp_path / ".claude" / "hooks" / "gate-edit.sh").exists()

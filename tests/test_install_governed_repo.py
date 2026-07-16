@@ -713,6 +713,7 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
             "install:enforced_planning/__init__.py",
             "install:enforced_planning/concern_routing.py",
             "install:enforced_planning/coordination_claims.py",
+            "install:enforced_planning/coordination_messages.py",
             "install:enforced_planning/doc_authority.py",
             "install:enforced_planning/push_safety.py",
             "install:enforced_planning/session_contracts.py",
@@ -726,6 +727,11 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
             "install:scripts/meta/session_heartbeat.py",
             "install:scripts/meta/session_start.py",
             "install:scripts/meta/session_status.py",
+            "install:scripts/meta/session_resume.py",
+            "install:scripts/coordination_inbox.py",
+            "install:scripts/coordination_messages.py",
+            "install:scripts/meta/coordination_inbox.py",
+            "install:scripts/meta/coordination_messages.py",
             "install:scripts/meta/worktree-coordination/create_worktree.py",
             "install:scripts/meta/worktree-coordination/create_publish_worktree.py",
             "install:scripts/meta/worktree-coordination/create_review_claim.py",
@@ -741,6 +747,11 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
     assert (tmp_path / "scripts" / "meta" / "session_start.py").exists()
     assert (tmp_path / "scripts" / "meta" / "session_heartbeat.py").exists()
     assert (tmp_path / "scripts" / "meta" / "session_status.py").exists()
+    assert (tmp_path / "scripts" / "meta" / "session_resume.py").exists()
+    assert (tmp_path / "scripts" / "coordination_inbox.py").exists()
+    assert (tmp_path / "scripts" / "coordination_messages.py").exists()
+    assert (tmp_path / "scripts" / "meta" / "coordination_messages.py").exists()
+    assert (tmp_path / "enforced_planning" / "coordination_messages.py").exists()
     assert (tmp_path / "scripts" / "meta" / "session_finish.py").exists()
     assert (tmp_path / "scripts" / "meta" / "session_close.py").exists()
     assert (tmp_path / "enforced_planning" / "session_contracts.py").exists()

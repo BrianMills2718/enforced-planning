@@ -396,22 +396,31 @@ What it does:
 - exposes a readable current-work registry, including derived active lanes
 - lets repos block conflicting or unsafe worktree flows
 - makes in-flight architectural decisions visible through `agent_memory` (query: `agent-memory recall 'active decisions' --project {project}`)
+- persists immutable cross-client messages and append-only observation and
+  acknowledgement receipts beside the canonical claim registry
+- injects mailbox notices into shared session start, resume, and heartbeat
+  responses; Claude additionally polls after governed read boundaries
 
 What it does not do:
 
 - real-time presence
 - automatic conflict resolution
-- automatic discovery of another agent mid-session
+- guaranteed asynchronous interruption of an arbitrary existing client session
 
 What concern routing adds:
 
 - `make review-claim` marks review intent on another lane's write paths
 - `make raise-concern` routes the concern to a PR comment when the target branch
-  is already published, otherwise to the repo-local inbox channel
+  is already published, otherwise to the canonical JSON coordination mailbox
+- a PR comment reports `fallback_published`; it never counts as mailbox
+  observation or acknowledgement
 - review overlap is visible coordination state, not silent out-of-band chatter
 
-Agents only see what has been written to claims, the active-work registry, or
-`agent_memory`. If those surfaces are stale, the agent view is stale.
+Codex discovery is lifecycle-polled unless a separately certified managed
+app-server owns its thread. Claude's hook accelerates discovery at read
+boundaries but is still not real-time presence. The compatibility
+`check-inbox.sh` and `notify-inbox-startup.sh` paths now redirect to the JSON
+mailbox and never read or mutate `.claude/messages/inbox/`.
 
 ## Repo Opt-In Contract
 

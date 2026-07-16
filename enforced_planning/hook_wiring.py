@@ -41,6 +41,10 @@ HOOK_FILES: dict[str, str] = {
     ".claude/hooks/check-hook-enabled.sh": "hooks/claude/check-hook-enabled.sh",
 }
 
+MAILBOX_HOOK_FILES: dict[str, str] = {
+    ".claude/hooks/notify-coordination-messages.sh": "hooks/claude/notify-coordination-messages.sh",
+}
+
 # Support Python scripts sourced from this canonical framework.
 SUPPORT_FILES: dict[str, str] = {
     "scripts/check_required_reading.py": "scripts/check_required_reading.py",
@@ -50,10 +54,23 @@ SUPPORT_FILES: dict[str, str] = {
     "enforced_planning/relationship_context.py": "enforced_planning/relationship_context.py",
 }
 
+MAILBOX_SUPPORT_FILES: dict[str, str] = {
+    "enforced_planning/coordination_claims.py": "enforced_planning/coordination_claims.py",
+    "enforced_planning/coordination_messages.py": "enforced_planning/coordination_messages.py",
+    "scripts/coordination_inbox.py": "scripts/coordination_inbox.py",
+    "scripts/meta/coordination_inbox.py": "scripts/meta/coordination_inbox.py",
+}
+
 READ_HOOK = {
     "type": "command",
     "command": "bash .claude/hooks/track-reads.sh",
     "timeout": 1000,
+}
+
+MAILBOX_HOOK = {
+    "type": "command",
+    "command": "bash .claude/hooks/notify-coordination-messages.sh",
+    "timeout": 3000,
 }
 
 GATE_HOOK = {
@@ -73,7 +90,7 @@ class TargetRepo:
     settings_file: Path
 
 
-def context_runtime_error(repo_root: Path) -> str | None:
+def context_runtime_error(repo_root: Path, *, require_pydantic: bool = True) -> str | None:
     """Return a fail-loud prerequisite error for the hook's actual Python runtime.
 
     Installed context tools parse ``relationships.yaml`` with PyYAML. Tests run
@@ -90,8 +107,9 @@ def context_runtime_error(repo_root: Path) -> str | None:
     if interpreter is None:
         return "relationship context requires python3 or a repo-local .venv/bin/python"
     try:
+        imports = "import yaml, pydantic" if require_pydantic else "import yaml"
         result = subprocess.run(
-            [interpreter, "-c", "import yaml"],
+            [interpreter, "-c", imports],
             capture_output=True,
             text=True,
             check=False,
@@ -99,9 +117,11 @@ def context_runtime_error(repo_root: Path) -> str | None:
     except OSError as exc:
         return f"relationship context runtime {interpreter} cannot execute: {exc}"
     if result.returncode:
+        dependencies = "PyYAML and Pydantic" if require_pydantic else "PyYAML"
+        requirement = "PyYAML>=6.0 and Pydantic>=2.0" if require_pydantic else "PyYAML>=6.0"
         return (
-            f"relationship context runtime {interpreter} cannot import PyYAML; "
-            "declare/install PyYAML>=6.0 before hook rollout"
+            f"governance hook runtime {interpreter} cannot import {dependencies}; "
+            f"declare/install {requirement} before hook rollout"
         )
     return None
 
@@ -246,13 +266,21 @@ def _relative(path: Path, repo_root: Path) -> str:
     return path.relative_to(repo_root).as_posix()
 
 
-def plan_generation(target: TargetRepo) -> tuple[list[str], dict[Path, str], str]:
+def plan_generation(
+    target: TargetRepo,
+    *,
+    include_coordination_messages: bool = True,
+) -> tuple[list[str], dict[Path, str], str]:
     """Compute file writes and settings content for the target repo."""
 
     actions: list[str] = []
     file_writes: dict[Path, str] = {}
 
-    for target_relpath, source_relpath in {**HOOK_FILES, **SUPPORT_FILES}.items():
+    source_files = {**HOOK_FILES, **SUPPORT_FILES}
+    if include_coordination_messages:
+        source_files.update(MAILBOX_HOOK_FILES)
+        source_files.update(MAILBOX_SUPPORT_FILES)
+    for target_relpath, source_relpath in source_files.items():
         source_path = FRAMEWORK_ROOT / source_relpath
         target_path = target.root / target_relpath
         content = source_path.read_text(encoding="utf-8")
@@ -281,6 +309,13 @@ def plan_generation(target: TargetRepo) -> tuple[list[str], dict[Path, str], str
     changed = False
     if _ensure_hook_command(read_hooks, READ_HOOK):
         changed = True
+    if include_coordination_messages:
+        if _ensure_hook_command(
+            read_hooks,
+            MAILBOX_HOOK,
+            after_command="bash .claude/hooks/track-reads.sh",
+        ):
+            changed = True
     if _ensure_hook_command(
         edit_hooks,
         GATE_HOOK,

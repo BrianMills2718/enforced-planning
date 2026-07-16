@@ -178,6 +178,7 @@ CORE_CLAUDE_HOOKS=(
     "track-reads.sh"
     "gate-edit.sh"
     "post-edit-quiz.sh"
+    "notify-coordination-messages.sh"
 )
 
 for hook in "${CORE_CLAUDE_HOOKS[@]}"; do

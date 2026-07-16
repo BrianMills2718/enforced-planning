@@ -53,6 +53,7 @@ def main(argv: list[str] | None = None) -> int:
             f"heartbeat: updated {payload['updated_count']} claims "
             f"for session {payload['session_id']} at {payload['heartbeat_at']}"
         )
+        print(payload["coordination_mailbox"]["summary"])
     return 0
 
 

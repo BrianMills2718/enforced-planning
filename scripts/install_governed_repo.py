@@ -54,6 +54,7 @@ SYNC_SUPPORT_FILES: dict[str, str] = {
     "enforced_planning/agents_rendering.py": "enforced_planning/agents_rendering.py",
     "enforced_planning/concern_routing.py": "enforced_planning/concern_routing.py",
     "enforced_planning/coordination_claims.py": "enforced_planning/coordination_claims.py",
+    "enforced_planning/coordination_messages.py": "enforced_planning/coordination_messages.py",
     "enforced_planning/doc_authority.py": "enforced_planning/doc_authority.py",
     "enforced_planning/file_context.py": "enforced_planning/file_context.py",
     "enforced_planning/relationship_context.py": "enforced_planning/relationship_context.py",
@@ -78,6 +79,11 @@ SYNC_SUPPORT_FILES: dict[str, str] = {
     "scripts/meta/session_heartbeat.py": "scripts/session_heartbeat.py",
     "scripts/meta/session_start.py": "scripts/session_start.py",
     "scripts/meta/session_status.py": "scripts/session_status.py",
+    "scripts/meta/session_resume.py": "scripts/session_resume.py",
+    "scripts/coordination_inbox.py": "scripts/coordination_inbox.py",
+    "scripts/coordination_messages.py": "scripts/coordination_messages.py",
+    "scripts/meta/coordination_inbox.py": "scripts/meta/coordination_inbox.py",
+    "scripts/meta/coordination_messages.py": "scripts/meta/coordination_messages.py",
     "scripts/sync_plan_status.py": "scripts/sync_plan_status.py",
     "scripts/meta/check_coordination_claims.py": "scripts/check_coordination_claims.py",
     "scripts/meta/check_agents_sync.py": "scripts/check_agents_sync.py",
@@ -107,6 +113,7 @@ WORKTREE_ONLY_SYNC_SUPPORT_FILES: dict[str, str] = {
     "enforced_planning/__init__.py": "enforced_planning/__init__.py",
     "enforced_planning/concern_routing.py": "enforced_planning/concern_routing.py",
     "enforced_planning/coordination_claims.py": "enforced_planning/coordination_claims.py",
+    "enforced_planning/coordination_messages.py": "enforced_planning/coordination_messages.py",
     "enforced_planning/doc_authority.py": "enforced_planning/doc_authority.py",
     "enforced_planning/push_safety.py": "enforced_planning/push_safety.py",
     "enforced_planning/session_contracts.py": "enforced_planning/session_contracts.py",
@@ -119,6 +126,11 @@ WORKTREE_ONLY_SYNC_SUPPORT_FILES: dict[str, str] = {
     "scripts/meta/session_heartbeat.py": "scripts/session_heartbeat.py",
     "scripts/meta/session_start.py": "scripts/session_start.py",
     "scripts/meta/session_status.py": "scripts/session_status.py",
+    "scripts/meta/session_resume.py": "scripts/session_resume.py",
+    "scripts/coordination_inbox.py": "scripts/coordination_inbox.py",
+    "scripts/coordination_messages.py": "scripts/coordination_messages.py",
+    "scripts/meta/coordination_inbox.py": "scripts/meta/coordination_inbox.py",
+    "scripts/meta/coordination_messages.py": "scripts/meta/coordination_messages.py",
     "scripts/meta/check_push_safety.py": "scripts/check_push_safety.py",
     "scripts/meta/worktree-coordination/create_worktree.py": "scripts/worktree-coordination/create_worktree.py",
     "scripts/meta/worktree-coordination/create_publish_worktree.py": "scripts/worktree-coordination/create_publish_worktree.py",
@@ -519,7 +531,10 @@ def install_or_plan(
     drift_files = list(static_plan.drift_files)
     blockers = list(static_plan.blockers)
     if not worktree_only:
-        runtime_error = context_runtime_error(repo_root)
+        runtime_error = context_runtime_error(
+            repo_root,
+            require_pydantic=not relationship_context_only,
+        )
         if runtime_error:
             blockers.append(runtime_error)
     if relationship_context_only:
@@ -544,7 +559,10 @@ def install_or_plan(
     )
 
     if not skip_hook_wiring and not worktree_only:
-        hook_actions, hook_writes, _ = plan_hook_generation(_hook_target(repo_root))
+        hook_actions, hook_writes, _ = plan_hook_generation(
+            _hook_target(repo_root),
+            include_coordination_messages=not relationship_context_only,
+        )
         duplicate_hook_paths = set(file_writes).intersection(hook_writes)
         for path in duplicate_hook_paths:
             if file_writes[path] != hook_writes[path]:

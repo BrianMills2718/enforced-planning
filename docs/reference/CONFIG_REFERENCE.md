@@ -106,11 +106,12 @@ worktree targets.
 
 ## messaging
 
-| Key | Type | Default | Read By | Default When Absent |
-|-----|------|---------|---------|---------------------|
-| `messaging.enabled` | bool | `false` | **Not read by any script** 📋 | No effect |
-| `messaging.require_ack` | bool | `true` | **Not read by any script** 📋 | No effect |
-| `messaging.inbox_dir` | string | `".claude/messages"` | **Not read by any script** 📋 | No effect (`send_message.py` hardcodes this path) |
+The canonical mailbox is enabled when installed and derives its storage root
+from the canonical claims directory (`../messages-v1`). It has no independent
+identity or enablement registry. Message TTL and acknowledgement disposition
+are typed request fields. Legacy `messaging.enabled`, `messaging.require_ack`,
+and `messaging.inbox_dir` values are ignored compatibility residue; the legacy
+Markdown inbox is not an authority.
 
 ## ci
 

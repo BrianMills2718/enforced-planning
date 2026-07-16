@@ -1,6 +1,6 @@
 # Plan #67: Cross-Client Mailbox and Acknowledgement
 
-**Status:** In Progress
+**Status:** Complete
 **Type:** implementation
 **Priority:** High
 **phase_ref:** "Phase 9 — fleet adoption and framework maintenance"
@@ -17,12 +17,13 @@ bounded Codex app-server steering spike on 2026-07-15 after reviewing external
 prior art. That initial authorization covered only Slice 0's disposable
 instrument and retained readout.
 
-Brian authorized this agent to take over implementation on 2026-07-15. That
-authorization activates Slice 1 only: the canonical message/receipt walking
-skeleton and package-backed CLI. Slice 2 hooks, installer rollout,
-concern-router cutover, and live cross-client pilot remain outside this slice.
+Brian authorized this agent to take over implementation on 2026-07-15. Slice 1
+landed first as the canonical message/receipt walking skeleton. Brian then
+approved continuing the documented plan and explicitly authorized this agent
+to take over implementation, activating Slice 2 lifecycle wiring, installer
+rollout, concern-router cutover, and the bounded bidirectional pilot.
 
-- Request mode: `plan_and_implement` for Slice 1
+- Request mode: `plan_and_implement` for Slices 1 and 2
 - Design depth: Standard
 - Execution profile: `production-internal` — coordination state can redirect
   work in shared repositories, but all current operators are trusted.
@@ -395,6 +396,28 @@ work.
 **Done when:** M67-4 and M67-6 through M67-8 pass; the live pilot retains exact
 message and receipt IDs; unsupported real-time claims are absent.
 
+**Observed 2026-07-15/16:** shared session start, resume, and heartbeat results
+now poll the same package mailbox for both clients, while the generated Claude
+hook additionally injects notices after governed read boundaries. The governed
+installer ships the package module and thin inbox wrapper, and its runtime
+probe requires the package dependencies before hook rollout. Concern routing
+now persists unpublished-lane concerns in the canonical mailbox and labels PR
+comments `fallback_published`. The legacy Claude inbox hooks are compatibility
+redirects that never read or mutate Markdown inbox state.
+
+The retained pilot under `docs/evidence/plan67_mailbox_pilot/` exercised the
+source command surfaces in separate processes for `codex:pilot-67` and
+`claude-code:pilot-67`. Both directions produced an immutable message, an
+observation receipt, and an explicit acknowledgement receipt. This is bounded
+cross-process adapter evidence, not evidence that two independently reasoning
+model sessions were asynchronously interrupted.
+
+The terminal Slice 2 verification passed 71 focused coordination, lifecycle,
+hook, installer, and router tests; focused Ruff and strict mypy; framework
+self-test; and an isolated wheel build. The full suite reported 647 passed, 1
+skipped, and the same 12 unrelated worktree/import-root baseline failures
+already recorded by Slice 1.
+
 ### Future, only after evidence
 
 Remote multi-host transport or asynchronous injection requires a new plan and a
@@ -424,10 +447,10 @@ at the terminal claim because this plan changes shared coordination contracts.
 | C67-1 | One canonical message/receipt model distinguishes persistence, runtime acceptance, observation, acknowledgement, and expiry. | source + both-sign tests | A — strict source + both-sign filesystem tests |
 | C67-2 | Recipient resolution reuses canonical session/claim identity and fails on ambiguity. | source + tests | A — live-claim resolver + unique/unknown/ambiguous tests |
 | C67-3 | Claude and Codex use the same core send/poll/acknowledge operations. | source + adapter tests | A — bidirectional session-identity tests + shared CLI core |
-| C67-4 | Governed-repo install/upgrade exposes the shared commands without copied logic. | clean fixture test | F — planned only |
-| C67-5 | One live bidirectional pilot retains message and acknowledgement evidence. | observed run + retained receipts | F — planned only |
-| C67-6 | Legacy inbox and PR comments cannot masquerade as acknowledged delivery. | negative tests + docs check | F overall — legacy-inbox half has A/test evidence; PR-comment routing remains Slice 2 |
-| C67-7 | Support claims distinguish managed event-driven delivery from lifecycle-polled recovery and do not promise arbitrary-session interruption. | source/docs test | D — plan wording corrected; implementation docs not built |
+| C67-4 | Governed-repo install/upgrade exposes the shared commands without copied logic. | clean fixture test | A — clean full/worktree installer fixtures and hook-generation tests |
+| C67-5 | One live bidirectional pilot retains message and acknowledgement evidence. | observed run + retained receipts | B — observed cross-process pilot with exact integrity-wrapped records; not two live reasoning agents |
+| C67-6 | Legacy inbox and PR comments cannot masquerade as acknowledged delivery. | negative tests + docs check | A — legacy non-consumption and PR fallback-evidence tests plus redirect docs |
+| C67-7 | Support claims distinguish managed event-driven delivery from lifecycle-polled recovery and do not promise arbitrary-session interruption. | source/docs test | A — lifecycle/hook source, support matrix, operator guide, and adapter tests |
 | C67-8 | One installed-version Codex app-server session accepts and processes correlated active-turn and idle-turn messages without a fork. | observed protocol transcript + bounded instrument test | B — observed on Codex 0.144.1; terminal-event reliability defect retained |
 
 ## Files Affected
@@ -458,9 +481,12 @@ this list against the reviewed codebase before activation.
 | legacy migration cannot preserve identity | Leave a tombstone/read-only legacy view and require manual disposition; no guessed acknowledgement. |
 | live bidirectional pilot fails | Keep support experimental and do not retire the human relay. |
 
-## Next action
+## Completion record
 
-Land and close the verified Slice 1 lane. Slice 2 may then wire lifecycle hooks,
-installer propagation, concern-router evidence ceilings, and the bounded live
-cross-client pilot through the canonical package. Do not retire the legacy
-human relay until that observed pilot passes.
+Slices 0 through 2 are complete for the bounded claim. The canonical mailbox,
+lifecycle-polled client path, Claude read-boundary acceleration, installer
+propagation, concern-router evidence ceiling, compatibility redirects, and
+bidirectional pilot evidence are present. Future remote transport or automatic
+injection into arbitrary unmanaged sessions requires a separate plan and must
+not weaken the persistence/observation/acknowledgement distinction established
+here.

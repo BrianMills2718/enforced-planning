@@ -16,12 +16,24 @@ from typing import Any
 
 import yaml  # type: ignore[import-untyped]
 
-from enforced_planning import coordination_claims, push_safety, session_contracts
+from enforced_planning import coordination_claims, coordination_messages, push_safety, session_contracts
 from enforced_planning import doc_authority
 from enforced_planning.worktree_paths import resolve_canonical_repo_root
 
 
 WORKTREE_LIFECYCLE_CONFIG_PATH = Path(__file__).with_name("worktree_lifecycle.yaml")
+
+
+def _poll_mailbox(*, agent: str, project: str, session_id: str) -> dict[str, Any]:
+    """Inject canonical mailbox state into a shared lifecycle response."""
+
+    notice = coordination_messages.poll_session_inbox(
+        agent=agent,
+        project=project,
+        session_id=session_id,
+        observe=True,
+    )
+    return notice.model_dump(mode="json")
 
 
 def _load_worktree_lifecycle_policy(path: Path) -> tuple[str, frozenset[str], frozenset[str], frozenset[str]]:
@@ -634,6 +646,11 @@ def start_session(
         "broader_goal": contract.broader_goal,
         "tracker_path": str(tracker_path),
         "plan_ref": contract.plan_ref,
+        "coordination_mailbox": _poll_mailbox(
+            agent=agent,
+            project=project,
+            session_id=resolved_session_id,
+        ),
     }
 
 
@@ -682,6 +699,11 @@ def heartbeat_session(
         "session_id": resolved_session_id,
         "heartbeat_at": heartbeat_at,
         "tracker_paths_updated": sorted(tracker_paths_updated),
+        "coordination_mailbox": _poll_mailbox(
+            agent=agent,
+            project=project,
+            session_id=resolved_session_id,
+        ),
     }
 
 
@@ -985,6 +1007,11 @@ def resume_session(
         "session_id": resolved_session_id,
         "tracker_path": tracker_path_text,
         "plan_ref": claim.plan_ref,
+        "coordination_mailbox": _poll_mailbox(
+            agent=agent,
+            project=project,
+            session_id=resolved_session_id,
+        ),
     }
 
 

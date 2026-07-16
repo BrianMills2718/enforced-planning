@@ -355,6 +355,15 @@ The following rules prevent both under-verification and gate inflation:
 - **Reuse unchanged evidence.** Broad evidence may be reused only when its
   source commit, dependency revision or lock, configuration, and command are
   unchanged. Record those values rather than rerunning a suite by habit.
+- **Separate executing dependencies from moving upstream refs.** Evidence binds
+  to the exact clean revision whose bytes executed and to any required
+  capability ancestry. During exploration, later movement of an observed
+  upstream branch is visible but does not invalidate evidence from unchanged
+  frozen bytes. At integration, record a semantic relevance disposition for
+  the reviewed upstream snapshot and block any later movement until the new
+  range is assessed. At release, use an immutable pin and block unresolved
+  drift. The invoking command must bind the required stage; a manifest cannot
+  weaken a terminal gate merely by labeling itself exploratory.
 - **Do not manufacture authority transitions.** A new authority pass is needed
   when permission changes, a one-use external resource is about to be consumed,
   shared state changed, or a terminal claim is issued. Producing another

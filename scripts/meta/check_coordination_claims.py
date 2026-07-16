@@ -50,10 +50,10 @@ def normalize_claim(data: dict[str, Any], *, source_file: str | None = None) -> 
     return _impl.normalize_claim(data, source_file=source_file)
 
 
-def check_claims(project: str | None = None) -> list[ClaimRecord]:
-    """Delegate live-claim loading while honoring script-level CLAIMS_DIR overrides."""
+def check_claims(project: str | None = None, *, claims_dir: Path | None = None) -> list[ClaimRecord]:
+    """Delegate live-claim loading with an optional explicit registry."""
     _sync_runtime_config()
-    return _impl.check_claims(project)
+    return _impl.check_claims(project, claims_dir=claims_dir)
 
 
 def evaluate_claim(candidate: ClaimRecord, *, active_claims: list[ClaimRecord] | None = None) -> ClaimCheckResult:

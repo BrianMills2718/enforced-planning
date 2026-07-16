@@ -468,13 +468,14 @@ def normalize_claim(data: dict[str, Any], *, source_file: str | None = None) -> 
     )
 
 
-def _load_claims() -> list[ClaimRecord]:
-    """Load all live claim files, pruning expired entries on read."""
-    if not CLAIMS_DIR.exists():
+def _load_claims(claims_dir: Path | None = None) -> list[ClaimRecord]:
+    """Load live claim files from the configured or explicitly supplied registry."""
+    resolved_claims_dir = claims_dir or CLAIMS_DIR
+    if not resolved_claims_dir.exists():
         return []
     claims: list[ClaimRecord] = []
     now = datetime.now(timezone.utc)
-    for claim_file in CLAIMS_DIR.glob("*.yaml"):
+    for claim_file in resolved_claims_dir.glob("*.yaml"):
         try:
             data = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
         except Exception:
@@ -516,9 +517,9 @@ def _claim_filename(agent: str, project: str, scope: str) -> str:
     return f"{safe(agent)}_{safe(project)}_{safe(scope)}.yaml"
 
 
-def check_claims(project: str | None = None) -> list[ClaimRecord]:
-    """Check for active live claims, optionally filtered by project."""
-    claims = [claim for claim in _load_claims() if claim.is_live()]
+def check_claims(project: str | None = None, *, claims_dir: Path | None = None) -> list[ClaimRecord]:
+    """Check active claims, optionally selecting a registry and project."""
+    claims = [claim for claim in _load_claims(claims_dir) if claim.is_live()]
     if project:
         claims = [claim for claim in claims if project in claim.projects]
     return claims

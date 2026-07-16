@@ -3,7 +3,7 @@ name = "enforced-planning"
 version = "1.0.0"
 description = "Portable framework for enforced planning, context gating, and doc-code alignment in AI-assisted development"
 requires-python = ">=3.11"
-dependencies = ["PyYAML>=6.0"]
+dependencies = ["PyYAML>=6.0", "pydantic>=2.11,<3"]
 
 [project.optional-dependencies]
 dev = ["pytest", "ruff", "mypy", "vulture"]

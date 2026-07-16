@@ -17,9 +17,10 @@ import os
 import sys
 import tempfile
 import uuid
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Annotated, Any, Literal, NoReturn
+from typing import Annotated, Any, Literal, NoReturn, cast
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, ValidationError, model_validator
 
@@ -396,16 +397,20 @@ class CoordinationMessageStore:
 
     def _live_claims(self, project: str | None = None) -> list[coordination_claims.ClaimRecord]:
         """Read canonical live identity records without introducing another registry."""
-        parameters = inspect.signature(coordination_claims.check_claims).parameters
+        check_claims = cast(
+            "Callable[..., list[coordination_claims.ClaimRecord]]",
+            coordination_claims.check_claims,
+        )
+        parameters = inspect.signature(check_claims).parameters
         if "claims_dir" in parameters:
-            return coordination_claims.check_claims(project, claims_dir=self.claims_dir)
+            return check_claims(project, claims_dir=self.claims_dir)
         canonical_claims_dir = Path(coordination_claims.CLAIMS_DIR).expanduser().resolve()
         if self.claims_dir != canonical_claims_dir:
             raise CoordinationMessageError(
                 "Installed claim registry cannot read a custom claims directory; "
                 "upgrade enforced_planning.coordination_claims before overriding claims_dir"
             )
-        return coordination_claims.check_claims(project)
+        return check_claims(project)
 
     def _require_live_session(self, session_id: str) -> None:
         """Fail when a caller or exact recipient is absent from live claims."""

@@ -278,6 +278,8 @@ def _recovery_action_for_claim(claim: coordination_claims.ClaimRecord) -> str:
         return "resume_or_finish_handoff"
     if health_status == "stale":
         return "resume_or_abandon_or_prune"
+    if health_status == "weak":
+        return "repair_session_contract"
     return "continue"
 
 
@@ -744,6 +746,7 @@ def status_sessions(
                 "tracker_path": claim.tracker_path,
                 "claim_status": claim.status,
                 "health_status": coordination_claims.claim_runtime_status(claim),
+                "health_issues": coordination_claims.claim_health_issues(claim),
                 "current_phase": tracker_section.get("current_phase") if isinstance(tracker_section, dict) else None,
                 "intended_next_phases": tracker_section.get("intended_next_phases") if isinstance(tracker_section, dict) else [],
                 "depends_on_repos": tracker_section.get("depends_on_repos") if isinstance(tracker_section, dict) else [],

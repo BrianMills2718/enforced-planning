@@ -128,11 +128,59 @@ def test_start_session_creates_tracker_and_updates_claim(tmp_path: Path, monkeyp
         source_file=str(claim_file),
     )
     assert loaded_claim is not None
+    assert coordination_claims.claim_health_status(loaded_claim) == "healthy"
     assert loaded_claim.session_name == "cross-project-session-lifecycle-enforcement"
     assert loaded_claim.broader_goal == "Cross-Project Session Lifecycle Enforcement"
     assert loaded_claim.tracker_path == payload["tracker_path"]
     assert Path(payload["tracker_path"]).exists()
     assert payload["plan_ref"] == "Plan #31"
+
+
+def test_status_sessions_routes_incomplete_plan_claim_to_contract_repair(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Session status must expose missing contract fields instead of healthy None values."""
+
+    claims_dir = tmp_path / "claims"
+    claims_dir.mkdir()
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    monkeypatch.setattr(session_lifecycle.coordination_claims, "CLAIMS_DIR", claims_dir)
+    worktree = tmp_path / "repo" / "worktrees" / "plan0141-canonical-record-evidence"
+    worktree.mkdir(parents=True)
+    claim_path = claims_dir / "codex_onto-canon6_plan0141-canonical-record-evidence.yaml"
+    claim_path.write_text(
+        yaml.safe_dump(
+            {
+                "agent": "codex",
+                "projects": ["onto-canon6"],
+                "scope": "plan0141-canonical-record-evidence",
+                "intent": "Add canonical-record evidence",
+                "claim_type": "write",
+                "write_paths": ["src/onto_canon6/document_map/complete_document_semantic_v2.py"],
+                "plan_ref": "Plan #0141 Greer row 10302 vertical slice",
+                "branch": "plan0141-canonical-record-evidence",
+                "worktree_path": str(worktree),
+                "session_id": "codex:plan0141",
+                "status": "active",
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    payload = session_lifecycle.status_sessions(project="onto-canon6")
+
+    assert payload["session_count"] == 1
+    session = payload["sessions"][0]
+    assert session["health_status"] == "weak"
+    assert session["health_issues"] == [
+        "missing_repo_root",
+        "missing_session_name",
+        "missing_broader_goal",
+        "missing_tracker_path",
+    ]
+    assert session["recovery_action"] == "repair_session_contract"
 
 
 def test_start_session_requires_plan_ref_without_unplanned_override(

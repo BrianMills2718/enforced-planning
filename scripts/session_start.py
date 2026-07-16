@@ -11,7 +11,6 @@ from pathlib import Path
 
 def _bootstrap_package() -> None:
     """Load local package support or the target repo's upstream bootstrap."""
-
     current = Path(__file__).resolve()
     for parent in current.parents:
         if (parent / "enforced_planning").is_dir():
@@ -36,6 +35,7 @@ from enforced_planning import session_lifecycle  # noqa: E402
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    """Parse the complete session-start contract without hidden defaults."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--agent", required=True)
     parser.add_argument("--project", required=True)
@@ -61,6 +61,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Start the session and expose its initial mailbox state."""
     args = parse_args(argv)
     payload = session_lifecycle.start_session(
         agent=args.agent,

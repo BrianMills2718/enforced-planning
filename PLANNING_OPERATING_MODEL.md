@@ -365,13 +365,19 @@ The following rules prevent both under-verification and gate inflation:
   unrelated work and treat repeated full-suite runs as the normal remedy.
 - **Separate executing dependencies from moving upstream refs.** Evidence binds
   to the exact clean revision whose bytes executed and to any required
-  capability ancestry. During exploration, later movement of an observed
-  upstream branch is visible but does not invalidate evidence from unchanged
-  frozen bytes. At integration, record a semantic relevance disposition for
-  the reviewed upstream snapshot and block any later movement until the new
-  range is assessed. At release, use an immutable pin and block unresolved
-  drift. The invoking command must bind the required stage; a manifest cannot
-  weaken a terminal gate merely by labeling itself exploratory.
+  capability ancestry. Forward movement of an upstream branch whose new bytes
+  did not execute is an observation, not execution drift. At integration,
+  record the reviewed snapshot and its semantic relevance, but do not
+  invalidate or rerun an exact green batch merely because later upstream
+  commits exist. Assess the new range before changing the authorized execution
+  pin or making a claim that includes that range. Reuse the exact batch when the
+  range is irrelevant to its protected decision; invalidate it when candidate
+  bytes, executing dependency bytes, required ancestry, configuration, or the
+  protected claim changes. At release, use an immutable pin and block unresolved
+  drift. Non-forward movement may create a separate durability or reproducibility
+  blocker, but it does not retroactively change the bytes that executed. The
+  invoking command must bind the required stage; a manifest cannot weaken a
+  terminal gate merely by labeling itself exploratory.
 - **Do not manufacture authority transitions.** A new authority pass is needed
   when permission changes, a one-use external resource is about to be consumed,
   shared state changed, or a terminal claim is issued. Producing another

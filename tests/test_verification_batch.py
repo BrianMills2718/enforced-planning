@@ -103,6 +103,33 @@ def test_check_rejects_new_commit_on_frozen_branch(tmp_path: Path) -> None:
         check_batch(repo)
 
 
+def test_check_ignores_unexecuted_remote_branch_movement(tmp_path: Path) -> None:
+    """A moving upstream ref cannot invalidate unchanged frozen execution bytes."""
+
+    repo = _repo(tmp_path)
+    remote = tmp_path / "remote.git"
+    updater = tmp_path / "updater"
+    subprocess.run(["git", "init", "--bare", "-q", str(remote)], check=True)
+    subprocess.run(["git", "-C", str(repo), "remote", "add", "origin", str(remote)], check=True)
+    subprocess.run(["git", "-C", str(repo), "push", "-q", "-u", "origin", "main"], check=True)
+    batch = freeze_batch(repo, decision="Merge exact candidate", command="make check")
+
+    subprocess.run(["git", "clone", "-q", "-b", "main", str(remote), str(updater)], check=True)
+    subprocess.run(["git", "-C", str(updater), "config", "user.name", "Upstream User"], check=True)
+    subprocess.run(
+        ["git", "-C", str(updater), "config", "user.email", "upstream@example.com"], check=True
+    )
+    (updater / "upstream-only.txt").write_text("not executed by candidate\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(updater), "add", "upstream-only.txt"], check=True)
+    subprocess.run(
+        ["git", "-C", str(updater), "commit", "-qm", "advance unexecuted upstream"],
+        check=True,
+    )
+    subprocess.run(["git", "-C", str(updater), "push", "-q", "origin", "main"], check=True)
+
+    assert check_batch(repo, require_active=True) == batch
+
+
 def test_thaw_requires_reason_and_retains_invalidation_history(tmp_path: Path) -> None:
     """A required scoped fix can restart verification without silent evidence loss."""
 

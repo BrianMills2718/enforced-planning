@@ -160,17 +160,22 @@ the concrete cases that explain it?
 authorized execution commit, required capability commit/ancestry, observed
 upstream ref and reviewed snapshot, current validation stage
 (`exploratory | integration | release`), drift disposition, and rationale.
-Exploration may report upstream-only movement while execution stays frozen;
-integration requires a relevance judgment and blocks movement beyond its
-reviewed snapshot; release uses an immutable blocking pin. Name the command
-that independently requires the declared stage.
+Upstream-only movement may be reported while execution stays frozen. At
+integration, record a relevance judgment for the reviewed snapshot; later
+forward movement does not invalidate exact evidence unless the authorized pin
+or protected claim expands to include it. Record an irrelevant-range
+disposition and reuse the exact batch, or invalidate and reverify when candidate
+bytes, executing dependency bytes, required ancestry, configuration, or claim
+scope changes. Release uses an immutable blocking pin. Name the command that
+independently requires the declared stage.
 
 **Terminal verification batch:** Before a terminal suite or independent review,
 freeze the clean exact branch head, protected decision, and verification command.
 Reject untracked files unless a narrow operational path is explicitly recorded.
 Queue later ready work behind this batch. If a blocker in the frozen scope
 requires a change, record the invalidation reason, thaw, fix, and open a new
-batch; unrelated scope expansion is not a valid thaw reason.
+batch; unrelated scope expansion and unexecuted upstream branch movement are
+not valid thaw reasons.
 
 | Lane | Trigger | Checks / Evidence | Evidence Reuse Key | Decision Protected |
 |------|---------|-------------------|--------------------|--------------------|

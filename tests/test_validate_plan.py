@@ -349,6 +349,135 @@ def test_validate_plan_warns_when_prior_session_provenance_lacks_citations(tmp_p
     )
 
 
+def test_validate_plan_reports_missing_outcome_first_contract(tmp_path: Path) -> None:
+    """Outcome omissions are visible without becoming legacy-plan hard failures."""
+
+    module = _load_module()
+    plan_file = tmp_path / "07_sample.md"
+    config_file = tmp_path / "relationships.yaml"
+    config_file.write_text(_relationships_config_empty(), encoding="utf-8")
+    plan_file.write_text(
+        "# Sample Plan\n"
+        "**Status:** Draft\n"
+        "**Landscape disposition:** linked\n\n"
+        "## Gap\nCurrent: no behavior. Target: behavior. Why: users need it.\n\n"
+        "## References Reviewed\n- `src/module.py`\n\n"
+        "## Plan\n### Steps\n1. Add infrastructure\n\n"
+        "## Acceptance Criteria\n- [ ] Tests pass\n",
+        encoding="utf-8",
+    )
+
+    result = module.validate_plan(
+        plan_file=plan_file,
+        plan_number=7,
+        relationships=module.load_relationships(config_path=config_file),
+    )
+
+    warning_codes = {warning["code"] for warning in result.warnings}
+    assert {
+        "missing_user_outcome",
+        "missing_canonical_behavioral_example",
+        "missing_critical_path_classification",
+    } <= warning_codes
+    assert result.missing_sections == []
+
+
+def test_validate_plan_accepts_outcome_first_contract(tmp_path: Path) -> None:
+    """A concrete outcome, example, and classification remove rollout warnings."""
+
+    module = _load_module()
+    plan_file = tmp_path / "08_sample.md"
+    config_file = tmp_path / "relationships.yaml"
+    config_file.write_text(_relationships_config_empty(), encoding="utf-8")
+    plan_file.write_text(
+        "# Sample Plan\n"
+        "**Status:** Draft\n"
+        "**Landscape disposition:** linked\n\n"
+        "## Gap\nCurrent: names split. Target: linked mentions. Why: retrieval.\n\n"
+        "## User Outcome\nA reader can retrieve every passage about Jane.\n\n"
+        "## Canonical Behavioral Example\n"
+        "Input: Jane introduces herself, then says I later. Action: query Jane. "
+        "Result: both passages are returned.\n\n"
+        "## References Reviewed\n- `src/module.py`\n\n"
+        "## Plan\n### Critical Path Classification\n"
+        "| Increment | Class | Change |\n|---|---|---|\n"
+        "| Coreference path | `vertical` | Query works |\n\n"
+        "## Acceptance Criteria\n- [ ] Example works end to end\n",
+        encoding="utf-8",
+    )
+
+    result = module.validate_plan(
+        plan_file=plan_file,
+        plan_number=8,
+        relationships=module.load_relationships(config_path=config_file),
+    )
+
+    warning_codes = {warning["code"] for warning in result.warnings}
+    assert "missing_user_outcome" not in warning_codes
+    assert "missing_canonical_behavioral_example" not in warning_codes
+    assert "missing_critical_path_classification" not in warning_codes
+
+
+def test_validate_plan_exempts_trivial_change_from_outcome_first_contract(tmp_path: Path) -> None:
+    """A declared trivial local change is not forced into product-plan ceremony."""
+
+    module = _load_module()
+    plan_file = tmp_path / "09_sample.md"
+    config_file = tmp_path / "relationships.yaml"
+    config_file.write_text(_relationships_config_empty(), encoding="utf-8")
+    plan_file.write_text(
+        "# Sample Plan\n"
+        "**Status:** Draft\n"
+        "**Landscape disposition:** exempt-trivial\n\n"
+        "## Gap\nCurrent: typo. Target: fixed typo. Why: clarity.\n\n"
+        "## References Reviewed\n- `README.md`\n\n"
+        "## Landscape And Prior Art\nReason: one local documentation typo.\n\n"
+        "## Acceptance Criteria\n- [ ] Typo is fixed\n",
+        encoding="utf-8",
+    )
+
+    result = module.validate_plan(
+        plan_file=plan_file,
+        plan_number=9,
+        relationships=module.load_relationships(config_path=config_file),
+    )
+
+    warning_codes = {warning["code"] for warning in result.warnings}
+    assert "missing_user_outcome" not in warning_codes
+    assert "missing_canonical_behavioral_example" not in warning_codes
+    assert "missing_critical_path_classification" not in warning_codes
+
+
+def test_validate_plan_exempts_design_plan_from_behavioral_contract(tmp_path: Path) -> None:
+    """Design plans do not claim implemented behavior and need no runnable example."""
+
+    module = _load_module()
+    plan_file = tmp_path / "10_sample.md"
+    config_file = tmp_path / "relationships.yaml"
+    config_file.write_text(_relationships_config_empty(), encoding="utf-8")
+    plan_file.write_text(
+        "# Design Plan\n"
+        "**Status:** Draft\n"
+        "**Type:** design\n"
+        "**Landscape disposition:** linked\n\n"
+        "## Gap\nCurrent: unclear boundary. Target: a decision. Why: scope.\n\n"
+        "## References Reviewed\n- `src/module.py`\n\n"
+        "## Acceptance Criteria\n- [ ] Boundary decision is recorded\n",
+        encoding="utf-8",
+    )
+
+    result = module.validate_plan(
+        plan_file=plan_file,
+        plan_number=10,
+        relationships=module.load_relationships(config_path=config_file),
+    )
+
+    warning_codes = {warning["code"] for warning in result.warnings}
+    assert "missing_user_outcome" not in warning_codes
+    assert "missing_canonical_behavioral_example" not in warning_codes
+    assert "missing_critical_path_classification" not in warning_codes
+
+
 def _landscape_plan(disposition: str, section: str) -> str:
     """Build a structurally valid plan around one landscape test case."""
     return "\n".join(

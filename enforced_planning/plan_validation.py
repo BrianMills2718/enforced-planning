@@ -38,6 +38,7 @@ PLANS_DIR = ROOT / "docs" / "plans"
 PATH_CLEAN_RE = re.compile(r"[,;:.()]$")
 RESEARCH_CITATION_RE = re.compile(r"^agent_memory:[A-Za-z0-9._-]+$")
 LANDSCAPE_DISPOSITIONS = frozenset({"linked", "inline", "exempt-trivial"})
+CRITICAL_PATH_CLASSES = frozenset({"vertical", "direct_blocker", "enabler", "hardening"})
 LANDSCAPE_URL_RE = re.compile(r"https?://[^\s)`>]+")
 RESEARCH_PROVENANCE_HINTS = (
     re.compile(r"memory context\s*:\s*`?agent-memory recall", re.IGNORECASE),
@@ -602,6 +603,38 @@ def validate_plan(
         _parse_landscape_contract(content)
     )
     warnings.extend(landscape_warnings)
+    plan_type = (_extract_metadata_value(content, "Type") or "implementation").lower()
+    if plan_type.startswith("implementation") and landscape_disposition != "exempt-trivial":
+        user_outcome = extract_section(content, "User Outcome")
+        if len(user_outcome.strip()) < 10:
+            warnings.append({
+                "code": "missing_user_outcome",
+                "message": (
+                    "Non-trivial implementation plans should preserve a plain-language "
+                    "`User Outcome`; supporting infrastructure is not the outcome."
+                ),
+            })
+
+        canonical_example = extract_section(content, "Canonical Behavioral Example")
+        if len(canonical_example.strip()) < 10:
+            warnings.append({
+                "code": "missing_canonical_behavioral_example",
+                "message": (
+                    "Non-trivial implementation plans should preserve the smallest "
+                    "representative input, action, and observable result."
+                ),
+            })
+
+        plan_section = extract_section(content, "Plan").lower()
+        if not any(re.search(rf"\b{re.escape(name)}\b", plan_section) for name in CRITICAL_PATH_CLASSES):
+            warnings.append({
+                "code": "missing_critical_path_classification",
+                "message": (
+                    "Classify planned increments as `vertical`, `direct_blocker`, "
+                    "`enabler`, or `hardening` so substrate work cannot silently "
+                    "advance product status."
+                ),
+            })
     uncertainties = parse_uncertainty_register(content)
     covered = {normalize(p) for p in set(affected) | set(references)}
     try:

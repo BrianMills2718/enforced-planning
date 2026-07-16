@@ -33,6 +33,36 @@
 
 ---
 
+## User Outcome
+
+> **REQUIRED for non-trivial implementation plans.** In one plain-language
+> sentence, state what a user, operator, or consuming system can do when this
+> slice succeeds. Supporting infrastructure is not the outcome.
+
+[The user can ...]
+
+---
+
+## Canonical Behavioral Example
+
+> **REQUIRED for non-trivial implementation plans.** Preserve the smallest
+> representative example that would expose a false completion claim. Attempt or
+> replay it before reviewing substrate evidence.
+
+**Starting input/state:** [smallest representative input]
+
+**Action:** [what the user/operator/system does]
+
+**Expected observable result:** [specific externally inspectable behavior]
+
+**Behavioral evidence:** Unobserved | fixture | test | observed real slice
+
+**Substrate/process evidence:** [schemas/tests/traces/governance that support but do not replace the behavior]
+
+**Failure signal:** [what exact output proves the outcome still does not work]
+
+---
+
 ## References Reviewed
 
 > **REQUIRED:** Cite specific code/docs reviewed before planning.
@@ -155,6 +185,18 @@ release both before handing off."
 ---
 
 ## Plan
+
+### Critical Path Classification
+
+> Classify every increment. Before the canonical example is observed, only
+> `vertical` and reproduced `direct_blocker` work belongs on the critical path.
+> `enabler` and `hardening` completion does not advance product status.
+
+| Increment | Class | Behavior or named blocker changed |
+|-----------|-------|-----------------------------------|
+| [smallest end-to-end slice] | `vertical` | [new observable behavior] |
+| [reproduced failure repair] | `direct_blocker` | [exact blocker removed] |
+| [supporting substrate, if justified] | `enabler` | [why it is not completion] |
 
 ### Steps
 

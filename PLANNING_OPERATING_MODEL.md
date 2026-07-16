@@ -61,6 +61,11 @@ an agent:
 14. **Controls follow an explicit execution profile.** Select controls from the
    claim, exposure, reversibility, and shared-state effect of the current slice.
    A specialized procedure cannot silently promote a PoC into production work.
+15. **The critical path is outcome-first.** Preserve one plain-language user
+   outcome and one canonical behavioral example for every non-trivial
+   implementation plan. Until that example works on the smallest real slice,
+   only vertical work and evidence-backed direct blockers belong on the critical
+   path; enablers and hardening do not advance product status by themselves.
 
 ## Execution Profiles
 
@@ -93,6 +98,40 @@ When rules conflict, the universal protections above apply first, then the
 declared execution profile, then specialized procedures. A skill may refine how
 an applicable control is performed; it may not expand the slice or import a
 higher profile without naming the failure mode it protects.
+
+## Outcome-First Critical Path
+
+Plans exist to produce behavior, not to maximize the number of supporting
+artifacts. Every non-trivial implementation plan therefore owns:
+
+- a **User Outcome**: one plain-language sentence describing what a user,
+  operator, or consuming system can do when the slice succeeds;
+- a **Canonical Behavioral Example**: the smallest representative input,
+  action, and observable result that would disprove a false completion claim;
+- an increment classification: `vertical`, `direct_blocker`, `enabler`, or
+  `hardening`.
+
+The classes have operational meaning:
+
+| Class | Meaning | Critical before the example works? |
+|-------|---------|------------------------------------|
+| `vertical` | Produces or extends the canonical end-to-end behavior. | Yes |
+| `direct_blocker` | Removes a reproduced failure that prevents that behavior. | Yes, while the evidence names the failure. |
+| `enabler` | Adds reusable substrate that may support later behavior. | No; completion is substrate evidence only. |
+| `hardening` | Improves reliability, policy, scale, compatibility, or polish around behavior. | No, unless a current-stage failure makes it a direct blocker. |
+
+Behavioral evidence and substrate/process evidence are reported separately.
+Green unit tests, schemas, transport, governance, traces, and evaluation
+apparatus can prove their own bounded claims, but they cannot substitute for an
+observed canonical example. After three consecutive increments produce neither
+new behavior nor removal of a named direct blocker, stop adding machinery,
+replay the example, and reset the plan around the smallest failing behavior.
+
+For exploratory or LLM-mediated behavior, the example may initially be a
+frozen fixture and full trace. The next promotion step uses the same behavioral
+contract on one smallest real input; it does not require a model comparison,
+large benchmark, or generalized infrastructure unless the current decision
+specifically depends on one.
 
 ## The Model
 
@@ -185,6 +224,9 @@ These are hard ordering rules:
   change may use `exempt-trivial` only with an explicit reason.
 - No non-trivial ADR without a research basis section or explicit research skip.
 - No bounded plan without current vs target framing.
+- No non-trivial implementation plan without a plain-language user outcome,
+  one canonical behavioral example, and increment classification. During the
+  initial rollout this is reported rather than made a legacy-plan hard gate.
 - No cross-project plan without capability or boundary clarity.
 - No design, cross-project, or externally-informed plan without a declared
   research basis for the slice or explicit research skip.

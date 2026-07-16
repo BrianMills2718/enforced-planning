@@ -1,6 +1,6 @@
 # Plan #67: Cross-Client Mailbox and Acknowledgement
 
-**Status:** Planned
+**Status:** In Progress
 **Type:** implementation
 **Priority:** High
 **phase_ref:** "Phase 9 — fleet adoption and framework maintenance"
@@ -14,11 +14,15 @@
 
 Brian authorized the original planning work on 2026-07-15 and authorized the
 bounded Codex app-server steering spike on 2026-07-15 after reviewing external
-prior art. This authorization covers only Slice 0's disposable instrument and
-retained readout. It does not authorize the mailbox implementation, a managed
-fleet migration, a Codex fork, or Hermes adoption.
+prior art. That initial authorization covered only Slice 0's disposable
+instrument and retained readout.
 
-- Request mode: `plan_and_implement` for Slice 0 only
+Brian authorized this agent to take over implementation on 2026-07-15. That
+authorization activates Slice 1 only: the canonical message/receipt walking
+skeleton and package-backed CLI. Slice 2 hooks, installer rollout,
+concern-router cutover, and live cross-client pilot remain outside this slice.
+
+- Request mode: `plan_and_implement` for Slice 1
 - Design depth: Standard
 - Execution profile: `production-internal` — coordination state can redirect
   work in shared repositories, but all current operators are trusted.
@@ -224,7 +228,7 @@ implementation review only if the requirements and lifecycle remain intact.
 - `receipt_id` (system-assigned)
 - `message_id`
 - `recipient_session_id`
-- `event`: `observed | acknowledged`
+- `event`: `runtime_accepted | observed | acknowledged`
 - `recorded_at`
 - for acknowledgements, `disposition`:
   `accepted | declined | deferred | information_only`
@@ -300,7 +304,7 @@ successful file write or PR comment cannot synthesize an acknowledgement.
 |---|---|---|
 | State authority | Immutable JSON message plus append-only receipts | Mutating Markdown status loses event history. Revisit only if the coordination store adopts a transactional event backend. |
 | Identity | Reuse session/claim IDs | Inbox-directory names create a second identity system. |
-| Delivery semantics | `persisted`, `observed`, `acknowledged` | One `delivered` boolean overclaims what a file write proves. |
+| Delivery semantics | `persisted`, `runtime_accepted`, `observed`, `acknowledged` | One `delivered` boolean overclaims what a file write proves. |
 | Delivery | Durable mailbox plus capability-specific acceleration | Lifecycle-only polling is too latent for managed sessions; push-only delivery loses offline messages. |
 | Managed Codex seam | App-server `turn/steer`/`turn/start`, conditional on Slice 0 | Hermes changes runtimes; tmux keystrokes are untyped; inbound MCP notifications do not enter normal Codex TUI sessions today. |
 | Polling | Lifecycle-bound polling as recovery in both clients | A filesystem watcher alone cannot inject into unmanaged hosts. |
@@ -363,6 +367,21 @@ Evidence and the bounded claim are summarized in
 **Done when:** M67-1 through M67-5 pass with source+tests; a persisted-only
 negative control remains unobserved; no legacy inbox file is consulted.
 
+**Observed 2026-07-15:** Slice 1 is implemented in
+`enforced_planning/coordination_messages.py` with thin source and installed-form
+JSON CLI wrappers. The implementation derives its mailbox root from the
+configured canonical claims directory, resolves only live claim/session
+identities, writes integrity-wrapped immutable JSON messages and receipts,
+quarantines corrupt records, and derives status plus a receipt-set digest.
+Codex→Claude and Claude→Codex fixtures exercise the identical core path. The
+67-test coordination/session regression set, focused Ruff, strict mypy, and
+framework self-test pass. The repository-wide suite reports 641 passed, 1
+skipped, and 12 failures in unchanged worktree/import-root tests; none exercise
+the mailbox surface. Those baseline failures are retained as infrastructure
+debt rather than being folded into this plan. Hooks, installer propagation,
+concern-router cutover, and live cross-process acknowledgement remain Slice 2
+work.
+
 ### Slice 2 — Client lifecycle and governed-repo adoption
 
 - Wire Claude startup/governed boundaries and Codex session-start/resume plus
@@ -402,12 +421,12 @@ at the terminal claim because this plan changes shared coordination contracts.
 
 | ID | Criterion | Required evidence | Current grade |
 |---|---|---|---|
-| C67-1 | One canonical message/receipt model distinguishes persistence, observation, acknowledgement, and expiry. | source + both-sign tests | F — planned only |
-| C67-2 | Recipient resolution reuses canonical session/claim identity and fails on ambiguity. | source + tests | F — planned only |
-| C67-3 | Claude and Codex use the same core send/poll/acknowledge operations. | source + adapter tests | F — planned only |
+| C67-1 | One canonical message/receipt model distinguishes persistence, runtime acceptance, observation, acknowledgement, and expiry. | source + both-sign tests | A — strict source + both-sign filesystem tests |
+| C67-2 | Recipient resolution reuses canonical session/claim identity and fails on ambiguity. | source + tests | A — live-claim resolver + unique/unknown/ambiguous tests |
+| C67-3 | Claude and Codex use the same core send/poll/acknowledge operations. | source + adapter tests | A — bidirectional session-identity tests + shared CLI core |
 | C67-4 | Governed-repo install/upgrade exposes the shared commands without copied logic. | clean fixture test | F — planned only |
 | C67-5 | One live bidirectional pilot retains message and acknowledgement evidence. | observed run + retained receipts | F — planned only |
-| C67-6 | Legacy inbox and PR comments cannot masquerade as acknowledged delivery. | negative tests + docs check | F — planned only |
+| C67-6 | Legacy inbox and PR comments cannot masquerade as acknowledged delivery. | negative tests + docs check | F overall — legacy-inbox half has A/test evidence; PR-comment routing remains Slice 2 |
 | C67-7 | Support claims distinguish managed event-driven delivery from lifecycle-polled recovery and do not promise arbitrary-session interruption. | source/docs test | D — plan wording corrected; implementation docs not built |
 | C67-8 | One installed-version Codex app-server session accepts and processes correlated active-turn and idle-turn messages without a fork. | observed protocol transcript + bounded instrument test | B — observed on Codex 0.144.1; terminal-event reliability defect retained |
 
@@ -441,7 +460,7 @@ this list against the reviewed codebase before activation.
 
 ## Next action
 
-Slice 0 is complete. The result supports an app-server-owned event-delivery
-acceleration backed by durable lifecycle recovery; it does not support arbitrary
-TUI injection or terminal-event-only state tracking. Slice 1 remains planned
-and requires separate implementation authorization.
+Land and close the verified Slice 1 lane. Slice 2 may then wire lifecycle hooks,
+installer propagation, concern-router evidence ceilings, and the bounded live
+cross-client pilot through the canonical package. Do not retire the legacy
+human relay until that observed pilot passes.

@@ -42,6 +42,15 @@
   behavior tests pass. The feature branch is pushed but not integrated; the
   live cross-client sync gate correctly remains pointed at canonical `main` and
   is therefore not evidence for this unmerged branch.
+- **Slice 3 — evaluation corpus implemented; model execution open
+  (2026-07-16):** shared-skill commit
+  `eaefb826a32d00489732dd520c5872941dae38af` adds reciprocal handoff cases covering a large single-repository
+  initiative, a bounded cross-repository change, roadmap output without future
+  schemas, exact design consumption, unsupported priority conflict, and
+  delta-only roadmap implications. All 21 repository behavior tests and both
+  skill validators pass. This is **A/source + structural test** evidence that
+  the expectations are present and coherent, not a fresh model-behavior score;
+  no score is claimed until the harness runs with a passing positive control.
 
 ---
 

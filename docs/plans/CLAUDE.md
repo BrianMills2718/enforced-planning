@@ -70,6 +70,7 @@ See `ROADMAP.md` for the full phase map and recommended priority order.
 | 64 | Requirement-Linked Test Relationships (`64_requirement_linked_test_relationships.md`) | High | ✅ Complete (report-only pilot; enforcement deferred) | reviewed expansion before any consolidation or hard gate |
 | 67 | Cross-Client Mailbox and Acknowledgement (`67_cross_client_mailbox_and_acknowledgement.md`) | High | ✅ Complete | Trustworthy Claude Code ↔ Codex coordination without human copy/paste |
 | 68 | Bounded Mailbox Fleet Rollout (`68_bounded_mailbox_fleet_rollout.md`) | High | ✅ Complete | Mailbox adoption without unrelated governance drift |
+| 71 | Effective-Policy Resolution Pilot (`71_effective-policy-resolution-pilot.md`) | High | 📋 Planned | truthful project policy resolution, explanation, and staged enforcement |
 
 ## Status Key
 

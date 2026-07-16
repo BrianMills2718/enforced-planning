@@ -45,7 +45,7 @@
   adding focused regression tests. Agent-skills PR #14 merged as
   `8e4aaf89937415b95c15a3249cec16b06e1e0888`; both skill validators, all 21
   repository behavior tests, and the live four-surface skill sync gate pass.
-- **Slice 2A — naming and landscape alignment implemented, integration open
+- **Slice 2A — naming and landscape alignment complete; root-guide projection pending
   (2026-07-16):** agent-skills commit `af6a3fc` renames the procedures to
   `initiative-roadmap` and `bounded-design` without changing their ownership
   boundary. It adds a mandatory `linked | inline | exempt-trivial` landscape
@@ -53,9 +53,12 @@
   fixture-first boundary seams, derived dashboard projections, and explicit
   roadmap adoption/revision/decline of design handbacks. Both skills pass the
   skill validator, all 23 repository behavior tests pass, and trigger-overlap
-  screening reports zero collisions. Client-surface sync remains a post-merge
-  integration check because the sync validator intentionally points clients at
-  canonical main rather than a feature worktree.
+  screening reports zero collisions. Four-surface client sync passed after the
+  merge. Enforced Planning and Project Meta references are on their default
+  branches through `5e89488` and `046aaea2`. The only remaining projection is
+  the symlinked root `CLAUDE.md`/`AGENTS.md`, whose active owner received durable
+  message `msg_5b21b631c966ffa918042c5af81f7646`; it does not block use of the
+  renamed canonical skills.
 - **Slice 3 — evaluation corpus implemented; model execution open
   (2026-07-16):** shared-skill commit
   `eaefb826a32d00489732dd520c5872941dae38af` adds reciprocal handoff cases covering a large single-repository

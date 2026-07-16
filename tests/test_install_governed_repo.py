@@ -36,8 +36,12 @@ RELATIONSHIP_CONTEXT_ROLLOUT_PATHS = {
 MAILBOX_COMMON_ROLLOUT_PATHS = {
     ".claude/hooks/notify-coordination-messages.sh",
     ".claude/settings.json",
+    ".codex/hooks.json",
+    ".codex/hooks/notify-coordination-messages.sh",
+    "scripts/coordination_hook.py",
     "scripts/coordination_inbox.py",
     "scripts/coordination_messages.py",
+    "scripts/meta/coordination_hook.py",
     "scripts/meta/coordination_inbox.py",
     "scripts/meta/coordination_messages.py",
     "scripts/meta/session_heartbeat.py",
@@ -226,7 +230,7 @@ def test_coordination_messages_only_rollout_is_bounded_runnable_and_idempotent(
     assert written.returncode == 0, written.stdout + written.stderr
     for relative in MAILBOX_ROLLOUT_PATHS:
         assert (tmp_path / relative).exists()
-    for wrapper in ("coordination_inbox.py", "coordination_messages.py"):
+    for wrapper in ("coordination_hook.py", "coordination_inbox.py", "coordination_messages.py"):
         help_result = subprocess.run(
             [sys.executable, str(tmp_path / "scripts/meta" / wrapper), "--help"],
             cwd=str(tmp_path),

@@ -43,6 +43,7 @@ HOOK_FILES: dict[str, str] = {
 
 MAILBOX_HOOK_FILES: dict[str, str] = {
     ".claude/hooks/notify-coordination-messages.sh": "hooks/claude/notify-coordination-messages.sh",
+    ".codex/hooks/notify-coordination-messages.sh": "hooks/codex/notify-coordination-messages.sh",
 }
 
 # Support Python scripts sourced from this canonical framework.
@@ -58,7 +59,9 @@ MAILBOX_SUPPORT_FILES: dict[str, str] = {
     "enforced_planning/coordination_claims.py": "enforced_planning/coordination_claims.py",
     "enforced_planning/coordination_messages.py": "enforced_planning/coordination_messages.py",
     "scripts/coordination_inbox.py": "scripts/coordination_inbox.py",
+    "scripts/coordination_hook.py": "scripts/coordination_hook.py",
     "scripts/meta/coordination_inbox.py": "scripts/meta/coordination_inbox.py",
+    "scripts/meta/coordination_hook.py": "scripts/meta/coordination_hook.py",
 }
 
 READ_HOOK = {
@@ -71,6 +74,16 @@ MAILBOX_HOOK = {
     "type": "command",
     "command": "bash .claude/hooks/notify-coordination-messages.sh",
     "timeout": 3000,
+}
+
+CODEX_MAILBOX_HOOK = {
+    "type": "command",
+    "command": (
+        'bash "$(git rev-parse --show-toplevel)/.codex/hooks/'
+        'notify-coordination-messages.sh"'
+    ),
+    "timeout": 3,
+    "statusMessage": "Checking coordination requests",
 }
 
 GATE_HOOK = {
@@ -260,6 +273,34 @@ def _render_settings(settings: dict[str, Any]) -> str:
     return json.dumps(settings, indent=2, sort_keys=False) + "\n"
 
 
+def _merge_codex_mailbox_hooks(settings: dict[str, Any]) -> bool:
+    """Install mailbox polling on supported Codex lifecycle boundaries."""
+
+    changed = False
+    for event_name, matcher in (
+        ("SessionStart", "startup|resume|clear|compact"),
+        ("UserPromptSubmit", ""),
+        ("PostToolUse", "*"),
+    ):
+        hooks = _ensure_matcher_block(settings, event_name=event_name, matcher=matcher)
+        if _ensure_hook_command(hooks, CODEX_MAILBOX_HOOK):
+            changed = True
+    return changed
+
+
+def _plan_codex_settings(target: TargetRepo) -> tuple[list[str], dict[Path, str]]:
+    """Plan a preserving merge into the target's native Codex hooks file."""
+
+    path = target.root / ".codex" / "hooks.json"
+    settings = _read_json_file(path)
+    changed = _merge_codex_mailbox_hooks(settings)
+    rendered = _render_settings(settings)
+    current = path.read_text(encoding="utf-8") if path.exists() else None
+    if current != rendered or changed:
+        return ["sync:.codex/hooks.json"], {path: rendered}
+    return [], {}
+
+
 def _relative(path: Path, repo_root: Path) -> str:
     """Return a repo-relative POSIX display path."""
 
@@ -333,6 +374,11 @@ def plan_generation(
         actions.append("sync:.claude/settings.json")
         file_writes[target.settings_file] = rendered_settings
 
+    if include_coordination_messages:
+        codex_actions, codex_writes = _plan_codex_settings(target)
+        actions.extend(codex_actions)
+        file_writes.update(codex_writes)
+
     return actions, file_writes, rendered_settings
 
 
@@ -372,6 +418,9 @@ def plan_coordination_message_generation(
     if current_settings != rendered_settings or changed:
         actions.append("sync:.claude/settings.json")
         file_writes[target.settings_file] = rendered_settings
+    codex_actions, codex_writes = _plan_codex_settings(target)
+    actions.extend(codex_actions)
+    file_writes.update(codex_writes)
     return actions, file_writes, rendered_settings
 
 
@@ -391,18 +440,18 @@ def validate_hooks(target: TargetRepo) -> list[str]:
     import subprocess
 
     errors: list[str] = []
-    hooks_dir = target.root / ".claude" / "hooks"
-    if not hooks_dir.exists():
-        return errors
-    for sh_file in sorted(hooks_dir.rglob("*.sh")):
-        result = subprocess.run(
-            ["bash", "-n", str(sh_file)],
-            capture_output=True,
-            text=True,
-        )
-        if result.returncode != 0:
-            rel = _relative(sh_file, target.root)
-            errors.append(f"syntax error in {rel}: {result.stderr.strip()}")
+    for hooks_dir in (target.root / ".claude" / "hooks", target.root / ".codex" / "hooks"):
+        if not hooks_dir.exists():
+            continue
+        for sh_file in sorted(hooks_dir.rglob("*.sh")):
+            result = subprocess.run(
+                ["bash", "-n", str(sh_file)],
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode != 0:
+                rel = _relative(sh_file, target.root)
+                errors.append(f"syntax error in {rel}: {result.stderr.strip()}")
     return errors
 
 

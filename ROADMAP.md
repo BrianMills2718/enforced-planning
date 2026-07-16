@@ -179,6 +179,7 @@ exists and measuring it.
 | Recursive doc-spine dogfood | Make `enforced-planning` itself the first adopter of the execution-brief/current-state/gap-summary/ancestor-read contract before downstream rollout. See Plans #54 and #55. | Plan #54 design complete; Plan #55 implementation planned |
 | Modality-aware planning maintenance | Fold `/design-plan` into the canonical operating model and plan templates so plans distinguish deductive, exploratory, and hybrid work. See Plan #56. | ✅ Complete |
 | Cross-client mailbox | Add client-neutral persisted/observed/acknowledged message semantics on the existing claim/session identity model. See Plan #67. | ISSUE-054 confirmed the Claude-only inbox has no reliable Codex delivery path |
+| Native Codex mailbox lifecycle | Install Codex lifecycle hooks and prove a live send-observe-acknowledge chain. See Plan #100. | Plan #67 persisted messages but did not deliver them into independent Codex sessions |
 | Multi-tool adoption | Cursor/Windsurf hook adapters when their hook surfaces are publicly documented | External dependency: tool documentation |
 | Project-meta topic-research adoption | Apply portable topic-research pattern in `research_synthesis/` with manifests, ADR links, freshness metadata | Plans #43/#44/#35 complete |
 

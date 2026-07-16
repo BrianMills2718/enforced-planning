@@ -483,3 +483,113 @@ def test_agent_inbox_cli_injects_notice_and_observation_evidence(
     status = store.status(MessageStatusRequest(message_id=persisted.message.message_id))
     assert status.state == "observed"
     assert len(status.receipt_paths) == 1
+
+
+def test_codex_lifecycle_hook_observes_repeats_until_ack_then_hides(
+    mailbox: tuple[CoordinationMessageStore, Path, Path],
+) -> None:
+    """Native Codex delivery must persist until the exact recipient acknowledges it."""
+
+    store, claims_dir, root = mailbox
+    persisted = store.send(
+        _send_request(
+            sender=CLAUDE_SESSION,
+            recipient=CODEX_SESSION,
+            idempotency_key="codex-hook",
+        )
+    )
+    hook_input = json.dumps(
+        {
+            "session_id": "thread-123",
+            "cwd": str(Path(__file__).resolve().parents[1]),
+            "hook_event_name": "SessionStart",
+        }
+    )
+    command = [
+        "python",
+        "scripts/coordination_hook.py",
+        "--claims-dir",
+        str(claims_dir),
+        "--root",
+        str(root),
+    ]
+
+    first = subprocess.run(
+        command,
+        input=hook_input,
+        cwd=Path(__file__).resolve().parents[1],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert first.returncode == 0, first.stderr or first.stdout
+    first_payload = json.loads(first.stdout)
+    context = first_payload["hookSpecificOutput"]["additionalContext"]
+    assert persisted.message.message_id in context
+    assert "Narrow the docs claim" in context
+    assert store.status(MessageStatusRequest(message_id=persisted.message.message_id)).state == "observed"
+
+    repeated = subprocess.run(
+        command,
+        input=hook_input,
+        cwd=Path(__file__).resolve().parents[1],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert persisted.message.message_id in repeated.stdout
+    status = store.status(MessageStatusRequest(message_id=persisted.message.message_id))
+    assert len(status.receipt_paths) == 1
+
+    store.acknowledge(
+        AcknowledgeMessageRequest(
+            message_id=persisted.message.message_id,
+            current_session_id=CODEX_SESSION,
+            disposition="accepted",
+        )
+    )
+    after_ack = subprocess.run(
+        command,
+        input=hook_input,
+        cwd=Path(__file__).resolve().parents[1],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert after_ack.returncode == 0
+    assert after_ack.stdout == ""
+
+
+def test_codex_lifecycle_hook_rejects_malformed_input_without_receipt(
+    mailbox: tuple[CoordinationMessageStore, Path, Path],
+) -> None:
+    """Invalid lifecycle input must warn visibly without manufacturing observation evidence."""
+
+    store, claims_dir, root = mailbox
+    persisted = store.send(
+        _send_request(
+            sender=CLAUDE_SESSION,
+            recipient=CODEX_SESSION,
+            idempotency_key="malformed-hook",
+        )
+    )
+    result = subprocess.run(
+        [
+            "python",
+            "scripts/coordination_hook.py",
+            "--claims-dir",
+            str(claims_dir),
+            "--root",
+            str(root),
+        ],
+        input='{"session_id":"thread-123"}',
+        cwd=Path(__file__).resolve().parents[1],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0
+    assert "coordination mailbox unavailable" in json.loads(result.stdout)["systemMessage"]
+    status = store.status(MessageStatusRequest(message_id=persisted.message.message_id))
+    assert status.state == "persisted"
+    assert status.receipt_paths == ()

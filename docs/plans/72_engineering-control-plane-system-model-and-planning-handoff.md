@@ -3,6 +3,7 @@
 **Status:** In Progress
 **Type:** architecture alignment + bounded implementation
 **Priority:** High
+**Landscape disposition:** linked
 **phase_ref:** "portable planning and context architecture"
 **goal_ref:** "ecosystem-context-integrity"
 **adrs_referenced:** ["ADR-2026-07-14-context-docstrings-and-exhaustive-relationships"]
@@ -133,6 +134,16 @@ recreated.
 for durable architectural boundaries. Without the handoff, agents either copy
 roadmap authority into design packets or invent strategy while planning one
 bounded change.
+
+## Landscape And Prior Art
+
+The detailed source inventory is retained in the `Research` section below. Its
+internal landscape shows that Project Meta, Enforced Planning, and the shared
+skill repository already own the required authority, context, policy,
+capability, and planning mechanisms. The adopted implication is therefore to
+reuse and align those systems, rename only the two ambiguous procedure
+entrypoints, and avoid a new planning framework, context compiler, registry, or
+graph database.
 
 ## Research
 

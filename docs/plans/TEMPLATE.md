@@ -7,6 +7,7 @@
 **goal_ref:** "goal-id"     <!-- see vision/08_GOAL_TAXONOMY.md -->
 **adrs_referenced:** []     <!-- e.g. ["ADR-0010"] -->
 **research_citations:** []  <!-- e.g. ["agent_memory:sm-0123"] -->
+**Landscape disposition:** linked  <!-- linked | inline | exempt-trivial -->
 **Blocked By:** None
 <!-- Dependency format:
   - #N              same-project plan reference (checker validates it resolves)
@@ -62,6 +63,26 @@ If no additional research beyond repo-local references was needed, write:
 If this slice materially relies on prior agent-session findings, record those
 IDs in `research_citations` using `agent_memory:<entry_id>`. Use this section
 for repo-local, investigation, synthesis, and external references as usual.
+
+---
+
+## Landscape And Prior Art
+
+> **REQUIRED for non-trivial work before requirements and architecture
+> stabilize.** Choose one disposition in the plan header:
+> - `linked`: link a dated landscape artifact or external source here;
+> - `inline`: include explicit `Alternatives` and `Project implications` below;
+> - `exempt-trivial`: include an explicit `Reason` for a local, reversible change.
+
+- `docs/research/YYYY-MM-DD-topic-landscape.md` - retained comparison and recommendation
+
+**Alternatives:** Adopt, extend, build, buy, defer, or reject the relevant options.
+
+**Project implications:** State which assumptions, requirements, boundaries,
+architecture, ADRs, or plan decisions change because of the comparison.
+
+**Refresh trigger:** Name the date, dependency change, new evidence, or decision
+that requires this landscape to be reviewed again.
 
 ---
 

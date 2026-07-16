@@ -73,6 +73,7 @@ See `ROADMAP.md` for the full phase map and recommended priority order.
 | 71 | Effective-Policy Resolution Pilot (`71_effective-policy-resolution-pilot.md`) | High | 📋 Planned | truthful project policy resolution, explanation, and staged enforcement |
 | 72 | Engineering Control-Plane System Model and Planning Handoff (`72_engineering-control-plane-system-model-and-planning-handoff.md`) | High | 🚧 In Progress | explicit roadmap-to-design transport and bounded skill alignment |
 | 100 | Native Codex Mailbox Lifecycle Delivery (`100_codex_mailbox_lifecycle_delivery.md`) | Critical | ✅ Complete | reliable request observation without human relay |
+| 101 | Landscape And Prior-Art Planning Contract (`101_landscape_and_prior_art_contract.md`) | High | 🚧 In Progress | reusable research-before-build contract and report-only validation |
 
 ## Status Key
 

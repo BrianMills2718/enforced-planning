@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from io import StringIO
 from pathlib import Path
 from typing import Any, Sequence
+from urllib.parse import urlparse
 
 import yaml  # type: ignore[import-untyped]
 
@@ -36,6 +37,8 @@ ROOT = _detect_repo_root(Path(__file__).resolve())
 PLANS_DIR = ROOT / "docs" / "plans"
 PATH_CLEAN_RE = re.compile(r"[,;:.()]$")
 RESEARCH_CITATION_RE = re.compile(r"^agent_memory:[A-Za-z0-9._-]+$")
+LANDSCAPE_DISPOSITIONS = frozenset({"linked", "inline", "exempt-trivial"})
+LANDSCAPE_URL_RE = re.compile(r"https?://[^\s)`>]+")
 RESEARCH_PROVENANCE_HINTS = (
     re.compile(r"memory context\s*:\s*`?agent-memory recall", re.IGNORECASE),
     re.compile(r"agent-memory recall.+\bfindings\b", re.IGNORECASE | re.DOTALL),
@@ -267,7 +270,7 @@ def parse_mentioned_adrs(content: str) -> set[int]:
 def _extract_metadata_value(content: str, field_name: str) -> str | None:
     """Extract one bolded metadata field value from the plan header."""
     match = re.search(
-        rf"^\*\*{re.escape(field_name)}:\*\*\s*(.+?)\s*$",
+        rf"^\*\*{re.escape(field_name)}:\*\*[ \t]*(.*?)[ \t]*$",
         content,
         re.IGNORECASE | re.MULTILINE,
     )
@@ -333,6 +336,78 @@ def _parse_research_citations(content: str) -> tuple[list[str], list[dict[str, s
         })
 
     return citations, warnings
+
+
+def _parse_landscape_contract(
+    content: str,
+) -> tuple[str | None, list[str], list[dict[str, str]]]:
+    """Parse the report-only landscape disposition and its structural evidence."""
+    raw_disposition = _extract_metadata_value(content, "Landscape disposition")
+    disposition = raw_disposition.lower() if raw_disposition else None
+    section = extract_section(content, "Landscape And Prior Art")
+    references = extract_paths(section)
+    urls = [url.rstrip(".,;:") for url in LANDSCAPE_URL_RE.findall(section)]
+    url_hosts = {urlparse(url).netloc for url in urls}
+    references = [reference for reference in references if reference not in url_hosts]
+    for clean_url in urls:
+        if clean_url not in references:
+            references.append(clean_url)
+
+    warnings: list[dict[str, str]] = []
+    if disposition is None:
+        warnings.append({
+            "code": "missing_landscape_disposition",
+            "message": (
+                "Declare `Landscape disposition` as `linked`, `inline`, or "
+                "`exempt-trivial`; this is report-only during rollout."
+            ),
+        })
+        return None, references, warnings
+
+    if disposition not in LANDSCAPE_DISPOSITIONS:
+        warnings.append({
+            "code": "invalid_landscape_disposition",
+            "message": (
+                f"Unknown landscape disposition `{raw_disposition}`; expected "
+                "`linked`, `inline`, or `exempt-trivial`."
+            ),
+        })
+        return disposition, references, warnings
+
+    if not section:
+        warnings.append({
+            "code": "missing_landscape_section",
+            "message": "The declared landscape disposition requires a `Landscape And Prior Art` section.",
+        })
+        return disposition, references, warnings
+
+    lowered_section = section.lower()
+    if disposition == "linked" and not references:
+        warnings.append({
+            "code": "missing_landscape_reference",
+            "message": "A `linked` landscape must retain at least one repo-relative path or HTTP(S) source.",
+        })
+    elif disposition == "inline":
+        missing_labels = [
+            label
+            for label in ("alternatives", "project implications")
+            if label not in lowered_section
+        ]
+        if missing_labels:
+            warnings.append({
+                "code": "incomplete_inline_landscape",
+                "message": (
+                    "An `inline` landscape must include explicit `Alternatives` and "
+                    f"`Project implications`; missing: {', '.join(missing_labels)}."
+                ),
+            })
+    elif disposition == "exempt-trivial" and "reason" not in lowered_section:
+        warnings.append({
+            "code": "weak_landscape_exemption",
+            "message": "An `exempt-trivial` landscape must include an explicit `Reason`.",
+        })
+
+    return disposition, references, warnings
 
 
 def _research_provenance_hint_present(content: str) -> bool:
@@ -451,6 +526,8 @@ class ValidationResult:
     affected_files: list[str]
     references_reviewed: list[str]
     research_citations: list[str]
+    landscape_disposition: str | None
+    landscape_references: list[str]
     uncertainties: list[str]
     required_docs_strict: set[str]
     required_docs_soft: set[str]
@@ -474,6 +551,10 @@ class ValidationResult:
             "affected_files": self.affected_files,
             "references_reviewed": self.references_reviewed,
             "research_citations": self.research_citations,
+            "landscape": {
+                "disposition": self.landscape_disposition,
+                "references": self.landscape_references,
+            },
             "uncertainties_count": len(self.uncertainties),
             "required_docs": {
                 "strict": sorted(self.required_docs_strict),
@@ -517,6 +598,10 @@ def validate_plan(
 
     references = parse_references_reviewed(content)
     research_citations, warnings = _parse_research_citations(content)
+    landscape_disposition, landscape_references, landscape_warnings = (
+        _parse_landscape_contract(content)
+    )
+    warnings.extend(landscape_warnings)
     uncertainties = parse_uncertainty_register(content)
     covered = {normalize(p) for p in set(affected) | set(references)}
     try:
@@ -584,6 +669,8 @@ def validate_plan(
         affected_files=sorted(affected),
         references_reviewed=sorted(references),
         research_citations=research_citations,
+        landscape_disposition=landscape_disposition,
+        landscape_references=landscape_references,
         uncertainties=uncertainties,
         required_docs_strict=required_strict_norm,
         required_docs_soft=required_soft_norm,
@@ -615,6 +702,10 @@ def print_summary(result: ValidationResult) -> None:
     print(f"\nResearch citations: {len(result.research_citations)}")
     for citation in result.research_citations:
         print(f"  - {citation}")
+
+    print(f"\nLandscape disposition: {result.landscape_disposition or '(missing)'}")
+    for reference in result.landscape_references:
+        print(f"  - {reference}")
 
     print("\nGOVERNANCE:")
     if result.governance:

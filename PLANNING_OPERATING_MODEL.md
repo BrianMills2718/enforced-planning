@@ -28,32 +28,37 @@ an agent:
 3. **Research should compound, not reset.** Dated investigations answer a
    specific question; topic research syntheses preserve reusable conclusions so
    future ADRs and plans can build on them.
-4. **Gap-driven planning.** Plans implement an explicit delta between current
+4. **Landscape before design commitment.** For non-trivial work, compare the
+   relevant products and workflows, open-source libraries, standards and
+   reference architectures, research and best practices, and known failures
+   before requirements and architecture stabilize. Record what to adopt,
+   extend, build, buy, defer, or reject and why.
+5. **Gap-driven planning.** Plans implement an explicit delta between current
    state and target state.
-5. **Capabilities and boundaries define enduring shape.** The reusable
+6. **Capabilities and boundaries define enduring shape.** The reusable
    capability or boundary contract comes before roadmap sequencing because it
    determines what the system is trying to become.
-6. **Roadmaps sequence validated gaps.** Phases exist to order major gates once
+7. **Roadmaps sequence validated gaps.** Phases exist to order major gates once
    the enduring shape is clear enough.
-7. **Plans are bounded execution contracts.** They pre-make local decisions,
+8. **Plans are bounded execution contracts.** They pre-make local decisions,
    define tests, and state acceptance criteria.
-8. **Journey notebooks are decision-scoped projections.** When a non-obvious
+9. **Journey notebooks are decision-scoped projections.** When a non-obvious
    multi-stage seam needs an executable walkthrough to resolve a named review
    decision, a notebook renders the journey by importing canonical contracts
    and fixtures. It is not a second contract authority or a permanent gate.
-9. **Tests and gates are pre-code artifacts.** They should be defined before
+10. **Tests and gates are pre-code artifacts.** They should be defined before
    implementation and follow TDD where feasible.
-10. **Observability is part of the contract.** It is not a postscript. Long-lived
+11. **Observability is part of the contract.** It is not a postscript. Long-lived
    or production-facing work is incomplete without a visibility surface.
-11. **ADRs are cross-cutting decisions, not just another linear level.** They
+12. **ADRs are cross-cutting decisions, not just another linear level.** They
    record durable choices whenever a capability, boundary, roadmap, or plan
    needs one, and they must record the research basis behind the choice or say
    explicitly that research was skipped.
-12. **Verification is stage-aware.** Protect irreversible boundaries when they
+13. **Verification is stage-aware.** Protect irreversible boundaries when they
    occur, verify the affected surface at each increment, and reserve broad
    authority and closeout suites for terminal claims. A check that does not
    protect the current decision is ceremony, not rigor.
-13. **Controls follow an explicit execution profile.** Select controls from the
+14. **Controls follow an explicit execution profile.** Select controls from the
    claim, exposure, reversibility, and shared-state effect of the current slice.
    A specialized procedure cannot silently promote a PoC into production work.
 
@@ -103,6 +108,7 @@ North Star / Thesis
     -> Questions
     -> Investigation Memos
     -> Topic Research Syntheses
+    -> Landscape / Prior-Art Decision
     -> Current-State Assessment
     -> Gap Analysis
     -> Capabilities / Boundary Docs / PRD surfaces
@@ -127,6 +133,7 @@ provided it records a durable architectural choice.
 | Questions | What do we need to verify first? | Investigation | Surface unknowns before planning |
 | Investigation memos | What did we learn when we looked? | ADR or plan | Dated, question-specific, usually immutable |
 | Topic research syntheses | What reusable conclusions already exist on this topic? | ADR, capability doc, or plan | Living topic memory; links investigations, prior art, and freshness triggers |
+| Landscape / prior-art decision | What already exists, what has failed, and what should we adopt, extend, build, buy, defer, or reject? | Stable requirements, boundaries, or architecture for non-trivial work | May be a linked dated artifact or a compact inline comparison. Include sources, observations, project implications, recommendation, uncertainty, and a refresh trigger. |
 | Current-state assessment | What exists now? | Gap analysis | Critical for legacy repos. Must include agent-memory recall for repos with prior session history (ADR-0010). |
 | Gap analysis | What delta matters now? | Roadmap or plan | Can be repeated throughout project life |
 | Capabilities / boundary docs / PRD surfaces | What enduring capability or contract are we shaping? | Roadmap | Cross-project work should define this early |
@@ -158,6 +165,12 @@ ownership, and policy applicability remain separate sources even when a
 generated context view joins them. Automation may propose relationships; it
 does not silently establish purpose or authority.
 
+A landscape is an upstream planning input, not a new source of runtime truth.
+Reviewed relationship edges may record that it `informs` requirements,
+architecture, ADRs, or a bounded plan with `maintenance: reconcile`. If a
+landscape becomes stale, downstream decisions are reviewed for impact; they are
+not silently invalidated or overwritten.
+
 ## What Is Strict vs. What Is Recommended
 
 ### Strict dependencies
@@ -167,6 +180,9 @@ These are hard ordering rules:
 - No non-trivial design or bounded plan without a modality diagnosis:
   deductive/plan-first, exploratory/ladder, or hybrid with explicit partition.
 - No bounded plan without prior investigation or explicit unresolved questions.
+- No non-trivial project design without a linked or inline landscape comparison
+  before requirements and architecture stabilize. A trivial local, reversible
+  change may use `exempt-trivial` only with an explicit reason.
 - No non-trivial ADR without a research basis section or explicit research skip.
 - No bounded plan without current vs target framing.
 - No cross-project plan without capability or boundary clarity.

@@ -344,6 +344,139 @@ def test_validate_plan_warns_when_prior_session_provenance_lacks_citations(tmp_p
     )
 
 
+def _landscape_plan(disposition: str, section: str) -> str:
+    """Build a structurally valid plan around one landscape test case."""
+    return "\n".join(
+        [
+            "# Landscape Plan",
+            "**Status:** Draft",
+            f"**Landscape disposition:** {disposition}",
+            "",
+            "## Gap",
+            "Current: landscape is implicit. Target: landscape is explicit.",
+            "",
+            "## References Reviewed",
+            "- CLAUDE.md",
+            "",
+            "## Landscape And Prior Art",
+            section,
+            "",
+            "## Acceptance Criteria",
+            "- [ ] Landscape disposition is visible",
+        ]
+    ) + "\n"
+
+
+def _validate_landscape(tmp_path: Path, disposition: str, section: str):
+    """Validate one landscape fixture with an empty relationship graph."""
+    module = _load_module()
+    plan_file = tmp_path / "landscape.md"
+    config_file = tmp_path / "relationships.yaml"
+    plan_file.write_text(_landscape_plan(disposition, section), encoding="utf-8")
+    config_file.write_text(_relationships_config_empty(), encoding="utf-8")
+    return module.validate_plan(
+        plan_file=plan_file,
+        plan_number=101,
+        relationships=module.load_relationships(config_path=config_file),
+    )
+
+
+def test_validate_plan_accepts_linked_landscape_and_projects_it_to_json(tmp_path: Path) -> None:
+    result = _validate_landscape(
+        tmp_path,
+        "linked",
+        "- `docs/research/runtime-landscape.md` - compared available runtimes",
+    )
+
+    assert result.landscape_disposition == "linked"
+    assert result.landscape_references == ["docs/research/runtime-landscape.md"]
+    assert not [warning for warning in result.warnings if "landscape" in warning["code"]]
+    assert result.to_payload()["landscape"] == {
+        "disposition": "linked",
+        "references": ["docs/research/runtime-landscape.md"],
+    }
+
+    url_result = _validate_landscape(
+        tmp_path,
+        "linked",
+        "- https://example.com/runtime-prior-art - external comparison",
+    )
+    assert url_result.landscape_references == ["https://example.com/runtime-prior-art"]
+    assert not [
+        warning for warning in url_result.warnings if "landscape" in warning["code"]
+    ]
+
+
+def test_validate_plan_warns_when_linked_landscape_has_no_reference(tmp_path: Path) -> None:
+    result = _validate_landscape(
+        tmp_path,
+        "linked",
+        "We discussed the available choices but did not retain a source.",
+    )
+
+    assert any(
+        warning["code"] == "missing_landscape_reference"
+        for warning in result.warnings
+    )
+
+
+def test_validate_plan_accepts_complete_inline_landscape(tmp_path: Path) -> None:
+    result = _validate_landscape(
+        tmp_path,
+        "inline",
+        "**Alternatives:** adopt, extend, or build.\n\n"
+        "**Project implications:** adopt the stable interface and retain an adapter.",
+    )
+
+    assert not [warning for warning in result.warnings if "landscape" in warning["code"]]
+
+
+def test_validate_plan_warns_when_inline_landscape_omits_implications(tmp_path: Path) -> None:
+    result = _validate_landscape(
+        tmp_path,
+        "inline",
+        "**Alternatives:** adopt, extend, or build.",
+    )
+
+    assert any(
+        warning["code"] == "incomplete_inline_landscape"
+        for warning in result.warnings
+    )
+
+
+def test_validate_plan_accepts_reasoned_trivial_exemption(tmp_path: Path) -> None:
+    result = _validate_landscape(
+        tmp_path,
+        "exempt-trivial",
+        "**Reason:** This is a local typo correction with no design choice.",
+    )
+
+    assert not [warning for warning in result.warnings if "landscape" in warning["code"]]
+
+
+def test_validate_plan_warns_on_bare_trivial_exemption(tmp_path: Path) -> None:
+    result = _validate_landscape(tmp_path, "exempt-trivial", "Not needed.")
+
+    assert any(
+        warning["code"] == "weak_landscape_exemption"
+        for warning in result.warnings
+    )
+
+
+def test_validate_plan_warns_on_missing_or_invalid_landscape_disposition(tmp_path: Path) -> None:
+    missing = _validate_landscape(tmp_path, "", "**Reason:** no declaration")
+    invalid = _validate_landscape(tmp_path, "complete", "**Reason:** unknown state")
+
+    assert any(
+        warning["code"] == "missing_landscape_disposition"
+        for warning in missing.warnings
+    )
+    assert any(
+        warning["code"] == "invalid_landscape_disposition"
+        for warning in invalid.warnings
+    )
+
+
 def test_file_context_includes_required_reading_defaults(tmp_path: Path) -> None:
     """File context should include repo-wide required-reading defaults."""
 

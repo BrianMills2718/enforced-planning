@@ -111,13 +111,15 @@ Before choosing a planning protocol, classify the work:
 Every non-trivial piece of work follows this sequence. Each step depends on the
 ones before it — don't skip ahead.
 
-1. **Requirements** — what must the system do, what counts as success/failure
-2. **Research** — what already exists (prior art, libraries, benchmarks). Search
-   before building. Don't re-derive what the field already knows.
-3. **Boundaries** — major components, what's in/out of scope
-4. **Domain model** — objects, relationships, constraints
-5. **Contracts** — input/output boundaries, failure semantics, types
-6. **Schema** — tables, APIs, typed models derived from above
+1. **Goal and scenario** — whose outcome matters and what concrete workflow must improve
+2. **Landscape and prior art** — what already exists across products, workflows,
+   open-source libraries, standards, research, and known failures. Decide what
+   to adopt, extend, build, buy, defer, or reject before requirements stabilize.
+3. **Requirements** — what must the system do, what counts as success/failure
+4. **Boundaries** — major components, what's in/out of scope
+5. **Domain model** — objects, relationships, constraints
+6. **Contracts** — input/output boundaries, failure semantics, types
+7. **Schema** — tables, APIs, typed models derived from above
 
 ADRs accumulate whenever a fork is encountered and a choice is made. Glossary
 entries accumulate whenever a term needs definition. Neither is a discrete
@@ -132,6 +134,7 @@ Every plan must be concrete enough that an agent can execute autonomously:
 - **Gap**: what exists now vs what we want (requirements)
 - **Modality assessment**: what is deductive, exploratory, or hybrid
 - **Research**: what was investigated before planning (references reviewed)
+- **Landscape disposition**: linked, inline, or reasoned `exempt-trivial`
 - **Acceptance criteria**: what passes and what fails
 - **Failure modes**: what can go wrong and how to diagnose it
 

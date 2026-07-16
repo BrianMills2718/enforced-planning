@@ -11,6 +11,30 @@ adrs: {}
 requirements: []
 relationships: []
 
+# Reviewed planning lineage example. A landscape informs downstream decisions;
+# it does not become runtime truth or silently override those authorities.
+# relationships:
+#   - source: docs/research/2026-07-16-runtime-landscape.md
+#     target: docs/requirements.md
+#     relation: informs
+#     reason: Prior art constrains requirements and the build/adopt boundary.
+#     maintenance: reconcile
+#   - source: docs/research/2026-07-16-runtime-landscape.md
+#     target: docs/architecture/current/runtime.md
+#     relation: informs
+#     reason: The integration shape depends on the reviewed landscape.
+#     maintenance: reconcile
+#   - source: docs/research/2026-07-16-runtime-landscape.md
+#     target: docs/adrs/ADR-0001-runtime-choice.md
+#     relation: evidence_for
+#     reason: The ADR records the durable choice made from this comparison.
+#     maintenance: reconcile
+#   - source: docs/research/2026-07-16-runtime-landscape.md
+#     target: docs/plans/01_runtime_adapter.md
+#     relation: informs
+#     reason: The bounded slice implements the selected low-lock-in path.
+#     maintenance: reconcile
+
 # Optional report-only test-quality audit scope. Reviewed ``tests`` edges can
 # link cohesive files or individual ``file.py::test_symbol`` selectors to
 # requirements, boundaries, levels, polarity, realism, and failure modes.

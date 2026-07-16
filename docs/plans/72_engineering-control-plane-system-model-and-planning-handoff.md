@@ -145,6 +145,10 @@ reuse and align those systems, rename only the two ambiguous procedure
 entrypoints, and avoid a new planning framework, context compiler, registry, or
 graph database.
 
+Representative linked authorities: `PLANNING_OPERATING_MODEL.md`,
+`docs/reference/PLANNING_HANDOFF_V1.md`, and Project Meta
+`vision/02_FRAMEWORK.md`.
+
 ## Research
 
 - Project Meta `vision/01_NORTH_STAR.md` — agentic engineering control-plane

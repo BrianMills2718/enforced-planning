@@ -1073,6 +1073,27 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
     assert "--disposition" in close_help.stdout
     assert "--recovery-ref" in close_help.stdout
 
+    safe_remove_help = subprocess.run(
+        [
+            sys.executable,
+            str(
+                tmp_path
+                / "scripts"
+                / "meta"
+                / "worktree-coordination"
+                / "safe_worktree_remove.py"
+            ),
+            "--help",
+        ],
+        cwd=str(tmp_path),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert safe_remove_help.returncode == 0, (
+        safe_remove_help.stdout + safe_remove_help.stderr
+    )
+
     subprocess.run(["git", "init", "-q", "-b", "main", str(tmp_path)], check=True)
     subprocess.run(["git", "-C", str(tmp_path), "add", "-A"], check=True)
     subprocess.run(

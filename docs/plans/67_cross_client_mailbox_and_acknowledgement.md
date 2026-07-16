@@ -397,10 +397,12 @@ work.
 message and receipt IDs; unsupported real-time claims are absent.
 
 **Observed 2026-07-15/16:** shared session start, resume, and heartbeat results
-now poll the same package mailbox for both clients, while the generated Claude
-hook additionally injects notices after governed read boundaries. The governed
-installer ships the package module and thin inbox wrapper, and its runtime
-probe requires the package dependencies before hook rollout. Concern routing
+poll the same package mailbox for both clients. Plan #100 subsequently added
+native Codex `SessionStart`, `UserPromptSubmit`, and `PostToolUse` hooks alongside
+the Claude governed-read hook. This is lifecycle-triggered discovery, not
+asynchronous interruption of an idle unmanaged client. The governed installer
+ships the package module and thin client adapters, and its runtime probe
+requires the package dependencies before hook rollout. Concern routing
 now persists unpublished-lane concerns in the canonical mailbox and labels PR
 comments `fallback_published`. The legacy Claude inbox hooks are compatibility
 redirects that never read or mutate Markdown inbox state.
@@ -448,7 +450,7 @@ at the terminal claim because this plan changes shared coordination contracts.
 | C67-2 | Recipient resolution reuses canonical session/claim identity and fails on ambiguity. | source + tests | A — live-claim resolver + unique/unknown/ambiguous tests |
 | C67-3 | Claude and Codex use the same core send/poll/acknowledge operations. | source + adapter tests | A — bidirectional session-identity tests + shared CLI core |
 | C67-4 | Governed-repo install/upgrade exposes the shared commands without copied logic. | clean fixture test | A — clean full/worktree installer fixtures and hook-generation tests |
-| C67-5 | One live bidirectional pilot retains message and acknowledgement evidence. | observed run + retained receipts | B — observed cross-process pilot with exact integrity-wrapped records; not two live reasoning agents |
+| C67-5 | One live bidirectional pilot retains message and acknowledgement evidence. | observed run + retained receipts | B — observed cross-process CLI pilot with exact integrity-wrapped records; native Codex hook delivery is covered separately by Plan #100 |
 | C67-6 | Legacy inbox and PR comments cannot masquerade as acknowledged delivery. | negative tests + docs check | A — legacy non-consumption and PR fallback-evidence tests plus redirect docs |
 | C67-7 | Support claims distinguish managed event-driven delivery from lifecycle-polled recovery and do not promise arbitrary-session interruption. | source/docs test | A — lifecycle/hook source, support matrix, operator guide, and adapter tests |
 | C67-8 | One installed-version Codex app-server session accepts and processes correlated active-turn and idle-turn messages without a fork. | observed protocol transcript + bounded instrument test | B — observed on Codex 0.144.1; terminal-event reliability defect retained |
@@ -486,7 +488,8 @@ this list against the reviewed codebase before activation.
 Slices 0 through 2 are complete for the bounded claim. The canonical mailbox,
 lifecycle-polled client path, Claude read-boundary acceleration, installer
 propagation, concern-router evidence ceiling, compatibility redirects, and
-bidirectional pilot evidence are present. Future remote transport or automatic
-injection into arbitrary unmanaged sessions requires a separate plan and must
-not weaken the persistence/observation/acknowledgement distinction established
-here.
+bidirectional CLI pilot evidence are present. Plan #100 owns native Codex
+lifecycle delivery and acknowledgement projection. Future remote transport or
+automatic injection into arbitrary unmanaged sessions requires a separate plan
+and must not weaken the persistence/observation/acknowledgement distinction
+established here.

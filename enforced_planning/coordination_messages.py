@@ -769,7 +769,9 @@ def poll_session_inbox(
             observe=observe,
         )
     )
-    active = tuple(view for view in result.messages if not view.expired)
+    active = tuple(
+        view for view in result.messages if not view.expired and not view.acknowledged
+    )
     if active:
         displayed = active[:max_messages]
         rendered_messages: list[str] = []

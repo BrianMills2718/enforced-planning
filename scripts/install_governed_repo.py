@@ -83,8 +83,10 @@ SYNC_SUPPORT_FILES: dict[str, str] = {
     "scripts/meta/session_status.py": "scripts/session_status.py",
     "scripts/meta/session_resume.py": "scripts/session_resume.py",
     "scripts/coordination_inbox.py": "scripts/coordination_inbox.py",
+    "scripts/coordination_hook.py": "scripts/coordination_hook.py",
     "scripts/coordination_messages.py": "scripts/coordination_messages.py",
     "scripts/meta/coordination_inbox.py": "scripts/meta/coordination_inbox.py",
+    "scripts/meta/coordination_hook.py": "scripts/meta/coordination_hook.py",
     "scripts/meta/coordination_messages.py": "scripts/meta/coordination_messages.py",
     "scripts/sync_plan_status.py": "scripts/sync_plan_status.py",
     "scripts/meta/check_coordination_claims.py": "scripts/check_coordination_claims.py",
@@ -159,8 +161,10 @@ RELATIONSHIP_CONTEXT_SYNC_SUPPORT_FILES: dict[str, str] = {
 
 COORDINATION_MESSAGES_SHARED_FILES: dict[str, str] = {
     "scripts/coordination_inbox.py": "scripts/coordination_inbox.py",
+    "scripts/coordination_hook.py": "scripts/coordination_hook.py",
     "scripts/coordination_messages.py": "scripts/coordination_messages.py",
     "scripts/meta/coordination_inbox.py": "scripts/meta/coordination_inbox.py",
+    "scripts/meta/coordination_hook.py": "scripts/meta/coordination_hook.py",
     "scripts/meta/coordination_messages.py": "scripts/meta/coordination_messages.py",
     "scripts/meta/session_heartbeat.py": "scripts/session_heartbeat.py",
     "scripts/meta/session_resume.py": "scripts/session_resume.py",
@@ -247,7 +251,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     scope.add_argument(
         "--coordination-messages-only",
         action="store_true",
-        help="Only sync the canonical mailbox core, lifecycle adapters, Claude hook, and settings entry.",
+        help="Only sync the canonical mailbox core, lifecycle adapters, and Claude/Codex hooks.",
     )
     parser.add_argument(
         "--strict-governed",

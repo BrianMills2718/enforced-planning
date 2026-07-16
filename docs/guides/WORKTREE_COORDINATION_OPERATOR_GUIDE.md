@@ -399,7 +399,8 @@ What it does:
 - persists immutable cross-client messages and append-only observation and
   acknowledgement receipts beside the canonical claim registry
 - injects mailbox notices into shared session start, resume, and heartbeat
-  responses; Claude additionally polls after governed read boundaries
+  responses; Claude additionally polls after governed read boundaries; Codex
+  polls on native session start, user prompt, and post-tool lifecycle events
 
 What it does not do:
 
@@ -416,11 +417,12 @@ What concern routing adds:
   observation or acknowledgement
 - review overlap is visible coordination state, not silent out-of-band chatter
 
-Codex discovery is lifecycle-polled unless a separately certified managed
-app-server owns its thread. Claude's hook accelerates discovery at read
-boundaries but is still not real-time presence. The compatibility
-`check-inbox.sh` and `notify-inbox-startup.sh` paths now redirect to the JSON
-mailbox and never read or mutate `.claude/messages/inbox/`.
+Codex and Claude discovery is lifecycle-polled unless a separately certified
+managed app-server owns the thread. Project-local Codex hooks require project
+trust and one-time review through `/hooks`; a changed hook is skipped until its
+new definition is trusted. Neither client's hook is real-time presence. The
+compatibility `check-inbox.sh` and `notify-inbox-startup.sh` paths now redirect
+to the JSON mailbox and never read or mutate `.claude/messages/inbox/`.
 
 ## Repo Opt-In Contract
 

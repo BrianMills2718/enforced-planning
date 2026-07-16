@@ -57,6 +57,8 @@ def test_generate_hook_wiring_dry_run_reports_expected_changes(tmp_path: Path) -
     assert "sync:.claude/hooks/gate-edit.sh" in payload["actions"]
     assert "sync:.claude/hooks/track-reads.sh" in payload["actions"]
     assert "sync:.claude/hooks/notify-coordination-messages.sh" in payload["actions"]
+    assert "sync:.codex/hooks/notify-coordination-messages.sh" in payload["actions"]
+    assert "sync:.codex/hooks.json" in payload["actions"]
     assert "sync:scripts/check_required_reading.py" in payload["actions"]
     assert "sync:scripts/meta/hook_log.py" in payload["actions"]
     assert "sync:scripts/meta/context_packet.py" in payload["actions"]
@@ -129,6 +131,9 @@ def test_generate_hook_wiring_writes_files_and_merges_settings(tmp_path: Path) -
 
     assert (tmp_path / ".claude" / "hooks" / "gate-edit.sh").exists()
     assert (tmp_path / ".claude" / "hooks" / "track-reads.sh").exists()
+    codex_hooks = json.loads((tmp_path / ".codex" / "hooks.json").read_text(encoding="utf-8"))
+    assert set(codex_hooks["hooks"]) == {"SessionStart", "UserPromptSubmit", "PostToolUse"}
+    assert (tmp_path / ".codex" / "hooks" / "notify-coordination-messages.sh").exists()
     assert (tmp_path / "scripts" / "check_required_reading.py").exists()
     assert (tmp_path / "scripts" / "meta" / "hook_log.py").exists()
     assert (tmp_path / "scripts" / "meta" / "context_packet.py").exists()

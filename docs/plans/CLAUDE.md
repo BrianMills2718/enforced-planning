@@ -72,6 +72,7 @@ See `ROADMAP.md` for the full phase map and recommended priority order.
 | 68 | Bounded Mailbox Fleet Rollout (`68_bounded_mailbox_fleet_rollout.md`) | High | ✅ Complete | Mailbox adoption without unrelated governance drift |
 | 71 | Effective-Policy Resolution Pilot (`71_effective-policy-resolution-pilot.md`) | High | 📋 Planned | truthful project policy resolution, explanation, and staged enforcement |
 | 72 | Engineering Control-Plane System Model and Planning Handoff (`72_engineering-control-plane-system-model-and-planning-handoff.md`) | High | 🚧 In Progress | explicit roadmap-to-design transport and bounded skill alignment |
+| 73 | Coordination Status Integrity (`73_coordination_status_integrity.md`) | Critical | 🚧 In Progress | trustworthy continuous multi-agent execution status |
 | 100 | Native Codex Mailbox Lifecycle Delivery (`100_codex_mailbox_lifecycle_delivery.md`) | Critical | ✅ Complete | reliable request observation without human relay |
 | 101 | Landscape And Prior-Art Planning Contract (`101_landscape_and_prior_art_contract.md`) | High | ✅ Complete | reusable research-before-build contract and report-only validation |
 | 102 | Plan Status Projection Repair (`102_plan_status_projection.md`) | Low | ✅ Complete | truthful cross-repo status metadata |

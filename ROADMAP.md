@@ -152,6 +152,7 @@ and readable as bounded active lanes instead of only raw claims.
 | #42 | Atomic closeout and claimed worktree removal | ✅ Complete |
 | #43 | Publish-lane safety and dirty primary checkout handling | ✅ Complete |
 | #44 | Interactive startup mode and session-owned surface policy | ✅ Complete |
+| #73 | Coordination status integrity | 🚧 In Progress — reject stale default-branch authority and incomplete plan-session health |
 
 **Deferred item blockers:**
 

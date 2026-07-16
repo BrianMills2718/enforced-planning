@@ -275,6 +275,40 @@ def test_heartbeat_session_updates_tracker_phase(tmp_path: Path, monkeypatch: py
     assert tracker_payload["timestamps"]["updated_at"] == payload["heartbeat_at"]
 
 
+def test_heartbeat_session_rejects_zero_matching_claims(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A wrong project selector must fail instead of reporting heartbeat success."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    session_lifecycle.start_session(
+        agent="codex",
+        project="enforced-planning",
+        scope="plan-73-coordination-status-integrity",
+        intent="repair coordination status",
+        repo_root=str(tmp_path / "enforced-planning"),
+        worktree_path=str(tmp_path / "enforced-planning" / "worktrees" / "plan-73"),
+        branch="plan-73-coordination-status-integrity",
+        broader_goal="Coordination Status Integrity",
+        current_phase="negative control",
+        plan_ref="Plan #73",
+        session_id="codex:test-session",
+        tracker_dir=trackers_dir,
+    )
+
+    with pytest.raises(ValueError, match="Heartbeat matched no live claim"):
+        session_lifecycle.heartbeat_session(
+            agent="codex",
+            project="plan-73-coordination-status-integrity",
+            scope="plan-73-coordination-status-integrity",
+            branch="plan-73-coordination-status-integrity",
+            session_id="codex:test-session",
+        )
+
+
 def test_finish_session_blocks_dirty_cleanup_without_handoff(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

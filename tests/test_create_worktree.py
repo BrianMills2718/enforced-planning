@@ -175,6 +175,8 @@ def test_get_default_worktree_dir_uses_canonical_repo_root_from_worktree(
     expected = repo_root / "worktrees"
     assert module.get_default_worktree_dir(repo_root) == expected
     assert module.get_default_worktree_dir(linked_worktree) == expected
+    assert module.get_canonical_project_name(repo_root) == "repo"
+    assert module.get_canonical_project_name(linked_worktree) == "repo"
 
     cleanup_result = _run_git(repo_root, "worktree", "remove", "--force", str(linked_worktree))
     assert cleanup_result.returncode == 0, cleanup_result.stdout + cleanup_result.stderr

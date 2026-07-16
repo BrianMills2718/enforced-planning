@@ -3,6 +3,8 @@
 .PHONY: help test test-quick check lint dead-code dead-code-audit dead-code-validate push-check infer check-deps check-caps migrate-rels verify-couplings review-surfaces promote plan-registry ecosystem-status docstring-wiki docstring-wiki-check test-relationships status
 
 PYTHON ?= $(if $(wildcard .venv/bin/python),.venv/bin/python,python3)
+PROJECT_STATUS_PYTHON ?= $(PYTHON)
+PROJECT_STATUS_SCRIPT ?= scripts/project_status.py
 REPO ?= .
 SCAN_DIR ?= ~/projects
 TRUTH_CONFIG ?= $(REPO)/scripts/truth_surface_drift.yaml
@@ -90,8 +92,8 @@ infer-all:  ## Infer deps across all governed repos in SCAN_DIR (writes generate
 agents-md:  ## Regenerate AGENTS.md from CLAUDE.md (Codex-facing projection)
 	python scripts/render_agents_md.py --source CLAUDE.md --output AGENTS.md
 
-status:  ## Git status
-	@git status --short --branch
+status:  ## Verify repository authority freshness and show branch status
+	@$(PROJECT_STATUS_PYTHON) $(PROJECT_STATUS_SCRIPT) --repo-root .
 
 # >>> META-PROCESS WORKTREE TARGETS >>>
 WORKTREE_CREATE_SCRIPT := scripts/meta/worktree-coordination/create_worktree.py
@@ -106,7 +108,7 @@ WORKTREE_REVIEW_CLAIM_SCRIPT := scripts/meta/worktree-coordination/create_review
 WORKTREE_RAISE_CONCERN_SCRIPT := scripts/meta/worktree-coordination/raise_concern.py
 WORKTREE_DIR ?= $(shell python "$(WORKTREE_CREATE_SCRIPT)" --repo-root . --print-default-worktree-dir)
 WORKTREE_START_POINT ?= HEAD
-WORKTREE_PROJECT ?= $(notdir $(CURDIR))
+WORKTREE_PROJECT ?= $(shell python "$(WORKTREE_CREATE_SCRIPT)" --repo-root . --print-canonical-project)
 WORKTREE_AGENT ?= $(shell if [ -n "$$CODEX_THREAD_ID" ]; then printf codex; elif [ -n "$$CLAUDE_SESSION_ID" ] || [ -n "$$CLAUDE_CODE_SSE_PORT" ]; then printf claude-code; elif [ -n "$$OPENCLAW_SESSION_ID" ] || [ -n "$$OPENCLAW_RUN_ID" ]; then printf openclaw; fi)
 SESSION_GOAL ?=
 SESSION_PHASE ?=

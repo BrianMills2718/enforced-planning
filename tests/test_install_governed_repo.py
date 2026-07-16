@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -112,6 +113,20 @@ def _run(*args: str, cwd: Path) -> subprocess.CompletedProcess[str]:
         text=True,
         check=False,
     )
+
+
+def _git(cwd: Path, *args: str) -> str:
+    """Run one real Git command for installer integration fixtures."""
+
+    result = subprocess.run(
+        ["git", *args],
+        cwd=str(cwd),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr or result.stdout
+    return result.stdout.strip()
 
 
 def _prepare_relationship_context_target(repo_root: Path) -> None:
@@ -575,6 +590,7 @@ def test_install_governed_repo_write_bootstraps_minimum_repo_and_passes_audit(
     assert (tmp_path / "enforced_planning" / "notebook_registry_validation.py").exists()
     assert (tmp_path / "enforced_planning" / "plan_validation.py").exists()
     assert (tmp_path / "enforced_planning" / "push_safety.py").exists()
+    assert (tmp_path / "enforced_planning" / "repository_status.py").exists()
     assert (tmp_path / "enforced_planning" / "session_contracts.py").exists()
     assert (tmp_path / "enforced_planning" / "session_lifecycle.py").exists()
     assert (tmp_path / "enforced_planning" / "worktree_lifecycle.yaml").exists()
@@ -586,6 +602,7 @@ def test_install_governed_repo_write_bootstraps_minimum_repo_and_passes_audit(
     assert (tmp_path / "scripts" / "meta" / "session_start.py").exists()
     assert (tmp_path / "scripts" / "meta" / "session_heartbeat.py").exists()
     assert (tmp_path / "scripts" / "meta" / "session_status.py").exists()
+    assert (tmp_path / "scripts" / "meta" / "project_status.py").exists()
     assert (tmp_path / "scripts" / "meta" / "session_finish.py").exists()
     assert (tmp_path / "scripts" / "meta" / "session_close.py").exists()
     assert (tmp_path / "scripts" / "meta" / "validate_dead_code_audit.py").exists()
@@ -616,6 +633,8 @@ def test_install_governed_repo_write_bootstraps_minimum_repo_and_passes_audit(
     assert "session-start:" in makefile_text
     assert "session-heartbeat:" in makefile_text
     assert "session-status:" in makefile_text
+    assert "PROJECT_STATUS_SCRIPT ?= scripts/meta/project_status.py" in makefile_text
+    assert "$(PROJECT_STATUS_SCRIPT) --repo-root ." in makefile_text
     assert "session-finish:" in makefile_text
     assert "session-close:" in makefile_text
     assert "review-claim:" in makefile_text
@@ -769,6 +788,10 @@ def test_installed_context_packet_wrapper_resolves_target_repo_root(tmp_path: Pa
     )
 
     assert result.returncode == 0, result.stdout + result.stderr
+    makefile_text = (tmp_path / "Makefile").read_text(encoding="utf-8")
+    assert "PROJECT_STATUS_SCRIPT ?= scripts/meta/project_status.py" in makefile_text
+    assert "$(PROJECT_STATUS_SCRIPT) --repo-root ." in makefile_text
+    assert "git status --short --branch" not in makefile_text
     payload = json.loads(result.stdout)
     assert payload["target"] == "CLAUDE.md"
     assert payload["items"][0]["path"] == "CLAUDE.md"
@@ -810,13 +833,55 @@ def test_install_governed_repo_appends_makefile_meta_block_when_missing(
 
     assert result.returncode == 0, result.stdout + result.stderr
     payload = json.loads(result.stdout)
+    assert "append:Makefile.status" in payload["actions"]
     assert "append:Makefile.worktree" in payload["actions"]
     makefile_text = (tmp_path / "Makefile").read_text(encoding="utf-8")
+    assert "PROJECT_STATUS_SCRIPT ?= scripts/meta/project_status.py" in makefile_text
+    assert "$(PROJECT_STATUS_SCRIPT) --repo-root ." in makefile_text
+    assert "git status --short --branch" not in makefile_text
     assert "help:" in makefile_text
     assert "worktree:" in makefile_text
     assert "# >>> META-PROCESS WORKTREE TARGETS >>>" in makefile_text
     assert "# <<< META-PROCESS WORKTREE TARGETS <<<" in makefile_text
     assert '$(MAKE) session-close BRANCH="$(BRANCH)"' in makefile_text
+
+
+def test_appended_project_status_target_executes_without_makefile_variables(
+    tmp_path: Path,
+) -> None:
+    """A custom Makefile needs no pre-existing Python or script variables."""
+
+    repo = tmp_path / "repo"
+    remote = tmp_path / "remote.git"
+    repo.mkdir()
+    _write_minimal_claude(repo)
+    (repo / "Makefile").write_text("help:\n\t@echo hello\n", encoding="utf-8")
+
+    install = _run("--repo-root", str(repo), "--write", "--json", cwd=PROJECT_META_ROOT)
+    assert install.returncode == 0, install.stdout + install.stderr
+
+    _git(tmp_path, "init", "--bare", str(remote))
+    _git(repo, "init", "-b", "main")
+    _git(repo, "config", "user.email", "tests@example.com")
+    _git(repo, "config", "user.name", "Test User")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-m", "installed governed repo")
+    _git(repo, "remote", "add", "origin", str(remote))
+    _git(repo, "push", "-u", "origin", "main")
+    _git(remote, "symbolic-ref", "HEAD", "refs/heads/main")
+    _git(repo, "remote", "set-head", "origin", "-a")
+
+    status = subprocess.run(
+        ["make", "status"],
+        cwd=str(repo),
+        capture_output=True,
+        text=True,
+        check=False,
+        env={key: value for key, value in os.environ.items() if key != "PYTHON"},
+    )
+
+    assert status.returncode == 0, status.stdout + status.stderr
+    assert "Repository authority: current" in status.stdout
 
 
 def test_install_governed_repo_syncs_worktree_block_into_existing_meta_makefile(
@@ -876,7 +941,7 @@ def test_install_governed_repo_syncs_worktree_block_into_existing_meta_makefile(
     assert "WORKTREE_CLAIMS_SCRIPT := scripts/meta/worktree-coordination/../check_coordination_claims.py" in makefile_text
     assert "WORKTREE_SESSION_START_SCRIPT := scripts/meta/worktree-coordination/../session_start.py" in makefile_text
     assert "WORKTREE_START_POINT ?= HEAD" in makefile_text
-    assert "WORKTREE_PROJECT ?= $(notdir $(CURDIR))" in makefile_text
+    assert "--print-canonical-project" in makefile_text
     assert "session-start:" in makefile_text
     assert "session-finish:" in makefile_text
     assert "worktree-list:" in makefile_text
@@ -911,6 +976,7 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
             "install:enforced_planning/coordination_messages.py",
             "install:enforced_planning/doc_authority.py",
             "install:enforced_planning/push_safety.py",
+            "install:enforced_planning/repository_status.py",
             "install:enforced_planning/session_contracts.py",
             "install:enforced_planning/session_lifecycle.py",
             "install:enforced_planning/verification_batch.py",
@@ -923,6 +989,7 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
             "install:scripts/meta/session_heartbeat.py",
             "install:scripts/meta/session_start.py",
             "install:scripts/meta/session_status.py",
+            "install:scripts/meta/project_status.py",
             "install:scripts/meta/session_resume.py",
             "install:scripts/meta/verification_batch.py",
             "install:scripts/coordination_inbox.py",
@@ -934,6 +1001,7 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
             "install:scripts/meta/worktree-coordination/create_review_claim.py",
             "install:scripts/meta/worktree-coordination/raise_concern.py",
             "install:scripts/meta/worktree-coordination/safe_worktree_remove.py",
+            "append:Makefile.status",
             "append:Makefile.worktree",
         ]
     )

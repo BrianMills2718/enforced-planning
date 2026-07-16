@@ -9,17 +9,28 @@ import sys
 from pathlib import Path
 
 
-def _find_repo_root() -> Path:
+def _bootstrap_package() -> None:
+    """Load local package support or the target repo's upstream bootstrap."""
+
     current = Path(__file__).resolve()
     for parent in current.parents:
         if (parent / "enforced_planning").is_dir():
-            return parent
-    raise RuntimeError("Unable to locate repo root containing enforced_planning/")
+            if str(parent) not in sys.path:
+                sys.path.insert(0, str(parent))
+            return
+    for parent in current.parents:
+        helper = parent / "scripts" / "_upstream_enforced_planning.py"
+        if helper.is_file():
+            if str(helper.parent) not in sys.path:
+                sys.path.insert(0, str(helper.parent))
+            from _upstream_enforced_planning import bootstrap_upstream_package  # type: ignore[import-not-found]
+
+            bootstrap_upstream_package(current)
+            return
+    raise RuntimeError("Unable to locate local or upstream enforced_planning support")
 
 
-REPO_ROOT = _find_repo_root()
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
+_bootstrap_package()
 
 from enforced_planning import session_lifecycle  # noqa: E402
 

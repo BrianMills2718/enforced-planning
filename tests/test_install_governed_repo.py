@@ -33,6 +33,25 @@ RELATIONSHIP_CONTEXT_ROLLOUT_PATHS = {
     "scripts/meta/test_relationships.py",
 }
 
+MAILBOX_COMMON_ROLLOUT_PATHS = {
+    ".claude/hooks/notify-coordination-messages.sh",
+    ".claude/settings.json",
+    "scripts/coordination_inbox.py",
+    "scripts/coordination_messages.py",
+    "scripts/meta/coordination_inbox.py",
+    "scripts/meta/coordination_messages.py",
+    "scripts/meta/session_heartbeat.py",
+    "scripts/meta/session_resume.py",
+    "scripts/meta/session_start.py",
+}
+
+MAILBOX_ROLLOUT_PATHS = MAILBOX_COMMON_ROLLOUT_PATHS | {
+    "enforced_planning/coordination_messages.py",
+    "enforced_planning/push_safety.py",
+    "enforced_planning/session_lifecycle.py",
+    "enforced_planning/worktree_lifecycle.yaml",
+}
+
 
 def _write_minimal_claude(repo_root: Path) -> None:
     """Write the smallest canonical CLAUDE.md that can generate AGENTS.md."""
@@ -121,6 +140,170 @@ def _prepare_relationship_context_target(repo_root: Path) -> None:
         ],
         check=True,
     )
+
+
+def _prepare_mailbox_target(repo_root: Path) -> None:
+    """Create the prerequisite governed session substrate without mailbox files."""
+
+    _write_minimal_claude(repo_root)
+    required = (
+        "enforced_planning/__init__.py",
+        "enforced_planning/coordination_claims.py",
+        "enforced_planning/doc_authority.py",
+        "enforced_planning/push_safety.py",
+        "enforced_planning/session_contracts.py",
+        "enforced_planning/worktree_lifecycle.yaml",
+        "enforced_planning/worktree_paths.py",
+    )
+    for relative in required:
+        source = PROJECT_META_ROOT / relative
+        target = repo_root / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
+    stale_lifecycle = repo_root / "enforced_planning/session_lifecycle.py"
+    stale_lifecycle.write_text('"""Stale lifecycle fixture."""\n', encoding="utf-8")
+    (repo_root / "enforced_planning/push_safety.py").write_text(
+        '"""Stale push-safety fixture."""\n', encoding="utf-8"
+    )
+    (repo_root / "enforced_planning/worktree_lifecycle.yaml").write_text(
+        "schema_version: 0\n", encoding="utf-8"
+    )
+    settings = repo_root / ".claude/settings.json"
+    settings.parent.mkdir(parents=True, exist_ok=True)
+    settings.write_text(
+        json.dumps(
+            {
+                "hooks": {
+                    "PostToolUse": [
+                        {
+                            "matcher": "Read",
+                            "hooks": [
+                                {
+                                    "type": "command",
+                                    "command": "bash .claude/hooks/track-reads.sh",
+                                    "timeout": 1000,
+                                }
+                            ],
+                        }
+                    ]
+                }
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+
+def test_coordination_messages_only_rollout_is_bounded_runnable_and_idempotent(
+    tmp_path: Path,
+) -> None:
+    """Mailbox adoption must not refresh unrelated governed-repo surfaces."""
+
+    _prepare_mailbox_target(tmp_path)
+    dry_run = _run(
+        "--repo-root",
+        str(tmp_path),
+        "--coordination-messages-only",
+        "--json",
+        cwd=PROJECT_META_ROOT,
+    )
+    assert dry_run.returncode == 0, dry_run.stdout + dry_run.stderr
+    payload = json.loads(dry_run.stdout)
+    assert payload["coordination_messages_only_mode"] is True
+    action_paths = {action.split(":", 1)[1] for action in payload["actions"]}
+    assert action_paths == MAILBOX_ROLLOUT_PATHS
+    assert payload["blockers"] == []
+
+    written = _run(
+        "--repo-root",
+        str(tmp_path),
+        "--coordination-messages-only",
+        "--write",
+        "--json",
+        cwd=PROJECT_META_ROOT,
+    )
+    assert written.returncode == 0, written.stdout + written.stderr
+    for relative in MAILBOX_ROLLOUT_PATHS:
+        assert (tmp_path / relative).exists()
+    help_result = subprocess.run(
+        [sys.executable, str(tmp_path / "scripts/meta/coordination_messages.py"), "--help"],
+        cwd=str(tmp_path),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert help_result.returncode == 0, help_result.stdout + help_result.stderr
+
+    repeat = _run(
+        "--repo-root",
+        str(tmp_path),
+        "--coordination-messages-only",
+        "--json",
+        cwd=PROJECT_META_ROOT,
+    )
+    assert repeat.returncode == 0
+    assert json.loads(repeat.stdout)["actions"] == []
+
+
+def test_coordination_messages_only_blocks_before_writing_without_session_substrate(
+    tmp_path: Path,
+) -> None:
+    """The bounded profile must fail rather than expand its own ownership."""
+
+    _write_minimal_claude(tmp_path)
+    result = _run(
+        "--repo-root",
+        str(tmp_path),
+        "--coordination-messages-only",
+        "--write",
+        "--json",
+        cwd=PROJECT_META_ROOT,
+    )
+    assert result.returncode == 1
+    payload = json.loads(result.stdout)
+    assert "local enforced_planning package" in payload["blockers"][0]
+    assert not (tmp_path / "enforced_planning/coordination_messages.py").exists()
+
+
+def test_coordination_messages_only_supports_upstream_bootstrap_consumers(
+    tmp_path: Path,
+) -> None:
+    """Project Meta-style consumers should reuse upstream code, not vendor a second package."""
+
+    _write_minimal_claude(tmp_path)
+    scripts_dir = tmp_path / "scripts"
+    scripts_dir.mkdir(exist_ok=True)
+    helper = scripts_dir / "_upstream_enforced_planning.py"
+    helper.write_text(
+        "from __future__ import annotations\n"
+        "import sys\n"
+        "from pathlib import Path\n"
+        "def bootstrap_upstream_package(_caller: Path) -> None:\n"
+        f"    sys.path.insert(0, {str(PROJECT_META_ROOT)!r})\n",
+        encoding="utf-8",
+    )
+    result = _run(
+        "--repo-root",
+        str(tmp_path),
+        "--coordination-messages-only",
+        "--write",
+        "--json",
+        cwd=PROJECT_META_ROOT,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    payload = json.loads(result.stdout)
+    action_paths = {action.split(":", 1)[1] for action in payload["actions"]}
+    assert action_paths == MAILBOX_COMMON_ROLLOUT_PATHS
+    assert not (tmp_path / "enforced_planning").exists()
+    help_result = subprocess.run(
+        [sys.executable, str(tmp_path / "scripts/meta/coordination_inbox.py"), "--help"],
+        cwd=str(tmp_path),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert help_result.returncode == 0, help_result.stdout + help_result.stderr
 
 
 def test_relationship_context_only_rollout_is_bounded_and_runnable(tmp_path: Path) -> None:

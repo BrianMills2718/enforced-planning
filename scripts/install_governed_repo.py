@@ -30,6 +30,7 @@ from enforced_planning.governed_repo_audit import audit_repo
 from enforced_planning.hook_wiring import TargetRepo
 from enforced_planning.hook_wiring import apply_generation as apply_hook_generation
 from enforced_planning.hook_wiring import context_runtime_error
+from enforced_planning.hook_wiring import plan_coordination_message_generation
 from enforced_planning.hook_wiring import plan_generation as plan_hook_generation
 
 
@@ -152,6 +153,23 @@ RELATIONSHIP_CONTEXT_SYNC_SUPPORT_FILES: dict[str, str] = {
     "scripts/meta/test_relationships.py": "scripts/test_relationships.py",
 }
 
+COORDINATION_MESSAGES_SHARED_FILES: dict[str, str] = {
+    "scripts/coordination_inbox.py": "scripts/coordination_inbox.py",
+    "scripts/coordination_messages.py": "scripts/coordination_messages.py",
+    "scripts/meta/coordination_inbox.py": "scripts/meta/coordination_inbox.py",
+    "scripts/meta/coordination_messages.py": "scripts/meta/coordination_messages.py",
+    "scripts/meta/session_heartbeat.py": "scripts/session_heartbeat.py",
+    "scripts/meta/session_resume.py": "scripts/session_resume.py",
+    "scripts/meta/session_start.py": "scripts/session_start.py",
+}
+
+COORDINATION_MESSAGES_LOCAL_PACKAGE_FILES: dict[str, str] = {
+    "enforced_planning/coordination_messages.py": "enforced_planning/coordination_messages.py",
+    "enforced_planning/push_safety.py": "enforced_planning/push_safety.py",
+    "enforced_planning/session_lifecycle.py": "enforced_planning/session_lifecycle.py",
+    "enforced_planning/worktree_lifecycle.yaml": "enforced_planning/worktree_lifecycle.yaml",
+}
+
 RELATIONSHIP_CONTEXT_TARGETS = (
     "relationship-context",
     "context-packet",
@@ -221,6 +239,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "Only sync the relationship inventory, context packet, impact, "
             "docstring-wiki, Make, and read-gating hook surfaces."
         ),
+    )
+    scope.add_argument(
+        "--coordination-messages-only",
+        action="store_true",
+        help="Only sync the canonical mailbox core, lifecycle adapters, Claude hook, and settings entry.",
     )
     parser.add_argument(
         "--strict-governed",
@@ -364,6 +387,7 @@ def _plan_static_support(
     *,
     worktree_only: bool,
     relationship_context_only: bool,
+    coordination_messages_only: bool = False,
 ) -> InstallPlan:
     """Plan scaffold and sync writes for static support files."""
     actions: list[str] = []
@@ -376,7 +400,7 @@ def _plan_static_support(
     if not claude_path.exists():
         blockers.append("missing canonical CLAUDE.md")
 
-    if not worktree_only and not relationship_context_only:
+    if not worktree_only and not relationship_context_only and not coordination_messages_only:
         for target_relpath, source_relpath in SCAFFOLD_TEMPLATES.items():
             target_path = repo_root / target_relpath
             if target_path.exists():
@@ -389,6 +413,10 @@ def _plan_static_support(
         support_files = WORKTREE_ONLY_SYNC_SUPPORT_FILES
     elif relationship_context_only:
         support_files = RELATIONSHIP_CONTEXT_SYNC_SUPPORT_FILES
+    elif coordination_messages_only:
+        support_files = dict(COORDINATION_MESSAGES_SHARED_FILES)
+        if (repo_root / "enforced_planning").is_dir():
+            support_files.update(COORDINATION_MESSAGES_LOCAL_PACKAGE_FILES)
     else:
         support_files = SYNC_SUPPORT_FILES
     for target_relpath, source_relpath in support_files.items():
@@ -403,6 +431,15 @@ def _plan_static_support(
             actions.append(f"sync:{target_relpath}")
             drift_files.append(target_relpath)
             file_writes[target_path] = canonical
+
+    if coordination_messages_only:
+        return InstallPlan(
+            actions=actions,
+            scaffolded_files=scaffolded_files,
+            drift_files=drift_files,
+            file_writes=file_writes,
+            blockers=blockers,
+        )
 
     makefile_path = repo_root / "Makefile"
     makefile_template = _load_source_text(MAKEFILE_TEMPLATE)
@@ -519,12 +556,14 @@ def install_or_plan(
     skip_hook_wiring: bool,
     worktree_only: bool,
     relationship_context_only: bool,
+    coordination_messages_only: bool = False,
 ) -> dict[str, Any]:
     """Plan or apply the governed-repo installer actions for one repo."""
     static_plan = _plan_static_support(
         repo_root,
         worktree_only=worktree_only,
         relationship_context_only=relationship_context_only,
+        coordination_messages_only=coordination_messages_only,
     )
     actions = list(static_plan.actions)
     scaffolded_files = list(static_plan.scaffolded_files)
@@ -545,6 +584,14 @@ def install_or_plan(
             blockers.append("missing scripts/meta/file_context.py for relationship-context hook rollout")
         if not skip_hook_wiring and not (repo_root / "enforced_planning" / "file_context.py").exists():
             blockers.append("missing enforced_planning/file_context.py for relationship-context hook rollout")
+    if coordination_messages_only:
+        local_package = (repo_root / "enforced_planning").is_dir()
+        upstream_bootstrap = (repo_root / "scripts/_upstream_enforced_planning.py").is_file()
+        if not local_package and not upstream_bootstrap:
+            blockers.append(
+                "coordination-messages-only rollout requires either a local "
+                "enforced_planning package or scripts/_upstream_enforced_planning.py"
+            )
     file_writes = dict(static_plan.file_writes)
     relationships_will_change = any(
         path == repo_root / "scripts" / "relationships.yaml" for path in file_writes
@@ -559,10 +606,15 @@ def install_or_plan(
     )
 
     if not skip_hook_wiring and not worktree_only:
-        hook_actions, hook_writes, _ = plan_hook_generation(
-            _hook_target(repo_root),
-            include_coordination_messages=not relationship_context_only,
-        )
+        if coordination_messages_only:
+            hook_actions, hook_writes, _ = plan_coordination_message_generation(
+                _hook_target(repo_root)
+            )
+        else:
+            hook_actions, hook_writes, _ = plan_hook_generation(
+                _hook_target(repo_root),
+                include_coordination_messages=not relationship_context_only,
+            )
         duplicate_hook_paths = set(file_writes).intersection(hook_writes)
         for path in duplicate_hook_paths:
             if file_writes[path] != hook_writes[path]:
@@ -579,7 +631,7 @@ def install_or_plan(
         }
         file_writes.update(hook_writes)
 
-    if not worktree_only and not relationship_context_only:
+    if not worktree_only and not relationship_context_only and not coordination_messages_only:
         agent_actions, agent_blockers = _plan_agents_refresh(
             repo_root,
             relationships_present_or_planned=(
@@ -602,7 +654,7 @@ def install_or_plan(
             applied_actions.extend(actions)
             if not skip_hook_wiring and not worktree_only:
                 apply_hook_generation(_hook_target(repo_root), hook_writes)
-            if not worktree_only and not relationship_context_only and _needs_agents_refresh(
+            if not worktree_only and not relationship_context_only and not coordination_messages_only and _needs_agents_refresh(
                 pre_audit,
                 relationships_will_change=relationships_will_change,
             ):
@@ -621,6 +673,7 @@ def install_or_plan(
         "dry_run_mode": not write,
         "worktree_only_mode": worktree_only,
         "relationship_context_only_mode": relationship_context_only,
+        "coordination_messages_only_mode": coordination_messages_only,
         "actions": actions,
         "applied_actions": applied_actions,
         "scaffolded_files": scaffolded_files,
@@ -671,6 +724,7 @@ def main(argv: list[str] | None = None) -> int:
         skip_hook_wiring=args.skip_hook_wiring,
         worktree_only=args.worktree_only,
         relationship_context_only=args.relationship_context_only,
+        coordination_messages_only=args.coordination_messages_only,
     )
 
     if args.json:

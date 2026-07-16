@@ -1,6 +1,6 @@
 # Plan #101: Landscape And Prior-Art Planning Contract
 
-**Status:** In Progress
+**Status:** Complete
 **Type:** implementation
 **Priority:** High
 **Landscape disposition:** linked
@@ -146,3 +146,20 @@ channel. Warnings do not affect exit status.
 Hard enforcement is explicitly out of scope. A later plan may propose it only
 after at least two governed projects use the contract and a coverage report
 shows warning precision, remediation cost, and a concrete prevented mistake.
+
+## Completion Record
+
+| Criterion | Grade | Evidence |
+|-----------|-------|----------|
+| C101-1 | A | Canonical dependency graph, artifact table, strict sequencing, and installed methodology now place landscape before stable requirements and architecture; framework self-test passes. |
+| C101-2 | A | Authored and installed plan templates expose the same three dispositions; installer self-test passes. |
+| C101-3 | B | Minimal relationship scaffold now shows reviewed landscape lineage to requirements, architecture, ADRs, and plans; no consumer rollout was attempted. |
+| C101-4 | A | 18 validator tests pass, including linked local/URL sources, inline and exemption both-sign controls, malformed metadata, JSON projection, and non-blocking CLI behavior. |
+| C101-5 | B | Dated background-agent landscape retains primary sources, alternatives, effort/lock-in estimates, implications, recommendation, uncertainty, and refresh trigger; runtime alternatives have not been benchmarked locally. |
+
+**Verification:** `pytest -q tests/test_validate_plan.py`, Ruff on changed Python,
+strict mypy on the changed module with imports skipped, `git diff --check`, and
+`python scripts/self_test.py` pass. The full suite has eight failures that
+reproduce on the unchanged default branch: governed-repo fixture classification
+and the retired `_worktrees` canonical-link fallback. They are outside this
+plan's write scope and do not exercise the landscape contract.

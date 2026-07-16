@@ -240,6 +240,11 @@ def test_validate_plan_cli_emits_json_payload(tmp_path: Path) -> None:
     ]
     assert payload["required_docs"]["soft"] == ["docs/coupled_soft.md"]
     assert payload["missing_adrs"] == []
+    assert payload["landscape"] == {"disposition": None, "references": []}
+    assert any(
+        warning["code"] == "missing_landscape_disposition"
+        for warning in payload["warnings"]
+    )
 
 
 def test_validate_plan_module_uses_repo_root_not_scripts_dir() -> None:

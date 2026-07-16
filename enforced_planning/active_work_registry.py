@@ -136,6 +136,54 @@ def build_lane_entries(*, claim_entries: list[dict[str, Any]]) -> list[dict[str,
     return lanes
 
 
+def build_plan_hierarchy_entries(
+    *,
+    claim_entries: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Derive normalized plan roots and child scopes from canonical claims."""
+
+    grouped: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for claim in claim_entries:
+        project = claim.get("project")
+        plan_identity = coordination_claims.normalize_plan_identity(claim.get("plan_ref"))
+        if not project or not plan_identity or not claim.get("session_id"):
+            continue
+        grouped.setdefault((project, plan_identity), []).append(claim)
+
+    entries: list[dict[str, Any]] = []
+    for (project, plan_identity), claims in sorted(grouped.items()):
+        roots = [
+            claim
+            for claim in claims
+            if claim["claim_type"] == "program" and not claim.get("parent_scope")
+        ]
+        root_scope = roots[0]["scope"] if len(roots) == 1 else None
+        root_scopes = {claim["scope"] for claim in roots}
+        health_issues = sorted(
+            {
+                issue
+                for claim in claims
+                for issue in claim.get("hierarchy_issues", [])
+            }
+        )
+        health_status = "weak" if health_issues else "healthy"
+        entries.append(
+            {
+                "project": project,
+                "plan_identity": plan_identity,
+                "root_scope": root_scope,
+                "root_count": len(roots),
+                "child_scopes": sorted(
+                    claim["scope"] for claim in claims if claim["scope"] not in root_scopes
+                ),
+                "claim_count": len(claims),
+                "health_status": health_status,
+                "health_issues": health_issues,
+            }
+        )
+    return entries
+
+
 def build_registry_payload(
     *,
     claims: list[coordination_claims.ClaimRecord],
@@ -162,7 +210,14 @@ def build_registry_payload(
     for claim in sorted_claims:
         check_result = coordination_claims.evaluate_claim(claim, active_claims=sorted_claims)
         entry = claim.to_dict()
-        health_issues = coordination_claims.claim_health_issues(claim)
+        health_issues = coordination_claims.coordination_health_issues(
+            claim,
+            active_claims=sorted_claims,
+        )
+        hierarchy_issues = coordination_claims.claim_hierarchy_issues(
+            claim,
+            active_claims=sorted_claims,
+        )
         lifecycle_issues = coordination_claims.claim_lifecycle_issues(claim)
         liveness_issues = coordination_claims.claim_liveness_issues(claim)
         entry["interaction_summary"] = {
@@ -170,8 +225,12 @@ def build_registry_payload(
             "soft_overlap_count": sum(1 for item in check_result.interactions if item.severity == "soft_overlap"),
             "informational_count": sum(1 for item in check_result.interactions if item.severity == "informational"),
         }
-        entry["health_status"] = coordination_claims.claim_runtime_status(claim)
+        entry["health_status"] = coordination_claims.claim_runtime_status(
+            claim,
+            active_claims=sorted_claims,
+        )
         entry["health_issues"] = health_issues
+        entry["hierarchy_issues"] = hierarchy_issues
         entry["lifecycle_issues"] = lifecycle_issues
         entry["liveness_issues"] = liveness_issues
         entry["conflict_notes"] = [
@@ -195,6 +254,7 @@ def build_registry_payload(
         claim_entries.append(entry)
 
     lane_entries = build_lane_entries(claim_entries=claim_entries)
+    plan_hierarchy_entries = build_plan_hierarchy_entries(claim_entries=claim_entries)
     lanes_by_project = Counter((lane["project"] or "(none)") for lane in lane_entries)
 
     overall_status = "idle"
@@ -221,6 +281,7 @@ def build_registry_payload(
             "soft_overlap_claim_count": soft_overlap_claim_count,
         },
         "lanes": lane_entries,
+        "plan_hierarchies": plan_hierarchy_entries,
         "claims": claim_entries,
     }
 
@@ -254,6 +315,27 @@ def render_markdown(payload: dict[str, Any]) -> str:
             lines.append(f"- `{claim_type}`: {count}")
     else:
         lines.append("- No live claims.")
+
+    lines.extend(["", "## Plan Hierarchies", ""])
+    if payload["plan_hierarchies"]:
+        lines.append("| Project | Plan | Root | Children | Claims | Health |")
+        lines.append("|---|---|---|---|---|---|")
+        for hierarchy in payload["plan_hierarchies"]:
+            health = hierarchy["health_status"]
+            if hierarchy["health_issues"]:
+                health = f"{health} ({', '.join(hierarchy['health_issues'])})"
+            lines.append(
+                "| {project} | {plan} | {root} | {children} | {count} | {health} |".format(
+                    project=hierarchy["project"],
+                    plan=hierarchy["plan_identity"],
+                    root=hierarchy["root_scope"] or "-",
+                    children=", ".join(hierarchy["child_scopes"]) or "-",
+                    count=hierarchy["claim_count"],
+                    health=health,
+                )
+            )
+    else:
+        lines.append("No live numbered-plan session claims.")
 
     lines.extend(["", "## Active Lanes", ""])
     lines.append("Lanes are derived summaries. Individual claim files remain the canonical coordination source.")

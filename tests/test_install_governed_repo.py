@@ -654,7 +654,10 @@ def test_install_governed_repo_write_bootstraps_minimum_repo_and_passes_audit(
     assert '--scope "$(BRANCH)"' in makefile_text
     assert 'SESSION_GOAL is required' in makefile_text
     assert 'SESSION_PHASE is required' in makefile_text
-    assert '--claim-type program' in makefile_text
+    assert 'SESSION_CLAIM_TYPE ?= program' in makefile_text
+    assert '--claim-type "$(SESSION_CLAIM_TYPE)"' in makefile_text
+    assert '--parent-scope' in makefile_text
+    assert '--write-path' in makefile_text
     assert "WORKTREE_DISPOSITION ?= merged" in makefile_text
     assert '--disposition "$(WORKTREE_DISPOSITION)"' in makefile_text
     assert "$(filter 1 true yes,$(WORKTREE_ALLOW_DISCARD_UNIQUE))" in makefile_text
@@ -942,6 +945,9 @@ def test_install_governed_repo_syncs_worktree_block_into_existing_meta_makefile(
     assert "WORKTREE_SESSION_START_SCRIPT := scripts/meta/worktree-coordination/../session_start.py" in makefile_text
     assert "WORKTREE_START_POINT ?= HEAD" in makefile_text
     assert "--print-canonical-project" in makefile_text
+    assert "SESSION_CLAIM_TYPE ?= program" in makefile_text
+    assert "--parent-scope" in makefile_text
+    assert "--write-path" in makefile_text
     assert "session-start:" in makefile_text
     assert "session-finish:" in makefile_text
     assert "worktree-list:" in makefile_text

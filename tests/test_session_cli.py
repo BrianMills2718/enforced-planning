@@ -136,6 +136,86 @@ def test_start_session_creates_tracker_and_updates_claim(tmp_path: Path, monkeyp
     assert payload["plan_ref"] == "Plan #31"
 
 
+def test_start_session_creates_parented_child_and_rejects_second_root(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Session activation should enforce the existing program/parent hierarchy."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    common = {
+        "project": "onto-canon6",
+        "repo_root": str(tmp_path / "onto-canon6"),
+        "broader_goal": "Complete Plan 0141",
+        "current_phase": "parallel execution",
+        "plan_ref": "Plan #0141",
+        "tracker_dir": trackers_dir,
+    }
+    root_worktree = tmp_path / "onto-canon6" / "worktrees" / "plan0141-root"
+    child_worktree = tmp_path / "onto-canon6" / "worktrees" / "plan0141-review"
+    root_worktree.mkdir(parents=True)
+    child_worktree.mkdir(parents=True)
+    session_lifecycle.start_session(
+        agent="codex",
+        scope="plan0141-root",
+        intent="coordinate Plan 0141",
+        worktree_path=str(root_worktree),
+        branch="plan0141-root",
+        session_id="codex:root",
+        claim_type="program",
+        **common,
+    )
+    session_lifecycle.start_session(
+        agent="claude-code",
+        scope="plan0141-review",
+        intent="review Plan 0141 output",
+        worktree_path=str(child_worktree),
+        branch="plan0141-review",
+        session_id="claude-code:review",
+        claim_type="write",
+        write_paths=["src/onto_canon6/review.py"],
+        parent_scope="plan0141-root",
+        **common,
+    )
+
+    child_path = claims_dir / "claude-code_onto-canon6_plan0141-review.yaml"
+    child = coordination_claims.normalize_claim(
+        yaml.safe_load(child_path.read_text(encoding="utf-8")),
+        source_file=str(child_path),
+    )
+    assert child is not None
+    assert child.claim_type == "write"
+    assert child.write_paths == ["src/onto_canon6/review.py"]
+    assert child.parent_scope == "plan0141-root"
+    child_status = session_lifecycle.status_sessions(
+        project="onto-canon6",
+        scope="plan0141-review",
+    )
+    assert child_status["sessions"][0]["health_status"] == "healthy"
+    assert child_status["sessions"][0]["health_issues"] == []
+    assert child_status["sessions"][0]["plan_identity"] == "Plan #141"
+    assert child_status["sessions"][0]["hierarchy_role"] == "child"
+    assert child_status["sessions"][0]["parent_scope"] == "plan0141-root"
+
+    with pytest.raises(ValueError, match="multiple_program_roots"):
+        session_lifecycle.start_session(
+            agent="openclaw",
+            scope="plan0141-second-root",
+            intent="duplicate Plan 0141 coordinator",
+            worktree_path=str(
+                tmp_path / "onto-canon6" / "worktrees" / "plan0141-second-root"
+            ),
+            branch="plan0141-second-root",
+            session_id="openclaw:second-root",
+            claim_type="program",
+            **common,
+        )
+    assert not (claims_dir / "openclaw_onto-canon6_plan0141-second-root.yaml").exists()
+    assert not list((trackers_dir / "onto-canon6").glob("*second-root*.yaml"))
+
+
 def test_status_sessions_routes_incomplete_plan_claim_to_contract_repair(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

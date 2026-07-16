@@ -58,6 +58,11 @@ Target:
 - plan-bound session claims missing their existing session-contract metadata
   are `weak`, name every missing field, and direct the operator to repair the
   session contract;
+- parallel claims for the same normalized project/plan identity reuse one
+  existing root `program` claim, and every subordinate claim names that root
+  through `parent_scope`;
+- the derived active-work registry renders the root/child grouping without
+  becoming a second ownership authority;
 - the generated Make target and installed governed-repo script use the shared
   implementation.
 
@@ -77,6 +82,10 @@ Target:
 6. Claim creation's pre-worktree reservation remains possible; the completed
    sanctioned `make worktree` flow must end healthy after `session-start` fills
    the session metadata.
+7. One complete session claim may run alone without a synthetic coordinator.
+   When a second live session joins the same normalized project/plan identity,
+   exactly one unparented `program` claim is the root and every other claim
+   names its scope as `parent_scope`.
 
 ### Boundaries And Contracts
 
@@ -88,6 +97,10 @@ Target:
   classifier; no new claim store or status authority is introduced.
 - `session_lifecycle.status_sessions` remains the session projection and adds
   explicit health issues/recovery action.
+- `coordination_claims` derives plan identity and hierarchy validity from the
+  canonical live claims; it does not persist a lease or owner record.
+- `active_work_registry` adds a derived plan-hierarchy view whose root and
+  child scopes always point back to canonical claim files.
 - `templates/Makefile.meta` and the framework Makefile route `status` through
   the shared command.
 
@@ -100,6 +113,9 @@ Target:
 - feature branch: show canonical default-branch drift and current branch status;
 - incomplete plan claim: report `weak`, list missing fields, and recommend
   `repair_session_contract`.
+- duplicate plan roots, parallel rootless claims, or orphan/wrong parents:
+  reject new session activation and report `repair_claim_hierarchy` for
+  readable legacy claims.
 
 ## Non-Goals
 
@@ -121,6 +137,9 @@ Target:
 | AC5 | The observed Plan 0141-shaped claim is `weak` with missing repo/goal/session/tracker issues; session status never prints `healthy None :: None`. | test | A |
 | AC6 | A claim produced by the sanctioned session-start path remains healthy. | test | A |
 | AC7 | Installed governed repos receive the shared project-status adapter and Make target. | test | A |
+| AC8 | Two live sessions for the same normalized project/plan identity are healthy only with exactly one root `program` claim and correctly parented subordinate claims; duplicate roots, rootless parallel claims, and wrong parents fail loud. | test | A |
+| AC9 | The sanctioned session-start CLI/Make path can declare `claim_type` and `parent_scope`, while a single standalone session remains backward-compatible. | test | A |
+| AC10 | The derived active-work payload and Markdown identify each normalized plan root and its child scopes without creating mutable hierarchy state. | test | A |
 
 ## Thin Slices
 
@@ -130,7 +149,9 @@ Target:
    health classification and recovery output, preserve complete-session green.
 3. **Portable adoption:** install the adapter/Make target through the existing
    governed-repo installer and verify one generated consumer fixture.
-4. **Bounded OntoCanon rollout:** update only the installed adapter/Make target
+4. **Existing-claim hierarchy:** enforce and render one root `program` claim
+   plus parented subordinate claims when execution becomes parallel.
+5. **Bounded OntoCanon rollout:** update only the installed adapter/Make target
    after the shared commit is independently reviewable.
 
 ## Verification
@@ -140,6 +161,7 @@ PYTHONPATH=. pytest -q \
   tests/test_repository_status.py \
   tests/test_check_coordination_claims.py \
   tests/test_session_cli.py \
+  tests/test_generate_active_work_registry.py \
   tests/test_install_governed_repo.py
 python scripts/self_test.py --docs
 ```

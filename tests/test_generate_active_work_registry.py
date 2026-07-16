@@ -121,7 +121,7 @@ def test_generate_registry_outputs_json_and_markdown(tmp_path: Path) -> None:
     assert payload["health_summary"] == {
         "overall_status": "attention",
         "stale_claim_count": 0,
-        "weak_claim_count": 1,
+        "weak_claim_count": 3,
         "hard_conflict_claim_count": 2,
         "soft_overlap_claim_count": 0,
     }
@@ -129,7 +129,8 @@ def test_generate_registry_outputs_json_and_markdown(tmp_path: Path) -> None:
         lane for lane in payload["lanes"] if lane["branch"] == "plan-62-coordination-v2"
     )
     assert execution_lane["claim_count"] == 1
-    assert execution_lane["health_status"] == "attention"
+    assert execution_lane["health_status"] == "weak"
+    assert execution_lane["health_issues"] == ["missing_program_root"]
     fallback_lane = next(
         lane for lane in payload["lanes"] if lane["fallback_scope"] == "phase-6-ops-and-governance"
     )
@@ -137,7 +138,8 @@ def test_generate_registry_outputs_json_and_markdown(tmp_path: Path) -> None:
     assert fallback_lane["claim_count"] == 1
     codex_entry = next(entry for entry in payload["claims"] if entry["agent"] == "codex")
     assert codex_entry["interaction_summary"]["hard_conflict_count"] == 1
-    assert codex_entry["health_status"] == "healthy"
+    assert codex_entry["health_status"] == "weak"
+    assert codex_entry["hierarchy_issues"] == ["missing_program_root"]
     assert any(note["severity"] == "hard_conflict" for note in codex_entry["conflict_notes"])
     program_entry = next(entry for entry in payload["claims"] if entry["agent"] == "openclaw")
     assert program_entry["health_status"] == "weak"
@@ -182,6 +184,74 @@ def test_generate_registry_handles_empty_claim_set(tmp_path: Path) -> None:
     assert payload["claims"] == []
     assert payload["lanes"] == []
     assert "No live claims." in markdown_output.read_text(encoding="utf-8")
+
+
+def test_registry_renders_plan_root_and_child_hierarchy(tmp_path: Path) -> None:
+    """The derivative registry should expose one root plus its child scopes."""
+
+    claims_dir = tmp_path / "claims"
+    base = {
+        "claimed_at": "2026-07-16T20:00:00+00:00",
+        "expires_at": "2099-07-16T21:00:00+00:00",
+        "projects": ["onto-canon6"],
+        "repo_root": str(tmp_path / "onto-canon6"),
+        "session_name": "complete-plan-0141",
+        "broader_goal": "Complete Plan 0141",
+        "tracker_path": str(tmp_path / "sessions" / "tracker.yaml"),
+        "status": "active",
+    }
+    _write_claim(
+        claims_dir,
+        "root.yaml",
+        {
+            **base,
+            "agent": "codex",
+            "scope": "plan0141-root",
+            "intent": "coordinate Plan 0141",
+            "claim_type": "program",
+            "plan_ref": "Plan #0141",
+            "branch": "plan0141-root",
+            "worktree_path": str(tmp_path / "onto-canon6" / "worktrees" / "root"),
+            "session_id": "codex:root",
+        },
+    )
+    _write_claim(
+        claims_dir,
+        "child.yaml",
+        {
+            **base,
+            "agent": "claude-code",
+            "scope": "plan0141-review",
+            "intent": "review Plan 0141",
+            "claim_type": "write",
+            "write_paths": ["src/review.py"],
+            "plan_ref": "Plan #141 reviewer slice",
+            "branch": "plan0141-review",
+            "worktree_path": str(tmp_path / "onto-canon6" / "worktrees" / "review"),
+            "session_id": "claude-code:review",
+            "parent_scope": "plan0141-root",
+        },
+    )
+
+    claims = module.coordination_claims.check_claims(claims_dir=claims_dir)
+    payload = module.build_registry_payload(claims=claims)
+    markdown = module.render_markdown(payload)
+
+    assert payload["plan_hierarchies"] == [
+        {
+            "project": "onto-canon6",
+            "plan_identity": "Plan #141",
+            "root_scope": "plan0141-root",
+            "root_count": 1,
+            "child_scopes": ["plan0141-review"],
+            "claim_count": 2,
+            "health_status": "healthy",
+            "health_issues": [],
+        }
+    ]
+    assert "## Plan Hierarchies" in markdown
+    assert "plan0141-root" in markdown
+    assert "plan0141-review" in markdown
 
 
 def test_generate_registry_marks_stale_claims_and_lanes(tmp_path: Path) -> None:

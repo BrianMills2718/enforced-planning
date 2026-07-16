@@ -22,6 +22,7 @@ import argparse
 import json
 import os
 import posixpath
+import re
 import subprocess
 import sys
 from dataclasses import asdict, dataclass
@@ -166,6 +167,137 @@ def claim_health_status(claim: ClaimRecord) -> str:
     return "weak" if claim_health_issues(claim) else "healthy"
 
 
+def normalize_plan_identity(plan_ref: str | None) -> str | None:
+    """Return one stable numbered-plan identity from descriptive plan text."""
+
+    if not isinstance(plan_ref, str):
+        return None
+    match = re.search(r"\bPlan\s*#\s*0*(\d+)\b", plan_ref, flags=re.IGNORECASE)
+    if not match:
+        return None
+    return f"Plan #{int(match.group(1))}"
+
+
+def _same_claim(left: ClaimRecord, right: ClaimRecord) -> bool:
+    """Return whether two records identify the same canonical claim slot."""
+
+    return (
+        left.agent == right.agent
+        and left.primary_project() == right.primary_project()
+        and left.scope == right.scope
+    )
+
+
+def claim_hierarchy_issues(
+    claim: ClaimRecord,
+    *,
+    active_claims: list[ClaimRecord],
+) -> list[str]:
+    """Validate one claim against the existing root-program hierarchy.
+
+    A single live session remains valid on its own. Once execution for the same
+    project and normalized numbered plan becomes parallel, exactly one
+    unparented program claim coordinates every other claim through
+    ``parent_scope``.
+    """
+
+    if not claim.is_live() or not claim.session_id:
+        return []
+    project = claim.primary_project()
+    plan_identity = normalize_plan_identity(claim.plan_ref)
+    if not project or not plan_identity:
+        return []
+
+    issues: list[str] = []
+    if claim.parent_scope:
+        if claim.parent_scope == claim.scope:
+            issues.append("self_parent_scope")
+        parents = [
+            other
+            for other in active_claims
+            if other.is_live()
+            and other.primary_project() == project
+            and other.scope == claim.parent_scope
+            and not _same_claim(other, claim)
+        ]
+        if not parents:
+            issues.append("missing_parent_claim")
+        elif len(parents) > 1:
+            issues.append("ambiguous_parent_scope")
+        else:
+            parent = parents[0]
+            if parent.claim_type != "program":
+                issues.append("parent_not_program")
+            if not parent.session_id or claim_health_issues(parent):
+                issues.append("parent_not_healthy")
+            if normalize_plan_identity(parent.plan_ref) != plan_identity:
+                issues.append("parent_plan_mismatch")
+
+    cohort = [
+        other
+        for other in active_claims
+        if other.is_live()
+        and other.session_id
+        and other.primary_project() == project
+        and normalize_plan_identity(other.plan_ref) == plan_identity
+    ]
+    if not any(_same_claim(other, claim) for other in cohort):
+        cohort.append(claim)
+    if len(cohort) < 2:
+        return list(dict.fromkeys(issues))
+
+    roots = [
+        other
+        for other in cohort
+        if other.claim_type == "program" and not other.parent_scope
+    ]
+    if not roots:
+        issues.append("missing_program_root")
+    elif len(roots) > 1:
+        issues.append("multiple_program_roots")
+    else:
+        root = roots[0]
+        if not _same_claim(root, claim):
+            if not claim.parent_scope:
+                issues.append("missing_parent_scope")
+            elif claim.parent_scope != root.scope:
+                issues.append("wrong_parent_scope")
+    return list(dict.fromkeys(issues))
+
+
+def coordination_health_issues(
+    claim: ClaimRecord,
+    *,
+    active_claims: list[ClaimRecord],
+) -> list[str]:
+    """Return local metadata plus cross-claim hierarchy health issues."""
+
+    return list(
+        dict.fromkeys(
+            claim_health_issues(claim)
+            + claim_hierarchy_issues(claim, active_claims=active_claims)
+        )
+    )
+
+
+def validate_claim_hierarchy_for_creation(
+    candidate: ClaimRecord,
+    *,
+    active_claims: list[ClaimRecord],
+) -> None:
+    """Reject a new or refreshed session claim that would be hierarchically invalid."""
+
+    prospective = [
+        claim for claim in active_claims if not _same_claim(claim, candidate)
+    ] + [candidate]
+    issues = claim_hierarchy_issues(candidate, active_claims=prospective)
+    if issues:
+        raise ValueError(
+            "Invalid plan claim hierarchy for "
+            f"{candidate.primary_project()}:{candidate.scope}: {', '.join(issues)}"
+        )
+
+
 def _heartbeat_stale_after() -> timedelta:
     """Return the configured heartbeat freshness window."""
     raw = os.environ.get("COORDINATION_HEARTBEAT_STALE_MINUTES", "").strip()
@@ -290,11 +422,20 @@ def claim_liveness_issues(
     return []
 
 
-def claim_runtime_status(claim: ClaimRecord) -> str:
+def claim_runtime_status(
+    claim: ClaimRecord,
+    *,
+    active_claims: list[ClaimRecord] | None = None,
+) -> str:
     """Classify one live claim across stale/weak/healthy states."""
     if claim_lifecycle_issues(claim) or claim_liveness_issues(claim):
         return "stale"
-    return claim_health_status(claim)
+    issues = (
+        coordination_health_issues(claim, active_claims=active_claims)
+        if active_claims is not None
+        else claim_health_issues(claim)
+    )
+    return "weak" if issues else "healthy"
 
 
 def validate_claim_for_creation(claim: ClaimRecord) -> None:
@@ -742,7 +883,9 @@ def create_claim(
     )
     validate_claim_for_creation(candidate)
 
-    check_result = evaluate_claim(candidate, active_claims=check_claims(project))
+    active_claims = check_claims(project)
+    validate_claim_hierarchy_for_creation(candidate, active_claims=active_claims)
+    check_result = evaluate_claim(candidate, active_claims=active_claims)
     if check_result.hard_conflicts:
         formatted = "; ".join(
             f"{item.other_agent} ({item.other_scope}: {', '.join(item.overlapping_write_paths)})"
@@ -1063,8 +1206,14 @@ def _render_check_output(
         "claims": [
             {
                 **claim.to_dict(),
-                "health_status": claim_runtime_status(claim),
-                "health_issues": claim_health_issues(claim),
+                "health_status": claim_runtime_status(
+                    claim,
+                    active_claims=claims,
+                ),
+                "health_issues": coordination_health_issues(
+                    claim,
+                    active_claims=claims,
+                ),
                 "lifecycle_issues": claim_lifecycle_issues(claim),
                 "liveness_issues": claim_liveness_issues(claim),
             }
@@ -1073,10 +1222,19 @@ def _render_check_output(
         "unregistered_claim_files": unregistered_claim_files(),
     }
     if candidate is not None:
+        prospective_claims = [
+            claim for claim in claims if not _same_claim(claim, candidate)
+        ] + [candidate]
         payload["check"] = {
             **evaluate_claim(candidate, active_claims=claims).to_dict(),
-            "candidate_health_status": claim_runtime_status(candidate),
-            "candidate_health_issues": claim_health_issues(candidate),
+            "candidate_health_status": claim_runtime_status(
+                candidate,
+                active_claims=prospective_claims,
+            ),
+            "candidate_health_issues": coordination_health_issues(
+                candidate,
+                active_claims=prospective_claims,
+            ),
             "candidate_lifecycle_issues": claim_lifecycle_issues(candidate),
             "candidate_liveness_issues": claim_liveness_issues(candidate),
         }

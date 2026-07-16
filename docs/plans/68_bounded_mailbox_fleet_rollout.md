@@ -68,8 +68,21 @@ bootstrap consumers while rejecting repos with neither substrate.
 
 - `scripts/install_governed_repo.py`
 - `enforced_planning/hook_wiring.py`
+- `scripts/meta/coordination_messages.py`
 - `tests/test_install_governed_repo.py`
 - this plan and the plan index
+
+## Verification-gap correction
+
+The first Project Meta rollout exposed a partial-scope/environment-mismatch
+gap: the installer tests executed the installed inbox wrapper under the
+upstream-bootstrap profile, but did not execute the installed message CLI under
+that same profile. The source meta wrapper still assumed a vendored local
+package and failed on the real target. The fix makes the meta wrapper delegate
+to the shared source CLI and executes both advertised installed CLIs under both
+supported deployment profiles. The canonical Project Meta verification-gap log
+was already exclusively claimed by other sessions, so this entry is retained
+here as the required pending handoff rather than colliding with that log.
 
 ## Next action
 

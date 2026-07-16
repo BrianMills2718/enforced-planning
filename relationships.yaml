@@ -66,4 +66,14 @@ couplings:
     type: validated
     description: V2 design should be consistent with the static/runtime split
 
+  - sources:
+      - "enforced_planning/planning_handoff.py"
+      - "tests/fixtures/planning_handoff/valid_exchange.yaml"
+      - "tests/fixtures/planning_handoff/negative_cases.yaml"
+    docs:
+      - "docs/reference/PLANNING_HANDOFF_V1.md"
+      - "PLANNING_OPERATING_MODEL.md"
+    type: locked
+    description: Planning handoff implementation and fixtures must stay aligned with the versioned reference and operating-model authority split
+
 overrides: {}

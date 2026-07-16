@@ -1,0 +1,89 @@
+handoff:
+  schema_version: "1.0"
+  record_type: roadmap_goal_handoff
+  handoff_id: roadmap-goal:enforced-planning:plan-72-handoff:fa95c5f4a637cbcb06464fdbe86d5be8262a2ce5
+  project_id: enforced-planning
+  goal_id: plan-72-handoff
+  project_roadmap_ref:
+    path: docs/plans/72_engineering-control-plane-system-model-and-planning-handoff.md
+    revision: fa95c5f4a637cbcb06464fdbe86d5be8262a2ce5
+    concern: bounded goal selection and acceptance
+  objective: Define and validate one roadmap-to-design handoff contract without creating a registry.
+  objective_sha256: 742fad34588356e73697a2babc025e8897127fa0e95c6bf4635549fd588f0f41
+  audience_or_actor: coding agents selecting the next bounded design objective
+  current_state_ref:
+    path: vision/02_FRAMEWORK.md
+    revision: 21505063dcceec0bce7f0830fc2d03a26c1b489f
+    concern: engineering control-plane system responsibilities
+  desired_outcome: A valid selection snapshot and design handback fail loud on identity or authority drift.
+  non_goals:
+    - Create a handoff registry or service.
+    - Merge project-roadmapping and design-plan.
+  non_claims:
+    - This fixture does not prove a real cross-skill pilot is useful.
+  required_capability_refs: []
+  typed_dependencies:
+    - dependency_type: requires_implementation
+      target_ref:
+        path: vision/02_FRAMEWORK.md
+        revision: 21505063dcceec0bce7f0830fc2d03a26c1b489f
+        concern: accepted control-plane system model
+      condition: The framework commit is reachable and retains the seven-system model.
+  applicable_decision_refs:
+    - path: docs/ops/ADR-2026-07-16-engineering-control-plane-system-model.md
+      revision: 21505063dcceec0bce7f0830fc2d03a26c1b489f
+      concern: repository-independent control-plane architecture
+  applicable_policy_refs: []
+  success_or_readout: Positive exchange passes; goal, revision, authority-leakage, and concern-owner negatives fail.
+  evidence_target:
+    claim: The version-one handoff contract rejects the named structural and cross-record failures.
+    evidence_class: test
+  material_unknowns: []
+  owner_or_owner_decision:
+    kind: owner
+    owner_role: enforced-planning-maintainer
+    decision_ref: null
+  recommended_design_profile: standard
+  recommended_overlays:
+    - repository_governance
+  selected_at: 2026-07-16T12:00:00-07:00
+result:
+  schema_version: "1.0"
+  record_type: design_packet_result
+  handoff_id: roadmap-goal:enforced-planning:plan-72-handoff:fa95c5f4a637cbcb06464fdbe86d5be8262a2ce5
+  source_handoff_sha256: 1b3748e2b6cd8df783142cbb67720e0f141ac9c2e906f50b993ce82886a3f4f5
+  source_roadmap_revision: fa95c5f4a637cbcb06464fdbe86d5be8262a2ce5
+  goal_id: plan-72-handoff
+  objective_sha256: 742fad34588356e73697a2babc025e8897127fa0e95c6bf4635549fd588f0f41
+  design_packet_ref:
+    path: docs/plans/72_engineering-control-plane-system-model-and-planning-handoff.md
+    revision: fa95c5f4a637cbcb06464fdbe86d5be8262a2ce5
+    concern: bounded planning-handoff design
+  objective_disposition: preserved
+  proposed_objective: null
+  requirement_refs: []
+  boundary_refs: []
+  domain_model_ref: null
+  contract_refs: []
+  schema_disposition: create
+  capability_graph_delta: []
+  relationship_or_intent_updates: []
+  evidence_plan_ref:
+    path: docs/plans/72_engineering-control-plane-system-model-and-planning-handoff.md
+    revision: fa95c5f4a637cbcb06464fdbe86d5be8262a2ce5
+    concern: Slice 1 acceptance and failure behavior
+  next_slice_refs: []
+  material_concerns:
+    - concern_id: persistence-authority
+      concern_class: architecture
+      summary: A transport record could accidentally become a second status registry.
+      disposition: closed
+      resolution: Version one validates files but provides no storage or current-state API.
+      authority_ref: null
+      owner_role: null
+      resume_condition: null
+  roadmap_implications:
+    - implication_type: priority_review
+      proposal: Run one report-only real handoff pilot before considering broader adoption.
+      rationale: Structural conformance does not demonstrate operator or agent usefulness.
+  completed_at: 2026-07-16T12:30:00-07:00

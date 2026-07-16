@@ -11,6 +11,7 @@ import pytest
 import yaml
 from pydantic import ValidationError
 
+from enforced_planning import coordination_claims
 from enforced_planning.coordination_messages import (
     AcknowledgeMessageRequest,
     AcknowledgementResult,
@@ -107,6 +108,26 @@ def _send_request(
         idempotency_key=idempotency_key,
         plan_ref="Plan #67",
     )
+
+
+def test_mailbox_supports_canonical_legacy_claim_registry_signature(
+    mailbox: tuple[CoordinationMessageStore, Path, Path],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Vendored repos may use the older canonical-dir-only claim reader."""
+
+    store, claims_dir, _root = mailbox
+    current_check_claims = coordination_claims.check_claims
+
+    def legacy_check_claims(project: str | None = None) -> list[coordination_claims.ClaimRecord]:
+        """Emulate the older claim reader while retaining production parsing."""
+
+        return current_check_claims(project, claims_dir=claims_dir)
+
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    monkeypatch.setattr(coordination_claims, "check_claims", legacy_check_claims)
+
+    assert {claim.session_id for claim in store._live_claims()} == {CODEX_SESSION, CLAUDE_SESSION}
 
 
 def test_codex_to_claude_persist_observe_acknowledge_round_trip(

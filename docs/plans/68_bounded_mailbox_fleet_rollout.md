@@ -68,8 +68,10 @@ bootstrap consumers while rejecting repos with neither substrate.
 
 - `scripts/install_governed_repo.py`
 - `enforced_planning/hook_wiring.py`
+- `enforced_planning/coordination_messages.py`
 - `scripts/meta/coordination_messages.py`
 - `tests/test_install_governed_repo.py`
+- `tests/test_coordination_messages.py`
 - this plan and the plan index
 
 ## Verification-gap correction
@@ -83,6 +85,14 @@ to the shared source CLI and executes both advertised installed CLIs under both
 supported deployment profiles. The canonical Project Meta verification-gap log
 was already exclusively claimed by other sessions, so this entry is retained
 here as the required pending handoff rather than colliding with that log.
+
+The first OntoCanon rollout then exposed a second target-profile gap: its
+vendored claim registry still uses the canonical-directory-only
+`check_claims(project)` signature. The mailbox now detects that explicit
+capability, permits it only for the canonical claims directory, and fails loud
+if a caller requests a custom directory that the installed registry cannot
+honor. A compatibility test covers the older signature without silently
+ignoring caller configuration.
 
 ## Next action
 

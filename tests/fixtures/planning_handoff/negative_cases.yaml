@@ -1,0 +1,30 @@
+base_fixture: valid_exchange.yaml
+cases:
+  - case_id: mismatched-goal
+    set_path: result.goal_id
+    value: different-goal
+    expected_error: design result does not match handoff
+  - case_id: mismatched-roadmap-revision
+    set_path: result.source_roadmap_revision
+    value: "0000000000000000000000000000000000000000"
+    expected_error: design result does not match handoff
+  - case_id: duplicated-roadmap-authority
+    set_path: result.current_priority
+    value: high
+    expected_error: Extra inputs are not permitted
+  - case_id: copied-mutable-status
+    set_path: handoff.current_status
+    value: in_progress
+    expected_error: Extra inputs are not permitted
+  - case_id: unowned-material-concern
+    set_path: result.material_concerns
+    value:
+      - concern_id: unresolved-owner
+        concern_class: architecture
+        summary: The concern has no owner or resume event.
+        disposition: assigned
+        resolution: null
+        authority_ref: null
+        owner_role: null
+        resume_condition: null
+    expected_error: material concern fields do not match disposition=assigned

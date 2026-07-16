@@ -1,6 +1,6 @@
 # Plan #72: Engineering Control-Plane System Model and Planning Handoff
 
-**Status:** Planned
+**Status:** In Progress
 **Type:** architecture alignment + bounded implementation
 **Priority:** High
 **phase_ref:** "portable planning and context architecture"
@@ -12,6 +12,28 @@
 **Blocks:** [future] machine-consumed roadmap-to-design handoffs beyond the first pilot
 
 `trace_evaluable: false # deterministic architecture, contract, and skill-alignment work`
+
+---
+
+## Progress
+
+- **Slice 0 — implemented; integration open (2026-07-16):** Project Meta commit
+  `21505063dcceec0bce7f0830fc2d03a26c1b489f` adds the seven-system feedback
+  model to `vision/02_FRAMEWORK.md`, records the accepted decision and rejected
+  alternatives in a distinct ADR, and links the decision through the existing
+  relationship and navigation surfaces. Direct lint, link, authority, generated
+  agent-doc, relationship, and 25 focused tests passed. The branch is pushed but
+  not yet integrated into Project Meta `main`, so AC-1 remains open. The semantic
+  architecture claim remains **D/source + accepted decision** rather than
+  pretending the deterministic checks independently validate its usefulness.
+- **Slice 1 — complete (2026-07-16):**
+  `enforced_planning.planning_handoff` now owns frozen Pydantic records,
+  deterministic cross-record identity checks, generated JSON Schemas, and an
+  agent-drivable CLI. The canonical reference includes the boundary diagram,
+  authority table, worked example, and failure behavior. One positive and five
+  negative fixture cases pass 9 focused tests; Ruff and strict mypy pass. This
+  is **A/source + both-sign test** evidence for structural conformance only;
+  usefulness and freshness resolution remain open for the report-only pilot.
 
 ---
 
@@ -300,101 +322,27 @@ symmetry.
 
 ## Handoff Contracts
 
-The first implementation is a versioned reference contract and fixtures. Do
-not create a service or global handoff registry. A record may be embedded in or
-stored beside its owning roadmap/design packet when a real cross-procedure
-handoff occurs.
+The canonical version-one contract is
+[`docs/reference/PLANNING_HANDOFF_V1.md`](../reference/PLANNING_HANDOFF_V1.md),
+implemented by `enforced_planning.planning_handoff` and exercised by
+`tests/fixtures/planning_handoff/`. This plan owns the objective, slices, and
+acceptance criteria; the reference owns field semantics and the worked example,
+so the two surfaces do not maintain duplicate schema prose.
 
-### `RoadmapGoalHandoff`
+The boundary remains:
 
-```yaml
-schema_version: "1"
-handoff_id: "roadmap-goal:<project>:<goal>:<revision>"
-goal_id: "<stable project goal ID>"
-project_roadmap_ref:
-  path: "roadmap/README.md"
-  revision: "<commit or immutable version>"
-  concern: "goal selection and dependency order"
-objective: "<one bounded observable outcome>"
-audience_or_actor: "<who receives value>"
-current_state_ref:
-  path: "<canonical status/evidence path>"
-  revision: "<observed commit or immutable version>"
-  concern: "<exact current-state claim consumed>"
-desired_outcome: "<observable change>"
-non_goals: []
-non_claims: []
-required_capability_refs: []
-typed_dependencies: []
-applicable_decision_refs: []
-applicable_policy_refs: []
-success_or_readout: "<pass/fail or exploratory decision>"
-evidence_target: "<claim and required evidence kind>"
-material_unknowns: []
-owner_or_owner_decision: "<role or required decision>"
-recommended_design_profile: "small | standard"
-recommended_overlays: []
-selected_at: "<timezone-aware timestamp>"
-```
+- `RoadmapGoalHandoff` is an immutable selection snapshot referencing native
+  roadmap, status, decision, policy, and capability authorities.
+- `DesignPacketResult` is a compact handback containing detailed-design
+  references, delta proposals, and explicit concern dispositions.
+- `PlanningHandoffExchange` rejects cross-record goal, objective, digest, or
+  roadmap-revision drift.
+- No record selects current work, adopts a roadmap change, or persists in a
+  global registry.
 
-Authority semantics:
-
-- The roadmap remains authoritative for goal identity, priority, dependencies,
-  and selection.
-- The record is an immutable selection snapshot and transport object. It is not
-  current roadmap status.
-- References point to existing authorities; they do not copy their full
-  contents.
-- A stale or unresolved roadmap revision fails loud rather than silently
-  starting design from an unknown goal.
-
-### `DesignPacketResult`
-
-```yaml
-schema_version: "1"
-handoff_id: "roadmap-goal:<project>:<goal>:<revision>"
-goal_id: "<same stable goal ID>"
-design_packet_ref:
-  path: "<canonical packet path>"
-  revision: "<commit or immutable version>"
-  concern: "bounded goal design"
-objective_disposition: "preserved | proposed_revision | blocked"
-requirement_refs: []
-boundary_refs: []
-domain_model_ref: null
-contract_refs: []
-schema_disposition: "reuse | extend | create | none"
-capability_graph_delta: []
-relationship_or_intent_updates: []
-evidence_plan_ref: "<packet section or native evidence plan>"
-next_slice_refs: []
-material_concerns: []
-roadmap_implications: []
-completed_at: "<timezone-aware timestamp>"
-```
-
-Authority semantics:
-
-- The design packet owns detailed requirements, boundaries, contracts, schema
-  disposition, slices, acceptance, and packet-local decisions.
-- The result is a compact handback and delta proposal, not a second roadmap or
-  capability graph.
-- Roadmap implications become current only after the roadmap owner accepts
-  them in the roadmap's native authority.
-- Every material concern identifies its concern class and is closed, promoted
-  to that class's canonical authority, or explicitly assigned with an owner and
-  resume condition at handoff.
-
-### Failure behavior
-
-- Reject unknown goal IDs, mismatched handoff IDs, missing immutable revisions,
-  or a result referring to a different objective.
-- Surface superseded roadmaps, unresolved authority conflicts, stale evidence,
-  and missing owners; do not merge them heuristically.
-- A packet may propose a goal revision, but implementation must not proceed
-  against weakened acceptance until the roadmap authority adopts it.
-- Do not require a handoff record for a trivial local change that does not cross
-  the roadmap/design boundary.
+Structural validation cannot determine whether a referenced authority has since
+become stale or superseded. The caller must resolve that through the existing
+authority and context systems before design or implementation proceeds.
 
 ---
 

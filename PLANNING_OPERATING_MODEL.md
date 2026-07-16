@@ -131,12 +131,32 @@ provided it records a durable architectural choice.
 | Gap analysis | What delta matters now? | Roadmap or plan | Can be repeated throughout project life |
 | Capabilities / boundary docs / PRD surfaces | What enduring capability or contract are we shaping? | Roadmap | Cross-project work should define this early |
 | Roadmap / phases | What major gates and sequence matter? | Plan | Can be lightweight in small repos |
+| Roadmap goal handoff | Which roadmap-owned goal, revision, evidence target, and governing references are entering a distinct design procedure? | Separate bounded design packet | Optional transport snapshot; never current roadmap or execution authority. See `docs/reference/PLANNING_HANDOFF_V1.md`. |
 | ADRs | What durable design choice did we make? | Implementation of affected change | Cross-cutting; must include research basis or explicit skip |
 | Plan | What bounded slice are we executing now? | Code | Must define acceptance criteria, required tests, and the research basis for the slice when the work is non-trivial |
+| Design packet result | Which detailed-design references, delta proposals, concern dispositions, and next slices return to roadmap review? | Roadmap change based on design | Delta-only handback; roadmap implications become current only when the roadmap owner adopts them. |
 | Journey notebook | Which named decision becomes clearer when this slice runs end to end? | Resolution of that decision, when no cheaper artifact suffices | Review projection only; canonical contracts and proof remain in package code, fixtures, tests, and evidence |
 | Tests / gates | What counts as pass/fail? | Code | Should be predeclared and preferably written first |
 | Code | What is the implementation? | Closeout | Must follow canonical plans and contracts; notebooks may render but do not own them |
 | Observability | How do we see behavior and drift? | Operational use / long-running execution | Required for runtime confidence |
+
+The roadmap/design handoff is required only when project direction and bounded
+design are distinct procedures or artifacts. A trivial local change does not
+need transport ceremony. The roadmap retains goal selection, priority, and
+project dependency authority; the design packet owns detailed requirements,
+boundaries, contracts, schema disposition, and slices.
+
+Planning must preserve one canonical owner **per concern class and scope**, not
+invent one universal concern register. Strategy, architecture, policy,
+implementation, verification, and live execution concerns may have different
+native authorities. Packet-local concerns must close, be promoted to their
+native authority, or leave with an owner and exact resume condition.
+
+`relationships.yaml` records reviewed artifact intent and maintenance
+obligations. Inferred code relationships, live coordination state, capability
+ownership, and policy applicability remain separate sources even when a
+generated context view joins them. Automation may propose relationships; it
+does not silently establish purpose or authority.
 
 ## What Is Strict vs. What Is Recommended
 

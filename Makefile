@@ -122,7 +122,19 @@ REVIEW_SCOPE ?=
 REVIEW_NOTES ?=
 RECIPIENT ?=
 
-.PHONY: worktree worktree-list worktree-remove session-start session-heartbeat session-status session-finish session-close review-claim raise-concern
+.PHONY: worktree worktree-list worktree-remove session-start session-heartbeat session-status session-finish session-close review-claim raise-concern verification-batch-freeze verification-batch-check verification-batch-thaw
+
+verification-batch-freeze:  ## Freeze clean HEAD for DECISION="..." VERIFY_COMMAND="..."
+	@test -n "$(DECISION)" || (echo "DECISION is required" && exit 1)
+	@test -n "$(VERIFY_COMMAND)" || (echo "VERIFY_COMMAND is required" && exit 1)
+	$(PYTHON) scripts/verification_batch.py --repo-root . freeze --decision "$(DECISION)" --command "$(VERIFY_COMMAND)" $(if $(ALLOW_UNTRACKED),--allow-untracked "$(ALLOW_UNTRACKED)",)
+
+verification-batch-check:  ## Require the active batch to match exact clean HEAD
+	$(PYTHON) scripts/verification_batch.py --repo-root . check --require-active
+
+verification-batch-thaw:  ## Invalidate the batch with REASON="..." before a scoped fix
+	@test -n "$(REASON)" || (echo "REASON is required" && exit 1)
+	$(PYTHON) scripts/verification_batch.py --repo-root . thaw --reason "$(REASON)"
 
 worktree:  ## Create claimed worktree (BRANCH=name TASK="..." [PLAN=N] [AGENT=name])
 ifndef BRANCH

@@ -22,6 +22,20 @@ find_script() {
     fi
 }
 
+# 0. Immutable terminal-verification batch check (if installed)
+VERIFICATION_BATCH=$(find_script "verification_batch.py")
+if [[ -n "$VERIFICATION_BATCH" ]]; then
+    echo "Checking verification batch freeze..."
+    if ! python "$VERIFICATION_BATCH" --repo-root "$REPO_ROOT" check; then
+        echo ""
+        echo "ERROR: This branch is frozen for exact terminal verification."
+        echo "Queue unrelated work in the next batch. For a blocker in the frozen"
+        echo "scope, run verification-batch-thaw with a recorded reason first."
+        echo ""
+        exit 1
+    fi
+fi
+
 # 1. Plan index regeneration (if generator exists)
 GENERATOR=$(find_script "generate_plan_index.py")
 if [[ -n "$GENERATOR" ]]; then

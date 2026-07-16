@@ -18,7 +18,7 @@ handoff:
   desired_outcome: A valid selection snapshot and design handback fail loud on identity or authority drift.
   non_goals:
     - Create a handoff registry or service.
-    - Merge project-roadmapping and design-plan.
+    - Merge initiative-roadmap and bounded-design.
   non_claims:
     - This fixture does not prove a real cross-skill pilot is useful.
   required_capability_refs: []
@@ -51,7 +51,7 @@ result:
   schema_version: "1.0"
   record_type: design_packet_result
   handoff_id: roadmap-goal:enforced-planning:plan-72-handoff:fa95c5f4a637cbcb06464fdbe86d5be8262a2ce5
-  source_handoff_sha256: 1b3748e2b6cd8df783142cbb67720e0f141ac9c2e906f50b993ce82886a3f4f5
+  source_handoff_sha256: 07c8b12cb2d93e690facd5d3ecc4ca80fa20e5ed6ca5aef1254af1e8835d9720
   source_roadmap_revision: fa95c5f4a637cbcb06464fdbe86d5be8262a2ce5
   goal_id: plan-72-handoff
   objective_sha256: 742fad34588356e73697a2babc025e8897127fa0e95c6bf4635549fd588f0f41

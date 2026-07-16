@@ -249,8 +249,16 @@ def parse_data_flow(content: str) -> list[dict[str, str]]:
 def parse_plan_status(content: str) -> tuple[str, str]:
     """Extract the markdown title and bolded Status line."""
     status = "Unknown"
-    if m := re.search(r"\*{1,2}Status:?\*?\s*:?\s*([^\n]+)", content, re.IGNORECASE):
-        status = m.group(1).strip()
+    status_patterns = (
+        r"^\*\*Status:\*\*[ \t]*(.+?)[ \t]*$",
+        r"^\*\*Status\*\*:[ \t]*(.+?)[ \t]*$",
+        r"^\*Status:\*[ \t]*(.+?)[ \t]*$",
+        r"^Status:[ \t]*(.+?)[ \t]*$",
+    )
+    for pattern in status_patterns:
+        if match := re.search(pattern, content, re.IGNORECASE | re.MULTILINE):
+            status = match.group(1)
+            break
     title = "Plan"
     if first := re.search(r"^#\s*([^\n]+)", content, re.MULTILINE):
         title = first.group(1).strip()

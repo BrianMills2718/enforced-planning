@@ -316,6 +316,50 @@ def test_heartbeat_claims_refreshes_codex_session(
     assert payload["heartbeat_at"] == heartbeat_at
 
 
+def test_heartbeat_replace_failure_preserves_existing_claim(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A failed heartbeat replacement must never truncate the active claim."""
+
+    module = _load_module()
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
+    monkeypatch.setenv("CODEX_THREAD_ID", "thread-atomic")
+    claim_path = claims_dir / "codex.yaml"
+    original = {
+        "agent": "codex",
+        "claimed_at": "2026-04-05T12:00:00+00:00",
+        "expires_at": "2099-04-05T13:00:00+00:00",
+        "projects": ["project-meta"],
+        "scope": "atomic-heartbeat",
+        "intent": "Preserve claim on write failure",
+        "claim_type": "write",
+        "write_paths": ["README.md"],
+        "branch": "atomic-heartbeat",
+        "worktree_path": str(tmp_path),
+        "session_id": "codex:thread-atomic",
+        "status": "active",
+    }
+    _write_claim(claims_dir, claim_path.name, original)
+    original_bytes = claim_path.read_bytes()
+
+    def fail_replace(_source: Path, _destination: Path) -> None:
+        raise OSError("simulated replacement failure")
+
+    monkeypatch.setattr(module._impl.os, "replace", fail_replace)
+
+    with pytest.raises(OSError, match="simulated replacement failure"):
+        module.heartbeat_claims(
+            agent="codex",
+            project="project-meta",
+            scope="atomic-heartbeat",
+        )
+
+    assert claim_path.read_bytes() == original_bytes
+    assert list(claims_dir.glob(".*.tmp")) == []
+
+
 def test_heartbeat_claims_refreshes_claude_code_session(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

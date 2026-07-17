@@ -76,6 +76,7 @@ See `ROADMAP.md` for the full phase map and recommended priority order.
 | 100 | Native Codex Mailbox Lifecycle Delivery (`100_codex_mailbox_lifecycle_delivery.md`) | Critical | ✅ Complete | reliable request observation without human relay |
 | 101 | Landscape And Prior-Art Planning Contract (`101_landscape_and_prior_art_contract.md`) | High | ✅ Complete | reusable research-before-build contract and report-only validation |
 | 102 | Plan Status Projection Repair (`102_plan_status_projection.md`) | Low | ✅ Complete | truthful cross-repo status metadata |
+| 103 | Relationship-Context Installer Dependency Closure (`103_relationship_context_installer_dependency_closure.md`) | High | 📋 Planned | bounded consumer adoption without missing local runtime dependencies |
 
 ## Status Key
 

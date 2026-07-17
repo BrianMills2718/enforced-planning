@@ -179,6 +179,69 @@ def test_create_review_claim_uses_target_branch_as_parent_scope(
     assert claim_payload["write_paths"] == ["src/demo.py", "tests/test_demo.py"]
 
 
+def test_create_review_claim_allows_read_only_review(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Read-only review should be visible without claiming false write ownership."""
+
+    repo_root = tmp_path / "demo"
+    _init_git_repo(repo_root)
+    subprocess.run(
+        ["git", "-C", str(repo_root), "checkout", "-b", "review-lane"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    monkeypatch.setenv("CODEX_THREAD_ID", "thread-read-only")
+    _write_claim(
+        claims_dir,
+        "writer.yaml",
+        {
+            "agent": "claude-code",
+            "claimed_at": "2026-04-09T10:00:00+00:00",
+            "expires_at": "2099-04-09T11:00:00+00:00",
+            "projects": ["demo"],
+            "scope": "plan-99-target",
+            "intent": "Implement the target lane",
+            "claim_type": "write",
+            "write_paths": ["src/demo.py"],
+            "branch": "plan-99-target",
+            "worktree_path": str(tmp_path / "target-worktree"),
+            "session_id": "claude-code:target-writer",
+            "status": "active",
+        },
+    )
+
+    payload = concern_routing.create_review_claim(
+        repo_root=repo_root,
+        agent="codex",
+        project="demo",
+        target_branch="plan-99-target",
+        intent="Inspect target lane without applying fixes",
+        write_paths=[],
+    )
+
+    assert payload["ok"]
+    assert payload["write_paths"] == []
+    claim_file = claims_dir / "codex_demo_review-plan-99-target.yaml"
+    claim_payload = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
+    assert claim_payload["claim_type"] == "review"
+    assert claim_payload["parent_scope"] == "plan-99-target"
+    assert claim_payload["write_paths"] == []
+    claims = coordination_claims.check_claims("demo")
+    review_claim = next(item for item in claims if item.claim_type == "review")
+    writer_claim = next(item for item in claims if item.claim_type == "write")
+    interaction = coordination_claims.evaluate_claim(
+        review_claim,
+        active_claims=[writer_claim],
+    )
+    assert interaction.hard_conflicts == []
+    assert interaction.interactions[0].overlapping_write_paths == []
+
+
 def test_route_concern_uses_canonical_mailbox_when_no_pr_exists(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

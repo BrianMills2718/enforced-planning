@@ -130,6 +130,16 @@ Plan 224, so this exact entry is retained here for its owner:
   `uninstrumented`/weak rather than alive; native activity should refresh only
   an exact matching session claim.
 
+Additional workflow friction observed during landing:
+
+- **Policy:** `worktree-pr-merge`
+- **Friction:** `gh pr merge --delete-branch` failed after a clean, mergeable PR
+  because GitHub CLI attempted a local branch operation while `main` was
+  correctly checked out in the canonical worktree.
+- **Recommendation:** The sanctioned worktree landing procedure should merge
+  remotely first and treat local/remote feature-branch cleanup as a separate
+  best-effort step.
+
 ## Synthesis
 
 This is a real policy and adapter gap, not evidence that all heartbeat

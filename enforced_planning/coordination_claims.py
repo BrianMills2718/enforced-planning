@@ -26,6 +26,7 @@ import posixpath
 import re
 import subprocess
 import sys
+import tempfile
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass
@@ -70,6 +71,35 @@ def claim_registry_lock() -> Iterator[None]:
             yield
         finally:
             fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+
+
+def _atomic_write_claim(path: Path, payload: dict[str, Any]) -> None:
+    """Replace one claim without exposing a truncated or partially written file."""
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            "w",
+            encoding="utf-8",
+            dir=path.parent,
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as handle:
+            temp_path = Path(handle.name)
+            yaml.safe_dump(
+                payload,
+                handle,
+                default_flow_style=False,
+                sort_keys=False,
+            )
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temp_path, path)
+    finally:
+        if temp_path is not None and temp_path.exists():
+            temp_path.unlink()
 
 
 @dataclass(frozen=True)
@@ -921,10 +951,7 @@ def create_claim(
         claim_payload = candidate.to_dict()
         claim_payload.pop("source_file", None)
         claim_payload.pop("project", None)
-        (CLAIMS_DIR / filename).write_text(
-            yaml.safe_dump(claim_payload, default_flow_style=False, sort_keys=False),
-            encoding="utf-8",
-        )
+        _atomic_write_claim(CLAIMS_DIR / filename, claim_payload)
     return True, (
         f"Claimed: {agent} → {project}:{scope} "
         f"[{candidate.claim_type}] (expires in {ttl_hours}h)"
@@ -979,10 +1006,7 @@ def hydrate_missing_session_ids(
         data["session_id"] = resolved_session_id
         data["heartbeat_at"] = now
         data["updated_at"] = now
-        claim_file.write_text(
-            yaml.safe_dump(data, default_flow_style=False, sort_keys=False),
-            encoding="utf-8",
-        )
+        _atomic_write_claim(claim_file, data)
         updated_scopes.append(claim.scope)
     return len(updated_scopes), sorted(updated_scopes), resolved_session_id
 
@@ -1036,10 +1060,7 @@ def heartbeat_claims(
         data["session_id"] = resolved_session_id
         data["heartbeat_at"] = heartbeat_at
         data["updated_at"] = heartbeat_at
-        claim_file.write_text(
-            yaml.safe_dump(data, default_flow_style=False, sort_keys=False),
-            encoding="utf-8",
-        )
+        _atomic_write_claim(claim_file, data)
         updated_scopes.append(claim.scope)
     return len(updated_scopes), sorted(updated_scopes), resolved_session_id, heartbeat_at
 
@@ -1095,10 +1116,7 @@ def complete_claims_for_plan(
                     data["notes"] = f"{existing_notes.rstrip()} | {note}"
             else:
                 data["notes"] = note
-        claim_file.write_text(
-            yaml.safe_dump(data, default_flow_style=False, sort_keys=False),
-            encoding="utf-8",
-        )
+        _atomic_write_claim(claim_file, data)
         completed_scopes.append(claim.scope)
     return len(completed_scopes), sorted(completed_scopes)
 

@@ -423,7 +423,7 @@ def claim_liveness_issues(
 
     Backward compatibility rule: a live claim with no `heartbeat_at` remains
     readable and does not become stale solely because the heartbeat rollout has
-    not touched it yet.
+    not touched it yet. It is explicitly uninstrumented rather than healthy.
     """
 
     if not claim.is_live():
@@ -431,7 +431,7 @@ def claim_liveness_issues(
     if not claim.session_id:
         return []
     if not claim.heartbeat_at:
-        return []
+        return ["missing_session_heartbeat"]
     heartbeat = _parse_iso_datetime(claim.heartbeat_at)
     if heartbeat is None:
         return ["invalid_heartbeat_at"]
@@ -447,14 +447,17 @@ def claim_runtime_status(
     active_claims: list[ClaimRecord] | None = None,
 ) -> str:
     """Classify one live claim across stale/weak/healthy states."""
-    if claim_lifecycle_issues(claim) or claim_liveness_issues(claim):
+    if claim_lifecycle_issues(claim):
+        return "stale"
+    liveness_issues = claim_liveness_issues(claim)
+    if any(issue != "missing_session_heartbeat" for issue in liveness_issues):
         return "stale"
     issues = (
         coordination_health_issues(claim, active_claims=active_claims)
         if active_claims is not None
         else claim_health_issues(claim)
     )
-    return "weak" if issues else "healthy"
+    return "weak" if issues or liveness_issues else "healthy"
 
 
 def validate_claim_for_creation(claim: ClaimRecord) -> None:
@@ -991,6 +994,8 @@ def heartbeat_claims(
     session_id: str | None = None,
     scope: str | None = None,
     branch: str | None = None,
+    claims_dir: Path | None = None,
+    require_exact_session: bool = False,
 ) -> tuple[int, list[str], str, str]:
     """Refresh heartbeat metadata for matching live claims owned by one session."""
 
@@ -1000,12 +1005,13 @@ def heartbeat_claims(
             "Unable to resolve a session ID. Pass --session-id explicitly or run from a supported tool runtime."
         )
 
-    if not CLAIMS_DIR.exists():
+    resolved_claims_dir = claims_dir or CLAIMS_DIR
+    if not resolved_claims_dir.exists():
         return 0, [], resolved_session_id, datetime.now(timezone.utc).isoformat()
 
     heartbeat_at = datetime.now(timezone.utc).isoformat()
     updated_scopes: list[str] = []
-    for claim_file in CLAIMS_DIR.glob("*.yaml"):
+    for claim_file in resolved_claims_dir.glob("*.yaml"):
         try:
             data = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
         except Exception:
@@ -1023,7 +1029,9 @@ def heartbeat_claims(
             continue
         if branch and claim.branch != branch:
             continue
-        if claim.session_id and claim.session_id != resolved_session_id:
+        if require_exact_session and claim.session_id != resolved_session_id:
+            continue
+        if not require_exact_session and claim.session_id and claim.session_id != resolved_session_id:
             continue
         data["session_id"] = resolved_session_id
         data["heartbeat_at"] = heartbeat_at
@@ -1128,7 +1136,11 @@ def prune_stale() -> tuple[int, list[str]]:
         claim = normalize_claim(data, source_file=str(claim_file))
         if claim is None or not claim.is_live():
             continue
-        if not (claim_lifecycle_issues(claim) or claim_liveness_issues(claim)):
+        liveness_issues = claim_liveness_issues(claim)
+        proven_stale_liveness = [
+            issue for issue in liveness_issues if issue != "missing_session_heartbeat"
+        ]
+        if not (claim_lifecycle_issues(claim) or proven_stale_liveness):
             continue
         claim_file.unlink()
         removed_labels.append(f"{claim.primary_project()}:{claim.scope}")

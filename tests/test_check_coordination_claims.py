@@ -388,6 +388,28 @@ def test_claim_liveness_issues_detect_stale_session_heartbeat(
     assert module.claim_runtime_status(claim) == "stale"
 
 
+def test_claim_without_heartbeat_is_weak_and_explicitly_uninstrumented(tmp_path: Path) -> None:
+    """Missing liveness evidence must not be promoted into a healthy-session claim."""
+
+    module = _load_module()
+    claim = module.build_candidate_claim(
+        agent="codex",
+        project="inside-success",
+        scope="legacy-active-lane",
+        intent="Represent an older live claim",
+        claim_type="program",
+        branch="main",
+        worktree_path=str(tmp_path),
+        session_id="codex:synthetic-session",
+        status="active",
+        claimed_at="2026-07-16T00:00:00+00:00",
+        expires_at="2099-07-16T00:00:00+00:00",
+    )
+
+    assert module.claim_liveness_issues(claim) == ["missing_session_heartbeat"]
+    assert module.claim_runtime_status(claim) == "weak"
+
+
 def test_plan_bound_claim_without_session_contract_is_weak(tmp_path: Path) -> None:
     """A Plan 0141-shaped path claim must not appear healthy without its session contract."""
 

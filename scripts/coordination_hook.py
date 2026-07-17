@@ -38,7 +38,7 @@ def _bootstrap_package() -> None:
 
 _bootstrap_package()
 
-from enforced_planning import coordination_messages  # noqa: E402
+from enforced_planning import coordination_claims, coordination_messages  # noqa: E402
 
 
 SUPPORTED_EVENTS = {"SessionStart", "UserPromptSubmit", "PostToolUse"}
@@ -109,15 +109,30 @@ def _render_result(event_name: str, summary: str) -> dict[str, Any]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Poll once, record delivery, and expose active requests to Codex."""
+    """Refresh exact-session liveness, then expose active requests to Codex."""
 
     args = parse_args(argv)
     try:
         payload = _read_hook_input()
+        project = _canonical_project(payload["cwd"])
+        session_id = _session_id(payload["session_id"])
+        updated_count, _updated_scopes, _resolved_session_id, _heartbeat_at = (
+            coordination_claims.heartbeat_claims(
+                agent="codex",
+                project=project,
+                session_id=session_id,
+                claims_dir=args.claims_dir,
+                require_exact_session=True,
+            )
+        )
+        if updated_count == 0:
+            raise coordination_messages.UnknownSessionError(
+                f"No live claim matches native Codex session {session_id!r} in project {project!r}"
+            )
         notice = coordination_messages.poll_session_inbox(
             agent="codex",
-            project=_canonical_project(payload["cwd"]),
-            session_id=_session_id(payload["session_id"]),
+            project=project,
+            session_id=session_id,
             observe=True,
             claims_dir=args.claims_dir,
             root=args.root,

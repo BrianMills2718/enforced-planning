@@ -55,6 +55,7 @@ def _write_claim(claims_dir: Path, *, agent: str, project: str, scope: str, sess
         "write_paths": [],
         "read_paths": [],
         "session_id": session_id,
+        "heartbeat_at": NOW.isoformat(),
         "status": "active",
         "claimed_at": NOW.isoformat(),
         "expires_at": datetime(2099, 1, 1, tzinfo=UTC).isoformat(),
@@ -528,6 +529,10 @@ def test_codex_lifecycle_hook_observes_repeats_until_ack_then_hides(
     assert persisted.message.message_id in context
     assert "Narrow the docs claim" in context
     assert store.status(MessageStatusRequest(message_id=persisted.message.message_id)).state == "observed"
+    refreshed_claim = yaml.safe_load(
+        (claims_dir / "codex_enforced-planning_sender-lane.yaml").read_text(encoding="utf-8")
+    )
+    assert refreshed_claim["heartbeat_at"] != NOW.isoformat()
 
     repeated = subprocess.run(
         command,
@@ -558,6 +563,42 @@ def test_codex_lifecycle_hook_observes_repeats_until_ack_then_hides(
     )
     assert after_ack.returncode == 0
     assert after_ack.stdout == ""
+
+
+def test_codex_lifecycle_hook_does_not_adopt_a_different_session_claim(
+    mailbox: tuple[CoordinationMessageStore, Path, Path],
+) -> None:
+    """Native activity must not manufacture liveness for a synthetic or obsolete session."""
+
+    _store, claims_dir, root = mailbox
+    claim_path = claims_dir / "codex_enforced-planning_sender-lane.yaml"
+    before = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    result = subprocess.run(
+        [
+            "python",
+            "scripts/coordination_hook.py",
+            "--claims-dir",
+            str(claims_dir),
+            "--root",
+            str(root),
+        ],
+        input=json.dumps(
+            {
+                "session_id": "different-runtime",
+                "cwd": str(Path(__file__).resolve().parents[1]),
+                "hook_event_name": "UserPromptSubmit",
+            }
+        ),
+        cwd=Path(__file__).resolve().parents[1],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    assert "No live claim matches native Codex session" in json.loads(result.stdout)["systemMessage"]
+    after = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    assert after["heartbeat_at"] == before["heartbeat_at"]
 
 
 def test_codex_lifecycle_hook_rejects_malformed_input_without_receipt(

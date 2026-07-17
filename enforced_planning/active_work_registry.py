@@ -98,9 +98,11 @@ def build_lane_entries(*, claim_entries: list[dict[str, Any]]) -> list[dict[str,
         lifecycle_issues = sorted({issue for item in items for issue in item.get("lifecycle_issues", [])})
         liveness_issues = sorted({issue for item in items for issue in item.get("liveness_issues", [])})
         health_status = "healthy"
-        if lifecycle_issues or liveness_issues:
+        if lifecycle_issues or any(
+            issue != "missing_session_heartbeat" for issue in liveness_issues
+        ):
             health_status = "stale"
-        elif health_issues:
+        elif health_issues or liveness_issues:
             health_status = "weak"
         elif hard_conflicts:
             health_status = "attention"
@@ -243,9 +245,11 @@ def build_registry_payload(
             }
             for item in check_result.interactions
         ]
-        if lifecycle_issues or liveness_issues:
+        if lifecycle_issues or any(
+            issue != "missing_session_heartbeat" for issue in liveness_issues
+        ):
             stale_claim_count += 1
-        elif health_issues:
+        elif health_issues or liveness_issues:
             weak_claim_count += 1
         if entry["interaction_summary"]["hard_conflict_count"] > 0:
             hard_conflict_claim_count += 1

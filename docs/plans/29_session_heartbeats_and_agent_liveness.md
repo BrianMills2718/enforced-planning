@@ -58,7 +58,7 @@ distinguish:
 | Heartbeat field | Add `heartbeat_at` to claim-v2 | Keeps liveness explicit instead of overloading `updated_at` |
 | Refresh path | Add explicit `--heartbeat` to the canonical claim CLI | Bounded, observable, and tool-agnostic |
 | Session resolution | Reuse the existing runtime session resolution for Codex, Claude Code, and OpenClaw | Same adapter surface, no second identity system |
-| Backward compatibility | Missing heartbeat alone does not make a legacy live claim stale | Avoids instantly degrading all existing healthy claims |
+| Backward compatibility | Missing heartbeat alone makes a legacy live claim weak/uninstrumented, not stale or healthy | Keeps legacy claims readable without translating missing liveness evidence into success |
 | Stale-session rule | A live claim becomes stale when `heartbeat_at` exists and is older than the configured freshness window | Distinguishes “no liveness instrumented yet” from “instrumented and stale” |
 | Threshold config | Use an environment-configurable stale window, defaulting in the framework code | Keeps the first rollout deterministic while avoiding hardwired semantics |
 
@@ -114,6 +114,30 @@ distinguish:
 - [x] Registry distinguishes stale-session from legacy no-heartbeat claims
 - [x] Focused coordination tests pass
 - [x] Operator docs explain the liveness model
+
+## 2026-07-17 Activity-Bound Repair
+
+An observed legacy claim exposed a remaining integrity gap: the native Codex
+hook ran on `SessionStart`, `UserPromptSubmit`, and `PostToolUse`, but only
+polled the mailbox. It did not refresh the existing claim heartbeat. A legacy
+claim with no heartbeat could consequently retain `status: active` and be
+reported as healthy even though no native runtime matched its synthetic session
+ID.
+
+The bounded repair:
+
+- refreshes heartbeat metadata from each native activity event before mailbox
+  polling;
+- requires an exact existing session match, so activity cannot adopt or revive
+  a synthetic, missing, or different session identity;
+- reports a live claim with no heartbeat as
+  `weak`/`missing_session_heartbeat`, while keeping it readable and distinct
+  from an instrumented stale session;
+- preserves the separate meanings of reservation status, session liveness, and
+  attributable progress evidence.
+
+Investigation:
+`../../investigations/2026-07-17-activity-heartbeat-gap.md`.
 
 ## Verification
 

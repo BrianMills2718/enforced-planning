@@ -179,6 +179,42 @@ def test_create_review_claim_uses_target_branch_as_parent_scope(
     assert claim_payload["write_paths"] == ["src/demo.py", "tests/test_demo.py"]
 
 
+def test_create_review_claim_allows_read_only_review(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Read-only review should be visible without claiming false write ownership."""
+
+    repo_root = tmp_path / "demo"
+    _init_git_repo(repo_root)
+    subprocess.run(
+        ["git", "-C", str(repo_root), "checkout", "-b", "review-lane"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    monkeypatch.setenv("CODEX_THREAD_ID", "thread-read-only")
+
+    payload = concern_routing.create_review_claim(
+        repo_root=repo_root,
+        agent="codex",
+        project="demo",
+        target_branch="plan-99-target",
+        intent="Inspect target lane without applying fixes",
+        write_paths=[],
+    )
+
+    assert payload["ok"]
+    assert payload["write_paths"] == []
+    claim_file = claims_dir / "codex_demo_review-plan-99-target.yaml"
+    claim_payload = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
+    assert claim_payload["claim_type"] == "review"
+    assert claim_payload["parent_scope"] == "plan-99-target"
+    assert claim_payload["write_paths"] == []
+
+
 def test_route_concern_uses_canonical_mailbox_when_no_pr_exists(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

@@ -221,6 +221,16 @@ python scripts/self_test.py --docs
 
 Completed on 2026-07-16.
 
+### Post-completion read-only review-claim repair
+
+An observed OntoCanon Plan 0141 review exposed one adapter-only contradiction:
+the canonical claim model permits a `review` claim with no write paths, but
+`create_review_claim` rejected that read-only form before consulting the claim
+model. The bounded repair removes only that stronger precondition. The existing
+write-capable review behavior remains covered, and a new both-sign test requires
+read-only review visibility with `write_paths=[]`, exact target-branch
+`parent_scope`, and no false file reservation.
+
 - Shared implementation and the installed-entrypoint repair are on Enforced
   Planning `main` at `434e487`.
 - The focused repository-status, claim, session, registry, and installer suite

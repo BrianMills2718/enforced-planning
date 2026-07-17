@@ -85,8 +85,6 @@ def create_review_claim(
 
     resolved_repo_root = push_safety.resolve_repo_root(repo_root)
     normalized_write_paths = _split_path_values(write_paths)
-    if not normalized_write_paths:
-        raise ValueError("Review claims require at least one write path.")
     current_branch = _current_branch(resolved_repo_root)
     resolved_scope = scope or _candidate_review_scope(target_branch)
     ok, message = coordination_claims.create_claim(

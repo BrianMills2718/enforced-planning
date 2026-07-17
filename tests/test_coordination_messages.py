@@ -596,9 +596,56 @@ def test_codex_lifecycle_hook_does_not_adopt_a_different_session_claim(
     )
 
     assert result.returncode == 0
-    assert "No live claim matches native Codex session" in json.loads(result.stdout)["systemMessage"]
+    assert result.stdout == ""
     after = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
     assert after["heartbeat_at"] == before["heartbeat_at"]
+
+
+def test_codex_lifecycle_hook_polls_after_write_claim_completion(
+    mailbox: tuple[CoordinationMessageStore, Path, Path],
+) -> None:
+    """Completing write ownership must not disable the still-running native inbox."""
+
+    store, claims_dir, root = mailbox
+    persisted = store.send(
+        _send_request(
+            sender=CLAUDE_SESSION,
+            recipient=CODEX_SESSION,
+            idempotency_key="completed-claim-native-poll",
+        )
+    )
+    claim_path = claims_dir / "codex_enforced-planning_sender-lane.yaml"
+    claim = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    claim["status"] = "completed"
+    claim_path.write_text(yaml.safe_dump(claim, sort_keys=False), encoding="utf-8")
+
+    result = subprocess.run(
+        [
+            "python",
+            "scripts/coordination_hook.py",
+            "--claims-dir",
+            str(claims_dir),
+            "--root",
+            str(root),
+        ],
+        input=json.dumps(
+            {
+                "session_id": "thread-123",
+                "cwd": str(Path(__file__).resolve().parents[1]),
+                "hook_event_name": "PostToolUse",
+            }
+        ),
+        cwd=Path(__file__).resolve().parents[1],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr or result.stdout
+    assert persisted.message.message_id in json.loads(result.stdout)["systemMessage"]
+    assert store.status(
+        MessageStatusRequest(message_id=persisted.message.message_id)
+    ).state == "observed"
 
 
 def test_codex_lifecycle_hook_rejects_malformed_input_without_receipt(

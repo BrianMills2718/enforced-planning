@@ -115,8 +115,8 @@ make test
    plan status changes.
 5. Run `python scripts/self_test.py` before landing documentation or installer
    changes.
-6. Treat the session lifecycle commands as part of sanctioned execution, not
-   optional helper scripts.
+6. Use session lifecycle commands for coordinated or release work; a reversible
+   single-writer development task does not need a session/claim lifecycle.
 7. Use `session-close` or `make worktree-remove` for claimed lane cleanup; do
    not manually split claim release from worktree removal.
 
@@ -130,8 +130,12 @@ make test
 
 ## Principles
 
-- Governance is mechanical: checks are deterministic, not advisory
-- Every repo gets the same contract surface (CLAUDE.md, AGENTS.md, validators, hooks)
+- Governance is discriminating: checks report deterministic facts, and block
+  only when the candidate can violate the protected contract and the selected
+  execution mode requires blocking.
+- Every repo gets the smallest stage-appropriate contract surface; development
+  does not inherit coordinated or release controls solely because the framework
+  can install them.
 - Install is idempotent: running it twice leaves the repo in the same state
 - Source truth is in this repo; installed repos are consumers of generated artifacts
 

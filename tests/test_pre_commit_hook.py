@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 import textwrap
 from pathlib import Path
@@ -11,20 +12,23 @@ PROJECT_META_ROOT = Path(__file__).resolve().parents[1]
 HOOK_SCRIPT = PROJECT_META_ROOT / "hooks" / "git" / "pre-commit"
 
 
-def test_pre_commit_hook_invokes_doc_coupling_in_staged_mode(tmp_path: Path) -> None:
-    """The hook should gate the staged slice, not the whole branch history."""
-
+def _hook_repo(tmp_path: Path) -> tuple[Path, Path]:
+    """Create the minimum repository needed to execute the tracked hook."""
     repo_root = tmp_path / "repo"
     repo_root.mkdir()
     subprocess.run(["git", "init"], cwd=repo_root, check=True, capture_output=True, text=True)
-    (repo_root / ".git").mkdir(exist_ok=True)
-
     hooks_dir = repo_root / "hooks"
     hooks_dir.mkdir(parents=True, exist_ok=True)
     hook_copy = hooks_dir / "pre-commit"
     hook_copy.write_text(HOOK_SCRIPT.read_text(encoding="utf-8"), encoding="utf-8")
     hook_copy.chmod(0o755)
+    return repo_root, hook_copy
 
+
+def test_pre_commit_hook_invokes_doc_coupling_in_staged_mode(tmp_path: Path) -> None:
+    """The hook should inspect the staged slice, not the whole branch history."""
+
+    repo_root, hook_copy = _hook_repo(tmp_path)
     scripts_meta = repo_root / "scripts" / "meta"
     scripts_meta.mkdir(parents=True, exist_ok=True)
     marker = repo_root / "doc_coupling_args.txt"
@@ -56,18 +60,100 @@ def test_pre_commit_hook_invokes_doc_coupling_in_staged_mode(tmp_path: Path) -> 
     assert marker.read_text(encoding="utf-8") == "--staged --strict"
 
 
+def test_pre_commit_hook_warns_by_default_on_governance_failure(tmp_path: Path) -> None:
+    """Reversible development commits should retain findings without blocking."""
+
+    repo_root, hook_copy = _hook_repo(tmp_path)
+    scripts_meta = repo_root / "scripts" / "meta"
+    scripts_meta.mkdir(parents=True, exist_ok=True)
+    stub = scripts_meta / "check_doc_coupling.py"
+    stub.write_text("raise SystemExit(1)\n", encoding="utf-8")
+
+    result = subprocess.run(
+        ["bash", str(hook_copy)],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    assert "commit continues in warn mode" in result.stdout
+
+
+def test_pre_commit_hook_blocks_when_explicitly_requested(tmp_path: Path) -> None:
+    """Pilot and release candidates can opt into strict blocking."""
+
+    repo_root, hook_copy = _hook_repo(tmp_path)
+    scripts_meta = repo_root / "scripts" / "meta"
+    scripts_meta.mkdir(parents=True, exist_ok=True)
+    stub = scripts_meta / "check_doc_coupling.py"
+    stub.write_text("raise SystemExit(1)\n", encoding="utf-8")
+
+    result = subprocess.run(
+        ["bash", str(hook_copy)],
+        cwd=repo_root,
+        env={**os.environ, "ENFORCED_PLANNING_HOOK_MODE": "block"},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 1
+    assert "failed in explicit block mode" in result.stdout
+
+
+def test_pre_commit_hook_rejects_unknown_mode(tmp_path: Path) -> None:
+    """A misspelled enforcement mode must not silently select a behavior."""
+
+    repo_root, hook_copy = _hook_repo(tmp_path)
+    result = subprocess.run(
+        ["bash", str(hook_copy)],
+        cwd=repo_root,
+        env={**os.environ, "ENFORCED_PLANNING_HOOK_MODE": "strictest"},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 2
+    assert "must be off, warn, or block" in result.stdout
+
+
+def test_pre_commit_hook_does_not_generate_or_stage_plan_index(tmp_path: Path) -> None:
+    """A check hook must not mutate or stage generated planning state."""
+
+    repo_root, hook_copy = _hook_repo(tmp_path)
+    scripts_meta = repo_root / "scripts" / "meta"
+    scripts_meta.mkdir(parents=True, exist_ok=True)
+    marker = repo_root / "generator-called.txt"
+    generator = scripts_meta / "generate_plan_index.py"
+    generator.write_text(
+        f"from pathlib import Path\nPath({str(marker)!r}).write_text('called')\n",
+        encoding="utf-8",
+    )
+    plan = repo_root / "docs" / "plans" / "01_example.md"
+    plan.parent.mkdir(parents=True)
+    plan.write_text("# Plan\n", encoding="utf-8")
+    subprocess.run(["git", "add", str(plan)], cwd=repo_root, check=True)
+
+    result = subprocess.run(
+        ["bash", str(hook_copy)],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    assert not marker.exists()
+    assert "git fetch" not in HOOK_SCRIPT.read_text(encoding="utf-8")
+
+
 def test_pre_commit_hook_blocks_mutation_of_frozen_verification_batch(tmp_path: Path) -> None:
     """A failing exact-batch check must stop a new commit before other gates run."""
 
-    repo_root = tmp_path / "repo"
-    repo_root.mkdir()
-    subprocess.run(["git", "init"], cwd=repo_root, check=True, capture_output=True, text=True)
-    hooks_dir = repo_root / "hooks"
-    hooks_dir.mkdir(parents=True, exist_ok=True)
-    hook_copy = hooks_dir / "pre-commit"
-    hook_copy.write_text(HOOK_SCRIPT.read_text(encoding="utf-8"), encoding="utf-8")
-    hook_copy.chmod(0o755)
-
+    repo_root, hook_copy = _hook_repo(tmp_path)
     scripts_meta = repo_root / "scripts" / "meta"
     scripts_meta.mkdir(parents=True, exist_ok=True)
     marker = repo_root / "verification_batch_called.txt"
@@ -90,6 +176,7 @@ def test_pre_commit_hook_blocks_mutation_of_frozen_verification_batch(tmp_path: 
     result = subprocess.run(
         ["bash", str(hook_copy)],
         cwd=repo_root,
+        env={**os.environ, "ENFORCED_PLANNING_HOOK_MODE": "off"},
         capture_output=True,
         text=True,
         check=False,

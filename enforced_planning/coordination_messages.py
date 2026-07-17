@@ -655,10 +655,24 @@ class CoordinationMessageStore:
             message_path=str(path),
         )
 
-    def poll(self, request: PollMessagesRequest, *, now: datetime | None = None) -> MessagePollResult:
-        """Read one live session inbox and optionally append observation receipts."""
+    def poll(
+        self,
+        request: PollMessagesRequest,
+        *,
+        now: datetime | None = None,
+        require_live_claim: bool = True,
+    ) -> MessagePollResult:
+        """Read one session inbox and optionally append observation receipts.
 
-        self._require_live_session(request.current_session_id)
+        ``require_live_claim=False`` is reserved for a native client lifecycle
+        adapter that receives the current session ID from the client itself.
+        Write claims remain mandatory for message routing and sender identity;
+        completing a write claim must not make the still-running client's
+        read-only inbox unavailable.
+        """
+
+        if require_live_claim:
+            self._require_live_session(request.current_session_id)
         as_of = request.as_of or now or _utc_now()
         if as_of.tzinfo is None:
             raise ValueError("as_of must be timezone-aware")
@@ -741,12 +755,14 @@ def poll_session_inbox(
     root: Path | None = None,
     max_body_chars: int = DEFAULT_NOTICE_BODY_LENGTH,
     max_messages: int = DEFAULT_NOTICE_MESSAGE_LIMIT,
+    require_live_claim: bool = True,
 ) -> SessionInboxNotice:
     """Resolve one live agent session and return an agent-visible mailbox notice.
 
-    Lifecycle adapters call this only after their claim is live. Observation
-    evidence therefore means the notice reached an agent-facing command result,
-    not merely that a background process scanned storage.
+    Native lifecycle adapters may set ``require_live_claim=False`` because the
+    client event supplies the exact current session identity. Observation
+    evidence still means the notice reached an agent-facing command result, not
+    merely that a background process scanned storage.
     """
 
     if max_body_chars < 1 or max_messages < 1:
@@ -767,7 +783,8 @@ def poll_session_inbox(
             current_session_id=resolved_session_id,
             project=project,
             observe=observe,
-        )
+        ),
+        require_live_claim=require_live_claim,
     )
     active = tuple(
         view for view in result.messages if not view.expired and not view.acknowledged

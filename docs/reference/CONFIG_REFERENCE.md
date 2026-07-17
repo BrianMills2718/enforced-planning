@@ -31,9 +31,9 @@ pretending it is mechanically enforced today.
 
 | Key | Type | Default | Read By | Default When Absent |
 |-----|------|---------|---------|---------------------|
-| `claims.enabled` | bool | `true` | `audit_governed_repo.py` (mechanical worktree opt-in requirement) | Audit treats missing flag as not opted in |
+| `claims.enabled` | bool | `false` | `audit_governed_repo.py` (mechanical worktree opt-in requirement) | Audit treats missing flag as not opted in |
 | `claims.enforce_exclusivity` | bool | `true` | Not enforced by script | No effect |
-| `claims.require_for_worktree` | bool | `true` | `audit_governed_repo.py` (mechanical sanctioned-entrypoint expectation) | Audit does not expect sanctioned entrypoints unless another worktree signal requires them |
+| `claims.require_for_worktree` | bool | `false` | `audit_governed_repo.py` (mechanical sanctioned-entrypoint expectation) | Audit does not expect sanctioned entrypoints unless another worktree signal requires them |
 | `claims.enforce_in_ci` | bool | `false` | Not enforced by script | No effect |
 | `claims.claims_file` | string | `.claude/active-work.yaml` | Not enforced by script | No effect |
 
@@ -46,8 +46,8 @@ tracker contract.
 
 | Key | Type | Default | Read By | Default When Absent |
 |-----|------|---------|---------|---------------------|
-| `worktrees.enabled` | bool | `true` | `audit_governed_repo.py`; `warn-worktree-cwd.sh`, `block-cd-worktree.sh` (via `check-hook-enabled.sh`) | Audit requires sanctioned worktree entrypoints and scripts when true; hooks stay active when installed |
-| `worktrees.protect_main` | bool | `true` | `check-hook-enabled.sh` | Hook active |
+| `worktrees.enabled` | bool | `false` | `audit_governed_repo.py`; `warn-worktree-cwd.sh`, `block-cd-worktree.sh` (via `check-hook-enabled.sh`) | Audit requires sanctioned worktree entrypoints and scripts only when explicitly enabled |
+| `worktrees.protect_main` | bool | `false` | `check-hook-enabled.sh` | Main-checkout protection is opt-in |
 | `worktrees.worktree_dir` | string | `"../worktrees"` | Not enforced by script | No effect |
 | `worktrees.safe_remove_only` | bool | `true` | Not enforced by script | No effect |
 
@@ -60,7 +60,7 @@ worktree targets.
 
 | Key | Type | Default | Read By | Default When Absent |
 |-----|------|---------|---------|---------------------|
-| `commits.require_prefix` | bool | `true` | `hooks/git/commit-msg` | Prefix required |
+| `commits.require_prefix` | bool | `false` | `hooks/git/commit-msg` | Prefix not required |
 | `commits.valid_prefixes` | list | `["\\[Plan #\\d+\\]", "\\[Trivial\\]", "\\[Unplanned\\]"]` | `hooks/git/commit-msg` | Framework defaults |
 
 ## planning
@@ -82,8 +82,8 @@ worktree targets.
 
 | Key | Type | Default | Read By | Default When Absent |
 |-----|------|---------|---------|---------------------|
-| `quality.doc_coupling.enabled` | bool | `true` | `hooks/git/pre-commit` (check #3) | Doc coupling checked |
-| `quality.doc_coupling.strict` | bool | `true` | Not read (hardcoded block) | Block |
+| `quality.doc_coupling.enabled` | bool | `false` | the coupling checker when explicitly installed or invoked | Doc coupling is opt-in |
+| `ENFORCED_PLANNING_HOOK_MODE` | `off \| warn \| block` | `warn` | `hooks/git/pre-commit` | Findings remain visible but do not block; an immutable terminal-verification freeze still blocks |
 | `quality.doc_coupling.config_file` | string | `"scripts/relationships.yaml"` | `check_doc_coupling.py` | `scripts/relationships.yaml` |
 | `quality.mock_policy.enabled` | bool | `true` | Not enforced by script | No effect |
 | `quality.mock_policy.require_mock_ok_comment` | bool | `true` | Not enforced by script | No effect |

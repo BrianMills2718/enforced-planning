@@ -109,14 +109,14 @@ def _render_result(event_name: str, summary: str) -> dict[str, Any]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Refresh exact-session liveness, then expose active requests to Codex."""
+    """Refresh matching claim state and expose requests to the native session."""
 
     args = parse_args(argv)
     try:
         payload = _read_hook_input()
         project = _canonical_project(payload["cwd"])
         session_id = _session_id(payload["session_id"])
-        updated_count, _updated_scopes, _resolved_session_id, _heartbeat_at = (
+        _updated_count, _updated_scopes, _resolved_session_id, _heartbeat_at = (
             coordination_claims.heartbeat_claims(
                 agent="codex",
                 project=project,
@@ -125,10 +125,6 @@ def main(argv: list[str] | None = None) -> int:
                 require_exact_session=True,
             )
         )
-        if updated_count == 0:
-            raise coordination_messages.UnknownSessionError(
-                f"No live claim matches native Codex session {session_id!r} in project {project!r}"
-            )
         notice = coordination_messages.poll_session_inbox(
             agent="codex",
             project=project,
@@ -136,6 +132,7 @@ def main(argv: list[str] | None = None) -> int:
             observe=True,
             claims_dir=args.claims_dir,
             root=args.root,
+            require_live_claim=False,
         )
         if notice.active_count:
             print(json.dumps(_render_result(payload["hook_event_name"], notice.summary)))

@@ -1,12 +1,19 @@
 #!/usr/bin/env python3
-"""Enforce plan completion requirements.
+"""Complete a plan with verification proportional to its declared claim.
 
-Mandatory script for marking plans as complete. Runs verification tests
-and records evidence before updating plan status.
+The default ``auto`` profile runs plan-declared focused tests for PoC or
+undeclared work and retains broad verification for pilot, production, and
+release plans.
 
 Usage:
     # Complete a plan (runs tests, records evidence, updates status)
     python scripts/complete_plan.py --plan 35
+
+    # Force the broad terminal suite for integration or release
+    python scripts/complete_plan.py --plan 35 --verification-profile broad
+
+    # Documentation-only closeout
+    python scripts/complete_plan.py --plan 35 --verification-profile docs
 
     # Dry run - check without updating
     python scripts/complete_plan.py --plan 35 --dry-run
@@ -43,6 +50,14 @@ from enforced_planning.worktree_paths import resolve_canonical_repo_root
 
 # Plan #136: Timeout for test subprocess calls to prevent hanging forever
 TEST_TIMEOUT_SECONDS = 300  # 5 minutes
+BROAD_EXECUTION_PROFILES = {
+    "pilot",
+    "production-internal",
+    "production-external",
+    "release",
+}
+FOCUSED_EXECUTION_PROFILES = {"poc", "functional-poc", "development"}
+VERIFICATION_PROFILES = {"auto", "focused", "broad", "docs"}
 
 
 def _pytest_command() -> list[str]:
@@ -68,6 +83,49 @@ def get_plan_status(plan_file: Path) -> str:
     content = plan_file.read_text()
     match = re.search(r"\*\*Status:\*\*\s*(.+)", content)
     return match.group(1).strip() if match else "Unknown"
+
+
+def get_declared_execution_profile(plan_file: Path) -> str | None:
+    """Read the first explicit execution-profile token from a plan."""
+
+    content = plan_file.read_text(encoding="utf-8")
+    patterns = (
+        r"Execution profile:\*{0,2}\s*`?([a-z][a-z0-9-]*)",
+        r"execution_profile:\s*`?([a-z][a-z0-9-]*)",
+    )
+    for pattern in patterns:
+        match = re.search(pattern, content, re.IGNORECASE)
+        if match:
+            return match.group(1).lower()
+    return None
+
+
+def resolve_verification_profile(plan_file: Path, requested: str) -> str:
+    """Resolve ``auto`` without silently promoting PoC work to broad closeout."""
+
+    if requested not in VERIFICATION_PROFILES:
+        choices = ", ".join(sorted(VERIFICATION_PROFILES))
+        raise ValueError(f"unknown verification profile {requested!r}; choose one of: {choices}")
+    if requested != "auto":
+        return requested
+
+    execution_profile = get_declared_execution_profile(plan_file)
+    if execution_profile in BROAD_EXECUTION_PROFILES:
+        return "broad"
+    if execution_profile in FOCUSED_EXECUTION_PROFILES or execution_profile is None:
+        return "focused"
+    return "focused"
+
+
+def _verification_status(passed: bool, summary: str) -> str:
+    """Render an honest short status for a check that may not have run."""
+
+    disposition = summary.lower()
+    if disposition.startswith("deferred"):
+        return "DEFER"
+    if disposition.startswith("skipped"):
+        return "SKIP"
+    return "PASS" if passed else "FAIL"
 
 
 def get_human_review_section(plan_file: Path) -> str | None:
@@ -146,6 +204,53 @@ def run_unit_tests(project_root: Path, verbose: bool = True) -> tuple[bool, str]
         else:
             print(f"    FAILED: {summary}")
             print(output[-2000:])  # Last 2000 chars of output
+
+    return result.returncode == 0, summary
+
+
+def run_focused_plan_tests(
+    project_root: Path,
+    plan_number: int,
+    verbose: bool = True,
+) -> tuple[bool, str]:
+    """Run only the tests declared by the plan through the installed checker."""
+
+    candidates = (
+        project_root / "scripts" / "meta" / "check_plan_tests.py",
+        project_root / "scripts" / "check_plan_tests.py",
+    )
+    checker = next((path for path in candidates if path.is_file()), None)
+    if checker is None:
+        summary = "missing scripts[/meta]/check_plan_tests.py"
+        if verbose:
+            print(f"\n[1/4] Focused plan tests... FAILED ({summary})")
+        return False, summary
+
+    if verbose:
+        print("\n[1/4] Running plan-declared focused tests...")
+
+    try:
+        result = subprocess.run(
+            [sys.executable, str(checker), "--plan", str(plan_number)],
+            cwd=project_root,
+            capture_output=True,
+            text=True,
+            timeout=TEST_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired:
+        if verbose:
+            print(f"    TIMEOUT: Tests did not complete within {TEST_TIMEOUT_SECONDS}s")
+        return False, f"timeout after {TEST_TIMEOUT_SECONDS}s"
+
+    output = result.stdout + result.stderr
+    nonempty_lines = [line.strip() for line in output.splitlines() if line.strip()]
+    summary = nonempty_lines[-1] if nonempty_lines else "no checker output"
+    if verbose:
+        if result.returncode == 0:
+            print(f"    PASSED: {summary}")
+        else:
+            print(f"    FAILED: {summary}")
+            print(output[-2000:])
 
     return result.returncode == 0, summary
 
@@ -577,8 +682,9 @@ def complete_plan(
     force: bool = False,
     human_verified: bool = False,
     verbose: bool = True,
+    verification_profile: str = "auto",
 ) -> bool:
-    """Complete a plan with full verification.
+    """Complete a plan with focused, broad, or documentation verification.
 
     Returns True if plan was completed successfully.
     """
@@ -590,6 +696,7 @@ def complete_plan(
         return False
 
     current_status = get_plan_status(plan_file)
+    resolved_profile = resolve_verification_profile(plan_file, verification_profile)
 
     if verbose:
         print(f"\n{'='*60}")
@@ -597,6 +704,7 @@ def complete_plan(
         print(f"{'='*60}")
         print(f"File: {plan_file.name}")
         print(f"Current Status: {current_status}")
+        print(f"Verification profile: {resolved_profile} (requested: {verification_profile})")
 
     if ("\u2705" in current_status or "Complete" in current_status) and not force:
         print(f"\nPlan #{plan_number} is already marked complete.")
@@ -617,38 +725,51 @@ def complete_plan(
     if human_review_section and human_verified and verbose:
         print("  (--human-verified: human review confirmed)")
 
-    # Run verification steps
+    # Run only the checks selected by the resolved profile.
     all_passed = True
 
-    # 1. Unit tests
-    unit_passed, unit_summary = run_unit_tests(project_root, verbose)
-    if not unit_passed:
-        all_passed = False
-
-    # 2. E2E smoke tests
-    if skip_e2e:
-        e2e_smoke_passed, e2e_smoke_summary = True, "skipped (--skip-e2e)"
-        if verbose:
-            print("\n[2/4] E2E smoke tests... SKIPPED (--skip-e2e flag)")
+    if resolved_profile == "focused":
+        unit_passed, unit_summary = run_focused_plan_tests(
+            project_root,
+            plan_number,
+            verbose,
+        )
+        e2e_smoke_passed, e2e_smoke_summary = True, "deferred (focused profile)"
+        e2e_real_passed, e2e_real_summary = True, "deferred (focused profile)"
+        doc_passed, doc_summary = True, "deferred (focused profile)"
+        all_passed = unit_passed
+    elif resolved_profile == "docs":
+        unit_passed, unit_summary = True, "skipped (docs profile)"
+        e2e_smoke_passed, e2e_smoke_summary = True, "skipped (docs profile)"
+        e2e_real_passed, e2e_real_summary = True, "skipped (docs profile)"
+        doc_passed, doc_summary = check_doc_coupling(project_root, verbose)
+        all_passed = doc_passed
     else:
-        e2e_smoke_passed, e2e_smoke_summary = run_e2e_tests(project_root, verbose)
-        if not e2e_smoke_passed:
+        unit_passed, unit_summary = run_unit_tests(project_root, verbose)
+        if not unit_passed:
             all_passed = False
 
-    # 3. Real E2E tests (actual LLM calls)
-    if skip_e2e or skip_real_e2e:
-        e2e_real_passed, e2e_real_summary = True, "skipped (--skip-real-e2e)"
-        if verbose:
-            print("\n[3/4] Real E2E tests... SKIPPED (--skip-real-e2e flag)")
-    else:
-        e2e_real_passed, e2e_real_summary = run_real_e2e_tests(project_root, verbose)
-        if not e2e_real_passed:
-            all_passed = False
+        if skip_e2e:
+            e2e_smoke_passed, e2e_smoke_summary = True, "skipped (--skip-e2e)"
+            if verbose:
+                print("\n[2/4] E2E smoke tests... SKIPPED (--skip-e2e flag)")
+        else:
+            e2e_smoke_passed, e2e_smoke_summary = run_e2e_tests(project_root, verbose)
+            if not e2e_smoke_passed:
+                all_passed = False
 
-    # 4. Doc coupling
-    doc_passed, doc_summary = check_doc_coupling(project_root, verbose)
-    if not doc_passed:
-        all_passed = False
+        if skip_e2e or skip_real_e2e:
+            e2e_real_passed, e2e_real_summary = True, "skipped (--skip-real-e2e)"
+            if verbose:
+                print("\n[3/4] Real E2E tests... SKIPPED (--skip-real-e2e flag)")
+        else:
+            e2e_real_passed, e2e_real_summary = run_real_e2e_tests(project_root, verbose)
+            if not e2e_real_passed:
+                all_passed = False
+
+        doc_passed, doc_summary = check_doc_coupling(project_root, verbose)
+        if not doc_passed:
+            all_passed = False
 
     # 5. Trace-evaluable advisory check (advisory — never blocks; Plan #132 policy)
     trace_warning = _check_trace_evaluable_advisory(plan_file, verbose)
@@ -658,10 +779,17 @@ def complete_plan(
         print(f"\n{'='*60}")
         print("VERIFICATION SUMMARY")
         print(f"{'='*60}")
-        print(f"  Unit tests:      {'PASS' if unit_passed else 'FAIL'}")
-        print(f"  E2E smoke:       {'PASS' if e2e_smoke_passed else 'FAIL'}")
-        print(f"  E2E real (LLM):  {'PASS' if e2e_real_passed else 'FAIL'}")
-        print(f"  Doc coupling:    {'PASS' if doc_passed else 'FAIL'}")
+        print(f"  Profile:         {resolved_profile}")
+        print(f"  Plan/unit tests: {_verification_status(unit_passed, unit_summary)}")
+        print(
+            f"  E2E smoke:       "
+            f"{_verification_status(e2e_smoke_passed, e2e_smoke_summary)}"
+        )
+        print(
+            f"  E2E real (LLM):  "
+            f"{_verification_status(e2e_real_passed, e2e_real_summary)}"
+        )
+        print(f"  Doc coupling:    {_verification_status(doc_passed, doc_summary)}")
         if trace_warning:
             print(f"  Trace eval:      WARN  ← {trace_warning}")
         else:
@@ -730,6 +858,15 @@ def main() -> int:
         help="Check without updating files"
     )
     parser.add_argument(
+        "--verification-profile",
+        choices=sorted(VERIFICATION_PROFILES),
+        default="auto",
+        help=(
+            "auto uses focused tests for PoC/undeclared plans and broad checks "
+            "for pilot/production/release; docs runs documentation checks only"
+        ),
+    )
+    parser.add_argument(
         "--skip-e2e",
         action="store_true",
         help="Skip all E2E tests (for documentation-only plans)"
@@ -762,6 +899,7 @@ def main() -> int:
     success = complete_plan(
         plan_number=args.plan,
         project_root=project_root,
+        verification_profile=args.verification_profile,
         dry_run=args.dry_run,
         skip_e2e=args.skip_e2e,
         skip_real_e2e=args.skip_real_e2e,

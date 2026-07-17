@@ -8,10 +8,14 @@ import yaml  # type: ignore[import-untyped]
 
 from enforced_planning import coordination_claims
 from scripts.complete_plan import (
+    _verification_status,
     find_plan_file,
+    get_declared_execution_profile,
     get_git_info,
     get_human_review_section,
     get_plan_status,
+    resolve_verification_profile,
+    run_focused_plan_tests,
     run_unit_tests,
     sync_coordination_closeout,
     update_plan_file,
@@ -78,6 +82,55 @@ def test_get_plan_status_missing(tmp_path: Path) -> None:
     plan = tmp_path / "01_plan.md"
     plan.write_text("# Plan without status field\n")
     assert get_plan_status(plan) == "Unknown"
+
+
+def test_execution_profile_parser_handles_bold_plan_metadata(tmp_path: Path) -> None:
+    """Read the canonical execution-profile token without depending on one template."""
+
+    plan = tmp_path / "01_plan.md"
+    plan.write_text("- **Execution profile:** `production-internal` pilot.\n")
+
+    assert get_declared_execution_profile(plan) == "production-internal"
+
+
+def test_auto_verification_is_focused_for_poc_or_undeclared_plan(tmp_path: Path) -> None:
+    """PoC and legacy plans should not inherit broad terminal verification."""
+
+    poc = tmp_path / "01_poc.md"
+    poc.write_text("- **Execution profile:** `poc`\n")
+    legacy = tmp_path / "02_legacy.md"
+    legacy.write_text("# Legacy plan\n")
+
+    assert resolve_verification_profile(poc, "auto") == "focused"
+    assert resolve_verification_profile(legacy, "auto") == "focused"
+
+
+def test_auto_verification_is_broad_for_production_plan(tmp_path: Path) -> None:
+    """An explicitly consequential plan retains broad terminal checks."""
+
+    plan = tmp_path / "01_plan.md"
+    plan.write_text("execution_profile: production-external\n")
+
+    assert resolve_verification_profile(plan, "auto") == "broad"
+
+
+def test_explicit_verification_profile_overrides_plan_metadata(tmp_path: Path) -> None:
+    """The operator can deliberately strengthen or select documentation closeout."""
+
+    plan = tmp_path / "01_plan.md"
+    plan.write_text("- Execution profile: `poc`\n")
+
+    assert resolve_verification_profile(plan, "broad") == "broad"
+    assert resolve_verification_profile(plan, "docs") == "docs"
+
+
+def test_verification_status_does_not_report_unrun_checks_as_passed() -> None:
+    """Deferred and skipped checks stay visibly distinct from passing evidence."""
+
+    assert _verification_status(True, "deferred (focused profile)") == "DEFER"
+    assert _verification_status(True, "skipped (docs profile)") == "SKIP"
+    assert _verification_status(True, "12 passed") == "PASS"
+    assert _verification_status(False, "1 failed") == "FAIL"
 
 
 # ---------------------------------------------------------------------------
@@ -310,6 +363,33 @@ def test_run_unit_tests_uses_interpreter_qualified_pytest(tmp_path: Path) -> Non
     assert "42 passed" in summary
     assert commands
     assert commands[0][:3] == [sys.executable, "-m", "pytest"]
+
+
+def test_run_focused_plan_tests_uses_installed_checker(tmp_path: Path) -> None:
+    """Focused verification executes the plan checker through the current interpreter."""
+
+    checker = tmp_path / "scripts" / "meta" / "check_plan_tests.py"
+    checker.parent.mkdir(parents=True)
+    checker.write_text(
+        "import sys\n"
+        "assert sys.argv[1:] == ['--plan', '41']\n"
+        "print('focused plan tests passed')\n",
+        encoding="utf-8",
+    )
+
+    passed, summary = run_focused_plan_tests(tmp_path, 41, verbose=False)
+
+    assert passed is True
+    assert summary == "focused plan tests passed"
+
+
+def test_run_focused_plan_tests_fails_loud_without_checker(tmp_path: Path) -> None:
+    """A missing focused-test boundary must not silently become a green closeout."""
+
+    passed, summary = run_focused_plan_tests(tmp_path, 41, verbose=False)
+
+    assert passed is False
+    assert "missing" in summary
 
 
 def test_run_e2e_tests_uses_interpreter_qualified_pytest(tmp_path: Path) -> None:

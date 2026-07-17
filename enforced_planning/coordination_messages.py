@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 """Durable cross-client coordination messages and append-only receipts.
 
-Claims remain authoritative for session identity and write ownership. This
-module owns only immutable message intent, runtime/observation/acknowledgement
-evidence, and derived status. JSON is the canonical storage format; client
-hooks and human-readable projections are deliberately outside this boundary.
+Claims remain authoritative for recipient routing and write ownership. Exact
+native client identity may authorize message-only send, poll, and
+acknowledgement after a write claim ends; it cannot restore write authority or
+route to an unclaimed recipient. This module owns only immutable message intent,
+runtime/observation/acknowledgement evidence, and derived status. JSON is the
+canonical storage format; human-readable projections remain outside this
+boundary.
 """
 
 from __future__ import annotations
@@ -40,7 +43,7 @@ class CoordinationMessageError(RuntimeError):
 
 
 class UnknownSessionError(CoordinationMessageError):
-    """Raised when a session is absent from the live claim registry."""
+    """Raised when no live claim or exact native client authorizes a session."""
 
 
 class AmbiguousRecipientError(CoordinationMessageError):
@@ -552,14 +555,26 @@ class CoordinationMessageStore:
         matching = [receipt for receipt in receipts if receipt.message_id == message_id]
         return sorted(matching, key=lambda receipt: (receipt.recorded_at, receipt.receipt_id))
 
-    def send(self, request: SendMessageRequest, *, now: datetime | None = None) -> PersistedMessageResult:
-        """Resolve identities and persist one immutable coordination message."""
+    def send(
+        self,
+        request: SendMessageRequest,
+        *,
+        now: datetime | None = None,
+        require_live_claim: bool = True,
+    ) -> PersistedMessageResult:
+        """Resolve identities and persist one immutable coordination message.
+
+        Native client adapters may set ``require_live_claim=False`` only after
+        verifying that their current client session exactly matches the caller
+        and sender IDs. Recipient routing remains claim-backed.
+        """
 
         if request.caller_session_id != request.sender_session_id:
             raise IdentityMismatchError(
                 f"Caller {request.caller_session_id!r} cannot assert sender {request.sender_session_id!r}"
-        )
-        self._require_live_session(request.caller_session_id)
+            )
+        if require_live_claim:
+            self._require_live_session(request.caller_session_id)
         semantic_request = request.model_dump(mode="json", exclude={"idempotency_key"})
         request_sha256 = hashlib.sha256(_canonical_json(semantic_request)).hexdigest()
         if request.idempotency_key is None:
@@ -706,10 +721,16 @@ class CoordinationMessageStore:
         request: AcknowledgeMessageRequest,
         *,
         now: datetime | None = None,
+        require_live_claim: bool = True,
     ) -> AcknowledgementResult:
-        """Append one recipient acknowledgement without mutating message state."""
+        """Append one recipient acknowledgement without mutating message state.
 
-        self._require_live_session(request.current_session_id)
+        A native client adapter may bypass claim liveness after proving the
+        current client session exactly matches ``current_session_id``.
+        """
+
+        if require_live_claim:
+            self._require_live_session(request.current_session_id)
         message, _path = self._message(request.message_id)
         if message.recipient_session_id != request.current_session_id:
             raise WrongRecipientError(
@@ -822,6 +843,15 @@ def _request_json(raw: str) -> str:
     return sys.stdin.read() if raw == "-" else raw
 
 
+def _is_current_native_session(session_id: str) -> bool:
+    """Return whether ambient client identity exactly matches one canonical ID."""
+
+    return any(
+        coordination_claims.resolve_session_id(agent) == session_id
+        for agent in coordination_claims.SESSION_ENV_KEYS
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Build the agent-drivable JSON request CLI."""
 
@@ -848,13 +878,27 @@ def main(argv: list[str] | None = None) -> int:
     raw = _request_json(args.request_json)
     try:
         if args.operation == "send":
-            result: BaseModel = store.send(SendMessageRequest.model_validate_json(raw))
+            send_request = SendMessageRequest.model_validate_json(raw)
+            result: BaseModel = store.send(
+                send_request,
+                require_live_claim=not _is_current_native_session(send_request.caller_session_id),
+            )
         elif args.operation == "poll":
-            result = store.poll(PollMessagesRequest.model_validate_json(raw))
+            poll_request = PollMessagesRequest.model_validate_json(raw)
+            result = store.poll(
+                poll_request,
+                require_live_claim=not _is_current_native_session(poll_request.current_session_id),
+            )
         elif args.operation == "status":
             result = store.status(MessageStatusRequest.model_validate_json(raw))
         else:
-            result = store.acknowledge(AcknowledgeMessageRequest.model_validate_json(raw))
+            acknowledge_request = AcknowledgeMessageRequest.model_validate_json(raw)
+            result = store.acknowledge(
+                acknowledge_request,
+                require_live_claim=not _is_current_native_session(
+                    acknowledge_request.current_session_id
+                ),
+            )
     except (ValidationError, CoordinationMessageError, ValueError) as exc:
         print(json.dumps({"ok": False, "error_type": type(exc).__name__, "error": str(exc)}, sort_keys=True))
         return 2

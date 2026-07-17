@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -447,6 +448,128 @@ def test_json_cli_runs_the_same_package_send_path(
     payload = json.loads(result.stdout)
     assert payload["message"]["recipient_session_id"] == CLAUDE_SESSION
     assert Path(payload["message_path"]).is_file()
+
+
+def test_native_cli_message_lifecycle_survives_write_claim_completion(
+    mailbox: tuple[CoordinationMessageStore, Path, Path],
+) -> None:
+    """Exact native identity should support message-only work after claims end."""
+
+    store, claims_dir, root = mailbox
+    for path in claims_dir.glob("codex_*.yaml"):
+        path.unlink()
+    send_request = _send_request(
+        sender=CODEX_SESSION,
+        recipient=CLAUDE_SESSION,
+        idempotency_key="native-unclaimed-send",
+    )
+    codex_env = {**os.environ, "CODEX_THREAD_ID": "thread-123"}
+    sent = subprocess.run(
+        [
+            "python",
+            "scripts/coordination_messages.py",
+            "--root",
+            str(root),
+            "--claims-dir",
+            str(claims_dir),
+            "send",
+            "--request-json",
+            send_request.model_dump_json(),
+        ],
+        cwd=Path(__file__).resolve().parents[1],
+        env=codex_env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert sent.returncode == 0, sent.stderr or sent.stdout
+    message_id = json.loads(sent.stdout)["message"]["message_id"]
+
+    for path in claims_dir.glob("claude-code_*.yaml"):
+        path.unlink()
+    claude_env = {**os.environ, "CLAUDE_SESSION_ID": "session-456"}
+    polled = subprocess.run(
+        [
+            "python",
+            "scripts/coordination_messages.py",
+            "--root",
+            str(root),
+            "--claims-dir",
+            str(claims_dir),
+            "poll",
+            "--request-json",
+            PollMessagesRequest(
+                current_session_id=CLAUDE_SESSION,
+                observe=True,
+            ).model_dump_json(),
+        ],
+        cwd=Path(__file__).resolve().parents[1],
+        env=claude_env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert polled.returncode == 0, polled.stderr or polled.stdout
+    assert json.loads(polled.stdout)["messages"][0]["message"]["message_id"] == message_id
+
+    acknowledged = subprocess.run(
+        [
+            "python",
+            "scripts/coordination_messages.py",
+            "--root",
+            str(root),
+            "--claims-dir",
+            str(claims_dir),
+            "acknowledge",
+            "--request-json",
+            AcknowledgeMessageRequest(
+                current_session_id=CLAUDE_SESSION,
+                message_id=message_id,
+                disposition="information_only",
+            ).model_dump_json(),
+        ],
+        cwd=Path(__file__).resolve().parents[1],
+        env=claude_env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert acknowledged.returncode == 0, acknowledged.stderr or acknowledged.stdout
+    assert json.loads(acknowledged.stdout)["status"]["state"] == "acknowledged"
+    assert store.status(MessageStatusRequest(message_id=message_id)).acknowledged is True
+
+
+def test_native_cli_rejects_unclaimed_sender_when_ambient_session_differs(
+    mailbox: tuple[CoordinationMessageStore, Path, Path],
+) -> None:
+    """Knowing a session ID must not let a different native session assert it."""
+
+    _store, claims_dir, root = mailbox
+    for path in claims_dir.glob("codex_*.yaml"):
+        path.unlink()
+    result = subprocess.run(
+        [
+            "python",
+            "scripts/coordination_messages.py",
+            "--root",
+            str(root),
+            "--claims-dir",
+            str(claims_dir),
+            "send",
+            "--request-json",
+            _send_request(idempotency_key="native-mismatch").model_dump_json(),
+        ],
+        cwd=Path(__file__).resolve().parents[1],
+        env={**os.environ, "CODEX_THREAD_ID": "different-thread"},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 2
+    payload = json.loads(result.stdout)
+    assert payload["error_type"] == "UnknownSessionError"
+    assert list(root.glob("messages/*.json")) == []
 
 
 def test_agent_inbox_cli_injects_notice_and_observation_evidence(

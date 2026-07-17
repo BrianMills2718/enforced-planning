@@ -169,6 +169,12 @@ GitHub notification, or asynchronous interruption of a running agent.
 | Concern router | Optional PR-comment projection/fallback | message reference + branch | remote publication fails | Claiming PR comment equals observation |
 | Managed Codex delivery adapter | Accelerating one persisted message into a broker-owned Codex thread | message + registered thread/turn -> runtime receipt | endpoint/version is unavailable, turn is not steerable, or expected turn changed | Owning mailbox truth, scraping transcripts, or attaching to arbitrary standalone TUIs |
 
+Claims remain the authority for write scope and recipient routing. A client
+adapter may use the exact current native session identity for message-only
+send, poll, and acknowledgement after that session's write claim ends. This
+does not recreate the claim, grant repository write authority, or make an
+unclaimed session routable as a recipient.
+
 ## Domain model and lifecycle
 
 ```text

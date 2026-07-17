@@ -4,49 +4,27 @@ Source repo for the portable planning and governance framework.
 
 ## Continuous Execution Contract
 
-This repo is currently running in explicit continuous-execution mode.
+Continuous authorization uses one of three profiles from
+`docs/guides/CONTINUOUS_EXECUTION_CONTRACT.md`:
 
-- Treat this as the canonical overnight execution contract for the repo, not a
-  soft preference.
-- Do not stop at plan creation, green tests, or one completed commit.
-- Execute the active numbered queue continuously until all planned phases are
-  complete or a documented stop condition is reached.
-- Work in sanctioned worktrees between merges/pushes rather than piling new
-  overnight work onto a dirty primary checkout.
-- Commit every verified slice so rollback is cheap and exact.
-- Merge and push verified slices from the root-anchored control session, then
-  close the finished lane through the sanctioned atomic closeout path before
-  starting the next slice.
-- Name runtime sessions after the broader objective, not the local subtask or
-  branch. The branch can be task-shaped; the session contract should be
-  objective-shaped.
-- No live session is allowed to float free of a plan. Every live lane must be
-  explicitly attached to a numbered `plan_ref` unless it is marked as a visible
-  emergency/unplanned exception.
-- If a runtime dies and work must continue later, the next runtime must
-  explicitly resume the same plan-bound lane. Do not silently create a fresh
-  lane for the same conceptual work.
-- If a concern or uncertainty appears, document it in the active plan or sprint
-  tracker immediately; do not leave it only in chat.
-- Do not build parallel coordination identity systems in downstream repos.
-  Assignment, queueing, and operator surfaces must consume the canonical
-  claim/session model owned here.
-- Authority drift against separately claimed truth surfaces must become formal,
-  machine-visible reconciliation debt. The owning lane is not allowed to close
-  while that debt remains unresolved.
-- Continuous-run discipline is part of the architecture here, not a stylistic
-  preference. Every bounded slice must end with: verified tests, commit,
-  merge/push, and sanctioned lane closeout before the next slice begins.
+- `continuous-light` is the default for reversible single-writer development
+  and functional PoCs. Reuse the existing task authority, run focused checks,
+  and do not require a numbered plan, tracker, claim, or worktree solely because
+  the user requested continuous work.
+- `continuous-coordinated` adds one shared tracker, scoped claims, and worktrees
+  when writers or dependent phases can collide.
+- `continuous-release` adds immutable candidate and broad terminal controls for
+  publication, migration, deployment, or another consequential terminal claim.
 
-Non-negotiable execution rules for continuous runs:
+All profiles commit and push verified increments, preserve the user outcome,
+and continue past a completed phase while a safe, authorized, outcome-advancing
+next action remains. After three consecutive increments add no canonical
+behavior and remove no reproduced direct blocker, replay the smallest canonical
+example and re-scope instead of adding more process machinery.
 
-1. every active implementation slice gets its own numbered plan
-2. every active implementation slice runs in its own sanctioned worktree
-3. every verified increment gets a commit before the next slice starts
-4. no finished slice is left only on a worktree branch; merge/push/cleanup is
-   part of completion, not optional follow-up
-5. if a stop condition is hit, document it in the active plan and repo tracker
-   before ending the session
+Do not build parallel coordination identity systems in downstream repos.
+Coordinated assignment and operator surfaces consume the canonical
+claim/session model owned here.
 
 Only these stop conditions are legitimate:
 

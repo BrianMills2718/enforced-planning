@@ -5,7 +5,16 @@
 
 set -e
 
-echo "Running pre-commit checks..."
+HOOK_MODE="${ENFORCED_PLANNING_HOOK_MODE:-warn}"
+case "$HOOK_MODE" in
+    off|warn|block) ;;
+    *)
+        echo "ERROR: ENFORCED_PLANNING_HOOK_MODE must be off, warn, or block; got '$HOOK_MODE'."
+        exit 2
+        ;;
+esac
+
+echo "Running pre-commit checks (mode: $HOOK_MODE)..."
 
 REPO_ROOT=$(git rev-parse --show-toplevel)
 cd "$REPO_ROOT"
@@ -22,6 +31,17 @@ find_script() {
     fi
 }
 
+handle_failure() {
+    local check_name="$1"
+    if [[ "$HOOK_MODE" == "block" ]]; then
+        echo "ERROR: $check_name failed in explicit block mode."
+        return 1
+    fi
+    echo "WARNING: $check_name failed; commit continues in warn mode."
+    echo "Set ENFORCED_PLANNING_HOOK_MODE=block for a strict pilot/release candidate."
+    return 0
+}
+
 # 0. Immutable terminal-verification batch check (if installed)
 VERIFICATION_BATCH=$(find_script "verification_batch.py")
 if [[ -n "$VERIFICATION_BATCH" ]]; then
@@ -36,56 +56,51 @@ if [[ -n "$VERIFICATION_BATCH" ]]; then
     fi
 fi
 
-# 1. Plan index regeneration (if generator exists)
-GENERATOR=$(find_script "generate_plan_index.py")
-if [[ -n "$GENERATOR" ]]; then
-    STAGED_PLANS=$(git diff --cached --name-only --diff-filter=ACM | grep '^docs/plans/' || true)
-    if [[ -n "$STAGED_PLANS" ]]; then
-        echo "Regenerating plan index..."
-        python "$GENERATOR" 2>/dev/null || true
-        git add docs/plans/CLAUDE.md 2>/dev/null || true
-    fi
+if [[ "$HOOK_MODE" == "off" ]]; then
+    echo "Governance checks disabled for this reversible commit."
+    exit 0
 fi
 
-# 2. Locked-coupling check (V2 relationships.yaml)
+# 1. Locked-coupling check (V2 relationships.yaml)
 LOCKED_COUPLINGS=$(find_script "check_locked_couplings.py")
 if [[ -n "$LOCKED_COUPLINGS" ]]; then
     echo "Checking locked couplings..."
-    if ! python "$LOCKED_COUPLINGS" --strict 2>/dev/null; then
+    if ! python "$LOCKED_COUPLINGS" --strict; then
         echo ""
-        echo "ERROR: Locked coupling violated — update the coupled docs and re-stage."
+        echo "Locked coupling finding: update a coupled document only when its"
+        echo "named decision or contract actually changed."
         echo "Run 'python $LOCKED_COUPLINGS' to see violations."
         echo ""
-        exit 1
+        handle_failure "locked coupling check" || exit 1
     fi
 fi
 
-# 4. Doc-coupling check (if script exists)
+# 2. Doc-coupling check (if script exists)
 DOC_COUPLING=$(find_script "check_doc_coupling.py")
 if [[ -n "$DOC_COUPLING" ]]; then
     echo "Checking doc-code coupling..."
-    if ! python "$DOC_COUPLING" --staged --strict 2>/dev/null; then
+    if ! python "$DOC_COUPLING" --staged --strict; then
         echo ""
-        echo "ERROR: Doc-coupling violation detected!"
+        echo "Doc-coupling finding detected."
         echo "Run 'python $DOC_COUPLING --suggest' to see which docs to update."
         echo ""
-        exit 1
+        handle_failure "doc-coupling check" || exit 1
     fi
 fi
 
-# 5. Mypy on changed src/ files (if mypy is installed)
+# 3. Mypy on changed src/ files (if mypy is installed)
 STAGED_SRC=$(echo "$STAGED_PY" | grep '^src/' || true)
 if [[ -n "$STAGED_SRC" ]] && command -v mypy >/dev/null 2>&1; then
     echo "Running mypy on changed files..."
-    if ! python -m mypy --strict --ignore-missing-imports --follow-imports=silent $STAGED_SRC 2>/dev/null; then
+    if ! python -m mypy --strict --ignore-missing-imports --follow-imports=silent $STAGED_SRC; then
         echo ""
-        echo "ERROR: mypy type check failed!"
+        echo "Mypy type check failed."
         echo ""
-        exit 1
+        handle_failure "mypy check" || exit 1
     fi
 fi
 
-# 6. Capabilities section check on staged plan files
+# 4. Capabilities section check on staged plan files
 CHECK_CAPS=$(find_script "check_plan_capabilities.py")
 if [[ -n "$CHECK_CAPS" ]]; then
     STAGED_PLAN_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep '^docs/plans/.*\.md$' || true)
@@ -96,12 +111,12 @@ if [[ -n "$CHECK_CAPS" ]]; then
             echo "ERROR: Cross-project plan missing Capabilities section!"
             echo "Run 'python $CHECK_CAPS docs/plans/' to see all warnings."
             echo ""
-            exit 1
+            handle_failure "plan capabilities check" || exit 1
         fi
     fi
 fi
 
-# 7. Plan status consistency (if script exists and plan files staged)
+# 5. Plan status consistency (if script exists and plan files staged)
 SYNC_STATUS=$(find_script "sync_plan_status.py")
 if [[ -n "$SYNC_STATUS" ]]; then
     STAGED_PLANS=$(git diff --cached --name-only --diff-filter=ACM | grep '^docs/plans/' || true)
@@ -112,28 +127,27 @@ if [[ -n "$SYNC_STATUS" ]]; then
             echo "ERROR: Plan status inconsistency detected!"
             echo "Run 'python $SYNC_STATUS --check' to see details"
             echo ""
-            exit 1
+            handle_failure "plan status check" || exit 1
         fi
     fi
 fi
 
-# 8. Dead code check (if enabled in meta-process.yaml)
+# 6. Dead code check (the script itself honors meta-process.yaml enablement)
 DEAD_CODE=$(find_script "check_dead_code.py")
 if [[ -n "$DEAD_CODE" ]] && [[ -n "$STAGED_PY" ]]; then
     echo "Checking for dead code..."
-    if ! python "$DEAD_CODE" 2>/dev/null; then
+    if ! python "$DEAD_CODE"; then
         echo ""
-        echo "ERROR: Dead code check failed!"
+        echo "Dead code check failed."
         echo "Run 'python $DEAD_CODE' to see details."
         echo ""
-        exit 1
+        handle_failure "dead code check" || exit 1
     fi
 fi
 
-# 9. Branch divergence check
-echo "Checking branch freshness..."
-git fetch origin 2>/dev/null || true
-
+# 7. Branch divergence advisory against the existing local remote ref.
+# Network freshness belongs at push/release time, not in a local commit hook.
+echo "Checking cached branch divergence..."
 BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null) || true
 REMOTE="origin/$BRANCH"
 
@@ -143,13 +157,10 @@ if git rev-parse --verify "$REMOTE" >/dev/null 2>&1; then
 
     if [ "$REMOTE_ONLY" -gt 0 ] && [ "$LOCAL_ONLY" -gt 0 ]; then
         echo ""
-        echo "ERROR: Branch has diverged from remote!"
+        echo "WARNING: Branch has diverged from the cached remote ref."
         echo "  Local commits not on remote: $LOCAL_ONLY"
         echo "  Remote commits not local: $REMOTE_ONLY"
-        echo ""
-        echo "Resolution: git pull --rebase origin $BRANCH"
-        echo "Bypass with: git commit --no-verify (not recommended)"
-        exit 1
+        echo "Reconcile before push; local commit remains recoverable."
     fi
 
     if [ "$REMOTE_ONLY" -gt 5 ]; then
@@ -158,7 +169,7 @@ if git rev-parse --verify "$REMOTE" >/dev/null 2>&1; then
     fi
 fi
 
-# 10. Terminology linter on staged .md files (if vocab pack and script exist)
+# 8. Terminology linter on staged .md files (if vocab pack and script exist)
 TERM_LINTER=$(find_script "check_terminology.py")
 VOCAB_PACK="$REPO_ROOT/generated/vocab_pack.jsonl"
 if [[ -n "$TERM_LINTER" ]] && [[ -f "$VOCAB_PACK" ]]; then
@@ -170,7 +181,7 @@ if [[ -n "$TERM_LINTER" ]] && [[ -f "$VOCAB_PACK" ]]; then
             echo "ERROR: Deprecated terminology found in staged files!"
             echo "Run 'python $TERM_LINTER --files <file>' to see violations."
             echo ""
-            exit 1
+            handle_failure "terminology check" || exit 1
         fi
     fi
 fi

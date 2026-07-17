@@ -17,14 +17,11 @@ repos:
   - repo: https://github.com/BrianMills2718/enforced-planning
     rev: v1.0.0  # pin to a tagged release; run `pre-commit autoupdate` to bump
     hooks:
-      # Required: commit message format enforcement
-      - id: commit-msg-format
-
-      # Required: locked coupling enforcement (blocks commit if doc not staged)
-      - id: locked-couplings
-
-      # Recommended: plan capabilities section check
-      - id: plan-capabilities
+      # The framework hooks are opt-in. Uncomment only the checks whose named
+      # contract is relevant to this repository and candidate.
+      # - id: commit-msg-format
+      # - id: locked-couplings
+      # - id: plan-capabilities
 
       # Optional: doc-code coupling check (requires doc_coupling.yaml)
       # - id: doc-coupling

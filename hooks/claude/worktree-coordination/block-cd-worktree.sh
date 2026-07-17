@@ -20,7 +20,13 @@ set -e
 # Check if hook is enabled via config
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/check-hook-enabled.sh"
-if ! is_hook_enabled "enforce_workflow"; then
+if is_hook_enabled "enforce_workflow"; then
+    :
+else
+    hook_status=$?
+    if [[ "$hook_status" -eq 2 ]]; then
+        exit 2
+    fi
     exit 0  # Hook disabled in config
 fi
 

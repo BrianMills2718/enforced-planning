@@ -8,6 +8,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import yaml
+
 
 PROJECT_META_ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = PROJECT_META_ROOT / "scripts" / "install_governed_repo.py"
@@ -574,6 +576,19 @@ def test_install_governed_repo_write_bootstraps_minimum_repo_and_passes_audit(
     assert (tmp_path / "AGENTS.md").exists()
     assert not (tmp_path / "AGENTS.md").is_symlink()
     assert (tmp_path / "meta-process.yaml").exists()
+    starter = yaml.safe_load(
+        (tmp_path / "meta-process.yaml").read_text(encoding="utf-8")
+    )["meta_process"]
+    assert starter["claims"] == {
+        "enabled": False,
+        "require_for_worktree": False,
+    }
+    assert starter["worktrees"] == {
+        "enabled": False,
+        "protect_main": False,
+    }
+    assert starter["commits"]["require_prefix"] is False
+    assert starter["quality"]["doc_coupling"]["enabled"] is False
     assert (tmp_path / "scripts" / "relationships.yaml").exists()
     assert (tmp_path / "docs" / "plans" / "CLAUDE.md").exists()
     assert (tmp_path / "docs" / "plans" / "TEMPLATE.md").exists()

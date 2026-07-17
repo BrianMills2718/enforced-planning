@@ -110,9 +110,11 @@ program, policy-control boundary, ecosystem layers, capability architecture,
 and repository ownership. Enforced Planning already supplies request modes,
 planning hierarchy, relationship context, bounded context compilation, and
 claim-specific evidence semantics. Project Meta Plans 224 and 225 already own
-documentation anti-proliferation and versioned policy definitions, while
-Enforced Planning Plan 71 owns the effective-policy pilot. The two planning
-skills already route correctly and share most vocabulary.
+documentation anti-proliferation and versioned policy definitions. Direct
+stage-aware hook modes and repo-local settings now own current enforcement
+selection; Plan 71's generic effective-policy pilot was superseded without
+implementation. The two planning skills already route correctly and share most
+vocabulary.
 
 What remains implicit is the system-level composition of those parts and the
 transport boundary between a roadmap-selected goal and its design packet.
@@ -164,8 +166,8 @@ Representative linked authorities: `PLANNING_OPERATING_MODEL.md`,
   and ownership routing.
 - Project Meta Plan 224 — artifact intent, relationship separation,
   consolidation, and anti-proliferation work.
-- Project Meta Plan 225 and Enforced Planning Plan 71 — policy definition and
-  effective-resolution ownership.
+- Project Meta Plan 225 — policy-definition research; current enforcement
+  selection remains a direct repo-local hook/config concern.
 - Enforced Planning `PLANNING_OPERATING_MODEL.md` — request authority, planning
   hierarchy, capability status, and evidence semantics.
 - Enforced Planning Plans 63–66 — relationship context, requirement/test
@@ -345,7 +347,7 @@ are needed, roadmap first and design only the selected near-term goals.
 | Derive one bounded design packet | `bounded-design` and the packet's project owner | implementation agents and roadmap owner | Requirements, boundaries, contracts, slices, and evidence are bounded to the selected goal. |
 | Return design implications | Design packet | Project roadmap authority | The result proposes scoped deltas; it cannot mutate strategy or capability priority by implication. |
 | Compile bounded context | Existing Enforced Planning context compiler | Roadmapping, design, and execution procedures | Selected context preserves source authority, revision, freshness, conflict, and selection reason. |
-| Resolve policy and assurance | Project Meta Plan 225 + Enforced Planning Plan 71 | planning and execution adapters | This plan consumes effective policy results and does not redefine policy meaning or enforcement. |
+| Select enforcement mode | Direct stage-aware hook/config contract | planning and execution adapters | This plan consumes repo-local `off`, `warn`, or `block` selection and does not introduce a generic policy resolver. |
 | Track artifact intent and lifecycle | Project Meta Plan 224 + portable relationship/lifecycle machinery | context and planning projections | Reviewed intent is distinct from inferred code structure and runtime observation. |
 
 Cross-repository payloads must use a versioned portable representation once a
@@ -365,7 +367,7 @@ symmetry.
 | Publication and closeout mechanics | Link existing request-mode and finish/publication procedures | Do not create a new publication-safety subsystem. |
 | Context compilation | Reuse existing compiler and contract | A new context resolver would duplicate shipped work. |
 | Documentation proliferation | Route to Project Meta Plan 224 and portable lifecycle machinery | This plan adds no competing inventory or gate. |
-| Policy configuration/resolution | Route to Project Meta Plan 225 and Enforced Planning Plan 71 | This plan adds no policy language or resolver. |
+| Policy configuration/resolution | Use the direct stage-aware hook/config contract; retain Project Meta Plan 225 as research only | This plan adds no policy language or resolver. |
 | Capability ownership | Consume existing capability architecture and registries | The planning skills do not own the global catalog. |
 
 ---

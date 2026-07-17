@@ -1,16 +1,37 @@
 # Plan #71: Effective-Policy Resolution Pilot
 
-**Status:** Planned
+**Status:** Complete — superseded without implementation
 **Type:** implementation
 **Priority:** High
 **phase_ref:** "Portable governance control plane"
 **goal_ref:** "ecosystem-policy-coherence"
 **adrs_referenced:** ["ADR-2026-06-26-ecosystem-organization-four-buckets"]
 **research_citations:** []
-**Blocked By:** project-meta#225 — versioned three-policy definition pack must publish first
-**Blocks:** [future] effective-policy manifests and risk-profile rollout
+**Blocked By:** none
+**Blocks:** none
 
 ---
+
+## Disposition
+
+The 2026-07-16 policy-friction audit rejected this generic control-plane build
+as disproportionate to the demonstrated problem. The planned definition pack,
+resolver, schemas, execution records, exception model, adapters, and shadow
+pilot were not implemented.
+
+The bounded replacement is direct and observable:
+
+- global instructions select a stage profile and default to development;
+- the portable commit hook exposes `off`, `warn`, and explicit `block` modes;
+- development starter configuration leaves claims, worktrees, commit prefixes,
+  and doc coupling disabled until their protected risk exists;
+- immutable terminal-verification freezes continue to block in every mode; and
+- individual checks retain their existing factual output without a new policy
+  language or manifest.
+
+This document remains historical design evidence. A future policy resolver
+requires a new demonstrated cross-check need that cannot be handled by a direct
+setting; it is not a pending prerequisite for ordinary development.
 
 ## Gap
 

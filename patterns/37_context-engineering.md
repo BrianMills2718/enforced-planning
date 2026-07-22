@@ -60,7 +60,7 @@ Choose the cheapest mechanism that solves the problem:
 | File | Purpose |
 |------|---------|
 | `~/.claude/CLAUDE.md` | Cross-project context management rules |
-| `~/.claude/skills/long-running-task/SKILL.md` | Harness engineering runbook |
+| `docs/guides/CONTINUOUS_EXECUTION_CONTRACT.md` | Continuous execution and durable state contract |
 | `~/.claude/skills/tool-design/SKILL.md` | Tool optimization runbook |
 | `~/.claude/skills/design-subagents/SKILL.md` | Subagent design guide |
 
@@ -69,7 +69,7 @@ Choose the cheapest mechanism that solves the problem:
 This pattern is already applied through the cross-project CLAUDE.md and skills. For new projects:
 
 1. Ensure `~/.claude/CLAUDE.md` is loaded (it is by default)
-2. For long-running tasks, invoke `/long-running-task` to load the harness runbook
+2. For continuous work, select the smallest profile in the continuous execution contract; use `/start` after a restart or compaction
 3. For tool-heavy projects, invoke `/tool-design` before designing new tools
 
 ## Customization

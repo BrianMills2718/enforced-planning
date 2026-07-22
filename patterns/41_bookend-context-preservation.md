@@ -25,23 +25,22 @@ number of compaction cycles.
 
 ### Protocol
 
-**Step 1 — Write a mission file at session start.**
-Create a progress/mission file (e.g., `PROGRESS.md`) containing: objective,
-acceptance criteria, constraints, current phase, completed work. This file
-lives on disk, outside the context window.
+**Step 1 — Select the state authority.**
+Reuse the current plan, issue, task, or goal. Only when no suitable authority
+exists and compaction would otherwise lose the framing, create one compact
+mission record using the continuous execution contract's fields.
 
-**Step 2 — Re-read the mission file every ~20 turns.**
-Periodically verify current work still aligns with the objective. Correct
-course if drifted.
+**Step 2 — Re-read at a real recovery boundary.**
+Re-read the authority after compaction, at session resumption, or when the next
+action becomes unclear. Do not use a turn counter as a mandatory ceremony.
 
 **Step 3 — Re-anchor after compaction.**
-When compaction fires (earlier context feels summarized or missing),
-immediately re-read the mission file. It is the ground truth that compaction
-cannot degrade.
+When compaction fires, immediately re-read the selected authority. It is the
+durable framing that compaction cannot degrade.
 
-**Step 4 — Update the mission file at each commit.**
-Keep the "Completed" and "Current Phase" sections current so any future
-session or agent starts with an accurate picture.
+**Step 4 — Update only when durable state changes.**
+Keep demonstrated behavior, current increment, blockers, and resume event
+current at meaningful boundaries rather than mirroring every commit.
 
 ### Context Window Layout (REACTIVE_COMPACT)
 
@@ -65,30 +64,26 @@ We complement it with the file-based mission protocol: belt and suspenders.
 
 | File | Purpose |
 |------|---------|
-| `~/.claude/skills/long-running-task/SKILL.md` | Full protocol and mission file template |
+| `docs/guides/CONTINUOUS_EXECUTION_CONTRACT.md` | Full protocol and compact mission-record fields |
 | `~/projects/.claude/CLAUDE.md` | Root instruction referencing this pattern |
 | Pattern 37 (Context Engineering) | General context management (this pattern extends it) |
 
 ## Setup
 
-This pattern is activated by invoking `/long-running-task` at the start of
-any long-running session. No additional configuration needed.
-
-For optional enforcement, a PostToolUse hook can periodically check whether
-a mission file exists and remind the agent to re-read it.
+This pattern is activated by selecting a continuous execution profile and
+re-reading the current state authority through `/start` after a restart or
+context compaction. No additional configuration is needed.
 
 ## Customization
 
-- Adjust re-read frequency (default: every ~20 turns) based on task complexity
 - For very short tasks (<15 min), skip the mission file and rely on context
-- For multi-agent work, the mission file is the shared contract — all agents
-  read the same file
+- For multi-agent work, all agents read the same selected authority
 
 ## Limitations
 
 - Cannot control Claude Code's internal compaction behavior
-- Mission file requires agent discipline to create and maintain
-- Re-reading adds a small context cost (~200 tokens per re-read)
+- A durable authority requires agent discipline to maintain
+- Re-reading adds context cost, so do it at recovery boundaries
 - Does not prevent compaction from degrading non-mission context
 
 ## Requires

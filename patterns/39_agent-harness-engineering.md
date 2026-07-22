@@ -18,11 +18,17 @@ Design a **legible environment** where each session can quickly understand state
 ### Three Pillars
 
 **1. Legible Environment**
-Any agent starting a fresh session must be able to understand the project state within the first few tool calls.
+Any agent resuming material work must be able to recover project state within
+the first few tool calls.
 
-- **Task/feature list** — break goals into discrete tasks stored in a file. Each task has: description, acceptance criteria, status. All start as planned. Forces the agent to pick the next task, not one-shot everything.
-- **Progress file** — single file updated after each task. Contains: what was done, what was verified, what's next, blockers. This is the handoff surface.
-- **File system as shared memory** — plans, research reports, and state live in files, not conversation history. Any agent/session can read them. Conversation dies with the session; files persist.
+- **One state authority** — reuse the current plan, issue, task, or goal. Create
+  a compact mission record only when cross-session or compaction risk would
+  otherwise lose the framing.
+- **No parallel projections** — do not maintain both a task list and progress
+  file when one authority can hold the outcome, acceptance checks, demonstrated
+  behavior, next increment, and resume event.
+- **File system as shared memory** — durable state belongs in the selected
+  authority rather than only in conversation history.
 
 **2. Verification**
 The agent must be able to check its own work. This is the single highest-leverage investment.
@@ -44,12 +50,12 @@ Models perform better with tools they natively understand than with bespoke doma
 ### Execution Loop
 
 Each session follows:
-1. Read progress file → understand state
+1. Read the selected state authority to understand the outcome and current state
 2. Pick highest-priority incomplete task
 3. Implement in thin verified slices
 4. Verify (tests, checks — not "looks right")
 5. Commit with descriptive message
-6. Update progress file
+6. Update the same authority only when durable cross-session state changed
 7. Repeat until milestone or blocker
 
 ### Context Hygiene During Execution
@@ -61,27 +67,25 @@ Each session follows:
 
 ### Clean Handoff
 
-Before ending any session:
-- Progress file updated
-- Changes committed with descriptive messages
-- Blockers/uncertainties documented
-- Next session can continue from progress file alone
+Before ending unfinished multi-session work, update the one state authority,
+commit verified changes, and record any blocker plus the exact resume event. A
+completed bounded task with no residual state needs no separate handoff.
 
 ## Files
 
 | File | Purpose |
 |------|---------|
-| `~/.claude/skills/long-running-task/SKILL.md` | Full harness engineering runbook |
+| `docs/guides/CONTINUOUS_EXECUTION_CONTRACT.md` | Continuous execution and state-preservation contract |
 | `~/.claude/skills/design-subagents/SKILL.md` | Subagent design guide |
 
 ## Setup
 
-For any task expected to span multiple sessions or exceed 30 minutes:
+For work that will genuinely span sessions or context compaction:
 
-1. Create a task list file before starting implementation
-2. Create a progress file
-3. Set up verification (tests, dev server, e2e tools)
-4. Invoke `/long-running-task` to load the full runbook
+1. Select the smallest profile from the continuous execution contract
+2. Reuse one existing state authority
+3. Create a compact mission record only if no suitable authority exists
+4. Set up only the verification needed to disprove the current claim
 
 ## Customization
 
@@ -91,7 +95,7 @@ For any task expected to span multiple sessions or exceed 30 minutes:
 
 ## Limitations
 
-- Adds setup overhead (~5 minutes for task list + progress file). Not worth it for tasks under 15 minutes.
+- Adds state-maintenance overhead when cross-session recovery is genuinely needed.
 - File-system shared memory requires discipline — agents must actually read and update the files.
 - Verification tooling (puppeteer, browser automation) has its own setup cost.
 - Agent teams (multi-agent collaboration) add 3-4x token cost vs. single session.

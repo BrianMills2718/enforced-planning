@@ -94,7 +94,11 @@ uncertainties. Update it at meaningful integration boundaries, not merely to
 mirror every command.
 
 When a run is likely to cross context compression and no durable authority
-already owns its state, create one progress record. Do not create two.
+already owns its state, create one compact mission record with `Outcome`,
+`Canonical Example`, `Acceptance Checks`, `Boundaries`, `Current Increment`,
+`Demonstrated`, and `Resume Event`. Do not create two state authorities. At a
+session start, after context compaction, or whenever the next action becomes
+unclear, re-read that authority before continuing.
 
 ### Commit Discipline
 
@@ -159,26 +163,14 @@ not retry the same approach indefinitely.
 
 At the earliest of three completed increments, roughly four hours of continuous
 execution, twice the expected effort, user confusion about the deliverable, or
-parallel demos replacing one integrated product, reassess strategy. State what
-the user can newly do, whether stakeholder observation advanced, whether work
-is converging on one cumulative product, how effort split among outcome,
-enabling, and process work, and whether the next increment is still the shortest
-path to the stable initiative example.
-
-Continue when those answers support the strategy. Otherwise stop creating
-successor plans and reset scope or sequencing around the initiative example,
-even when each increment is green. This checkpoint occurs in conversation or
-the existing state authority; it is not a new report, approval gate, or stop
+parallel demos replacing one integrated product, apply the lightweight strategy
+reassessment defined by the shared `initiative-roadmap` skill. Continue when it
+supports the strategy; otherwise reset scope or sequencing before authoring
+successor plans. Apply that skill's roadmap-facing documentation dispositions
+after the decision. The checkpoint occurs in conversation or the existing state
+authority; it is not a new report, approval gate, cleanup phase, or stop
 condition. A commit, green process test, new schema, refreshed manifest, or
 policy artifact is enabling evidence rather than strategic progress by itself.
-
-After the strategy decision, reconcile only roadmap-facing documentation whose
-authority or status changed or whose duplication can misdirect the next action.
-Use `keep`, `update`, `consolidate`, `archive`, or `delete`; preserve one current
-authority, extract live claims and redirect active references before archival,
-and delete only demonstrably dead material. Do not turn the checkpoint into a
-broad cleanup phase or create a cleanup artifact solely to record that no change
-was needed.
 
 ---
 
@@ -228,5 +220,6 @@ When a stop condition IS reached:
 ## References
 
 - `PLANNING_OPERATING_MODEL.md` — artifact dependency graph and planning hierarchy
+- shared `initiative-roadmap` skill — strategy reassessment and roadmap-facing documentation dispositions
 - `docs/guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md` — claims, lanes, and worktree lifecycle
 - ADR-0010 — agent_memory as required planning input

@@ -182,6 +182,18 @@ successor plans, preserve useful work, and reset sequencing or scope around the
 initiative probe. The reassessment is normally an in-conversation or existing-
 authority update, not a new document, approval ceremony, or hard gate.
 
+After the strategy disposition, reconcile the smallest documentation surface
+that could misdirect subsequent work: the roadmap, current-state authority,
+active plan or goal, navigation/index surface, and documents referenced by the
+next packet. Mark affected documents `keep`, `update`, `consolidate`, `archive`,
+or `delete`. Preserve one current authority, extract live claims before
+archiving history, redirect active references, and delete only material with no
+decision, evidence, or recovery value. Apply these changes only when mutation is
+authorized. Do not require a new cleanup plan, repository-wide inventory, or
+archive pass when existing documentation remains current; documentation work is
+process progress unless it removes a demonstrated navigation or authority
+blocker.
+
 For exploratory or LLM-mediated behavior, the example may initially be a
 frozen fixture and full trace. The next promotion step uses the same behavioral
 contract on one smallest real input; it does not require a model comparison,

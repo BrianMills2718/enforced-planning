@@ -41,8 +41,10 @@ night" does not itself promote the profile.
 
 Execute the authorized outcome path without pausing merely because one phase,
 test run, or commit completed. Continue to the next bounded action only while it
-adds the canonical behavior, removes a reproduced direct blocker, or completes
-a control required by the selected profile.
+materially advances the stable initiative example, removes a reproduced direct
+blocker, or completes a control required by the selected profile. A locally new
+variation of an already-proven mechanism is not automatically strategic
+progress.
 
 Process artifacts, gate repair, cleanup, reconciliation, and hardening do not
 count as product progress unless current evidence shows they directly block the
@@ -82,9 +84,9 @@ next action remains.
 
 For `continuous-light`, reuse the current task, plan, issue, or progress record.
 Do not create a tracker, numbered plan, claim, or handoff solely because the run
-is continuous. Before starting, state the user outcome, smallest canonical
-example, current profile, and stop conditions in the existing authority or
-conversation.
+is continuous. Before starting, state the user outcome, stable initiative
+example when the task spans several increments, current profile, and stop
+conditions in the existing authority or conversation.
 
 For `continuous-coordinated` and `continuous-release`, use one shared tracker
 that records phases, ownership, success criteria, rollback points, and open
@@ -155,11 +157,20 @@ error = new information; same error = not new information), record the finding
 in the active authority and move to the next highest-value unblocked slice. Do
 not retry the same approach indefinitely.
 
-After three consecutive increments add neither canonical behavior nor remove a
-reproduced direct blocker, stop process expansion and replay the smallest
-canonical example. Re-scope around its first observed failure. A commit, green
-process test, new schema, refreshed manifest, or policy artifact does not reset
-this counter by itself.
+At the earliest of three completed increments, roughly four hours of continuous
+execution, twice the expected effort, user confusion about the deliverable, or
+parallel demos replacing one integrated product, reassess strategy. State what
+the user can newly do, whether stakeholder observation advanced, whether work
+is converging on one cumulative product, how effort split among outcome,
+enabling, and process work, and whether the next increment is still the shortest
+path to the stable initiative example.
+
+Continue when those answers support the strategy. Otherwise stop creating
+successor plans and reset scope or sequencing around the initiative example,
+even when each increment is green. This checkpoint occurs in conversation or
+the existing state authority; it is not a new report, approval gate, or stop
+condition. A commit, green process test, new schema, refreshed manifest, or
+policy artifact is enabling evidence rather than strategic progress by itself.
 
 ---
 

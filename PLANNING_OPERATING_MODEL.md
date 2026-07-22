@@ -131,9 +131,56 @@ The classes have operational meaning:
 Behavioral evidence and substrate/process evidence are reported separately.
 Green unit tests, schemas, transport, governance, traces, and evaluation
 apparatus can prove their own bounded claims, but they cannot substitute for an
-observed canonical example. After three consecutive increments produce neither
-new behavior nor removal of a named direct blocker, stop adding machinery,
-replay the example, and reset the plan around the smallest failing behavior.
+observed canonical example.
+
+The roadmap or north star owns a stable **initiative probe** above plan-level
+examples. A bounded plan may use a smaller example to verify one boundary, but
+it must state how success advances the stable initiative probe and cannot
+redefine initiative completion. Count behavior as strategic progress only when
+it advances stakeholder observation, expands the same cumulative product in a
+materially more representative, integrated, or scaled way, or removes a
+reproduced direct blocker. A technically new variation of an already-proven
+mechanism is enabling evidence, not automatically a value-bearing vertical.
+
+Thin slices normally progress through:
+
+```text
+mechanism proof -> representative integrated example -> scale and breadth -> hardening
+```
+
+After the mechanism proof, repeating a mechanism-sized example is justified
+only by a named uncertainty or blocker. Otherwise move to the next progression
+stage.
+
+Run a lightweight **strategy reassessment** at the earliest of:
+
+- three completed implementation increments;
+- roughly four hours of continuous execution, or the initiative's shorter
+  declared checkpoint;
+- elapsed effort exceeding the original estimate or stage boundary by about
+  two times;
+- the user asking what is being built, why progress is slow, or what the
+  current output means;
+- parallel fixtures, models, demos, or surfaces accumulating where the outcome
+  requires one integrated product; or
+- a passing increment producing only a trivial variation of demonstrated
+  behavior.
+
+The reassessment asks:
+
+1. What can the user concretely do now that was impossible at the previous
+   checkpoint?
+2. Did stakeholder observation status advance?
+3. Is work converging on one cumulative product or accumulating disconnected
+   demonstrations?
+4. How did effort divide among outcome, enabling, and process work?
+5. Is the proposed next increment still the shortest path to the stable
+   initiative probe?
+
+Continue when the answers support the current strategy. Otherwise stop creating
+successor plans, preserve useful work, and reset sequencing or scope around the
+initiative probe. The reassessment is normally an in-conversation or existing-
+authority update, not a new document, approval ceremony, or hard gate.
 
 For exploratory or LLM-mediated behavior, the example may initially be a
 frozen fixture and full trace. The next promotion step uses the same behavioral

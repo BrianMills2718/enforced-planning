@@ -172,6 +172,14 @@ the existing state authority; it is not a new report, approval gate, or stop
 condition. A commit, green process test, new schema, refreshed manifest, or
 policy artifact is enabling evidence rather than strategic progress by itself.
 
+After the strategy decision, reconcile only roadmap-facing documentation whose
+authority or status changed or whose duplication can misdirect the next action.
+Use `keep`, `update`, `consolidate`, `archive`, or `delete`; preserve one current
+authority, extract live claims and redirect active references before archival,
+and delete only demonstrably dead material. Do not turn the checkpoint into a
+broad cleanup phase or create a cleanup artifact solely to record that no change
+was needed.
+
 ---
 
 ## Blocked Tasks

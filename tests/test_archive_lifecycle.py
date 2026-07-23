@@ -69,6 +69,20 @@ def _archive_manifest(path: str, source: Path, repo: Path) -> dict[str, object]:
     }
 
 
+def _hash_path(path: Path) -> str:
+    """Produce the executor-compatible hash used by directory fixtures."""
+
+    digest = hashlib.sha256()
+    if path.is_file():
+        digest.update(path.read_bytes())
+        return digest.hexdigest()
+    for child in sorted(candidate for candidate in path.rglob("*") if candidate.is_file()):
+        digest.update(child.relative_to(path).as_posix().encode())
+        digest.update(b"\0")
+        digest.update(child.read_bytes())
+    return digest.hexdigest()
+
+
 def test_lineage_only_reaches_semantic_review_without_claiming_eligibility(tmp_path: Path) -> None:
     """Clear mechanics still require a semantic promotion and disposition judgment."""
 
@@ -218,6 +232,61 @@ def test_hash_bound_archive_manifest_selects_candidate_without_editing_source(tm
     assert candidate.readiness == "semantic_review_required"
     assert candidate.blockers == ()
     assert source.read_text(encoding="utf-8").startswith("# Unowned")
+
+
+def test_directory_manifest_candidate_reviews_tracked_markdown_descendants(
+    tmp_path: Path,
+) -> None:
+    """One mixed bundle stays byte-bound while lifecycle reviews its documents."""
+
+    repo = _repo(tmp_path)
+    _write(repo / "legacy/report.md", "# Historical report\n")
+    _write(repo / "legacy/evidence.csv", "claim,source\none,old\n")
+    subprocess.run(["git", "-C", str(repo), "add", "-A"], check=True)
+    payload = _archive_manifest("legacy", repo / "legacy/report.md", repo)
+    payload["candidates"][0]["expected_source_sha256"] = _hash_path(repo / "legacy")  # type: ignore[index]
+    manifest_path = repo / "archive-manifest.json"
+    manifest_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    report = build_archive_lifecycle_report(
+        repo,
+        {"documents": [_document("legacy/report.md")]},
+        archive_manifest=manifest_path,
+    )
+
+    assert [candidate.path for candidate in report.candidates] == ["legacy/report.md"]
+    assert report.candidates[0].lifecycle == "archive_candidate"
+    assert report.candidates[0].readiness == "semantic_review_required"
+
+    _write(repo / "legacy/evidence.csv", "claim,source\ntwo,changed\n")
+    with pytest.raises(ArchiveLifecycleError, match="expected_source_sha256 mismatch"):
+        build_archive_lifecycle_report(
+            repo,
+            {"documents": [_document("legacy/report.md")]},
+            archive_manifest=manifest_path,
+        )
+
+
+def test_non_document_manifest_candidate_does_not_select_unrelated_documents(
+    tmp_path: Path,
+) -> None:
+    """A data-only candidate is accepted without turning every document into a candidate."""
+
+    repo = _repo(tmp_path)
+    _write(repo / "legacy/data.csv", "claim,source\none,old\n")
+    subprocess.run(["git", "-C", str(repo), "add", "-A"], check=True)
+    payload = _archive_manifest("legacy/data.csv", repo / "legacy/data.csv", repo)
+    manifest_path = repo / "archive-manifest.json"
+    manifest_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    report = build_archive_lifecycle_report(
+        repo,
+        {"documents": [_document("docs/old.md")]},
+        archive_manifest=manifest_path,
+    )
+
+    assert report.candidate_count == 0
+    assert report.candidates == ()
 
 
 def test_explicit_archive_candidate_status_is_terminal_for_active_use(tmp_path: Path) -> None:

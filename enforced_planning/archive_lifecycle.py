@@ -83,13 +83,17 @@ class ArchiveLifecycleError(RuntimeError):
     """Report malformed lifecycle declarations or unresolved report inputs."""
 
 
-def _sha256(path: Path) -> str:
-    """Return the exact current bytes' SHA-256 without decoding source evidence."""
+def _hash_path(path: Path) -> str:
+    """Match the archive executor's stable hash for one file or directory."""
 
     digest = hashlib.sha256()
-    with path.open("rb") as source:
-        for chunk in iter(lambda: source.read(1024 * 1024), b""):
-            digest.update(chunk)
+    if path.is_file():
+        digest.update(path.read_bytes())
+        return digest.hexdigest()
+    for child in sorted(candidate for candidate in path.rglob("*") if candidate.is_file()):
+        digest.update(child.relative_to(path).as_posix().encode())
+        digest.update(b"\0")
+        digest.update(child.read_bytes())
     return digest.hexdigest()
 
 
@@ -133,12 +137,15 @@ def _archive_manifest_lifecycle(
         if not isinstance(candidate, dict):
             raise ArchiveLifecycleError(f"{provenance} must be an object")
         path = _exact_path(candidate.get("path"), provenance=provenance, field="path")
-        if path not in narrative_documents:
+        source = (repo_root / path).resolve()
+        try:
+            source.relative_to(repo_root)
+        except ValueError as exc:
             raise ArchiveLifecycleError(
-                f"{provenance}.path is not a tracked narrative Markdown document: {path}"
-            )
-        if path in overrides:
-            raise ArchiveLifecycleError(f"{provenance}.path duplicates archive manifest path {path!r}")
+                f"{provenance}.path escapes archive manifest.repo_root: {path}"
+            ) from exc
+        if not source.exists():
+            raise ArchiveLifecycleError(f"{provenance}.path does not exist: {path}")
         source_sha256 = candidate.get("expected_source_sha256")
         if not isinstance(source_sha256, str) or SHA256_PATTERN.fullmatch(source_sha256) is None:
             raise ArchiveLifecycleError(
@@ -149,9 +156,26 @@ def _archive_manifest_lifecycle(
             raise ArchiveLifecycleError(
                 f"{provenance}.disposition must be one of {sorted(ARCHIVE_MANIFEST_DISPOSITIONS)}"
             )
-        if _sha256(repo_root / path) != source_sha256:
+        if _hash_path(source) != source_sha256:
             raise ArchiveLifecycleError(f"{provenance}.expected_source_sha256 mismatch for {path}")
-        overrides[path] = ARCHIVE_MANIFEST_LIFECYCLE
+        manifest_root = PurePosixPath(path)
+        affected_documents = (
+            (path,)
+            if source.is_file() and path in narrative_documents
+            else tuple(
+                document
+                for document in narrative_documents
+                if PurePosixPath(document).is_relative_to(manifest_root)
+            )
+            if source.is_dir()
+            else ()
+        )
+        for document in affected_documents:
+            if document in overrides:
+                raise ArchiveLifecycleError(
+                    f"{provenance}.path overlaps another archive manifest candidate at {document!r}"
+                )
+            overrides[document] = ARCHIVE_MANIFEST_LIFECYCLE
     return overrides
 
 
@@ -471,7 +495,9 @@ def build_archive_lifecycle_report(
     selected = (
         tuple(sorted(set(candidates)))
         if candidates
-        else tuple(sorted(lifecycle_overrides)) if lifecycle_overrides else narrative_documents
+        else tuple(sorted(lifecycle_overrides))
+        if archive_manifest is not None
+        else narrative_documents
     )
     unknown_candidates = tuple(path for path in selected if path not in narrative_documents)
     if unknown_candidates:

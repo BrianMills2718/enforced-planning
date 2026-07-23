@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 from pathlib import Path
 import subprocess
 import sys
@@ -45,6 +46,22 @@ def _document(path: str, *, role: str = "historical_evidence") -> dict[str, obje
             "reason": "The current authority explains why this history is retained.",
         },
         "lifecycle_source": "document_status",
+    }
+
+
+def _immutable_sidecar(path: str, source: Path) -> dict[str, object]:
+    """Bind one archive-candidate interpretation to exact source bytes."""
+
+    return {
+        "schema_version": "archive-lifecycle-sidecar-v1",
+        "candidates": [
+            {
+                "path": path,
+                "source_sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
+                "lifecycle": "archive_candidate",
+                "immutable_source": True,
+            }
+        ],
     }
 
 
@@ -175,6 +192,106 @@ def test_active_lifecycle_and_unresolved_justification_anchor_block(tmp_path: Pa
     }
 
 
+def test_hash_bound_sidecar_allows_immutable_evidence_to_reach_semantic_review(tmp_path: Path) -> None:
+    """A status-free historical source stays unchanged while its hash is verified."""
+
+    repo = _repo(tmp_path)
+    source = repo / "docs/unowned.md"
+    sidecar_path = repo / "archive-sidecar.json"
+    sidecar_path.write_text(json.dumps(_immutable_sidecar("docs/unowned.md", source)), encoding="utf-8")
+
+    report = build_archive_lifecycle_report(
+        repo,
+        {"documents": [_document("docs/unowned.md")]},
+        candidates=("docs/unowned.md",),
+        immutable_lifecycle_sidecar=sidecar_path,
+    )
+
+    candidate = report.candidates[0]
+    assert candidate.lifecycle == "archive_candidate"
+    assert candidate.readiness == "semantic_review_required"
+    assert candidate.blockers == ()
+    assert source.read_text(encoding="utf-8").startswith("# Unowned")
+
+
+def test_explicit_archive_candidate_status_is_terminal_for_active_use(tmp_path: Path) -> None:
+    """A source-local candidate status reaches review without becoming a move approval."""
+
+    repo = _repo(tmp_path)
+    _write(repo / "docs/old.md", "# Old plan\n\n**Status:** Archive candidate\n")
+
+    candidate = build_archive_lifecycle_report(
+        repo,
+        {"documents": [_document("docs/old.md")]},
+        candidates=("docs/old.md",),
+    ).candidates[0]
+
+    assert candidate.lifecycle == "archive_candidate"
+    assert candidate.readiness == "semantic_review_required"
+
+
+@pytest.mark.parametrize(
+    ("mutation", "error"),
+    [
+        (lambda payload: payload["candidates"][0].__setitem__("source_sha256", "0" * 64), "source_sha256 mismatch"),
+        (lambda payload: payload["candidates"][0].__setitem__("lifecycle", "completed"), "lifecycle must be"),
+        (lambda payload: payload["candidates"][0].__setitem__("immutable_source", False), "immutable_source must be true"),
+    ],
+)
+def test_immutable_sidecar_rejects_unbound_or_broader_overrides(
+    tmp_path: Path,
+    mutation: object,
+    error: str,
+) -> None:
+    """The external interpretation cannot evade its exact evidence boundary."""
+
+    repo = _repo(tmp_path)
+    source = repo / "docs/unowned.md"
+    payload = _immutable_sidecar("docs/unowned.md", source)
+    mutation(payload)  # type: ignore[operator]
+    sidecar_path = repo / "archive-sidecar.json"
+    sidecar_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(ArchiveLifecycleError, match=error):
+        build_archive_lifecycle_report(
+            repo,
+            {"documents": [_document("docs/unowned.md")]},
+            candidates=("docs/unowned.md",),
+            immutable_lifecycle_sidecar=sidecar_path,
+        )
+
+
+def test_immutable_sidecar_does_not_bypass_relationship_archive_blocks(tmp_path: Path) -> None:
+    """Source preservation cannot override the relationship graph's safeguards."""
+
+    repo = _repo(tmp_path)
+    source = repo / "docs/unowned.md"
+    sidecar_path = repo / "archive-sidecar.json"
+    sidecar_path.write_text(json.dumps(_immutable_sidecar("docs/unowned.md", source)), encoding="utf-8")
+
+    candidate = build_archive_lifecycle_report(
+        repo,
+        {
+            "documents": [_document("docs/unowned.md")],
+            "relationships": [
+                {
+                    "source": "docs/current.md",
+                    "target": "docs/unowned.md",
+                    "relation": "updates",
+                    "reason": "The current document still depends on this source.",
+                    "archive_effect": "blocks_archive",
+                }
+            ],
+        },
+        candidates=("docs/unowned.md",),
+        immutable_lifecycle_sidecar=sidecar_path,
+    ).candidates[0]
+
+    assert candidate.lifecycle == "archive_candidate"
+    assert candidate.readiness == "blocked"
+    assert [blocker.code for blocker in candidate.blockers] == ["archive-edge-blocks"]
+
+
 def test_report_is_byte_deterministic_and_workspace_neutral(tmp_path: Path) -> None:
     """Repeated reports contain no path, time, or ordering volatility."""
 
@@ -225,6 +342,47 @@ def test_cli_emits_the_same_report_only_boundary(tmp_path: Path) -> None:
     payload = json.loads(result.stdout)
     assert payload["candidates"][0]["readiness"] == "semantic_review_required"
     assert "eligible" not in result.stdout
+
+
+def test_cli_accepts_a_repo_relative_hash_bound_immutable_sidecar(tmp_path: Path) -> None:
+    """The portable entry point preserves the same strict sidecar boundary."""
+
+    repo = _repo(tmp_path)
+    _write(
+        repo / "scripts/relationships.yaml",
+        """documents:
+  - path: docs/unowned.md
+    role: historical_evidence
+    justification:
+      anchored_to: docs/current.md
+      reason: The current authority explains why this history is retained.
+    lifecycle_source: document_status
+""",
+    )
+    sidecar = _immutable_sidecar("docs/unowned.md", repo / "docs/unowned.md")
+    _write(repo / "archive-sidecar.json", json.dumps(sidecar))
+    subprocess.run(["git", "-C", str(repo), "add", "-A"], check=True)
+    script = Path(__file__).parents[1] / "scripts/archive_lifecycle.py"
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "--repo-root",
+            str(repo),
+            "--candidate",
+            "docs/unowned.md",
+            "--immutable-lifecycle-sidecar",
+            "archive-sidecar.json",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    payload = json.loads(result.stdout)
+    assert payload["candidates"][0]["lifecycle"] == "archive_candidate"
+    assert payload["candidates"][0]["readiness"] == "semantic_review_required"
 
 
 def test_malformed_document_declarations_fail_loudly(tmp_path: Path) -> None:

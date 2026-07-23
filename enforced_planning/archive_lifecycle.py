@@ -10,8 +10,10 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import asdict, dataclass
+import hashlib
 import json
 from pathlib import Path, PurePosixPath
+import re
 from typing import Any, Literal, TypeAlias
 
 import yaml  # type: ignore[import-untyped]
@@ -55,12 +57,98 @@ ALLOWED_DOCUMENT_ROLES = {
     "generated_projection",
     "recovery",
 }
-TERMINAL_LIFECYCLES = {"completed", "archived", "superseded", "deprecated", "mistaken", "deferred"}
+TERMINAL_LIFECYCLES = {
+    "completed",
+    "archive_candidate",
+    "archived",
+    "superseded",
+    "deprecated",
+    "mistaken",
+    "deferred",
+}
 STATUS_SCAN_LINE_LIMIT = 40
+IMMUTABLE_SIDECAR_SCHEMA_VERSION = "archive-lifecycle-sidecar-v1"
+IMMUTABLE_SIDECAR_LIFECYCLE: DocumentLifecycle = "archive_candidate"
+SHA256_PATTERN = re.compile(r"[0-9a-f]{64}\Z")
 
 
 class ArchiveLifecycleError(RuntimeError):
     """Report malformed lifecycle declarations or unresolved report inputs."""
+
+
+def _sha256(path: Path) -> str:
+    """Return the exact current bytes' SHA-256 without decoding source evidence."""
+
+    digest = hashlib.sha256()
+    with path.open("rb") as source:
+        for chunk in iter(lambda: source.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _immutable_lifecycle_sidecar(
+    sidecar_path: Path,
+    *,
+    repo_root: Path,
+    narrative_documents: tuple[str, ...],
+) -> dict[str, DocumentLifecycle]:
+    """Validate hash-bound lifecycle overrides for byte-preserved evidence.
+
+    The sidecar deliberately grants only ``archive_candidate``. It cannot
+    declare a document, classify relationship effects, or approve archival.
+    """
+
+    try:
+        raw = json.loads(sidecar_path.read_text(encoding="utf-8"))
+    except FileNotFoundError as exc:
+        raise ArchiveLifecycleError(f"immutable lifecycle sidecar does not exist: {sidecar_path}") from exc
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ArchiveLifecycleError(f"immutable lifecycle sidecar is not valid JSON: {sidecar_path}") from exc
+    if not isinstance(raw, dict) or set(raw) != {"schema_version", "candidates"}:
+        raise ArchiveLifecycleError(
+            "immutable lifecycle sidecar must contain only schema_version and candidates"
+        )
+    if raw["schema_version"] != IMMUTABLE_SIDECAR_SCHEMA_VERSION:
+        raise ArchiveLifecycleError(
+            "immutable lifecycle sidecar has unsupported schema_version "
+            f"{raw['schema_version']!r}"
+        )
+    candidates = raw["candidates"]
+    if not isinstance(candidates, list):
+        raise ArchiveLifecycleError("immutable lifecycle sidecar.candidates must be a list")
+
+    overrides: dict[str, DocumentLifecycle] = {}
+    for index, candidate in enumerate(candidates):
+        provenance = f"immutable lifecycle sidecar.candidates[{index}]"
+        if not isinstance(candidate, dict) or set(candidate) != {
+            "path",
+            "source_sha256",
+            "lifecycle",
+            "immutable_source",
+        }:
+            raise ArchiveLifecycleError(
+                f"{provenance} must contain only path, source_sha256, lifecycle, and immutable_source"
+            )
+        path = _exact_path(candidate["path"], provenance=provenance, field="path")
+        if path not in narrative_documents:
+            raise ArchiveLifecycleError(
+                f"{provenance}.path is not a tracked narrative Markdown document: {path}"
+            )
+        if path in overrides:
+            raise ArchiveLifecycleError(f"{provenance}.path duplicates immutable lifecycle sidecar path {path!r}")
+        source_sha256 = candidate["source_sha256"]
+        if not isinstance(source_sha256, str) or SHA256_PATTERN.fullmatch(source_sha256) is None:
+            raise ArchiveLifecycleError(f"{provenance}.source_sha256 must be a lowercase SHA-256 digest")
+        if candidate["lifecycle"] != IMMUTABLE_SIDECAR_LIFECYCLE:
+            raise ArchiveLifecycleError(
+                f"{provenance}.lifecycle must be {IMMUTABLE_SIDECAR_LIFECYCLE!r}"
+            )
+        if candidate["immutable_source"] is not True:
+            raise ArchiveLifecycleError(f"{provenance}.immutable_source must be true")
+        if _sha256(repo_root / path) != source_sha256:
+            raise ArchiveLifecycleError(f"{provenance}.source_sha256 mismatch for {path}")
+        overrides[path] = IMMUTABLE_SIDECAR_LIFECYCLE
+    return overrides
 
 
 @dataclass(frozen=True)
@@ -282,11 +370,12 @@ def _candidate(
     declarations: tuple[DocumentDeclaration, ...],
     tracked_paths: set[str],
     relationships: dict[str, Any],
+    lifecycle_overrides: dict[str, DocumentLifecycle],
 ) -> ArchiveCandidate:
     """Compile one candidate's mechanical blockers and semantic-review boundary."""
 
     owned = tuple(item for item in declarations if item.path == path)
-    lifecycle = document_lifecycle(repo_root / path)
+    lifecycle = lifecycle_overrides.get(path, document_lifecycle(repo_root / path))
     impacts = _edge_impacts(path, relationships)
     blockers: list[ArchiveBlocker] = []
     if not owned:
@@ -348,6 +437,7 @@ def build_archive_lifecycle_report(
     relationships: dict[str, Any],
     *,
     candidates: tuple[str, ...] = (),
+    immutable_lifecycle_sidecar: Path | None = None,
 ) -> ArchiveLifecycleReport:
     """Report exhaustive narrative-document coverage and candidate blockers."""
 
@@ -371,7 +461,18 @@ def build_archive_lifecycle_report(
         raise ArchiveLifecycleError(
             "candidate is not a tracked narrative Markdown document: " + ", ".join(unknown_candidates)
         )
-    compiled = tuple(_candidate(root, path, declarations, tracked, relationships) for path in selected)
+    lifecycle_overrides = (
+        _immutable_lifecycle_sidecar(
+            immutable_lifecycle_sidecar,
+            repo_root=root,
+            narrative_documents=narrative_documents,
+        )
+        if immutable_lifecycle_sidecar is not None
+        else {}
+    )
+    compiled = tuple(
+        _candidate(root, path, declarations, tracked, relationships, lifecycle_overrides) for path in selected
+    )
     declared_paths = {item.path for item in declarations}
     undeclared = tuple(path for path in narrative_documents if path not in declared_paths)
     return ArchiveLifecycleReport(
@@ -407,15 +508,24 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--repo-root", type=Path, default=Path.cwd())
     parser.add_argument("--config", default="scripts/relationships.yaml")
     parser.add_argument("--candidate", action="append", default=[], help="Exact document path; repeat as needed")
+    parser.add_argument(
+        "--immutable-lifecycle-sidecar",
+        type=Path,
+        help="Strict JSON, hash-bound archive-candidate status for immutable source evidence",
+    )
     parser.add_argument("--output", type=Path, help="Write JSON to this path instead of stdout")
     parser.add_argument("--pretty", action="store_true")
     args = parser.parse_args(argv)
     try:
         relationships = _load_relationships(args.repo_root, args.config)
+        sidecar_path = args.immutable_lifecycle_sidecar
+        if sidecar_path is not None and not sidecar_path.is_absolute():
+            sidecar_path = args.repo_root / sidecar_path
         report = build_archive_lifecycle_report(
             args.repo_root,
             relationships,
             candidates=tuple(args.candidate),
+            immutable_lifecycle_sidecar=sidecar_path,
         )
     except (ArchiveLifecycleError, OSError) as exc:
         parser.exit(2, f"archive-lifecycle: {exc}\n")

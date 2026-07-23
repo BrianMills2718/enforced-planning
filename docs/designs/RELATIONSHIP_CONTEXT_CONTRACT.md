@@ -258,9 +258,20 @@ context-packet JSON contract to schema version 2.
 
 Document declarations use exact repository-relative paths. Each declaration
 assigns one role and one purpose-bearing justification; repeated declarations
-may assign additional roles to the same document. The compiler reads only an
-explicit source-local `Status` field for lifecycle. It does not infer lifecycle
-from filenames, age, inbound-link counts, or document prose.
+may assign additional roles to the same document. By default, the compiler
+reads only an explicit source-local `Status` field for lifecycle. It does not
+infer lifecycle from filenames, age, inbound-link counts, or document prose.
+
+An immutable source artifact may instead receive the strictly limited
+`--immutable-lifecycle-sidecar` input. Its JSON entry binds an exact
+repository-relative path to the current source SHA-256, sets
+`immutable_source: true`, and may express only `archive_candidate`. The report
+rejects malformed entries, unknown or duplicate paths, and hash mismatches.
+This preserves source bytes while recording a revisable operational
+interpretation; it cannot declare the document, override relationship effects,
+claim semantic truth, authorize a move, or produce `eligible`/`approved`.
+The archive executor must independently bind the same evidence before an
+actual transition, so this report-only seam does not close a move-time race.
 
 The report inventories every Git-tracked narrative Markdown document and emits
 declared/undeclared coverage plus candidate-specific edge impacts and blockers:

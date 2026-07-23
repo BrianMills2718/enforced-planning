@@ -67,8 +67,15 @@ TERMINAL_LIFECYCLES = {
     "deferred",
 }
 STATUS_SCAN_LINE_LIMIT = 40
-IMMUTABLE_SIDECAR_SCHEMA_VERSION = "archive-lifecycle-sidecar-v1"
-IMMUTABLE_SIDECAR_LIFECYCLE: DocumentLifecycle = "archive_candidate"
+ARCHIVE_MANIFEST_SCHEMA_VERSION = "archive-disposition-v1"
+ARCHIVE_MANIFEST_DISPOSITIONS = {
+    "superseded",
+    "deprecated",
+    "deferred",
+    "mistaken",
+    "candidate-for-resurrection",
+}
+ARCHIVE_MANIFEST_LIFECYCLE: DocumentLifecycle = "archive_candidate"
 SHA256_PATTERN = re.compile(r"[0-9a-f]{64}\Z")
 
 
@@ -86,68 +93,65 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _immutable_lifecycle_sidecar(
-    sidecar_path: Path,
+def _archive_manifest_lifecycle(
+    manifest_path: Path,
     *,
     repo_root: Path,
     narrative_documents: tuple[str, ...],
 ) -> dict[str, DocumentLifecycle]:
-    """Validate hash-bound lifecycle overrides for byte-preserved evidence.
+    """Read candidate identity and exact bytes from the ecosystem archive manifest.
 
-    The sidecar deliberately grants only ``archive_candidate``. It cannot
-    declare a document, classify relationship effects, or approve archival.
+    The manifest supplies only the candidate lifecycle for this report.
+    Repository declarations and relationship effects remain independent.
     """
 
     try:
-        raw = json.loads(sidecar_path.read_text(encoding="utf-8"))
+        raw = json.loads(manifest_path.read_text(encoding="utf-8"))
     except FileNotFoundError as exc:
-        raise ArchiveLifecycleError(f"immutable lifecycle sidecar does not exist: {sidecar_path}") from exc
+        raise ArchiveLifecycleError(f"archive manifest does not exist: {manifest_path}") from exc
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise ArchiveLifecycleError(f"immutable lifecycle sidecar is not valid JSON: {sidecar_path}") from exc
-    if not isinstance(raw, dict) or set(raw) != {"schema_version", "candidates"}:
+        raise ArchiveLifecycleError(f"archive manifest is not valid JSON: {manifest_path}") from exc
+    if not isinstance(raw, dict):
+        raise ArchiveLifecycleError("archive manifest root must be an object")
+    if raw.get("schema_version") != ARCHIVE_MANIFEST_SCHEMA_VERSION:
         raise ArchiveLifecycleError(
-            "immutable lifecycle sidecar must contain only schema_version and candidates"
+            "archive manifest has unsupported schema_version "
+            f"{raw.get('schema_version')!r}"
         )
-    if raw["schema_version"] != IMMUTABLE_SIDECAR_SCHEMA_VERSION:
-        raise ArchiveLifecycleError(
-            "immutable lifecycle sidecar has unsupported schema_version "
-            f"{raw['schema_version']!r}"
-        )
-    candidates = raw["candidates"]
-    if not isinstance(candidates, list):
-        raise ArchiveLifecycleError("immutable lifecycle sidecar.candidates must be a list")
+    manifest_repo_root = raw.get("repo_root")
+    if not isinstance(manifest_repo_root, str) or not manifest_repo_root.strip():
+        raise ArchiveLifecycleError("archive manifest.repo_root must be a non-empty path")
+    if Path(manifest_repo_root).expanduser().resolve() != repo_root:
+        raise ArchiveLifecycleError("archive manifest.repo_root does not match --repo-root")
+    candidates = raw.get("candidates")
+    if not isinstance(candidates, list) or not candidates:
+        raise ArchiveLifecycleError("archive manifest.candidates must be a non-empty list")
 
     overrides: dict[str, DocumentLifecycle] = {}
     for index, candidate in enumerate(candidates):
-        provenance = f"immutable lifecycle sidecar.candidates[{index}]"
-        if not isinstance(candidate, dict) or set(candidate) != {
-            "path",
-            "source_sha256",
-            "lifecycle",
-            "immutable_source",
-        }:
-            raise ArchiveLifecycleError(
-                f"{provenance} must contain only path, source_sha256, lifecycle, and immutable_source"
-            )
-        path = _exact_path(candidate["path"], provenance=provenance, field="path")
+        provenance = f"archive manifest.candidates[{index}]"
+        if not isinstance(candidate, dict):
+            raise ArchiveLifecycleError(f"{provenance} must be an object")
+        path = _exact_path(candidate.get("path"), provenance=provenance, field="path")
         if path not in narrative_documents:
             raise ArchiveLifecycleError(
                 f"{provenance}.path is not a tracked narrative Markdown document: {path}"
             )
         if path in overrides:
-            raise ArchiveLifecycleError(f"{provenance}.path duplicates immutable lifecycle sidecar path {path!r}")
-        source_sha256 = candidate["source_sha256"]
+            raise ArchiveLifecycleError(f"{provenance}.path duplicates archive manifest path {path!r}")
+        source_sha256 = candidate.get("expected_source_sha256")
         if not isinstance(source_sha256, str) or SHA256_PATTERN.fullmatch(source_sha256) is None:
-            raise ArchiveLifecycleError(f"{provenance}.source_sha256 must be a lowercase SHA-256 digest")
-        if candidate["lifecycle"] != IMMUTABLE_SIDECAR_LIFECYCLE:
             raise ArchiveLifecycleError(
-                f"{provenance}.lifecycle must be {IMMUTABLE_SIDECAR_LIFECYCLE!r}"
+                f"{provenance}.expected_source_sha256 must be a lowercase SHA-256 digest"
             )
-        if candidate["immutable_source"] is not True:
-            raise ArchiveLifecycleError(f"{provenance}.immutable_source must be true")
+        disposition = candidate.get("disposition")
+        if disposition not in ARCHIVE_MANIFEST_DISPOSITIONS:
+            raise ArchiveLifecycleError(
+                f"{provenance}.disposition must be one of {sorted(ARCHIVE_MANIFEST_DISPOSITIONS)}"
+            )
         if _sha256(repo_root / path) != source_sha256:
-            raise ArchiveLifecycleError(f"{provenance}.source_sha256 mismatch for {path}")
-        overrides[path] = IMMUTABLE_SIDECAR_LIFECYCLE
+            raise ArchiveLifecycleError(f"{provenance}.expected_source_sha256 mismatch for {path}")
+        overrides[path] = ARCHIVE_MANIFEST_LIFECYCLE
     return overrides
 
 
@@ -437,7 +441,7 @@ def build_archive_lifecycle_report(
     relationships: dict[str, Any],
     *,
     candidates: tuple[str, ...] = (),
-    immutable_lifecycle_sidecar: Path | None = None,
+    archive_manifest: Path | None = None,
 ) -> ArchiveLifecycleReport:
     """Report exhaustive narrative-document coverage and candidate blockers."""
 
@@ -455,21 +459,30 @@ def build_archive_lifecycle_report(
             raise ArchiveLifecycleError(
                 f"{declaration.provenance}.path is not a tracked narrative Markdown document: {declaration.path}"
             )
-    selected = tuple(sorted(set(candidates))) if candidates else narrative_documents
+    lifecycle_overrides = (
+        _archive_manifest_lifecycle(
+            archive_manifest,
+            repo_root=root,
+            narrative_documents=narrative_documents,
+        )
+        if archive_manifest is not None
+        else {}
+    )
+    selected = (
+        tuple(sorted(set(candidates)))
+        if candidates
+        else tuple(sorted(lifecycle_overrides)) if lifecycle_overrides else narrative_documents
+    )
     unknown_candidates = tuple(path for path in selected if path not in narrative_documents)
     if unknown_candidates:
         raise ArchiveLifecycleError(
             "candidate is not a tracked narrative Markdown document: " + ", ".join(unknown_candidates)
         )
-    lifecycle_overrides = (
-        _immutable_lifecycle_sidecar(
-            immutable_lifecycle_sidecar,
-            repo_root=root,
-            narrative_documents=narrative_documents,
+    missing_manifest_candidates = tuple(path for path in selected if archive_manifest is not None and path not in lifecycle_overrides)
+    if missing_manifest_candidates:
+        raise ArchiveLifecycleError(
+            "candidate is not present in archive manifest: " + ", ".join(missing_manifest_candidates)
         )
-        if immutable_lifecycle_sidecar is not None
-        else {}
-    )
     compiled = tuple(
         _candidate(root, path, declarations, tracked, relationships, lifecycle_overrides) for path in selected
     )
@@ -509,23 +522,23 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--config", default="scripts/relationships.yaml")
     parser.add_argument("--candidate", action="append", default=[], help="Exact document path; repeat as needed")
     parser.add_argument(
-        "--immutable-lifecycle-sidecar",
+        "--archive-manifest",
         type=Path,
-        help="Strict JSON, hash-bound archive-candidate status for immutable source evidence",
+        help="Ecosystem archive-disposition manifest binding candidates to exact source hashes",
     )
     parser.add_argument("--output", type=Path, help="Write JSON to this path instead of stdout")
     parser.add_argument("--pretty", action="store_true")
     args = parser.parse_args(argv)
     try:
         relationships = _load_relationships(args.repo_root, args.config)
-        sidecar_path = args.immutable_lifecycle_sidecar
-        if sidecar_path is not None and not sidecar_path.is_absolute():
-            sidecar_path = args.repo_root / sidecar_path
+        manifest_path = args.archive_manifest
+        if manifest_path is not None and not manifest_path.is_absolute():
+            manifest_path = args.repo_root / manifest_path
         report = build_archive_lifecycle_report(
             args.repo_root,
             relationships,
             candidates=tuple(args.candidate),
-            immutable_lifecycle_sidecar=sidecar_path,
+            archive_manifest=manifest_path,
         )
     except (ArchiveLifecycleError, OSError) as exc:
         parser.exit(2, f"archive-lifecycle: {exc}\n")

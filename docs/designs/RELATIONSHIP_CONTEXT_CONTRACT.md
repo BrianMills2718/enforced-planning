@@ -262,16 +262,19 @@ may assign additional roles to the same document. By default, the compiler
 reads only an explicit source-local `Status` field for lifecycle. It does not
 infer lifecycle from filenames, age, inbound-link counts, or document prose.
 
-An immutable source artifact may instead receive the strictly limited
-`--immutable-lifecycle-sidecar` input. Its JSON entry binds an exact
-repository-relative path to the current source SHA-256, sets
-`immutable_source: true`, and may express only `archive_candidate`. The report
-rejects malformed entries, unknown or duplicate paths, and hash mismatches.
-This preserves source bytes while recording a revisable operational
-interpretation; it cannot declare the document, override relationship effects,
-claim semantic truth, authorize a move, or produce `eligible`/`approved`.
-The archive executor must independently bind the same evidence before an
-actual transition, so this report-only seam does not close a move-time race.
+When an archive transition is proposed, the compiler accepts the ecosystem's
+single `archive-disposition-v1` transaction record through
+`--archive-manifest`. The manifest binds each exact repository-relative path to
+its reviewed source SHA-256 and disposition. The report treats a hash-matched
+entry as `archive_candidate` without editing the source artifact. It still
+derives declarations and relationship blockers independently from the
+repository graph and cannot claim semantic truth, authorize a move, or produce
+`eligible`/`approved`.
+
+The same manifest is consumed by the central archive executor, which rechecks
+the expected source hash immediately before moving anything. Do not create a
+separate lifecycle sidecar or maintain archive hashes during ordinary document
+editing.
 
 The report inventories every Git-tracked narrative Markdown document and emits
 declared/undeclared coverage plus candidate-specific edge impacts and blockers:

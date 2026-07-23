@@ -49,17 +49,21 @@ def _document(path: str, *, role: str = "historical_evidence") -> dict[str, obje
     }
 
 
-def _immutable_sidecar(path: str, source: Path) -> dict[str, object]:
-    """Bind one archive-candidate interpretation to exact source bytes."""
+def _archive_manifest(path: str, source: Path, repo: Path) -> dict[str, object]:
+    """Bind one archive disposition to exact source bytes."""
 
     return {
-        "schema_version": "archive-lifecycle-sidecar-v1",
+        "schema_version": "archive-disposition-v1",
+        "repo_root": str(repo),
         "candidates": [
             {
                 "path": path,
-                "source_sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
-                "lifecycle": "archive_candidate",
-                "immutable_source": True,
+                "expected_source_sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
+                "disposition": "superseded",
+                "rationale": "Current authority replaced this historical document.",
+                "replacement_or_recovery": "docs/current.md",
+                "extracted_live_claims": "none",
+                "relationships": [],
             }
         ],
     }
@@ -192,19 +196,21 @@ def test_active_lifecycle_and_unresolved_justification_anchor_block(tmp_path: Pa
     }
 
 
-def test_hash_bound_sidecar_allows_immutable_evidence_to_reach_semantic_review(tmp_path: Path) -> None:
-    """A status-free historical source stays unchanged while its hash is verified."""
+def test_hash_bound_archive_manifest_selects_candidate_without_editing_source(tmp_path: Path) -> None:
+    """One transition manifest supplies candidate state without changing evidence."""
 
     repo = _repo(tmp_path)
     source = repo / "docs/unowned.md"
-    sidecar_path = repo / "archive-sidecar.json"
-    sidecar_path.write_text(json.dumps(_immutable_sidecar("docs/unowned.md", source)), encoding="utf-8")
+    manifest_path = repo / "archive-manifest.json"
+    manifest_path.write_text(
+        json.dumps(_archive_manifest("docs/unowned.md", source, repo)),
+        encoding="utf-8",
+    )
 
     report = build_archive_lifecycle_report(
         repo,
         {"documents": [_document("docs/unowned.md")]},
-        candidates=("docs/unowned.md",),
-        immutable_lifecycle_sidecar=sidecar_path,
+        archive_manifest=manifest_path,
     )
 
     candidate = report.candidates[0]
@@ -233,12 +239,25 @@ def test_explicit_archive_candidate_status_is_terminal_for_active_use(tmp_path: 
 @pytest.mark.parametrize(
     ("mutation", "error"),
     [
-        (lambda payload: payload["candidates"][0].__setitem__("source_sha256", "0" * 64), "source_sha256 mismatch"),
-        (lambda payload: payload["candidates"][0].__setitem__("lifecycle", "completed"), "lifecycle must be"),
-        (lambda payload: payload["candidates"][0].__setitem__("immutable_source", False), "immutable_source must be true"),
+        (
+            lambda payload: payload["candidates"][0].__setitem__(
+                "expected_source_sha256", "0" * 64
+            ),
+            "expected_source_sha256 mismatch",
+        ),
+        (
+            lambda payload: payload["candidates"][0].__setitem__(
+                "disposition", "active"
+            ),
+            "disposition must be",
+        ),
+        (
+            lambda payload: payload.__setitem__("repo_root", "/wrong/repository"),
+            "repo_root does not match",
+        ),
     ],
 )
-def test_immutable_sidecar_rejects_unbound_or_broader_overrides(
+def test_archive_manifest_rejects_unbound_or_invalid_candidate_state(
     tmp_path: Path,
     mutation: object,
     error: str,
@@ -247,27 +266,52 @@ def test_immutable_sidecar_rejects_unbound_or_broader_overrides(
 
     repo = _repo(tmp_path)
     source = repo / "docs/unowned.md"
-    payload = _immutable_sidecar("docs/unowned.md", source)
+    payload = _archive_manifest("docs/unowned.md", source, repo)
     mutation(payload)  # type: ignore[operator]
-    sidecar_path = repo / "archive-sidecar.json"
-    sidecar_path.write_text(json.dumps(payload), encoding="utf-8")
+    manifest_path = repo / "archive-manifest.json"
+    manifest_path.write_text(json.dumps(payload), encoding="utf-8")
 
     with pytest.raises(ArchiveLifecycleError, match=error):
         build_archive_lifecycle_report(
             repo,
             {"documents": [_document("docs/unowned.md")]},
-            candidates=("docs/unowned.md",),
-            immutable_lifecycle_sidecar=sidecar_path,
+            archive_manifest=manifest_path,
         )
 
 
-def test_immutable_sidecar_does_not_bypass_relationship_archive_blocks(tmp_path: Path) -> None:
-    """Source preservation cannot override the relationship graph's safeguards."""
+def test_archive_manifest_requires_candidate_list(tmp_path: Path) -> None:
+    """Malformed transition records fail as lifecycle errors rather than key errors."""
+
+    repo = _repo(tmp_path)
+    manifest_path = repo / "archive-manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "archive-disposition-v1",
+                "repo_root": str(repo),
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ArchiveLifecycleError, match="candidates must be"):
+        build_archive_lifecycle_report(
+            repo,
+            {"documents": [_document("docs/unowned.md")]},
+            archive_manifest=manifest_path,
+        )
+
+
+def test_archive_manifest_does_not_bypass_relationship_archive_blocks(tmp_path: Path) -> None:
+    """The transition record cannot override the relationship graph's safeguards."""
 
     repo = _repo(tmp_path)
     source = repo / "docs/unowned.md"
-    sidecar_path = repo / "archive-sidecar.json"
-    sidecar_path.write_text(json.dumps(_immutable_sidecar("docs/unowned.md", source)), encoding="utf-8")
+    manifest_path = repo / "archive-manifest.json"
+    manifest_path.write_text(
+        json.dumps(_archive_manifest("docs/unowned.md", source, repo)),
+        encoding="utf-8",
+    )
 
     candidate = build_archive_lifecycle_report(
         repo,
@@ -283,8 +327,7 @@ def test_immutable_sidecar_does_not_bypass_relationship_archive_blocks(tmp_path:
                 }
             ],
         },
-        candidates=("docs/unowned.md",),
-        immutable_lifecycle_sidecar=sidecar_path,
+        archive_manifest=manifest_path,
     ).candidates[0]
 
     assert candidate.lifecycle == "archive_candidate"
@@ -344,8 +387,8 @@ def test_cli_emits_the_same_report_only_boundary(tmp_path: Path) -> None:
     assert "eligible" not in result.stdout
 
 
-def test_cli_accepts_a_repo_relative_hash_bound_immutable_sidecar(tmp_path: Path) -> None:
-    """The portable entry point preserves the same strict sidecar boundary."""
+def test_cli_accepts_the_repo_relative_archive_manifest(tmp_path: Path) -> None:
+    """The portable entry point consumes the ecosystem transition record."""
 
     repo = _repo(tmp_path)
     _write(
@@ -359,8 +402,8 @@ def test_cli_accepts_a_repo_relative_hash_bound_immutable_sidecar(tmp_path: Path
     lifecycle_source: document_status
 """,
     )
-    sidecar = _immutable_sidecar("docs/unowned.md", repo / "docs/unowned.md")
-    _write(repo / "archive-sidecar.json", json.dumps(sidecar))
+    manifest = _archive_manifest("docs/unowned.md", repo / "docs/unowned.md", repo)
+    _write(repo / "archive-manifest.json", json.dumps(manifest))
     subprocess.run(["git", "-C", str(repo), "add", "-A"], check=True)
     script = Path(__file__).parents[1] / "scripts/archive_lifecycle.py"
 
@@ -370,10 +413,8 @@ def test_cli_accepts_a_repo_relative_hash_bound_immutable_sidecar(tmp_path: Path
             str(script),
             "--repo-root",
             str(repo),
-            "--candidate",
-            "docs/unowned.md",
-            "--immutable-lifecycle-sidecar",
-            "archive-sidecar.json",
+            "--archive-manifest",
+            "archive-manifest.json",
         ],
         check=True,
         capture_output=True,

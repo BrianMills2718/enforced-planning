@@ -74,6 +74,16 @@ an agent:
    costs less than a reversible choice. If fairness requires fully building and
    polishing multiple options, choose behind a replaceable boundary and validate
    the selected implementation against its own requirements.
+17. **Targets extend through the consumer boundary.** For artifact-producing
+    work, acceptance covers source-supported meaning, semantic structure,
+    materialized representation, and consuming person or agent behavior where
+    each applies. A producer's intermediate output is not a sufficient target
+    when downstream usefulness is the outcome.
+18. **Canonical state and candidate evidence are distinct.** One execution
+    lineage owns the current outcome. Unmerged branches and observed runs remain
+    candidate or unaccepted evidence until their target, review, integration,
+    and authority transitions occur. A target change triggers bounded impact
+    reconciliation rather than automatic restart or silent evidence reuse.
 
 ## Execution Profiles
 
@@ -200,6 +210,52 @@ contract on one smallest real input; it does not require a model comparison,
 large benchmark, or generalized infrastructure. A comparative evaluation enters
 the plan only after the first-principles comparison test above is satisfied.
 
+### Target Acceptance And Execution Lineage
+
+For extraction, transformation, analysis, graph, generated UI, migration, or
+other artifact-producing work, the target is reviewable at the boundary where
+value is consumed. Include only applicable layers:
+
+1. exact source or starting-state support, including ambiguity and non-claims;
+2. intended semantic objects, relationships, identity, time, and evidence;
+3. materialized graph, wiki, report, UI, or other projection shape; and
+4. expected consuming person or agent decision and one negative behavior.
+
+Record target state as `draft`, `reviewed`, `accepted`, or `superseded`. When
+the target controls consequential semantic, migration, publication, or bulk
+downstream work, its author cannot be its sole acceptance authority. Retain the
+accepted digest or revision, reviewer or product owner, decision, and any
+allowed variation. Approval of an approach does not imply acceptance of target
+meanings the reviewer did not see.
+
+Maintain one canonical execution lineage for an outcome. Classify other
+implementation evidence as:
+
+- `canonical_merged`: accepted into the declared canonical branch or surface;
+- `candidate_branch`: implemented and inspectable but not canonical;
+- `observed_unaccepted`: executed evidence whose target or review gate remains
+  open; or
+- `superseded_historical`: retained for salvage or provenance, not execution
+  direction.
+
+A pushed branch is durable candidate evidence, not canonical completion. If
+several branches implement the same outcome, select one reconciliation lineage
+and disposition the others as salvageable, superseded, historical, or still
+independently owned before creating further overlapping work.
+
+When an accepted target changes after implementation begins, freeze affected
+downstream work and compare old/new target revisions. Classify every affected
+artifact or evidence record as `reuse_unchanged`, `replay`, `rework`, or
+`invalid`, with the target field or digest difference that justifies the
+disposition. Resume at the first invalidated boundary. Do not discard unchanged
+machinery by default and do not grandfather incompatible semantic evidence.
+
+At target acceptance/supersession and candidate merge/rejection/replacement,
+reconcile only the roadmap, current-state authority, active packet, and
+navigation surfaces that could misdirect the next agent. Current status must
+separate canonical merged state from candidate and observed-unaccepted
+evidence.
+
 ## The Model
 
 This is a **partial-order dependency graph**, not a rigid one-pass waterfall.
@@ -294,6 +350,12 @@ These are hard ordering rules:
 - No non-trivial implementation plan without a plain-language user outcome,
   one canonical behavioral example, and increment classification. During the
   initial rollout this is reported rather than made a legacy-plan hard gate.
+- No consequential artifact-producing downstream work before the controlling
+  target has a recorded acceptance state and reviewer distinct from its sole
+  author. During initial rollout, enforce this on new or materially revised
+  targets rather than retroactively blocking unrelated legacy work.
+- No status or completion claim may represent an unmerged candidate branch or
+  observed-unaccepted run as canonical state.
 - No cross-project plan without capability or boundary clarity.
 - No design, cross-project, or externally-informed plan without a declared
   research basis for the slice or explicit research skip.

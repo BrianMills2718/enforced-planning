@@ -188,6 +188,10 @@ def verify_coupling(
 
     judgment, _llm_result = call_llm_structured(
         model=effective_model,
+        model_justification=(
+            "Gemini 2.5 Flash is the configured low-latency structured judge "
+            "for pre-commit documentation-coupling verification."
+        ),
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": user_content},

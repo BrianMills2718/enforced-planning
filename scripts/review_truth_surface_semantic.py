@@ -191,6 +191,10 @@ def review_truth_surface_semantic(
     review, meta = call_llm_structured(
         model,
         messages,
+        model_justification=(
+            "The configured semantic-review model is required to preserve "
+            "this governed truth-surface review's declared execution route."
+        ),
         response_model=SemanticReviewReport,
         task="enforced_planning.truth_surface.semantic_review",
         trace_id=trace_id,

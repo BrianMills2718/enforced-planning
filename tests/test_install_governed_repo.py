@@ -670,6 +670,8 @@ def test_install_governed_repo_write_bootstraps_minimum_repo_and_passes_audit(
     assert 'SESSION_GOAL is required' in makefile_text
     assert 'SESSION_PHASE is required' in makefile_text
     assert 'SESSION_CLAIM_TYPE ?= program' in makefile_text
+    assert 'ALLOW_UNPLANNED ?=' in makefile_text
+    assert makefile_text.count("$(if $(ALLOW_UNPLANNED),--allow-unplanned,)") == 2
     assert '--claim-type "$(SESSION_CLAIM_TYPE)"' in makefile_text
     assert '--parent-scope' in makefile_text
     assert '--write-path' in makefile_text

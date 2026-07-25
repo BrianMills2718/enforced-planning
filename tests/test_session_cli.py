@@ -627,6 +627,43 @@ def test_close_session_closes_branch_merged_to_default(
     assert claim_payload["disposition"] == "merged"
 
 
+def test_close_session_accepts_branch_merged_to_remote_default_when_local_default_is_behind(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A stale primary checkout must not block proven remote-default integration."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    repo_root, worktree, branch = _real_repo_with_worktree(tmp_path)
+    _start_real_closeout_claim(
+        repo_root=repo_root,
+        worktree=worktree,
+        branch=branch,
+        claims_dir=claims_dir,
+        trackers_dir=trackers_dir,
+    )
+    _git(
+        repo_root,
+        "update-ref",
+        "refs/remotes/origin/main",
+        f"refs/heads/{branch}",
+    )
+
+    payload = session_lifecycle.close_session(
+        agent="codex",
+        project="enforced-planning",
+        scope=branch,
+    )
+
+    assert payload["action"] == "closed"
+    assert payload["merged_to_default"] is True
+    assert payload["default_remote_ref"] == "refs/remotes/origin/main"
+    assert payload["default_branch_pushed"] is True
+    assert not worktree.exists()
+
+
 def test_close_session_deletes_merged_branch_with_stale_feature_upstream(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

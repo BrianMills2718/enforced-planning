@@ -991,6 +991,9 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
     assert result.returncode == 0, result.stdout + result.stderr
     payload = json.loads(result.stdout)
     assert payload["worktree_only_mode"] is True
+    assert not (
+        tmp_path / "enforced_planning" / "__init__.py"
+    ).read_bytes().endswith(b"\n\n")
     assert sorted(payload["actions"]) == sorted(
         [
             "install:enforced_planning/__init__.py",

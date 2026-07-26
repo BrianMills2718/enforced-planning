@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import subprocess
 import sys
 from pathlib import Path
 
@@ -24,6 +25,30 @@ def _load() -> object:
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)  # type: ignore[union-attr]
     return module
+
+
+def _git(repo: Path, *args: str) -> None:
+    subprocess.run(["git", *args], cwd=repo, check=True, capture_output=True, text=True)
+
+
+def _real_repo_with_readonly_worktree(tmp_path: Path) -> tuple[Path, Path]:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-b", "main")
+    _git(repo, "config", "user.email", "test@example.com")
+    _git(repo, "config", "user.name", "Test")
+    (repo / "README.md").write_text("root\n", encoding="utf-8")
+    _git(repo, "add", "README.md")
+    _git(repo, "commit", "-m", "initial")
+    worktree = tmp_path / "target-worktree"
+    _git(repo, "worktree", "add", "-b", "target", str(worktree))
+    readonly = worktree / "readonly"
+    readonly.mkdir()
+    (readonly / "nested.txt").write_text("safe\n", encoding="utf-8")
+    _git(worktree, "add", "readonly/nested.txt")
+    _git(worktree, "commit", "-m", "add readonly directory")
+    readonly.chmod(0o555)
+    return repo, worktree
 
 
 def test_check_worktree_claimed_prefers_claim_v2_records(tmp_path: Path) -> None:
@@ -106,3 +131,49 @@ def test_should_block_removal_uses_claim_v2_active_claims(tmp_path: Path) -> Non
     assert reason == "claim"
     assert info is not None
     assert info["coordination_source"] == "claim_v2"
+
+
+def test_run_cmd_includes_stderr(tmp_path: Path) -> None:
+    """A failed Git command must expose stderr for a recoverable diagnosis."""
+    module = _load()
+    success, output = module.run_cmd(["git", "rev-parse", "--git-dir"], cwd=str(tmp_path))  # type: ignore[attr-defined]
+    assert success is False
+    assert "not a git repository" in output
+
+
+def test_remove_worktree_uses_target_repo_and_handles_readonly_directories(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """Clean cross-repo worktrees should not be partially unregistered by the guard."""
+    module = _load()
+    repo, worktree = _real_repo_with_readonly_worktree(tmp_path)
+    monkeypatch.setattr(module, "should_block_removal", lambda *_args, **_kwargs: (False, "", None))
+
+    assert module.remove_worktree(str(worktree)) is True  # type: ignore[attr-defined]
+    assert not worktree.exists()
+    listed = subprocess.run(
+        ["git", "worktree", "list", "--porcelain"], cwd=repo, check=True, capture_output=True, text=True
+    ).stdout
+    assert str(worktree) not in listed
+
+
+def test_remove_worktree_restores_readonly_modes_after_git_failure(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    """A failed removal restores temporary permission changes and exposes stderr."""
+    module = _load()
+    _repo, worktree = _real_repo_with_readonly_worktree(tmp_path)
+    readonly = worktree / "readonly"
+    original_run = module.run_cmd
+    monkeypatch.setattr(module, "should_block_removal", lambda *_args, **_kwargs: (False, "", None))
+
+    def fail_remove(command, cwd=None):
+        if command[:3] == ["git", "worktree", "remove"]:
+            return False, "permission denied"
+        return original_run(command, cwd=cwd)
+
+    monkeypatch.setattr(module, "run_cmd", fail_remove)
+
+    assert module.remove_worktree(str(worktree)) is False  # type: ignore[attr-defined]
+    assert readonly.stat().st_mode & 0o777 == 0o555
+    assert "permission denied" in capsys.readouterr().out

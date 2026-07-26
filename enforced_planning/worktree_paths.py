@@ -7,7 +7,6 @@ from pathlib import Path
 
 def detect_workspace_root(project_root: Path) -> Path:
     """Resolve the shared workspace root from main or worktree checkouts."""
-
     resolved_project_root = project_root.resolve()
     parent = resolved_project_root.parent
     if parent.name == "worktrees":
@@ -48,7 +47,6 @@ def resolve_canonical_target_path(*, target_path: Path, repo_root: Path) -> Path
     repo root. Paths outside the repo root are left alone because they may be
     genuine workspace-relative or sibling-repo targets.
     """
-
     resolved_repo_root = repo_root.resolve()
     canonical_repo_root = resolve_canonical_repo_root(resolved_repo_root)
     if canonical_repo_root == resolved_repo_root:

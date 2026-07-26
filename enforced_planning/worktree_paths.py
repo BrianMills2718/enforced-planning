@@ -20,22 +20,21 @@ def detect_workspace_root(project_root: Path) -> Path:
 def resolve_canonical_repo_root(repo_root: Path) -> Path:
     """Return the canonical repo root for a main checkout or worktree clone."""
     resolved_repo_root = repo_root.resolve()
-    parent = resolved_repo_root.parent
-
-    if parent.name == "worktrees":
-        canonical_repo_root = parent.parent.resolve()
-        if (canonical_repo_root / ".git").exists():
-            return canonical_repo_root
-        return resolved_repo_root
-
-    if not parent.name.endswith("_worktrees"):
-        return resolved_repo_root
-
-    workspace_root = parent.parent
-    canonical_name = parent.name.removesuffix("_worktrees")
-    canonical_repo_root = (workspace_root / canonical_name).resolve()
-    if (canonical_repo_root / ".git").exists():
-        return canonical_repo_root
+    # Branches containing "/" create nested paths such as
+    # <repo>/worktrees/feat/name. The target may already be absent during an
+    # idempotent closeout, so resolve lexically through every ancestor rather
+    # than relying on the immediate parent or an existing .git file.
+    for ancestor in (resolved_repo_root, *resolved_repo_root.parents):
+        if ancestor.name == "worktrees":
+            canonical_repo_root = ancestor.parent.resolve()
+            if (canonical_repo_root / ".git").exists():
+                return canonical_repo_root
+        if ancestor.name.endswith("_worktrees"):
+            workspace_root = ancestor.parent
+            canonical_name = ancestor.name.removesuffix("_worktrees")
+            canonical_repo_root = (workspace_root / canonical_name).resolve()
+            if (canonical_repo_root / ".git").exists():
+                return canonical_repo_root
     return resolved_repo_root
 
 

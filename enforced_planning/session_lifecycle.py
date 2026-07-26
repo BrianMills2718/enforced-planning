@@ -488,8 +488,17 @@ def _validate_closeout_preflight(
 
     branch_ref = f"refs/heads/{branch}"
     default_ref = f"refs/heads/{default_branch}"
-    merged_to_default = _is_ancestor(repo_root, branch_ref, default_ref)
     default_remote_ref = f"refs/remotes/origin/{default_branch}"
+    merged_to_local_default = _is_ancestor(repo_root, branch_ref, default_ref)
+    merged_to_remote_default = (
+        _is_ancestor(repo_root, branch_ref, default_remote_ref)
+        if _ref_exists(repo_root, default_remote_ref)
+        else False
+    )
+    # A dirty canonical checkout can retain a stale local default ref.  A task
+    # branch already contained by the verified pushed remote default is merged
+    # even when updating that local checkout would risk unrelated dirt.
+    merged_to_default = merged_to_local_default or merged_to_remote_default
     default_branch_pushed = (
         _is_ancestor(repo_root, default_ref, default_remote_ref)
         if _ref_exists(repo_root, default_remote_ref)

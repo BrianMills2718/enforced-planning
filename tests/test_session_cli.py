@@ -719,6 +719,27 @@ def test_close_session_rejects_unpushed_default_branch_before_mutation(
     assert payload["default_branch_pushed"] is True
 
 
+def test_close_session_accepts_branch_merged_to_pushed_remote_default_when_local_is_stale(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A stale local main must not prevent safe closeout of a remotely merged lane."""
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    repo_root, worktree, branch = _real_repo_with_worktree(tmp_path)
+    _start_real_closeout_claim(repo_root=repo_root, worktree=worktree, branch=branch, claims_dir=claims_dir, trackers_dir=trackers_dir)
+    stale_main = _git(repo_root, "rev-parse", "refs/heads/main").strip()
+    _git(repo_root, "merge", "--no-ff", branch, "-m", "merge feature")
+    _git(repo_root, "update-ref", "refs/remotes/origin/main", "refs/heads/main")
+    _git(repo_root, "reset", "--hard", stale_main)
+
+    payload = session_lifecycle.close_session(agent="codex", project="enforced-planning", scope=branch)
+
+    assert payload["merged_to_default"] is True
+    assert payload["default_branch_pushed"] is True
+    assert not worktree.exists()
+
+
 def test_close_session_keeps_canonical_root_after_worktree_removal(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

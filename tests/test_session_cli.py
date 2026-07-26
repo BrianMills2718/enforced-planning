@@ -784,6 +784,27 @@ def test_close_session_accepts_branch_merged_to_pushed_remote_default_when_local
     assert not worktree.exists()
 
 
+def test_close_session_accepts_remote_merged_branch_when_local_default_diverges(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A divergent local default ref must not block remote-proven lane closure."""
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    repo_root, worktree, branch = _real_repo_with_worktree(tmp_path)
+    _start_real_closeout_claim(repo_root=repo_root, worktree=worktree, branch=branch, claims_dir=claims_dir, trackers_dir=trackers_dir)
+    local_main = _git(repo_root, "rev-parse", "refs/heads/main").strip()
+    divergent_main = _git(repo_root, "commit-tree", f"{local_main}^{{tree}}", "-p", local_main, "-m", "preserved local divergence").strip()
+    _git(repo_root, "update-ref", "refs/remotes/origin/main", f"refs/heads/{branch}")
+    _git(repo_root, "update-ref", "refs/heads/main", divergent_main)
+
+    payload = session_lifecycle.close_session(agent="codex", project="enforced-planning", scope=branch)
+
+    assert payload["merged_to_default"] is True
+    assert payload["default_branch_pushed"] is False
+    assert not worktree.exists()
+
+
 def test_close_session_keeps_canonical_root_after_worktree_removal(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

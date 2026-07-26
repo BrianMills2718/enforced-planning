@@ -518,7 +518,7 @@ def _validate_closeout_preflight(
                 f"branch '{default_branch}'. Merge it first or supply an explicit "
                 "non-merge disposition with required evidence."
             )
-        if default_branch_pushed is False:
+        if default_branch_pushed is False and merged_to_remote_default is not True:
             raise ValueError(
                 f"Canonical default branch '{default_branch}' has commits not present in "
                 f"'{default_remote_ref}'. Push the default branch before closeout."

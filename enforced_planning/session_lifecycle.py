@@ -489,23 +489,30 @@ def _validate_closeout_preflight(
     branch_ref = f"refs/heads/{branch}"
     default_ref = f"refs/heads/{default_branch}"
     default_remote_ref = f"refs/remotes/origin/{default_branch}"
+    remote_default_exists = _ref_exists(repo_root, default_remote_ref)
     merged_to_local_default = _is_ancestor(repo_root, branch_ref, default_ref)
     merged_to_remote_default = (
         _is_ancestor(repo_root, branch_ref, default_remote_ref)
-        if _ref_exists(repo_root, default_remote_ref)
-        else False
+        if remote_default_exists
+        else None
     )
-    # A dirty canonical checkout can retain a stale local default ref.  A task
-    # branch already contained by the verified pushed remote default is merged
-    # even when updating that local checkout would risk unrelated dirt.
-    merged_to_default = merged_to_local_default or merged_to_remote_default
+    merged_to_default = (
+        merged_to_remote_default
+        if merged_to_remote_default is not None
+        else merged_to_local_default
+    )
     default_branch_pushed = (
         _is_ancestor(repo_root, default_ref, default_remote_ref)
-        if _ref_exists(repo_root, default_remote_ref)
+        if remote_default_exists
         else None
     )
     if normalized_disposition == MERGED_DISPOSITION:
         if not merged_to_default:
+            if merged_to_local_default and default_branch_pushed is False:
+                raise ValueError(
+                    f"Canonical default branch '{default_branch}' has commits not present in "
+                    f"'{default_remote_ref}'. Push the default branch before closeout."
+                )
             raise ValueError(
                 f"Branch '{branch}' is clean but not integrated into canonical default "
                 f"branch '{default_branch}'. Merge it first or supply an explicit "

@@ -873,6 +873,38 @@ def test_prune_completed_removes_only_completed_claims(
     assert (claims_dir / "expired-active.yaml").exists()
 
 
+def test_listing_expired_claim_is_read_only(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Listing filters expired claims without deleting their source records."""
+    module = _load_module()
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
+    _write_claim(
+        claims_dir,
+        "expired-active.yaml",
+        {
+            "agent": "codex",
+            "claimed_at": "2026-04-05T12:00:00+00:00",
+            "expires_at": "2026-04-05T13:00:00+00:00",
+            "projects": ["demo"],
+            "scope": "expired-active-scope",
+            "intent": "Historical expired claim",
+            "claim_type": "program",
+            "status": "active",
+        },
+    )
+
+    exit_code = module.main(["--list", "--json"])
+
+    payload = json.loads(capsys.readouterr().out)
+    assert exit_code == 0
+    assert payload["claims"] == []
+    assert (claims_dir / "expired-active.yaml").exists()
+
+
 def test_check_json_outputs_claims_and_candidate_conflict_classification(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

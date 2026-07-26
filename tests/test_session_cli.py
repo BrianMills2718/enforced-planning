@@ -27,12 +27,15 @@ def _git(cwd: Path, *args: str) -> str:
     return result.stdout.strip()
 
 
-def _real_repo_with_worktree(tmp_path: Path) -> tuple[Path, Path, str]:
+def _real_repo_with_worktree(
+    tmp_path: Path,
+    *,
+    branch: str = "plan-59-safe-closeout",
+) -> tuple[Path, Path, str]:
     """Create a real canonical repo plus an in-repo linked task worktree."""
 
     repo_root = tmp_path / "repo"
     repo_root.mkdir()
-    branch = "plan-59-safe-closeout"
     _git(repo_root, "init", "-b", "main")
     _git(repo_root, "config", "user.email", "tests@example.com")
     _git(repo_root, "config", "user.name", "Test User")
@@ -73,7 +76,11 @@ def _start_real_closeout_claim(
         session_id="codex:test-session",
         tracker_dir=trackers_dir,
     )
-    return claims_dir / f"codex_enforced-planning_{branch}.yaml"
+    return claims_dir / coordination_claims._claim_filename(
+        "codex",
+        "enforced-planning",
+        branch,
+    )
 
 
 def test_worktree_lifecycle_policy_rejects_overlapping_dispositions(tmp_path: Path) -> None:
@@ -627,6 +634,43 @@ def test_close_session_closes_branch_merged_to_default(
     assert claim_payload["disposition"] == "merged"
 
 
+def test_close_session_accepts_branch_merged_to_remote_default_when_local_default_is_behind(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A stale primary checkout must not block proven remote-default integration."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    repo_root, worktree, branch = _real_repo_with_worktree(tmp_path)
+    _start_real_closeout_claim(
+        repo_root=repo_root,
+        worktree=worktree,
+        branch=branch,
+        claims_dir=claims_dir,
+        trackers_dir=trackers_dir,
+    )
+    _git(
+        repo_root,
+        "update-ref",
+        "refs/remotes/origin/main",
+        f"refs/heads/{branch}",
+    )
+
+    payload = session_lifecycle.close_session(
+        agent="codex",
+        project="enforced-planning",
+        scope=branch,
+    )
+
+    assert payload["action"] == "closed"
+    assert payload["merged_to_default"] is True
+    assert payload["default_remote_ref"] == "refs/remotes/origin/main"
+    assert payload["default_branch_pushed"] is True
+    assert not worktree.exists()
+
+
 def test_close_session_deletes_merged_branch_with_stale_feature_upstream(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -771,6 +815,44 @@ def test_close_session_keeps_canonical_root_after_worktree_removal(
     assert payload["worktree_action"] == "removed"
     assert payload["branch_action"] == "deleted"
     assert repo_root.exists()
+
+
+def test_close_session_resolves_missing_nested_worktree_repo_root(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A removed slash-nested worktree must still resolve its canonical repo."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    repo_root, worktree, branch = _real_repo_with_worktree(
+        tmp_path,
+        branch="feat/nested-closeout",
+    )
+    claim_file = _start_real_closeout_claim(
+        repo_root=worktree,
+        worktree=worktree,
+        branch=branch,
+        claims_dir=claims_dir,
+        trackers_dir=trackers_dir,
+    )
+    _git(repo_root, "merge", "--no-ff", branch, "-m", "merge nested feature")
+    _git(repo_root, "worktree", "remove", str(worktree))
+
+    payload = session_lifecycle.close_session(
+        agent="codex",
+        project="enforced-planning",
+        scope=branch,
+    )
+
+    assert payload["action"] == "closed"
+    assert payload["disposition"] == "merged"
+    assert payload["worktree_action"] == "already_missing"
+    assert payload["branch_action"] == "deleted"
+    claim_payload = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
+    assert claim_payload["status"] == "completed"
+    assert claim_payload["disposition"] == "merged"
 
 
 def test_close_session_rejects_unknown_disposition(

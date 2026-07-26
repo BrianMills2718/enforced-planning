@@ -670,6 +670,8 @@ def test_install_governed_repo_write_bootstraps_minimum_repo_and_passes_audit(
     assert 'SESSION_GOAL is required' in makefile_text
     assert 'SESSION_PHASE is required' in makefile_text
     assert 'SESSION_CLAIM_TYPE ?= program' in makefile_text
+    assert 'ALLOW_UNPLANNED ?=' in makefile_text
+    assert makefile_text.count("$(if $(ALLOW_UNPLANNED),--allow-unplanned,)") == 2
     assert '--claim-type "$(SESSION_CLAIM_TYPE)"' in makefile_text
     assert '--parent-scope' in makefile_text
     assert '--write-path' in makefile_text
@@ -989,6 +991,9 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
     assert result.returncode == 0, result.stdout + result.stderr
     payload = json.loads(result.stdout)
     assert payload["worktree_only_mode"] is True
+    assert not (
+        tmp_path / "enforced_planning" / "__init__.py"
+    ).read_bytes().endswith(b"\n\n")
     assert sorted(payload["actions"]) == sorted(
         [
             "install:enforced_planning/__init__.py",

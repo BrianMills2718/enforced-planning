@@ -697,7 +697,9 @@ def _load_claims(claims_dir: Path | None = None) -> list[ClaimRecord]:
             continue
         expires_at = _parse_iso_datetime(data.get("expires_at"))
         if expires_at is not None and expires_at < now:
-            claim_file.unlink()
+            # Loading and listing are read-only. Expired source records remain
+            # auditable until the explicit --prune lifecycle action removes
+            # them.
             continue
         claim = normalize_claim(data, source_file=str(claim_file))
         if claim is not None:

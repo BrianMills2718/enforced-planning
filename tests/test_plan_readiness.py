@@ -156,6 +156,19 @@ def test_explicit_resume_allows_no_matching_live_claim(monkeypatch: pytest.Monke
     assert "provisionally allowed" in result.reason
 
 
+def test_explicit_resume_accepts_documented_nonzero_already_active_response(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _patch_graph(monkeypatch, decision="already_active", returncode=2)
+    monkeypatch.setattr(plan_readiness.coordination_claims, "check_claims", lambda _project: [])
+
+    result = _gate(resume_requested=True)
+
+    assert result.allowed is True
+    assert result.readiness is not None
+    assert result.readiness.decision == "already_active"
+
+
 @pytest.mark.parametrize("status", ["active", "blocked", "handoff"])
 def test_explicit_resume_rejects_each_live_matching_claim(
     monkeypatch: pytest.MonkeyPatch,

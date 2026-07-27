@@ -139,7 +139,12 @@ def check_plan_start_readiness(
             "readiness payload identity mismatch: "
             f"requested {qualified_plan_id}, received {readiness.qualified_plan_id}"
         )
-    if completed.returncode != 0:
+    # ``check-ready`` deliberately uses a nonzero exit for every decision that
+    # does not open a *new* lane.  An explicit resume is the one controlled
+    # exception: a structurally valid ``already_active`` decision is evidence
+    # to inspect claim ownership, not a transport or producer failure.
+    resumable_already_active = readiness.decision == "already_active" and resume_requested
+    if completed.returncode != 0 and not resumable_already_active:
         raise ValueError(
             f"plan readiness rejected {qualified_plan_id}: "
             f"{readiness.decision} ({readiness.error_code or readiness.reason})"

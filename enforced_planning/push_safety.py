@@ -110,7 +110,10 @@ def ahead_behind(repo_root: Path, upstream_ref: str) -> tuple[int, int]:
 def changed_paths_since_default(repo_root: Path, default_branch: str) -> list[str]:
     """Return repo-relative paths changed on this branch against default."""
 
-    base = _git_stdout(repo_root, ["merge-base", "HEAD", f"refs/heads/{default_branch}"])
+    remote_default = f"refs/remotes/origin/{default_branch}"
+    remote_exists = _run_git(repo_root, ["show-ref", "--verify", remote_default])
+    default_ref = remote_default if remote_exists.returncode == 0 else f"refs/heads/{default_branch}"
+    base = _git_stdout(repo_root, ["merge-base", "HEAD", default_ref])
     diff = _git_stdout(repo_root, ["diff", "--name-only", f"{base}..HEAD"])
     if not diff:
         return []

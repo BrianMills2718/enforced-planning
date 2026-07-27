@@ -247,6 +247,28 @@ def test_push_check_resolves_canonical_project_from_linked_worktree(
     assert payload["branch_claim_count"] == 1
 
 
+def test_changed_paths_prefers_remote_default_over_stale_local_main(tmp_path: Path) -> None:
+    """Already-merged remote files must not reappear because local main is stale."""
+
+    repo_root = tmp_path / "demo"
+    _init_git_repo(repo_root)
+    subprocess.run(["git", "-C", str(repo_root), "checkout", "-b", "feature"], check=True, capture_output=True, text=True)
+    (repo_root / "merged.py").write_text("merged\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(repo_root), "add", "merged.py"], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(repo_root), "commit", "-m", "remote merged state"], check=True, capture_output=True, text=True)
+    subprocess.run(
+        ["git", "-C", str(repo_root), "update-ref", "refs/remotes/origin/main", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    (repo_root / "feature.py").write_text("feature\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(repo_root), "add", "feature.py"], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(repo_root), "commit", "-m", "feature delta"], check=True, capture_output=True, text=True)
+
+    assert push_safety.changed_paths_since_default(repo_root, "main") == ["feature.py"]
+
+
 def test_create_review_claim_uses_target_branch_as_parent_scope(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

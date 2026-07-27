@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import subprocess
 import sys
@@ -50,18 +51,21 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--claims-dir", type=Path)
     parser.add_argument("--root", type=Path)
+    parser.add_argument("--agent", choices=("codex", "claude-code"), default="codex")
+    parser.add_argument("--project", help="Canonical project override supplied by a repository compatibility hook.")
     return parser.parse_args(argv)
 
 
-def _read_hook_input() -> dict[str, Any]:
-    """Read and validate the common native Codex hook fields from stdin."""
+def _read_hook_input(*, project_supplied: bool) -> dict[str, Any]:
+    """Read and validate the common native lifecycle-hook fields from stdin."""
 
     payload = json.loads(sys.stdin.read())
     if not isinstance(payload, dict):
-        raise ValueError("Codex hook input must be a JSON object")
-    for field in ("session_id", "cwd", "hook_event_name"):
+        raise ValueError("Lifecycle hook input must be a JSON object")
+    required_fields = ("session_id", "hook_event_name") if project_supplied else ("session_id", "cwd", "hook_event_name")
+    for field in required_fields:
         if not isinstance(payload.get(field), str) or not payload[field].strip():
-            raise ValueError(f"Codex hook input requires non-empty {field!r}")
+            raise ValueError(f"Lifecycle hook input requires non-empty {field!r}")
     if payload["hook_event_name"] not in SUPPORTED_EVENTS:
         raise ValueError(f"Unsupported Codex hook event: {payload['hook_event_name']}")
     return payload
@@ -89,13 +93,32 @@ def _canonical_project(cwd: str) -> str:
     return Path(canonical_root).name
 
 
-def _session_id(raw_session_id: str) -> str:
-    """Normalize the native Codex UUID into the canonical claim identity."""
+def _session_id(agent: str, raw_session_id: str) -> str:
+    """Normalize one native client session UUID into canonical claim identity."""
 
-    return raw_session_id if raw_session_id.startswith("codex:") else f"codex:{raw_session_id}"
+    return raw_session_id if raw_session_id.startswith(f"{agent}:") else f"{agent}:{raw_session_id}"
 
 
-def _render_result(event_name: str, summary: str) -> dict[str, Any]:
+def _delivery_event_id(payload: dict[str, Any], *, agent: str, session_id: str) -> str:
+    """Derive one client-neutral identity for a native lifecycle callback.
+
+    Native turn/event IDs are preferred. A timestamp is only a compatibility
+    fallback because it is weaker: adapters that receive neither must fail
+    before they can create observation evidence.
+    """
+
+    for field in ("event_id", "turn_id", "tool_use_id", "tool_call_id", "timestamp"):
+        value = payload.get(field)
+        if isinstance(value, str) and value.strip():
+            token = f"{field}:{value.strip()}"
+            break
+    else:
+        raise ValueError("Lifecycle hook requires a native event ID or timestamp for duplicate-safe delivery")
+    material = "\0".join((agent, session_id, payload["hook_event_name"], token))
+    return f"event_{hashlib.sha256(material.encode('utf-8')).hexdigest()[:32]}"
+
+
+def _render_codex_result(event_name: str, summary: str) -> dict[str, Any]:
     """Render the event-specific output accepted by the native Codex client."""
 
     if event_name == "SessionStart":
@@ -113,12 +136,13 @@ def main(argv: list[str] | None = None) -> int:
 
     args = parse_args(argv)
     try:
-        payload = _read_hook_input()
-        project = _canonical_project(payload["cwd"])
-        session_id = _session_id(payload["session_id"])
+        payload = _read_hook_input(project_supplied=args.project is not None)
+        project = args.project or _canonical_project(payload["cwd"])
+        session_id = _session_id(args.agent, payload["session_id"])
+        delivery_event_id = _delivery_event_id(payload, agent=args.agent, session_id=session_id)
         _updated_count, _updated_scopes, _resolved_session_id, _heartbeat_at = (
             coordination_claims.heartbeat_claims(
-                agent="codex",
+                agent=args.agent,
                 project=project,
                 session_id=session_id,
                 claims_dir=args.claims_dir,
@@ -126,16 +150,20 @@ def main(argv: list[str] | None = None) -> int:
             )
         )
         notice = coordination_messages.poll_session_inbox(
-            agent="codex",
+            agent=args.agent,
             project=project,
             session_id=session_id,
             observe=True,
             claims_dir=args.claims_dir,
             root=args.root,
+            delivery_event_id=delivery_event_id,
             require_live_claim=False,
         )
         if notice.active_count:
-            print(json.dumps(_render_result(payload["hook_event_name"], notice.summary)))
+            if args.agent == "codex":
+                print(json.dumps(_render_codex_result(payload["hook_event_name"], notice.summary)))
+            else:
+                print(notice.summary)
     except (
         coordination_messages.CoordinationMessageError,
         json.JSONDecodeError,

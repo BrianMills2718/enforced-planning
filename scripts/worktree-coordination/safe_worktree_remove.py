@@ -146,8 +146,11 @@ def restore_tree_modes(changed: list[tuple[Path, int]]) -> None:
         if directory.exists():
             try:
                 directory.chmod(mode)
-            except OSError:
-                pass
+            except OSError as exc:
+                print(
+                    f"WARNING: could not restore permissions for {directory}: {exc}",
+                    file=sys.stderr,
+                )
 
 
 def get_current_cc_identity() -> dict[str, Any]:

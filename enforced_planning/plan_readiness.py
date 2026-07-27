@@ -1,13 +1,16 @@
-"""Portable adapter for canonical, revision-bound plan readiness decisions."""
+"""Portable, revision-bound plan start and explicit-resume decisions."""
 
 from __future__ import annotations
 
 import json
+import re
 import shlex
 import subprocess
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
+
+from enforced_planning import coordination_claims
 
 ExecutionProfile = Literal["light", "coordinated", "release"]
 ReadinessErrorCode = Literal[
@@ -27,7 +30,7 @@ class StrictContract(BaseModel):
 
 
 class PlanReadinessDecisionV1(StrictContract):
-    """Canonical decision returned by the ecosystem plan graph."""
+    """Canonical static decision returned by the ecosystem plan graph."""
 
     schema_version: Literal["1.0.0"]
     qualified_plan_id: str
@@ -65,6 +68,30 @@ class PlanStartGateResultV1(StrictContract):
     reason: str
 
 
+def _plan_number(value: str | None) -> int | None:
+    """Extract the numbered-plan identity from canonical and legacy spellings."""
+
+    if not isinstance(value, str):
+        return None
+    match = re.search(r"(?:\bPlan\s*#?|#)\s*0*(\d+)\b", value, flags=re.IGNORECASE)
+    return int(match.group(1)) if match else None
+
+
+def _live_matching_claim_scopes(*, repository: str, qualified_plan_id: str) -> list[str]:
+    """Return live canonical claim scopes for one repository/numbered plan."""
+
+    plan_number = _plan_number(qualified_plan_id)
+    if plan_number is None:
+        raise ValueError(f"invalid qualified plan identity for resume: {qualified_plan_id}")
+    scopes = []
+    for claim in coordination_claims.check_claims(repository):
+        if not claim.is_live() or claim.primary_project() != repository:
+            continue
+        if _plan_number(claim.plan_ref) == plan_number:
+            scopes.append(claim.scope)
+    return sorted(set(scopes))
+
+
 def check_plan_start_readiness(
     *,
     qualified_plan_id: str | None,
@@ -78,8 +105,15 @@ def check_plan_start_readiness(
     session_identity: str,
     parent_lane_id: str | None = None,
     allow_unplanned: bool = False,
+    resume_requested: bool = False,
 ) -> PlanStartGateResultV1:
-    """Validate canonical readiness before any lifecycle state is created."""
+    """Validate static readiness and the non-owning precondition for a resume.
+
+    A successful resume remains provisional: the canonical claim registry's
+    lock and hierarchy checks are the final ownership guard before a worktree
+    can be created.
+    """
+
     if execution_profile == "light" and qualified_plan_id is None and allow_unplanned:
         return PlanStartGateResultV1(
             allowed=True,
@@ -94,12 +128,7 @@ def check_plan_start_readiness(
             f"{execution_profile} work requires a configured plan-readiness query command"
         )
 
-    command = [
-        *shlex.split(query_command),
-        "check-ready",
-        qualified_plan_id,
-        "--json",
-    ]
+    command = [*shlex.split(query_command), "check-ready", qualified_plan_id, "--json"]
     completed = subprocess.run(command, capture_output=True, text=True, check=False)
     try:
         readiness = PlanReadinessDecisionV1.model_validate_json(completed.stdout)
@@ -113,7 +142,28 @@ def check_plan_start_readiness(
             "readiness payload identity mismatch: "
             f"requested {qualified_plan_id}, received {readiness.qualified_plan_id}"
         )
-    if readiness.decision != "ready" or completed.returncode != 0:
+    if completed.returncode != 0:
+        raise ValueError(
+            f"plan readiness rejected {qualified_plan_id}: "
+            f"{readiness.decision} ({readiness.error_code or readiness.reason})"
+        )
+
+    if readiness.decision == "already_active":
+        if not resume_requested:
+            raise ValueError(
+                f"plan readiness rejected {qualified_plan_id}: already_active "
+                "requires an explicit resume request"
+            )
+        live_scopes = _live_matching_claim_scopes(
+            repository=repository,
+            qualified_plan_id=qualified_plan_id,
+        )
+        if live_scopes:
+            raise ValueError(
+                f"plan resume rejected {qualified_plan_id}: live claim(s) already own it: "
+                + ", ".join(live_scopes)
+            )
+    elif readiness.decision != "ready":
         raise ValueError(
             f"plan readiness rejected {qualified_plan_id}: "
             f"{readiness.decision} ({readiness.error_code or readiness.reason})"
@@ -132,9 +182,12 @@ def check_plan_start_readiness(
         creation_revision=readiness.graph_revision,
         execution_profile=execution_profile,
     )
+    reason = readiness.reason
+    if readiness.decision == "already_active":
+        reason = f"{reason} Explicit resume is provisionally allowed; claim acquisition remains atomic."
     return PlanStartGateResultV1(
         allowed=True,
         readiness=readiness,
         lane=lane,
-        reason=readiness.reason,
+        reason=reason,
     )

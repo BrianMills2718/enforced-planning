@@ -972,7 +972,9 @@ def test_install_governed_repo_syncs_worktree_block_into_existing_meta_makefile(
         "scripts/meta/worktree-coordination/../check_plan_readiness.py"
     ) in makefile_text
     assert "PLAN_READINESS_COMMAND ?=" in makefile_text
+    assert "PLAN_RESUME ?=" in makefile_text
     assert '--qualified-plan-id "$(PLAN_PROJECT)#$(PLAN)"' in makefile_text
+    assert "$(if $(PLAN_RESUME),--resume,)" in makefile_text
     assert makefile_text.index('"$(WORKTREE_PLAN_READINESS_SCRIPT)"') < makefile_text.index(
         '"$(WORKTREE_CLAIMS_SCRIPT)" --claim'
     )
@@ -1053,6 +1055,15 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
     assert not (tmp_path / "AGENTS.md").exists()
     assert not (tmp_path / ".claude" / "hooks" / "gate-edit.sh").exists()
     assert (tmp_path / "scripts" / "meta" / "check_coordination_claims.py").exists()
+    installed_readiness = tmp_path / "enforced_planning" / "plan_readiness.py"
+    assert installed_readiness.read_text(encoding="utf-8") == (
+        PROJECT_META_ROOT / "enforced_planning" / "plan_readiness.py"
+    ).read_text(encoding="utf-8")
+    installed_readiness_cli = tmp_path / "scripts" / "meta" / "check_plan_readiness.py"
+    assert installed_readiness_cli.read_text(encoding="utf-8") == (
+        PROJECT_META_ROOT / "scripts" / "check_plan_readiness.py"
+    ).read_text(encoding="utf-8")
+    assert "PLAN_RESUME ?=" in (tmp_path / "Makefile").read_text(encoding="utf-8")
     assert (tmp_path / "hooks" / "pre-push").exists()
     assert os.access(tmp_path / "hooks" / "pre-push", os.X_OK)
     assert (tmp_path / "scripts" / "meta" / "session_start.py").exists()

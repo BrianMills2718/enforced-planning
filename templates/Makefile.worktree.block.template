@@ -21,6 +21,7 @@ SESSION_DEPENDS ?=
 SESSION_STOP_CONDITIONS ?=
 SESSION_NOTE ?=
 ALLOW_UNPLANNED ?=
+PLAN_RESUME ?=
 WORKTREE_EXECUTION_PROFILE ?= coordinated
 PLAN_PROJECT ?= $(WORKTREE_PROJECT)
 PLAN_READINESS_COMMAND ?=
@@ -92,7 +93,8 @@ endif
 		--worktree-path "$(WORKTREE_DIR)/$(BRANCH)" \
 		--agent "$(WORKTREE_AGENT)" \
 		--scope "$(BRANCH)" \
-		$(if $(ALLOW_UNPLANNED),--allow-unplanned,)
+		$(if $(ALLOW_UNPLANNED),--allow-unplanned,) \
+		$(if $(PLAN_RESUME),--resume,)
 	@python "$(WORKTREE_CLAIMS_SCRIPT)" --claim \
 		--agent "$(WORKTREE_AGENT)" \
 		--project "$(WORKTREE_PROJECT)" \

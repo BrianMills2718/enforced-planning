@@ -45,7 +45,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-from enforced_planning import active_work_registry, coordination_claims
+from enforced_planning import active_work_registry, coordination_claims, plan_close
 from enforced_planning.worktree_paths import resolve_canonical_repo_root
 
 # Plan #136: Timeout for test subprocess calls to prevent hanging forever
@@ -802,6 +802,20 @@ def complete_plan(
 
     # All passed - synchronize coordination state before marking the plan complete.
     commit, branch = get_git_info(project_root)
+
+    qualified_plan_id = (
+        f"{resolve_canonical_repo_root(project_root).name.lower().replace('_', '-')}#{plan_number}"
+    )
+    close_result = plan_close.close_plan_lanes(
+        qualified_plan_id=qualified_plan_id,
+        submitted_revision=commit,
+        dry_run=dry_run,
+    )
+    if not close_result.success:
+        print(f"\nFAILED: Plan #{plan_number} has unresolved owned lanes.")
+        for failure in close_result.failures:
+            print(f"  - {failure}")
+        return False
 
     closed_count, closed_scopes, payload = sync_coordination_closeout(
         plan_number=plan_number,

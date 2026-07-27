@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import yaml  # type: ignore[import-untyped]
 
+import scripts.complete_plan as complete_plan_module
 from enforced_planning import coordination_claims
 from scripts.complete_plan import (
     _verification_status,
@@ -561,3 +562,57 @@ def test_sync_coordination_closeout_dry_run_reports_without_mutating_claims(
     assert scopes == ["lifecycle-automation"]
     assert payload is None
     assert yaml.safe_load(claim_path.read_text(encoding="utf-8")) == original
+
+
+def test_complete_plan_does_not_transition_status_when_owned_lane_is_unresolved(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    """A failed atomic plan close must stop before plan or index mutation."""
+    plans_dir = tmp_path / "docs" / "plans"
+    plans_dir.mkdir(parents=True)
+    plan_file = plans_dir / "12_example.md"
+    original = "# Plan #12\n\n**Status:** In Progress\n\n## Plan\n\n1. Finish.\n"
+    plan_file.write_text(original, encoding="utf-8")
+    (plans_dir / "CLAUDE.md").write_text(
+        "| # | Gap | Priority | Status | Blocks |\n"
+        "|---|---|---|---|---|\n"
+        "| 12 | Example | High | 🚧 In Progress | — |\n",
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(
+        complete_plan_module,
+        "check_doc_coupling",
+        lambda project_root, verbose: (True, "passed"),
+    )
+    monkeypatch.setattr(
+        complete_plan_module,
+        "_check_trace_evaluable_advisory",
+        lambda plan_file, verbose: None,
+    )
+    monkeypatch.setattr(
+        complete_plan_module,
+        "get_git_info",
+        lambda project_root: ("abc123", "main"),
+    )
+    monkeypatch.setattr(
+        complete_plan_module.plan_close,
+        "close_plan_lanes",
+        lambda **kwargs: type(
+            "CloseResult",
+            (),
+            {"success": False, "failures": ["dirty-lane: Worktree is dirty"]},
+        )(),
+    )
+
+    result = complete_plan_module.complete_plan(
+        12,
+        tmp_path,
+        verification_profile="docs",
+        verbose=False,
+    )
+
+    assert result is False
+    assert plan_file.read_text(encoding="utf-8") == original
+    assert "In Progress" in (plans_dir / "CLAUDE.md").read_text(encoding="utf-8")

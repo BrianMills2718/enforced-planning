@@ -1014,6 +1014,7 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
             "install:enforced_planning/coordination_claims.py",
             "install:enforced_planning/coordination_messages.py",
             "install:enforced_planning/plan_readiness.py",
+            "install:enforced_planning/plan_close.py",
             "install:enforced_planning/doc_authority.py",
             "install:enforced_planning/push_safety.py",
             "install:enforced_planning/repository_status.py",
@@ -1026,6 +1027,7 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
             "install:scripts/meta/check_coordination_claims.py",
             "install:scripts/meta/check_push_safety.py",
             "install:scripts/meta/check_plan_readiness.py",
+            "install:scripts/meta/plan_close.py",
             "install:scripts/meta/session_close.py",
             "install:scripts/meta/session_finish.py",
             "install:scripts/meta/session_heartbeat.py",
@@ -1063,7 +1065,9 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
     assert (tmp_path / "scripts" / "meta" / "coordination_messages.py").exists()
     assert (tmp_path / "enforced_planning" / "coordination_messages.py").exists()
     assert (tmp_path / "enforced_planning" / "plan_readiness.py").exists()
+    assert (tmp_path / "enforced_planning" / "plan_close.py").exists()
     assert (tmp_path / "scripts" / "meta" / "check_plan_readiness.py").exists()
+    assert (tmp_path / "scripts" / "meta" / "plan_close.py").exists()
     assert (tmp_path / "scripts" / "meta" / "session_finish.py").exists()
     assert (tmp_path / "scripts" / "meta" / "session_close.py").exists()
     assert (tmp_path / "enforced_planning" / "session_contracts.py").exists()

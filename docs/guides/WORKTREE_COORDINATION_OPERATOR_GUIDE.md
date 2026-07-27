@@ -267,6 +267,30 @@ runtime can continue; only the client's true `SessionEnd` event may retire
 ownership. Session end is deliberately non-destructive and cannot substitute
 for `session-close`.
 
+### Resume an in-progress plan with no live lane
+
+Resume is explicit and still consults both authorities: Ecosystem Ops supplies
+the revision-bound static plan decision, then the canonical claim registry
+performs the final atomic ownership check. For the standard workspace layout:
+
+```bash
+make worktree \
+  BRANCH=plan-234-next-lane \
+  TASK="Resume Plan 234" \
+  PLAN=234 PLAN_PROJECT=project-meta PLAN_RESUME=1 \
+  PLAN_READINESS_COMMAND="python $HOME/projects/ecosystem-ops/plan_graph.py" \
+  SESSION_GOAL="Resolve recoverable historical workspace worktree residue" \
+  SESSION_PHASE="Execute the next accepted Plan 234 packet"
+```
+
+The command is allowed only when the graph returns `already_active` for the
+exact qualified plan and the registry has no matching live lane. Omitting
+`PLAN_RESUME=1`, a negative or malformed graph response, or a matching live
+claim fails before creating a claim, branch, worktree, or tracker. The
+readiness command is explicit because the portable framework does not assume a
+personal workspace location; governed workspace repositories may provide a
+repo-local default through their own canonical configuration.
+
 ## Session-End Hooks, Observability, And Feedback
 
 The source-owned adapter is:

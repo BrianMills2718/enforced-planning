@@ -150,6 +150,15 @@ class PollMessagesRequest(StrictContract):
     project: str | None = Field(default=None, min_length=1, description="Optional exact project filter.")
     include_expired: bool = Field(default=False, description="Whether expired messages remain in the returned view.")
     observe: bool = Field(default=False, description="Whether returned active messages emit observation receipts.")
+    delivery_event_id: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=500,
+        description=(
+            "Optional adapter-derived identity for one native lifecycle event. "
+            "When present, the same message is visible at most once for that event."
+        ),
+    )
 
 
 class AcknowledgeMessageRequest(StrictContract):
@@ -284,6 +293,33 @@ class StoredReceiptRecord(StrictContract):
         return self
 
 
+class DeliveryEventRecord(StrictContract):
+    """Immutable duplicate-suppression marker for one displayed lifecycle event."""
+
+    schema_version: Literal["1.0"] = Field(description="Portable delivery-marker schema version.")
+    delivery_id: str = Field(pattern=r"^delivery_[0-9a-f]{32}$", description="Deterministic marker identity.")
+    delivery_event_id: str = Field(min_length=1, description="Adapter-derived native lifecycle-event identity.")
+    message_id: str = Field(pattern=r"^msg_[0-9a-f]{32}$", description="Message displayed for this event.")
+    recipient_session_id: str = Field(min_length=1, description="Exact recipient session shown the message.")
+    recorded_at: AwareDatetime = Field(description="UTC marker publication time.")
+
+
+class StoredDeliveryEventRecord(StrictContract):
+    """Integrity envelope for one lifecycle duplicate-suppression marker."""
+
+    record_type: Literal["mailbox_delivery_event"] = Field(description="Discriminator for delivery-marker storage.")
+    payload: DeliveryEventRecord = Field(description="Strict immutable delivery-marker payload.")
+    payload_sha256: str = Field(pattern=r"^[0-9a-f]{64}$", description="Digest of canonical marker payload JSON.")
+
+    @model_validator(mode="after")
+    def validate_digest(self) -> StoredDeliveryEventRecord:
+        """Reject marker bytes whose payload no longer matches its digest."""
+
+        if self.payload_sha256 != _model_digest(self.payload):
+            raise ValueError("delivery marker payload_sha256 mismatch")
+        return self
+
+
 class MessageStatusView(StrictContract):
     """Derived lifecycle view computed from immutable message and receipts."""
 
@@ -324,6 +360,14 @@ class MessagePollResult(StrictContract):
     )
     observation_receipt_paths: tuple[str, ...] = Field(
         description="Evidence paths aligned one-to-one with observation_receipts."
+    )
+    delivery_event_id: str | None = Field(
+        default=None,
+        description="Lifecycle event identity used for duplicate suppression, when supplied by an adapter.",
+    )
+    suppressed_message_ids: tuple[str, ...] = Field(
+        default=(),
+        description="Messages withheld because another adapter already displayed them for this exact lifecycle event.",
     )
 
 
@@ -396,6 +440,7 @@ class CoordinationMessageStore:
         self.claims_dir = claims_dir.expanduser().resolve()
         self.messages_dir = self.root / "messages"
         self.receipts_dir = self.root / "receipts"
+        self.deliveries_dir = self.root / "deliveries"
         self.quarantine_dir = self.root / "quarantine"
 
     def _live_claims(self, project: str | None = None) -> list[coordination_claims.ClaimRecord]:
@@ -474,6 +519,15 @@ class CoordinationMessageStore:
             return self._quarantine(path, str(exc))
         return record.payload
 
+    def _read_delivery_path(self, path: Path) -> DeliveryEventRecord:
+        """Validate one marker before treating an event as already delivered."""
+
+        try:
+            record = StoredDeliveryEventRecord.model_validate_json(path.read_bytes())
+        except (OSError, ValidationError, ValueError) as exc:
+            return self._quarantine(path, str(exc))
+        return record.payload
+
     def _write_immutable(self, path: Path, payload: bytes) -> bool:
         """Atomically publish immutable bytes without overwriting an existing identifier."""
 
@@ -529,6 +583,47 @@ class CoordinationMessageStore:
         if comparable_existing != receipt:
             raise RecordCollisionError(f"Receipt ID {receipt.receipt_id} already contains different content")
         return path, True
+
+    def _claim_event_delivery(
+        self,
+        message: CoordinationMessage,
+        *,
+        delivery_event_id: str,
+        now: datetime,
+    ) -> bool:
+        """Atomically reserve one agent-visible delivery for a native event.
+
+        This marker is intentionally weaker than an observation receipt: it
+        proves only that one adapter won the right to render the message for
+        this exact event. It never acknowledges work and a different event ID
+        may display the still-unacknowledged message again.
+        """
+
+        delivery_id = _stable_id(
+            "delivery", message.message_id, message.recipient_session_id, delivery_event_id
+        )
+        marker = DeliveryEventRecord(
+            schema_version=SCHEMA_VERSION,
+            delivery_id=delivery_id,
+            delivery_event_id=delivery_event_id,
+            message_id=message.message_id,
+            recipient_session_id=message.recipient_session_id,
+            recorded_at=now,
+        )
+        path = self.deliveries_dir / f"{delivery_id}.json"
+        record = StoredDeliveryEventRecord(
+            record_type="mailbox_delivery_event",
+            payload=marker,
+            payload_sha256=_model_digest(marker),
+        )
+        encoded = _canonical_json(record.model_dump(mode="json")) + b"\n"
+        if self._write_immutable(path, encoded):
+            return True
+        existing = self._read_delivery_path(path)
+        comparable_existing = existing.model_copy(update={"recorded_at": marker.recorded_at})
+        if comparable_existing != marker:
+            raise RecordCollisionError(f"Delivery marker {delivery_id} already contains different content")
+        return False
 
     def _message(self, message_id: str) -> tuple[CoordinationMessage, Path]:
         """Load one canonical message or fail when it is absent."""
@@ -700,10 +795,19 @@ class CoordinationMessageStore:
         observations: list[MessageReceipt] = []
         observation_paths: list[str] = []
         views: list[MessageStatusView] = []
+        suppressed_message_ids: list[str] = []
         for message in selected:
             before = self.status(MessageStatusRequest(message_id=message.message_id, as_of=as_of))
             if before.expired and not request.include_expired:
                 continue
+            if request.delivery_event_id is not None and not before.acknowledged:
+                if not self._claim_event_delivery(
+                    message,
+                    delivery_event_id=request.delivery_event_id,
+                    now=as_of,
+                ):
+                    suppressed_message_ids.append(message.message_id)
+                    continue
             if request.observe and not before.expired and not before.observed:
                 observation, observation_path = self._append_observation(message, now=as_of)
                 observations.append(observation)
@@ -714,6 +818,8 @@ class CoordinationMessageStore:
             messages=tuple(views),
             observation_receipts=tuple(observations),
             observation_receipt_paths=tuple(observation_paths),
+            delivery_event_id=request.delivery_event_id,
+            suppressed_message_ids=tuple(suppressed_message_ids),
         )
 
     def acknowledge(
@@ -776,6 +882,7 @@ def poll_session_inbox(
     root: Path | None = None,
     max_body_chars: int = DEFAULT_NOTICE_BODY_LENGTH,
     max_messages: int = DEFAULT_NOTICE_MESSAGE_LIMIT,
+    delivery_event_id: str | None = None,
     require_live_claim: bool = True,
 ) -> SessionInboxNotice:
     """Resolve one live agent session and return an agent-visible mailbox notice.
@@ -804,6 +911,7 @@ def poll_session_inbox(
             current_session_id=resolved_session_id,
             project=project,
             observe=observe,
+            delivery_event_id=delivery_event_id,
         ),
         require_live_claim=require_live_claim,
     )

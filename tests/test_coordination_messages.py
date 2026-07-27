@@ -184,6 +184,59 @@ def test_claude_to_codex_uses_identical_core_operations(
     assert result.messages[0].state == "observed"
 
 
+@pytest.mark.parametrize("agent,recipient", [("codex", CODEX_SESSION), ("claude-code", CLAUDE_SESSION)])
+def test_duplicate_adapters_show_one_notice_per_event_then_repeat_for_later_event(
+    mailbox: tuple[CoordinationMessageStore, Path, Path],
+    agent: str,
+    recipient: str,
+) -> None:
+    """Host and repository adapters share one display marker but never infer acknowledgement."""
+
+    store, _claims_dir, _root = mailbox
+    message = store.send(
+        _send_request(sender=CLAUDE_SESSION if recipient == CODEX_SESSION else CODEX_SESSION, recipient=recipient)
+    ).message
+    event_one = f"event-{agent}-one"
+    host = store.poll(
+        PollMessagesRequest(
+            current_session_id=recipient,
+            observe=True,
+            delivery_event_id=event_one,
+        ),
+        now=NOW,
+        require_live_claim=False,
+    )
+    repository = store.poll(
+        PollMessagesRequest(
+            current_session_id=recipient,
+            observe=True,
+            delivery_event_id=event_one,
+        ),
+        now=NOW + timedelta(milliseconds=1),
+        require_live_claim=False,
+    )
+    later = store.poll(
+        PollMessagesRequest(
+            current_session_id=recipient,
+            observe=True,
+            delivery_event_id=f"event-{agent}-two",
+        ),
+        now=NOW + timedelta(seconds=1),
+        require_live_claim=False,
+    )
+
+    assert [view.message.message_id for view in host.messages] == [message.message_id]
+    assert repository.messages == ()
+    assert repository.suppressed_message_ids == (message.message_id,)
+    assert len(host.observation_receipts) == 1
+    assert repository.observation_receipts == ()
+    assert [view.message.message_id for view in later.messages] == [message.message_id]
+    assert later.observation_receipts == ()
+    status = store.status(MessageStatusRequest(message_id=message.message_id))
+    assert status.state == "observed"
+    assert [receipt.event for receipt in status.receipts] == ["observed"]
+
+
 def test_claim_selector_resolves_unique_session_and_rejects_ambiguity(
     mailbox: tuple[CoordinationMessageStore, Path, Path],
 ) -> None:
@@ -414,8 +467,10 @@ def test_claude_hook_paths_never_scan_the_legacy_markdown_inbox() -> None:
     for path in hook_paths:
         content = path.read_text(encoding="utf-8")
         assert ".claude/messages" not in content
-        assert "coordination_inbox.py" in content
         assert "git worktree list --porcelain" in content
+    assert "coordination_hook.py" in hook_paths[0].read_text(encoding="utf-8")
+    for path in hook_paths[1:]:
+        assert "coordination_inbox.py" in path.read_text(encoding="utf-8")
 
 
 @pytest.mark.parametrize("script_path", ["scripts/coordination_messages.py", "scripts/meta/coordination_messages.py"])
@@ -627,6 +682,7 @@ def test_codex_lifecycle_hook_observes_repeats_until_ack_then_hides(
             "session_id": "thread-123",
             "cwd": str(Path(__file__).resolve().parents[1]),
             "hook_event_name": "SessionStart",
+            "event_id": "codex-lifecycle-one",
         }
     )
     command = [
@@ -657,7 +713,7 @@ def test_codex_lifecycle_hook_observes_repeats_until_ack_then_hides(
     )
     assert refreshed_claim["heartbeat_at"] != NOW.isoformat()
 
-    repeated = subprocess.run(
+    duplicate = subprocess.run(
         command,
         input=hook_input,
         cwd=Path(__file__).resolve().parents[1],
@@ -665,9 +721,28 @@ def test_codex_lifecycle_hook_observes_repeats_until_ack_then_hides(
         text=True,
         check=False,
     )
-    assert persisted.message.message_id in repeated.stdout
+    assert duplicate.returncode == 0
+    assert duplicate.stdout == ""
     status = store.status(MessageStatusRequest(message_id=persisted.message.message_id))
     assert len(status.receipt_paths) == 1
+
+    later_hook_input = json.dumps(
+        {
+            "session_id": "thread-123",
+            "cwd": str(Path(__file__).resolve().parents[1]),
+            "hook_event_name": "SessionStart",
+            "event_id": "codex-lifecycle-two",
+        }
+    )
+    later = subprocess.run(
+        command,
+        input=later_hook_input,
+        cwd=Path(__file__).resolve().parents[1],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert persisted.message.message_id in later.stdout
 
     store.acknowledge(
         AcknowledgeMessageRequest(
@@ -686,6 +761,108 @@ def test_codex_lifecycle_hook_observes_repeats_until_ack_then_hides(
     )
     assert after_ack.returncode == 0
     assert after_ack.stdout == ""
+
+
+def test_claude_lifecycle_adapter_is_duplicate_safe_with_repository_project_override(
+    mailbox: tuple[CoordinationMessageStore, Path, Path],
+) -> None:
+    """Claude host and repository adapters use the same event marker contract as Codex."""
+
+    store, claims_dir, root = mailbox
+    persisted = store.send(
+        _send_request(sender=CODEX_SESSION, recipient=CLAUDE_SESSION, idempotency_key="claude-hook")
+    )
+    command = [
+        "python",
+        "scripts/coordination_hook.py",
+        "--agent",
+        "claude-code",
+        "--project",
+        "enforced-planning",
+        "--claims-dir",
+        str(claims_dir),
+        "--root",
+        str(root),
+    ]
+    event = json.dumps(
+        {
+            "session_id": "session-456",
+            "hook_event_name": "PostToolUse",
+            "event_id": "claude-tool-use-1",
+        }
+    )
+    host = subprocess.run(
+        command,
+        input=event,
+        cwd=Path(__file__).resolve().parents[1],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    repository = subprocess.run(
+        command,
+        input=event,
+        cwd=Path(__file__).resolve().parents[1],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    later = subprocess.run(
+        command,
+        input=json.dumps(
+            {
+                "session_id": "session-456",
+                "hook_event_name": "PostToolUse",
+                "event_id": "claude-tool-use-2",
+            }
+        ),
+        cwd=Path(__file__).resolve().parents[1],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert host.returncode == 0, host.stderr or host.stdout
+    assert persisted.message.message_id in host.stdout
+    assert repository.returncode == 0
+    assert repository.stdout == ""
+    assert later.returncode == 0
+    assert persisted.message.message_id in later.stdout
+    status = store.status(MessageStatusRequest(message_id=persisted.message.message_id))
+    assert [receipt.event for receipt in status.receipts] == ["observed"]
+
+
+def test_lifecycle_adapter_missing_event_identity_does_not_observe(
+    mailbox: tuple[CoordinationMessageStore, Path, Path],
+) -> None:
+    """An adapter without a native event identity cannot manufacture observation evidence."""
+
+    store, claims_dir, root = mailbox
+    persisted = store.send(_send_request(sender=CLAUDE_SESSION, recipient=CODEX_SESSION, idempotency_key="no-event"))
+    result = subprocess.run(
+        [
+            "python",
+            "scripts/coordination_hook.py",
+            "--claims-dir",
+            str(claims_dir),
+            "--root",
+            str(root),
+        ],
+        input=json.dumps(
+            {
+                "session_id": "thread-123",
+                "cwd": str(Path(__file__).resolve().parents[1]),
+                "hook_event_name": "SessionStart",
+            }
+        ),
+        cwd=Path(__file__).resolve().parents[1],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0
+    assert "requires a native event ID" in result.stdout
+    assert store.status(MessageStatusRequest(message_id=persisted.message.message_id)).state == "persisted"
 
 
 def test_codex_lifecycle_hook_does_not_adopt_a_different_session_claim(
@@ -710,6 +887,7 @@ def test_codex_lifecycle_hook_does_not_adopt_a_different_session_claim(
                 "session_id": "different-runtime",
                 "cwd": str(Path(__file__).resolve().parents[1]),
                 "hook_event_name": "UserPromptSubmit",
+                "event_id": "different-runtime-event",
             }
         ),
         cwd=Path(__file__).resolve().parents[1],
@@ -756,6 +934,7 @@ def test_codex_lifecycle_hook_polls_after_write_claim_completion(
                 "session_id": "thread-123",
                 "cwd": str(Path(__file__).resolve().parents[1]),
                 "hook_event_name": "PostToolUse",
+                "event_id": "completed-claim-event",
             }
         ),
         cwd=Path(__file__).resolve().parents[1],

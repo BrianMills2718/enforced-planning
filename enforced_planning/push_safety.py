@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from enforced_planning import coordination_claims
+from enforced_planning.worktree_paths import resolve_canonical_repo_root
 
 
 @dataclass(frozen=True)
@@ -202,12 +203,14 @@ def evaluate_push_safety(
     *,
     project: str | None = None,
     branch: str | None = None,
+    include_active_decisions: bool = False,
     fail_on_active_decisions: bool = False,
 ) -> dict[str, Any]:
     """Evaluate whether the current branch is safe to push as-is."""
 
     resolved_repo_root = resolve_repo_root(repo_root)
-    resolved_project = project or resolved_repo_root.name
+    canonical_repo_root = resolve_canonical_repo_root(resolved_repo_root)
+    resolved_project = project or canonical_repo_root.name
     resolved_branch = branch or current_branch(resolved_repo_root)
     default_branch = resolve_default_branch(resolved_repo_root)
     if not default_branch:
@@ -342,7 +345,11 @@ def evaluate_push_safety(
                 )
             )
 
-    active_decisions = load_active_decisions(resolved_project)
+    active_decisions = (
+        load_active_decisions(resolved_project)
+        if include_active_decisions or fail_on_active_decisions
+        else []
+    )
     if active_decisions:
         decision_finding = PushCheckFinding(
             code="active_decisions_present",

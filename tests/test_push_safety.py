@@ -142,15 +142,29 @@ def test_push_check_warns_on_active_decisions_without_blocking(
                 "status": "active",
         },
     )
-    monkeypatch.setattr(
-        push_safety,
-        "load_active_decisions",
-        lambda project, limit=5: [{"content": "Do not mutate scoring interfaces until Plan #9 closes."}],
+    decision_queries: list[str] = []
+
+    def _load_decisions(project: str, limit: int = 5) -> list[dict[str, str]]:
+        decision_queries.append(project)
+        return [{"content": "Do not mutate scoring interfaces until Plan #9 closes."}]
+
+    monkeypatch.setattr(push_safety, "load_active_decisions", _load_decisions)
+
+    default_payload = push_safety.evaluate_push_safety(repo_root)
+    assert default_payload["ok"]
+    assert decision_queries == []
+    assert not any(
+        item["code"] == "active_decisions_present"
+        for item in default_payload["warnings"]
     )
 
-    payload = push_safety.evaluate_push_safety(repo_root)
+    payload = push_safety.evaluate_push_safety(
+        repo_root,
+        include_active_decisions=True,
+    )
 
     assert payload["ok"]
+    assert decision_queries == ["demo"]
     assert any(item["code"] == "active_decisions_present" for item in payload["warnings"])
 
 
@@ -187,6 +201,50 @@ def test_push_check_rejects_branch_claim_without_complete_session_identity(
     assert not payload["ok"]
     finding = next(item for item in payload["issues"] if item["code"] == "no_healthy_branch_claim")
     assert finding["details"]["claims"][0]["health_issues"] == ["missing_session_name"]
+
+
+def test_push_check_resolves_canonical_project_from_linked_worktree(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A linked worktree must query claims under its canonical repository name."""
+
+    repo_root = tmp_path / "demo"
+    _init_git_repo(repo_root)
+    worktree = repo_root / "worktrees" / "plan-identity"
+    worktree.parent.mkdir()
+    subprocess.run(
+        ["git", "-C", str(repo_root), "worktree", "add", "-b", "plan-identity", str(worktree)],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    monkeypatch.setattr(push_safety, "load_active_decisions", lambda project, limit=5: [])
+    _write_claim(
+        claims_dir,
+        "attributed.yaml",
+        {
+            "agent": "codex",
+            "projects": ["demo"],
+            "scope": "plan-identity",
+            "intent": "Attributed worktree lane",
+            "claim_type": "program",
+            "branch": "plan-identity",
+            "worktree_path": str(worktree),
+            "session_id": "codex:thread-identity",
+            "session_name": "identity-enforcement",
+            "heartbeat_at": datetime.now(timezone.utc).isoformat(),
+            "status": "active",
+        },
+    )
+
+    payload = push_safety.evaluate_push_safety(worktree)
+
+    assert payload["ok"]
+    assert payload["project"] == "demo"
+    assert payload["branch_claim_count"] == 1
 
 
 def test_create_review_claim_uses_target_branch_as_parent_scope(

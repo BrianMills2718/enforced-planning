@@ -106,6 +106,7 @@ WORKTREE_SESSION_FINISH_SCRIPT := scripts/meta/worktree-coordination/../session_
 WORKTREE_SESSION_CLOSE_SCRIPT := scripts/meta/worktree-coordination/../session_close.py
 WORKTREE_REVIEW_CLAIM_SCRIPT := scripts/meta/worktree-coordination/create_review_claim.py
 WORKTREE_RAISE_CONCERN_SCRIPT := scripts/meta/worktree-coordination/raise_concern.py
+WORKTREE_PLAN_READINESS_SCRIPT := scripts/meta/check_plan_readiness.py
 WORKTREE_DIR ?= $(shell python "$(WORKTREE_CREATE_SCRIPT)" --repo-root . --print-default-worktree-dir)
 WORKTREE_START_POINT ?= HEAD
 WORKTREE_PROJECT ?= $(shell python "$(WORKTREE_CREATE_SCRIPT)" --repo-root . --print-canonical-project)
@@ -116,6 +117,10 @@ SESSION_NEXT ?=
 SESSION_DEPENDS ?=
 SESSION_STOP_CONDITIONS ?=
 SESSION_NOTE ?=
+ALLOW_UNPLANNED ?=
+WORKTREE_EXECUTION_PROFILE ?= coordinated
+PLAN_PROJECT ?= $(WORKTREE_PROJECT)
+PLAN_READINESS_COMMAND ?=
 SESSION_CLAIM_TYPE ?= program
 SESSION_PARENT_SCOPE ?=
 SESSION_WRITE_PATHS ?=
@@ -173,6 +178,18 @@ endif
 		echo "Install or sync the sanctioned session lifecycle module before using make worktree."; \
 		exit 1; \
 	fi
+	@python "$(WORKTREE_PLAN_READINESS_SCRIPT)" \
+		$(if $(PLAN),--qualified-plan-id "$(PLAN_PROJECT)#$(PLAN)",) \
+		--execution-profile "$(WORKTREE_EXECUTION_PROFILE)" \
+		$(if $(PLAN_READINESS_COMMAND),--query-command "$(PLAN_READINESS_COMMAND)",) \
+		--repository "$(WORKTREE_PROJECT)" \
+		--lane-id "$(BRANCH)" \
+		$(if $(SESSION_PARENT_SCOPE),--parent-lane-id "$(SESSION_PARENT_SCOPE)",) \
+		--branch "$(BRANCH)" \
+		--worktree-path "$(WORKTREE_DIR)/$(BRANCH)" \
+		--agent "$(WORKTREE_AGENT)" \
+		--scope "$(BRANCH)" \
+		$(if $(ALLOW_UNPLANNED),--allow-unplanned,)
 	@python "$(WORKTREE_CLAIMS_SCRIPT)" --claim \
 		--agent "$(WORKTREE_AGENT)" \
 		--project "$(WORKTREE_PROJECT)" \
@@ -185,7 +202,7 @@ endif
 		$(if $(SESSION_PARENT_SCOPE),--parent-scope "$(SESSION_PARENT_SCOPE)",) \
 		$(foreach path,$(SESSION_WRITE_PATHS),--write-path "$(path)") \
 		$(foreach path,$(SESSION_READ_PATHS),--read-path "$(path)") \
-		$(if $(PLAN),--plan "Plan #$(PLAN)",)
+		$(if $(PLAN),--plan "$(PLAN_PROJECT)#$(PLAN)",)
 	@mkdir -p "$(WORKTREE_DIR)"
 	@if ! python "$(WORKTREE_CREATE_SCRIPT)" --repo-root . --path "$(WORKTREE_DIR)/$(BRANCH)" --branch "$(BRANCH)" --start-point "$(WORKTREE_START_POINT)"; then \
 		python "$(WORKTREE_CLAIMS_SCRIPT)" --release --agent "$(WORKTREE_AGENT)" --project "$(WORKTREE_PROJECT)" --scope "$(BRANCH)" >/dev/null 2>&1 || true; \
@@ -205,7 +222,8 @@ endif
 		$(if $(SESSION_PARENT_SCOPE),--parent-scope "$(SESSION_PARENT_SCOPE)",) \
 		$(foreach path,$(SESSION_WRITE_PATHS),--write-path "$(path)") \
 		$(foreach path,$(SESSION_READ_PATHS),--read-path "$(path)") \
-		$(if $(PLAN),--plan "Plan #$(PLAN)",) \
+		$(if $(PLAN),--plan "$(PLAN_PROJECT)#$(PLAN)",) \
+		$(if $(ALLOW_UNPLANNED),--allow-unplanned,) \
 		$(if $(SESSION_NEXT),--next-phase "$(SESSION_NEXT)",) \
 		$(if $(SESSION_DEPENDS),--depends-on "$(SESSION_DEPENDS)",) \
 		$(if $(SESSION_STOP_CONDITIONS),--stop-condition "$(SESSION_STOP_CONDITIONS)",) \

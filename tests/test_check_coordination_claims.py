@@ -533,6 +533,13 @@ def test_parallel_plan_claims_require_one_root_and_parented_children() -> None:
     assert module.claim_hierarchy_issues(child, active_claims=[root, child]) == []
 
 
+def test_normalize_plan_identity_preserves_qualified_project() -> None:
+    """Qualified identities must not collapse back to a global plan number."""
+    module = _load_module()
+
+    assert module.normalize_plan_identity("Project_Meta#0233") == "project-meta#233"
+
+
 def test_parallel_plan_claims_reject_rootless_duplicate_root_and_wrong_parent() -> None:
     """Every invalid parallel hierarchy shape should name its exact defect."""
 

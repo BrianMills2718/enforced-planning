@@ -1,0 +1,65 @@
+#!/bin/bash
+# Pre-push hook for canonical governed-branch publication safety.
+
+set -euo pipefail
+
+REPO_ROOT=$(git rev-parse --show-toplevel)
+cd "$REPO_ROOT"
+
+find_push_check() {
+    if [[ -f "$REPO_ROOT/scripts/meta/check_push_safety.py" ]]; then
+        printf '%s\n' "$REPO_ROOT/scripts/meta/check_push_safety.py"
+    elif [[ -f "$REPO_ROOT/scripts/check_push_safety.py" ]]; then
+        printf '%s\n' "$REPO_ROOT/scripts/check_push_safety.py"
+    fi
+}
+
+PUSH_CHECK=$(find_push_check)
+if [[ -z "$PUSH_CHECK" ]]; then
+    echo "ERROR: canonical check_push_safety.py is missing; refusing governed branch push." >&2
+    exit 1
+fi
+
+if [[ -x "$REPO_ROOT/.venv/bin/python" ]]; then
+    PYTHON_BIN="$REPO_ROOT/.venv/bin/python"
+elif command -v python3 >/dev/null 2>&1; then
+    PYTHON_BIN=$(command -v python3)
+elif command -v python >/dev/null 2>&1; then
+    PYTHON_BIN=$(command -v python)
+else
+    echo "ERROR: Python is required for canonical pre-push validation." >&2
+    exit 1
+fi
+
+CURRENT_BRANCH=$(git symbolic-ref --quiet --short HEAD 2>/dev/null || true)
+VALIDATED_BRANCH=""
+
+while read -r LOCAL_REF LOCAL_SHA REMOTE_REF REMOTE_SHA; do
+    if [[ -z "${LOCAL_REF:-}" || "$LOCAL_REF" != refs/heads/* ]]; then
+        continue
+    fi
+    if [[ "${LOCAL_SHA:-}" =~ ^0+$ ]]; then
+        continue
+    fi
+
+    BRANCH="${LOCAL_REF#refs/heads/}"
+    if [[ -z "$CURRENT_BRANCH" || "$BRANCH" != "$CURRENT_BRANCH" ]]; then
+        echo "ERROR: governed pre-push validation only supports the checked-out branch." >&2
+        echo "Requested local branch: $BRANCH" >&2
+        echo "Checked-out branch: ${CURRENT_BRANCH:-detached HEAD}" >&2
+        echo "Check out the branch in its claimed worktree and push from there." >&2
+        exit 1
+    fi
+
+    if [[ "$VALIDATED_BRANCH" == "$BRANCH" ]]; then
+        continue
+    fi
+
+    echo "Running canonical pre-push claim validation for '$BRANCH'..."
+    "$PYTHON_BIN" "$PUSH_CHECK" \
+        --repo-root "$REPO_ROOT" \
+        --branch "$BRANCH"
+    VALIDATED_BRANCH="$BRANCH"
+done
+
+exit 0

@@ -1,6 +1,6 @@
 # Plan #104: Plan-Lane Resumption Contract and Source Propagation
 
-**Status:** In Progress
+**Status:** Complete
 **Type:** cross-repository lifecycle repair
 **Priority:** Critical
 **Landscape disposition:** inline
@@ -219,5 +219,24 @@ consumer-only fix.
 
 ## Completion Record
 
-Not started. This plan is complete only when AC-104-01 through AC-104-08 have
-revision-bound evidence and Plan #234 has a real resumable lane lifecycle.
+Completed 2026-07-27.
+
+- AC-104-01 through AC-104-07 are covered by the source readiness, claim-race,
+  Make/installer propagation, and no-side-effect regression suites. The focused
+  source verification passed 44 tests and Ruff; the broader readiness and
+  status-parser suites passed 193 tests after the explicit lifecycle-status
+  parser repair.
+- Ecosystem Ops PR #9 merged the leading-explicit-status parser fix at
+  `f4d9295267efd4ee`; Enforced Planning PR #61 merged the operational source
+  `PLAN_RESUME=1` Make path at `840162f0f268`.
+- AC-104-08 used the real in-progress Project Meta Plan #234. The graph returned
+  revision-bound `already_active`; one explicit resume created the healthy
+  claimed `plan-234-residue-resume-20260727` lane, while a duplicate resume was
+  rejected before lifecycle mutation.
+- Project Meta PR #159 merged that lane's refreshed disposition receipt at
+  `5f2608f6bead9256007f4cf9177334ce1906e9dd`. Sanctioned `session-close` then
+  removed its worktree and local branch and released its claim. A fresh registry
+  query returns no live claim for the scope. Plan #234 remains in progress and
+  must explicitly resume again for its next accepted packet.
+- The shared plan index update is intentionally deferred to its active Plan #106
+  owner; this lane does not overwrite the separately claimed index surface.

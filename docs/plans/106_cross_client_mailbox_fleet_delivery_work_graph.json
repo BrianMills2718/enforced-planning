@@ -13,7 +13,7 @@
       "objective": "Produce strict read-only installation receipts and idempotent dry-run plans for Codex and Claude host hooks without changing live configuration.",
       "profile": "standard",
       "execution_class": "independently_executable",
-      "claimability": "pending_approval",
+      "claimability": "ready_for_execution",
       "authorization_mode": "host_workspace",
       "scope": {
         "included": [
@@ -85,14 +85,21 @@
         }
       ],
       "readiness": {
-        "status": "blocked",
+        "status": "ready",
         "required_approval_types": ["design"],
-        "approvals": [],
-        "failed_guards": [
-          "Brian has not yet adopted design revision mailbox-fleet-delivery-v1"
-        ]
+        "approvals": [
+          {
+            "approval_type": "design",
+            "role": "user",
+            "approver_id": "brian",
+            "approved_revision": "mailbox-fleet-delivery-v1",
+            "approved_at": "2026-07-27T15:34:04-07:00",
+            "expires_at": null
+          }
+        ],
+        "failed_guards": []
       },
-      "status": "decomposed",
+      "status": "ready",
       "record_version": 1
     },
     {

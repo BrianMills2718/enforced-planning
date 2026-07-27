@@ -1,6 +1,6 @@
 # Plan #106: Cross-Client Mailbox Fleet Delivery Certification
 
-**Status:** Planned — bounded design complete; implementation units require design adoption
+**Status:** Active — design adopted; MF-01 is ready for execution
 **Type:** implementation
 **Priority:** Critical
 **phase_ref:** "Phase 9 — fleet adoption and framework maintenance"
@@ -15,15 +15,22 @@
 
 ## Request Mode And Design Profile
 
-- Request mode: planning and decomposition only
+- Request mode: adopted planning and dependency-governed implementation
 - Design revision: `mailbox-fleet-delivery-v1`
 - Design depth: Standard
 - Execution profile: `production_internal`
 - Overlays: runtime state, operational service, repository governance, migration
 - Landscape disposition: linked to Plans #67, #68, and #100 plus the current
   Codex lifecycle-hook contract
-- Non-claim: this plan does not authorize implementation, configuration writes,
-  repository rollout, hook trust, deployment, or message-driven work
+- Non-claim: design adoption does not authorize configuration writes,
+  repository rollout, hook trust, deployment, or message-driven work outside
+  the readiness and approval gates of the exact work unit.
+
+### Adoption Record
+
+Brian adopted design revision `mailbox-fleet-delivery-v1` on 2026-07-27. This
+releases MF-01 only; all later units remain dependency- and approval-gated in
+the work graph.
 
 ## Gap
 

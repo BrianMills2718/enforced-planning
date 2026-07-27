@@ -48,6 +48,7 @@ CREATION_BLOCKING_HEALTH_ISSUES = {
     "missing_branch",
     "missing_worktree_path",
     "missing_session_id",
+    "missing_session_name",
 }
 DEFAULT_HEARTBEAT_STALE_MINUTES = 120
 SESSION_ENV_KEYS = {
@@ -199,11 +200,11 @@ def claim_health_issues(claim: ClaimRecord) -> list[str]:
             issues.append("missing_worktree_path")
         if not claim.session_id:
             issues.append("missing_session_id")
+        if not claim.session_name:
+            issues.append("missing_session_name")
         if claim.plan_ref and claim.session_id:
             if not claim.repo_root:
                 issues.append("missing_repo_root")
-            if not claim.session_name:
-                issues.append("missing_session_name")
             if not claim.broader_goal:
                 issues.append("missing_broader_goal")
             if not claim.tracker_path:
@@ -507,6 +508,7 @@ def validate_claim_for_creation(claim: ClaimRecord) -> None:
         "missing_branch": "--branch",
         "missing_worktree_path": "--worktree-path",
         "missing_session_id": "--session-id",
+        "missing_session_name": "--session-name",
     }
     required_flags = [flag_map[item] for item in issues if item in flag_map]
     required_text = ", ".join(required_flags)
@@ -1238,6 +1240,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--worktree-path", help="Worktree path for this claim")
     parser.add_argument("--branch", help="Branch for this claim")
     parser.add_argument("--session-id", help="Session identifier")
+    parser.add_argument(
+        "--session-name",
+        help="Human-readable broader-goal session name; required for live program/write/research claims",
+    )
     parser.add_argument("--status", default="active", help="Claim status (default: active)")
     parser.add_argument("--parent-scope", help="Parent/broad-scope identifier")
     parser.add_argument("--notes", help="Freeform notes")
@@ -1312,6 +1318,7 @@ def main(argv: list[str] | None = None) -> int:
                 read_paths=args.read_path,
                 worktree_path=args.worktree_path,
                 branch=args.branch,
+                session_name=args.session_name,
                 session_id=args.session_id,
                 status=args.status,
                 parent_scope=args.parent_scope,
@@ -1385,6 +1392,7 @@ def main(argv: list[str] | None = None) -> int:
                 read_paths=args.read_path,
                 worktree_path=args.worktree_path,
                 branch=args.branch,
+                session_name=args.session_name,
                 session_id=args.session_id,
                 status=args.status,
                 parent_scope=args.parent_scope,

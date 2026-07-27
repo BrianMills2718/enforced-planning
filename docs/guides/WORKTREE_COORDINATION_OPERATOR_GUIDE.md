@@ -72,7 +72,8 @@ surfaces from them.
    - `plan_ref`
    - `branch`
    - `worktree_path`
-   - `session_id`
+- `session_id`
+- `session_name` (the durable broader-goal name when it differs from the runtime ID)
    - narrow `write_paths` for write claims
 4. Execute, commit verified slices, and keep docs/trackers truthful.
 5. Run `make push-check` before publishing from the safe root-anchored control session.
@@ -109,7 +110,7 @@ For the sanctioned repo-local `make worktree` flow, the default claim is a v2
 metadata. That keeps lane tracking healthy without inventing a fake broad
 write-path claim for the whole repo.
 
-If any of `branch`, `worktree_path`, `session_id`, or required write ownership
+If any of `branch`, `worktree_path`, `session_id`, `session_name`, or required write ownership
 is missing for a live write/program/research claim, the claim is weak and the
 registry should treat the lane as attention-worthy rather than healthy.
 

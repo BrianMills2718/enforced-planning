@@ -255,6 +255,16 @@ read-only review visibility with `write_paths=[]`, exact target-branch
 - AC1–AC10 achieved grade A: each criterion has source plus deterministic test
   evidence, with the bounded consumer path additionally observed live.
 
+### 2026-07-27 identity-completeness follow-up
+
+An observed consumer still used a legacy coordination surface that allowed a
+live lane with `session_id: null`. New live program, write, and research claims
+now fail at creation unless they carry both a runtime `session_id` and a
+human-readable `session_name`. The sanctioned worktree command supplies the
+initial name from its required broader goal before the session contract
+normalizes it. Existing incomplete records remain readable and explicitly weak;
+the repair never invents an owner identity for them.
+
 ## Rollback
 
 Revert the shared implementation and generated-adapter changes as one commit.

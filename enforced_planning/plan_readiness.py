@@ -70,7 +70,6 @@ class PlanStartGateResultV1(StrictContract):
 
 def _plan_number(value: str | None) -> int | None:
     """Extract the numbered-plan identity from canonical and legacy spellings."""
-
     if not isinstance(value, str):
         return None
     match = re.search(r"(?:\bPlan\s*#?|#)\s*0*(\d+)\b", value, flags=re.IGNORECASE)
@@ -79,7 +78,6 @@ def _plan_number(value: str | None) -> int | None:
 
 def _live_matching_claim_scopes(*, repository: str, qualified_plan_id: str) -> list[str]:
     """Return live canonical claim scopes for one repository/numbered plan."""
-
     plan_number = _plan_number(qualified_plan_id)
     if plan_number is None:
         raise ValueError(f"invalid qualified plan identity for resume: {qualified_plan_id}")
@@ -113,7 +111,6 @@ def check_plan_start_readiness(
     lock and hierarchy checks are the final ownership guard before a worktree
     can be created.
     """
-
     if execution_profile == "light" and qualified_plan_id is None and allow_unplanned:
         return PlanStartGateResultV1(
             allowed=True,

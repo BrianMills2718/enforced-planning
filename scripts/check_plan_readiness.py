@@ -11,7 +11,6 @@ from pathlib import Path
 
 def _add_repo_root_to_path() -> None:
     """Make the adjacent source package importable from source or installed paths."""
-
     for parent in Path(__file__).resolve().parents:
         if (parent / "enforced_planning").is_dir():
             sys.path.insert(0, str(parent))
@@ -27,7 +26,6 @@ from enforced_planning.plan_readiness import check_plan_start_readiness  # noqa:
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     """Parse portable plan-start gate arguments."""
-
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--qualified-plan-id")
     parser.add_argument("--execution-profile", choices=("light", "coordinated", "release"), required=True)
@@ -47,7 +45,6 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     """Run the gate and emit its strict result as JSON."""
-
     args = parse_args(argv)
     session_id = coordination_claims.resolve_session_id(args.agent, args.session_id)
     if not session_id:

@@ -78,7 +78,7 @@ See `ROADMAP.md` for the full phase map and recommended priority order.
 | 101 | Landscape And Prior-Art Planning Contract (`101_landscape_and_prior_art_contract.md`) | High | ✅ Complete | reusable research-before-build contract and report-only validation |
 | 102 | Plan Status Projection Repair (`102_plan_status_projection.md`) | Low | ✅ Complete | truthful cross-repo status metadata |
 | 104 | Plan-Lane Resumption Contract and Source Propagation (`104_plan_lane_resumption_contract.md`) | Critical | 🚧 In Progress | Plan #234 resumption and fail-closed recovery of plan-owned lanes |
-| 105 | Session-Bound Lane Lifecycle (`105_session_bound_lane_lifecycle.md`) | Critical | 🚧 In Progress | session-end ownership retirement and accidental tangent-root prevention |
+| 105 | Session-Bound Lane Lifecycle (`105_session_bound_lane_lifecycle.md`) | Critical | ✅ Complete | session-end ownership retirement and accidental tangent-root prevention |
 
 ## Status Key
 

@@ -1,6 +1,6 @@
 # Plan #105: Session-Bound Lane Lifecycle
 
-**Status:** In Progress
+**Status:** Complete
 **Type:** coordination lifecycle enforcement
 **Priority:** Critical
 **Landscape disposition:** inline
@@ -113,4 +113,27 @@ native-hook input fixture before publishing.
 
 ## Completion Record
 
-Not started.
+Completed 2026-07-27.
+
+- Enforced Planning implementation merged through PR #58 at `0712fd5`.
+- Project Meta registered the policy, regenerated its policy surfaces, and
+  installed the governed-repository lifecycle consumer through PR #157 at
+  `283697ed`.
+- Project Meta's preserved canonical-checkout reconciliation was published
+  through PR #158 at `8f032a8b`; both temporary Project Meta lanes and the
+  superseded `llm_client` metadata lane were closed through sanctioned
+  merge/migration dispositions.
+- Focused Enforced Planning verification passed 113 tests; Ruff, repository
+  self-test, plan validation, source/template parity, and diff checks passed.
+  The broad suite passed 781 tests with 1 skip and retained 18 unrelated
+  baseline fixture failures.
+- Project Meta verification passed 46 focused coordination/policy tests plus
+  the registry contract, generated `AGENTS.md`, compile, JSON, pre-commit, and
+  pre-push checks.
+- Claude and Codex user configuration parses and binds the source-owned adapter
+  to `SessionEnd`, not turn-level `Stop`; adapter fixtures prove exact-session
+  retirement. Native client invocation remains observable at the next actual
+  runtime termination rather than being simulated against this live session.
+- Two enforcement defects observed during integration were recorded through
+  the typed Project Meta feedback register: duplicate local/global claim
+  detection and a branch-freshness merge deadlock.

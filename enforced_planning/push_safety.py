@@ -132,6 +132,18 @@ def _branch_claims(project: str, branch: str) -> list[coordination_claims.ClaimR
     ]
 
 
+def _healthy_branch_claims(
+    claims: list[coordination_claims.ClaimRecord],
+) -> list[coordination_claims.ClaimRecord]:
+    """Return branch claims with complete, live ownership metadata."""
+
+    return [
+        claim
+        for claim in claims
+        if coordination_claims.claim_runtime_status(claim) == "healthy"
+    ]
+
+
 def _extract_json_block(raw_text: str) -> str:
     """Strip CLI noise before the first JSON token so parsing stays deterministic."""
 
@@ -229,6 +241,30 @@ def evaluate_push_safety(
                 code="missing_branch_claim",
                 message="No live coordination claim is attached to the current branch.",
                 details={"branch": resolved_branch, "project": resolved_project},
+            )
+        )
+    elif not _healthy_branch_claims(branch_claims):
+        issues.append(
+            PushCheckFinding(
+                code="no_healthy_branch_claim",
+                message=(
+                    "The current branch has no healthy canonical claim with complete "
+                    "session identity. Resume or recreate the lane before pushing."
+                ),
+                details={
+                    "branch": resolved_branch,
+                    "project": resolved_project,
+                    "claims": [
+                        {
+                            "scope": claim.scope,
+                            "session_id": claim.session_id,
+                            "session_name": claim.session_name,
+                            "health_issues": coordination_claims.claim_health_issues(claim),
+                            "liveness_issues": coordination_claims.claim_liveness_issues(claim),
+                        }
+                        for claim in branch_claims
+                    ],
+                },
             )
         )
 

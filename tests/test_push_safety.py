@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import subprocess
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -80,8 +81,10 @@ def test_push_check_detects_overlapping_live_write_claim(
             "claim_type": "program",
             "branch": "plan-42-demo",
             "worktree_path": str(repo_root),
-            "session_id": "codex:thread-1",
-            "status": "active",
+                "session_id": "codex:thread-1",
+                "session_name": "current-branch-owner",
+                "heartbeat_at": datetime.now(timezone.utc).isoformat(),
+                "status": "active",
         },
     )
     _write_claim(
@@ -132,9 +135,11 @@ def test_push_check_warns_on_active_decisions_without_blocking(
             "intent": "Own current branch",
             "claim_type": "program",
             "branch": "plan-42-demo",
-            "worktree_path": str(repo_root),
-            "session_id": "codex:thread-1",
-            "status": "active",
+                "worktree_path": str(repo_root),
+                "session_id": "codex:thread-1",
+                "session_name": "current-branch-owner",
+                "heartbeat_at": datetime.now(timezone.utc).isoformat(),
+                "status": "active",
         },
     )
     monkeypatch.setattr(
@@ -147,6 +152,41 @@ def test_push_check_warns_on_active_decisions_without_blocking(
 
     assert payload["ok"]
     assert any(item["code"] == "active_decisions_present" for item in payload["warnings"])
+
+
+def test_push_check_rejects_branch_claim_without_complete_session_identity(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A branch cannot satisfy push safety with an anonymous legacy-style claim."""
+
+    repo_root = tmp_path / "demo"
+    _init_git_repo(repo_root)
+    subprocess.run(["git", "-C", str(repo_root), "checkout", "-b", "plan-identity"], check=True, capture_output=True, text=True)
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    monkeypatch.setattr(push_safety, "load_active_decisions", lambda project, limit=5: [])
+    _write_claim(
+        claims_dir,
+        "anonymous.yaml",
+        {
+            "agent": "codex",
+            "projects": ["demo"],
+            "scope": "plan-identity",
+            "intent": "Unattributed legacy lane",
+            "claim_type": "program",
+            "branch": "plan-identity",
+            "worktree_path": str(repo_root),
+            "session_id": "codex:legacy",
+            "status": "active",
+        },
+    )
+
+    payload = push_safety.evaluate_push_safety(repo_root)
+
+    assert not payload["ok"]
+    finding = next(item for item in payload["issues"] if item["code"] == "no_healthy_branch_claim")
+    assert finding["details"]["claims"][0]["health_issues"] == ["missing_session_name"]
 
 
 def test_create_review_claim_uses_target_branch_as_parent_scope(

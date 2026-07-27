@@ -81,6 +81,17 @@ while an owned lane lacks a terminal disposition.
 No additional research beyond References Reviewed. The failure is an
 integration gap between existing canonical capabilities.
 
+## Capabilities and Cross-Repository Boundaries
+
+| Capability | Producer/owner | Consumer | Boundary claim |
+|---|---|---|---|
+| Compile qualified plan dependency truth and decide readiness | `ecosystem-ops` | `enforced-planning` readiness adapter | `PlanReadinessDecisionV1` is revision-bound; consumers do not reimplement graph resolution. |
+| Enforce plan-owned lane creation and closeout | `enforced-planning` | governed repositories | Portable lifecycle code owns fail-closed start and terminal-disposition behavior. |
+| Prove installed behavior and approve broader rollout | Project Meta | governed-repository installer and policy surfaces | The pilot consumes exact source revisions and cannot redefine either graph or lifecycle truth. |
+
+Cross-repository transport is versioned and machine-readable. Repository-local
+wrappers may adapt invocation details but cannot weaken the owning contract.
+
 ## Landscape And Prior Art
 
 **Alternatives:** Requiring sequential plan completion was rejected because it

@@ -1,6 +1,6 @@
 # Plan #106: Cross-Client Mailbox Fleet Delivery Certification
 
-**Status:** In Progress — design adopted; MF-01 is ready for execution
+**Status:** In Progress — MF-01 implementation awaits completion review; MF-02 remains blocked
 **Type:** implementation
 **Priority:** Critical
 **phase_ref:** "Phase 9 — fleet adoption and framework maintenance"
@@ -31,6 +31,16 @@
 Brian adopted design revision `mailbox-fleet-delivery-v1` on 2026-07-27. This
 releases MF-01 only; all later units remain dependency- and approval-gated in
 the work graph.
+
+### MF-01 Implementation Record
+
+Implementation commit `fafcdb0` added the typed receipt/audit/planning boundary,
+the read-only JSON CLIs, and deterministic fixtures. The focused compatibility
+suite (65 tests), MF-01 selector suite (7 selected tests), Ruff, strict mypy,
+plan validation, and work-graph validation passed. The framework-wide self-test
+still reports the pre-existing Plan #105 index/status mismatch, which is outside
+MF-01's claimed paths. MF-01 is therefore in completion review; MF-02 remains
+blocked on its accepted status.
 
 ## Gap
 

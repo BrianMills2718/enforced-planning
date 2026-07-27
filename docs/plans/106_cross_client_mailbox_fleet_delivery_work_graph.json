@@ -13,7 +13,7 @@
       "objective": "Produce strict read-only installation receipts and idempotent dry-run plans for Codex and Claude host hooks without changing live configuration.",
       "profile": "standard",
       "execution_class": "independently_executable",
-      "claimability": "ready_for_execution",
+      "claimability": "not_applicable",
       "authorization_mode": "host_workspace",
       "scope": {
         "included": [
@@ -99,8 +99,8 @@
         ],
         "failed_guards": []
       },
-      "status": "ready",
-      "record_version": 1
+      "status": "completion_review",
+      "record_version": 2
     },
     {
       "schema_version": "1.0",

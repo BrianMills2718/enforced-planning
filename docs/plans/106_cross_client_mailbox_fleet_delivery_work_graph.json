@@ -1,0 +1,507 @@
+{
+  "units": [
+    {
+      "schema_version": "1.0",
+      "record_type": "work_unit",
+      "id": "mailbox-mf-01-host-installation-audit",
+      "initiative_id": "cross-client-mailbox",
+      "goal_id": "cross-client-mailbox-delivery",
+      "design_revision": "mailbox-fleet-delivery-v1",
+      "spec_revision": "mailbox-mf-01-v1",
+      "title": "Implement host installation audit and safe config planning",
+      "class": "implementation",
+      "objective": "Produce strict read-only installation receipts and idempotent dry-run plans for Codex and Claude host hooks without changing live configuration.",
+      "profile": "standard",
+      "execution_class": "independently_executable",
+      "claimability": "ready_for_execution",
+      "authorization_mode": "host_workspace",
+      "scope": {
+        "included": [
+          "Strict Pydantic installation receipt and hook-surface contracts",
+          "Read-only audit of host and repository hook presence, digest, and duplicate risk",
+          "Atomic-backup-aware but dry-run-only host config merge planning",
+          "Both-sign JSON, TOML, missing, drifted, and unrelated-hook fixtures"
+        ],
+        "excluded": [
+          "Writes to user home configuration",
+          "Lifecycle adapter behavior changes",
+          "Consumer repository mutation",
+          "Live client restart, trust, message send, or acknowledgement"
+        ]
+      },
+      "inputs": [
+        {
+          "kind": "bounded_design",
+          "id": "docs/plans/106_cross_client_mailbox_fleet_delivery_certification.md",
+          "revision": "mailbox-fleet-delivery-v1"
+        }
+      ],
+      "outputs": [
+        "MailboxInstallationReceiptV1 and HookSurfaceV1 contracts",
+        "Read-only audit CLI with stable JSON output",
+        "Dry-run host config merge plan that preserves unrelated hooks"
+      ],
+      "dependencies": [],
+      "conflict_surfaces": [
+        {
+          "kind": "repository_path",
+          "target": "enforced_planning/mailbox_delivery.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "mailbox-host-delivery"
+        },
+        {
+          "kind": "repository_path",
+          "target": "scripts/audit_mailbox_delivery.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "mailbox-host-delivery"
+        },
+        {
+          "kind": "repository_path",
+          "target": "scripts/install_mailbox_host_adapters.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "mailbox-host-delivery"
+        },
+        {
+          "kind": "repository_path",
+          "target": "tests/test_mailbox_delivery.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "mailbox-host-delivery"
+        }
+      ],
+      "acceptance": [
+        {
+          "id": "MF01-A1",
+          "criterion": "Fixture audits distinguish absent, drifted, configured, unknown-trust, and operationally-observed states without writing files or promoting configuration to runtime proof.",
+          "evidence_required": [
+            "pytest -q tests/test_mailbox_delivery.py -k 'installation or config or audit'",
+            "ruff and strict mypy on the new contracts and CLIs",
+            "git diff --check"
+          ],
+          "negative_control": "Malformed JSON/TOML, unrelated hooks, missing adapters, and configured-without-receipt fixtures must retain exact content or fail before producing a repairable state."
+        }
+      ],
+      "readiness": {
+        "status": "ready",
+        "required_approval_types": ["design"],
+        "approvals": [
+          {
+            "approval_type": "design",
+            "role": "user",
+            "approver_id": "brian",
+            "approved_revision": "mailbox-fleet-delivery-v1",
+            "approved_at": "2026-07-27T15:34:04-07:00",
+            "expires_at": null
+          }
+        ],
+        "failed_guards": []
+      },
+      "status": "ready",
+      "record_version": 1
+    },
+    {
+      "schema_version": "1.0",
+      "record_type": "work_unit",
+      "id": "mailbox-mf-02-duplicate-safe-adapters",
+      "initiative_id": "cross-client-mailbox",
+      "goal_id": "cross-client-mailbox-delivery",
+      "design_revision": "mailbox-fleet-delivery-v1",
+      "spec_revision": "mailbox-mf-02-v1",
+      "title": "Make Codex and Claude lifecycle adapters duplicate-safe",
+      "class": "implementation",
+      "objective": "Allow host and repository compatibility hooks to coexist during migration while emitting one agent-visible notice per message and lifecycle event.",
+      "profile": "standard",
+      "execution_class": "independently_executable",
+      "claimability": "blocked_dependencies",
+      "authorization_mode": "host_workspace",
+      "scope": {
+        "included": [
+          "Client-specific event normalization into one delivery-event identity",
+          "Codex and Claude adapter parity",
+          "Duplicate suppression without acknowledgement inference",
+          "Repository-local compatibility behavior and both-sign tests"
+        ],
+        "excluded": [
+          "Host config writes",
+          "Mailbox routing or acknowledgement schema replacement",
+          "Asynchronous interruption",
+          "Consumer repository rollout"
+        ]
+      },
+      "inputs": [
+        {
+          "kind": "work_unit_output",
+          "id": "mailbox-mf-01-host-installation-audit",
+          "revision": "accepted"
+        }
+      ],
+      "outputs": [
+        "Duplicate-safe Codex and Claude lifecycle adapters",
+        "One shared event-delivery identity rule",
+        "Both-sign host-plus-repository compatibility tests"
+      ],
+      "dependencies": [
+        {
+          "unit_id": "mailbox-mf-01-host-installation-audit",
+          "type": "hard",
+          "gate": {
+            "type": "unit_status",
+            "required_status": "accepted"
+          },
+          "rationale": "Adapter behavior must emit the installation and runtime states frozen by MF-01."
+        }
+      ],
+      "conflict_surfaces": [
+        {
+          "kind": "repository_path",
+          "target": "enforced_planning/coordination_messages.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "mailbox-runtime-adapters"
+        },
+        {
+          "kind": "repository_path",
+          "target": "scripts/coordination_hook.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "mailbox-runtime-adapters"
+        },
+        {
+          "kind": "repository_path",
+          "target": "hooks/claude/notify-coordination-messages.sh",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "mailbox-runtime-adapters"
+        },
+        {
+          "kind": "repository_path",
+          "target": "hooks/codex/notify-coordination-messages.sh",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "mailbox-runtime-adapters"
+        },
+        {
+          "kind": "repository_path",
+          "target": "tests/test_coordination_messages.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "mailbox-runtime-adapters"
+        }
+      ],
+      "acceptance": [
+        {
+          "id": "MF02-A1",
+          "criterion": "For each client, two matching host/repository hook invocations for one lifecycle event produce one visible notice and one observation receipt, while a later lifecycle event repeats an unacknowledged request.",
+          "evidence_required": [
+            "pytest -q tests/test_coordination_messages.py tests/test_mailbox_delivery.py -k 'hook or duplicate or lifecycle'",
+            "ruff and strict mypy on changed runtime surfaces",
+            "git diff --check"
+          ],
+          "negative_control": "Wrong session, unknown claim, acknowledged message, expired message, unsupported event, and missing event identity must not create a false observation or acknowledgement."
+        }
+      ],
+      "readiness": {
+        "status": "blocked",
+        "required_approval_types": [],
+        "approvals": [],
+        "failed_guards": [
+          "mailbox-mf-01-host-installation-audit is not accepted"
+        ]
+      },
+      "status": "blocked",
+      "record_version": 1
+    },
+    {
+      "schema_version": "1.0",
+      "record_type": "work_unit",
+      "id": "mailbox-mf-03-host-rollout",
+      "initiative_id": "cross-client-mailbox",
+      "goal_id": "cross-client-mailbox-delivery",
+      "design_revision": "mailbox-fleet-delivery-v1",
+      "spec_revision": "mailbox-mf-03-v1",
+      "title": "Install and activate workstation-level Codex and Claude hooks",
+      "class": "migration",
+      "objective": "Safely install the accepted adapters in Brian's user-level Codex and Claude lifecycle configuration and prove idempotent configuration readback.",
+      "profile": "controlled",
+      "control_approval_types": ["readiness"],
+      "execution_class": "coupled",
+      "claimability": "blocked_dependencies",
+      "authorization_mode": "host_workspace",
+      "scope": {
+        "included": [
+          "Timestamped backups of exact user hook configuration files",
+          "Atomic merge of only canonical mailbox hook blocks",
+          "Post-write parse/readback and idempotent second dry run",
+          "Operator hook trust review and client restart/resume checklist"
+        ],
+        "excluded": [
+          "Automatic hook trust",
+          "Deletion of unrelated or repository-local hooks",
+          "Consumer repository writes",
+          "Claims of live delivery before receipts exist"
+        ]
+      },
+      "inputs": [
+        {
+          "kind": "work_unit_output",
+          "id": "mailbox-mf-02-duplicate-safe-adapters",
+          "revision": "accepted"
+        }
+      ],
+      "outputs": [
+        "Backed-up and atomically updated Codex and Claude user hook configurations",
+        "Before/after MailboxInstallationReceiptV1 records",
+        "Idempotent dry-run result and explicit trust/restart state"
+      ],
+      "dependencies": [
+        {
+          "unit_id": "mailbox-mf-02-duplicate-safe-adapters",
+          "type": "hard",
+          "gate": {
+            "type": "unit_status",
+            "required_status": "accepted"
+          },
+          "rationale": "Host and repository hooks may coexist only after duplicate-safe adapters are accepted."
+        }
+      ],
+      "conflict_surfaces": [
+        {
+          "kind": "external_system",
+          "target": "~/.codex/config.toml hook configuration",
+          "access": "exclusive",
+          "coordination_key": "mailbox-host-config"
+        },
+        {
+          "kind": "external_system",
+          "target": "~/.claude/settings.json hook configuration",
+          "access": "exclusive",
+          "coordination_key": "mailbox-host-config"
+        }
+      ],
+      "acceptance": [
+        {
+          "id": "MF03-A1",
+          "criterion": "Both user configurations parse, retain unrelated hooks, contain one canonical mailbox hook per required event, produce exact backup paths, and yield no actions on a second dry run.",
+          "evidence_required": [
+            "Before/after MailboxInstallationReceiptV1 JSON",
+            "Backup existence and parse readback",
+            "Second dry run with zero actions",
+            "Codex /hooks review plus Codex and Claude restart/resume state recorded"
+          ],
+          "negative_control": "A malformed config, failed backup, changed candidate between review and write, or untrusted hook aborts promotion to operational state."
+        }
+      ],
+      "readiness": {
+        "status": "blocked",
+        "required_approval_types": ["readiness"],
+        "approvals": [],
+        "failed_guards": [
+          "mailbox-mf-02-duplicate-safe-adapters is not accepted",
+          "Exact host-config candidate has not received readiness approval"
+        ]
+      },
+      "status": "blocked",
+      "record_version": 1
+    },
+    {
+      "schema_version": "1.0",
+      "record_type": "work_unit",
+      "id": "mailbox-mf-04-fleet-readonly-audit",
+      "initiative_id": "cross-client-mailbox",
+      "goal_id": "cross-client-mailbox-delivery",
+      "design_revision": "mailbox-fleet-delivery-v1",
+      "spec_revision": "mailbox-mf-04-v1",
+      "title": "Audit the registered governed-repository fleet",
+      "class": "integration",
+      "objective": "Produce one read-only fleet report that classifies mailbox compatibility drift and emits exact separately claimable repair packets without changing consumer repositories.",
+      "profile": "standard",
+      "execution_class": "independently_executable",
+      "claimability": "blocked_dependencies",
+      "authorization_mode": "host_workspace",
+      "scope": {
+        "included": [
+          "governed_repos.yaml as the explicit fleet inventory",
+          "Read-only installation receipt for every registered repository",
+          "Current, drifted, unavailable, and excluded classifications",
+          "One exact bounded repair command and path list per drifted repository"
+        ],
+        "excluded": [
+          "Consumer repository mutation, claims, commits, pushes, or merges",
+          "Adding repositories to the registry without authority review",
+          "Treating repository hooks as proof of host operation"
+        ]
+      },
+      "inputs": [
+        {
+          "kind": "work_unit_output",
+          "id": "mailbox-mf-01-host-installation-audit",
+          "revision": "accepted"
+        },
+        {
+          "kind": "fleet_registry",
+          "id": "governed_repos.yaml",
+          "revision": "execution-head"
+        }
+      ],
+      "outputs": [
+        "Read-only fleet mailbox installation report",
+        "Explicit inventory omissions including DIGIMON if still absent",
+        "Separately claimable per-repository repair packets"
+      ],
+      "dependencies": [
+        {
+          "unit_id": "mailbox-mf-01-host-installation-audit",
+          "type": "hard",
+          "gate": {
+            "type": "unit_status",
+            "required_status": "accepted"
+          },
+          "rationale": "Fleet classification reuses the accepted installation receipt contract."
+        }
+      ],
+      "conflict_surfaces": [
+        {
+          "kind": "repository_path",
+          "target": "scripts/upgrade_governed_repos.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "mailbox-fleet-audit"
+        },
+        {
+          "kind": "repository_path",
+          "target": "governed_repos.yaml",
+          "repository": "enforced-planning",
+          "access": "read",
+          "coordination_key": "mailbox-fleet-audit"
+        }
+      ],
+      "acceptance": [
+        {
+          "id": "MF04-A1",
+          "criterion": "One command audits every explicit fleet entry without writes, reports omissions separately, and produces a concrete repair packet for each drifted repository.",
+          "evidence_required": [
+            "Fixture fleet with current, drifted, missing, and excluded repositories",
+            "Real --dry-run --json fleet report",
+            "git status proving no consumer repository changed"
+          ],
+          "negative_control": "Dirty, archived, employer-owned, absent, unregistered, or authority-unknown repositories are reported and never repaired automatically."
+        }
+      ],
+      "readiness": {
+        "status": "blocked",
+        "required_approval_types": [],
+        "approvals": [],
+        "failed_guards": [
+          "mailbox-mf-01-host-installation-audit is not accepted"
+        ]
+      },
+      "status": "blocked",
+      "record_version": 1
+    },
+    {
+      "schema_version": "1.0",
+      "record_type": "work_unit",
+      "id": "mailbox-mf-05-four-direction-live-certification",
+      "initiative_id": "cross-client-mailbox",
+      "goal_id": "cross-client-mailbox-delivery",
+      "design_revision": "mailbox-fleet-delivery-v1",
+      "spec_revision": "mailbox-mf-05-v1",
+      "title": "Certify all Codex and Claude delivery directions",
+      "class": "verification",
+      "objective": "Produce one exact four-leg certification showing persisted, observed, and acknowledged evidence for every Codex/Claude sender-recipient pairing.",
+      "profile": "controlled",
+      "control_approval_types": ["readiness"],
+      "execution_class": "coupled",
+      "claimability": "blocked_dependencies",
+      "authorization_mode": "host_workspace",
+      "scope": {
+        "included": [
+          "Codex-to-Codex, Claude-to-Claude, Codex-to-Claude, and Claude-to-Codex legs",
+          "Exact live claimed sessions and lifecycle events",
+          "Four distinct message IDs and exact observation/acknowledgement receipt IDs",
+          "Configured-without-observation and acknowledged-hidden negative controls"
+        ],
+        "excluded": [
+          "Paid model calls",
+          "Asynchronous interruption or latency SLO claims",
+          "Inference that the requested work was completed",
+          "Consumer repository repair"
+        ]
+      },
+      "inputs": [
+        {
+          "kind": "work_unit_output",
+          "id": "mailbox-mf-03-host-rollout",
+          "revision": "accepted"
+        },
+        {
+          "kind": "work_unit_output",
+          "id": "mailbox-mf-04-fleet-readonly-audit",
+          "revision": "accepted"
+        }
+      ],
+      "outputs": [
+        "MailboxDeliveryCertificationV1 with four exact legs",
+        "Human-readable status summary linked to exact receipts",
+        "Negative-control proof that configuration alone is not operation"
+      ],
+      "dependencies": [
+        {
+          "unit_id": "mailbox-mf-03-host-rollout",
+          "type": "hard",
+          "gate": {
+            "type": "unit_status",
+            "required_status": "accepted"
+          },
+          "rationale": "Live certification requires installed and activated host hooks."
+        },
+        {
+          "unit_id": "mailbox-mf-04-fleet-readonly-audit",
+          "type": "evidence",
+          "gate": {
+            "type": "unit_status",
+            "required_status": "accepted"
+          },
+          "rationale": "Fleet configuration evidence bounds which repository contexts the certification represents."
+        }
+      ],
+      "conflict_surfaces": [
+        {
+          "kind": "external_system",
+          "target": "Canonical cross-client mailbox and four active runtime sessions",
+          "access": "write",
+          "coordination_key": "mailbox-live-certification"
+        }
+      ],
+      "acceptance": [
+        {
+          "id": "MF05-A1",
+          "criterion": "All four exact sender-recipient directions reach acknowledged state through real lifecycle delivery and validate as one MailboxDeliveryCertificationV1.",
+          "evidence_required": [
+            "Four distinct message IDs",
+            "Four exact observation receipts",
+            "Four exact recipient acknowledgement receipts",
+            "Certification schema validation and source revision",
+            "Configured-without-observation and acknowledged-hidden controls"
+          ],
+          "negative_control": "A persisted-only, manually polled-as-recipient, wrong-session, expired, duplicate-injected, or configuration-only leg fails certification."
+        }
+      ],
+      "readiness": {
+        "status": "blocked",
+        "required_approval_types": ["readiness"],
+        "approvals": [],
+        "failed_guards": [
+          "mailbox-mf-03-host-rollout is not accepted",
+          "mailbox-mf-04-fleet-readonly-audit is not accepted",
+          "Four exact active recipient sessions are not yet bound"
+        ]
+      },
+      "status": "blocked",
+      "record_version": 1
+    }
+  ]
+}

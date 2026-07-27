@@ -99,8 +99,8 @@
         ],
         "failed_guards": []
       },
-      "status": "completion_review",
-      "record_version": 2
+      "status": "accepted",
+      "record_version": 3
     },
     {
       "schema_version": "1.0",
@@ -115,7 +115,7 @@
       "objective": "Allow host and repository compatibility hooks to coexist during migration while emitting one agent-visible notice per message and lifecycle event.",
       "profile": "standard",
       "execution_class": "independently_executable",
-      "claimability": "blocked_dependencies",
+      "claimability": "ready_for_execution",
       "authorization_mode": "host_workspace",
       "scope": {
         "included": [
@@ -204,15 +204,13 @@
         }
       ],
       "readiness": {
-        "status": "blocked",
+        "status": "ready",
         "required_approval_types": [],
         "approvals": [],
-        "failed_guards": [
-          "mailbox-mf-01-host-installation-audit is not accepted"
-        ]
+        "failed_guards": []
       },
-      "status": "blocked",
-      "record_version": 1
+      "status": "ready",
+      "record_version": 2
     },
     {
       "schema_version": "1.0",
@@ -319,7 +317,7 @@
       "objective": "Produce one read-only fleet report that classifies mailbox compatibility drift and emits exact separately claimable repair packets without changing consumer repositories.",
       "profile": "standard",
       "execution_class": "independently_executable",
-      "claimability": "blocked_dependencies",
+      "claimability": "ready_for_execution",
       "authorization_mode": "host_workspace",
       "scope": {
         "included": [
@@ -391,15 +389,13 @@
         }
       ],
       "readiness": {
-        "status": "blocked",
+        "status": "ready",
         "required_approval_types": [],
         "approvals": [],
-        "failed_guards": [
-          "mailbox-mf-01-host-installation-audit is not accepted"
-        ]
+        "failed_guards": []
       },
-      "status": "blocked",
-      "record_version": 1
+      "status": "ready",
+      "record_version": 2
     },
     {
       "schema_version": "1.0",

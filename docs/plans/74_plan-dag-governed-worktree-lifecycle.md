@@ -176,8 +176,8 @@ included.
 |---|---|---|---|---|
 | WU-74-01 | implementation | complete | none | Qualified `check-ready --json` query in `ecosystem-ops` |
 | WU-74-02 | implementation | complete | WU-74-01 (hard, satisfied) | Shared identity/readiness adapter and start gate in `enforced-planning` |
-| WU-74-03 | implementation | ready for execution | WU-74-02 (hard, satisfied) | Plan-owned inventory and atomic `plan-close`/completion gate |
-| WU-74-04 | integration | blocked dependency | WU-74-03 (hard) | Project Meta pilot, installer propagation, compatibility report |
+| WU-74-03 | implementation | complete | WU-74-02 (hard, satisfied) | Plan-owned inventory and atomic `plan-close`/completion gate |
+| WU-74-04 | integration | ready for execution | WU-74-03 (hard, satisfied) | Project Meta pilot, installer propagation, compatibility report |
 
 ### WU-74-01 — Canonical qualified readiness query
 
@@ -245,6 +245,19 @@ unresolved lane.
 **Acceptance:** Repeated close is idempotent; partial failures preserve recovery
 state; successful completion leaves no unresolved owned lifecycle records.
 
+**Observed evidence (2026-07-27):**
+
+- `enforced-planning` commit `f107d2c` added strict `PlanCloseResultV1`,
+  all-lane preflight, the `plan-close` CLI, completion gating, and installer
+  propagation; PR `BrianMills2718/enforced-planning#53` merged it to `main` at
+  `a03d8f5`.
+- 103 combined Plan 74 adapter, closeout, completion, claim, and installer
+  tests passed; changed-code Ruff and mypy checks and framework self-test passed.
+- A live dry run against this Plan 74 lane returned exit 2, named every dirty
+  path, performed zero close actions, and left plan status unchanged.
+- Completed claims require recorded merged-to-default or durable recovery-ref
+  evidence; legacy completed markers without that evidence block completion.
+
 ### WU-74-04 — Pilot and rollout
 
 **Scope:** Install the exact source revision into Project Meta, exercise one
@@ -273,7 +286,7 @@ hard-coded workspace paths or a second graph store.
 
 1. [x] Execute WU-74-01 with failing readiness fixtures first.
 2. [x] Execute WU-74-02 only after the qualified query contract is accepted.
-3. Execute WU-74-03 only after created lanes carry qualified identity.
+3. [x] Execute WU-74-03 only after created lanes carry qualified identity.
 4. Pilot and propagate the exact verified source revision through WU-74-04.
 
 ---

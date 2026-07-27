@@ -1,6 +1,6 @@
 # Plan #74: Plan-DAG-Governed Worktree Lifecycle
 
-**Status:** In Progress
+**Status:** Complete
 **Type:** implementation
 **Priority:** Critical
 **phase_ref:** "Phase 9"
@@ -177,7 +177,7 @@ included.
 | WU-74-01 | implementation | complete | none | Qualified `check-ready --json` query in `ecosystem-ops` |
 | WU-74-02 | implementation | complete | WU-74-01 (hard, satisfied) | Shared identity/readiness adapter and start gate in `enforced-planning` |
 | WU-74-03 | implementation | complete | WU-74-02 (hard, satisfied) | Plan-owned inventory and atomic `plan-close`/completion gate |
-| WU-74-04 | integration | ready for execution | WU-74-03 (hard, satisfied) | Project Meta pilot, installer propagation, compatibility report |
+| WU-74-04 | integration | complete | WU-74-03 (hard, satisfied) | Project Meta pilot, installer propagation, compatibility report |
 
 ### WU-74-01 — Canonical qualified readiness query
 
@@ -269,6 +269,30 @@ ready/blocked command receipts, and a no-residue plan-close receipt.
 **Acceptance:** The pilot demonstrates the canonical behavioral example without
 hard-coded workspace paths or a second graph store.
 
+**Observed evidence (2026-07-27):**
+
+- Project Meta PR `BrianMills2718/project-meta#150` merged at `362cec86` after
+  installing the exact Plan 74 readiness and closeout surfaces. A source-review
+  correction to report failed permission restoration, rather than suppress it,
+  merged first in `BrianMills2718/enforced-planning#55` at `fa7da2b` and was
+  propagated as a second pilot commit.
+- The installed `make worktree` gate rejected blocked `ecosystem-ops#75` with
+  exit 2 before creating a branch, claim, worktree, or tracker. It accepted
+  ready `project-meta#206`, emitted the revision-bound lane contract, and
+  created a clean claimed worktree.
+- Installed `plan_close.py --plan 206` removed that temporary worktree and
+  local branch, recorded `merged_to_default: true`, released the claim/tracker,
+  and a repeated invocation returned success without new actions.
+- A post-write installer dry run reported no lifecycle drift. CLI help, Python
+  compilation, `git diff --check`, and Project Meta enforcement-liveness passed.
+  Project Meta's full test suite remains independently blocked by pre-existing
+  generated `AGENTS.md` drift (25 tests pass before that failure); regeneration
+  is intentionally outside this plan until its canonical sources are reviewed.
+- Project Meta keeps `meta-process.yaml` claims/worktrees opt-outs. The pilot
+  therefore proves the installed entrypoint contract, not an unreviewed change
+  to Project Meta's default coordination policy. Fleet enablement needs its own
+  policy decision.
+
 ---
 
 ## Plan
@@ -287,7 +311,7 @@ hard-coded workspace paths or a second graph store.
 1. [x] Execute WU-74-01 with failing readiness fixtures first.
 2. [x] Execute WU-74-02 only after the qualified query contract is accepted.
 3. [x] Execute WU-74-03 only after created lanes carry qualified identity.
-4. Pilot and propagate the exact verified source revision through WU-74-04.
+4. [x] Pilot and propagate the exact verified source revision through WU-74-04.
 
 ---
 
@@ -310,12 +334,12 @@ hard-coded workspace paths or a second graph store.
 
 ## Acceptance Criteria
 
-- [ ] Blocked plans cannot create implementation worktrees.
-- [ ] Independent ready plans remain concurrently startable.
-- [ ] Every created lane carries qualified plan identity.
-- [ ] Plan completion rejects unresolved owned lanes.
-- [ ] Successful plan close leaves recoverable terminal evidence and no lane residue.
-- [ ] No second plan graph or hard-coded repository path is introduced.
+- [x] Blocked plans cannot create implementation worktrees.
+- [x] Independent ready plans remain concurrently startable.
+- [x] Every created lane carries qualified plan identity.
+- [x] Plan completion rejects unresolved owned lanes.
+- [x] Successful plan close leaves recoverable terminal evidence and no lane residue.
+- [x] No second plan graph or hard-coded repository path is introduced.
 
 ## Non-Goals
 

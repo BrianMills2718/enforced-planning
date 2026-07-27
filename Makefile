@@ -335,6 +335,9 @@ endif
 ifndef TASK
 	$(error TASK is required. Describe the review intent)
 endif
+ifndef SESSION_GOAL
+	$(error SESSION_GOAL is required. Name the broader review objective)
+endif
 ifndef WORKTREE_AGENT
 	$(error Unable to infer agent runtime. Set AGENT via WORKTREE_AGENT=codex|claude-code|openclaw)
 endif
@@ -344,6 +347,7 @@ endif
 		--project "$(WORKTREE_PROJECT)" \
 		--target-branch "$(TARGET_BRANCH)" \
 		--intent "$(TASK)" \
+		--session-name "$(SESSION_GOAL)" \
 		--write-path "$(WRITE_PATHS)" \
 		$(if $(PLAN),--plan "Plan #$(PLAN)",) \
 		$(if $(REVIEW_SCOPE),--scope "$(REVIEW_SCOPE)",) \

@@ -41,7 +41,7 @@ DEFAULT_TTL_HOURS = 24  # Sprints run 24h; 2h caused false-expiry conflicts mid-
 LIVE_STATUSES = {"active", "blocked", "handoff"}
 COMPLETED_STATUSES = {"complete", "completed"}
 CLAIM_TYPES = {"program", "write", "review", "research"}
-STRICT_LIVE_METADATA_CLAIM_TYPES = {"program", "write", "research"}
+STRICT_LIVE_METADATA_CLAIM_TYPES = {"program", "write", "review", "research"}
 CREATION_BLOCKING_HEALTH_ISSUES = {
     "missing_project",
     "missing_write_paths",

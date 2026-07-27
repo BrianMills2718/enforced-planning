@@ -169,6 +169,7 @@ def test_create_review_claim_uses_target_branch_as_parent_scope(
         target_branch="plan-99-target",
         intent="Inspect target lane",
         write_paths=["src/demo.py|tests/test_demo.py"],
+        session_name="review-plan-99",
     )
 
     assert payload["ok"]
@@ -222,6 +223,7 @@ def test_create_review_claim_allows_read_only_review(
         target_branch="plan-99-target",
         intent="Inspect target lane without applying fixes",
         write_paths=[],
+        session_name="review-plan-99",
     )
 
     assert payload["ok"]

@@ -80,6 +80,7 @@ def create_review_claim(
     notes: str | None = None,
     scope: str | None = None,
     session_id: str | None = None,
+    session_name: str | None = None,
 ) -> dict[str, Any]:
     """Create a review claim that makes cross-lane inspection visible."""
 
@@ -100,6 +101,7 @@ def create_review_claim(
         worktree_path=str(resolved_repo_root),
         parent_scope=target_branch,
         session_id=session_id,
+        session_name=session_name,
         notes=notes,
     )
     if not ok:

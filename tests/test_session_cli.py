@@ -336,8 +336,8 @@ def test_status_sessions_routes_incomplete_plan_claim_to_contract_repair(
     session = payload["sessions"][0]
     assert session["health_status"] == "weak"
     assert session["health_issues"] == [
-        "missing_repo_root",
         "missing_session_name",
+        "missing_repo_root",
         "missing_broader_goal",
         "missing_tracker_path",
     ]

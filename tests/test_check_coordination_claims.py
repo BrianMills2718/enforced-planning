@@ -234,6 +234,7 @@ def test_create_claim_accepts_program_claim_with_live_metadata(
         branch="plan-90-coordination-graph-runtime",
         worktree_path="~/projects/project-meta_worktrees/plan-90-coordination-graph-runtime",
         session_id="codex-session-1",
+        session_name="coordination-governance",
     )
 
     assert ok
@@ -265,6 +266,7 @@ def test_create_claim_auto_resolves_codex_session_id(
         write_paths=["scripts/check_coordination_claims.py"],
         branch="plan-62-coordination-v2",
         worktree_path="~/projects/project-meta_worktrees/plan-62-coordination-v2",
+        session_name="coordination-claim-repair",
     )
 
     assert ok
@@ -272,6 +274,29 @@ def test_create_claim_auto_resolves_codex_session_id(
     payload = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
     assert payload["session_id"] == "codex:thread-123"
     assert isinstance(payload["heartbeat_at"], str)
+
+
+def test_create_claim_rejects_live_claim_without_session_name(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A live claim cannot be attributable only to an opaque runtime ID."""
+    module = _load_module()
+    monkeypatch.setattr(module, "CLAIMS_DIR", tmp_path / "claims")
+
+    with pytest.raises(ValueError, match="--session-name"):
+        module.create_claim(
+            "codex",
+            "project-meta",
+            "identity-contract",
+            "Repair coordination identity contract",
+            plan_ref="Plan #73",
+            claim_type="write",
+            write_paths=["enforced_planning/coordination_claims.py"],
+            branch="fix/identity-contract",
+            worktree_path="~/projects/project-meta/worktrees/fix/identity-contract",
+            session_id="codex:thread-identity",
+        )
 
 
 def test_heartbeat_claims_refreshes_codex_session(
@@ -476,8 +501,8 @@ def test_plan_bound_claim_without_session_contract_is_weak(tmp_path: Path) -> No
 
     assert module.claim_health_status(claim) == "weak"
     assert module.claim_health_issues(claim) == [
-        "missing_repo_root",
         "missing_session_name",
+        "missing_repo_root",
         "missing_broader_goal",
         "missing_tracker_path",
     ]
@@ -954,7 +979,12 @@ def test_check_json_outputs_claims_and_candidate_conflict_classification(
     assert exit_code == 0
     assert len(payload["claims"]) == 1
     assert payload["claims"][0]["health_status"] == "weak"
-    assert payload["claims"][0]["health_issues"] == ["missing_branch", "missing_worktree_path", "missing_session_id"]
+    assert payload["claims"][0]["health_issues"] == [
+        "missing_branch",
+        "missing_worktree_path",
+        "missing_session_id",
+        "missing_session_name",
+    ]
     assert payload["check"]["has_hard_conflict"] is True
     assert payload["check"]["candidate_health_status"] == "weak"
     assert payload["check"]["interactions"][0]["severity"] == "hard_conflict"

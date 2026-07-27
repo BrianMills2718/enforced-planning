@@ -1,6 +1,6 @@
 # Plan #74: Plan-DAG-Governed Worktree Lifecycle
 
-**Status:** Planned
+**Status:** In Progress
 **Type:** implementation
 **Priority:** Critical
 **phase_ref:** "Phase 9"
@@ -163,8 +163,8 @@ included.
 
 | Unit | Class | Availability | Depends on | Output |
 |---|---|---|---|---|
-| WU-74-01 | implementation | ready for execution | none | Qualified `check-ready --json` query in `ecosystem-ops` |
-| WU-74-02 | implementation | blocked dependency | WU-74-01 (hard) | Shared identity/readiness adapter and start gate in `enforced-planning` |
+| WU-74-01 | implementation | complete | none | Qualified `check-ready --json` query in `ecosystem-ops` |
+| WU-74-02 | implementation | ready for execution | WU-74-01 (hard, satisfied) | Shared identity/readiness adapter and start gate in `enforced-planning` |
 | WU-74-03 | implementation | blocked dependency | WU-74-02 (hard) | Plan-owned inventory and atomic `plan-close`/completion gate |
 | WU-74-04 | integration | blocked dependency | WU-74-03 (hard) | Project Meta pilot, installer propagation, compatibility report |
 
@@ -179,6 +179,20 @@ non-actionable status.
 
 **Acceptance:** The command returns a revision-bound
 `PlanReadinessDecisionV1`; negative cases fail nonzero without creating state.
+
+**Observed evidence (2026-07-27):**
+
+- `ecosystem-ops` commit `33fde90` added the strict contract and command; PR
+  `BrianMills2718/ecosystem-ops#8` merged it to `main` at `68bb9c95`.
+- `pytest -q tests/test_plan_graph.py` passed 70 tests, including all specified
+  positive and negative readiness fixtures.
+- `make check` passed 832 Python tests, 186 Vitest tests, typed-boundary checks,
+  configured mypy scope, documentation checks, and UI policy checks.
+- Real graph probes returned exit 0/`ready` for `enforced-planning#54` and exit
+  2/`blocked` for `ecosystem-ops#75` at graph revision
+  `b289f78b4a700301eae597e43b8587feda7dc1351a25931dc716c291b19f9c5a`.
+- The child lane was closed with verified `merged` disposition; its worktree,
+  local/remote feature branch, claim, and session tracker were removed.
 
 ### WU-74-02 — Portable start gate and lane identity
 
@@ -230,7 +244,7 @@ hard-coded workspace paths or a second graph store.
 
 ### Steps
 
-1. Execute WU-74-01 with failing readiness fixtures first.
+1. [x] Execute WU-74-01 with failing readiness fixtures first.
 2. Execute WU-74-02 only after the qualified query contract is accepted.
 3. Execute WU-74-03 only after created lanes carry qualified identity.
 4. Pilot and propagate the exact verified source revision through WU-74-04.

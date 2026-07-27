@@ -72,8 +72,8 @@ surfaces from them.
    - `plan_ref`
    - `branch`
    - `worktree_path`
-- `session_id`
-- `session_name` (the durable broader-goal name when it differs from the runtime ID)
+   - `session_id`
+   - `session_name` (the durable broader-goal name when it differs from the runtime ID)
    - narrow `write_paths` for write claims
 4. Execute, commit verified slices, and keep docs/trackers truthful.
 5. Push from the checked-out claimed branch. The installed `pre-push` hook runs
@@ -106,6 +106,12 @@ changing closeout semantics.
 Mandatory rule: no live session without `plan_ref`, except explicitly marked
 unplanned emergency work. If work resumes in a new runtime, reattach it to the
 existing plan-bound lane instead of silently creating a new one.
+
+A runtime session may own one unparented `program` root by default. Related
+work must declare `parent_scope`. Before opening an unrelated root, close or
+transfer the existing root; use `SESSION_ALLOW_PARALLEL=1` / `--allow-parallel`
+only when multiple roots are an intentional part of the adopted plan graph.
+The claim check runs before branch or worktree creation.
 
 For the sanctioned repo-local `make worktree` flow, the default claim is a v2
 **program** claim with real `branch`, `worktree_path`, and `session_id`
@@ -211,15 +217,14 @@ Canonical lifecycle commands:
 - `session-start`: create or refresh the claim-linked session contract
 - `session-heartbeat`: refresh the lease and tracker timestamp
 - `session-status`: show live sessions derived from claims plus trackers
+- `session-end`: detach a terminating runtime from all of its exact-session
+  claims without deleting branches, worktrees, trackers, or Git objects
 - `session-finish`: refuse unsafe closeout and require clean or explicit handoff state
 - `session-close`: clean up a claimed lane end-to-end by removing the worktree,
   safely deleting the local branch, and releasing the claim together after
   merge/disposition preflight
 - `create_publish_worktree.py`: create a merge/push control worktree only when
   the canonical main checkout is already clean
-
-Next lifecycle additions to keep the model truthful after crashes or intentional
-session closure:
 
 - `session-resume`: attach a new runtime to an existing plan-bound lane
 - `session-handoff`: intentionally pause or transfer work with a durable note
@@ -239,7 +244,12 @@ contract schema, the tracker schema, or the sanctioned repo lifecycle commands.
 
 The coordination stack uses lease semantics, not perfect real-time presence.
 
-- if a machine crashes or a window closes, the session stops heartbeating
+- if the client emits a real `SessionEnd`, the configured hook changes every
+  exact-session live claim to `session_ended`
+- `session_ended` is non-live ownership but not terminal disposition; the
+  preserved lane must be resumed, taken over, or closed through merge/recovery
+- if a machine crashes or a client cannot emit `SessionEnd`, the session stops
+  heartbeating
 - once the heartbeat ages out, the lane becomes stale
 - the next runtime must explicitly choose to resume, hand off, abandon, or
   prune that lane
@@ -248,8 +258,52 @@ Do not treat "I reopened the repo" as implicit recovery. Recovery must be
 explicitly attached to the same `project + plan_ref + scope` lane or declared
 as a new parallel lane.
 
-Parallel live lanes on the same `project + plan_ref + scope` should fail unless
-the operator explicitly allows parallelism.
+Parallel live lanes on the same `project + plan_ref + scope`, and a second
+unparented root owned by the same runtime across any project, fail unless the
+operator explicitly allows parallelism.
+
+Never wire this transition to a turn-level `Stop` event. `Stop` fires while a
+runtime can continue; only the client's true `SessionEnd` event may retire
+ownership. Session end is deliberately non-destructive and cannot substitute
+for `session-close`.
+
+## Session-End Hooks, Observability, And Feedback
+
+The source-owned adapter is:
+
+```bash
+python ~/projects/enforced-planning/scripts/session_end.py \
+  --agent codex --hook
+```
+
+Claude Code uses the same adapter with `--agent claude-code`. The hook receives
+native JSON on stdin and accepts only `hook_event_name: SessionEnd`. Configure
+it under the user-level `SessionEnd` hook, not `Stop`, so every repository uses
+one canonical implementation. Clients without a verified end hook rely on the
+heartbeat stale path and explicit `make session-end`.
+
+Inspect live state with `make session-status`. Inspect preserved ended state or
+one runtime across repositories with:
+
+```bash
+python scripts/session_status.py --include-ended --json
+python scripts/session_status.py --session-id codex:<thread-id> --include-ended --json
+```
+
+The JSON end receipt names the session, end time, reason, and every affected
+`project:scope`. Claim YAML is the durable audit record; the generated active
+work registry remains a derivative and no second mutable lane store is added.
+
+When this control blocks valid work, loses an expected session transition, or
+creates avoidable process cost, record concrete evidence in Project Meta's
+canonical feedback register:
+
+```bash
+make -C ~/projects/project-meta policy-friction \
+  POLICY=policy-session-bound-lane-lifecycle \
+  FRICTION="<observed failure and command>" \
+  RECOMMENDATION="<smallest corrective change>"
+```
 
 ## Consumer Rule
 

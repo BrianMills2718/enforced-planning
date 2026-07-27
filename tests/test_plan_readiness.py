@@ -148,7 +148,11 @@ def test_already_active_requires_explicit_resume(monkeypatch: pytest.MonkeyPatch
 
 def test_explicit_resume_allows_no_matching_live_claim(monkeypatch: pytest.MonkeyPatch) -> None:
     _patch_graph(monkeypatch, decision="already_active")
-    monkeypatch.setattr(plan_readiness.coordination_claims, "check_claims", lambda _project: [])
+    monkeypatch.setattr(
+        plan_readiness.coordination_claims,
+        "list_claims",
+        lambda _project, include_inactive: [],
+    )
 
     result = _gate(resume_requested=True)
 
@@ -160,7 +164,11 @@ def test_explicit_resume_accepts_documented_nonzero_already_active_response(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _patch_graph(monkeypatch, decision="already_active", returncode=2)
-    monkeypatch.setattr(plan_readiness.coordination_claims, "check_claims", lambda _project: [])
+    monkeypatch.setattr(
+        plan_readiness.coordination_claims,
+        "list_claims",
+        lambda _project, include_inactive: [],
+    )
 
     result = _gate(resume_requested=True)
 
@@ -169,7 +177,7 @@ def test_explicit_resume_accepts_documented_nonzero_already_active_response(
     assert result.readiness.decision == "already_active"
 
 
-@pytest.mark.parametrize("status", ["active", "blocked", "handoff"])
+@pytest.mark.parametrize("status", ["active", "blocked", "handoff", "session_ended"])
 def test_explicit_resume_rejects_each_live_matching_claim(
     monkeypatch: pytest.MonkeyPatch,
     status: str,
@@ -184,8 +192,8 @@ def test_explicit_resume_rejects_each_live_matching_claim(
     )
     monkeypatch.setattr(
         plan_readiness.coordination_claims,
-        "check_claims",
-        lambda _project: [matching_claim],
+        "list_claims",
+        lambda _project, include_inactive: [matching_claim],
     )
 
     with pytest.raises(ValueError, match=f"existing-{status}"):

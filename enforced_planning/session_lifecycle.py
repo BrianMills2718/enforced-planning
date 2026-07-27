@@ -163,6 +163,7 @@ def _upsert_session_claim(
     read_paths: list[str] | None = None,
     parent_scope: str | None = None,
     ttl_hours: float = coordination_claims.DEFAULT_TTL_HOURS,
+    allow_parallel: bool = False,
 ) -> str:
     """Create or update the compact claim-side session contract metadata."""
 
@@ -188,6 +189,7 @@ def _upsert_session_claim(
             tracker_path=tracker_path,
             parent_scope=parent_scope,
             ttl_hours=ttl_hours,
+            allow_parallel=allow_parallel,
         )
         if not ok:
             raise ValueError(message)
@@ -233,10 +235,17 @@ def _upsert_session_claim(
             broader_goal=broader_goal,
             tracker_path=tracker_path,
             parent_scope=effective_parent_scope,
+            parallel_root_authorized=(
+                allow_parallel or existing.parallel_root_authorized
+            ),
         )
         coordination_claims.validate_claim_hierarchy_for_creation(
             candidate,
             active_claims=coordination_claims.check_claims(project),
+        )
+        coordination_claims.validate_session_root_for_creation(
+            candidate,
+            active_claims=coordination_claims.check_claims(),
         )
 
         expires_at = existing.expires_at or (now + timedelta(hours=ttl_hours)).isoformat()
@@ -264,6 +273,7 @@ def _upsert_session_claim(
             "write_paths": effective_write_paths,
             "read_paths": effective_read_paths,
             "parent_scope": effective_parent_scope,
+            "parallel_root_authorized": candidate.parallel_root_authorized,
         }
         _write_claim_payload(path, payload)
     return "updated"
@@ -328,6 +338,8 @@ def _recovery_action_for_claim(
     )
     if claim.status == "handoff":
         return "resume_or_finish_handoff"
+    if claim.status == coordination_claims.SESSION_ENDED_STATUS:
+        return "resume_take_over_or_close_preserved_lane"
     if health_status == "stale":
         return "resume_or_abandon_or_prune"
     if health_status == "weak":
@@ -721,6 +733,7 @@ def start_session(
             write_paths=write_paths,
             read_paths=read_paths,
             parent_scope=parent_scope,
+            allow_parallel=allow_parallel,
         )
     except Exception:
         tracker_path.unlink(missing_ok=True)
@@ -812,19 +825,43 @@ def status_sessions(
     agent: str | None = None,
     scope: str | None = None,
     branch: str | None = None,
+    session_id: str | None = None,
+    include_ended: bool = False,
 ) -> dict[str, Any]:
-    """Return live session summaries derived from claims plus linked trackers."""
+    """Return session summaries derived from claims plus linked trackers."""
 
     sessions: list[dict[str, Any]] = []
-    project_claims = _iter_matching_live_claims(project=project)
+    all_claims = coordination_claims.list_claims(
+        include_inactive=include_ended,
+    )
+    if include_ended:
+        all_claims = [
+            claim
+            for claim in all_claims
+            if claim.is_live()
+            or claim.status == coordination_claims.SESSION_ENDED_STATUS
+        ]
+    project_claims = [
+        claim
+        for claim in all_claims
+        if not project or project in claim.projects
+    ]
     matching_claims = [
         claim
         for claim in project_claims
         if (not agent or claim.agent == agent)
         and (not scope or claim.scope == scope)
         and (not branch or claim.branch == branch)
+        and (not session_id or claim.session_id == session_id)
     ]
     for claim in matching_claims:
+        session_roots = [
+            item
+            for item in all_claims
+            if item.session_id == claim.session_id
+            and item.claim_type == "program"
+            and not item.parent_scope
+        ]
         tracker_payload: dict[str, Any] | None = None
         if claim.tracker_path:
             path = Path(claim.tracker_path).expanduser()
@@ -847,6 +884,12 @@ def status_sessions(
                 "plan_identity": coordination_claims.normalize_plan_identity(claim.plan_ref),
                 "claim_type": claim.claim_type,
                 "parent_scope": claim.parent_scope,
+                "parallel_root_authorized": claim.parallel_root_authorized,
+                "session_root_count": len(session_roots),
+                "session_root_identities": [
+                    f"{item.primary_project()}:{item.scope}"
+                    for item in session_roots
+                ],
                 "hierarchy_role": (
                     "child"
                     if claim.parent_scope
@@ -880,6 +923,52 @@ def status_sessions(
     return {
         "session_count": len(sessions),
         "sessions": sessions,
+    }
+
+
+def end_runtime_session(
+    *,
+    agent: str,
+    session_id: str | None = None,
+    reason: str = "session ended",
+    claims_dir: Path | None = None,
+) -> dict[str, Any]:
+    """Detach a terminated runtime from every exact-session live claim."""
+
+    count, identities, resolved_session_id, ended_at = (
+        coordination_claims.end_session_claims(
+            agent=agent,
+            session_id=session_id,
+            reason=reason,
+            claims_dir=claims_dir,
+        )
+    )
+    for claim in coordination_claims.list_claims(
+        claims_dir=claims_dir,
+        include_inactive=True,
+    ):
+        if (
+            claim.agent != agent
+            or claim.session_id != resolved_session_id
+            or claim.status != coordination_claims.SESSION_ENDED_STATUS
+            or not claim.tracker_path
+        ):
+            continue
+        tracker_path = Path(claim.tracker_path).expanduser()
+        if tracker_path.exists():
+            session_contracts.update_session_tracker(
+                tracker_path,
+                current_phase="session ended; lane disposition required",
+                notes=reason.strip() or "session ended",
+                updated_at=ended_at,
+            )
+    return {
+        "action": "session_ended",
+        "ended_count": count,
+        "claims": identities,
+        "session_id": resolved_session_id,
+        "session_ended_at": ended_at,
+        "reason": reason.strip() or "session ended",
     }
 
 
@@ -1089,7 +1178,15 @@ def resume_session(
 ) -> dict[str, Any]:
     """Reattach a new runtime session to an existing plan-bound lane."""
 
-    claim = _single_matching_live_claim(agent=agent, project=project, scope=scope)
+    claim, payload, claim_file = _claim_record_any_status(
+        agent=agent,
+        project=project,
+        scope=scope,
+    )
+    if claim.status not in coordination_claims.CLOSEABLE_STATUSES:
+        raise ValueError(
+            f"Cannot resume lane from lifecycle status {claim.status!r}"
+        )
     if not claim.plan_ref:
         raise ValueError("Cannot resume a lane with no plan_ref")
     if claim.branch and claim.branch != branch:
@@ -1102,11 +1199,6 @@ def resume_session(
         raise ValueError("Unable to resolve a session ID for session-resume.")
 
     updated_at = datetime.now(timezone.utc).isoformat()
-    claim_file = _claim_path(agent, project, scope)
-    payload = _load_claim_payload(agent, project, scope)
-    if payload is None:
-        raise ValueError(f"Claim file missing for {agent} → {project}:{scope}")
-
     payload["status"] = "active"
     payload["session_id"] = resolved_session_id
     payload["heartbeat_at"] = updated_at

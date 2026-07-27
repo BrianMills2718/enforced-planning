@@ -40,6 +40,8 @@ CLAIMS_DIR = Path.home() / ".claude" / "coordination" / "claims"
 DEFAULT_TTL_HOURS = 24  # Sprints run 24h; 2h caused false-expiry conflicts mid-sprint
 LIVE_STATUSES = {"active", "blocked", "handoff"}
 COMPLETED_STATUSES = {"complete", "completed"}
+SESSION_ENDED_STATUS = "session_ended"
+CLOSEABLE_STATUSES = LIVE_STATUSES | {SESSION_ENDED_STATUS}
 CLAIM_TYPES = {"program", "write", "review", "research"}
 STRICT_LIVE_METADATA_CLAIM_TYPES = {"program", "write", "review", "research"}
 CREATION_BLOCKING_HEALTH_ISSUES = {
@@ -59,12 +61,12 @@ SESSION_ENV_KEYS = {
 
 
 @contextmanager
-def claim_registry_lock() -> Iterator[None]:
+def claim_registry_lock(claims_dir: Path | None = None) -> Iterator[None]:
     """Serialize claim check-and-write mutations across local agent processes."""
 
-    claims_dir = CLAIMS_DIR.expanduser().resolve()
-    claims_dir.parent.mkdir(parents=True, exist_ok=True)
-    lock_path = claims_dir.parent / f".{claims_dir.name}.lock"
+    resolved_claims_dir = (claims_dir or CLAIMS_DIR).expanduser().resolve()
+    resolved_claims_dir.parent.mkdir(parents=True, exist_ok=True)
+    lock_path = resolved_claims_dir.parent / f".{resolved_claims_dir.name}.lock"
     with lock_path.open("a+", encoding="utf-8") as lock_file:
         lock_path.chmod(0o600)
         fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
@@ -131,6 +133,7 @@ class ClaimRecord:
     plan_ref: str | None
     source_file: str | None
     schema_version: int
+    parallel_root_authorized: bool = False
 
     def primary_project(self) -> str | None:
         """Return the first project for CLI compatibility surfaces."""
@@ -354,6 +357,88 @@ def validate_claim_hierarchy_for_creation(
             "Invalid plan claim hierarchy for "
             f"{candidate.primary_project()}:{candidate.scope}: {', '.join(issues)}"
         )
+
+
+def session_root_conflicts(
+    claim: ClaimRecord,
+    *,
+    active_claims: list[ClaimRecord],
+) -> list[ClaimRecord]:
+    """Return other root lanes already owned by the exact runtime session."""
+
+    if (
+        not claim.is_live()
+        or not claim.session_id
+        or claim.claim_type != "program"
+        or claim.parent_scope
+    ):
+        return []
+    return sorted(
+        (
+            other
+            for other in active_claims
+            if other.is_live()
+            and other.session_id == claim.session_id
+            and other.claim_type == "program"
+            and not other.parent_scope
+            and not _same_claim(other, claim)
+        ),
+        key=lambda item: (item.primary_project() or "", item.scope),
+    )
+
+
+def validate_session_root_for_creation(
+    candidate: ClaimRecord,
+    *,
+    active_claims: list[ClaimRecord],
+) -> None:
+    """Reject accidental tangent roots while preserving explicit parallelism."""
+
+    conflicts = session_root_conflicts(candidate, active_claims=active_claims)
+    if not conflicts or candidate.parallel_root_authorized:
+        return
+    identities = ", ".join(
+        f"{claim.primary_project()}:{claim.scope}" for claim in conflicts
+    )
+    raise ValueError(
+        "Runtime session already owns an unresolved root lane: "
+        f"{identities}. Start a child with --parent-scope, close/transfer the "
+        "existing root, or pass --allow-parallel for intentional parallel roots."
+    )
+
+
+def validate_no_preserved_lane_conflict(
+    candidate: ClaimRecord,
+    *,
+    claims: list[ClaimRecord],
+) -> None:
+    """Require explicit recovery before replacing preserved ended work."""
+
+    candidate_project = candidate.primary_project()
+    candidate_plan = normalize_plan_identity(candidate.plan_ref)
+    conflicts: list[ClaimRecord] = []
+    for other in claims:
+        if other.status != SESSION_ENDED_STATUS or _same_claim(other, candidate):
+            continue
+        if candidate_project not in other.projects:
+            continue
+        same_plan = bool(
+            candidate_plan
+            and normalize_plan_identity(other.plan_ref) == candidate_plan
+        )
+        write_overlap = bool(_compute_overlapping_write_paths(candidate, other))
+        if same_plan or write_overlap:
+            conflicts.append(other)
+    if not conflicts:
+        return
+    identities = ", ".join(
+        f"{claim.primary_project()}:{claim.scope}" for claim in conflicts
+    )
+    raise ValueError(
+        "Preserved session-ended lane(s) still require disposition: "
+        f"{identities}. Resume/take over the existing lane or close it through "
+        "the sanctioned merge/recovery path before creating a replacement."
+    )
 
 
 def _heartbeat_stale_after() -> timedelta:
@@ -660,6 +745,7 @@ def normalize_claim(data: dict[str, Any], *, source_file: str | None = None) -> 
             "updated_at",
             "parent_scope",
             "notes",
+            "parallel_root_authorized",
         )
     ) else 1
 
@@ -688,6 +774,7 @@ def normalize_claim(data: dict[str, Any], *, source_file: str | None = None) -> 
         plan_ref=data.get("plan_ref") if isinstance(data.get("plan_ref"), str) else None,
         source_file=source_file,
         schema_version=schema_version,
+        parallel_root_authorized=data.get("parallel_root_authorized") is True,
     )
 
 
@@ -745,6 +832,22 @@ def _claim_filename(agent: str, project: str, scope: str) -> str:
 def check_claims(project: str | None = None, *, claims_dir: Path | None = None) -> list[ClaimRecord]:
     """Check active claims, optionally selecting a registry and project."""
     claims = [claim for claim in _load_claims(claims_dir) if claim.is_live()]
+    if project:
+        claims = [claim for claim in claims if project in claim.projects]
+    return claims
+
+
+def list_claims(
+    project: str | None = None,
+    *,
+    claims_dir: Path | None = None,
+    include_inactive: bool = False,
+) -> list[ClaimRecord]:
+    """List claims with an explicit option to retain non-live audit records."""
+
+    claims = _load_claims(claims_dir)
+    if not include_inactive:
+        claims = [claim for claim in claims if claim.is_live()]
     if project:
         claims = [claim for claim in claims if project in claim.projects]
     return claims
@@ -860,6 +963,7 @@ def build_candidate_claim(
     claimed_at: str | None = None,
     expires_at: str | None = None,
     updated_at: str | None = None,
+    parallel_root_authorized: bool = False,
 ) -> ClaimRecord:
     """Build a normalized candidate claim from CLI or test inputs."""
     normalized_write_paths = [_normalize_repo_path(path) for path in (write_paths or [])]
@@ -895,6 +999,7 @@ def build_candidate_claim(
         plan_ref=plan_ref,
         source_file=None,
         schema_version=2,
+        parallel_root_authorized=parallel_root_authorized,
     )
 
 
@@ -918,6 +1023,7 @@ def create_claim(
     status: str = "active",
     parent_scope: str | None = None,
     notes: str | None = None,
+    allow_parallel: bool = False,
 ) -> tuple[bool, str]:
     """Create a new claim after checking for hard conflicts."""
     now = datetime.now(timezone.utc)
@@ -941,6 +1047,7 @@ def create_claim(
         status=status,
         parent_scope=parent_scope,
         notes=notes,
+        parallel_root_authorized=allow_parallel,
         claimed_at=now.isoformat(),
         expires_at=(now + timedelta(hours=ttl_hours)).isoformat(),
         updated_at=now.isoformat(),
@@ -948,8 +1055,26 @@ def create_claim(
     validate_claim_for_creation(candidate)
 
     with claim_registry_lock():
+        claim_path = CLAIMS_DIR / _claim_filename(agent, project, scope)
+        if claim_path.exists():
+            raw_existing = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+            existing = (
+                normalize_claim(raw_existing, source_file=str(claim_path))
+                if isinstance(raw_existing, dict)
+                else None
+            )
+            if existing and existing.status == SESSION_ENDED_STATUS:
+                raise ValueError(
+                    "Existing claim is session_ended; use session-resume/takeover "
+                    "or sanctioned closeout instead of overwriting it."
+                )
         active_claims = check_claims(project)
+        validate_no_preserved_lane_conflict(
+            candidate,
+            claims=list_claims(include_inactive=True),
+        )
         validate_claim_hierarchy_for_creation(candidate, active_claims=active_claims)
+        validate_session_root_for_creation(candidate, active_claims=check_claims())
         check_result = evaluate_claim(candidate, active_claims=active_claims)
         if check_result.hard_conflicts:
             formatted = "; ".join(
@@ -1075,6 +1200,51 @@ def heartbeat_claims(
         _atomic_write_claim(claim_file, data)
         updated_scopes.append(claim.scope)
     return len(updated_scopes), sorted(updated_scopes), resolved_session_id, heartbeat_at
+
+
+def end_session_claims(
+    *,
+    agent: str,
+    session_id: str | None = None,
+    reason: str = "session ended",
+    claims_dir: Path | None = None,
+) -> tuple[int, list[str], str, str]:
+    """Retire exact-session live ownership without deleting recovery state."""
+
+    resolved_session_id = resolve_session_id(agent, session_id)
+    if not resolved_session_id:
+        raise ValueError(
+            "Unable to resolve a session ID. Pass --session-id explicitly or run from a supported tool runtime."
+        )
+    resolved_claims_dir = claims_dir or CLAIMS_DIR
+    ended_at = datetime.now(timezone.utc).isoformat()
+    ended_claims: list[str] = []
+    with claim_registry_lock(resolved_claims_dir):
+        if not resolved_claims_dir.exists():
+            return 0, [], resolved_session_id, ended_at
+        for claim_file in resolved_claims_dir.glob("*.yaml"):
+            try:
+                data = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
+            except (OSError, yaml.YAMLError):
+                continue
+            if not isinstance(data, dict):
+                continue
+            claim = normalize_claim(data, source_file=str(claim_file))
+            if (
+                claim is None
+                or not claim.is_live()
+                or claim.agent != agent
+                or claim.session_id != resolved_session_id
+            ):
+                continue
+            data["previous_status"] = claim.status
+            data["status"] = SESSION_ENDED_STATUS
+            data["session_end_reason"] = reason.strip() or "session ended"
+            data["session_ended_at"] = ended_at
+            data["updated_at"] = ended_at
+            _atomic_write_claim(claim_file, data)
+            ended_claims.append(f"{claim.primary_project()}:{claim.scope}")
+    return len(ended_claims), sorted(ended_claims), resolved_session_id, ended_at
 
 
 def release_claim(agent: str, project: str, scope: str) -> tuple[bool, str]:
@@ -1254,6 +1424,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--status", default="active", help="Claim status (default: active)")
     parser.add_argument("--parent-scope", help="Parent/broad-scope identifier")
+    parser.add_argument(
+        "--allow-parallel",
+        action="store_true",
+        help="Explicitly authorize an additional root for this runtime session.",
+    )
     parser.add_argument("--notes", help="Freeform notes")
     parser.add_argument("--json", action="store_true", help="Output as JSON")
 
@@ -1331,6 +1506,7 @@ def main(argv: list[str] | None = None) -> int:
                 status=args.status,
                 parent_scope=args.parent_scope,
                 notes=args.notes,
+                parallel_root_authorized=args.allow_parallel,
             )
         if args.json:
             print(json.dumps(_render_check_output(claims=claims, project=args.project, candidate=candidate), indent=2))
@@ -1405,6 +1581,7 @@ def main(argv: list[str] | None = None) -> int:
                 status=args.status,
                 parent_scope=args.parent_scope,
                 notes=args.notes,
+                allow_parallel=args.allow_parallel,
             )
         except ValueError as exc:
             if args.json:

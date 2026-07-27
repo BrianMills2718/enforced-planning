@@ -1,11 +1,11 @@
 # Enforced Planning
 
 <!-- GENERATED FILE: DO NOT EDIT DIRECTLY -->
-<!-- generated_by: scripts/meta/render_agents_md.py -->
+<!-- generated_by: scripts/render_agents_md.py -->
 <!-- canonical_claude: CLAUDE.md -->
 <!-- canonical_relationships: scripts/relationships.yaml -->
 <!-- canonical_relationships_sha256: 840b164dcfa4 -->
-<!-- sync_check: python scripts/meta/check_agents_sync.py --check -->
+<!-- sync_check: python scripts/check_agents_sync.py --check -->
 
 This file is a generated Codex-oriented projection of repo governance.
 Edit the canonical sources instead of editing this file directly.
@@ -43,6 +43,7 @@ python scripts/complete_plan.py --plan N
 python scripts/session_start.py --help
 python scripts/session_heartbeat.py --help
 python scripts/session_status.py --help
+python scripts/session_end.py --help
 python scripts/session_finish.py --help
 python scripts/session_close.py --help
 
@@ -59,8 +60,12 @@ read `CLAUDE.md` directly.
 
 ### Principles
 
-- Governance is mechanical: checks are deterministic, not advisory
-- Every repo gets the same contract surface (CLAUDE.md, AGENTS.md, validators, hooks)
+- Governance is discriminating: checks report deterministic facts, and block
+  only when the candidate can violate the protected contract and the selected
+  execution mode requires blocking.
+- Every repo gets the smallest stage-appropriate contract surface; development
+  does not inherit coordinated or release controls solely because the framework
+  can install them.
 - Install is idempotent: running it twice leaves the repo in the same state
 - Source truth is in this repo; installed repos are consumers of generated artifacts
 

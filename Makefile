@@ -102,6 +102,7 @@ WORKTREE_CLAIMS_SCRIPT := scripts/meta/worktree-coordination/../check_coordinati
 WORKTREE_SESSION_START_SCRIPT := scripts/meta/worktree-coordination/../session_start.py
 WORKTREE_SESSION_HEARTBEAT_SCRIPT := scripts/meta/worktree-coordination/../session_heartbeat.py
 WORKTREE_SESSION_STATUS_SCRIPT := scripts/meta/worktree-coordination/../session_status.py
+WORKTREE_SESSION_END_SCRIPT := scripts/meta/worktree-coordination/../session_end.py
 WORKTREE_SESSION_FINISH_SCRIPT := scripts/meta/worktree-coordination/../session_finish.py
 WORKTREE_SESSION_CLOSE_SCRIPT := scripts/meta/worktree-coordination/../session_close.py
 WORKTREE_REVIEW_CLAIM_SCRIPT := scripts/meta/worktree-coordination/create_review_claim.py
@@ -117,6 +118,7 @@ SESSION_NEXT ?=
 SESSION_DEPENDS ?=
 SESSION_STOP_CONDITIONS ?=
 SESSION_NOTE ?=
+SESSION_ALLOW_PARALLEL ?=
 ALLOW_UNPLANNED ?=
 WORKTREE_EXECUTION_PROFILE ?= coordinated
 PLAN_PROJECT ?= $(WORKTREE_PROJECT)
@@ -133,7 +135,7 @@ REVIEW_SCOPE ?=
 REVIEW_NOTES ?=
 RECIPIENT ?=
 
-.PHONY: worktree worktree-list worktree-remove session-start session-heartbeat session-status session-finish session-close review-claim raise-concern verification-batch-freeze verification-batch-check verification-batch-thaw
+.PHONY: worktree worktree-list worktree-remove session-start session-heartbeat session-status session-end session-finish session-close review-claim raise-concern verification-batch-freeze verification-batch-check verification-batch-thaw
 
 verification-batch-freeze:  ## Freeze clean HEAD for DECISION="..." VERIFY_COMMAND="..."
 	@test -n "$(DECISION)" || (echo "DECISION is required" && exit 1)
@@ -200,6 +202,7 @@ endif
 		--worktree-path "$(WORKTREE_DIR)/$(BRANCH)" \
 		--session-name "$(SESSION_GOAL)" \
 		$(if $(SESSION_PARENT_SCOPE),--parent-scope "$(SESSION_PARENT_SCOPE)",) \
+		$(if $(filter 1 true yes,$(SESSION_ALLOW_PARALLEL)),--allow-parallel,) \
 		$(foreach path,$(SESSION_WRITE_PATHS),--write-path "$(path)") \
 		$(foreach path,$(SESSION_READ_PATHS),--read-path "$(path)") \
 		$(if $(PLAN),--plan "$(PLAN_PROJECT)#$(PLAN)",)
@@ -220,6 +223,7 @@ endif
 		--current-phase "$(SESSION_PHASE)" \
 		--claim-type "$(SESSION_CLAIM_TYPE)" \
 		$(if $(SESSION_PARENT_SCOPE),--parent-scope "$(SESSION_PARENT_SCOPE)",) \
+		$(if $(filter 1 true yes,$(SESSION_ALLOW_PARALLEL)),--allow-parallel,) \
 		$(foreach path,$(SESSION_WRITE_PATHS),--write-path "$(path)") \
 		$(foreach path,$(SESSION_READ_PATHS),--read-path "$(path)") \
 		$(if $(PLAN),--plan "$(PLAN_PROJECT)#$(PLAN)",) \
@@ -266,6 +270,7 @@ endif
 		--current-phase "$(SESSION_PHASE)" \
 		--claim-type "$(SESSION_CLAIM_TYPE)" \
 		$(if $(SESSION_PARENT_SCOPE),--parent-scope "$(SESSION_PARENT_SCOPE)",) \
+		$(if $(filter 1 true yes,$(SESSION_ALLOW_PARALLEL)),--allow-parallel,) \
 		$(foreach path,$(SESSION_WRITE_PATHS),--write-path "$(path)") \
 		$(foreach path,$(SESSION_READ_PATHS),--read-path "$(path)") \
 		$(if $(PLAN),--plan "Plan #$(PLAN)",) \
@@ -290,6 +295,14 @@ endif
 
 session-status:  ## Show live session summaries for this repo
 	@python "$(WORKTREE_SESSION_STATUS_SCRIPT)" --project "$(WORKTREE_PROJECT)"
+
+session-end:  ## Retire this runtime session's live claims without deleting Git work
+ifndef WORKTREE_AGENT
+	$(error Unable to infer agent runtime. Set AGENT via WORKTREE_AGENT=codex|claude-code|openclaw)
+endif
+	@python "$(WORKTREE_SESSION_END_SCRIPT)" \
+		--agent "$(WORKTREE_AGENT)" \
+		$(if $(SESSION_NOTE),--reason "$(SESSION_NOTE)",)
 
 session-finish:  ## Finish the session for BRANCH=name; blocks if the worktree is dirty
 ifndef BRANCH

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import subprocess
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -143,6 +144,151 @@ def test_start_session_creates_tracker_and_updates_claim(tmp_path: Path, monkeyp
     assert loaded_claim.tracker_path == payload["tracker_path"]
     assert Path(payload["tracker_path"]).exists()
     assert payload["plan_ref"] == "Plan #31"
+
+
+def test_session_end_retires_live_ownership_and_preserves_resume_state(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A real runtime end must release ownership without deleting recoverable work."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    worktree = tmp_path / "repo" / "worktrees" / "plan-105-root"
+    worktree.mkdir(parents=True)
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    session_lifecycle.start_session(
+        agent="codex",
+        project="enforced-planning",
+        scope="plan-105-root",
+        intent="enforce session-bound lanes",
+        repo_root=str(tmp_path / "repo"),
+        worktree_path=str(worktree),
+        branch="plan-105-root",
+        broader_goal="Prevent Abandoned Workspace Lanes",
+        current_phase="implementation",
+        plan_ref="Plan #105",
+        session_id="codex:ending-runtime",
+        tracker_dir=trackers_dir,
+    )
+
+    ended = session_lifecycle.end_runtime_session(
+        agent="codex",
+        session_id="codex:ending-runtime",
+        reason="user exited client",
+        claims_dir=claims_dir,
+    )
+    assert ended["ended_count"] == 1
+    assert ended["claims"] == ["enforced-planning:plan-105-root"]
+    assert worktree.exists()
+    assert coordination_claims.check_claims(claims_dir=claims_dir) == []
+
+    status = session_lifecycle.status_sessions(
+        project="enforced-planning",
+        include_ended=True,
+    )
+    assert status["session_count"] == 1
+    assert status["sessions"][0]["claim_status"] == "session_ended"
+    assert status["sessions"][0]["recovery_action"] == "resume_take_over_or_close_preserved_lane"
+    claim_path = claims_dir / "codex_enforced-planning_plan-105-root.yaml"
+    claim_payload = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    assert claim_payload["previous_status"] == "active"
+    assert claim_payload["session_end_reason"] == "user exited client"
+
+    with pytest.raises(ValueError, match="Preserved session-ended lane"):
+        coordination_claims.create_claim(
+            agent="claude-code",
+            project="enforced-planning",
+            scope="plan-105-replacement",
+            intent="silently replace ended work",
+            plan_ref="Plan #105",
+            claim_type="program",
+            repo_root=str(tmp_path / "repo"),
+            worktree_path=str(tmp_path / "repo" / "worktrees" / "replacement"),
+            branch="plan-105-replacement",
+            session_id="claude-code:replacement",
+            session_name="prevent-abandoned-workspace-lanes",
+            broader_goal="Prevent Abandoned Workspace Lanes",
+            tracker_path=str(trackers_dir / "replacement.yaml"),
+        )
+
+    resumed = session_lifecycle.resume_session(
+        agent="codex",
+        project="enforced-planning",
+        scope="plan-105-root",
+        worktree_path=str(worktree),
+        branch="plan-105-root",
+        current_phase="resumed disposition",
+        session_id="codex:new-runtime",
+    )
+    assert resumed["action"] == "resumed"
+    assert resumed["session_id"] == "codex:new-runtime"
+    assert coordination_claims.check_claims("enforced-planning")[0].status == "active"
+
+
+def test_native_session_end_hook_requires_real_end_event(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A turn-level event must never be mistaken for runtime termination."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    worktree = tmp_path / "repo" / "worktrees" / "hook-root"
+    worktree.mkdir(parents=True)
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    session_lifecycle.start_session(
+        agent="codex",
+        project="enforced-planning",
+        scope="hook-root",
+        intent="test native end hook",
+        repo_root=str(tmp_path / "repo"),
+        worktree_path=str(worktree),
+        branch="hook-root",
+        broader_goal="Test Native Session End",
+        current_phase="hook fixture",
+        plan_ref="Plan #105",
+        session_id="codex:hook-session",
+        tracker_dir=trackers_dir,
+    )
+    command = [
+        "python",
+        "scripts/session_end.py",
+        "--agent",
+        "codex",
+        "--hook",
+        "--claims-dir",
+        str(claims_dir),
+    ]
+    stop = subprocess.run(
+        command,
+        input=json.dumps(
+            {"session_id": "hook-session", "hook_event_name": "Stop"}
+        ),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert stop.returncode == 0
+    assert "requires hook_event_name=SessionEnd" in stop.stdout
+    assert coordination_claims.check_claims(claims_dir=claims_dir)
+
+    ended = subprocess.run(
+        command,
+        input=json.dumps(
+            {
+                "session_id": "hook-session",
+                "hook_event_name": "SessionEnd",
+                "reason": "logout",
+            }
+        ),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert ended.returncode == 0, ended.stderr or ended.stdout
+    assert json.loads(ended.stdout)["ended_count"] == 1
+    assert coordination_claims.check_claims(claims_dir=claims_dir) == []
 
 
 def test_start_session_creates_parented_child_and_rejects_second_root(

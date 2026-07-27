@@ -1,6 +1,6 @@
 # Plan #106: Cross-Client Mailbox Fleet Delivery Certification
 
-**Status:** Active — design adopted; MF-01 is ready for execution
+**Status:** In Progress — design adopted; MF-01 is ready for execution
 **Type:** implementation
 **Priority:** Critical
 **phase_ref:** "Phase 9 — fleet adoption and framework maintenance"
@@ -205,6 +205,28 @@ event, and native event/turn identity when available. If the native event has
 no stable ID, use a short-lived lock/receipt keyed by message, session, event,
 and hook invocation timestamp bucket only for duplicate suppression; it must
 not create acknowledgement or suppress later lifecycle events.
+
+---
+
+## Capabilities
+
+| Capability | Input schema | Output schema | Producer | Consumer(s) | Cost tier |
+|---|---|---|---|---|---|
+| `audit_mailbox_host_installation` | `HostInstallationAuditRequestV1` | `MailboxInstallationReceiptV1` | enforced-planning | Codex/Claude operators, fleet auditor | free |
+| `plan_mailbox_host_installation` | `HostInstallationPlanRequestV1` | `HostInstallationPlanV1` | enforced-planning | controlled rollout unit | free |
+| `query_mailbox_delivery` | `MailboxDeliveryQueryV1` | `MailboxDeliveryStatusV1` | enforced-planning | four-direction certifier, operators | free |
+
+All contracts are Pydantic-backed and revision-bound. Repository-local adapters
+may preserve compatibility during migration, but they cannot assert a host
+installation, delivery observation, or acknowledgement without the producer's
+durable receipt.
+
+### Capability Validation
+
+- [ ] Strict schema round trips cover both Codex and Claude configuration forms.
+- [ ] Audit and dry-run planning have package-backed CLIs with stable JSON.
+- [ ] A configured hook never substitutes for a runtime delivery observation.
+- [ ] MF-05 records one complete receipt chain for each client direction.
 
 ---
 

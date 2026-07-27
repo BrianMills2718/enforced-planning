@@ -40,6 +40,10 @@ The installer configures `core.hooksPath=hooks` when it is unset. It refuses to
 replace a different custom hook path. The broader raw git-hook stack and larger
 Claude hook template set remain outside the canonical minimum.
 
+The framework source repository is the template exception: its executable
+templates remain under `hooks/git/`, so source-repository dogfooding uses
+`core.hooksPath=hooks/git`.
+
 ## Legacy And Optional Hook Surfaces
 
 The source repo still contains additional templates for broader rollout modes:

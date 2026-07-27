@@ -28,6 +28,8 @@ def _arguments() -> argparse.Namespace:
     parser.add_argument("--claude-command", required=True)
     parser.add_argument("--codex-adapter", required=True)
     parser.add_argument("--claude-adapter", required=True)
+    parser.add_argument("--codex-adapter-sha256", required=True)
+    parser.add_argument("--claude-adapter-sha256", required=True)
     parser.add_argument("--repository-root")
     parser.add_argument("--framework-revision", default="unknown")
     return parser.parse_args()
@@ -40,8 +42,16 @@ def main() -> int:
             HostInstallationPlanRequestV1(
                 codex_config_path=args.codex_config,
                 claude_config_path=args.claude_config,
-                codex_adapter=HostAdapterSpecV1(command=args.codex_command, adapter_path=args.codex_adapter),
-                claude_adapter=HostAdapterSpecV1(command=args.claude_command, adapter_path=args.claude_adapter),
+                codex_adapter=HostAdapterSpecV1(
+                    command=args.codex_command,
+                    adapter_path=args.codex_adapter,
+                    expected_sha256=args.codex_adapter_sha256,
+                ),
+                claude_adapter=HostAdapterSpecV1(
+                    command=args.claude_command,
+                    adapter_path=args.claude_adapter,
+                    expected_sha256=args.claude_adapter_sha256,
+                ),
                 repository_root=args.repository_root,
                 framework_revision=args.framework_revision,
             )

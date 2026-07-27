@@ -8,11 +8,13 @@ evidence remain distinct throughout this boundary.
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
+import re
 import tomllib
 from datetime import UTC, datetime
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -47,6 +49,7 @@ class HostAdapterSpecV1(StrictContract):
 
     command: str = Field(min_length=1)
     adapter_path: str = Field(min_length=1)
+    expected_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
 class ObservationEvidenceV1(StrictContract):
@@ -132,6 +135,13 @@ def _path(path_text: str) -> Path:
     return Path(path_text).expanduser()
 
 
+def _portable_text(value: str) -> str:
+    """Replace the current home prefix with ``~`` in durable display values."""
+
+    home = str(Path.home())
+    return value.replace(home, "~") if home else value
+
+
 def _sha256_bytes(value: bytes) -> str:
     return hashlib.sha256(value).hexdigest()
 
@@ -142,7 +152,10 @@ def _adapter_sha256(adapter: HostAdapterSpecV1) -> tuple[str | None, tuple[str, 
     adapter_path = _path(adapter.adapter_path)
     if not adapter_path.is_file():
         return None, ("adapter_missing",)
-    return _sha256_bytes(adapter_path.read_bytes()), ()
+    digest = _sha256_bytes(adapter_path.read_bytes())
+    if digest != adapter.expected_sha256:
+        return digest, ("adapter_digest_mismatch",)
+    return digest, ()
 
 
 def _read_json(path: Path, *, label: str) -> dict[str, Any] | None:
@@ -217,6 +230,11 @@ def _verified_observed_clients(evidence: tuple[ObservationEvidenceV1, ...]) -> f
 
     verified: set[ClientName] = set()
     for item in evidence:
+        expected_prefix = "codex:" if item.client == "codex" else "claude-code:"
+        if not item.session_id.startswith(expected_prefix):
+            raise MailboxInstallationError(
+                f"observation evidence client/session mismatch: {item.client} requires {expected_prefix!r}"
+            )
         receipt_path = _path(item.receipt_path)
         try:
             record = StoredReceiptRecord.model_validate_json(receipt_path.read_text(encoding="utf-8"))
@@ -250,7 +268,7 @@ def _audit_surface(
             HookSurfaceV1(
                 client=client,
                 scope=scope,
-                config_path=config_path,
+                config_path=_portable_text(config_path),
                 configured_events=(),
                 adapter_command=None,
                 adapter_sha256=digest,
@@ -270,9 +288,9 @@ def _audit_surface(
         HookSurfaceV1(
             client=client,
             scope=scope,
-            config_path=config_path,
+            config_path=_portable_text(config_path),
             configured_events=configured,
-            adapter_command=adapter.command if configured else None,
+            adapter_command=_portable_text(adapter.command) if configured else None,
             adapter_sha256=digest,
             configuration_state=state,
             trust_state=_trust_state(client, observed_clients),
@@ -290,10 +308,11 @@ def _repository_surfaces(
     root = _path(request.repository_root)
     codex_path = root / ".codex" / "hooks.json"
     claude_path = root / ".claude" / "settings.json"
+    display_root = PurePosixPath(request.repository_root)
     codex, _ = _audit_surface(
         client="codex",
         scope="repository",
-        config_path=codex_path.as_posix(),
+        config_path=_portable_text((display_root / ".codex" / "hooks.json").as_posix()),
         config=_read_json(codex_path, label="repository Codex hook"),
         adapter=request.codex_adapter,
         observed_clients=observed_clients,
@@ -301,7 +320,7 @@ def _repository_surfaces(
     claude, _ = _audit_surface(
         client="claude-code",
         scope="repository",
-        config_path=claude_path.as_posix(),
+        config_path=_portable_text((display_root / ".claude" / "settings.json").as_posix()),
         config=_read_json(claude_path, label="repository Claude hook"),
         adapter=request.claude_adapter,
         observed_clients=observed_clients,
@@ -388,6 +407,15 @@ def _toml_value(value: Any) -> str:
     raise MailboxInstallationError(f"unsupported TOML value in dry-run planner: {type(value).__name__}")
 
 
+_TOML_BARE_KEY = re.compile(r"^[A-Za-z0-9_-]+$")
+
+
+def _toml_key(value: str) -> str:
+    """Quote TOML keys that are not valid bare keys, including filesystem paths."""
+
+    return value if _TOML_BARE_KEY.fullmatch(value) else json.dumps(value)
+
+
 def _render_toml(config: dict[str, Any]) -> str:
     lines: list[str] = []
 
@@ -397,13 +425,13 @@ def _render_toml(config: dict[str, Any]) -> str:
         for key in sorted(table):
             value = table[key]
             if not isinstance(value, (dict, list)) or (isinstance(value, list) and all(not isinstance(item, dict) for item in value)):
-                lines.append(f"{key} = {_toml_value(value)}")
+                lines.append(f"{_toml_key(key)} = {_toml_value(value)}")
         if lines and lines[-1] != "":
             lines.append("")
         for key in sorted(table):
             value = table[key]
             child = prefix + (key,)
-            dotted = ".".join(child)
+            dotted = ".".join(_toml_key(part) for part in child)
             if isinstance(value, dict):
                 write_table(child, value, header=f"[{dotted}]")
             elif isinstance(value, list) and any(isinstance(item, dict) for item in value):
@@ -415,7 +443,12 @@ def _render_toml(config: dict[str, Any]) -> str:
     write_table((), config)
     while lines and lines[-1] == "":
         lines.pop()
-    return "\n".join(lines) + "\n"
+    rendered = "\n".join(lines) + "\n"
+    try:
+        tomllib.loads(rendered)
+    except tomllib.TOMLDecodeError as exc:
+        raise MailboxInstallationError(f"generated Codex TOML candidate is invalid: {exc}") from exc
+    return rendered
 
 
 def _candidate_content(
@@ -430,7 +463,7 @@ def _candidate_content(
         candidate: dict[str, Any] = {}
         unrelated = 0
     else:
-        candidate = json.loads(json.dumps(config))
+        candidate = copy.deepcopy(config)
         requirements = CODEX_HOOK_REQUIREMENTS if client == "codex" else CLAUDE_HOOK_REQUIREMENTS
         _configured, missing, unrelated = _matching_events(config, requirements, adapter.command)
         if not missing:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import subprocess
 import sys
 import tomllib
@@ -38,8 +39,16 @@ def _request(tmp_path: Path) -> HostInstallationAuditRequestV1:
     return HostInstallationAuditRequestV1(
         codex_config_path=str(tmp_path / "codex.toml"),
         claude_config_path=str(tmp_path / "claude.json"),
-        codex_adapter=HostAdapterSpecV1(command=CODEX_COMMAND, adapter_path=str(codex_adapter)),
-        claude_adapter=HostAdapterSpecV1(command=CLAUDE_COMMAND, adapter_path=str(claude_adapter)),
+        codex_adapter=HostAdapterSpecV1(
+            command=CODEX_COMMAND,
+            adapter_path=str(codex_adapter),
+            expected_sha256=hashlib.sha256(codex_adapter.read_bytes()).hexdigest(),
+        ),
+        claude_adapter=HostAdapterSpecV1(
+            command=CLAUDE_COMMAND,
+            adapter_path=str(claude_adapter),
+            expected_sha256=hashlib.sha256(claude_adapter.read_bytes()).hexdigest(),
+        ),
     )
 
 
@@ -165,11 +174,26 @@ def test_drifted_command_and_missing_adapter_are_repairable_not_configured(tmp_p
     assert receipt.repair_actions
 
 
+def test_adapter_digest_drift_is_not_reported_as_configured(tmp_path: Path) -> None:
+    """An existing adapter must match the accepted digest, not merely exist."""
+
+    request = _request(tmp_path)
+    Path(request.codex_config_path).write_text(_configured_codex(), encoding="utf-8")
+    Path(request.claude_config_path).write_text(json.dumps(_configured_claude()), encoding="utf-8")
+    Path(request.codex_adapter.adapter_path).write_text("# drifted codex adapter\n", encoding="utf-8")
+
+    receipt = audit_host_installation(request)
+    codex = next(surface for surface in receipt.host_surfaces if surface.client == "codex")
+    assert codex.configuration_state == "drifted"
+    assert "adapter_digest_mismatch" in codex.issues
+
+
 def test_dry_run_candidate_preserves_unrelated_hooks_in_both_native_formats(tmp_path: Path) -> None:
     """A repair candidate adds only missing mailbox hooks and keeps unrelated semantics."""
 
     request = _request(tmp_path)
     codex = tomllib.loads(_configured_codex())
+    codex["projects"] = {"/workspace/project": {"trust_level": "trusted"}}
     codex["hooks"].pop("UserPromptSubmit")
     codex_candidate = _candidate_content(client="codex", config=codex, adapter=request.codex_adapter)
     assert codex_candidate is not None
@@ -177,6 +201,7 @@ def test_dry_run_candidate_preserves_unrelated_hooks_in_both_native_formats(tmp_
     assert parsed_codex["model"] == "gpt-5"
     assert parsed_codex["hooks"]["PreToolUse"][0]["hooks"][0]["command"] == "python3 /opt/other/guard.py"
     assert "UserPromptSubmit" in parsed_codex["hooks"]
+    assert parsed_codex["projects"]["/workspace/project"]["trust_level"] == "trusted"
 
     claude = _configured_claude()
     claude["hooks"].pop("UserPromptSubmit")
@@ -228,6 +253,57 @@ def test_observation_evidence_changes_trust_only_not_configuration(tmp_path: Pat
     assert by_client["claude-code"].trust_state == "unknown"
 
 
+def test_observation_evidence_rejects_client_session_mismatch(tmp_path: Path) -> None:
+    """A receipt cannot be relabeled from one native client to another."""
+
+    request = _request(tmp_path)
+    evidence = ObservationEvidenceV1(
+        client="codex",
+        receipt_id="rcpt_0123456789abcdef0123456789abcdef",
+        session_id="claude-code:wrong-client",
+        receipt_path=str(tmp_path / "unused.json"),
+    )
+    with pytest.raises(MailboxInstallationError, match="client/session mismatch"):
+        audit_host_installation(request.model_copy(update={"observation_evidence": (evidence,)}))
+
+
+def test_repository_receipt_paths_keep_portable_tilde(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Durable repository surface paths do not expose a resolved personal home directory."""
+
+    request = _request(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    receipt = audit_host_installation(request.model_copy(update={"repository_root": "~/consumer"}))
+    assert [surface.config_path for surface in receipt.repository_surfaces] == [
+        "~/consumer/.codex/hooks.json",
+        "~/consumer/.claude/settings.json",
+    ]
+
+
+def test_host_receipt_normalizes_explicit_home_paths(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Explicit host paths and configured commands remain portable in durable output."""
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    codex_config = tmp_path / ".codex" / "config.toml"
+    claude_config = tmp_path / ".claude" / "settings.json"
+    codex_config.parent.mkdir()
+    claude_config.parent.mkdir()
+    codex_command = f"python3 {tmp_path}/mailbox/codex_adapter.py"
+    codex_config.write_text(_configured_codex(codex_command), encoding="utf-8")
+    claude_config.write_text(json.dumps(_configured_claude()), encoding="utf-8")
+    request = _request(tmp_path).model_copy(
+        update={
+            "codex_config_path": str(codex_config),
+            "claude_config_path": str(claude_config),
+            "codex_adapter": _request(tmp_path).codex_adapter.model_copy(update={"command": codex_command}),
+        }
+    )
+
+    receipt = audit_host_installation(request)
+    codex = next(surface for surface in receipt.host_surfaces if surface.client == "codex")
+    assert codex.config_path == "~/.codex/config.toml"
+    assert codex.adapter_command == "python3 ~/mailbox/codex_adapter.py"
+
+
 def test_repository_collision_is_risk_not_runtime_proof(tmp_path: Path) -> None:
     """Host/repository coexistence is visible but does not claim suppression exists."""
 
@@ -263,6 +339,10 @@ def test_audit_and_planner_clis_emit_json_without_writing(tmp_path: Path) -> Non
         request.codex_adapter.adapter_path,
         "--claude-adapter",
         request.claude_adapter.adapter_path,
+        "--codex-adapter-sha256",
+        request.codex_adapter.expected_sha256,
+        "--claude-adapter-sha256",
+        request.claude_adapter.expected_sha256,
     ]
     root = Path(__file__).resolve().parents[1]
     for script in ("audit_mailbox_delivery.py", "install_mailbox_host_adapters.py"):

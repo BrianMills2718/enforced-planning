@@ -222,6 +222,14 @@ def normalize_plan_identity(plan_ref: str | None) -> str | None:
 
     if not isinstance(plan_ref, str):
         return None
+    qualified = re.fullmatch(
+        r"\s*([A-Za-z0-9_.-]+)#0*(\d+)\s*",
+        plan_ref,
+        flags=re.IGNORECASE,
+    )
+    if qualified:
+        project = qualified.group(1).lower().replace("_", "-")
+        return f"{project}#{int(qualified.group(2))}"
     match = re.search(r"\bPlan\s*#\s*0*(\d+)\b", plan_ref, flags=re.IGNORECASE)
     if not match:
         return None

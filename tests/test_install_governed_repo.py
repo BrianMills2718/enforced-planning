@@ -597,6 +597,7 @@ def test_install_governed_repo_write_bootstraps_minimum_repo_and_passes_audit(
     assert (tmp_path / "enforced_planning" / "__init__.py").exists()
     assert (tmp_path / "enforced_planning" / "agents_rendering.py").exists()
     assert (tmp_path / "enforced_planning" / "concern_routing.py").exists()
+    assert (tmp_path / "enforced_planning" / "plan_readiness.py").exists()
     assert (tmp_path / "enforced_planning" / "file_context.py").exists()
     assert (tmp_path / "enforced_planning" / "relationship_context.py").exists()
     assert (tmp_path / "enforced_planning" / "context_packet.py").exists()
@@ -674,7 +675,7 @@ def test_install_governed_repo_write_bootstraps_minimum_repo_and_passes_audit(
     assert 'SESSION_PHASE is required' in makefile_text
     assert 'SESSION_CLAIM_TYPE ?= program' in makefile_text
     assert 'ALLOW_UNPLANNED ?=' in makefile_text
-    assert makefile_text.count("$(if $(ALLOW_UNPLANNED),--allow-unplanned,)") == 2
+    assert makefile_text.count("$(if $(ALLOW_UNPLANNED),--allow-unplanned,)") == 3
     assert '--claim-type "$(SESSION_CLAIM_TYPE)"' in makefile_text
     assert '--parent-scope' in makefile_text
     assert '--write-path' in makefile_text
@@ -966,6 +967,15 @@ def test_install_governed_repo_syncs_worktree_block_into_existing_meta_makefile(
     assert "WORKTREE_START_POINT ?= HEAD" in makefile_text
     assert "--print-canonical-project" in makefile_text
     assert "SESSION_CLAIM_TYPE ?= program" in makefile_text
+    assert (
+        "WORKTREE_PLAN_READINESS_SCRIPT := "
+        "scripts/meta/worktree-coordination/../check_plan_readiness.py"
+    ) in makefile_text
+    assert "PLAN_READINESS_COMMAND ?=" in makefile_text
+    assert '--qualified-plan-id "$(PLAN_PROJECT)#$(PLAN)"' in makefile_text
+    assert makefile_text.index('"$(WORKTREE_PLAN_READINESS_SCRIPT)"') < makefile_text.index(
+        '"$(WORKTREE_CLAIMS_SCRIPT)" --claim'
+    )
     assert "--parent-scope" in makefile_text
     assert "--write-path" in makefile_text
     assert "session-start:" in makefile_text
@@ -1003,6 +1013,7 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
             "install:enforced_planning/concern_routing.py",
             "install:enforced_planning/coordination_claims.py",
             "install:enforced_planning/coordination_messages.py",
+            "install:enforced_planning/plan_readiness.py",
             "install:enforced_planning/doc_authority.py",
             "install:enforced_planning/push_safety.py",
             "install:enforced_planning/repository_status.py",
@@ -1014,6 +1025,7 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
             "install:hooks/pre-push",
             "install:scripts/meta/check_coordination_claims.py",
             "install:scripts/meta/check_push_safety.py",
+            "install:scripts/meta/check_plan_readiness.py",
             "install:scripts/meta/session_close.py",
             "install:scripts/meta/session_finish.py",
             "install:scripts/meta/session_heartbeat.py",
@@ -1050,6 +1062,8 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
     assert (tmp_path / "scripts" / "coordination_messages.py").exists()
     assert (tmp_path / "scripts" / "meta" / "coordination_messages.py").exists()
     assert (tmp_path / "enforced_planning" / "coordination_messages.py").exists()
+    assert (tmp_path / "enforced_planning" / "plan_readiness.py").exists()
+    assert (tmp_path / "scripts" / "meta" / "check_plan_readiness.py").exists()
     assert (tmp_path / "scripts" / "meta" / "session_finish.py").exists()
     assert (tmp_path / "scripts" / "meta" / "session_close.py").exists()
     assert (tmp_path / "enforced_planning" / "session_contracts.py").exists()

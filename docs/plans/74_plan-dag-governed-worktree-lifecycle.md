@@ -175,8 +175,8 @@ included.
 | Unit | Class | Availability | Depends on | Output |
 |---|---|---|---|---|
 | WU-74-01 | implementation | complete | none | Qualified `check-ready --json` query in `ecosystem-ops` |
-| WU-74-02 | implementation | ready for execution | WU-74-01 (hard, satisfied) | Shared identity/readiness adapter and start gate in `enforced-planning` |
-| WU-74-03 | implementation | blocked dependency | WU-74-02 (hard) | Plan-owned inventory and atomic `plan-close`/completion gate |
+| WU-74-02 | implementation | complete | WU-74-01 (hard, satisfied) | Shared identity/readiness adapter and start gate in `enforced-planning` |
+| WU-74-03 | implementation | ready for execution | WU-74-02 (hard, satisfied) | Plan-owned inventory and atomic `plan-close`/completion gate |
 | WU-74-04 | integration | blocked dependency | WU-74-03 (hard) | Project Meta pilot, installer propagation, compatibility report |
 
 ### WU-74-01 — Canonical qualified readiness query
@@ -217,6 +217,22 @@ qualified lane.
 **Acceptance:** The existing unplanned/light profile remains compatible, while
 coordinated and release work fails closed on missing or negative readiness.
 
+**Observed evidence (2026-07-27):**
+
+- `enforced-planning` commit `76afb56` added the strict consumer contracts,
+  adapter, generated worktree gate, qualified claim identity, and installer
+  propagation; PR `BrianMills2718/enforced-planning#51` merged it to `main` at
+  `49b46c3`.
+- The rendered `make worktree` command places readiness validation before the
+  first claim mutation and records `project#plan-id` in both claim and session.
+- 63 focused adapter, claim, and installer tests passed; changed-code Ruff and
+  mypy checks passed; the framework self-test passed.
+- A real canonical query returned exit 0 plus a revision-bound
+  `PlanLaneIdentityV1` for `enforced-planning#54`; a real
+  `ecosystem-ops#75` query returned exit 2 before lifecycle mutation.
+- Repository-wide pytest reached 762 passing tests and 18 pre-existing
+  unrelated failures in session-name and subprocess import-path fixtures.
+
 ### WU-74-03 — Plan completion and atomic close
 
 **Scope:** Inventory lanes by qualified plan identity, add `plan-close`, and
@@ -256,7 +272,7 @@ hard-coded workspace paths or a second graph store.
 ### Steps
 
 1. [x] Execute WU-74-01 with failing readiness fixtures first.
-2. Execute WU-74-02 only after the qualified query contract is accepted.
+2. [x] Execute WU-74-02 only after the qualified query contract is accepted.
 3. Execute WU-74-03 only after created lanes carry qualified identity.
 4. Pilot and propagate the exact verified source revision through WU-74-04.
 

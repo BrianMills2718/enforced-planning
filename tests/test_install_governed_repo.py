@@ -506,6 +506,7 @@ def test_install_governed_repo_dry_run_reports_expected_actions(tmp_path: Path) 
     assert "install:enforced_planning/notebook_registry_validation.py" in payload["actions"]
     assert "install:enforced_planning/plan_validation.py" in payload["actions"]
     assert "install:enforced_planning/push_safety.py" in payload["actions"]
+    assert "install:hooks/pre-push" in payload["actions"]
     assert "install:scripts/meta/audit_dead_code.py" in payload["actions"]
     assert "install:scripts/meta/check_dead_code.py" in payload["actions"]
     assert "install:scripts/meta/check_push_safety.py" in payload["actions"]
@@ -605,6 +606,8 @@ def test_install_governed_repo_write_bootstraps_minimum_repo_and_passes_audit(
     assert (tmp_path / "enforced_planning" / "notebook_registry_validation.py").exists()
     assert (tmp_path / "enforced_planning" / "plan_validation.py").exists()
     assert (tmp_path / "enforced_planning" / "push_safety.py").exists()
+    assert (tmp_path / "hooks" / "pre-push").exists()
+    assert os.access(tmp_path / "hooks" / "pre-push", os.X_OK)
     assert (tmp_path / "enforced_planning" / "repository_status.py").exists()
     assert (tmp_path / "enforced_planning" / "session_contracts.py").exists()
     assert (tmp_path / "enforced_planning" / "session_lifecycle.py").exists()
@@ -1008,6 +1011,7 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
             "install:enforced_planning/verification_batch.py",
             "install:enforced_planning/worktree_lifecycle.yaml",
             "install:enforced_planning/worktree_paths.py",
+            "install:hooks/pre-push",
             "install:scripts/meta/check_coordination_claims.py",
             "install:scripts/meta/check_push_safety.py",
             "install:scripts/meta/session_close.py",
@@ -1035,6 +1039,8 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
     assert not (tmp_path / "AGENTS.md").exists()
     assert not (tmp_path / ".claude" / "hooks" / "gate-edit.sh").exists()
     assert (tmp_path / "scripts" / "meta" / "check_coordination_claims.py").exists()
+    assert (tmp_path / "hooks" / "pre-push").exists()
+    assert os.access(tmp_path / "hooks" / "pre-push", os.X_OK)
     assert (tmp_path / "scripts" / "meta" / "session_start.py").exists()
     assert (tmp_path / "scripts" / "meta" / "session_heartbeat.py").exists()
     assert (tmp_path / "scripts" / "meta" / "session_status.py").exists()
@@ -1185,6 +1191,87 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
         check=False,
     )
     assert portable_lint.returncode == 0, portable_lint.stdout + portable_lint.stderr
+
+
+def test_worktree_rollout_activates_versioned_git_hooks(tmp_path: Path) -> None:
+    """A real Git consumer should receive an active pre-push gate."""
+
+    _write_minimal_claude(tmp_path)
+    (tmp_path / "Makefile").write_text("help:\n\t@echo hello\n", encoding="utf-8")
+    _git(tmp_path, "init", "-q")
+
+    result = _run(
+        "--repo-root",
+        str(tmp_path),
+        "--write",
+        "--worktree-only",
+        "--json",
+        cwd=PROJECT_META_ROOT,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    payload = json.loads(result.stdout)
+    assert "configure:git.core.hooksPath=hooks" in payload["applied_actions"]
+    assert _git(tmp_path, "config", "--local", "--get", "core.hooksPath") == "hooks"
+    assert os.access(tmp_path / "hooks" / "pre-push", os.X_OK)
+
+
+def test_worktree_rollout_refuses_to_replace_custom_git_hook_path(tmp_path: Path) -> None:
+    """Installer must not silently displace a consumer-owned hook stack."""
+
+    _write_minimal_claude(tmp_path)
+    (tmp_path / "Makefile").write_text("help:\n\t@echo hello\n", encoding="utf-8")
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "config", "--local", "core.hooksPath", ".custom-hooks")
+
+    result = _run(
+        "--repo-root",
+        str(tmp_path),
+        "--write",
+        "--worktree-only",
+        "--json",
+        cwd=PROJECT_META_ROOT,
+    )
+
+    assert result.returncode == 1
+    payload = json.loads(result.stdout)
+    assert payload["blockers"] == [
+        "core.hooksPath is already '.custom-hooks'; refusing to replace custom Git hooks"
+    ]
+    assert _git(tmp_path, "config", "--local", "--get", "core.hooksPath") == ".custom-hooks"
+    assert not (tmp_path / "hooks" / "pre-push").exists()
+
+
+def test_worktree_rollout_repairs_non_executable_pre_push_hook(tmp_path: Path) -> None:
+    """Content equality must not conceal an inactive non-executable hook."""
+
+    _write_minimal_claude(tmp_path)
+    (tmp_path / "Makefile").write_text("help:\n\t@echo hello\n", encoding="utf-8")
+    first = _run(
+        "--repo-root",
+        str(tmp_path),
+        "--write",
+        "--worktree-only",
+        "--json",
+        cwd=PROJECT_META_ROOT,
+    )
+    assert first.returncode == 0, first.stdout + first.stderr
+    hook = tmp_path / "hooks" / "pre-push"
+    hook.chmod(0o644)
+
+    repaired = _run(
+        "--repo-root",
+        str(tmp_path),
+        "--write",
+        "--worktree-only",
+        "--json",
+        cwd=PROJECT_META_ROOT,
+    )
+
+    assert repaired.returncode == 0, repaired.stdout + repaired.stderr
+    payload = json.loads(repaired.stdout)
+    assert "chmod:hooks/pre-push" in payload["applied_actions"]
+    assert os.access(hook, os.X_OK)
 
 
 def test_install_governed_repo_worktree_only_requires_existing_makefile(

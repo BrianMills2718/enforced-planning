@@ -17,6 +17,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -72,6 +74,7 @@ SYNC_SUPPORT_FILES: dict[str, str] = {
     "enforced_planning/session_contracts.py": "enforced_planning/session_contracts.py",
     "enforced_planning/session_lifecycle.py": "enforced_planning/session_lifecycle.py",
     "enforced_planning/worktree_lifecycle.yaml": "enforced_planning/worktree_lifecycle.yaml",
+    "hooks/pre-push": "hooks/git/pre-push",
     "scripts/check_doc_coupling.py": "scripts/check_doc_coupling.py",
     "scripts/check_dead_code.py": "scripts/check_dead_code.py",
     "scripts/check_push_safety.py": "scripts/check_push_safety.py",
@@ -129,6 +132,7 @@ WORKTREE_ONLY_SYNC_SUPPORT_FILES: dict[str, str] = {
     "enforced_planning/verification_batch.py": "enforced_planning/verification_batch.py",
     "enforced_planning/worktree_lifecycle.yaml": "enforced_planning/worktree_lifecycle.yaml",
     "enforced_planning/worktree_paths.py": "enforced_planning/worktree_paths.py",
+    "hooks/pre-push": "hooks/git/pre-push",
     "scripts/meta/check_coordination_claims.py": "scripts/check_coordination_claims.py",
     "scripts/meta/session_finish.py": "scripts/session_finish.py",
     "scripts/meta/session_close.py": "scripts/session_close.py",
@@ -479,6 +483,10 @@ def _plan_static_support(
             actions.append(f"sync:{target_relpath}")
             drift_files.append(target_relpath)
             file_writes[target_path] = canonical
+        elif target_relpath == "hooks/pre-push" and not os.access(target_path, os.X_OK):
+            actions.append("chmod:hooks/pre-push")
+            drift_files.append(target_relpath)
+            file_writes[target_path] = canonical
 
     if coordination_messages_only:
         return InstallPlan(
@@ -591,8 +599,56 @@ def _apply_file_writes(file_writes: dict[Path, str]) -> None:
     for path, content in file_writes.items():
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
-        if path.suffix == ".sh":
+        if path.suffix == ".sh" or path.name in {"pre-commit", "commit-msg", "post-commit", "pre-push"}:
             path.chmod(0o755)
+
+
+def _plan_git_hook_activation(repo_root: Path) -> tuple[str | None, str | None]:
+    """Plan safe activation of the versioned ``hooks/`` directory."""
+
+    inside = subprocess.run(
+        ["git", "rev-parse", "--git-dir"],
+        cwd=str(repo_root),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if inside.returncode != 0:
+        return None, None
+
+    configured = subprocess.run(
+        ["git", "config", "--local", "--get", "core.hooksPath"],
+        cwd=str(repo_root),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    current = configured.stdout.strip() if configured.returncode == 0 else ""
+    if current == "hooks":
+        return None, None
+    if current:
+        return (
+            None,
+            f"core.hooksPath is already {current!r}; refusing to replace custom Git hooks",
+        )
+    return "configure:git.core.hooksPath=hooks", None
+
+
+def _activate_git_hooks(repo_root: Path) -> None:
+    """Point this repository at the installed, versioned hook directory."""
+
+    configured = subprocess.run(
+        ["git", "config", "--local", "core.hooksPath", "hooks"],
+        cwd=str(repo_root),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if configured.returncode != 0:
+        raise RuntimeError(
+            (configured.stderr or configured.stdout).strip()
+            or "failed to configure core.hooksPath"
+        )
 
 
 def _write_agents(repo_root: Path) -> str:
@@ -653,6 +709,14 @@ def install_or_plan(
                 "enforced_planning package or scripts/_upstream_enforced_planning.py"
             )
     file_writes = dict(static_plan.file_writes)
+    install_git_push_gate = not relationship_context_only and not coordination_messages_only
+    git_hook_action: str | None = None
+    if install_git_push_gate:
+        git_hook_action, git_hook_blocker = _plan_git_hook_activation(repo_root)
+        if git_hook_action:
+            actions.append(git_hook_action)
+        if git_hook_blocker:
+            blockers.append(git_hook_blocker)
     relationships_will_change = any(
         path == repo_root / "scripts" / "relationships.yaml" for path in file_writes
     )
@@ -712,6 +776,8 @@ def install_or_plan(
         if not blockers:
             _apply_file_writes(file_writes)
             applied_actions.extend(actions)
+            if git_hook_action:
+                _activate_git_hooks(repo_root)
             if not skip_hook_wiring and not worktree_only:
                 apply_hook_generation(_hook_target(repo_root), hook_writes)
             if not worktree_only and not relationship_context_only and not coordination_messages_only and _needs_agents_refresh(

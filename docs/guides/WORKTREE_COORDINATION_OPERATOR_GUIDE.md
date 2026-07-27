@@ -76,7 +76,9 @@ surfaces from them.
 - `session_name` (the durable broader-goal name when it differs from the runtime ID)
    - narrow `write_paths` for write claims
 4. Execute, commit verified slices, and keep docs/trackers truthful.
-5. Run `make push-check` before publishing from the safe root-anchored control session.
+5. Push from the checked-out claimed branch. The installed `pre-push` hook runs
+   the canonical deterministic push check automatically. Use `make push-check`
+   directly when diagnosing a blocked push.
 6. Merge/push from the safe root-anchored control session.
 7. Record the lane disposition and use `session-close` to make the claim
    non-live, retain its completed audit record, remove the worktree, and safely

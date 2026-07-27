@@ -7,6 +7,18 @@
 **Blocked By:** None
 **Blocks:** trustworthy continuous multi-agent execution status
 
+## 2026-07-27 Publication-Gate Hardening
+
+The canonical installer now activates a versioned `hooks/pre-push` gate for
+ordinary branch publication. It invokes the shared deterministic push-safety
+check, requires the pushed branch to be the branch checked out in its claimed
+worktree, and rejects missing or unhealthy session-attributed claims. Tag-only
+and branch-deletion pushes remain outside this branch-ownership check.
+
+The installer sets `core.hooksPath=hooks` only when no hook path is configured;
+it fails loud instead of replacing a different custom hook stack. Direct
+`make push-check` remains the diagnostic entrypoint.
+
 ## Objective
 
 Prevent an agent or operator from treating a stale default-branch checkout or

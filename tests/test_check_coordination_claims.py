@@ -669,6 +669,65 @@ def test_claim_lifecycle_issues_detect_missing_worktree_on_disk(tmp_path: Path) 
     assert module.claim_runtime_status(claim) == "stale"
 
 
+def test_runtime_session_rejects_unrelated_second_root_unless_explicit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """One long-running runtime must not accumulate accidental tangent roots."""
+
+    module = _load_module()
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
+    common = {
+        "agent": "codex",
+        "intent": "fixture root",
+        "claim_type": "program",
+        "session_id": "codex:week-long-session",
+        "session_name": "complete-workspace-maintenance",
+        "broader_goal": "Complete workspace maintenance",
+    }
+    ok, _message = module.create_claim(
+        project="alpha",
+        scope="plan-1-root",
+        plan_ref="alpha#1",
+        repo_root=str(tmp_path / "alpha"),
+        worktree_path=str(tmp_path / "alpha" / "worktrees" / "plan-1-root"),
+        branch="plan-1-root",
+        tracker_path=str(tmp_path / "sessions" / "alpha.yaml"),
+        **common,
+    )
+    assert ok is True
+
+    with pytest.raises(ValueError, match="already owns an unresolved root lane"):
+        module.create_claim(
+            project="beta",
+            scope="plan-2-root",
+            plan_ref="beta#2",
+            repo_root=str(tmp_path / "beta"),
+            worktree_path=str(tmp_path / "beta" / "worktrees" / "plan-2-root"),
+            branch="plan-2-root",
+            tracker_path=str(tmp_path / "sessions" / "beta.yaml"),
+            **common,
+        )
+
+    ok, _message = module.create_claim(
+        project="beta",
+        scope="plan-2-root",
+        plan_ref="beta#2",
+        repo_root=str(tmp_path / "beta"),
+        worktree_path=str(tmp_path / "beta" / "worktrees" / "plan-2-root"),
+        branch="plan-2-root",
+        tracker_path=str(tmp_path / "sessions" / "beta.yaml"),
+        allow_parallel=True,
+        **common,
+    )
+    assert ok is True
+    claims = module.check_claims()
+    assert len(claims) == 2
+    beta = next(claim for claim in claims if claim.projects == ["beta"])
+    assert beta.parallel_root_authorized is True
+
+
 def test_claim_lifecycle_issues_detect_missing_branch_ref(tmp_path: Path) -> None:
     """Claims should become stale when the declared branch ref no longer exists."""
     module = _load_module()

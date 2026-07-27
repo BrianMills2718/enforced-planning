@@ -30,6 +30,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--agent")
     parser.add_argument("--scope")
     parser.add_argument("--branch")
+    parser.add_argument("--session-id")
+    parser.add_argument("--include-ended", action="store_true")
     parser.add_argument("--json", action="store_true")
     return parser.parse_args(argv)
 
@@ -41,11 +43,14 @@ def main(argv: list[str] | None = None) -> int:
         agent=args.agent,
         scope=args.scope,
         branch=args.branch,
+        session_id=args.session_id,
+        include_ended=args.include_ended,
     )
     if args.json:
         print(json.dumps(payload, indent=2, sort_keys=True))
         return 0
-    print(f"Live sessions: {payload['session_count']}")
+    label = "Live and ended sessions" if args.include_ended else "Live sessions"
+    print(f"{label}: {payload['session_count']}")
     for session in payload["sessions"]:
         session_name = session["session_name"] or "<missing-session-name>"
         current_phase = session["current_phase"] or "<missing-current-phase>"

@@ -31,8 +31,8 @@ FRAMEWORK_ROOT = Path(__file__).resolve().parents[1]
 if str(FRAMEWORK_ROOT) not in sys.path:
     sys.path.insert(0, str(FRAMEWORK_ROOT))
 
-from enforced_planning.agents_rendering import build_renderer
-from enforced_planning.worktree_paths import resolve_canonical_repo_root
+from enforced_planning.agents_rendering import build_renderer  # noqa: E402
+from enforced_planning.worktree_paths import resolve_canonical_repo_root  # noqa: E402
 
 _FRAMEWORK_RENDERER = build_renderer(FRAMEWORK_ROOT / "scripts" / "render_agents_md.py")
 DEFAULT_SHARED_CAPABILITY_REGISTRY = (
@@ -165,6 +165,7 @@ WORKTREE_TARGETS: tuple[str, ...] = (
     "session-heartbeat",
     "session-status",
     "session-finish",
+    "session-end",
     "session-close",
 )
 

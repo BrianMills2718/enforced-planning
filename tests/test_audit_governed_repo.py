@@ -199,6 +199,7 @@ def _write_worktree_coordination_surface(repo_root: Path) -> None:
         "scripts/meta/session_status.py",
         "scripts/meta/session_finish.py",
         "scripts/meta/session_close.py",
+        "scripts/meta/session_end.py",
     ):
         file_path = repo_root / relpath
         file_path.parent.mkdir(parents=True, exist_ok=True)
@@ -208,7 +209,7 @@ def _write_worktree_coordination_surface(repo_root: Path) -> None:
         "\n".join(
             [
                 "# === META-PROCESS TARGETS ===",
-                ".PHONY: worktree worktree-list worktree-remove session-start session-heartbeat session-status session-finish session-close",
+                ".PHONY: worktree worktree-list worktree-remove session-start session-heartbeat session-status session-end session-finish session-close",
                 "worktree:",
                 "\t@echo create",
                 "worktree-list:",
@@ -221,6 +222,8 @@ def _write_worktree_coordination_surface(repo_root: Path) -> None:
                 "\t@echo heartbeat",
                 "session-status:",
                 "\t@echo status",
+                "session-end:",
+                "\t@echo end",
                 "session-finish:",
                 "\t@echo finish",
                 "session-close:",

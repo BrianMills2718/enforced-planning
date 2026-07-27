@@ -187,3 +187,19 @@ def test_completed_claim_without_disposition_blocks_completion(tmp_path):
     assert result.failures == [
         "closed: Completed claim lacks an accepted recoverable disposition: missing."
     ]
+
+
+def test_session_ended_lane_remains_closeable_before_plan_completion():
+    """Ending a runtime must not bypass the plan's merge/recovery closeout gate."""
+
+    closed: list[str] = []
+    result = close_plan_lanes(
+        qualified_plan_id="alpha#12",
+        submitted_revision="abc123",
+        claims=[_claim(scope="preserved", status="session_ended")],
+        preflight=lambda claim: {"disposition": "merged", "merged_to_default": True},
+        closer=lambda claim: closed.append(claim.scope)
+        or {"action": "closed", "disposition": "merged"},
+    )
+    assert result.success is True
+    assert closed == ["preserved"]

@@ -100,6 +100,7 @@ python scripts/complete_plan.py --plan N
 python scripts/session_start.py --help
 python scripts/session_heartbeat.py --help
 python scripts/session_status.py --help
+python scripts/session_end.py --help
 python scripts/session_finish.py --help
 python scripts/session_close.py --help
 
@@ -121,6 +122,9 @@ make test
    single-writer development task does not need a session/claim lifecycle.
 7. Use `session-close` or `make worktree-remove` for claimed lane cleanup; do
    not manually split claim release from worktree removal.
+8. One runtime session owns one unparented program root by default. Related
+   work declares `parent_scope`; intentional additional roots require explicit
+   parallel authorization.
 
 ## Notes
 

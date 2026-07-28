@@ -134,6 +134,7 @@ WORKTREE_DISPOSITION ?= merged
 WORKTREE_DISPOSITION_REASON ?=
 WORKTREE_RECOVERY_REF ?=
 WORKTREE_ALLOW_DISCARD_UNIQUE ?=
+WORKTREE_MERGE_COMMIT ?=
 REVIEW_SCOPE ?=
 REVIEW_NOTES ?=
 RECIPIENT ?=
@@ -346,6 +347,7 @@ endif
 		--disposition-reason "$(WORKTREE_DISPOSITION_REASON)" \
 		--recovery-ref "$(WORKTREE_RECOVERY_REF)" \
 		$(if $(filter 1 true yes,$(WORKTREE_ALLOW_DISCARD_UNIQUE)),--allow-discard-unique,) \
+		$(if $(WORKTREE_MERGE_COMMIT),--merge-commit "$(WORKTREE_MERGE_COMMIT)",) \
 		$(if $(SESSION_NOTE),--note "$(SESSION_NOTE)",)
 
 worktree-list:  ## Show claimed worktree coordination status
@@ -365,7 +367,9 @@ endif
 		echo "Install or sync the sanctioned session lifecycle module before using make worktree-remove."; \
 		exit 1; \
 	fi
-	@$(MAKE) session-close BRANCH="$(BRANCH)" $(if $(SESSION_NOTE),SESSION_NOTE="$(SESSION_NOTE)",)
+	@$(MAKE) session-close BRANCH="$(BRANCH)" \
+		$(if $(WORKTREE_MERGE_COMMIT),WORKTREE_MERGE_COMMIT="$(WORKTREE_MERGE_COMMIT)",) \
+		$(if $(SESSION_NOTE),SESSION_NOTE="$(SESSION_NOTE)",)
 
 review-claim:  ## Create a review claim for TARGET_BRANCH=name WRITE_PATHS="a|b" TASK="..."
 ifndef TARGET_BRANCH

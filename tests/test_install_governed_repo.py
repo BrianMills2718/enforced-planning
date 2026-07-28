@@ -1022,6 +1022,105 @@ def test_install_governed_repo_appends_makefile_meta_block_when_missing(
     assert '$(MAKE) session-close BRANCH="$(BRANCH)"' in makefile_text
 
 
+def test_session_close_make_target_forwards_exact_squash_merge_commit(tmp_path: Path) -> None:
+    """The sanctioned Make closeout wrapper preserves exact squash evidence."""
+    captured_argv = tmp_path / "session-close-argv.json"
+    recorder = tmp_path / "record_session_close.py"
+    recorder.write_text(
+        "import json, os, sys\n"
+        "from pathlib import Path\n"
+        "Path(os.environ['CAPTURED_ARGV']).write_text(json.dumps(sys.argv[1:]))\n",
+        encoding="utf-8",
+    )
+    merge_commit = "a" * 40
+
+    result = subprocess.run(
+        [
+            "make",
+            "-f",
+            str(PROJECT_META_ROOT / "Makefile"),
+            "session-close",
+            "BRANCH=plan-234-squash-closeout",
+            "WORKTREE_AGENT=codex",
+            "WORKTREE_PROJECT=fixture",
+            f"WORKTREE_DIR={tmp_path / 'worktrees'}",
+            f"WORKTREE_SESSION_CLOSE_SCRIPT={recorder}",
+            f"WORKTREE_MERGE_COMMIT={merge_commit}",
+        ],
+        cwd=tmp_path,
+        capture_output=True,
+        env={**os.environ, "CAPTURED_ARGV": str(captured_argv)},
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert json.loads(captured_argv.read_text(encoding="utf-8")) == [
+        "--agent",
+        "codex",
+        "--project",
+        "fixture",
+        "--scope",
+        "plan-234-squash-closeout",
+        "--worktree-path",
+        str(tmp_path / "worktrees" / "plan-234-squash-closeout"),
+        "--branch",
+        "plan-234-squash-closeout",
+        "--disposition",
+        "merged",
+        "--disposition-reason",
+        "",
+        "--recovery-ref",
+        "",
+        "--merge-commit",
+        merge_commit,
+    ]
+
+
+def test_worktree_remove_make_target_forwards_exact_squash_merge_commit(tmp_path: Path) -> None:
+    """The compatibility worktree-remove wrapper cannot drop squash evidence."""
+    source_makefile = (PROJECT_META_ROOT / "Makefile").read_text(encoding="utf-8")
+    assert (
+        '$(if $(WORKTREE_MERGE_COMMIT),WORKTREE_MERGE_COMMIT="$(WORKTREE_MERGE_COMMIT)",)'
+        in source_makefile
+    )
+    (tmp_path / "Makefile").write_text(
+        source_makefile,
+        encoding="utf-8",
+    )
+    captured_argv = tmp_path / "session-close-argv.json"
+    recorder = tmp_path / "record_session_close.py"
+    recorder.write_text(
+        "import json, os, sys\n"
+        "from pathlib import Path\n"
+        "Path(os.environ['CAPTURED_ARGV']).write_text(json.dumps(sys.argv[1:]))\n",
+        encoding="utf-8",
+    )
+    merge_commit = "b" * 40
+
+    result = subprocess.run(
+        [
+            "make",
+            "worktree-remove",
+            "BRANCH=plan-234-squash-closeout",
+            "WORKTREE_AGENT=codex",
+            "WORKTREE_PROJECT=fixture",
+            f"WORKTREE_DIR={tmp_path / 'worktrees'}",
+            f"WORKTREE_SESSION_CLOSE_SCRIPT={recorder}",
+            f"WORKTREE_MERGE_COMMIT={merge_commit}",
+        ],
+        cwd=tmp_path,
+        capture_output=True,
+        env={**os.environ, "CAPTURED_ARGV": str(captured_argv)},
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "--merge-commit" in json.loads(captured_argv.read_text(encoding="utf-8"))
+    assert merge_commit in json.loads(captured_argv.read_text(encoding="utf-8"))
+
+
 def test_appended_project_status_target_executes_without_makefile_variables(
     tmp_path: Path,
 ) -> None:

@@ -507,6 +507,18 @@ Normal merged closeout:
 make session-close BRANCH=plan-59-safe-closeout
 ```
 
+For a squash merge, provide the exact canonical one-parent merge commit through
+the same sanctioned wrapper. It forwards the evidence unchanged to
+`session-close`, which rejects a commit whose patch is not exactly equivalent
+to the lane branch; a failed check leaves the worktree, branch, claim, and
+tracker intact.
+
+```bash
+make worktree-remove \
+  BRANCH=plan-59-safe-closeout \
+  WORKTREE_MERGE_COMMIT=<canonical-squash-commit>
+```
+
 ### Exact missing-worktree reconciliation
 
 Use this exceptional path only for a preserved `session_ended` claim whose

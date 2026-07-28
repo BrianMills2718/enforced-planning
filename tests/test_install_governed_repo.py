@@ -48,6 +48,7 @@ MAILBOX_COMMON_ROLLOUT_PATHS = {
     "scripts/meta/coordination_inbox.py",
     "scripts/meta/coordination_messages.py",
     "scripts/meta/session_heartbeat.py",
+    "scripts/meta/session_close.py",
     "scripts/meta/session_resume.py",
     "scripts/meta/session_start.py",
 }
@@ -254,6 +255,15 @@ def test_coordination_messages_only_rollout_is_bounded_runnable_and_idempotent(
             check=False,
         )
         assert help_result.returncode == 0, help_result.stdout + help_result.stderr
+    close_help = subprocess.run(
+        [sys.executable, str(tmp_path / "scripts/meta/session_close.py"), "--help"],
+        cwd=str(tmp_path),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert close_help.returncode == 0, close_help.stdout + close_help.stderr
+    assert "--mailbox-disposition" in close_help.stdout
 
     repeat = _run(
         "--repo-root",

@@ -185,6 +185,7 @@ COORDINATION_MESSAGES_SHARED_FILES: dict[str, str] = {
     "scripts/meta/coordination_hook.py": "scripts/meta/coordination_hook.py",
     "scripts/meta/coordination_messages.py": "scripts/meta/coordination_messages.py",
     "scripts/meta/session_heartbeat.py": "scripts/session_heartbeat.py",
+    "scripts/meta/session_close.py": "scripts/session_close.py",
     "scripts/meta/session_resume.py": "scripts/session_resume.py",
     "scripts/meta/session_start.py": "scripts/session_start.py",
 }

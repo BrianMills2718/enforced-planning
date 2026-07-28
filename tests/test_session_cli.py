@@ -20,6 +20,17 @@ from enforced_planning import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _isolate_claim_mutation_ledger(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep lifecycle fixtures out of the shared operator ledger."""
+
+    monkeypatch.setattr(
+        claim_mutation_receipts,
+        "DEFAULT_EVENTS_PATH",
+        tmp_path / "claim-mutation-events.jsonl",
+    )
+
+
 def _git(cwd: Path, *args: str) -> str:
     """Run one real Git command for lifecycle integration fixtures."""
 

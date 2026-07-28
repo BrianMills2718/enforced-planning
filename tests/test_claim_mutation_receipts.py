@@ -144,15 +144,14 @@ def test_ledger_failure_reports_mutation_applied_without_rollback(
     """A failed ledger append cannot conceal the already-applied YAML mutation."""
 
     claims_dir, _events_path = _isolated_registry(tmp_path, monkeypatch)
-
-    def fail_append(*_args, **_kwargs):
-        raise OSError("ledger unavailable")
-
-    monkeypatch.setattr(receipts, "append_receipt", fail_append)
+    blocked_parent = tmp_path / "not-a-directory"
+    blocked_parent.write_text("not a ledger directory\n", encoding="utf-8")
+    monkeypatch.setattr(receipts, "DEFAULT_EVENTS_PATH", blocked_parent / "events.jsonl")
     with pytest.raises(receipts.MutationAuditError, match="mutation_applied_audit_failed") as raised:
         _claim(scope="audit-failure", claims_dir=claims_dir)
 
     assert raised.value.to_dict()["mutation_applied"] is True
+    assert isinstance(raised.value.cause, OSError)
     assert (claims_dir / coordination_claims._claim_filename("codex", "enforced-planning", "audit-failure")).exists()
 
 
@@ -162,11 +161,9 @@ def test_cli_returns_nonzero_and_discloses_applied_audit_failure(
     """CLI callers receive a truthful nonzero result after a post-mutation audit failure."""
 
     claims_dir, _events_path = _isolated_registry(tmp_path, monkeypatch)
-
-    def fail_append(*_args, **_kwargs):
-        raise OSError("ledger unavailable")
-
-    monkeypatch.setattr(receipts, "append_receipt", fail_append)
+    blocked_parent = tmp_path / "not-a-directory"
+    blocked_parent.write_text("not a ledger directory\n", encoding="utf-8")
+    monkeypatch.setattr(receipts, "DEFAULT_EVENTS_PATH", blocked_parent / "events.jsonl")
     result = coordination_claims.main(
         [
             "--claim",

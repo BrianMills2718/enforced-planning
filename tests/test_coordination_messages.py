@@ -665,6 +665,73 @@ def test_agent_inbox_cli_injects_notice_and_observation_evidence(
     assert len(status.receipt_paths) == 1
 
 
+def test_sender_lifecycle_hook_surfaces_acknowledgement_once_without_reply_loop(
+    mailbox: tuple[CoordinationMessageStore, Path, Path],
+) -> None:
+    """The sender sees one derived acknowledgement notice without a new message."""
+
+    store, claims_dir, root = mailbox
+    persisted = store.send(_send_request(idempotency_key="sender-ack-notice"))
+    store.acknowledge(
+        AcknowledgeMessageRequest(
+            current_session_id=CLAUDE_SESSION,
+            message_id=persisted.message.message_id,
+            disposition="accepted",
+            note="The overlapping guide claim was released.",
+        )
+    )
+    command = [
+        "python",
+        "scripts/coordination_hook.py",
+        "--claims-dir",
+        str(claims_dir),
+        "--root",
+        str(root),
+    ]
+    first = subprocess.run(
+        command,
+        input=json.dumps(
+            {
+                "session_id": "thread-123",
+                "cwd": str(Path(__file__).resolve().parents[1]),
+                "hook_event_name": "UserPromptSubmit",
+                "event_id": "sender-ack-one",
+            }
+        ),
+        cwd=Path(__file__).resolve().parents[1],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    second = subprocess.run(
+        command,
+        input=json.dumps(
+            {
+                "session_id": "thread-123",
+                "cwd": str(Path(__file__).resolve().parents[1]),
+                "hook_event_name": "UserPromptSubmit",
+                "event_id": "sender-ack-two",
+            }
+        ),
+        cwd=Path(__file__).resolve().parents[1],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert first.returncode == 0, first.stderr or first.stdout
+    notice = json.loads(first.stdout)["systemMessage"]
+    assert persisted.message.message_id in notice
+    assert "new acknowledgement" in notice
+    assert "accepted" in notice
+    assert "The overlapping guide claim was released." in notice
+    assert second.returncode == 0
+    assert second.stdout == ""
+    assert len(list((root / "messages").glob("*.json"))) == 1
+    status = store.status(MessageStatusRequest(message_id=persisted.message.message_id))
+    assert [receipt.event for receipt in status.receipts] == ["acknowledged"]
+
+
 def test_codex_lifecycle_hook_observes_repeats_until_ack_then_hides(
     mailbox: tuple[CoordinationMessageStore, Path, Path],
 ) -> None:

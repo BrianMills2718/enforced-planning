@@ -187,7 +187,7 @@ def main(argv: list[str] | None = None) -> int:
             delivery_event_id=delivery_event_id,
             require_live_claim=False,
         )
-        if notice.active_count:
+        if notice.active_count or notice.acknowledgement_count:
             if args.agent == "codex":
                 print(json.dumps(_render_codex_result(payload["hook_event_name"], notice.summary)))
             else:

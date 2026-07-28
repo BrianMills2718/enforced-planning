@@ -1,0 +1,21 @@
+{
+  "schema_version": "1.0",
+  "plan": "Plan #108",
+  "work_unit": "prewrite-pw-02b0-writer-provenance",
+  "recorded_at": "2026-07-28T06:19:31.583719+00:00",
+  "verification": {
+    "heartbeat_command": "make session-heartbeat BRANCH=plan-108-pw02b0-writer-provenance WORKTREE_AGENT=codex",
+    "fleet_query_command": "python scripts/query_claim_mutation_fleet.py --json",
+    "event_id": "829edffa-c668-490e-ba60-a8bf3ee046e4",
+    "operation": "heartbeat",
+    "result": "applied_projection_current",
+    "target_project": "enforced-planning",
+    "target_scope": "plan-108-pw02b0-writer-provenance",
+    "writer_source_sha256": "ce1d252aaa486c8c6f349f1c2ce34b6500a2fbf5b47a30068162fbcb24d195e5",
+    "registry_digest_after": "17c47e8bd185a9a00082812f8a3c5a2d701173c3241edcb98b46ebeb16950362",
+    "projection_digest_after": "17c47e8bd185a9a00082812f8a3c5a2d701173c3241edcb98b46ebeb16950362",
+    "projection_current_after": true,
+    "fleet_report_sha256": "344181e30c614751e1cde7960e996f84fe2964d27bb49a443d4a566fc8a6245d"
+  },
+  "disposition": "The exact active Plan 108 claim grouped under the loaded writer source SHA. Other live claims without receipt evidence were intentionally reported as unclassified_legacy rather than inferred current."
+}

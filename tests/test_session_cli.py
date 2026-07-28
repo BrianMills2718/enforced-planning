@@ -11,7 +11,13 @@ from pathlib import Path
 import pytest
 import yaml
 
-from enforced_planning import coordination_claims, coordination_messages, session_contracts, session_lifecycle
+from enforced_planning import (
+    claim_mutation_receipts,
+    coordination_claims,
+    coordination_messages,
+    session_contracts,
+    session_lifecycle,
+)
 
 
 def _git(cwd: Path, *args: str) -> str:
@@ -797,6 +803,8 @@ def test_close_session_closes_branch_merged_to_default(
     claims_dir = tmp_path / "claims"
     trackers_dir = tmp_path / "sessions"
     monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    events_path = tmp_path / "claim-mutation-events.jsonl"
+    monkeypatch.setattr(claim_mutation_receipts, "DEFAULT_EVENTS_PATH", events_path)
     repo_root, worktree, branch = _real_repo_with_worktree(tmp_path)
     claim_file = _start_real_closeout_claim(
         repo_root=repo_root,
@@ -827,6 +835,14 @@ def test_close_session_closes_branch_merged_to_default(
     claim_payload = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
     assert claim_payload["status"] == "completed"
     assert claim_payload["disposition"] == "merged"
+    closeout_records = [
+        record
+        for record in claim_mutation_receipts.load_receipts(events_path=events_path)
+        if record.operation == "closeout"
+    ]
+    assert len(closeout_records) == 1
+    assert closeout_records[0].target_claim_path == str(claim_file)
+    assert closeout_records[0].projection_current_after is True
 
 
 def test_close_session_rejects_active_mailbox_message_before_mutation(

@@ -54,6 +54,7 @@ MAILBOX_COMMON_ROLLOUT_PATHS = {
 }
 
 MAILBOX_ROLLOUT_PATHS = MAILBOX_COMMON_ROLLOUT_PATHS | {
+    "enforced_planning/claim_mutation_receipts.py",
     "enforced_planning/coordination_claims.py",
     "enforced_planning/coordination_messages.py",
     "enforced_planning/prewrite_claim_fast.py",
@@ -68,6 +69,7 @@ MAILBOX_ROLLOUT_PATHS = MAILBOX_COMMON_ROLLOUT_PATHS | {
 }
 
 CLAIM_PROJECTION_REFRESH_PATHS = {
+    "enforced_planning/claim_mutation_receipts.py",
     "enforced_planning/coordination_claims.py",
     "enforced_planning/prewrite_claim_fast.py",
     "enforced_planning/prewrite_claim_projection.py",
@@ -1163,6 +1165,7 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
         [
             "install:enforced_planning/__init__.py",
             "install:enforced_planning/concern_routing.py",
+            "install:enforced_planning/claim_mutation_receipts.py",
             "install:enforced_planning/coordination_claims.py",
             "install:enforced_planning/coordination_messages.py",
             "install:enforced_planning/prewrite_claim_fast.py",

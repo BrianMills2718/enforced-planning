@@ -46,6 +46,9 @@ tracker contract.
 Pre-write enforcement is explicit and staged. Use `observe` first and retain
 latency/decision receipts. Promote to `enforce` only after representative
 compliant edits have zero false blocks and the approved latency bar passes.
+Promotion also requires every sanctioned claim-mutating client to refresh the
+digest-bound projection; a legacy writer can otherwise make the projection
+stale, which is visible in `observe` and correctly denied in `enforce`.
 The current adapters cover Claude `Edit|Write` and Codex `apply_patch`; they do
 not provide OS-level protection or infer arbitrary shell write targets.
 

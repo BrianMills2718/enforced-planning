@@ -13,6 +13,7 @@ import yaml
 
 PROJECT_META_ROOT = Path(__file__).resolve().parents[1]
 AUDIT_SCRIPT = PROJECT_META_ROOT / "scripts" / "audit_governed_repo.py"
+GENERATE_HOOKS_SCRIPT = PROJECT_META_ROOT / "scripts" / "generate_hook_wiring.py"
 
 
 def _write_canonical_governance(repo_root: Path) -> None:
@@ -985,3 +986,51 @@ def test_audit_requires_prewrite_wiring_only_for_opted_in_repo(tmp_path: Path) -
     assert check["expected"] is True
     assert check["present"] is False
     assert any(item.startswith("prewrite-hook:") for item in payload["missing_required"])
+    assert "enforced_planning/prewrite_claim_fast.py" in check["files_missing"]
+    assert "enforced_planning/prewrite_claim_projection.py" in check["files_missing"]
+    assert "scripts/refresh_prewrite_claim_projection.py" in check["files_missing"]
+
+
+def test_audit_accepts_generated_codex_prewrite_command(tmp_path: Path) -> None:
+    """Audit parsed settings so JSON escaping cannot hide a valid Codex command."""
+
+    repo_root = tmp_path / "repo"
+    _write_governed_repo_scaffold(repo_root)
+    (repo_root / "meta-process.yaml").write_text(
+        "meta_process:\n  version: '1.0'\n  claims:\n    prewrite_mode: observe\n",
+        encoding="utf-8",
+    )
+    generated = subprocess.run(
+        [
+            sys.executable,
+            str(GENERATE_HOOKS_SCRIPT),
+            "--repo-root",
+            str(repo_root),
+            "--write",
+            "--json",
+        ],
+        cwd=str(PROJECT_META_ROOT),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert generated.returncode == 0, generated.stderr
+
+    result = subprocess.run(
+        [sys.executable, str(AUDIT_SCRIPT), "--repo-root", str(repo_root), "--json"],
+        cwd=str(PROJECT_META_ROOT),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    payload = json.loads(result.stdout)
+    check = payload["checks"]["prewrite_claim_gate"]
+    assert check == {
+        "mode": "observe",
+        "expected": True,
+        "present": True,
+        "files_missing": [],
+        "commands_missing": [],
+    }

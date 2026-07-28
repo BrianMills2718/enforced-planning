@@ -1,6 +1,6 @@
 # Plan #108: Low-Friction Pre-Write Claim Enforcement
 
-**Status:** In Progress — PW-01/PW-02A accepted; PW-02 ready
+**Status:** In Progress — PW-01/PW-02A/PW-02 accepted; PW-02B ready; PW-03 blocked
 **Type:** implementation
 **Priority:** Critical
 **phase_ref:** "Phase 9"
@@ -318,6 +318,7 @@ integration action; framework implementation must not edit it implicitly.
 | PW-01 typed evaluator and native adapters | `vertical` | Known native write events receive an attributable pre-write decision. |
 | PW-02A digest-bound fast decision path | `vertical` | Fresh hook processes avoid Pydantic startup and registry-wide YAML parsing without weakening authority. |
 | PW-02 observe-mode calibration and installer/auditor | `vertical` | Real client wiring is measurable without blocking work. |
+| PW-02B fleet projection-refresh rollout | `vertical` | Every active sanctioned claim mutation leaves the shared projection current. |
 | PW-03 enforce-mode promotion and live negative control | `vertical` | An unauthorized native edit is stopped before mutation. |
 
 ### Thin slices
@@ -334,7 +335,11 @@ integration action; framework implementation must not edit it implicitly.
    install only an exact reviewed observe-mode candidate, exercise supported
    native payloads, and retain decision/latency receipts. Stop if payload
    identity is insufficient or the latency/false-block readout misses its bar.
-4. **PW-03 — promote one governed repository.** Change only the explicit repo's
+4. **PW-02B — close the fleet mutation gap.** Inventory every active sanctioned
+   claim-mutation entrypoint, update each installed runtime under an exact repo
+   claim, and prove create, heartbeat, release, and closeout all leave the
+   digest-bound projection current. Do not edit archived or inactive repos.
+5. **PW-03 — promote one governed repository.** Change only the explicit repo's
    configured mode to enforce, prove an unclaimed/out-of-scope edit leaves the
    file hash unchanged, prove an exact claimed edit succeeds, and retain the
    rollback command and receipts.
@@ -373,6 +378,23 @@ violation controls correctly with zero false blocks, but measured p95 796.655 ms
 and p99 1051.962 ms. Both exceed the approved p95 <100 ms and p99 <200 ms bars.
 Therefore no repository or host configuration was promoted to `enforce`.
 
+PW-02 was subsequently accepted in `observe` mode after PW-02A removed the
+synchronous parsing bottleneck. The installed-copy integration test constructs
+a temporary governed Git repository, compiles its projection with the installed
+projector, and proves both an exact-claim allow and an out-of-scope observe
+violation. The real Codex adapter then produced receipts
+`prewrite_fe592bc105874cd6af26cd4eb22da509` and
+`prewrite_5e5b0464376648cfb1d27c3f71677042` on the shared registry. Full details
+are retained in
+`docs/evidence/plan108_pw02_installed_observe_probe.json`.
+
+The first live probe also exposed a promotion blocker: a legacy claim writer
+had changed the shared YAML registry without refreshing the derived projection.
+Observe mode reported `projection_unavailable_or_stale` without blocking. PW-03
+must not enable hard enforcement until every sanctioned active claim mutation
+surface uses the projection-refreshing implementation and a retained
+mutation/readback control proves the projection remains current.
+
 ### PW-02A Evidence
 
 PW-02A is accepted at source revisions `d7cdb00`, `7b8c0d9`, and `c174beb`.
@@ -394,7 +416,8 @@ probe remain PW-02 work, not because of an unresolved PW-02A defect.
 
 #### Dependency Subplan: lower-latency native decision path
 
-**Blocks:** PW-02 acceptance and PW-03 enforcement promotion.
+**Historical blocker:** PW-02A previously blocked PW-02 acceptance and remains
+a prerequisite for PW-03. PW-02A and PW-02 are now accepted.
 
 **Current stub:** The typed evaluator, adapters, generator, and audit are
 correct but start a fresh Python/Pydantic process and reparse the full YAML
@@ -416,9 +439,10 @@ dependency-light hook engine behind the same
 **Readout:** Zero false blocks, exact receipt step-down, p95 <100 ms, and p99
 <200 ms.
 
-**Promotion:** Accept PW-02A only after canonical-vs-fast parity and stale-state
-negative controls pass. Then update the PW-02 evidence; mark PW-02 accepted and
-make PW-03 ready only if the unchanged latency and correctness bars pass.
+**Promotion result:** Canonical-vs-fast parity and stale-state negative controls
+passed, and PW-02 is accepted. PW-03 remains blocked on PW-02B because the live
+observe probe proved at least one legacy mutation path can still leave the
+shared projection stale.
 
 **Cleanup:** Route the typed facade and native adapter through one underlying
 decision engine. Retain the heavier projector only for claim mutation,

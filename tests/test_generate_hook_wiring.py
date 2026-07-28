@@ -5,7 +5,10 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
+
+import yaml  # type: ignore[import-untyped]
 
 
 PROJECT_META_ROOT = Path(__file__).resolve().parents[1]
@@ -202,6 +205,9 @@ def test_generate_hook_wiring_installs_prewrite_gate_only_when_opted_in(tmp_path
     assert result.returncode == 0, result.stderr
     assert (tmp_path / ".claude" / "hooks" / "prewrite-claim-gate.sh").is_file()
     assert (tmp_path / ".codex" / "hooks" / "prewrite-claim-gate.sh").is_file()
+    assert (tmp_path / "enforced_planning" / "prewrite_claim_fast.py").is_file()
+    assert (tmp_path / "enforced_planning" / "prewrite_claim_projection.py").is_file()
+    assert (tmp_path / "scripts" / "refresh_prewrite_claim_projection.py").is_file()
     claude = json.loads((tmp_path / ".claude" / "settings.json").read_text(encoding="utf-8"))
     codex = json.loads((tmp_path / ".codex" / "hooks.json").read_text(encoding="utf-8"))
     claude_pre = next(item for item in claude["hooks"]["PreToolUse"] if item["matcher"] == "Edit|Write")
@@ -211,6 +217,163 @@ def test_generate_hook_wiring_installs_prewrite_gate_only_when_opted_in(tmp_path
         'bash "$(git rev-parse --show-toplevel)/.codex/hooks/prewrite-claim-gate.sh"'
         in [item["command"] for item in codex_pre["hooks"]]
     )
+
+    second = subprocess.run(
+        [sys.executable, str(SCRIPT), "--repo-root", str(tmp_path), "--write", "--json"],
+        cwd=str(PROJECT_META_ROOT),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert second.returncode == 0, second.stderr
+    second_payload = json.loads(second.stdout)
+    assert second_payload["actions"] == []
+    assert second_payload["changed_files"] == []
+
+
+def test_installed_prewrite_runtime_projects_and_classifies_native_payloads(
+    tmp_path: Path,
+) -> None:
+    """The installed copy must run independently at the target-repo boundary."""
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _scaffold_target_repo(repo)
+    (repo / "meta-process.yaml").write_text(
+        "meta_process:\n  version: '1.0'\n  claims:\n    prewrite_mode: observe\n",
+        encoding="utf-8",
+    )
+    subprocess.run(["git", "init", "-b", "main"], cwd=repo, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "config", "user.name", "Test User"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.email", "test@example.com"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+    )
+    (repo / "src").mkdir()
+    (repo / "src" / "allowed.py").write_text("VALUE = 1\n", encoding="utf-8")
+    subprocess.run(["git", "add", "."], cwd=repo, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "-m", "seed"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+    )
+
+    install = subprocess.run(
+        [sys.executable, str(SCRIPT), "--repo-root", str(repo), "--write", "--json"],
+        cwd=str(PROJECT_META_ROOT),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert install.returncode == 0, install.stderr
+
+    claims_dir = tmp_path / "claims"
+    claims_dir.mkdir()
+    projection_path = tmp_path / "projection.json"
+    receipt_path = tmp_path / "receipts.jsonl"
+    now = datetime.now(timezone.utc)
+    (claims_dir / "codex_installed-test_main.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "schema_version": 3,
+                "agent": "codex",
+                "claimed_at": now.isoformat(),
+                "expires_at": (now + timedelta(hours=1)).isoformat(),
+                "projects": ["installed-test"],
+                "scope": "main",
+                "intent": "exercise installed pre-write runtime",
+                "claim_type": "write",
+                "write_paths": ["src/allowed.py"],
+                "read_paths": [],
+                "worktree_path": str(repo),
+                "repo_root": str(repo),
+                "branch": "main",
+                "session_name": "installed-test",
+                "session_id": "codex:installed-test",
+                "heartbeat_at": now.isoformat(),
+                "status": "active",
+                "updated_at": now.isoformat(),
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+    refresh = subprocess.run(
+        [
+            sys.executable,
+            str(repo / "scripts" / "refresh_prewrite_claim_projection.py"),
+            "--claims-dir",
+            str(claims_dir),
+            "--projection-path",
+            str(projection_path),
+            "--json",
+        ],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert refresh.returncode == 0, refresh.stderr
+
+    def invoke(target: str) -> dict[str, object]:
+        payload = {
+            "session_id": "installed-test",
+            "cwd": str(repo),
+            "hook_event_name": "PreToolUse",
+            "tool_name": "apply_patch",
+            "tool_input": {
+                "command": f"*** Begin Patch\n*** Update File: {target}\n*** End Patch"
+            },
+        }
+        completed = subprocess.run(
+            [
+                sys.executable,
+                str(repo / "scripts" / "prewrite_claim_gate.py"),
+                "--client",
+                "codex",
+                "--mode",
+                "observe",
+                "--claims-dir",
+                str(claims_dir),
+                "--projection-path",
+                str(projection_path),
+                "--receipt-path",
+                str(receipt_path),
+                "--json",
+            ],
+            cwd=repo,
+            input=json.dumps(payload),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert completed.returncode == 0, completed.stderr
+        return json.loads(completed.stdout)
+
+    allowed = invoke("src/allowed.py")
+    violation = invoke("src/outside.py")
+
+    assert (allowed["decision"], allowed["reason_code"]) == (
+        "allow",
+        "exact_live_claim",
+    )
+    assert (violation["decision"], violation["reason_code"]) == (
+        "observe_violation",
+        "path_outside_claim",
+    )
+    receipts = [json.loads(line) for line in receipt_path.read_text(encoding="utf-8").splitlines()]
+    assert [item["reason_code"] for item in receipts] == [
+        "exact_live_claim",
+        "path_outside_claim",
+    ]
 
 
 def test_generate_hook_wiring_fails_without_file_context(tmp_path: Path) -> None:

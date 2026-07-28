@@ -161,7 +161,10 @@ PREWRITE_HOOK_FILES: tuple[str, ...] = (
     ".claude/hooks/prewrite-claim-gate.sh",
     ".codex/hooks/prewrite-claim-gate.sh",
     "scripts/prewrite_claim_gate.py",
+    "scripts/refresh_prewrite_claim_projection.py",
+    "enforced_planning/prewrite_claim_fast.py",
     "enforced_planning/prewrite_claim_gate.py",
+    "enforced_planning/prewrite_claim_projection.py",
 )
 
 PREWRITE_HOOK_COMMANDS: tuple[str, ...] = (
@@ -193,12 +196,27 @@ def _audit_prewrite_claim_gate(repo_root: Path, config: dict[str, Any] | None) -
         for path in PREWRITE_HOOK_FILES
         if not _resolve_repo_surface_path(repo_root, path)[0].is_file()
     ]
-    rendered = ""
+    installed_commands: set[str] = set()
     for relpath in (".claude/settings.json", ".codex/hooks.json"):
         settings_path, _used_fallback = _resolve_repo_surface_path(repo_root, relpath)
         if settings_path.is_file():
-            rendered += settings_path.read_text(encoding="utf-8")
-    commands_missing = [command for command in PREWRITE_HOOK_COMMANDS if command not in rendered]
+            try:
+                settings: object = json.loads(settings_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                continue
+            pending = [settings]
+            while pending:
+                value = pending.pop()
+                if isinstance(value, dict):
+                    command = value.get("command")
+                    if isinstance(command, str):
+                        installed_commands.add(command)
+                    pending.extend(value.values())
+                elif isinstance(value, list):
+                    pending.extend(value)
+    commands_missing = [
+        command for command in PREWRITE_HOOK_COMMANDS if command not in installed_commands
+    ]
     return {
         "mode": mode,
         "expected": expected,

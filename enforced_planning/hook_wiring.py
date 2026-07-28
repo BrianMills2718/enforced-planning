@@ -75,6 +75,9 @@ PREWRITE_SUPPORT_FILES: dict[str, str] = {
 MAILBOX_SUPPORT_FILES: dict[str, str] = {
     "enforced_planning/coordination_claims.py": "enforced_planning/coordination_claims.py",
     "enforced_planning/coordination_messages.py": "enforced_planning/coordination_messages.py",
+    "enforced_planning/prewrite_claim_fast.py": "enforced_planning/prewrite_claim_fast.py",
+    "enforced_planning/prewrite_claim_projection.py": "enforced_planning/prewrite_claim_projection.py",
+    "scripts/refresh_prewrite_claim_projection.py": "scripts/refresh_prewrite_claim_projection.py",
     "scripts/coordination_inbox.py": "scripts/coordination_inbox.py",
     "scripts/coordination_hook.py": "scripts/coordination_hook.py",
     "scripts/meta/coordination_inbox.py": "scripts/meta/coordination_inbox.py",

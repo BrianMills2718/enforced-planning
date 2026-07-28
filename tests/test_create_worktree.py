@@ -237,6 +237,7 @@ def test_create_worktree_rejects_conflicting_scoped_write_claim(tmp_path: Path) 
             "branch": "plan-62-conflict",
             "worktree_path": "~/projects/repo_worktrees/plan-62-conflict",
             "session_id": "codex-session",
+            "session_name": "coordination-v2",
             "status": "active",
         },
     )
@@ -255,6 +256,7 @@ def test_create_worktree_rejects_conflicting_scoped_write_claim(tmp_path: Path) 
             "branch": "claude-docs",
             "worktree_path": "~/projects/repo_worktrees/claude-docs",
             "session_id": "claude-session",
+            "session_name": "other-docs",
             "status": "active",
         },
     )
@@ -343,6 +345,7 @@ def test_create_worktree_allows_matching_scoped_write_claim(tmp_path: Path) -> N
             "branch": "plan-62-valid",
             "worktree_path": "~/projects/repo_worktrees/plan-62-valid",
             "session_id": "codex-session",
+            "session_name": "coordination-v2",
             "status": "active",
         },
     )

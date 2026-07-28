@@ -95,6 +95,8 @@ class CloseoutPreflight:
     merged_to_default: bool | None
     default_remote_ref: str | None
     default_branch_pushed: bool | None
+    merge_commit: str | None
+    merge_evidence: str | None
     recovery_ref: str | None
     force_delete_branch: bool
 
@@ -162,6 +164,8 @@ def _upsert_session_claim(
     write_paths: list[str] | None = None,
     read_paths: list[str] | None = None,
     parent_scope: str | None = None,
+    work_graph_path: str | None = None,
+    work_unit_id: str | None = None,
     ttl_hours: float = coordination_claims.DEFAULT_TTL_HOURS,
     allow_parallel: bool = False,
 ) -> str:
@@ -188,6 +192,8 @@ def _upsert_session_claim(
             broader_goal=broader_goal,
             tracker_path=tracker_path,
             parent_scope=parent_scope,
+            work_graph_path=work_graph_path,
+            work_unit_id=work_unit_id,
             ttl_hours=ttl_hours,
             allow_parallel=allow_parallel,
         )
@@ -218,6 +224,19 @@ def _upsert_session_claim(
         effective_write_paths = existing.write_paths if write_paths is None else write_paths
         effective_read_paths = existing.read_paths if read_paths is None else read_paths
         effective_parent_scope = existing.parent_scope if parent_scope is None else parent_scope
+        effective_work_graph_path = existing.work_graph_path if work_graph_path is None else work_graph_path
+        effective_work_unit_id = existing.work_unit_id if work_unit_id is None else work_unit_id
+        work_graph_sha256 = existing.work_graph_sha256
+        approval_revisions = existing.approval_revisions
+        if effective_write_paths and plan_ref:
+            if not effective_work_graph_path or not effective_work_unit_id:
+                raise ValueError("Plan-bound write ownership requires --work-graph and --work-unit-id")
+            work_graph_sha256, approval_revisions = coordination_claims.resolve_canonical_work_unit_binding(
+                repo_root=repo_root,
+                plan_ref=plan_ref,
+                work_graph_path=effective_work_graph_path,
+                work_unit_id=effective_work_unit_id,
+            )
         candidate = coordination_claims.build_candidate_claim(
             agent=agent,
             project=project,
@@ -235,6 +254,10 @@ def _upsert_session_claim(
             broader_goal=broader_goal,
             tracker_path=tracker_path,
             parent_scope=effective_parent_scope,
+            work_graph_path=effective_work_graph_path,
+            work_unit_id=effective_work_unit_id,
+            work_graph_sha256=work_graph_sha256,
+            approval_revisions=approval_revisions,
             parallel_root_authorized=(
                 allow_parallel or existing.parallel_root_authorized
             ),
@@ -247,6 +270,7 @@ def _upsert_session_claim(
             candidate,
             active_claims=coordination_claims.check_claims(),
         )
+        coordination_claims.validate_claim_for_creation(candidate)
 
         expires_at = existing.expires_at or (now + timedelta(hours=ttl_hours)).isoformat()
         payload = {
@@ -273,6 +297,10 @@ def _upsert_session_claim(
             "write_paths": effective_write_paths,
             "read_paths": effective_read_paths,
             "parent_scope": effective_parent_scope,
+            "work_graph_path": effective_work_graph_path,
+            "work_unit_id": effective_work_unit_id,
+            "work_graph_sha256": work_graph_sha256,
+            "approval_revisions": list(approval_revisions),
             "parallel_root_authorized": candidate.parallel_root_authorized,
         }
         _write_claim_payload(path, payload)
@@ -448,6 +476,54 @@ def _is_ancestor(repo_root: Path, ancestor_ref: str, descendant_ref: str) -> boo
     return result.returncode == 0
 
 
+def _squash_merge_matches_branch(
+    repo_root: Path,
+    *,
+    branch_ref: str,
+    merge_commit: str,
+    default_ref: str,
+) -> bool:
+    """Prove a one-parent merge commit carries exactly the task branch patch."""
+
+    if not _ref_exists(repo_root, merge_commit) or not _is_ancestor(
+        repo_root, merge_commit, default_ref
+    ):
+        return False
+    parents = subprocess.run(
+        ["git", "rev-list", "--parents", "-n", "1", merge_commit],
+        cwd=str(repo_root),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    parent_fields = parents.stdout.strip().split()
+    if parents.returncode != 0 or len(parent_fields) != 2:
+        return False
+    merge_parent = parent_fields[1]
+    merge_base = subprocess.run(
+        ["git", "merge-base", branch_ref, merge_parent],
+        cwd=str(repo_root),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if merge_base.returncode != 0 or not merge_base.stdout.strip():
+        return False
+
+    def patch(left: str, right: str) -> bytes | None:
+        result = subprocess.run(
+            ["git", "diff", "--binary", "--full-index", "--no-renames", left, right],
+            cwd=str(repo_root),
+            capture_output=True,
+            check=False,
+        )
+        return result.stdout if result.returncode == 0 else None
+
+    branch_patch = patch(merge_base.stdout.strip(), branch_ref)
+    merged_patch = patch(merge_parent, merge_commit)
+    return branch_patch is not None and branch_patch == merged_patch
+
+
 def _validate_closeout_preflight(
     *,
     repo_root: Path,
@@ -455,6 +531,7 @@ def _validate_closeout_preflight(
     disposition: str,
     disposition_reason: str | None,
     recovery_ref: str | None,
+    merge_commit: str | None,
     allow_discard_unique: bool,
     delete_branch: bool,
 ) -> CloseoutPreflight:
@@ -483,6 +560,8 @@ def _validate_closeout_preflight(
             merged_to_default=None,
             default_remote_ref=None,
             default_branch_pushed=None,
+            merge_commit=None,
+            merge_evidence=None,
             recovery_ref=recovery_ref,
             force_delete_branch=False,
         )
@@ -519,6 +598,20 @@ def _validate_closeout_preflight(
         else None
     )
     if normalized_disposition == MERGED_DISPOSITION:
+        normalized_merge_commit = merge_commit.strip() if merge_commit else None
+        merge_evidence = "branch_ancestor" if merged_to_default else None
+        if not merged_to_default and normalized_merge_commit:
+            canonical_default_ref = (
+                default_remote_ref if remote_default_exists else default_ref
+            )
+            if _squash_merge_matches_branch(
+                repo_root,
+                branch_ref=branch_ref,
+                merge_commit=normalized_merge_commit,
+                default_ref=canonical_default_ref,
+            ):
+                merged_to_default = True
+                merge_evidence = "squash_patch_equivalent"
         if not merged_to_default:
             if merged_to_local_default and default_branch_pushed is False:
                 raise ValueError(
@@ -530,7 +623,11 @@ def _validate_closeout_preflight(
                 f"branch '{default_branch}'. Merge it first or supply an explicit "
                 "non-merge disposition with required evidence."
             )
-        if default_branch_pushed is False and merged_to_remote_default is not True:
+        if (
+            default_branch_pushed is False
+            and merged_to_remote_default is not True
+            and merge_evidence != "squash_patch_equivalent"
+        ):
             raise ValueError(
                 f"Canonical default branch '{default_branch}' has commits not present in "
                 f"'{default_remote_ref}'. Push the default branch before closeout."
@@ -542,6 +639,8 @@ def _validate_closeout_preflight(
             merged_to_default=True,
             default_remote_ref=default_remote_ref,
             default_branch_pushed=default_branch_pushed,
+            merge_commit=normalized_merge_commit,
+            merge_evidence=merge_evidence,
             recovery_ref=None,
             # Git's ordinary -d check substitutes a configured feature upstream
             # for HEAD. The explicit checks above already proved the stronger
@@ -592,6 +691,8 @@ def _validate_closeout_preflight(
         merged_to_default=False,
         default_remote_ref=default_remote_ref,
         default_branch_pushed=default_branch_pushed,
+        merge_commit=None,
+        merge_evidence=None,
         recovery_ref=normalized_recovery_ref,
         force_delete_branch=delete_branch,
     )
@@ -662,6 +763,8 @@ def start_session(
     write_paths: list[str] | None = None,
     read_paths: list[str] | None = None,
     parent_scope: str | None = None,
+    work_graph_path: str | None = None,
+    work_unit_id: str | None = None,
     tracker_dir: Path = session_contracts.DEFAULT_SESSION_TRACKERS_DIR,
     allow_unplanned: bool = False,
     allow_parallel: bool = False,
@@ -733,6 +836,8 @@ def start_session(
             write_paths=write_paths,
             read_paths=read_paths,
             parent_scope=parent_scope,
+            work_graph_path=work_graph_path,
+            work_unit_id=work_unit_id,
             allow_parallel=allow_parallel,
         )
     except Exception:
@@ -1056,6 +1161,7 @@ def close_session(
     disposition: str = MERGED_DISPOSITION,
     disposition_reason: str | None = None,
     recovery_ref: str | None = None,
+    merge_commit: str | None = None,
     allow_discard_unique: bool = False,
 ) -> dict[str, Any]:
     """Finish, clean up, and release one claimed lane as a single sanctioned flow.
@@ -1072,6 +1178,25 @@ def close_session(
     resolved_branch = branch or claim.branch
     repo_root = _resolve_claim_repo_root(claim)
     updated_at = datetime.now(timezone.utc).isoformat()
+
+    if resolved_worktree_path:
+        canonical_worktree_path = resolved_worktree_path.resolve()
+        sibling_scopes = sorted(
+            sibling.scope
+            for sibling in coordination_claims.check_claims()
+            if not (
+                sibling.agent == claim.agent
+                and sibling.primary_project() == claim.primary_project()
+                and sibling.scope == claim.scope
+            )
+            and sibling.worktree_path
+            and Path(sibling.worktree_path).expanduser().resolve() == canonical_worktree_path
+        )
+        if sibling_scopes:
+            raise ValueError(
+                "Cannot close a shared worktree while sibling live claims still reference it: "
+                + ", ".join(sibling_scopes)
+            )
 
     if claim.write_paths:
         doc_authority.assert_no_unresolved_owned_obligations(claim)
@@ -1090,6 +1215,7 @@ def close_session(
         disposition=disposition,
         disposition_reason=disposition_reason,
         recovery_ref=recovery_ref,
+        merge_commit=merge_commit,
         allow_discard_unique=allow_discard_unique,
         delete_branch=delete_branch,
     )
@@ -1105,6 +1231,8 @@ def close_session(
     payload["merged_to_default"] = preflight.merged_to_default
     payload["default_remote_ref"] = preflight.default_remote_ref
     payload["default_branch_pushed"] = preflight.default_branch_pushed
+    payload["merge_commit"] = preflight.merge_commit
+    payload["merge_evidence"] = preflight.merge_evidence
     payload["updated_at"] = updated_at
     payload["notes"] = note or "closing claimed lane via canonical session-close flow"
     _write_claim_payload(claim_file, payload)

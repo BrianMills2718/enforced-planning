@@ -300,6 +300,11 @@ def test_start_session_creates_parented_child_and_rejects_second_root(
     claims_dir = tmp_path / "claims"
     trackers_dir = tmp_path / "sessions"
     monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    monkeypatch.setattr(
+        coordination_claims,
+        "resolve_canonical_work_unit_binding",
+        lambda **_kwargs: ("a" * 64, ()),
+    )
     common = {
         "project": "onto-canon6",
         "repo_root": str(tmp_path / "onto-canon6"),
@@ -332,6 +337,8 @@ def test_start_session_creates_parented_child_and_rejects_second_root(
         claim_type="write",
         write_paths=["src/onto_canon6/review.py"],
         parent_scope="plan0141-root",
+        work_graph_path="docs/plans/141_fixture_work_graph.json",
+        work_unit_id="plan0141-review",
         **common,
     )
 
@@ -778,6 +785,133 @@ def test_close_session_closes_branch_merged_to_default(
     claim_payload = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
     assert claim_payload["status"] == "completed"
     assert claim_payload["disposition"] == "merged"
+
+
+def test_close_session_rejects_live_sibling_claim_on_same_worktree_before_cleanup(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """One lane must not remove a worktree still referenced by another live claim."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    repo_root, worktree, branch = _real_repo_with_worktree(tmp_path)
+    claim_file = _start_real_closeout_claim(
+        repo_root=repo_root,
+        worktree=worktree,
+        branch=branch,
+        claims_dir=claims_dir,
+        trackers_dir=trackers_dir,
+    )
+    sibling = coordination_claims.build_candidate_claim(
+        agent="claude-code",
+        project="enforced-planning",
+        scope="sibling-review",
+        intent="review the same lane",
+        claim_type="review",
+        read_paths=["feature.txt"],
+        repo_root=str(repo_root),
+        worktree_path=str(worktree),
+        branch=branch,
+        session_id="claude-code:test-session",
+        session_name="sibling-review",
+        broader_goal="Safe Worktree Lifecycle",
+        tracker_path=str(trackers_dir / "sibling.yaml"),
+        claimed_at="2026-07-28T00:00:00+00:00",
+        expires_at="2099-07-28T00:00:00+00:00",
+    )
+    sibling_payload = sibling.to_dict()
+    sibling_payload.pop("project")
+    sibling_payload.pop("source_file")
+    claims_dir.joinpath("claude-code_enforced-planning_sibling-review.yaml").write_text(
+        yaml.safe_dump(sibling_payload, sort_keys=False),
+        encoding="utf-8",
+    )
+    _git(repo_root, "merge", "--no-ff", branch, "-m", "merge feature")
+
+    with pytest.raises(ValueError, match="sibling-review"):
+        session_lifecycle.close_session(
+            agent="codex",
+            project="enforced-planning",
+            scope=branch,
+        )
+
+    assert worktree.exists()
+    assert _git(repo_root, "show-ref", "--verify", f"refs/heads/{branch}")
+    assert yaml.safe_load(claim_file.read_text(encoding="utf-8"))["status"] == "active"
+
+
+def test_close_session_accepts_exact_squash_merge_patch_receipt(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A one-parent main commit with the exact task patch licenses squash closeout."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    repo_root, worktree, branch = _real_repo_with_worktree(tmp_path)
+    claim_file = _start_real_closeout_claim(
+        repo_root=repo_root,
+        worktree=worktree,
+        branch=branch,
+        claims_dir=claims_dir,
+        trackers_dir=trackers_dir,
+    )
+    _git(repo_root, "cherry-pick", "--no-commit", branch)
+    _git(repo_root, "commit", "-m", "squash merge feature")
+    merge_commit = _git(repo_root, "rev-parse", "HEAD")
+
+    payload = session_lifecycle.close_session(
+        agent="codex",
+        project="enforced-planning",
+        scope=branch,
+        merge_commit=merge_commit,
+    )
+
+    assert payload["action"] == "closed"
+    assert payload["merged_to_default"] is True
+    assert payload["merge_commit"] == merge_commit
+    assert payload["merge_evidence"] == "squash_patch_equivalent"
+    assert not worktree.exists()
+    claim_payload = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
+    assert claim_payload["merge_commit"] == merge_commit
+    assert claim_payload["merge_evidence"] == "squash_patch_equivalent"
+
+
+def test_close_session_rejects_unrelated_commit_as_squash_receipt(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Any main commit whose patch differs from the task branch must fail closed."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    repo_root, worktree, branch = _real_repo_with_worktree(tmp_path)
+    claim_file = _start_real_closeout_claim(
+        repo_root=repo_root,
+        worktree=worktree,
+        branch=branch,
+        claims_dir=claims_dir,
+        trackers_dir=trackers_dir,
+    )
+    (repo_root / "unrelated.txt").write_text("different patch\n", encoding="utf-8")
+    _git(repo_root, "add", "unrelated.txt")
+    _git(repo_root, "commit", "-m", "unrelated main change")
+    unrelated_commit = _git(repo_root, "rev-parse", "HEAD")
+
+    with pytest.raises(ValueError, match="not integrated"):
+        session_lifecycle.close_session(
+            agent="codex",
+            project="enforced-planning",
+            scope=branch,
+            merge_commit=unrelated_commit,
+        )
+
+    assert worktree.exists()
+    assert yaml.safe_load(claim_file.read_text(encoding="utf-8"))["status"] == "active"
 
 
 def test_close_session_accepts_branch_merged_to_remote_default_when_local_default_is_behind(

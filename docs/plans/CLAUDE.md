@@ -77,9 +77,10 @@ See `ROADMAP.md` for the full phase map and recommended priority order.
 | 100 | Native Codex Mailbox Lifecycle Delivery (`100_codex_mailbox_lifecycle_delivery.md`) | Critical | ✅ Complete | reliable request observation without human relay |
 | 101 | Landscape And Prior-Art Planning Contract (`101_landscape_and_prior_art_contract.md`) | High | ✅ Complete | reusable research-before-build contract and report-only validation |
 | 102 | Plan Status Projection Repair (`102_plan_status_projection.md`) | Low | ✅ Complete | truthful cross-repo status metadata |
-| 104 | Plan-Lane Resumption Contract and Source Propagation (`104_plan_lane_resumption_contract.md`) | Critical | 🚧 In Progress | Plan #234 resumption and fail-closed recovery of plan-owned lanes |
-| 105 | Session-Bound Lane Lifecycle (`105_session_bound_lane_lifecycle.md`) | Critical | 🚧 In Progress | session-end ownership retirement and accidental tangent-root prevention |
+| 104 | Plan-Lane Resumption Contract and Source Propagation (`104_plan_lane_resumption_contract.md`) | Critical | ✅ Complete | Plan #234 resumption and fail-closed recovery of plan-owned lanes |
+| 105 | Session-Bound Lane Lifecycle (`105_session_bound_lane_lifecycle.md`) | Critical | ✅ Complete | session-end ownership retirement and accidental tangent-root prevention |
 | 106 | Cross-Client Mailbox Fleet Delivery Certification (`106_cross_client_mailbox_fleet_delivery_certification.md`) | Critical | 🚧 In Progress — MF-01/MF-02/MF-04 accepted; MF-03A ready | mechanically installed, observable, four-direction Codex/Claude delivery |
+| 107 | Claim Readiness And Merge Closeout Enforcement (`107_claim_readiness_and_merge_closeout_enforcement.md`) | Critical | ✅ Complete | fail closed on blocked/unapproved write claims and merged active ownership |
 
 ## Status Key
 

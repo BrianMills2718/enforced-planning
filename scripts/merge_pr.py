@@ -46,7 +46,24 @@ def get_pr_branch(pr_number: int) -> str | None:
     if result.returncode != 0:
         return None
     data = json.loads(result.stdout)
-    return data.get("headRefName")
+    branch = data.get("headRefName") if isinstance(data, dict) else None
+    return branch if isinstance(branch, str) and branch else None
+
+
+def get_pr_merge_commit(pr_number: int) -> str | None:
+    """Return the canonical merge commit after GitHub reports the PR merged."""
+
+    result = run_cmd(
+        ["gh", "pr", "view", str(pr_number), "--json", "state,mergeCommit"],
+        check=False,
+    )
+    if result.returncode != 0:
+        return None
+    data = json.loads(result.stdout)
+    state = data.get("state") if isinstance(data, dict) else None
+    merge_commit = data.get("mergeCommit") if isinstance(data, dict) else None
+    oid = merge_commit.get("oid") if isinstance(merge_commit, dict) else None
+    return oid if state == "MERGED" and isinstance(oid, str) and oid else None
 
 
 def find_existing_script(paths: list[str]) -> Path | None:
@@ -103,13 +120,10 @@ def release_claim_for_branch(branch: str) -> bool:
     return False
 
 
-def cleanup_worktree(branch: str) -> bool:
-    """Clean up local worktree for a branch. Returns True if successful."""
+def cleanup_worktree(branch: str, *, merge_commit: str | None = None) -> bool:
+    """Close the merged lane and clean up its worktree. Return success."""
     worktree_path = find_worktree_for_branch(branch)
-    if not worktree_path:
-        return True  # No worktree to clean up
-
-    print(f"🧹 Cleaning up local worktree for branch '{branch}'...")
+    print(f"🧹 Closing merged lane for branch '{branch}'...")
 
     safe_remove_script = find_existing_script(
         [
@@ -141,13 +155,21 @@ def cleanup_worktree(branch: str) -> bool:
                 repo_name,
                 "--scope",
                 branch,
-                "--worktree-path",
-                str(worktree_path),
                 "--branch",
                 branch,
             ]
+            if worktree_path:
+                cleanup_cmd.extend(["--worktree-path", str(worktree_path)])
+            if merge_commit:
+                cleanup_cmd.extend(["--merge-commit", merge_commit])
             manual_cmd = " ".join(cleanup_cmd)
     else:
+        if not worktree_path:
+            print(
+                "HIGH: merged lane has no discoverable worktree and no sanctioned "
+                "session-close entrypoint; ownership disposition was not recorded."
+            )
+            return False
         safe_remove_script = find_existing_script(
         [
             "scripts/worktree-coordination/safe_worktree_remove.py",
@@ -171,7 +193,7 @@ def cleanup_worktree(branch: str) -> bool:
         print(f"   Run manually: {manual_cmd}")
         return False
 
-    print(f"✅ Cleaned up worktree at {worktree_path}")
+    print(f"✅ Closed merged lane for {branch}")
     return True
 
 
@@ -273,13 +295,21 @@ def merge_pr(pr_number: int, dry_run: bool = False) -> bool:
         print(f"❌ Merge failed: {e}")
         return False
 
-    # Pull latest
-    print("📥 Pulling latest main...")
-    run_cmd(["git", "pull", "--rebase", "origin", "main"], check=False)
+    # Refresh the canonical remote ref and capture the immutable merge receipt.
+    print("📥 Fetching merged default branch...")
+    run_cmd(["git", "fetch", "origin", "main"], check=False)
+    merge_commit = get_pr_merge_commit(pr_number)
+    if not merge_commit:
+        print("HIGH: GitHub did not return a canonical merge commit for the merged PR.")
+        return False
 
     # Clean up local worktree if it exists
-    if branch:
-        cleanup_worktree(branch)
+    if branch and not cleanup_worktree(branch, merge_commit=merge_commit):
+        print(
+            "HIGH: PR merged, but claim/worktree closeout failed. "
+            "The merge command is incomplete until the printed session-close action succeeds."
+        )
+        return False
 
     print(f"\n✅ Done! PR #{pr_number} has been merged.")
     return True

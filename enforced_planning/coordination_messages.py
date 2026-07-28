@@ -384,7 +384,7 @@ class SessionInboxNotice(StrictContract):
     """Compact agent-facing projection of one lifecycle mailbox poll."""
 
     session_id: str = Field(min_length=1, description="Canonical session identity whose inbox was polled.")
-    project: str = Field(min_length=1, description="Project filter applied to the poll.")
+    project: str | None = Field(default=None, min_length=1, description="Optional exact project filter applied to the poll.")
     active_count: int = Field(ge=0, description="Number of non-expired messages visible to the session.")
     message_ids: tuple[str, ...] = Field(description="Canonical active message IDs in creation order.")
     summary: str = Field(description="Bounded text suitable for injection into an agent lifecycle response.")
@@ -875,7 +875,7 @@ def default_message_root(claims_dir: Path | None = None) -> Path:
 def poll_session_inbox(
     *,
     agent: str,
-    project: str,
+    project: str | None,
     session_id: str | None = None,
     observe: bool = True,
     claims_dir: Path | None = None,
@@ -885,12 +885,15 @@ def poll_session_inbox(
     delivery_event_id: str | None = None,
     require_live_claim: bool = True,
 ) -> SessionInboxNotice:
-    """Resolve one live agent session and return an agent-visible mailbox notice.
+    """Resolve one native session and return an agent-visible mailbox notice.
 
     Native lifecycle adapters may set ``require_live_claim=False`` because the
-    client event supplies the exact current session identity. Observation
-    evidence still means the notice reached an agent-facing command result, not
-    merely that a background process scanned storage.
+    client event supplies the exact current session identity. They may also omit
+    ``project`` when a workspace-level current directory has no repository
+    context; the exact native session identity still confines the poll to that
+    session's inbox, including messages retained after a claim closes.
+    Observation evidence still means the notice reached an agent-facing command
+    result, not merely that a background process scanned storage.
     """
 
     if max_body_chars < 1 or max_messages < 1:

@@ -25,6 +25,8 @@ meta_process:
     enabled: true
     # Require claim before creating worktree
     require_for_worktree: true
+    # Record pre-write ownership decisions without blocking edits during calibration.
+    prewrite_mode: observe
 
   worktrees:
     enabled: true

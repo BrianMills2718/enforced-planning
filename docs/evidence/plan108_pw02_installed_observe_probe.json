@@ -1,0 +1,86 @@
+{
+  "schema_version": "1.0",
+  "plan": "108",
+  "work_unit_id": "prewrite-pw-02-observe-calibration",
+  "recorded_at": "2026-07-28T04:03:59.927918+00:00",
+  "source_revision_before_slice": "26b2afffc96e68549e337bf87d7255f249a9697b",
+  "candidate_repository": "/home/brian/projects/enforced-planning",
+  "candidate_worktree": "/home/brian/projects/enforced-planning/worktrees/plan-108-pw02-observe-promotion",
+  "configured_mode": "observe",
+  "client": "codex",
+  "session_id": "codex:019f9076-29c7-7ef1-aab5-443068ad6e15",
+  "installation": {
+    "generator": "python scripts/generate_hook_wiring.py --repo-root . --write --json",
+    "first_run_status": "PASS",
+    "second_run_status": "PASS",
+    "second_run_actions": [],
+    "second_run_changed_files": [],
+    "installed_adapter": ".codex/hooks/prewrite-claim-gate.sh",
+    "portable_adapter": ".claude/hooks/prewrite-claim-gate.sh",
+    "portable_adapter_sha256": "9bba556501b12e650f87537efe22298c71dbdb4b01466a62abf39ffca6225cd6"
+  },
+  "installed_runtime_test": {
+    "command": "pytest -q tests/test_generate_hook_wiring.py tests/test_audit_governed_repo.py -k 'generate_hook_wiring or opted_in_repo'",
+    "result": "8 passed, 18 deselected",
+    "coverage": [
+      "temporary governed Git repository",
+      "installed projection compiler",
+      "installed native CLI",
+      "exact-claim allow",
+      "out-of-scope observe violation",
+      "two durable receipts",
+      "idempotent second installation"
+    ]
+  },
+  "initial_live_probe": {
+    "result": "observe_violation",
+    "reason_code": "projection_unavailable_or_stale",
+    "detail": "projection registry digest is stale",
+    "interpretation": "Another claim writer changed the shared YAML registry without refreshing the derived projection. Observe mode correctly stayed non-blocking and exposed the condition.",
+    "receipt_ids": [
+      "prewrite_20fc311e247d40ea8a8d9404a1923cc7",
+      "prewrite_b5c90281ed4a4377bc02bfee6f9b61ef"
+    ]
+  },
+  "repeated_stale_readback": {
+    "observed_at": "2026-07-28T04:12:29.743508+00:00",
+    "projection_generated_at": "2026-07-28T04:12:29.644238+00:00",
+    "projection_is_current": false,
+    "latest_registry_write": "codex_project-meta_review-plan235-inside-success-nested-repository-migration-20260727.yaml",
+    "interpretation": "The shared registry changed after projection generation while the observe slice was being verified. This independently reproduces the fleet mutation gap and blocks enforce promotion; it does not identify which implementation performed the write."
+  },
+  "post_refresh_live_probe": {
+    "refresh_command": "python scripts/refresh_prewrite_claim_projection.py --json",
+    "allowed": {
+      "target": "meta-process.yaml",
+      "decision": "allow",
+      "reason_code": "exact_live_claim",
+      "receipt_id": "prewrite_fe592bc105874cd6af26cd4eb22da509",
+      "evaluator_elapsed_ms": 20.26521900188527,
+      "wall_ms": 156.39326099699247
+    },
+    "negative_control": {
+      "target": "README.md",
+      "decision": "observe_violation",
+      "reason_code": "path_outside_claim",
+      "receipt_id": "prewrite_5e5b0464376648cfb1d27c3f71677042",
+      "evaluator_elapsed_ms": 18.368824999924982,
+      "wall_ms": 90.48627900119754
+    },
+    "receipt_file_sha256_after_probe": "78018e2cd29baae031ac48929f1de8e596dad5d1e57cac25510083038b2386f0"
+  },
+  "calibration_reference": "docs/evidence/plan108_pw02a_low_latency_calibration.json",
+  "calibration_summary": {
+    "authorized_controls": 50,
+    "violation_controls": 10,
+    "false_classifications": 0,
+    "fresh_process_wall_p95_ms": 88.032,
+    "fresh_process_wall_p99_ms": 97.366
+  },
+  "decision": {
+    "pw02": "accepted",
+    "pw03": "blocked",
+    "reason": "Installed observe behavior and latency are accepted, but hard enforcement would intermittently deny valid writes while legacy claim-mutating clients can leave the shared projection stale.",
+    "promotion_guard": "Every sanctioned active claim mutation surface must use a projection-refreshing implementation, followed by a retained mutation/readback probe with no stale projection."
+  }
+}

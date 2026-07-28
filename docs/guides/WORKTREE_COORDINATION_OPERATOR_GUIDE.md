@@ -49,6 +49,12 @@ passes, `enforce` turns the same violations into pre-tool denials. `off` is the
 portable default. This is a native agent-hook guardrail, not filesystem
 isolation; arbitrary shell/process writes remain outside this gate.
 
+The YAML claim registry remains authoritative. The low-latency hook consumes a
+digest-bound JSON projection refreshed by sanctioned claim mutations. A stale
+or missing projection is an observe violation and an enforce denial; do not
+promote a repository to `enforce` while any active claim writer still uses a
+legacy mutation path that does not refresh the projection.
+
 ## Default Flow
 
 1. Keep the canonical repo checkout clean and on its canonical default branch,

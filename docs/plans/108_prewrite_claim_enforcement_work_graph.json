@@ -281,7 +281,7 @@
       "objective": "Install preserving observe-mode wiring, retain concrete decision receipts, and determine whether hard enforcement can meet the approved correctness and latency bars.",
       "profile": "standard",
       "execution_class": "independently_executable",
-      "claimability": "ready_for_execution",
+      "claimability": "not_applicable",
       "authorization_mode": "registry_claim",
       "scope": {
         "included": [
@@ -388,8 +388,103 @@
         "max_active_per_claimant": 1,
         "named_owner_id": null
       },
+      "status": "accepted",
+      "record_version": 6
+    },
+    {
+      "schema_version": "1.0",
+      "record_type": "work_unit",
+      "id": "prewrite-pw-02b-fleet-projection-refresh",
+      "initiative_id": "coordination-integrity",
+      "goal_id": "prewrite-claim-enforcement",
+      "design_revision": "plan-108-v1",
+      "spec_revision": "prewrite-pw-02b-v1",
+      "title": "Make every active sanctioned claim writer refresh the authority projection",
+      "class": "integration",
+      "objective": "Inventory the active claim-mutation entrypoints, update each governed installed copy to the accepted projection-refreshing implementation, and prove create, heartbeat, release, and session closeout cannot leave the shared projection stale.",
+      "profile": "standard",
+      "execution_class": "independently_executable",
+      "claimability": "ready_for_execution",
+      "authorization_mode": "registry_claim",
+      "scope": {
+        "included": [
+          "Read-only inventory of active sanctioned claim-mutation entrypoints",
+          "Explicit claimed updates to their installed coordination runtime copies",
+          "Create, heartbeat, release, and closeout projection-current readbacks",
+          "A retained fleet version/digest and mutation evidence report"
+        ],
+        "excluded": [
+          "Enabling hard pre-write enforcement",
+          "Editing archived or inactive repositories",
+          "Adding a resident daemon or a slow hook fallback",
+          "Changing claim authority away from the YAML registry"
+        ]
+      },
+      "inputs": [
+        {
+          "kind": "work_unit_output",
+          "id": "prewrite-pw-02-observe-calibration",
+          "revision": "accepted"
+        }
+      ],
+      "outputs": [
+        "Authoritative inventory of active claim mutation surfaces and installed revisions",
+        "Projection-refreshing runtime on every active sanctioned mutation surface",
+        "Retained create/heartbeat/release/closeout projection-current probe"
+      ],
+      "dependencies": [
+        {
+          "unit_id": "prewrite-pw-02-observe-calibration",
+          "type": "hard",
+          "gate": {
+            "type": "unit_status",
+            "required_status": "accepted"
+          },
+          "rationale": "Fleet mutation rollout must use the accepted installed observe implementation."
+        }
+      ],
+      "conflict_surfaces": [
+        {
+          "kind": "external_system",
+          "target": "active governed repositories that provide sanctioned claim-mutation entrypoints",
+          "access": "write",
+          "coordination_key": "prewrite-projection-refresh-fleet"
+        },
+        {
+          "kind": "external_system",
+          "target": "shared claim registry and digest-bound projection",
+          "access": "write",
+          "coordination_key": "prewrite-projection-refresh-fleet"
+        }
+      ],
+      "acceptance": [
+        {
+          "id": "PW02B-A1",
+          "criterion": "Every active sanctioned claim-mutation entrypoint is either updated to the accepted projection-refreshing revision or explicitly removed from active use, and create, heartbeat, release, and closeout probes each leave projection_is_current true.",
+          "evidence_required": [
+            "Fleet inventory with canonical repository identity and installed source digest",
+            "Per-repository claimed update or explicit inactive disposition",
+            "Four mutation receipts with projection digest readback",
+            "Post-probe native observe allow with no projection_unavailable_or_stale result"
+          ],
+          "negative_control": "A deliberately retained legacy fixture is detected as noncompliant and cannot satisfy the promotion guard."
+        }
+      ],
+      "readiness": {
+        "status": "ready",
+        "required_approval_types": [],
+        "approvals": [],
+        "failed_guards": []
+      },
+      "claim_policy": {
+        "eligibility_rule": "PW-02 accepted; claim the framework inventory/report paths and obtain an exact claim in every target repository before updating its installed runtime.",
+        "lease_policy": "renewable",
+        "lease_duration_minutes": 1440,
+        "max_active_per_claimant": 1,
+        "named_owner_id": null
+      },
       "status": "ready",
-      "record_version": 5
+      "record_version": 1
     },
     {
       "schema_version": "1.0",
@@ -424,6 +519,11 @@
           "kind": "work_unit_output",
           "id": "prewrite-pw-02-observe-calibration",
           "revision": "accepted"
+        },
+        {
+          "kind": "work_unit_output",
+          "id": "prewrite-pw-02b-fleet-projection-refresh",
+          "revision": "accepted"
         }
       ],
       "outputs": [
@@ -440,6 +540,15 @@
             "required_status": "accepted"
           },
           "rationale": "Hard enforcement is permitted only after the observe-mode correctness and latency bars pass."
+        },
+        {
+          "unit_id": "prewrite-pw-02b-fleet-projection-refresh",
+          "type": "hard",
+          "gate": {
+            "type": "unit_status",
+            "required_status": "accepted"
+          },
+          "rationale": "Hard enforcement would create intermittent false denials while any active claim writer can leave the shared projection stale."
         }
       ],
       "conflict_surfaces": [
@@ -468,18 +577,18 @@
         "required_approval_types": [],
         "approvals": [],
         "failed_guards": [
-          "prewrite-pw-02-observe-calibration must be accepted"
+          "prewrite-pw-02b-fleet-projection-refresh must be accepted"
         ]
       },
       "claim_policy": {
-        "eligibility_rule": "PW-02 accepted and the target repository/configuration paths declared in a fresh exact claim.",
+        "eligibility_rule": "PW-02 and PW-02B accepted and the target repository/configuration paths declared in a fresh exact claim.",
         "lease_policy": "renewable",
         "lease_duration_minutes": 1440,
         "max_active_per_claimant": 1,
         "named_owner_id": null
       },
       "status": "blocked",
-      "record_version": 1
+      "record_version": 2
     }
   ]
 }

@@ -128,6 +128,8 @@ SESSION_CLAIM_TYPE ?= program
 SESSION_PARENT_SCOPE ?=
 SESSION_WRITE_PATHS ?=
 SESSION_READ_PATHS ?=
+SESSION_WORK_GRAPH ?=
+SESSION_WORK_UNIT_ID ?=
 WORKTREE_DISPOSITION ?= merged
 WORKTREE_DISPOSITION_REASON ?=
 WORKTREE_RECOVERY_REF ?=
@@ -200,6 +202,7 @@ endif
 		--scope "$(BRANCH)" \
 		--intent "$(TASK)" \
 		--claim-type "$(SESSION_CLAIM_TYPE)" \
+		--repo-root "$(CURDIR)" \
 		--branch "$(BRANCH)" \
 		--worktree-path "$(WORKTREE_DIR)/$(BRANCH)" \
 		--session-name "$(SESSION_GOAL)" \
@@ -207,6 +210,8 @@ endif
 		$(if $(filter 1 true yes,$(SESSION_ALLOW_PARALLEL)),--allow-parallel,) \
 		$(foreach path,$(SESSION_WRITE_PATHS),--write-path "$(path)") \
 		$(foreach path,$(SESSION_READ_PATHS),--read-path "$(path)") \
+		$(if $(SESSION_WORK_GRAPH),--work-graph "$(SESSION_WORK_GRAPH)",) \
+		$(if $(SESSION_WORK_UNIT_ID),--work-unit-id "$(SESSION_WORK_UNIT_ID)",) \
 		$(if $(PLAN),--plan "$(PLAN_PROJECT)#$(PLAN)",)
 	@mkdir -p "$(WORKTREE_DIR)"
 	@if ! python "$(WORKTREE_CREATE_SCRIPT)" --repo-root . --path "$(WORKTREE_DIR)/$(BRANCH)" --branch "$(BRANCH)" --start-point "$(WORKTREE_START_POINT)"; then \
@@ -228,6 +233,8 @@ endif
 		$(if $(filter 1 true yes,$(SESSION_ALLOW_PARALLEL)),--allow-parallel,) \
 		$(foreach path,$(SESSION_WRITE_PATHS),--write-path "$(path)") \
 		$(foreach path,$(SESSION_READ_PATHS),--read-path "$(path)") \
+		$(if $(SESSION_WORK_GRAPH),--work-graph "$(SESSION_WORK_GRAPH)",) \
+		$(if $(SESSION_WORK_UNIT_ID),--work-unit-id "$(SESSION_WORK_UNIT_ID)",) \
 		$(if $(PLAN),--plan "$(PLAN_PROJECT)#$(PLAN)",) \
 		$(if $(ALLOW_UNPLANNED),--allow-unplanned,) \
 		$(if $(SESSION_NEXT),--next-phase "$(SESSION_NEXT)",) \
@@ -275,6 +282,8 @@ endif
 		$(if $(filter 1 true yes,$(SESSION_ALLOW_PARALLEL)),--allow-parallel,) \
 		$(foreach path,$(SESSION_WRITE_PATHS),--write-path "$(path)") \
 		$(foreach path,$(SESSION_READ_PATHS),--read-path "$(path)") \
+		$(if $(SESSION_WORK_GRAPH),--work-graph "$(SESSION_WORK_GRAPH)",) \
+		$(if $(SESSION_WORK_UNIT_ID),--work-unit-id "$(SESSION_WORK_UNIT_ID)",) \
 		$(if $(PLAN),--plan "Plan #$(PLAN)",) \
 		$(if $(SESSION_NEXT),--next-phase "$(SESSION_NEXT)",) \
 		$(if $(SESSION_DEPENDS),--depends-on "$(SESSION_DEPENDS)",) \

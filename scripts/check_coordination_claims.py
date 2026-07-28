@@ -108,6 +108,12 @@ def claim_runtime_status(
     return _impl.claim_runtime_status(claim, active_claims=active_claims)
 
 
+def claim_enforcement_issues(claim: ClaimRecord) -> list[dict[str, str]]:
+    """Expose blocking merged-ownership diagnostics through the legacy script surface."""
+
+    return _impl.claim_enforcement_issues(claim)
+
+
 def claim_liveness_issues(claim: ClaimRecord, *, now: Any | None = None) -> list[str]:
     """Expose heartbeat-backed liveness diagnostics."""
     return _impl.claim_liveness_issues(claim, now=now)

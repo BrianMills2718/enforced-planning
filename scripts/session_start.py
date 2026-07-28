@@ -55,6 +55,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--parent-scope")
     parser.add_argument("--write-path", action="append", default=[])
     parser.add_argument("--read-path", action="append", default=[])
+    parser.add_argument("--work-graph")
+    parser.add_argument("--work-unit-id")
     parser.add_argument("--next-phase", action="append", default=[])
     parser.add_argument("--depends-on", action="append", default=[])
     parser.add_argument("--stop-condition", action="append", default=[])
@@ -86,6 +88,8 @@ def main(argv: list[str] | None = None) -> int:
         parent_scope=args.parent_scope,
         write_paths=args.write_path or None,
         read_paths=args.read_path or None,
+        work_graph_path=args.work_graph,
+        work_unit_id=args.work_unit_id,
         intended_next_phases=args.next_phase,
         depends_on_repos=args.depends_on,
         requires_shared_infra_changes=args.requires_shared_infra_changes,

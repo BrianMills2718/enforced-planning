@@ -75,6 +75,18 @@ def _init_git_repo(repo_root: Path) -> None:
     subprocess.run(["git", "-C", str(repo_root), "commit", "-m", "seed"], check=True, capture_output=True, text=True)
 
 
+def _commit_work_graph(repo_root: Path, *, plan: int, unit: dict) -> str:
+    """Commit one canonical work graph and return its repo-relative path."""
+
+    relative = f"docs/plans/{plan}_fixture_work_graph.json"
+    path = repo_root / relative
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"units": [unit]}, indent=2) + "\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(repo_root), "add", relative], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(repo_root), "commit", "-m", "work graph"], check=True, capture_output=True, text=True)
+    return relative
+
+
 def test_normalize_claim_reads_v1_schema_as_program_claim(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Legacy v1 claims should normalize into the v2 in-memory record cleanly."""
     module = _load_module()
@@ -261,7 +273,6 @@ def test_create_claim_auto_resolves_codex_session_id(
         "project-meta",
         "coordination-v2",
         "Patch claims tool",
-        plan_ref="Plan #62",
         claim_type="write",
         write_paths=["scripts/check_coordination_claims.py"],
         branch="plan-62-coordination-v2",
@@ -290,13 +301,194 @@ def test_create_claim_rejects_live_claim_without_session_name(
             "project-meta",
             "identity-contract",
             "Repair coordination identity contract",
-            plan_ref="Plan #73",
             claim_type="write",
             write_paths=["enforced_planning/coordination_claims.py"],
             branch="fix/identity-contract",
             worktree_path="~/projects/project-meta/worktrees/fix/identity-contract",
             session_id="codex:thread-identity",
         )
+
+
+def test_plan_bound_write_claim_rejects_blocked_canonical_work_unit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A blocked canonical work unit must fail before a claim file is written."""
+
+    module = _load_module()
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
+    repo_root = tmp_path / "demo"
+    _init_git_repo(repo_root)
+    graph = _commit_work_graph(
+        repo_root,
+        plan=106,
+        unit={
+            "id": "mf03b",
+            "status": "blocked",
+            "readiness": {"status": "blocked", "approvals": [], "failed_guards": ["approval missing"]},
+        },
+    )
+
+    with pytest.raises(ValueError, match="not claimable"):
+        module.create_claim(
+            agent="codex",
+            project="demo",
+            scope="mf03b",
+            intent="apply host config",
+            plan_ref="Plan #106",
+            claim_type="write",
+            write_paths=["scripts/apply.py"],
+            repo_root=str(repo_root),
+            worktree_path=str(repo_root / "worktrees" / "mf03b"),
+            branch="mf03b",
+            session_id="codex:test",
+            session_name="mailbox",
+            broader_goal="mailbox",
+            tracker_path=str(tmp_path / "tracker.yaml"),
+            work_graph_path=graph,
+            work_unit_id="mf03b",
+        )
+
+    assert not claims_dir.exists()
+
+
+def test_plan_bound_review_cannot_bypass_write_readiness_binding(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Changing the claim label must not exempt owned write paths from readiness."""
+
+    module = _load_module()
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
+
+    with pytest.raises(ValueError, match="Plan-bound write ownership"):
+        module.create_claim(
+            agent="codex",
+            project="demo",
+            scope="review-mf03b",
+            intent="review and patch host apply",
+            plan_ref="Plan #106",
+            claim_type="review",
+            write_paths=["scripts/apply.py"],
+            repo_root=str(tmp_path / "demo"),
+            worktree_path=str(tmp_path / "demo" / "worktrees" / "review-mf03b"),
+            branch="review-mf03b",
+            session_id="codex:test",
+            session_name="mailbox-review",
+        )
+
+    assert not claims_dir.exists()
+
+
+def test_plan_bound_controlled_write_requires_declared_canonical_approval(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ready prose cannot replace a required exact approval record."""
+
+    module = _load_module()
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
+    repo_root = tmp_path / "demo"
+    _init_git_repo(repo_root)
+    graph = _commit_work_graph(
+        repo_root,
+        plan=106,
+        unit={
+            "id": "mf03b",
+            "status": "ready",
+            "control_approval_types": ["readiness"],
+            "readiness": {"status": "ready", "approvals": [], "failed_guards": []},
+        },
+    )
+
+    with pytest.raises(ValueError, match="requires exactly one 'readiness' approval"):
+        module.create_claim(
+            agent="codex",
+            project="demo",
+            scope="mf03b",
+            intent="apply host config",
+            plan_ref="Plan #106",
+            claim_type="write",
+            write_paths=["scripts/apply.py"],
+            repo_root=str(repo_root),
+            worktree_path=str(repo_root / "worktrees" / "mf03b"),
+            branch="mf03b",
+            session_id="codex:test",
+            session_name="mailbox",
+            broader_goal="mailbox",
+            tracker_path=str(tmp_path / "tracker.yaml"),
+            work_graph_path=graph,
+            work_unit_id="mf03b",
+        )
+
+    assert not claims_dir.exists()
+
+
+def test_plan_bound_write_claim_persists_exact_canonical_binding(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A ready controlled unit binds graph bytes and exact approval revision."""
+
+    module = _load_module()
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
+    repo_root = tmp_path / "demo"
+    _init_git_repo(repo_root)
+    digest = "5e3936b23a642ba97418b83fcf03b151b65d80785ec81d9330464a4380ffa834"
+    graph = _commit_work_graph(
+        repo_root,
+        plan=106,
+        unit={
+            "id": "mf03b",
+            "status": "ready",
+            "control_approval_types": ["readiness"],
+            "readiness": {
+                "status": "ready",
+                "required_approval_types": ["readiness"],
+                "approvals": [
+                    {
+                        "approval_type": "readiness",
+                        "role": "user",
+                        "approver_id": "brian",
+                        "approved_revision": digest,
+                        "approved_at": "2026-07-28T01:20:00+00:00",
+                        "expires_at": None,
+                    }
+                ],
+                "failed_guards": [],
+            },
+        },
+    )
+
+    ok, _message = module.create_claim(
+        agent="codex",
+        project="demo",
+        scope="mf03b",
+        intent="apply host config",
+        plan_ref="Plan #106",
+        claim_type="write",
+        write_paths=["scripts/apply.py"],
+        repo_root=str(repo_root),
+        worktree_path=str(repo_root / "worktrees" / "mf03b"),
+        branch="mf03b",
+        session_id="codex:test",
+        session_name="mailbox",
+        broader_goal="mailbox",
+        tracker_path=str(tmp_path / "tracker.yaml"),
+        work_graph_path=graph,
+        work_unit_id="mf03b",
+    )
+
+    assert ok is True
+    payload = yaml.safe_load((claims_dir / "codex_demo_mf03b.yaml").read_text(encoding="utf-8"))
+    assert payload["work_unit_id"] == "mf03b"
+    assert payload["work_graph_path"] == graph
+    assert len(payload["work_graph_sha256"]) == 64
+    assert payload["approval_revisions"] == [f"readiness={digest}"]
 
 
 def test_heartbeat_claims_refreshes_codex_session(
@@ -505,6 +697,9 @@ def test_plan_bound_claim_without_session_contract_is_weak(tmp_path: Path) -> No
         "missing_repo_root",
         "missing_broader_goal",
         "missing_tracker_path",
+        "missing_work_unit_id",
+        "missing_work_graph_path",
+        "missing_work_graph_sha256",
     ]
 
 
@@ -778,6 +973,120 @@ def test_claim_lifecycle_issues_detect_branch_merged_to_default(tmp_path: Path) 
 
     assert module.claim_lifecycle_issues(claim) == ["branch_merged_to_default"]
     assert module.claim_runtime_status(claim) == "stale"
+
+
+def test_claim_lifecycle_issues_detect_remote_merge_when_local_default_is_stale(tmp_path: Path) -> None:
+    """Remote canonical integration must outrank a stale local main checkout."""
+
+    module = _load_module()
+    repo_root = tmp_path / "demo"
+    _init_git_repo(repo_root)
+    subprocess.run(
+        ["git", "-C", str(repo_root), "checkout", "-b", "plan-107-landed"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    (repo_root / "feature.txt").write_text("feature\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(repo_root), "add", "feature.txt"], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(repo_root), "commit", "-m", "feature"], check=True, capture_output=True, text=True)
+    feature_sha = subprocess.run(
+        ["git", "-C", str(repo_root), "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    subprocess.run(["git", "-C", str(repo_root), "checkout", "main"], check=True, capture_output=True, text=True)
+    base_sha = subprocess.run(
+        ["git", "-C", str(repo_root), "rev-parse", "main"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    tree_sha = subprocess.run(
+        ["git", "-C", str(repo_root), "rev-parse", f"{feature_sha}^{{tree}}"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    merged_sha = subprocess.run(
+        ["git", "-C", str(repo_root), "commit-tree", tree_sha, "-p", base_sha, "-p", feature_sha, "-m", "remote merge"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    subprocess.run(
+        ["git", "-C", str(repo_root), "update-ref", "refs/remotes/origin/main", merged_sha],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(repo_root), "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    claim = module.build_candidate_claim(
+        agent="codex",
+        project="demo",
+        scope="remote-landed",
+        intent="Detect remote integration",
+        claim_type="write",
+        write_paths=["feature.txt"],
+        branch="plan-107-landed",
+        worktree_path=str(repo_root),
+        session_id="codex:test",
+    )
+
+    assert module.claim_lifecycle_issues(claim) == ["branch_merged_to_default"]
+    assert module.claim_enforcement_issues(claim)[0]["severity"] == "high"
+
+
+def test_check_json_fails_high_when_active_claim_branch_is_merged(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The standard claim check must fail until merged ownership is disposed."""
+
+    module = _load_module()
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
+    repo_root = tmp_path / "demo"
+    _init_git_repo(repo_root)
+    subprocess.run(["git", "-C", str(repo_root), "checkout", "-b", "plan-107-landed"], check=True, capture_output=True, text=True)
+    (repo_root / "feature.txt").write_text("feature\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(repo_root), "add", "feature.txt"], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(repo_root), "commit", "-m", "feature"], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(repo_root), "checkout", "main"], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(repo_root), "merge", "--no-ff", "plan-107-landed", "-m", "merge"], check=True, capture_output=True, text=True)
+    _write_claim(
+        claims_dir,
+        "codex-demo-landed.yaml",
+        {
+            "agent": "codex",
+            "claimed_at": "2026-07-27T00:00:00+00:00",
+            "expires_at": "2099-07-28T00:00:00+00:00",
+            "projects": ["demo"],
+            "scope": "landed",
+            "intent": "merged work",
+            "claim_type": "write",
+            "write_paths": ["feature.txt"],
+            "branch": "plan-107-landed",
+            "worktree_path": str(repo_root),
+            "session_id": "codex:test",
+            "session_name": "test",
+            "status": "active",
+        },
+    )
+
+    exit_code = module.main(["--check", "--project", "demo", "--json"])
+
+    payload = json.loads(capsys.readouterr().out)
+    assert exit_code == 1
+    assert payload["has_high_severity_issues"] is True
+    assert payload["enforcement_issues"][0]["code"] == "merged_active_claim_requires_disposition"
 
 
 def test_hydrate_session_ids_backfills_matching_live_claims(

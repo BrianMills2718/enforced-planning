@@ -46,7 +46,8 @@ def get_pr_branch(pr_number: int) -> str | None:
     if result.returncode != 0:
         return None
     data = json.loads(result.stdout)
-    return data.get("headRefName")
+    branch = data.get("headRefName") if isinstance(data, dict) else None
+    return branch if isinstance(branch, str) and branch else None
 
 
 def find_existing_script(paths: list[str]) -> Path | None:
@@ -104,12 +105,9 @@ def release_claim_for_branch(branch: str) -> bool:
 
 
 def cleanup_worktree(branch: str) -> bool:
-    """Clean up local worktree for a branch. Returns True if successful."""
+    """Close the merged lane and clean up its worktree. Return success."""
     worktree_path = find_worktree_for_branch(branch)
-    if not worktree_path:
-        return True  # No worktree to clean up
-
-    print(f"🧹 Cleaning up local worktree for branch '{branch}'...")
+    print(f"🧹 Closing merged lane for branch '{branch}'...")
 
     safe_remove_script = find_existing_script(
         [
@@ -141,13 +139,19 @@ def cleanup_worktree(branch: str) -> bool:
                 repo_name,
                 "--scope",
                 branch,
-                "--worktree-path",
-                str(worktree_path),
                 "--branch",
                 branch,
             ]
+            if worktree_path:
+                cleanup_cmd.extend(["--worktree-path", str(worktree_path)])
             manual_cmd = " ".join(cleanup_cmd)
     else:
+        if not worktree_path:
+            print(
+                "HIGH: merged lane has no discoverable worktree and no sanctioned "
+                "session-close entrypoint; ownership disposition was not recorded."
+            )
+            return False
         safe_remove_script = find_existing_script(
         [
             "scripts/worktree-coordination/safe_worktree_remove.py",
@@ -171,7 +175,7 @@ def cleanup_worktree(branch: str) -> bool:
         print(f"   Run manually: {manual_cmd}")
         return False
 
-    print(f"✅ Cleaned up worktree at {worktree_path}")
+    print(f"✅ Closed merged lane for {branch}")
     return True
 
 
@@ -278,8 +282,12 @@ def merge_pr(pr_number: int, dry_run: bool = False) -> bool:
     run_cmd(["git", "pull", "--rebase", "origin", "main"], check=False)
 
     # Clean up local worktree if it exists
-    if branch:
-        cleanup_worktree(branch)
+    if branch and not cleanup_worktree(branch):
+        print(
+            "HIGH: PR merged, but claim/worktree closeout failed. "
+            "The merge command is incomplete until the printed session-close action succeeds."
+        )
+        return False
 
     print(f"\n✅ Done! PR #{pr_number} has been merged.")
     return True

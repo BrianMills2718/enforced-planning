@@ -162,6 +162,8 @@ def _upsert_session_claim(
     write_paths: list[str] | None = None,
     read_paths: list[str] | None = None,
     parent_scope: str | None = None,
+    work_graph_path: str | None = None,
+    work_unit_id: str | None = None,
     ttl_hours: float = coordination_claims.DEFAULT_TTL_HOURS,
     allow_parallel: bool = False,
 ) -> str:
@@ -188,6 +190,8 @@ def _upsert_session_claim(
             broader_goal=broader_goal,
             tracker_path=tracker_path,
             parent_scope=parent_scope,
+            work_graph_path=work_graph_path,
+            work_unit_id=work_unit_id,
             ttl_hours=ttl_hours,
             allow_parallel=allow_parallel,
         )
@@ -218,6 +222,19 @@ def _upsert_session_claim(
         effective_write_paths = existing.write_paths if write_paths is None else write_paths
         effective_read_paths = existing.read_paths if read_paths is None else read_paths
         effective_parent_scope = existing.parent_scope if parent_scope is None else parent_scope
+        effective_work_graph_path = existing.work_graph_path if work_graph_path is None else work_graph_path
+        effective_work_unit_id = existing.work_unit_id if work_unit_id is None else work_unit_id
+        work_graph_sha256 = existing.work_graph_sha256
+        approval_revisions = existing.approval_revisions
+        if effective_write_paths and plan_ref:
+            if not effective_work_graph_path or not effective_work_unit_id:
+                raise ValueError("Plan-bound write ownership requires --work-graph and --work-unit-id")
+            work_graph_sha256, approval_revisions = coordination_claims.resolve_canonical_work_unit_binding(
+                repo_root=repo_root,
+                plan_ref=plan_ref,
+                work_graph_path=effective_work_graph_path,
+                work_unit_id=effective_work_unit_id,
+            )
         candidate = coordination_claims.build_candidate_claim(
             agent=agent,
             project=project,
@@ -235,6 +252,10 @@ def _upsert_session_claim(
             broader_goal=broader_goal,
             tracker_path=tracker_path,
             parent_scope=effective_parent_scope,
+            work_graph_path=effective_work_graph_path,
+            work_unit_id=effective_work_unit_id,
+            work_graph_sha256=work_graph_sha256,
+            approval_revisions=approval_revisions,
             parallel_root_authorized=(
                 allow_parallel or existing.parallel_root_authorized
             ),
@@ -247,6 +268,7 @@ def _upsert_session_claim(
             candidate,
             active_claims=coordination_claims.check_claims(),
         )
+        coordination_claims.validate_claim_for_creation(candidate)
 
         expires_at = existing.expires_at or (now + timedelta(hours=ttl_hours)).isoformat()
         payload = {
@@ -273,6 +295,10 @@ def _upsert_session_claim(
             "write_paths": effective_write_paths,
             "read_paths": effective_read_paths,
             "parent_scope": effective_parent_scope,
+            "work_graph_path": effective_work_graph_path,
+            "work_unit_id": effective_work_unit_id,
+            "work_graph_sha256": work_graph_sha256,
+            "approval_revisions": list(approval_revisions),
             "parallel_root_authorized": candidate.parallel_root_authorized,
         }
         _write_claim_payload(path, payload)
@@ -662,6 +688,8 @@ def start_session(
     write_paths: list[str] | None = None,
     read_paths: list[str] | None = None,
     parent_scope: str | None = None,
+    work_graph_path: str | None = None,
+    work_unit_id: str | None = None,
     tracker_dir: Path = session_contracts.DEFAULT_SESSION_TRACKERS_DIR,
     allow_unplanned: bool = False,
     allow_parallel: bool = False,
@@ -733,6 +761,8 @@ def start_session(
             write_paths=write_paths,
             read_paths=read_paths,
             parent_scope=parent_scope,
+            work_graph_path=work_graph_path,
+            work_unit_id=work_unit_id,
             allow_parallel=allow_parallel,
         )
     except Exception:
@@ -1072,6 +1102,25 @@ def close_session(
     resolved_branch = branch or claim.branch
     repo_root = _resolve_claim_repo_root(claim)
     updated_at = datetime.now(timezone.utc).isoformat()
+
+    if resolved_worktree_path:
+        canonical_worktree_path = resolved_worktree_path.resolve()
+        sibling_scopes = sorted(
+            sibling.scope
+            for sibling in coordination_claims.check_claims()
+            if not (
+                sibling.agent == claim.agent
+                and sibling.primary_project() == claim.primary_project()
+                and sibling.scope == claim.scope
+            )
+            and sibling.worktree_path
+            and Path(sibling.worktree_path).expanduser().resolve() == canonical_worktree_path
+        )
+        if sibling_scopes:
+            raise ValueError(
+                "Cannot close a shared worktree while sibling live claims still reference it: "
+                + ", ".join(sibling_scopes)
+            )
 
     if claim.write_paths:
         doc_authority.assert_no_unresolved_owned_obligations(claim)

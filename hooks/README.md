@@ -32,6 +32,8 @@ deterministic branch-publication gate:
 | Installed Path | Purpose |
 |---|---|
 | `.claude/hooks/gate-edit.sh` | Block edits until required reading is satisfied |
+| `.claude/hooks/prewrite-claim-gate.sh` | Check Claude edits against exact live claim ownership when opted in |
+| `.codex/hooks/prewrite-claim-gate.sh` | Check Codex apply-patch calls against exact live claim ownership when opted in |
 | `.claude/hooks/track-reads.sh` | Record document reads for gating |
 | `.claude/settings.json` | Wires the `Read` and `Edit|Write` hook commands |
 | `hooks/pre-push` | Requires a healthy canonical claim before a checked-out branch can be pushed |

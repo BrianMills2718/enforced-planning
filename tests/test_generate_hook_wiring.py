@@ -182,6 +182,37 @@ def test_generate_hook_wiring_is_idempotent(tmp_path: Path) -> None:
     assert payload["changed_files"] == []
 
 
+def test_generate_hook_wiring_installs_prewrite_gate_only_when_opted_in(tmp_path: Path) -> None:
+    """Observe/enforce modes install both native adapters without changing off defaults."""
+
+    _scaffold_target_repo(tmp_path)
+    (tmp_path / "meta-process.yaml").write_text(
+        "meta_process:\n  version: '1.0'\n  claims:\n    prewrite_mode: observe\n",
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT), "--repo-root", str(tmp_path), "--write", "--json"],
+        cwd=str(PROJECT_META_ROOT),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert (tmp_path / ".claude" / "hooks" / "prewrite-claim-gate.sh").is_file()
+    assert (tmp_path / ".codex" / "hooks" / "prewrite-claim-gate.sh").is_file()
+    claude = json.loads((tmp_path / ".claude" / "settings.json").read_text(encoding="utf-8"))
+    codex = json.loads((tmp_path / ".codex" / "hooks.json").read_text(encoding="utf-8"))
+    claude_pre = next(item for item in claude["hooks"]["PreToolUse"] if item["matcher"] == "Edit|Write")
+    codex_pre = next(item for item in codex["hooks"]["PreToolUse"] if item["matcher"] == "Edit|Write")
+    assert "bash .claude/hooks/prewrite-claim-gate.sh" in [item["command"] for item in claude_pre["hooks"]]
+    assert (
+        'bash "$(git rev-parse --show-toplevel)/.codex/hooks/prewrite-claim-gate.sh"'
+        in [item["command"] for item in codex_pre["hooks"]]
+    )
+
+
 def test_generate_hook_wiring_fails_without_file_context(tmp_path: Path) -> None:
     """The generator should fail loudly when the repo lacks file_context.py."""
 

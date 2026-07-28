@@ -29,6 +29,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import yaml  # type: ignore[import-untyped]
+
 
 FRAMEWORK_ROOT = Path(__file__).resolve().parents[1]
 
@@ -39,6 +41,11 @@ HOOK_FILES: dict[str, str] = {
     # Required by worktree-coordination hooks (block-cd-worktree, warn-worktree-cwd).
     # Install unconditionally so repos that later add worktree hooks don't break.
     ".claude/hooks/check-hook-enabled.sh": "hooks/claude/check-hook-enabled.sh",
+}
+
+PREWRITE_HOOK_FILES: dict[str, str] = {
+    ".claude/hooks/prewrite-claim-gate.sh": "hooks/claude/prewrite-claim-gate.sh",
+    ".codex/hooks/prewrite-claim-gate.sh": "hooks/codex/prewrite-claim-gate.sh",
 }
 
 MAILBOX_HOOK_FILES: dict[str, str] = {
@@ -53,6 +60,13 @@ SUPPORT_FILES: dict[str, str] = {
     "scripts/meta/context_packet.py": "scripts/context_packet.py",
     "enforced_planning/context_packet.py": "enforced_planning/context_packet.py",
     "enforced_planning/relationship_context.py": "enforced_planning/relationship_context.py",
+}
+
+PREWRITE_SUPPORT_FILES: dict[str, str] = {
+    "scripts/prewrite_claim_gate.py": "scripts/prewrite_claim_gate.py",
+    "enforced_planning/prewrite_claim_gate.py": "enforced_planning/prewrite_claim_gate.py",
+    "enforced_planning/coordination_claims.py": "enforced_planning/coordination_claims.py",
+    "enforced_planning/worktree_paths.py": "enforced_planning/worktree_paths.py",
 }
 
 MAILBOX_SUPPORT_FILES: dict[str, str] = {
@@ -90,6 +104,22 @@ GATE_HOOK = {
     "type": "command",
     "command": "bash .claude/hooks/gate-edit.sh",
     "timeout": 5000,
+}
+
+PREWRITE_HOOK = {
+    "type": "command",
+    "command": "bash .claude/hooks/prewrite-claim-gate.sh",
+    "timeout": 1,
+}
+
+CODEX_PREWRITE_HOOK = {
+    "type": "command",
+    "command": (
+        'bash "$(git rev-parse --show-toplevel)/.codex/hooks/'
+        'prewrite-claim-gate.sh"'
+    ),
+    "timeout": 1,
+    "statusMessage": "Checking write ownership",
 }
 
 
@@ -273,7 +303,28 @@ def _render_settings(settings: dict[str, Any]) -> str:
     return json.dumps(settings, indent=2, sort_keys=False) + "\n"
 
 
-def _merge_codex_mailbox_hooks(settings: dict[str, Any]) -> bool:
+def _configured_prewrite_mode(repo_root: Path) -> str:
+    """Return the explicit portable mode without enabling absent configuration."""
+
+    path = repo_root / "meta-process.yaml"
+    if not path.is_file():
+        return "off"
+    payload = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    if not isinstance(payload, dict):
+        raise ValueError("meta-process.yaml must be a mapping")
+    meta_process = payload.get("meta_process", payload)
+    if not isinstance(meta_process, dict):
+        raise ValueError("meta-process.yaml meta_process must be a mapping")
+    claims = meta_process.get("claims", {}) or {}
+    if not isinstance(claims, dict):
+        raise ValueError("meta-process.yaml claims must be a mapping")
+    mode = claims.get("prewrite_mode", "off")
+    if mode not in {"off", "observe", "enforce"}:
+        raise ValueError("claims.prewrite_mode must be off, observe, or enforce")
+    return str(mode)
+
+
+def _merge_codex_mailbox_hooks(settings: dict[str, Any], *, include_prewrite: bool = False) -> bool:
     """Install mailbox polling on supported Codex lifecycle boundaries."""
 
     changed = False
@@ -285,6 +336,10 @@ def _merge_codex_mailbox_hooks(settings: dict[str, Any]) -> bool:
         hooks = _ensure_matcher_block(settings, event_name=event_name, matcher=matcher)
         if _ensure_hook_command(hooks, CODEX_MAILBOX_HOOK):
             changed = True
+    if include_prewrite:
+        hooks = _ensure_matcher_block(settings, event_name="PreToolUse", matcher="Edit|Write")
+        if _ensure_hook_command(hooks, CODEX_PREWRITE_HOOK):
+            changed = True
     return changed
 
 
@@ -293,7 +348,10 @@ def _plan_codex_settings(target: TargetRepo) -> tuple[list[str], dict[Path, str]
 
     path = target.root / ".codex" / "hooks.json"
     settings = _read_json_file(path)
-    changed = _merge_codex_mailbox_hooks(settings)
+    changed = _merge_codex_mailbox_hooks(
+        settings,
+        include_prewrite=_configured_prewrite_mode(target.root) != "off",
+    )
     rendered = _render_settings(settings)
     current = path.read_text(encoding="utf-8") if path.exists() else None
     if current != rendered or changed:
@@ -317,7 +375,11 @@ def plan_generation(
     actions: list[str] = []
     file_writes: dict[Path, str] = {}
 
+    prewrite_enabled = _configured_prewrite_mode(target.root) != "off"
     source_files = {**HOOK_FILES, **SUPPORT_FILES}
+    if prewrite_enabled:
+        source_files.update(PREWRITE_HOOK_FILES)
+        source_files.update(PREWRITE_SUPPORT_FILES)
     if include_coordination_messages:
         source_files.update(MAILBOX_HOOK_FILES)
         source_files.update(MAILBOX_SUPPORT_FILES)
@@ -361,6 +423,12 @@ def plan_generation(
         edit_hooks,
         GATE_HOOK,
         after_command="bash .claude/hooks/protect-main.sh",
+    ):
+        changed = True
+    if prewrite_enabled and _ensure_hook_command(
+        edit_hooks,
+        PREWRITE_HOOK,
+        after_command="bash .claude/hooks/gate-edit.sh",
     ):
         changed = True
 

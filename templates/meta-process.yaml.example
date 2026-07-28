@@ -28,6 +28,8 @@ meta_process:
   claims:
     enabled: false
     require_for_worktree: false
+    # off | observe | enforce; promote only after measured observe-mode calibration
+    prewrite_mode: "off"
 
   worktrees:
     enabled: false

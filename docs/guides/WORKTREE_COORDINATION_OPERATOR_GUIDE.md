@@ -42,6 +42,13 @@ Important rule: **claims are canonical, lanes are derived**. Do not invent a
 second mutable lane registry by hand. Update claims; regenerate readable lane
 surfaces from them.
 
+For repositories that set `meta_process.claims.prewrite_mode: observe`, native
+Claude `Edit|Write` and Codex `apply_patch` calls are evaluated before mutation
+and violations are recorded without blocking. After measured calibration
+passes, `enforce` turns the same violations into pre-tool denials. `off` is the
+portable default. This is a native agent-hook guardrail, not filesystem
+isolation; arbitrary shell/process writes remain outside this gate.
+
 ## Default Flow
 
 1. Keep the canonical repo checkout clean and on its canonical default branch,

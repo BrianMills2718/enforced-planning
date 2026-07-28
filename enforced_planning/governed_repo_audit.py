@@ -157,6 +157,56 @@ HOOK_COMMANDS: tuple[str, ...] = (
     "bash .claude/hooks/track-reads.sh",
 )
 
+PREWRITE_HOOK_FILES: tuple[str, ...] = (
+    ".claude/hooks/prewrite-claim-gate.sh",
+    ".codex/hooks/prewrite-claim-gate.sh",
+    "scripts/prewrite_claim_gate.py",
+    "enforced_planning/prewrite_claim_gate.py",
+)
+
+PREWRITE_HOOK_COMMANDS: tuple[str, ...] = (
+    "bash .claude/hooks/prewrite-claim-gate.sh",
+    'bash "$(git rev-parse --show-toplevel)/.codex/hooks/prewrite-claim-gate.sh"',
+)
+
+
+def _prewrite_mode(config: dict[str, Any] | None) -> str:
+    if not isinstance(config, dict):
+        return "off"
+    meta_process = config.get("meta_process")
+    if not isinstance(meta_process, dict):
+        return "off"
+    claims = meta_process.get("claims")
+    if not isinstance(claims, dict):
+        return "off"
+    mode = claims.get("prewrite_mode", "off")
+    return str(mode) if mode in {"off", "observe", "enforce"} else "invalid"
+
+
+def _audit_prewrite_claim_gate(repo_root: Path, config: dict[str, Any] | None) -> dict[str, Any]:
+    """Audit opt-in adapter files and commands without promoting off mode."""
+
+    mode = _prewrite_mode(config)
+    expected = mode in {"observe", "enforce"}
+    files_missing = [
+        path
+        for path in PREWRITE_HOOK_FILES
+        if not _resolve_repo_surface_path(repo_root, path)[0].is_file()
+    ]
+    rendered = ""
+    for relpath in (".claude/settings.json", ".codex/hooks.json"):
+        settings_path, _used_fallback = _resolve_repo_surface_path(repo_root, relpath)
+        if settings_path.is_file():
+            rendered += settings_path.read_text(encoding="utf-8")
+    commands_missing = [command for command in PREWRITE_HOOK_COMMANDS if command not in rendered]
+    return {
+        "mode": mode,
+        "expected": expected,
+        "present": not files_missing and not commands_missing if expected else True,
+        "files_missing": files_missing if expected else [],
+        "commands_missing": commands_missing if expected else [],
+    }
+
 WORKTREE_TARGETS: tuple[str, ...] = (
     "worktree",
     "worktree-list",
@@ -773,6 +823,8 @@ def audit_repo(
     }
     read_gating = _audit_read_gating(repo_root)
     checks["read_gating"] = read_gating
+    prewrite_gate = _audit_prewrite_claim_gate(repo_root, config)
+    checks["prewrite_claim_gate"] = prewrite_gate
 
     optional = {
         "hooks_dir": {
@@ -821,6 +873,14 @@ def audit_repo(
             missing_required.append("hook:.claude/settings.json")
         for c in read_gating["commands_missing"]:
             missing_required.append(f"hook-wiring:{c}")
+
+    if prewrite_gate["mode"] == "invalid":
+        missing_required.append("meta-process.yaml claims.prewrite_mode valid enum")
+    elif prewrite_gate["expected"] and not prewrite_gate["present"]:
+        for path in prewrite_gate["files_missing"]:
+            missing_required.append(f"prewrite-hook:{path}")
+        for command in prewrite_gate["commands_missing"]:
+            missing_required.append(f"prewrite-hook-wiring:{command}")
 
     worktree_entrypoints = checks["worktree_entrypoints"]
     if worktree_entrypoints["expected"]:

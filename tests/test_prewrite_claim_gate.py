@@ -15,6 +15,7 @@ from enforced_planning.prewrite_claim_gate import (
     PreWriteRequestV1,
     adapt_hook_payload,
     evaluate_prewrite,
+    load_prewrite_mode,
 )
 
 
@@ -294,6 +295,15 @@ def test_cached_allow_is_invalidated_when_claim_changes(tmp_path: Path) -> None:
     assert first.decision == "allow" and first.cache_hit is False
     assert second.decision == "allow" and second.cache_hit is True
     assert third.decision == "deny" and third.cache_hit is False
+
+
+def test_load_prewrite_mode_reads_real_nested_meta_process_shape(tmp_path: Path) -> None:
+    (tmp_path / "meta-process.yaml").write_text(
+        "meta_process:\n  version: '1.0'\n  claims:\n    prewrite_mode: observe\n",
+        encoding="utf-8",
+    )
+
+    assert load_prewrite_mode(tmp_path) == "observe"
 
 
 def test_cli_denies_before_tool_and_observe_mode_never_blocks(tmp_path: Path) -> None:

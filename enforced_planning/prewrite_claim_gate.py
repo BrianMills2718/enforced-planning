@@ -194,7 +194,10 @@ def load_prewrite_mode(repo_root: Path) -> PreWriteMode:
         return "off"
     if not isinstance(payload, dict):
         raise PreWriteEvaluationError(f"{config_path} must contain a YAML mapping")
-    claims = payload.get("claims", {})
+    meta_process = payload.get("meta_process", payload)
+    if not isinstance(meta_process, dict):
+        raise PreWriteEvaluationError("meta-process.yaml meta_process must be a mapping")
+    claims = meta_process.get("claims", {})
     if claims is None:
         return "off"
     if not isinstance(claims, dict):

@@ -958,3 +958,30 @@ def test_audit_governed_repo_prefers_local_worktree_settings_when_present(
     assert read_gating["present"] is False
     assert read_gating["canonical_fallback_used"] is False
     assert read_gating["settings_source_path"] == str(settings_path.resolve())
+
+
+def test_audit_requires_prewrite_wiring_only_for_opted_in_repo(tmp_path: Path) -> None:
+    """Observe mode must not be reported healthy when its native adapters are absent."""
+
+    repo_root = tmp_path / "repo"
+    _write_governed_repo_scaffold(repo_root)
+    (repo_root / "meta-process.yaml").write_text(
+        "meta_process:\n  version: '1.0'\n  claims:\n    prewrite_mode: observe\n",
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        [sys.executable, str(AUDIT_SCRIPT), "--repo-root", str(repo_root), "--json"],
+        cwd=str(PROJECT_META_ROOT),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    payload = json.loads(result.stdout)
+    check = payload["checks"]["prewrite_claim_gate"]
+    assert check["mode"] == "observe"
+    assert check["expected"] is True
+    assert check["present"] is False
+    assert any(item.startswith("prewrite-hook:") for item in payload["missing_required"])

@@ -34,6 +34,7 @@ pretending it is mechanically enforced today.
 | `claims.enabled` | bool | `false` | `audit_governed_repo.py` (mechanical worktree opt-in requirement) | Audit treats missing flag as not opted in |
 | `claims.enforce_exclusivity` | bool | `true` | Not enforced by script | No effect |
 | `claims.require_for_worktree` | bool | `false` | `audit_governed_repo.py` (mechanical sanctioned-entrypoint expectation) | Audit does not expect sanctioned entrypoints unless another worktree signal requires them |
+| `claims.prewrite_mode` | enum `off \| observe \| enforce` | `off` | native pre-write adapters, hook generator, governed-repo audit | No pre-write wiring or lookup; `observe` records without blocking; `enforce` denies unauthorized supported native writes |
 | `claims.enforce_in_ci` | bool | `false` | Not enforced by script | No effect |
 | `claims.claims_file` | string | `.claude/active-work.yaml` | Not enforced by script | No effect |
 
@@ -41,6 +42,12 @@ Session lifecycle note: sanctioned session bootstrap and heartbeat do **not**
 require tool-specific config keys in `meta-process.yaml`. Codex and Claude Code
 resolve runtime identity through their adapters and populate the same claim and
 tracker contract.
+
+Pre-write enforcement is explicit and staged. Use `observe` first and retain
+latency/decision receipts. Promote to `enforce` only after representative
+compliant edits have zero false blocks and the approved latency bar passes.
+The current adapters cover Claude `Edit|Write` and Codex `apply_patch`; they do
+not provide OS-level protection or infer arbitrary shell write targets.
 
 ## worktrees
 

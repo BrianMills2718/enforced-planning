@@ -17,6 +17,8 @@ meta_process:
     trivial_block_src: true  # [PLANNED - not yet enforced]
 
   claims:
+    # Native pre-write claim gate: off | observe | enforce
+    prewrite_mode: "off"
     # Block claiming already-claimed scopes
     enforce_exclusivity: true  # [PLANNED - not yet enforced]
     # CI verifies PR branches have claims

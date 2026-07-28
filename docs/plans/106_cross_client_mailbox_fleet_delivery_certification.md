@@ -1,6 +1,6 @@
 # Plan #106: Cross-Client Mailbox Fleet Delivery Certification
 
-**Status:** In Progress — MF-01/MF-02/MF-03A/MF-04 accepted; MF-03B applied and awaits hook review/resume evidence
+**Status:** In Progress — MF-01/MF-02/MF-03A/MF-03B/MF-04 accepted; MF-05 is explicitly deferred
 **Type:** implementation
 **Priority:** Critical
 **phase_ref:** "Phase 9 — fleet adoption and framework maintenance"
@@ -33,9 +33,9 @@ then approved the delegation-safety revision `mailbox-fleet-delivery-v2` on
 2026-07-27: host candidate generation and host mutation are separate units.
 MF-01, MF-02, and MF-04 remain valid `reuse_unchanged` outputs from v1. MF-03A
 is accepted. Brian approved the exact MF-03A candidate digest on 2026-07-27;
-MF-03B applied it on 2026-07-27 and remains open only for native hook review
-and fresh client restart/resume evidence. MF-05 remains dependency- and
-approval-gated in the work graph.
+MF-03B applied it on 2026-07-27 and is accepted after native Codex and Claude
+prompt-event evidence. MF-05 is deliberately deferred: it is broader
+coordination certification, not a current product blocker.
 
 ### MF-01 Implementation Record
 
@@ -111,6 +111,23 @@ observed message `msg_bf41b253ee384cbb7f6d761c41c00cd7` as receipt
 `rcpt_b86ecbebaa8e179780ce5c9854b1c552`. This proves the configured adapter's
 message/receipt boundary, but it does not substitute for native-client hook
 trust or prove a newly started client invoked the hook.
+
+### MF-03B Native Receipt Acceptance Record
+
+Fresh native-client evidence now closes MF-03B's host-installation acceptance
+boundary. A restarted Codex session invoked the configured host adapter and
+recorded an observation receipt for its exact session. A real Claude Code
+`UserPromptSubmit` event then displayed persisted message
+`msg_1c72504336bdfb4f005f758f233e4499` and recorded observation receipt
+`rcpt_42cac939338899b06508c3abb291ee94` at
+`2026-07-28T01:51:35.976907Z`. The Claude prompt event uses its documented
+native `prompt_id`; the lifecycle adapter does not use a session-ID fallback.
+
+Claude `SessionStart` still emits a visible missing-event-identity warning.
+That does not prevent `UserPromptSubmit` delivery and is explicitly deferred
+as a bounded client-event design question. MF-05's four-direction plus explicit
+acknowledgement certification is also deferred: it exceeds the presently needed
+proof that the host-installed hooks can surface a message on the next prompt.
 
 ## Gap
 
@@ -625,7 +642,9 @@ Current handoff order:
 
 1. `mailbox-mf-03a-host-candidate` is accepted with the exact candidate digest
    recorded above.
-2. `mailbox-mf-03b-host-apply` remains blocked until Brian approves that exact
-   candidate `payload_sha256`.
-3. `mailbox-mf-05-four-direction-live-certification` remains blocked until
-   MF-03B is accepted and four exact live sessions are bound.
+2. `mailbox-mf-03b-host-apply` is accepted: the candidate was approved,
+   installed with backup/readback, and proven through fresh Codex and Claude
+   prompt-event observation receipts.
+3. `mailbox-mf-05-four-direction-live-certification` is deferred. Resume only
+   when ecosystem-wide acknowledgement certification is a consequential need;
+   it is not required for prompt-event mailbox delivery.

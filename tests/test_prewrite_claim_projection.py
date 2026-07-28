@@ -8,9 +8,11 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import yaml  # type: ignore[import-untyped]
+import pytest
 
 from enforced_planning.prewrite_claim_fast import evaluate_prewrite_fast
-from enforced_planning.prewrite_claim_projection import write_projection
+from enforced_planning import prewrite_claim_projection
+from enforced_planning.prewrite_claim_projection import ProjectionBuildError, write_projection
 
 
 SESSION = "codex:projection-test"
@@ -219,3 +221,23 @@ def test_merged_active_claim_is_denied(tmp_path: Path) -> None:
     assert decision["decision"] == "deny"
     assert decision["reason_code"] == "claim_not_healthy"
     assert "merged_active_claim_requires_disposition" in decision["details"]
+
+
+def test_projection_build_rejects_concurrent_registry_change(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _repo, _worktree, claims_dir, _claim_path = _fixture(tmp_path)
+    real_digest = prewrite_claim_projection.registry_digest
+    calls = 0
+
+    def changing_digest(path: Path) -> str:
+        nonlocal calls
+        calls += 1
+        value = real_digest(path)
+        return value if calls == 1 else "f" * 64
+
+    monkeypatch.setattr(prewrite_claim_projection, "registry_digest", changing_digest)
+
+    with pytest.raises(ProjectionBuildError, match="changed while"):
+        prewrite_claim_projection.build_projection(claims_dir=claims_dir)

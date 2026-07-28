@@ -264,6 +264,53 @@ def test_create_claim_accepts_program_claim_with_live_metadata(
     assert projection["claims"][0]["session_id"] == "codex-session-1"
 
 
+def test_heartbeat_and_release_refresh_prewrite_projection(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Every sanctioned live-claim mutation should leave a current projection."""
+
+    module = _load_module()
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
+    ok, _message = module.create_claim(
+        "codex",
+        "project-meta",
+        "projection-refresh",
+        "Verify derived projection refresh",
+        branch="projection-refresh",
+        worktree_path=str(tmp_path / "worktree"),
+        session_id="codex:projection-refresh",
+        session_name="projection-refresh",
+    )
+    assert ok
+    projection_path = projection_path_for(claims_dir)
+    created = json.loads(projection_path.read_text(encoding="utf-8"))
+
+    count, scopes, _session, _heartbeat = module.heartbeat_claims(
+        agent="codex",
+        project="project-meta",
+        scope="projection-refresh",
+        session_id="codex:projection-refresh",
+        require_exact_session=True,
+    )
+    heartbeat = json.loads(projection_path.read_text(encoding="utf-8"))
+    heartbeat_registry_digest = registry_digest(claims_dir)
+    released, _release_message = module.release_claim(
+        "codex",
+        "project-meta",
+        "projection-refresh",
+    )
+    empty = json.loads(projection_path.read_text(encoding="utf-8"))
+
+    assert count == 1 and scopes == ["projection-refresh"]
+    assert heartbeat["registry_digest"] == heartbeat_registry_digest
+    assert heartbeat["registry_digest"] != created["registry_digest"]
+    assert released is True
+    assert empty["registry_digest"] == registry_digest(claims_dir)
+    assert empty["claims"] == []
+
+
 def test_create_claim_auto_resolves_codex_session_id(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

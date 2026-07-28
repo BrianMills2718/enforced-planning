@@ -101,7 +101,13 @@ def build_projection(*, claims_dir: Path) -> PreWriteAuthorityProjectionV1:
     """Build a validated projection without mutating local state."""
 
     resolved = claims_dir.expanduser().resolve()
+    digest_before = registry_digest(resolved)
     claims = _load_projection_claims(resolved)
+    digest_after = registry_digest(resolved)
+    if digest_before != digest_after:
+        raise ProjectionBuildError(
+            "Claim registry changed while the pre-write projection was being built"
+        )
     projected: list[PreWriteAuthorityClaimV1] = []
     for claim in claims:
         # Retain unhealthy claims so the fast evaluator can return
@@ -144,7 +150,7 @@ def build_projection(*, claims_dir: Path) -> PreWriteAuthorityProjectionV1:
     return PreWriteAuthorityProjectionV1(
         generated_at=datetime.now(timezone.utc),
         claims_dir=str(resolved),
-        registry_digest=registry_digest(resolved),
+        registry_digest=digest_after,
         claims=tuple(projected),
     )
 

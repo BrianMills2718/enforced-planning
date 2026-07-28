@@ -8,10 +8,19 @@ import sys
 from pathlib import Path
 
 from enforced_planning.hook_wiring import CODEX_MAILBOX_HOOK, MAILBOX_HOOK
-from enforced_planning.mailbox_fleet_audit import MailboxFleetAuditRequestV1, audit_mailbox_fleet
+from enforced_planning.mailbox_fleet_audit import MailboxFleetAuditRequestV1, _portable_path, audit_mailbox_fleet
 
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_durable_fleet_paths_do_not_retain_the_absolute_home_prefix() -> None:
+    """Durable reports use a portable home marker instead of workstation identity."""
+
+    candidate = Path.home() / "projects" / "example" / ".codex" / "hooks.json"
+
+    assert _portable_path(candidate) == "~/projects/example/.codex/hooks.json"
+    assert str(Path.home()) not in _portable_path(candidate)
 
 
 def _hook_block(command: str, matcher: str) -> dict[str, object]:

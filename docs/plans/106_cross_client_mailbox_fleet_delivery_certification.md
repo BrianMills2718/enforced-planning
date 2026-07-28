@@ -1,6 +1,6 @@
 # Plan #106: Cross-Client Mailbox Fleet Delivery Certification
 
-**Status:** In Progress — MF-01 accepted; MF-02 and MF-04 are ready for execution
+**Status:** In Progress — MF-01/MF-02/MF-04 accepted; MF-03A ready for execution
 **Type:** implementation
 **Priority:** Critical
 **phase_ref:** "Phase 9 — fleet adoption and framework maintenance"
@@ -16,7 +16,7 @@
 ## Request Mode And Design Profile
 
 - Request mode: adopted planning and dependency-governed implementation
-- Design revision: `mailbox-fleet-delivery-v1`
+- Design revision: `mailbox-fleet-delivery-v2`
 - Design depth: Standard
 - Execution profile: `production_internal`
 - Overlays: runtime state, operational service, repository governance, migration
@@ -28,9 +28,12 @@
 
 ### Adoption Record
 
-Brian adopted design revision `mailbox-fleet-delivery-v1` on 2026-07-27. This
-releases MF-01 only; all later units remain dependency- and approval-gated in
-the work graph.
+Brian adopted design revision `mailbox-fleet-delivery-v1` on 2026-07-27. Brian
+then approved the delegation-safety revision `mailbox-fleet-delivery-v2` on
+2026-07-27: host candidate generation and host mutation are separate units.
+MF-01, MF-02, and MF-04 remain valid `reuse_unchanged` outputs from v1. MF-03A
+is the only ready implementation unit; MF-03B and MF-05 remain dependency- and
+approval-gated in the work graph.
 
 ### MF-01 Implementation Record
 
@@ -39,8 +42,25 @@ the read-only JSON CLIs, and deterministic fixtures. Completion review then
 closed four contract blockers: adapter digest comparison, client/session receipt
 binding, portable durable paths, and valid complex-key TOML rendering. The
 post-review gate passed 69 compatibility tests, 8 MF-01 selector tests, Ruff,
-strict mypy, and diff checks. MF-01 is accepted. Its satisfied dependency makes
-MF-02 and MF-04 ready; MF-03 and MF-05 remain blocked by their declared gates.
+strict mypy, and diff checks. MF-01 is accepted. Its outputs were consumed by
+the now-accepted MF-02 and MF-04 units.
+
+### MF-02 And MF-04 Acceptance Record
+
+MF-02 implementation commit `502cfeb` (merged as `bf35b48`) added one durable
+delivery-event marker shared by Codex and Claude lifecycle adapters. Exact
+host/repository duplicate, later-event repeat, missing-identity, wrong-session,
+expired, and acknowledged controls pass. The acceptance selector passed 12
+tests; Ruff, strict mypy, and diff checks passed. MF-02 is accepted.
+
+MF-04 implementation commit `11f30e5` added the read-only fleet report and
+bounded repair packets. Completion review found that resolved workstation paths
+were retained in durable JSON; review-fix commit `3d33c97` replaced home-prefixed
+paths with portable `~/...` values. The combined mailbox compatibility suite
+then passed 77 tests; Ruff, strict mypy, and diff checks passed. MF-04 is
+accepted. The real read-only report covered all 16 explicit registry entries
+and separately reported 27 governed-looking omissions; those observations are
+inventory evidence, not authority to mutate any repository.
 
 ## Gap
 
@@ -265,6 +285,46 @@ class MailboxInstallationReceiptV1(StrictContract):
     duplicate_delivery_risk: bool
     repair_actions: tuple[str, ...]
 
+class HostConfigFingerprintV1(StrictContract):
+    client: Literal["codex", "claude-code"]
+    config_path: str
+    state: Literal["absent", "present"]
+    before_sha256: str | None
+    proposed_sha256: str
+    adapter_sha256: str
+
+class HostInstallationCandidatePayloadV1(StrictContract):
+    schema_version: Literal["mailbox_host_candidate.v1"]
+    framework_revision: str
+    generated_at: datetime
+    configs: tuple[HostConfigFingerprintV1, HostConfigFingerprintV1]
+    plan: HostInstallationPlanV1
+    will_write: Literal[False]
+
+class StoredHostInstallationCandidateV1(StrictContract):
+    record_type: Literal["mailbox_host_candidate"]
+    payload: HostInstallationCandidatePayloadV1
+    payload_sha256: str
+
+class HostInstallationApplyReceiptV1(StrictContract):
+    schema_version: Literal["mailbox_host_apply_receipt.v1"]
+    candidate_payload_sha256: str
+    applied_at: datetime
+    backup_paths: tuple[str | None, str | None]
+    before_sha256: tuple[str | None, str | None]
+    after_sha256: tuple[str, str]
+    second_dry_run_action_count: Literal[0]
+
+class HostInstallationApplyFailureV1(StrictContract):
+    schema_version: Literal["mailbox_host_apply_failure.v1"]
+    candidate_payload_sha256: str
+    failed_at: datetime
+    failure_stage: Literal["preflight", "backup", "codex_write", "claude_write", "readback", "rollback"]
+    backup_paths: tuple[str | None, str | None]
+    rollback_completed: bool
+    restored_sha256: tuple[str | None, str | None]
+    error_code: str
+
 class DeliveryLegV1(StrictContract):
     sender_client: Literal["codex", "claude-code"]
     recipient_client: Literal["codex", "claude-code"]
@@ -287,6 +347,22 @@ class MailboxDeliveryCertificationV1(StrictContract):
 Unknown fields are forbidden. Paths and commands may contain `~` but durable
 artifacts must not contain Brian's resolved home path. Secret values and full
 hook inputs are never retained.
+
+MF-03A produces only hashes, portable paths, required hook changes, and counts;
+it does not retain unrelated configuration values. `payload_sha256` is the
+SHA-256 of canonical JSON for `payload`; the digest is stored in the outer
+envelope and is never self-referential. `HostConfigFingerprintV1` validates that
+`present` requires `before_sha256` and `absent` requires `None`. MF-03B may apply
+only a candidate whose envelope `payload_sha256` has exact readiness approval
+and whose current config and adapter hashes still match the candidate inputs.
+Any mismatch invalidates the candidate and returns to MF-03A.
+
+MF-03B backs up every config that exists; an absent config has a `None` backup
+path and remains identified by its `absent` fingerprint. If any write or
+readback fails after mutation begins, the applier restores every changed file
+to its exact before state, verifies the restored hashes, and emits
+`HostInstallationApplyFailureV1`. A failed or rolled-back attempt never emits a
+success receipt or upgrades installation/runtime state.
 
 ### State and claim rules
 
@@ -346,7 +422,8 @@ hook inputs are never retained.
 |---|---|---|
 | MF-01 | `enabler` | Makes configuration and runtime evidence mechanically distinguishable. |
 | MF-02 | `direct_blocker` | Removes duplicate injection when host and repository hooks coexist. |
-| MF-03 | `enabler` | Installs the accepted adapters but does not prove delivery. |
+| MF-03A | `enabler` | Produces an exact reviewable candidate without host writes. |
+| MF-03B | `enabler` | Applies only the approved unchanged candidate; it does not prove delivery. |
 | MF-04 | `enabler` | Makes fleet drift visible without mutating consumers. |
 | MF-05 | `vertical` | Demonstrates the user outcome in all four client directions. |
 
@@ -358,12 +435,17 @@ hook inputs are never retained.
 2. **MF-02 — duplicate-safe shared lifecycle adapters.** Generalize the current
    Codex/Claude adapters around exact client/session/event identity and prove
    host plus repository hooks produce one notice per event.
-3. **MF-03 — host rollout.** Back up, install, review, and activate Codex and
-   Claude user-level hooks on this workstation.
-4. **MF-04 — fleet read-only audit and bounded repository repair packets.** Scan
+3. **MF-03A — exact host candidate.** Read the current Codex and Claude user
+   configuration, bind the proposed change to config and adapter hashes, and
+   emit a portable dry-run candidate. No host write or backup occurs.
+4. **MF-03B — approved host apply.** After exact candidate-digest readiness
+   approval, recheck all hashes, back up each present config, atomically replace
+   each file with only the canonical mailbox hook additions, roll back the group
+   on partial failure, parse/read back, and prove a zero-action second dry run.
+5. **MF-04 — fleet read-only audit and bounded repository repair packets.** Scan
    `governed_repos.yaml`; report drift and one exact per-repository repair
    command without writing consumer repositories.
-5. **MF-05 — four-direction live certification.** Retain exact send, observe,
+6. **MF-05 — four-direction live certification.** Retain exact send, observe,
    acknowledge evidence for all client pairs.
 
 The machine-readable execution graph is
@@ -376,8 +458,10 @@ The machine-readable execution graph is
 Framework implementation units may touch only:
 
 - `enforced_planning/mailbox_delivery.py` (new)
+- `enforced_planning/mailbox_fleet_audit.py` (new)
 - `enforced_planning/coordination_messages.py`
 - `scripts/audit_mailbox_delivery.py` (new)
+- `scripts/audit_mailbox_fleet.py` (new)
 - `scripts/install_mailbox_host_adapters.py` (new)
 - `scripts/coordination_hook.py`
 - `hooks/claude/notify-coordination-messages.sh`
@@ -387,6 +471,7 @@ Framework implementation units may touch only:
 - `scripts/upgrade_governed_repos.py`
 - `governed_repos.yaml`
 - `tests/test_mailbox_delivery.py` (new)
+- `tests/test_mailbox_fleet_audit.py` (new)
 - `tests/test_coordination_messages.py`
 - `tests/test_generate_hook_wiring.py`
 - `tests/test_install_governed_repo.py`
@@ -411,9 +496,11 @@ python scripts/validate_plan.py --plan-file docs/plans/106_cross_client_mailbox_
 python <company-planning-work-unit-validator> docs/plans/106_cross_client_mailbox_fleet_delivery_work_graph.json
 ```
 
-MF-03 additionally requires a before/after installation receipt, backup
-readback, idempotent second dry run, Codex `/hooks` review, and fresh client
-resume. MF-05 requires four real exact-session message chains.
+MF-03A requires a portable candidate bound to the exact before-config and
+adapter hashes and proof that neither host config changed. MF-03B requires the
+exact candidate approval, before/after installation receipts, backup readback,
+idempotent second dry run, Codex `/hooks` review, and fresh client resume.
+MF-05 requires four real exact-session message chains.
 
 ## Acceptance Criteria
 
@@ -437,7 +524,11 @@ resume. MF-05 requires four real exact-session message chains.
 - A client lifecycle event lacks enough identity to suppress duplicate
   host/repository delivery: stop MF-02 and return a bounded client-specific
   design revision.
-- Host configuration cannot be parsed or safely backed up: stop before write.
+- Host configuration cannot be parsed or fingerprinted: stop MF-03A without
+  producing an executable candidate.
+- MF-03B observes a config, adapter, or candidate digest different from the
+  approved MF-03A artifact: stop before backup or write and regenerate MF-03A.
+- Host configuration cannot be safely backed up: stop MF-03B before write.
 - Hook trust cannot be established by the operator: retain `configured` and do
   not attempt MF-05 for that client.
 - A consumer repository is dirty, employer-owned, archived, or lacks mutation
@@ -458,8 +549,26 @@ resume. MF-05 requires four real exact-session message chains.
 
 ## Implementation Handoff
 
-After Brian adopts design revision `mailbox-fleet-delivery-v1`, assign only a
-unit whose work-graph `claimability` is `ready_for_execution`. The implementer
-must read this plan and the exact unit record, claim only its conflict surfaces,
-write tests before implementation, and stop rather than choosing a new hook
-scope, trust policy, delivery guarantee, or consumer-repository rollout.
+Assign only a unit whose work-graph `claimability` is `ready_for_execution`.
+The implementer must read this plan and the exact unit record, claim only its
+conflict surfaces, write tests before implementation, and stop rather than
+choosing a new hook scope, trust policy, delivery guarantee, or
+consumer-repository rollout.
+
+### Parallel Delegation Contract
+
+One orchestrator must first own the unparented Plan #106 `program` root. Every
+parallel worker is a child lane with `parent_scope` set to that exact root and a
+narrow write claim for its unit's declared conflict surfaces. `--allow-parallel`
+does not authorize multiple same-plan program roots; the one-root hierarchy is
+intentional and mechanically enforced. If the parent root does not exist, the
+operator must create it before spawning workers rather than bypassing the claim
+gate or pretending one sibling unit owns another.
+
+Current handoff order:
+
+1. `mailbox-mf-03a-host-candidate` is ready and read-only.
+2. `mailbox-mf-03b-host-apply` remains blocked until MF-03A is accepted and
+   Brian approves the exact candidate `payload_sha256`.
+3. `mailbox-mf-05-four-direction-live-certification` remains blocked until
+   MF-03B is accepted and four exact live sessions are bound.

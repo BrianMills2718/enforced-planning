@@ -115,6 +115,18 @@ def _expand(path_text: str) -> Path:
     return Path(path_text).expanduser().resolve()
 
 
+def _portable_path(path: Path) -> str:
+    """Render paths below the current home without retaining its absolute prefix."""
+
+    resolved = path.expanduser().resolve()
+    home = Path.home().resolve()
+    try:
+        relative = resolved.relative_to(home)
+    except ValueError:
+        return str(resolved)
+    return "~" if not relative.parts else f"~/{relative.as_posix()}"
+
+
 def _shell_quote(value: str) -> str:
     """Return a shell-safe single argument without invoking a shell."""
 
@@ -194,14 +206,19 @@ def _repair_paths(repo_root: Path) -> tuple[str, ...]:
     paths = [".codex/hooks.json", ".claude/settings.json"]
     paths.extend(MAILBOX_HOOK_FILES)
     paths.extend(MAILBOX_SUPPORT_FILES)
-    return tuple(str(repo_root / relative) for relative in sorted(set(paths)))
+    return tuple(_portable_path(repo_root / relative) for relative in sorted(set(paths)))
 
 
 def _repair_packet(entry: FleetRepositoryEntryV1, repo_root: Path, framework_root: Path) -> FleetRepairPacketV1:
+    installer = _portable_path(framework_root / "scripts" / "install_governed_repo.py")
+    portable_repo_root = _portable_path(repo_root)
     return FleetRepairPacketV1(
         repo_id=entry.repo_id,
         claim_scope=f"mailbox-repair:{entry.repo_id}",
-        command=f"python {_shell_quote(os.fspath(framework_root / 'scripts' / 'install_governed_repo.py'))} --repo-root {_shell_quote(os.fspath(repo_root))} --coordination-messages-only --write",
+        command=(
+            f"python {_shell_quote(installer)} --repo-root {_shell_quote(portable_repo_root)} "
+            "--coordination-messages-only --write"
+        ),
         paths=_repair_paths(repo_root),
     )
 
@@ -238,7 +255,7 @@ def _audit_entry(
         return FleetRepositoryReportV1(
             repo_id=entry.repo_id,
             registry_path=entry.path,
-            resolved_path=str(repo_root),
+            resolved_path=_portable_path(repo_root),
             tier=entry.tier,
             classification="excluded",
             reasons=("explicitly_excluded_from_mailbox_audit",),
@@ -248,7 +265,7 @@ def _audit_entry(
         return FleetRepositoryReportV1(
             repo_id=entry.repo_id,
             registry_path=entry.path,
-            resolved_path=str(repo_root),
+            resolved_path=_portable_path(repo_root),
             tier=entry.tier,
             classification="unavailable",
             reasons=("repository_path_unavailable",),
@@ -270,7 +287,7 @@ def _audit_entry(
         return FleetRepositoryReportV1(
             repo_id=entry.repo_id,
             registry_path=entry.path,
-            resolved_path=str(repo_root),
+            resolved_path=_portable_path(repo_root),
             tier=entry.tier,
             classification="drifted",
             reasons=tuple((*reasons, f"mailbox_audit_failed:{exc}")),
@@ -290,7 +307,7 @@ def _audit_entry(
     return FleetRepositoryReportV1(
         repo_id=entry.repo_id,
         registry_path=entry.path,
-        resolved_path=str(repo_root),
+        resolved_path=_portable_path(repo_root),
         tier=entry.tier,
         classification=classification,
         reasons=tuple(reasons),
@@ -323,7 +340,10 @@ def _find_omissions(workspace_root: Path | None, registered: set[Path]) -> tuple
             continue
         if (candidate / ".git").exists() and (candidate / "meta-process.yaml").is_file():
             omissions.append(
-                FleetRegistryOmissionV1(resolved_path=str(candidate.resolve()), suggested_repo_id=candidate.name)
+                FleetRegistryOmissionV1(
+                    resolved_path=_portable_path(candidate),
+                    suggested_repo_id=candidate.name,
+                )
             )
     return tuple(omissions)
 
@@ -341,7 +361,7 @@ def audit_mailbox_fleet(request: MailboxFleetAuditRequestV1) -> MailboxFleetAudi
     omissions = _find_omissions(workspace_root, {_expand(entry.path) for entry in entries})
     return MailboxFleetAuditReportV1(
         audited_at=datetime.now(UTC),
-        registry_path=str(registry_path),
+        registry_path=_portable_path(registry_path),
         explicit_entry_count=len(entries),
         reports=reports,
         omissions=omissions,

@@ -182,7 +182,7 @@ exists and measuring it.
 | Landscape and prior-art contract | Make research-before-build explicit in methodology, plans, relationship lineage, and report-only validation. See Plan #101. | ✅ Complete; enforcement deferred pending dogfood |
 | Cross-client mailbox | Add client-neutral persisted/observed/acknowledged message semantics on the existing claim/session identity model. See Plan #67. | ISSUE-054 confirmed the Claude-only inbox has no reliable Codex delivery path |
 | Native Codex mailbox lifecycle | Install Codex lifecycle hooks and prove a live send-observe-acknowledge chain. See Plan #100. | ✅ Complete; native resumed-thread proof retained |
-| Mailbox fleet delivery certification | Move the canonical delivery adapter to the host boundary, detect repository drift without conflating configuration with observation, and certify Codex↔Claude in all four directions. See Plan #106. | Planned; bounded design v1 awaits adoption before MF-01 |
+| Mailbox fleet delivery certification | Move the canonical delivery adapter to the host boundary, detect repository drift without conflating configuration with observation, and certify Codex↔Claude in all four directions. See Plan #106. | In progress; MF-01/MF-02/MF-04 accepted, read-only MF-03A host candidate is next, and host apply/live certification remain approval-gated |
 | Multi-tool adoption | Cursor/Windsurf hook adapters when their hook surfaces are publicly documented | External dependency: tool documentation |
 | Project-meta topic-research adoption | Apply portable topic-research pattern in `research_synthesis/` with manifests, ADR links, freshness metadata | Plans #43/#44/#35 complete |
 

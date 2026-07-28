@@ -352,6 +352,55 @@ def test_claim_projection_refresh_only_is_bounded_and_idempotent(tmp_path: Path)
     for relative in CLAIM_PROJECTION_REFRESH_PATHS:
         assert (tmp_path / relative).is_file()
 
+    # A bounded refresh may intentionally retain an older local lifecycle.
+    # The refreshed wrapper must remain runnable rather than requiring a
+    # broad lifecycle replacement just to support projection refresh.
+    (tmp_path / "enforced_planning" / "session_lifecycle.py").write_text(
+        "\n".join(
+            [
+                '"""Legacy lifecycle fixture."""',
+                'MERGED_DISPOSITION = "merged"',
+                'WORKTREE_DISPOSITIONS = {"merged"}',
+                "def close_session(*, agent, project, scope, worktree_path=None, branch=None, note=None, delete_branch=True, disposition='merged', disposition_reason=None, recovery_ref=None, allow_discard_unique=False):",
+                "    return {",
+                "        'action': 'closed',",
+                "        'worktree_action': 'removed',",
+                "        'branch_action': 'deleted',",
+                "        'disposition': 'merged',",
+                "        'released': True,",
+                "    }",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    close_help = subprocess.run(
+        [sys.executable, str(tmp_path / "scripts/meta/session_close.py"), "--help"],
+        cwd=str(tmp_path),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert close_help.returncode == 0, close_help.stdout + close_help.stderr
+    close_run = subprocess.run(
+        [
+            sys.executable,
+            str(tmp_path / "scripts/meta/session_close.py"),
+            "--agent",
+            "codex",
+            "--project",
+            "demo",
+            "--scope",
+            "legacy-closeout",
+        ],
+        cwd=str(tmp_path),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert close_run.returncode == 0, close_run.stdout + close_run.stderr
+    assert "closed: worktree=removed branch=deleted" in close_run.stdout
+
     repeat = _run(
         "--repo-root",
         str(tmp_path),

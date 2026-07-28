@@ -361,6 +361,14 @@ def test_claim_projection_refresh_only_is_bounded_and_idempotent(tmp_path: Path)
                 '"""Legacy lifecycle fixture."""',
                 'MERGED_DISPOSITION = "merged"',
                 'WORKTREE_DISPOSITIONS = {"merged"}',
+                "def start_session(*, agent, project, scope, intent, repo_root, worktree_path, branch, broader_goal, current_phase, plan_ref=None, allow_unplanned=False, allow_parallel=False, session_id=None, session_name=None, claim_type=None, parent_scope=None, write_paths=None, read_paths=None, intended_next_phases=(), depends_on_repos=(), requires_shared_infra_changes=False, stop_conditions=(), notes=None):",
+                "    return {",
+                "        'action': 'updated',",
+                "        'session_name': session_name or scope,",
+                "        'broader_goal': broader_goal,",
+                "        'tracker_path': 'legacy-tracker.yaml',",
+                "        'coordination_mailbox': {'summary': 'coordination mailbox: unavailable'},",
+                "    }",
                 "def close_session(*, agent, project, scope, worktree_path=None, branch=None, note=None, delete_branch=True, disposition='merged', disposition_reason=None, recovery_ref=None, allow_discard_unique=False):",
                 "    return {",
                 "        'action': 'closed',",
@@ -400,6 +408,21 @@ def test_claim_projection_refresh_only_is_bounded_and_idempotent(tmp_path: Path)
     )
     assert close_run.returncode == 0, close_run.stdout + close_run.stderr
     assert "closed: worktree=removed branch=deleted" in close_run.stdout
+    start_run = subprocess.run(
+        [
+            sys.executable,
+            str(tmp_path / "scripts/meta/session_start.py"),
+            "--agent", "codex", "--project", "demo", "--scope", "legacy-start",
+            "--intent", "exercise legacy compatibility", "--repo-root", str(tmp_path),
+            "--worktree-path", str(tmp_path / "worktrees" / "legacy-start"),
+            "--branch", "legacy-start", "--broader-goal", "Legacy compatibility",
+            "--current-phase", "verify wrapper", "--work-graph", "ignored.json",
+            "--work-unit-id", "ignored-unit",
+        ],
+        cwd=str(tmp_path), capture_output=True, text=True, check=False,
+    )
+    assert start_run.returncode == 0, start_run.stdout + start_run.stderr
+    assert "updated: legacy-start" in start_run.stdout
 
     repeat = _run(
         "--repo-root",

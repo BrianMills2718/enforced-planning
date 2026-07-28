@@ -832,6 +832,69 @@ def test_claude_lifecycle_adapter_is_duplicate_safe_with_repository_project_over
     assert [receipt.event for receipt in status.receipts] == ["observed"]
 
 
+def test_claude_prompt_lifecycle_uses_native_prompt_id_for_duplicate_safety(
+    mailbox: tuple[CoordinationMessageStore, Path, Path],
+) -> None:
+    """Claude prompt callbacks use prompt_id, never a session-ID fallback."""
+
+    store, claims_dir, root = mailbox
+    persisted = store.send(
+        _send_request(sender=CODEX_SESSION, recipient=CLAUDE_SESSION, idempotency_key="claude-prompt-id")
+    )
+    command = [
+        "python",
+        "scripts/coordination_hook.py",
+        "--agent",
+        "claude-code",
+        "--project",
+        "enforced-planning",
+        "--claims-dir",
+        str(claims_dir),
+        "--root",
+        str(root),
+    ]
+    prompt = {
+        "session_id": "session-456",
+        "hook_event_name": "UserPromptSubmit",
+        "prompt_id": "claude-prompt-one",
+    }
+
+    first = subprocess.run(
+        command,
+        input=json.dumps(prompt),
+        cwd=Path(__file__).resolve().parents[1],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    duplicate = subprocess.run(
+        command,
+        input=json.dumps(prompt),
+        cwd=Path(__file__).resolve().parents[1],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    later = subprocess.run(
+        command,
+        input=json.dumps({**prompt, "prompt_id": "claude-prompt-two"}),
+        cwd=Path(__file__).resolve().parents[1],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert first.returncode == 0, first.stderr or first.stdout
+    assert persisted.message.message_id in first.stdout
+    assert duplicate.returncode == 0
+    assert duplicate.stdout == ""
+    assert later.returncode == 0
+    assert persisted.message.message_id in later.stdout
+    assert [receipt.event for receipt in store.status(MessageStatusRequest(message_id=persisted.message.message_id)).receipts] == [
+        "observed"
+    ]
+
+
 def test_lifecycle_adapter_missing_event_identity_does_not_observe(
     mailbox: tuple[CoordinationMessageStore, Path, Path],
 ) -> None:

@@ -11,13 +11,15 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import os
 import re
+import tempfile
 import tomllib
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from enforced_planning.coordination_messages import StoredReceiptRecord
 
@@ -129,6 +131,120 @@ class HostInstallationPlanV1(StrictContract):
     atomic_replace_required_on_apply: Literal[True] = True
 
 
+class HostConfigFingerprintV1(StrictContract):
+    """One exact host-config and adapter binding for a read-only candidate."""
+
+    client: ClientName
+    config_path: str = Field(min_length=1)
+    state: Literal["absent", "present"]
+    before_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    proposed_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    adapter_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+    @model_validator(mode="after")
+    def validate_state_digest(self) -> HostConfigFingerprintV1:
+        """Make an absent source distinguishable from an omitted fingerprint."""
+
+        if self.state == "absent" and self.before_sha256 is not None:
+            raise ValueError("absent config must not retain before_sha256")
+        if self.state == "present" and self.before_sha256 is None:
+            raise ValueError("present config requires before_sha256")
+        return self
+
+
+class HostInstallationCandidatePayloadV1(StrictContract):
+    """Portable, non-mutating candidate bound to exact source bytes."""
+
+    schema_version: Literal["mailbox_host_candidate.v1"] = "mailbox_host_candidate.v1"
+    framework_revision: str = Field(min_length=1)
+    generated_at: datetime
+    configs: tuple[HostConfigFingerprintV1, HostConfigFingerprintV1]
+    plan: HostInstallationPlanV1
+    will_write: Literal[False] = False
+
+    @model_validator(mode="after")
+    def validate_clients(self) -> HostInstallationCandidatePayloadV1:
+        """Require exactly one binding for each supported host client."""
+
+        if tuple(item.client for item in self.configs) != ("codex", "claude-code"):
+            raise ValueError("candidate configs must be ordered as codex then claude-code")
+        return self
+
+
+class StoredHostInstallationCandidateV1(StrictContract):
+    """Digest envelope for the exact candidate a later rollout may approve."""
+
+    record_type: Literal["mailbox_host_candidate"] = "mailbox_host_candidate"
+    payload: HostInstallationCandidatePayloadV1
+    payload_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+    @model_validator(mode="after")
+    def validate_digest(self) -> StoredHostInstallationCandidateV1:
+        """Reject envelopes that do not bind their exact payload bytes."""
+
+        if self.payload_sha256 != _model_digest(self.payload):
+            raise ValueError("host candidate payload_sha256 mismatch")
+        return self
+
+
+class HostInstallationAppliedFileV1(StrictContract):
+    """One host config after a verified, recoverable candidate application."""
+
+    client: ClientName
+    config_path: str = Field(min_length=1)
+    before_state: Literal["absent", "present"]
+    before_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    after_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    backup_path: str | None = None
+    backup_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+
+
+class HostInstallationApplyReceiptV1(StrictContract):
+    """Durable evidence that one approved candidate was applied and rechecked."""
+
+    schema_version: Literal["mailbox_host_apply_receipt.v1"] = "mailbox_host_apply_receipt.v1"
+    approved_payload_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    framework_revision: str = Field(min_length=1)
+    applied_at: datetime
+    files: tuple[HostInstallationAppliedFileV1, HostInstallationAppliedFileV1]
+    before_receipt: MailboxInstallationReceiptV1
+    after_receipt: MailboxInstallationReceiptV1
+    second_dry_run_action_count: Literal[0] = 0
+    trust_state: Literal["unknown"] = "unknown"
+    client_restart_or_resume_required: Literal[True] = True
+
+
+class HostInstallationRollbackV1(StrictContract):
+    """Exact restoration evidence for one config after an apply failure."""
+
+    client: ClientName
+    config_path: str = Field(min_length=1)
+    restored_state: Literal["absent", "present"]
+    restored_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+
+
+class HostInstallationApplyFailureV1(StrictContract):
+    """Fail-loud evidence for a rejected or rolled-back host application."""
+
+    schema_version: Literal["mailbox_host_apply_failure.v1"] = "mailbox_host_apply_failure.v1"
+    approved_payload_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    candidate_payload_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    failed_at: datetime
+    stage: Literal["preflight", "backup", "write", "readback", "idempotence"]
+    reason: str = Field(min_length=1)
+    mutation_started: bool
+    rollback_verified: bool
+    rollback: tuple[HostInstallationRollbackV1, ...] = ()
+
+
+class HostInstallationApplyError(MailboxInstallationError):
+    """Host application failed with a typed, inspectable failure record."""
+
+    def __init__(self, receipt: HostInstallationApplyFailureV1) -> None:
+        super().__init__(receipt.reason)
+        self.receipt = receipt
+
+
 def _path(path_text: str) -> Path:
     """Resolve only for local I/O; contracts retain the caller's portable string."""
 
@@ -144,6 +260,18 @@ def _portable_text(value: str) -> str:
 
 def _sha256_bytes(value: bytes) -> str:
     return hashlib.sha256(value).hexdigest()
+
+
+def _model_digest(payload: StrictContract) -> str:
+    """Hash canonical JSON for a durable strict-contract envelope."""
+
+    encoded = json.dumps(
+        payload.model_dump(mode="json"),
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    return _sha256_bytes(encoded)
 
 
 def _adapter_sha256(adapter: HostAdapterSpecV1) -> tuple[str | None, tuple[str, ...]]:
@@ -489,7 +617,7 @@ def _candidate_change(
     requirements = CODEX_HOOK_REQUIREMENTS if client == "codex" else CLAUDE_HOOK_REQUIREMENTS
     return HostConfigChangeV1(
         client=client,
-        config_path=config_path,
+        config_path=_portable_text(config_path),
         configuration_state_before=state,
         proposed_sha256=_sha256_bytes(rendered.encode("utf-8")),
         proposed_bytes=len(rendered.encode("utf-8")),
@@ -525,3 +653,319 @@ def plan_host_installation(request: HostInstallationPlanRequestV1) -> HostInstal
         if change is not None
     )
     return HostInstallationPlanV1(receipt=receipt, changes=changes)
+
+
+def _candidate_fingerprint(
+    *,
+    client: ClientName,
+    config_path: str,
+    adapter: HostAdapterSpecV1,
+    plan: HostInstallationPlanV1,
+) -> HostConfigFingerprintV1:
+    """Bind one candidate leg to exact source bytes and validated adapter bytes."""
+
+    adapter_sha256, adapter_issues = _adapter_sha256(adapter)
+    if adapter_issues or adapter_sha256 is None:
+        detail = ",".join(adapter_issues) if adapter_issues else "adapter_digest_unavailable"
+        raise MailboxInstallationError(f"cannot generate host candidate: {client} {detail}")
+    source = _path(config_path)
+    before = source.read_bytes() if source.exists() else None
+    changes = {change.client: change for change in plan.changes}
+    proposed_sha256 = changes[client].proposed_sha256 if client in changes else _sha256_bytes(before or b"")
+    return HostConfigFingerprintV1(
+        client=client,
+        config_path=_portable_text(config_path),
+        state="present" if before is not None else "absent",
+        before_sha256=_sha256_bytes(before) if before is not None else None,
+        proposed_sha256=proposed_sha256,
+        adapter_sha256=adapter_sha256,
+    )
+
+
+def generate_host_installation_candidate(
+    request: HostInstallationPlanRequestV1,
+) -> StoredHostInstallationCandidateV1:
+    """Create an exact, portable, read-only candidate for later human approval."""
+
+    if request.framework_revision == "unknown":
+        raise MailboxInstallationError(
+            "cannot generate host candidate: exact framework_revision is required"
+        )
+    plan = plan_host_installation(request)
+    payload = HostInstallationCandidatePayloadV1(
+        framework_revision=request.framework_revision,
+        generated_at=datetime.now(UTC),
+        configs=(
+            _candidate_fingerprint(
+                client="codex",
+                config_path=request.codex_config_path,
+                adapter=request.codex_adapter,
+                plan=plan,
+            ),
+            _candidate_fingerprint(
+                client="claude-code",
+                config_path=request.claude_config_path,
+                adapter=request.claude_adapter,
+                plan=plan,
+            ),
+        ),
+        plan=plan,
+    )
+    return StoredHostInstallationCandidateV1(payload=payload, payload_sha256=_model_digest(payload))
+
+
+def _atomic_replace(path: Path, content: bytes, *, mode: int = 0o600) -> None:
+    """Replace one file from the same directory and fsync before returning."""
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+    temporary_path = Path(temporary_name)
+    try:
+        os.fchmod(descriptor, mode)
+        with os.fdopen(descriptor, "wb") as handle:
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+        temporary_path.replace(path)
+        directory_descriptor = os.open(path.parent, os.O_RDONLY)
+        try:
+            os.fsync(directory_descriptor)
+        finally:
+            os.close(directory_descriptor)
+    except Exception:
+        temporary_path.unlink(missing_ok=True)
+        raise
+
+
+def _parse_config_bytes(client: ClientName, content: bytes, *, label: str) -> dict[str, Any]:
+    try:
+        parsed = tomllib.loads(content.decode("utf-8")) if client == "codex" else json.loads(content)
+    except (UnicodeDecodeError, tomllib.TOMLDecodeError, json.JSONDecodeError) as exc:
+        raise MailboxInstallationError(f"invalid {label} for {client}: {exc}") from exc
+    if not isinstance(parsed, dict):
+        raise MailboxInstallationError(f"invalid {label} for {client}: expected object")
+    return parsed
+
+
+def _failure(
+    *,
+    candidate: StoredHostInstallationCandidateV1,
+    approved_payload_sha256: str,
+    stage: Literal["preflight", "backup", "write", "readback", "idempotence"],
+    reason: str,
+    mutation_started: bool,
+    rollback_verified: bool = False,
+    rollback: tuple[HostInstallationRollbackV1, ...] = (),
+) -> HostInstallationApplyError:
+    return HostInstallationApplyError(
+        HostInstallationApplyFailureV1(
+            approved_payload_sha256=approved_payload_sha256,
+            candidate_payload_sha256=candidate.payload_sha256,
+            failed_at=datetime.now(UTC),
+            stage=stage,
+            reason=reason,
+            mutation_started=mutation_started,
+            rollback_verified=rollback_verified,
+            rollback=rollback,
+        )
+    )
+
+
+def _rollback_configs(
+    originals: dict[ClientName, bytes | None], paths: dict[ClientName, Path]
+) -> tuple[HostInstallationRollbackV1, HostInstallationRollbackV1]:
+    records: list[HostInstallationRollbackV1] = []
+    for client in ("codex", "claude-code"):
+        path = paths[client]
+        original = originals[client]
+        if original is None:
+            path.unlink(missing_ok=True)
+            if path.exists():
+                raise MailboxInstallationError(f"rollback failed to remove originally absent {client} config")
+            restored_sha256 = None
+            state: Literal["absent", "present"] = "absent"
+        else:
+            mode = path.stat().st_mode & 0o777 if path.exists() else 0o600
+            _atomic_replace(path, original, mode=mode)
+            restored_sha256 = _sha256_bytes(path.read_bytes())
+            if restored_sha256 != _sha256_bytes(original):
+                raise MailboxInstallationError(f"rollback digest mismatch for {client} config")
+            _parse_config_bytes(client, path.read_bytes(), label="restored host config")
+            state = "present"
+        records.append(
+            HostInstallationRollbackV1(
+                client=client,
+                config_path=_portable_text(str(path)),
+                restored_state=state,
+                restored_sha256=restored_sha256,
+            )
+        )
+    return records[0], records[1]
+
+
+def apply_host_installation_candidate(
+    *,
+    candidate: StoredHostInstallationCandidateV1,
+    approved_payload_sha256: str,
+    request: HostInstallationPlanRequestV1,
+    backup_root: str,
+) -> HostInstallationApplyReceiptV1:
+    """Apply exactly one approved, unchanged candidate or restore the full group."""
+
+    if approved_payload_sha256 != candidate.payload_sha256:
+        raise _failure(
+            candidate=candidate,
+            approved_payload_sha256=approved_payload_sha256,
+            stage="preflight",
+            reason="approved payload digest does not match candidate",
+            mutation_started=False,
+        )
+    if request.framework_revision != candidate.payload.framework_revision:
+        raise _failure(
+            candidate=candidate,
+            approved_payload_sha256=approved_payload_sha256,
+            stage="preflight",
+            reason="framework revision does not match approved candidate",
+            mutation_started=False,
+        )
+
+    configs = candidate.payload.configs
+    paths: dict[ClientName, Path] = {
+        "codex": _path(request.codex_config_path),
+        "claude-code": _path(request.claude_config_path),
+    }
+    adapters: dict[ClientName, HostAdapterSpecV1] = {
+        "codex": request.codex_adapter,
+        "claude-code": request.claude_adapter,
+    }
+    originals: dict[ClientName, bytes | None] = {}
+    proposed: dict[ClientName, bytes] = {}
+    before_receipt: MailboxInstallationReceiptV1
+    try:
+        before_receipt = audit_host_installation(request)
+        for fingerprint in configs:
+            client = fingerprint.client
+            if fingerprint.config_path != _portable_text(str(paths[client])):
+                raise MailboxInstallationError(f"config path drift for {client}")
+            adapter_digest, adapter_issues = _adapter_sha256(adapters[client])
+            if adapter_issues or adapter_digest != fingerprint.adapter_sha256:
+                raise MailboxInstallationError(f"adapter digest drift for {client}")
+            original = paths[client].read_bytes() if paths[client].exists() else None
+            originals[client] = original
+            observed_state = "present" if original is not None else "absent"
+            observed_digest = _sha256_bytes(original) if original is not None else None
+            if observed_state != fingerprint.state or observed_digest != fingerprint.before_sha256:
+                raise MailboxInstallationError(f"config input digest drift for {client}")
+            parsed = _parse_config_bytes(client, original, label="host config") if original is not None else None
+            rendered = _candidate_content(client=client, config=parsed, adapter=adapters[client])
+            candidate_bytes = original if rendered is None and original is not None else (rendered[0].encode("utf-8") if rendered else b"")
+            if _sha256_bytes(candidate_bytes) != fingerprint.proposed_sha256:
+                raise MailboxInstallationError(f"proposed config digest drift for {client}")
+            proposed[client] = candidate_bytes
+    except MailboxInstallationError as exc:
+        raise _failure(
+            candidate=candidate,
+            approved_payload_sha256=approved_payload_sha256,
+            stage="preflight",
+            reason=str(exc),
+            mutation_started=False,
+        ) from exc
+
+    backup_directory = _path(backup_root) / (
+        datetime.now(UTC).strftime("%Y%m%dT%H%M%S.%fZ") + f"-{candidate.payload_sha256[:12]}"
+    )
+    backups: dict[ClientName, Path | None] = {"codex": None, "claude-code": None}
+    try:
+        backup_directory.mkdir(parents=True, mode=0o700, exist_ok=False)
+        for client in ("codex", "claude-code"):
+            original = originals[client]
+            if original is None:
+                continue
+            suffix = ".toml" if client == "codex" else ".json"
+            backup = backup_directory / f"{client}-config{suffix}"
+            descriptor = os.open(backup, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            with os.fdopen(descriptor, "wb") as handle:
+                handle.write(original)
+                handle.flush()
+                os.fsync(handle.fileno())
+            backup_bytes = backup.read_bytes()
+            if backup_bytes != original:
+                raise MailboxInstallationError(f"backup readback mismatch for {client}")
+            _parse_config_bytes(client, backup_bytes, label="backup")
+            backups[client] = backup
+    except (OSError, MailboxInstallationError) as exc:
+        raise _failure(
+            candidate=candidate,
+            approved_payload_sha256=approved_payload_sha256,
+            stage="backup",
+            reason=str(exc),
+            mutation_started=False,
+        ) from exc
+
+    mutation_started = False
+    stage: Literal["write", "readback", "idempotence"] = "write"
+    try:
+        for client in ("codex", "claude-code"):
+            if proposed[client] == originals[client]:
+                continue
+            mutation_started = True
+            current = paths[client]
+            mode = current.stat().st_mode & 0o777 if current.exists() else 0o600
+            _atomic_replace(current, proposed[client], mode=mode)
+        stage = "readback"
+        for fingerprint in configs:
+            content = paths[fingerprint.client].read_bytes()
+            _parse_config_bytes(fingerprint.client, content, label="applied host config")
+            if _sha256_bytes(content) != fingerprint.proposed_sha256:
+                raise MailboxInstallationError(f"applied config digest mismatch for {fingerprint.client}")
+        after_receipt = audit_host_installation(request)
+        if any(surface.configuration_state != "configured" for surface in after_receipt.host_surfaces):
+            raise MailboxInstallationError("applied host audit did not classify both clients as configured")
+        stage = "idempotence"
+        second_plan = plan_host_installation(request)
+        if second_plan.changes:
+            raise MailboxInstallationError("second host installation dry run was not zero-action")
+    except (OSError, MailboxInstallationError) as exc:
+        try:
+            rollback = _rollback_configs(originals, paths)
+        except (OSError, MailboxInstallationError) as rollback_exc:
+            raise _failure(
+                candidate=candidate,
+                approved_payload_sha256=approved_payload_sha256,
+                stage=stage,
+                reason=f"{exc}; rollback failed: {rollback_exc}",
+                mutation_started=mutation_started,
+                rollback_verified=False,
+            ) from rollback_exc
+        raise _failure(
+            candidate=candidate,
+            approved_payload_sha256=approved_payload_sha256,
+            stage=stage,
+            reason=str(exc),
+            mutation_started=mutation_started,
+            rollback_verified=True,
+            rollback=rollback,
+        ) from exc
+
+    applied_file_records: list[HostInstallationAppliedFileV1] = []
+    for fingerprint in configs:
+        receipt_backup = backups[fingerprint.client]
+        applied_file_records.append(
+            HostInstallationAppliedFileV1(
+                client=fingerprint.client,
+                config_path=fingerprint.config_path,
+                before_state=fingerprint.state,
+                before_sha256=fingerprint.before_sha256,
+                after_sha256=fingerprint.proposed_sha256,
+                backup_path=_portable_text(str(receipt_backup)) if receipt_backup else None,
+                backup_sha256=_sha256_bytes(receipt_backup.read_bytes()) if receipt_backup else None,
+            )
+        )
+    return HostInstallationApplyReceiptV1(
+        approved_payload_sha256=approved_payload_sha256,
+        framework_revision=candidate.payload.framework_revision,
+        applied_at=datetime.now(UTC),
+        files=(applied_file_records[0], applied_file_records[1]),
+        before_receipt=before_receipt,
+        after_receipt=after_receipt,
+    )

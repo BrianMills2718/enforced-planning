@@ -1,6 +1,6 @@
 # Plan #106: Cross-Client Mailbox Fleet Delivery Certification
 
-**Status:** In Progress — MF-01/MF-02/MF-04 accepted; MF-03A ready for execution
+**Status:** In Progress — MF-01/MF-02/MF-03A/MF-04 accepted; MF-03B applied and awaits hook review/resume evidence
 **Type:** implementation
 **Priority:** Critical
 **phase_ref:** "Phase 9 — fleet adoption and framework maintenance"
@@ -32,7 +32,9 @@ Brian adopted design revision `mailbox-fleet-delivery-v1` on 2026-07-27. Brian
 then approved the delegation-safety revision `mailbox-fleet-delivery-v2` on
 2026-07-27: host candidate generation and host mutation are separate units.
 MF-01, MF-02, and MF-04 remain valid `reuse_unchanged` outputs from v1. MF-03A
-is the only ready implementation unit; MF-03B and MF-05 remain dependency- and
+is accepted. Brian approved the exact MF-03A candidate digest on 2026-07-27;
+MF-03B applied it on 2026-07-27 and remains open only for native hook review
+and fresh client restart/resume evidence. MF-05 remains dependency- and
 approval-gated in the work graph.
 
 ### MF-01 Implementation Record
@@ -61,6 +63,54 @@ then passed 77 tests; Ruff, strict mypy, and diff checks passed. MF-04 is
 accepted. The real read-only report covered all 16 explicit registry entries
 and separately reported 27 governed-looking omissions; those observations are
 inventory evidence, not authority to mutate any repository.
+
+### MF-03A Acceptance Record
+
+MF-03A adds the strict `StoredHostInstallationCandidateV1` envelope and binds
+the proposed Codex and Claude host-hook changes to exact before-config,
+proposed-config, adapter, and framework hashes. Candidate generation rejects an
+unknown framework revision, adapter drift, malformed host configuration, and a
+digest-mismatched envelope. The full mailbox compatibility suite passed 77
+tests; Ruff, strict mypy, and diff checks passed.
+
+The real read-only candidate is retained locally at portable coordination path
+`~/.claude/coordination/candidates/plan106-mf03a-host-candidate-20260727.json`.
+Its `payload_sha256` is
+`5e3936b23a642ba97418b83fcf03b151b65d80785ec81d9330464a4380ffa834`,
+bound to framework revision `fffbec5217e3f66dd6c35d1ad723c83a0e197d78`.
+Before/after hashes proved that neither host configuration changed. MF-03A is
+accepted; this record is not readiness approval to apply the candidate.
+
+### MF-03B Apply Record
+
+Brian explicitly approved candidate payload SHA-256
+`5e3936b23a642ba97418b83fcf03b151b65d80785ec81d9330464a4380ffa834`.
+The applier rechecked the exact candidate envelope, framework revision, adapter
+digest, and both before-config digests before mutation. It then created exact
+readable backups under
+`~/.claude/coordination/backups/mailbox-host/20260728T012000.360188Z-5e3936b23a64/`,
+atomically installed both native hook configurations, parsed and hashed the
+results, and produced a zero-action second dry run.
+
+Codex changed from `a96437a8a82932da34aadb9e740c016dc462188d9aed9f3b414016aa846d19aa`
+to `4587012899bb7f9f10bc3b1fbd1ebdd3db2474687b4dacd4f76ed85939e6977c`.
+Claude changed from `29629433b3319947a290dfd212b8373711a66f631eea9e966b067569600a78ed`
+to `a5ca8d31ec89ca04f0e92b073a2f6872a254892b39ab698de8892dbb3261607d`.
+Backup digests equal the two before digests. The after audit classifies both
+host surfaces as `configured`, with `trust_state=unknown`, no repair actions,
+and no claim of live delivery. Deterministic tests include exact approval,
+backup/readback, zero-action idempotence, wrong-digest preflight rejection, and
+an injected second-write failure that restores both exact inputs. MF-03B is not
+accepted until Codex `/hooks` review and fresh Codex and Claude restart/resume
+state are recorded.
+
+After apply, Codex `doctor` loaded the rewritten config successfully and
+reported the hooks feature enabled. A direct exact-session adapter smoke then
+observed message `msg_bf41b253ee384cbb7f6d761c41c00cd7` as receipt
+`rcpt_3c24dd03cfe10b614b106c536dfa366c` and acknowledged it as receipt
+`rcpt_b86ecbebaa8e179780ce5c9854b1c552`. This proves the configured adapter's
+message/receipt boundary, but it does not substitute for native-client hook
+trust or prove a newly started client invoked the hook.
 
 ## Gap
 
@@ -235,6 +285,12 @@ event, and native event/turn identity when available. If the native event has
 no stable ID, use a short-lived lock/receipt keyed by message, session, event,
 and hook invocation timestamp bucket only for duplicate suppression; it must
 not create acknowledgement or suppress later lifecycle events.
+
+Claude Code `UserPromptSubmit` supplies `prompt_id`; the lifecycle adapter
+uses that native prompt identity for duplicate-safe delivery. It does not use a
+session-ID fallback. A lifecycle event that supplies neither a documented
+native event identity nor an approved bounded duplicate mechanism remains a
+visible adapter failure until separately evidenced and designed.
 
 ---
 
@@ -567,8 +623,9 @@ gate or pretending one sibling unit owns another.
 
 Current handoff order:
 
-1. `mailbox-mf-03a-host-candidate` is ready and read-only.
-2. `mailbox-mf-03b-host-apply` remains blocked until MF-03A is accepted and
-   Brian approves the exact candidate `payload_sha256`.
+1. `mailbox-mf-03a-host-candidate` is accepted with the exact candidate digest
+   recorded above.
+2. `mailbox-mf-03b-host-apply` remains blocked until Brian approves that exact
+   candidate `payload_sha256`.
 3. `mailbox-mf-05-four-direction-live-certification` remains blocked until
    MF-03B is accepted and four exact live sessions are bound.

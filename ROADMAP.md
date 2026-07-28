@@ -183,6 +183,7 @@ exists and measuring it.
 | Cross-client mailbox | Add client-neutral persisted/observed/acknowledged message semantics on the existing claim/session identity model. See Plan #67. | ISSUE-054 confirmed the Claude-only inbox has no reliable Codex delivery path |
 | Native Codex mailbox lifecycle | Install Codex lifecycle hooks and prove a live send-observe-acknowledge chain. See Plan #100. | ✅ Complete; native resumed-thread proof retained |
 | Mailbox fleet delivery certification | Move the canonical delivery adapter to the host boundary, detect repository drift without conflating configuration with observation, and certify Codex↔Claude in all four directions. See Plan #106. | In progress; MF-01/MF-02/MF-04 accepted, read-only MF-03A host candidate is next, and host apply/live certification remain approval-gated |
+| Pre-write claim enforcement | Check supported native Codex/Claude write events against exact live session, worktree, branch, and path ownership before mutation. See Plan #108. | Plan #107 closed claim/readiness enforcement; Plan #108 is planned with observe-first latency calibration before hard blocking |
 | Multi-tool adoption | Cursor/Windsurf hook adapters when their hook surfaces are publicly documented | External dependency: tool documentation |
 | Project-meta topic-research adoption | Apply portable topic-research pattern in `research_synthesis/` with manifests, ADR links, freshness metadata | Plans #43/#44/#35 complete |
 

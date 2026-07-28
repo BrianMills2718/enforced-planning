@@ -1,6 +1,6 @@
 # Plan #108: Low-Friction Pre-Write Claim Enforcement
 
-**Status:** Planned
+**Status:** In Progress — PW-01 accepted; PW-02 ready
 **Type:** implementation
 **Priority:** Critical
 **phase_ref:** "Phase 9"
@@ -289,6 +289,25 @@ integration action; framework implementation must not edit it implicitly.
 The machine-readable units are in
 `docs/plans/108_prewrite_claim_enforcement_work_graph.json`.
 
+### PW-01 Evidence
+
+PW-01 is accepted at source revision `f16bc6653cf1031e66da915ac7adc5ba7a1d9cab`.
+The retained contract probe is
+`docs/evidence/plan108_pw01_contract_probe.json`. It records one real exact-claim
+`allow`, one out-of-scope `deny`, exactly two terminal receipts, and the receipt
+set digest. The code-diff review was a non-independent second pass; it found and
+repaired a missing canonical-`repo_root` comparison, and the original
+wrong-repository counterexample now denies.
+
+Verification at the accepted slice:
+
+- `pytest -q tests/test_prewrite_claim_gate.py tests/test_check_coordination_claims.py tests/test_session_cli.py` — 85 passed before the review fix.
+- `pytest -q tests/test_prewrite_claim_gate.py` — 13 passed after the review fix.
+- Ruff and strict mypy passed on the evaluator, CLI, and tests.
+- `python scripts/self_test.py` passed.
+- PW-01 licenses `contract_tested` for the local library boundary only. It does
+  not license installed, enforced, or deployment-verified status.
+
 ---
 
 ## Required Tests
@@ -321,8 +340,8 @@ The machine-readable units are in
 - [ ] A known unclaimed, wrong-session, wrong-worktree, wrong-branch,
   out-of-scope, stale, or merged-active native write is denied before mutation
   in enforce mode with an exact reason and recovery action.
-- [ ] An exact healthy claimed write succeeds without extra user interaction.
-- [ ] Observe mode records the same decision inputs but never blocks.
+- [x] An exact healthy claimed write succeeds without extra user interaction.
+- [x] Observe mode records the same decision inputs but never blocks.
 - [ ] The evaluator's deterministic/local calibration has p95 under 100 ms and
   p99 under 200 ms, and representative compliant native writes have zero false
   blocks before promotion.

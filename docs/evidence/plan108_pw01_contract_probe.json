@@ -1,0 +1,49 @@
+{
+  "schema_version": "1.0",
+  "capability_id": "prewrite-claim-evaluator",
+  "profile": "library",
+  "certification_level": "contract_tested",
+  "source_revision": "f16bc6653cf1031e66da915ac7adc5ba7a1d9cab",
+  "observed_at": "2026-07-27T20:06:58-07:00",
+  "environment": "local enforced-planning claimed linked worktree",
+  "invalidation_inputs": [
+    "enforced_planning/prewrite_claim_gate.py",
+    "scripts/prewrite_claim_gate.py",
+    "coordination claim schema and registry contents",
+    "native PreToolUse payload schema",
+    "Git worktree and branch identity",
+    "Pydantic and PyYAML runtime versions"
+  ],
+  "positive_control": {
+    "decision": "allow",
+    "reason_code": "exact_live_claim",
+    "receipt_id": "prewrite_167ba1d545764492a0be7006f584d995"
+  },
+  "negative_control": {
+    "scenario": "target path outside exact live claim",
+    "decision": "deny",
+    "reason_code": "path_outside_claim",
+    "receipt_id": "prewrite_81faf32f027d458fbbcd0c8a0fe12a78"
+  },
+  "terminal_receipt_count": 2,
+  "receipt_set_sha256": "ec02f63d22f89c2e796b75d04fcd4b29f161d890fd910ac6dbf416e0a29b8022",
+  "tests": {
+    "focused_and_regression": "85 passed",
+    "prewrite_after_review_fix": "13 passed",
+    "ruff": "passed",
+    "mypy_strict": "passed",
+    "framework_self_test": "passed"
+  },
+  "review": {
+    "profile": "code-diff",
+    "independence": "non-independent second pass",
+    "finding_repaired": "canonical repo_root was not included in exact-claim matching",
+    "counterexample": "wrong canonical repo root now denies with no_exact_claim",
+    "verdict": "pass_with_notes"
+  },
+  "non_claims": [
+    "No host or consumer hook is installed by PW-01.",
+    "No shell-command write authorization is implemented.",
+    "No deployment_verified or OS-level enforcement claim is licensed."
+  ]
+}

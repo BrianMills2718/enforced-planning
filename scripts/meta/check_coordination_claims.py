@@ -108,6 +108,12 @@ def claim_runtime_status(
     return _impl.claim_runtime_status(claim, active_claims=active_claims)
 
 
+def claim_enforcement_issues(claim: ClaimRecord) -> list[dict[str, str]]:
+    """Expose blocking merged-ownership diagnostics through the legacy script surface."""
+
+    return _impl.claim_enforcement_issues(claim)
+
+
 def claim_liveness_issues(claim: ClaimRecord, *, now: Any | None = None) -> list[str]:
     """Expose heartbeat-backed liveness diagnostics."""
     return _impl.claim_liveness_issues(claim, now=now)
@@ -129,6 +135,12 @@ def release_claim(*args: Any, **kwargs: Any) -> tuple[bool, str]:
     """Delegate claim release while honoring script-level CLAIMS_DIR overrides."""
     _sync_runtime_config()
     return _impl.release_claim(*args, **kwargs)
+
+
+def unregistered_claim_files() -> list[str]:
+    """Delegate unregistered-format claim detection while honoring script-level CLAIMS_DIR overrides."""
+    _sync_runtime_config()
+    return _impl.unregistered_claim_files()
 
 
 def prune_expired() -> int:

@@ -404,7 +404,7 @@
       "objective": "Inventory the active claim-mutation entrypoints, update each governed installed copy to the accepted projection-refreshing implementation, and prove create, heartbeat, release, and session closeout cannot leave the shared projection stale.",
       "profile": "standard",
       "execution_class": "independently_executable",
-      "claimability": "ready_for_execution",
+      "claimability": "not_applicable",
       "authorization_mode": "registry_claim",
       "scope": {
         "included": [
@@ -483,8 +483,8 @@
         "max_active_per_claimant": 1,
         "named_owner_id": null
       },
-      "status": "ready",
-      "record_version": 1
+      "status": "in_progress",
+      "record_version": 2
     },
     {
       "schema_version": "1.0",

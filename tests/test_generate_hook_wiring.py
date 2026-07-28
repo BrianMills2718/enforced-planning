@@ -142,6 +142,9 @@ def test_generate_hook_wiring_writes_files_and_merges_settings(tmp_path: Path) -
     assert (tmp_path / "scripts" / "meta" / "context_packet.py").exists()
     assert (tmp_path / "enforced_planning" / "context_packet.py").exists()
     assert (tmp_path / "enforced_planning" / "relationship_context.py").exists()
+    assert (tmp_path / "enforced_planning" / "prewrite_claim_fast.py").exists()
+    assert (tmp_path / "enforced_planning" / "prewrite_claim_projection.py").exists()
+    assert (tmp_path / "scripts" / "refresh_prewrite_claim_projection.py").exists()
 
 
 def test_generate_hook_wiring_is_idempotent(tmp_path: Path) -> None:

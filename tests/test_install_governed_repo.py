@@ -56,12 +56,30 @@ MAILBOX_COMMON_ROLLOUT_PATHS = {
 MAILBOX_ROLLOUT_PATHS = MAILBOX_COMMON_ROLLOUT_PATHS | {
     "enforced_planning/coordination_claims.py",
     "enforced_planning/coordination_messages.py",
+    "enforced_planning/prewrite_claim_fast.py",
+    "enforced_planning/prewrite_claim_projection.py",
     "enforced_planning/doc_authority.py",
     "enforced_planning/push_safety.py",
     "enforced_planning/session_contracts.py",
     "enforced_planning/session_lifecycle.py",
     "enforced_planning/worktree_lifecycle.yaml",
     "enforced_planning/worktree_paths.py",
+    "scripts/refresh_prewrite_claim_projection.py",
+}
+
+CLAIM_PROJECTION_REFRESH_PATHS = {
+    "enforced_planning/coordination_claims.py",
+    "enforced_planning/prewrite_claim_fast.py",
+    "enforced_planning/prewrite_claim_projection.py",
+    "enforced_planning/worktree_paths.py",
+    "scripts/refresh_prewrite_claim_projection.py",
+    "scripts/meta/check_coordination_claims.py",
+    "scripts/meta/session_close.py",
+    "scripts/meta/session_end.py",
+    "scripts/meta/session_finish.py",
+    "scripts/meta/session_heartbeat.py",
+    "scripts/meta/session_resume.py",
+    "scripts/meta/session_start.py",
 }
 
 
@@ -294,6 +312,55 @@ def test_coordination_messages_only_blocks_before_writing_without_session_substr
     payload = json.loads(result.stdout)
     assert "local enforced_planning package" in payload["blockers"][0]
     assert not (tmp_path / "enforced_planning/coordination_messages.py").exists()
+
+
+def test_claim_projection_refresh_only_is_bounded_and_idempotent(tmp_path: Path) -> None:
+    """Fleet repair must update mutation support without touching hook configuration."""
+
+    _prepare_mailbox_target(tmp_path)
+    original_claude_settings = (tmp_path / ".claude" / "settings.json").read_text(
+        encoding="utf-8"
+    )
+    dry_run = _run(
+        "--repo-root",
+        str(tmp_path),
+        "--claim-projection-refresh-only",
+        "--json",
+        cwd=PROJECT_META_ROOT,
+    )
+    assert dry_run.returncode == 0, dry_run.stdout + dry_run.stderr
+    payload = json.loads(dry_run.stdout)
+    assert payload["claim_projection_refresh_only_mode"] is True
+    assert {action.split(":", 1)[1] for action in payload["actions"]} == (
+        CLAIM_PROJECTION_REFRESH_PATHS
+    )
+    assert payload["blockers"] == []
+
+    written = _run(
+        "--repo-root",
+        str(tmp_path),
+        "--claim-projection-refresh-only",
+        "--write",
+        "--json",
+        cwd=PROJECT_META_ROOT,
+    )
+    assert written.returncode == 0, written.stdout + written.stderr
+    assert not (tmp_path / ".codex" / "hooks.json").exists()
+    assert (tmp_path / ".claude" / "settings.json").read_text(
+        encoding="utf-8"
+    ) == original_claude_settings
+    for relative in CLAIM_PROJECTION_REFRESH_PATHS:
+        assert (tmp_path / relative).is_file()
+
+    repeat = _run(
+        "--repo-root",
+        str(tmp_path),
+        "--claim-projection-refresh-only",
+        "--json",
+        cwd=PROJECT_META_ROOT,
+    )
+    assert repeat.returncode == 0, repeat.stdout + repeat.stderr
+    assert json.loads(repeat.stdout)["actions"] == []
 
 
 def test_coordination_messages_only_supports_upstream_bootstrap_consumers(
@@ -593,6 +660,7 @@ def test_install_governed_repo_write_bootstraps_minimum_repo_and_passes_audit(
     assert starter["claims"] == {
         "enabled": False,
         "require_for_worktree": False,
+        "prewrite_mode": "off",
     }
     assert starter["worktrees"] == {
         "enabled": False,
@@ -1025,6 +1093,8 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
             "install:enforced_planning/concern_routing.py",
             "install:enforced_planning/coordination_claims.py",
             "install:enforced_planning/coordination_messages.py",
+            "install:enforced_planning/prewrite_claim_fast.py",
+            "install:enforced_planning/prewrite_claim_projection.py",
             "install:enforced_planning/plan_readiness.py",
             "install:enforced_planning/plan_close.py",
             "install:enforced_planning/doc_authority.py",
@@ -1037,6 +1107,7 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
             "install:enforced_planning/worktree_paths.py",
             "install:hooks/pre-push",
             "install:scripts/meta/check_coordination_claims.py",
+            "install:scripts/refresh_prewrite_claim_projection.py",
             "install:scripts/meta/check_push_safety.py",
             "install:scripts/meta/check_plan_readiness.py",
             "install:scripts/meta/plan_close.py",

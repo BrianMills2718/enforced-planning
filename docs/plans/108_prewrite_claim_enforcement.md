@@ -1,6 +1,6 @@
 # Plan #108: Low-Friction Pre-Write Claim Enforcement
 
-**Status:** In Progress — PW-01/PW-02A/PW-02 accepted; PW-02B ready; PW-03 blocked
+**Status:** In Progress — PW-01/PW-02A/PW-02 accepted; PW-02B active; PW-03 blocked
 **Type:** implementation
 **Priority:** Critical
 **phase_ref:** "Phase 9"
@@ -394,6 +394,23 @@ Observe mode reported `projection_unavailable_or_stale` without blocking. PW-03
 must not enable hard enforcement until every sanctioned active claim mutation
 surface uses the projection-refreshing implementation and a retained
 mutation/readback control proves the projection remains current.
+
+### PW-02B Fleet Refresh Progress
+
+The first live inventory found seven repository roots with active claims. Three
+contained local `coordination_claims.py` copies with no projection refresh,
+three had no local package and require their actual bootstrap path to be
+classified, and only `enforced-planning` matched the accepted source. The same
+inventory reproduced stale projection state after active registry updates.
+
+The initial rollout attempt exposed a packaging defect: existing installer
+profiles could copy `coordination_claims.py` without the projection modules it
+imports during mutation, while broader profiles also changed unrelated hook and
+Makefile surfaces. PW-02B therefore adds the bounded
+`--claim-projection-refresh-only` profile. It owns only claim mutation adapters,
+the projection runtime, and the explicit recovery CLI; it does not alter hooks,
+Makefiles, or enforcement mode. Fleet writes remain pending per-repository
+claims and authority review.
 
 ### PW-02A Evidence
 

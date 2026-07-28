@@ -58,6 +58,8 @@ SYNC_SUPPORT_FILES: dict[str, str] = {
     "enforced_planning/concern_routing.py": "enforced_planning/concern_routing.py",
     "enforced_planning/coordination_claims.py": "enforced_planning/coordination_claims.py",
     "enforced_planning/coordination_messages.py": "enforced_planning/coordination_messages.py",
+    "enforced_planning/prewrite_claim_fast.py": "enforced_planning/prewrite_claim_fast.py",
+    "enforced_planning/prewrite_claim_projection.py": "enforced_planning/prewrite_claim_projection.py",
     "enforced_planning/plan_readiness.py": "enforced_planning/plan_readiness.py",
     "enforced_planning/plan_close.py": "enforced_planning/plan_close.py",
     "enforced_planning/doc_authority.py": "enforced_planning/doc_authority.py",
@@ -98,6 +100,7 @@ SYNC_SUPPORT_FILES: dict[str, str] = {
     "scripts/meta/coordination_messages.py": "scripts/meta/coordination_messages.py",
     "scripts/sync_plan_status.py": "scripts/sync_plan_status.py",
     "scripts/meta/check_coordination_claims.py": "scripts/check_coordination_claims.py",
+    "scripts/refresh_prewrite_claim_projection.py": "scripts/refresh_prewrite_claim_projection.py",
     "scripts/meta/check_agents_sync.py": "scripts/check_agents_sync.py",
     "scripts/meta/audit_dead_code.py": "scripts/audit_dead_code.py",
     "scripts/meta/check_doc_coupling.py": "scripts/check_doc_coupling.py",
@@ -129,6 +132,8 @@ WORKTREE_ONLY_SYNC_SUPPORT_FILES: dict[str, str] = {
     "enforced_planning/concern_routing.py": "enforced_planning/concern_routing.py",
     "enforced_planning/coordination_claims.py": "enforced_planning/coordination_claims.py",
     "enforced_planning/coordination_messages.py": "enforced_planning/coordination_messages.py",
+    "enforced_planning/prewrite_claim_fast.py": "enforced_planning/prewrite_claim_fast.py",
+    "enforced_planning/prewrite_claim_projection.py": "enforced_planning/prewrite_claim_projection.py",
     "enforced_planning/plan_readiness.py": "enforced_planning/plan_readiness.py",
     "enforced_planning/plan_close.py": "enforced_planning/plan_close.py",
     "enforced_planning/doc_authority.py": "enforced_planning/doc_authority.py",
@@ -141,6 +146,7 @@ WORKTREE_ONLY_SYNC_SUPPORT_FILES: dict[str, str] = {
     "enforced_planning/worktree_paths.py": "enforced_planning/worktree_paths.py",
     "hooks/pre-push": "hooks/git/pre-push",
     "scripts/meta/check_coordination_claims.py": "scripts/check_coordination_claims.py",
+    "scripts/refresh_prewrite_claim_projection.py": "scripts/refresh_prewrite_claim_projection.py",
     "scripts/meta/session_finish.py": "scripts/session_finish.py",
     "scripts/meta/session_close.py": "scripts/session_close.py",
     "scripts/meta/session_heartbeat.py": "scripts/session_heartbeat.py",
@@ -193,12 +199,33 @@ COORDINATION_MESSAGES_SHARED_FILES: dict[str, str] = {
 COORDINATION_MESSAGES_LOCAL_PACKAGE_FILES: dict[str, str] = {
     "enforced_planning/coordination_claims.py": "enforced_planning/coordination_claims.py",
     "enforced_planning/coordination_messages.py": "enforced_planning/coordination_messages.py",
+    "enforced_planning/prewrite_claim_fast.py": "enforced_planning/prewrite_claim_fast.py",
+    "enforced_planning/prewrite_claim_projection.py": "enforced_planning/prewrite_claim_projection.py",
     "enforced_planning/doc_authority.py": "enforced_planning/doc_authority.py",
     "enforced_planning/push_safety.py": "enforced_planning/push_safety.py",
     "enforced_planning/session_contracts.py": "enforced_planning/session_contracts.py",
     "enforced_planning/session_lifecycle.py": "enforced_planning/session_lifecycle.py",
     "enforced_planning/worktree_lifecycle.yaml": "enforced_planning/worktree_lifecycle.yaml",
     "enforced_planning/worktree_paths.py": "enforced_planning/worktree_paths.py",
+    "scripts/refresh_prewrite_claim_projection.py": "scripts/refresh_prewrite_claim_projection.py",
+}
+
+CLAIM_PROJECTION_SHARED_FILES: dict[str, str] = {
+    "scripts/meta/check_coordination_claims.py": "scripts/check_coordination_claims.py",
+    "scripts/meta/session_close.py": "scripts/session_close.py",
+    "scripts/meta/session_end.py": "scripts/session_end.py",
+    "scripts/meta/session_finish.py": "scripts/session_finish.py",
+    "scripts/meta/session_heartbeat.py": "scripts/session_heartbeat.py",
+    "scripts/meta/session_resume.py": "scripts/session_resume.py",
+    "scripts/meta/session_start.py": "scripts/session_start.py",
+}
+
+CLAIM_PROJECTION_LOCAL_PACKAGE_FILES: dict[str, str] = {
+    "enforced_planning/coordination_claims.py": "enforced_planning/coordination_claims.py",
+    "enforced_planning/prewrite_claim_fast.py": "enforced_planning/prewrite_claim_fast.py",
+    "enforced_planning/prewrite_claim_projection.py": "enforced_planning/prewrite_claim_projection.py",
+    "enforced_planning/worktree_paths.py": "enforced_planning/worktree_paths.py",
+    "scripts/refresh_prewrite_claim_projection.py": "scripts/refresh_prewrite_claim_projection.py",
 }
 
 RELATIONSHIP_CONTEXT_TARGETS = (
@@ -275,6 +302,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--coordination-messages-only",
         action="store_true",
         help="Only sync the canonical mailbox core, lifecycle adapters, and Claude/Codex hooks.",
+    )
+    scope.add_argument(
+        "--claim-projection-refresh-only",
+        action="store_true",
+        help=(
+            "Only sync claim mutation adapters and the digest-bound projection "
+            "runtime; do not change hooks, Makefiles, or unrelated governance."
+        ),
     )
     parser.add_argument(
         "--strict-governed",
@@ -451,6 +486,7 @@ def _plan_static_support(
     worktree_only: bool,
     relationship_context_only: bool,
     coordination_messages_only: bool = False,
+    claim_projection_refresh_only: bool = False,
 ) -> InstallPlan:
     """Plan scaffold and sync writes for static support files."""
     actions: list[str] = []
@@ -463,7 +499,12 @@ def _plan_static_support(
     if not claude_path.exists():
         blockers.append("missing canonical CLAUDE.md")
 
-    if not worktree_only and not relationship_context_only and not coordination_messages_only:
+    if (
+        not worktree_only
+        and not relationship_context_only
+        and not coordination_messages_only
+        and not claim_projection_refresh_only
+    ):
         for target_relpath, source_relpath in SCAFFOLD_TEMPLATES.items():
             target_path = repo_root / target_relpath
             if target_path.exists():
@@ -480,6 +521,10 @@ def _plan_static_support(
         support_files = dict(COORDINATION_MESSAGES_SHARED_FILES)
         if (repo_root / "enforced_planning").is_dir():
             support_files.update(COORDINATION_MESSAGES_LOCAL_PACKAGE_FILES)
+    elif claim_projection_refresh_only:
+        support_files = dict(CLAIM_PROJECTION_SHARED_FILES)
+        if (repo_root / "enforced_planning").is_dir():
+            support_files.update(CLAIM_PROJECTION_LOCAL_PACKAGE_FILES)
     else:
         support_files = SYNC_SUPPORT_FILES
     for target_relpath, source_relpath in support_files.items():
@@ -499,7 +544,7 @@ def _plan_static_support(
             drift_files.append(target_relpath)
             file_writes[target_path] = canonical
 
-    if coordination_messages_only:
+    if coordination_messages_only or claim_projection_refresh_only:
         return InstallPlan(
             actions=actions,
             scaffolded_files=scaffolded_files,
@@ -684,6 +729,7 @@ def install_or_plan(
     worktree_only: bool,
     relationship_context_only: bool,
     coordination_messages_only: bool = False,
+    claim_projection_refresh_only: bool = False,
 ) -> dict[str, Any]:
     """Plan or apply the governed-repo installer actions for one repo."""
     static_plan = _plan_static_support(
@@ -691,6 +737,7 @@ def install_or_plan(
         worktree_only=worktree_only,
         relationship_context_only=relationship_context_only,
         coordination_messages_only=coordination_messages_only,
+        claim_projection_refresh_only=claim_projection_refresh_only,
     )
     actions = list(static_plan.actions)
     scaffolded_files = list(static_plan.scaffolded_files)
@@ -711,16 +758,25 @@ def install_or_plan(
             blockers.append("missing scripts/meta/file_context.py for relationship-context hook rollout")
         if not skip_hook_wiring and not (repo_root / "enforced_planning" / "file_context.py").exists():
             blockers.append("missing enforced_planning/file_context.py for relationship-context hook rollout")
-    if coordination_messages_only:
+    if coordination_messages_only or claim_projection_refresh_only:
         local_package = (repo_root / "enforced_planning").is_dir()
         upstream_bootstrap = (repo_root / "scripts/_upstream_enforced_planning.py").is_file()
         if not local_package and not upstream_bootstrap:
+            profile = (
+                "coordination-messages-only"
+                if coordination_messages_only
+                else "claim-projection-refresh-only"
+            )
             blockers.append(
-                "coordination-messages-only rollout requires either a local "
+                f"{profile} rollout requires either a local "
                 "enforced_planning package or scripts/_upstream_enforced_planning.py"
             )
     file_writes = dict(static_plan.file_writes)
-    install_git_push_gate = not relationship_context_only and not coordination_messages_only
+    install_git_push_gate = (
+        not relationship_context_only
+        and not coordination_messages_only
+        and not claim_projection_refresh_only
+    )
     git_hook_action: str | None = None
     if install_git_push_gate:
         git_hook_action, git_hook_blocker = _plan_git_hook_activation(repo_root)
@@ -740,7 +796,7 @@ def install_or_plan(
         plans_dir="docs/plans",
     )
 
-    if not skip_hook_wiring and not worktree_only:
+    if not skip_hook_wiring and not worktree_only and not claim_projection_refresh_only:
         if coordination_messages_only:
             hook_actions, hook_writes, _ = plan_coordination_message_generation(
                 _hook_target(repo_root)
@@ -766,7 +822,12 @@ def install_or_plan(
         }
         file_writes.update(hook_writes)
 
-    if not worktree_only and not relationship_context_only and not coordination_messages_only:
+    if (
+        not worktree_only
+        and not relationship_context_only
+        and not coordination_messages_only
+        and not claim_projection_refresh_only
+    ):
         agent_actions, agent_blockers = _plan_agents_refresh(
             repo_root,
             relationships_present_or_planned=(
@@ -789,9 +850,9 @@ def install_or_plan(
             applied_actions.extend(actions)
             if git_hook_action:
                 _activate_git_hooks(repo_root)
-            if not skip_hook_wiring and not worktree_only:
+            if not skip_hook_wiring and not worktree_only and not claim_projection_refresh_only:
                 apply_hook_generation(_hook_target(repo_root), hook_writes)
-            if not worktree_only and not relationship_context_only and not coordination_messages_only and _needs_agents_refresh(
+            if not worktree_only and not relationship_context_only and not coordination_messages_only and not claim_projection_refresh_only and _needs_agents_refresh(
                 pre_audit,
                 relationships_will_change=relationships_will_change,
             ):
@@ -811,6 +872,7 @@ def install_or_plan(
         "worktree_only_mode": worktree_only,
         "relationship_context_only_mode": relationship_context_only,
         "coordination_messages_only_mode": coordination_messages_only,
+        "claim_projection_refresh_only_mode": claim_projection_refresh_only,
         "actions": actions,
         "applied_actions": applied_actions,
         "scaffolded_files": scaffolded_files,
@@ -862,6 +924,7 @@ def main(argv: list[str] | None = None) -> int:
         worktree_only=args.worktree_only,
         relationship_context_only=args.relationship_context_only,
         coordination_messages_only=args.coordination_messages_only,
+        claim_projection_refresh_only=args.claim_projection_refresh_only,
     )
 
     if args.json:

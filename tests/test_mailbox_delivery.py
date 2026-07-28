@@ -12,14 +12,17 @@ from pathlib import Path
 
 import pytest
 
+import enforced_planning.mailbox_delivery as mailbox_delivery
 from enforced_planning.mailbox_delivery import (
     HostAdapterSpecV1,
+    HostInstallationApplyError,
     HostInstallationAuditRequestV1,
     HostInstallationPlanRequestV1,
     MailboxInstallationError,
     ObservationEvidenceV1,
     StoredHostInstallationCandidateV1,
     _candidate_content,
+    apply_host_installation_candidate,
     audit_host_installation,
     generate_host_installation_candidate,
     plan_host_installation,
@@ -292,6 +295,115 @@ def test_host_candidate_requires_exact_framework_revision(tmp_path: Path) -> Non
 
     with pytest.raises(MailboxInstallationError, match="exact framework_revision"):
         generate_host_installation_candidate(HostInstallationPlanRequestV1(**request.model_dump()))
+
+
+def test_approved_host_candidate_applies_with_backups_and_zero_action_second_plan(tmp_path: Path) -> None:
+    """MF-03B binds approval, backups, parse readback, and idempotence in one receipt."""
+
+    base = _request(tmp_path)
+    codex_path = Path(base.codex_config_path)
+    claude_path = Path(base.claude_config_path)
+    codex_path.write_text('model = "gpt-5"\n', encoding="utf-8")
+    claude_path.write_text(json.dumps({"permissions": {"allow": ["Read"]}}), encoding="utf-8")
+    before = {path: path.read_bytes() for path in (codex_path, claude_path)}
+    request = HostInstallationPlanRequestV1(
+        **base.model_copy(update={"framework_revision": "approved-fixture"}).model_dump()
+    )
+    candidate = generate_host_installation_candidate(request)
+
+    receipt = apply_host_installation_candidate(
+        candidate=candidate,
+        approved_payload_sha256=candidate.payload_sha256,
+        request=request,
+        backup_root=str(tmp_path / "backups"),
+    )
+
+    assert receipt.approved_payload_sha256 == candidate.payload_sha256
+    assert receipt.second_dry_run_action_count == 0
+    assert receipt.trust_state == "unknown"
+    assert receipt.client_restart_or_resume_required is True
+    assert [surface.configuration_state for surface in receipt.after_receipt.host_surfaces] == [
+        "configured",
+        "configured",
+    ]
+    for item, path in zip(receipt.files, (codex_path, claude_path), strict=True):
+        assert item.after_sha256 == hashlib.sha256(path.read_bytes()).hexdigest()
+        assert item.backup_path is not None
+        backup = Path(item.backup_path)
+        assert backup.read_bytes() == before[path]
+        assert item.backup_sha256 == hashlib.sha256(before[path]).hexdigest()
+    assert plan_host_installation(request).changes == ()
+
+
+def test_host_apply_rejects_unapproved_digest_before_mutation(tmp_path: Path) -> None:
+    """A generic or wrong approval digest never authorizes host writes or backups."""
+
+    base = _request(tmp_path)
+    Path(base.codex_config_path).write_text('model = "gpt-5"\n', encoding="utf-8")
+    Path(base.claude_config_path).write_text("{}\n", encoding="utf-8")
+    request = HostInstallationPlanRequestV1(
+        **base.model_copy(update={"framework_revision": "approved-fixture"}).model_dump()
+    )
+    candidate = generate_host_installation_candidate(request)
+    before = {
+        Path(base.codex_config_path): Path(base.codex_config_path).read_bytes(),
+        Path(base.claude_config_path): Path(base.claude_config_path).read_bytes(),
+    }
+
+    with pytest.raises(HostInstallationApplyError) as raised:
+        apply_host_installation_candidate(
+            candidate=candidate,
+            approved_payload_sha256="0" * 64,
+            request=request,
+            backup_root=str(tmp_path / "backups"),
+        )
+
+    assert raised.value.receipt.stage == "preflight"
+    assert raised.value.receipt.mutation_started is False
+    assert {path: path.read_bytes() for path in before} == before
+    assert not (tmp_path / "backups").exists()
+
+
+def test_partial_host_write_failure_restores_both_exact_inputs(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A second-file failure restores the first write and verifies the full before state."""
+
+    base = _request(tmp_path)
+    codex_path = Path(base.codex_config_path)
+    claude_path = Path(base.claude_config_path)
+    codex_path.write_text('model = "gpt-5"\n', encoding="utf-8")
+    claude_path.write_text("{}\n", encoding="utf-8")
+    before = {codex_path: codex_path.read_bytes(), claude_path: claude_path.read_bytes()}
+    request = HostInstallationPlanRequestV1(
+        **base.model_copy(update={"framework_revision": "approved-fixture"}).model_dump()
+    )
+    candidate = generate_host_installation_candidate(request)
+    real_replace = mailbox_delivery._atomic_replace
+    calls = 0
+
+    def fail_second_replace(path: Path, content: bytes, *, mode: int = 0o600) -> None:
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise OSError("injected second-write failure")
+        real_replace(path, content, mode=mode)
+
+    monkeypatch.setattr(mailbox_delivery, "_atomic_replace", fail_second_replace)
+    with pytest.raises(HostInstallationApplyError) as raised:
+        apply_host_installation_candidate(
+            candidate=candidate,
+            approved_payload_sha256=candidate.payload_sha256,
+            request=request,
+            backup_root=str(tmp_path / "backups"),
+        )
+
+    failure = raised.value.receipt
+    assert failure.stage == "write"
+    assert failure.mutation_started is True
+    assert failure.rollback_verified is True
+    assert len(failure.rollback) == 2
+    assert {path: path.read_bytes() for path in before} == before
 
 
 def test_observation_evidence_changes_trust_only_not_configuration(tmp_path: Path) -> None:

@@ -8,6 +8,7 @@ import subprocess
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -309,6 +310,59 @@ def test_heartbeat_and_release_refresh_prewrite_projection(
     assert released is True
     assert empty["registry_digest"] == registry_digest(claims_dir)
     assert empty["claims"] == []
+
+
+def test_heartbeat_holds_registry_lock_through_projection_refresh(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Concurrent lifecycle hooks cannot split a heartbeat write from refresh."""
+
+    module = _load_module()
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
+    ok, _message = module.create_claim(
+        "codex",
+        "project-meta",
+        "locked-heartbeat",
+        "Verify heartbeat projection locking",
+        branch="locked-heartbeat",
+        worktree_path=str(tmp_path / "worktree"),
+        session_id="codex:locked-heartbeat",
+        session_name="locked-heartbeat",
+    )
+    assert ok
+
+    phases: list[str] = []
+
+    @contextmanager
+    def recording_lock(path: Path):
+        assert path == claims_dir
+        phases.append("locked")
+        try:
+            yield
+        finally:
+            phases.append("unlocked")
+
+    def refresh_while_locked(path: Path) -> tuple[str, str]:
+        assert path == claims_dir
+        assert phases == ["locked"]
+        phases.append("refreshed")
+        return "projection.json", "digest"
+
+    monkeypatch.setattr(module._impl, "claim_registry_lock", recording_lock)
+    monkeypatch.setattr(module._impl, "refresh_prewrite_authority_projection", refresh_while_locked)
+    count, scopes, _session, _heartbeat = module.heartbeat_claims(
+        agent="codex",
+        project="project-meta",
+        scope="locked-heartbeat",
+        session_id="codex:locked-heartbeat",
+        require_exact_session=True,
+    )
+
+    assert count == 1
+    assert scopes == ["locked-heartbeat"]
+    assert phases == ["locked", "refreshed", "unlocked"]
 
 
 def test_create_claim_auto_resolves_codex_session_id(

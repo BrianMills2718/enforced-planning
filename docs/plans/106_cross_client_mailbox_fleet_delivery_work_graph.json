@@ -225,7 +225,7 @@
       "objective": "Produce a portable, digest-bound Codex and Claude host configuration candidate without changing either user configuration.",
       "profile": "standard",
       "execution_class": "independently_executable",
-      "claimability": "ready_for_execution",
+      "claimability": "not_applicable",
       "authorization_mode": "host_workspace",
       "scope": {
         "included": [
@@ -320,8 +320,8 @@
         "approvals": [],
         "failed_guards": []
       },
-      "status": "ready",
-      "record_version": 2
+      "status": "accepted",
+      "record_version": 3
     },
     {
       "schema_version": "1.0",
@@ -442,7 +442,6 @@
         "required_approval_types": ["readiness"],
         "approvals": [],
         "failed_guards": [
-          "mailbox-mf-03a-host-candidate is not accepted",
           "Exact StoredHostInstallationCandidateV1 payload_sha256 has not received readiness approval"
         ]
       },

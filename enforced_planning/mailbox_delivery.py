@@ -17,7 +17,7 @@ from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from enforced_planning.coordination_messages import StoredReceiptRecord
 
@@ -129,6 +129,62 @@ class HostInstallationPlanV1(StrictContract):
     atomic_replace_required_on_apply: Literal[True] = True
 
 
+class HostConfigFingerprintV1(StrictContract):
+    """One exact host-config and adapter binding for a read-only candidate."""
+
+    client: ClientName
+    config_path: str = Field(min_length=1)
+    state: Literal["absent", "present"]
+    before_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    proposed_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    adapter_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+    @model_validator(mode="after")
+    def validate_state_digest(self) -> HostConfigFingerprintV1:
+        """Make an absent source distinguishable from an omitted fingerprint."""
+
+        if self.state == "absent" and self.before_sha256 is not None:
+            raise ValueError("absent config must not retain before_sha256")
+        if self.state == "present" and self.before_sha256 is None:
+            raise ValueError("present config requires before_sha256")
+        return self
+
+
+class HostInstallationCandidatePayloadV1(StrictContract):
+    """Portable, non-mutating candidate bound to exact source bytes."""
+
+    schema_version: Literal["mailbox_host_candidate.v1"] = "mailbox_host_candidate.v1"
+    framework_revision: str = Field(min_length=1)
+    generated_at: datetime
+    configs: tuple[HostConfigFingerprintV1, HostConfigFingerprintV1]
+    plan: HostInstallationPlanV1
+    will_write: Literal[False] = False
+
+    @model_validator(mode="after")
+    def validate_clients(self) -> HostInstallationCandidatePayloadV1:
+        """Require exactly one binding for each supported host client."""
+
+        if tuple(item.client for item in self.configs) != ("codex", "claude-code"):
+            raise ValueError("candidate configs must be ordered as codex then claude-code")
+        return self
+
+
+class StoredHostInstallationCandidateV1(StrictContract):
+    """Digest envelope for the exact candidate a later rollout may approve."""
+
+    record_type: Literal["mailbox_host_candidate"] = "mailbox_host_candidate"
+    payload: HostInstallationCandidatePayloadV1
+    payload_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+    @model_validator(mode="after")
+    def validate_digest(self) -> StoredHostInstallationCandidateV1:
+        """Reject envelopes that do not bind their exact payload bytes."""
+
+        if self.payload_sha256 != _model_digest(self.payload):
+            raise ValueError("host candidate payload_sha256 mismatch")
+        return self
+
+
 def _path(path_text: str) -> Path:
     """Resolve only for local I/O; contracts retain the caller's portable string."""
 
@@ -144,6 +200,18 @@ def _portable_text(value: str) -> str:
 
 def _sha256_bytes(value: bytes) -> str:
     return hashlib.sha256(value).hexdigest()
+
+
+def _model_digest(payload: StrictContract) -> str:
+    """Hash canonical JSON for a durable strict-contract envelope."""
+
+    encoded = json.dumps(
+        payload.model_dump(mode="json"),
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    return _sha256_bytes(encoded)
 
 
 def _adapter_sha256(adapter: HostAdapterSpecV1) -> tuple[str | None, tuple[str, ...]]:
@@ -489,7 +557,7 @@ def _candidate_change(
     requirements = CODEX_HOOK_REQUIREMENTS if client == "codex" else CLAUDE_HOOK_REQUIREMENTS
     return HostConfigChangeV1(
         client=client,
-        config_path=config_path,
+        config_path=_portable_text(config_path),
         configuration_state_before=state,
         proposed_sha256=_sha256_bytes(rendered.encode("utf-8")),
         proposed_bytes=len(rendered.encode("utf-8")),
@@ -525,3 +593,62 @@ def plan_host_installation(request: HostInstallationPlanRequestV1) -> HostInstal
         if change is not None
     )
     return HostInstallationPlanV1(receipt=receipt, changes=changes)
+
+
+def _candidate_fingerprint(
+    *,
+    client: ClientName,
+    config_path: str,
+    adapter: HostAdapterSpecV1,
+    plan: HostInstallationPlanV1,
+) -> HostConfigFingerprintV1:
+    """Bind one candidate leg to exact source bytes and validated adapter bytes."""
+
+    adapter_sha256, adapter_issues = _adapter_sha256(adapter)
+    if adapter_issues or adapter_sha256 is None:
+        detail = ",".join(adapter_issues) if adapter_issues else "adapter_digest_unavailable"
+        raise MailboxInstallationError(f"cannot generate host candidate: {client} {detail}")
+    source = _path(config_path)
+    before = source.read_bytes() if source.exists() else None
+    changes = {change.client: change for change in plan.changes}
+    proposed_sha256 = changes[client].proposed_sha256 if client in changes else _sha256_bytes(before or b"")
+    return HostConfigFingerprintV1(
+        client=client,
+        config_path=_portable_text(config_path),
+        state="present" if before is not None else "absent",
+        before_sha256=_sha256_bytes(before) if before is not None else None,
+        proposed_sha256=proposed_sha256,
+        adapter_sha256=adapter_sha256,
+    )
+
+
+def generate_host_installation_candidate(
+    request: HostInstallationPlanRequestV1,
+) -> StoredHostInstallationCandidateV1:
+    """Create an exact, portable, read-only candidate for later human approval."""
+
+    if request.framework_revision == "unknown":
+        raise MailboxInstallationError(
+            "cannot generate host candidate: exact framework_revision is required"
+        )
+    plan = plan_host_installation(request)
+    payload = HostInstallationCandidatePayloadV1(
+        framework_revision=request.framework_revision,
+        generated_at=datetime.now(UTC),
+        configs=(
+            _candidate_fingerprint(
+                client="codex",
+                config_path=request.codex_config_path,
+                adapter=request.codex_adapter,
+                plan=plan,
+            ),
+            _candidate_fingerprint(
+                client="claude-code",
+                config_path=request.claude_config_path,
+                adapter=request.claude_adapter,
+                plan=plan,
+            ),
+        ),
+        plan=plan,
+    )
+    return StoredHostInstallationCandidateV1(payload=payload, payload_sha256=_model_digest(payload))

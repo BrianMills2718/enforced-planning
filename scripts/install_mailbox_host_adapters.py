@@ -16,6 +16,7 @@ from enforced_planning.mailbox_delivery import (  # noqa: E402
     HostAdapterSpecV1,
     HostInstallationPlanRequestV1,
     MailboxInstallationError,
+    generate_host_installation_candidate,
     plan_host_installation,
 )
 
@@ -32,30 +33,34 @@ def _arguments() -> argparse.Namespace:
     parser.add_argument("--claude-adapter-sha256", required=True)
     parser.add_argument("--repository-root")
     parser.add_argument("--framework-revision", default="unknown")
+    parser.add_argument(
+        "--candidate",
+        action="store_true",
+        help="Emit the MF-03A digest-bound read-only candidate instead of the legacy dry-run plan.",
+    )
     return parser.parse_args()
 
 
 def main() -> int:
     args = _arguments()
     try:
-        plan = plan_host_installation(
-            HostInstallationPlanRequestV1(
-                codex_config_path=args.codex_config,
-                claude_config_path=args.claude_config,
-                codex_adapter=HostAdapterSpecV1(
-                    command=args.codex_command,
-                    adapter_path=args.codex_adapter,
-                    expected_sha256=args.codex_adapter_sha256,
-                ),
-                claude_adapter=HostAdapterSpecV1(
-                    command=args.claude_command,
-                    adapter_path=args.claude_adapter,
-                    expected_sha256=args.claude_adapter_sha256,
-                ),
-                repository_root=args.repository_root,
-                framework_revision=args.framework_revision,
-            )
+        request = HostInstallationPlanRequestV1(
+            codex_config_path=args.codex_config,
+            claude_config_path=args.claude_config,
+            codex_adapter=HostAdapterSpecV1(
+                command=args.codex_command,
+                adapter_path=args.codex_adapter,
+                expected_sha256=args.codex_adapter_sha256,
+            ),
+            claude_adapter=HostAdapterSpecV1(
+                command=args.claude_command,
+                adapter_path=args.claude_adapter,
+                expected_sha256=args.claude_adapter_sha256,
+            ),
+            repository_root=args.repository_root,
+            framework_revision=args.framework_revision,
         )
+        plan = generate_host_installation_candidate(request) if args.candidate else plan_host_installation(request)
     except MailboxInstallationError as exc:
         print(f"mailbox host installation planning failed: {exc}", file=sys.stderr)
         return 2

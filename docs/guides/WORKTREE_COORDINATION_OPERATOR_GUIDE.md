@@ -145,6 +145,13 @@ is already absent. `session-close` itself refuses physical cleanup while any
 other live claim still references the same canonical worktree path and lists
 the sibling scopes that must be disposed or transferred first.
 
+Squash merges require an explicit `--merge-commit <sha>` receipt. Closeout
+accepts it only when that one-parent commit is retained by the canonical
+default ref and its exact binary patch equals the task branch's cumulative
+patch from the merge base. An arbitrary commit already on `main` does not
+license closeout. The sanctioned merge helper captures and forwards GitHub's
+reported merge commit automatically.
+
 ### Work-unit readiness binding
 
 Every new plan-bound claim with write ownership must name its exact canonical work unit:

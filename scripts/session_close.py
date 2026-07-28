@@ -41,6 +41,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--disposition-reason")
     parser.add_argument("--recovery-ref")
     parser.add_argument(
+        "--merge-commit",
+        help="Canonical squash-merge commit whose exact patch must match the task branch.",
+    )
+    parser.add_argument(
         "--allow-discard-unique",
         action="store_true",
         help="Explicitly authorize unique-commit deletion for disposition=abandoned.",
@@ -63,6 +67,7 @@ def main(argv: list[str] | None = None) -> int:
         disposition=args.disposition,
         disposition_reason=args.disposition_reason,
         recovery_ref=args.recovery_ref,
+        merge_commit=args.merge_commit,
         allow_discard_unique=args.allow_discard_unique,
     )
     if args.json:

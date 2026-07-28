@@ -286,6 +286,12 @@ no stable ID, use a short-lived lock/receipt keyed by message, session, event,
 and hook invocation timestamp bucket only for duplicate suppression; it must
 not create acknowledgement or suppress later lifecycle events.
 
+Claude Code `UserPromptSubmit` supplies `prompt_id`; the lifecycle adapter
+uses that native prompt identity for duplicate-safe delivery. It does not use a
+session-ID fallback. A lifecycle event that supplies neither a documented
+native event identity nor an approved bounded duplicate mechanism remains a
+visible adapter failure until separately evidenced and designed.
+
 ---
 
 ## Capabilities

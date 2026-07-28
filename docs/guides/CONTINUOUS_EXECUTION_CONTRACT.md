@@ -185,6 +185,25 @@ Only stop when every remaining action in the authorized run is blocked by the
 same gap that qualifies as stop condition #2, or bounded investigation confirms
 stop condition #3.
 
+### Path-local claim conflicts
+
+A write-claim collision is an `integration_wait`, not proof that the authorized
+goal is blocked. It prevents mutation or publication only for the overlapping
+paths. The agent must:
+
+1. Preserve the conflicting owner's write authority.
+2. Remove or defer the overlapping paths from the candidate claim or branch.
+3. Claim and continue the remaining compatible work, or move to another ready
+   work unit in the authorized goal.
+4. Record a reconciliation obligation when the deferred path indexes,
+   summarizes, or governs an authoritative artifact that is ready to land.
+5. Report the whole goal blocked only after evaluating the complete authorized
+   ready queue and finding no safe, high-value work.
+
+Checkpointing a branch, opening a draft PR, or waiting to reconcile one index
+can be an integration dependency. None is, by itself, a reason to leave other
+authorized work idle.
+
 ---
 
 ## End of Run

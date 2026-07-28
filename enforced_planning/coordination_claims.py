@@ -275,12 +275,68 @@ class ClaimCheckResult:
         """Return hard-conflict interactions only."""
         return [item for item in self.interactions if item.severity == "hard_conflict"]
 
+    def continuation(self) -> dict[str, Any]:
+        """Describe safe work that remains outside path-local claim conflicts.
+
+        Claim evaluation can determine whether this candidate is blocked on
+        particular write paths. It cannot determine whether the caller's whole
+        authorized goal has exhausted its ready queue, so a claim collision is
+        never reported as a whole-goal blocker.
+        """
+        conflicts = self.hard_conflicts
+        blocked_paths = sorted(
+            {
+                overlap.split(" <-> ", 1)[0]
+                for conflict in conflicts
+                for overlap in conflict.overlapping_write_paths
+            }
+        )
+        writable_paths = sorted(
+            {
+                _normalize_repo_path(path)
+                for path in self.candidate.write_paths
+                if _normalize_repo_path(path) not in blocked_paths
+            }
+        )
+        integration_owners = sorted(
+            {
+                (conflict.other_agent, conflict.other_scope)
+                for conflict in conflicts
+            }
+        )
+        if not conflicts:
+            recommended_next_action = "Proceed with the candidate claim."
+        elif writable_paths:
+            recommended_next_action = (
+                "Remove or defer the blocked paths, claim the remaining writable paths, "
+                "and continue. Record an authority-reconciliation obligation when the "
+                "deferred path indexes or governs the completed artifact."
+            )
+        else:
+            recommended_next_action = (
+                "This candidate is path-blocked. Checkpoint any completed work and move "
+                "to another authorized ready work unit; report the whole goal blocked only "
+                "after its complete ready queue has been evaluated."
+            )
+        return {
+            "state": "integration_wait" if conflicts else "ready",
+            "goal_blocked": False,
+            "blocked_paths": blocked_paths,
+            "writable_paths": writable_paths,
+            "integration_owners": [
+                {"agent": agent, "scope": scope}
+                for agent, scope in integration_owners
+            ],
+            "recommended_next_action": recommended_next_action,
+        }
+
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-safe check result."""
         return {
             "candidate": self.candidate.to_dict(),
             "interactions": [item.to_dict() for item in self.interactions],
             "has_hard_conflict": bool(self.hard_conflicts),
+            "continuation": self.continuation(),
         }
 
 
@@ -1370,7 +1426,12 @@ def create_claim(
                 f"{item.other_agent} ({item.other_scope}: {', '.join(item.overlapping_write_paths)})"
                 for item in check_result.hard_conflicts
             )
-            return False, f"CONFLICT: active write claim overlap in '{project}' — {formatted}"
+            return False, (
+                f"CONFLICT: active write claim overlap in '{project}' — {formatted}. "
+                "This is a path-local integration wait, not a whole-goal blocker: "
+                "continue claim-compatible work or record the required reconciliation "
+                "obligation before deferring the overlapping authority surface."
+            )
 
         CLAIMS_DIR.mkdir(parents=True, exist_ok=True)
         claim_payload = candidate.to_dict()

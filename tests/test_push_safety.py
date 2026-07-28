@@ -100,7 +100,13 @@ def test_push_check_detects_overlapping_live_write_claim(
     _init_git_repo(repo_root)
     subprocess.run(["git", "-C", str(repo_root), "checkout", "-b", "plan-42-demo"], check=True, capture_output=True, text=True)
     (repo_root / "feature.py").write_text("print('hi')\n", encoding="utf-8")
-    subprocess.run(["git", "-C", str(repo_root), "add", "feature.py"], check=True, capture_output=True, text=True)
+    (repo_root / "independent.py").write_text("print('continue')\n", encoding="utf-8")
+    subprocess.run(
+        ["git", "-C", str(repo_root), "add", "feature.py", "independent.py"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
     subprocess.run(["git", "-C", str(repo_root), "commit", "-m", "feature"], check=True, capture_output=True, text=True)
 
     claims_dir = tmp_path / "claims"
@@ -151,6 +157,19 @@ def test_push_check_detects_overlapping_live_write_claim(
 
     assert not payload["ok"]
     assert any(item["code"] == "overlapping_write_claim" for item in payload["issues"])
+    assert payload["continuation"] == {
+        "state": "integration_wait",
+        "goal_blocked": False,
+        "blocked_paths": ["feature.py"],
+        "writable_paths": ["independent.py"],
+        "integration_owners": [
+            {"agent": "claude-code", "scope": "reviewed-scope"}
+        ],
+        "recommended_next_action": (
+            "Split or defer the blocked paths, publish a claim-compatible checkpoint, "
+            "and continue another authorized ready work unit."
+        ),
+    }
 
 
 def test_push_check_warns_on_active_decisions_without_blocking(

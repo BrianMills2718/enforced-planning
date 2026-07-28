@@ -168,6 +168,63 @@ def test_evaluate_claim_detects_parent_child_write_overlap_as_hard_conflict(
     conflict = result.hard_conflicts[0]
     assert conflict.reason == "write_paths overlap across active write claims"
     assert conflict.overlapping_write_paths == ["docs/ops/INDEX.md <-> docs/ops"]
+    assert result.to_dict()["continuation"] == {
+        "state": "integration_wait",
+        "goal_blocked": False,
+        "blocked_paths": ["docs/ops/INDEX.md"],
+        "writable_paths": [],
+        "integration_owners": [
+            {"agent": "claude-code", "scope": "docs-authority"}
+        ],
+        "recommended_next_action": (
+            "This candidate is path-blocked. Checkpoint any completed work and move "
+            "to another authorized ready work unit; report the whole goal blocked only "
+            "after its complete ready queue has been evaluated."
+        ),
+    }
+
+
+def test_evaluate_claim_reports_non_overlapping_candidate_paths_as_writable(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A narrow collision must expose candidate paths that can still be claimed."""
+    module = _load_module()
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
+    _write_claim(
+        claims_dir,
+        "existing.yaml",
+        {
+            "agent": "claude-code",
+            "claimed_at": "2026-04-02T08:00:00+00:00",
+            "expires_at": "2099-04-02T09:00:00+00:00",
+            "projects": ["project-meta"],
+            "scope": "docs-authority",
+            "intent": "Patch authority docs",
+            "claim_type": "write",
+            "write_paths": ["docs/ops"],
+            "status": "active",
+        },
+    )
+
+    candidate = module.build_candidate_claim(
+        agent="codex",
+        project="project-meta",
+        scope="mixed-scope",
+        intent="Patch docs and implementation",
+        claim_type="write",
+        write_paths=["docs/ops/INDEX.md", "src/worker.py"],
+    )
+    continuation = module.evaluate_claim(
+        candidate,
+        active_claims=module.check_claims("project-meta"),
+    ).to_dict()["continuation"]
+
+    assert continuation["state"] == "integration_wait"
+    assert continuation["goal_blocked"] is False
+    assert continuation["blocked_paths"] == ["docs/ops/INDEX.md"]
+    assert continuation["writable_paths"] == ["src/worker.py"]
 
 
 def test_evaluate_claim_marks_review_vs_write_overlap_as_soft_overlap(

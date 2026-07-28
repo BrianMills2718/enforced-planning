@@ -1330,38 +1330,38 @@ def hydrate_missing_session_ids(
             "Unable to resolve a session ID. Pass --session-id explicitly or run from a supported tool runtime."
         )
 
-    if not CLAIMS_DIR.exists():
-        return 0, [], resolved_session_id
-
     updated_scopes: list[str] = []
     now = datetime.now(timezone.utc).isoformat()
-    for claim_file in CLAIMS_DIR.glob("*.yaml"):
-        try:
-            data = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
-        except Exception:
-            continue
-        if not isinstance(data, dict):
-            continue
-        claim = normalize_claim(data, source_file=str(claim_file))
-        if claim is None or not claim.is_live():
-            continue
-        if claim.agent != agent:
-            continue
-        if project not in claim.projects:
-            continue
-        if scope and claim.scope != scope:
-            continue
-        if branch and claim.branch != branch:
-            continue
-        if claim.session_id:
-            continue
-        data["session_id"] = resolved_session_id
-        data["heartbeat_at"] = now
-        data["updated_at"] = now
-        _atomic_write_claim(claim_file, data)
-        updated_scopes.append(claim.scope)
-    if updated_scopes:
-        refresh_prewrite_authority_projection(CLAIMS_DIR)
+    with claim_registry_lock(CLAIMS_DIR):
+        if not CLAIMS_DIR.exists():
+            return 0, [], resolved_session_id
+        for claim_file in CLAIMS_DIR.glob("*.yaml"):
+            try:
+                data = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
+            except Exception:
+                continue
+            if not isinstance(data, dict):
+                continue
+            claim = normalize_claim(data, source_file=str(claim_file))
+            if claim is None or not claim.is_live():
+                continue
+            if claim.agent != agent:
+                continue
+            if project not in claim.projects:
+                continue
+            if scope and claim.scope != scope:
+                continue
+            if branch and claim.branch != branch:
+                continue
+            if claim.session_id:
+                continue
+            data["session_id"] = resolved_session_id
+            data["heartbeat_at"] = now
+            data["updated_at"] = now
+            _atomic_write_claim(claim_file, data)
+            updated_scopes.append(claim.scope)
+        if updated_scopes:
+            refresh_prewrite_authority_projection(CLAIMS_DIR)
     return len(updated_scopes), sorted(updated_scopes), resolved_session_id
 
 
@@ -1496,86 +1496,88 @@ def complete_claims_for_plan(
     history with an explicit `completed` status.
     """
 
-    if not CLAIMS_DIR.exists():
-        return 0, []
-
     now = datetime.now(timezone.utc).isoformat()
     completed_scopes: list[str] = []
-    for claim_file in CLAIMS_DIR.glob("*.yaml"):
-        try:
-            data = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
-        except Exception:
-            continue
-        if not isinstance(data, dict):
-            continue
-        claim = normalize_claim(data, source_file=str(claim_file))
-        if claim is None or not claim.is_live():
-            continue
-        if project not in claim.projects:
-            continue
-        if claim.plan_ref != plan_ref:
-            continue
-        data["status"] = "completed"
-        data["updated_at"] = now
-        if note:
-            existing_notes = data.get("notes")
-            if isinstance(existing_notes, str) and existing_notes.strip():
-                if note not in existing_notes:
-                    data["notes"] = f"{existing_notes.rstrip()} | {note}"
-            else:
-                data["notes"] = note
-        _atomic_write_claim(claim_file, data)
-        completed_scopes.append(claim.scope)
-    if completed_scopes:
-        refresh_prewrite_authority_projection(CLAIMS_DIR)
+    with claim_registry_lock(CLAIMS_DIR):
+        if not CLAIMS_DIR.exists():
+            return 0, []
+        for claim_file in CLAIMS_DIR.glob("*.yaml"):
+            try:
+                data = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
+            except Exception:
+                continue
+            if not isinstance(data, dict):
+                continue
+            claim = normalize_claim(data, source_file=str(claim_file))
+            if claim is None or not claim.is_live():
+                continue
+            if project not in claim.projects:
+                continue
+            if claim.plan_ref != plan_ref:
+                continue
+            data["status"] = "completed"
+            data["updated_at"] = now
+            if note:
+                existing_notes = data.get("notes")
+                if isinstance(existing_notes, str) and existing_notes.strip():
+                    if note not in existing_notes:
+                        data["notes"] = f"{existing_notes.rstrip()} | {note}"
+                else:
+                    data["notes"] = note
+            _atomic_write_claim(claim_file, data)
+            completed_scopes.append(claim.scope)
+        if completed_scopes:
+            refresh_prewrite_authority_projection(CLAIMS_DIR)
     return len(completed_scopes), sorted(completed_scopes)
 
 
 def prune_expired() -> int:
     """Remove expired claims and return the number pruned."""
-    if not CLAIMS_DIR.exists():
-        return 0
     now = datetime.now(timezone.utc)
     removed = 0
-    for claim_file in CLAIMS_DIR.glob("*.yaml"):
-        try:
-            data = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
-        except Exception:
-            continue
-        expires_at = _parse_iso_datetime(data.get("expires_at") if isinstance(data, dict) else None)
-        if expires_at is not None and expires_at < now:
-            claim_file.unlink()
-            removed += 1
-    if removed:
-        refresh_prewrite_authority_projection(CLAIMS_DIR)
+    with claim_registry_lock(CLAIMS_DIR):
+        if not CLAIMS_DIR.exists():
+            return 0
+        for claim_file in CLAIMS_DIR.glob("*.yaml"):
+            try:
+                data = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
+            except Exception:
+                continue
+            expires_at = _parse_iso_datetime(data.get("expires_at") if isinstance(data, dict) else None)
+            if expires_at is not None and expires_at < now:
+                claim_file.unlink()
+                removed += 1
+        if removed:
+            refresh_prewrite_authority_projection(CLAIMS_DIR)
     return removed
 
 
 def prune_stale() -> tuple[int, list[str]]:
     """Remove stale live claims and return the removal count plus scope labels."""
-    if not CLAIMS_DIR.exists():
-        return 0, []
     removed_labels: list[str] = []
-    for claim_file in CLAIMS_DIR.glob("*.yaml"):
-        try:
-            data = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
-        except Exception:
-            continue
-        if not isinstance(data, dict):
-            continue
-        claim = normalize_claim(data, source_file=str(claim_file))
-        if claim is None or not claim.is_live():
-            continue
-        liveness_issues = claim_liveness_issues(claim)
-        proven_stale_liveness = [
-            issue for issue in liveness_issues if issue != "missing_session_heartbeat"
-        ]
-        if not (claim_lifecycle_issues(claim) or proven_stale_liveness):
-            continue
-        claim_file.unlink()
-        removed_labels.append(f"{claim.primary_project()}:{claim.scope}")
-    if removed_labels:
-        refresh_prewrite_authority_projection(CLAIMS_DIR)
+    with claim_registry_lock(CLAIMS_DIR):
+        if not CLAIMS_DIR.exists():
+            return 0, []
+        for claim_file in CLAIMS_DIR.glob("*.yaml"):
+            try:
+                data = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
+            except Exception:
+                continue
+            if not isinstance(data, dict):
+                continue
+            claim = normalize_claim(data, source_file=str(claim_file))
+            if claim is None or not claim.is_live():
+                continue
+            liveness_issues = claim_liveness_issues(claim)
+            proven_stale_liveness = [
+                issue for issue in liveness_issues if issue != "missing_session_heartbeat"
+            ]
+            if not (claim_lifecycle_issues(claim) or proven_stale_liveness):
+                continue
+            claim_file.unlink()
+            removed_labels.append(f"{claim.primary_project()}:{claim.scope}")
+        if removed_labels:
+            refresh_prewrite_authority_projection(CLAIMS_DIR)
     return len(removed_labels), sorted(removed_labels)
 
 
@@ -1588,25 +1590,26 @@ def prune_completed() -> tuple[int, list[str]]:
     captured elsewhere.
     """
 
-    if not CLAIMS_DIR.exists():
-        return 0, []
     removed_labels: list[str] = []
-    for claim_file in CLAIMS_DIR.glob("*.yaml"):
-        try:
-            data = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
-        except Exception:
-            continue
-        if not isinstance(data, dict):
-            continue
-        claim = normalize_claim(data, source_file=str(claim_file))
-        if claim is None:
-            continue
-        if claim.status.strip().lower() not in COMPLETED_STATUSES:
-            continue
-        claim_file.unlink()
-        removed_labels.append(f"{claim.primary_project()}:{claim.scope}")
-    if removed_labels:
-        refresh_prewrite_authority_projection(CLAIMS_DIR)
+    with claim_registry_lock(CLAIMS_DIR):
+        if not CLAIMS_DIR.exists():
+            return 0, []
+        for claim_file in CLAIMS_DIR.glob("*.yaml"):
+            try:
+                data = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
+            except Exception:
+                continue
+            if not isinstance(data, dict):
+                continue
+            claim = normalize_claim(data, source_file=str(claim_file))
+            if claim is None:
+                continue
+            if claim.status.strip().lower() not in COMPLETED_STATUSES:
+                continue
+            claim_file.unlink()
+            removed_labels.append(f"{claim.primary_project()}:{claim.scope}")
+        if removed_labels:
+            refresh_prewrite_authority_projection(CLAIMS_DIR)
     return len(removed_labels), sorted(removed_labels)
 
 

@@ -365,6 +365,171 @@ def test_heartbeat_holds_registry_lock_through_projection_refresh(
     assert phases == ["locked", "refreshed", "unlocked"]
 
 
+def _assert_maintenance_mutation_holds_lock_through_projection_refresh(
+    module,
+    claims_dir: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    operation,
+) -> None:
+    """Prove a maintenance mutation holds its lock through the derived refresh."""
+
+    phases: list[str] = []
+
+    @contextmanager
+    def recording_lock(path: Path):
+        assert path == claims_dir
+        phases.append("locked")
+        try:
+            yield
+        finally:
+            phases.append("unlocked")
+
+    def refresh_while_locked(path: Path) -> tuple[str, str]:
+        assert path == claims_dir
+        assert phases == ["locked"]
+        phases.append("refreshed")
+        return "projection.json", "digest"
+
+    monkeypatch.setattr(module._impl, "claim_registry_lock", recording_lock)
+    monkeypatch.setattr(module._impl, "refresh_prewrite_authority_projection", refresh_while_locked)
+
+    operation()
+
+    assert phases == ["locked", "refreshed", "unlocked"]
+
+
+def test_hydration_holds_registry_lock_through_projection_refresh(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Hydration must not expose a changed YAML registry before refreshing projection."""
+
+    module = _load_module()
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
+    _write_claim(
+        claims_dir,
+        "hydrate.yaml",
+        {
+            "agent": "codex",
+            "projects": ["demo"],
+            "scope": "hydrate",
+            "intent": "hydrate",
+            "claim_type": "program",
+            "status": "active",
+        },
+    )
+
+    _assert_maintenance_mutation_holds_lock_through_projection_refresh(
+        module,
+        claims_dir,
+        monkeypatch,
+        lambda: module.hydrate_missing_session_ids(
+            agent="codex", project="demo", session_id="codex:hydrate"
+        ),
+    )
+
+
+def test_completion_and_every_prune_hold_registry_lock_through_projection_refresh(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Every remaining sanctioned maintenance mutation is one critical section."""
+
+    module = _load_module()
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
+    monkeypatch.setattr(module._impl, "CLAIMS_DIR", claims_dir)
+    original_lock = module._impl.claim_registry_lock
+
+    def exercise(name: str, payload: dict, operation) -> None:
+        claims_dir.mkdir(parents=True, exist_ok=True)
+        for path in claims_dir.glob("*.yaml"):
+            path.unlink()
+        _write_claim(claims_dir, f"{name}.yaml", payload)
+        monkeypatch.setattr(module._impl, "claim_registry_lock", original_lock)
+        _assert_maintenance_mutation_holds_lock_through_projection_refresh(
+            module, claims_dir, monkeypatch, operation
+        )
+
+    active = {
+        "agent": "codex",
+        "claimed_at": "2026-04-05T12:00:00+00:00",
+        "expires_at": "2099-04-05T13:00:00+00:00",
+        "projects": ["demo"],
+        "scope": "maintenance",
+        "intent": "maintenance",
+        "claim_type": "program",
+        "status": "active",
+        "plan_ref": "Plan #234",
+    }
+    exercise(
+        "complete",
+        active,
+        lambda: module._impl.complete_claims_for_plan(project="demo", plan_ref="Plan #234"),
+    )
+    exercise(
+        "expired",
+        {**active, "expires_at": "2000-04-05T13:00:00+00:00"},
+        module.prune_expired,
+    )
+    exercise(
+        "stale",
+        {**active, "worktree_path": str(tmp_path / "missing-worktree")},
+        module.prune_stale,
+    )
+    exercise(
+        "completed",
+        {**active, "status": "completed"},
+        module.prune_completed,
+    )
+
+
+def test_concurrent_sanctioned_hydration_leaves_projection_current(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Two maintenance mutations serialize and leave the derived projection current."""
+
+    module = _load_module()
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
+    for scope in ("first", "second"):
+        _write_claim(
+            claims_dir,
+            f"{scope}.yaml",
+            {
+                "agent": "codex",
+                "projects": ["demo"],
+                "scope": scope,
+                "intent": scope,
+                "claim_type": "program",
+                "status": "active",
+            },
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(
+            executor.map(
+                lambda scope: module.hydrate_missing_session_ids(
+                    agent="codex",
+                    project="demo",
+                    scope=scope,
+                    session_id=f"codex:{scope}",
+                ),
+                ("first", "second"),
+            )
+        )
+
+    assert [result[0] for result in results] == [1, 1]
+    projection = json.loads(projection_path_for(claims_dir).read_text(encoding="utf-8"))
+    assert projection["registry_digest"] == registry_digest(claims_dir)
+    assert {claim["session_id"] for claim in projection["claims"]} == {
+        "codex:first",
+        "codex:second",
+    }
+
+
 def test_create_claim_auto_resolves_codex_session_id(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

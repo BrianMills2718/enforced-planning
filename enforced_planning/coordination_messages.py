@@ -108,7 +108,9 @@ class SendMessageRequest(StrictContract):
         description="Bounded coordination intent, not an authorization to mutate recipient state."
     )
     subject: str = Field(min_length=1, max_length=500, description="Compact human-readable message subject.")
-    body: str | None = Field(default=None, min_length=1, description="Inline message content when no content_ref is used.")
+    body: str | None = Field(
+        default=None, min_length=1, description="Inline message content when no content_ref is used."
+    )
     content_ref: str | None = Field(
         default=None,
         min_length=1,
@@ -169,7 +171,9 @@ class AcknowledgeMessageRequest(StrictContract):
     disposition: Literal["accepted", "declined", "deferred", "information_only"] = Field(
         description="Recipient's explicit acknowledgement disposition."
     )
-    response_ref: str | None = Field(default=None, min_length=1, description="Optional durable response artifact reference.")
+    response_ref: str | None = Field(
+        default=None, min_length=1, description="Optional durable response artifact reference."
+    )
     note: str | None = Field(
         default=None,
         min_length=1,
@@ -199,7 +203,9 @@ class CoordinationMessage(StrictContract):
     )
     subject: str = Field(min_length=1, max_length=500, description="Compact human-readable message subject.")
     body: str | None = Field(default=None, min_length=1, description="Inline content when retained directly.")
-    content_ref: str | None = Field(default=None, min_length=1, description="Durable content reference when not inline.")
+    content_ref: str | None = Field(
+        default=None, min_length=1, description="Durable content reference when not inline."
+    )
     created_at: AwareDatetime = Field(description="UTC creation time chosen by the mailbox.")
     expires_at: AwareDatetime = Field(description="UTC time after which the message is inactive but auditable.")
     request_sha256: str = Field(
@@ -240,7 +246,9 @@ class MessageReceipt(StrictContract):
         default=None,
         description="Required only for acknowledgement receipts.",
     )
-    response_ref: str | None = Field(default=None, min_length=1, description="Optional durable response artifact reference.")
+    response_ref: str | None = Field(
+        default=None, min_length=1, description="Optional durable response artifact reference."
+    )
     note: str | None = Field(
         default=None,
         min_length=1,
@@ -324,9 +332,7 @@ class MessageStatusView(StrictContract):
     """Derived lifecycle view computed from immutable message and receipts."""
 
     message: CoordinationMessage = Field(description="Canonical immutable message being projected.")
-    state: MessageState = Field(
-        description="Strongest active lifecycle state at the requested projection time."
-    )
+    state: MessageState = Field(description="Strongest active lifecycle state at the requested projection time.")
     runtime_accepted: bool = Field(description="Whether runtime acceptance evidence exists.")
     observed: bool = Field(description="Whether observation or acknowledgement evidence exists.")
     acknowledged: bool = Field(description="Whether explicit acknowledgement evidence exists.")
@@ -384,7 +390,9 @@ class SessionInboxNotice(StrictContract):
     """Compact agent-facing projection of one lifecycle mailbox poll."""
 
     session_id: str = Field(min_length=1, description="Canonical session identity whose inbox was polled.")
-    project: str = Field(min_length=1, description="Project filter applied to the poll.")
+    project: str | None = Field(
+        default=None, min_length=1, description="Optional exact project filter applied to the poll."
+    )
     active_count: int = Field(ge=0, description="Number of non-expired messages visible to the session.")
     message_ids: tuple[str, ...] = Field(description="Canonical active message IDs in creation order.")
     summary: str = Field(description="Bounded text suitable for injection into an agent lifecycle response.")
@@ -481,9 +489,7 @@ class CoordinationMessageStore:
                 f"No live recipient session matches project={selector.project!r}, scope={selector.scope!r}"
             )
         if len(sessions) > 1:
-            raise AmbiguousRecipientError(
-                f"Recipient selector matched {len(sessions)} sessions: {', '.join(sessions)}"
-            )
+            raise AmbiguousRecipientError(f"Recipient selector matched {len(sessions)} sessions: {', '.join(sessions)}")
         return sessions[0]
 
     def _quarantine(self, path: Path, reason: str) -> NoReturn:
@@ -599,9 +605,7 @@ class CoordinationMessageStore:
         may display the still-unacknowledged message again.
         """
 
-        delivery_id = _stable_id(
-            "delivery", message.message_id, message.recipient_session_id, delivery_event_id
-        )
+        delivery_id = _stable_id("delivery", message.message_id, message.recipient_session_id, delivery_event_id)
         marker = DeliveryEventRecord(
             schema_version=SCHEMA_VERSION,
             delivery_id=delivery_id,
@@ -875,7 +879,7 @@ def default_message_root(claims_dir: Path | None = None) -> Path:
 def poll_session_inbox(
     *,
     agent: str,
-    project: str,
+    project: str | None,
     session_id: str | None = None,
     observe: bool = True,
     claims_dir: Path | None = None,
@@ -885,12 +889,15 @@ def poll_session_inbox(
     delivery_event_id: str | None = None,
     require_live_claim: bool = True,
 ) -> SessionInboxNotice:
-    """Resolve one live agent session and return an agent-visible mailbox notice.
+    """Resolve one native session and return an agent-visible mailbox notice.
 
     Native lifecycle adapters may set ``require_live_claim=False`` because the
-    client event supplies the exact current session identity. Observation
-    evidence still means the notice reached an agent-facing command result, not
-    merely that a background process scanned storage.
+    client event supplies the exact current session identity. They may also omit
+    ``project`` when a workspace-level current directory has no repository
+    context; the exact native session identity still confines the poll to that
+    session's inbox, including messages retained after a claim closes.
+    Observation evidence still means the notice reached an agent-facing command
+    result, not merely that a background process scanned storage.
     """
 
     if max_body_chars < 1 or max_messages < 1:
@@ -915,9 +922,7 @@ def poll_session_inbox(
         ),
         require_live_claim=require_live_claim,
     )
-    active = tuple(
-        view for view in result.messages if not view.expired and not view.acknowledged
-    )
+    active = tuple(view for view in result.messages if not view.expired and not view.acknowledged)
     if active:
         displayed = active[:max_messages]
         rendered_messages: list[str] = []
@@ -927,8 +932,7 @@ def poll_session_inbox(
             if len(compact_content) > max_body_chars:
                 compact_content = compact_content[: max_body_chars - 1] + "…"
             rendered_messages.append(
-                f"{view.message.message_id} [{view.message.kind}] "
-                f"{view.message.subject}: {compact_content}"
+                f"{view.message.message_id} [{view.message.kind}] {view.message.subject}: {compact_content}"
             )
         details = "; ".join(rendered_messages)
         remainder = len(active) - len(displayed)
@@ -955,8 +959,7 @@ def _is_current_native_session(session_id: str) -> bool:
     """Return whether ambient client identity exactly matches one canonical ID."""
 
     return any(
-        coordination_claims.resolve_session_id(agent) == session_id
-        for agent in coordination_claims.SESSION_ENV_KEYS
+        coordination_claims.resolve_session_id(agent) == session_id for agent in coordination_claims.SESSION_ENV_KEYS
     )
 
 
@@ -1003,9 +1006,7 @@ def main(argv: list[str] | None = None) -> int:
             acknowledge_request = AcknowledgeMessageRequest.model_validate_json(raw)
             result = store.acknowledge(
                 acknowledge_request,
-                require_live_claim=not _is_current_native_session(
-                    acknowledge_request.current_session_id
-                ),
+                require_live_claim=not _is_current_native_session(acknowledge_request.current_session_id),
             )
     except (ValidationError, CoordinationMessageError, ValueError) as exc:
         print(json.dumps({"ok": False, "error_type": type(exc).__name__, "error": str(exc)}, sort_keys=True))

@@ -31,10 +31,7 @@ def _bootstrap_package() -> None:
 
             bootstrap_upstream_package(current)
             return
-    raise RuntimeError(
-        "Unable to locate a local enforced_planning package or "
-        "scripts/_upstream_enforced_planning.py"
-    )
+    raise RuntimeError("Unable to locate a local enforced_planning package or scripts/_upstream_enforced_planning.py")
 
 
 _bootstrap_package()
@@ -62,7 +59,9 @@ def _read_hook_input(*, project_supplied: bool) -> dict[str, Any]:
     payload = json.loads(sys.stdin.read())
     if not isinstance(payload, dict):
         raise ValueError("Lifecycle hook input must be a JSON object")
-    required_fields = ("session_id", "hook_event_name") if project_supplied else ("session_id", "cwd", "hook_event_name")
+    required_fields = (
+        ("session_id", "hook_event_name") if project_supplied else ("session_id", "cwd", "hook_event_name")
+    )
     for field in required_fields:
         if not isinstance(payload.get(field), str) or not payload[field].strip():
             raise ValueError(f"Lifecycle hook input requires non-empty {field!r}")
@@ -71,15 +70,19 @@ def _read_hook_input(*, project_supplied: bool) -> dict[str, Any]:
     return payload
 
 
-def _canonical_project(cwd: str) -> str:
-    """Resolve a worktree cwd to the canonical repository project name."""
+def _canonical_project(cwd: str) -> str | None:
+    """Resolve a worktree cwd, or return no project for a non-Git workspace path."""
 
-    top = subprocess.run(
+    repository = subprocess.run(
         ["git", "-C", cwd, "rev-parse", "--show-toplevel"],
         capture_output=True,
         text=True,
-        check=True,
-    ).stdout.strip()
+        check=False,
+    )
+    if repository.returncode == 128:
+        return None
+    repository.check_returncode()
+    top = repository.stdout.strip()
     worktrees = subprocess.run(
         ["git", "-C", top, "worktree", "list", "--porcelain"],
         capture_output=True,
@@ -91,6 +94,22 @@ def _canonical_project(cwd: str) -> str:
         top,
     )
     return Path(canonical_root).name
+
+
+def _claimed_projects(*, agent: str, session_id: str, claims_dir: Path | None) -> tuple[str, ...]:
+    """Return exact-session live claim projects without adopting another lane."""
+
+    claims = coordination_claims.check_claims(claims_dir=claims_dir)
+    return tuple(
+        sorted(
+            {
+                project
+                for claim in claims
+                if claim.agent == agent and claim.session_id == session_id
+                for project in claim.projects
+            }
+        )
+    )
 
 
 def _session_id(agent: str, raw_session_id: str) -> str:
@@ -141,18 +160,26 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     try:
         payload = _read_hook_input(project_supplied=args.project is not None)
-        project = args.project or _canonical_project(payload["cwd"])
         session_id = _session_id(args.agent, payload["session_id"])
         delivery_event_id = _delivery_event_id(payload, agent=args.agent, session_id=session_id)
-        _updated_count, _updated_scopes, _resolved_session_id, _heartbeat_at = (
+        project = args.project or _canonical_project(payload["cwd"])
+        heartbeat_projects = (
+            (project,)
+            if project is not None
+            else _claimed_projects(
+                agent=args.agent,
+                session_id=session_id,
+                claims_dir=args.claims_dir,
+            )
+        )
+        for heartbeat_project in heartbeat_projects:
             coordination_claims.heartbeat_claims(
                 agent=args.agent,
-                project=project,
+                project=heartbeat_project,
                 session_id=session_id,
                 claims_dir=args.claims_dir,
                 require_exact_session=True,
             )
-        )
         notice = coordination_messages.poll_session_inbox(
             agent=args.agent,
             project=project,

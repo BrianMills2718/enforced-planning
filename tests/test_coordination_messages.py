@@ -95,6 +95,7 @@ def _send_request(
     idempotency_key: str | None = "request-1",
     subject: str = "Narrow the docs claim",
     ttl_seconds: int = 3600,
+    project: str = "enforced-planning",
 ) -> SendMessageRequest:
     """Build one strict request while keeping system IDs outside caller input."""
 
@@ -102,7 +103,7 @@ def _send_request(
         caller_session_id=sender,
         sender_session_id=sender,
         recipient=ExactSessionSelector(kind="session", session_id=recipient),
-        project="enforced-planning",
+        project=project,
         kind="coordination_request",
         subject=subject,
         body="Please narrow the broad docs claim before implementation.",
@@ -349,9 +350,7 @@ def test_expired_message_remains_auditable_and_late_ack_does_not_reactivate(
     message = store.send(_send_request(ttl_seconds=1), now=NOW).message
     later = NOW + timedelta(seconds=2)
     assert store.poll(PollMessagesRequest(current_session_id=CLAUDE_SESSION, as_of=later)).messages == ()
-    included = store.poll(
-        PollMessagesRequest(current_session_id=CLAUDE_SESSION, as_of=later, include_expired=True)
-    )
+    included = store.poll(PollMessagesRequest(current_session_id=CLAUDE_SESSION, as_of=later, include_expired=True))
     assert included.messages[0].state == "expired"
 
     late_ack = store.acknowledge(
@@ -763,15 +762,147 @@ def test_codex_lifecycle_hook_observes_repeats_until_ack_then_hides(
     assert after_ack.stdout == ""
 
 
+def test_codex_lifecycle_hook_workspace_root_without_claim_or_message_is_silent(
+    mailbox: tuple[CoordinationMessageStore, Path, Path], tmp_path: Path
+) -> None:
+    """A non-Git workspace path is not a mailbox outage when no claim is live."""
+
+    _store, claims_dir, root = mailbox
+    for claim_path in claims_dir.glob("*.yaml"):
+        claim_path.unlink()
+    result = subprocess.run(
+        ["python", "scripts/coordination_hook.py", "--claims-dir", str(claims_dir), "--root", str(root)],
+        input=json.dumps(
+            {
+                "session_id": "thread-123",
+                "cwd": str(tmp_path),
+                "hook_event_name": "UserPromptSubmit",
+                "event_id": "workspace-root-no-claim",
+            }
+        ),
+        cwd=Path(__file__).resolve().parents[1],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr or result.stdout
+    assert result.stdout == ""
+
+
+def test_codex_lifecycle_hook_workspace_root_heartbeats_one_claim_and_delivers(
+    mailbox: tuple[CoordinationMessageStore, Path, Path], tmp_path: Path
+) -> None:
+    """A non-Git workspace path routes through one exact-session live claim."""
+
+    store, claims_dir, root = mailbox
+    persisted = store.send(
+        _send_request(sender=CLAUDE_SESSION, recipient=CODEX_SESSION, idempotency_key="workspace-one")
+    )
+    claim_path = claims_dir / "codex_enforced-planning_sender-lane.yaml"
+    before = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    result = subprocess.run(
+        ["python", "scripts/coordination_hook.py", "--claims-dir", str(claims_dir), "--root", str(root)],
+        input=json.dumps(
+            {
+                "session_id": "thread-123",
+                "cwd": str(tmp_path),
+                "hook_event_name": "UserPromptSubmit",
+                "event_id": "workspace-root-one-claim",
+            }
+        ),
+        cwd=Path(__file__).resolve().parents[1],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr or result.stdout
+    assert persisted.message.message_id in result.stdout
+    after = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    assert after["heartbeat_at"] != before["heartbeat_at"]
+
+
+def test_codex_lifecycle_hook_workspace_root_heartbeats_multiple_claims_and_polls_all_projects(
+    mailbox: tuple[CoordinationMessageStore, Path, Path], tmp_path: Path
+) -> None:
+    """Workspace-root polling reaches exact-session messages across live projects."""
+
+    store, claims_dir, root = mailbox
+    _write_claim(
+        claims_dir,
+        agent="codex",
+        project="project-meta",
+        scope="second-lane",
+        session_id=CODEX_SESSION,
+    )
+    persisted = store.send(
+        _send_request(
+            sender=CLAUDE_SESSION,
+            recipient=CODEX_SESSION,
+            project="project-meta",
+            idempotency_key="workspace-multiple",
+        )
+    )
+    result = subprocess.run(
+        ["python", "scripts/coordination_hook.py", "--claims-dir", str(claims_dir), "--root", str(root)],
+        input=json.dumps(
+            {
+                "session_id": "thread-123",
+                "cwd": str(tmp_path),
+                "hook_event_name": "UserPromptSubmit",
+                "event_id": "workspace-root-multiple-claims",
+            }
+        ),
+        cwd=Path(__file__).resolve().parents[1],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr or result.stdout
+    assert persisted.message.message_id in result.stdout
+    for claim_path in claims_dir.glob("codex_*.yaml"):
+        claim = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+        assert claim["heartbeat_at"] != NOW.isoformat()
+
+
+def test_codex_lifecycle_hook_workspace_root_delivers_closed_lane_message(
+    mailbox: tuple[CoordinationMessageStore, Path, Path], tmp_path: Path
+) -> None:
+    """Exact native identity still receives retained mail after its claim closes."""
+
+    store, claims_dir, root = mailbox
+    persisted = store.send(
+        _send_request(sender=CLAUDE_SESSION, recipient=CODEX_SESSION, idempotency_key="workspace-closed")
+    )
+    for claim_path in claims_dir.glob("*.yaml"):
+        claim = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+        claim["status"] = "completed"
+        claim_path.write_text(yaml.safe_dump(claim, sort_keys=False), encoding="utf-8")
+    result = subprocess.run(
+        ["python", "scripts/coordination_hook.py", "--claims-dir", str(claims_dir), "--root", str(root)],
+        input=json.dumps(
+            {
+                "session_id": "thread-123",
+                "cwd": str(tmp_path),
+                "hook_event_name": "UserPromptSubmit",
+                "event_id": "workspace-root-closed-lane",
+            }
+        ),
+        cwd=Path(__file__).resolve().parents[1],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr or result.stdout
+    assert persisted.message.message_id in result.stdout
+
+
 def test_claude_lifecycle_adapter_is_duplicate_safe_with_repository_project_override(
     mailbox: tuple[CoordinationMessageStore, Path, Path],
 ) -> None:
     """Claude host and repository adapters use the same event marker contract as Codex."""
 
     store, claims_dir, root = mailbox
-    persisted = store.send(
-        _send_request(sender=CODEX_SESSION, recipient=CLAUDE_SESSION, idempotency_key="claude-hook")
-    )
+    persisted = store.send(_send_request(sender=CODEX_SESSION, recipient=CLAUDE_SESSION, idempotency_key="claude-hook"))
     command = [
         "python",
         "scripts/coordination_hook.py",
@@ -890,9 +1021,10 @@ def test_claude_prompt_lifecycle_uses_native_prompt_id_for_duplicate_safety(
     assert duplicate.stdout == ""
     assert later.returncode == 0
     assert persisted.message.message_id in later.stdout
-    assert [receipt.event for receipt in store.status(MessageStatusRequest(message_id=persisted.message.message_id)).receipts] == [
-        "observed"
-    ]
+    assert [
+        receipt.event
+        for receipt in store.status(MessageStatusRequest(message_id=persisted.message.message_id)).receipts
+    ] == ["observed"]
 
 
 def test_lifecycle_adapter_missing_event_identity_does_not_observe(
@@ -1008,9 +1140,7 @@ def test_codex_lifecycle_hook_polls_after_write_claim_completion(
 
     assert result.returncode == 0, result.stderr or result.stdout
     assert persisted.message.message_id in json.loads(result.stdout)["systemMessage"]
-    assert store.status(
-        MessageStatusRequest(message_id=persisted.message.message_id)
-    ).state == "observed"
+    assert store.status(MessageStatusRequest(message_id=persisted.message.message_id)).state == "observed"
 
 
 def test_codex_lifecycle_hook_rejects_malformed_input_without_receipt(

@@ -107,7 +107,7 @@ WORKTREE_SESSION_FINISH_SCRIPT := scripts/meta/worktree-coordination/../session_
 WORKTREE_SESSION_CLOSE_SCRIPT := scripts/meta/worktree-coordination/../session_close.py
 WORKTREE_REVIEW_CLAIM_SCRIPT := scripts/meta/worktree-coordination/create_review_claim.py
 WORKTREE_RAISE_CONCERN_SCRIPT := scripts/meta/worktree-coordination/raise_concern.py
-WORKTREE_PLAN_READINESS_SCRIPT := scripts/meta/check_plan_readiness.py
+WORKTREE_PLAN_READINESS_SCRIPT := scripts/check_plan_readiness.py
 WORKTREE_DIR ?= $(shell python "$(WORKTREE_CREATE_SCRIPT)" --repo-root . --print-default-worktree-dir)
 WORKTREE_START_POINT ?= HEAD
 WORKTREE_PROJECT ?= $(shell python "$(WORKTREE_CREATE_SCRIPT)" --repo-root . --print-canonical-project)
@@ -120,6 +120,7 @@ SESSION_STOP_CONDITIONS ?=
 SESSION_NOTE ?=
 SESSION_ALLOW_PARALLEL ?=
 ALLOW_UNPLANNED ?=
+PLAN_RESUME ?=
 WORKTREE_EXECUTION_PROFILE ?= coordinated
 PLAN_PROJECT ?= $(WORKTREE_PROJECT)
 PLAN_READINESS_COMMAND ?=
@@ -191,6 +192,7 @@ endif
 		--worktree-path "$(WORKTREE_DIR)/$(BRANCH)" \
 		--agent "$(WORKTREE_AGENT)" \
 		--scope "$(BRANCH)" \
+		$(if $(PLAN_RESUME),--resume,) \
 		$(if $(ALLOW_UNPLANNED),--allow-unplanned,)
 	@python "$(WORKTREE_CLAIMS_SCRIPT)" --claim \
 		--agent "$(WORKTREE_AGENT)" \

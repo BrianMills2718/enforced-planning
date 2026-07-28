@@ -13,7 +13,7 @@
       "objective": "Produce strict read-only installation receipts and idempotent dry-run plans for Codex and Claude host hooks without changing live configuration.",
       "profile": "standard",
       "execution_class": "independently_executable",
-      "claimability": "ready_for_execution",
+      "claimability": "not_applicable",
       "authorization_mode": "host_workspace",
       "scope": {
         "included": [
@@ -99,8 +99,8 @@
         ],
         "failed_guards": []
       },
-      "status": "ready",
-      "record_version": 1
+      "status": "accepted",
+      "record_version": 3
     },
     {
       "schema_version": "1.0",
@@ -115,7 +115,7 @@
       "objective": "Allow host and repository compatibility hooks to coexist during migration while emitting one agent-visible notice per message and lifecycle event.",
       "profile": "standard",
       "execution_class": "independently_executable",
-      "claimability": "blocked_dependencies",
+      "claimability": "not_applicable",
       "authorization_mode": "host_workspace",
       "scope": {
         "included": [
@@ -204,41 +204,40 @@
         }
       ],
       "readiness": {
-        "status": "blocked",
+        "status": "ready",
         "required_approval_types": [],
         "approvals": [],
-        "failed_guards": [
-          "mailbox-mf-01-host-installation-audit is not accepted"
-        ]
+        "failed_guards": []
       },
-      "status": "blocked",
-      "record_version": 1
+      "status": "accepted",
+      "record_version": 3
     },
     {
       "schema_version": "1.0",
       "record_type": "work_unit",
-      "id": "mailbox-mf-03-host-rollout",
+      "id": "mailbox-mf-03a-host-candidate",
       "initiative_id": "cross-client-mailbox",
       "goal_id": "cross-client-mailbox-delivery",
-      "design_revision": "mailbox-fleet-delivery-v1",
-      "spec_revision": "mailbox-mf-03-v1",
-      "title": "Install and activate workstation-level Codex and Claude hooks",
+      "design_revision": "mailbox-fleet-delivery-v2",
+      "spec_revision": "mailbox-mf-03a-v1",
+      "title": "Generate an exact read-only host installation candidate",
       "class": "migration",
-      "objective": "Safely install the accepted adapters in Brian's user-level Codex and Claude lifecycle configuration and prove idempotent configuration readback.",
-      "profile": "controlled",
-      "control_approval_types": ["readiness"],
-      "execution_class": "coupled",
-      "claimability": "blocked_dependencies",
+      "objective": "Produce a portable, digest-bound Codex and Claude host configuration candidate without changing either user configuration.",
+      "profile": "standard",
+      "execution_class": "independently_executable",
+      "claimability": "ready_for_execution",
       "authorization_mode": "host_workspace",
       "scope": {
         "included": [
-          "Timestamped backups of exact user hook configuration files",
-          "Atomic merge of only canonical mailbox hook blocks",
-          "Post-write parse/readback and idempotent second dry run",
-          "Operator hook trust review and client restart/resume checklist"
+          "Read-only parse and fingerprint of exact Codex and Claude user configurations",
+          "Expected adapter digest verification",
+          "Portable candidate binding before and proposed config hashes to the framework revision",
+          "Dry-run hook changes and preserved-unrelated-hook counts without retaining unrelated values"
         ],
         "excluded": [
-          "Automatic hook trust",
+          "Writes, backups, or atomic replacement of user configuration",
+          "Readiness approval or application of the candidate",
+          "Automatic hook trust, restart, or runtime delivery",
           "Deletion of unrelated or repository-local hooks",
           "Consumer repository writes",
           "Claims of live delivery before receipts exist"
@@ -252,9 +251,9 @@
         }
       ],
       "outputs": [
-        "Backed-up and atomically updated Codex and Claude user hook configurations",
-        "Before/after MailboxInstallationReceiptV1 records",
-        "Idempotent dry-run result and explicit trust/restart state"
+        "StoredHostInstallationCandidateV1 bound to exact config, adapter, and framework hashes",
+        "Portable JSON candidate containing no unrelated config values or resolved home prefix",
+        "Read-only before receipt and deterministic proposed config hashes"
       ],
       "dependencies": [
         {
@@ -264,10 +263,152 @@
             "type": "unit_status",
             "required_status": "accepted"
           },
-          "rationale": "Host and repository hooks may coexist only after duplicate-safe adapters are accepted."
+          "rationale": "The candidate may include host hooks only after duplicate-safe adapters are accepted."
         }
       ],
       "conflict_surfaces": [
+        {
+          "kind": "repository_path",
+          "target": "enforced_planning/mailbox_delivery.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "mailbox-host-candidate"
+        },
+        {
+          "kind": "repository_path",
+          "target": "scripts/install_mailbox_host_adapters.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "mailbox-host-candidate"
+        },
+        {
+          "kind": "repository_path",
+          "target": "tests/test_mailbox_delivery.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "mailbox-host-candidate"
+        },
+        {
+          "kind": "external_system",
+          "target": "~/.codex/config.toml hook configuration",
+          "access": "read",
+          "coordination_key": "mailbox-host-candidate"
+        },
+        {
+          "kind": "external_system",
+          "target": "~/.claude/settings.json hook configuration",
+          "access": "read",
+          "coordination_key": "mailbox-host-candidate"
+        }
+      ],
+      "acceptance": [
+        {
+          "id": "MF03A-A1",
+          "criterion": "One read-only command emits a portable candidate bound to exact before-config, adapter, framework, and proposed-config hashes while changing neither user configuration.",
+          "evidence_required": [
+            "Both-sign fixture coverage for present and absent valid configs",
+            "Malformed config and adapter-digest negative controls",
+            "Real StoredHostInstallationCandidateV1 JSON plus before/after file hashes proving no writes",
+            "Ruff, strict mypy, and git diff --check on changed candidate surfaces"
+          ],
+          "negative_control": "Malformed config, adapter drift, unsupported config shape, resolved home paths, or retained unrelated config values fail before a candidate is emitted."
+        }
+      ],
+      "readiness": {
+        "status": "ready",
+        "required_approval_types": [],
+        "approvals": [],
+        "failed_guards": []
+      },
+      "status": "ready",
+      "record_version": 2
+    },
+    {
+      "schema_version": "1.0",
+      "record_type": "work_unit",
+      "id": "mailbox-mf-03b-host-apply",
+      "initiative_id": "cross-client-mailbox",
+      "goal_id": "cross-client-mailbox-delivery",
+      "design_revision": "mailbox-fleet-delivery-v2",
+      "spec_revision": "mailbox-mf-03b-v1",
+      "title": "Apply one explicitly approved unchanged host candidate",
+      "class": "migration",
+      "objective": "Back up and atomically update Brian's Codex and Claude user hook configurations only when the current inputs still match an explicitly approved MF-03A candidate.",
+      "profile": "controlled",
+      "control_approval_types": ["readiness"],
+      "execution_class": "coupled",
+      "claimability": "blocked_dependencies",
+      "authorization_mode": "host_workspace",
+      "scope": {
+        "included": [
+          "Exact candidate-digest approval validation",
+          "Pre-write config, adapter, and framework digest recheck",
+          "Timestamped backups of exact user hook configuration files",
+          "Atomic merge of only canonical mailbox hook blocks",
+          "Post-write parse/readback and idempotent second dry run",
+          "Operator hook trust review and client restart/resume checklist"
+        ],
+        "excluded": [
+          "Candidate generation or silent regeneration",
+          "Applying a candidate whose approved digest or input hashes differ",
+          "Automatic hook trust",
+          "Deletion of unrelated or repository-local hooks",
+          "Consumer repository writes",
+          "Claims of live delivery before receipts exist"
+        ]
+      },
+      "inputs": [
+        {
+          "kind": "work_unit_output",
+          "id": "mailbox-mf-03a-host-candidate",
+          "revision": "accepted"
+        },
+        {
+          "kind": "readiness_approval",
+          "id": "host-installation-candidate-payload-sha256",
+          "revision": "exact-candidate-digest"
+        }
+      ],
+      "outputs": [
+        "Backed-up Codex and Claude user hook configurations with per-file atomic replace and verified group rollback",
+        "HostInstallationApplyReceiptV1 bound to the approved candidate payload digest",
+        "HostInstallationApplyFailureV1 with verified rollback evidence for any partial failure",
+        "Before/after MailboxInstallationReceiptV1 records",
+        "Zero-action second dry run and explicit trust/restart state"
+      ],
+      "dependencies": [
+        {
+          "unit_id": "mailbox-mf-03a-host-candidate",
+          "type": "hard",
+          "gate": {
+            "type": "unit_status",
+            "required_status": "accepted"
+          },
+          "rationale": "Host mutation may use only an accepted candidate generated from the current configuration and adapters."
+        }
+      ],
+      "conflict_surfaces": [
+        {
+          "kind": "repository_path",
+          "target": "enforced_planning/mailbox_delivery.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "mailbox-host-apply"
+        },
+        {
+          "kind": "repository_path",
+          "target": "scripts/install_mailbox_host_adapters.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "mailbox-host-apply"
+        },
+        {
+          "kind": "repository_path",
+          "target": "tests/test_mailbox_delivery.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "mailbox-host-apply"
+        },
         {
           "kind": "external_system",
           "target": "~/.codex/config.toml hook configuration",
@@ -283,15 +424,17 @@
       ],
       "acceptance": [
         {
-          "id": "MF03-A1",
-          "criterion": "Both user configurations parse, retain unrelated hooks, contain one canonical mailbox hook per required event, produce exact backup paths, and yield no actions on a second dry run.",
+          "id": "MF03B-A1",
+          "criterion": "The exact approved candidate applies only after all input hashes match, every present original configuration has a readable backup, both results parse and match proposed hashes, and a second dry run reports zero actions.",
           "evidence_required": [
-            "Before/after MailboxInstallationReceiptV1 JSON",
-            "Backup existence and parse readback",
+            "Approval record bound to exact StoredHostInstallationCandidateV1 payload_sha256",
+            "Before/after MailboxInstallationReceiptV1 and HostInstallationApplyReceiptV1 JSON",
+            "Backup existence, digest, and parse readback",
+            "Injected second-write/readback failure fixture proving restoration to exact before hashes",
             "Second dry run with zero actions",
             "Codex /hooks review plus Codex and Claude restart/resume state recorded"
           ],
-          "negative_control": "A malformed config, failed backup, changed candidate between review and write, or untrusted hook aborts promotion to operational state."
+          "negative_control": "Malformed config, failed backup, stale candidate, changed config or adapter hash, unapproved digest, partial write, or untrusted hook aborts promotion to operational state and preserves recoverable originals."
         }
       ],
       "readiness": {
@@ -299,8 +442,8 @@
         "required_approval_types": ["readiness"],
         "approvals": [],
         "failed_guards": [
-          "mailbox-mf-02-duplicate-safe-adapters is not accepted",
-          "Exact host-config candidate has not received readiness approval"
+          "mailbox-mf-03a-host-candidate is not accepted",
+          "Exact StoredHostInstallationCandidateV1 payload_sha256 has not received readiness approval"
         ]
       },
       "status": "blocked",
@@ -319,7 +462,7 @@
       "objective": "Produce one read-only fleet report that classifies mailbox compatibility drift and emits exact separately claimable repair packets without changing consumer repositories.",
       "profile": "standard",
       "execution_class": "independently_executable",
-      "claimability": "blocked_dependencies",
+      "claimability": "not_applicable",
       "authorization_mode": "host_workspace",
       "scope": {
         "included": [
@@ -365,7 +508,21 @@
       "conflict_surfaces": [
         {
           "kind": "repository_path",
-          "target": "scripts/upgrade_governed_repos.py",
+          "target": "enforced_planning/mailbox_fleet_audit.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "mailbox-fleet-audit"
+        },
+        {
+          "kind": "repository_path",
+          "target": "scripts/audit_mailbox_fleet.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "mailbox-fleet-audit"
+        },
+        {
+          "kind": "repository_path",
+          "target": "tests/test_mailbox_fleet_audit.py",
           "repository": "enforced-planning",
           "access": "exclusive",
           "coordination_key": "mailbox-fleet-audit"
@@ -391,15 +548,13 @@
         }
       ],
       "readiness": {
-        "status": "blocked",
+        "status": "ready",
         "required_approval_types": [],
         "approvals": [],
-        "failed_guards": [
-          "mailbox-mf-01-host-installation-audit is not accepted"
-        ]
+        "failed_guards": []
       },
-      "status": "blocked",
-      "record_version": 1
+      "status": "accepted",
+      "record_version": 3
     },
     {
       "schema_version": "1.0",
@@ -407,8 +562,8 @@
       "id": "mailbox-mf-05-four-direction-live-certification",
       "initiative_id": "cross-client-mailbox",
       "goal_id": "cross-client-mailbox-delivery",
-      "design_revision": "mailbox-fleet-delivery-v1",
-      "spec_revision": "mailbox-mf-05-v1",
+      "design_revision": "mailbox-fleet-delivery-v2",
+      "spec_revision": "mailbox-mf-05-v2",
       "title": "Certify all Codex and Claude delivery directions",
       "class": "verification",
       "objective": "Produce one exact four-leg certification showing persisted, observed, and acknowledged evidence for every Codex/Claude sender-recipient pairing.",
@@ -434,7 +589,7 @@
       "inputs": [
         {
           "kind": "work_unit_output",
-          "id": "mailbox-mf-03-host-rollout",
+          "id": "mailbox-mf-03b-host-apply",
           "revision": "accepted"
         },
         {
@@ -450,7 +605,7 @@
       ],
       "dependencies": [
         {
-          "unit_id": "mailbox-mf-03-host-rollout",
+          "unit_id": "mailbox-mf-03b-host-apply",
           "type": "hard",
           "gate": {
             "type": "unit_status",
@@ -495,13 +650,12 @@
         "required_approval_types": ["readiness"],
         "approvals": [],
         "failed_guards": [
-          "mailbox-mf-03-host-rollout is not accepted",
-          "mailbox-mf-04-fleet-readonly-audit is not accepted",
+          "mailbox-mf-03b-host-apply is not accepted",
           "Four exact active recipient sessions are not yet bound"
         ]
       },
       "status": "blocked",
-      "record_version": 1
+      "record_version": 2
     }
   ]
 }

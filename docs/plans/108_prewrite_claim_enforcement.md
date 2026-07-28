@@ -1,6 +1,6 @@
 # Plan #108: Low-Friction Pre-Write Claim Enforcement
 
-**Status:** In Progress — PW-01 accepted; PW-02 latency-blocked
+**Status:** In Progress — PW-01 accepted; PW-02A ready; PW-02 latency-blocked
 **Type:** implementation
 **Priority:** Critical
 **phase_ref:** "Phase 9"
@@ -192,6 +192,48 @@ invalidated by any claim-file metadata or branch change. Denials and malformed
 requests are not reused across distinct requests. The cache is an optimization,
 not an authority.
 
+### Low-latency authority projection
+
+PW-02A replaces registry-wide YAML parsing on the synchronous hook path with a
+derived, digest-bound JSON projection. The YAML claim registry remains the only
+ownership authority. Canonical claim create, refresh, heartbeat, release, and
+prune operations atomically regenerate the projection after mutating YAML; a
+standalone refresh command supports explicit recovery from a manual or legacy
+claim-file change.
+
+`PreWriteAuthorityProjectionV1` contains the canonical claims-directory path,
+the deterministic digest of every YAML claim record, generation time, and the
+normalized live claim entries needed for pre-write decisions. Each
+`PreWriteAuthorityClaimV1` contains agent/client, session, canonical repository,
+worktree, branch, write paths, expiry and heartbeat timestamps, source path and
+digest, and canonical static-health findings. It contains no patch, prompt,
+command body, secret, or new grant of authority.
+
+The dependency-light hook engine must:
+
+1. normalize the native request and current Git identity;
+2. recompute the registry digest and require an exact projection match;
+3. find exactly one projected claim matching client, session, repository,
+   worktree, and branch;
+4. reject canonical static-health findings, stale heartbeat/expiry, a missing
+   worktree or branch, an already-merged branch, or a target outside the
+   projected write paths; and
+5. append the existing receipt contract and return the native decision.
+
+Static normalization and hierarchy policy remain owned by
+`coordination_claims.py` and are compiled into the projection. Dependency-light
+runtime identity, freshness, Git lifecycle, and path-containment helpers are
+shared by the typed facade and native CLI; there must not be a second competing
+policy evaluator. The existing Pydantic request, decision, and receipt models
+remain the public and durable validation boundary.
+
+Missing, corrupt, or digest-mismatched projection state never triggers a slow
+or permissive hook fallback. It produces `projection_unavailable_or_stale`:
+`observe` records and permits the attempted edit as an observed violation;
+`enforce` denies it with the exact refresh command. `off` performs no authority
+lookup. Projection replacement is atomic and recoverable by regeneration from
+YAML; it has no independent history or deletion requirement.
+
 ### Failure, recovery, and rollback
 
 - Missing registry, unreadable claim, malformed payload, unknown supported
@@ -244,7 +286,11 @@ not an authority.
 ## Files Affected
 
 - `enforced_planning/prewrite_claim_gate.py` (create)
+- `enforced_planning/prewrite_claim_fast.py` (create)
+- `enforced_planning/prewrite_claim_projection.py` (create)
+- `enforced_planning/coordination_claims.py` (modify)
 - `scripts/prewrite_claim_gate.py` (create)
+- `scripts/refresh_prewrite_claim_projection.py` (create)
 - `hooks/claude/prewrite-claim-gate.sh` (create)
 - `hooks/codex/prewrite-claim-gate.sh` (create)
 - `enforced_planning/hook_wiring.py` (modify)
@@ -252,6 +298,8 @@ not an authority.
 - `docs/reference/CONFIG_REFERENCE.md` (modify)
 - `docs/guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md` (modify)
 - `tests/test_prewrite_claim_gate.py` (create)
+- `tests/test_prewrite_claim_projection.py` (create)
+- `tests/test_check_coordination_claims.py` (modify)
 - `tests/test_generate_hook_wiring.py` (modify)
 - `tests/test_audit_governed_repo.py` (modify)
 - this plan, work graph, plan index, and roadmap
@@ -268,6 +316,7 @@ integration action; framework implementation must not edit it implicitly.
 | Increment | Class | Behavior or named blocker changed |
 |---|---|---|
 | PW-01 typed evaluator and native adapters | `vertical` | Known native write events receive an attributable pre-write decision. |
+| PW-02A digest-bound fast decision path | `vertical` | Fresh hook processes avoid Pydantic startup and registry-wide YAML parsing without weakening authority. |
 | PW-02 observe-mode calibration and installer/auditor | `vertical` | Real client wiring is measurable without blocking work. |
 | PW-03 enforce-mode promotion and live negative control | `vertical` | An unauthorized native edit is stopped before mutation. |
 
@@ -277,11 +326,15 @@ integration action; framework implementation must not edit it implicitly.
    fixtures first, then implement the typed evaluator, receipt, Claude adapter,
    Codex adapter, and cache. Demonstrate allow and deny decisions without
    editing host configuration.
-2. **PW-02 — observe and measure.** Extend preserving hook generation and audit,
+2. **PW-02A — compile and consume authority projection.** Add both-sign parity
+   fixtures first, atomically project canonical claim state after every
+   sanctioned mutation, route the native CLI through the dependency-light
+   evaluator, and fail visibly on missing, corrupt, or stale projection state.
+3. **PW-02 — observe and measure.** Extend preserving hook generation and audit,
    install only an exact reviewed observe-mode candidate, exercise supported
    native payloads, and retain decision/latency receipts. Stop if payload
    identity is insufficient or the latency/false-block readout misses its bar.
-3. **PW-03 — promote one governed repository.** Change only the explicit repo's
+4. **PW-03 — promote one governed repository.** Change only the explicit repo's
    configured mode to enforce, prove an unclaimed/out-of-scope edit leaves the
    file hash unchanged, prove an exact claimed edit succeeds, and retain the
    rollback command and receipts.
@@ -325,24 +378,32 @@ Therefore no repository or host configuration was promoted to `enforce`.
 **Blocks:** PW-02 acceptance and PW-03 enforcement promotion.
 
 **Current stub:** The typed evaluator, adapters, generator, and audit are
-correct but start a fresh Python/Pydantic/Git process for each write.
+correct but start a fresh Python/Pydantic process and reparse the full YAML
+registry for each uncached write.
 
-**Unknowns:** Whether a minimal stdlib fast path with claim-digest validation or
-a small long-lived local decision service can meet the latency bar without
-creating a second claim authority or silently allowing on service failure.
+**Resolved diagnosis:** On 2026-07-27, fresh process import measured p95 227.841
+ms; `check_claims()` over 230 YAML files measured p95 414.759 ms; Git identity,
+registry hashing, and receipt `fsync` were each single-digit milliseconds.
+Canonical live-claim JSON for the 17 live claims was about 31 KB and parsed in
+under 0.1 ms p95. A dependency-light Python/JSON process measured 41.486 ms
+p95. A resident service was rejected because it adds lifecycle, availability,
+and recovery ownership that the measured bottleneck does not require.
 
-**Instrument:** Implement the cheapest replaceable candidate behind the same
+**Instrument:** Implement a digest-verified derived authority projection and
+dependency-light hook engine behind the same
 `PreWriteRequestV1 -> PreWriteDecisionV1` contract, then rerun the identical
-50-authorized/10-violation full subprocess calibration.
+50-authorized/10-violation full subprocess calibration from fresh processes.
 
 **Readout:** Zero false blocks, exact receipt step-down, p95 <100 ms, and p99
 <200 ms.
 
-**Promotion:** Update the adapter/runtime boundary and PW-02 evidence, mark
-PW-02 accepted, then make PW-03 ready.
+**Promotion:** Accept PW-02A only after canonical-vs-fast parity and stale-state
+negative controls pass. Then update the PW-02 evidence; mark PW-02 accepted and
+make PW-03 ready only if the unchanged latency and correctness bars pass.
 
-**Cleanup:** Remove the slower duplicate path or retain it only as a diagnostic
-reference; do not keep two policy evaluators.
+**Cleanup:** Route the typed facade and native adapter through one underlying
+decision engine. Retain the heavier projector only for claim mutation,
+validation, explicit refresh, and diagnostics; do not keep two policy engines.
 
 ---
 

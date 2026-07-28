@@ -110,11 +110,172 @@
     {
       "schema_version": "1.0",
       "record_type": "work_unit",
+      "id": "prewrite-pw-02a-low-latency-projection",
+      "initiative_id": "coordination-integrity",
+      "goal_id": "prewrite-claim-enforcement",
+      "design_revision": "plan-108-v2",
+      "spec_revision": "prewrite-pw-02a-v1",
+      "title": "Compile and consume a low-latency claim authority projection",
+      "class": "implementation",
+      "objective": "Keep YAML claims authoritative while making each fresh native hook decision from an exact digest-bound projection fast enough for the approved latency gate.",
+      "profile": "standard",
+      "execution_class": "independently_executable",
+      "claimability": "ready_for_execution",
+      "authorization_mode": "registry_claim",
+      "scope": {
+        "included": [
+          "Atomic digest-bound projection of canonical normalized live claims",
+          "Dependency-light native hook evaluator behind the existing decision contract",
+          "Projection refresh on every sanctioned claim mutation and explicit recovery command",
+          "Canonical-versus-fast parity, corruption, staleness, lifecycle, and latency fixtures"
+        ],
+        "excluded": [
+          "Host or consumer-repository enforcement activation",
+          "Resident daemon or network service",
+          "A second claim authority or permissive fallback",
+          "Arbitrary shell or operating-system write containment"
+        ]
+      },
+      "inputs": [
+        {
+          "kind": "bounded_design",
+          "id": "docs/plans/108_prewrite_claim_enforcement.md",
+          "revision": "plan-108-v2"
+        },
+        {
+          "kind": "work_unit_output",
+          "id": "prewrite-pw-01-evaluator-adapters",
+          "revision": "accepted"
+        }
+      ],
+      "outputs": [
+        "PreWriteAuthorityProjectionV1 and atomically generated local projection",
+        "One dependency-light decision engine shared by the typed facade and native CLI",
+        "Deterministic projection refresh and fail-loud stale-state recovery",
+        "Identical 50-authorized/10-violation calibration readout"
+      ],
+      "dependencies": [
+        {
+          "unit_id": "prewrite-pw-01-evaluator-adapters",
+          "type": "hard",
+          "gate": {
+            "type": "unit_status",
+            "required_status": "accepted"
+          },
+          "rationale": "The fast path must preserve the accepted request, decision, receipt, and policy semantics."
+        }
+      ],
+      "conflict_surfaces": [
+        {
+          "kind": "repository_path",
+          "target": "enforced_planning/prewrite_claim_gate.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "prewrite-low-latency"
+        },
+        {
+          "kind": "repository_path",
+          "target": "enforced_planning/prewrite_claim_fast.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "prewrite-low-latency"
+        },
+        {
+          "kind": "repository_path",
+          "target": "enforced_planning/prewrite_claim_projection.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "prewrite-low-latency"
+        },
+        {
+          "kind": "repository_path",
+          "target": "enforced_planning/coordination_claims.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "prewrite-low-latency"
+        },
+        {
+          "kind": "repository_path",
+          "target": "scripts/prewrite_claim_gate.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "prewrite-low-latency"
+        },
+        {
+          "kind": "repository_path",
+          "target": "scripts/refresh_prewrite_claim_projection.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "prewrite-low-latency"
+        },
+        {
+          "kind": "repository_path",
+          "target": "tests/test_prewrite_claim_gate.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "prewrite-low-latency"
+        },
+        {
+          "kind": "repository_path",
+          "target": "tests/test_prewrite_claim_projection.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "prewrite-low-latency"
+        },
+        {
+          "kind": "repository_path",
+          "target": "tests/test_check_coordination_claims.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "prewrite-low-latency"
+        }
+      ],
+      "acceptance": [
+        {
+          "id": "PW02A-A1",
+          "criterion": "The dependency-light engine and typed canonical facade return equivalent reason codes and decisions for exact, missing, ambiguous, wrong-session, wrong-repository, wrong-worktree, wrong-branch, out-of-scope, stale-heartbeat, expired, merged, missing-worktree, corrupt-projection, and digest-mismatch fixtures.",
+          "evidence_required": [
+            "Failing tests committed or demonstrated before implementation",
+            "pytest -q tests/test_prewrite_claim_gate.py tests/test_prewrite_claim_projection.py tests/test_check_coordination_claims.py",
+            "ruff and strict mypy on changed Python files"
+          ],
+          "negative_control": "A missing, corrupt, or digest-mismatched projection is an observe violation or enforce denial and never invokes the slow YAML evaluator as a fallback."
+        },
+        {
+          "id": "PW02A-A2",
+          "criterion": "The unchanged full fresh-process calibration classifies 50 authorized and 10 violation controls with zero false blocks at p95 below 100 ms and p99 below 200 ms.",
+          "evidence_required": [
+            "Versioned calibration JSON with all 60 receipt IDs and exact command/config identity",
+            "Aggregate latency plus step-down to each concrete decision receipt",
+            "python scripts/self_test.py and git diff --check"
+          ],
+          "negative_control": "Mutating a claim after projection generation invalidates the next authorization until an explicit canonical refresh succeeds."
+        }
+      ],
+      "readiness": {
+        "status": "ready",
+        "required_approval_types": [],
+        "approvals": [],
+        "failed_guards": []
+      },
+      "claim_policy": {
+        "eligibility_rule": "One exact live registry claim for this ready unit and every declared repository path.",
+        "lease_policy": "renewable",
+        "lease_duration_minutes": 1440,
+        "max_active_per_claimant": 1,
+        "named_owner_id": null
+      },
+      "status": "ready",
+      "record_version": 1
+    },
+    {
+      "schema_version": "1.0",
+      "record_type": "work_unit",
       "id": "prewrite-pw-02-observe-calibration",
       "initiative_id": "coordination-integrity",
       "goal_id": "prewrite-claim-enforcement",
       "design_revision": "plan-108-v1",
-      "spec_revision": "prewrite-pw-02-v1",
+      "spec_revision": "prewrite-pw-02-v2",
       "title": "Wire observe mode and calibrate correctness and latency",
       "class": "integration",
       "objective": "Install preserving observe-mode wiring, retain concrete decision receipts, and determine whether hard enforcement can meet the approved correctness and latency bars.",
@@ -140,6 +301,11 @@
           "kind": "work_unit_output",
           "id": "prewrite-pw-01-evaluator-adapters",
           "revision": "accepted"
+        },
+        {
+          "kind": "work_unit_output",
+          "id": "prewrite-pw-02a-low-latency-projection",
+          "revision": "accepted"
         }
       ],
       "outputs": [
@@ -156,6 +322,15 @@
             "required_status": "accepted"
           },
           "rationale": "Live calibration must use the accepted evaluator and adapter contract."
+        },
+        {
+          "unit_id": "prewrite-pw-02a-low-latency-projection",
+          "type": "hard",
+          "gate": {
+            "type": "unit_status",
+            "required_status": "accepted"
+          },
+          "rationale": "Observe-mode promotion must use the accepted low-latency path rather than the known slow YAML path."
         }
       ],
       "conflict_surfaces": [
@@ -205,7 +380,7 @@
         "required_approval_types": [],
         "approvals": [],
         "failed_guards": [
-          "full hook subprocess latency measured p95 796.655 ms and p99 1051.962 ms, above the approved 100/200 ms bars"
+          "prewrite-pw-02a-low-latency-projection must be accepted and its identical calibration must meet the approved 100/200 ms bars"
         ]
       },
       "claim_policy": {
@@ -216,7 +391,7 @@
         "named_owner_id": null
       },
       "status": "blocked",
-      "record_version": 3
+      "record_version": 4
     },
     {
       "schema_version": "1.0",

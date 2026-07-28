@@ -1,6 +1,6 @@
 # Plan #108: Low-Friction Pre-Write Claim Enforcement
 
-**Status:** In Progress — PW-01/PW-02A/PW-02 accepted; PW-02B active; PW-03 blocked
+**Status:** In Progress — PW-01/PW-02A/PW-02 accepted; PW-02B ready; PW-03 blocked
 **Type:** implementation
 **Priority:** Critical
 **phase_ref:** "Phase 9"

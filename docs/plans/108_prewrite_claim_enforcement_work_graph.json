@@ -120,7 +120,7 @@
       "objective": "Keep YAML claims authoritative while making each fresh native hook decision from an exact digest-bound projection fast enough for the approved latency gate.",
       "profile": "standard",
       "execution_class": "independently_executable",
-      "claimability": "ready_for_execution",
+      "claimability": "not_applicable",
       "authorization_mode": "registry_claim",
       "scope": {
         "included": [
@@ -265,8 +265,8 @@
         "max_active_per_claimant": 1,
         "named_owner_id": null
       },
-      "status": "ready",
-      "record_version": 1
+      "status": "accepted",
+      "record_version": 2
     },
     {
       "schema_version": "1.0",
@@ -281,7 +281,7 @@
       "objective": "Install preserving observe-mode wiring, retain concrete decision receipts, and determine whether hard enforcement can meet the approved correctness and latency bars.",
       "profile": "standard",
       "execution_class": "independently_executable",
-      "claimability": "blocked_dependencies",
+      "claimability": "ready_for_execution",
       "authorization_mode": "registry_claim",
       "scope": {
         "included": [
@@ -376,12 +376,10 @@
         }
       ],
       "readiness": {
-        "status": "blocked",
+        "status": "ready",
         "required_approval_types": [],
         "approvals": [],
-        "failed_guards": [
-          "prewrite-pw-02a-low-latency-projection must be accepted and its identical calibration must meet the approved 100/200 ms bars"
-        ]
+        "failed_guards": []
       },
       "claim_policy": {
         "eligibility_rule": "PW-01 accepted and exact host or repository write surfaces declared in a fresh claim.",
@@ -390,8 +388,8 @@
         "max_active_per_claimant": 1,
         "named_owner_id": null
       },
-      "status": "blocked",
-      "record_version": 4
+      "status": "ready",
+      "record_version": 5
     },
     {
       "schema_version": "1.0",

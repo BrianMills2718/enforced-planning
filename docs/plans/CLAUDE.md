@@ -81,7 +81,7 @@ See `ROADMAP.md` for the full phase map and recommended priority order.
 | 105 | Session-Bound Lane Lifecycle (`105_session_bound_lane_lifecycle.md`) | Critical | ✅ Complete | session-end ownership retirement and accidental tangent-root prevention |
 | 106 | Cross-Client Mailbox Fleet Delivery Certification (`106_cross_client_mailbox_fleet_delivery_certification.md`) | Critical | 🚧 In Progress — MF-01/MF-02/MF-04 accepted; MF-03A ready | mechanically installed, observable, four-direction Codex/Claude delivery |
 | 107 | Claim Readiness And Merge Closeout Enforcement (`107_claim_readiness_and_merge_closeout_enforcement.md`) | Critical | ✅ Complete | fail closed on blocked/unapproved write claims and merged active ownership |
-| 108 | Low-Friction Pre-Write Claim Enforcement (`108_prewrite_claim_enforcement.md`) | Critical | 🚧 In Progress — PW-01 accepted; PW-02A low-latency projection ready; PW-02 latency-blocked | native agent writes checked against exact live claim before mutation |
+| 108 | Low-Friction Pre-Write Claim Enforcement (`108_prewrite_claim_enforcement.md`) | Critical | 🚧 In Progress — PW-01/PW-02A accepted; PW-02 ready | native agent writes checked against exact live claim before mutation |
 
 ## Status Key
 

@@ -1,6 +1,6 @@
 # Plan #108: Low-Friction Pre-Write Claim Enforcement
 
-**Status:** In Progress — PW-01 accepted; PW-02A ready; PW-02 latency-blocked
+**Status:** In Progress — PW-01/PW-02A accepted; PW-02 ready
 **Type:** implementation
 **Priority:** Critical
 **phase_ref:** "Phase 9"
@@ -373,6 +373,25 @@ violation controls correctly with zero false blocks, but measured p95 796.655 ms
 and p99 1051.962 ms. Both exceed the approved p95 <100 ms and p99 <200 ms bars.
 Therefore no repository or host configuration was promoted to `enforce`.
 
+### PW-02A Evidence
+
+PW-02A is accepted at source revisions `d7cdb00`, `7b8c0d9`, and `c174beb`.
+The digest-bound projection keeps YAML authoritative, the native hook no longer
+imports Pydantic or parses all claim YAML, and every sanctioned claim mutation
+refreshes the derived projection. Missing, corrupt, concurrently changing, or
+digest-mismatched projections fail visibly without invoking the slow evaluator.
+
+The retained calibration is
+`docs/evidence/plan108_pw02a_low_latency_calibration.json`. Against exact hook
+revision `7b8c0d9`, 50 authorized and 10 violation fresh-process calls produced
+zero false classifications, wall p95 88.032 ms, and wall p99 97.366 ms. All 60
+receipt IDs, the retained receipt-file digest, projection digest, command, and
+registry-snapshot identity are recorded. A code-diff review found one
+projection-build race; `c174beb` added before/after registry-digest validation
+and a deterministic negative control. The resulting review verdict was
+`pass_with_notes` because installed asset propagation and the real observe-mode
+probe remain PW-02 work, not because of an unresolved PW-02A defect.
+
 #### Dependency Subplan: lower-latency native decision path
 
 **Blocks:** PW-02 acceptance and PW-03 enforcement promotion.
@@ -439,10 +458,10 @@ validation, explicit refresh, and diagnostics; do not keep two policy engines.
   in enforce mode with an exact reason and recovery action.
 - [x] An exact healthy claimed write succeeds without extra user interaction.
 - [x] Observe mode records the same decision inputs but never blocks.
-- [ ] The evaluator's deterministic/local calibration has p95 under 100 ms and
+- [x] The evaluator's deterministic/local calibration has p95 under 100 ms and
   p99 under 200 ms, and representative compliant native writes have zero false
   blocks before promotion.
-- [ ] Receipts step down every aggregate to an exact request, claim, decision,
+- [x] Receipts step down every aggregate to an exact request, claim, decision,
   and latency without storing file contents or secrets.
 - [ ] Hook generation and audit preserve unrelated user/repository hooks and
   are idempotent.

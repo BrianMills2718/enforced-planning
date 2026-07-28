@@ -171,16 +171,25 @@ def _git(path: Path, *args: str, allow_failure: bool = False) -> str | None:
 
 def _repository_context(request: dict[str, Any]) -> dict[str, Any]:
     cwd = Path(str(request["cwd"])).expanduser().resolve()
-    worktree_text = _git(cwd, "rev-parse", "--show-toplevel")
-    assert worktree_text is not None
-    worktree = Path(worktree_text).resolve()
-    common_text = _git(worktree, "rev-parse", "--path-format=absolute", "--git-common-dir")
-    assert common_text is not None
-    common_git = Path(common_text).resolve()
+    identity = _git(
+        cwd,
+        "rev-parse",
+        "--show-toplevel",
+        "--path-format=absolute",
+        "--git-common-dir",
+        "--abbrev-ref",
+        "HEAD",
+    )
+    assert identity is not None
+    parts = identity.splitlines()
+    if len(parts) != 3:
+        raise FastPreWriteError("Git identity response did not contain worktree, common dir, and branch")
+    worktree = Path(parts[0]).resolve()
+    common_git = Path(parts[1]).resolve()
     if common_git.name != ".git":
         raise FastPreWriteError(f"unsupported Git common directory: {common_git}")
     repo_root = common_git.parent
-    branch = _git(worktree, "branch", "--show-current")
+    branch = parts[2].strip()
     if not branch:
         raise FastPreWriteError("Pre-write enforcement requires a named Git branch")
 
@@ -342,9 +351,15 @@ def _dynamic_claim_issues(claim: dict[str, Any]) -> tuple[str, ...]:
         return tuple(dict.fromkeys(issues))
     default = _default_ref(repo_root)
     if default and default[0] != branch:
-        branch_sha = _git(repo_root, "rev-parse", branch_ref, allow_failure=True)
-        default_sha = _git(repo_root, "rev-parse", default[1], allow_failure=True)
-        if branch_sha is None or default_sha is None or branch_sha == default_sha:
+        revisions = _git(
+            repo_root,
+            "rev-parse",
+            branch_ref,
+            default[1],
+            allow_failure=True,
+        )
+        revision_lines = revisions.splitlines() if revisions is not None else []
+        if len(revision_lines) != 2 or revision_lines[0] == revision_lines[1]:
             return tuple(dict.fromkeys(issues))
         merged = subprocess.run(
             ["git", "-C", str(repo_root), "merge-base", "--is-ancestor", branch_ref, default[1]],

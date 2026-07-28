@@ -104,6 +104,14 @@ an injected second-write failure that restores both exact inputs. MF-03B is not
 accepted until Codex `/hooks` review and fresh Codex and Claude restart/resume
 state are recorded.
 
+After apply, Codex `doctor` loaded the rewritten config successfully and
+reported the hooks feature enabled. A direct exact-session adapter smoke then
+observed message `msg_bf41b253ee384cbb7f6d761c41c00cd7` as receipt
+`rcpt_3c24dd03cfe10b614b106c536dfa366c` and acknowledged it as receipt
+`rcpt_b86ecbebaa8e179780ce5c9854b1c552`. This proves the configured adapter's
+message/receipt boundary, but it does not substitute for native-client hook
+trust or prove a newly started client invoked the hook.
+
 ## Gap
 
 **Current:** The canonical JSON mailbox can persist, route, observe, and

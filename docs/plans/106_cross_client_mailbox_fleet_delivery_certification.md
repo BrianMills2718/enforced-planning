@@ -1,6 +1,6 @@
 # Plan #106: Cross-Client Mailbox Fleet Delivery Certification
 
-**Status:** In Progress — MF-01/MF-02/MF-04 accepted; MF-03A ready for execution
+**Status:** In Progress — MF-01/MF-02/MF-03A/MF-04 accepted; MF-03B awaits exact candidate approval
 **Type:** implementation
 **Priority:** Critical
 **phase_ref:** "Phase 9 — fleet adoption and framework maintenance"
@@ -32,8 +32,8 @@ Brian adopted design revision `mailbox-fleet-delivery-v1` on 2026-07-27. Brian
 then approved the delegation-safety revision `mailbox-fleet-delivery-v2` on
 2026-07-27: host candidate generation and host mutation are separate units.
 MF-01, MF-02, and MF-04 remain valid `reuse_unchanged` outputs from v1. MF-03A
-is the only ready implementation unit; MF-03B and MF-05 remain dependency- and
-approval-gated in the work graph.
+is accepted. MF-03B remains gated on readiness approval for the exact candidate
+digest, and MF-05 remains dependency- and approval-gated in the work graph.
 
 ### MF-01 Implementation Record
 
@@ -61,6 +61,23 @@ then passed 77 tests; Ruff, strict mypy, and diff checks passed. MF-04 is
 accepted. The real read-only report covered all 16 explicit registry entries
 and separately reported 27 governed-looking omissions; those observations are
 inventory evidence, not authority to mutate any repository.
+
+### MF-03A Acceptance Record
+
+MF-03A adds the strict `StoredHostInstallationCandidateV1` envelope and binds
+the proposed Codex and Claude host-hook changes to exact before-config,
+proposed-config, adapter, and framework hashes. Candidate generation rejects an
+unknown framework revision, adapter drift, malformed host configuration, and a
+digest-mismatched envelope. The full mailbox compatibility suite passed 77
+tests; Ruff, strict mypy, and diff checks passed.
+
+The real read-only candidate is retained locally at portable coordination path
+`~/.claude/coordination/candidates/plan106-mf03a-host-candidate-20260727.json`.
+Its `payload_sha256` is
+`5e3936b23a642ba97418b83fcf03b151b65d80785ec81d9330464a4380ffa834`,
+bound to framework revision `fffbec5217e3f66dd6c35d1ad723c83a0e197d78`.
+Before/after hashes proved that neither host configuration changed. MF-03A is
+accepted; this record is not readiness approval to apply the candidate.
 
 ## Gap
 
@@ -567,8 +584,9 @@ gate or pretending one sibling unit owns another.
 
 Current handoff order:
 
-1. `mailbox-mf-03a-host-candidate` is ready and read-only.
-2. `mailbox-mf-03b-host-apply` remains blocked until MF-03A is accepted and
-   Brian approves the exact candidate `payload_sha256`.
+1. `mailbox-mf-03a-host-candidate` is accepted with the exact candidate digest
+   recorded above.
+2. `mailbox-mf-03b-host-apply` remains blocked until Brian approves that exact
+   candidate `payload_sha256`.
 3. `mailbox-mf-05-four-direction-live-certification` remains blocked until
    MF-03B is accepted and four exact live sessions are bound.

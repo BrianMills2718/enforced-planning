@@ -421,10 +421,13 @@ ignore during expedited execution.
 
 Current implementation:
 
-- `scripts/validate_doc_authority.py --check` validates indexed authority drift
-- `scripts/validate_doc_authority.py --record-obligation ...` records formal
+- In the canonical Enforced Planning repository,
+  `scripts/validate_doc_authority.py --check` validates indexed authority drift.
+- In an installed governed repository, use
+  `scripts/meta/validate_doc_authority.py --check`.
+- `scripts/meta/validate_doc_authority.py --record-obligation ...` records formal
   reconciliation debt
-- `scripts/validate_doc_authority.py --list-obligations --json` shows current
+- `scripts/meta/validate_doc_authority.py --list-obligations --json` shows current
   open or resolved debt
 - `session-finish` now fails when the closing lane owns authority surfaces with
   unresolved reconciliation obligations

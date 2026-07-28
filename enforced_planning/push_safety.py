@@ -224,6 +224,8 @@ def evaluate_push_safety(
 
     issues: list[PushCheckFinding] = []
     warnings: list[PushCheckFinding] = []
+    live_write_overlap_paths: set[str] = set()
+    integration_owners: set[tuple[str, str]] = set()
 
     if _working_tree_dirty(resolved_repo_root):
         issues.append(
@@ -343,10 +345,18 @@ def evaluate_push_safety(
             )
             continue
         if claim.claim_type == "write":
+            live_write_overlap_paths.update(
+                overlap.split(" <-> ", 1)[0] for overlap in overlaps
+            )
+            integration_owners.add((claim.agent, claim.scope))
             issues.append(
                 PushCheckFinding(
                     code="overlapping_write_claim",
-                    message="Changed files overlap another live write claim.",
+                    message=(
+                        "Changed files overlap another live write claim. Publication is "
+                        "waiting on those paths; this is not evidence that the whole goal "
+                        "is blocked."
+                    ),
                     details=claim_details,
                 )
             )
@@ -376,6 +386,22 @@ def evaluate_push_safety(
         else:
             warnings.append(decision_finding)
 
+    blocked_paths = sorted(live_write_overlap_paths)
+    writable_paths = sorted(path for path in changed_paths if path not in live_write_overlap_paths)
+    if blocked_paths and writable_paths:
+        recommended_next_action = (
+            "Split or defer the blocked paths, publish a claim-compatible checkpoint, "
+            "and continue another authorized ready work unit."
+        )
+    elif blocked_paths:
+        recommended_next_action = (
+            "This branch publication is path-blocked. Preserve the checkpoint and move "
+            "to another authorized ready work unit; report the whole goal blocked only "
+            "after evaluating its complete ready queue."
+        )
+    else:
+        recommended_next_action = "Proceed with normal push-safety handling."
+
     return {
         "ok": not issues,
         "repo_root": str(resolved_repo_root),
@@ -387,6 +413,17 @@ def evaluate_push_safety(
         "behind": behind,
         "changed_paths": changed_paths,
         "branch_claim_count": len(branch_claims),
+        "continuation": {
+            "state": "integration_wait" if blocked_paths else "ready",
+            "goal_blocked": False,
+            "blocked_paths": blocked_paths,
+            "writable_paths": writable_paths,
+            "integration_owners": [
+                {"agent": agent, "scope": scope}
+                for agent, scope in sorted(integration_owners)
+            ],
+            "recommended_next_action": recommended_next_action,
+        },
         "issues": [item.to_dict() for item in issues],
         "warnings": [item.to_dict() for item in warnings],
     }

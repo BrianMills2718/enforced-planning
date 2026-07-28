@@ -668,6 +668,7 @@ def test_install_governed_repo_dry_run_reports_expected_actions(tmp_path: Path) 
     assert "install:scripts/meta/session_finish.py" in payload["actions"]
     assert "install:scripts/meta/session_close.py" in payload["actions"]
     assert "install:scripts/meta/validate_dead_code_audit.py" in payload["actions"]
+    assert "install:scripts/meta/validate_doc_authority.py" in payload["actions"]
     assert "install:scripts/meta/worktree-coordination/create_publish_worktree.py" in payload["actions"]
     assert "install:scripts/meta/worktree-coordination/create_review_claim.py" in payload["actions"]
     assert "install:scripts/meta/worktree-coordination/raise_concern.py" in payload["actions"]
@@ -777,6 +778,7 @@ def test_install_governed_repo_write_bootstraps_minimum_repo_and_passes_audit(
     assert (tmp_path / "scripts" / "meta" / "session_finish.py").exists()
     assert (tmp_path / "scripts" / "meta" / "session_close.py").exists()
     assert (tmp_path / "scripts" / "meta" / "validate_dead_code_audit.py").exists()
+    assert (tmp_path / "scripts" / "meta" / "validate_doc_authority.py").exists()
     assert (
         tmp_path / "scripts" / "meta" / "worktree-coordination" / "create_publish_worktree.py"
     ).exists()
@@ -863,6 +865,18 @@ def test_install_governed_repo_write_bootstraps_minimum_repo_and_passes_audit(
     assert file_context_result.returncode == 0, (
         file_context_result.stdout + file_context_result.stderr
     )
+    authority_help = subprocess.run(
+        [
+            sys.executable,
+            str(tmp_path / "scripts" / "meta" / "validate_doc_authority.py"),
+            "--help",
+        ],
+        cwd=str(tmp_path),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert authority_help.returncode == 0, authority_help.stdout + authority_help.stderr
 
 
 def test_installed_make_gate_rejects_stale_agents_projection(tmp_path: Path) -> None:
@@ -1293,6 +1307,7 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
             "install:scripts/meta/session_status.py",
             "install:scripts/meta/project_status.py",
             "install:scripts/meta/session_resume.py",
+            "install:scripts/meta/validate_doc_authority.py",
             "install:scripts/meta/verification_batch.py",
             "install:scripts/coordination_inbox.py",
             "install:scripts/coordination_messages.py",

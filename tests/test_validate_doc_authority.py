@@ -106,13 +106,13 @@ def _create_write_claim(
         project=repo_root.name,
         scope=scope,
         intent="test claim",
-        plan_ref="Plan #38",
         claim_type="write",
         write_paths=write_paths,
         worktree_path=str(repo_root),
         repo_root=str(repo_root),
         branch="main",
         session_id="codex:test-session",
+        session_name="test-authority-obligation",
     )
     assert ok, message
 

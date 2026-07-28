@@ -14,6 +14,8 @@ from pathlib import Path
 import pytest
 import yaml  # type: ignore[import-untyped]
 
+from enforced_planning.prewrite_claim_fast import projection_path_for, registry_digest
+
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / "scripts" / "check_coordination_claims.py"
 
@@ -256,6 +258,10 @@ def test_create_claim_accepts_program_claim_with_live_metadata(
     assert payload["claim_type"] == "program"
     assert payload["branch"] == "plan-90-coordination-graph-runtime"
     assert payload["session_id"] == "codex-session-1"
+    projection_path = projection_path_for(claims_dir)
+    projection = json.loads(projection_path.read_text(encoding="utf-8"))
+    assert projection["registry_digest"] == registry_digest(claims_dir)
+    assert projection["claims"][0]["session_id"] == "codex-session-1"
 
 
 def test_create_claim_auto_resolves_codex_session_id(

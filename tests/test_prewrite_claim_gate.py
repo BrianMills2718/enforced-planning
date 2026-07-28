@@ -17,6 +17,7 @@ from enforced_planning.prewrite_claim_gate import (
     evaluate_prewrite,
     load_prewrite_mode,
 )
+from enforced_planning.prewrite_claim_projection import write_projection
 
 
 SESSION = "codex:thread-123"
@@ -320,6 +321,10 @@ def test_cli_denies_before_tool_and_observe_mode_never_blocks(tmp_path: Path) ->
                 "command": "*** Begin Patch\n*** Update File: src/allowed.py\n*** End Patch"
             },
         }
+    )
+    write_projection(
+        claims_dir=tmp_path / "claims",
+        projection_path=tmp_path / "cache" / "authority-projection-v1.json",
     )
     command = [
         "python",

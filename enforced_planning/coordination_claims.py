@@ -109,6 +109,19 @@ def _atomic_write_claim(path: Path, payload: dict[str, Any]) -> None:
             temp_path.unlink()
 
 
+def refresh_prewrite_authority_projection(
+    claims_dir: Path | None = None,
+) -> tuple[str, str]:
+    """Regenerate the replaceable pre-write projection from canonical YAML."""
+
+    from enforced_planning.prewrite_claim_fast import projection_path_for
+    from enforced_planning.prewrite_claim_projection import write_projection
+
+    resolved = (claims_dir or CLAIMS_DIR).expanduser().resolve()
+    projection = write_projection(claims_dir=resolved)
+    return str(projection_path_for(resolved)), projection.registry_digest
+
+
 @dataclass(frozen=True)
 class ClaimRecord:
     """Normalized coordination claim record used across v1 and v2 schemas."""
@@ -1290,6 +1303,7 @@ def create_claim(
         claim_payload.pop("source_file", None)
         claim_payload.pop("project", None)
         _atomic_write_claim(CLAIMS_DIR / filename, claim_payload)
+        refresh_prewrite_authority_projection(CLAIMS_DIR)
     return True, (
         f"Claimed: {agent} → {project}:{scope} "
         f"[{candidate.claim_type}] (expires in {ttl_hours}h)"
@@ -1346,6 +1360,8 @@ def hydrate_missing_session_ids(
         data["updated_at"] = now
         _atomic_write_claim(claim_file, data)
         updated_scopes.append(claim.scope)
+    if updated_scopes:
+        refresh_prewrite_authority_projection(CLAIMS_DIR)
     return len(updated_scopes), sorted(updated_scopes), resolved_session_id
 
 
@@ -1400,6 +1416,8 @@ def heartbeat_claims(
         data["updated_at"] = heartbeat_at
         _atomic_write_claim(claim_file, data)
         updated_scopes.append(claim.scope)
+    if updated_scopes:
+        refresh_prewrite_authority_projection(resolved_claims_dir)
     return len(updated_scopes), sorted(updated_scopes), resolved_session_id, heartbeat_at
 
 
@@ -1445,6 +1463,8 @@ def end_session_claims(
             data["updated_at"] = ended_at
             _atomic_write_claim(claim_file, data)
             ended_claims.append(f"{claim.primary_project()}:{claim.scope}")
+        if ended_claims:
+            refresh_prewrite_authority_projection(resolved_claims_dir)
     return len(ended_claims), sorted(ended_claims), resolved_session_id, ended_at
 
 
@@ -1452,9 +1472,11 @@ def release_claim(agent: str, project: str, scope: str) -> tuple[bool, str]:
     """Release an existing claim."""
     filename = _claim_filename(agent, project, scope)
     path = CLAIMS_DIR / filename
-    if path.exists():
-        path.unlink()
-        return True, f"Released: {agent} → {project}:{scope}"
+    with claim_registry_lock(CLAIMS_DIR):
+        if path.exists():
+            path.unlink()
+            refresh_prewrite_authority_projection(CLAIMS_DIR)
+            return True, f"Released: {agent} → {project}:{scope}"
     return False, f"No claim found for {agent} → {project}:{scope}"
 
 
@@ -1501,6 +1523,8 @@ def complete_claims_for_plan(
                 data["notes"] = note
         _atomic_write_claim(claim_file, data)
         completed_scopes.append(claim.scope)
+    if completed_scopes:
+        refresh_prewrite_authority_projection(CLAIMS_DIR)
     return len(completed_scopes), sorted(completed_scopes)
 
 
@@ -1519,6 +1543,8 @@ def prune_expired() -> int:
         if expires_at is not None and expires_at < now:
             claim_file.unlink()
             removed += 1
+    if removed:
+        refresh_prewrite_authority_projection(CLAIMS_DIR)
     return removed
 
 
@@ -1545,6 +1571,8 @@ def prune_stale() -> tuple[int, list[str]]:
             continue
         claim_file.unlink()
         removed_labels.append(f"{claim.primary_project()}:{claim.scope}")
+    if removed_labels:
+        refresh_prewrite_authority_projection(CLAIMS_DIR)
     return len(removed_labels), sorted(removed_labels)
 
 
@@ -1574,6 +1602,8 @@ def prune_completed() -> tuple[int, list[str]]:
             continue
         claim_file.unlink()
         removed_labels.append(f"{claim.primary_project()}:{claim.scope}")
+    if removed_labels:
+        refresh_prewrite_authority_projection(CLAIMS_DIR)
     return len(removed_labels), sorted(removed_labels)
 
 

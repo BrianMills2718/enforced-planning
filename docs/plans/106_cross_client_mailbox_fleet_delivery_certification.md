@@ -123,11 +123,16 @@ recorded an observation receipt for its exact session. A real Claude Code
 `2026-07-28T01:51:35.976907Z`. The Claude prompt event uses its documented
 native `prompt_id`; the lifecycle adapter does not use a session-ID fallback.
 
-Claude `SessionStart` still emits a visible missing-event-identity warning.
-That does not prevent `UserPromptSubmit` delivery and is explicitly deferred
-as a bounded client-event design question. MF-05's four-direction plus explicit
-acknowledgement certification is also deferred: it exceeds the presently needed
-proof that the host-installed hooks can surface a message on the next prompt.
+Claude `SessionStart` originally emitted a visible missing-event-identity
+warning because its documented payload has neither a native event ID nor a
+timestamp. The adapter now uses a short-lived bucket keyed with the exact
+client session and lifecycle event only for that payload shape. This suppresses
+concurrent host/repository duplicate delivery without treating the session ID
+as an event ID, creating acknowledgement evidence, or weakening the
+native-identity requirement for other events. MF-05's four-direction plus
+explicit acknowledgement certification is still deferred: it exceeds the
+presently needed proof that the host-installed hooks can surface a message on
+the next lifecycle event.
 
 ## Gap
 

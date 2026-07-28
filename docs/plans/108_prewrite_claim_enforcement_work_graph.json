@@ -120,7 +120,7 @@
       "objective": "Install preserving observe-mode wiring, retain concrete decision receipts, and determine whether hard enforcement can meet the approved correctness and latency bars.",
       "profile": "standard",
       "execution_class": "independently_executable",
-      "claimability": "ready_for_execution",
+      "claimability": "blocked_dependencies",
       "authorization_mode": "registry_claim",
       "scope": {
         "included": [
@@ -201,10 +201,12 @@
         }
       ],
       "readiness": {
-        "status": "ready",
+        "status": "blocked",
         "required_approval_types": [],
         "approvals": [],
-        "failed_guards": []
+        "failed_guards": [
+          "full hook subprocess latency measured p95 796.655 ms and p99 1051.962 ms, above the approved 100/200 ms bars"
+        ]
       },
       "claim_policy": {
         "eligibility_rule": "PW-01 accepted and exact host or repository write surfaces declared in a fresh claim.",
@@ -213,8 +215,8 @@
         "max_active_per_claimant": 1,
         "named_owner_id": null
       },
-      "status": "ready",
-      "record_version": 2
+      "status": "blocked",
+      "record_version": 3
     },
     {
       "schema_version": "1.0",

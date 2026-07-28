@@ -1,6 +1,6 @@
 # Plan #108: Low-Friction Pre-Write Claim Enforcement
 
-**Status:** In Progress — PW-01 accepted; PW-02 ready
+**Status:** In Progress — PW-01 accepted; PW-02 latency-blocked
 **Type:** implementation
 **Priority:** Critical
 **phase_ref:** "Phase 9"
@@ -253,7 +253,7 @@ not an authority.
 - `docs/guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md` (modify)
 - `tests/test_prewrite_claim_gate.py` (create)
 - `tests/test_generate_hook_wiring.py` (modify)
-- `tests/test_governed_repo_audit.py` (modify if the existing audit surface requires it)
+- `tests/test_audit_governed_repo.py` (modify)
 - this plan, work graph, plan index, and roadmap
 
 Host configuration or consumer-repository rollout is a separately evidenced
@@ -307,6 +307,42 @@ Verification at the accepted slice:
 - `python scripts/self_test.py` passed.
 - PW-01 licenses `contract_tested` for the local library boundary only. It does
   not license installed, enforced, or deployment-verified status.
+
+### PW-02 Calibration Readout
+
+PW-02 implemented opt-in preserving hook wiring, portable `off | observe |
+enforce` configuration, governed-repo audit coverage, and the nested real
+`meta-process.yaml` loader repair at revision `24806e8`. The retained readout is
+`docs/evidence/plan108_pw02_observe_calibration.json`.
+
+The full fresh-subprocess hook path classified all 50 authorized and 10
+violation controls correctly with zero false blocks, but measured p95 796.655 ms
+and p99 1051.962 ms. Both exceed the approved p95 <100 ms and p99 <200 ms bars.
+Therefore no repository or host configuration was promoted to `enforce`.
+
+#### Dependency Subplan: lower-latency native decision path
+
+**Blocks:** PW-02 acceptance and PW-03 enforcement promotion.
+
+**Current stub:** The typed evaluator, adapters, generator, and audit are
+correct but start a fresh Python/Pydantic/Git process for each write.
+
+**Unknowns:** Whether a minimal stdlib fast path with claim-digest validation or
+a small long-lived local decision service can meet the latency bar without
+creating a second claim authority or silently allowing on service failure.
+
+**Instrument:** Implement the cheapest replaceable candidate behind the same
+`PreWriteRequestV1 -> PreWriteDecisionV1` contract, then rerun the identical
+50-authorized/10-violation full subprocess calibration.
+
+**Readout:** Zero false blocks, exact receipt step-down, p95 <100 ms, and p99
+<200 ms.
+
+**Promotion:** Update the adapter/runtime boundary and PW-02 evidence, mark
+PW-02 accepted, then make PW-03 ready.
+
+**Cleanup:** Remove the slower duplicate path or retain it only as a diagnostic
+reference; do not keep two policy evaluators.
 
 ---
 

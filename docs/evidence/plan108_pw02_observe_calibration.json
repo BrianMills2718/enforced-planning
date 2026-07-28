@@ -1,0 +1,34 @@
+{
+  "schema_version": "1.0",
+  "work_unit_id": "prewrite-pw-02-observe-calibration",
+  "source_revision": "24806e8",
+  "observed_at": "2026-07-27T20:14:00-07:00",
+  "execution_path": "fresh Python subprocess -> native payload adapter -> Pydantic contracts -> Git/claim evaluator -> JSONL receipt",
+  "samples": 60,
+  "expected_authorized": 50,
+  "expected_violations": 10,
+  "observed_allow": 50,
+  "observed_observe_violation": 10,
+  "false_blocks": 0,
+  "latency_ms": {
+    "p50": 221.068,
+    "p95": 796.655,
+    "p99": 1051.962,
+    "max": 1115.051
+  },
+  "required_bar_ms": {
+    "p95_below": 100,
+    "p99_below": 200
+  },
+  "receipt_count": 60,
+  "decision": "do_not_promote_to_enforce",
+  "reason": "Correct classification passed, but full native-hook subprocess latency exceeded both approved bars.",
+  "verification": {
+    "focused_tests": "21 passed",
+    "ruff": "passed",
+    "mypy_strict": "passed",
+    "framework_self_test": "passed"
+  },
+  "inherited_test_debt": "Seven broader governed-repo audit tests fail because their historical scaffolds omit .claude/hooks/check-hook-enabled.sh; the new opt-in prewrite audit test passes.",
+  "next_readout": "A lower-latency execution design must rerun the identical 50/10 subprocess calibration and meet both bars with zero false blocks."
+}

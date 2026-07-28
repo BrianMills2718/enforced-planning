@@ -1,6 +1,6 @@
 # Plan #108: Low-Friction Pre-Write Claim Enforcement
 
-**Status:** In Progress — PW-01/PW-02A/PW-02 accepted; PW-02B0 ready; later units dependency-blocked
+**Status:** In Progress — PW-01/PW-02A/PW-02/PW-02B0 accepted; PW-02B1 ready; later units dependency-blocked
 **Type:** implementation
 **Priority:** Critical
 **Design Revision:** `plan-108-v2`
@@ -358,7 +358,7 @@ PW-02A, and PW-02 slices. Execute the units in the order below. Do not skip a
 blocked unit, select a different pilot repository, infer a runtime from a repo
 path, or widen a target's installer profile.
 
-#### PW-02B0 — writer provenance (ready now)
+#### PW-02B0 — writer provenance (accepted 2026-07-28)
 
 Implement `ClaimMutationReceiptV1` in
 `enforced_planning/claim_mutation_receipts.py` and append it to
@@ -411,7 +411,14 @@ Retain the real heartbeat event ID and matching registry/projection digests in
 mutation lacks one terminal receipt, the receipt cannot identify the loaded
 source file and digest, or audit failure is silent.
 
-#### PW-02B1 — frozen fleet inventory (blocked on PW-02B0)
+**Accepted evidence:** [PR #87](https://github.com/BrianMills2718/enforced-planning/pull/87)
+merged as `7342650`, with real heartbeat event
+`829edffa-c668-490e-ba60-a8bf3ee046e4`; [PR #88](https://github.com/BrianMills2718/enforced-planning/pull/88)
+added an audit repair that isolates deterministic fixture ledgers and exercises
+an actual unusable ledger path. The retained evidence artifact is
+`docs/evidence/plan108_pw02b0_writer_provenance.json`.
+
+#### PW-02B1 — frozen fleet inventory (ready now)
 
 Run the query against the shared registry and ledger and write
 `docs/evidence/plan108_pw02b_fleet_inventory.json`. Every live writer digest
@@ -562,7 +569,7 @@ PW-02B1 manifest must be derived from runtime mutation receipts.
 
 This observation changed the remaining design from “infer the writer from the
 claim's repo root” to “record the loaded writer source and digest at mutation
-time.” PW-02B0 is therefore the sole ready leaf. PW-02B1 inventory, PW-02B2
+time.” PW-02B0 is accepted. PW-02B1 inventory is the sole ready leaf; PW-02B2
 rollout, final PW-02B certification, and PW-03 remain dependency-blocked in
 that order.
 

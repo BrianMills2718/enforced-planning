@@ -120,7 +120,7 @@
       "objective": "Make claim-writer identity directly observable so fleet rollout never infers an executable from a repository path.",
       "profile": "standard",
       "execution_class": "independently_executable",
-      "claimability": "ready_for_execution",
+      "claimability": "not_applicable",
       "authorization_mode": "registry_claim",
       "scope": {
         "included": [
@@ -151,10 +151,10 @@
         "evidence_required": ["Passing create/heartbeat/release/prune/end/closeout receipt tests", "Query output for one real heartbeat", "Failure test proving an unwritable receipt path fails visibly after reporting mutation outcome"],
         "negative_control": "A legacy mutation with no receipt remains unknown and cannot be classified as current."
       }],
-      "readiness": {"status": "ready", "required_approval_types": [], "approvals": [], "failed_guards": []},
+      "readiness": {"status": "accepted", "required_approval_types": [], "approvals": [], "failed_guards": []},
       "claim_policy": {"eligibility_rule": "Claim only the canonical mutation contract, query, tests, and Plan 108 evidence paths.", "lease_policy": "renewable", "lease_duration_minutes": 1440, "max_active_per_claimant": 1, "named_owner_id": null},
-      "status": "ready",
-      "record_version": 1
+      "status": "accepted",
+      "record_version": 2
     },
     {
       "schema_version": "1.0",
@@ -169,7 +169,7 @@
       "objective": "Produce a timestamped fleet manifest in which every live writer is current, legacy, inactive, or authority-blocked without operator interpretation.",
       "profile": "standard",
       "execution_class": "independently_executable",
-      "claimability": "blocked_dependencies",
+      "claimability": "ready_for_execution",
       "authorization_mode": "registry_claim",
       "scope": {"included": ["Query the global live-claim registry and mutation ledger", "Record canonical repo, remote owner, runtime source digest, active sessions, and disposition", "Fail closed on missing provenance or conflicting identities"], "excluded": ["Updating consumer repositories", "Treating file presence as proof of the executing runtime", "Granting organization-repository write authority"]},
       "inputs": [{"kind": "work_unit_output", "id": "prewrite-pw-02b0-writer-provenance", "revision": "accepted"}],
@@ -177,10 +177,10 @@
       "dependencies": [{"unit_id": "prewrite-pw-02b0-writer-provenance", "type": "hard", "gate": {"type": "unit_status", "required_status": "accepted"}, "rationale": "Fleet identity must come from runtime receipts rather than repository inference."}],
       "conflict_surfaces": [{"kind": "external_system", "target": "shared claim registry and claim-mutation ledger", "access": "read", "coordination_key": "prewrite-fleet-inventory"}],
       "acceptance": [{"id": "PW02B1-A1", "criterion": "Every live mutation runtime has exactly one mechanical disposition: update_current_personal, already_current, inactive, or authority_blocked.", "evidence_required": ["Timestamped manifest with source SHA-256 and active-session IDs", "Zero unclassified live writer digests", "Fresh projection-current readback"], "negative_control": "A fixture writer without provenance produces unclassified_legacy and fails acceptance."}],
-      "readiness": {"status": "blocked", "required_approval_types": [], "approvals": [], "failed_guards": ["prewrite-pw-02b0-writer-provenance must be accepted"]},
+      "readiness": {"status": "ready", "required_approval_types": [], "approvals": [], "failed_guards": []},
       "claim_policy": {"eligibility_rule": "Writer-provenance unit accepted; claim only fleet inventory and evidence paths.", "lease_policy": "renewable", "lease_duration_minutes": 1440, "max_active_per_claimant": 1, "named_owner_id": null},
-      "status": "blocked",
-      "record_version": 1
+      "status": "ready",
+      "record_version": 2
     },
     {
       "schema_version": "1.0",

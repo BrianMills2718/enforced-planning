@@ -60,6 +60,8 @@ def _supported_closeout_kwargs(args: argparse.Namespace) -> dict[str, object]:
     supported = inspect.signature(session_lifecycle.close_session).parameters
     for name, value in (
         ("merge_commit", args.merge_commit),
+        ("reconcile_missing_worktree", args.reconcile_missing_worktree),
+        ("expected_tracker_sha256", args.tracker_sha256),
         ("mailbox_disposition", args.mailbox_disposition),
         ("mailbox_note", args.mailbox_note),
     ):
@@ -96,6 +98,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--merge-commit",
         help="Canonical squash-merge commit whose exact patch must match the task branch.",
+    )
+    parser.add_argument(
+        "--reconcile-missing-worktree",
+        action="store_true",
+        help="Close only an exact session-ended lane whose recorded worktree is already absent.",
+    )
+    parser.add_argument(
+        "--tracker-sha256",
+        help="Exact SHA-256 of the preserved session tracker required for missing-worktree reconciliation.",
     )
     parser.add_argument(
         "--allow-discard-unique",

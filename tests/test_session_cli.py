@@ -1302,6 +1302,121 @@ def test_close_session_resolves_missing_nested_worktree_repo_root(
     assert claim_payload["disposition"] == "merged"
 
 
+def test_close_session_reconciles_exact_session_ended_missing_worktree(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A preserved exact lane closes without attempting filesystem deletion."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    repo_root, worktree, branch = _real_repo_with_worktree(tmp_path)
+    claim_file = _start_real_closeout_claim(
+        repo_root=repo_root,
+        worktree=worktree,
+        branch=branch,
+        claims_dir=claims_dir,
+        trackers_dir=trackers_dir,
+    )
+    _git(repo_root, "merge", "--no-ff", branch, "-m", "merge feature")
+    session_lifecycle.end_runtime_session(
+        agent="codex",
+        session_id="codex:test-session",
+        reason="runtime ended before physical closeout",
+        claims_dir=claims_dir,
+    )
+    _git(repo_root, "worktree", "remove", str(worktree))
+    claim_before = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
+    tracker = Path(claim_before["tracker_path"])
+    digest = session_lifecycle._tracker_sha256(tracker)
+
+    payload = session_lifecycle.close_session(
+        agent="codex",
+        project="enforced-planning",
+        scope=branch,
+        reconcile_missing_worktree=True,
+        expected_tracker_sha256=digest,
+    )
+
+    assert payload["action"] == "closed"
+    assert payload["worktree_action"] == "not_attempted_absent_recorded_worktree"
+    receipt = payload["missing_worktree_reconciliation"]
+    assert receipt == {
+        "schema_version": "1.0",
+        "claim_status_before": "session_ended",
+        "recorded_worktree_path": str(worktree),
+        "tracker_path": str(tracker),
+        "tracker_sha256": digest,
+        "filesystem_action": "not_attempted_absent_recorded_worktree",
+        "merge_evidence": "branch_ancestor",
+        "merge_commit": "none",
+    }
+    claim_after = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
+    assert claim_after["status"] == "completed"
+    assert claim_after["missing_worktree_reconciliation"] == receipt
+    assert session_contracts.read_session_tracker(tracker)["tracker"]["current_phase"] == "closed"
+
+
+@pytest.mark.parametrize(
+    ("end_session", "remove_worktree", "digest"),
+    [
+        (False, True, "correct"),
+        (True, False, "correct"),
+        (True, True, "wrong"),
+    ],
+)
+def test_close_session_missing_worktree_reconciliation_rejects_before_mutation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    end_session: bool,
+    remove_worktree: bool,
+    digest: str,
+) -> None:
+    """Live, present, or digest-changed lanes remain preserved for recovery."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    repo_root, worktree, branch = _real_repo_with_worktree(tmp_path)
+    claim_file = _start_real_closeout_claim(
+        repo_root=repo_root,
+        worktree=worktree,
+        branch=branch,
+        claims_dir=claims_dir,
+        trackers_dir=trackers_dir,
+    )
+    _git(repo_root, "merge", "--no-ff", branch, "-m", "merge feature")
+    if end_session:
+        session_lifecycle.end_runtime_session(
+            agent="codex",
+            session_id="codex:test-session",
+            reason="runtime ended before physical closeout",
+            claims_dir=claims_dir,
+        )
+    if remove_worktree:
+        _git(repo_root, "worktree", "remove", str(worktree))
+    claim_before = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
+    tracker = Path(claim_before["tracker_path"])
+    expected_digest = session_lifecycle._tracker_sha256(tracker)
+    if digest == "wrong":
+        expected_digest = "0" * 64
+
+    with pytest.raises(ValueError):
+        session_lifecycle.close_session(
+            agent="codex",
+            project="enforced-planning",
+            scope=branch,
+            reconcile_missing_worktree=True,
+            expected_tracker_sha256=expected_digest,
+        )
+
+    claim_after = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
+    assert claim_after["status"] == claim_before["status"]
+    assert not claim_after.get("missing_worktree_reconciliation")
+    assert worktree.exists() is (not remove_worktree)
+
+
 def test_close_session_rejects_unknown_disposition(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

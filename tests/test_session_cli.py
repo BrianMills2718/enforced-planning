@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from enforced_planning import coordination_claims, coordination_messages, session_lifecycle
+from enforced_planning import coordination_claims, coordination_messages, session_contracts, session_lifecycle
 
 
 def _git(cwd: Path, *args: str) -> str:
@@ -1492,6 +1492,83 @@ def test_close_session_completes_claim_even_when_worktree_already_missing(
     claim_payload = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
     assert claim_payload["status"] == "completed"
     assert claim_payload["disposition"] == "merged"
+
+
+def test_close_session_recovers_exact_tracker_after_claim_refresh_lost_path(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Closeout must not strand the original tracker after a claim refresh."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    monkeypatch.setattr(session_contracts, "DEFAULT_SESSION_TRACKERS_DIR", trackers_dir)
+    repo_root, worktree, branch = _real_repo_with_worktree(tmp_path)
+    claim_file = _start_real_closeout_claim(
+        repo_root=repo_root,
+        worktree=worktree,
+        branch=branch,
+        claims_dir=claims_dir,
+        trackers_dir=trackers_dir,
+    )
+    original_claim = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
+    tracker_path = Path(original_claim["tracker_path"])
+    refreshed_claim = dict(original_claim)
+    refreshed_claim["tracker_path"] = None
+    refreshed_claim["broader_goal"] = None
+    claim_file.write_text(yaml.safe_dump(refreshed_claim, sort_keys=False), encoding="utf-8")
+    _git(repo_root, "merge", "--no-ff", branch, "-m", "merge feature")
+
+    payload = session_lifecycle.close_session(
+        agent="codex",
+        project="enforced-planning",
+        scope=branch,
+    )
+
+    assert payload["tracker_path"] == str(tracker_path)
+    tracker_payload = yaml.safe_load(tracker_path.read_text(encoding="utf-8"))
+    assert tracker_payload["tracker"]["current_phase"] == "closed"
+
+
+def test_tracker_recovery_rejects_ambiguous_exact_identity(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A lost tracker path must fail loud when exact identity matches twice."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    monkeypatch.setattr(session_contracts, "DEFAULT_SESSION_TRACKERS_DIR", trackers_dir)
+    repo_root = tmp_path / "repo"
+    worktree = repo_root / "worktrees" / "ambiguous-tracker"
+    worktree.mkdir(parents=True)
+    started = session_lifecycle.start_session(
+        agent="codex",
+        project="enforced-planning",
+        scope="ambiguous-tracker",
+        intent="exercise tracker ambiguity guard",
+        repo_root=str(repo_root),
+        worktree_path=str(worktree),
+        branch="ambiguous-tracker",
+        broader_goal="Tracker Ambiguity Guard",
+        current_phase="fixture setup",
+        plan_ref="Plan #59",
+        session_id="codex:test-session",
+        tracker_dir=trackers_dir,
+    )
+    tracker_path = Path(started["tracker_path"])
+    duplicate = tracker_path.with_name("codex__enforced-planning__codex-test-session__duplicate.yaml")
+    duplicate.write_text(tracker_path.read_text(encoding="utf-8"), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="Ambiguous exact session trackers"):
+        session_contracts.find_session_tracker_path(
+            agent="codex",
+            project="enforced-planning",
+            scope="ambiguous-tracker",
+            session_id="codex:test-session",
+        )
 
 
 def test_handoff_session_marks_lane_for_resume(

@@ -1384,40 +1384,43 @@ def heartbeat_claims(
         )
 
     resolved_claims_dir = claims_dir or CLAIMS_DIR
-    if not resolved_claims_dir.exists():
-        return 0, [], resolved_session_id, datetime.now(timezone.utc).isoformat()
-
     heartbeat_at = datetime.now(timezone.utc).isoformat()
     updated_scopes: list[str] = []
-    for claim_file in resolved_claims_dir.glob("*.yaml"):
-        try:
-            data = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
-        except Exception:
-            continue
-        if not isinstance(data, dict):
-            continue
-        claim = normalize_claim(data, source_file=str(claim_file))
-        if claim is None or not claim.is_live():
-            continue
-        if claim.agent != agent:
-            continue
-        if project not in claim.projects:
-            continue
-        if scope and claim.scope != scope:
-            continue
-        if branch and claim.branch != branch:
-            continue
-        if require_exact_session and claim.session_id != resolved_session_id:
-            continue
-        if not require_exact_session and claim.session_id and claim.session_id != resolved_session_id:
-            continue
-        data["session_id"] = resolved_session_id
-        data["heartbeat_at"] = heartbeat_at
-        data["updated_at"] = heartbeat_at
-        _atomic_write_claim(claim_file, data)
-        updated_scopes.append(claim.scope)
-    if updated_scopes:
-        refresh_prewrite_authority_projection(resolved_claims_dir)
+    # Lifecycle hooks run concurrently across sessions. Keep the canonical
+    # heartbeat write and its derived projection refresh in the same registry
+    # critical section as every other live-claim mutation.
+    with claim_registry_lock(resolved_claims_dir):
+        if not resolved_claims_dir.exists():
+            return 0, [], resolved_session_id, heartbeat_at
+        for claim_file in resolved_claims_dir.glob("*.yaml"):
+            try:
+                data = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
+            except Exception:
+                continue
+            if not isinstance(data, dict):
+                continue
+            claim = normalize_claim(data, source_file=str(claim_file))
+            if claim is None or not claim.is_live():
+                continue
+            if claim.agent != agent:
+                continue
+            if project not in claim.projects:
+                continue
+            if scope and claim.scope != scope:
+                continue
+            if branch and claim.branch != branch:
+                continue
+            if require_exact_session and claim.session_id != resolved_session_id:
+                continue
+            if not require_exact_session and claim.session_id and claim.session_id != resolved_session_id:
+                continue
+            data["session_id"] = resolved_session_id
+            data["heartbeat_at"] = heartbeat_at
+            data["updated_at"] = heartbeat_at
+            _atomic_write_claim(claim_file, data)
+            updated_scopes.append(claim.scope)
+        if updated_scopes:
+            refresh_prewrite_authority_projection(resolved_claims_dir)
     return len(updated_scopes), sorted(updated_scopes), resolved_session_id, heartbeat_at
 
 

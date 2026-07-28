@@ -107,7 +107,11 @@ def _delivery_event_id(payload: dict[str, Any], *, agent: str, session_id: str) 
     before they can create observation evidence.
     """
 
-    for field in ("event_id", "turn_id", "tool_use_id", "tool_call_id", "timestamp"):
+    # Claude Code's UserPromptSubmit payload identifies the native prompt with
+    # ``prompt_id``.  It is an event identity, not a session identity, so it
+    # preserves the same duplicate-suppression boundary as the turn/tool IDs
+    # above.  Do not substitute a session ID when an event lacks one.
+    for field in ("event_id", "turn_id", "prompt_id", "tool_use_id", "tool_call_id", "timestamp"):
         value = payload.get(field)
         if isinstance(value, str) and value.strip():
             token = f"{field}:{value.strip()}"

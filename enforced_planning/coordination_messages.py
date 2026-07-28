@@ -300,7 +300,10 @@ class DeliveryEventRecord(StrictContract):
     delivery_id: str = Field(pattern=r"^delivery_[0-9a-f]{32}$", description="Deterministic marker identity.")
     delivery_event_id: str = Field(min_length=1, description="Adapter-derived native lifecycle-event identity.")
     message_id: str = Field(pattern=r"^msg_[0-9a-f]{32}$", description="Message displayed for this event.")
-    recipient_session_id: str = Field(min_length=1, description="Exact recipient session shown the message.")
+    recipient_session_id: str = Field(
+        min_length=1,
+        description="Exact session shown the message or sender-facing acknowledgement notification.",
+    )
     recorded_at: AwareDatetime = Field(description="UTC marker publication time.")
 
 
@@ -387,6 +390,15 @@ class SessionInboxNotice(StrictContract):
     project: str | None = Field(default=None, min_length=1, description="Optional exact project filter applied to the poll.")
     active_count: int = Field(ge=0, description="Number of non-expired messages visible to the session.")
     message_ids: tuple[str, ...] = Field(description="Canonical active message IDs in creation order.")
+    acknowledgement_count: int = Field(
+        default=0,
+        ge=0,
+        description="Number of newly surfaced acknowledgements for messages sent by this session.",
+    )
+    acknowledgement_message_ids: tuple[str, ...] = Field(
+        default=(),
+        description="Sent message IDs whose acknowledgements were newly surfaced.",
+    )
     summary: str = Field(description="Bounded text suitable for injection into an agent lifecycle response.")
 
 
@@ -588,6 +600,7 @@ class CoordinationMessageStore:
         self,
         message: CoordinationMessage,
         *,
+        display_session_id: str | None = None,
         delivery_event_id: str,
         now: datetime,
     ) -> bool:
@@ -599,15 +612,14 @@ class CoordinationMessageStore:
         may display the still-unacknowledged message again.
         """
 
-        delivery_id = _stable_id(
-            "delivery", message.message_id, message.recipient_session_id, delivery_event_id
-        )
+        display_session = display_session_id or message.recipient_session_id
+        delivery_id = _stable_id("delivery", message.message_id, display_session, delivery_event_id)
         marker = DeliveryEventRecord(
             schema_version=SCHEMA_VERSION,
             delivery_id=delivery_id,
             delivery_event_id=delivery_event_id,
             message_id=message.message_id,
-            recipient_session_id=message.recipient_session_id,
+            recipient_session_id=display_session,
             recorded_at=now,
         )
         path = self.deliveries_dir / f"{delivery_id}.json"
@@ -624,6 +636,57 @@ class CoordinationMessageStore:
         if comparable_existing != marker:
             raise RecordCollisionError(f"Delivery marker {delivery_id} already contains different content")
         return False
+
+    def poll_sender_acknowledgements(
+        self,
+        *,
+        current_session_id: str,
+        project: str | None = None,
+        consume: bool = True,
+        limit: int = DEFAULT_NOTICE_MESSAGE_LIMIT,
+        now: datetime | None = None,
+    ) -> tuple[MessageStatusView, ...]:
+        """Return acknowledgements not yet surfaced to the exact sender session.
+
+        A sender notification is a derived view over the canonical acknowledgement
+        receipt.  Consuming it writes only an immutable delivery marker, so it
+        cannot create a reply message or an acknowledgement loop.
+        """
+
+        if limit < 1:
+            raise ValueError("limit must be positive")
+        recorded_at = now or _utc_now()
+        pending: list[MessageStatusView] = []
+        for message, _path in self._all_messages():
+            if message.sender_session_id != current_session_id:
+                continue
+            if project is not None and message.project != project:
+                continue
+            status = self.status(MessageStatusRequest(message_id=message.message_id, as_of=recorded_at))
+            acknowledgements = [receipt for receipt in status.receipts if receipt.event == "acknowledged"]
+            if not acknowledgements:
+                continue
+            acknowledgement = acknowledgements[-1]
+            delivery_event_id = f"acknowledgement:{acknowledgement.receipt_id}"
+            if consume:
+                claimed = self._claim_event_delivery(
+                    message,
+                    display_session_id=current_session_id,
+                    delivery_event_id=delivery_event_id,
+                    now=recorded_at,
+                )
+                if not claimed:
+                    continue
+            else:
+                delivery_id = _stable_id("delivery", message.message_id, current_session_id, delivery_event_id)
+                marker_path = self.deliveries_dir / f"{delivery_id}.json"
+                if marker_path.is_file():
+                    self._read_delivery_path(marker_path)
+                    continue
+            pending.append(status)
+            if len(pending) >= limit:
+                break
+        return tuple(pending)
 
     def _message(self, message_id: str) -> tuple[CoordinationMessage, Path]:
         """Load one canonical message or fail when it is absent."""
@@ -921,6 +984,13 @@ def poll_session_inbox(
     active = tuple(
         view for view in result.messages if not view.expired and not view.acknowledged
     )
+    acknowledgements = store.poll_sender_acknowledgements(
+        current_session_id=resolved_session_id,
+        project=project,
+        consume=observe,
+        limit=max_messages,
+    )
+    summary_parts: list[str] = []
     if active:
         displayed = active[:max_messages]
         rendered_messages: list[str] = []
@@ -936,14 +1006,34 @@ def poll_session_inbox(
         details = "; ".join(rendered_messages)
         remainder = len(active) - len(displayed)
         suffix = f"; {remainder} more not shown" if remainder else ""
-        summary = f"coordination mailbox: {len(active)} active message(s): {details}{suffix}"
+        summary_parts.append(f"{len(active)} active message(s): {details}{suffix}")
     else:
-        summary = "coordination mailbox: no active messages"
+        summary_parts.append("no active messages")
+    if acknowledgements:
+        rendered_acknowledgements: list[str] = []
+        for view in acknowledgements:
+            acknowledgement = next(
+                receipt for receipt in reversed(view.receipts) if receipt.event == "acknowledged"
+            )
+            detail = acknowledgement.note or acknowledgement.response_ref or "no note"
+            compact_detail = " ".join(detail.split())
+            if len(compact_detail) > max_body_chars:
+                compact_detail = compact_detail[: max_body_chars - 1] + "…"
+            rendered_acknowledgements.append(
+                f"{view.message.message_id} [{acknowledgement.disposition}]: {compact_detail}"
+            )
+        summary_parts.append(
+            f"{len(acknowledgements)} new acknowledgement(s): "
+            + "; ".join(rendered_acknowledgements)
+        )
+    summary = "coordination mailbox: " + "; ".join(summary_parts)
     return SessionInboxNotice(
         session_id=resolved_session_id,
         project=project,
         active_count=len(active),
         message_ids=tuple(view.message.message_id for view in active[:max_messages]),
+        acknowledgement_count=len(acknowledgements),
+        acknowledgement_message_ids=tuple(view.message.message_id for view in acknowledgements),
         summary=summary,
     )
 

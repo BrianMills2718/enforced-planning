@@ -15,6 +15,7 @@ from pathlib import Path
 import pytest
 import yaml  # type: ignore[import-untyped]
 
+from enforced_planning import claim_mutation_receipts
 from enforced_planning.prewrite_claim_fast import projection_path_for, registry_digest
 
 
@@ -30,6 +31,17 @@ def _load_module():
     sys.modules[module_name] = module
     spec.loader.exec_module(module)
     return module
+
+
+@pytest.fixture(autouse=True)
+def _isolate_claim_mutation_ledger(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep deterministic claim fixtures out of the shared operator ledger."""
+
+    monkeypatch.setattr(
+        claim_mutation_receipts,
+        "DEFAULT_EVENTS_PATH",
+        tmp_path / "claim-mutation-events.jsonl",
+    )
 
 
 def _write_claim(claims_dir: Path, name: str, payload: dict) -> None:

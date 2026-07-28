@@ -1316,16 +1316,21 @@ def close_session(
     payload["notes"] = note or "closing claimed lane via canonical session-close flow"
     _write_claim_payload(claim_file, payload)
 
-    tracker_path_text = claim.tracker_path
-    if tracker_path_text:
-        tracker_path = Path(tracker_path_text).expanduser()
-        if tracker_path.exists():
-            session_contracts.update_session_tracker(
-                tracker_path,
-                current_phase="closing",
-                notes=payload["notes"],
-                updated_at=updated_at,
-            )
+    tracker_path = session_contracts.find_session_tracker_path(
+        agent=claim.agent,
+        project=project,
+        scope=claim.scope,
+        session_id=claim.session_id,
+        preferred_path=claim.tracker_path,
+    )
+    tracker_path_text = str(tracker_path) if tracker_path is not None else claim.tracker_path
+    if tracker_path is not None:
+        session_contracts.update_session_tracker(
+            tracker_path,
+            current_phase="closing",
+            notes=payload["notes"],
+            updated_at=updated_at,
+        )
 
     worktree_action = "not_requested"
     branch_action = "kept"
@@ -1352,15 +1357,13 @@ def close_session(
     )
     _write_claim_payload(claim_file, payload)
 
-    if tracker_path_text:
-        tracker_path = Path(tracker_path_text).expanduser()
-        if tracker_path.exists():
-            session_contracts.update_session_tracker(
-                tracker_path,
-                current_phase="closed",
-                notes=payload["notes"],
-                updated_at=closed_at,
-            )
+    if tracker_path is not None:
+        session_contracts.update_session_tracker(
+            tracker_path,
+            current_phase="closed",
+            notes=payload["notes"],
+            updated_at=closed_at,
+        )
 
     return {
         "action": "closed",

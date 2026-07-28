@@ -37,6 +37,9 @@ from typing import Any
 
 import yaml  # type: ignore[import-untyped]
 
+from enforced_planning import claim_mutation_receipts
+from enforced_planning.claim_mutation_receipts import MutationAuditError
+
 CLAIMS_DIR = Path.home() / ".claude" / "coordination" / "claims"
 DEFAULT_TTL_HOURS = 24  # Sprints run 24h; 2h caused false-expiry conflicts mid-sprint
 LIVE_STATUSES = {"active", "blocked", "handoff"}
@@ -120,6 +123,77 @@ def refresh_prewrite_authority_projection(
     resolved = (claims_dir or CLAIMS_DIR).expanduser().resolve()
     projection = write_projection(claims_dir=resolved)
     return str(projection_path_for(resolved)), projection.registry_digest
+
+
+def _registry_digest(claims_dir: Path) -> str:
+    """Return the canonical digest used to bind derived projection state."""
+
+    from enforced_planning.prewrite_claim_fast import registry_digest
+
+    return registry_digest(claims_dir.expanduser().resolve())
+
+
+def record_claim_mutation(
+    *,
+    operation: "claim_mutation_receipts.MutationOperation",
+    claims_dir: Path,
+    registry_digest_before: str | None,
+    target_project: str | None,
+    target_scope: str | None,
+    target_claim_path: Path | None,
+    session_id: str | None,
+    projection_digest_after: str | None,
+) -> "claim_mutation_receipts.ClaimMutationReceiptV1":
+    """Persist one terminal receipt after a sanctioned YAML/projection mutation.
+
+    The YAML registry remains authoritative. This append-only ledger records
+    which loaded runtime performed the mutation and whether the projection it
+    produced still matches that authority.
+    """
+
+    from enforced_planning.prewrite_claim_projection import projection_is_current
+
+    resolved_claims_dir = claims_dir.expanduser().resolve()
+    registry_digest_after = _registry_digest(resolved_claims_dir)
+    projection_current_after = projection_is_current(claims_dir=resolved_claims_dir)
+    result: claim_mutation_receipts.MutationResult = (
+        "applied_projection_current"
+        if projection_current_after
+        else "applied_projection_stale"
+    )
+    writer_source_path, writer_source_sha256, writer_repo_root = (
+        claim_mutation_receipts.writer_identity(Path(__file__))
+    )
+    receipt = claim_mutation_receipts.ClaimMutationReceiptV1(
+        operation=operation,
+        result=result,
+        writer_source_path=writer_source_path,
+        writer_source_sha256=writer_source_sha256,
+        writer_repo_root=writer_repo_root,
+        process_id=os.getpid(),
+        session_id=session_id,
+        target_project=target_project,
+        target_scope=target_scope,
+        target_claim_path=str(target_claim_path) if target_claim_path else None,
+        registry_digest_before=registry_digest_before,
+        registry_digest_after=registry_digest_after,
+        projection_digest_after=projection_digest_after,
+        projection_current_after=projection_current_after,
+        error_code=None,
+    )
+    try:
+        claim_mutation_receipts.append_receipt(receipt)
+    except OSError as exc:
+        raise claim_mutation_receipts.MutationAuditError(
+            operation=operation,
+            target_project=target_project,
+            target_scope=target_scope,
+            registry_digest_after=registry_digest_after,
+            projection_digest_after=projection_digest_after,
+            projection_current_after=projection_current_after,
+            cause=exc,
+        ) from exc
+    return receipt
 
 
 @dataclass(frozen=True)
@@ -1269,6 +1343,7 @@ def create_claim(
     validate_claim_for_creation(candidate)
 
     with claim_registry_lock():
+        registry_digest_before = _registry_digest(CLAIMS_DIR)
         claim_path = CLAIMS_DIR / _claim_filename(agent, project, scope)
         if claim_path.exists():
             raw_existing = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
@@ -1298,12 +1373,21 @@ def create_claim(
             return False, f"CONFLICT: active write claim overlap in '{project}' — {formatted}"
 
         CLAIMS_DIR.mkdir(parents=True, exist_ok=True)
-        filename = _claim_filename(agent, project, scope)
         claim_payload = candidate.to_dict()
         claim_payload.pop("source_file", None)
         claim_payload.pop("project", None)
-        _atomic_write_claim(CLAIMS_DIR / filename, claim_payload)
-        refresh_prewrite_authority_projection(CLAIMS_DIR)
+        _atomic_write_claim(claim_path, claim_payload)
+        _projection_path, projection_digest_after = refresh_prewrite_authority_projection(CLAIMS_DIR)
+        record_claim_mutation(
+            operation="create",
+            claims_dir=CLAIMS_DIR,
+            registry_digest_before=registry_digest_before,
+            target_project=project,
+            target_scope=scope,
+            target_claim_path=claim_path,
+            session_id=candidate.session_id,
+            projection_digest_after=projection_digest_after,
+        )
     return True, (
         f"Claimed: {agent} → {project}:{scope} "
         f"[{candidate.claim_type}] (expires in {ttl_hours}h)"
@@ -1385,11 +1469,12 @@ def heartbeat_claims(
 
     resolved_claims_dir = claims_dir or CLAIMS_DIR
     heartbeat_at = datetime.now(timezone.utc).isoformat()
-    updated_scopes: list[str] = []
+    updated_claims: list[tuple[Path, ClaimRecord]] = []
     # Lifecycle hooks run concurrently across sessions. Keep the canonical
     # heartbeat write and its derived projection refresh in the same registry
     # critical section as every other live-claim mutation.
     with claim_registry_lock(resolved_claims_dir):
+        registry_digest_before = _registry_digest(resolved_claims_dir)
         if not resolved_claims_dir.exists():
             return 0, [], resolved_session_id, heartbeat_at
         for claim_file in resolved_claims_dir.glob("*.yaml"):
@@ -1418,9 +1503,21 @@ def heartbeat_claims(
             data["heartbeat_at"] = heartbeat_at
             data["updated_at"] = heartbeat_at
             _atomic_write_claim(claim_file, data)
-            updated_scopes.append(claim.scope)
-        if updated_scopes:
-            refresh_prewrite_authority_projection(resolved_claims_dir)
+            updated_claims.append((claim_file, claim))
+        if updated_claims:
+            _projection_path, projection_digest_after = refresh_prewrite_authority_projection(resolved_claims_dir)
+            for claim_file, claim in updated_claims:
+                record_claim_mutation(
+                    operation="heartbeat",
+                    claims_dir=resolved_claims_dir,
+                    registry_digest_before=registry_digest_before,
+                    target_project=claim.primary_project(),
+                    target_scope=claim.scope,
+                    target_claim_path=claim_file,
+                    session_id=resolved_session_id,
+                    projection_digest_after=projection_digest_after,
+                )
+    updated_scopes = [claim.scope for _path, claim in updated_claims]
     return len(updated_scopes), sorted(updated_scopes), resolved_session_id, heartbeat_at
 
 
@@ -1440,8 +1537,9 @@ def end_session_claims(
         )
     resolved_claims_dir = claims_dir or CLAIMS_DIR
     ended_at = datetime.now(timezone.utc).isoformat()
-    ended_claims: list[str] = []
+    ended_claims: list[tuple[Path, ClaimRecord]] = []
     with claim_registry_lock(resolved_claims_dir):
+        registry_digest_before = _registry_digest(resolved_claims_dir)
         if not resolved_claims_dir.exists():
             return 0, [], resolved_session_id, ended_at
         for claim_file in resolved_claims_dir.glob("*.yaml"):
@@ -1465,10 +1563,22 @@ def end_session_claims(
             data["session_ended_at"] = ended_at
             data["updated_at"] = ended_at
             _atomic_write_claim(claim_file, data)
-            ended_claims.append(f"{claim.primary_project()}:{claim.scope}")
+            ended_claims.append((claim_file, claim))
         if ended_claims:
-            refresh_prewrite_authority_projection(resolved_claims_dir)
-    return len(ended_claims), sorted(ended_claims), resolved_session_id, ended_at
+            _projection_path, projection_digest_after = refresh_prewrite_authority_projection(resolved_claims_dir)
+            for claim_file, claim in ended_claims:
+                record_claim_mutation(
+                    operation="session_end",
+                    claims_dir=resolved_claims_dir,
+                    registry_digest_before=registry_digest_before,
+                    target_project=claim.primary_project(),
+                    target_scope=claim.scope,
+                    target_claim_path=claim_file,
+                    session_id=resolved_session_id,
+                    projection_digest_after=projection_digest_after,
+                )
+    ended_labels = [f"{claim.primary_project()}:{claim.scope}" for _path, claim in ended_claims]
+    return len(ended_labels), sorted(ended_labels), resolved_session_id, ended_at
 
 
 def release_claim(agent: str, project: str, scope: str) -> tuple[bool, str]:
@@ -1477,8 +1587,21 @@ def release_claim(agent: str, project: str, scope: str) -> tuple[bool, str]:
     path = CLAIMS_DIR / filename
     with claim_registry_lock(CLAIMS_DIR):
         if path.exists():
+            registry_digest_before = _registry_digest(CLAIMS_DIR)
+            raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+            claim = normalize_claim(raw, source_file=str(path)) if isinstance(raw, dict) else None
             path.unlink()
-            refresh_prewrite_authority_projection(CLAIMS_DIR)
+            _projection_path, projection_digest_after = refresh_prewrite_authority_projection(CLAIMS_DIR)
+            record_claim_mutation(
+                operation="release",
+                claims_dir=CLAIMS_DIR,
+                registry_digest_before=registry_digest_before,
+                target_project=project,
+                target_scope=scope,
+                target_claim_path=path,
+                session_id=claim.session_id if claim else None,
+                projection_digest_after=projection_digest_after,
+            )
             return True, f"Released: {agent} → {project}:{scope}"
     return False, f"No claim found for {agent} → {project}:{scope}"
 
@@ -1497,8 +1620,9 @@ def complete_claims_for_plan(
     """
 
     now = datetime.now(timezone.utc).isoformat()
-    completed_scopes: list[str] = []
+    completed_claims: list[tuple[Path, ClaimRecord]] = []
     with claim_registry_lock(CLAIMS_DIR):
+        registry_digest_before = _registry_digest(CLAIMS_DIR)
         if not CLAIMS_DIR.exists():
             return 0, []
         for claim_file in CLAIMS_DIR.glob("*.yaml"):
@@ -1525,17 +1649,30 @@ def complete_claims_for_plan(
                 else:
                     data["notes"] = note
             _atomic_write_claim(claim_file, data)
-            completed_scopes.append(claim.scope)
-        if completed_scopes:
-            refresh_prewrite_authority_projection(CLAIMS_DIR)
+            completed_claims.append((claim_file, claim))
+        if completed_claims:
+            _projection_path, projection_digest_after = refresh_prewrite_authority_projection(CLAIMS_DIR)
+            for claim_file, claim in completed_claims:
+                record_claim_mutation(
+                    operation="closeout",
+                    claims_dir=CLAIMS_DIR,
+                    registry_digest_before=registry_digest_before,
+                    target_project=claim.primary_project(),
+                    target_scope=claim.scope,
+                    target_claim_path=claim_file,
+                    session_id=claim.session_id,
+                    projection_digest_after=projection_digest_after,
+                )
+    completed_scopes = [claim.scope for _path, claim in completed_claims]
     return len(completed_scopes), sorted(completed_scopes)
 
 
 def prune_expired() -> int:
     """Remove expired claims and return the number pruned."""
     now = datetime.now(timezone.utc)
-    removed = 0
+    removed_claims: list[tuple[Path, ClaimRecord | None]] = []
     with claim_registry_lock(CLAIMS_DIR):
+        registry_digest_before = _registry_digest(CLAIMS_DIR)
         if not CLAIMS_DIR.exists():
             return 0
         for claim_file in CLAIMS_DIR.glob("*.yaml"):
@@ -1545,17 +1682,30 @@ def prune_expired() -> int:
                 continue
             expires_at = _parse_iso_datetime(data.get("expires_at") if isinstance(data, dict) else None)
             if expires_at is not None and expires_at < now:
+                claim = normalize_claim(data, source_file=str(claim_file)) if isinstance(data, dict) else None
                 claim_file.unlink()
-                removed += 1
-        if removed:
-            refresh_prewrite_authority_projection(CLAIMS_DIR)
-    return removed
+                removed_claims.append((claim_file, claim))
+        if removed_claims:
+            _projection_path, projection_digest_after = refresh_prewrite_authority_projection(CLAIMS_DIR)
+            for claim_file, claim in removed_claims:
+                record_claim_mutation(
+                    operation="prune",
+                    claims_dir=CLAIMS_DIR,
+                    registry_digest_before=registry_digest_before,
+                    target_project=claim.primary_project() if claim else None,
+                    target_scope=claim.scope if claim else None,
+                    target_claim_path=claim_file,
+                    session_id=claim.session_id if claim else None,
+                    projection_digest_after=projection_digest_after,
+                )
+    return len(removed_claims)
 
 
 def prune_stale() -> tuple[int, list[str]]:
     """Remove stale live claims and return the removal count plus scope labels."""
-    removed_labels: list[str] = []
+    removed_claims: list[tuple[Path, ClaimRecord]] = []
     with claim_registry_lock(CLAIMS_DIR):
+        registry_digest_before = _registry_digest(CLAIMS_DIR)
         if not CLAIMS_DIR.exists():
             return 0, []
         for claim_file in CLAIMS_DIR.glob("*.yaml"):
@@ -1575,9 +1725,21 @@ def prune_stale() -> tuple[int, list[str]]:
             if not (claim_lifecycle_issues(claim) or proven_stale_liveness):
                 continue
             claim_file.unlink()
-            removed_labels.append(f"{claim.primary_project()}:{claim.scope}")
-        if removed_labels:
-            refresh_prewrite_authority_projection(CLAIMS_DIR)
+            removed_claims.append((claim_file, claim))
+        if removed_claims:
+            _projection_path, projection_digest_after = refresh_prewrite_authority_projection(CLAIMS_DIR)
+            for claim_file, claim in removed_claims:
+                record_claim_mutation(
+                    operation="prune",
+                    claims_dir=CLAIMS_DIR,
+                    registry_digest_before=registry_digest_before,
+                    target_project=claim.primary_project(),
+                    target_scope=claim.scope,
+                    target_claim_path=claim_file,
+                    session_id=claim.session_id,
+                    projection_digest_after=projection_digest_after,
+                )
+    removed_labels = [f"{claim.primary_project()}:{claim.scope}" for _path, claim in removed_claims]
     return len(removed_labels), sorted(removed_labels)
 
 
@@ -1590,8 +1752,9 @@ def prune_completed() -> tuple[int, list[str]]:
     captured elsewhere.
     """
 
-    removed_labels: list[str] = []
+    removed_claims: list[tuple[Path, ClaimRecord]] = []
     with claim_registry_lock(CLAIMS_DIR):
+        registry_digest_before = _registry_digest(CLAIMS_DIR)
         if not CLAIMS_DIR.exists():
             return 0, []
         for claim_file in CLAIMS_DIR.glob("*.yaml"):
@@ -1607,9 +1770,21 @@ def prune_completed() -> tuple[int, list[str]]:
             if claim.status.strip().lower() not in COMPLETED_STATUSES:
                 continue
             claim_file.unlink()
-            removed_labels.append(f"{claim.primary_project()}:{claim.scope}")
-        if removed_labels:
-            refresh_prewrite_authority_projection(CLAIMS_DIR)
+            removed_claims.append((claim_file, claim))
+        if removed_claims:
+            _projection_path, projection_digest_after = refresh_prewrite_authority_projection(CLAIMS_DIR)
+            for claim_file, claim in removed_claims:
+                record_claim_mutation(
+                    operation="prune",
+                    claims_dir=CLAIMS_DIR,
+                    registry_digest_before=registry_digest_before,
+                    target_project=claim.primary_project(),
+                    target_scope=claim.scope,
+                    target_claim_path=claim_file,
+                    session_id=claim.session_id,
+                    projection_digest_after=projection_digest_after,
+                )
+    removed_labels = [f"{claim.primary_project()}:{claim.scope}" for _path, claim in removed_claims]
     return len(removed_labels), sorted(removed_labels)
 
 
@@ -1736,6 +1911,16 @@ def _render_check_output(
     return payload
 
 
+def _render_mutation_audit_failure(exc: MutationAuditError, *, as_json: bool) -> int:
+    """Report an already-applied mutation whose receipt could not be persisted."""
+
+    if as_json:
+        print(json.dumps(exc.to_dict(), indent=2, sort_keys=True))
+    else:
+        print(str(exc), file=sys.stderr)
+    return 1
+
+
 def main(argv: list[str] | None = None) -> int:
     """Run the CLI for cross-brain coordination claim management."""
     args = parse_args(argv)
@@ -1846,6 +2031,8 @@ def main(argv: list[str] | None = None) -> int:
                 work_unit_id=args.work_unit_id,
                 allow_parallel=args.allow_parallel,
             )
+        except MutationAuditError as exc:
+            return _render_mutation_audit_failure(exc, as_json=args.json)
         except ValueError as exc:
             if args.json:
                 print(json.dumps({"ok": False, "message": str(exc)}, indent=2))
@@ -1861,7 +2048,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.release:
         if not all([args.agent, args.project, args.scope]):
             raise SystemExit("--release requires --agent, --project, --scope")
-        ok, msg = release_claim(args.agent, args.project, args.scope)
+        try:
+            ok, msg = release_claim(args.agent, args.project, args.scope)
+        except MutationAuditError as exc:
+            return _render_mutation_audit_failure(exc, as_json=args.json)
         if args.json:
             print(json.dumps({"ok": ok, "message": msg}, indent=2))
         else:
@@ -1869,7 +2059,10 @@ def main(argv: list[str] | None = None) -> int:
         return 0 if ok else 1
 
     if args.prune:
-        removed = prune_expired()
+        try:
+            removed = prune_expired()
+        except MutationAuditError as exc:
+            return _render_mutation_audit_failure(exc, as_json=args.json)
         if args.json:
             print(json.dumps({"pruned": removed}, indent=2))
         else:
@@ -1877,7 +2070,10 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.prune_stale:
-        removed, removed_scopes = prune_stale()
+        try:
+            removed, removed_scopes = prune_stale()
+        except MutationAuditError as exc:
+            return _render_mutation_audit_failure(exc, as_json=args.json)
         payload = {"pruned": removed, "removed_scopes": removed_scopes}
         if args.json:
             print(json.dumps(payload, indent=2))
@@ -1888,7 +2084,10 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.prune_completed:
-        removed, removed_scopes = prune_completed()
+        try:
+            removed, removed_scopes = prune_completed()
+        except MutationAuditError as exc:
+            return _render_mutation_audit_failure(exc, as_json=args.json)
         payload = {"pruned": removed, "removed_scopes": removed_scopes}
         if args.json:
             print(json.dumps(payload, indent=2))
@@ -1909,6 +2108,8 @@ def main(argv: list[str] | None = None) -> int:
                 scope=args.scope,
                 branch=args.branch,
             )
+        except MutationAuditError as exc:
+            return _render_mutation_audit_failure(exc, as_json=args.json)
         except ValueError as exc:
             if args.json:
                 print(json.dumps({"ok": False, "message": str(exc)}, indent=2))
@@ -1941,6 +2142,8 @@ def main(argv: list[str] | None = None) -> int:
                 scope=args.scope,
                 branch=args.branch,
             )
+        except MutationAuditError as exc:
+            return _render_mutation_audit_failure(exc, as_json=args.json)
         except ValueError as exc:
             if args.json:
                 print(json.dumps({"ok": False, "message": str(exc)}, indent=2))

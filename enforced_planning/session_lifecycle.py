@@ -209,13 +209,9 @@ def _load_claim_payload(agent: str, project: str, scope: str) -> dict[str, Any] 
 
 
 def _write_claim_payload(path: Path, payload: dict[str, Any]) -> None:
-    """Persist one normalized claim payload."""
+    """Persist one normalized claim payload through the canonical atomic writer."""
 
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        yaml.safe_dump(payload, default_flow_style=False, sort_keys=False),
-        encoding="utf-8",
-    )
+    coordination_claims._atomic_write_claim(path, payload)
 
 
 def _upsert_session_claim(
@@ -1213,7 +1209,22 @@ def finish_session(
     payload["status"] = "completed"
     payload["updated_at"] = updated_at
     payload["notes"] = note or "session finished cleanly"
-    _write_claim_payload(claim_file, payload)
+    with coordination_claims.claim_registry_lock(coordination_claims.CLAIMS_DIR):
+        registry_digest_before = coordination_claims._registry_digest(coordination_claims.CLAIMS_DIR)
+        _write_claim_payload(claim_file, payload)
+        _projection_path, projection_digest_after = coordination_claims.refresh_prewrite_authority_projection(
+            coordination_claims.CLAIMS_DIR
+        )
+        coordination_claims.record_claim_mutation(
+            operation="closeout",
+            claims_dir=coordination_claims.CLAIMS_DIR,
+            registry_digest_before=registry_digest_before,
+            target_project=claim.primary_project(),
+            target_scope=claim.scope,
+            target_claim_path=claim_file,
+            session_id=claim.session_id,
+            projection_digest_after=projection_digest_after,
+        )
     return {
         "action": "completed",
         "clean": True,
@@ -1314,7 +1325,11 @@ def close_session(
     payload["merge_evidence"] = preflight.merge_evidence
     payload["updated_at"] = updated_at
     payload["notes"] = note or "closing claimed lane via canonical session-close flow"
-    _write_claim_payload(claim_file, payload)
+    # Keep the projection current during physical cleanup, but do not emit a
+    # terminal closeout receipt until the final completed state is durable.
+    with coordination_claims.claim_registry_lock(coordination_claims.CLAIMS_DIR):
+        _write_claim_payload(claim_file, payload)
+        coordination_claims.refresh_prewrite_authority_projection(coordination_claims.CLAIMS_DIR)
 
     tracker_path = session_contracts.find_session_tracker_path(
         agent=claim.agent,
@@ -1355,7 +1370,22 @@ def close_session(
             else ""
         )
     )
-    _write_claim_payload(claim_file, payload)
+    with coordination_claims.claim_registry_lock(coordination_claims.CLAIMS_DIR):
+        registry_digest_before = coordination_claims._registry_digest(coordination_claims.CLAIMS_DIR)
+        _write_claim_payload(claim_file, payload)
+        _projection_path, projection_digest_after = coordination_claims.refresh_prewrite_authority_projection(
+            coordination_claims.CLAIMS_DIR
+        )
+        coordination_claims.record_claim_mutation(
+            operation="closeout",
+            claims_dir=coordination_claims.CLAIMS_DIR,
+            registry_digest_before=registry_digest_before,
+            target_project=claim.primary_project(),
+            target_scope=claim.scope,
+            target_claim_path=claim_file,
+            session_id=claim.session_id,
+            projection_digest_after=projection_digest_after,
+        )
 
     if tracker_path is not None:
         session_contracts.update_session_tracker(

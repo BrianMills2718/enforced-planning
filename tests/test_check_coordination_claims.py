@@ -348,7 +348,7 @@ def test_heartbeat_holds_registry_lock_through_projection_refresh(
         assert path == claims_dir
         assert phases == ["locked"]
         phases.append("refreshed")
-        return "projection.json", "digest"
+        return "projection.json", "d" * 64
 
     monkeypatch.setattr(module._impl, "claim_registry_lock", recording_lock)
     monkeypatch.setattr(module._impl, "refresh_prewrite_authority_projection", refresh_while_locked)
@@ -388,7 +388,7 @@ def _assert_maintenance_mutation_holds_lock_through_projection_refresh(
         assert path == claims_dir
         assert phases == ["locked"]
         phases.append("refreshed")
-        return "projection.json", "digest"
+        return "projection.json", "d" * 64
 
     monkeypatch.setattr(module._impl, "claim_registry_lock", recording_lock)
     monkeypatch.setattr(module._impl, "refresh_prewrite_authority_projection", refresh_while_locked)

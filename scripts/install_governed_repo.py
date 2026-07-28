@@ -56,6 +56,7 @@ SYNC_SUPPORT_FILES: dict[str, str] = {
     "enforced_planning/__init__.py": "enforced_planning/__init__.py",
     "enforced_planning/agents_rendering.py": "enforced_planning/agents_rendering.py",
     "enforced_planning/concern_routing.py": "enforced_planning/concern_routing.py",
+    "enforced_planning/claim_mutation_receipts.py": "enforced_planning/claim_mutation_receipts.py",
     "enforced_planning/coordination_claims.py": "enforced_planning/coordination_claims.py",
     "enforced_planning/coordination_messages.py": "enforced_planning/coordination_messages.py",
     "enforced_planning/prewrite_claim_fast.py": "enforced_planning/prewrite_claim_fast.py",
@@ -130,6 +131,7 @@ SYNC_SUPPORT_FILES: dict[str, str] = {
 WORKTREE_ONLY_SYNC_SUPPORT_FILES: dict[str, str] = {
     "enforced_planning/__init__.py": "enforced_planning/__init__.py",
     "enforced_planning/concern_routing.py": "enforced_planning/concern_routing.py",
+    "enforced_planning/claim_mutation_receipts.py": "enforced_planning/claim_mutation_receipts.py",
     "enforced_planning/coordination_claims.py": "enforced_planning/coordination_claims.py",
     "enforced_planning/coordination_messages.py": "enforced_planning/coordination_messages.py",
     "enforced_planning/prewrite_claim_fast.py": "enforced_planning/prewrite_claim_fast.py",
@@ -197,6 +199,7 @@ COORDINATION_MESSAGES_SHARED_FILES: dict[str, str] = {
 }
 
 COORDINATION_MESSAGES_LOCAL_PACKAGE_FILES: dict[str, str] = {
+    "enforced_planning/claim_mutation_receipts.py": "enforced_planning/claim_mutation_receipts.py",
     "enforced_planning/coordination_claims.py": "enforced_planning/coordination_claims.py",
     "enforced_planning/coordination_messages.py": "enforced_planning/coordination_messages.py",
     "enforced_planning/prewrite_claim_fast.py": "enforced_planning/prewrite_claim_fast.py",
@@ -221,6 +224,7 @@ CLAIM_PROJECTION_SHARED_FILES: dict[str, str] = {
 }
 
 CLAIM_PROJECTION_LOCAL_PACKAGE_FILES: dict[str, str] = {
+    "enforced_planning/claim_mutation_receipts.py": "enforced_planning/claim_mutation_receipts.py",
     "enforced_planning/coordination_claims.py": "enforced_planning/coordination_claims.py",
     "enforced_planning/prewrite_claim_fast.py": "enforced_planning/prewrite_claim_fast.py",
     "enforced_planning/prewrite_claim_projection.py": "enforced_planning/prewrite_claim_projection.py",

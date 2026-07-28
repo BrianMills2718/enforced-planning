@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from enforced_planning import coordination_claims, session_lifecycle
+from enforced_planning import coordination_claims, coordination_messages, session_lifecycle
 
 
 def _git(cwd: Path, *args: str) -> str:
@@ -82,6 +82,48 @@ def _start_real_closeout_claim(
         "enforced-planning",
         branch,
     )
+
+
+def _send_active_closeout_message(*, claims_dir: Path, recipient_session_id: str) -> str:
+    """Persist one actionable message for the exact closeout recipient."""
+
+    sender_session_id = "claude-code:closeout-sender"
+    sender_claim = {
+        "schema_version": 2,
+        "agent": "claude-code",
+        "projects": ["enforced-planning"],
+        "scope": "closeout-sender",
+        "intent": "send closeout coordination",
+        "claim_type": "program",
+        "write_paths": [],
+        "read_paths": [],
+        "session_id": sender_session_id,
+        "heartbeat_at": "2026-07-28T00:00:00+00:00",
+        "status": "active",
+        "claimed_at": "2026-07-28T00:00:00+00:00",
+        "expires_at": "2099-01-01T00:00:00+00:00",
+    }
+    (claims_dir / "claude-code_enforced-planning_closeout-sender.yaml").write_text(
+        yaml.safe_dump(sender_claim, sort_keys=False), encoding="utf-8"
+    )
+    store = coordination_messages.CoordinationMessageStore(
+        root=coordination_messages.default_message_root(claims_dir),
+        claims_dir=claims_dir,
+    )
+    message = store.send(
+        coordination_messages.SendMessageRequest(
+            caller_session_id=sender_session_id,
+            sender_session_id=sender_session_id,
+            recipient=coordination_messages.ExactSessionSelector(
+                kind="session", session_id=recipient_session_id
+            ),
+            project="enforced-planning",
+            kind="coordination_request",
+            subject="Closeout review request",
+            body="Please reconcile the outstanding closeout decision.",
+        )
+    )
+    return message.message.message_id
 
 
 def test_worktree_lifecycle_policy_rejects_overlapping_dispositions(tmp_path: Path) -> None:
@@ -785,6 +827,83 @@ def test_close_session_closes_branch_merged_to_default(
     claim_payload = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
     assert claim_payload["status"] == "completed"
     assert claim_payload["disposition"] == "merged"
+
+
+def test_close_session_rejects_active_mailbox_message_before_mutation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A lane cannot strand an actionable exact-recipient message at closeout."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    repo_root, worktree, branch = _real_repo_with_worktree(tmp_path)
+    claim_file = _start_real_closeout_claim(
+        repo_root=repo_root,
+        worktree=worktree,
+        branch=branch,
+        claims_dir=claims_dir,
+        trackers_dir=trackers_dir,
+    )
+    _git(repo_root, "merge", "--no-ff", branch, "-m", "merge feature")
+    message_id = _send_active_closeout_message(
+        claims_dir=claims_dir, recipient_session_id="codex:test-session"
+    )
+
+    with pytest.raises(ValueError, match="active mailbox message"):
+        session_lifecycle.close_session(agent="codex", project="enforced-planning", scope=branch)
+
+    assert worktree.exists()
+    assert _git(repo_root, "show-ref", "--verify", f"refs/heads/{branch}")
+    assert yaml.safe_load(claim_file.read_text(encoding="utf-8"))["status"] == "active"
+    store = coordination_messages.CoordinationMessageStore(
+        root=coordination_messages.default_message_root(claims_dir), claims_dir=claims_dir
+    )
+    assert store.status(coordination_messages.MessageStatusRequest(message_id=message_id)).acknowledged is False
+
+
+def test_close_session_records_explicit_mailbox_deferral(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Explicit closeout deferral is durable and remains bound to the recipient session."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    repo_root, worktree, branch = _real_repo_with_worktree(tmp_path)
+    _start_real_closeout_claim(
+        repo_root=repo_root,
+        worktree=worktree,
+        branch=branch,
+        claims_dir=claims_dir,
+        trackers_dir=trackers_dir,
+    )
+    _git(repo_root, "merge", "--no-ff", branch, "-m", "merge feature")
+    message_id = _send_active_closeout_message(
+        claims_dir=claims_dir, recipient_session_id="codex:test-session"
+    )
+
+    payload = session_lifecycle.close_session(
+        agent="codex",
+        project="enforced-planning",
+        scope=branch,
+        mailbox_disposition="deferred",
+        mailbox_note="Deferred at closeout; successor must reconcile the review request.",
+    )
+
+    assert payload["action"] == "closed"
+    assert payload["mailbox_disposition"] == "deferred"
+    assert payload["mailbox_message_ids"] == [message_id]
+    store = coordination_messages.CoordinationMessageStore(
+        root=coordination_messages.default_message_root(claims_dir), claims_dir=claims_dir
+    )
+    status = store.status(coordination_messages.MessageStatusRequest(message_id=message_id))
+    assert status.acknowledged is True
+    acknowledgement = next(receipt for receipt in status.receipts if receipt.event == "acknowledged")
+    assert acknowledgement.recipient_session_id == "codex:test-session"
+    assert acknowledgement.disposition == "deferred"
 
 
 def test_close_session_rejects_live_sibling_claim_on_same_worktree_before_cleanup(

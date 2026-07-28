@@ -83,6 +83,7 @@ WORKTREE_DISPOSITIONS = frozenset(
     | set(RECOVERY_REQUIRED_DISPOSITIONS)
     | set(DISCARD_AUTHORIZATION_DISPOSITIONS)
 )
+MAILBOX_CLOSEOUT_DISPOSITIONS = frozenset({"deferred"})
 
 
 @dataclass(frozen=True)
@@ -104,6 +105,77 @@ class CloseoutPreflight:
         """Return a JSON-safe representation for CLI payloads and audit records."""
 
         return asdict(self)
+
+
+def _resolve_active_mailbox_for_closeout(
+    *,
+    claim: coordination_claims.ClaimRecord,
+    mailbox_disposition: str | None,
+    mailbox_note: str | None,
+) -> dict[str, Any]:
+    """Require an explicit durable disposition for active recipient messages.
+
+    Closeout retains the exact recipient session in the claim record, including
+    for a preserved ``session_ended`` lane.  It may therefore write an
+    acknowledgement only for that same recipient, never for another session.
+    This prevents a closed session from leaving actionable mailbox messages
+    replaying indefinitely while preserving the existing recipient boundary.
+    """
+
+    recipient_session_id = claim.session_id
+    if not recipient_session_id:
+        raise ValueError("Cannot close a claimed lane without a canonical session ID for mailbox reconciliation")
+    claims_dir = coordination_claims.CLAIMS_DIR.expanduser().resolve()
+    store = coordination_messages.CoordinationMessageStore(
+        root=coordination_messages.default_message_root(claims_dir),
+        claims_dir=claims_dir,
+    )
+    inbox = store.poll(
+        coordination_messages.PollMessagesRequest(
+            current_session_id=recipient_session_id,
+            project=claim.primary_project(),
+            observe=False,
+        ),
+        require_live_claim=False,
+    )
+    active = [view for view in inbox.messages if not view.expired and not view.acknowledged]
+    if not active:
+        return {"mailbox_disposition": None, "mailbox_message_ids": []}
+
+    normalized_disposition = mailbox_disposition.strip().lower() if mailbox_disposition else None
+    if normalized_disposition is None:
+        message_ids = ", ".join(view.message.message_id for view in active)
+        raise ValueError(
+            "Cannot close a session with active mailbox message(s): "
+            f"{message_ids}. Read and acknowledge each message, or pass "
+            "--mailbox-disposition deferred with --mailbox-note to record a durable closeout deferral."
+        )
+    if normalized_disposition not in MAILBOX_CLOSEOUT_DISPOSITIONS:
+        supported = ", ".join(sorted(MAILBOX_CLOSEOUT_DISPOSITIONS))
+        raise ValueError(
+            f"Unsupported mailbox closeout disposition '{mailbox_disposition}'. Supported values: {supported}"
+        )
+    normalized_note = mailbox_note.strip() if mailbox_note else ""
+    if not normalized_note:
+        raise ValueError("--mailbox-note is required when deferring active mailbox messages at closeout")
+
+    acknowledgement_paths: list[str] = []
+    for view in active:
+        acknowledgement = store.acknowledge(
+            coordination_messages.AcknowledgeMessageRequest(
+                current_session_id=recipient_session_id,
+                message_id=view.message.message_id,
+                disposition="deferred",
+                note=normalized_note,
+            ),
+            require_live_claim=False,
+        )
+        acknowledgement_paths.append(acknowledgement.receipt_path)
+    return {
+        "mailbox_disposition": normalized_disposition,
+        "mailbox_message_ids": [view.message.message_id for view in active],
+        "mailbox_acknowledgement_paths": acknowledgement_paths,
+    }
 
 
 def _split_cli_values(values: list[str] | None) -> list[str]:
@@ -1163,6 +1235,8 @@ def close_session(
     recovery_ref: str | None = None,
     merge_commit: str | None = None,
     allow_discard_unique: bool = False,
+    mailbox_disposition: str | None = None,
+    mailbox_note: str | None = None,
 ) -> dict[str, Any]:
     """Finish, clean up, and release one claimed lane as a single sanctioned flow.
 
@@ -1172,6 +1246,11 @@ def close_session(
     """
 
     claim, payload, claim_file = _claim_record_any_status(agent=agent, project=project, scope=scope)
+    mailbox_closeout = _resolve_active_mailbox_for_closeout(
+        claim=claim,
+        mailbox_disposition=mailbox_disposition,
+        mailbox_note=mailbox_note,
+    )
     resolved_worktree_path = Path(
         worktree_path or claim.worktree_path or ""
     ).expanduser()
@@ -1290,6 +1369,7 @@ def close_session(
         "released": True,
         **preflight.to_dict(),
         "tracker_path": tracker_path_text,
+        **mailbox_closeout,
     }
 
 

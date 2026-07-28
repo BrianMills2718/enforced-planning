@@ -33,6 +33,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--branch")
     parser.add_argument("--note")
     parser.add_argument(
+        "--mailbox-disposition",
+        choices=sorted(session_lifecycle.MAILBOX_CLOSEOUT_DISPOSITIONS),
+        help="Explicit disposition for active messages addressed to the closing session.",
+    )
+    parser.add_argument(
+        "--mailbox-note",
+        help="Required durable reason when --mailbox-disposition defers active messages.",
+    )
+    parser.add_argument(
         "--disposition",
         default=session_lifecycle.MERGED_DISPOSITION,
         choices=sorted(session_lifecycle.WORKTREE_DISPOSITIONS),
@@ -69,6 +78,8 @@ def main(argv: list[str] | None = None) -> int:
         recovery_ref=args.recovery_ref,
         merge_commit=args.merge_commit,
         allow_discard_unique=args.allow_discard_unique,
+        mailbox_disposition=args.mailbox_disposition,
+        mailbox_note=args.mailbox_note,
     )
     if args.json:
         print(json.dumps(payload, indent=2, sort_keys=True))

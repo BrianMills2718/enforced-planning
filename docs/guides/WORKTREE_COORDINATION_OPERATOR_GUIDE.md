@@ -458,6 +458,23 @@ manual steps.
 The sanctioned closeout flow is idempotent for already-missing worktree or
 branch state so partial cleanup can be rerun safely.
 
+Mailbox messages are a separate closeout precondition. `session-close` refuses
+to close a lane while actionable messages remain addressed to its exact session.
+The recipient must read and explicitly acknowledge them first. When the work
+cannot be completed before closeout, the only supported exception is an
+explicit, durable deferral recorded against that same recipient session:
+
+```bash
+python scripts/session_close.py \
+  --agent codex --project example --scope example-lane \
+  --mailbox-disposition deferred \
+  --mailbox-note "Deferred at closeout; successor must reconcile the linked review request."
+```
+
+This does not transfer a message to another session and never authorizes an
+agent to acknowledge someone else's inbox. A separate handoff must create and
+route a new message to its exact recipient.
+
 Atomicity does not replace integration safety. Before any mutation,
 `session-close` must establish one of these conditions:
 

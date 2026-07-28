@@ -138,13 +138,13 @@ def _delivery_event_id(payload: dict[str, Any], *, agent: str, session_id: str) 
             token = f"{field}:{value.strip()}"
             break
     else:
-        # Claude Code's SessionStart payload currently has neither an event ID
-        # nor a timestamp.  A short-lived bucket preserves duplicate
+        # Native SessionStart payloads from Claude Code and Codex can omit both
+        # an event ID and a timestamp. A short-lived bucket preserves duplicate
         # suppression for concurrently configured host/repository hooks without
-        # pretending the session ID is a unique lifecycle event.  It is used
+        # pretending the session ID is a unique lifecycle event. It is used
         # only for this documented native-payload gap; other events still fail
         # visibly until they provide a native identity.
-        if agent == "claude-code" and payload["hook_event_name"] == "SessionStart":
+        if payload["hook_event_name"] == "SessionStart":
             token = f"sessionstart-bucket:{int(time.time() // 30)}"
         else:
             raise ValueError("Lifecycle hook requires a native event ID or timestamp for duplicate-safe delivery")

@@ -1,8 +1,9 @@
 # Plan #108: Low-Friction Pre-Write Claim Enforcement
 
-**Status:** In Progress — PW-01/PW-02A/PW-02 accepted; PW-02B ready; PW-03 blocked
+**Status:** In Progress — PW-01/PW-02A/PW-02 accepted; PW-02B0 ready; later units dependency-blocked
 **Type:** implementation
 **Priority:** Critical
+**Design Revision:** `plan-108-v2`
 **phase_ref:** "Phase 9"
 **goal_ref:** "coordination-integrity"
 **adrs_referenced:** []
@@ -288,9 +289,11 @@ YAML; it has no independent history or deletion requirement.
 - `enforced_planning/prewrite_claim_gate.py` (create)
 - `enforced_planning/prewrite_claim_fast.py` (create)
 - `enforced_planning/prewrite_claim_projection.py` (create)
+- `enforced_planning/claim_mutation_receipts.py` (create in PW-02B0)
 - `enforced_planning/coordination_claims.py` (modify)
 - `scripts/prewrite_claim_gate.py` (create)
 - `scripts/refresh_prewrite_claim_projection.py` (create)
+- `scripts/query_claim_mutation_fleet.py` (create in PW-02B0)
 - `hooks/claude/prewrite-claim-gate.sh` (create)
 - `hooks/codex/prewrite-claim-gate.sh` (create)
 - `enforced_planning/hook_wiring.py` (modify)
@@ -299,6 +302,7 @@ YAML; it has no independent history or deletion requirement.
 - `docs/guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md` (modify)
 - `tests/test_prewrite_claim_gate.py` (create)
 - `tests/test_prewrite_claim_projection.py` (create)
+- `tests/test_claim_mutation_receipts.py` (create in PW-02B0)
 - `tests/test_check_coordination_claims.py` (modify)
 - `tests/test_generate_hook_wiring.py` (modify)
 - `tests/test_audit_governed_repo.py` (modify)
@@ -346,6 +350,141 @@ integration action; framework implementation must not edit it implicitly.
 
 The machine-readable units are in
 `docs/plans/108_prewrite_claim_enforcement_work_graph.json`.
+
+### Remaining implementation handoff
+
+This section is authoritative for execution after the accepted PW-01,
+PW-02A, and PW-02 slices. Execute the units in the order below. Do not skip a
+blocked unit, select a different pilot repository, infer a runtime from a repo
+path, or widen a target's installer profile.
+
+#### PW-02B0 — writer provenance (ready now)
+
+Implement `ClaimMutationReceiptV1` in
+`enforced_planning/claim_mutation_receipts.py` and append it to
+`~/.claude/coordination/claim-mutation-events-v1.jsonl` after every sanctioned
+create, heartbeat, release, prune, session-end, and closeout mutation. Required
+fields are: `schema_version`, `event_id`, `observed_at`, `operation`, `result`,
+`writer_source_path`, `writer_source_sha256`, `writer_repo_root`, `process_id`,
+`session_id`, `target_project`, `target_scope`, `target_claim_path`,
+`registry_digest_before`, `registry_digest_after`, `projection_digest_after`,
+`projection_current_after`, and nullable `error_code`. `operation` is the enum
+`create | heartbeat | release | prune | session_end | closeout`; `result` is
+the enum `applied_projection_current | applied_projection_stale | not_applied`.
+Digest/current fields may be null only for `not_applied`. Store no prompt,
+patch, command body, or secret.
+
+The mutation result and projection replacement happen before receipt append.
+If receipt append fails, return a nonzero result that names
+`mutation_applied_audit_failed` and the claim/projection outcome; never report
+the mutation as absent or roll it back implicitly. Because the configured
+ledger is unavailable in that case, the durable receipt cannot exist; stderr
+and the caller's nonzero result are the required failure evidence. Unknown
+fields are rejected.
+The ledger is evidence only and never grants authority.
+
+Add `scripts/query_claim_mutation_fleet.py` with:
+
+```text
+--claims-dir PATH
+--events-path PATH
+--output PATH
+--json
+```
+
+The query groups live mutations by exact writer source SHA-256 and reports the
+live claim/session identities touched by each writer. A live claim with no
+terminal receipt is `unclassified_legacy`, never current by inference.
+
+Required verification:
+
+```bash
+pytest -q tests/test_claim_mutation_receipts.py \
+  tests/test_check_coordination_claims.py tests/test_session_cli.py
+python scripts/query_claim_mutation_fleet.py --json
+make session-heartbeat BRANCH=<this-unit-branch> WORKTREE_AGENT=<agent>
+python scripts/query_claim_mutation_fleet.py --json
+```
+
+Retain the real heartbeat event ID and matching registry/projection digests in
+`docs/evidence/plan108_pw02b0_writer_provenance.json`. Stop if any sanctioned
+mutation lacks one terminal receipt, the receipt cannot identify the loaded
+source file and digest, or audit failure is silent.
+
+#### PW-02B1 — frozen fleet inventory (blocked on PW-02B0)
+
+Run the query against the shared registry and ledger and write
+`docs/evidence/plan108_pw02b_fleet_inventory.json`. Every live writer digest
+must have exactly one of these enum dispositions:
+
+- `already_current`: digest equals the accepted canonical source digest;
+- `update_current_personal`: active, Brian-owned personal repository with an
+  exact governed update path;
+- `inactive`: no live claim and no mutation during the observation window;
+- `authority_blocked`: an organization/external repository for which current
+  governance does not grant this lane write authority;
+- `unclassified_legacy`: missing or contradictory runtime provenance; this is
+  a failing disposition and blocks PW-02B2.
+
+Use a 15-minute observation window after the first complete query. Re-run the
+query at the end. Any mutation during the window resets the writer's evidence
+to its newest receipt; it does not extend the window. Acceptance requires zero
+`unclassified_legacy` rows. Do not convert `authority_blocked` to permission.
+
+#### PW-02B2 — bounded fleet rollout (blocked on PW-02B1)
+
+For each manifest row marked `update_current_personal`, in manifest order:
+
+1. Read the target `CLAUDE.md`; verify the personal remote/account and clean
+   canonical tracked state.
+2. Create one exact claimed linked worktree whose write paths equal the dry-run
+   action paths.
+3. Run `install_governed_repo.py --claim-projection-refresh-only --json` from
+   the accepted enforced-planning revision. Stop if actions include hooks,
+   `Makefile`, `meta-process.yaml`, or any path not listed by the bounded
+   profile.
+4. Re-run with `--write --json`, execute the target wrappers' `--help`, and run
+   the target's applicable claim/session tests.
+5. Heartbeat the exact target claim and require
+   `projection_current_after=true` with equal registry/projection digests.
+6. Commit, push, merge through the approved personal remote, fast-forward the
+   canonical checkout, and run sanctioned `session-close`.
+7. Record target, source and merge revisions, PR URL, test command/result,
+   heartbeat event ID/digests, and closeout result in the fleet evidence.
+
+Rows marked `already_current`, `inactive`, or `authority_blocked` receive only
+their evidence-backed disposition. Never edit an `authority_blocked` target.
+
+#### PW-02B certification (blocked on PW-02B2)
+
+Freeze a new fleet query and require no `update_current_personal` or
+`unclassified_legacy` row. In a disposable exact claim, perform one create,
+heartbeat, release, and closeout control. After each operation require
+`projection_is_current=true`. Then run one native observe-mode exact-claim
+write and require `decision=allow`, not
+`projection_unavailable_or_stale`. Retain all event/receipt IDs and digests in
+`docs/evidence/plan108_pw02b_fleet_projection_refresh.json`. Only this evidence
+permits marking PW-02B accepted.
+
+#### PW-03 — fixed enforcement pilot (blocked on PW-02B acceptance)
+
+The pilot repository is `enforced-planning`; selecting another repository is a
+plan change. Claim only `meta-process.yaml`, the installed hook configuration,
+`tests/fixtures/prewrite_live_probe.txt`, Plan 108 evidence/status paths, and
+the exact rollback surface. Record SHA-256 of `README.md`, set
+`claims.prewrite_mode: enforce`, regenerate through the canonical hook
+installer, and prove audit readback reports `enforce`.
+
+Use native Codex `apply_patch` for both controls. First attempt an out-of-scope
+append to `README.md`; require a denial receipt and unchanged SHA-256. Then
+apply an in-scope marker change to
+`tests/fixtures/prewrite_live_probe.txt`; require an allow receipt and the
+expected diff. Finally restore `claims.prewrite_mode: observe`, regenerate,
+and require audit readback `observe`. Commit only the fixture/evidence and the
+final observe configuration; do not leave the repository in enforce mode in
+this first pilot. Any changed README hash, false denial, stale projection,
+missing receipt, or failed rollback stops the unit and requires restoring
+observe before further work.
 
 ### PW-01 Evidence
 
@@ -411,6 +550,21 @@ Makefile surfaces. PW-02B therefore adds the bounded
 the projection runtime, and the explicit recovery CLI; it does not alter hooks,
 Makefiles, or enforcement mode. Fleet writes remain pending per-repository
 claims and authority review.
+
+The bounded installer landed in PR #81. DIGIMON's refresh landed in its PR
+#235 and OntoCanon's initial refresh landed in its PR #270. Live OntoCanon use
+then exposed wrapper/lifecycle version skew; the shared backward-compatible
+close and start wrappers landed in enforced-planning PRs #83 and #84. Those
+repairs are canonical, but their remaining consumer propagation has not been
+certified. The earlier seven-repository list is historical orientation, not a
+current fleet authority: active claims change continuously, and the fresh
+PW-02B1 manifest must be derived from runtime mutation receipts.
+
+This observation changed the remaining design from “infer the writer from the
+claim's repo root” to “record the loaded writer source and digest at mutation
+time.” PW-02B0 is therefore the sole ready leaf. PW-02B1 inventory, PW-02B2
+rollout, final PW-02B certification, and PW-03 remain dependency-blocked in
+that order.
 
 ### PW-02A Evidence
 

@@ -1038,7 +1038,7 @@ def test_claude_prompt_lifecycle_uses_native_prompt_id_for_duplicate_safety(
     ]
 
 
-def test_lifecycle_adapter_missing_event_identity_does_not_observe(
+def test_non_sessionstart_lifecycle_adapter_missing_event_identity_does_not_observe(
     mailbox: tuple[CoordinationMessageStore, Path, Path],
 ) -> None:
     """An adapter without a native event identity cannot manufacture observation evidence."""
@@ -1058,7 +1058,7 @@ def test_lifecycle_adapter_missing_event_identity_does_not_observe(
             {
                 "session_id": "thread-123",
                 "cwd": str(Path(__file__).resolve().parents[1]),
-                "hook_event_name": "SessionStart",
+                "hook_event_name": "UserPromptSubmit",
             }
         ),
         cwd=Path(__file__).resolve().parents[1],
@@ -1091,6 +1091,40 @@ def test_claude_session_start_without_event_identity_uses_bounded_duplicate_key(
     hook_input = json.dumps(
         {
             "session_id": "session-456",
+            "cwd": str(Path(__file__).resolve().parents[1]),
+            "hook_event_name": "SessionStart",
+        }
+    )
+
+    first = subprocess.run(command, input=hook_input, cwd=Path(__file__).resolve().parents[1], capture_output=True, text=True, check=False)
+    duplicate = subprocess.run(command, input=hook_input, cwd=Path(__file__).resolve().parents[1], capture_output=True, text=True, check=False)
+
+    assert first.returncode == 0, first.stderr or first.stdout
+    assert persisted.message.message_id in first.stdout
+    assert duplicate.returncode == 0
+    assert duplicate.stdout == ""
+    status = store.status(MessageStatusRequest(message_id=persisted.message.message_id))
+    assert [receipt.event for receipt in status.receipts] == ["observed"]
+
+
+def test_codex_session_start_without_event_identity_uses_bounded_duplicate_key(
+    mailbox: tuple[CoordinationMessageStore, Path, Path],
+) -> None:
+    """Codex's documented SessionStart shape can deliver without inventing an event ID."""
+
+    store, claims_dir, root = mailbox
+    persisted = store.send(_send_request(sender=CLAUDE_SESSION, recipient=CODEX_SESSION, idempotency_key="codex-start"))
+    command = [
+        "python",
+        "scripts/coordination_hook.py",
+        "--claims-dir",
+        str(claims_dir),
+        "--root",
+        str(root),
+    ]
+    hook_input = json.dumps(
+        {
+            "session_id": "thread-123",
             "cwd": str(Path(__file__).resolve().parents[1]),
             "hook_event_name": "SessionStart",
         }

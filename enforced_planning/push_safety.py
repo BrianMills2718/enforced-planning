@@ -121,9 +121,12 @@ def changed_paths_since_default(repo_root: Path, default_branch: str) -> list[st
 
 
 def _working_tree_dirty(repo_root: Path) -> bool:
-    """Return whether the repo has tracked or untracked local dirt."""
+    """Return whether tracked content could make the published delta ambiguous."""
 
-    return bool(_git_stdout(repo_root, ["status", "--short"]))
+    return (
+        _run_git(repo_root, ["diff", "--quiet"]).returncode != 0
+        or _run_git(repo_root, ["diff", "--cached", "--quiet"]).returncode != 0
+    )
 
 
 def _branch_claims(project: str, branch: str) -> list[coordination_claims.ClaimRecord]:
@@ -232,20 +235,29 @@ def evaluate_push_safety(
         )
 
     if resolved_branch == default_branch:
-        issues.append(
+        warnings.append(
             PushCheckFinding(
                 code="default_branch_push",
-                message="Direct pushes from the default branch are blocked; use a worktree-backed task branch.",
+                message=(
+                    "Direct default-branch pushes require repository governance that permits "
+                    "recoverable Git publication; this generic coordination check cannot establish ownership."
+                ),
                 details={"branch": resolved_branch, "default_branch": default_branch},
             )
         )
 
     branch_claims = _branch_claims(resolved_project, resolved_branch)
     if not branch_claims:
-        issues.append(
+        findings = warnings if resolved_branch == default_branch else issues
+        findings.append(
             PushCheckFinding(
                 code="missing_branch_claim",
-                message="No live coordination claim is attached to the current branch.",
+                message=(
+                    "No live coordination claim is attached to the default branch; "
+                    "verify that the published integration came from a claimed lane."
+                    if resolved_branch == default_branch
+                    else "No live coordination claim is attached to the current branch."
+                ),
                 details={"branch": resolved_branch, "project": resolved_project},
             )
         )

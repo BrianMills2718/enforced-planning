@@ -32,11 +32,11 @@ def _write_claim(claims_dir: Path, name: str, payload: dict) -> None:
     (claims_dir / name).write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
 
 
-def test_push_check_fails_on_default_branch(
+def test_push_check_warns_on_default_branch_without_claim(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Default-branch pushes should block even before overlap analysis."""
+    """Ownership policy, not this generic check, governs direct default pushes."""
 
     repo_root = tmp_path / "demo"
     _init_git_repo(repo_root)
@@ -45,8 +45,49 @@ def test_push_check_fails_on_default_branch(
 
     payload = push_safety.evaluate_push_safety(repo_root)
 
+    assert payload["ok"]
+    assert {item["code"] for item in payload["warnings"]} >= {
+        "default_branch_push",
+        "missing_branch_claim",
+    }
+
+
+def test_push_check_ignores_untracked_local_session_artifacts(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Untracked local session state cannot alter a Git push's published delta."""
+
+    repo_root = tmp_path / "demo"
+    _init_git_repo(repo_root)
+    session_artifact = repo_root / ".claude" / "sessions" / "current.json"
+    session_artifact.parent.mkdir(parents=True)
+    session_artifact.write_text("{}\n", encoding="utf-8")
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", tmp_path / "claims")
+    monkeypatch.setattr(push_safety, "load_active_decisions", lambda project, limit=5: [])
+
+    payload = push_safety.evaluate_push_safety(repo_root)
+
+    assert payload["ok"]
+    assert not any(item["code"] == "dirty_worktree" for item in payload["issues"])
+
+
+def test_push_check_blocks_tracked_uncommitted_changes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Tracked worktree changes still make a publication candidate ambiguous."""
+
+    repo_root = tmp_path / "demo"
+    _init_git_repo(repo_root)
+    (repo_root / "README.md").write_text("changed\n", encoding="utf-8")
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", tmp_path / "claims")
+    monkeypatch.setattr(push_safety, "load_active_decisions", lambda project, limit=5: [])
+
+    payload = push_safety.evaluate_push_safety(repo_root)
+
     assert not payload["ok"]
-    assert any(item["code"] == "default_branch_push" for item in payload["issues"])
+    assert any(item["code"] == "dirty_worktree" for item in payload["issues"])
 
 
 def test_push_check_detects_overlapping_live_write_claim(

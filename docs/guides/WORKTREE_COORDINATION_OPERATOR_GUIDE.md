@@ -507,6 +507,27 @@ Normal merged closeout:
 make session-close BRANCH=plan-59-safe-closeout
 ```
 
+### Exact missing-worktree reconciliation
+
+Use this exceptional path only for a preserved `session_ended` claim whose
+recorded worktree no longer exists. It does not remove a filesystem path. The
+operator must supply the exact tracker digest captured from the one identity-
+matched tracker plus ordinary merge or recovery evidence. Live claims, a
+present worktree, tracker ambiguity or digest drift, sibling live ownership,
+and invalid merge/recovery evidence fail before claim or tracker mutation.
+
+```bash
+python scripts/session_close.py \
+  --agent codex --project enforced-planning --scope plan-106-example \
+  --reconcile-missing-worktree \
+  --tracker-sha256 "$(sha256sum /absolute/path/to/tracker.yaml | cut -d' ' -f1)" \
+  --merge-commit <canonical-merge-or-squash-commit> \
+  --json
+```
+
+The JSON response and completed claim retain a `missing_worktree_reconciliation`
+receipt. Do not use this path to close a live, handoff, or existing worktree.
+
 Explicit archive closeout for an unmerged branch whose exact tip remains on a
 durable remote or tag ref:
 

@@ -8,6 +8,8 @@ inventing a second coordination registry.
 from __future__ import annotations
 
 import os
+import hashlib
+import re
 import subprocess
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
@@ -105,6 +107,91 @@ class CloseoutPreflight:
         """Return a JSON-safe representation for CLI payloads and audit records."""
 
         return asdict(self)
+
+
+def _tracker_sha256(path: Path) -> str:
+    """Return the exact byte digest used to bind missing-worktree closeout."""
+
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _exact_tracker_candidates(claim: coordination_claims.ClaimRecord) -> list[Path]:
+    """Return trackers matching every preserved claim identity field."""
+
+    if not claim.session_id:
+        raise ValueError("Missing-worktree reconciliation requires a canonical session ID")
+    project = claim.primary_project()
+    if not project:
+        raise ValueError("Missing-worktree reconciliation requires a canonical project")
+    safe_session_id = re.sub(r"[^a-zA-Z0-9._-]+", "-", claim.session_id)
+    root = (
+        Path(claim.tracker_path).expanduser().parent
+        if claim.tracker_path
+        else session_contracts.DEFAULT_SESSION_TRACKERS_DIR / project
+    )
+    matches: list[Path] = []
+    for path in sorted(root.glob(f"{claim.agent}__{project}__{safe_session_id}__*.yaml")):
+        payload = session_contracts.read_session_tracker(path)
+        contract = payload.get("claim")
+        if not isinstance(contract, dict):
+            raise ValueError(f"Session tracker at {path} is missing claim metadata")
+        if (
+            contract.get("agent") == claim.agent
+            and contract.get("project") == project
+            and contract.get("scope") == claim.scope
+            and contract.get("session_id") == claim.session_id
+        ):
+            matches.append(path)
+    return matches
+
+
+def _validate_missing_worktree_reconciliation(
+    *,
+    claim: coordination_claims.ClaimRecord,
+    expected_tracker_sha256: str | None,
+) -> dict[str, str]:
+    """Fail closed before reconciling one preserved lane with no worktree."""
+
+    if claim.status != coordination_claims.SESSION_ENDED_STATUS:
+        raise ValueError(
+            "Missing-worktree reconciliation requires an exact session_ended claim; "
+            f"found {claim.status!r}."
+        )
+    if not claim.worktree_path:
+        raise ValueError("Missing-worktree reconciliation requires a recorded worktree path")
+    recorded_worktree = Path(claim.worktree_path).expanduser()
+    if recorded_worktree.exists():
+        raise ValueError(
+            "Missing-worktree reconciliation rejects an existing recorded worktree; "
+            "use ordinary sanctioned closeout instead."
+        )
+    expected_digest = (expected_tracker_sha256 or "").strip().lower()
+    if not re.fullmatch(r"[0-9a-f]{64}", expected_digest):
+        raise ValueError(
+            "Missing-worktree reconciliation requires --tracker-sha256 as a SHA-256 digest."
+        )
+    trackers = _exact_tracker_candidates(claim)
+    if not trackers:
+        raise ValueError("Missing-worktree reconciliation requires one exact session tracker")
+    if len(trackers) != 1:
+        rendered = ", ".join(str(path) for path in trackers)
+        raise ValueError("Ambiguous exact session trackers for missing-worktree reconciliation: " + rendered)
+    tracker = trackers[0]
+    if claim.tracker_path and Path(claim.tracker_path).expanduser() != tracker:
+        raise ValueError("Claim tracker path does not match the exact reconciliation tracker")
+    actual_digest = _tracker_sha256(tracker)
+    if actual_digest != expected_digest:
+        raise ValueError(
+            "Missing-worktree reconciliation tracker digest mismatch; preserve the lane and regenerate evidence."
+        )
+    return {
+        "schema_version": "1.0",
+        "claim_status_before": claim.status,
+        "recorded_worktree_path": str(recorded_worktree),
+        "tracker_path": str(tracker),
+        "tracker_sha256": actual_digest,
+        "filesystem_action": "not_attempted_absent_recorded_worktree",
+    }
 
 
 def _resolve_active_mailbox_for_closeout(
@@ -1246,6 +1333,8 @@ def close_session(
     recovery_ref: str | None = None,
     merge_commit: str | None = None,
     allow_discard_unique: bool = False,
+    reconcile_missing_worktree: bool = False,
+    expected_tracker_sha256: str | None = None,
     mailbox_disposition: str | None = None,
     mailbox_note: str | None = None,
 ) -> dict[str, Any]:
@@ -1268,6 +1357,15 @@ def close_session(
     resolved_branch = branch or claim.branch
     repo_root = _resolve_claim_repo_root(claim)
     updated_at = datetime.now(timezone.utc).isoformat()
+
+    reconciliation_receipt = (
+        _validate_missing_worktree_reconciliation(
+            claim=claim,
+            expected_tracker_sha256=expected_tracker_sha256,
+        )
+        if reconcile_missing_worktree
+        else None
+    )
 
     if resolved_worktree_path:
         canonical_worktree_path = resolved_worktree_path.resolve()
@@ -1323,6 +1421,10 @@ def close_session(
     payload["default_branch_pushed"] = preflight.default_branch_pushed
     payload["merge_commit"] = preflight.merge_commit
     payload["merge_evidence"] = preflight.merge_evidence
+    if reconciliation_receipt is not None:
+        reconciliation_receipt["merge_evidence"] = preflight.merge_evidence or "none"
+        reconciliation_receipt["merge_commit"] = preflight.merge_commit or "none"
+        payload["missing_worktree_reconciliation"] = reconciliation_receipt
     payload["updated_at"] = updated_at
     payload["notes"] = note or "closing claimed lane via canonical session-close flow"
     # Keep the projection current during physical cleanup, but do not emit a
@@ -1349,7 +1451,9 @@ def close_session(
 
     worktree_action = "not_requested"
     branch_action = "kept"
-    if worktree_path or claim.worktree_path:
+    if reconciliation_receipt is not None:
+        worktree_action = reconciliation_receipt["filesystem_action"]
+    elif worktree_path or claim.worktree_path:
         worktree_action = _remove_worktree_path(repo_root, resolved_worktree_path)
     if delete_branch:
         branch_action = _delete_branch(
@@ -1402,6 +1506,7 @@ def close_session(
         "released": True,
         **preflight.to_dict(),
         "tracker_path": tracker_path_text,
+        "missing_worktree_reconciliation": reconciliation_receipt,
         **mailbox_closeout,
     }
 

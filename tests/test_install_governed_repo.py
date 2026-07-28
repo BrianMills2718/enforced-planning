@@ -801,6 +801,8 @@ def test_install_governed_repo_write_bootstraps_minimum_repo_and_passes_audit(
     assert (tmp_path / ".claude" / "settings.json").exists()
     makefile_text = (tmp_path / "Makefile").read_text(encoding="utf-8")
     assert "worktree:" in makefile_text
+    assert "maintenance-worktree:" in makefile_text
+    assert "WORKTREE_EXECUTION_PROFILE=light ALLOW_UNPLANNED=1" in makefile_text
     assert "worktree-list:" in makefile_text
     assert "worktree-remove:" in makefile_text
     assert "session-start:" in makefile_text
@@ -836,6 +838,17 @@ def test_install_governed_repo_write_bootstraps_minimum_repo_and_passes_audit(
     assert "WORKTREE_DISPOSITION ?= merged" in makefile_text
     assert '--disposition "$(WORKTREE_DISPOSITION)"' in makefile_text
     assert "$(filter 1 true yes,$(WORKTREE_ALLOW_DISCARD_UNIQUE))" in makefile_text
+    maintenance_with_plan = subprocess.run(
+        ["make", "maintenance-worktree", "PLAN=123"],
+        cwd=str(tmp_path),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert maintenance_with_plan.returncode != 0
+    assert "only for explicitly unplanned light maintenance" in (
+        maintenance_with_plan.stdout + maintenance_with_plan.stderr
+    )
     sync_result = subprocess.run(
         [
             sys.executable,

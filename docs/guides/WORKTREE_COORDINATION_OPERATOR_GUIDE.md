@@ -581,6 +581,11 @@ Observation and acknowledgement are distinct append-only receipts. An
 does not satisfy this response rule. Claims remain the write-ownership source,
 and no mailbox disposition grants, transfers, or releases a claim.
 
+The sender's lifecycle poll surfaces each new acknowledgement once, including
+its disposition, note, or response reference. This is a derived notification
+over the acknowledgement receipt, not a reply message, so it does not create a
+new acknowledgement obligation or a confirmation loop.
+
 The closeout gate mechanically rejects active unacknowledged messages before
 mutation. If normal disposition is impossible, closeout supports only an
 explicit durable `deferred` acknowledgement with a note; the successor still

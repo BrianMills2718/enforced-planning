@@ -337,7 +337,7 @@
       "profile": "controlled",
       "control_approval_types": ["readiness"],
       "execution_class": "coupled",
-      "claimability": "blocked_dependencies",
+      "claimability": "not_applicable",
       "authorization_mode": "host_workspace",
       "scope": {
         "included": [
@@ -438,15 +438,22 @@
         }
       ],
       "readiness": {
-        "status": "blocked",
+        "status": "ready",
         "required_approval_types": ["readiness"],
-        "approvals": [],
-        "failed_guards": [
-          "Exact StoredHostInstallationCandidateV1 payload_sha256 has not received readiness approval"
-        ]
+        "approvals": [
+          {
+            "approval_type": "readiness",
+            "role": "user",
+            "approver_id": "brian",
+            "approved_revision": "5e3936b23a642ba97418b83fcf03b151b65d80785ec81d9330464a4380ffa834",
+            "approved_at": "2026-07-28T01:20:00Z",
+            "expires_at": null
+          }
+        ],
+        "failed_guards": []
       },
-      "status": "blocked",
-      "record_version": 1
+      "status": "ready",
+      "record_version": 2
     },
     {
       "schema_version": "1.0",

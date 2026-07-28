@@ -1,6 +1,6 @@
 # Plan #106: Cross-Client Mailbox Fleet Delivery Certification
 
-**Status:** In Progress — MF-01/MF-02/MF-03A/MF-04 accepted; MF-03B awaits exact candidate approval
+**Status:** In Progress — MF-01/MF-02/MF-03A/MF-04 accepted; MF-03B applied and awaits hook review/resume evidence
 **Type:** implementation
 **Priority:** Critical
 **phase_ref:** "Phase 9 — fleet adoption and framework maintenance"
@@ -32,8 +32,10 @@ Brian adopted design revision `mailbox-fleet-delivery-v1` on 2026-07-27. Brian
 then approved the delegation-safety revision `mailbox-fleet-delivery-v2` on
 2026-07-27: host candidate generation and host mutation are separate units.
 MF-01, MF-02, and MF-04 remain valid `reuse_unchanged` outputs from v1. MF-03A
-is accepted. MF-03B remains gated on readiness approval for the exact candidate
-digest, and MF-05 remains dependency- and approval-gated in the work graph.
+is accepted. Brian approved the exact MF-03A candidate digest on 2026-07-27;
+MF-03B applied it on 2026-07-27 and remains open only for native hook review
+and fresh client restart/resume evidence. MF-05 remains dependency- and
+approval-gated in the work graph.
 
 ### MF-01 Implementation Record
 
@@ -78,6 +80,29 @@ Its `payload_sha256` is
 bound to framework revision `fffbec5217e3f66dd6c35d1ad723c83a0e197d78`.
 Before/after hashes proved that neither host configuration changed. MF-03A is
 accepted; this record is not readiness approval to apply the candidate.
+
+### MF-03B Apply Record
+
+Brian explicitly approved candidate payload SHA-256
+`5e3936b23a642ba97418b83fcf03b151b65d80785ec81d9330464a4380ffa834`.
+The applier rechecked the exact candidate envelope, framework revision, adapter
+digest, and both before-config digests before mutation. It then created exact
+readable backups under
+`~/.claude/coordination/backups/mailbox-host/20260728T012000.360188Z-5e3936b23a64/`,
+atomically installed both native hook configurations, parsed and hashed the
+results, and produced a zero-action second dry run.
+
+Codex changed from `a96437a8a82932da34aadb9e740c016dc462188d9aed9f3b414016aa846d19aa`
+to `4587012899bb7f9f10bc3b1fbd1ebdd3db2474687b4dacd4f76ed85939e6977c`.
+Claude changed from `29629433b3319947a290dfd212b8373711a66f631eea9e966b067569600a78ed`
+to `a5ca8d31ec89ca04f0e92b073a2f6872a254892b39ab698de8892dbb3261607d`.
+Backup digests equal the two before digests. The after audit classifies both
+host surfaces as `configured`, with `trust_state=unknown`, no repair actions,
+and no claim of live delivery. Deterministic tests include exact approval,
+backup/readback, zero-action idempotence, wrong-digest preflight rejection, and
+an injected second-write failure that restores both exact inputs. MF-03B is not
+accepted until Codex `/hooks` review and fresh Codex and Claude restart/resume
+state are recorded.
 
 ## Gap
 

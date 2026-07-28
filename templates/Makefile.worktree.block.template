@@ -39,7 +39,7 @@ REVIEW_SCOPE ?=
 REVIEW_NOTES ?=
 RECIPIENT ?=
 
-.PHONY: worktree worktree-list worktree-remove session-start session-heartbeat session-status session-end session-finish session-close review-claim raise-concern verification-batch-freeze verification-batch-check verification-batch-thaw
+.PHONY: worktree maintenance-worktree worktree-list worktree-remove session-start session-heartbeat session-status session-end session-finish session-close review-claim raise-concern verification-batch-freeze verification-batch-check verification-batch-thaw
 
 verification-batch-freeze:  ## Freeze clean HEAD for DECISION="..." VERIFY_COMMAND="..."
 	@test -n "$(DECISION)" || (echo "DECISION is required" && exit 1)
@@ -146,6 +146,20 @@ endif
 	@echo "Worktree created at $(WORKTREE_DIR)/$(BRANCH)"
 	@echo "Claim created for branch $(BRANCH)"
 	@echo "Session contract started for $(SESSION_GOAL)"
+
+maintenance-worktree:  ## Create a claimed light maintenance worktree without a numbered plan
+	@if [ -n "$(PLAN)" ]; then \
+		echo "maintenance-worktree is only for explicitly unplanned light maintenance; use make worktree PLAN=N for plan-owned work."; \
+		exit 2; \
+	fi
+	@$(MAKE) worktree \
+		BRANCH="$(BRANCH)" TASK="$(TASK)" WORKTREE_AGENT="$(WORKTREE_AGENT)" \
+		SESSION_GOAL="$(SESSION_GOAL)" SESSION_PHASE="$(SESSION_PHASE)" \
+		SESSION_NEXT="$(SESSION_NEXT)" SESSION_DEPENDS="$(SESSION_DEPENDS)" \
+		SESSION_STOP_CONDITIONS="$(SESSION_STOP_CONDITIONS)" SESSION_NOTE="$(SESSION_NOTE)" \
+		SESSION_CLAIM_TYPE="$(SESSION_CLAIM_TYPE)" SESSION_PARENT_SCOPE="$(SESSION_PARENT_SCOPE)" \
+		SESSION_WRITE_PATHS="$(SESSION_WRITE_PATHS)" SESSION_READ_PATHS="$(SESSION_READ_PATHS)" \
+		WORKTREE_EXECUTION_PROFILE=light ALLOW_UNPLANNED=1
 
 session-start:  ## Create or refresh the active session contract for BRANCH=name
 ifndef BRANCH

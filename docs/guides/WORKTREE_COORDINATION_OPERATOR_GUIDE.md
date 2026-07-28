@@ -538,6 +538,56 @@ checkout.
 - if the canonical main checkout is dirty, treat that as a publish blocker and
   document it explicitly rather than creating an ambiguous publish lane
 
+## Mailbox Response Lifecycle
+
+Mailbox delivery is not complete merely because a hook displayed a message.
+Every active message addressed to the current exact session must receive a
+durable acknowledgement with one truthful disposition:
+
+- `accepted`: the recipient accepts the requested action or handoff
+- `declined`: the recipient will not perform it; include the reason
+- `deferred`: the recipient cannot act now; include the owner or resume event
+- `information_only`: the message required awareness but no action
+
+Inspect the exact-session inbox at these natural boundaries:
+
+1. session start or resume;
+2. before beginning a new work unit;
+3. after a major phase when another lane can change the next action; and
+4. before claim transfer, lane closeout, or final handoff.
+
+For a question, review request, handoff, or coordination request, the
+acknowledgement note or `response_ref` must state the decision or point to its
+durable answer. An informational message needs no reply message; acknowledge it
+as `information_only`. Do not create acknowledgement loops by replying only to
+confirm that an acknowledgement was received.
+
+Use the repo-local inbox wrapper to poll:
+
+```bash
+python scripts/meta/coordination_inbox.py \
+  --agent codex --project example --session-id codex:<thread-id> --json
+```
+
+Use the canonical mailbox CLI to acknowledge one message with a strict request:
+
+```bash
+python scripts/meta/coordination_messages.py acknowledge --request-json \
+  '{"current_session_id":"codex:<thread-id>","message_id":"msg_<32-hex>","disposition":"information_only","note":"Read; no action requested."}'
+```
+
+Observation and acknowledgement are distinct append-only receipts. An
+`observed` receipt proves only that the message was exposed to the session; it
+does not satisfy this response rule. Claims remain the write-ownership source,
+and no mailbox disposition grants, transfers, or releases a claim.
+
+The closeout gate mechanically rejects active unacknowledged messages before
+mutation. If normal disposition is impossible, closeout supports only an
+explicit durable `deferred` acknowledgement with a note; the successor still
+needs a separately routed handoff. If polling is unavailable, follow the
+degraded-mailbox rule in the workspace instructions and record the limitation;
+never fabricate an acknowledgement.
+
 ## What Coordination Does And Does Not Do
 
 What it does:

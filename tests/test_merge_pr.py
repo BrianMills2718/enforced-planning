@@ -56,6 +56,22 @@ def test_find_existing_script_returns_none_when_missing(tmp_path: Path) -> None:
     assert found is None
 
 
+def test_get_pr_merge_commit_requires_merged_state(monkeypatch) -> None:
+    """Only GitHub's immutable merged-PR receipt may license squash closeout."""
+
+    module = _load()
+    monkeypatch.setattr(
+        module,
+        "run_cmd",
+        lambda cmd, check=True, capture=True: completed_process(
+            cmd,
+            stdout='{"state":"MERGED","mergeCommit":{"oid":"abc123"}}',
+        ),
+    )
+
+    assert module.get_pr_merge_commit(107) == "abc123"
+
+
 def test_cleanup_worktree_uses_safe_remove_script_with_discovered_path(
     monkeypatch, tmp_path
 ) -> None:
@@ -215,7 +231,12 @@ def test_merge_reports_high_failure_when_post_merge_closeout_fails(
     module = _load()
     monkeypatch.setattr(module, "get_pr_branch", lambda _pr: "plan-107-landed")
     monkeypatch.setattr(module, "check_pr_mergeable", lambda _pr: (True, "OK"))
-    monkeypatch.setattr(module, "cleanup_worktree", lambda _branch: False)
+    monkeypatch.setattr(
+        module,
+        "cleanup_worktree",
+        lambda _branch, *, merge_commit=None: False,
+    )
+    monkeypatch.setattr(module, "get_pr_merge_commit", lambda _pr: "merge-commit")
     monkeypatch.setattr(
         module,
         "run_cmd",

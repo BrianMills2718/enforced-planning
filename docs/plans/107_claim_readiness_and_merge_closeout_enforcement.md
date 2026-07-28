@@ -63,6 +63,7 @@ Included:
 - claim-time validation of unit status and declared approval records;
 - remote-default-aware merged-branch detection;
 - nonzero `--check` status for merged-but-active ownership;
+- exact-patch verification for explicit squash-merge commit receipts;
 - propagation through the sanctioned worktree/session entrypoints;
 - deterministic positive and negative tests and operator documentation.
 
@@ -146,7 +147,7 @@ terminal disposition.
 ## Verification Evidence
 
 - `pytest -q tests/test_check_coordination_claims.py tests/test_plan_readiness.py tests/test_session_cli.py tests/test_create_worktree.py tests/test_session_contracts.py tests/test_merge_pr.py`
-  — 108 passed.
+  — 111 passed after the live squash-merge closeout negative control was added.
 - `python scripts/self_test.py` — all checks passed.
 - Ruff passed on every changed Python implementation and test surface.
 - Strict mypy passed on the five changed Python implementation surfaces.

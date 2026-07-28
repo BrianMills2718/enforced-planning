@@ -95,6 +95,8 @@ class CloseoutPreflight:
     merged_to_default: bool | None
     default_remote_ref: str | None
     default_branch_pushed: bool | None
+    merge_commit: str | None
+    merge_evidence: str | None
     recovery_ref: str | None
     force_delete_branch: bool
 
@@ -474,6 +476,54 @@ def _is_ancestor(repo_root: Path, ancestor_ref: str, descendant_ref: str) -> boo
     return result.returncode == 0
 
 
+def _squash_merge_matches_branch(
+    repo_root: Path,
+    *,
+    branch_ref: str,
+    merge_commit: str,
+    default_ref: str,
+) -> bool:
+    """Prove a one-parent merge commit carries exactly the task branch patch."""
+
+    if not _ref_exists(repo_root, merge_commit) or not _is_ancestor(
+        repo_root, merge_commit, default_ref
+    ):
+        return False
+    parents = subprocess.run(
+        ["git", "rev-list", "--parents", "-n", "1", merge_commit],
+        cwd=str(repo_root),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    parent_fields = parents.stdout.strip().split()
+    if parents.returncode != 0 or len(parent_fields) != 2:
+        return False
+    merge_parent = parent_fields[1]
+    merge_base = subprocess.run(
+        ["git", "merge-base", branch_ref, merge_parent],
+        cwd=str(repo_root),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if merge_base.returncode != 0 or not merge_base.stdout.strip():
+        return False
+
+    def patch(left: str, right: str) -> bytes | None:
+        result = subprocess.run(
+            ["git", "diff", "--binary", "--full-index", "--no-renames", left, right],
+            cwd=str(repo_root),
+            capture_output=True,
+            check=False,
+        )
+        return result.stdout if result.returncode == 0 else None
+
+    branch_patch = patch(merge_base.stdout.strip(), branch_ref)
+    merged_patch = patch(merge_parent, merge_commit)
+    return branch_patch is not None and branch_patch == merged_patch
+
+
 def _validate_closeout_preflight(
     *,
     repo_root: Path,
@@ -481,6 +531,7 @@ def _validate_closeout_preflight(
     disposition: str,
     disposition_reason: str | None,
     recovery_ref: str | None,
+    merge_commit: str | None,
     allow_discard_unique: bool,
     delete_branch: bool,
 ) -> CloseoutPreflight:
@@ -509,6 +560,8 @@ def _validate_closeout_preflight(
             merged_to_default=None,
             default_remote_ref=None,
             default_branch_pushed=None,
+            merge_commit=None,
+            merge_evidence=None,
             recovery_ref=recovery_ref,
             force_delete_branch=False,
         )
@@ -545,6 +598,20 @@ def _validate_closeout_preflight(
         else None
     )
     if normalized_disposition == MERGED_DISPOSITION:
+        normalized_merge_commit = merge_commit.strip() if merge_commit else None
+        merge_evidence = "branch_ancestor" if merged_to_default else None
+        if not merged_to_default and normalized_merge_commit:
+            canonical_default_ref = (
+                default_remote_ref if remote_default_exists else default_ref
+            )
+            if _squash_merge_matches_branch(
+                repo_root,
+                branch_ref=branch_ref,
+                merge_commit=normalized_merge_commit,
+                default_ref=canonical_default_ref,
+            ):
+                merged_to_default = True
+                merge_evidence = "squash_patch_equivalent"
         if not merged_to_default:
             if merged_to_local_default and default_branch_pushed is False:
                 raise ValueError(
@@ -556,7 +623,11 @@ def _validate_closeout_preflight(
                 f"branch '{default_branch}'. Merge it first or supply an explicit "
                 "non-merge disposition with required evidence."
             )
-        if default_branch_pushed is False and merged_to_remote_default is not True:
+        if (
+            default_branch_pushed is False
+            and merged_to_remote_default is not True
+            and merge_evidence != "squash_patch_equivalent"
+        ):
             raise ValueError(
                 f"Canonical default branch '{default_branch}' has commits not present in "
                 f"'{default_remote_ref}'. Push the default branch before closeout."
@@ -568,6 +639,8 @@ def _validate_closeout_preflight(
             merged_to_default=True,
             default_remote_ref=default_remote_ref,
             default_branch_pushed=default_branch_pushed,
+            merge_commit=normalized_merge_commit,
+            merge_evidence=merge_evidence,
             recovery_ref=None,
             # Git's ordinary -d check substitutes a configured feature upstream
             # for HEAD. The explicit checks above already proved the stronger
@@ -618,6 +691,8 @@ def _validate_closeout_preflight(
         merged_to_default=False,
         default_remote_ref=default_remote_ref,
         default_branch_pushed=default_branch_pushed,
+        merge_commit=None,
+        merge_evidence=None,
         recovery_ref=normalized_recovery_ref,
         force_delete_branch=delete_branch,
     )
@@ -1086,6 +1161,7 @@ def close_session(
     disposition: str = MERGED_DISPOSITION,
     disposition_reason: str | None = None,
     recovery_ref: str | None = None,
+    merge_commit: str | None = None,
     allow_discard_unique: bool = False,
 ) -> dict[str, Any]:
     """Finish, clean up, and release one claimed lane as a single sanctioned flow.
@@ -1139,6 +1215,7 @@ def close_session(
         disposition=disposition,
         disposition_reason=disposition_reason,
         recovery_ref=recovery_ref,
+        merge_commit=merge_commit,
         allow_discard_unique=allow_discard_unique,
         delete_branch=delete_branch,
     )
@@ -1154,6 +1231,8 @@ def close_session(
     payload["merged_to_default"] = preflight.merged_to_default
     payload["default_remote_ref"] = preflight.default_remote_ref
     payload["default_branch_pushed"] = preflight.default_branch_pushed
+    payload["merge_commit"] = preflight.merge_commit
+    payload["merge_evidence"] = preflight.merge_evidence
     payload["updated_at"] = updated_at
     payload["notes"] = note or "closing claimed lane via canonical session-close flow"
     _write_claim_payload(claim_file, payload)

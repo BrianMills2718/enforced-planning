@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import fcntl
+import hashlib
 import json
 import os
 import posixpath
@@ -51,6 +52,9 @@ CREATION_BLOCKING_HEALTH_ISSUES = {
     "missing_worktree_path",
     "missing_session_id",
     "missing_session_name",
+    "missing_work_unit_id",
+    "missing_work_graph_path",
+    "missing_work_graph_sha256",
 }
 DEFAULT_HEARTBEAT_STALE_MINUTES = 120
 SESSION_ENV_KEYS = {
@@ -133,6 +137,10 @@ class ClaimRecord:
     plan_ref: str | None
     source_file: str | None
     schema_version: int
+    work_unit_id: str | None = None
+    work_graph_path: str | None = None
+    work_graph_sha256: str | None = None
+    approval_revisions: tuple[str, ...] = ()
     parallel_root_authorized: bool = False
 
     def primary_project(self) -> str | None:
@@ -212,6 +220,13 @@ def claim_health_issues(claim: ClaimRecord) -> list[str]:
                 issues.append("missing_broader_goal")
             if not claim.tracker_path:
                 issues.append("missing_tracker_path")
+        if claim.schema_version >= 3 and claim.write_paths and claim.plan_ref:
+            if not claim.work_unit_id:
+                issues.append("missing_work_unit_id")
+            if not claim.work_graph_path:
+                issues.append("missing_work_graph_path")
+            if not claim.work_graph_sha256:
+                issues.append("missing_work_graph_sha256")
     return issues
 
 
@@ -501,6 +516,14 @@ def _resolve_default_branch(repo_root: Path) -> str | None:
     return None
 
 
+def _default_integration_ref(repo_root: Path, default_branch: str) -> str:
+    """Prefer the canonical remote default ref when it exists."""
+
+    remote_ref = f"refs/remotes/origin/{default_branch}"
+    remote_check = _run_git(repo_root, ["show-ref", "--verify", remote_ref])
+    return remote_ref if remote_check.returncode == 0 else f"refs/heads/{default_branch}"
+
+
 def claim_lifecycle_issues(claim: ClaimRecord) -> list[str]:
     """Return mechanically provable stale-lifecycle issues for one live claim."""
     if not claim.is_live():
@@ -523,14 +546,15 @@ def claim_lifecycle_issues(claim: ClaimRecord) -> list[str]:
             default_branch = _resolve_default_branch(repo_root)
             if default_branch and default_branch != claim.branch:
                 branch_sha = _run_git(repo_root, ["rev-parse", branch_ref])
-                default_sha = _run_git(repo_root, ["rev-parse", f"refs/heads/{default_branch}"])
+                default_ref = _default_integration_ref(repo_root, default_branch)
+                default_sha = _run_git(repo_root, ["rev-parse", default_ref])
                 if branch_sha.returncode != 0 or default_sha.returncode != 0:
                     return issues
                 if branch_sha.stdout.strip() == default_sha.stdout.strip():
                     return issues
                 merged_check = _run_git(
                     repo_root,
-                    ["merge-base", "--is-ancestor", branch_ref, f"refs/heads/{default_branch}"],
+                    ["merge-base", "--is-ancestor", branch_ref, default_ref],
                 )
                 if merged_check.returncode == 0:
                     issues.append("branch_merged_to_default")
@@ -584,6 +608,25 @@ def claim_runtime_status(
     return "weak" if issues or liveness_issues else "healthy"
 
 
+def claim_enforcement_issues(claim: ClaimRecord) -> list[dict[str, str]]:
+    """Return blocking operator findings that require an explicit disposition."""
+
+    lifecycle = claim_lifecycle_issues(claim)
+    if "branch_merged_to_default" not in lifecycle:
+        return []
+    return [
+        {
+            "code": "merged_active_claim_requires_disposition",
+            "severity": "high",
+            "message": (
+                f"Active claim {claim.primary_project()}:{claim.scope} owns branch "
+                f"{claim.branch!r}, which is already integrated into the canonical default branch. "
+                "Run sanctioned session-close or record a supported kept-open disposition."
+            ),
+        }
+    ]
+
+
 def validate_claim_for_creation(claim: ClaimRecord) -> None:
     """Reject new claims that omit required ownership metadata for live coordination."""
     issues = [
@@ -602,6 +645,9 @@ def validate_claim_for_creation(claim: ClaimRecord) -> None:
         "missing_worktree_path": "--worktree-path",
         "missing_session_id": "--session-id",
         "missing_session_name": "--session-name",
+        "missing_work_unit_id": "--work-unit-id",
+        "missing_work_graph_path": "--work-graph",
+        "missing_work_graph_sha256": "a validated canonical work-graph binding",
     }
     required_flags = [flag_map[item] for item in issues if item in flag_map]
     required_text = ", ".join(required_flags)
@@ -609,6 +655,109 @@ def validate_claim_for_creation(claim: ClaimRecord) -> None:
         f"Active {claim.claim_type} claims require {required_text}. "
         "Legacy claims remain readable, but new live claims must declare real ownership."
     )
+
+
+def _plan_number(plan_ref: str | None) -> int | None:
+    """Extract a numbered-plan identity from canonical claim spellings."""
+
+    if not isinstance(plan_ref, str):
+        return None
+    match = re.search(r"(?:\bPlan\s*#?|#)\s*0*(\d+)\b", plan_ref, flags=re.IGNORECASE)
+    return int(match.group(1)) if match else None
+
+
+def resolve_canonical_work_unit_binding(
+    *,
+    repo_root: str,
+    plan_ref: str,
+    work_graph_path: str,
+    work_unit_id: str,
+) -> tuple[str, tuple[str, ...]]:
+    """Validate one work unit from the canonical default ref and return its binding."""
+
+    root = Path(repo_root).expanduser().resolve()
+    normalized_path = _normalize_repo_path(work_graph_path)
+    if Path(normalized_path).is_absolute() or normalized_path == ".." or normalized_path.startswith("../"):
+        raise ValueError("--work-graph must be a repository-relative path")
+    plan_number = _plan_number(plan_ref)
+    if plan_number is None:
+        raise ValueError(f"Unable to resolve numbered plan identity from {plan_ref!r}")
+    if not Path(normalized_path).name.startswith(f"{plan_number}_"):
+        raise ValueError(
+            f"Work graph {normalized_path!r} does not match {plan_ref}; expected a {plan_number}_ prefix"
+        )
+    default_branch = _resolve_default_branch(root)
+    if not default_branch:
+        raise ValueError("Unable to resolve canonical default branch for work-unit validation")
+    source_ref = _default_integration_ref(root, default_branch)
+    rendered = _run_git(root, ["show", f"{source_ref}:{normalized_path}"])
+    if rendered.returncode != 0:
+        raise ValueError(
+            f"Canonical work graph {normalized_path!r} is unavailable at {source_ref}"
+        )
+    try:
+        payload = json.loads(rendered.stdout)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Canonical work graph {normalized_path!r} is invalid JSON: {exc}") from exc
+    units = payload.get("units") if isinstance(payload, dict) else None
+    if not isinstance(units, list):
+        raise ValueError(f"Canonical work graph {normalized_path!r} requires a units list")
+    matches = [unit for unit in units if isinstance(unit, dict) and unit.get("id") == work_unit_id]
+    if len(matches) != 1:
+        raise ValueError(
+            f"Canonical work graph must contain exactly one work unit {work_unit_id!r}; found {len(matches)}"
+        )
+    unit = matches[0]
+    readiness = unit.get("readiness")
+    readiness_status = readiness.get("status") if isinstance(readiness, dict) else None
+    unit_status = unit.get("status")
+    if unit_status != "ready" or readiness_status != "ready":
+        raise ValueError(
+            f"Work unit {work_unit_id!r} is not claimable: status={unit_status!r}, "
+            f"readiness={readiness_status!r}"
+        )
+    control_types = unit.get("control_approval_types", [])
+    readiness_types = readiness.get("required_approval_types", []) if isinstance(readiness, dict) else []
+    approvals = readiness.get("approvals", []) if isinstance(readiness, dict) else []
+    if not isinstance(control_types, list) or not all(isinstance(item, str) for item in control_types):
+        raise ValueError(f"Work unit {work_unit_id!r} has invalid control_approval_types")
+    if not isinstance(readiness_types, list) or not all(isinstance(item, str) for item in readiness_types):
+        raise ValueError(f"Work unit {work_unit_id!r} has invalid required_approval_types")
+    if not isinstance(approvals, list):
+        raise ValueError(f"Work unit {work_unit_id!r} has invalid readiness approvals")
+    required_types = sorted(set(control_types + readiness_types))
+    approval_revisions: list[str] = []
+    for approval_type in required_types:
+        matching = [
+            item
+            for item in approvals
+            if isinstance(item, dict)
+            and item.get("approval_type") == approval_type
+            and isinstance(item.get("role"), str)
+            and item["role"].strip()
+            and isinstance(item.get("approver_id"), str)
+            and item["approver_id"].strip()
+            and isinstance(item.get("approved_revision"), str)
+            and item["approved_revision"].strip()
+            and isinstance(item.get("approved_at"), str)
+            and _parse_iso_datetime(item["approved_at"]) is not None
+            and (
+                item.get("expires_at") is None
+                or (
+                    isinstance(item.get("expires_at"), str)
+                    and (expires_at := _parse_iso_datetime(item["expires_at"])) is not None
+                    and expires_at > datetime.now(timezone.utc)
+                )
+            )
+        ]
+        if len(matching) != 1:
+            raise ValueError(
+                f"Work unit {work_unit_id!r} requires exactly one {approval_type!r} approval; "
+                f"found {len(matching)}"
+            )
+        approval_revisions.append(f"{approval_type}={matching[0]['approved_revision'].strip()}")
+    graph_sha256 = hashlib.sha256(rendered.stdout.encode("utf-8")).hexdigest()
+    return graph_sha256, tuple(sorted(approval_revisions))
 
 
 def resolve_session_id(agent: str, explicit_session_id: str | None = None) -> str | None:
@@ -726,7 +875,20 @@ def normalize_claim(data: dict[str, Any], *, source_file: str | None = None) -> 
 
     raw_status = data.get("status")
     status = raw_status if isinstance(raw_status, str) and raw_status.strip() else "active"
-    schema_version = 2 if any(
+    raw_schema_version = data.get("schema_version")
+    if isinstance(raw_schema_version, int) and raw_schema_version in {1, 2, 3}:
+        schema_version = raw_schema_version
+    elif any(
+        key in data
+        for key in (
+            "work_unit_id",
+            "work_graph_path",
+            "work_graph_sha256",
+            "approval_revisions",
+        )
+    ):
+        schema_version = 3
+    elif any(
         key in data
         for key in (
             "claim_type",
@@ -747,7 +909,10 @@ def normalize_claim(data: dict[str, Any], *, source_file: str | None = None) -> 
             "notes",
             "parallel_root_authorized",
         )
-    ) else 1
+    ):
+        schema_version = 2
+    else:
+        schema_version = 1
 
     return ClaimRecord(
         agent=agent_text,
@@ -774,6 +939,14 @@ def normalize_claim(data: dict[str, Any], *, source_file: str | None = None) -> 
         plan_ref=data.get("plan_ref") if isinstance(data.get("plan_ref"), str) else None,
         source_file=source_file,
         schema_version=schema_version,
+        work_unit_id=data.get("work_unit_id") if isinstance(data.get("work_unit_id"), str) else None,
+        work_graph_path=(
+            data.get("work_graph_path") if isinstance(data.get("work_graph_path"), str) else None
+        ),
+        work_graph_sha256=(
+            data.get("work_graph_sha256") if isinstance(data.get("work_graph_sha256"), str) else None
+        ),
+        approval_revisions=tuple(_safe_string_list(data.get("approval_revisions"))),
         parallel_root_authorized=data.get("parallel_root_authorized") is True,
     )
 
@@ -963,6 +1136,10 @@ def build_candidate_claim(
     claimed_at: str | None = None,
     expires_at: str | None = None,
     updated_at: str | None = None,
+    work_unit_id: str | None = None,
+    work_graph_path: str | None = None,
+    work_graph_sha256: str | None = None,
+    approval_revisions: tuple[str, ...] = (),
     parallel_root_authorized: bool = False,
 ) -> ClaimRecord:
     """Build a normalized candidate claim from CLI or test inputs."""
@@ -998,7 +1175,11 @@ def build_candidate_claim(
         notes=notes,
         plan_ref=plan_ref,
         source_file=None,
-        schema_version=2,
+        schema_version=3,
+        work_unit_id=work_unit_id,
+        work_graph_path=work_graph_path,
+        work_graph_sha256=work_graph_sha256,
+        approval_revisions=approval_revisions,
         parallel_root_authorized=parallel_root_authorized,
     )
 
@@ -1023,17 +1204,33 @@ def create_claim(
     status: str = "active",
     parent_scope: str | None = None,
     notes: str | None = None,
+    work_graph_path: str | None = None,
+    work_unit_id: str | None = None,
     allow_parallel: bool = False,
 ) -> tuple[bool, str]:
     """Create a new claim after checking for hard conflicts."""
     now = datetime.now(timezone.utc)
+    resolved_claim_type = claim_type or ("write" if write_paths else "program")
+    work_graph_sha256: str | None = None
+    approval_revisions: tuple[str, ...] = ()
+    if write_paths and plan_ref:
+        if not repo_root:
+            raise ValueError("Plan-bound write ownership requires --repo-root for canonical work-unit validation")
+        if not work_graph_path or not work_unit_id:
+            raise ValueError("Plan-bound write ownership requires --work-graph and --work-unit-id")
+        work_graph_sha256, approval_revisions = resolve_canonical_work_unit_binding(
+            repo_root=repo_root,
+            plan_ref=plan_ref,
+            work_graph_path=work_graph_path,
+            work_unit_id=work_unit_id,
+        )
     candidate = build_candidate_claim(
         agent=agent,
         project=project,
         scope=scope,
         intent=intent,
         plan_ref=plan_ref,
-        claim_type=claim_type,
+        claim_type=resolved_claim_type,
         write_paths=write_paths,
         read_paths=read_paths,
         worktree_path=worktree_path,
@@ -1047,6 +1244,10 @@ def create_claim(
         status=status,
         parent_scope=parent_scope,
         notes=notes,
+        work_unit_id=work_unit_id,
+        work_graph_path=_normalize_repo_path(work_graph_path) if work_graph_path else None,
+        work_graph_sha256=work_graph_sha256,
+        approval_revisions=approval_revisions,
         parallel_root_authorized=allow_parallel,
         claimed_at=now.isoformat(),
         expires_at=(now + timedelta(hours=ttl_hours)).isoformat(),
@@ -1416,6 +1617,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--write-path", action="append", default=[], help="Repo-relative write path")
     parser.add_argument("--read-path", action="append", default=[], help="Repo-relative read path")
     parser.add_argument("--worktree-path", help="Worktree path for this claim")
+    parser.add_argument("--repo-root", help="Canonical repository root for readiness validation")
     parser.add_argument("--branch", help="Branch for this claim")
     parser.add_argument("--session-id", help="Session identifier")
     parser.add_argument(
@@ -1430,6 +1632,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Explicitly authorize an additional root for this runtime session.",
     )
     parser.add_argument("--notes", help="Freeform notes")
+    parser.add_argument(
+        "--work-graph",
+        help="Repository-relative canonical work graph required for plan-bound write ownership.",
+    )
+    parser.add_argument(
+        "--work-unit-id",
+        help="Exact ready work-unit ID required for plan-bound write ownership.",
+    )
     parser.add_argument("--json", action="store_true", help="Output as JSON")
 
     return parser.parse_args(argv)
@@ -1442,8 +1652,15 @@ def _render_check_output(
     candidate: ClaimRecord | None,
 ) -> dict[str, Any]:
     """Build a structured report for list/check operations."""
+    enforcement_issues = [
+        issue
+        for claim in claims
+        for issue in claim_enforcement_issues(claim)
+    ]
     payload: dict[str, Any] = {
         "project": project,
+        "has_high_severity_issues": bool(enforcement_issues),
+        "enforcement_issues": enforcement_issues,
         "claims": [
             {
                 **claim.to_dict(),
@@ -1457,6 +1674,7 @@ def _render_check_output(
                 ),
                 "lifecycle_issues": claim_lifecycle_issues(claim),
                 "liveness_issues": claim_liveness_issues(claim),
+                "enforcement_issues": claim_enforcement_issues(claim),
             }
             for claim in claims
         ],
@@ -1500,6 +1718,7 @@ def main(argv: list[str] | None = None) -> int:
                 write_paths=args.write_path,
                 read_paths=args.read_path,
                 worktree_path=args.worktree_path,
+                repo_root=args.repo_root,
                 branch=args.branch,
                 session_name=args.session_name,
                 session_id=args.session_id,
@@ -1510,7 +1729,7 @@ def main(argv: list[str] | None = None) -> int:
             )
         if args.json:
             print(json.dumps(_render_check_output(claims=claims, project=args.project, candidate=candidate), indent=2))
-            return 0
+            return 1 if any(claim_enforcement_issues(claim) for claim in claims) else 0
         if not claims:
             print("No active claims.")
             return 0
@@ -1522,6 +1741,11 @@ def main(argv: list[str] | None = None) -> int:
             print(f"    expires: {claim.expires_at}")
             if claim.write_paths:
                 print(f"    write_paths: {', '.join(claim.write_paths)}")
+            for issue in claim_enforcement_issues(claim):
+                print(
+                    f"HIGH: {issue['code']}: {issue['message']}",
+                    file=sys.stderr,
+                )
         if candidate is not None:
             result = evaluate_claim(candidate, active_claims=claims)
             if not result.interactions:
@@ -1534,7 +1758,7 @@ def main(argv: list[str] | None = None) -> int:
                         f"  - {item.severity}: {item.other_agent} {item.other_scope} "
                         f"({item.reason}; overlap={overlaps})"
                     )
-        return 0
+        return 1 if any(claim_enforcement_issues(claim) for claim in claims) else 0
 
     if args.list:
         claims = check_claims()
@@ -1575,12 +1799,15 @@ def main(argv: list[str] | None = None) -> int:
                 write_paths=args.write_path,
                 read_paths=args.read_path,
                 worktree_path=args.worktree_path,
+                repo_root=args.repo_root,
                 branch=args.branch,
                 session_name=args.session_name,
                 session_id=args.session_id,
                 status=args.status,
                 parent_scope=args.parent_scope,
                 notes=args.notes,
+                work_graph_path=args.work_graph,
+                work_unit_id=args.work_unit_id,
                 allow_parallel=args.allow_parallel,
             )
         except ValueError as exc:

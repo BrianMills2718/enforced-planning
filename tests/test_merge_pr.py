@@ -166,3 +166,61 @@ def test_cleanup_worktree_reports_manual_safe_remove_command_on_failure(
         "Run manually: python scripts/meta/worktree-coordination/safe_worktree_remove.py "
         f"{discovered_path}"
     ) in captured.out
+
+
+def test_cleanup_without_worktree_still_records_session_close(
+    monkeypatch, tmp_path
+) -> None:
+    """A missing local worktree must not silently leave merged ownership active."""
+
+    module = _load()
+    monkeypatch.chdir(tmp_path)
+    session_close = tmp_path / "scripts" / "session_close.py"
+    session_close.parent.mkdir(parents=True)
+    session_close.write_text("#!/usr/bin/env python3\n", encoding="utf-8")
+    monkeypatch.setenv("CODEX_THREAD_ID", "test-thread")
+    monkeypatch.setattr(module, "find_worktree_for_branch", lambda _branch: None)
+    observed_calls: list[list[str]] = []
+
+    def fake_run_cmd(
+        cmd, check: bool = True, capture: bool = True
+    ) -> subprocess.CompletedProcess[str]:
+        observed_calls.append(cmd)
+        return completed_process(cmd)
+
+    monkeypatch.setattr(module, "run_cmd", fake_run_cmd)
+
+    assert module.cleanup_worktree("plan-107-landed") is True
+    assert observed_calls == [
+        [
+            "python",
+            "scripts/session_close.py",
+            "--agent",
+            "codex",
+            "--project",
+            tmp_path.name,
+            "--scope",
+            "plan-107-landed",
+            "--branch",
+            "plan-107-landed",
+        ]
+    ]
+
+
+def test_merge_reports_high_failure_when_post_merge_closeout_fails(
+    monkeypatch, capsys
+) -> None:
+    """A successful GitHub merge is not a successful command until closeout succeeds."""
+
+    module = _load()
+    monkeypatch.setattr(module, "get_pr_branch", lambda _pr: "plan-107-landed")
+    monkeypatch.setattr(module, "check_pr_mergeable", lambda _pr: (True, "OK"))
+    monkeypatch.setattr(module, "cleanup_worktree", lambda _branch: False)
+    monkeypatch.setattr(
+        module,
+        "run_cmd",
+        lambda cmd, check=True, capture=True: completed_process(cmd),
+    )
+
+    assert module.merge_pr(107) is False
+    assert "HIGH: PR merged, but claim/worktree closeout failed" in capsys.readouterr().out

@@ -132,6 +132,44 @@ canonical stale diagnostics are:
 - `stale_session_heartbeat`
 
 Stale outranks weak. A stale claim should be cleaned up, not merely tolerated.
+`branch_merged_to_default` is also a high-severity enforcement failure: the
+standard `--check` command exits nonzero until the owner runs sanctioned
+`session-close` or records an explicit supported non-merge disposition. The
+check prefers `origin/<default>` over a stale local default checkout, so a
+merged remote pull request cannot remain hidden merely because local `main`
+has not advanced.
+
+The sanctioned `scripts/merge_pr.py` helper treats post-merge `session-close`
+failure as a high-severity command failure, including when the local worktree
+is already absent. `session-close` itself refuses physical cleanup while any
+other live claim still references the same canonical worktree path and lists
+the sibling scopes that must be disposed or transferred first.
+
+### Work-unit readiness binding
+
+Every new plan-bound claim with write ownership must name its exact canonical work unit:
+
+```bash
+python scripts/meta/check_coordination_claims.py --claim \
+  --agent codex --project example --scope unit-a --intent "Implement unit A" \
+  --plan example#42 --claim-type write --write-path src/unit_a.py \
+  --repo-root ~/projects/example \
+  --work-graph docs/plans/42_example_work_graph.json \
+  --work-unit-id unit-a \
+  --branch plan-42-unit-a --worktree-path ~/projects/example/worktrees/plan-42-unit-a \
+  --session-id codex:<thread-id> --session-name example-plan-42
+```
+
+The claim command reads the graph from the canonical remote default ref. It
+fails before writing a claim when the unit or readiness state is not `ready`,
+or when any `control_approval_types` entry lacks exactly one non-empty approval
+revision. A successful claim retains `work_graph_sha256`, `work_unit_id`, and
+the exact approval revisions. Existing historical claims remain readable, but
+creating or refreshing a plan-bound claim with write ownership cannot omit this binding.
+
+Use `SESSION_WORK_GRAPH` and `SESSION_WORK_UNIT_ID` with `make worktree` and
+`make session-start`; these variables propagate the same validation through
+the sanctioned entrypoints.
 
 Liveness is heartbeat-backed:
 

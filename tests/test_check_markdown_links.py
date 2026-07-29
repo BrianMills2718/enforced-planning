@@ -82,6 +82,7 @@ def test_markdown_link_checker_falls_back_to_canonical_repo_root_for_worktree_li
     canonical_repo = workspace / "demo"
     worktree_repo = workspace / "demo_worktrees" / "plan-x"
     canonical_repo.mkdir(parents=True)
+    (canonical_repo / ".git").mkdir()
     worktree_repo.mkdir(parents=True)
 
     canonical_target = canonical_repo / "research_synthesis" / "guide.md"

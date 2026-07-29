@@ -81,7 +81,7 @@ def _write_governed_repo_scaffold(repo_root: Path) -> None:
     # Read-gating hooks (Level 1 requirement per GOVERNED_REPO_CONTRACT.md §6)
     hooks_dir = repo_root / ".claude" / "hooks"
     hooks_dir.mkdir(parents=True, exist_ok=True)
-    for hook_name in ("gate-edit.sh", "track-reads.sh"):
+    for hook_name in ("gate-edit.sh", "track-reads.sh", "check-hook-enabled.sh"):
         (hooks_dir / hook_name).write_text("#!/bin/bash\nexit 0\n", encoding="utf-8")
     settings = {
         "hooks": {
@@ -882,6 +882,7 @@ def test_audit_governed_repo_uses_canonical_read_gating_for_worktree_checkout(
     canonical_repo_root = workspace_root / "Digimon_for_KG_application"
     worktree_root = workspace_root / "Digimon_for_KG_application_worktrees" / "plan-38"
     _write_governed_repo_scaffold(canonical_repo_root)
+    (canonical_repo_root / ".git").mkdir()
     _write_worktree_repo_from_canonical(
         canonical_repo_root,
         worktree_root,

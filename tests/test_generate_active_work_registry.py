@@ -147,6 +147,7 @@ def test_generate_registry_outputs_json_and_markdown(tmp_path: Path) -> None:
         "missing_branch",
         "missing_worktree_path",
         "missing_session_id",
+        "missing_session_name",
     ]
     markdown = markdown_output.read_text(encoding="utf-8")
     assert "# Active Work Registry" in markdown

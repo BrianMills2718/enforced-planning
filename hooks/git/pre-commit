@@ -61,7 +61,20 @@ if [[ "$HOOK_MODE" == "off" ]]; then
     exit 0
 fi
 
-# 1. Locked-coupling check (V2 relationships.yaml)
+# 1. New-artifact creation and directory policy (when explicitly configured)
+ARTIFACT_CREATION=$(find_script "artifact_creation.py")
+if [[ -n "$ARTIFACT_CREATION" ]]; then
+    echo "Checking newly staged artifact creation policy..."
+    if ! python "$ARTIFACT_CREATION" check --repo-root "$REPO_ROOT"; then
+        echo ""
+        echo "New tracked artifact violates the configured directory or intent policy."
+        echo "Run 'python $ARTIFACT_CREATION check --repo-root $REPO_ROOT --json' for details."
+        echo ""
+        handle_failure "artifact creation policy" || exit 1
+    fi
+fi
+
+# 2. Locked-coupling check (V2 relationships.yaml)
 LOCKED_COUPLINGS=$(find_script "check_locked_couplings.py")
 if [[ -n "$LOCKED_COUPLINGS" ]]; then
     echo "Checking locked couplings..."

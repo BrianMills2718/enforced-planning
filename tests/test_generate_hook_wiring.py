@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from datetime import datetime, timedelta, timezone
@@ -221,8 +222,43 @@ def test_generate_hook_wiring_installs_prewrite_gate_only_when_opted_in(tmp_path
         in [item["command"] for item in codex_pre["hooks"]]
     )
 
+
+def test_generate_hook_wiring_installs_artifact_creation_gate_only_when_opted_in(
+    tmp_path: Path,
+) -> None:
+    """Artifact creation mode should independently install both native adapters."""
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _scaffold_target_repo(repo)
+    (repo / "meta-process.yaml").write_text(
+        "meta_process:\n  version: '1.0'\n  artifact_creation:\n    mode: observe\n",
+        encoding="utf-8",
+    )
+    completed = subprocess.run(
+        [sys.executable, str(SCRIPT), "--repo-root", str(repo), "--write"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert (repo / ".claude" / "hooks" / "artifact-creation-gate.sh").is_file()
+    assert (repo / ".codex" / "hooks" / "artifact-creation-gate.sh").is_file()
+    assert (repo / "scripts" / "artifact_creation.py").is_file()
+    assert (repo / "enforced_planning" / "artifact_creation.py").is_file()
+
+    claude = json.loads((repo / ".claude" / "settings.json").read_text(encoding="utf-8"))
+    codex = json.loads((repo / ".codex" / "hooks.json").read_text(encoding="utf-8"))
+    claude_pre = next(item for item in claude["hooks"]["PreToolUse"] if item["matcher"] == "Edit|Write")
+    codex_pre = next(item for item in codex["hooks"]["PreToolUse"] if item["matcher"] == "Edit|Write")
+    assert "bash .claude/hooks/artifact-creation-gate.sh" in [item["command"] for item in claude_pre["hooks"]]
+    assert (
+        'bash "$(git rev-parse --show-toplevel)/.codex/hooks/artifact-creation-gate.sh"'
+        in [item["command"] for item in codex_pre["hooks"]]
+    )
+
     second = subprocess.run(
-        [sys.executable, str(SCRIPT), "--repo-root", str(tmp_path), "--write", "--json"],
+        [sys.executable, str(SCRIPT), "--repo-root", str(repo), "--write", "--json"],
         cwd=str(PROJECT_META_ROOT),
         capture_output=True,
         text=True,
@@ -232,6 +268,187 @@ def test_generate_hook_wiring_installs_prewrite_gate_only_when_opted_in(tmp_path
     second_payload = json.loads(second.stdout)
     assert second_payload["actions"] == []
     assert second_payload["changed_files"] == []
+
+
+def test_artifact_creation_profile_has_no_read_gate_dependency_or_side_effect(
+    tmp_path: Path,
+) -> None:
+    """A bounded rollout must not require or install the unrelated read-gating stack."""
+
+    repo = tmp_path / "repo"
+    (repo / "scripts").mkdir(parents=True)
+    (repo / "scripts" / "relationships.yaml").write_text(
+        "schema_version: 2\nartifacts: []\n",
+        encoding="utf-8",
+    )
+    (repo / "meta-process.yaml").write_text(
+        "meta_process:\n  artifact_creation:\n    mode: observe\n",
+        encoding="utf-8",
+    )
+    (repo / ".claude").mkdir()
+    (repo / ".claude" / "settings.json").write_text(
+        json.dumps(
+            {
+                "hooks": {
+                    "PostToolUse": [
+                        {
+                            "matcher": "Read",
+                            "hooks": [{"type": "command", "command": "keep-me"}],
+                        }
+                    ]
+                }
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT),
+            "--repo-root",
+            str(repo),
+            "--profile",
+            "artifact-creation",
+            "--write",
+            "--json",
+        ],
+        cwd=str(PROJECT_META_ROOT),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    payload = json.loads(completed.stdout)
+    assert payload["profile"] == "artifact-creation"
+    assert payload["required_inputs"] == ["scripts/relationships.yaml"]
+    assert not (repo / "scripts" / "meta" / "file_context.py").exists()
+    assert not (repo / ".claude" / "hooks" / "gate-edit.sh").exists()
+    assert not (repo / ".claude" / "hooks" / "track-reads.sh").exists()
+    settings = json.loads((repo / ".claude" / "settings.json").read_text(encoding="utf-8"))
+    assert settings["hooks"]["PostToolUse"][0]["hooks"] == [
+        {"type": "command", "command": "keep-me"}
+    ]
+    pretool = next(
+        item
+        for item in settings["hooks"]["PreToolUse"]
+        if item["matcher"] == "Edit|Write"
+    )
+    assert [item["command"] for item in pretool["hooks"]] == [
+        "bash .claude/hooks/artifact-creation-gate.sh"
+    ]
+
+
+def test_installed_artifact_creation_hooks_allow_registered_and_deny_missing_intent(
+    tmp_path: Path,
+) -> None:
+    """Both installed client adapters must enforce the same repository decision."""
+
+    repo = tmp_path / "repo"
+    (repo / "scripts").mkdir(parents=True)
+    (repo / "meta-process.yaml").write_text(
+        "meta_process:\n  artifact_creation:\n    mode: enforce\n",
+        encoding="utf-8",
+    )
+    _write_yaml = lambda path, payload: path.write_text(  # noqa: E731
+        yaml.safe_dump(payload, sort_keys=False),
+        encoding="utf-8",
+    )
+    _write_yaml(
+        repo / "scripts" / "artifact_directory_policy.yaml",
+        {
+            "schema_version": 1,
+            "controlled_globs": ["**/*.md"],
+            "directory_rules": [
+                {
+                    "id": "docs",
+                    "path_globs": ["docs/**/*.md"],
+                    "allowed_kinds": ["documentation"],
+                    "allowed_authorities": ["canonical"],
+                }
+            ],
+        },
+    )
+    _write_yaml(
+        repo / "scripts" / "relationships.yaml",
+        {
+            "schema_version": 2,
+            "artifacts": [
+                {
+                    "artifact_id": "fixture:allowed",
+                    "path": "docs/allowed.md",
+                    "kind": "documentation",
+                    "owner": "fixture",
+                    "concern_id": "fixture-status",
+                    "authority": "canonical",
+                    "creation_justification": "Provide the one registered positive control.",
+                    "separate_file_reason": "Exercise installed client hook behavior.",
+                    "review_triggers": ["Fixture contract changes."],
+                    "lifecycle": {
+                        "status": "active",
+                        "retirement_condition": "Retire with this fixture.",
+                    },
+                    "alignment": {"authority_refs": ["README.md"]},
+                }
+            ],
+        },
+    )
+    subprocess.run(["git", "init", "-b", "main"], cwd=repo, check=True, capture_output=True)
+    subprocess.run(
+        [sys.executable, str(SCRIPT), "--repo-root", str(repo), "--profile", "artifact-creation", "--write"],
+        cwd=str(PROJECT_META_ROOT),
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    codex_payload = {
+        "hook_event_name": "PreToolUse",
+        "tool_name": "apply_patch",
+        "session_id": "installed-artifact-gate",
+        "cwd": str(repo),
+        "tool_input": {
+            "command": "*** Begin Patch\n*** Add File: docs/missing.md\n+x\n*** End Patch"
+        },
+    }
+    denied = subprocess.run(
+        ["bash", ".codex/hooks/artifact-creation-gate.sh"],
+        cwd=repo,
+        input=json.dumps(codex_payload),
+        env={
+            **os.environ,
+            "ARTIFACT_CREATION_RECEIPT_PATH": str(tmp_path / "receipts.jsonl"),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert denied.returncode == 2
+    assert "intent_missing" in denied.stderr
+
+    claude_payload = {
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Write",
+        "session_id": "installed-artifact-gate",
+        "cwd": str(repo),
+        "tool_input": {"file_path": str(repo / "docs" / "allowed.md")},
+    }
+    allowed = subprocess.run(
+        ["bash", ".claude/hooks/artifact-creation-gate.sh"],
+        cwd=repo,
+        input=json.dumps(claude_payload),
+        env={
+            **os.environ,
+            "ARTIFACT_CREATION_RECEIPT_PATH": str(tmp_path / "receipts.jsonl"),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert allowed.returncode == 0, allowed.stderr
+    assert not (repo / "docs" / "allowed.md").exists()
 
 
 def test_installed_prewrite_runtime_projects_and_classifies_native_payloads(

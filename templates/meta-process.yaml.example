@@ -31,6 +31,12 @@ meta_process:
     # off | observe | enforce; promote only after measured observe-mode calibration
     prewrite_mode: "off"
 
+  artifact_creation:
+    # off | observe | enforce. Start with observe on a bounded path class.
+    mode: "off"
+    policy_file: "scripts/artifact_directory_policy.yaml"
+    registry_file: "scripts/relationships.yaml"
+
   worktrees:
     enabled: false
     protect_main: false

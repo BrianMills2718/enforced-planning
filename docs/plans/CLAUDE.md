@@ -82,6 +82,7 @@ See `ROADMAP.md` for the full phase map and recommended priority order.
 | 106 | Cross-Client Mailbox Fleet Delivery Certification (`106_cross_client_mailbox_fleet_delivery_certification.md`) | Critical | 🚧 In Progress — MF-01/MF-02/MF-04 accepted; MF-03A ready | mechanically installed, observable, four-direction Codex/Claude delivery |
 | 107 | Claim Readiness And Merge Closeout Enforcement (`107_claim_readiness_and_merge_closeout_enforcement.md`) | Critical | ✅ Complete | fail closed on blocked/unapproved write claims and merged active ownership |
 | 108 | Low-Friction Pre-Write Claim Enforcement (`108_prewrite_claim_enforcement.md`) | Critical | 🚧 In Progress — PW-01/PW-02A/PW-02/PW-02B0 accepted; PW-02B1 fleet inventory ready | native agent writes checked against exact live claim before mutation |
+| 109 | Artifact Creation and Directory Policy Enforcement (`109_artifact_creation_and_directory_policy_enforcement.md`) | High | 🚧 In Progress — portable mechanism implemented; consumer observe pilot pending | deterministic new-file anti-proliferation gate with receipts and feedback |
 
 ## Status Key
 

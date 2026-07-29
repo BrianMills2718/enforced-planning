@@ -48,6 +48,11 @@ PREWRITE_HOOK_FILES: dict[str, str] = {
     ".codex/hooks/prewrite-claim-gate.sh": "hooks/codex/prewrite-claim-gate.sh",
 }
 
+ARTIFACT_CREATION_HOOK_FILES: dict[str, str] = {
+    ".claude/hooks/artifact-creation-gate.sh": "hooks/claude/artifact-creation-gate.sh",
+    ".codex/hooks/artifact-creation-gate.sh": "hooks/codex/artifact-creation-gate.sh",
+}
+
 MAILBOX_HOOK_FILES: dict[str, str] = {
     ".claude/hooks/notify-coordination-messages.sh": "hooks/claude/notify-coordination-messages.sh",
     ".codex/hooks/notify-coordination-messages.sh": "hooks/codex/notify-coordination-messages.sh",
@@ -69,7 +74,14 @@ PREWRITE_SUPPORT_FILES: dict[str, str] = {
     "enforced_planning/prewrite_claim_gate.py": "enforced_planning/prewrite_claim_gate.py",
     "enforced_planning/prewrite_claim_projection.py": "enforced_planning/prewrite_claim_projection.py",
     "enforced_planning/coordination_claims.py": "enforced_planning/coordination_claims.py",
+    "enforced_planning/claim_mutation_receipts.py": "enforced_planning/claim_mutation_receipts.py",
     "enforced_planning/worktree_paths.py": "enforced_planning/worktree_paths.py",
+}
+
+ARTIFACT_CREATION_SUPPORT_FILES: dict[str, str] = {
+    "scripts/artifact_creation.py": "scripts/artifact_creation.py",
+    "enforced_planning/artifact_creation.py": "enforced_planning/artifact_creation.py",
+    "enforced_planning/prewrite_claim_fast.py": "enforced_planning/prewrite_claim_fast.py",
 }
 
 MAILBOX_SUPPORT_FILES: dict[str, str] = {
@@ -126,6 +138,22 @@ CODEX_PREWRITE_HOOK = {
     ),
     "timeout": 1,
     "statusMessage": "Checking write ownership",
+}
+
+ARTIFACT_CREATION_HOOK = {
+    "type": "command",
+    "command": "bash .claude/hooks/artifact-creation-gate.sh",
+    "timeout": 5,
+}
+
+CODEX_ARTIFACT_CREATION_HOOK = {
+    "type": "command",
+    "command": (
+        'bash "$(git rev-parse --show-toplevel)/.codex/hooks/'
+        'artifact-creation-gate.sh"'
+    ),
+    "timeout": 5,
+    "statusMessage": "Checking new artifact policy",
 }
 
 
@@ -194,6 +222,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Emit machine-readable JSON output.",
     )
+    parser.add_argument(
+        "--profile",
+        choices=("full", "artifact-creation"),
+        default="full",
+        help=(
+            "Install the complete read/coordination wiring or only the "
+            "artifact-creation gate and its support files."
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -226,6 +263,33 @@ def _resolve_target(repo_root_arg: str) -> TargetRepo:
         relationships_file=relationships_file,
         file_context_file=file_context_file,
         settings_file=settings_file,
+    )
+
+
+def _resolve_artifact_target(repo_root_arg: str) -> TargetRepo:
+    """Resolve only the prerequisites needed by the artifact-creation profile."""
+
+    repo_root = Path(repo_root_arg).expanduser().resolve()
+    if not repo_root.exists():
+        raise FileNotFoundError(f"Repo root not found: {repo_root}")
+
+    relationships_file = repo_root / "scripts" / "relationships.yaml"
+    if not relationships_file.exists():
+        raise FileNotFoundError(
+            f"Missing machine-readable governance file: {relationships_file}"
+        )
+
+    runtime_error = context_runtime_error(repo_root)
+    if runtime_error:
+        raise FileNotFoundError(runtime_error)
+
+    return TargetRepo(
+        root=repo_root,
+        relationships_file=relationships_file,
+        # This profile does not use read-gating, but retaining a concrete path
+        # keeps the shared target contract simple and makes absence explicit.
+        file_context_file=repo_root / "scripts" / "meta" / "file_context.py",
+        settings_file=repo_root / ".claude" / "settings.json",
     )
 
 
@@ -330,7 +394,33 @@ def _configured_prewrite_mode(repo_root: Path) -> str:
     return str(mode)
 
 
-def _merge_codex_mailbox_hooks(settings: dict[str, Any], *, include_prewrite: bool = False) -> bool:
+def _configured_artifact_creation_mode(repo_root: Path) -> str:
+    """Return the explicit artifact-creation mode without enabling it implicitly."""
+
+    path = repo_root / "meta-process.yaml"
+    if not path.is_file():
+        return "off"
+    payload = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    if not isinstance(payload, dict):
+        raise ValueError("meta-process.yaml must be a mapping")
+    meta_process = payload.get("meta_process", payload)
+    if not isinstance(meta_process, dict):
+        raise ValueError("meta-process.yaml meta_process must be a mapping")
+    settings = meta_process.get("artifact_creation", {}) or {}
+    if not isinstance(settings, dict):
+        raise ValueError("meta-process.yaml artifact_creation must be a mapping")
+    mode = settings.get("mode", "off")
+    if mode not in {"off", "observe", "enforce"}:
+        raise ValueError("artifact_creation.mode must be off, observe, or enforce")
+    return str(mode)
+
+
+def _merge_codex_mailbox_hooks(
+    settings: dict[str, Any],
+    *,
+    include_prewrite: bool = False,
+    include_artifact_creation: bool = False,
+) -> bool:
     """Install mailbox polling on supported Codex lifecycle boundaries."""
 
     changed = False
@@ -346,6 +436,14 @@ def _merge_codex_mailbox_hooks(settings: dict[str, Any], *, include_prewrite: bo
         hooks = _ensure_matcher_block(settings, event_name="PreToolUse", matcher="Edit|Write")
         if _ensure_hook_command(hooks, CODEX_PREWRITE_HOOK):
             changed = True
+    if include_artifact_creation:
+        hooks = _ensure_matcher_block(settings, event_name="PreToolUse", matcher="Edit|Write")
+        if _ensure_hook_command(
+            hooks,
+            CODEX_ARTIFACT_CREATION_HOOK,
+            after_command=CODEX_PREWRITE_HOOK["command"] if include_prewrite else None,
+        ):
+            changed = True
     return changed
 
 
@@ -357,7 +455,28 @@ def _plan_codex_settings(target: TargetRepo) -> tuple[list[str], dict[Path, str]
     changed = _merge_codex_mailbox_hooks(
         settings,
         include_prewrite=_configured_prewrite_mode(target.root) != "off",
+        include_artifact_creation=_configured_artifact_creation_mode(target.root) != "off",
     )
+    rendered = _render_settings(settings)
+    current = path.read_text(encoding="utf-8") if path.exists() else None
+    if current != rendered or changed:
+        return ["sync:.codex/hooks.json"], {path: rendered}
+    return [], {}
+
+
+def _plan_codex_artifact_creation_settings(
+    target: TargetRepo,
+) -> tuple[list[str], dict[Path, str]]:
+    """Plan only the Codex artifact-creation hook without unrelated wiring."""
+
+    path = target.root / ".codex" / "hooks.json"
+    settings = _read_json_file(path)
+    hooks = _ensure_matcher_block(
+        settings,
+        event_name="PreToolUse",
+        matcher="Edit|Write",
+    )
+    changed = _ensure_hook_command(hooks, CODEX_ARTIFACT_CREATION_HOOK)
     rendered = _render_settings(settings)
     current = path.read_text(encoding="utf-8") if path.exists() else None
     if current != rendered or changed:
@@ -382,10 +501,14 @@ def plan_generation(
     file_writes: dict[Path, str] = {}
 
     prewrite_enabled = _configured_prewrite_mode(target.root) != "off"
+    artifact_creation_enabled = _configured_artifact_creation_mode(target.root) != "off"
     source_files = {**HOOK_FILES, **SUPPORT_FILES}
     if prewrite_enabled:
         source_files.update(PREWRITE_HOOK_FILES)
         source_files.update(PREWRITE_SUPPORT_FILES)
+    if artifact_creation_enabled:
+        source_files.update(ARTIFACT_CREATION_HOOK_FILES)
+        source_files.update(ARTIFACT_CREATION_SUPPORT_FILES)
     if include_coordination_messages:
         source_files.update(MAILBOX_HOOK_FILES)
         source_files.update(MAILBOX_SUPPORT_FILES)
@@ -435,6 +558,14 @@ def plan_generation(
         edit_hooks,
         PREWRITE_HOOK,
         after_command="bash .claude/hooks/gate-edit.sh",
+    ):
+        changed = True
+    if artifact_creation_enabled and _ensure_hook_command(
+        edit_hooks,
+        ARTIFACT_CREATION_HOOK,
+        after_command=(
+            PREWRITE_HOOK["command"] if prewrite_enabled else GATE_HOOK["command"]
+        ),
     ):
         changed = True
 
@@ -498,6 +629,55 @@ def plan_coordination_message_generation(
     return actions, file_writes, rendered_settings
 
 
+def plan_artifact_creation_generation(
+    target: TargetRepo,
+) -> tuple[list[str], dict[Path, str], str]:
+    """Plan the standalone artifact-creation gate and no unrelated hooks."""
+
+    if _configured_artifact_creation_mode(target.root) == "off":
+        raise ValueError(
+            "artifact-creation profile requires meta_process.artifact_creation.mode "
+            "to be observe or enforce"
+        )
+
+    actions: list[str] = []
+    file_writes: dict[Path, str] = {}
+    source_files = {
+        **ARTIFACT_CREATION_HOOK_FILES,
+        **ARTIFACT_CREATION_SUPPORT_FILES,
+    }
+    for target_relpath, source_relpath in source_files.items():
+        source_path = FRAMEWORK_ROOT / source_relpath
+        target_path = target.root / target_relpath
+        content = source_path.read_text(encoding="utf-8")
+        current = target_path.read_text(encoding="utf-8") if target_path.exists() else None
+        if current != content:
+            actions.append(f"sync:{target_relpath}")
+            file_writes[target_path] = content
+
+    settings = _read_json_file(target.settings_file)
+    edit_hooks = _ensure_matcher_block(
+        settings,
+        event_name="PreToolUse",
+        matcher="Edit|Write",
+    )
+    changed = _ensure_hook_command(edit_hooks, ARTIFACT_CREATION_HOOK)
+    rendered_settings = _render_settings(settings)
+    current_settings = (
+        target.settings_file.read_text(encoding="utf-8")
+        if target.settings_file.exists()
+        else None
+    )
+    if current_settings != rendered_settings or changed:
+        actions.append("sync:.claude/settings.json")
+        file_writes[target.settings_file] = rendered_settings
+
+    codex_actions, codex_writes = _plan_codex_artifact_creation_settings(target)
+    actions.extend(codex_actions)
+    file_writes.update(codex_writes)
+    return actions, file_writes, rendered_settings
+
+
 def apply_generation(target: TargetRepo, file_writes: dict[Path, str]) -> None:
     """Write the generated files to disk."""
 
@@ -534,8 +714,12 @@ def main(argv: list[str] | None = None) -> int:
 
     args = parse_args(argv)
     try:
-        target = _resolve_target(args.repo_root)
-        actions, file_writes, _ = plan_generation(target)
+        if args.profile == "artifact-creation":
+            target = _resolve_artifact_target(args.repo_root)
+            actions, file_writes, _ = plan_artifact_creation_generation(target)
+        else:
+            target = _resolve_target(args.repo_root)
+            actions, file_writes, _ = plan_generation(target)
     except (FileNotFoundError, ValueError) as exc:
         print(str(exc), file=sys.stderr)
         return 1
@@ -554,10 +738,15 @@ def main(argv: list[str] | None = None) -> int:
             _relative(path, target.root)
             for path in sorted(file_writes.keys())
         ],
-        "required_inputs": [
-            _relative(target.relationships_file, target.root),
-            _relative(target.file_context_file, target.root),
-        ],
+        "profile": args.profile,
+        "required_inputs": (
+            [_relative(target.relationships_file, target.root)]
+            if args.profile == "artifact-creation"
+            else [
+                _relative(target.relationships_file, target.root),
+                _relative(target.file_context_file, target.root),
+            ]
+        ),
         "validation_errors": validation_errors,
     }
 

@@ -168,9 +168,12 @@ and readable as bounded active lanes instead of only raw claims.
 
 **Gate:** Plans #43, #44, and #35 all complete. ✅ Gate met (2026-04-05). Coordination Runtime Surface is closed.
 
-**Strategic choice:** Phase 9 is **fleet adoption and maintenance** — not a new capability
-phase. The framework capability set is complete. Phase 9 work is about deploying what
-exists and measuring it.
+**Strategic choice:** Phase 9 is **fleet adoption and maintenance** — not a broad new
+capability phase. Phase 9 primarily deploys what exists and measures it. New
+framework code is limited to direct adoption blockers found through observed
+use. Plan #109 is such a blocker: the relationship registry and context packet
+existed, but could not prevent newly created documentation from bypassing
+authority and directory policy.
 
 | Item | What | Trigger |
 |------|------|---------|
@@ -184,6 +187,7 @@ exists and measuring it.
 | Native Codex mailbox lifecycle | Install Codex lifecycle hooks and prove a live send-observe-acknowledge chain. See Plan #100. | ✅ Complete; native resumed-thread proof retained |
 | Mailbox fleet delivery certification | Move the canonical delivery adapter to the host boundary, detect repository drift without conflating configuration with observation, and certify Codex↔Claude in all four directions. See Plan #106. | In progress; MF-01/MF-02/MF-04 accepted, read-only MF-03A host candidate is next, and host apply/live certification remain approval-gated |
 | Pre-write claim enforcement | Check supported native Codex/Claude write events against exact live session, worktree, branch, and path ownership before mutation. See Plan #108. | PW-01/PW-02A/PW-02 are accepted; PW-02B0 writer provenance is the only ready leaf, followed by frozen inventory, bounded rollout, fleet certification, and the fixed enforced-planning pilot |
+| Artifact creation enforcement | Gate selected new tracked artifacts against repository directory rules and durable intent, with receipts and feedback. See Plan #109. | Portable mechanism first, then an Inside Success Markdown observe pilot before any blocking promotion |
 | Multi-tool adoption | Cursor/Windsurf hook adapters when their hook surfaces are publicly documented | External dependency: tool documentation |
 | Project-meta topic-research adoption | Apply portable topic-research pattern in `research_synthesis/` with manifests, ADR links, freshness metadata | Plans #43/#44/#35 complete |
 

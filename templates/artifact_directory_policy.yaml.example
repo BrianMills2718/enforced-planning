@@ -1,0 +1,26 @@
+# Repository-owned policy for newly created tracked artifacts.
+schema_version: 1
+
+# Start with human-authored documentation. Expand only after observe-mode data
+# shows that another class has predictable low-friction rules.
+controlled_globs:
+  - "**/*.md"
+
+directory_rules:
+  - id: governed-docs
+    path_globs: ["docs/**/*.md", "roadmap/**/*.md", "wiki/**/*.md"]
+    allowed_kinds: [contract, decision, evidence, guide, plan, reference, roadmap, status, wiki]
+    allowed_authorities: [canonical, scoped, navigation, evidence, none]
+
+  - id: generated-docs
+    path_globs: ["generated/**/*.md"]
+    allowed_kinds: [generated]
+    allowed_authorities: [none]
+    generated_only: true
+
+  - id: temporary-quarantine
+    path_globs: ["misc/**/*.md"]
+    allowed_kinds: [temporary]
+    allowed_authorities: [none]
+    quarantine: true
+    max_ttl_days: 14

@@ -61,6 +61,41 @@ not provide OS-level protection or infer arbitrary shell write targets.
 | `worktrees.worktree_dir` | string | `"../worktrees"` | Not enforced by script | No effect |
 | `worktrees.safe_remove_only` | bool | `true` | Not enforced by script | No effect |
 
+## artifact_creation
+
+| Key | Type | Default | Read By | Default When Absent |
+|-----|------|---------|---------|---------------------|
+| `artifact_creation.mode` | enum `off \| observe \| enforce` | `off` | native artifact-creation hooks, staged candidate check, hook generator | No artifact-creation hook is installed and no new-file decision is recorded |
+| `artifact_creation.policy_file` | path | `scripts/artifact_directory_policy.yaml` | `scripts/artifact_creation.py` | Uses the default repository-owned directory policy path |
+| `artifact_creation.registry_file` | path | `scripts/relationships.yaml` | `scripts/artifact_creation.py` | Uses the existing relationship/intent registry |
+
+Artifact creation is a ratchet, not a legacy-corpus rewrite. A repository first
+selects bounded `controlled_globs` in its directory policy and runs `observe`.
+For a controlled new path, the registry entry must exist before file creation
+and must declare its concern, authority role, owner, separate-file need,
+lifecycle, discoverability, and retirement behavior. `enforce` denies missing
+or invalid intent, duplicate canonical concern ownership, disallowed directory
+classes, generator-free generated output, and invalid temporary quarantine
+records. Existing-file edits are outside this gate.
+
+The native hooks and staged candidate check append content-free local receipts
+to `~/.claude/coordination/artifact-creation-events-v1.jsonl`. Use
+`python scripts/artifact_creation.py report` to inspect decisions, reason codes,
+frequent paths, latency, and linked feedback. Use the `feedback` subcommand to
+bind a friction or recommendation record to an exact receipt, then use
+`resolve-feedback` to append a `resolved`, `accepted_risk`, or `superseded`
+disposition without rewriting history. Neither feedback nor observe-mode
+findings change policy automatically.
+
+Tests and isolated probes may set `ARTIFACT_CREATION_RECEIPT_PATH` to redirect
+content-free receipts. This variable cannot change the configured enforcement
+mode or policy inputs.
+
+Repositories that do not use the read-gating stack can install only this
+boundary with `scripts/generate_hook_wiring.py --profile artifact-creation`.
+That profile requires the relationship registry and an explicit non-`off`
+mode; it does not install mailbox or read-context hooks.
+
 Operational note: when `worktrees.enabled` is true and the sanctioned Makefile
 block is installed, governed repos are expected to expose `session-start`,
 `session-heartbeat`, `session-status`, and `session-finish` alongside the

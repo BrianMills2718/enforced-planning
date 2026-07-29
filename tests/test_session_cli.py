@@ -1302,6 +1302,56 @@ def test_close_session_resolves_missing_nested_worktree_repo_root(
     assert claim_payload["disposition"] == "merged"
 
 
+def test_close_session_records_receipt_after_removing_loaded_runtime_worktree(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Closeout keeps loaded-writer provenance after its source worktree is gone."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    events_path = tmp_path / "claim-mutation-events.jsonl"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    monkeypatch.setattr(claim_mutation_receipts, "DEFAULT_EVENTS_PATH", events_path)
+    repo_root, worktree, branch = _real_repo_with_worktree(tmp_path)
+    claim_file = _start_real_closeout_claim(
+        repo_root=repo_root,
+        worktree=worktree,
+        branch=branch,
+        claims_dir=claims_dir,
+        trackers_dir=trackers_dir,
+    )
+    runtime_source = worktree / "enforced_planning" / "coordination_claims.py"
+    runtime_source.parent.mkdir()
+    runtime_source.write_text("# loaded closeout runtime\n", encoding="utf-8")
+    _git(worktree, "add", str(runtime_source.relative_to(worktree)))
+    _git(worktree, "commit", "-m", "add closeout runtime fixture")
+    loaded_identity = claim_mutation_receipts.writer_identity(runtime_source)
+    monkeypatch.setattr(coordination_claims, "__file__", str(runtime_source))
+    monkeypatch.setattr(coordination_claims, "_LOADED_WRITER_IDENTITY", loaded_identity)
+    _git(repo_root, "merge", "--no-ff", branch, "-m", "merge feature")
+
+    payload = session_lifecycle.close_session(
+        agent="codex",
+        project="enforced-planning",
+        scope=branch,
+    )
+
+    assert payload["action"] == "closed"
+    assert not worktree.exists()
+    assert yaml.safe_load(claim_file.read_text(encoding="utf-8"))["status"] == "completed"
+    closeout_receipt = [
+        receipt
+        for receipt in claim_mutation_receipts.load_receipts(events_path=events_path)
+        if receipt.operation == "closeout"
+    ][-1]
+    assert (
+        closeout_receipt.writer_source_path,
+        closeout_receipt.writer_source_sha256,
+        closeout_receipt.writer_repo_root,
+    ) == loaded_identity
+
+
 def test_close_session_reconciles_exact_session_ended_missing_worktree(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

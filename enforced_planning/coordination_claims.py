@@ -40,6 +40,8 @@ import yaml  # type: ignore[import-untyped]
 from enforced_planning import claim_mutation_receipts
 from enforced_planning.claim_mutation_receipts import MutationAuditError
 
+_LOADED_WRITER_IDENTITY = claim_mutation_receipts.writer_identity(Path(__file__))
+
 CLAIMS_DIR = Path.home() / ".claude" / "coordination" / "claims"
 DEFAULT_TTL_HOURS = 24  # Sprints run 24h; 2h caused false-expiry conflicts mid-sprint
 LIVE_STATUSES = {"active", "blocked", "handoff"}
@@ -161,9 +163,10 @@ def record_claim_mutation(
         if projection_current_after
         else "applied_projection_stale"
     )
-    writer_source_path, writer_source_sha256, writer_repo_root = (
-        claim_mutation_receipts.writer_identity(Path(__file__))
-    )
+    # Capture provenance when this module is loaded. Session closeout may
+    # intentionally remove the worktree containing this source file before the
+    # final receipt is emitted, but the loaded runtime remains the writer.
+    writer_source_path, writer_source_sha256, writer_repo_root = _LOADED_WRITER_IDENTITY
     receipt = claim_mutation_receipts.ClaimMutationReceiptV1(
         operation=operation,
         result=result,

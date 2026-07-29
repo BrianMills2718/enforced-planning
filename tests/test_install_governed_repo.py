@@ -1290,6 +1290,7 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
     assert sorted(payload["actions"]) == sorted(
         [
             "install:enforced_planning/__init__.py",
+            "install:enforced_planning/artifact_creation.py",
             "install:enforced_planning/concern_routing.py",
             "install:enforced_planning/claim_mutation_receipts.py",
             "install:enforced_planning/coordination_claims.py",
@@ -1309,6 +1310,7 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
             "install:hooks/pre-push",
             "install:scripts/meta/check_coordination_claims.py",
             "install:scripts/refresh_prewrite_claim_projection.py",
+            "install:scripts/artifact_creation.py",
             "install:scripts/meta/check_push_safety.py",
             "install:scripts/meta/check_plan_readiness.py",
             "install:scripts/meta/plan_close.py",

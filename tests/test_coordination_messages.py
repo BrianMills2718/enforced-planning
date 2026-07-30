@@ -660,6 +660,15 @@ def test_agent_inbox_cli_injects_notice_and_observation_evidence(
     payload = json.loads(result.stdout)
     assert payload["message_ids"] == [persisted.message.message_id]
     assert "Narrow the docs claim" in payload["summary"]
+    assert payload["summary"].startswith(
+        "coordination mailbox: ACKNOWLEDGEMENT REQUIRED"
+    )
+    assert "DO NOT pass the next natural work boundary" in payload["summary"]
+    assert "scripts/meta/coordination_messages.py acknowledge" in payload["summary"]
+    assert f'"current_session_id":"{CLAUDE_SESSION}"' in payload["summary"]
+    assert f'"message_id":"{persisted.message.message_id}"' in payload["summary"]
+    assert '"disposition":"<accepted|declined|deferred|information_only>"' in payload["summary"]
+    assert "This notice will repeat until acknowledgement is recorded." in payload["summary"]
     status = store.status(MessageStatusRequest(message_id=persisted.message.message_id))
     assert status.state == "observed"
     assert len(status.receipt_paths) == 1
@@ -775,6 +784,8 @@ def test_codex_lifecycle_hook_observes_repeats_until_ack_then_hides(
     context = first_payload["hookSpecificOutput"]["additionalContext"]
     assert persisted.message.message_id in context
     assert "Narrow the docs claim" in context
+    assert "ACKNOWLEDGEMENT REQUIRED" in context
+    assert "scripts/meta/coordination_messages.py acknowledge" in context
     assert store.status(MessageStatusRequest(message_id=persisted.message.message_id)).state == "observed"
     refreshed_claim = yaml.safe_load(
         (claims_dir / "codex_enforced-planning_sender-lane.yaml").read_text(encoding="utf-8")

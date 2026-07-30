@@ -618,6 +618,13 @@ python scripts/meta/coordination_messages.py acknowledge --request-json \
   '{"current_session_id":"codex:<thread-id>","message_id":"msg_<32-hex>","disposition":"information_only","note":"Read; no action requested."}'
 ```
 
+Native lifecycle notices render every active message under an emphatic
+`ACKNOWLEDGEMENT REQUIRED` heading. The notice includes the exact session and
+message IDs plus a shell-safe acknowledgement command template. Replace its
+disposition and note placeholders truthfully, then run it before crossing the
+next natural work boundary. The notice intentionally repeats on later lifecycle
+events until the acknowledgement receipt exists.
+
 Observation and acknowledgement are distinct append-only receipts. An
 `observed` receipt proves only that the message was exposed to the session; it
 does not satisfy this response rule. Claims remain the write-ownership source,

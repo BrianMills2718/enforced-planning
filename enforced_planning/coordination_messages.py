@@ -17,6 +17,7 @@ import hashlib
 import inspect
 import json
 import os
+import shlex
 import sys
 import tempfile
 import uuid
@@ -994,6 +995,7 @@ def poll_session_inbox(
     if active:
         displayed = active[:max_messages]
         rendered_messages: list[str] = []
+        acknowledgement_commands: list[str] = []
         for view in displayed:
             content = view.message.body or f"content_ref={view.message.content_ref}"
             compact_content = " ".join(content.split())
@@ -1003,10 +1005,34 @@ def poll_session_inbox(
                 f"{view.message.message_id} [{view.message.kind}] "
                 f"{view.message.subject}: {compact_content}"
             )
+            acknowledgement_request = json.dumps(
+                {
+                    "current_session_id": resolved_session_id,
+                    "message_id": view.message.message_id,
+                    "disposition": "<accepted|declined|deferred|information_only>",
+                    "note": "<what you did, why you deferred, or why no action is needed>",
+                },
+                separators=(",", ":"),
+            )
+            acknowledgement_commands.append(
+                "python scripts/meta/coordination_messages.py acknowledge "
+                f"--request-json {shlex.quote(acknowledgement_request)}"
+            )
         details = "; ".join(rendered_messages)
         remainder = len(active) - len(displayed)
         suffix = f"; {remainder} more not shown" if remainder else ""
-        summary_parts.append(f"{len(active)} active message(s): {details}{suffix}")
+        summary_parts.extend(
+            (
+                "ACKNOWLEDGEMENT REQUIRED. DO NOT pass the next natural work "
+                "boundary until every displayed message has a truthful durable "
+                "disposition",
+                f"{len(active)} active message(s): {details}{suffix}",
+                "Acknowledge each displayed message by replacing the disposition "
+                "and note placeholders in its command: "
+                + " ; ".join(acknowledgement_commands),
+                "This notice will repeat until acknowledgement is recorded.",
+            )
+        )
     else:
         summary_parts.append("no active messages")
     if acknowledgements:

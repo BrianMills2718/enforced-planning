@@ -35,6 +35,11 @@ shared-state effect, irreversibility, or the claim being made requires it. A
 specialized skill, existing repository complexity, or the phrase "run all
 night" does not itself promote the profile.
 
+For prototypes and early product work, also apply
+[`PROTOTYPE_OVERBUILD_FAILURE_MODE.md`](./PROTOTYPE_OVERBUILD_FAILURE_MODE.md).
+Capability ambition such as SOTA/SOTA+ does not promote delivery maturity, and
+commercial intent does not by itself select `continuous-release`.
+
 ---
 
 ## Core Rule
@@ -239,6 +244,8 @@ When a stop condition IS reached:
 ## References
 
 - `PLANNING_OPERATING_MODEL.md` — artifact dependency graph and planning hierarchy
+- `docs/guides/PROTOTYPE_OVERBUILD_FAILURE_MODE.md` — prototype-default scope,
+  progress measures, and autonomous-run circuit breakers
 - shared `initiative-roadmap` skill — strategy reassessment and roadmap-facing documentation dispositions
 - `docs/guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md` — claims, lanes, and worktree lifecycle
 - ADR-0010 — agent_memory as required planning input

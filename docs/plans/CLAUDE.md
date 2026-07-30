@@ -83,7 +83,7 @@ See `ROADMAP.md` for the full phase map and recommended priority order.
 | 107 | Claim Readiness And Merge Closeout Enforcement (`107_claim_readiness_and_merge_closeout_enforcement.md`) | Critical | ✅ Complete | fail closed on blocked/unapproved write claims and merged active ownership |
 | 108 | Low-Friction Pre-Write Claim Enforcement (`108_prewrite_claim_enforcement.md`) | Critical | 🚧 In Progress — PW-01/PW-02A/PW-02/PW-02B0 accepted; PW-02B1 fleet inventory ready | native agent writes checked against exact live claim before mutation |
 | 109 | Artifact Creation and Directory Policy Enforcement (`109_artifact_creation_and_directory_policy_enforcement.md`) | High | 🚧 In Progress — portable mechanism implemented; consumer observe pilot pending | deterministic new-file anti-proliferation gate with receipts and feedback |
-| 110 | No-Passive-Waiting Enforcement (`110_no_passive_waiting_enforcement.md`) | Critical | 🚧 In Progress — design adopted; implementation graph next | distinguish progress, local waits, ready alternatives, and genuine blockers without unsafe takeover |
+| 110 | No-Passive-Waiting Enforcement (`110_no_passive_waiting_enforcement.md`) | Critical | 🚧 In Progress — work graph validated; NPW-01 and NPW-02 ready | distinguish progress, local waits, ready alternatives, and genuine blockers without unsafe takeover |
 
 ## Status Key
 

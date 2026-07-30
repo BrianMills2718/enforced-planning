@@ -1,0 +1,539 @@
+{
+  "units": [
+    {
+      "schema_version": "1.0",
+      "record_type": "work_unit",
+      "id": "npw-01-progress-lease-current-main",
+      "initiative_id": "coordination-integrity",
+      "goal_id": "no-passive-waiting",
+      "design_revision": "405f7423f9e5673185cea604a8d594d68d69c85c",
+      "spec_revision": "npw-01-v1",
+      "title": "Port truthful progress leases onto current main",
+      "class": "implementation",
+      "objective": "Distinguish durable advancement from heartbeat and blocker lifecycle events on the current claim/session runtime without changing ownership automatically.",
+      "profile": "standard",
+      "execution_class": "independently_executable",
+      "claimability": "ready_for_execution",
+      "authorization_mode": "registry_claim",
+      "scope": {
+        "included": [
+          "Additive ProgressEventV1 fields and owning-session mutation",
+          "Stalled classification with bounded quiet intervals",
+          "Registry and session status step-down context",
+          "Current-main salvage of the useful Plan 70 fixtures",
+          "Correction that blocker and handoff events do not renew progress"
+        ],
+        "excluded": [
+          "Blocker disposition or ready-queue evaluation",
+          "Automatic claim release, takeover, rebase or deletion",
+          "Fleet threshold tuning",
+          "Workspace bootstrap edits"
+        ]
+      },
+      "inputs": [
+        {
+          "kind": "bounded_design",
+          "id": "docs/plans/110_no_passive_waiting_enforcement.md",
+          "revision": "405f7423f9e5673185cea604a8d594d68d69c85c"
+        },
+        {
+          "kind": "historical_salvage",
+          "id": "origin/plan-70-progress-leases",
+          "revision": "2d56f6cf04db75789304de3af4a5503cfa822dda"
+        }
+      ],
+      "outputs": [
+        "ProgressEventV1-compatible claim fields and mutation command",
+        "One canonical stalled classifier used by registry and session status",
+        "Both-sign current-main tests for heartbeat, blocker, quiet interval, legacy state and pruning"
+      ],
+      "dependencies": [],
+      "conflict_surfaces": [
+        {
+          "kind": "repository_path",
+          "target": "enforced_planning/coordination_claims.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "npw-progress-lease"
+        },
+        {
+          "kind": "repository_path",
+          "target": "enforced_planning/session_lifecycle.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "npw-progress-lease"
+        },
+        {
+          "kind": "repository_path",
+          "target": "enforced_planning/active_work_registry.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "npw-progress-lease"
+        },
+        {
+          "kind": "repository_path",
+          "target": "tests/test_check_coordination_claims.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "npw-progress-lease"
+        },
+        {
+          "kind": "repository_path",
+          "target": "tests/test_generate_active_work_registry.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "npw-progress-lease"
+        },
+        {
+          "kind": "repository_path",
+          "target": "tests/test_session_cli.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "npw-progress-lease"
+        }
+      ],
+      "acceptance": [
+        {
+          "id": "NPW01-A1",
+          "criterion": "A live claim with fresh heartbeats and expired durable progress is reported stalled with exact evidence and next action while ownership remains unchanged.",
+          "evidence_required": [
+            "Focused claim, registry and session status tests",
+            "Frozen-clock before/after progress deadline fixture",
+            "Legacy-claim compatibility fixture"
+          ],
+          "negative_control": "Heartbeat, blocker, handoff, file dirt and stalled pruning cannot change progress_at or release the claim."
+        }
+      ],
+      "readiness": {
+        "status": "ready",
+        "required_approval_types": [],
+        "approvals": [],
+        "failed_guards": []
+      },
+      "claim_policy": {
+        "eligibility_rule": "One exact live registry claim owns only the progress-lease runtime, status, documentation and focused-test paths.",
+        "lease_policy": "renewable",
+        "lease_duration_minutes": 1440,
+        "max_active_per_claimant": 1,
+        "named_owner_id": null
+      },
+      "status": "ready",
+      "record_version": 1
+    },
+    {
+      "schema_version": "1.0",
+      "record_type": "work_unit",
+      "id": "npw-02-provider-free-blocker-decision",
+      "initiative_id": "coordination-integrity",
+      "goal_id": "no-passive-waiting",
+      "design_revision": "405f7423f9e5673185cea604a8d594d68d69c85c",
+      "spec_revision": "npw-02-v1",
+      "title": "Implement provider-free blocker and ready-queue decisions",
+      "class": "implementation",
+      "objective": "Return a typed deterministic disposition that distinguishes ready alternatives, path waits, verified blockers and incomplete queue knowledge without mutating claims.",
+      "profile": "standard",
+      "execution_class": "independently_executable",
+      "claimability": "ready_for_execution",
+      "authorization_mode": "registry_claim",
+      "scope": {
+        "included": [
+          "Strict BlockerRequestV1, ReadyQueueEvaluationV1 and BlockerDispositionV1 contracts",
+          "Revision-bound work-graph queue evaluation",
+          "Claim-conflict and mailbox-delivery evidence inputs",
+          "A/B/C and unrelated-root fixtures",
+          "Read-only decision CLI"
+        ],
+        "excluded": [
+          "Claim or tracker mutation",
+          "Progress-lease implementation",
+          "LLM judgment",
+          "Work-graph requirement for unplanned light work",
+          "Workspace bootstrap edits"
+        ]
+      },
+      "inputs": [
+        {
+          "kind": "bounded_design",
+          "id": "docs/plans/110_no_passive_waiting_enforcement.md",
+          "revision": "405f7423f9e5673185cea604a8d594d68d69c85c"
+        },
+        {
+          "kind": "existing_contract",
+          "id": "enforced_planning/plan_readiness.py",
+          "revision": "812759dcb09ec2cebc5954601b418434256b31b4"
+        }
+      ],
+      "outputs": [
+        "Strict blocker and queue Pydantic contracts",
+        "Pure ready-queue and blocker disposition evaluator",
+        "Read-only CLI and both-sign fixtures"
+      ],
+      "dependencies": [],
+      "conflict_surfaces": [
+        {
+          "kind": "repository_path",
+          "target": "enforced_planning/blocker_policy.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "npw-blocker-policy"
+        },
+        {
+          "kind": "repository_path",
+          "target": "scripts/evaluate_blocker.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "npw-blocker-policy"
+        },
+        {
+          "kind": "repository_path",
+          "target": "tests/test_blocker_policy.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "npw-blocker-policy"
+        }
+      ],
+      "acceptance": [
+        {
+          "id": "NPW02-A1",
+          "criterion": "The same deterministic evaluator returns continue_ready_work for A blocked/B ready, integration_wait for a path collision, and goal_blocked_verified only for complete queue coverage with no eligible units and a supported blocker.",
+          "evidence_required": [
+            "Provider-free contract and decision tests",
+            "A/B/C positive and negative fixture receipts",
+            "Stale, missing and malformed graph tests",
+            "Persisted-versus-observed mailbox tests"
+          ],
+          "negative_control": "Partial or unavailable queue coverage and a merely persisted mailbox message cannot produce goal_blocked_verified."
+        }
+      ],
+      "readiness": {
+        "status": "ready",
+        "required_approval_types": [],
+        "approvals": [],
+        "failed_guards": []
+      },
+      "claim_policy": {
+        "eligibility_rule": "One exact live registry claim owns only the new blocker-policy module, read-only CLI and focused tests.",
+        "lease_policy": "renewable",
+        "lease_duration_minutes": 1440,
+        "max_active_per_claimant": 1,
+        "named_owner_id": null
+      },
+      "status": "ready",
+      "record_version": 1
+    },
+    {
+      "schema_version": "1.0",
+      "record_type": "work_unit",
+      "id": "npw-03-safe-lifecycle-integration",
+      "initiative_id": "coordination-integrity",
+      "goal_id": "no-passive-waiting",
+      "design_revision": "405f7423f9e5673185cea604a8d594d68d69c85c",
+      "spec_revision": "npw-03-v1",
+      "title": "Apply blocker dispositions through safe scoped lifecycle operations",
+      "class": "integration",
+      "objective": "Record the deterministic disposition and either continue another unit or safely narrow, hand off, or retire only the blocked goal scope while preserving unrelated roots and dirty work.",
+      "profile": "standard",
+      "execution_class": "coupled",
+      "claimability": "blocked_dependencies",
+      "authorization_mode": "registry_claim",
+      "integration_owner_id": "enforced-planning",
+      "scope": {
+        "included": [
+          "Sanctioned blocker-session entrypoint",
+          "Scoped blocker receipt persistence",
+          "Scoped handoff or retirement of one goal root and descendants",
+          "Installed wrapper generation",
+          "End-to-end A/B/C and true-blocker lifecycle tests"
+        ],
+        "excluded": [
+          "Automatic takeover or deletion",
+          "Ending unrelated roots owned by the same runtime",
+          "Workspace bootstrap edit",
+          "Fleet deadline tuning"
+        ]
+      },
+      "inputs": [
+        {
+          "kind": "work_unit_output",
+          "id": "npw-01-progress-lease-current-main",
+          "revision": "accepted"
+        },
+        {
+          "kind": "work_unit_output",
+          "id": "npw-02-provider-free-blocker-decision",
+          "revision": "accepted"
+        }
+      ],
+      "outputs": [
+        "Sanctioned blocker disposition and scoped lifecycle command",
+        "Installed consumer wrappers",
+        "End-to-end receipts for continue-ready-work and true-blocker paths"
+      ],
+      "dependencies": [
+        {
+          "unit_id": "npw-01-progress-lease-current-main",
+          "type": "hard",
+          "gate": {
+            "type": "unit_status",
+            "required_status": "accepted"
+          },
+          "rationale": "Lifecycle application must preserve the accepted progress-versus-liveness state model."
+        },
+        {
+          "unit_id": "npw-02-provider-free-blocker-decision",
+          "type": "hard",
+          "gate": {
+            "type": "unit_status",
+            "required_status": "accepted"
+          },
+          "rationale": "Ownership changes may consume only an accepted deterministic disposition."
+        }
+      ],
+      "conflict_surfaces": [
+        {
+          "kind": "repository_path",
+          "target": "enforced_planning/session_lifecycle.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "npw-lifecycle-integration"
+        },
+        {
+          "kind": "repository_path",
+          "target": "enforced_planning/coordination_claims.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "npw-lifecycle-integration"
+        },
+        {
+          "kind": "repository_path",
+          "target": "scripts/install_governed_repo.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "npw-lifecycle-integration"
+        },
+        {
+          "kind": "repository_path",
+          "target": "tests/test_session_cli.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "npw-lifecycle-integration"
+        }
+      ],
+      "acceptance": [
+        {
+          "id": "NPW03-A1",
+          "criterion": "One installed command denies a whole-goal block while a unit is ready and safely records and retires only the selected goal scope for a verified true blocker.",
+          "evidence_required": [
+            "End-to-end fixture receipt for continue_ready_work",
+            "End-to-end fixture receipt for goal_blocked_verified",
+            "Installed-wrapper parity test",
+            "Idempotent replay and dirty-work preservation tests"
+          ],
+          "negative_control": "An unrelated authorized root remains active and no dirty worktree, branch or claim is deleted, rebased or taken over."
+        }
+      ],
+      "readiness": {
+        "status": "blocked",
+        "required_approval_types": [],
+        "approvals": [],
+        "failed_guards": [
+          "npw-01-progress-lease-current-main must be accepted",
+          "npw-02-provider-free-blocker-decision must be accepted"
+        ]
+      },
+      "claim_policy": {
+        "eligibility_rule": "Both provider units are accepted and one integration claim exclusively owns their shared lifecycle and installer paths.",
+        "lease_policy": "renewable",
+        "lease_duration_minutes": 1440,
+        "max_active_per_claimant": 1,
+        "named_owner_id": null
+      },
+      "status": "blocked",
+      "record_version": 1
+    },
+    {
+      "schema_version": "1.0",
+      "record_type": "work_unit",
+      "id": "npw-04-workspace-bootstrap-integration",
+      "initiative_id": "coordination-integrity",
+      "goal_id": "no-passive-waiting",
+      "design_revision": "405f7423f9e5673185cea604a8d594d68d69c85c",
+      "spec_revision": "npw-04-v1",
+      "title": "Integrate the compact workspace no-passive-waiting instruction",
+      "class": "integration",
+      "objective": "Add one compact universal instruction that routes agents to the enforced blocker lifecycle without conflicting with the concurrently implemented ecosystem-feedback instruction.",
+      "profile": "standard",
+      "execution_class": "coupled",
+      "claimability": "blocked_dependencies",
+      "authorization_mode": "registry_claim",
+      "integration_owner_id": "project-meta",
+      "scope": {
+        "included": [
+          "Canonical workspace bootstrap source edit after feedback-lane integration",
+          "Generated instruction-surface synchronization",
+          "One navigation test showing both compact instructions"
+        ],
+        "excluded": [
+          "Feedback command or register implementation",
+          "Duplicating detailed blocker policy in every repository",
+          "Editing another agent's active branch or claim"
+        ]
+      },
+      "inputs": [
+        {
+          "kind": "work_unit_output",
+          "id": "npw-03-safe-lifecycle-integration",
+          "revision": "accepted"
+        },
+        {
+          "kind": "external_integration",
+          "id": "project-meta-universal-feedback-bootstrap",
+          "revision": "pending"
+        }
+      ],
+      "outputs": [
+        "One canonical workspace instruction covering no-passive-waiting",
+        "Synchronized generated instruction surfaces",
+        "Navigation and non-duplication evidence"
+      ],
+      "dependencies": [
+        {
+          "unit_id": "npw-03-safe-lifecycle-integration",
+          "type": "hard",
+          "gate": {
+            "type": "unit_status",
+            "required_status": "accepted"
+          },
+          "rationale": "The workspace instruction must point to a real installed lifecycle capability."
+        }
+      ],
+      "conflict_surfaces": [
+        {
+          "kind": "repository_path",
+          "target": ".claude/CLAUDE.md canonical workspace bootstrap source",
+          "repository": "project-meta",
+          "access": "exclusive",
+          "coordination_key": "workspace-bootstrap-feedback-and-waiting"
+        }
+      ],
+      "acceptance": [
+        {
+          "id": "NPW04-A1",
+          "criterion": "The always-loaded workspace instruction tells agents to evaluate ready work before reporting blocked and to record a precise blocker/resume event, while preserving the accepted feedback-routing instruction.",
+          "evidence_required": [
+            "Canonical-source diff",
+            "Instruction-surface sync check",
+            "Navigation test for both feedback and blocker routes"
+          ],
+          "negative_control": "No derived AGENTS.md is hand-edited and neither compact instruction duplicates the other's detailed implementation."
+        }
+      ],
+      "readiness": {
+        "status": "blocked",
+        "required_approval_types": [],
+        "approvals": [],
+        "failed_guards": [
+          "npw-03-safe-lifecycle-integration must be accepted",
+          "the project-meta universal-feedback bootstrap claim must be integrated or released"
+        ]
+      },
+      "claim_policy": {
+        "eligibility_rule": "Claim only after the active workspace-bootstrap feedback lane is integrated or released and NPW-03 is accepted.",
+        "lease_policy": "renewable",
+        "lease_duration_minutes": 1440,
+        "max_active_per_claimant": 1,
+        "named_owner_id": null
+      },
+      "status": "blocked",
+      "record_version": 1
+    },
+    {
+      "schema_version": "1.0",
+      "record_type": "work_unit",
+      "id": "npw-05-fleet-observation",
+      "initiative_id": "coordination-integrity",
+      "goal_id": "no-passive-waiting",
+      "design_revision": "405f7423f9e5673185cea604a8d594d68d69c85c",
+      "spec_revision": "npw-05-v1",
+      "title": "Observe stalled-lane usefulness without enabling takeover",
+      "class": "verification",
+      "objective": "Classify real stalled reports and determine whether the reporting deadline or instrumentation needs adjustment without changing ownership semantics.",
+      "profile": "standard",
+      "execution_class": "independently_executable",
+      "claimability": "blocked_dependencies",
+      "authorization_mode": "registry_claim",
+      "scope": {
+        "included": [
+          "Read-only fleet status capture",
+          "Classification as genuine stall, legitimate quiet work, missing instrumentation or noisy threshold",
+          "Bounded recommendation on reporting configuration"
+        ],
+        "excluded": [
+          "Automatic takeover, deletion or reassignment",
+          "Model-based progress scoring",
+          "Changing blocker semantics from an observational sample"
+        ]
+      },
+      "inputs": [
+        {
+          "kind": "work_unit_output",
+          "id": "npw-04-workspace-bootstrap-integration",
+          "revision": "accepted"
+        }
+      ],
+      "outputs": [
+        "Timestamped read-only stalled-lane observation set",
+        "Per-case classification and evidence references",
+        "Keep, tune or repair-instrumentation recommendation"
+      ],
+      "dependencies": [
+        {
+          "unit_id": "npw-04-workspace-bootstrap-integration",
+          "type": "hard",
+          "gate": {
+            "type": "unit_status",
+            "required_status": "accepted"
+          },
+          "rationale": "Observation is meaningful only after the runtime and compact agent instruction are installed together."
+        }
+      ],
+      "conflict_surfaces": [
+        {
+          "kind": "external_system",
+          "target": "shared coordination claim registry",
+          "access": "read",
+          "coordination_key": "npw-fleet-observation"
+        }
+      ],
+      "acceptance": [
+        {
+          "id": "NPW05-A1",
+          "criterion": "Every observed stalled row steps down to one exact claim and is classified with evidence without mutating any claim or worktree.",
+          "evidence_required": [
+            "Timestamped registry snapshot",
+            "Per-case evidence and classification",
+            "Explicit stopping rule and recommendation"
+          ],
+          "negative_control": "The observation command performs zero claim, branch, worktree or tracker mutations."
+        }
+      ],
+      "readiness": {
+        "status": "blocked",
+        "required_approval_types": [],
+        "approvals": [],
+        "failed_guards": [
+          "npw-04-workspace-bootstrap-integration must be accepted"
+        ]
+      },
+      "claim_policy": {
+        "eligibility_rule": "NPW-04 is accepted; claim only the read-only evidence output path.",
+        "lease_policy": "renewable",
+        "lease_duration_minutes": 1440,
+        "max_active_per_claimant": 1,
+        "named_owner_id": null
+      },
+      "status": "blocked",
+      "record_version": 1
+    }
+  ]
+}

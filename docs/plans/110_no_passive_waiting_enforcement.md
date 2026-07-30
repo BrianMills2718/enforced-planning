@@ -1,6 +1,6 @@
 # Plan #110: No-Passive-Waiting Enforcement
 
-**Status:** 🚧 In Progress — design adopted; implementation graph next
+**Status:** 🚧 In Progress — work graph validated; NPW-01 and NPW-02 ready
 **Type:** implementation
 **Priority:** Critical
 **phase_ref:** "Coordination runtime maintenance"
@@ -367,5 +367,7 @@ behaviors.
 
 ## Next action
 
-Decompose these slices into revision-bound work units, validate the graph, then
-execute the first ready unit under repository authority.
+Execute `npw-01-progress-lease-current-main` and
+`npw-02-provider-free-blocker-decision` from the validated companion work graph.
+They own disjoint paths and may proceed independently. Do not start NPW-03 until
+both are accepted against their exact submitted revisions.

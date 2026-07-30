@@ -631,6 +631,14 @@ def _is_ancestor(repo_root: Path, ancestor_ref: str, descendant_ref: str) -> boo
     return result.returncode == 0
 
 
+def _patch_without_blob_identity(patch: bytes) -> bytes:
+    """Remove only full-index blob IDs while preserving the complete patch body."""
+
+    return b"".join(
+        line for line in patch.splitlines(keepends=True) if not line.startswith(b"index ")
+    )
+
+
 def _squash_merge_matches_branch(
     repo_root: Path,
     *,
@@ -672,7 +680,11 @@ def _squash_merge_matches_branch(
             capture_output=True,
             check=False,
         )
-        return result.stdout if result.returncode == 0 else None
+        return (
+            _patch_without_blob_identity(result.stdout)
+            if result.returncode == 0
+            else None
+        )
 
     branch_patch = patch(merge_base.stdout.strip(), branch_ref)
     merged_patch = patch(merge_parent, merge_commit)

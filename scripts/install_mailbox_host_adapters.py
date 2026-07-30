@@ -78,12 +78,13 @@ def main() -> int:
             candidate = StoredHostInstallationCandidateV1.model_validate_json(
                 Path(args.apply_candidate).expanduser().read_text(encoding="utf-8")
             )
-            output_json = apply_host_installation_candidate(
+            apply_receipt = apply_host_installation_candidate(
                 candidate=candidate,
                 approved_payload_sha256=args.approved_payload_sha256,
                 request=request,
                 backup_root=args.backup_root,
-            ).model_dump_json(indent=2)
+            )
+            output_json = apply_receipt.model_dump_json(indent=2)
         else:
             output_json = (
                 generate_host_installation_candidate(request).model_dump_json(indent=2)
@@ -100,6 +101,13 @@ def main() -> int:
         print(f"mailbox host installation planning failed: {exc}", file=sys.stderr)
         return 2
     print(output_json)
+    if args.apply_candidate:
+        print(
+            "RESTART REQUIRED: running clients do not reload newly installed hooks. "
+            "After restart, send and acknowledge one exact-session mailbox canary, then run "
+            "scripts/verify_mailbox_hook_activation.py --canary-message-id <message-id>.",
+            file=sys.stderr,
+        )
     return 0
 
 

@@ -134,18 +134,41 @@ explicit acknowledgement certification is still deferred: it exceeds the
 presently needed proof that the host-installed hooks can surface a message on
 the next lifecycle event.
 
+### MF-03B Activation Integrity Repair
+
+The original apply receipt carried
+`client_restart_or_resume_required=true`, but the installation CLI exposed that
+requirement only inside JSON. A later live PRE-5 check proved the operational
+gap: six Codex processes had started before the host config changed, so a
+message remained persisted while the clients continued making tool calls.
+Restarting the clients caused the host `SessionStart` hook to observe the
+message, and the recipient acknowledged it normally.
+
+The repair adds a first-class activation verifier. It reads kernel process
+start times, compares every live Codex process with the host config modification
+time, and fails with `RESTART REQUIRED` while any older process remains. After
+restart it also requires one exact mailbox canary whose acknowledgement receipt
+was recorded after the config change. Process freshness and canary success are
+independent fields; neither alone licenses `activation_verified=true`.
+
+The real verifier passed at `2026-07-30T19:10:56.957408Z` against config SHA-256
+`15070ce2037f896d970816fe3083e33a5af418110c122a2c24a5694ae83ef1bf`.
+All six observed Codex processes started after the config changed, and canary
+`msg_eb0686e99a47d24f3cab7fb55f3e5ce1` retained exact observed and acknowledged
+evidence with receipt-set SHA-256
+`bc9b3bf6f692821bbe5893cfaaadce630e6a2d36643d7230ed428bba0443ea3a`.
+The installer now also prints the restart and canary command prominently on
+stderr after an apply.
+
 ## Gap
 
 **Current:** The canonical JSON mailbox can persist, route, observe, and
-acknowledge cross-client messages. The source repository contains Codex and
-Claude lifecycle adapters, and the bounded installer can copy them into a
-consumer repository. The current DIGIMON checkout nevertheless has no Codex
-mailbox hook, no `.codex/hooks.json`, and no installed coordination hook
-script. A real Plan #186 review message therefore remained `persisted` rather
-than `observed`. User-level Codex and Claude hook configurations also do not
-currently invoke the canonical mailbox adapter. Existing tests prove the core
-and isolated installation fixtures, but there is no fleet drift gate or
-host-level delivery certification.
+acknowledge cross-client messages. Host-level Codex and Claude lifecycle
+adapters are installed, fresh native events have produced exact observation
+receipts, and the Codex activation verifier now distinguishes installed config,
+stale running clients, and a post-config acknowledged canary. Repository-local
+compatibility hooks and the read-only fleet audit remain available during
+migration. Full four-direction MF-05 certification is explicitly deferred.
 
 **Target:** One host-level adapter installation makes the canonical mailbox
 available to every claimed Codex and Claude session on the workstation,
@@ -541,6 +564,7 @@ Framework implementation units may touch only:
 - `scripts/audit_mailbox_delivery.py` (new)
 - `scripts/audit_mailbox_fleet.py` (new)
 - `scripts/install_mailbox_host_adapters.py` (new)
+- `scripts/verify_mailbox_hook_activation.py` (new)
 - `scripts/coordination_hook.py`
 - `hooks/claude/notify-coordination-messages.sh`
 - `hooks/codex/notify-coordination-messages.sh`
@@ -577,7 +601,8 @@ python <company-planning-work-unit-validator> docs/plans/106_cross_client_mailbo
 MF-03A requires a portable candidate bound to the exact before-config and
 adapter hashes and proof that neither host config changed. MF-03B requires the
 exact candidate approval, before/after installation receipts, backup readback,
-idempotent second dry run, Codex `/hooks` review, and fresh client resume.
+idempotent second dry run, Codex `/hooks` review, fresh client resume, and one
+post-config exact-session canary acknowledged through the native hook.
 MF-05 requires four real exact-session message chains.
 
 ## Acceptance Criteria
@@ -594,6 +619,8 @@ MF-05 requires four real exact-session message chains.
   acknowledged evidence.
 - [ ] Missing adapters, invalid configs, wrong identities, expired messages,
   and configuration-only false positives fail loud.
+- [x] Host activation fails loud while any Codex process predates the installed
+  config and passes only with a post-config acknowledged exact-session canary.
 - [ ] No test, installer, or audit claims asynchronous interruption of an idle
   unmanaged client.
 

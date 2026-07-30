@@ -330,8 +330,8 @@
       "initiative_id": "cross-client-mailbox",
       "goal_id": "cross-client-mailbox-delivery",
       "design_revision": "mailbox-fleet-delivery-v2",
-      "spec_revision": "mailbox-mf-03b-v1",
-      "title": "Apply one explicitly approved unchanged host candidate",
+      "spec_revision": "mailbox-mf-03b-v2",
+      "title": "Apply and activation-verify one explicitly approved unchanged host candidate",
       "class": "migration",
       "objective": "Back up and atomically update Brian's Codex and Claude user hook configurations only when the current inputs still match an explicitly approved MF-03A candidate.",
       "profile": "controlled",
@@ -346,7 +346,8 @@
           "Timestamped backups of exact user hook configuration files",
           "Atomic merge of only canonical mailbox hook blocks",
           "Post-write parse/readback and idempotent second dry run",
-          "Operator hook trust review and client restart/resume checklist"
+          "Operator hook trust review and client restart/resume checklist",
+          "Fail-loud stale Codex process detection and one post-config acknowledged mailbox canary"
         ],
         "excluded": [
           "Candidate generation or silent regeneration",
@@ -374,7 +375,8 @@
         "HostInstallationApplyReceiptV1 bound to the approved candidate payload digest",
         "HostInstallationApplyFailureV1 with verified rollback evidence for any partial failure",
         "Before/after MailboxInstallationReceiptV1 records",
-        "Zero-action second dry run and explicit trust/restart state"
+        "Zero-action second dry run and explicit trust/restart state",
+        "MailboxHookActivationReceiptV1 separating process freshness from exact canary evidence"
       ],
       "dependencies": [
         {
@@ -398,6 +400,13 @@
         {
           "kind": "repository_path",
           "target": "scripts/install_mailbox_host_adapters.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "mailbox-host-apply"
+        },
+        {
+          "kind": "repository_path",
+          "target": "scripts/verify_mailbox_hook_activation.py",
           "repository": "enforced-planning",
           "access": "exclusive",
           "coordination_key": "mailbox-host-apply"
@@ -432,9 +441,10 @@
             "Backup existence, digest, and parse readback",
             "Injected second-write/readback failure fixture proving restoration to exact before hashes",
             "Second dry run with zero actions",
-            "Codex /hooks review plus Codex and Claude restart/resume state recorded"
+            "Codex /hooks review plus Codex and Claude restart/resume state recorded",
+            "Fail-loud process/config freshness receipt and one post-config exact-session canary acknowledgement"
           ],
-          "negative_control": "Malformed config, failed backup, stale candidate, changed config or adapter hash, unapproved digest, partial write, or untrusted hook aborts promotion to operational state and preserves recoverable originals."
+          "negative_control": "Malformed config, failed backup, stale candidate, changed config or adapter hash, unapproved digest, partial write, untrusted hook, a process predating the config, or a canary acknowledged before the config change aborts promotion to operational state and preserves recoverable originals."
         }
       ],
       "readiness": {
@@ -452,8 +462,8 @@
         ],
         "failed_guards": []
       },
-      "status": "ready",
-      "record_version": 2
+      "status": "accepted",
+      "record_version": 3
     },
     {
       "schema_version": "1.0",

@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import json
 import hashlib
+import os
 import subprocess
 import sys
 import tomllib
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -24,14 +25,102 @@ from enforced_planning.mailbox_delivery import (
     _candidate_content,
     apply_host_installation_candidate,
     audit_host_installation,
+    check_mailbox_hook_activation,
+    discover_codex_processes,
     generate_host_installation_candidate,
     plan_host_installation,
 )
-from enforced_planning.coordination_messages import MessageReceipt, StoredReceiptRecord, _model_digest
+from enforced_planning.coordination_messages import (
+    CoordinationMessage,
+    ExactSessionSelector,
+    MessageReceipt,
+    StoredMessageRecord,
+    StoredReceiptRecord,
+    _model_digest,
+)
 
 
 CODEX_COMMAND = "python3 /opt/mailbox/codex_adapter.py"
 CLAUDE_COMMAND = "python3 /opt/mailbox/claude_adapter.py"
+
+
+def _write_fake_proc(
+    proc_root: Path,
+    *,
+    pid: int,
+    started_at: datetime,
+    boot_epoch: int,
+    clock_ticks: int,
+    executable: str = "/usr/bin/codex",
+) -> None:
+    """Write the minimum Linux proc records needed by the process detector."""
+
+    process_dir = proc_root / str(pid)
+    process_dir.mkdir(parents=True)
+    process_dir.joinpath("cmdline").write_bytes(
+        executable.encode("utf-8") + b"\0--yolo\0resume\0"
+    )
+    start_ticks = int((started_at.timestamp() - boot_epoch) * clock_ticks)
+    fields_after_command = ["S", *(["0"] * 18), str(start_ticks)]
+    process_dir.joinpath("stat").write_text(
+        f"{pid} (codex) {' '.join(fields_after_command)}\n",
+        encoding="utf-8",
+    )
+
+
+def _write_acknowledged_canary(
+    mailbox_root: Path,
+    *,
+    message_id: str,
+    created_at: datetime,
+) -> None:
+    """Persist exact message and acknowledgement envelopes for activation checks."""
+
+    message = CoordinationMessage(
+        schema_version="1.0",
+        message_id=message_id,
+        sender_session_id="codex:sender",
+        recipient_selector=ExactSessionSelector(kind="session", session_id="codex:recipient"),
+        recipient_session_id="codex:recipient",
+        project="fixture",
+        kind="coordination_request",
+        subject="Mailbox activation canary",
+        body="Acknowledge after the restarted hook displays this canary.",
+        created_at=created_at,
+        expires_at=created_at + timedelta(hours=1),
+        request_sha256="1" * 64,
+    )
+    acknowledgement = MessageReceipt(
+        schema_version="1.0",
+        receipt_id="rcpt_" + ("2" * 32),
+        message_id=message_id,
+        recipient_session_id="codex:recipient",
+        event="acknowledged",
+        recorded_at=created_at + timedelta(minutes=1),
+        disposition="accepted",
+    )
+    messages_dir = mailbox_root / "messages"
+    receipts_dir = mailbox_root / "receipts"
+    messages_dir.mkdir(parents=True)
+    receipts_dir.mkdir(parents=True)
+    stored_message = StoredMessageRecord(
+        record_type="coordination_message",
+        payload=message,
+        payload_sha256=_model_digest(message),
+    )
+    stored_receipt = StoredReceiptRecord(
+        record_type="message_receipt",
+        payload=acknowledgement,
+        payload_sha256=_model_digest(acknowledgement),
+    )
+    messages_dir.joinpath(f"{message_id}.json").write_text(
+        stored_message.model_dump_json(indent=2) + "\n",
+        encoding="utf-8",
+    )
+    receipts_dir.joinpath(f"{acknowledgement.receipt_id}.json").write_text(
+        stored_receipt.model_dump_json(indent=2) + "\n",
+        encoding="utf-8",
+    )
 
 
 def _request(tmp_path: Path) -> HostInstallationAuditRequestV1:
@@ -269,6 +358,208 @@ def test_host_candidate_handles_absent_config_without_creating_it(tmp_path: Path
     assert all(item.proposed_sha256 for item in candidate.payload.configs)
     assert not Path(request.codex_config_path).exists()
     assert not Path(request.claude_config_path).exists()
+
+
+def test_process_detector_reports_codex_start_times_from_proc(tmp_path: Path) -> None:
+    """Only live Codex executables become restart candidates."""
+
+    proc_root = tmp_path / "proc"
+    proc_root.mkdir()
+    boot_epoch = 1_700_000_000
+    clock_ticks = 100
+    proc_root.joinpath("stat").write_text(f"cpu 1 2 3\nbtime {boot_epoch}\n", encoding="utf-8")
+    expected_start = datetime.fromtimestamp(boot_epoch + 30, tz=UTC)
+    _write_fake_proc(
+        proc_root,
+        pid=101,
+        started_at=expected_start,
+        boot_epoch=boot_epoch,
+        clock_ticks=clock_ticks,
+    )
+    _write_fake_proc(
+        proc_root,
+        pid=102,
+        started_at=expected_start,
+        boot_epoch=boot_epoch,
+        clock_ticks=clock_ticks,
+        executable="/usr/bin/python3",
+    )
+
+    processes = discover_codex_processes(proc_root=proc_root, clock_ticks=clock_ticks)
+
+    assert [(process.pid, process.started_at, process.command) for process in processes] == [
+        (101, expected_start, "codex")
+    ]
+
+
+def test_activation_check_requires_restart_for_process_predating_config(tmp_path: Path) -> None:
+    """Installed bytes cannot be promoted while an older Codex process is alive."""
+
+    proc_root = tmp_path / "proc"
+    proc_root.mkdir()
+    boot_epoch = 1_700_000_000
+    clock_ticks = 100
+    proc_root.joinpath("stat").write_text(f"btime {boot_epoch}\n", encoding="utf-8")
+    config = tmp_path / "config.toml"
+    config.write_text('model = "gpt-5"\n', encoding="utf-8")
+    config_changed_at = datetime.fromtimestamp(boot_epoch + 60, tz=UTC)
+    os.utime(config, (config_changed_at.timestamp(), config_changed_at.timestamp()))
+    _write_fake_proc(
+        proc_root,
+        pid=201,
+        started_at=datetime.fromtimestamp(boot_epoch + 30, tz=UTC),
+        boot_epoch=boot_epoch,
+        clock_ticks=clock_ticks,
+    )
+
+    receipt = check_mailbox_hook_activation(
+        codex_config_path=str(config),
+        proc_root=proc_root,
+        clock_ticks=clock_ticks,
+        mailbox_root=tmp_path / "mailbox",
+        claims_dir=tmp_path / "claims",
+        observed_at=datetime.fromtimestamp(boot_epoch + 150, tz=UTC),
+    )
+
+    assert receipt.restart_required is True
+    assert [process.pid for process in receipt.stale_codex_processes] == [201]
+    assert receipt.activation_verified is False
+    assert receipt.next_action == "restart_codex_clients"
+
+
+def test_activation_check_requires_fresh_process_and_acknowledged_canary(tmp_path: Path) -> None:
+    """One exact acknowledged canary completes activation only after restart."""
+
+    proc_root = tmp_path / "proc"
+    proc_root.mkdir()
+    boot_epoch = 1_700_000_000
+    clock_ticks = 100
+    proc_root.joinpath("stat").write_text(f"btime {boot_epoch}\n", encoding="utf-8")
+    config = tmp_path / "config.toml"
+    config.write_text('model = "gpt-5"\n', encoding="utf-8")
+    config_changed_at = datetime.fromtimestamp(boot_epoch + 30, tz=UTC)
+    os.utime(config, (config_changed_at.timestamp(), config_changed_at.timestamp()))
+    _write_fake_proc(
+        proc_root,
+        pid=301,
+        started_at=datetime.fromtimestamp(boot_epoch + 60, tz=UTC),
+        boot_epoch=boot_epoch,
+        clock_ticks=clock_ticks,
+    )
+    canary_id = "msg_" + ("3" * 32)
+    mailbox_root = tmp_path / "mailbox"
+    _write_acknowledged_canary(
+        mailbox_root,
+        message_id=canary_id,
+        created_at=datetime.fromtimestamp(boot_epoch + 70, tz=UTC),
+    )
+
+    receipt = check_mailbox_hook_activation(
+        codex_config_path=str(config),
+        proc_root=proc_root,
+        clock_ticks=clock_ticks,
+        canary_message_id=canary_id,
+        mailbox_root=mailbox_root,
+        claims_dir=tmp_path / "claims",
+        observed_at=datetime.fromtimestamp(boot_epoch + 150, tz=UTC),
+    )
+
+    assert receipt.restart_required is False
+    assert receipt.canary_state == "acknowledged"
+    assert receipt.canary_observed is True
+    assert receipt.canary_acknowledged is True
+    assert receipt.activation_verified is True
+    assert receipt.next_action == "none"
+
+
+def test_activation_check_rejects_canary_acknowledged_before_config_change(tmp_path: Path) -> None:
+    """Historical mailbox success cannot certify newly written hook configuration."""
+
+    proc_root = tmp_path / "proc"
+    proc_root.mkdir()
+    boot_epoch = 1_700_000_000
+    clock_ticks = 100
+    proc_root.joinpath("stat").write_text(f"btime {boot_epoch}\n", encoding="utf-8")
+    config = tmp_path / "config.toml"
+    config.write_text('model = "gpt-5"\n', encoding="utf-8")
+    config_changed_at = datetime.fromtimestamp(boot_epoch + 120, tz=UTC)
+    os.utime(config, (config_changed_at.timestamp(), config_changed_at.timestamp()))
+    _write_fake_proc(
+        proc_root,
+        pid=351,
+        started_at=datetime.fromtimestamp(boot_epoch + 130, tz=UTC),
+        boot_epoch=boot_epoch,
+        clock_ticks=clock_ticks,
+    )
+    canary_id = "msg_" + ("4" * 32)
+    mailbox_root = tmp_path / "mailbox"
+    _write_acknowledged_canary(
+        mailbox_root,
+        message_id=canary_id,
+        created_at=datetime.fromtimestamp(boot_epoch + 30, tz=UTC),
+    )
+
+    receipt = check_mailbox_hook_activation(
+        codex_config_path=str(config),
+        proc_root=proc_root,
+        clock_ticks=clock_ticks,
+        canary_message_id=canary_id,
+        mailbox_root=mailbox_root,
+        claims_dir=tmp_path / "claims",
+        observed_at=datetime.fromtimestamp(boot_epoch + 150, tz=UTC),
+    )
+
+    assert receipt.restart_required is False
+    assert receipt.canary_state == "acknowledged"
+    assert receipt.canary_acknowledged is False
+    assert receipt.activation_verified is False
+    assert receipt.next_action == "send_or_acknowledge_canary"
+
+
+def test_activation_cli_fails_loud_when_restart_is_required(tmp_path: Path) -> None:
+    """The operator sees an emphatic restart instruction, not only a JSON flag."""
+
+    proc_root = tmp_path / "proc"
+    proc_root.mkdir()
+    boot_epoch = 1_700_000_000
+    clock_ticks = 100
+    proc_root.joinpath("stat").write_text(f"btime {boot_epoch}\n", encoding="utf-8")
+    config = tmp_path / "config.toml"
+    config.write_text('model = "gpt-5"\n', encoding="utf-8")
+    config_changed_at = datetime.fromtimestamp(boot_epoch + 60, tz=UTC)
+    os.utime(config, (config_changed_at.timestamp(), config_changed_at.timestamp()))
+    _write_fake_proc(
+        proc_root,
+        pid=401,
+        started_at=datetime.fromtimestamp(boot_epoch + 30, tz=UTC),
+        boot_epoch=boot_epoch,
+        clock_ticks=clock_ticks,
+    )
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "scripts/verify_mailbox_hook_activation.py",
+            "--codex-config",
+            str(config),
+            "--proc-root",
+            str(proc_root),
+            "--clock-ticks",
+            str(clock_ticks),
+            "--mailbox-root",
+            str(tmp_path / "mailbox"),
+            "--claims-dir",
+            str(tmp_path / "claims"),
+        ],
+        cwd=Path(__file__).resolve().parents[1],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 3
+    assert "RESTART REQUIRED" in result.stderr
+    assert json.loads(result.stdout)["restart_required"] is True
 
 
 def test_host_candidate_fails_loudly_on_adapter_digest_drift_or_invalid_envelope(tmp_path: Path) -> None:

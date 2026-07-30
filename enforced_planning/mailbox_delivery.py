@@ -21,7 +21,13 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from enforced_planning.coordination_messages import StoredReceiptRecord
+from enforced_planning.coordination_messages import (
+    CoordinationMessageError,
+    CoordinationMessageStore,
+    MessageState,
+    MessageStatusRequest,
+    StoredReceiptRecord,
+)
 
 
 ClientName = Literal["codex", "claude-code"]
@@ -214,6 +220,63 @@ class HostInstallationApplyReceiptV1(StrictContract):
     client_restart_or_resume_required: Literal[True] = True
 
 
+class CodexProcessV1(StrictContract):
+    """One live Codex process relevant to host-hook activation."""
+
+    pid: int = Field(gt=0)
+    started_at: datetime
+    command: str = Field(min_length=1)
+
+
+class MailboxHookActivationReceiptV1(StrictContract):
+    """Fresh host-process and exact-canary proof after mailbox hook installation."""
+
+    schema_version: Literal["mailbox_hook_activation_receipt.v1"] = "mailbox_hook_activation_receipt.v1"
+    observed_at: datetime
+    codex_config_path: str = Field(min_length=1)
+    codex_config_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    codex_config_modified_at: datetime
+    active_codex_processes: tuple[CodexProcessV1, ...]
+    stale_codex_processes: tuple[CodexProcessV1, ...]
+    restart_required: bool
+    canary_message_id: str | None = Field(default=None, pattern=r"^msg_[0-9a-f]{32}$")
+    canary_state: MessageState | None = None
+    canary_observed: bool = False
+    canary_acknowledged: bool = False
+    canary_receipt_set_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    activation_verified: bool
+    next_action: Literal["restart_codex_clients", "send_or_acknowledge_canary", "none"]
+
+    @model_validator(mode="after")
+    def validate_activation_evidence(self) -> MailboxHookActivationReceiptV1:
+        """Prevent process freshness or a canary alone from licensing activation."""
+
+        if self.restart_required != bool(self.stale_codex_processes):
+            raise ValueError("restart_required must reflect stale_codex_processes")
+        if self.canary_message_id is None and any(
+            (
+                self.canary_state is not None,
+                self.canary_observed,
+                self.canary_acknowledged,
+                self.canary_receipt_set_sha256 is not None,
+            )
+        ):
+            raise ValueError("canary evidence requires canary_message_id")
+        if self.canary_acknowledged and not self.canary_observed:
+            raise ValueError("acknowledged canary must also be observed")
+        expected_verified = not self.restart_required and self.canary_acknowledged
+        if self.activation_verified != expected_verified:
+            raise ValueError("activation_verified requires fresh processes and an acknowledged canary")
+        expected_action = (
+            "restart_codex_clients"
+            if self.restart_required
+            else ("none" if self.canary_acknowledged else "send_or_acknowledge_canary")
+        )
+        if self.next_action != expected_action:
+            raise ValueError("next_action does not match activation evidence")
+        return self
+
+
 class HostInstallationRollbackV1(StrictContract):
     """Exact restoration evidence for one config after an apply failure."""
 
@@ -260,6 +323,144 @@ def _portable_text(value: str) -> str:
 
 def _sha256_bytes(value: bytes) -> str:
     return hashlib.sha256(value).hexdigest()
+
+
+def _proc_boot_time(proc_root: Path) -> float:
+    """Read the kernel boot epoch used to interpret process start ticks."""
+
+    try:
+        stat_lines = (proc_root / "stat").read_text(encoding="utf-8").splitlines()
+    except OSError as exc:
+        raise MailboxInstallationError(f"cannot read process boot time from {proc_root / 'stat'}: {exc}") from exc
+    for line in stat_lines:
+        if line.startswith("btime "):
+            try:
+                return float(line.split()[1])
+            except (IndexError, ValueError) as exc:
+                raise MailboxInstallationError(f"invalid btime in {proc_root / 'stat'}") from exc
+    raise MailboxInstallationError(f"missing btime in {proc_root / 'stat'}")
+
+
+def discover_codex_processes(
+    *,
+    proc_root: Path = Path("/proc"),
+    clock_ticks: int | None = None,
+) -> tuple[CodexProcessV1, ...]:
+    """Enumerate live Codex client processes with kernel-derived start times."""
+
+    ticks = clock_ticks if clock_ticks is not None else int(os.sysconf("SC_CLK_TCK"))
+    if ticks <= 0:
+        raise MailboxInstallationError("process clock ticks must be positive")
+    boot_time = _proc_boot_time(proc_root)
+    processes: list[CodexProcessV1] = []
+    try:
+        entries = tuple(proc_root.iterdir())
+    except OSError as exc:
+        raise MailboxInstallationError(f"cannot enumerate process root {proc_root}: {exc}") from exc
+    for entry in entries:
+        if not entry.name.isdigit() or not entry.is_dir():
+            continue
+        try:
+            command_parts = [part.decode("utf-8", errors="replace") for part in (entry / "cmdline").read_bytes().split(b"\0") if part]
+            if not command_parts:
+                continue
+            executable = Path(command_parts[0]).name
+            if not executable.startswith("codex"):
+                continue
+            stat_text = (entry / "stat").read_text(encoding="utf-8")
+            closing_parenthesis = stat_text.rfind(")")
+            if closing_parenthesis < 0:
+                raise MailboxInstallationError(f"invalid process stat for PID {entry.name}")
+            remaining_fields = stat_text[closing_parenthesis + 2 :].split()
+            start_ticks = int(remaining_fields[19])
+        except FileNotFoundError:
+            continue
+        except PermissionError as exc:
+            raise MailboxInstallationError(f"cannot inspect Codex process PID {entry.name}: {exc}") from exc
+        except (IndexError, ValueError) as exc:
+            raise MailboxInstallationError(f"invalid process stat for PID {entry.name}") from exc
+        started_at = datetime.fromtimestamp(boot_time + (start_ticks / ticks), tz=UTC)
+        processes.append(
+            CodexProcessV1(
+                pid=int(entry.name),
+                started_at=started_at,
+                command=executable,
+            )
+        )
+    return tuple(sorted(processes, key=lambda item: (item.started_at, item.pid)))
+
+
+def check_mailbox_hook_activation(
+    *,
+    codex_config_path: str = "~/.codex/config.toml",
+    proc_root: Path = Path("/proc"),
+    clock_ticks: int | None = None,
+    canary_message_id: str | None = None,
+    mailbox_root: Path = Path("~/.claude/coordination/messages-v1"),
+    claims_dir: Path = Path("~/.claude/coordination/claims"),
+    observed_at: datetime | None = None,
+) -> MailboxHookActivationReceiptV1:
+    """Require fresh Codex processes plus one acknowledged exact-session canary."""
+
+    now = observed_at or datetime.now(UTC)
+    config_path = _path(codex_config_path)
+    if not config_path.is_file():
+        raise MailboxInstallationError(f"Codex host config is missing: {config_path}")
+    config_bytes = config_path.read_bytes()
+    _parse_config_bytes("codex", config_bytes, label="Codex host config")
+    config_modified_at = datetime.fromtimestamp(config_path.stat().st_mtime, tz=UTC)
+    active_processes = discover_codex_processes(proc_root=proc_root, clock_ticks=clock_ticks)
+    stale_processes = tuple(process for process in active_processes if process.started_at < config_modified_at)
+
+    canary_state: MessageState | None = None
+    canary_observed = False
+    canary_acknowledged = False
+    receipt_set_sha256: str | None = None
+    if canary_message_id is not None:
+        try:
+            status = CoordinationMessageStore(
+                root=mailbox_root.expanduser(),
+                claims_dir=claims_dir.expanduser(),
+            ).status(MessageStatusRequest(message_id=canary_message_id, as_of=now))
+        except CoordinationMessageError as exc:
+            raise MailboxInstallationError(
+                f"cannot verify mailbox activation canary {canary_message_id}: {exc}"
+            ) from exc
+        canary_state = status.state
+        post_config_receipts = tuple(
+            receipt for receipt in status.receipts if receipt.recorded_at >= config_modified_at
+        )
+        canary_observed = any(
+            receipt.event in {"observed", "acknowledged"} for receipt in post_config_receipts
+        )
+        canary_acknowledged = status.state == "acknowledged" and any(
+            receipt.event == "acknowledged" for receipt in post_config_receipts
+        )
+        receipt_set_sha256 = status.receipt_set_sha256
+
+    restart_required = bool(stale_processes)
+    activation_verified = not restart_required and canary_acknowledged
+    next_action: Literal["restart_codex_clients", "send_or_acknowledge_canary", "none"] = (
+        "restart_codex_clients"
+        if restart_required
+        else ("none" if canary_acknowledged else "send_or_acknowledge_canary")
+    )
+    return MailboxHookActivationReceiptV1(
+        observed_at=now,
+        codex_config_path=_portable_text(str(config_path)),
+        codex_config_sha256=_sha256_bytes(config_bytes),
+        codex_config_modified_at=config_modified_at,
+        active_codex_processes=active_processes,
+        stale_codex_processes=stale_processes,
+        restart_required=restart_required,
+        canary_message_id=canary_message_id,
+        canary_state=canary_state,
+        canary_observed=canary_observed,
+        canary_acknowledged=canary_acknowledged,
+        canary_receipt_set_sha256=receipt_set_sha256,
+        activation_verified=activation_verified,
+        next_action=next_action,
+    )
 
 
 def _model_digest(payload: StrictContract) -> str:

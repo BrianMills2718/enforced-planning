@@ -38,7 +38,10 @@ from typing import Any
 import yaml  # type: ignore[import-untyped]
 
 from enforced_planning import claim_mutation_receipts
-from enforced_planning.claim_mutation_receipts import MutationAuditError
+from enforced_planning.claim_mutation_receipts import (
+    CompletedClaimArchiveError,
+    MutationAuditError,
+)
 
 _LOADED_WRITER_IDENTITY = claim_mutation_receipts.writer_identity(Path(__file__))
 
@@ -145,6 +148,7 @@ def record_claim_mutation(
     target_claim_path: Path | None,
     session_id: str | None,
     projection_digest_after: str | None,
+    archive_transaction_id: str | None = None,
 ) -> "claim_mutation_receipts.ClaimMutationReceiptV1":
     """Persist one terminal receipt after a sanctioned YAML/projection mutation.
 
@@ -182,6 +186,7 @@ def record_claim_mutation(
         registry_digest_after=registry_digest_after,
         projection_digest_after=projection_digest_after,
         projection_current_after=projection_current_after,
+        archive_transaction_id=archive_transaction_id,
         error_code=None,
     )
     try:
@@ -1816,40 +1821,198 @@ def prune_completed() -> tuple[int, list[str]]:
     captured elsewhere.
     """
 
+    archive_candidates: list[
+        tuple[
+            Path,
+            bytes,
+            ClaimRecord,
+            claim_mutation_receipts.CompletedClaimArchiveReceiptV1,
+        ]
+    ] = []
     removed_claims: list[tuple[Path, ClaimRecord]] = []
     with claim_registry_lock(CLAIMS_DIR):
-        registry_digest_before = _registry_digest(CLAIMS_DIR)
         if not CLAIMS_DIR.exists():
             return 0, []
-        for claim_file in CLAIMS_DIR.glob("*.yaml"):
+        for claim_file in sorted(CLAIMS_DIR.glob("*.yaml")):
             try:
-                data = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
-            except Exception:
-                continue
+                source_bytes = claim_file.read_bytes()
+                data = yaml.safe_load(source_bytes.decode("utf-8"))
+            except (OSError, UnicodeDecodeError, yaml.YAMLError) as exc:
+                raise CompletedClaimArchiveError(
+                    error_code="invalid_completed_claim_source",
+                    source_path=str(claim_file),
+                    cause=exc,
+                ) from exc
             if not isinstance(data, dict):
-                continue
+                invalid_mapping = ValueError(
+                    "claim YAML must decode to a mapping"
+                )
+                raise CompletedClaimArchiveError(
+                    error_code="invalid_completed_claim_source",
+                    source_path=str(claim_file),
+                    cause=invalid_mapping,
+                ) from invalid_mapping
             claim = normalize_claim(data, source_file=str(claim_file))
             if claim is None:
-                continue
+                invalid_claim = ValueError(
+                    "claim YAML does not satisfy the claim identity contract"
+                )
+                raise CompletedClaimArchiveError(
+                    error_code="invalid_completed_claim_source",
+                    source_path=str(claim_file),
+                    cause=invalid_claim,
+                ) from invalid_claim
             if claim.status.strip().lower() not in COMPLETED_STATUSES:
                 continue
-            claim_file.unlink()
-            removed_claims.append((claim_file, claim))
-        if removed_claims:
-            _projection_path, projection_digest_after = refresh_prewrite_authority_projection(CLAIMS_DIR)
-            for claim_file, claim in removed_claims:
-                record_claim_mutation(
-                    operation="prune",
-                    claims_dir=CLAIMS_DIR,
-                    registry_digest_before=registry_digest_before,
-                    target_project=claim.primary_project(),
-                    target_scope=claim.scope,
-                    target_claim_path=claim_file,
-                    session_id=claim.session_id,
-                    projection_digest_after=projection_digest_after,
+            try:
+                archive_receipt = (
+                    claim_mutation_receipts.build_completed_claim_archive_receipt(
+                        source_kind="live_prune",
+                        source_path=claim_file,
+                        source_bytes=source_bytes,
+                        writer=_LOADED_WRITER_IDENTITY,
+                    )
                 )
+            except ValueError as exc:
+                raise CompletedClaimArchiveError(
+                    error_code="invalid_completed_claim_source",
+                    source_path=str(claim_file),
+                    cause=exc,
+                ) from exc
+            archive_candidates.append(
+                (claim_file, source_bytes, claim, archive_receipt)
+            )
+
+        for claim_file, _source_bytes, _claim, archive_receipt in archive_candidates:
+            try:
+                claim_mutation_receipts.append_completed_claim_archive_receipt(
+                    archive_receipt
+                )
+            except (OSError, ValueError) as exc:
+                raise CompletedClaimArchiveError(
+                    error_code="completed_claim_archive_write_failed",
+                    source_path=str(claim_file),
+                    cause=exc,
+                ) from exc
+
+        for claim_file, source_bytes, _claim, _archive_receipt in archive_candidates:
+            try:
+                current_bytes = claim_file.read_bytes()
+            except OSError as exc:
+                raise CompletedClaimArchiveError(
+                    error_code="completed_claim_source_changed_before_prune",
+                    source_path=str(claim_file),
+                    cause=exc,
+                ) from exc
+            if current_bytes != source_bytes:
+                changed_source = ValueError(
+                    "claim source bytes changed after archive persistence and before prune"
+                )
+                raise CompletedClaimArchiveError(
+                    error_code="completed_claim_source_changed_before_prune",
+                    source_path=str(claim_file),
+                    cause=changed_source,
+                ) from changed_source
+
+        for claim_file, source_bytes, claim, archive_receipt in archive_candidates:
+            try:
+                if claim_file.read_bytes() != source_bytes:
+                    raise ValueError(
+                        "claim source bytes changed immediately before prune"
+                    )
+            except (OSError, ValueError) as exc:
+                raise CompletedClaimArchiveError(
+                    error_code="completed_claim_source_changed_before_prune",
+                    source_path=str(claim_file),
+                    cause=exc,
+                ) from exc
+            registry_digest_before = _registry_digest(CLAIMS_DIR)
+            claim_file.unlink()
+            _projection_path, projection_digest_after = refresh_prewrite_authority_projection(CLAIMS_DIR)
+            record_claim_mutation(
+                operation="prune",
+                claims_dir=CLAIMS_DIR,
+                registry_digest_before=registry_digest_before,
+                target_project=claim.primary_project(),
+                target_scope=claim.scope,
+                target_claim_path=claim_file,
+                session_id=claim.session_id,
+                projection_digest_after=projection_digest_after,
+                archive_transaction_id=archive_receipt.prune_binding.transaction_id,
+            )
+            removed_claims.append((claim_file, claim))
     removed_labels = [f"{claim.primary_project()}:{claim.scope}" for _path, claim in removed_claims]
     return len(removed_labels), sorted(removed_labels)
+
+
+def backfill_completed_claim_archive(
+    *,
+    source_claim_snapshot: Path,
+    expected_source_sha256: str,
+    prune_event_id: str,
+) -> tuple[claim_mutation_receipts.CompletedClaimArchiveReceiptV1, bool]:
+    """Archive one legacy completed claim using exact bytes and prune provenance."""
+
+    resolved_snapshot = source_claim_snapshot.expanduser().resolve()
+    source_bytes = resolved_snapshot.read_bytes()
+    observed_source_sha256 = hashlib.sha256(source_bytes).hexdigest()
+    if observed_source_sha256 != expected_source_sha256:
+        raise ValueError(
+            "source SHA-256 mismatch: "
+            f"expected={expected_source_sha256} observed={observed_source_sha256}"
+        )
+
+    mutation_receipts = claim_mutation_receipts.load_receipts()
+    matching_events = [
+        event for event in mutation_receipts if event.event_id == prune_event_id
+    ]
+    if len(matching_events) != 1:
+        raise ValueError(
+            "legacy completed-claim backfill requires exactly one historical prune "
+            f"event for event_id={prune_event_id!r}"
+        )
+    prune_event = matching_events[0]
+    if not prune_event.target_claim_path:
+        raise ValueError("historical prune event is missing its target claim path")
+    historical_claim_path = Path(
+        prune_event.target_claim_path
+    ).expanduser().resolve()
+    receipt = claim_mutation_receipts.build_completed_claim_archive_receipt(
+        source_kind="legacy_reconciliation",
+        source_path=historical_claim_path,
+        source_bytes=source_bytes,
+        prune_event_id=prune_event.event_id,
+        writer=_LOADED_WRITER_IDENTITY,
+    )
+    expected_filename = _claim_filename(
+        receipt.agent,
+        receipt.project,
+        receipt.scope,
+    )
+    if historical_claim_path.name != expected_filename:
+        raise ValueError(
+            "historical prune event path does not match the completed claim identity: "
+            f"expected filename={expected_filename!r} "
+            f"observed={historical_claim_path.name!r}"
+        )
+    claim_mutation_receipts.validate_completed_claim_archive_prune_binding(
+        receipt,
+        mutation_receipts=mutation_receipts,
+    )
+    _archive_path, appended = (
+        claim_mutation_receipts.append_completed_claim_archive_receipt(receipt)
+    )
+    persisted = [
+        candidate
+        for candidate in claim_mutation_receipts.load_completed_claim_archive_receipts()
+        if candidate.archive_id == receipt.archive_id
+    ]
+    if len(persisted) != 1:
+        raise ValueError(
+            "completed-claim archive did not retain exactly one validated receipt "
+            f"for archive_id={receipt.archive_id}"
+        )
+    return persisted[0], appended
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -1870,6 +2033,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--prune-completed",
         action="store_true",
         help="Remove valid YAML claims already marked complete/completed; never prunes live claims.",
+    )
+    group.add_argument(
+        "--backfill-completed-claim-archive",
+        action="store_true",
+        help="Archive one legacy completed claim from exact snapshot bytes and an applied prune event.",
     )
     group.add_argument(
         "--hydrate-session-ids",
@@ -1914,6 +2082,19 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--work-unit-id",
         help="Exact ready work-unit ID required for plan-bound write ownership.",
+    )
+    parser.add_argument(
+        "--source-claim-snapshot",
+        type=Path,
+        help="Exact completed-claim YAML snapshot used for legacy archive reconciliation.",
+    )
+    parser.add_argument(
+        "--expected-source-sha256",
+        help="Operator-reviewed SHA-256 of --source-claim-snapshot.",
+    )
+    parser.add_argument(
+        "--prune-event-id",
+        help="Existing applied claim-mutation event ID for the legacy prune.",
     )
     parser.add_argument("--json", action="store_true", help="Output as JSON")
 
@@ -1980,6 +2161,20 @@ def _render_mutation_audit_failure(exc: MutationAuditError, *, as_json: bool) ->
 
     if as_json:
         print(json.dumps(exc.to_dict(), indent=2, sort_keys=True))
+    else:
+        print(str(exc), file=sys.stderr)
+    return 1
+
+
+def _render_completed_claim_archive_failure(
+    exc: CompletedClaimArchiveError,
+    *,
+    as_json: bool,
+) -> int:
+    """Report an archive-before-prune failure that left claim YAML unchanged."""
+
+    if as_json:
+        print(json.dumps({"ok": False, **exc.to_dict()}, indent=2, sort_keys=True))
     else:
         print(str(exc), file=sys.stderr)
     return 1
@@ -2150,6 +2345,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.prune_completed:
         try:
             removed, removed_scopes = prune_completed()
+        except CompletedClaimArchiveError as exc:
+            return _render_completed_claim_archive_failure(
+                exc,
+                as_json=args.json,
+            )
         except MutationAuditError as exc:
             return _render_mutation_audit_failure(exc, as_json=args.json)
         payload = {"pruned": removed, "removed_scopes": removed_scopes}
@@ -2159,6 +2359,59 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Completed claims pruned: {removed}")
             if removed_scopes:
                 print("Removed scopes: " + ", ".join(removed_scopes))
+        return 0
+
+    if args.backfill_completed_claim_archive:
+        if not all(
+            [
+                args.source_claim_snapshot,
+                args.expected_source_sha256,
+                args.prune_event_id,
+            ]
+        ):
+            raise SystemExit(
+                "--backfill-completed-claim-archive requires "
+                "--source-claim-snapshot, --expected-source-sha256, and "
+                "--prune-event-id"
+            )
+        try:
+            receipt, appended = backfill_completed_claim_archive(
+                source_claim_snapshot=args.source_claim_snapshot,
+                expected_source_sha256=args.expected_source_sha256,
+                prune_event_id=args.prune_event_id,
+            )
+        except (OSError, ValueError) as exc:
+            payload = {
+                "ok": False,
+                "error_code": "completed_claim_archive_backfill_failed",
+                "error": str(exc),
+            }
+            if args.json:
+                print(json.dumps(payload, indent=2, sort_keys=True))
+            else:
+                print(str(exc), file=sys.stderr)
+            return 1
+        payload = {
+            "ok": True,
+            "archive_id": receipt.archive_id,
+            "receipt_sha256": receipt.receipt_sha256,
+            "archive_path": str(
+                claim_mutation_receipts.DEFAULT_COMPLETED_CLAIM_ARCHIVE_PATH
+                .expanduser()
+                .resolve()
+            ),
+            "appended": appended,
+            "source_kind": receipt.source_kind,
+            "prune_event_id": receipt.prune_binding.mutation_event_id,
+        }
+        if args.json:
+            print(json.dumps(payload, indent=2, sort_keys=True))
+        else:
+            action = "appended" if appended else "already present"
+            print(
+                "Completed-claim archive receipt "
+                f"{receipt.archive_id} {action} at {payload['archive_path']}"
+            )
         return 0
 
     if args.hydrate_session_ids:

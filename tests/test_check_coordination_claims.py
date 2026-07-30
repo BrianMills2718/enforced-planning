@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import base64
+import hashlib
 import importlib.util
 import json
 import subprocess
@@ -41,6 +43,11 @@ def _isolate_claim_mutation_ledger(tmp_path: Path, monkeypatch: pytest.MonkeyPat
         claim_mutation_receipts,
         "DEFAULT_EVENTS_PATH",
         tmp_path / "claim-mutation-events.jsonl",
+    )
+    monkeypatch.setattr(
+        claim_mutation_receipts,
+        "DEFAULT_COMPLETED_CLAIM_ARCHIVE_PATH",
+        tmp_path / "completed-claim-archive.jsonl",
     )
 
 
@@ -1612,6 +1619,415 @@ def test_prune_completed_removes_only_completed_claims(
     assert not (claims_dir / "completed.yaml").exists()
     assert not (claims_dir / "complete.yaml").exists()
     assert (claims_dir / "expired-active.yaml").exists()
+
+
+def _completed_claim_payload(
+    *,
+    scope: str = "completed-scope",
+    status: str = "completed",
+    session_id: str | None = "codex:completed-scope",
+) -> dict:
+    """Return one exact completed-claim fixture payload."""
+
+    return {
+        "agent": "codex",
+        "claimed_at": "2026-04-05T12:00:00+00:00",
+        "expires_at": "2026-04-05T13:00:00+00:00",
+        "projects": ["demo"],
+        "scope": scope,
+        "intent": "Preserve exact completed claim evidence",
+        "claim_type": "program",
+        "session_id": session_id,
+        "status": status,
+    }
+
+
+def _append_historical_prune_event(
+    *,
+    target_claim_path: Path,
+    scope: str = "completed-scope",
+    session_id: str | None = "codex:completed-scope",
+    result: str = "applied_projection_current",
+) -> claim_mutation_receipts.ClaimMutationReceiptV1:
+    """Append one historical mutation event suitable for legacy binding."""
+
+    receipt = claim_mutation_receipts.ClaimMutationReceiptV1(
+        operation="prune",
+        result=result,
+        writer_source_path="/framework/enforced_planning/coordination_claims.py",
+        writer_source_sha256="a" * 64,
+        writer_repo_root="/framework",
+        process_id=123,
+        session_id=session_id,
+        target_project="demo",
+        target_scope=scope,
+        target_claim_path=str(target_claim_path),
+        registry_digest_before="b" * 64,
+        registry_digest_after="c" * 64,
+        projection_digest_after="c" * 64,
+        projection_current_after=True,
+        error_code=None,
+    )
+    claim_mutation_receipts.append_receipt(receipt)
+    return receipt
+
+
+def test_prune_completed_archives_exact_bytes_before_unlink(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Live pruning must retain exact bytes and a matching applied transaction."""
+
+    module = _load_module()
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
+    source_path = claims_dir / "completed.yaml"
+    source_bytes = yaml.safe_dump(
+        _completed_claim_payload(),
+        sort_keys=False,
+    ).encode("utf-8")
+    claims_dir.mkdir(parents=True)
+    source_path.write_bytes(source_bytes)
+
+    removed, removed_scopes = module.prune_completed()
+
+    assert removed == 1
+    assert removed_scopes == ["demo:completed-scope"]
+    assert not source_path.exists()
+    archived = claim_mutation_receipts.load_completed_claim_archive_receipts()
+    assert len(archived) == 1
+    receipt = archived[0]
+    assert receipt.source_kind == "live_prune"
+    assert receipt.source_path == str(source_path)
+    assert receipt.source_sha256 == hashlib.sha256(source_bytes).hexdigest()
+    assert base64.b64decode(receipt.source_yaml_bytes, validate=True) == source_bytes
+    assert receipt.agent == "codex"
+    assert receipt.project == "demo"
+    assert receipt.scope == "completed-scope"
+    assert receipt.session_id == "codex:completed-scope"
+    assert receipt.status == "completed"
+    assert receipt.prune_binding.kind == "live_prune_transaction"
+    mutation_receipts = claim_mutation_receipts.load_receipts()
+    matching = [
+        event
+        for event in mutation_receipts
+        if event.archive_transaction_id == receipt.prune_binding.transaction_id
+    ]
+    assert len(matching) == 1
+    assert matching[0].operation == "prune"
+    assert matching[0].result == "applied_projection_current"
+
+
+def test_prune_completed_archive_failure_leaves_every_claim_byte_unchanged(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """No registry file may unlink when any completed archive append fails."""
+
+    module = _load_module()
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
+    expected: dict[Path, bytes] = {}
+    for scope in ("first", "second"):
+        path = claims_dir / f"{scope}.yaml"
+        source_bytes = yaml.safe_dump(
+            _completed_claim_payload(scope=scope, session_id=f"codex:{scope}"),
+            sort_keys=False,
+        ).encode("utf-8")
+        claims_dir.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(source_bytes)
+        expected[path] = source_bytes
+
+    calls = 0
+    real_append = claim_mutation_receipts.append_completed_claim_archive_receipt
+
+    def fail_second_append(receipt):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise OSError("simulated archive outage")
+        return real_append(receipt)
+
+    monkeypatch.setattr(
+        claim_mutation_receipts,
+        "append_completed_claim_archive_receipt",
+        fail_second_append,
+    )
+
+    with pytest.raises(
+        claim_mutation_receipts.CompletedClaimArchiveError,
+        match="completed_claim_archive_write_failed",
+    ):
+        module.prune_completed()
+
+    assert calls == 2
+    assert {path: path.read_bytes() for path in expected} == expected
+
+
+def test_prune_completed_malformed_yaml_fails_before_any_registry_change(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Malformed YAML cannot be silently skipped by completed housekeeping."""
+
+    module = _load_module()
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
+    claims_dir.mkdir(parents=True)
+    malformed = claims_dir / "malformed.yaml"
+    completed = claims_dir / "completed.yaml"
+    malformed.write_bytes(b"status: [unterminated\n")
+    completed.write_text(
+        yaml.safe_dump(_completed_claim_payload(), sort_keys=False),
+        encoding="utf-8",
+    )
+    before = {path: path.read_bytes() for path in claims_dir.glob("*.yaml")}
+
+    with pytest.raises(
+        claim_mutation_receipts.CompletedClaimArchiveError,
+        match="invalid_completed_claim_source",
+    ):
+        module.prune_completed()
+
+    assert {path: path.read_bytes() for path in claims_dir.glob("*.yaml")} == before
+    assert not claim_mutation_receipts.DEFAULT_COMPLETED_CLAIM_ARCHIVE_PATH.exists()
+
+
+def test_completed_claim_archive_rejects_noncompleted_and_corrupt_sources(
+    tmp_path: Path,
+) -> None:
+    """Status, bytes, digest, parsed identity, and receipt digest are fail-closed."""
+
+    source_path = tmp_path / "claim.yaml"
+    active_bytes = yaml.safe_dump(
+        _completed_claim_payload(status="active"),
+        sort_keys=False,
+    ).encode("utf-8")
+    with pytest.raises(ValueError, match="completed claim"):
+        claim_mutation_receipts.build_completed_claim_archive_receipt(
+            source_kind="live_prune",
+            source_path=source_path,
+            source_bytes=active_bytes,
+        )
+
+    completed_bytes = yaml.safe_dump(
+        _completed_claim_payload(),
+        sort_keys=False,
+    ).encode("utf-8")
+    receipt = claim_mutation_receipts.build_completed_claim_archive_receipt(
+        source_kind="live_prune",
+        source_path=source_path,
+        source_bytes=completed_bytes,
+    )
+    payload = receipt.model_dump(mode="json")
+    invalid_payloads = [
+        {**payload, "source_sha256": "0" * 64},
+        {**payload, "source_yaml_bytes": base64.b64encode(b"different").decode("ascii")},
+        {**payload, "scope": "wrong-scope"},
+        {**payload, "receipt_sha256": "f" * 64},
+    ]
+    for invalid in invalid_payloads:
+        with pytest.raises(ValueError):
+            claim_mutation_receipts.CompletedClaimArchiveReceiptV1.model_validate(invalid)
+
+
+def test_completed_claim_archive_append_is_idempotent_and_rejects_conflict(
+    tmp_path: Path,
+) -> None:
+    """The same archive ID is a no-op; different content under it is corruption."""
+
+    source_bytes = yaml.safe_dump(
+        _completed_claim_payload(),
+        sort_keys=False,
+    ).encode("utf-8")
+    receipt = claim_mutation_receipts.build_completed_claim_archive_receipt(
+        source_kind="live_prune",
+        source_path=tmp_path / "completed.yaml",
+        source_bytes=source_bytes,
+    )
+
+    first_path, first_appended = (
+        claim_mutation_receipts.append_completed_claim_archive_receipt(receipt)
+    )
+    second_path, second_appended = (
+        claim_mutation_receipts.append_completed_claim_archive_receipt(receipt)
+    )
+
+    assert first_path == second_path
+    assert first_appended is True
+    assert second_appended is False
+    assert len(first_path.read_text(encoding="utf-8").splitlines()) == 1
+    conflicting_payload = receipt.model_dump(mode="json")
+    conflicting_payload["source_kind"] = "legacy_reconciliation"
+    conflicting_payload["prune_binding"] = {
+        "kind": "legacy_prune_event",
+        "transaction_id": None,
+        "mutation_event_id": "different-event",
+    }
+    conflicting_payload["receipt_sha256"] = (
+        claim_mutation_receipts.completed_claim_archive_receipt_sha256(
+            conflicting_payload
+        )
+    )
+    conflicting = (
+        claim_mutation_receipts.CompletedClaimArchiveReceiptV1.model_validate(
+            conflicting_payload
+        )
+    )
+    with pytest.raises(ValueError, match="conflicting completed-claim archive"):
+        claim_mutation_receipts.append_completed_claim_archive_receipt(conflicting)
+
+
+def test_legacy_completed_claim_backfill_requires_exact_applied_prune_binding(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Legacy reconciliation must bind exact calibration bytes to one prune event."""
+
+    module = _load_module()
+    claims_dir = tmp_path / "claims"
+    claims_dir.mkdir()
+    monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
+    registry_before = registry_digest(claims_dir)
+    snapshot_path = tmp_path / "calibration" / "completed.yaml"
+    snapshot_path.parent.mkdir()
+    source_bytes = yaml.safe_dump(
+        _completed_claim_payload(),
+        sort_keys=False,
+    ).encode("utf-8")
+    snapshot_path.write_bytes(source_bytes)
+    historical_path = (
+        tmp_path
+        / "historical-claims"
+        / module._claim_filename("codex", "demo", "completed-scope")
+    )
+    with pytest.raises(ValueError, match="exactly one historical prune event"):
+        module._impl.backfill_completed_claim_archive(
+            source_claim_snapshot=snapshot_path,
+            expected_source_sha256=hashlib.sha256(source_bytes).hexdigest(),
+            prune_event_id="missing-event",
+        )
+    prune_event = _append_historical_prune_event(
+        target_claim_path=historical_path,
+    )
+
+    receipt, appended = module._impl.backfill_completed_claim_archive(
+        source_claim_snapshot=snapshot_path,
+        expected_source_sha256=hashlib.sha256(source_bytes).hexdigest(),
+        prune_event_id=prune_event.event_id,
+    )
+    repeated, repeated_appended = module._impl.backfill_completed_claim_archive(
+        source_claim_snapshot=snapshot_path,
+        expected_source_sha256=hashlib.sha256(source_bytes).hexdigest(),
+        prune_event_id=prune_event.event_id,
+    )
+
+    assert appended is True
+    assert repeated_appended is False
+    assert repeated.archive_id == receipt.archive_id
+    assert receipt.source_kind == "legacy_reconciliation"
+    assert receipt.source_path == str(historical_path)
+    assert receipt.prune_binding.kind == "legacy_prune_event"
+    assert receipt.prune_binding.mutation_event_id == prune_event.event_id
+    assert registry_digest(claims_dir) == registry_before
+    assert claim_mutation_receipts.load_completed_claim_archive_receipts() == [
+        receipt
+    ]
+
+
+@pytest.mark.parametrize(
+    ("mutation_override", "expected_error"),
+    [
+        ({"target_project": "other"}, "identity"),
+        ({"target_scope": "other"}, "identity"),
+        ({"session_id": "codex:other"}, "session"),
+        ({"target_claim_path": "/historical/wrong.yaml"}, "path"),
+        ({"result": "not_applied"}, "applied prune"),
+    ],
+)
+def test_legacy_completed_claim_backfill_rejects_mismatched_prune_event(
+    tmp_path: Path,
+    mutation_override: dict,
+    expected_error: str,
+) -> None:
+    """A historical event cannot validate a different completed claim."""
+
+    module = _load_module()
+    snapshot_path = tmp_path / "completed.yaml"
+    source_bytes = yaml.safe_dump(
+        _completed_claim_payload(),
+        sort_keys=False,
+    ).encode("utf-8")
+    snapshot_path.write_bytes(source_bytes)
+    target_path = (
+        tmp_path
+        / "historical"
+        / module._claim_filename("codex", "demo", "completed-scope")
+    )
+    base = {
+        "operation": "prune",
+        "result": "applied_projection_current",
+        "writer_source_path": "/framework/enforced_planning/coordination_claims.py",
+        "writer_source_sha256": "a" * 64,
+        "writer_repo_root": "/framework",
+        "process_id": 123,
+        "session_id": "codex:completed-scope",
+        "target_project": "demo",
+        "target_scope": "completed-scope",
+        "target_claim_path": str(target_path),
+        "registry_digest_before": "b" * 64,
+        "registry_digest_after": "c" * 64,
+        "projection_digest_after": "c" * 64,
+        "projection_current_after": True,
+        "error_code": None,
+    }
+    event = claim_mutation_receipts.ClaimMutationReceiptV1(
+        **{**base, **mutation_override}
+    )
+    claim_mutation_receipts.append_receipt(event)
+
+    with pytest.raises(ValueError, match=expected_error):
+        module._impl.backfill_completed_claim_archive(
+            source_claim_snapshot=snapshot_path,
+            expected_source_sha256=hashlib.sha256(source_bytes).hexdigest(),
+            prune_event_id=event.event_id,
+        )
+    assert not claim_mutation_receipts.DEFAULT_COMPLETED_CLAIM_ARCHIVE_PATH.exists()
+
+
+def test_legacy_completed_claim_backfill_cli_fails_on_changed_snapshot_digest(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The sanctioned CLI must require the operator-reviewed calibration digest."""
+
+    module = _load_module()
+    snapshot_path = tmp_path / "completed.yaml"
+    source_bytes = yaml.safe_dump(
+        _completed_claim_payload(),
+        sort_keys=False,
+    ).encode("utf-8")
+    snapshot_path.write_bytes(source_bytes)
+
+    exit_code = module.main(
+        [
+            "--backfill-completed-claim-archive",
+            "--source-claim-snapshot",
+            str(snapshot_path),
+            "--expected-source-sha256",
+            "0" * 64,
+            "--prune-event-id",
+            "missing-event",
+            "--json",
+        ]
+    )
+
+    payload = json.loads(capsys.readouterr().out)
+    assert exit_code == 1
+    assert payload["ok"] is False
+    assert payload["error_code"] == "completed_claim_archive_backfill_failed"
+    assert "source SHA-256 mismatch" in payload["error"]
+    assert not claim_mutation_receipts.DEFAULT_COMPLETED_CLAIM_ARCHIVE_PATH.exists()
 
 
 def test_listing_expired_claim_is_read_only(

@@ -58,7 +58,10 @@ def _real_repo_with_worktree(
     _git(repo_root, "config", "user.email", "tests@example.com")
     _git(repo_root, "config", "user.name", "Test User")
     (repo_root / ".gitignore").write_text("worktrees/\n", encoding="utf-8")
-    (repo_root / "README.md").write_text("baseline\n", encoding="utf-8")
+    (repo_root / "README.md").write_text(
+        "\n".join(f"baseline line {index}" for index in range(1, 21)) + "\n",
+        encoding="utf-8",
+    )
     _git(repo_root, "add", ".gitignore", "README.md")
     _git(repo_root, "commit", "-m", "initial")
 
@@ -1024,6 +1027,89 @@ def test_close_session_accepts_exact_squash_merge_patch_receipt(
     claim_payload = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
     assert claim_payload["merge_commit"] == merge_commit
     assert claim_payload["merge_evidence"] == "squash_patch_equivalent"
+
+
+def test_patch_normalization_ignores_only_full_index_blob_identity() -> None:
+    """Squash comparison must retain modes, binary payloads, and content lines."""
+
+    patch_body = (
+        b"diff --git a/example.bin b/example.bin\n"
+        b"old mode 100644\n"
+        b"new mode 100755\n"
+        b"GIT binary patch\n"
+        b"literal 3\n"
+        b"KcmZQz\n"
+        b"+index remains ordinary file content here\n"
+    )
+    first = b"index " + b"a" * 40 + b".." + b"b" * 40 + b" 100644\n" + patch_body
+    second = b"index " + b"c" * 40 + b".." + b"d" * 40 + b" 100644\n" + patch_body
+
+    assert session_lifecycle._patch_without_blob_identity(
+        first
+    ) == session_lifecycle._patch_without_blob_identity(second)
+    assert session_lifecycle._patch_without_blob_identity(
+        first
+    ) != session_lifecycle._patch_without_blob_identity(
+        second.replace(b"new mode 100755", b"new mode 100644")
+    )
+    assert session_lifecycle._patch_without_blob_identity(
+        first
+    ) != session_lifecycle._patch_without_blob_identity(
+        second.replace(b"KcmZQz", b"KcmZRz")
+    )
+    assert session_lifecycle._patch_without_blob_identity(
+        first
+    ) != session_lifecycle._patch_without_blob_identity(
+        second.replace(b"+index remains", b"+index changed")
+    )
+
+
+def test_close_session_accepts_squash_patch_after_independent_same_file_change(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Unrelated base blob identity must not strand an otherwise exact squash patch."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    repo_root, worktree, branch = _real_repo_with_worktree(tmp_path)
+    claim_file = _start_real_closeout_claim(
+        repo_root=repo_root,
+        worktree=worktree,
+        branch=branch,
+        claims_dir=claims_dir,
+        trackers_dir=trackers_dir,
+    )
+    branch_lines = (worktree / "README.md").read_text(encoding="utf-8").splitlines()
+    branch_lines[1] = "task branch change"
+    (worktree / "README.md").write_text("\n".join(branch_lines) + "\n", encoding="utf-8")
+    _git(worktree, "add", "README.md")
+    _git(worktree, "commit", "-m", "update task setting")
+
+    main_lines = (repo_root / "README.md").read_text(encoding="utf-8").splitlines()
+    main_lines[17] = "independent main change"
+    (repo_root / "README.md").write_text("\n".join(main_lines) + "\n", encoding="utf-8")
+    _git(repo_root, "add", "README.md")
+    _git(repo_root, "commit", "-m", "update unrelated main setting")
+    merge_parent = _git(repo_root, "rev-parse", "HEAD")
+    merge_base = _git(repo_root, "merge-base", branch, merge_parent)
+    _git(repo_root, "cherry-pick", "--no-commit", f"{merge_base}..{branch}")
+    _git(repo_root, "commit", "-m", "squash merge feature after main advanced")
+    merge_commit = _git(repo_root, "rev-parse", "HEAD")
+
+    payload = session_lifecycle.close_session(
+        agent="codex",
+        project="enforced-planning",
+        scope=branch,
+        merge_commit=merge_commit,
+    )
+
+    assert payload["action"] == "closed"
+    assert payload["merge_evidence"] == "squash_patch_equivalent"
+    assert not worktree.exists()
+    claim_payload = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
+    assert claim_payload["merge_commit"] == merge_commit
 
 
 def test_close_session_rejects_unrelated_commit_as_squash_receipt(

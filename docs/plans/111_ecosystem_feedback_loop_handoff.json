@@ -1,0 +1,30 @@
+{
+  "schema_version": "1.0",
+  "record_type": "next_skill_handoff",
+  "handoff_id": "HANDOFF-PLAN-111-EF-01",
+  "producer_skill": "work-unit-graph",
+  "next_skill": "evidence-first-development",
+  "reason": "EF-01 is structurally ready and authorized by the user and repository policy; the advertised implementation skill is unavailable in this session, so the repository-native test-first workflow is the execution fallback.",
+  "source_records": [
+    {
+      "kind": "DesignPacket",
+      "id": "PLAN-111",
+      "schema_version": "1.0",
+      "revision": "docs/plans/111_ecosystem_feedback_loop.md",
+      "digest": "sha256:645a3e03b4ee7b770236c1b58a5a4fbce96070b564f2f188bf46548e10e4d709"
+    },
+    {
+      "kind": "WorkUnitGraph",
+      "id": "PLAN-111-WORK-GRAPH",
+      "schema_version": "1.0",
+      "revision": "docs/plans/111_ecosystem_feedback_loop_work_graph.json",
+      "digest": "sha256:813723ab95780e77b22c289e48f50b51468885421c1ad560cc44ed05b7cff497"
+    }
+  ],
+  "required_inputs": [
+    "EF-01@1",
+    "EcosystemFeedbackV1@1.0",
+    "enforced-planning repository authority"
+  ],
+  "lifecycle_state": "accepted"
+}

@@ -1,0 +1,301 @@
+{
+  "units": [
+    {
+      "schema_version": "1.0",
+      "record_type": "work_unit",
+      "id": "EF-01",
+      "initiative_id": "PLAN-111",
+      "goal_id": "empirical-ecosystem-improvement",
+      "design_revision": "sha256:645a3e03b4ee7b770236c1b58a5a4fbce96070b564f2f188bf46548e10e4d709",
+      "spec_revision": "EF-01@1",
+      "title": "Build the portable ecosystem feedback transport",
+      "class": "implementation",
+      "objective": "Implement one strict append-only feedback contract and CLI that records, lists, reports, and dispositions evidence-backed policy, skill, instruction, tool, project, and general feedback without changing policy.",
+      "profile": "standard",
+      "execution_class": "independently_executable",
+      "claimability": "ready_for_execution",
+      "authorization_mode": "host_workspace",
+      "scope": {
+        "included": [
+          "Strict EcosystemFeedbackV1 and EcosystemFeedbackDispositionV1 contracts",
+          "Portable record, list, report, and disposition CLI",
+          "Append-only JSONL validation and corruption detection",
+          "Both-sign fixtures and operator documentation"
+        ],
+        "excluded": [
+          "Project Meta legacy register migration or projection",
+          "Workspace bootstrap mutation",
+          "Automatic policy, skill, instruction, or project changes",
+          "Evidence-content ingestion"
+        ]
+      },
+      "inputs": [
+        {
+          "kind": "DesignPacket",
+          "id": "PLAN-111",
+          "revision": "sha256:645a3e03b4ee7b770236c1b58a5a4fbce96070b564f2f188bf46548e10e4d709"
+        },
+        {
+          "kind": "ExistingContract",
+          "id": "ArtifactPolicyFeedbackV1",
+          "revision": "origin/main@812759d"
+        }
+      ],
+      "outputs": [
+        "Validated portable ecosystem feedback Python contract",
+        "Agent-drivable ecosystem-feedback CLI",
+        "Both-sign contract and CLI tests",
+        "Portable operator guide"
+      ],
+      "dependencies": [],
+      "conflict_surfaces": [
+        {
+          "kind": "repository_path",
+          "repository": "BrianMills2718/enforced-planning",
+          "target": "enforced_planning/ecosystem_feedback.py, scripts/ecosystem_feedback.py, tests/test_ecosystem_feedback.py, docs/guides/ECOSYSTEM_FEEDBACK.md",
+          "access": "exclusive",
+          "coordination_key": "plan111-ef01-transport"
+        },
+        {
+          "kind": "contract",
+          "target": "EcosystemFeedbackV1@1.0",
+          "access": "exclusive",
+          "coordination_key": "plan111-feedback-contract"
+        }
+      ],
+      "acceptance": [
+        {
+          "id": "EF01-A1",
+          "criterion": "All six scope kinds record through one strict command, while general feedback requires no fabricated scope identity.",
+          "evidence_required": [
+            "positive contract fixtures",
+            "CLI subprocess tests"
+          ],
+          "negative_control": "Missing scoped identity, fabricated general identity, empty evidence, or an unknown field fails before append."
+        },
+        {
+          "id": "EF01-A2",
+          "criterion": "Append, list, report, and disposition preserve original records and step down to stable feedback IDs.",
+          "evidence_required": [
+            "append-only lifecycle tests",
+            "report step-down assertions"
+          ],
+          "negative_control": "Malformed JSONL, duplicate IDs, unknown dispositions, and conflicting terminal dispositions fail loud."
+        },
+        {
+          "id": "EF01-A3",
+          "criterion": "The default stream stores only supplied semantic fields and evidence references; it never reads evidence contents or mutates policy.",
+          "evidence_required": [
+            "privacy boundary test",
+            "operator guide contract"
+          ],
+          "negative_control": "A missing evidence file remains a valid reference and is never opened by the transport."
+        }
+      ],
+      "readiness": {
+        "status": "ready",
+        "required_approval_types": [],
+        "approvals": [],
+        "failed_guards": []
+      },
+      "status": "ready",
+      "record_version": 1
+    },
+    {
+      "schema_version": "1.0",
+      "record_type": "work_unit",
+      "id": "EF-02",
+      "initiative_id": "PLAN-111",
+      "goal_id": "empirical-ecosystem-improvement",
+      "design_revision": "sha256:645a3e03b4ee7b770236c1b58a5a4fbce96070b564f2f188bf46548e10e4d709",
+      "spec_revision": "EF-02@1",
+      "title": "Integrate Project Meta routing and projections",
+      "class": "integration",
+      "objective": "Make Project Meta consume the accepted portable feedback contract, retain explicit compatibility with policy and skill Markdown registers, and expose open feedback for evidence-backed triage.",
+      "profile": "standard",
+      "execution_class": "independently_executable",
+      "claimability": "blocked_dependencies",
+      "authorization_mode": "host_workspace",
+      "scope": {
+        "included": [
+          "Project Meta command adapter to the accepted portable transport",
+          "Policy and skill compatibility projection",
+          "Open feedback summary with stable-ID step-down",
+          "Legacy behavior and routing documentation"
+        ],
+        "excluded": [
+          "Reimplementing the portable contract",
+          "Deleting or bulk-migrating historical registers",
+          "Automatic acceptance or policy promotion",
+          "Workspace bootstrap edits"
+        ]
+      },
+      "inputs": [
+        {
+          "kind": "WorkUnit",
+          "id": "EF-01",
+          "revision": "EF-01@1"
+        }
+      ],
+      "outputs": [
+        "Project Meta ecosystem-feedback entrypoint",
+        "Policy and skill feedback compatibility views",
+        "Open-feedback triage report and tests"
+      ],
+      "dependencies": [
+        {
+          "unit_id": "EF-01",
+          "type": "hard",
+          "gate": {
+            "type": "unit_status",
+            "required_status": "accepted"
+          },
+          "rationale": "Project Meta must consume one accepted portable contract rather than defining a competing schema."
+        }
+      ],
+      "conflict_surfaces": [
+        {
+          "kind": "repository_path",
+          "repository": "BrianMills2718/project-meta",
+          "target": "Makefile, feedback adapters/tests, policy_friction.md and skill_feedback.md compatibility documentation",
+          "access": "exclusive",
+          "coordination_key": "plan111-ef02-project-meta"
+        },
+        {
+          "kind": "contract",
+          "target": "EcosystemFeedbackV1@1.0",
+          "access": "read",
+          "coordination_key": "plan111-feedback-contract"
+        }
+      ],
+      "acceptance": [
+        {
+          "id": "EF02-A1",
+          "criterion": "Project Meta routes all feedback kinds through the accepted contract and preserves legacy policy and skill registers as explicit compatibility surfaces.",
+          "evidence_required": [
+            "adapter tests",
+            "legacy compatibility tests"
+          ],
+          "negative_control": "A Project Meta-specific feedback schema or silent deletion of a legacy record fails review and tests."
+        },
+        {
+          "id": "EF02-A2",
+          "criterion": "The triage report separates open and dispositioned entries by scope and steps down to exact stable IDs.",
+          "evidence_required": [
+            "report fixture",
+            "Project Meta command output"
+          ],
+          "negative_control": "An unowned general entry remains visible and is not forced into a policy or skill projection."
+        }
+      ],
+      "readiness": {
+        "status": "blocked",
+        "required_approval_types": [],
+        "approvals": [],
+        "failed_guards": [
+          "EF-01 is not accepted."
+        ]
+      },
+      "status": "blocked",
+      "record_version": 1
+    },
+    {
+      "schema_version": "1.0",
+      "record_type": "work_unit",
+      "id": "EF-03",
+      "initiative_id": "PLAN-111",
+      "goal_id": "empirical-ecosystem-improvement",
+      "design_revision": "sha256:645a3e03b4ee7b770236c1b58a5a4fbce96070b564f2f188bf46548e10e4d709",
+      "spec_revision": "EF-03@1",
+      "title": "Deliver universal routing and prove the loop",
+      "class": "integration",
+      "objective": "Add one concise universal feedback-routing rule to the canonical workspace instruction and prove policy, skill, and general records traverse the installed command into Project Meta triage without per-artifact boilerplate.",
+      "profile": "standard",
+      "execution_class": "coupled",
+      "claimability": "blocked_dependencies",
+      "authorization_mode": "host_workspace",
+      "integration_owner_id": "PLAN-111",
+      "scope": {
+        "included": [
+          "Canonical workspace bootstrap routing rule",
+          "CLAUDE.md and AGENTS.md alias verification",
+          "One policy, one skill, and one general end-to-end probe",
+          "First real workflow-friction record and disposition"
+        ],
+        "excluded": [
+          "Adding generic feedback sections to every policy, skill, or project instruction",
+          "Changing client installation topology",
+          "Automatic feedback triage or policy mutation",
+          "Bulk historical backfill"
+        ]
+      },
+      "inputs": [
+        {
+          "kind": "WorkUnit",
+          "id": "EF-02",
+          "revision": "EF-02@1"
+        }
+      ],
+      "outputs": [
+        "Canonical always-loaded routing rule",
+        "Cross-client alias verification",
+        "End-to-end feedback-loop evidence"
+      ],
+      "dependencies": [
+        {
+          "unit_id": "EF-02",
+          "type": "hard",
+          "gate": {
+            "type": "unit_status",
+            "required_status": "accepted"
+          },
+          "rationale": "The always-loaded instruction must point to a proven installed route rather than an aspirational command."
+        }
+      ],
+      "conflict_surfaces": [
+        {
+          "kind": "external_system",
+          "target": "/home/brian/projects/.claude/CLAUDE.md and its root aliases",
+          "access": "exclusive",
+          "coordination_key": "plan111-ef03-workspace-bootstrap"
+        },
+        {
+          "kind": "route",
+          "target": "always-loaded feedback routing contract",
+          "access": "exclusive",
+          "coordination_key": "plan111-feedback-route"
+        }
+      ],
+      "acceptance": [
+        {
+          "id": "EF03-A1",
+          "criterion": "A fresh agent can discover one command and correctly route policy, skill, instruction, tool, project, or general feedback without inspecting implementation files.",
+          "evidence_required": [
+            "workspace bootstrap text check",
+            "cross-client alias check"
+          ],
+          "negative_control": "No generic feedback boilerplate is added to active shared SKILL.md files."
+        },
+        {
+          "id": "EF03-A2",
+          "criterion": "Policy, skill, and general test entries record, list, report, and disposition end to end, and the observed planning-profile mismatch is preserved as real friction evidence.",
+          "evidence_required": [
+            "temporary-stream end-to-end trace",
+            "durable real feedback ID"
+          ],
+          "negative_control": "The real record names evidence and the failure family rather than only the one failed command."
+        }
+      ],
+      "readiness": {
+        "status": "blocked",
+        "required_approval_types": [],
+        "approvals": [],
+        "failed_guards": [
+          "EF-02 is not accepted."
+        ]
+      },
+      "status": "blocked",
+      "record_version": 1
+    }
+  ]
+}

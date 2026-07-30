@@ -44,9 +44,11 @@ MAILBOX_COMMON_ROLLOUT_PATHS = {
     "scripts/coordination_hook.py",
     "scripts/coordination_inbox.py",
     "scripts/coordination_messages.py",
+    "scripts/coordination_operator_status.py",
     "scripts/meta/coordination_hook.py",
     "scripts/meta/coordination_inbox.py",
     "scripts/meta/coordination_messages.py",
+    "scripts/meta/coordination_operator_status.py",
     "scripts/meta/session_heartbeat.py",
     "scripts/meta/session_close.py",
     "scripts/meta/session_resume.py",
@@ -55,6 +57,7 @@ MAILBOX_COMMON_ROLLOUT_PATHS = {
 
 MAILBOX_ROLLOUT_PATHS = MAILBOX_COMMON_ROLLOUT_PATHS | {
     "enforced_planning/claim_mutation_receipts.py",
+    "enforced_planning/client_session_metadata.py",
     "enforced_planning/coordination_claims.py",
     "enforced_planning/coordination_messages.py",
     "enforced_planning/prewrite_claim_fast.py",
@@ -266,7 +269,12 @@ def test_coordination_messages_only_rollout_is_bounded_runnable_and_idempotent(
     assert written.returncode == 0, written.stdout + written.stderr
     for relative in MAILBOX_ROLLOUT_PATHS:
         assert (tmp_path / relative).exists()
-    for wrapper in ("coordination_hook.py", "coordination_inbox.py", "coordination_messages.py"):
+    for wrapper in (
+        "coordination_hook.py",
+        "coordination_inbox.py",
+        "coordination_messages.py",
+        "coordination_operator_status.py",
+    ):
         help_result = subprocess.run(
             [sys.executable, str(tmp_path / "scripts/meta" / wrapper), "--help"],
             cwd=str(tmp_path),
@@ -1293,6 +1301,7 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
             "install:enforced_planning/artifact_creation.py",
             "install:enforced_planning/concern_routing.py",
             "install:enforced_planning/claim_mutation_receipts.py",
+            "install:enforced_planning/client_session_metadata.py",
             "install:enforced_planning/coordination_claims.py",
             "install:enforced_planning/coordination_messages.py",
             "install:enforced_planning/prewrite_claim_fast.py",
@@ -1326,8 +1335,10 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
             "install:scripts/meta/verification_batch.py",
             "install:scripts/coordination_inbox.py",
             "install:scripts/coordination_messages.py",
+            "install:scripts/coordination_operator_status.py",
             "install:scripts/meta/coordination_inbox.py",
             "install:scripts/meta/coordination_messages.py",
+            "install:scripts/meta/coordination_operator_status.py",
             "install:scripts/meta/worktree-coordination/create_worktree.py",
             "install:scripts/meta/worktree-coordination/create_publish_worktree.py",
             "install:scripts/meta/worktree-coordination/create_review_claim.py",
@@ -1359,7 +1370,10 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
     assert (tmp_path / "scripts" / "meta" / "verification_batch.py").exists()
     assert (tmp_path / "scripts" / "coordination_inbox.py").exists()
     assert (tmp_path / "scripts" / "coordination_messages.py").exists()
+    assert (tmp_path / "scripts" / "coordination_operator_status.py").exists()
     assert (tmp_path / "scripts" / "meta" / "coordination_messages.py").exists()
+    assert (tmp_path / "scripts" / "meta" / "coordination_operator_status.py").exists()
+    assert (tmp_path / "enforced_planning" / "client_session_metadata.py").exists()
     assert (tmp_path / "enforced_planning" / "coordination_messages.py").exists()
     assert (tmp_path / "enforced_planning" / "plan_readiness.py").exists()
     assert (tmp_path / "enforced_planning" / "plan_close.py").exists()
@@ -1372,6 +1386,19 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
     assert (tmp_path / "enforced_planning" / "verification_batch.py").exists()
     assert (tmp_path / "enforced_planning" / "worktree_lifecycle.yaml").exists()
     assert (tmp_path / "enforced_planning" / "worktree_paths.py").exists()
+    for installed_cli in (
+        tmp_path / "scripts" / "coordination_operator_status.py",
+        tmp_path / "scripts" / "meta" / "coordination_operator_status.py",
+        tmp_path / "scripts" / "meta" / "session_status.py",
+    ):
+        help_result = subprocess.run(
+            [sys.executable, str(installed_cli), "--help"],
+            cwd=str(tmp_path),
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        assert help_result.returncode == 0, help_result.stdout + help_result.stderr
     assert (
         tmp_path / "scripts" / "meta" / "worktree-coordination" / "create_worktree.py"
     ).exists()

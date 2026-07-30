@@ -585,7 +585,7 @@
       "objective": "Let an operator identify the actual Codex thread for a routed message, distinguish display from acknowledgement, and obtain the exact safe manual response action without changing routing authority or claiming automatic wake.",
       "profile": "standard",
       "execution_class": "independently_executable",
-      "claimability": "ready_for_execution",
+      "claimability": "not_applicable",
       "authorization_mode": "host_workspace",
       "scope": {
         "included": [
@@ -660,6 +660,20 @@
           "coordination_key": "human-session-response-readout"
         },
         {
+          "kind": "repository_path",
+          "target": "scripts/install_governed_repo.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "human-session-response-readout"
+        },
+        {
+          "kind": "repository_path",
+          "target": "tests/test_install_governed_repo.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "human-session-response-readout"
+        },
+        {
           "kind": "external_system",
           "target": "~/.codex/session_index.jsonl",
           "access": "read",
@@ -673,6 +687,7 @@
           "evidence_required": [
             "Both-sign resolver fixtures with duplicate revisions, missing index, malformed rows, and an unknown session",
             "Session-status JSON and human rendering checks",
+            "Clean partial-package installer fixture proving the new module accompanies session_status.py",
             "Read-only assertion for the client index"
           ],
           "negative_control": "A thread rename, malformed row, or missing index never changes recipient routing, claim ownership, or the internal session name."
@@ -694,8 +709,8 @@
         "approvals": [],
         "failed_guards": []
       },
-      "status": "ready",
-      "record_version": 1
+      "status": "accepted",
+      "record_version": 2
     },
     {
       "schema_version": "1.0",

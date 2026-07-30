@@ -1,6 +1,6 @@
 # Plan #106: Cross-Client Mailbox Fleet Delivery Certification
 
-**Status:** In Progress — MF-01/MF-02/MF-03A/MF-03B/MF-04 accepted; MF-06 ready; MF-05 is explicitly deferred
+**Status:** In Progress — MF-01/MF-02/MF-03A/MF-03B/MF-04/MF-06 accepted; MF-05 is explicitly deferred
 **Type:** implementation
 **Priority:** Critical
 **phase_ref:** "Phase 9 — fleet adoption and framework maintenance"
@@ -186,7 +186,10 @@ MF-06 adds a read-only client-display projection and joined message response
 readout. Routing remains bound to immutable `session_id`; the mutable client
 thread name is never used as authority. `session_name` retains its existing
 goal identity. Missing, malformed, or stale client metadata remains explicit
-and cannot silently fall back to the internal goal name.
+and cannot silently fall back to the internal goal name. Governed-repository
+installation must copy the new package dependency alongside the enriched
+session-status script; a partial local package must not make the installed
+command fail at import time.
 
 For unmanaged Codex TUI sessions, the readout may provide an exact
 human-invoked `codex exec resume <session-id> <prompt>` action, but must not
@@ -194,6 +197,17 @@ execute it automatically or claim wake delivery. Concurrent resumption of an
 open TUI has not been certified. Automatic active-turn steering or idle-turn
 start remains limited to controller-owned app-server sessions already bounded
 by Plan 67.
+
+Implementation commit `406b489` adds `ClientSessionDisplayV1`,
+`CoordinationResponseReadoutV1`, the enriched session-status projection, and a
+read-only per-message operator status command. The focused compatibility suite
+passed 92 tests; Ruff, strict mypy, plan validation, and diff checks passed.
+The governed-repository installer closure passed five focused rollout tests,
+including direct `--help` execution from the installed partial package.
+The exact Plan 189 replay resolved the visible thread, retained the separate
+internal session name, reported both messages as `recipient_acknowledged`,
+preserved the recipient notes, and emitted no resume command. MF-06 is
+accepted. Passing does not prove work completion or automatic wake.
 
 ## Gap
 

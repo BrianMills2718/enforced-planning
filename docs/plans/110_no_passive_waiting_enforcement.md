@@ -1,6 +1,6 @@
 # Plan #110: No-Passive-Waiting Enforcement
 
-**Status:** Design adopted; implementation units being decomposed
+**Status:** 🚧 In Progress — design adopted; implementation graph next
 **Type:** implementation
 **Priority:** Critical
 **phase_ref:** "Coordination runtime maintenance"
@@ -61,12 +61,14 @@ its core separation of heartbeat, progress and ownership.
 
 ## Landscape And Prior Art
 
-The landscape disposition is `linked`: the existing framework authorities and
-the unmerged Plan 70 implementation establish the relevant local prior art.
-This plan extends rather than replaces the canonical claim/session model. The
-Kubernetes-style distinction adopted by Plan 70 remains useful: a live
-controller can fail to progress, and reporting that condition must not itself
-destroy or take over the workload.
+The landscape disposition is `linked`: the
+[continuous execution contract](../guides/CONTINUOUS_EXECUTION_CONTRACT.md),
+[coordination operator guide](../guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md),
+and the unmerged Plan 70 implementation at `2d56f6c` establish the relevant
+local prior art. This plan extends rather than replaces the canonical
+claim/session model. The Kubernetes-style distinction adopted by Plan 70
+remains useful: a live controller can fail to progress, and reporting that
+condition must not itself destroy or take over the workload.
 
 ## References Reviewed
 
@@ -202,6 +204,15 @@ recorded_at
 
 The deterministic evaluator owns `decision`. The agent cannot directly write a
 verified blocked state.
+
+## Capabilities
+
+| Capability | Input schema | Output schema | Producer | Consumer(s) | Cost tier |
+| --- | --- | --- | --- | --- | --- |
+| `record_progress_event` | owning claim selector + `ProgressEventV1` | updated claim identity + timestamp | claim/session lifecycle | status surfaces and owning agents | free |
+| `evaluate_ready_queue` | revision-bound work graph + claim snapshot | `ReadyQueueEvaluationV1` | readiness evaluator | blocker policy evaluator | free |
+| `decide_blocker_disposition` | `BlockerRequestV1` + queue and mailbox evidence | `BlockerDispositionV1` | blocker policy evaluator | sanctioned lifecycle command and status views | free |
+| `apply_blocker_disposition` | accepted disposition + selected goal-root identity | scoped lifecycle receipt | session lifecycle | agents, operators and installed governed repos | free |
 
 ## Decision rules
 

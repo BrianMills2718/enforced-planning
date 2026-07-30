@@ -575,6 +575,131 @@
     {
       "schema_version": "1.0",
       "record_type": "work_unit",
+      "id": "mailbox-mf-06-human-session-response-readout",
+      "initiative_id": "cross-client-mailbox",
+      "goal_id": "cross-client-mailbox-delivery",
+      "design_revision": "mailbox-fleet-delivery-v3",
+      "spec_revision": "mailbox-mf-06-v1",
+      "title": "Expose human-visible session identity and truthful response state",
+      "class": "implementation",
+      "objective": "Let an operator identify the actual Codex thread for a routed message, distinguish display from acknowledgement, and obtain the exact safe manual response action without changing routing authority or claiming automatic wake.",
+      "profile": "standard",
+      "execution_class": "independently_executable",
+      "claimability": "ready_for_execution",
+      "authorization_mode": "host_workspace",
+      "scope": {
+        "included": [
+          "Read-only resolution of Codex session IDs to mutable visible thread names",
+          "Session status fields that keep client display name distinct from goal-derived session_name",
+          "Joined message, receipt, claim, and client-display operator readout",
+          "Explicit unresolved-recipient manual resume command for Codex"
+        ],
+        "excluded": [
+          "Routing by thread name",
+          "Mutation of Codex session_index.jsonl",
+          "Automatic codex exec resume, TUI attachment, app-server ownership, or daemon work",
+          "Inferring work completion from observation or acknowledgement",
+          "Claude display-name invention"
+        ]
+      },
+      "inputs": [
+        {
+          "kind": "bounded_design",
+          "id": "docs/plans/106_cross_client_mailbox_fleet_delivery_certification.md",
+          "revision": "mailbox-fleet-delivery-v3"
+        },
+        {
+          "kind": "runtime_evidence",
+          "id": "Plan 189 recipient response incident",
+          "revision": "2026-07-30T19:36:09Z"
+        }
+      ],
+      "outputs": [
+        "ClientSessionDisplayV1 read-only projection",
+        "Session status with separate client_display_name and internal session_name",
+        "Coordination operator status with truthful response state and bounded manual action"
+      ],
+      "dependencies": [
+        {
+          "unit_id": "mailbox-mf-02-duplicate-safe-adapters",
+          "type": "hard",
+          "gate": {
+            "type": "unit_status",
+            "required_status": "accepted"
+          },
+          "rationale": "The operator readout consumes the accepted message and receipt lifecycle without changing it."
+        }
+      ],
+      "conflict_surfaces": [
+        {
+          "kind": "repository_path",
+          "target": "enforced_planning/client_session_metadata.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "human-session-response-readout"
+        },
+        {
+          "kind": "repository_path",
+          "target": "scripts/session_status.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "human-session-response-readout"
+        },
+        {
+          "kind": "repository_path",
+          "target": "scripts/coordination_operator_status.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "human-session-response-readout"
+        },
+        {
+          "kind": "repository_path",
+          "target": "tests/test_coordination_operator_status.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "human-session-response-readout"
+        },
+        {
+          "kind": "external_system",
+          "target": "~/.codex/session_index.jsonl",
+          "access": "read",
+          "coordination_key": "human-session-response-readout"
+        }
+      ],
+      "acceptance": [
+        {
+          "id": "MF06-A1",
+          "criterion": "A known Codex session status shows its visible thread name beside the distinct goal-derived session name and immutable routing ID; unknown or malformed client metadata is explicit and never substituted.",
+          "evidence_required": [
+            "Both-sign resolver fixtures with duplicate revisions, missing index, malformed rows, and an unknown session",
+            "Session-status JSON and human rendering checks",
+            "Read-only assertion for the client index"
+          ],
+          "negative_control": "A thread rename, malformed row, or missing index never changes recipient routing, claim ownership, or the internal session name."
+        },
+        {
+          "id": "MF06-A2",
+          "criterion": "A joined message readout distinguishes persisted, observed, and acknowledged states and renders a manual Codex resume action only for an unresolved recipient.",
+          "evidence_required": [
+            "Persisted, observed-unacknowledged, acknowledged, expired, and unknown-client fixtures",
+            "Exact Plan 189 message-status replay",
+            "Ruff, strict mypy, focused pytest, and git diff check"
+          ],
+          "negative_control": "Observed is never rendered as responded or completed; acknowledged is never rendered as completed; the command is never executed by the read-only status path."
+        }
+      ],
+      "readiness": {
+        "status": "ready",
+        "required_approval_types": [],
+        "approvals": [],
+        "failed_guards": []
+      },
+      "status": "ready",
+      "record_version": 1
+    },
+    {
+      "schema_version": "1.0",
+      "record_type": "work_unit",
       "id": "mailbox-mf-05-four-direction-live-certification",
       "initiative_id": "cross-client-mailbox",
       "goal_id": "cross-client-mailbox-delivery",

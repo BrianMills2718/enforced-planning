@@ -1,6 +1,6 @@
 # Plan #106: Cross-Client Mailbox Fleet Delivery Certification
 
-**Status:** In Progress — MF-01/MF-02/MF-03A/MF-03B/MF-04 accepted; MF-05 is explicitly deferred
+**Status:** In Progress — MF-01/MF-02/MF-03A/MF-03B/MF-04 accepted; MF-06 ready; MF-05 is explicitly deferred
 **Type:** implementation
 **Priority:** Critical
 **phase_ref:** "Phase 9 — fleet adoption and framework maintenance"
@@ -159,6 +159,41 @@ evidence with receipt-set SHA-256
 `bc9b3bf6f692821bbe5893cfaaadce630e6a2d36643d7230ed428bba0443ea3a`.
 The installer now also prints the restart and canary command prominently on
 stderr after an apply.
+
+### Human-Identifiable Session And Response-State Correction
+
+A live coordination incident on 2026-07-30 exposed two operator-facing gaps
+without disproving mailbox delivery:
+
+- the claim's `session_name` is a durable goal-derived slug, while Codex's
+  visible thread name is a separate mutable client label; status output showed
+  only the former, so Brian could not identify which Codex window owned a
+  request;
+- an `observed` receipt correctly proved only that a lifecycle hook displayed
+  a message, but the operator had no joined readout showing whether the
+  recipient later acknowledged it or which exact thread to resume.
+
+For the reproduced Plan 189 recipient, canonical session ID
+`codex:019f95f8-75e9-7a31-bba1-527695ed821e` maps through Codex's local
+session index to visible thread name `gap_closure_including_composability`.
+Messages `msg_cc74100f6a1da63b1b942d34aedb29ea` and
+`msg_f4c8fa9718a2c809ef960fa420f15ea2` were observed and then explicitly
+acknowledged at 2026-07-30T19:36:09Z. The recipient subsequently modified the
+first named Plan 111 generated artifacts. The mailbox worked; the operator
+projection was incomplete.
+
+MF-06 adds a read-only client-display projection and joined message response
+readout. Routing remains bound to immutable `session_id`; the mutable client
+thread name is never used as authority. `session_name` retains its existing
+goal identity. Missing, malformed, or stale client metadata remains explicit
+and cannot silently fall back to the internal goal name.
+
+For unmanaged Codex TUI sessions, the readout may provide an exact
+human-invoked `codex exec resume <session-id> <prompt>` action, but must not
+execute it automatically or claim wake delivery. Concurrent resumption of an
+open TUI has not been certified. Automatic active-turn steering or idle-turn
+start remains limited to controller-owned app-server sessions already bounded
+by Plan 67.
 
 ## Gap
 
@@ -526,6 +561,7 @@ success receipt or upgrades installation/runtime state.
 | MF-03A | `enabler` | Produces an exact reviewable candidate without host writes. |
 | MF-03B | `enabler` | Applies only the approved unchanged candidate; it does not prove delivery. |
 | MF-04 | `enabler` | Makes fleet drift visible without mutating consumers. |
+| MF-06 | `vertical` | Lets the operator identify the real client thread, distinguish display from response, and take the exact safe next action. |
 | MF-05 | `vertical` | Demonstrates the user outcome in all four client directions. |
 
 ### Thin-Slice Skeleton
@@ -546,7 +582,12 @@ success receipt or upgrades installation/runtime state.
 5. **MF-04 — fleet read-only audit and bounded repository repair packets.** Scan
    `governed_repos.yaml`; report drift and one exact per-repository repair
    command without writing consumer repositories.
-6. **MF-05 — four-direction live certification.** Retain exact send, observe,
+6. **MF-06 — human-identifiable response readout.** Join canonical message and
+   claim state with optional client-native display metadata. Show the visible
+   Codex thread name, preserve the distinct internal session name, classify
+   persisted/displayed/acknowledged states without implication, and render an
+   explicit manual-resume action only while recipient action remains pending.
+7. **MF-05 — four-direction live certification.** Retain exact send, observe,
    acknowledge evidence for all client pairs.
 
 The machine-readable execution graph is
@@ -560,12 +601,15 @@ Framework implementation units may touch only:
 
 - `enforced_planning/mailbox_delivery.py` (new)
 - `enforced_planning/mailbox_fleet_audit.py` (new)
+- `enforced_planning/client_session_metadata.py` (new)
 - `enforced_planning/coordination_messages.py`
 - `scripts/audit_mailbox_delivery.py` (new)
 - `scripts/audit_mailbox_fleet.py` (new)
 - `scripts/install_mailbox_host_adapters.py` (new)
 - `scripts/verify_mailbox_hook_activation.py` (new)
 - `scripts/coordination_hook.py`
+- `scripts/coordination_operator_status.py` (new)
+- `scripts/session_status.py`
 - `hooks/claude/notify-coordination-messages.sh`
 - `hooks/codex/notify-coordination-messages.sh`
 - `enforced_planning/hook_wiring.py`
@@ -575,6 +619,8 @@ Framework implementation units may touch only:
 - `tests/test_mailbox_delivery.py` (new)
 - `tests/test_mailbox_fleet_audit.py` (new)
 - `tests/test_coordination_messages.py`
+- `tests/test_coordination_operator_status.py` (new)
+- `tests/test_session_lifecycle.py`
 - `tests/test_generate_hook_wiring.py`
 - `tests/test_install_governed_repo.py`
 - `docs/reference/CONFIG_REFERENCE.md`
@@ -617,6 +663,12 @@ MF-05 requires four real exact-session message chains.
   drifted, unavailable, or excluded with an exact reason.
 - [ ] All four real client-direction legs have exact persisted, observed, and
   acknowledged evidence.
+- [ ] Session and message status identify the visible Codex thread when
+  available, preserve the distinct internal session name, and never route by
+  the mutable display label.
+- [ ] Message status distinguishes displayed-but-unanswered from acknowledged;
+  it offers a manual resume action only for an unresolved unmanaged Codex
+  recipient and never labels that action automatic wake.
 - [ ] Missing adapters, invalid configs, wrong identities, expired messages,
   and configuration-only false positives fail loud.
 - [x] Host activation fails loud while any Codex process predates the installed
@@ -647,6 +699,7 @@ MF-05 requires four real exact-session message chains.
 - No daemon, network broker, terminal injection, or arbitrary TUI attachment.
 - No guarantee of delivery while the recipient has no lifecycle activity.
 - No inference that a recipient performed the requested work.
+- No automatic `codex exec resume` of an unmanaged or concurrently open TUI.
 - No automatic acknowledgement, hook trust, restart, or repository mutation.
 - No replacement of the canonical claim/session registry.
 - No secrets, transcripts, prompt bodies beyond the existing bounded message

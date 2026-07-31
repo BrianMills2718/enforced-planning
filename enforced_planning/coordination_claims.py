@@ -70,6 +70,11 @@ SESSION_ENV_KEYS = {
     "claude-code": ("CLAUDE_SESSION_ID", "CLAUDE_CODE_SSE_PORT"),
     "openclaw": ("OPENCLAW_SESSION_ID", "OPENCLAW_RUN_ID"),
 }
+STRICT_NATIVE_SESSION_ENV_KEYS = {
+    "codex": "CODEX_THREAD_ID",
+    "claude-code": "CLAUDE_SESSION_ID",
+    "openclaw": "OPENCLAW_SESSION_ID",
+}
 
 
 @contextmanager
@@ -944,7 +949,9 @@ def validate_native_session_binding(agent: str, session_id: str | None) -> None:
 
     if not session_id:
         return
-    native_session_id = resolve_session_id(agent)
+    native_key = STRICT_NATIVE_SESSION_ENV_KEYS.get(agent)
+    native_value = os.environ.get(native_key, "").strip() if native_key else ""
+    native_session_id = f"{agent}:{native_value}" if native_value else None
     if native_session_id is None or session_id == native_session_id:
         return
     raise ValueError(

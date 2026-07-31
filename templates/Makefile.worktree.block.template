@@ -35,6 +35,7 @@ WORKTREE_DISPOSITION ?= merged
 WORKTREE_DISPOSITION_REASON ?=
 WORKTREE_RECOVERY_REF ?=
 WORKTREE_ALLOW_DISCARD_UNIQUE ?=
+WORKTREE_MERGE_COMMIT ?=
 REVIEW_SCOPE ?=
 REVIEW_NOTES ?=
 RECIPIENT ?=
@@ -158,6 +159,7 @@ maintenance-worktree:  ## Create a claimed light maintenance worktree without a 
 		SESSION_NEXT="$(SESSION_NEXT)" SESSION_DEPENDS="$(SESSION_DEPENDS)" \
 		SESSION_STOP_CONDITIONS="$(SESSION_STOP_CONDITIONS)" SESSION_NOTE="$(SESSION_NOTE)" \
 		SESSION_CLAIM_TYPE="$(SESSION_CLAIM_TYPE)" SESSION_PARENT_SCOPE="$(SESSION_PARENT_SCOPE)" \
+		SESSION_ALLOW_PARALLEL="$(SESSION_ALLOW_PARALLEL)" \
 		SESSION_WRITE_PATHS="$(SESSION_WRITE_PATHS)" SESSION_READ_PATHS="$(SESSION_READ_PATHS)" \
 		WORKTREE_EXECUTION_PROFILE=light ALLOW_UNPLANNED=1
 
@@ -255,6 +257,7 @@ endif
 		--disposition-reason "$(WORKTREE_DISPOSITION_REASON)" \
 		--recovery-ref "$(WORKTREE_RECOVERY_REF)" \
 		$(if $(filter 1 true yes,$(WORKTREE_ALLOW_DISCARD_UNIQUE)),--allow-discard-unique,) \
+		$(if $(WORKTREE_MERGE_COMMIT),--merge-commit "$(WORKTREE_MERGE_COMMIT)",) \
 		$(if $(SESSION_NOTE),--note "$(SESSION_NOTE)",)
 
 worktree-list:  ## Show claimed worktree coordination status
@@ -274,7 +277,9 @@ endif
 		echo "Install or sync the sanctioned session lifecycle module before using make worktree-remove."; \
 		exit 1; \
 	fi
-	@$(MAKE) session-close BRANCH="$(BRANCH)" $(if $(SESSION_NOTE),SESSION_NOTE="$(SESSION_NOTE)",)
+	@$(MAKE) session-close BRANCH="$(BRANCH)" \
+		$(if $(WORKTREE_MERGE_COMMIT),WORKTREE_MERGE_COMMIT="$(WORKTREE_MERGE_COMMIT)",) \
+		$(if $(SESSION_NOTE),SESSION_NOTE="$(SESSION_NOTE)",)
 
 review-claim:  ## Create a review claim for TARGET_BRANCH=name WRITE_PATHS="a|b" TASK="..."
 ifndef TARGET_BRANCH

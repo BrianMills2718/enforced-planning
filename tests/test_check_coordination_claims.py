@@ -910,6 +910,21 @@ def test_native_session_binding_accepts_exact_runtime_or_external_hook_identity(
     module.validate_native_session_binding("codex", native)
 
 
+def test_native_session_binding_does_not_confuse_claude_sse_fallback_with_exact_id(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A fallback SSE port must not contradict an exact hook-provided session ID."""
+
+    module = _load_module()
+    monkeypatch.delenv("CLAUDE_SESSION_ID", raising=False)
+    monkeypatch.setenv("CLAUDE_CODE_SSE_PORT", "15193")
+
+    module.validate_native_session_binding(
+        "claude-code",
+        "claude-code:019f9b0a-5a78-7a91-a6c6-940aa5393e6b",
+    )
+
+
 def test_heartbeat_replace_failure_preserves_existing_claim(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

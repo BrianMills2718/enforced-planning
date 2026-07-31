@@ -530,12 +530,16 @@ def session_root_conflicts(
     *,
     active_claims: list[ClaimRecord],
 ) -> list[ClaimRecord]:
-    """Return other root lanes already owned by the exact runtime session."""
+    """Return other unparented lanes owned by the exact runtime session.
+
+    Claim type classifies the work and its conflict semantics; it does not
+    determine whether a lane is a session root. Any live claim without
+    ``parent_scope`` is an ownership root for this lifecycle guard.
+    """
 
     if (
         not claim.is_live()
         or not claim.session_id
-        or claim.claim_type != "program"
         or claim.parent_scope
     ):
         return []
@@ -545,7 +549,6 @@ def session_root_conflicts(
             for other in active_claims
             if other.is_live()
             and other.session_id == claim.session_id
-            and other.claim_type == "program"
             and not other.parent_scope
             and not _same_claim(other, claim)
         ),

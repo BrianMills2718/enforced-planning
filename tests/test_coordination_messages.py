@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
 import subprocess
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -842,6 +843,199 @@ def test_codex_lifecycle_hook_observes_repeats_until_ack_then_hides(
     assert after_ack.stdout == ""
 
 
+def test_mailbox_obligation_gate_blocks_mutation_allows_exact_ack_then_passes(
+    mailbox: tuple[CoordinationMessageStore, Path, Path],
+) -> None:
+    """A displayed active message blocks mutation but never blocks its own disposition."""
+
+    store, claims_dir, root = mailbox
+    persisted = store.send(
+        _send_request(sender=CLAUDE_SESSION, recipient=CODEX_SESSION, idempotency_key="mutation-gate")
+    )
+    command = [
+        "python",
+        "scripts/coordination_hook.py",
+        "--claims-dir",
+        str(claims_dir),
+        "--root",
+        str(root),
+    ]
+    base = {
+        "session_id": "thread-123",
+        "cwd": str(Path(__file__).resolve().parents[1]),
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Bash",
+    }
+    blocked = subprocess.run(
+        command,
+        input=json.dumps(
+            {**base, "tool_use_id": "mutation-one", "tool_input": {"command": "git commit -am blocked"}}
+        ),
+        cwd=Path(__file__).resolve().parents[1],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert blocked.returncode == 0, blocked.stderr or blocked.stdout
+    denial = json.loads(blocked.stdout)["hookSpecificOutput"]
+    assert denial["permissionDecision"] == "deny"
+    status = store.status(MessageStatusRequest(message_id=persisted.message.message_id))
+    assert [receipt.event for receipt in status.receipts] == ["observed"]
+    boundary = store.boundary_blocks(persisted.message.message_id)[0]
+    assert boundary.hook_event_name == "PreToolUse"
+    assert boundary.tool_name == "Bash"
+
+    request = {
+        "current_session_id": CODEX_SESSION,
+        "message_id": persisted.message.message_id,
+        "disposition": "information_only",
+        "note": "Recorded the completed sibling closeout; no follow-up action is needed.",
+    }
+    acknowledgement_command = (
+        "python scripts/meta/coordination_messages.py acknowledge --request-json "
+        + shlex.quote(json.dumps(request, separators=(",", ":")))
+    )
+    allowed_ack = subprocess.run(
+        command,
+        input=json.dumps(
+            {
+                **base,
+                "tool_use_id": "ack-one",
+                "tool_input": {"command": acknowledgement_command},
+            }
+        ),
+        cwd=Path(__file__).resolve().parents[1],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert allowed_ack.returncode == 0, allowed_ack.stderr or allowed_ack.stdout
+    assert "permissionDecision" not in allowed_ack.stdout
+
+    acknowledged = store.acknowledge(AcknowledgeMessageRequest(**request))
+    assert acknowledged.acknowledgement_latency_seconds >= 0
+    after_ack = subprocess.run(
+        command,
+        input=json.dumps(
+            {**base, "tool_use_id": "mutation-two", "tool_input": {"command": "git commit -am allowed"}}
+        ),
+        cwd=Path(__file__).resolve().parents[1],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert after_ack.returncode == 0
+    assert after_ack.stdout == ""
+
+
+def test_mailbox_obligation_gate_blocks_stop_until_acknowledged(
+    mailbox: tuple[CoordinationMessageStore, Path, Path],
+) -> None:
+    """Final-response delivery cannot pass while a displayed message remains active."""
+
+    store, claims_dir, root = mailbox
+    persisted = store.send(
+        _send_request(sender=CLAUDE_SESSION, recipient=CODEX_SESSION, idempotency_key="stop-gate")
+    )
+    command = [
+        "python",
+        "scripts/coordination_hook.py",
+        "--claims-dir",
+        str(claims_dir),
+        "--root",
+        str(root),
+    ]
+    hook_input = {
+        "session_id": "thread-123",
+        "cwd": str(Path(__file__).resolve().parents[1]),
+        "hook_event_name": "Stop",
+        "turn_id": "turn-stop-one",
+        "stop_hook_active": False,
+    }
+    first = subprocess.run(
+        command,
+        input=json.dumps(hook_input),
+        cwd=Path(__file__).resolve().parents[1],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    repeated = subprocess.run(
+        command,
+        input=json.dumps({**hook_input, "stop_hook_active": True}),
+        cwd=Path(__file__).resolve().parents[1],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert json.loads(first.stdout)["decision"] == "block"
+    assert json.loads(repeated.stdout)["decision"] == "block"
+    boundary_records = store.boundary_blocks(persisted.message.message_id)
+    assert len(boundary_records) == 1
+    assert boundary_records[0].hook_event_name == "Stop"
+
+    store.acknowledge(
+        AcknowledgeMessageRequest(
+            current_session_id=CODEX_SESSION,
+            message_id=persisted.message.message_id,
+            disposition="accepted",
+            note="Handled before final response.",
+        )
+    )
+    after_ack = subprocess.run(
+        command,
+        input=json.dumps({**hook_input, "turn_id": "turn-stop-two"}),
+        cwd=Path(__file__).resolve().parents[1],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert after_ack.returncode == 0
+    assert after_ack.stdout == ""
+
+
+def test_claude_stop_gate_uses_native_last_message_when_event_id_is_absent(
+    mailbox: tuple[CoordinationMessageStore, Path, Path],
+) -> None:
+    """Claude's Stop payload can block without inventing a session-scoped event ID."""
+
+    store, claims_dir, root = mailbox
+    persisted = store.send(
+        _send_request(sender=CODEX_SESSION, recipient=CLAUDE_SESSION, idempotency_key="claude-stop-gate")
+    )
+    result = subprocess.run(
+        [
+            "python",
+            "scripts/coordination_hook.py",
+            "--agent",
+            "claude-code",
+            "--claims-dir",
+            str(claims_dir),
+            "--root",
+            str(root),
+        ],
+        input=json.dumps(
+            {
+                "session_id": "session-456",
+                "cwd": str(Path(__file__).resolve().parents[1]),
+                "hook_event_name": "Stop",
+                "stop_hook_active": False,
+                "last_assistant_message": "I am done.",
+            }
+        ),
+        cwd=Path(__file__).resolve().parents[1],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr or result.stdout
+    assert json.loads(result.stdout)["decision"] == "block"
+    assert store.boundary_blocks(persisted.message.message_id)[0].hook_event_name == "Stop"
+
+
 def test_codex_lifecycle_hook_workspace_root_without_claim_or_message_is_silent(
     mailbox: tuple[CoordinationMessageStore, Path, Path], tmp_path: Path
 ) -> None:
@@ -1080,6 +1274,44 @@ def test_non_sessionstart_lifecycle_adapter_missing_event_identity_does_not_obse
     assert result.returncode == 0
     assert "requires a native event ID" in result.stdout
     assert store.status(MessageStatusRequest(message_id=persisted.message.message_id)).state == "persisted"
+
+
+def test_stop_gate_mailbox_failure_warns_without_fabricating_a_block_receipt(
+    mailbox: tuple[CoordinationMessageStore, Path, Path],
+) -> None:
+    """A degraded adapter reports uncertainty instead of inventing mailbox state."""
+
+    store, claims_dir, root = mailbox
+    persisted = store.send(
+        _send_request(sender=CLAUDE_SESSION, recipient=CODEX_SESSION, idempotency_key="degraded-stop")
+    )
+    result = subprocess.run(
+        [
+            "python",
+            "scripts/coordination_hook.py",
+            "--claims-dir",
+            str(claims_dir),
+            "--root",
+            str(root),
+        ],
+        input=json.dumps(
+            {
+                "session_id": "thread-123",
+                "cwd": str(Path(__file__).resolve().parents[1]),
+                "hook_event_name": "Stop",
+            }
+        ),
+        cwd=Path(__file__).resolve().parents[1],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    payload = json.loads(result.stdout)
+    assert "coordination mailbox unavailable" in payload["systemMessage"]
+    assert "decision" not in payload
+    assert store.status(MessageStatusRequest(message_id=persisted.message.message_id)).receipts == ()
+    assert store.boundary_blocks(persisted.message.message_id) == ()
 
 
 def test_claude_session_start_without_event_identity_uses_bounded_duplicate_key(

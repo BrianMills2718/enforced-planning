@@ -642,6 +642,21 @@ disposition and note placeholders truthfully, then run it before crossing the
 next natural work boundary. The notice intentionally repeats on later lifecycle
 events until the acknowledgement receipt exists.
 
+Host mailbox adapters enforce two boundaries after a notice is visible:
+
+- `PreToolUse` denies the common mutation tools (`Bash`, `Edit`, `Write`, and
+  `apply_patch`) while a displayed message remains active. One structurally
+  exact acknowledgement command for that session and message remains allowed.
+- `Stop` denies final-response delivery while any displayed message remains
+  active. The client resumes the same turn so the agent can record a truthful
+  disposition.
+
+Read-only investigation remains available, and neither gate chooses a
+disposition automatically. Each denied boundary appends an idempotent boundary
+record with the native event identity; acknowledgement results expose elapsed
+response time. These records expose ignored notices and response latency
+without changing claim authority or historical receipt schemas.
+
 Observation and acknowledgement are distinct append-only receipts. An
 `observed` receipt proves only that the message was exposed to the session; it
 does not satisfy this response rule. Claims remain the write-ownership source,
@@ -657,7 +672,10 @@ mutation. If normal disposition is impossible, closeout supports only an
 explicit durable `deferred` acknowledgement with a note; the successor still
 needs a separately routed handoff. If polling is unavailable, follow the
 degraded-mailbox rule in the workspace instructions and record the limitation;
-never fabricate an acknowledgement.
+never fabricate an acknowledgement. An adapter failure emits a visible warning
+but cannot truthfully assert mailbox debt or manufacture a block. The agent must
+not cross a boundary when a live-agent decision may be pending until canonical
+polling is restored.
 
 ## What Coordination Does And Does Not Do
 
@@ -669,9 +687,9 @@ What it does:
 - makes in-flight architectural decisions visible through `agent_memory` (query: `agent-memory recall 'active decisions' --project {project}`)
 - persists immutable cross-client messages and append-only observation and
   acknowledgement receipts beside the canonical claim registry
-- injects mailbox notices into shared session start, resume, and heartbeat
-  responses; Claude additionally polls after governed read boundaries; Codex
-  polls on native session start, user prompt, and post-tool lifecycle events
+- injects mailbox notices at native session start, user prompt, and post-tool
+  lifecycle events; both supported clients enforce mutation and final-response
+  boundaries with `PreToolUse` and `Stop`
 
 What it does not do:
 

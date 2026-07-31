@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 
 from enforced_planning.hook_wiring import CODEX_MAILBOX_HOOK, MAILBOX_HOOK
+from enforced_planning.mailbox_delivery import CLAUDE_HOOK_REQUIREMENTS, CODEX_HOOK_REQUIREMENTS
 from enforced_planning.mailbox_fleet_audit import MailboxFleetAuditRequestV1, _portable_path, audit_mailbox_fleet
 
 
@@ -27,14 +28,13 @@ def _hook_block(command: str, matcher: str) -> dict[str, object]:
     return {"matcher": matcher, "hooks": [{"type": "command", "command": command, "timeout": 3}]}
 
 
-def _configured_hooks(command: str) -> dict[str, object]:
-    return {
-        "hooks": {
-            "SessionStart": [_hook_block(command, "startup|resume|clear|compact")],
-            "UserPromptSubmit": [_hook_block(command, "")],
-            "PostToolUse": [_hook_block(command, "*")],
-        }
-    }
+def _configured_hooks(
+    command: str, requirements: tuple[tuple[str, str], ...]
+) -> dict[str, object]:
+    hooks: dict[str, list[dict[str, object]]] = {}
+    for event, matcher in requirements:
+        hooks.setdefault(event, []).append(_hook_block(command, matcher))
+    return {"hooks": hooks}
 
 
 def _repo(tmp_path: Path, name: str, *, configured: bool, governed: bool = True) -> Path:
@@ -55,10 +55,22 @@ def _repo(tmp_path: Path, name: str, *, configured: bool, governed: bool = True)
         (repo / ".codex").mkdir(exist_ok=True)
         (repo / ".claude").mkdir(exist_ok=True)
         (repo / ".codex" / "hooks.json").write_text(
-            json.dumps(_configured_hooks(str(CODEX_MAILBOX_HOOK["command"]))), encoding="utf-8"
+            json.dumps(
+                _configured_hooks(
+                    str(CODEX_MAILBOX_HOOK["command"]),
+                    CODEX_HOOK_REQUIREMENTS,
+                )
+            ),
+            encoding="utf-8",
         )
         (repo / ".claude" / "settings.json").write_text(
-            json.dumps(_configured_hooks(str(MAILBOX_HOOK["command"]))), encoding="utf-8"
+            json.dumps(
+                _configured_hooks(
+                    str(MAILBOX_HOOK["command"]),
+                    CLAUDE_HOOK_REQUIREMENTS,
+                )
+            ),
+            encoding="utf-8",
         )
     subprocess.run(["git", "add", "."], cwd=repo, check=True)
     subprocess.run(["git", "commit", "-qm", "fixture"], cwd=repo, check=True)

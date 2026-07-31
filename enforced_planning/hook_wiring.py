@@ -27,7 +27,7 @@ import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import yaml  # type: ignore[import-untyped]
 
@@ -428,6 +428,8 @@ def _merge_codex_mailbox_hooks(
         ("SessionStart", "startup|resume|clear|compact"),
         ("UserPromptSubmit", ""),
         ("PostToolUse", "*"),
+        ("PreToolUse", "Bash|apply_patch"),
+        ("Stop", ""),
     ):
         hooks = _ensure_matcher_block(settings, event_name=event_name, matcher=matcher)
         if _ensure_hook_command(hooks, CODEX_MAILBOX_HOOK):
@@ -441,7 +443,7 @@ def _merge_codex_mailbox_hooks(
         if _ensure_hook_command(
             hooks,
             CODEX_ARTIFACT_CREATION_HOOK,
-            after_command=CODEX_PREWRITE_HOOK["command"] if include_prewrite else None,
+            after_command=(cast(str, CODEX_PREWRITE_HOOK["command"]) if include_prewrite else None),
         ):
             changed = True
     return changed
@@ -542,12 +544,20 @@ def plan_generation(
     if _ensure_hook_command(read_hooks, READ_HOOK):
         changed = True
     if include_coordination_messages:
-        if _ensure_hook_command(
-            read_hooks,
-            MAILBOX_HOOK,
-            after_command="bash .claude/hooks/track-reads.sh",
+        for event_name, matcher in (
+            ("SessionStart", "startup|resume|clear|compact"),
+            ("UserPromptSubmit", ""),
+            ("PostToolUse", "*"),
+            ("PreToolUse", "Bash|Edit|Write"),
+            ("Stop", ""),
         ):
-            changed = True
+            mailbox_hooks = _ensure_matcher_block(
+                settings,
+                event_name=event_name,
+                matcher=matcher,
+            )
+            if _ensure_hook_command(mailbox_hooks, MAILBOX_HOOK):
+                changed = True
     if _ensure_hook_command(
         edit_hooks,
         GATE_HOOK,
@@ -564,7 +574,7 @@ def plan_generation(
         edit_hooks,
         ARTIFACT_CREATION_HOOK,
         after_command=(
-            PREWRITE_HOOK["command"] if prewrite_enabled else GATE_HOOK["command"]
+            cast(str, PREWRITE_HOOK["command"] if prewrite_enabled else GATE_HOOK["command"])
         ),
     ):
         changed = True
@@ -608,12 +618,17 @@ def plan_coordination_message_generation(
             file_writes[target_path] = content
 
     settings = _read_json_file(target.settings_file)
-    read_hooks = _ensure_matcher_block(settings, event_name="PostToolUse", matcher="Read")
-    changed = _ensure_hook_command(
-        read_hooks,
-        MAILBOX_HOOK,
-        after_command="bash .claude/hooks/track-reads.sh",
-    )
+    changed = False
+    for event_name, matcher in (
+        ("SessionStart", "startup|resume|clear|compact"),
+        ("UserPromptSubmit", ""),
+        ("PostToolUse", "*"),
+        ("PreToolUse", "Bash|Edit|Write"),
+        ("Stop", ""),
+    ):
+        hooks = _ensure_matcher_block(settings, event_name=event_name, matcher=matcher)
+        if _ensure_hook_command(hooks, MAILBOX_HOOK):
+            changed = True
     rendered_settings = _render_settings(settings)
     current_settings = (
         target.settings_file.read_text(encoding="utf-8")

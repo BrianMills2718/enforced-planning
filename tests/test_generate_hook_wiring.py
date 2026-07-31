@@ -130,13 +130,24 @@ def test_generate_hook_wiring_writes_files_and_merges_settings(tmp_path: Path) -
     ]
     assert [hook["command"] for hook in posttool["hooks"]] == [
         "bash .claude/hooks/track-reads.sh",
+    ]
+    mailbox_posttool = next(
+        item for item in settings["hooks"]["PostToolUse"] if item["matcher"] == "*"
+    )
+    assert [hook["command"] for hook in mailbox_posttool["hooks"]] == [
         "bash .claude/hooks/notify-coordination-messages.sh",
     ]
 
     assert (tmp_path / ".claude" / "hooks" / "gate-edit.sh").exists()
     assert (tmp_path / ".claude" / "hooks" / "track-reads.sh").exists()
     codex_hooks = json.loads((tmp_path / ".codex" / "hooks.json").read_text(encoding="utf-8"))
-    assert set(codex_hooks["hooks"]) == {"SessionStart", "UserPromptSubmit", "PostToolUse"}
+    assert set(codex_hooks["hooks"]) == {
+        "SessionStart",
+        "UserPromptSubmit",
+        "PostToolUse",
+        "PreToolUse",
+        "Stop",
+    }
     assert (tmp_path / ".codex" / "hooks" / "notify-coordination-messages.sh").exists()
     assert (tmp_path / "scripts" / "check_required_reading.py").exists()
     assert (tmp_path / "scripts" / "meta" / "hook_log.py").exists()

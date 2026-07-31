@@ -933,6 +933,28 @@ def resolve_session_id(agent: str, explicit_session_id: str | None = None) -> st
     return None
 
 
+def validate_native_session_binding(agent: str, session_id: str | None) -> None:
+    """Reject an explicit session identity that contradicts the native runtime.
+
+    Explicit identities remain necessary for lifecycle hooks and recovery tools
+    whose subprocess environment does not expose a native marker. When a native
+    marker *is* present, however, accepting a different value creates an owner
+    that no real session can heartbeat, receive mailbox messages for, or close.
+    """
+
+    if not session_id:
+        return
+    native_session_id = resolve_session_id(agent)
+    if native_session_id is None or session_id == native_session_id:
+        return
+    raise ValueError(
+        f"Explicit session ID {session_id!r} does not match the current "
+        f"{agent} runtime {native_session_id!r}. Use the native session identity; "
+        "do not substitute a lane name. Use sanctioned transfer or takeover for "
+        "ownership changes."
+    )
+
+
 def _safe_string_list(value: Any) -> list[str]:
     """Normalize a scalar-or-list YAML value into a clean string list."""
     if value is None:
@@ -1361,9 +1383,12 @@ def create_claim(
     work_graph_path: str | None = None,
     work_unit_id: str | None = None,
     allow_parallel: bool = False,
+    require_native_session_binding: bool = False,
 ) -> tuple[bool, str]:
     """Create a new claim after checking for hard conflicts."""
     now = datetime.now(timezone.utc)
+    if require_native_session_binding:
+        validate_native_session_binding(agent, session_id)
     resolved_claim_type = claim_type or ("write" if write_paths else "program")
     work_graph_sha256: str | None = None
     approval_revisions: tuple[str, ...] = ()
@@ -2292,6 +2317,7 @@ def main(argv: list[str] | None = None) -> int:
                 work_graph_path=args.work_graph,
                 work_unit_id=args.work_unit_id,
                 allow_parallel=args.allow_parallel,
+                require_native_session_binding=True,
             )
         except MutationAuditError as exc:
             return _render_mutation_audit_failure(exc, as_json=args.json)

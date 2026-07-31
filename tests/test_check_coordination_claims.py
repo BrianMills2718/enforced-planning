@@ -881,6 +881,35 @@ def test_heartbeat_claims_refreshes_codex_session(
     assert payload["heartbeat_at"] == heartbeat_at
 
 
+def test_native_session_binding_rejects_lane_name_in_place_of_codex_runtime(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A live Codex runtime must not create ownership under a fabricated ID."""
+
+    module = _load_module()
+    monkeypatch.setenv("CODEX_THREAD_ID", "019f9b0a-5a78-7a91-a6c6-940aa5393e6b")
+
+    with pytest.raises(ValueError, match="does not match the current codex runtime"):
+        module.validate_native_session_binding(
+            "codex",
+            "codex:second-slack-vertical-20260730",
+        )
+
+
+def test_native_session_binding_accepts_exact_runtime_or_external_hook_identity(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Exact native IDs pass, while hooks without ambient metadata stay usable."""
+
+    module = _load_module()
+    native = "codex:019f9b0a-5a78-7a91-a6c6-940aa5393e6b"
+    monkeypatch.setenv("CODEX_THREAD_ID", native.removeprefix("codex:"))
+    module.validate_native_session_binding("codex", native)
+
+    monkeypatch.delenv("CODEX_THREAD_ID")
+    module.validate_native_session_binding("codex", native)
+
+
 def test_heartbeat_replace_failure_preserves_existing_claim(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

@@ -120,11 +120,13 @@ Mandatory rule: no live session without `plan_ref`, except explicitly marked
 unplanned emergency work. If work resumes in a new runtime, reattach it to the
 existing plan-bound lane instead of silently creating a new one.
 
-A runtime session may own one unparented `program` root by default. Related
-work must declare `parent_scope`. Before opening an unrelated root, close or
-transfer the existing root; use `SESSION_ALLOW_PARALLEL=1` / `--allow-parallel`
-only when multiple roots are an intentional part of the adopted plan graph.
-The claim check runs before branch or worktree creation.
+A runtime session may own one unparented live claim root by default. Claim type
+classifies work and path-conflict behavior; it does not exempt a lane from
+session-root lifecycle enforcement. Related work must declare `parent_scope`.
+Before opening an unrelated root, close or transfer the existing root; use
+`SESSION_ALLOW_PARALLEL=1` / `--allow-parallel` only when multiple roots are an
+intentional part of the adopted plan graph. The claim check runs before branch
+or worktree creation and counts `active`, `blocked`, and `handoff` roots.
 
 For the sanctioned repo-local `make worktree` flow, the default claim is a v2
 **program** claim with real `branch`, `worktree_path`, and `session_id`

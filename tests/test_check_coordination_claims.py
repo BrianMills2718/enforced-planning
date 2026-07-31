@@ -1271,6 +1271,94 @@ def test_runtime_session_rejects_unrelated_second_root_unless_explicit(
     assert beta.parallel_root_authorized is True
 
 
+@pytest.mark.parametrize("existing_status", ["active", "blocked", "handoff"])
+@pytest.mark.parametrize("existing_claim_type", ["write", "research"])
+def test_runtime_session_counts_every_live_unparented_claim_as_root(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    existing_status: str,
+    existing_claim_type: str,
+) -> None:
+    """Work classification must not let a session abandon an unresolved root."""
+
+    module = _load_module()
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
+    existing_kwargs = {
+        "agent": "codex",
+        "project": "workspace-instructions",
+        "scope": "root-policy-edit",
+        "intent": "Edit the shared workspace instruction",
+        "claim_type": existing_claim_type,
+        "write_paths": ["CLAUDE.md"] if existing_claim_type == "write" else None,
+        "repo_root": str(tmp_path / "workspace-instructions"),
+        "worktree_path": str(tmp_path / "workspace-instructions" / "worktrees" / "root-policy-edit"),
+        "branch": "root-policy-edit",
+        "session_id": "codex:week-long-session",
+        "session_name": "workspace-maintenance",
+        "status": existing_status,
+    }
+    ok, _message = module.create_claim(**existing_kwargs)
+    assert ok is True
+
+    with pytest.raises(ValueError, match="already owns an unresolved root lane"):
+        module.create_claim(
+            agent="codex",
+            project="inside-success",
+            scope="dagim-meeting-reconcile",
+            intent="Open an unrelated root in another project",
+            claim_type="program",
+            repo_root=str(tmp_path / "inside-success"),
+            worktree_path=str(tmp_path / "inside-success" / "worktrees" / "dagim-meeting-reconcile"),
+            branch="dagim-meeting-reconcile",
+            session_id="codex:week-long-session",
+            session_name="workspace-maintenance",
+        )
+
+    ok, _message = module.create_claim(
+        agent="codex",
+        project="inside-success",
+        scope="different-runtime-root",
+        intent="Open a root owned by a different runtime",
+        claim_type="program",
+        repo_root=str(tmp_path / "inside-success"),
+        worktree_path=str(tmp_path / "inside-success" / "worktrees" / "different-runtime-root"),
+        branch="different-runtime-root",
+        session_id="codex:different-session",
+        session_name="independent-runtime",
+    )
+    assert ok is True
+
+
+def test_runtime_session_can_refresh_same_non_program_root(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Refreshing the exact claim slot must not look like a second root."""
+
+    module = _load_module()
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
+    kwargs = {
+        "agent": "codex",
+        "project": "workspace-instructions",
+        "scope": "root-policy-edit",
+        "intent": "Edit the shared workspace instruction",
+        "claim_type": "write",
+        "write_paths": ["CLAUDE.md"],
+        "repo_root": str(tmp_path / "workspace-instructions"),
+        "worktree_path": str(tmp_path / "workspace-instructions" / "worktrees" / "root-policy-edit"),
+        "branch": "root-policy-edit",
+        "session_id": "codex:week-long-session",
+        "session_name": "workspace-maintenance",
+    }
+    ok, _message = module.create_claim(**kwargs)
+    assert ok is True
+    ok, _message = module.create_claim(**kwargs)
+    assert ok is True
+    assert len(module.check_claims()) == 1
+
+
 def test_claim_lifecycle_issues_detect_missing_branch_ref(tmp_path: Path) -> None:
     """Claims should become stale when the declared branch ref no longer exists."""
     module = _load_module()

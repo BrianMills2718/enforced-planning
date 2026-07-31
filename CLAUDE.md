@@ -122,9 +122,10 @@ make test
    single-writer development task does not need a session/claim lifecycle.
 7. Use `session-close` or `make worktree-remove` for claimed lane cleanup; do
    not manually split claim release from worktree removal.
-8. One runtime session owns one unparented program root by default. Related
-   work declares `parent_scope`; intentional additional roots require explicit
-   parallel authorization.
+8. One runtime session owns one unparented live claim root by default. Claim
+   type does not exempt a lane from this lifecycle guard. Related work declares
+   `parent_scope`; intentional additional roots require explicit parallel
+   authorization.
 
 ## Notes
 

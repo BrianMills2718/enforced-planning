@@ -2013,6 +2013,32 @@ def test_start_session_auto_resolves_codex_runtime_session_id(
     assert payload["session_id"] == "codex:codex-thread-123"
 
 
+def test_start_session_rejects_explicit_id_that_mismatches_codex_runtime(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Session start must bind ownership to the actual interactive runtime."""
+
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", tmp_path / "claims")
+    monkeypatch.setenv("CODEX_THREAD_ID", "019f9b0a-5a78-7a91-a6c6-940aa5393e6b")
+
+    with pytest.raises(ValueError, match="do not substitute a lane name"):
+        session_lifecycle.start_session(
+            agent="codex",
+            project="inside-success",
+            scope="second-slack-vertical-20260730",
+            intent="run one retained Slack vertical",
+            repo_root="~/projects/inside-success",
+            worktree_path="~/projects/inside-success/worktrees/second-slack-vertical-20260730",
+            branch="feat/second-slack-vertical-20260730",
+            broader_goal="Improve retained Slack knowledge",
+            current_phase="vertical execution",
+            session_id="codex:second-slack-vertical-20260730",
+            tracker_dir=tmp_path / "sessions",
+            allow_unplanned=True,
+        )
+
+
 def test_start_session_auto_resolves_claude_code_runtime_session_id(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

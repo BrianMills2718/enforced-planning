@@ -68,6 +68,12 @@ def build_candidate_claim(**kwargs: Any) -> ClaimRecord:
     return _impl.build_candidate_claim(**kwargs)
 
 
+def validate_native_session_binding(agent: str, session_id: str | None) -> None:
+    """Expose native runtime/session binding through the legacy facade."""
+
+    _impl.validate_native_session_binding(agent, session_id)
+
+
 def claim_health_issues(claim: ClaimRecord) -> list[str]:
     """Expose claim health diagnostics through the legacy script surface."""
     return _impl.claim_health_issues(claim)

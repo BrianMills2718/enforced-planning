@@ -205,8 +205,16 @@ Liveness is heartbeat-backed:
 The canonical v2 claim CLI now auto-resolves `session_id` from supported tool
 runtime env vars when possible. In governed repos the installed local entrypoint
 is `scripts/meta/check_coordination_claims.py`. In the framework repo the
-equivalent source entrypoint is `scripts/check_coordination_claims.py`. If older
-live claims are missing `session_id`, repair them explicitly with:
+equivalent source entrypoint is `scripts/check_coordination_claims.py`.
+
+For an interactive runtime, `session_id` is the client-provided native session
+identity, never a branch, lane, task, or invented label. When the native runtime
+marker is available, sanctioned claim and session-start entrypoints reject a
+different explicit identity. Hooks that receive an exact native ID but run
+without its ambient environment may still pass that ID explicitly. Transfer or
+takeover changes ownership; fabricating a replacement session ID does not.
+
+If older live claims are missing `session_id`, repair them explicitly with:
 
 ```bash
 python scripts/meta/check_coordination_claims.py --hydrate-session-ids --agent codex --project your-repo

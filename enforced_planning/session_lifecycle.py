@@ -326,6 +326,7 @@ def _upsert_session_claim(
 ) -> str:
     """Create or update the compact claim-side session contract metadata."""
 
+    coordination_claims.validate_native_session_binding(agent, session_id)
     path = _claim_path(agent, project, scope)
     now = datetime.now(timezone.utc)
     existing_payload = _load_claim_payload(agent, project, scope)
@@ -351,6 +352,7 @@ def _upsert_session_claim(
             work_unit_id=work_unit_id,
             ttl_hours=ttl_hours,
             allow_parallel=allow_parallel,
+            require_native_session_binding=True,
         )
         if not ok:
             raise ValueError(message)
@@ -943,6 +945,7 @@ def start_session(
         raise ValueError(
             "Unable to resolve a session ID. Pass --session-id explicitly or run from a supported tool runtime."
         )
+    coordination_claims.validate_native_session_binding(agent, resolved_session_id)
 
     contract = session_contracts.SessionContract.build(
         agent=agent,

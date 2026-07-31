@@ -38,8 +38,16 @@ CODEX_HOOK_REQUIREMENTS: tuple[tuple[str, str], ...] = (
     ("SessionStart", "startup|resume|clear|compact"),
     ("UserPromptSubmit", ""),
     ("PostToolUse", "*"),
+    ("PreToolUse", "Bash|apply_patch"),
+    ("Stop", ""),
 )
-CLAUDE_HOOK_REQUIREMENTS = CODEX_HOOK_REQUIREMENTS
+CLAUDE_HOOK_REQUIREMENTS: tuple[tuple[str, str], ...] = (
+    ("SessionStart", "startup|resume|clear|compact"),
+    ("UserPromptSubmit", ""),
+    ("PostToolUse", "*"),
+    ("PreToolUse", "Bash|Edit|Write"),
+    ("Stop", ""),
+)
 
 
 class MailboxInstallationError(RuntimeError):

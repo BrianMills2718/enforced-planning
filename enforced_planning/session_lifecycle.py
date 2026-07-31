@@ -889,6 +889,35 @@ def _remove_worktree_path(repo_root: Path, worktree_path: Path) -> str:
     return "removed"
 
 
+def _assert_worktree_removal_access(worktree_path: Path) -> None:
+    """Fail before Git mutation when the current user cannot remove a tree.
+
+    ``git worktree remove`` can unregister a worktree before recursive
+    filesystem deletion encounters a read-only cache directory.  Check the
+    directory permissions that govern unlinking first so a predictable access
+    failure leaves both the Git registry and coordination claim untouched.
+    """
+
+    if not worktree_path.exists():
+        return
+    directories = [worktree_path.parent]
+    directories.extend(Path(root) for root, _dirs, _files in os.walk(worktree_path))
+    blocked = sorted(
+        str(path)
+        for path in directories
+        if not os.access(path, os.W_OK | os.X_OK)
+    )
+    if blocked:
+        preview = ", ".join(blocked[:5])
+        if len(blocked) > 5:
+            preview += f", ... ({len(blocked)} total)"
+        raise PermissionError(
+            "Worktree removal blocked before Git registry mutation; "
+            "the current user cannot recursively remove: "
+            f"{preview}. Repair or preserve those paths, then retry session-close."
+        )
+
+
 def _delete_branch(repo_root: Path, branch: str | None, *, force: bool = False) -> str:
     """Delete one local branch after worktree cleanup."""
 
@@ -1411,6 +1440,7 @@ def close_session(
                 "Worktree is dirty; commit or stash before session-close. "
                 f"Uncommitted state:\n{dirty_details}"
             )
+        _assert_worktree_removal_access(resolved_worktree_path)
 
     preflight = _validate_closeout_preflight(
         repo_root=repo_root,

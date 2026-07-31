@@ -1350,6 +1350,51 @@ def test_close_session_keeps_canonical_root_after_worktree_removal(
     assert repo_root.exists()
 
 
+def test_close_session_fails_before_registry_mutation_when_ignored_directory_is_not_deletable(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A read-only ignored cache must not leave a half-removed worktree."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    repo_root, worktree, branch = _real_repo_with_worktree(tmp_path)
+    claim_file = _start_real_closeout_claim(
+        repo_root=repo_root,
+        worktree=worktree,
+        branch=branch,
+        claims_dir=claims_dir,
+        trackers_dir=trackers_dir,
+    )
+    (worktree / ".gitignore").write_text("runtime-cache/\n", encoding="utf-8")
+    _git(worktree, "add", ".gitignore")
+    _git(worktree, "commit", "-m", "ignore runtime cache")
+    cache = worktree / "runtime-cache"
+    cache.mkdir()
+    (cache / "artifact.bin").write_bytes(b"preserve me")
+    cache.chmod(0o555)
+
+    try:
+        with pytest.raises(PermissionError, match="before Git registry mutation"):
+            session_lifecycle.close_session(
+                agent="codex",
+                project="enforced-planning",
+                scope=branch,
+                disposition="archived",
+                disposition_reason="historical lane with remote recovery",
+                recovery_ref="refs/heads/main",
+            )
+
+        assert worktree.exists()
+        assert str(worktree) in _git(repo_root, "worktree", "list", "--porcelain")
+        claim_payload = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
+        assert claim_payload["status"] == "active"
+        assert "disposition" not in claim_payload
+    finally:
+        cache.chmod(0o755)
+
+
 def test_close_session_resolves_missing_nested_worktree_repo_root(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

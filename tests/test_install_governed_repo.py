@@ -846,6 +846,16 @@ def test_install_governed_repo_write_bootstraps_minimum_repo_and_passes_audit(
     assert "WORKTREE_DISPOSITION ?= merged" in makefile_text
     assert '--disposition "$(WORKTREE_DISPOSITION)"' in makefile_text
     assert "$(filter 1 true yes,$(WORKTREE_ALLOW_DISCARD_UNIQUE))" in makefile_text
+    assert "WORKTREE_MERGE_COMMIT ?=" in makefile_text
+    assert (
+        '$(if $(WORKTREE_MERGE_COMMIT),--merge-commit "$(WORKTREE_MERGE_COMMIT)",)'
+        in makefile_text
+    )
+    assert (
+        '$(if $(WORKTREE_MERGE_COMMIT),WORKTREE_MERGE_COMMIT="$(WORKTREE_MERGE_COMMIT)",)'
+        in makefile_text
+    )
+    assert 'SESSION_ALLOW_PARALLEL="$(SESSION_ALLOW_PARALLEL)"' in makefile_text
     maintenance_with_plan = subprocess.run(
         ["make", "maintenance-worktree", "PLAN=123"],
         cwd=str(tmp_path),

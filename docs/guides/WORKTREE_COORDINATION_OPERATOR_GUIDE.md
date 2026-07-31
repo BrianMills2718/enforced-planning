@@ -569,6 +569,13 @@ reason and `WORKTREE_ALLOW_DISCARD_UNIQUE=1`. `active` and `handoff` are valid
 lane dispositions but are not valid `session-close` outcomes because their
 work remains live.
 
+Before changing the Git worktree registry, `session-close` verifies that the
+current user can traverse and write every directory needed for recursive
+removal. Read-only dependency trees and root-owned caches fail at this
+preflight, leaving the worktree registration and claim unchanged. Preserve or
+repair the reported path, then retry; do not manually remove `.git/worktrees`
+metadata to work around the failure.
+
 Successful closeout retains the claim YAML with `status: completed`, the
 disposition, default-branch result, reason, recovery ref when used, and close
 timestamp. It is no longer active coordination state. Explicit

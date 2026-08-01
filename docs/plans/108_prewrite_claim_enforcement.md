@@ -1,6 +1,6 @@
 # Plan #108: Low-Friction Pre-Write Claim Enforcement
 
-**Status:** In Progress — PW-01/PW-02A/PW-02/PW-02B0 accepted; PW-02B1 inventory and PW-02C Codex matcher repair are ready; enforcement remains dependency-blocked
+**Status:** In Progress — PW-01/PW-02A/PW-02/PW-02B0/PW-02B1 accepted; PW-02B2 and PW-02C are ready; enforcement remains dependency-blocked
 **Type:** implementation
 **Priority:** Critical
 **Design Revision:** `plan-108-v3`
@@ -438,6 +438,14 @@ query at the end. Any mutation during the window resets the writer's evidence
 to its newest receipt; it does not extend the window. Acceptance requires zero
 `unclassified_legacy` rows. Do not convert `authority_blocked` to permission.
 
+**Accepted evidence:** The retained
+`docs/evidence/plan108_pw02b_fleet_inventory.json` records a 16-minute window,
+one exact current writer digest, three live exact-session claims, zero
+`unclassified_legacy` rows, and a current registry/projection digest readback.
+The initially unknown Inside Success row became attributable only after its
+live owner acknowledged the coordination request and ran the sanctioned
+heartbeat. No legacy identity was inferred and no claim was taken over.
+
 #### PW-02C — native Codex matcher repair (ready independently)
 
 The source generator currently installs the Codex pre-write command beneath an
@@ -583,9 +591,10 @@ PW-02B1 manifest must be derived from runtime mutation receipts.
 
 This observation changed the remaining design from “infer the writer from the
 claim's repo root” to “record the loaded writer source and digest at mutation
-time.” PW-02B0 is accepted. PW-02B1 inventory and the independent PW-02C Codex
-matcher repair are ready leaves. PW-02B2 rollout, final PW-02B certification,
-PW-03 pilot promotion, and PW-04 governed-fleet promotion remain
+time.” PW-02B0 and PW-02B1 are accepted. The accepted inventory contains no
+`update_current_personal` rows, so PW-02B2 is a ready zero-target verification;
+the independent PW-02C Codex matcher repair is also ready. Final PW-02B
+certification, PW-03 pilot promotion, and PW-04 governed-fleet promotion remain
 dependency-blocked in that order.
 
 ### PW-04 — governed-fleet hard-enforcement rollout

@@ -169,7 +169,7 @@
       "objective": "Produce a timestamped fleet manifest in which every live writer is current, legacy, inactive, or authority-blocked without operator interpretation.",
       "profile": "standard",
       "execution_class": "independently_executable",
-      "claimability": "ready_for_execution",
+      "claimability": "not_applicable",
       "authorization_mode": "registry_claim",
       "scope": {"included": ["Query the global live-claim registry and mutation ledger", "Record canonical repo, remote owner, runtime source digest, active sessions, and disposition", "Fail closed on missing provenance or conflicting identities"], "excluded": ["Updating consumer repositories", "Treating file presence as proof of the executing runtime", "Granting organization-repository write authority"]},
       "inputs": [{"kind": "work_unit_output", "id": "prewrite-pw-02b0-writer-provenance", "revision": "accepted"}],
@@ -179,8 +179,8 @@
       "acceptance": [{"id": "PW02B1-A1", "criterion": "Every live mutation runtime has exactly one mechanical disposition: update_current_personal, already_current, inactive, or authority_blocked.", "evidence_required": ["Timestamped manifest with source SHA-256 and active-session IDs", "Zero unclassified live writer digests", "Fresh projection-current readback"], "negative_control": "A fixture writer without provenance produces unclassified_legacy and fails acceptance."}],
       "readiness": {"status": "ready", "required_approval_types": [], "approvals": [], "failed_guards": []},
       "claim_policy": {"eligibility_rule": "Writer-provenance unit accepted; claim only fleet inventory and evidence paths.", "lease_policy": "renewable", "lease_duration_minutes": 1440, "max_active_per_claimant": 1, "named_owner_id": null},
-      "status": "ready",
-      "record_version": 2
+      "status": "accepted",
+      "record_version": 3
     },
     {
       "schema_version": "1.0",
@@ -256,7 +256,7 @@
       "objective": "Apply the bounded refresh profile only to manifest rows marked update_current_personal and retain exact per-repository proof.",
       "profile": "standard",
       "execution_class": "independently_executable",
-      "claimability": "blocked_dependencies",
+      "claimability": "ready_for_execution",
       "authorization_mode": "registry_claim",
       "scope": {"included": ["One exact target-repository claim and linked worktree per eligible manifest row", "Dry-run, bounded installer apply, targeted tests, real heartbeat, commit, PR, merge, and sanctioned closeout", "Per-row revision, PR, command, digest, and rollback evidence"], "excluded": ["Organization repositories marked authority_blocked", "Inactive or archived repositories", "Hook mode changes", "Broad governed-repo upgrades"]},
       "inputs": [{"kind": "work_unit_output", "id": "prewrite-pw-02b1-fleet-inventory", "revision": "accepted"}],
@@ -264,10 +264,10 @@
       "dependencies": [{"unit_id": "prewrite-pw-02b1-fleet-inventory", "type": "hard", "gate": {"type": "unit_status", "required_status": "accepted"}, "rationale": "The frozen manifest removes target-selection judgment."}],
       "conflict_surfaces": [{"kind": "external_system", "target": "eligible repositories listed by plan108_pw02b_fleet_inventory.json", "access": "write", "coordination_key": "prewrite-projection-refresh-fleet"}],
       "acceptance": [{"id": "PW02B2-A1", "criterion": "Every update_current_personal row is merged and closed, and its real heartbeat leaves projection_is_current true.", "evidence_required": ["Installer dry-run showing only bounded profile paths", "Targeted test output", "Merge revision and PR URL", "Heartbeat registry/projection digest equality", "Sanctioned lane closeout receipt"], "negative_control": "Any dry-run containing hooks, Makefile, enforcement mode, or an unclaimed path stops that target without applying changes."}],
-      "readiness": {"status": "blocked", "required_approval_types": [], "approvals": [], "failed_guards": ["prewrite-pw-02b1-fleet-inventory must be accepted"]},
+      "readiness": {"status": "ready", "required_approval_types": [], "approvals": [], "failed_guards": []},
       "claim_policy": {"eligibility_rule": "Inventory accepted; target row equals update_current_personal; exact target paths are claimed before mutation.", "lease_policy": "renewable", "lease_duration_minutes": 1440, "max_active_per_claimant": 1, "named_owner_id": null},
-      "status": "blocked",
-      "record_version": 1
+      "status": "ready",
+      "record_version": 2
     },
     {
       "schema_version": "1.0",

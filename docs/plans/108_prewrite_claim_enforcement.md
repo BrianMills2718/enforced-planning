@@ -1,6 +1,6 @@
 # Plan #108: Low-Friction Pre-Write Claim Enforcement
 
-**Status:** In Progress — PW-01/PW-02A/PW-02/PW-02B0/PW-02B1/PW-02C accepted; PW-02B2 is ready; enforcement remains dependency-blocked
+**Status:** In Progress — PW-01/PW-02A/PW-02/PW-02B0/PW-02B1/PW-02B2/PW-02C accepted; final fleet certification is ready; enforcement remains dependency-blocked
 **Type:** implementation
 **Priority:** Critical
 **Design Revision:** `plan-108-v3`
@@ -487,6 +487,15 @@ For each manifest row marked `update_current_personal`, in manifest order:
    canonical checkout, and run sanctioned `session-close`.
 7. Record target, source and merge revisions, PR URL, test command/result,
    heartbeat event ID/digests, and closeout result in the fleet evidence.
+
+**Accepted zero-target evidence:** The frozen PW-02B1 manifest has SHA-256
+`830514fe75920d17daf72d8e1673e6f155014d9dbc15bcea94ff34ca82b3239a`
+and contains zero `update_current_personal` rows. PW-02B2 therefore performed
+no repository, hook, configuration, claim, branch, or worktree mutation. The
+retained `docs/evidence/plan108_pw02b2_fleet_rollout.json` records that exact
+empty target set. A newly observed legacy writer after the frozen window is
+carried forward as a blocker for fresh fleet certification rather than being
+silently added to or ignored by this revision-bound rollout.
 
 Rows marked `already_current`, `inactive`, or `authority_blocked` receive only
 their evidence-backed disposition. Never edit an `authority_blocked` target.

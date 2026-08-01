@@ -583,9 +583,28 @@ PW-02B1 manifest must be derived from runtime mutation receipts.
 
 This observation changed the remaining design from “infer the writer from the
 claim's repo root” to “record the loaded writer source and digest at mutation
-time.” PW-02B0 is accepted. PW-02B1 inventory is the sole ready leaf; PW-02B2
-rollout, final PW-02B certification, and PW-03 remain dependency-blocked in
-that order.
+time.” PW-02B0 is accepted. PW-02B1 inventory and the independent PW-02C Codex
+matcher repair are ready leaves. PW-02B2 rollout, final PW-02B certification,
+PW-03 pilot promotion, and PW-04 governed-fleet promotion remain
+dependency-blocked in that order.
+
+### PW-04 — governed-fleet hard-enforcement rollout
+
+The single-repository PW-03 pilot is not workspace completion. After its real
+positive and negative native probes pass, freeze the active governed-repository
+set from Project Meta governance, classify each repository by mutation and
+publication authority, and install `claims.prewrite_mode: enforce` plus the
+generated Claude/Codex adapters through one exact claimed lane per repository.
+Repositories outside current mutation authority remain explicit blocked or
+excluded rows; they are never silently treated as covered.
+
+Acceptance requires a deterministic fleet report with every in-scope active
+repository either enforced or carrying a named, evidence-backed exception; no
+repository may remain implicitly `off`. Generator/audit readback is required
+per repository, while live native both-sign canaries may be sampled by distinct
+runtime/configuration shape rather than repeated mechanically for every clone.
+The 24-hour forfeiture process remains recovery for escaped failures, not the
+primary ownership control.
 
 ### PW-02A Evidence
 

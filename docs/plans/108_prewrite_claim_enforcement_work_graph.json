@@ -750,6 +750,71 @@
       },
       "status": "blocked",
       "record_version": 3
+    },
+    {
+      "schema_version": "1.0",
+      "record_type": "work_unit",
+      "id": "prewrite-pw-04-governed-fleet-enforcement",
+      "initiative_id": "coordination-integrity",
+      "goal_id": "prewrite-claim-enforcement",
+      "design_revision": "plan-108-v3",
+      "spec_revision": "prewrite-pw-04-v1",
+      "title": "Promote every authorized active governed repository to hard pre-write enforcement",
+      "class": "integration",
+      "objective": "Make unclaimed native edits fail before mutation across the authorized governed fleet, with explicit exceptions instead of implicit off state.",
+      "profile": "standard",
+      "execution_class": "independently_executable",
+      "claimability": "blocked_dependencies",
+      "authorization_mode": "registry_claim",
+      "scope": {
+        "included": [
+          "Fresh active governed-repository target manifest from Project Meta repository governance",
+          "One exact claimed configuration and generated-hook rollout lane per authorized repository",
+          "Per-repository enforce-mode and adapter audit readback",
+          "Representative both-sign native canaries for each distinct client/configuration shape",
+          "Explicit evidence-backed exceptions with owner and resume event"
+        ],
+        "excluded": [
+          "Archived, vendored, external, or unauthorized repositories",
+          "Arbitrary-process or operating-system write containment",
+          "Force-push, deployment, package publication, or non-Git publication",
+          "Closing or discarding pre-existing dirty work"
+        ]
+      },
+      "inputs": [
+        {"kind": "work_unit_output", "id": "prewrite-pw-03-enforce-promotion", "revision": "accepted"},
+        {"kind": "authority", "id": "project-meta/PROJECT_GRAPH.json", "revision": "fresh-default-branch"}
+      ],
+      "outputs": [
+        "Frozen governed-fleet enforcement manifest",
+        "Merged per-repository enforce configuration and generated adapters",
+        "Fleet audit with no implicit off repository",
+        "Representative native denial and exact-claim allow receipts"
+      ],
+      "dependencies": [
+        {"unit_id": "prewrite-pw-03-enforce-promotion", "type": "hard", "gate": {"type": "unit_status", "required_status": "accepted"}, "rationale": "Fleet promotion starts only after the fixed repository pilot proves denial, allow, and rollback through the real native boundary."}
+      ],
+      "conflict_surfaces": [
+        {"kind": "external_system", "target": "Project Meta active governed-repository inventory", "access": "read", "coordination_key": "prewrite-governed-fleet-promotion"},
+        {"kind": "external_system", "target": "authorized governed repository configuration and generated hook surfaces", "access": "exclusive", "coordination_key": "prewrite-governed-fleet-promotion"}
+      ],
+      "acceptance": [
+        {
+          "id": "PW04-A1",
+          "criterion": "Every authorized active governed repository in the frozen manifest has enforce-mode configuration and current generated native adapters, or an explicit evidence-backed exception with owner and resume event; no row is implicitly off or unclassified.",
+          "evidence_required": [
+            "Revision-bound Project Meta target manifest",
+            "Per-repository claim, merge revision, closeout receipt, and audit readback",
+            "Representative native exact-claim allow and unclaimed-write denial receipts",
+            "Post-rollout fleet audit"
+          ],
+          "negative_control": "An unauthorized, archived, missing, dirty, or actively claimed repository remains unchanged and is reported explicitly rather than counted as enforced."
+        }
+      ],
+      "readiness": {"status": "blocked", "required_approval_types": [], "approvals": [], "failed_guards": ["prewrite-pw-03-enforce-promotion must be accepted"]},
+      "claim_policy": {"eligibility_rule": "PW-03 accepted; each target matches the frozen governance manifest and receives one exact non-overlapping claim before mutation.", "lease_policy": "renewable", "lease_duration_minutes": 1440, "max_active_per_claimant": 1, "named_owner_id": null},
+      "status": "blocked",
+      "record_version": 1
     }
   ]
 }

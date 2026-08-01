@@ -151,7 +151,7 @@
         "evidence_required": ["Passing create/heartbeat/release/prune/end/closeout receipt tests", "Query output for one real heartbeat", "Failure test proving an unwritable receipt path fails visibly after reporting mutation outcome"],
         "negative_control": "A legacy mutation with no receipt remains unknown and cannot be classified as current."
       }],
-      "readiness": {"status": "accepted", "required_approval_types": [], "approvals": [], "failed_guards": []},
+      "readiness": {"status": "ready", "required_approval_types": [], "approvals": [], "failed_guards": []},
       "claim_policy": {"eligibility_rule": "Claim only the canonical mutation contract, query, tests, and Plan 108 evidence paths.", "lease_policy": "renewable", "lease_duration_minutes": 1440, "max_active_per_claimant": 1, "named_owner_id": null},
       "status": "accepted",
       "record_version": 2
@@ -181,6 +181,67 @@
       "claim_policy": {"eligibility_rule": "Writer-provenance unit accepted; claim only fleet inventory and evidence paths.", "lease_policy": "renewable", "lease_duration_minutes": 1440, "max_active_per_claimant": 1, "named_owner_id": null},
       "status": "ready",
       "record_version": 2
+    },
+    {
+      "schema_version": "1.0",
+      "record_type": "work_unit",
+      "id": "prewrite-pw-02c-codex-matcher-repair",
+      "initiative_id": "coordination-integrity",
+      "goal_id": "prewrite-claim-enforcement",
+      "design_revision": "plan-108-v3",
+      "spec_revision": "prewrite-pw-02c-v1",
+      "title": "Route the native Codex pre-write gate through apply_patch",
+      "class": "implementation",
+      "objective": "Make the already-accepted Codex pre-write adapter reachable by generated hook wiring without enabling hard enforcement.",
+      "profile": "small",
+      "execution_class": "independently_executable",
+      "claimability": "ready_for_execution",
+      "authorization_mode": "registry_claim",
+      "scope": {
+        "included": [
+          "Move the canonical Codex pre-write command from the stale Edit|Write matcher to apply_patch during preserving generation",
+          "Preserve unrelated user hook commands and matcher blocks",
+          "Both-sign generator and migration regression tests"
+        ],
+        "excluded": [
+          "Changing claims.prewrite_mode",
+          "Fleet rollout or host-global installation",
+          "Broadening the adapter to arbitrary shell writes"
+        ]
+      },
+      "inputs": [
+        {"kind": "work_unit_output", "id": "prewrite-pw-02-observe-calibration", "revision": "accepted"},
+        {"kind": "reproduced_failure", "id": "generated-codex-prewrite-matcher", "revision": "2026-07-31"}
+      ],
+      "outputs": [
+        "Correct generated Codex apply_patch matcher",
+        "Preserving stale-matcher migration",
+        "Focused generator regression evidence"
+      ],
+      "dependencies": [
+        {"unit_id": "prewrite-pw-02-observe-calibration", "type": "hard", "gate": {"type": "unit_status", "required_status": "accepted"}, "rationale": "The repair routes the accepted adapter and does not redefine its contract."}
+      ],
+      "conflict_surfaces": [
+        {"kind": "repository_path", "target": "enforced_planning/hook_wiring.py", "repository": "enforced-planning", "access": "exclusive", "coordination_key": "prewrite-codex-matcher"},
+        {"kind": "repository_path", "target": "tests/test_generate_hook_wiring.py", "repository": "enforced-planning", "access": "exclusive", "coordination_key": "prewrite-codex-matcher"}
+      ],
+      "acceptance": [
+        {
+          "id": "PW02C-A1",
+          "criterion": "Generated Codex wiring invokes the canonical pre-write adapter for apply_patch, removes only that canonical command from a stale Edit|Write block, and preserves unrelated hooks.",
+          "evidence_required": [
+            "Focused generator tests",
+            "Generated configuration readback",
+            "Negative migration fixture with an unrelated Edit|Write hook",
+            "git diff --check"
+          ],
+          "negative_control": "Regeneration must not delete an unrelated hook, enable enforcement, or route unsupported Codex tools through the pre-write adapter."
+        }
+      ],
+      "readiness": {"status": "ready", "required_approval_types": [], "approvals": [], "failed_guards": []},
+      "claim_policy": {"eligibility_rule": "Claim only the hook generator, its focused tests, and Plan 108 evidence/status paths.", "lease_policy": "renewable", "lease_duration_minutes": 1440, "max_active_per_claimant": 1, "named_owner_id": null},
+      "status": "ready",
+      "record_version": 1
     },
     {
       "schema_version": "1.0",

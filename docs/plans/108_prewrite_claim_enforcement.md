@@ -1,9 +1,9 @@
 # Plan #108: Low-Friction Pre-Write Claim Enforcement
 
-**Status:** In Progress — PW-01/PW-02A/PW-02/PW-02B0 accepted; PW-02B1 ready; later units dependency-blocked
+**Status:** In Progress — PW-01/PW-02A/PW-02/PW-02B0 accepted; PW-02B1 inventory and PW-02C Codex matcher repair are ready; enforcement remains dependency-blocked
 **Type:** implementation
 **Priority:** Critical
-**Design Revision:** `plan-108-v2`
+**Design Revision:** `plan-108-v3`
 **phase_ref:** "Phase 9"
 **goal_ref:** "coordination-integrity"
 **adrs_referenced:** []
@@ -437,6 +437,20 @@ Use a 15-minute observation window after the first complete query. Re-run the
 query at the end. Any mutation during the window resets the writer's evidence
 to its newest receipt; it does not extend the window. Acceptance requires zero
 `unclassified_legacy` rows. Do not convert `authority_blocked` to permission.
+
+#### PW-02C — native Codex matcher repair (ready independently)
+
+The source generator currently installs the Codex pre-write command beneath an
+`Edit|Write` matcher even though the accepted adapter consumes Codex
+`apply_patch`. Repair the generator so it places the canonical pre-write
+command under `apply_patch`, removes only that canonical command from the stale
+matcher when regenerating, and preserves unrelated user hooks and matcher
+blocks. Retain both-sign generator tests proving a generated Codex configuration
+routes `apply_patch` through the gate and that migration does not delete an
+unrelated `Edit|Write` hook.
+
+This repair makes the accepted observe adapter reachable; it does not enable
+hard enforcement or bypass the PW-02B fleet-projection promotion gates.
 
 #### PW-02B2 — bounded fleet rollout (blocked on PW-02B1)
 

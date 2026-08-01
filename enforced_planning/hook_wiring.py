@@ -367,6 +367,35 @@ def _ensure_hook_command(
     return True
 
 
+def _remove_hook_command_from_matcher(
+    settings: dict[str, Any],
+    *,
+    event_name: str,
+    matcher: str,
+    command: str,
+) -> bool:
+    """Remove only one generator-owned command from an existing matcher block."""
+
+    changed = False
+    for block in _ensure_event_block(settings, event_name):
+        if not isinstance(block, dict) or block.get("matcher") != matcher:
+            continue
+        hooks = block.get("hooks", [])
+        if not isinstance(hooks, list):
+            raise ValueError(
+                f"settings.json hooks.{event_name} matcher {matcher} has non-list hooks"
+            )
+        retained = [
+            hook
+            for hook in hooks
+            if not (isinstance(hook, dict) and hook.get("command") == command)
+        ]
+        if len(retained) != len(hooks):
+            hooks[:] = retained
+            changed = True
+    return changed
+
+
 def _render_settings(settings: dict[str, Any]) -> str:
     """Render deterministic pretty JSON for `.claude/settings.json`."""
 
@@ -435,7 +464,19 @@ def _merge_codex_mailbox_hooks(
         if _ensure_hook_command(hooks, CODEX_MAILBOX_HOOK):
             changed = True
     if include_prewrite:
-        hooks = _ensure_matcher_block(settings, event_name="PreToolUse", matcher="Edit|Write")
+        prewrite_command = cast(str, CODEX_PREWRITE_HOOK["command"])
+        if _remove_hook_command_from_matcher(
+            settings,
+            event_name="PreToolUse",
+            matcher="Edit|Write",
+            command=prewrite_command,
+        ):
+            changed = True
+        hooks = _ensure_matcher_block(
+            settings,
+            event_name="PreToolUse",
+            matcher="apply_patch",
+        )
         if _ensure_hook_command(hooks, CODEX_PREWRITE_HOOK):
             changed = True
     if include_artifact_creation:

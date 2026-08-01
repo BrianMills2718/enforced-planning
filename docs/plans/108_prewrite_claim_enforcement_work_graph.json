@@ -195,7 +195,7 @@
       "objective": "Make the already-accepted Codex pre-write adapter reachable by generated hook wiring without enabling hard enforcement.",
       "profile": "small",
       "execution_class": "independently_executable",
-      "claimability": "ready_for_execution",
+      "claimability": "not_applicable",
       "authorization_mode": "registry_claim",
       "scope": {
         "included": [
@@ -240,8 +240,8 @@
       ],
       "readiness": {"status": "ready", "required_approval_types": [], "approvals": [], "failed_guards": []},
       "claim_policy": {"eligibility_rule": "Claim only the hook generator, its focused tests, and Plan 108 evidence/status paths.", "lease_policy": "renewable", "lease_duration_minutes": 1440, "max_active_per_claimant": 1, "named_owner_id": null},
-      "status": "ready",
-      "record_version": 1
+      "status": "accepted",
+      "record_version": 2
     },
     {
       "schema_version": "1.0",
@@ -685,6 +685,11 @@
           "kind": "work_unit_output",
           "id": "prewrite-pw-02b-fleet-projection-refresh",
           "revision": "accepted"
+        },
+        {
+          "kind": "work_unit_output",
+          "id": "prewrite-pw-02c-codex-matcher-repair",
+          "revision": "accepted"
         }
       ],
       "outputs": [
@@ -710,6 +715,15 @@
             "required_status": "accepted"
           },
           "rationale": "Hard enforcement would create intermittent false denials while any active claim writer can leave the shared projection stale."
+        },
+        {
+          "unit_id": "prewrite-pw-02c-codex-matcher-repair",
+          "type": "hard",
+          "gate": {
+            "type": "unit_status",
+            "required_status": "accepted"
+          },
+          "rationale": "The real Codex pilot requires generated wiring that actually matches native apply_patch events."
         }
       ],
       "conflict_surfaces": [

@@ -1,6 +1,6 @@
 # Plan #108: Low-Friction Pre-Write Claim Enforcement
 
-**Status:** In Progress — PW-01/PW-02A/PW-02/PW-02B0/PW-02B1 accepted; PW-02B2 and PW-02C are ready; enforcement remains dependency-blocked
+**Status:** In Progress — PW-01/PW-02A/PW-02/PW-02B0/PW-02B1/PW-02C accepted; PW-02B2 is ready; enforcement remains dependency-blocked
 **Type:** implementation
 **Priority:** Critical
 **Design Revision:** `plan-108-v3`
@@ -459,6 +459,13 @@ unrelated `Edit|Write` hook.
 
 This repair makes the accepted observe adapter reachable; it does not enable
 hard enforcement or bypass the PW-02B fleet-projection promotion gates.
+
+**Accepted evidence:** The source generator now routes the canonical Codex
+pre-write command through `apply_patch` and removes only that command from the
+stale `Edit|Write` block. The retained
+`docs/evidence/plan108_pw02c_codex_matcher_repair.json` records the initial
+two-test failure, the preserving migration negative control, 25 passing hook
+generation/pre-write tests, and clean lint. Enforcement mode remains unchanged.
 
 #### PW-02B2 — bounded fleet rollout (blocked on PW-02B1)
 

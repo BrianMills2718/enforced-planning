@@ -754,19 +754,19 @@
       "goal_id": "prewrite-claim-enforcement",
       "design_revision": "plan-108-v2",
       "spec_revision": "prewrite-pw-03-v2",
-      "title": "Promote enforced-planning to hard pre-write enforcement and prove rollback",
+      "title": "Promote enforced-planning to hard pre-write enforcement and prove native controls",
       "class": "integration",
       "objective": "Enable enforcement only after accepted calibration, then prove unauthorized native writes are stopped before mutation and exact claimed writes still succeed.",
       "profile": "standard",
       "execution_class": "independently_executable",
-      "claimability": "ready_for_execution",
+      "claimability": "not_applicable",
       "authorization_mode": "registry_claim",
       "scope": {
         "included": [
           "The enforced-planning repository only",
           "Exact enforce-mode configuration change",
           "Real positive and negative file-hash probes",
-          "Rollback and retained receipts"
+          "Retained enforce-mode configuration and receipts"
         ],
         "excluded": [
           "Fleet-wide enforcement",
@@ -794,7 +794,7 @@
       "outputs": [
         "Enforced native Codex apply_patch path in enforced-planning",
         "Positive and negative native write receipts",
-        "Verified observe/off rollback"
+        "Verified enforce-mode audit readback"
       ],
       "dependencies": [
         {
@@ -836,11 +836,11 @@
       "acceptance": [
         {
           "id": "PW03-A1",
-          "criterion": "In enforced-planning, an out-of-scope native edit attempt against README.md is denied with unchanged SHA-256, an exact claimed edit to tests/fixtures/prewrite_live_probe.txt succeeds, and rollback restores claims.prewrite_mode=observe.",
+          "criterion": "In enforced-planning, an out-of-scope native edit attempt against README.md is denied with unchanged SHA-256, an exact claimed edit to tests/fixtures/prewrite_live_probe.txt succeeds, and audit readback retains claims.prewrite_mode=enforce.",
           "evidence_required": [
             "Real native negative-control receipt and unchanged before/after hash",
             "Real native positive-control receipt and expected diff",
-            "Rollback readback",
+            "Enforce-mode audit readback",
             "Relevant regression suite"
           ],
           "negative_control": "A missing registry, malformed identity, or stale claim must not be converted into an allow decision in enforce mode."
@@ -859,8 +859,8 @@
         "max_active_per_claimant": 1,
         "named_owner_id": null
       },
-      "status": "ready",
-      "record_version": 4
+      "status": "accepted",
+      "record_version": 5
     },
     {
       "schema_version": "1.0",
@@ -875,7 +875,7 @@
       "objective": "Make unclaimed native edits fail before mutation across the authorized governed fleet, with explicit exceptions instead of implicit off state.",
       "profile": "standard",
       "execution_class": "independently_executable",
-      "claimability": "blocked_dependencies",
+      "claimability": "ready_for_execution",
       "authorization_mode": "registry_claim",
       "scope": {
         "included": [
@@ -903,7 +903,7 @@
         "Representative native denial and exact-claim allow receipts"
       ],
       "dependencies": [
-        {"unit_id": "prewrite-pw-03-enforce-promotion", "type": "hard", "gate": {"type": "unit_status", "required_status": "accepted"}, "rationale": "Fleet promotion starts only after the fixed repository pilot proves denial, allow, and rollback through the real native boundary."}
+        {"unit_id": "prewrite-pw-03-enforce-promotion", "type": "hard", "gate": {"type": "unit_status", "required_status": "accepted"}, "rationale": "Fleet promotion starts only after the fixed repository pilot proves denial and allow through the real native boundary with retained enforce-mode readback."}
       ],
       "conflict_surfaces": [
         {"kind": "external_system", "target": "Project Meta active governed-repository inventory", "access": "read", "coordination_key": "prewrite-governed-fleet-promotion"},
@@ -922,10 +922,10 @@
           "negative_control": "An unauthorized, archived, missing, dirty, or actively claimed repository remains unchanged and is reported explicitly rather than counted as enforced."
         }
       ],
-      "readiness": {"status": "blocked", "required_approval_types": [], "approvals": [], "failed_guards": ["prewrite-pw-03-enforce-promotion must be accepted"]},
+      "readiness": {"status": "ready", "required_approval_types": [], "approvals": [], "failed_guards": []},
       "claim_policy": {"eligibility_rule": "PW-03 accepted; each target matches the frozen governance manifest and receives one exact non-overlapping claim before mutation.", "lease_policy": "renewable", "lease_duration_minutes": 1440, "max_active_per_claimant": 1, "named_owner_id": null},
-      "status": "blocked",
-      "record_version": 1
+      "status": "ready",
+      "record_version": 2
     }
   ]
 }

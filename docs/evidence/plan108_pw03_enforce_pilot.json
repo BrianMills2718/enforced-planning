@@ -1,0 +1,39 @@
+{
+  "schema_version": "1.0",
+  "plan": "108",
+  "work_unit": "prewrite-pw-03-enforce-promotion",
+  "recorded_at": "2026-08-02T15:04:00+00:00",
+  "configuration": {
+    "claims_prewrite_mode": "enforce",
+    "hook_wiring_generation": "PASS; no further generated-file actions after the initial synchronization"
+  },
+  "native_controls": {
+    "negative": {
+      "target": "README.md",
+      "decision": "deny",
+      "reason_code": "path_outside_claim",
+      "receipt_id": "prewrite_ff792bda06914807aa2bf71819643eb4",
+      "sha256_before": "11c97e8b06590c117af33df3d9bf0a1f332c86f69efa6e735328dfcc23495485",
+      "sha256_after": "11c97e8b06590c117af33df3d9bf0a1f332c86f69efa6e735328dfcc23495485"
+    },
+    "positive": {
+      "target": "tests/fixtures/prewrite_live_probe.txt",
+      "decision": "allow",
+      "reason_code": "exact_live_claim",
+      "receipt_id": "prewrite_9427a46fb7824424b00a655a2175dd05",
+      "expected_diff": "new fixture contains the PW03 native enforce allow marker"
+    }
+  },
+  "repair_observation": {
+    "failed_receipt_id": "prewrite_ee64be4529f444948a71566ad1599236",
+    "failure": "The original make session-start invocation recorded the linked worktree as repo_root, which correctly produced no_exact_claim.",
+    "repair": "Makefile now derives the canonical Git root from git-common-dir; the exact-session claim was refreshed with that canonical root before the passing controls."
+  },
+  "verification": {
+    "command": "python -m pytest -q tests/test_prewrite_claim_gate.py tests/test_generate_hook_wiring.py tests/test_audit_governed_repo.py",
+    "result": "45 passed",
+    "make_session_start_dry_run": "The linked-worktree dry run emitted --repo-root /home/brian/projects/enforced-planning, not the linked worktree path.",
+    "audit_prewrite_claim_gate": "mode=enforce, expected=true, present=true, files_missing=[], commands_missing=[]",
+    "known_unrelated_audit_drift": "AGENTS.md is refreshable but not in sync; this pilot does not alter its canonical source."
+  }
+}

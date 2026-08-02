@@ -1,6 +1,6 @@
 # Plan #108: Low-Friction Pre-Write Claim Enforcement
 
-**Status:** In Progress — PW-01/PW-02A/PW-02/PW-02B0/PW-02B1/PW-02B2/PW-02C accepted; existing-session upsert provenance repair is ready; final fleet certification and enforcement remain dependency-blocked
+**Status:** In Progress — PW-01/PW-02A/PW-02/PW-02B0/PW-02B1/PW-02B2/PW-02C/PW-02D/PW-02B/PW-03 accepted; governed-fleet enforcement (PW-04) is ready
 **Type:** implementation
 **Priority:** Critical
 **Design Revision:** `plan-108-v4`
@@ -534,7 +534,7 @@ emit `session_upsert`. The retained
 the real exact-lane receipt, both-sign receipt-failure control, 56 lifecycle /
 receipt tests under fixture isolation, and clean lint.
 
-#### PW-03 — fixed enforcement pilot (blocked on PW-02B acceptance)
+#### PW-03 — fixed enforcement pilot (accepted)
 
 The pilot repository is `enforced-planning`; selecting another repository is a
 plan change. Claim only `meta-process.yaml`, the installed hook configuration,
@@ -547,12 +547,19 @@ Use native Codex `apply_patch` for both controls. First attempt an out-of-scope
 append to `README.md`; require a denial receipt and unchanged SHA-256. Then
 apply an in-scope marker change to
 `tests/fixtures/prewrite_live_probe.txt`; require an allow receipt and the
-expected diff. Finally restore `claims.prewrite_mode: observe`, regenerate,
-and require audit readback `observe`. Commit only the fixture/evidence and the
-final observe configuration; do not leave the repository in enforce mode in
-this first pilot. Any changed README hash, false denial, stale projection,
-missing receipt, or failed rollback stops the unit and requires restoring
+expected diff. If both controls pass, retain `claims.prewrite_mode: enforce`,
+regenerate, and require audit readback `enforce`; this is the first live
+prevention surface. Any changed README hash, false denial, stale projection,
+missing receipt, or failed control stops the unit and requires restoring
 observe before further work.
+
+**Accepted evidence:** `docs/evidence/plan108_pw03_enforce_pilot.json`
+records the passing real native deny (`path_outside_claim`) and allow
+(`exact_live_claim`) controls, unchanged `README.md` SHA-256, enforce-mode
+audit readback, and 45 focused regression tests. The first positive probe
+truthfully exposed a Makefile defect: `session-start` recorded a linked
+worktree as `repo_root`. PW-03 repairs that source command to derive the
+canonical Git root before refreshing its exact-session claim.
 
 ### PW-01 Evidence
 

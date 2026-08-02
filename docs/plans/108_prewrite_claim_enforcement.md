@@ -522,6 +522,12 @@ registry and projection digests. A receipt append failure must surface
 `mutation_applied_audit_failed` after the mutation, never silently claim that
 the update did not occur. Do not infer, rewrite, or take over legacy claims.
 
+**Accepted evidence:** Existing-session updates now refresh the projection and
+emit `session_upsert`. The retained
+`docs/evidence/plan108_pw02d_session_upsert_projection_receipt.json` records
+the real exact-lane receipt, both-sign receipt-failure control, 56 lifecycle /
+receipt tests under fixture isolation, and clean lint.
+
 #### PW-03 — fixed enforcement pilot (blocked on PW-02B acceptance)
 
 The pilot repository is `enforced-planning`; selecting another repository is a

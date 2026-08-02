@@ -15,6 +15,7 @@ from enforced_planning import (
     claim_mutation_receipts,
     coordination_claims,
     coordination_messages,
+    prewrite_claim_projection,
     session_contracts,
     session_lifecycle,
 )
@@ -206,6 +207,84 @@ def test_start_session_creates_tracker_and_updates_claim(tmp_path: Path, monkeyp
     assert loaded_claim.tracker_path == payload["tracker_path"]
     assert Path(payload["tracker_path"]).exists()
     assert payload["plan_ref"] == "Plan #31"
+
+
+def test_existing_session_upsert_refreshes_projection_and_emits_receipt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Refreshing a live session claim must remain attributable to the fast gate."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    monkeypatch.delenv("CODEX_THREAD_ID", raising=False)
+    common = {
+        "agent": "codex",
+        "project": "enforced-planning",
+        "scope": "plan-108-upsert-receipt",
+        "intent": "prove existing-session claim provenance",
+        "repo_root": str(tmp_path / "repo"),
+        "worktree_path": str(tmp_path / "repo" / "worktrees" / "plan-108-upsert-receipt"),
+        "branch": "plan-108-upsert-receipt",
+        "broader_goal": "Pre-Write Claim Enforcement",
+        "plan_ref": "Plan #108",
+        "session_id": "codex:test-session",
+        "tracker_dir": trackers_dir,
+    }
+
+    session_lifecycle.start_session(current_phase="initial", **common)
+    refreshed = session_lifecycle.start_session(current_phase="refreshed", **common)
+
+    records = claim_mutation_receipts.load_receipts()
+    upserts = [record for record in records if record.operation == "session_upsert"]
+    assert len(upserts) == 1
+    receipt = upserts[0]
+    assert receipt.target_project == "enforced-planning"
+    assert receipt.target_scope == "plan-108-upsert-receipt"
+    assert receipt.registry_digest_after == receipt.projection_digest_after
+    assert receipt.projection_current_after is True
+    assert refreshed["action"] == "updated"
+
+
+def test_existing_session_upsert_reports_audit_failure_after_persisting_mutation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A failed session-upsert receipt must not conceal the applied claim update."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    monkeypatch.delenv("CODEX_THREAD_ID", raising=False)
+    common = {
+        "agent": "codex",
+        "project": "enforced-planning",
+        "scope": "plan-108-upsert-audit-failure",
+        "intent": "initial claim intent",
+        "repo_root": str(tmp_path / "repo"),
+        "worktree_path": str(tmp_path / "repo" / "worktrees" / "plan-108-upsert-audit-failure"),
+        "branch": "plan-108-upsert-audit-failure",
+        "broader_goal": "Pre-Write Claim Enforcement",
+        "plan_ref": "Plan #108",
+        "session_id": "codex:test-session",
+        "tracker_dir": trackers_dir,
+    }
+    session_lifecycle.start_session(current_phase="initial", **common)
+
+    def fail_append(*_args: object, **_kwargs: object) -> None:
+        raise OSError("simulated receipt ledger outage")
+
+    monkeypatch.setattr(claim_mutation_receipts, "append_receipt", fail_append)
+    with pytest.raises(claim_mutation_receipts.MutationAuditError, match="session_upsert"):
+        session_lifecycle.start_session(
+            current_phase="refreshed",
+            **{**common, "intent": "persisted update despite receipt failure"},
+        )
+
+    claim_file = claims_dir / "codex_enforced-planning_plan-108-upsert-audit-failure.yaml"
+    assert yaml.safe_load(claim_file.read_text(encoding="utf-8"))["intent"] == (
+        "persisted update despite receipt failure"
+    )
+    assert prewrite_claim_projection.projection_is_current(claims_dir=claims_dir) is True
 
 
 def test_session_end_retires_live_ownership_and_preserves_resume_state(

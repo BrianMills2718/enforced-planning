@@ -566,7 +566,7 @@
       "objective": "Ensure every sanctioned update of an existing live session claim atomically refreshes the digest-bound projection and emits an exact receipt before hard enforcement certification.",
       "profile": "standard",
       "execution_class": "independently_executable",
-      "claimability": "ready_for_execution",
+      "claimability": "not_applicable",
       "authorization_mode": "registry_claim",
       "scope": {
         "included": [
@@ -640,8 +640,8 @@
         "max_active_per_claimant": 1,
         "named_owner_id": null
       },
-      "status": "ready",
-      "record_version": 1
+      "status": "accepted",
+      "record_version": 2
     },
     {
       "schema_version": "1.0",
@@ -656,7 +656,7 @@
       "objective": "Prove the complete active sanctioned writer fleet cannot leave the shared projection stale before hard enforcement is allowed.",
       "profile": "standard",
       "execution_class": "independently_executable",
-      "claimability": "blocked_dependencies",
+      "claimability": "ready_for_execution",
       "authorization_mode": "registry_claim",
       "scope": {
         "included": [
@@ -731,12 +731,10 @@
         }
       ],
       "readiness": {
-        "status": "blocked",
+        "status": "ready",
         "required_approval_types": [],
         "approvals": [],
-        "failed_guards": [
-          "prewrite-pw-02d-session-upsert-projection-receipt must be accepted"
-        ]
+        "failed_guards": []
       },
       "claim_policy": {
         "eligibility_rule": "PW-02B2 accepted; claim only final fleet evidence and Plan 108 status paths.",
@@ -745,8 +743,8 @@
         "max_active_per_claimant": 1,
         "named_owner_id": null
       },
-      "status": "blocked",
-      "record_version": 6
+      "status": "ready",
+      "record_version": 7
     },
     {
       "schema_version": "1.0",

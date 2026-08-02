@@ -359,6 +359,9 @@ def _upsert_session_claim(
         return "created"
 
     with coordination_claims.claim_registry_lock():
+        registry_digest_before = coordination_claims._registry_digest(
+            coordination_claims.CLAIMS_DIR
+        )
         refreshed_payload = _load_claim_payload(agent, project, scope)
         if refreshed_payload is None:
             raise ValueError(
@@ -461,6 +464,21 @@ def _upsert_session_claim(
             "parallel_root_authorized": candidate.parallel_root_authorized,
         }
         _write_claim_payload(path, payload)
+        _projection_path, projection_digest_after = (
+            coordination_claims.refresh_prewrite_authority_projection(
+                coordination_claims.CLAIMS_DIR
+            )
+        )
+        coordination_claims.record_claim_mutation(
+            operation="session_upsert",
+            claims_dir=coordination_claims.CLAIMS_DIR,
+            registry_digest_before=registry_digest_before,
+            target_project=project,
+            target_scope=scope,
+            target_claim_path=path,
+            session_id=session_id,
+            projection_digest_after=projection_digest_after,
+        )
     return "updated"
 
 

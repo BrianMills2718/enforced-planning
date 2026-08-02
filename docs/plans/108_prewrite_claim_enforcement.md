@@ -1,9 +1,9 @@
 # Plan #108: Low-Friction Pre-Write Claim Enforcement
 
-**Status:** In Progress — PW-01/PW-02A/PW-02/PW-02B0/PW-02B1/PW-02B2/PW-02C accepted; final fleet certification is ready; enforcement remains dependency-blocked
+**Status:** In Progress — PW-01/PW-02A/PW-02/PW-02B0/PW-02B1/PW-02B2/PW-02C accepted; existing-session upsert provenance repair is ready; final fleet certification and enforcement remain dependency-blocked
 **Type:** implementation
 **Priority:** Critical
-**Design Revision:** `plan-108-v3`
+**Design Revision:** `plan-108-v4`
 **phase_ref:** "Phase 9"
 **goal_ref:** "coordination-integrity"
 **adrs_referenced:** []
@@ -510,6 +510,17 @@ write and require `decision=allow`, not
 `projection_unavailable_or_stale`. Retain all event/receipt IDs and digests in
 `docs/evidence/plan108_pw02b_fleet_projection_refresh.json`. Only this evidence
 permits marking PW-02B accepted.
+
+#### PW-02D — existing-session upsert provenance repair (ready)
+
+The final-certification control reproduced one uncovered sanctioned mutation:
+`session-start` updating an already-live exact-session claim rewrote the shared
+YAML without refreshing the projection or emitting a mutation receipt. Repair
+that update transaction before certification. It must atomically refresh the
+projection and append a distinct `session_upsert` receipt containing the exact
+registry and projection digests. A receipt append failure must surface
+`mutation_applied_audit_failed` after the mutation, never silently claim that
+the update did not occur. Do not infer, rewrite, or take over legacy claims.
 
 #### PW-03 — fixed enforcement pilot (blocked on PW-02B acceptance)
 

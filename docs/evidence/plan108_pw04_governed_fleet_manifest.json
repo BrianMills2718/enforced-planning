@@ -1,0 +1,38 @@
+{
+  "schema_version": "1.0",
+  "plan": "108",
+  "work_unit": "prewrite-pw-04-governed-fleet-enforcement",
+  "recorded_at": "2026-08-02T15:12:00+00:00",
+  "source": {
+    "authority": "/home/brian/projects/project-meta/PROJECT_GRAPH.json",
+    "revision": "6db3d7d33fa2f9619a72155de3268bcd4be1b1a1",
+    "selection": "status=active, owner_class=brian, mutation_authority=normal_push, publication_authority=recoverable_git"
+  },
+  "summary": {
+    "authorized_active_records": 15,
+    "already_enforced": 1,
+    "eligible_clean_opted_in_targets": 8,
+    "deferred_dirty_opted_in": 2,
+    "excluded_not_opted_in": 4
+  },
+  "targets": [
+    {"project": "theory-forge", "path": "/home/brian/projects/theory-forge", "default_branch": "master", "disposition": "target", "resume_event": "create exact claimed rollout worktree"},
+    {"project": "llm_client", "path": "/home/brian/projects/llm_client", "default_branch": "main", "disposition": "target", "resume_event": "create exact claimed rollout worktree"},
+    {"project": "prompt_eval", "path": "/home/brian/projects/prompt_eval", "default_branch": "main", "disposition": "target", "resume_event": "create exact claimed rollout worktree"},
+    {"project": "agentic_scaffolding", "path": "/home/brian/projects/agentic_scaffolding", "default_branch": "master", "disposition": "target", "resume_event": "create exact claimed rollout worktree"},
+    {"project": "project-meta", "path": "/home/brian/projects/project-meta", "default_branch": "main", "disposition": "target", "resume_event": "create exact claimed rollout worktree"},
+    {"project": "data-contracts", "path": "/home/brian/projects/data_contracts", "default_branch": "master", "disposition": "target", "resume_event": "create exact claimed rollout worktree"},
+    {"project": "open_web_retrieval", "path": "/home/brian/projects/open_web_retrieval", "default_branch": "main", "disposition": "target", "resume_event": "create exact claimed rollout worktree"},
+    {"project": "agent_memory", "path": "/home/brian/projects/agent_memory", "default_branch": "master", "disposition": "target", "resume_event": "create exact claimed rollout worktree"}
+  ],
+  "exceptions": [
+    {"project": "enforced-planning", "disposition": "already_enforced", "evidence": "PW03 merged at cc4e7cb64d930ba8772b3d383148e933e159bcba"},
+    {"project": "dodaf", "disposition": "deferred_dirty_checkout", "observed_status_entries": 3, "owner": "unresolved", "resume_event": "preserve and reconcile the existing checkout before a separately claimed rollout lane"},
+    {"project": "ecosystem-ops", "disposition": "deferred_dirty_checkout", "observed_status_entries": 3, "owner": "unresolved", "resume_event": "preserve and reconcile the existing checkout before a separately claimed rollout lane"},
+    {"project": "trace_eval", "disposition": "excluded_not_opted_in", "reason": "no meta-process.yaml", "resume_event": "separate governed-repository adoption decision"},
+    {"project": "graph_application_toolkit", "disposition": "excluded_not_opted_in", "reason": "no meta-process.yaml", "resume_event": "separate governed-repository adoption decision"},
+    {"project": "agent-skills", "disposition": "excluded_not_opted_in", "reason": "shared skills source is not a governed repository", "resume_event": "none"},
+    {"project": "machine-coordination", "disposition": "excluded_not_opted_in", "reason": "no meta-process.yaml", "resume_event": "separate governed-repository adoption decision"}
+  ],
+  "coordination": "The canonical claim registry had no active claim for any target at the freeze boundary. Each target still requires a fresh exact claim immediately before mutation."
+}

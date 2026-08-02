@@ -1,6 +1,6 @@
 # Plan #108: Low-Friction Pre-Write Claim Enforcement
 
-**Status:** In Progress — PW-01/PW-02A/PW-02/PW-02B0/PW-02B1/PW-02B2/PW-02C/PW-02D/PW-02B/PW-03 accepted; governed-fleet enforcement (PW-04) is ready
+**Status:** In Progress — PW-01/PW-02A/PW-02/PW-02B0/PW-02B1/PW-02B2/PW-02C/PW-02D/PW-02B/PW-03 accepted; PW-04 manifest is frozen and per-repository rollout remains
 **Type:** implementation
 **Priority:** Critical
 **Design Revision:** `plan-108-v4`
@@ -560,6 +560,15 @@ audit readback, and 45 focused regression tests. The first positive probe
 truthfully exposed a Makefile defect: `session-start` recorded a linked
 worktree as `repo_root`. PW-03 repairs that source command to derive the
 canonical Git root before refreshing its exact-session claim.
+
+#### PW-04 — governed fleet enforcement (manifest frozen)
+
+`docs/evidence/plan108_pw04_governed_fleet_manifest.json` freezes the Project
+Meta governance revision and classifies every Brian-owned active record before
+mutation. Eight clean opted-in repositories are targetable through separate
+claimed rollout lanes. Enforced Planning is already covered; dirty or
+non-opted-in repositories remain explicitly excluded until their recorded
+resume event is satisfied. This checkpoint does not alter a target repository.
 
 ### PW-01 Evidence
 

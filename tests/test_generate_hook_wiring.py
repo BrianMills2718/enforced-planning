@@ -234,6 +234,50 @@ def test_generate_hook_wiring_installs_prewrite_gate_only_when_opted_in(tmp_path
     )
 
 
+def test_prewrite_claim_profile_installs_only_native_claim_surfaces(tmp_path: Path) -> None:
+    """The rollout profile must not silently add read or mailbox wiring."""
+
+    _scaffold_target_repo(tmp_path)
+    (tmp_path / "meta-process.yaml").write_text(
+        "meta_process:\n  version: '1.0'\n  claims:\n    prewrite_mode: enforce\n",
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT),
+            "--repo-root",
+            str(tmp_path),
+            "--profile",
+            "prewrite-claim",
+            "--write",
+            "--json",
+        ],
+        cwd=str(PROJECT_META_ROOT),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["profile"] == "prewrite-claim"
+    assert (tmp_path / ".claude/hooks/prewrite-claim-gate.sh").is_file()
+    assert (tmp_path / ".codex/hooks/prewrite-claim-gate.sh").is_file()
+    assert not (tmp_path / ".claude/hooks/gate-edit.sh").exists()
+    assert not (tmp_path / ".claude/hooks/notify-coordination-messages.sh").exists()
+    assert not (tmp_path / "scripts/meta/context_packet.py").exists()
+
+    claude = json.loads((tmp_path / ".claude/settings.json").read_text(encoding="utf-8"))
+    claude_pre = next(item for item in claude["hooks"]["PreToolUse"] if item["matcher"] == "Edit|Write")
+    assert [item["command"] for item in claude_pre["hooks"]] == [
+        "bash .claude/hooks/prewrite-claim-gate.sh"
+    ]
+    codex = json.loads((tmp_path / ".codex/hooks.json").read_text(encoding="utf-8"))
+    assert set(codex["hooks"]) == {"PreToolUse"}
+
+
 def test_generate_hook_wiring_migrates_only_its_stale_codex_prewrite_command(
     tmp_path: Path,
 ) -> None:

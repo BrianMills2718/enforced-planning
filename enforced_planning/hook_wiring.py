@@ -224,11 +224,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--profile",
-        choices=("full", "artifact-creation"),
+        choices=("full", "artifact-creation", "prewrite-claim"),
         default="full",
         help=(
             "Install the complete read/coordination wiring or only the "
-            "artifact-creation gate and its support files."
+            "artifact-creation or pre-write-claim gate and their support files."
         ),
     )
     return parser.parse_args(argv)
@@ -527,6 +527,20 @@ def _plan_codex_artifact_creation_settings(
     return [], {}
 
 
+def _plan_codex_prewrite_settings(target: TargetRepo) -> tuple[list[str], dict[Path, str]]:
+    """Plan only Codex's native apply-patch pre-write gate."""
+
+    path = target.root / ".codex" / "hooks.json"
+    settings = _read_json_file(path)
+    hooks = _ensure_matcher_block(settings, event_name="PreToolUse", matcher="apply_patch")
+    changed = _ensure_hook_command(hooks, CODEX_PREWRITE_HOOK)
+    rendered = _render_settings(settings)
+    current = path.read_text(encoding="utf-8") if path.exists() else None
+    if current != rendered or changed:
+        return ["sync:.codex/hooks.json"], {path: rendered}
+    return [], {}
+
+
 def _relative(path: Path, repo_root: Path) -> str:
     """Return a repo-relative POSIX display path."""
 
@@ -734,6 +748,43 @@ def plan_artifact_creation_generation(
     return actions, file_writes, rendered_settings
 
 
+def plan_prewrite_claim_generation(
+    target: TargetRepo,
+) -> tuple[list[str], dict[Path, str], str]:
+    """Plan the standalone native pre-write claim gate and no unrelated hooks."""
+
+    if _configured_prewrite_mode(target.root) == "off":
+        raise ValueError(
+            "prewrite-claim profile requires meta_process.claims.prewrite_mode "
+            "to be observe or enforce"
+        )
+
+    actions: list[str] = []
+    file_writes: dict[Path, str] = {}
+    for target_relpath, source_relpath in {**PREWRITE_HOOK_FILES, **PREWRITE_SUPPORT_FILES}.items():
+        source_path = FRAMEWORK_ROOT / source_relpath
+        target_path = target.root / target_relpath
+        content = source_path.read_text(encoding="utf-8")
+        current = target_path.read_text(encoding="utf-8") if target_path.exists() else None
+        if current != content:
+            actions.append(f"sync:{target_relpath}")
+            file_writes[target_path] = content
+
+    settings = _read_json_file(target.settings_file)
+    edit_hooks = _ensure_matcher_block(settings, event_name="PreToolUse", matcher="Edit|Write")
+    changed = _ensure_hook_command(edit_hooks, PREWRITE_HOOK)
+    rendered_settings = _render_settings(settings)
+    current_settings = target.settings_file.read_text(encoding="utf-8") if target.settings_file.exists() else None
+    if current_settings != rendered_settings or changed:
+        actions.append("sync:.claude/settings.json")
+        file_writes[target.settings_file] = rendered_settings
+
+    codex_actions, codex_writes = _plan_codex_prewrite_settings(target)
+    actions.extend(codex_actions)
+    file_writes.update(codex_writes)
+    return actions, file_writes, rendered_settings
+
+
 def apply_generation(target: TargetRepo, file_writes: dict[Path, str]) -> None:
     """Write the generated files to disk."""
 
@@ -773,6 +824,9 @@ def main(argv: list[str] | None = None) -> int:
         if args.profile == "artifact-creation":
             target = _resolve_artifact_target(args.repo_root)
             actions, file_writes, _ = plan_artifact_creation_generation(target)
+        elif args.profile == "prewrite-claim":
+            target = _resolve_artifact_target(args.repo_root)
+            actions, file_writes, _ = plan_prewrite_claim_generation(target)
         else:
             target = _resolve_target(args.repo_root)
             actions, file_writes, _ = plan_generation(target)
@@ -797,7 +851,7 @@ def main(argv: list[str] | None = None) -> int:
         "profile": args.profile,
         "required_inputs": (
             [_relative(target.relationships_file, target.root)]
-            if args.profile == "artifact-creation"
+            if args.profile in {"artifact-creation", "prewrite-claim"}
             else [
                 _relative(target.relationships_file, target.root),
                 _relative(target.file_context_file, target.root),

@@ -880,6 +880,7 @@
       "scope": {
         "included": [
           "Fresh active governed-repository target manifest from Project Meta repository governance",
+          "A bounded source-owned pre-write installer profile before the first target rollout",
           "One exact claimed configuration and generated-hook rollout lane per authorized repository",
           "Per-repository enforce-mode and adapter audit readback",
           "Representative both-sign native canaries for each distinct client/configuration shape",
@@ -898,6 +899,7 @@
       ],
       "outputs": [
         "Frozen governed-fleet enforcement manifest",
+        "Bounded pre-write installer/profile contract",
         "Merged per-repository enforce configuration and generated adapters",
         "Fleet audit with no implicit off repository",
         "Representative native denial and exact-claim allow receipts"
@@ -907,6 +909,7 @@
       ],
       "conflict_surfaces": [
         {"kind": "external_system", "target": "Project Meta active governed-repository inventory", "access": "read", "coordination_key": "prewrite-governed-fleet-promotion"},
+        {"kind": "repository_path", "target": "enforced-planning installer and hook-wiring profile", "repository": "enforced-planning", "access": "write", "coordination_key": "prewrite-governed-fleet-promotion"},
         {"kind": "external_system", "target": "authorized governed repository configuration and generated hook surfaces", "access": "exclusive", "coordination_key": "prewrite-governed-fleet-promotion"}
       ],
       "acceptance": [

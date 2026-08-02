@@ -570,6 +570,13 @@ claimed rollout lanes. Enforced Planning is already covered; dirty or
 non-opted-in repositories remain explicitly excluded until their recorded
 resume event is satisfied. This checkpoint does not alter a target repository.
 
+Before the first target, PW-04 adds the bounded
+`generate_hook_wiring.py --profile prewrite-claim` source profile. It updates
+only pre-write runtime and native hook entries, preventing the rollout from
+using the broad installer to overwrite unrelated stale framework surfaces.
+Its contract and focused regression evidence are retained in
+`docs/evidence/plan108_pw04_bounded_prewrite_profile.json`.
+
 ### PW-01 Evidence
 
 PW-01 is accepted at source revision `f16bc6653cf1031e66da915ac7adc5ba7a1d9cab`.

@@ -511,6 +511,12 @@ write and require `decision=allow`, not
 `docs/evidence/plan108_pw02b_fleet_projection_refresh.json`. Only this evidence
 permits marking PW-02B accepted.
 
+**Accepted evidence:** The final observation ran for 3,049 seconds with one
+current writer group, three receipted live claims, and zero legacy rows. Its
+retained evidence records real create/heartbeat receipts, a disposable
+create/heartbeat/release/closeout control, a native Codex exact-claim allow,
+and the Project Meta reader compatibility recovery without ledger rewriting.
+
 #### PW-02D — existing-session upsert provenance repair (ready)
 
 The final-certification control reproduced one uncovered sanctioned mutation:

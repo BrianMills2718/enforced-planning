@@ -656,7 +656,7 @@
       "objective": "Prove the complete active sanctioned writer fleet cannot leave the shared projection stale before hard enforcement is allowed.",
       "profile": "standard",
       "execution_class": "independently_executable",
-      "claimability": "ready_for_execution",
+      "claimability": "not_applicable",
       "authorization_mode": "registry_claim",
       "scope": {
         "included": [
@@ -743,8 +743,8 @@
         "max_active_per_claimant": 1,
         "named_owner_id": null
       },
-      "status": "ready",
-      "record_version": 7
+      "status": "accepted",
+      "record_version": 8
     },
     {
       "schema_version": "1.0",
@@ -759,7 +759,7 @@
       "objective": "Enable enforcement only after accepted calibration, then prove unauthorized native writes are stopped before mutation and exact claimed writes still succeed.",
       "profile": "standard",
       "execution_class": "independently_executable",
-      "claimability": "blocked_dependencies",
+      "claimability": "ready_for_execution",
       "authorization_mode": "registry_claim",
       "scope": {
         "included": [
@@ -847,12 +847,10 @@
         }
       ],
       "readiness": {
-        "status": "blocked",
+        "status": "ready",
         "required_approval_types": [],
         "approvals": [],
-        "failed_guards": [
-          "prewrite-pw-02b-fleet-projection-refresh must be accepted"
-        ]
+        "failed_guards": []
       },
       "claim_policy": {
         "eligibility_rule": "PW-02 and PW-02B accepted and the target repository/configuration paths declared in a fresh exact claim.",
@@ -861,8 +859,8 @@
         "max_active_per_claimant": 1,
         "named_owner_id": null
       },
-      "status": "blocked",
-      "record_version": 3
+      "status": "ready",
+      "record_version": 4
     },
     {
       "schema_version": "1.0",

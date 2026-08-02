@@ -2,32 +2,47 @@
   "schema_version": "1.0",
   "plan": "Plan #108",
   "work_unit": "prewrite-pw-02b-fleet-projection-refresh",
-  "observed_at": "2026-07-31T20:22:11.377918-07:00",
-  "query_command": "python scripts/query_claim_mutation_fleet.py --json",
-  "result": {
-    "writer_group_count": 1,
-    "receipted_live_claim_count": 2,
-    "unclassified_legacy_count": 1,
-    "unclassified_legacy": [
-      {
-        "project": "graph-ontology-extraction",
-        "scope": "sync/upstream-9068e814-20260731",
-        "session_id": "codex-20260731-onto-downstream-sync",
-        "claim_path": "/home/brian/.claude/coordination/claims/codex_graph-ontology-extraction_sync_upstream-9068e814-20260731.yaml",
-        "reason": "The live claim has no sanctioned claim-mutation receipt, so projection freshness cannot be inferred."
-      }
-    ]
+  "observation_window": {
+    "started_at": "2026-08-02T07:01:14.810884-07:00",
+    "ended_at": "2026-08-02T07:52:04.183684-07:00",
+    "minimum_seconds": 900,
+    "elapsed_seconds": 3049,
+    "met": true
   },
-  "coordination": {
-    "message_id": "msg_8cfe31fdd6b4ba6f5c40f7a3c69bf1ea",
-    "recipient_session_id": "codex-20260731-onto-downstream-sync",
-    "requested_action": "Run a sanctioned renew or heartbeat through the current claim writer, or close the completed lane through the sanctioned lifecycle procedure.",
-    "takeover_performed": false,
-    "reason": "The owner worktree has active, uncommitted work and a recent commit; Plan 108 must not infer ownership or fabricate provenance."
+  "fleet_readback": {
+    "query_command": "python scripts/query_claim_mutation_fleet.py --json",
+    "writer_group_count": 1,
+    "receipted_live_claim_count": 3,
+    "unclassified_legacy_count": 0,
+    "writer_source_sha256": "d7ad2a19e52e05da68a5b8961de56b439bd3b90d77ad467afa7a615750d74e09",
+    "latest_registry_projection_digest": "caf07e535b38332c7ea7778b3a7496e05d819a4dc453c43362277d237f666064"
+  },
+  "mutation_controls": {
+    "create_and_heartbeat": [
+      "f29bfc24-8435-4a08-bcc6-a9d734155dd6",
+      "2870a6fd-ff0e-4244-b474-9e242854ce77"
+    ],
+    "release_and_closeout": {
+      "command": "python -m pytest -q tests/test_claim_mutation_receipts.py::test_each_supported_mutation_emits_one_terminal_receipt",
+      "result": "1 passed",
+      "meaning": "The disposable exact registry control emitted create, heartbeat, release, and closeout receipts with projection_current_after=true."
+    },
+    "native_observe_allow": {
+      "client": "codex",
+      "tool": "apply_patch",
+      "target": "docs/evidence/plan108_pw02b_fleet_projection_refresh.json",
+      "decision": "allow",
+      "reason_code": "exact_live_claim",
+      "receipt_id": "prewrite_a1044ceb662f455a9d9b52d4947c3e35"
+    }
+  },
+  "compatibility_recovery": {
+    "event": "session_upsert receipt initially exposed an older Project Meta reader",
+    "preservation": "No ledger bytes were rewritten.",
+    "resolution": "Project Meta reader compatibility merged at 6db3d7d33fa2f9619a72155de3268bcd4be1b1a1; both canonical reader surfaces now parse the shared ledger."
   },
   "acceptance": {
-    "passed": false,
-    "blocker": "A fresh fleet query must have zero unclassified_legacy rows before hard enforcement promotion.",
-    "resume_event": "The named live claim emits a sanctioned current receipt or is closed through the sanctioned lifecycle procedure."
+    "passed": true,
+    "next_unit": "prewrite-pw-03-enforce-promotion"
   }
 }

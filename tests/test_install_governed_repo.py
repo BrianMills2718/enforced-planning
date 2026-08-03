@@ -76,6 +76,7 @@ CLAIM_PROJECTION_REFRESH_PATHS = {
     "enforced_planning/coordination_claims.py",
     "enforced_planning/prewrite_claim_fast.py",
     "enforced_planning/prewrite_claim_projection.py",
+    "enforced_planning/session_lifecycle.py",
     "enforced_planning/worktree_paths.py",
     "scripts/refresh_prewrite_claim_projection.py",
     "scripts/meta/check_coordination_claims.py",
@@ -328,6 +329,18 @@ def test_claim_projection_refresh_only_is_bounded_and_idempotent(tmp_path: Path)
     """Fleet repair must update mutation support without touching hook configuration."""
 
     _prepare_mailbox_target(tmp_path)
+    # A projection-only refresh assumes the governed repo already has the
+    # mailbox/lifecycle dependency substrate; only the mutation surfaces drift.
+    dependency_paths = {
+        path
+        for path in MAILBOX_ROLLOUT_PATHS - CLAIM_PROJECTION_REFRESH_PATHS
+        if path.startswith("enforced_planning/")
+    }
+    for relative in dependency_paths:
+        source = PROJECT_META_ROOT / relative
+        target = tmp_path / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(source.read_bytes())
     original_claude_settings = (tmp_path / ".claude" / "settings.json").read_text(
         encoding="utf-8"
     )
@@ -362,77 +375,19 @@ def test_claim_projection_refresh_only_is_bounded_and_idempotent(tmp_path: Path)
     for relative in CLAIM_PROJECTION_REFRESH_PATHS:
         assert (tmp_path / relative).is_file()
 
-    # A bounded refresh may intentionally retain an older local lifecycle.
-    # The refreshed wrapper must remain runnable rather than requiring a
-    # broad lifecycle replacement just to support projection refresh.
-    (tmp_path / "enforced_planning" / "session_lifecycle.py").write_text(
-        "\n".join(
-            [
-                '"""Legacy lifecycle fixture."""',
-                'MERGED_DISPOSITION = "merged"',
-                'WORKTREE_DISPOSITIONS = {"merged"}',
-                "def start_session(*, agent, project, scope, intent, repo_root, worktree_path, branch, broader_goal, current_phase, plan_ref=None, allow_unplanned=False, allow_parallel=False, session_id=None, session_name=None, claim_type=None, parent_scope=None, write_paths=None, read_paths=None, intended_next_phases=(), depends_on_repos=(), requires_shared_infra_changes=False, stop_conditions=(), notes=None):",
-                "    return {",
-                "        'action': 'updated',",
-                "        'session_name': session_name or scope,",
-                "        'broader_goal': broader_goal,",
-                "        'tracker_path': 'legacy-tracker.yaml',",
-                "        'coordination_mailbox': {'summary': 'coordination mailbox: unavailable'},",
-                "    }",
-                "def close_session(*, agent, project, scope, worktree_path=None, branch=None, note=None, delete_branch=True, disposition='merged', disposition_reason=None, recovery_ref=None, allow_discard_unique=False):",
-                "    return {",
-                "        'action': 'closed',",
-                "        'worktree_action': 'removed',",
-                "        'branch_action': 'deleted',",
-                "        'disposition': 'merged',",
-                "        'released': True,",
-                "    }",
-                "",
-            ]
-        ),
-        encoding="utf-8",
-    )
-    close_help = subprocess.run(
-        [sys.executable, str(tmp_path / "scripts/meta/session_close.py"), "--help"],
-        cwd=str(tmp_path),
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert close_help.returncode == 0, close_help.stdout + close_help.stderr
-    close_run = subprocess.run(
-        [
-            sys.executable,
-            str(tmp_path / "scripts/meta/session_close.py"),
-            "--agent",
-            "codex",
-            "--project",
-            "demo",
-            "--scope",
-            "legacy-closeout",
-        ],
-        cwd=str(tmp_path),
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert close_run.returncode == 0, close_run.stdout + close_run.stderr
-    assert "closed: worktree=removed branch=deleted" in close_run.stdout
-    start_run = subprocess.run(
-        [
-            sys.executable,
-            str(tmp_path / "scripts/meta/session_start.py"),
-            "--agent", "codex", "--project", "demo", "--scope", "legacy-start",
-            "--intent", "exercise legacy compatibility", "--repo-root", str(tmp_path),
-            "--worktree-path", str(tmp_path / "worktrees" / "legacy-start"),
-            "--branch", "legacy-start", "--broader-goal", "Legacy compatibility",
-            "--current-phase", "verify wrapper", "--work-graph", "ignored.json",
-            "--work-unit-id", "ignored-unit",
-        ],
-        cwd=str(tmp_path), capture_output=True, text=True, check=False,
-    )
-    assert start_run.returncode == 0, start_run.stdout + start_run.stderr
-    assert "updated: legacy-start" in start_run.stdout
+    installed_lifecycle = tmp_path / "enforced_planning" / "session_lifecycle.py"
+    assert installed_lifecycle.read_bytes() == (
+        PROJECT_META_ROOT / "enforced_planning" / "session_lifecycle.py"
+    ).read_bytes()
+    for wrapper in ("session_start.py", "session_close.py"):
+        help_result = subprocess.run(
+            [sys.executable, str(tmp_path / "scripts/meta" / wrapper), "--help"],
+            cwd=str(tmp_path),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert help_result.returncode == 0, help_result.stdout + help_result.stderr
 
     repeat = _run(
         "--repo-root",

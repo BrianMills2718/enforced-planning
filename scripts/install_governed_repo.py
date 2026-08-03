@@ -243,6 +243,7 @@ CLAIM_PROJECTION_LOCAL_PACKAGE_FILES: dict[str, str] = {
     "enforced_planning/coordination_claims.py": "enforced_planning/coordination_claims.py",
     "enforced_planning/prewrite_claim_fast.py": "enforced_planning/prewrite_claim_fast.py",
     "enforced_planning/prewrite_claim_projection.py": "enforced_planning/prewrite_claim_projection.py",
+    "enforced_planning/session_lifecycle.py": "enforced_planning/session_lifecycle.py",
     "enforced_planning/worktree_paths.py": "enforced_planning/worktree_paths.py",
     "scripts/refresh_prewrite_claim_projection.py": "scripts/refresh_prewrite_claim_projection.py",
 }

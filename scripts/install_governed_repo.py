@@ -238,15 +238,12 @@ CLAIM_PROJECTION_SHARED_FILES: dict[str, str] = {
     "scripts/meta/session_start.py": "scripts/session_start.py",
 }
 
-CLAIM_PROJECTION_LOCAL_PACKAGE_FILES: dict[str, str] = {
-    "enforced_planning/claim_mutation_receipts.py": "enforced_planning/claim_mutation_receipts.py",
-    "enforced_planning/coordination_claims.py": "enforced_planning/coordination_claims.py",
-    "enforced_planning/prewrite_claim_fast.py": "enforced_planning/prewrite_claim_fast.py",
-    "enforced_planning/prewrite_claim_projection.py": "enforced_planning/prewrite_claim_projection.py",
-    "enforced_planning/session_lifecycle.py": "enforced_planning/session_lifecycle.py",
-    "enforced_planning/worktree_paths.py": "enforced_planning/worktree_paths.py",
-    "scripts/refresh_prewrite_claim_projection.py": "scripts/refresh_prewrite_claim_projection.py",
-}
+# Lifecycle mutation and projection refresh are one import/runtime boundary. Keep
+# the complete local dependency closure compatible while leaving hook wiring and
+# mailbox client configuration outside this bounded installer profile.
+CLAIM_PROJECTION_LOCAL_PACKAGE_FILES: dict[str, str] = dict(
+    COORDINATION_MESSAGES_LOCAL_PACKAGE_FILES
+)
 
 RELATIONSHIP_CONTEXT_TARGETS = (
     "relationship-context",

@@ -77,6 +77,13 @@ Apply should:
 - create a rollback-safe branch/worktree before modifying files
 - stop on first hard failure for the targeted repo
 
+Current implementation guard: `upgrade_governed_repos.py --write` fails closed
+until the CLI actually creates the claimed linked worktree, commit/publication
+receipt, and sanctioned closeout required above. Operators may use its dry-run
+report, then run the selected bounded installer profile inside each target
+repository's own claimed worktree. A clean primary checkout is not a substitute
+for that lane.
+
 ## Rollback Model
 
 Rollback should be branch-based, not file-rewrite-based.

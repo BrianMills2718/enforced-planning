@@ -15,11 +15,9 @@ Usage::
     # Preview what would change — never modifies files
     python scripts/upgrade_governed_repos.py --registry governed_repos.yaml --dry-run
 
-    # Upgrade one repo
-    python scripts/upgrade_governed_repos.py --registry governed_repos.yaml --repo llm_client --write
-
-    # Upgrade all governed repos (dry-run first recommended)
-    python scripts/upgrade_governed_repos.py --registry governed_repos.yaml --write
+    # Write mode is fail-closed until claimed-worktree orchestration is implemented.
+    # Apply one reviewed dry-run through install_governed_repo.py inside that
+    # repository's own claimed linked worktree instead.
 
     # Output machine-readable report
     python scripts/upgrade_governed_repos.py --registry governed_repos.yaml --dry-run --json
@@ -239,7 +237,7 @@ def run_upgrade(
     return 0 if failed == 0 else 1
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Orchestrate governed-repo upgrades across the fleet.",
     )
@@ -263,7 +261,7 @@ def main() -> int:
         "--write",
         action="store_true",
         default=False,
-        help="Apply changes. Blocked if repo has local dirt.",
+        help="Reserved; currently fails closed until claimed-worktree write orchestration exists.",
     )
     parser.add_argument(
         "--json",
@@ -271,7 +269,17 @@ def main() -> int:
         default=False,
         help="Output machine-readable JSON report.",
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
+
+    if args.write:
+        print(
+            "ERROR: fleet --write is disabled because this command does not yet "
+            "create claimed linked worktrees, commits, publication receipts, or "
+            "sanctioned closeout. Run the fleet dry-run, then apply the selected "
+            "installer profile inside each repository's own claimed worktree.",
+            file=sys.stderr,
+        )
+        return 2
 
     dry_run = not args.write  # default is dry-run; --write enables apply mode
     registry_path = _expand(args.registry)

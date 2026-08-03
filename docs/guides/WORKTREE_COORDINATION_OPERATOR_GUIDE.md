@@ -55,6 +55,13 @@ or missing projection is an observe violation and an enforce denial; do not
 promote a repository to `enforce` while any active claim writer still uses a
 legacy mutation path that does not refresh the projection.
 
+Sanctioned claim writers stage atomic replacements in a same-filesystem sibling
+directory outside the live registry. While holding the registry lock, writers
+remove abandoned sanctioned staging files older than five minutes, including
+strictly recognized legacy staging files in the registry; unrelated files are
+left untouched. Session resume, handoff, abandon, and finish update the claim
+and refresh the pre-write projection in the same locked mutation.
+
 ## Default Flow
 
 1. Keep the canonical repo checkout clean and on its canonical default branch,

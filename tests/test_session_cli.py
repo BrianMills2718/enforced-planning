@@ -135,9 +135,7 @@ def _send_active_closeout_message(*, claims_dir: Path, recipient_session_id: str
         coordination_messages.SendMessageRequest(
             caller_session_id=sender_session_id,
             sender_session_id=sender_session_id,
-            recipient=coordination_messages.ExactSessionSelector(
-                kind="session", session_id=recipient_session_id
-            ),
+            recipient=coordination_messages.ExactSessionSelector(kind="session", session_id=recipient_session_id),
             project="enforced-planning",
             kind="coordination_request",
             subject="Closeout review request",
@@ -403,9 +401,7 @@ def test_native_session_end_hook_requires_real_end_event(
     ]
     stop = subprocess.run(
         command,
-        input=json.dumps(
-            {"session_id": "hook-session", "hook_event_name": "Stop"}
-        ),
+        input=json.dumps({"session_id": "hook-session", "hook_event_name": "Stop"}),
         capture_output=True,
         text=True,
         check=False,
@@ -507,9 +503,7 @@ def test_start_session_creates_parented_child_and_rejects_second_root(
             agent="openclaw",
             scope="plan0141-second-root",
             intent="duplicate Plan 0141 coordinator",
-            worktree_path=str(
-                tmp_path / "onto-canon6" / "worktrees" / "plan0141-second-root"
-            ),
+            worktree_path=str(tmp_path / "onto-canon6" / "worktrees" / "plan0141-second-root"),
             branch="plan0141-second-root",
             session_id="openclaw:second-root",
             claim_type="program",
@@ -797,6 +791,7 @@ def test_finish_session_blocks_dirty_cleanup_without_handoff(
             returncode = 0
             stdout = " M dirty.txt\n"
             stderr = ""
+
         return Result()
 
     monkeypatch.setattr(session_lifecycle.subprocess, "run", _fake_run)
@@ -809,6 +804,58 @@ def test_finish_session_blocks_dirty_cleanup_without_handoff(
             worktree_path=str(worktree),
             release_claim=True,
         )
+
+
+def test_finish_session_dirty_handoff_refreshes_projection(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Dirty handoff must not leave the pre-write projection stale."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    worktree = tmp_path / "worktree"
+    worktree.mkdir()
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+
+    session_lifecycle.start_session(
+        agent="codex",
+        project="enforced-planning",
+        scope="plan-31-session-cli-enforcement",
+        intent="implement session lifecycle CLI and governed repo enforcement",
+        repo_root="~/projects/enforced-planning",
+        worktree_path=str(worktree),
+        branch="plan-31-session-cli-enforcement",
+        broader_goal="Cross-Project Session Lifecycle Enforcement",
+        current_phase="dirty handoff proof",
+        plan_ref="Plan #31",
+        session_id="codex:test-session",
+        tracker_dir=trackers_dir,
+    )
+
+    def _fake_run(*_args, **_kwargs):
+        class Result:
+            returncode = 0
+            stdout = " M dirty.txt\n"
+            stderr = ""
+
+        return Result()
+
+    monkeypatch.setattr(session_lifecycle.subprocess, "run", _fake_run)
+
+    payload = session_lifecycle.finish_session(
+        agent="codex",
+        project="enforced-planning",
+        scope="plan-31-session-cli-enforcement",
+        worktree_path=str(worktree),
+        allow_dirty_handoff=True,
+        note="handoff with preserved dirty state",
+    )
+
+    claim = coordination_claims._load_claims(claims_dir)[0]
+    assert payload["action"] == "handoff"
+    assert claim.status == "handoff"
+    assert prewrite_claim_projection.projection_is_current(claims_dir=claims_dir) is True
 
 
 def test_finish_session_releases_clean_claim(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -840,6 +887,7 @@ def test_finish_session_releases_clean_claim(tmp_path: Path, monkeypatch: pytest
             returncode = 0
             stdout = ""
             stderr = ""
+
         return Result()
 
     monkeypatch.setattr(session_lifecycle.subprocess, "run", _fake_run)
@@ -956,9 +1004,7 @@ def test_close_session_rejects_active_mailbox_message_before_mutation(
         trackers_dir=trackers_dir,
     )
     _git(repo_root, "merge", "--no-ff", branch, "-m", "merge feature")
-    message_id = _send_active_closeout_message(
-        claims_dir=claims_dir, recipient_session_id="codex:test-session"
-    )
+    message_id = _send_active_closeout_message(claims_dir=claims_dir, recipient_session_id="codex:test-session")
 
     with pytest.raises(ValueError, match="active mailbox message"):
         session_lifecycle.close_session(agent="codex", project="enforced-planning", scope=branch)
@@ -990,9 +1036,7 @@ def test_close_session_records_explicit_mailbox_deferral(
         trackers_dir=trackers_dir,
     )
     _git(repo_root, "merge", "--no-ff", branch, "-m", "merge feature")
-    message_id = _send_active_closeout_message(
-        claims_dir=claims_dir, recipient_session_id="codex:test-session"
-    )
+    message_id = _send_active_closeout_message(claims_dir=claims_dir, recipient_session_id="codex:test-session")
 
     payload = session_lifecycle.close_session(
         agent="codex",
@@ -1123,22 +1167,16 @@ def test_patch_normalization_ignores_only_full_index_blob_identity() -> None:
     first = b"index " + b"a" * 40 + b".." + b"b" * 40 + b" 100644\n" + patch_body
     second = b"index " + b"c" * 40 + b".." + b"d" * 40 + b" 100644\n" + patch_body
 
-    assert session_lifecycle._patch_without_blob_identity(
-        first
-    ) == session_lifecycle._patch_without_blob_identity(second)
-    assert session_lifecycle._patch_without_blob_identity(
-        first
-    ) != session_lifecycle._patch_without_blob_identity(
+    assert session_lifecycle._patch_without_blob_identity(first) == session_lifecycle._patch_without_blob_identity(
+        second
+    )
+    assert session_lifecycle._patch_without_blob_identity(first) != session_lifecycle._patch_without_blob_identity(
         second.replace(b"new mode 100755", b"new mode 100644")
     )
-    assert session_lifecycle._patch_without_blob_identity(
-        first
-    ) != session_lifecycle._patch_without_blob_identity(
+    assert session_lifecycle._patch_without_blob_identity(first) != session_lifecycle._patch_without_blob_identity(
         second.replace(b"KcmZQz", b"KcmZRz")
     )
-    assert session_lifecycle._patch_without_blob_identity(
-        first
-    ) != session_lifecycle._patch_without_blob_identity(
+    assert session_lifecycle._patch_without_blob_identity(first) != session_lifecycle._patch_without_blob_identity(
         second.replace(b"+index remains", b"+index changed")
     )
 
@@ -1362,7 +1400,9 @@ def test_close_session_accepts_branch_merged_to_pushed_remote_default_when_local
     trackers_dir = tmp_path / "sessions"
     monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
     repo_root, worktree, branch = _real_repo_with_worktree(tmp_path)
-    _start_real_closeout_claim(repo_root=repo_root, worktree=worktree, branch=branch, claims_dir=claims_dir, trackers_dir=trackers_dir)
+    _start_real_closeout_claim(
+        repo_root=repo_root, worktree=worktree, branch=branch, claims_dir=claims_dir, trackers_dir=trackers_dir
+    )
     stale_main = _git(repo_root, "rev-parse", "refs/heads/main").strip()
     _git(repo_root, "merge", "--no-ff", branch, "-m", "merge feature")
     _git(repo_root, "update-ref", "refs/remotes/origin/main", "refs/heads/main")
@@ -1383,9 +1423,13 @@ def test_close_session_accepts_remote_merged_branch_when_local_default_diverges(
     trackers_dir = tmp_path / "sessions"
     monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
     repo_root, worktree, branch = _real_repo_with_worktree(tmp_path)
-    _start_real_closeout_claim(repo_root=repo_root, worktree=worktree, branch=branch, claims_dir=claims_dir, trackers_dir=trackers_dir)
+    _start_real_closeout_claim(
+        repo_root=repo_root, worktree=worktree, branch=branch, claims_dir=claims_dir, trackers_dir=trackers_dir
+    )
     local_main = _git(repo_root, "rev-parse", "refs/heads/main").strip()
-    divergent_main = _git(repo_root, "commit-tree", f"{local_main}^{{tree}}", "-p", local_main, "-m", "preserved local divergence").strip()
+    divergent_main = _git(
+        repo_root, "commit-tree", f"{local_main}^{{tree}}", "-p", local_main, "-m", "preserved local divergence"
+    ).strip()
     _git(repo_root, "update-ref", "refs/remotes/origin/main", f"refs/heads/{branch}")
     _git(repo_root, "update-ref", "refs/heads/main", divergent_main)
 
@@ -2013,6 +2057,7 @@ def test_handoff_session_marks_lane_for_resume(
     assert status_payload["sessions"][0]["claim_status"] == "handoff"
     assert status_payload["sessions"][0]["recovery_action"] == "resume_or_finish_handoff"
     assert tracker_payload["tracker"]["current_phase"] == "handoff required"
+    assert prewrite_claim_projection.projection_is_current(claims_dir=claims_dir)
 
 
 def test_resume_session_rebinds_stale_or_handoff_lane(
@@ -2066,6 +2111,7 @@ def test_resume_session_rebinds_stale_or_handoff_lane(
     assert status_payload["sessions"][0]["claim_status"] == "active"
     assert status_payload["sessions"][0]["recovery_action"] == "continue"
     assert tracker_payload["tracker"]["current_phase"] == "fresh runtime resumed"
+    assert prewrite_claim_projection.projection_is_current(claims_dir=claims_dir)
 
 
 def test_abandon_session_removes_lane_from_live_status(
@@ -2107,6 +2153,7 @@ def test_abandon_session_removes_lane_from_live_status(
     assert payload["action"] == "abandoned"
     assert status_payload["session_count"] == 0
     assert tracker_payload["tracker"]["current_phase"] == "abandoned"
+    assert prewrite_claim_projection.projection_is_current(claims_dir=claims_dir)
 
 
 def test_start_session_auto_resolves_codex_runtime_session_id(

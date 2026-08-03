@@ -93,6 +93,68 @@ def find_worktree_for_branch(branch: str) -> Path | None:
     return None
 
 
+def resolve_claim_identity(
+    branch: str,
+    *,
+    agent: str,
+    worktree_path: Path | None,
+) -> tuple[str, str] | None:
+    """Return the one live claim identity that owns the merged branch."""
+
+    claims_script = find_existing_script(
+        [
+            "scripts/check_coordination_claims.py",
+            "scripts/meta/check_coordination_claims.py",
+        ]
+    )
+    if claims_script is None:
+        return None
+    result = run_cmd(
+        ["python", str(claims_script), "--list", "--json"],
+        check=False,
+    )
+    if result.returncode != 0:
+        return None
+    try:
+        payload = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return None
+    records = payload.get("claims", []) if isinstance(payload, dict) else []
+    candidates: list[tuple[str, str]] = []
+    for record in records:
+        if not isinstance(record, dict):
+            continue
+        if record.get("agent") != agent or record.get("branch") != branch:
+            continue
+        if record.get("status") not in {"active", "blocked", "handoff", "session_ended"}:
+            continue
+        recorded_path = record.get("worktree_path")
+        if worktree_path is not None and recorded_path:
+            if Path(str(recorded_path)).expanduser().resolve() != worktree_path.expanduser().resolve():
+                continue
+        projects = record.get("projects")
+        project = projects[0] if isinstance(projects, list) and projects else record.get("project")
+        scope = record.get("scope")
+        if isinstance(project, str) and project and isinstance(scope, str) and scope:
+            candidates.append((project, scope))
+    unique = sorted(set(candidates))
+    return unique[0] if len(unique) == 1 else None
+
+
+def canonical_repo_root() -> Path:
+    """Resolve the primary checkout root even when invoked from a linked worktree."""
+
+    result = run_cmd(
+        ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
+        check=False,
+    )
+    if result.returncode == 0:
+        common_dir = Path(result.stdout.strip()).expanduser().resolve()
+        if common_dir.name == ".git":
+            return common_dir.parent
+    return Path(__file__).resolve().parent.parent
+
+
 def release_claim_for_branch(branch: str) -> bool:
     """Release any claim associated with this branch. PR merged = work done.
 
@@ -132,7 +194,6 @@ def cleanup_worktree(branch: str, *, merge_commit: str | None = None) -> bool:
         ]
     )
     if safe_remove_script:
-        repo_name = Path.cwd().resolve().name
         agent = (
             "codex"
             if os.environ.get("CODEX_THREAD_ID")
@@ -146,15 +207,27 @@ def cleanup_worktree(branch: str, *, merge_commit: str | None = None) -> bool:
             cleanup_cmd = ["make", "worktree-remove", f"BRANCH={branch}"]
             manual_cmd = f"make worktree-remove BRANCH={branch}"
         else:
+            claim_identity = resolve_claim_identity(
+                branch,
+                agent=agent,
+                worktree_path=worktree_path,
+            )
+            if claim_identity is None:
+                print(
+                    "HIGH: session-close is available, but no unambiguous live claim "
+                    f"owns branch {branch!r}; refusing guessed project/scope closeout."
+                )
+                return False
+            project, scope = claim_identity
             cleanup_cmd = [
                 "python",
                 str(safe_remove_script),
                 "--agent",
                 agent,
                 "--project",
-                repo_name,
+                project,
                 "--scope",
-                branch,
+                scope,
                 "--branch",
                 branch,
             ]
@@ -318,7 +391,7 @@ def merge_pr(pr_number: int, dry_run: bool = False) -> bool:
 def main() -> int:
     # Prevent CWD-in-deleted-worktree issue
     # Always run from project root, not from a worktree that may be deleted
-    project_root = Path(__file__).parent.parent
+    project_root = canonical_repo_root()
     os.chdir(project_root)
 
     parser = argparse.ArgumentParser(

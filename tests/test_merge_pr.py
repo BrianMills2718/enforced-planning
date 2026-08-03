@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -196,6 +197,11 @@ def test_cleanup_without_worktree_still_records_session_close(
     session_close.write_text("#!/usr/bin/env python3\n", encoding="utf-8")
     monkeypatch.setenv("CODEX_THREAD_ID", "test-thread")
     monkeypatch.setattr(module, "find_worktree_for_branch", lambda _branch: None)
+    monkeypatch.setattr(
+        module,
+        "resolve_claim_identity",
+        lambda _branch, *, agent, worktree_path: ("actual-project", "actual-scope"),
+    )
     observed_calls: list[list[str]] = []
 
     def fake_run_cmd(
@@ -214,13 +220,67 @@ def test_cleanup_without_worktree_still_records_session_close(
             "--agent",
             "codex",
             "--project",
-            tmp_path.name,
+            "actual-project",
             "--scope",
-            "plan-107-landed",
+            "actual-scope",
             "--branch",
             "plan-107-landed",
         ]
     ]
+
+
+def test_resolve_claim_identity_uses_registry_project_and_scope(monkeypatch, tmp_path) -> None:
+    """Branch cleanup must use claim identity, not the worktree directory name."""
+
+    module = _load()
+    claims_script = tmp_path / "scripts" / "check_coordination_claims.py"
+    claims_script.parent.mkdir(parents=True)
+    claims_script.write_text("#!/usr/bin/env python3\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    worktree = tmp_path / "worktrees" / "feature"
+    payload = {
+        "claims": [
+            {
+                "agent": "codex",
+                "branch": "feature",
+                "status": "active",
+                "projects": ["enforced-planning"],
+                "scope": "claim-scope",
+                "worktree_path": str(worktree),
+            }
+        ]
+    }
+    monkeypatch.setattr(
+        module,
+        "run_cmd",
+        lambda cmd, check=True, capture=True: completed_process(
+            cmd,
+            stdout=json.dumps(payload),
+        ),
+    )
+
+    assert module.resolve_claim_identity(
+        "feature",
+        agent="codex",
+        worktree_path=worktree,
+    ) == ("enforced-planning", "claim-scope")
+
+
+def test_canonical_repo_root_uses_git_common_dir(monkeypatch, tmp_path) -> None:
+    """Merge closeout must run outside the linked worktree being removed."""
+
+    module = _load()
+    common_dir = tmp_path / "canonical" / ".git"
+    monkeypatch.setattr(
+        module,
+        "run_cmd",
+        lambda cmd, check=True, capture=True: completed_process(
+            cmd,
+            stdout=f"{common_dir}\n",
+        ),
+    )
+
+    assert module.canonical_repo_root() == common_dir.parent
 
 
 def test_merge_reports_high_failure_when_post_merge_closeout_fails(

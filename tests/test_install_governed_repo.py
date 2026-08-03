@@ -73,10 +73,16 @@ MAILBOX_ROLLOUT_PATHS = MAILBOX_COMMON_ROLLOUT_PATHS | {
 
 CLAIM_PROJECTION_REFRESH_PATHS = {
     "enforced_planning/claim_mutation_receipts.py",
+    "enforced_planning/client_session_metadata.py",
     "enforced_planning/coordination_claims.py",
+    "enforced_planning/coordination_messages.py",
+    "enforced_planning/doc_authority.py",
     "enforced_planning/prewrite_claim_fast.py",
     "enforced_planning/prewrite_claim_projection.py",
+    "enforced_planning/push_safety.py",
+    "enforced_planning/session_contracts.py",
     "enforced_planning/session_lifecycle.py",
+    "enforced_planning/worktree_lifecycle.yaml",
     "enforced_planning/worktree_paths.py",
     "scripts/refresh_prewrite_claim_projection.py",
     "scripts/meta/check_coordination_claims.py",
@@ -329,18 +335,6 @@ def test_claim_projection_refresh_only_is_bounded_and_idempotent(tmp_path: Path)
     """Fleet repair must update mutation support without touching hook configuration."""
 
     _prepare_mailbox_target(tmp_path)
-    # A projection-only refresh assumes the governed repo already has the
-    # mailbox/lifecycle dependency substrate; only the mutation surfaces drift.
-    dependency_paths = {
-        path
-        for path in MAILBOX_ROLLOUT_PATHS - CLAIM_PROJECTION_REFRESH_PATHS
-        if path.startswith("enforced_planning/")
-    }
-    for relative in dependency_paths:
-        source = PROJECT_META_ROOT / relative
-        target = tmp_path / relative
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_bytes(source.read_bytes())
     original_claude_settings = (tmp_path / ".claude" / "settings.json").read_text(
         encoding="utf-8"
     )

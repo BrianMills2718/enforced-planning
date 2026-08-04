@@ -92,10 +92,15 @@ fi
 DOC_COUPLING=$(find_script "check_doc_coupling.py")
 if [[ -n "$DOC_COUPLING" ]]; then
     echo "Checking doc-code coupling..."
-    if ! python "$DOC_COUPLING" --staged --strict; then
+    DOC_COUPLING_ARGS=(--staged --strict)
+    if [[ -f "$REPO_ROOT/.doc-coupling-acks" ]]; then
+        DOC_COUPLING_ARGS+=(--ack-file "$REPO_ROOT/.doc-coupling-acks")
+    fi
+    if ! python "$DOC_COUPLING" "${DOC_COUPLING_ARGS[@]}"; then
         echo ""
         echo "Doc-coupling finding detected."
         echo "Run 'python $DOC_COUPLING --suggest' to see which docs to update."
+        echo "Or create .doc-coupling-acks with a reason for each unchanged authority."
         echo ""
         handle_failure "doc-coupling check" || exit 1
     fi

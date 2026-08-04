@@ -1,6 +1,15 @@
 #!/bin/bash
 # Post-commit hook (portable enforced-planning template)
-# Reminds about unpushed commits.
+# Cleans up ephemeral coupling acknowledgements and reminds about unpushed commits.
+
+REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
+
+# Acknowledgements authorize one staged commit only. The resulting commit and
+# hook output retain the durable evidence; leaving the file behind could
+# accidentally acknowledge a later, unrelated change.
+if [[ -f "$REPO_ROOT/.doc-coupling-acks" ]]; then
+    rm "$REPO_ROOT/.doc-coupling-acks"
+fi
 
 BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null) || exit 0
 REMOTE="origin/$BRANCH"

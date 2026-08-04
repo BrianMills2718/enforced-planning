@@ -10,7 +10,7 @@ Utility scripts for development and CI. All scripts support `--help` for options
 | `complete_plan.py` | Mark plan complete |
 | `sync_plan_status.py` | Sync plan status |
 | `merge_pr.py` | Merge PRs via GitHub CLI |
-| `pr_auto.py` | Non-interactive PR preflight + create/reuse workflow |
+| `pr_auto.py` | Non-interactive PR flow with process-isolated GitHub account selection |
 | `check_doc_coupling.py` | Verify docs updated when source changes |
 
 ## Common Commands

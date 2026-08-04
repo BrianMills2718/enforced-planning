@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 import sys
 from pathlib import Path
 
@@ -77,3 +78,32 @@ def test_sanitize_github_env_removes_token_overrides() -> None:
     assert "GITHUB_ENTERPRISE_TOKEN" not in env
     assert env["KEEP_ME"] == "ok"
     assert env["GIT_CONFIG_NOSYSTEM"] == "1"
+
+
+def test_isolated_github_auth_does_not_mutate_shared_config(tmp_path: Path) -> None:
+    """Account selection must use a temporary GH config directory."""
+    module = _load()
+    source = tmp_path / "shared-gh"
+    source.mkdir()
+    hosts = source / "hosts.yml"
+    hosts.write_text("active: original\n", encoding="utf-8")
+    observed: list[tuple[Path, str]] = []
+
+    def fake_switch(cwd: Path, env: dict[str, str], account: str) -> None:
+        isolated_hosts = Path(env["GH_CONFIG_DIR"]) / "hosts.yml"
+        observed.append((isolated_hosts, account))
+        isolated_hosts.write_text("active: selected\n", encoding="utf-8")
+
+    module._switch_gh_account = fake_switch  # type: ignore[attr-defined]
+    with module.isolated_github_auth(  # type: ignore[attr-defined]
+        cwd=tmp_path,
+        gh_env={**os.environ, "GH_CONFIG_DIR": str(source)},
+        account="expected-owner",
+    ) as env:
+        isolated_dir = Path(env["GH_CONFIG_DIR"])
+        assert isolated_dir != source
+        assert (isolated_dir / "hosts.yml").read_text(encoding="utf-8") == "active: selected\n"
+
+    assert observed[0][1] == "expected-owner"
+    assert hosts.read_text(encoding="utf-8") == "active: original\n"
+    assert not isolated_dir.exists()

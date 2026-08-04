@@ -22,6 +22,7 @@ Source repo for the portable planning and governance framework.
 
 ```bash
 # Canonical governed-repo install / upgrade
+python scripts/install_governed_repo.py --repo-root /path/to/project --check
 python scripts/install_governed_repo.py --repo-root /path/to/project --write
 python scripts/audit_governed_repo.py --repo-root /path/to/project --strict-governed
 

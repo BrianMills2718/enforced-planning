@@ -89,6 +89,10 @@ def test_validate_config_accepts_matching_doc_glob(tmp_path: Path, monkeypatch: 
     module = _load_module()
     repo_root = tmp_path / "repo"
     repo_root.mkdir()
+    (repo_root / "scripts" / "meta").mkdir(parents=True, exist_ok=True)
+    (repo_root / "scripts" / "meta" / "generate_agent_docs.py").write_text(
+        "# generator\n", encoding="utf-8"
+    )
     (repo_root / "generated" / "agent_docs" / "subtrees").mkdir(parents=True, exist_ok=True)
     (repo_root / "generated" / "agent_docs" / "README.md").write_text("# Index\n", encoding="utf-8")
     (repo_root / "generated" / "agent_docs" / "subtrees" / "docs.md").write_text("# Docs\n", encoding="utf-8")
@@ -104,3 +108,19 @@ def test_validate_config_accepts_matching_doc_glob(tmp_path: Path, monkeypatch: 
     )
 
     assert warnings == []
+
+
+def test_validate_config_reports_missing_source_paths(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A nonexistent source cannot silently remain a coupling authority."""
+
+    module = _load_module()
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "CLAUDE.md").write_text("# Rules\n", encoding="utf-8")
+
+    warnings = module.validate_config(
+        [{"sources": ["docs/missing-policy.md"], "docs": ["CLAUDE.md"]}]
+    )
+
+    assert warnings == ["Coupled source doesn't exist: docs/missing-policy.md"]

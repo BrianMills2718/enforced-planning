@@ -288,6 +288,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Show planned bootstrap/sync actions without applying them.",
     )
+    mode.add_argument(
+        "--check",
+        action="store_true",
+        help=(
+            "Check installer-managed drift without writing; exit non-zero "
+            "when repair actions are required."
+        ),
+    )
     parser.add_argument(
         "--json",
         action="store_true",
@@ -953,6 +961,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.write and payload["blockers"]:
         return 1
     if args.strict_governed and final_audit["classification"] != "governed":
+        return 1
+    if args.check and (payload["actions"] or payload["blockers"]):
         return 1
     return 0
 

@@ -645,6 +645,70 @@ def test_install_governed_repo_dry_run_reports_expected_actions(tmp_path: Path) 
     assert not (tmp_path / "AGENTS.md").exists()
 
 
+def test_install_governed_repo_check_fails_on_managed_drift(tmp_path: Path) -> None:
+    """Check mode must expose stale installed support files without repairing them."""
+
+    _write_minimal_claude(tmp_path)
+    installed = _run(
+        "--repo-root", str(tmp_path), "--write", "--json", cwd=PROJECT_META_ROOT
+    )
+    assert installed.returncode == 0, installed.stdout + installed.stderr
+    renderer = tmp_path / "scripts" / "meta" / "render_agents_md.py"
+    renderer.write_text("# stale installed renderer\n", encoding="utf-8")
+
+    checked = _run(
+        "--repo-root", str(tmp_path), "--check", "--json", cwd=PROJECT_META_ROOT
+    )
+
+    assert checked.returncode == 1
+    payload = json.loads(checked.stdout)
+    assert "sync:scripts/meta/render_agents_md.py" in payload["actions"]
+    assert renderer.read_text(encoding="utf-8") == "# stale installed renderer\n"
+
+
+def test_installed_agents_tools_run_from_linked_worktree(tmp_path: Path) -> None:
+    """Installed render/check entrypoints must resolve local runtime in a worktree."""
+
+    repo_root = tmp_path / "consumer"
+    repo_root.mkdir()
+    _write_minimal_claude(repo_root)
+    installed = _run(
+        "--repo-root", str(repo_root), "--write", "--json", cwd=PROJECT_META_ROOT
+    )
+    assert installed.returncode == 0, installed.stdout + installed.stderr
+    for command in (
+        ["git", "init", "-b", "main"],
+        ["git", "config", "user.email", "test@example.com"],
+        ["git", "config", "user.name", "Test User"],
+        ["git", "add", "."],
+        ["git", "commit", "-m", "initial"],
+    ):
+        result = subprocess.run(
+            command, cwd=repo_root, capture_output=True, text=True, check=False
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+
+    linked = repo_root / "worktrees" / "portability-probe"
+    result = subprocess.run(
+        ["git", "worktree", "add", "-b", "portability-probe", str(linked)],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+    for script in ("render_agents_md.py", "check_agents_sync.py"):
+        result = subprocess.run(
+            [sys.executable, str(linked / "scripts" / "meta" / script), "--help"],
+            cwd=linked,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+
+
 def test_installer_blocks_write_when_target_runtime_lacks_yaml(tmp_path: Path) -> None:
     """The installer must not claim runnable context tools via the host environment."""
 

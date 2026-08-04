@@ -204,3 +204,29 @@ def test_run_tests_uses_current_python_interpreter(tmp_path: Path) -> None:
 
     assert exit_code == 0
     assert run.call_args.args[0][:3] == [sys.executable, "-m", "pytest"]
+
+
+def test_run_tests_coalesces_nodes_covered_by_a_whole_file(tmp_path: Path) -> None:
+    """A file-wide requirement should not rerun its individually listed nodes."""
+    test_file = tmp_path / "tests" / "test_example.py"
+    test_file.parent.mkdir()
+    test_file.write_text(
+        "def test_one(): assert True\n\ndef test_two(): assert True\n",
+        encoding="utf-8",
+    )
+    requirements = [
+        RequiredTestSpec(file="tests/test_example.py", function="test_one"),
+        RequiredTestSpec(file="tests/test_example.py"),
+        RequiredTestSpec(file="tests/test_example.py", function="test_two"),
+    ]
+    completed = MagicMock(returncode=0, stdout="passed", stderr="")
+
+    # mock-ok: exact pytest selection is the behavior under test; the selected
+    # file is exercised by the plan-runner integration controls.
+    with patch("check_plan_tests.subprocess.run", return_value=completed) as run:
+        exit_code, _output = run_tests(requirements, tmp_path)
+
+    assert exit_code == 0
+    command = run.call_args.args[0]
+    assert command.count("tests/test_example.py") == 1
+    assert not any("::" in argument for argument in command)

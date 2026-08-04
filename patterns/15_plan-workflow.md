@@ -228,8 +228,8 @@ checks that prove the exploration is agent-drivable and inspectable.
 - [ ] Any declared boundary gate passed immediately before its protected action
 - [ ] Increment gate passed for the affected surface
 - [ ] Exploratory readouts/instruments were exercised, if applicable
-- [ ] Repository health recorded; no new or changed-test baseline failures
-- [ ] Type check passes
+- [ ] Repository health recorded; no new failures, changed failure evidence, or changed-test overlap
+- [ ] Applicable type checks pass
 - [ ] Terminal gate passed before closeout or a works/done claim
 - [ ] Reused evidence matches its declared reuse key
 - [ ] Docs updated

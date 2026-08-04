@@ -37,9 +37,9 @@ required tests block completion.
 
 The repository-wide non-E2E suite still runs. If it passes, the plan records a
 repository-green completion. If it fails, the completion tool reruns the same
-  suite at the merge base in a detached sibling worktree, using the same Python
-  interpreter and command, then compares machine-readable test identities and
-  normalized failure-detail hashes.
+suite at the merge base in a detached sibling worktree, using the same Python
+interpreter and command, then compares machine-readable test identities and
+normalized failure-detail hashes.
 
 - A failure absent from the baseline blocks completion as a new regression.
 - Pytest runs with full assertion-value verbosity before normalization. A

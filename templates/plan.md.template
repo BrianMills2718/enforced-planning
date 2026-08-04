@@ -166,8 +166,8 @@ the concrete cases that explain it?
 
 > Process criteria (quality gates):
 - [ ] Required tests pass
-- [ ] Repository health recorded; no new or changed-test baseline failures
-- [ ] Type check passes
+- [ ] Repository health recorded; no new failures, changed failure evidence, or changed-test overlap
+- [ ] Applicable type checks pass
 - [ ] Any declared boundary gate passed immediately before its protected action
 - [ ] Increment gate passed for the affected surface
 - [ ] Terminal gate passed before closeout or a works/done claim

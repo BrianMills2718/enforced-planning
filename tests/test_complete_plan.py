@@ -1,5 +1,6 @@
 """Tests for scripts/complete_plan.py pure and mock-friendly functions."""
 
+import json
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -9,6 +10,7 @@ import yaml  # type: ignore[import-untyped]
 from enforced_planning import coordination_claims
 from scripts.complete_plan import (
     RepositoryHealthComparison,
+    TestFailure as RepositoryTestFailure,
     TestRunResult as RepositoryTestRunResult,
     complete_plan,
     check_doc_coupling,
@@ -22,6 +24,7 @@ from scripts.complete_plan import (
     sync_coordination_closeout,
     update_plan_file,
     update_plan_index,
+    write_repository_health_evidence,
 )
 
 
@@ -574,7 +577,25 @@ def _green_test_run() -> RepositoryTestRunResult:
 
 def _degraded_comparison() -> RepositoryHealthComparison:
     """Return an allowed baseline-degraded comparison for wiring tests."""
-    run = _green_test_run()
+    failure = RepositoryTestFailure(
+        identity="tests/test_known.py::test_known_debt::failure",
+        file="tests/test_known.py",
+        outcome="failure",
+        detail_hash="known-detail-hash",
+        detail_excerpt="assert known debt",
+    )
+    run = RepositoryTestRunResult(
+        available=True,
+        commit="abc1234",
+        command=(sys.executable, "-m", "pytest", "tests/"),
+        returncode=1,
+        summary="1 passed, 0 skipped, 1 failed",
+        test_count=2,
+        passed_count=1,
+        skipped_count=0,
+        failures=(failure,),
+        error=None,
+    )
     return RepositoryHealthComparison(
         status="baseline_degraded",
         allowed=True,
@@ -587,6 +608,24 @@ def _degraded_comparison() -> RepositoryHealthComparison:
         new_failures=(),
         changed_baseline_failures=(),
     )
+
+
+def test_repository_health_evidence_round_trips_both_verdicts(tmp_path: Path) -> None:
+    """Durable evidence must preserve comparison inputs and failure identity."""
+    path = write_repository_health_evidence(
+        tmp_path,
+        67,
+        _degraded_comparison(),
+        dry_run=False,
+    )
+
+    assert path == Path("docs/evidence/plan67_repository_health.json")
+    payload = json.loads((tmp_path / path).read_text(encoding="utf-8"))
+    assert payload["status"] == "baseline_degraded"
+    assert payload["baseline_commit"] == "abc1234"
+    assert payload["current"]["failures"][0]["identity"].endswith("test_known_debt::failure")
+    assert payload["baseline"]["failures"][0]["detail_hash"] == "known-detail-hash"
+    assert payload["changed_paths"] == ["docs/example.md"]
 
 
 def test_required_plan_tests_block_before_repository_health(tmp_path: Path) -> None:

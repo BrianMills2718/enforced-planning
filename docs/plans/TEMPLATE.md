@@ -172,8 +172,8 @@ release both before handing off."
 
 > Process criteria (quality gates):
 - [ ] Required tests pass
-- [ ] Repository health recorded; no new or changed-test baseline failures
-- [ ] Type check passes
+- [ ] Repository health recorded; no new failures, changed failure evidence, or changed-test overlap
+- [ ] Applicable type checks pass
 - [ ] Docs updated
 
 ---

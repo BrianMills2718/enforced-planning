@@ -293,17 +293,31 @@ def run_tests(requirements: list[TestRequirement], project_root: Path) -> tuple[
         return 0, "No tests to run"
 
     pytest_args = [sys.executable, "-m", "pytest", "-v"]
+    whole_file_requirements = {
+        requirement.file
+        for requirement in requirements
+        if requirement.function is None
+    }
+    selected_paths: list[str] = []
+    seen_paths: set[str] = set()
 
     for req in requirements:
+        if req.function is not None and req.file in whole_file_requirements:
+            continue
         # Plan #41: Use get_pytest_path to get the correct path with class prefix
         pytest_path = get_pytest_path(req, project_root)
         if pytest_path:
-            pytest_args.append(pytest_path)
+            selected_path = pytest_path
         elif req.function:
             # Fallback to original format if get_pytest_path returns None
-            pytest_args.append(f"{req.file}::{req.function}")
+            selected_path = f"{req.file}::{req.function}"
         else:
-            pytest_args.append(req.file)
+            selected_path = req.file
+        if selected_path not in seen_paths:
+            selected_paths.append(selected_path)
+            seen_paths.add(selected_path)
+
+    pytest_args.extend(selected_paths)
 
     result = subprocess.run(
         pytest_args,

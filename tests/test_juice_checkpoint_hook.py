@@ -104,16 +104,20 @@ def test_session_start_resets_timer_and_claude_uses_additional_context(tmp_path:
     assert "JUICE CHECK (non-blocking)" in payload["hookSpecificOutput"]["additionalContext"]
 
 
-def test_user_prompt_is_silent_and_malformed_input_warns_without_failing(tmp_path: Path) -> None:
-    """The reminder does not interrupt a user turn, while broken state remains visible."""
+def test_non_checkpoint_events_are_silent_and_malformed_input_warns_without_failing(tmp_path: Path) -> None:
+    """Other installed lifecycle events stay silent, while broken state remains visible."""
 
-    prompt = invoke(
-        agent="codex",
-        state_dir=tmp_path / "state",
-        session_id="codex-two",
-        event_name="UserPromptSubmit",
-        now_epoch=10_000,
-    )
+    events = ("UserPromptSubmit", "PreToolUse", "Stop")
+    results = [
+        invoke(
+            agent="codex",
+            state_dir=tmp_path / "state",
+            session_id="codex-two",
+            event_name=event_name,
+            now_epoch=10_000,
+        )
+        for event_name in events
+    ]
     malformed = subprocess.run(
         [sys.executable, str(SCRIPT), "--agent", "codex", "--state-dir", str(tmp_path / "state")],
         input="{}",
@@ -122,6 +126,6 @@ def test_user_prompt_is_silent_and_malformed_input_warns_without_failing(tmp_pat
         check=False,
     )
 
-    assert prompt.returncode == 0 and prompt.stdout == ""
+    assert all(result.returncode == 0 and result.stdout == "" for result in results)
     assert malformed.returncode == 0
     assert "juice checkpoint unavailable" in json.loads(malformed.stdout)["systemMessage"]

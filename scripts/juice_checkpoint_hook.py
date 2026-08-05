@@ -23,7 +23,7 @@ MESSAGE = (
     "switch now without asking. Do not create a plan, audit, checklist, or approval pause solely because "
     "of this reminder."
 )
-SUPPORTED_EVENTS = {"SessionStart", "UserPromptSubmit", "PostToolUse"}
+SUPPORTED_EVENTS = {"SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop"}
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -86,7 +86,7 @@ def checkpoint_due(
     if interval_seconds <= 0:
         raise ValueError("interval must be positive")
     event_name = payload["hook_event_name"]
-    if event_name == "UserPromptSubmit":
+    if event_name not in {"SessionStart", "PostToolUse"}:
         return False
 
     resolved_state_dir = state_dir.expanduser().resolve()

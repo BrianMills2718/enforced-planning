@@ -60,6 +60,60 @@ def test_pre_commit_hook_invokes_doc_coupling_in_staged_mode(tmp_path: Path) -> 
     assert marker.read_text(encoding="utf-8") == "--staged --strict"
 
 
+def test_pre_commit_hook_passes_ephemeral_doc_coupling_ack_file(tmp_path: Path) -> None:
+    """A justified acknowledgement should reach the portable checker."""
+
+    repo_root, hook_copy = _hook_repo(tmp_path)
+    scripts_meta = repo_root / "scripts" / "meta"
+    scripts_meta.mkdir(parents=True, exist_ok=True)
+    marker = repo_root / "doc_coupling_args.txt"
+    ack_file = repo_root / ".doc-coupling-acks"
+    ack_file.write_text("- path: README.md\n  reason: Unchanged public contract.\n", encoding="utf-8")
+    stub = scripts_meta / "check_doc_coupling.py"
+    stub.write_text(
+        textwrap.dedent(
+            f"""\
+            from pathlib import Path
+            import sys
+
+            Path({str(marker)!r}).write_text(" ".join(sys.argv[1:]), encoding="utf-8")
+            """
+        ),
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        ["bash", str(hook_copy)],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    assert marker.read_text(encoding="utf-8") == f"--staged --strict --ack-file {ack_file}"
+
+
+def test_post_commit_hook_removes_ephemeral_doc_coupling_ack_file(tmp_path: Path) -> None:
+    """A one-commit acknowledgement must not leak into the next commit."""
+
+    repo_root, _ = _hook_repo(tmp_path)
+    ack_file = repo_root / ".doc-coupling-acks"
+    ack_file.write_text("- path: README.md\n  reason: Unchanged public contract.\n", encoding="utf-8")
+    hook = PROJECT_META_ROOT / "hooks" / "git" / "post-commit"
+
+    result = subprocess.run(
+        ["bash", str(hook)],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    assert not ack_file.exists()
+
+
 def test_pre_commit_hook_warns_by_default_on_governance_failure(tmp_path: Path) -> None:
     """Reversible development commits should retain findings without blocking."""
 

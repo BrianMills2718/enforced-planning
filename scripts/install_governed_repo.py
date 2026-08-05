@@ -238,14 +238,12 @@ CLAIM_PROJECTION_SHARED_FILES: dict[str, str] = {
     "scripts/meta/session_start.py": "scripts/session_start.py",
 }
 
-CLAIM_PROJECTION_LOCAL_PACKAGE_FILES: dict[str, str] = {
-    "enforced_planning/claim_mutation_receipts.py": "enforced_planning/claim_mutation_receipts.py",
-    "enforced_planning/coordination_claims.py": "enforced_planning/coordination_claims.py",
-    "enforced_planning/prewrite_claim_fast.py": "enforced_planning/prewrite_claim_fast.py",
-    "enforced_planning/prewrite_claim_projection.py": "enforced_planning/prewrite_claim_projection.py",
-    "enforced_planning/worktree_paths.py": "enforced_planning/worktree_paths.py",
-    "scripts/refresh_prewrite_claim_projection.py": "scripts/refresh_prewrite_claim_projection.py",
-}
+# Lifecycle mutation and projection refresh are one import/runtime boundary. Keep
+# the complete local dependency closure compatible while leaving hook wiring and
+# mailbox client configuration outside this bounded installer profile.
+CLAIM_PROJECTION_LOCAL_PACKAGE_FILES: dict[str, str] = dict(
+    COORDINATION_MESSAGES_LOCAL_PACKAGE_FILES
+)
 
 RELATIONSHIP_CONTEXT_TARGETS = (
     "relationship-context",
@@ -289,6 +287,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--dry-run",
         action="store_true",
         help="Show planned bootstrap/sync actions without applying them.",
+    )
+    mode.add_argument(
+        "--check",
+        action="store_true",
+        help=(
+            "Check installer-managed drift without writing; exit non-zero "
+            "when repair actions are required."
+        ),
     )
     parser.add_argument(
         "--json",
@@ -955,6 +961,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.write and payload["blockers"]:
         return 1
     if args.strict_governed and final_audit["classification"] != "governed":
+        return 1
+    if args.check and (payload["actions"] or payload["blockers"]):
         return 1
     return 0
 

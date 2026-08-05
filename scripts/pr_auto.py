@@ -12,7 +12,11 @@ import argparse
 import json
 import os
 import re
+import shutil
 import subprocess
+import tempfile
+from contextlib import contextmanager
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Mapping
 
@@ -143,6 +147,34 @@ def _switch_gh_account(cwd: Path, gh_env: dict[str, str], account: str) -> None:
         )
 
 
+@contextmanager
+def isolated_github_auth(
+    *,
+    cwd: Path,
+    gh_env: dict[str, str],
+    account: str,
+) -> Iterator[dict[str, str]]:
+    """Select one stored GitHub account without mutating the shared profile.
+
+    Multiple agents can publish concurrently from different owners. ``gh auth
+    switch`` rewrites the active account in its config directory, so perform it
+    only in a private copy that lives for this PR operation.
+    """
+
+    source = Path(
+        gh_env.get("GH_CONFIG_DIR", str(Path.home() / ".config" / "gh"))
+    ).expanduser()
+    if not source.is_dir():
+        raise SystemExit(f"GitHub auth config directory does not exist: {source}")
+
+    with tempfile.TemporaryDirectory(prefix="enforced-planning-gh-") as temp_dir:
+        isolated = Path(temp_dir) / "gh"
+        shutil.copytree(source, isolated)
+        isolated_env = {**gh_env, "GH_CONFIG_DIR": str(isolated)}
+        _switch_gh_account(cwd, isolated_env, account)
+        yield isolated_env
+
+
 def _fetch_and_rebase(cwd: Path, base: str) -> None:
     run_cmd(["git", "fetch", "origin", base], cwd=cwd)
     run_cmd(["git", "rebase", f"origin/{base}"], cwd=cwd)
@@ -232,39 +264,38 @@ def main() -> int:
     branch = _ensure_branch(cwd)
     _ensure_clean_tree(cwd)
     _ensure_origin(cwd, args.expected_origin_repo)
-    _switch_gh_account(cwd, gh_env, args.account)
+    with isolated_github_auth(cwd=cwd, gh_env=gh_env, account=args.account) as isolated_env:
+        if args.preflight_only:
+            print("Preflight passed.")
+            return 0
 
-    if args.preflight_only:
-        print("Preflight passed.")
-        return 0
+        _fetch_and_rebase(cwd, args.base)
+        _push_branch(cwd)
 
-    _fetch_and_rebase(cwd, args.base)
-    _push_branch(cwd)
-
-    pr = _find_open_pr(cwd=cwd, gh_env=gh_env, branch=branch, base=args.base)
-    if pr is None:
-        _create_pr(
-            cwd=cwd,
-            gh_env=gh_env,
-            branch=branch,
-            base=args.base,
-            fill=args.fill,
-            title=args.title,
-            body_file=args.body_file,
-        )
-        pr = _find_open_pr(cwd=cwd, gh_env=gh_env, branch=branch, base=args.base)
+        pr = _find_open_pr(cwd=cwd, gh_env=isolated_env, branch=branch, base=args.base)
         if pr is None:
-            raise SystemExit("PR creation failed: unable to locate open PR after create.")
+            _create_pr(
+                cwd=cwd,
+                gh_env=isolated_env,
+                branch=branch,
+                base=args.base,
+                fill=args.fill,
+                title=args.title,
+                body_file=args.body_file,
+            )
+            pr = _find_open_pr(cwd=cwd, gh_env=isolated_env, branch=branch, base=args.base)
+            if pr is None:
+                raise SystemExit("PR creation failed: unable to locate open PR after create.")
 
-    pr_number, pr_url = pr
-    print(f"PR: {pr_url}")
+        pr_number, pr_url = pr
+        print(f"PR: {pr_url}")
 
-    if args.auto_merge:
-        enabled = _enable_auto_merge(cwd=cwd, gh_env=gh_env, pr_number=pr_number)
-        if enabled:
-            print(f"Auto-merge enabled for PR #{pr_number}.")
-        else:
-            print(f"Auto-merge not enabled for PR #{pr_number}.")
+        if args.auto_merge:
+            enabled = _enable_auto_merge(cwd=cwd, gh_env=isolated_env, pr_number=pr_number)
+            if enabled:
+                print(f"Auto-merge enabled for PR #{pr_number}.")
+            else:
+                print(f"Auto-merge not enabled for PR #{pr_number}.")
 
     return 0
 

@@ -82,6 +82,7 @@ Keep the perspectives separate:
 
 ```bash
 # Canonical governed-repo install / upgrade
+python scripts/install_governed_repo.py --repo-root /path/to/project --check
 python scripts/install_governed_repo.py --repo-root /path/to/project --write
 python scripts/audit_governed_repo.py --repo-root /path/to/project --strict-governed
 

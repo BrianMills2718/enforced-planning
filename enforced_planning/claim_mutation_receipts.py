@@ -21,7 +21,15 @@ DEFAULT_EVENTS_PATH = Path.home() / ".claude" / "coordination" / "claim-mutation
 DEFAULT_COMPLETED_CLAIM_ARCHIVE_PATH = (
     Path.home() / ".claude" / "coordination" / "completed-claim-archive-v1.jsonl"
 )
-MutationOperation = Literal["create", "heartbeat", "release", "prune", "session_end", "closeout"]
+MutationOperation = Literal[
+    "create",
+    "session_upsert",
+    "heartbeat",
+    "release",
+    "prune",
+    "session_end",
+    "closeout",
+]
 MutationResult = Literal["applied_projection_current", "applied_projection_stale", "not_applied"]
 CompletedClaimSourceKind = Literal["live_prune", "legacy_reconciliation"]
 CompletedClaimStatus = Literal["complete", "completed"]

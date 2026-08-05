@@ -6,6 +6,7 @@ import base64
 import hashlib
 import importlib.util
 import json
+import os
 import subprocess
 import sys
 import time
@@ -90,8 +91,15 @@ def _plan_session_claim(
 def _init_git_repo(repo_root: Path) -> None:
     """Create a minimal git repo with a configured identity."""
     subprocess.run(["git", "init", "-b", "main", str(repo_root)], check=True, capture_output=True, text=True)
-    subprocess.run(["git", "-C", str(repo_root), "config", "user.name", "Test User"], check=True, capture_output=True, text=True)
-    subprocess.run(["git", "-C", str(repo_root), "config", "user.email", "test@example.com"], check=True, capture_output=True, text=True)
+    subprocess.run(
+        ["git", "-C", str(repo_root), "config", "user.name", "Test User"], check=True, capture_output=True, text=True
+    )
+    subprocess.run(
+        ["git", "-C", str(repo_root), "config", "user.email", "test@example.com"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
     (repo_root / "README.md").write_text("seed\n", encoding="utf-8")
     subprocess.run(["git", "-C", str(repo_root), "add", "README.md"], check=True, capture_output=True, text=True)
     subprocess.run(["git", "-C", str(repo_root), "commit", "-m", "seed"], check=True, capture_output=True, text=True)
@@ -105,7 +113,9 @@ def _commit_work_graph(repo_root: Path, *, plan: int, unit: dict) -> str:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps({"units": [unit]}, indent=2) + "\n", encoding="utf-8")
     subprocess.run(["git", "-C", str(repo_root), "add", relative], check=True, capture_output=True, text=True)
-    subprocess.run(["git", "-C", str(repo_root), "commit", "-m", "work graph"], check=True, capture_output=True, text=True)
+    subprocess.run(
+        ["git", "-C", str(repo_root), "commit", "-m", "work graph"], check=True, capture_output=True, text=True
+    )
     return relative
 
 
@@ -180,9 +190,7 @@ def test_evaluate_claim_detects_parent_child_write_overlap_as_hard_conflict(
         "goal_blocked": False,
         "blocked_paths": ["docs/ops/INDEX.md"],
         "writable_paths": [],
-        "integration_owners": [
-            {"agent": "claude-code", "scope": "docs-authority"}
-        ],
+        "integration_owners": [{"agent": "claude-code", "scope": "docs-authority"}],
         "recommended_next_action": (
             "This candidate is path-blocked. Checkpoint any completed work and move "
             "to another authorized ready work unit; report the whole goal blocked only "
@@ -500,9 +508,7 @@ def test_hydration_holds_registry_lock_through_projection_refresh(
         module,
         claims_dir,
         monkeypatch,
-        lambda: module.hydrate_missing_session_ids(
-            agent="codex", project="demo", session_id="codex:hydrate"
-        ),
+        lambda: module.hydrate_missing_session_ids(agent="codex", project="demo", session_id="codex:hydrate"),
     )
 
 
@@ -524,9 +530,7 @@ def test_completion_and_every_prune_hold_registry_lock_through_projection_refres
             path.unlink()
         _write_claim(claims_dir, f"{name}.yaml", payload)
         monkeypatch.setattr(module._impl, "claim_registry_lock", original_lock)
-        _assert_maintenance_mutation_holds_lock_through_projection_refresh(
-            module, claims_dir, monkeypatch, operation
-        )
+        _assert_maintenance_mutation_holds_lock_through_projection_refresh(module, claims_dir, monkeypatch, operation)
 
     active = {
         "agent": "codex",
@@ -967,6 +971,39 @@ def test_heartbeat_replace_failure_preserves_existing_claim(
 
     assert claim_path.read_bytes() == original_bytes
     assert list(claims_dir.glob(".*.tmp")) == []
+    assert list(module._impl._claim_write_staging_dir(claims_dir).glob("*.tmp")) == []
+
+
+def test_registry_lock_prunes_only_old_sanctioned_write_artifacts(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A later locked mutation cleans interrupted writes without broad deletion."""
+
+    module = _load_module()
+    claims_dir = tmp_path / "claims"
+    claims_dir.mkdir()
+    monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
+    staging_dir = module._impl._claim_write_staging_dir(claims_dir)
+    staging_dir.mkdir()
+    legacy = claims_dir / ".codex_demo_scope.yaml.interrupted.tmp"
+    staged = staging_dir / ".codex_demo_scope.yaml.interrupted.tmp"
+    fresh = staging_dir / ".codex_demo_scope.yaml.fresh.tmp"
+    unrelated = claims_dir / ".operator-note.tmp"
+    for path in (legacy, staged, fresh, unrelated):
+        path.write_text("partial\n", encoding="utf-8")
+    old = time.time() - module._impl.CLAIM_WRITE_STAGING_MAX_AGE_SECONDS - 1
+    os.utime(legacy, (old, old))
+    os.utime(staged, (old, old))
+    os.utime(unrelated, (old, old))
+
+    with module._impl.claim_registry_lock(claims_dir):
+        pass
+
+    assert not legacy.exists()
+    assert not staged.exists()
+    assert fresh.exists()
+    assert unrelated.exists()
 
 
 def test_heartbeat_claims_refreshes_claude_code_session(
@@ -1143,9 +1180,7 @@ def test_parallel_plan_claims_reject_rootless_duplicate_root_and_wrong_parent() 
         scope="plan0141-write-b",
         claim_type="write",
     )
-    assert module.claim_hierarchy_issues(write_a, active_claims=[write_a, write_b]) == [
-        "missing_program_root"
-    ]
+    assert module.claim_hierarchy_issues(write_a, active_claims=[write_a, write_b]) == ["missing_program_root"]
 
     root_a = _plan_session_claim(
         module,
@@ -1159,9 +1194,7 @@ def test_parallel_plan_claims_reject_rootless_duplicate_root_and_wrong_parent() 
         scope="plan0141-root-b",
         claim_type="program",
     )
-    assert module.claim_hierarchy_issues(root_b, active_claims=[root_a, root_b]) == [
-        "multiple_program_roots"
-    ]
+    assert module.claim_hierarchy_issues(root_b, active_claims=[root_a, root_b]) == ["multiple_program_roots"]
 
     wrong_parent = _plan_session_claim(
         module,
@@ -1224,7 +1257,6 @@ def test_concurrent_program_root_creation_serializes_check_and_write(
     assert sum(1 for ok, _message in results if ok) == 1
     assert sum("multiple_program_roots" in message for _ok, message in results) == 1
     assert len(list(claims_dir.glob("*.yaml"))) == 1
-
 
 
 def test_claim_lifecycle_issues_detect_missing_worktree_on_disk(tmp_path: Path) -> None:
@@ -1432,12 +1464,19 @@ def test_claim_lifecycle_issues_detect_branch_merged_to_default(tmp_path: Path) 
     module = _load_module()
     repo_root = tmp_path / "demo"
     _init_git_repo(repo_root)
-    subprocess.run(["git", "-C", str(repo_root), "checkout", "-b", "plan-92-landed"], check=True, capture_output=True, text=True)
+    subprocess.run(
+        ["git", "-C", str(repo_root), "checkout", "-b", "plan-92-landed"], check=True, capture_output=True, text=True
+    )
     (repo_root / "feature.txt").write_text("feature\n", encoding="utf-8")
     subprocess.run(["git", "-C", str(repo_root), "add", "feature.txt"], check=True, capture_output=True, text=True)
     subprocess.run(["git", "-C", str(repo_root), "commit", "-m", "feature"], check=True, capture_output=True, text=True)
     subprocess.run(["git", "-C", str(repo_root), "checkout", "main"], check=True, capture_output=True, text=True)
-    subprocess.run(["git", "-C", str(repo_root), "merge", "--no-ff", "plan-92-landed", "-m", "merge feature"], check=True, capture_output=True, text=True)
+    subprocess.run(
+        ["git", "-C", str(repo_root), "merge", "--no-ff", "plan-92-landed", "-m", "merge feature"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
 
     claim = module.build_candidate_claim(
         agent="codex",
@@ -1535,12 +1574,19 @@ def test_check_json_fails_high_when_active_claim_branch_is_merged(
     monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
     repo_root = tmp_path / "demo"
     _init_git_repo(repo_root)
-    subprocess.run(["git", "-C", str(repo_root), "checkout", "-b", "plan-107-landed"], check=True, capture_output=True, text=True)
+    subprocess.run(
+        ["git", "-C", str(repo_root), "checkout", "-b", "plan-107-landed"], check=True, capture_output=True, text=True
+    )
     (repo_root / "feature.txt").write_text("feature\n", encoding="utf-8")
     subprocess.run(["git", "-C", str(repo_root), "add", "feature.txt"], check=True, capture_output=True, text=True)
     subprocess.run(["git", "-C", str(repo_root), "commit", "-m", "feature"], check=True, capture_output=True, text=True)
     subprocess.run(["git", "-C", str(repo_root), "checkout", "main"], check=True, capture_output=True, text=True)
-    subprocess.run(["git", "-C", str(repo_root), "merge", "--no-ff", "plan-107-landed", "-m", "merge"], check=True, capture_output=True, text=True)
+    subprocess.run(
+        ["git", "-C", str(repo_root), "merge", "--no-ff", "plan-107-landed", "-m", "merge"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
     _write_claim(
         claims_dir,
         "codex-demo-landed.yaml",
@@ -1658,7 +1704,9 @@ def test_prune_stale_removes_only_mechanically_stale_claims(
     monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
     repo_root = tmp_path / "demo"
     _init_git_repo(repo_root)
-    subprocess.run(["git", "-C", str(repo_root), "branch", "plan-93-healthy"], check=True, capture_output=True, text=True)
+    subprocess.run(
+        ["git", "-C", str(repo_root), "branch", "plan-93-healthy"], check=True, capture_output=True, text=True
+    )
     healthy_worktree = tmp_path / "demo_worktrees" / "plan-93-healthy"
     healthy_worktree.mkdir(parents=True)
 
@@ -1841,9 +1889,7 @@ def test_prune_completed_archives_exact_bytes_before_unlink(
     assert receipt.prune_binding.kind == "live_prune_transaction"
     mutation_receipts = claim_mutation_receipts.load_receipts()
     matching = [
-        event
-        for event in mutation_receipts
-        if event.archive_transaction_id == receipt.prune_binding.transaction_id
+        event for event in mutation_receipts if event.archive_transaction_id == receipt.prune_binding.transaction_id
     ]
     assert len(matching) == 1
     assert matching[0].operation == "prune"
@@ -1978,12 +2024,8 @@ def test_completed_claim_archive_append_is_idempotent_and_rejects_conflict(
         source_bytes=source_bytes,
     )
 
-    first_path, first_appended = (
-        claim_mutation_receipts.append_completed_claim_archive_receipt(receipt)
-    )
-    second_path, second_appended = (
-        claim_mutation_receipts.append_completed_claim_archive_receipt(receipt)
-    )
+    first_path, first_appended = claim_mutation_receipts.append_completed_claim_archive_receipt(receipt)
+    second_path, second_appended = claim_mutation_receipts.append_completed_claim_archive_receipt(receipt)
 
     assert first_path == second_path
     assert first_appended is True
@@ -1996,16 +2038,10 @@ def test_completed_claim_archive_append_is_idempotent_and_rejects_conflict(
         "transaction_id": None,
         "mutation_event_id": "different-event",
     }
-    conflicting_payload["receipt_sha256"] = (
-        claim_mutation_receipts.completed_claim_archive_receipt_sha256(
-            conflicting_payload
-        )
+    conflicting_payload["receipt_sha256"] = claim_mutation_receipts.completed_claim_archive_receipt_sha256(
+        conflicting_payload
     )
-    conflicting = (
-        claim_mutation_receipts.CompletedClaimArchiveReceiptV1.model_validate(
-            conflicting_payload
-        )
-    )
+    conflicting = claim_mutation_receipts.CompletedClaimArchiveReceiptV1.model_validate(conflicting_payload)
     with pytest.raises(ValueError, match="conflicting completed-claim archive"):
         claim_mutation_receipts.append_completed_claim_archive_receipt(conflicting)
 
@@ -2028,11 +2064,7 @@ def test_legacy_completed_claim_backfill_requires_exact_applied_prune_binding(
         sort_keys=False,
     ).encode("utf-8")
     snapshot_path.write_bytes(source_bytes)
-    historical_path = (
-        tmp_path
-        / "historical-claims"
-        / module._claim_filename("codex", "demo", "completed-scope")
-    )
+    historical_path = tmp_path / "historical-claims" / module._claim_filename("codex", "demo", "completed-scope")
     with pytest.raises(ValueError, match="exactly one historical prune event"):
         module._impl.backfill_completed_claim_archive(
             source_claim_snapshot=snapshot_path,
@@ -2062,9 +2094,7 @@ def test_legacy_completed_claim_backfill_requires_exact_applied_prune_binding(
     assert receipt.prune_binding.kind == "legacy_prune_event"
     assert receipt.prune_binding.mutation_event_id == prune_event.event_id
     assert registry_digest(claims_dir) == registry_before
-    assert claim_mutation_receipts.load_completed_claim_archive_receipts() == [
-        receipt
-    ]
+    assert claim_mutation_receipts.load_completed_claim_archive_receipts() == [receipt]
 
 
 @pytest.mark.parametrize(
@@ -2091,11 +2121,7 @@ def test_legacy_completed_claim_backfill_rejects_mismatched_prune_event(
         sort_keys=False,
     ).encode("utf-8")
     snapshot_path.write_bytes(source_bytes)
-    target_path = (
-        tmp_path
-        / "historical"
-        / module._claim_filename("codex", "demo", "completed-scope")
-    )
+    target_path = tmp_path / "historical" / module._claim_filename("codex", "demo", "completed-scope")
     base = {
         "operation": "prune",
         "result": "applied_projection_current",
@@ -2113,9 +2139,7 @@ def test_legacy_completed_claim_backfill_rejects_mismatched_prune_event(
         "projection_current_after": True,
         "error_code": None,
     }
-    event = claim_mutation_receipts.ClaimMutationReceiptV1(
-        **{**base, **mutation_override}
-    )
+    event = claim_mutation_receipts.ClaimMutationReceiptV1(**{**base, **mutation_override})
     claim_mutation_receipts.append_receipt(event)
 
     with pytest.raises(ValueError, match=expected_error):

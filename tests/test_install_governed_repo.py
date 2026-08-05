@@ -73,9 +73,16 @@ MAILBOX_ROLLOUT_PATHS = MAILBOX_COMMON_ROLLOUT_PATHS | {
 
 CLAIM_PROJECTION_REFRESH_PATHS = {
     "enforced_planning/claim_mutation_receipts.py",
+    "enforced_planning/client_session_metadata.py",
     "enforced_planning/coordination_claims.py",
+    "enforced_planning/coordination_messages.py",
+    "enforced_planning/doc_authority.py",
     "enforced_planning/prewrite_claim_fast.py",
     "enforced_planning/prewrite_claim_projection.py",
+    "enforced_planning/push_safety.py",
+    "enforced_planning/session_contracts.py",
+    "enforced_planning/session_lifecycle.py",
+    "enforced_planning/worktree_lifecycle.yaml",
     "enforced_planning/worktree_paths.py",
     "scripts/refresh_prewrite_claim_projection.py",
     "scripts/meta/check_coordination_claims.py",
@@ -362,77 +369,19 @@ def test_claim_projection_refresh_only_is_bounded_and_idempotent(tmp_path: Path)
     for relative in CLAIM_PROJECTION_REFRESH_PATHS:
         assert (tmp_path / relative).is_file()
 
-    # A bounded refresh may intentionally retain an older local lifecycle.
-    # The refreshed wrapper must remain runnable rather than requiring a
-    # broad lifecycle replacement just to support projection refresh.
-    (tmp_path / "enforced_planning" / "session_lifecycle.py").write_text(
-        "\n".join(
-            [
-                '"""Legacy lifecycle fixture."""',
-                'MERGED_DISPOSITION = "merged"',
-                'WORKTREE_DISPOSITIONS = {"merged"}',
-                "def start_session(*, agent, project, scope, intent, repo_root, worktree_path, branch, broader_goal, current_phase, plan_ref=None, allow_unplanned=False, allow_parallel=False, session_id=None, session_name=None, claim_type=None, parent_scope=None, write_paths=None, read_paths=None, intended_next_phases=(), depends_on_repos=(), requires_shared_infra_changes=False, stop_conditions=(), notes=None):",
-                "    return {",
-                "        'action': 'updated',",
-                "        'session_name': session_name or scope,",
-                "        'broader_goal': broader_goal,",
-                "        'tracker_path': 'legacy-tracker.yaml',",
-                "        'coordination_mailbox': {'summary': 'coordination mailbox: unavailable'},",
-                "    }",
-                "def close_session(*, agent, project, scope, worktree_path=None, branch=None, note=None, delete_branch=True, disposition='merged', disposition_reason=None, recovery_ref=None, allow_discard_unique=False):",
-                "    return {",
-                "        'action': 'closed',",
-                "        'worktree_action': 'removed',",
-                "        'branch_action': 'deleted',",
-                "        'disposition': 'merged',",
-                "        'released': True,",
-                "    }",
-                "",
-            ]
-        ),
-        encoding="utf-8",
-    )
-    close_help = subprocess.run(
-        [sys.executable, str(tmp_path / "scripts/meta/session_close.py"), "--help"],
-        cwd=str(tmp_path),
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert close_help.returncode == 0, close_help.stdout + close_help.stderr
-    close_run = subprocess.run(
-        [
-            sys.executable,
-            str(tmp_path / "scripts/meta/session_close.py"),
-            "--agent",
-            "codex",
-            "--project",
-            "demo",
-            "--scope",
-            "legacy-closeout",
-        ],
-        cwd=str(tmp_path),
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert close_run.returncode == 0, close_run.stdout + close_run.stderr
-    assert "closed: worktree=removed branch=deleted" in close_run.stdout
-    start_run = subprocess.run(
-        [
-            sys.executable,
-            str(tmp_path / "scripts/meta/session_start.py"),
-            "--agent", "codex", "--project", "demo", "--scope", "legacy-start",
-            "--intent", "exercise legacy compatibility", "--repo-root", str(tmp_path),
-            "--worktree-path", str(tmp_path / "worktrees" / "legacy-start"),
-            "--branch", "legacy-start", "--broader-goal", "Legacy compatibility",
-            "--current-phase", "verify wrapper", "--work-graph", "ignored.json",
-            "--work-unit-id", "ignored-unit",
-        ],
-        cwd=str(tmp_path), capture_output=True, text=True, check=False,
-    )
-    assert start_run.returncode == 0, start_run.stdout + start_run.stderr
-    assert "updated: legacy-start" in start_run.stdout
+    installed_lifecycle = tmp_path / "enforced_planning" / "session_lifecycle.py"
+    assert installed_lifecycle.read_bytes() == (
+        PROJECT_META_ROOT / "enforced_planning" / "session_lifecycle.py"
+    ).read_bytes()
+    for wrapper in ("session_start.py", "session_close.py"):
+        help_result = subprocess.run(
+            [sys.executable, str(tmp_path / "scripts/meta" / wrapper), "--help"],
+            cwd=str(tmp_path),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert help_result.returncode == 0, help_result.stdout + help_result.stderr
 
     repeat = _run(
         "--repo-root",
@@ -694,6 +643,70 @@ def test_install_governed_repo_dry_run_reports_expected_actions(tmp_path: Path) 
     assert payload["dry_run_mode"] is True
     assert len(payload["actions"]) == len(set(payload["actions"]))
     assert not (tmp_path / "AGENTS.md").exists()
+
+
+def test_install_governed_repo_check_fails_on_managed_drift(tmp_path: Path) -> None:
+    """Check mode must expose stale installed support files without repairing them."""
+
+    _write_minimal_claude(tmp_path)
+    installed = _run(
+        "--repo-root", str(tmp_path), "--write", "--json", cwd=PROJECT_META_ROOT
+    )
+    assert installed.returncode == 0, installed.stdout + installed.stderr
+    renderer = tmp_path / "scripts" / "meta" / "render_agents_md.py"
+    renderer.write_text("# stale installed renderer\n", encoding="utf-8")
+
+    checked = _run(
+        "--repo-root", str(tmp_path), "--check", "--json", cwd=PROJECT_META_ROOT
+    )
+
+    assert checked.returncode == 1
+    payload = json.loads(checked.stdout)
+    assert "sync:scripts/meta/render_agents_md.py" in payload["actions"]
+    assert renderer.read_text(encoding="utf-8") == "# stale installed renderer\n"
+
+
+def test_installed_agents_tools_run_from_linked_worktree(tmp_path: Path) -> None:
+    """Installed render/check entrypoints must resolve local runtime in a worktree."""
+
+    repo_root = tmp_path / "consumer"
+    repo_root.mkdir()
+    _write_minimal_claude(repo_root)
+    installed = _run(
+        "--repo-root", str(repo_root), "--write", "--json", cwd=PROJECT_META_ROOT
+    )
+    assert installed.returncode == 0, installed.stdout + installed.stderr
+    for command in (
+        ["git", "init", "-b", "main"],
+        ["git", "config", "user.email", "test@example.com"],
+        ["git", "config", "user.name", "Test User"],
+        ["git", "add", "."],
+        ["git", "commit", "-m", "initial"],
+    ):
+        result = subprocess.run(
+            command, cwd=repo_root, capture_output=True, text=True, check=False
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+
+    linked = repo_root / "worktrees" / "portability-probe"
+    result = subprocess.run(
+        ["git", "worktree", "add", "-b", "portability-probe", str(linked)],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+    for script in ("render_agents_md.py", "check_agents_sync.py"):
+        result = subprocess.run(
+            [sys.executable, str(linked / "scripts" / "meta" / script), "--help"],
+            cwd=linked,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
 
 
 def test_installer_blocks_write_when_target_runtime_lacks_yaml(tmp_path: Path) -> None:

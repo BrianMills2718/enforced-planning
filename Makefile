@@ -109,6 +109,7 @@ WORKTREE_REVIEW_CLAIM_SCRIPT := scripts/meta/worktree-coordination/create_review
 WORKTREE_RAISE_CONCERN_SCRIPT := scripts/meta/worktree-coordination/raise_concern.py
 WORKTREE_PLAN_READINESS_SCRIPT := scripts/check_plan_readiness.py
 WORKTREE_DIR ?= $(shell python "$(WORKTREE_CREATE_SCRIPT)" --repo-root . --print-default-worktree-dir)
+WORKTREE_REPO_ROOT ?= $(shell git rev-parse --path-format=absolute --git-common-dir 2>/dev/null | sed 's|/\.git$$||')
 WORKTREE_START_POINT ?= HEAD
 WORKTREE_PROJECT ?= $(shell python "$(WORKTREE_CREATE_SCRIPT)" --repo-root . --print-canonical-project)
 WORKTREE_AGENT ?= $(shell if [ -n "$$CODEX_THREAD_ID" ]; then printf codex; elif [ -n "$$CLAUDE_SESSION_ID" ] || [ -n "$$CLAUDE_CODE_SSE_PORT" ]; then printf claude-code; elif [ -n "$$OPENCLAW_SESSION_ID" ] || [ -n "$$OPENCLAW_RUN_ID" ]; then printf openclaw; fi)
@@ -203,7 +204,7 @@ endif
 		--scope "$(BRANCH)" \
 		--intent "$(TASK)" \
 		--claim-type "$(SESSION_CLAIM_TYPE)" \
-		--repo-root "$(CURDIR)" \
+		--repo-root "$(WORKTREE_REPO_ROOT)" \
 		--branch "$(BRANCH)" \
 		--worktree-path "$(WORKTREE_DIR)/$(BRANCH)" \
 		--session-name "$(SESSION_GOAL)" \
@@ -224,7 +225,7 @@ endif
 		--project "$(WORKTREE_PROJECT)" \
 		--scope "$(BRANCH)" \
 		--intent "$(TASK)" \
-		--repo-root "$(CURDIR)" \
+		--repo-root "$(WORKTREE_REPO_ROOT)" \
 		--worktree-path "$(WORKTREE_DIR)/$(BRANCH)" \
 		--branch "$(BRANCH)" \
 		--broader-goal "$(SESSION_GOAL)" \
@@ -273,7 +274,7 @@ endif
 		--project "$(WORKTREE_PROJECT)" \
 		--scope "$(BRANCH)" \
 		--intent "$(TASK)" \
-		--repo-root "$(CURDIR)" \
+		--repo-root "$(WORKTREE_REPO_ROOT)" \
 		--worktree-path "$(WORKTREE_DIR)/$(BRANCH)" \
 		--branch "$(BRANCH)" \
 		--broader-goal "$(SESSION_GOAL)" \

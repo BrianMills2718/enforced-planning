@@ -18,8 +18,14 @@ from typing import Any
 
 import yaml  # type: ignore[import-untyped]
 
-from enforced_planning import coordination_claims, coordination_messages, push_safety, session_contracts
-from enforced_planning import doc_authority
+from enforced_planning import (
+    claim_mutation_receipts,
+    coordination_claims,
+    coordination_messages,
+    doc_authority,
+    push_safety,
+    session_contracts,
+)
 from enforced_planning.worktree_paths import resolve_canonical_repo_root
 
 
@@ -154,8 +160,7 @@ def _validate_missing_worktree_reconciliation(
 
     if claim.status != coordination_claims.SESSION_ENDED_STATUS:
         raise ValueError(
-            "Missing-worktree reconciliation requires an exact session_ended claim; "
-            f"found {claim.status!r}."
+            f"Missing-worktree reconciliation requires an exact session_ended claim; found {claim.status!r}."
         )
     if not claim.worktree_path:
         raise ValueError("Missing-worktree reconciliation requires a recorded worktree path")
@@ -167,9 +172,7 @@ def _validate_missing_worktree_reconciliation(
         )
     expected_digest = (expected_tracker_sha256 or "").strip().lower()
     if not re.fullmatch(r"[0-9a-f]{64}", expected_digest):
-        raise ValueError(
-            "Missing-worktree reconciliation requires --tracker-sha256 as a SHA-256 digest."
-        )
+        raise ValueError("Missing-worktree reconciliation requires --tracker-sha256 as a SHA-256 digest.")
     trackers = _exact_tracker_candidates(claim)
     if not trackers:
         raise ValueError("Missing-worktree reconciliation requires one exact session tracker")
@@ -301,6 +304,38 @@ def _write_claim_payload(path: Path, payload: dict[str, Any]) -> None:
     coordination_claims._atomic_write_claim(path, payload)
 
 
+def _apply_claim_payload_updates(
+    *,
+    claim: coordination_claims.ClaimRecord,
+    claim_file: Path,
+    updates: dict[str, Any],
+    operation: claim_mutation_receipts.MutationOperation = "session_upsert",
+) -> dict[str, Any]:
+    """Apply one lifecycle mutation and refresh its projection under one lock."""
+
+    with coordination_claims.claim_registry_lock(coordination_claims.CLAIMS_DIR):
+        registry_digest_before = coordination_claims._registry_digest(coordination_claims.CLAIMS_DIR)
+        current = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
+        if not isinstance(current, dict):
+            raise ValueError(f"Claim file at {claim_file} must be a YAML mapping")
+        current.update(updates)
+        _write_claim_payload(claim_file, current)
+        _projection_path, projection_digest_after = coordination_claims.refresh_prewrite_authority_projection(
+            coordination_claims.CLAIMS_DIR
+        )
+        coordination_claims.record_claim_mutation(
+            operation=operation,
+            claims_dir=coordination_claims.CLAIMS_DIR,
+            registry_digest_before=registry_digest_before,
+            target_project=claim.primary_project(),
+            target_scope=claim.scope,
+            target_claim_path=claim_file,
+            session_id=current.get("session_id"),
+            projection_digest_after=projection_digest_after,
+        )
+    return current
+
+
 def _upsert_session_claim(
     *,
     agent: str,
@@ -359,11 +394,10 @@ def _upsert_session_claim(
         return "created"
 
     with coordination_claims.claim_registry_lock():
+        registry_digest_before = coordination_claims._registry_digest(coordination_claims.CLAIMS_DIR)
         refreshed_payload = _load_claim_payload(agent, project, scope)
         if refreshed_payload is None:
-            raise ValueError(
-                f"Claim at {path} disappeared during session activation; retry session start"
-            )
+            raise ValueError(f"Claim at {path} disappeared during session activation; retry session start")
         existing = coordination_claims.normalize_claim(
             refreshed_payload,
             source_file=str(path),
@@ -373,9 +407,7 @@ def _upsert_session_claim(
         if existing.agent != agent:
             raise ValueError(f"Claim at {path} belongs to {existing.agent}, not {agent}")
         if existing.session_id and existing.session_id != session_id:
-            raise ValueError(
-                f"Claim at {path} belongs to session {existing.session_id}, not {session_id}"
-            )
+            raise ValueError(f"Claim at {path} belongs to session {existing.session_id}, not {session_id}")
 
         effective_claim_type = claim_type or existing.claim_type
         effective_write_paths = existing.write_paths if write_paths is None else write_paths
@@ -415,9 +447,7 @@ def _upsert_session_claim(
             work_unit_id=effective_work_unit_id,
             work_graph_sha256=work_graph_sha256,
             approval_revisions=approval_revisions,
-            parallel_root_authorized=(
-                allow_parallel or existing.parallel_root_authorized
-            ),
+            parallel_root_authorized=(allow_parallel or existing.parallel_root_authorized),
         )
         coordination_claims.validate_claim_hierarchy_for_creation(
             candidate,
@@ -461,6 +491,19 @@ def _upsert_session_claim(
             "parallel_root_authorized": candidate.parallel_root_authorized,
         }
         _write_claim_payload(path, payload)
+        _projection_path, projection_digest_after = coordination_claims.refresh_prewrite_authority_projection(
+            coordination_claims.CLAIMS_DIR
+        )
+        coordination_claims.record_claim_mutation(
+            operation="session_upsert",
+            claims_dir=coordination_claims.CLAIMS_DIR,
+            registry_digest_before=registry_digest_before,
+            target_project=project,
+            target_scope=scope,
+            target_claim_path=path,
+            session_id=session_id,
+            projection_digest_after=projection_digest_after,
+        )
     return "updated"
 
 
@@ -636,9 +679,7 @@ def _is_ancestor(repo_root: Path, ancestor_ref: str, descendant_ref: str) -> boo
 def _patch_without_blob_identity(patch: bytes) -> bytes:
     """Remove only full-index blob IDs while preserving the complete patch body."""
 
-    return b"".join(
-        line for line in patch.splitlines(keepends=True) if not line.startswith(b"index ")
-    )
+    return b"".join(line for line in patch.splitlines(keepends=True) if not line.startswith(b"index "))
 
 
 def _squash_merge_matches_branch(
@@ -650,9 +691,7 @@ def _squash_merge_matches_branch(
 ) -> bool:
     """Prove a one-parent merge commit carries exactly the task branch patch."""
 
-    if not _ref_exists(repo_root, merge_commit) or not _is_ancestor(
-        repo_root, merge_commit, default_ref
-    ):
+    if not _ref_exists(repo_root, merge_commit) or not _is_ancestor(repo_root, merge_commit, default_ref):
         return False
     parents = subprocess.run(
         ["git", "rev-list", "--parents", "-n", "1", merge_commit],
@@ -682,11 +721,7 @@ def _squash_merge_matches_branch(
             capture_output=True,
             check=False,
         )
-        return (
-            _patch_without_blob_identity(result.stdout)
-            if result.returncode == 0
-            else None
-        )
+        return _patch_without_blob_identity(result.stdout) if result.returncode == 0 else None
 
     branch_patch = patch(merge_base.stdout.strip(), branch_ref)
     merged_patch = patch(merge_parent, merge_commit)
@@ -709,13 +744,10 @@ def _validate_closeout_preflight(
     normalized_disposition = disposition.strip().lower()
     if normalized_disposition not in WORKTREE_DISPOSITIONS:
         supported = ", ".join(sorted(WORKTREE_DISPOSITIONS))
-        raise ValueError(
-            f"Unsupported worktree disposition '{disposition}'. Supported values: {supported}"
-        )
+        raise ValueError(f"Unsupported worktree disposition '{disposition}'. Supported values: {supported}")
     if normalized_disposition in NON_CLOSEABLE_DISPOSITIONS:
         raise ValueError(
-            f"Disposition '{normalized_disposition}' does not permit session-close; "
-            "keep or hand off the lane instead."
+            f"Disposition '{normalized_disposition}' does not permit session-close; keep or hand off the lane instead."
         )
     if not branch:
         raise ValueError("session-close requires a branch for merge/disposition validation")
@@ -742,9 +774,7 @@ def _validate_closeout_preflight(
             "or create a local main/master ref before closeout."
         )
     if branch == default_branch:
-        raise ValueError(
-            f"Refusing to close the canonical default branch '{default_branch}' as a task lane."
-        )
+        raise ValueError(f"Refusing to close the canonical default branch '{default_branch}' as a task lane.")
 
     branch_ref = f"refs/heads/{branch}"
     default_ref = f"refs/heads/{default_branch}"
@@ -752,27 +782,15 @@ def _validate_closeout_preflight(
     remote_default_exists = _ref_exists(repo_root, default_remote_ref)
     merged_to_local_default = _is_ancestor(repo_root, branch_ref, default_ref)
     merged_to_remote_default = (
-        _is_ancestor(repo_root, branch_ref, default_remote_ref)
-        if remote_default_exists
-        else None
+        _is_ancestor(repo_root, branch_ref, default_remote_ref) if remote_default_exists else None
     )
-    merged_to_default = (
-        merged_to_remote_default
-        if merged_to_remote_default is not None
-        else merged_to_local_default
-    )
-    default_branch_pushed = (
-        _is_ancestor(repo_root, default_ref, default_remote_ref)
-        if remote_default_exists
-        else None
-    )
+    merged_to_default = merged_to_remote_default if merged_to_remote_default is not None else merged_to_local_default
+    default_branch_pushed = _is_ancestor(repo_root, default_ref, default_remote_ref) if remote_default_exists else None
     if normalized_disposition == MERGED_DISPOSITION:
         normalized_merge_commit = merge_commit.strip() if merge_commit else None
         merge_evidence = "branch_ancestor" if merged_to_default else None
         if not merged_to_default and normalized_merge_commit:
-            canonical_default_ref = (
-                default_remote_ref if remote_default_exists else default_ref
-            )
+            canonical_default_ref = default_remote_ref if remote_default_exists else default_ref
             if _squash_merge_matches_branch(
                 repo_root,
                 branch_ref=branch_ref,
@@ -817,19 +835,14 @@ def _validate_closeout_preflight(
             force_delete_branch=delete_branch,
         )
 
-    if normalized_disposition not in (
-        RECOVERY_REQUIRED_DISPOSITIONS | DISCARD_AUTHORIZATION_DISPOSITIONS
-    ):
+    if normalized_disposition not in (RECOVERY_REQUIRED_DISPOSITIONS | DISCARD_AUTHORIZATION_DISPOSITIONS):
         raise ValueError(f"Disposition '{normalized_disposition}' is not a terminal closeout state.")
     if merged_to_default:
         raise ValueError(
-            f"Branch '{branch}' is already integrated into '{default_branch}'; "
-            f"use disposition '{MERGED_DISPOSITION}'."
+            f"Branch '{branch}' is already integrated into '{default_branch}'; use disposition '{MERGED_DISPOSITION}'."
         )
     if not disposition_reason or not disposition_reason.strip():
-        raise ValueError(
-            f"Disposition '{normalized_disposition}' requires --disposition-reason."
-        )
+        raise ValueError(f"Disposition '{normalized_disposition}' requires --disposition-reason.")
 
     normalized_recovery_ref = recovery_ref.strip() if recovery_ref else None
     if normalized_disposition in DISCARD_AUTHORIZATION_DISPOSITIONS:
@@ -849,9 +862,7 @@ def _validate_closeout_preflight(
         if not _ref_exists(repo_root, normalized_recovery_ref):
             raise ValueError(f"Recovery ref '{normalized_recovery_ref}' does not resolve to a commit.")
         if not _is_ancestor(repo_root, branch_ref, normalized_recovery_ref):
-            raise ValueError(
-                f"Recovery ref '{normalized_recovery_ref}' does not contain branch '{branch}'."
-            )
+            raise ValueError(f"Recovery ref '{normalized_recovery_ref}' does not contain branch '{branch}'.")
 
     return CloseoutPreflight(
         disposition=normalized_disposition,
@@ -887,6 +898,31 @@ def _remove_worktree_path(repo_root: Path, worktree_path: Path) -> str:
     if result.returncode != 0:
         raise RuntimeError((result.stderr or result.stdout).strip())
     return "removed"
+
+
+def _assert_worktree_removal_access(worktree_path: Path) -> None:
+    """Fail before Git mutation when the current user cannot remove a tree.
+
+    ``git worktree remove`` can unregister a worktree before recursive
+    filesystem deletion encounters a read-only cache directory.  Check the
+    directory permissions that govern unlinking first so a predictable access
+    failure leaves both the Git registry and coordination claim untouched.
+    """
+
+    if not worktree_path.exists():
+        return
+    directories = [worktree_path.parent]
+    directories.extend(Path(root) for root, _dirs, _files in os.walk(worktree_path))
+    blocked = sorted(str(path) for path in directories if not os.access(path, os.W_OK | os.X_OK))
+    if blocked:
+        preview = ", ".join(blocked[:5])
+        if len(blocked) > 5:
+            preview += f", ... ({len(blocked)} total)"
+        raise PermissionError(
+            "Worktree removal blocked before Git registry mutation; "
+            "the current user cannot recursively remove: "
+            f"{preview}. Repair or preserve those paths, then retry session-close."
+        )
 
 
 def _delete_branch(repo_root: Path, branch: str | None, *, force: bool = False) -> str:
@@ -1111,16 +1147,9 @@ def status_sessions(
     )
     if include_ended:
         all_claims = [
-            claim
-            for claim in all_claims
-            if claim.is_live()
-            or claim.status == coordination_claims.SESSION_ENDED_STATUS
+            claim for claim in all_claims if claim.is_live() or claim.status == coordination_claims.SESSION_ENDED_STATUS
         ]
-    project_claims = [
-        claim
-        for claim in all_claims
-        if not project or project in claim.projects
-    ]
+    project_claims = [claim for claim in all_claims if not project or project in claim.projects]
     matching_claims = [
         claim
         for claim in project_claims
@@ -1133,9 +1162,7 @@ def status_sessions(
         session_roots = [
             item
             for item in all_claims
-            if item.session_id == claim.session_id
-            and item.claim_type == "program"
-            and not item.parent_scope
+            if item.session_id == claim.session_id and item.claim_type == "program" and not item.parent_scope
         ]
         tracker_payload: dict[str, Any] | None = None
         if claim.tracker_path:
@@ -1161,16 +1188,9 @@ def status_sessions(
                 "parent_scope": claim.parent_scope,
                 "parallel_root_authorized": claim.parallel_root_authorized,
                 "session_root_count": len(session_roots),
-                "session_root_identities": [
-                    f"{item.primary_project()}:{item.scope}"
-                    for item in session_roots
-                ],
+                "session_root_identities": [f"{item.primary_project()}:{item.scope}" for item in session_roots],
                 "hierarchy_role": (
-                    "child"
-                    if claim.parent_scope
-                    else "root"
-                    if claim.claim_type == "program"
-                    else "standalone"
+                    "child" if claim.parent_scope else "root" if claim.claim_type == "program" else "standalone"
                 ),
                 "session_id": claim.session_id,
                 "session_name": claim.session_name,
@@ -1183,9 +1203,15 @@ def status_sessions(
                 ),
                 "health_issues": health_issues,
                 "current_phase": tracker_section.get("current_phase") if isinstance(tracker_section, dict) else None,
-                "intended_next_phases": tracker_section.get("intended_next_phases") if isinstance(tracker_section, dict) else [],
-                "depends_on_repos": tracker_section.get("depends_on_repos") if isinstance(tracker_section, dict) else [],
-                "requires_shared_infra_changes": tracker_section.get("requires_shared_infra_changes") if isinstance(tracker_section, dict) else False,
+                "intended_next_phases": tracker_section.get("intended_next_phases")
+                if isinstance(tracker_section, dict)
+                else [],
+                "depends_on_repos": tracker_section.get("depends_on_repos")
+                if isinstance(tracker_section, dict)
+                else [],
+                "requires_shared_infra_changes": tracker_section.get("requires_shared_infra_changes")
+                if isinstance(tracker_section, dict)
+                else False,
                 "stop_conditions": tracker_section.get("stop_conditions") if isinstance(tracker_section, dict) else [],
                 "notes": tracker_section.get("notes") if isinstance(tracker_section, dict) else None,
                 "tracker_updated_at": timestamps.get("updated_at") if isinstance(timestamps, dict) else None,
@@ -1210,13 +1236,11 @@ def end_runtime_session(
 ) -> dict[str, Any]:
     """Detach a terminated runtime from every exact-session live claim."""
 
-    count, identities, resolved_session_id, ended_at = (
-        coordination_claims.end_session_claims(
-            agent=agent,
-            session_id=session_id,
-            reason=reason,
-            claims_dir=claims_dir,
-        )
+    count, identities, resolved_session_id, ended_at = coordination_claims.end_session_claims(
+        agent=agent,
+        session_id=session_id,
+        reason=reason,
+        claims_dir=claims_dir,
     )
     for claim in coordination_claims.list_claims(
         claims_dir=claims_dir,
@@ -1287,10 +1311,15 @@ def finish_session(
                 "Worktree is dirty; commit or stash before session-finish, "
                 "or pass --allow-dirty-handoff with a handoff note."
             )
-        payload["status"] = "handoff"
-        payload["updated_at"] = updated_at
-        payload["notes"] = note or "handoff required because the worktree still has uncommitted changes"
-        _write_claim_payload(claim_file, payload)
+        payload = _apply_claim_payload_updates(
+            claim=claim,
+            claim_file=claim_file,
+            updates={
+                "status": "handoff",
+                "updated_at": updated_at,
+                "notes": note or "handoff required because the worktree still has uncommitted changes",
+            },
+        )
         return {
             "action": "handoff",
             "clean": False,
@@ -1308,25 +1337,16 @@ def finish_session(
             "tracker_path": tracker_path_text,
         }
 
-    payload["status"] = "completed"
-    payload["updated_at"] = updated_at
-    payload["notes"] = note or "session finished cleanly"
-    with coordination_claims.claim_registry_lock(coordination_claims.CLAIMS_DIR):
-        registry_digest_before = coordination_claims._registry_digest(coordination_claims.CLAIMS_DIR)
-        _write_claim_payload(claim_file, payload)
-        _projection_path, projection_digest_after = coordination_claims.refresh_prewrite_authority_projection(
-            coordination_claims.CLAIMS_DIR
-        )
-        coordination_claims.record_claim_mutation(
-            operation="closeout",
-            claims_dir=coordination_claims.CLAIMS_DIR,
-            registry_digest_before=registry_digest_before,
-            target_project=claim.primary_project(),
-            target_scope=claim.scope,
-            target_claim_path=claim_file,
-            session_id=claim.session_id,
-            projection_digest_after=projection_digest_after,
-        )
+    _apply_claim_payload_updates(
+        claim=claim,
+        claim_file=claim_file,
+        operation="closeout",
+        updates={
+            "status": "completed",
+            "updated_at": updated_at,
+            "notes": note or "session finished cleanly",
+        },
+    )
     return {
         "action": "completed",
         "clean": True,
@@ -1366,9 +1386,7 @@ def close_session(
         mailbox_disposition=mailbox_disposition,
         mailbox_note=mailbox_note,
     )
-    resolved_worktree_path = Path(
-        worktree_path or claim.worktree_path or ""
-    ).expanduser()
+    resolved_worktree_path = Path(worktree_path or claim.worktree_path or "").expanduser()
     resolved_branch = branch or claim.branch
     repo_root = _resolve_claim_repo_root(claim)
     updated_at = datetime.now(timezone.utc).isoformat()
@@ -1408,9 +1426,9 @@ def close_session(
         clean, dirty_details = _worktree_is_clean(str(resolved_worktree_path))
         if not clean:
             raise ValueError(
-                "Worktree is dirty; commit or stash before session-close. "
-                f"Uncommitted state:\n{dirty_details}"
+                f"Worktree is dirty; commit or stash before session-close. Uncommitted state:\n{dirty_details}"
             )
+        _assert_worktree_removal_access(resolved_worktree_path)
 
     preflight = _validate_closeout_preflight(
         repo_root=repo_root,
@@ -1483,11 +1501,7 @@ def close_session(
     payload["updated_at"] = closed_at
     payload["notes"] = note or (
         f"closed claimed lane with disposition={preflight.disposition}"
-        + (
-            f"; reason={disposition_reason.strip()}"
-            if disposition_reason and disposition_reason.strip()
-            else ""
-        )
+        + (f"; reason={disposition_reason.strip()}" if disposition_reason and disposition_reason.strip() else "")
     )
     with coordination_claims.claim_registry_lock(coordination_claims.CLAIMS_DIR):
         registry_digest_before = coordination_claims._registry_digest(coordination_claims.CLAIMS_DIR)
@@ -1545,9 +1559,7 @@ def resume_session(
         scope=scope,
     )
     if claim.status not in coordination_claims.CLOSEABLE_STATUSES:
-        raise ValueError(
-            f"Cannot resume lane from lifecycle status {claim.status!r}"
-        )
+        raise ValueError(f"Cannot resume lane from lifecycle status {claim.status!r}")
     if not claim.plan_ref:
         raise ValueError("Cannot resume a lane with no plan_ref")
     if claim.branch and claim.branch != branch:
@@ -1560,12 +1572,17 @@ def resume_session(
         raise ValueError("Unable to resolve a session ID for session-resume.")
 
     updated_at = datetime.now(timezone.utc).isoformat()
-    payload["status"] = "active"
-    payload["session_id"] = resolved_session_id
-    payload["heartbeat_at"] = updated_at
-    payload["updated_at"] = updated_at
-    payload["notes"] = note or "session resumed with a fresh runtime attachment"
-    _write_claim_payload(claim_file, payload)
+    payload = _apply_claim_payload_updates(
+        claim=claim,
+        claim_file=claim_file,
+        updates={
+            "status": "active",
+            "session_id": resolved_session_id,
+            "heartbeat_at": updated_at,
+            "updated_at": updated_at,
+            "notes": note or "session resumed with a fresh runtime attachment",
+        },
+    )
 
     tracker_path_text = claim.tracker_path
     if tracker_path_text:
@@ -1608,10 +1625,15 @@ def handoff_session(
     if payload is None:
         raise ValueError(f"Claim file missing for {agent} → {project}:{scope}")
 
-    payload["status"] = "handoff"
-    payload["updated_at"] = updated_at
-    payload["notes"] = note.strip()
-    _write_claim_payload(claim_file, payload)
+    payload = _apply_claim_payload_updates(
+        claim=claim,
+        claim_file=claim_file,
+        updates={
+            "status": "handoff",
+            "updated_at": updated_at,
+            "notes": note.strip(),
+        },
+    )
 
     tracker_path_text = claim.tracker_path
     if tracker_path_text:
@@ -1646,10 +1668,15 @@ def abandon_session(
     if payload is None:
         raise ValueError(f"Claim file missing for {agent} → {project}:{scope}")
 
-    payload["status"] = "abandoned"
-    payload["updated_at"] = updated_at
-    payload["notes"] = note.strip()
-    _write_claim_payload(claim_file, payload)
+    payload = _apply_claim_payload_updates(
+        claim=claim,
+        claim_file=claim_file,
+        updates={
+            "status": "abandoned",
+            "updated_at": updated_at,
+            "notes": note.strip(),
+        },
+    )
 
     tracker_path_text = claim.tracker_path
     if tracker_path_text:

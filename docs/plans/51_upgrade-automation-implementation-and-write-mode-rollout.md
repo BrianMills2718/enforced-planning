@@ -1,6 +1,6 @@
 # Plan #51: Upgrade Automation Implementation and Write-Mode Rollout
 
-**Status:** ✅ Complete (implementation shipped 2026-04-05; write-mode rollout deferred pending Mac mini pilot)
+**Status:** 🟡 Partial (dry-run shipped; unsafe direct-primary write mode disabled 2026-08-03)
 **Type:** implementation
 **Priority:** High
 **Blocked By:** Plan #20 (design)
@@ -47,7 +47,7 @@ pass is the trigger for write-mode rollout consideration.
 | Flag | Effect |
 |------|--------|
 | `--dry-run` | Default; never modifies files |
-| `--write` | Apply changes (blocked if repo has local dirt) |
+| `--write` | Fails closed until claimed-worktree orchestration is implemented |
 | `--repo REPO_ID` | Upgrade one repo by ID |
 | `--json` | Machine-readable JSON output |
 | `--registry PATH` | Path to governed_repos.yaml (default: governed_repos.yaml) |
@@ -83,8 +83,13 @@ All 16 repos passed dry-run with correct classification and no unexpected blocke
 
 ## Write-Mode Rollout (Phase 9 — Deferred)
 
-Write-mode rollout is **not yet executed**. The trigger is the Mac mini continuous-automation
-pilot (see ROADMAP.md Phase 9). Rollout sequence when triggered:
+Write-mode rollout is **not yet executed**. On 2026-08-03, audit confirmed the
+implemented command wrote the full installer directly into primary checkouts
+without claims, linked worktrees, commits, publication receipts, or sanctioned
+closeout. `--write` now fails closed. The trigger is no longer only the Mac mini
+pilot: the CLI must first implement the accepted worktree sequence in the design.
+
+Rollout sequence when re-enabled:
 
 1. Run `python scripts/upgrade_governed_repos.py --registry governed_repos.yaml --write --repo <one repo>` on a low-risk repo first
 2. Verify audit passes and no unexpected mutations

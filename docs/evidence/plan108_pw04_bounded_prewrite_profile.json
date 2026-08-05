@@ -1,0 +1,18 @@
+{
+  "schema_version": "1.0",
+  "plan": "108",
+  "work_unit": "prewrite-pw-04-governed-fleet-enforcement",
+  "subpacket": "bounded-prewrite-profile",
+  "purpose": "Prevent a pre-write-enforcement rollout from synchronizing unrelated governed-repository support surfaces.",
+  "interface": "python scripts/generate_hook_wiring.py --repo-root <target> --profile prewrite-claim [--write] --json",
+  "guarantees": [
+    "Requires claims.prewrite_mode to be observe or enforce.",
+    "Synchronizes only native pre-write gate scripts, their runtime support, and preserving Claude/Codex hook entries.",
+    "Does not add read-gating, relationship-context, or mailbox wiring."
+  ],
+  "verification": {
+    "command": "python -m pytest -q tests/test_generate_hook_wiring.py",
+    "result": "12 passed",
+    "negative_control": "The profile refused Theory Forge while its mode remained off, before writing any file."
+  }
+}

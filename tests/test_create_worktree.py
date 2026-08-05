@@ -117,6 +117,41 @@ def test_create_worktree_creates_clean_temp_repo_worktree(tmp_path: Path) -> Non
     assert delete_branch.returncode == 0, delete_branch.stdout + delete_branch.stderr
 
 
+def test_create_worktree_excludes_required_nested_container_from_canonical_status(
+    tmp_path: Path,
+) -> None:
+    """A sanctioned nested worktree must not make the canonical checkout dirty."""
+
+    module = _load_module()
+    repo_root = tmp_path / "repo"
+    worktree_path = repo_root / "worktrees" / "plan-39-nested"
+    _init_temp_repo(repo_root)
+
+    result = module.create_worktree(
+        repo_root=repo_root,
+        worktree_path=worktree_path,
+        branch="plan-39-nested",
+        start_point="HEAD",
+        split_brain_threshold=5,
+        keep_failed_worktree=False,
+    )
+
+    assert result.ok, result.message
+    canonical_status = _run_git(repo_root, "status", "--porcelain", "--untracked-files=all")
+    assert canonical_status.returncode == 0
+    assert canonical_status.stdout == ""
+    exclude_path = repo_root / ".git" / "info" / "exclude"
+    assert exclude_path.read_text(encoding="utf-8").splitlines().count("/worktrees/") == 1
+
+    assert module.ensure_default_worktree_container_excluded(repo_root, worktree_path)
+    assert exclude_path.read_text(encoding="utf-8").splitlines().count("/worktrees/") == 1
+
+    cleanup_result = _run_git(repo_root, "worktree", "remove", "--force", str(worktree_path))
+    assert cleanup_result.returncode == 0, cleanup_result.stdout + cleanup_result.stderr
+    delete_branch = _run_git(repo_root, "branch", "-D", "plan-39-nested")
+    assert delete_branch.returncode == 0, delete_branch.stdout + delete_branch.stderr
+
+
 
 def test_create_worktree_cleans_up_detected_dirty_initial_state(
     tmp_path: Path,

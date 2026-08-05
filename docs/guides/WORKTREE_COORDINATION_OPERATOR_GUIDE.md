@@ -55,6 +55,13 @@ or missing projection is an observe violation and an enforce denial; do not
 promote a repository to `enforce` while any active claim writer still uses a
 legacy mutation path that does not refresh the projection.
 
+Sanctioned claim writers stage atomic replacements in a same-filesystem sibling
+directory outside the live registry. While holding the registry lock, writers
+remove abandoned sanctioned staging files older than five minutes, including
+strictly recognized legacy staging files in the registry; unrelated files are
+left untouched. Session resume, handoff, abandon, and finish update the claim
+and refresh the pre-write projection in the same locked mutation.
+
 ## Default Flow
 
 1. Keep the canonical repo checkout clean and on its canonical default branch,
@@ -569,6 +576,13 @@ reason and `WORKTREE_ALLOW_DISCARD_UNIQUE=1`. `active` and `handoff` are valid
 lane dispositions but are not valid `session-close` outcomes because their
 work remains live.
 
+Before changing the Git worktree registry, `session-close` verifies that the
+current user can traverse and write every directory needed for recursive
+removal. Read-only dependency trees and root-owned caches fail at this
+preflight, leaving the worktree registration and claim unchanged. Preserve or
+repair the reported path, then retry; do not manually remove `.git/worktrees`
+metadata to work around the failure.
+
 Successful closeout retains the claim YAML with `status: completed`, the
 disposition, default-branch result, reason, recovery ref when used, and close
 timestamp. It is no longer active coordination state. Explicit
@@ -635,6 +649,21 @@ disposition and note placeholders truthfully, then run it before crossing the
 next natural work boundary. The notice intentionally repeats on later lifecycle
 events until the acknowledgement receipt exists.
 
+Host mailbox adapters enforce two boundaries after a notice is visible:
+
+- `PreToolUse` denies the common mutation tools (`Bash`, `Edit`, `Write`, and
+  `apply_patch`) while a displayed message remains active. One structurally
+  exact acknowledgement command for that session and message remains allowed.
+- `Stop` denies final-response delivery while any displayed message remains
+  active. The client resumes the same turn so the agent can record a truthful
+  disposition.
+
+Read-only investigation remains available, and neither gate chooses a
+disposition automatically. Each denied boundary appends an idempotent boundary
+record with the native event identity; acknowledgement results expose elapsed
+response time. These records expose ignored notices and response latency
+without changing claim authority or historical receipt schemas.
+
 Observation and acknowledgement are distinct append-only receipts. An
 `observed` receipt proves only that the message was exposed to the session; it
 does not satisfy this response rule. Claims remain the write-ownership source,
@@ -650,7 +679,10 @@ mutation. If normal disposition is impossible, closeout supports only an
 explicit durable `deferred` acknowledgement with a note; the successor still
 needs a separately routed handoff. If polling is unavailable, follow the
 degraded-mailbox rule in the workspace instructions and record the limitation;
-never fabricate an acknowledgement.
+never fabricate an acknowledgement. An adapter failure emits a visible warning
+but cannot truthfully assert mailbox debt or manufacture a block. The agent must
+not cross a boundary when a live-agent decision may be pending until canonical
+polling is restored.
 
 ## What Coordination Does And Does Not Do
 
@@ -662,9 +694,9 @@ What it does:
 - makes in-flight architectural decisions visible through `agent_memory` (query: `agent-memory recall 'active decisions' --project {project}`)
 - persists immutable cross-client messages and append-only observation and
   acknowledgement receipts beside the canonical claim registry
-- injects mailbox notices into shared session start, resume, and heartbeat
-  responses; Claude additionally polls after governed read boundaries; Codex
-  polls on native session start, user prompt, and post-tool lifecycle events
+- injects mailbox notices at native session start, user prompt, and post-tool
+  lifecycle events; both supported clients enforce mutation and final-response
+  boundaries with `PreToolUse` and `Stop`
 
 What it does not do:
 

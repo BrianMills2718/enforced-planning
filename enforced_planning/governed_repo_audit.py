@@ -70,20 +70,22 @@ def _load_repo_render_module(repo_root: Path) -> tuple[Any, Any]:
     for candidate in candidates:
         if not candidate.exists():
             continue
-        module_name = "_repo_render_agents_md"
-        spec = importlib.util.spec_from_file_location(
-            module_name,
-            candidate,
-        )
-        if spec is None or spec.loader is None:
-            raise RuntimeError(f"Failed to load AGENTS renderer spec from {candidate}")
-        module = importlib.util.module_from_spec(spec)
-        sys.modules[module_name] = module
         try:
-            spec.loader.exec_module(module)
-        finally:
-            sys.modules.pop(module_name, None)
-        return module.resolve_inputs, module.render_agents_markdown
+            module_name = "_repo_render_agents_md"
+            spec = importlib.util.spec_from_file_location(module_name, candidate)
+            if spec is None or spec.loader is None:
+                continue
+            module = importlib.util.module_from_spec(spec)
+            sys.modules[module_name] = module
+            try:
+                spec.loader.exec_module(module)
+            finally:
+                sys.modules.pop(module_name, None)
+            return module.resolve_inputs, module.render_agents_markdown
+        except (AttributeError, ImportError, OSError, SyntaxError):
+            # A canonical framework audit must still diagnose a stale installed
+            # renderer. The installer plan reports the exact managed-file drift.
+            continue
     return _FRAMEWORK_RENDERER.resolve_inputs, _FRAMEWORK_RENDERER.render_agents_markdown
 
 

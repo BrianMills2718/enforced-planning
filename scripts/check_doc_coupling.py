@@ -122,14 +122,16 @@ def validate_config(couplings: list[dict]) -> list[str]:
     """
     warnings = []
     for coupling in couplings:
-        for doc in coupling.get("docs", []):
-            if any(ch in doc for ch in "*?[]"):
-                if not glob.glob(doc, recursive=True):
-                    warnings.append(f"Coupled doc glob doesn't match any files: {doc}")
-                continue
-            if not Path(doc).exists():
-                warnings.append(f"Coupled doc doesn't exist: {doc}")
-        # Don't validate source patterns - they're globs
+        for field, label in (("sources", "source"), ("docs", "doc")):
+            for path in coupling.get(field, []):
+                if any(ch in path for ch in "*?[]"):
+                    if not glob.glob(path, recursive=True):
+                        warnings.append(
+                            f"Coupled {label} glob doesn't match any files: {path}"
+                        )
+                    continue
+                if not Path(path).exists():
+                    warnings.append(f"Coupled {label} doesn't exist: {path}")
     return warnings
 
 
@@ -331,7 +333,7 @@ def main() -> int:
     parser.add_argument(
         "--validate-config",
         action="store_true",
-        help="Validate that all docs in config exist",
+        help="Validate that all source and documentation paths in config exist",
     )
     parser.add_argument(
         "--staged",

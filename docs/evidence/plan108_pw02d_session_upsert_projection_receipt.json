@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "plan": "Plan #108",
+  "work_unit": "prewrite-pw-02d-session-upsert-projection-receipt",
+  "implementation": {
+    "mutation_operation": "session_upsert",
+    "transaction": "Existing-session claim updates now write the claim, refresh the digest-bound projection, and append a terminal receipt while holding the claim-registry lock.",
+    "failure_behavior": "If receipt append fails after the mutation, MutationAuditError reports mutation_applied_audit_failed with the current registry/projection outcome."
+  },
+  "verification": {
+    "focused_command": "python -m pytest -q tests/test_session_cli.py::test_existing_session_upsert_refreshes_projection_and_emits_receipt tests/test_session_cli.py::test_existing_session_upsert_reports_audit_failure_after_persisting_mutation tests/test_claim_mutation_receipts.py",
+    "focused_result": "7 passed",
+    "suite_command": "env -u CODEX_THREAD_ID python -m pytest -q tests/test_session_cli.py tests/test_claim_mutation_receipts.py",
+    "suite_result": "56 passed",
+    "lint_command": "ruff check enforced_planning/session_lifecycle.py enforced_planning/claim_mutation_receipts.py tests/test_session_cli.py tests/test_claim_mutation_receipts.py",
+    "lint_result": "All checks passed",
+    "ambient_runtime_note": "The full fixture suite uses synthetic Codex session IDs; removing the live agent's CODEX_THREAD_ID is required to preserve its declared fixture isolation."
+  },
+  "real_lane_receipt": {
+    "event_id": "fcf6306b-98b4-4f7e-a347-2e786b480709",
+    "observed_at": "2026-08-02T13:57:48.840218Z",
+    "operation": "session_upsert",
+    "result": "applied_projection_current",
+    "target_project": "enforced-planning",
+    "target_scope": "plan108-pw02d-session-upsert-receipt-20260802",
+    "registry_digest_before": "ee38be2704836af4be0175356dcd62a110b268718795541ae72408d11c3b7975",
+    "registry_digest_after": "dfa13641cb44b41df932a2ec42cbe4c5455bf9de7ee350b6296aaec00aa729ca",
+    "projection_digest_after": "dfa13641cb44b41df932a2ec42cbe4c5455bf9de7ee350b6296aaec00aa729ca",
+    "projection_current_after": true
+  },
+  "acceptance": {
+    "passed": true,
+    "next_unit": "prewrite-pw-02b-fleet-projection-refresh"
+  }
+}

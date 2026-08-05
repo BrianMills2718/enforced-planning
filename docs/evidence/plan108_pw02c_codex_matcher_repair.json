@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "plan": "Plan #108",
+  "work_unit": "prewrite-pw-02c-codex-matcher-repair",
+  "reproduced_failure": {
+    "source": "enforced_planning/hook_wiring.py",
+    "generated_matcher_before": "Edit|Write",
+    "actual_codex_tool": "apply_patch",
+    "initial_test_result": "2 failed",
+    "effect": "The accepted Codex pre-write adapter was generated beneath a matcher that could not invoke it for native Codex writes."
+  },
+  "repair": {
+    "generated_matcher_after": "apply_patch",
+    "migration": "Remove only the canonical pre-write command from an existing Edit|Write block, retain the block and unrelated commands, and install the canonical command under apply_patch.",
+    "enforcement_mode_changed": false,
+    "unsupported_tools_broadened": false
+  },
+  "verification": {
+    "focused_command": "python -m pytest -q tests/test_generate_hook_wiring.py::test_generate_hook_wiring_installs_prewrite_gate_only_when_opted_in tests/test_generate_hook_wiring.py::test_generate_hook_wiring_migrates_only_its_stale_codex_prewrite_command",
+    "focused_result": "2 passed",
+    "integration_command": "python -m pytest -q tests/test_generate_hook_wiring.py tests/test_prewrite_claim_gate.py",
+    "integration_result": "25 passed",
+    "lint_command": "ruff check enforced_planning/hook_wiring.py tests/test_generate_hook_wiring.py",
+    "lint_result": "pass",
+    "work_graph_command": "python <company-planning>/skills/work-unit-graph/scripts/validate_work_graph.py docs/plans/108_prewrite_claim_enforcement_work_graph.json",
+    "negative_control": "The migration fixture retains python scripts/custom_edit_guard.py byte-for-byte in the stale Edit|Write block while moving only the canonical pre-write command."
+  },
+  "acceptance": {
+    "passed": true,
+    "next_units": [
+      "prewrite-pw-02b2-fleet-rollout",
+      "prewrite-pw-02b-fleet-projection-refresh"
+    ]
+  }
+}

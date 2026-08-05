@@ -27,7 +27,7 @@ import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import yaml  # type: ignore[import-untyped]
 
@@ -224,11 +224,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--profile",
-        choices=("full", "artifact-creation"),
+        choices=("full", "artifact-creation", "prewrite-claim"),
         default="full",
         help=(
             "Install the complete read/coordination wiring or only the "
-            "artifact-creation gate and its support files."
+            "artifact-creation or pre-write-claim gate and their support files."
         ),
     )
     return parser.parse_args(argv)
@@ -367,6 +367,35 @@ def _ensure_hook_command(
     return True
 
 
+def _remove_hook_command_from_matcher(
+    settings: dict[str, Any],
+    *,
+    event_name: str,
+    matcher: str,
+    command: str,
+) -> bool:
+    """Remove only one generator-owned command from an existing matcher block."""
+
+    changed = False
+    for block in _ensure_event_block(settings, event_name):
+        if not isinstance(block, dict) or block.get("matcher") != matcher:
+            continue
+        hooks = block.get("hooks", [])
+        if not isinstance(hooks, list):
+            raise ValueError(
+                f"settings.json hooks.{event_name} matcher {matcher} has non-list hooks"
+            )
+        retained = [
+            hook
+            for hook in hooks
+            if not (isinstance(hook, dict) and hook.get("command") == command)
+        ]
+        if len(retained) != len(hooks):
+            hooks[:] = retained
+            changed = True
+    return changed
+
+
 def _render_settings(settings: dict[str, Any]) -> str:
     """Render deterministic pretty JSON for `.claude/settings.json`."""
 
@@ -428,12 +457,26 @@ def _merge_codex_mailbox_hooks(
         ("SessionStart", "startup|resume|clear|compact"),
         ("UserPromptSubmit", ""),
         ("PostToolUse", "*"),
+        ("PreToolUse", "Bash|apply_patch"),
+        ("Stop", ""),
     ):
         hooks = _ensure_matcher_block(settings, event_name=event_name, matcher=matcher)
         if _ensure_hook_command(hooks, CODEX_MAILBOX_HOOK):
             changed = True
     if include_prewrite:
-        hooks = _ensure_matcher_block(settings, event_name="PreToolUse", matcher="Edit|Write")
+        prewrite_command = cast(str, CODEX_PREWRITE_HOOK["command"])
+        if _remove_hook_command_from_matcher(
+            settings,
+            event_name="PreToolUse",
+            matcher="Edit|Write",
+            command=prewrite_command,
+        ):
+            changed = True
+        hooks = _ensure_matcher_block(
+            settings,
+            event_name="PreToolUse",
+            matcher="apply_patch",
+        )
         if _ensure_hook_command(hooks, CODEX_PREWRITE_HOOK):
             changed = True
     if include_artifact_creation:
@@ -441,7 +484,7 @@ def _merge_codex_mailbox_hooks(
         if _ensure_hook_command(
             hooks,
             CODEX_ARTIFACT_CREATION_HOOK,
-            after_command=CODEX_PREWRITE_HOOK["command"] if include_prewrite else None,
+            after_command=(cast(str, CODEX_PREWRITE_HOOK["command"]) if include_prewrite else None),
         ):
             changed = True
     return changed
@@ -477,6 +520,20 @@ def _plan_codex_artifact_creation_settings(
         matcher="Edit|Write",
     )
     changed = _ensure_hook_command(hooks, CODEX_ARTIFACT_CREATION_HOOK)
+    rendered = _render_settings(settings)
+    current = path.read_text(encoding="utf-8") if path.exists() else None
+    if current != rendered or changed:
+        return ["sync:.codex/hooks.json"], {path: rendered}
+    return [], {}
+
+
+def _plan_codex_prewrite_settings(target: TargetRepo) -> tuple[list[str], dict[Path, str]]:
+    """Plan only Codex's native apply-patch pre-write gate."""
+
+    path = target.root / ".codex" / "hooks.json"
+    settings = _read_json_file(path)
+    hooks = _ensure_matcher_block(settings, event_name="PreToolUse", matcher="apply_patch")
+    changed = _ensure_hook_command(hooks, CODEX_PREWRITE_HOOK)
     rendered = _render_settings(settings)
     current = path.read_text(encoding="utf-8") if path.exists() else None
     if current != rendered or changed:
@@ -542,12 +599,20 @@ def plan_generation(
     if _ensure_hook_command(read_hooks, READ_HOOK):
         changed = True
     if include_coordination_messages:
-        if _ensure_hook_command(
-            read_hooks,
-            MAILBOX_HOOK,
-            after_command="bash .claude/hooks/track-reads.sh",
+        for event_name, matcher in (
+            ("SessionStart", "startup|resume|clear|compact"),
+            ("UserPromptSubmit", ""),
+            ("PostToolUse", "*"),
+            ("PreToolUse", "Bash|Edit|Write"),
+            ("Stop", ""),
         ):
-            changed = True
+            mailbox_hooks = _ensure_matcher_block(
+                settings,
+                event_name=event_name,
+                matcher=matcher,
+            )
+            if _ensure_hook_command(mailbox_hooks, MAILBOX_HOOK):
+                changed = True
     if _ensure_hook_command(
         edit_hooks,
         GATE_HOOK,
@@ -564,7 +629,7 @@ def plan_generation(
         edit_hooks,
         ARTIFACT_CREATION_HOOK,
         after_command=(
-            PREWRITE_HOOK["command"] if prewrite_enabled else GATE_HOOK["command"]
+            cast(str, PREWRITE_HOOK["command"] if prewrite_enabled else GATE_HOOK["command"])
         ),
     ):
         changed = True
@@ -608,12 +673,17 @@ def plan_coordination_message_generation(
             file_writes[target_path] = content
 
     settings = _read_json_file(target.settings_file)
-    read_hooks = _ensure_matcher_block(settings, event_name="PostToolUse", matcher="Read")
-    changed = _ensure_hook_command(
-        read_hooks,
-        MAILBOX_HOOK,
-        after_command="bash .claude/hooks/track-reads.sh",
-    )
+    changed = False
+    for event_name, matcher in (
+        ("SessionStart", "startup|resume|clear|compact"),
+        ("UserPromptSubmit", ""),
+        ("PostToolUse", "*"),
+        ("PreToolUse", "Bash|Edit|Write"),
+        ("Stop", ""),
+    ):
+        hooks = _ensure_matcher_block(settings, event_name=event_name, matcher=matcher)
+        if _ensure_hook_command(hooks, MAILBOX_HOOK):
+            changed = True
     rendered_settings = _render_settings(settings)
     current_settings = (
         target.settings_file.read_text(encoding="utf-8")
@@ -678,6 +748,43 @@ def plan_artifact_creation_generation(
     return actions, file_writes, rendered_settings
 
 
+def plan_prewrite_claim_generation(
+    target: TargetRepo,
+) -> tuple[list[str], dict[Path, str], str]:
+    """Plan the standalone native pre-write claim gate and no unrelated hooks."""
+
+    if _configured_prewrite_mode(target.root) == "off":
+        raise ValueError(
+            "prewrite-claim profile requires meta_process.claims.prewrite_mode "
+            "to be observe or enforce"
+        )
+
+    actions: list[str] = []
+    file_writes: dict[Path, str] = {}
+    for target_relpath, source_relpath in {**PREWRITE_HOOK_FILES, **PREWRITE_SUPPORT_FILES}.items():
+        source_path = FRAMEWORK_ROOT / source_relpath
+        target_path = target.root / target_relpath
+        content = source_path.read_text(encoding="utf-8")
+        current = target_path.read_text(encoding="utf-8") if target_path.exists() else None
+        if current != content:
+            actions.append(f"sync:{target_relpath}")
+            file_writes[target_path] = content
+
+    settings = _read_json_file(target.settings_file)
+    edit_hooks = _ensure_matcher_block(settings, event_name="PreToolUse", matcher="Edit|Write")
+    changed = _ensure_hook_command(edit_hooks, PREWRITE_HOOK)
+    rendered_settings = _render_settings(settings)
+    current_settings = target.settings_file.read_text(encoding="utf-8") if target.settings_file.exists() else None
+    if current_settings != rendered_settings or changed:
+        actions.append("sync:.claude/settings.json")
+        file_writes[target.settings_file] = rendered_settings
+
+    codex_actions, codex_writes = _plan_codex_prewrite_settings(target)
+    actions.extend(codex_actions)
+    file_writes.update(codex_writes)
+    return actions, file_writes, rendered_settings
+
+
 def apply_generation(target: TargetRepo, file_writes: dict[Path, str]) -> None:
     """Write the generated files to disk."""
 
@@ -717,6 +824,9 @@ def main(argv: list[str] | None = None) -> int:
         if args.profile == "artifact-creation":
             target = _resolve_artifact_target(args.repo_root)
             actions, file_writes, _ = plan_artifact_creation_generation(target)
+        elif args.profile == "prewrite-claim":
+            target = _resolve_artifact_target(args.repo_root)
+            actions, file_writes, _ = plan_prewrite_claim_generation(target)
         else:
             target = _resolve_target(args.repo_root)
             actions, file_writes, _ = plan_generation(target)
@@ -741,7 +851,7 @@ def main(argv: list[str] | None = None) -> int:
         "profile": args.profile,
         "required_inputs": (
             [_relative(target.relationships_file, target.root)]
-            if args.profile == "artifact-creation"
+            if args.profile in {"artifact-creation", "prewrite-claim"}
             else [
                 _relative(target.relationships_file, target.root),
                 _relative(target.file_context_file, target.root),

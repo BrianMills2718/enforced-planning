@@ -1,9 +1,9 @@
 # Plan #108: Low-Friction Pre-Write Claim Enforcement
 
-**Status:** In Progress — PW-01/PW-02A/PW-02/PW-02B0 accepted; PW-02B1 ready; later units dependency-blocked
+**Status:** In Progress — PW-01/PW-02A/PW-02/PW-02B0/PW-02B1/PW-02B2/PW-02C/PW-02D/PW-02B/PW-03 accepted; PW-04 manifest is frozen and per-repository rollout remains
 **Type:** implementation
 **Priority:** Critical
-**Design Revision:** `plan-108-v2`
+**Design Revision:** `plan-108-v4`
 **phase_ref:** "Phase 9"
 **goal_ref:** "coordination-integrity"
 **adrs_referenced:** []
@@ -438,6 +438,35 @@ query at the end. Any mutation during the window resets the writer's evidence
 to its newest receipt; it does not extend the window. Acceptance requires zero
 `unclassified_legacy` rows. Do not convert `authority_blocked` to permission.
 
+**Accepted evidence:** The retained
+`docs/evidence/plan108_pw02b_fleet_inventory.json` records a 16-minute window,
+one exact current writer digest, three live exact-session claims, zero
+`unclassified_legacy` rows, and a current registry/projection digest readback.
+The initially unknown Inside Success row became attributable only after its
+live owner acknowledged the coordination request and ran the sanctioned
+heartbeat. No legacy identity was inferred and no claim was taken over.
+
+#### PW-02C — native Codex matcher repair (ready independently)
+
+The source generator currently installs the Codex pre-write command beneath an
+`Edit|Write` matcher even though the accepted adapter consumes Codex
+`apply_patch`. Repair the generator so it places the canonical pre-write
+command under `apply_patch`, removes only that canonical command from the stale
+matcher when regenerating, and preserves unrelated user hooks and matcher
+blocks. Retain both-sign generator tests proving a generated Codex configuration
+routes `apply_patch` through the gate and that migration does not delete an
+unrelated `Edit|Write` hook.
+
+This repair makes the accepted observe adapter reachable; it does not enable
+hard enforcement or bypass the PW-02B fleet-projection promotion gates.
+
+**Accepted evidence:** The source generator now routes the canonical Codex
+pre-write command through `apply_patch` and removes only that command from the
+stale `Edit|Write` block. The retained
+`docs/evidence/plan108_pw02c_codex_matcher_repair.json` records the initial
+two-test failure, the preserving migration negative control, 25 passing hook
+generation/pre-write tests, and clean lint. Enforcement mode remains unchanged.
+
 #### PW-02B2 — bounded fleet rollout (blocked on PW-02B1)
 
 For each manifest row marked `update_current_personal`, in manifest order:
@@ -459,6 +488,15 @@ For each manifest row marked `update_current_personal`, in manifest order:
 7. Record target, source and merge revisions, PR URL, test command/result,
    heartbeat event ID/digests, and closeout result in the fleet evidence.
 
+**Accepted zero-target evidence:** The frozen PW-02B1 manifest has SHA-256
+`830514fe75920d17daf72d8e1673e6f155014d9dbc15bcea94ff34ca82b3239a`
+and contains zero `update_current_personal` rows. PW-02B2 therefore performed
+no repository, hook, configuration, claim, branch, or worktree mutation. The
+retained `docs/evidence/plan108_pw02b2_fleet_rollout.json` records that exact
+empty target set. A newly observed legacy writer after the frozen window is
+carried forward as a blocker for fresh fleet certification rather than being
+silently added to or ignored by this revision-bound rollout.
+
 Rows marked `already_current`, `inactive`, or `authority_blocked` receive only
 their evidence-backed disposition. Never edit an `authority_blocked` target.
 
@@ -473,7 +511,30 @@ write and require `decision=allow`, not
 `docs/evidence/plan108_pw02b_fleet_projection_refresh.json`. Only this evidence
 permits marking PW-02B accepted.
 
-#### PW-03 — fixed enforcement pilot (blocked on PW-02B acceptance)
+**Accepted evidence:** The final observation ran for 3,049 seconds with one
+current writer group, three receipted live claims, and zero legacy rows. Its
+retained evidence records real create/heartbeat receipts, a disposable
+create/heartbeat/release/closeout control, a native Codex exact-claim allow,
+and the Project Meta reader compatibility recovery without ledger rewriting.
+
+#### PW-02D — existing-session upsert provenance repair (ready)
+
+The final-certification control reproduced one uncovered sanctioned mutation:
+`session-start` updating an already-live exact-session claim rewrote the shared
+YAML without refreshing the projection or emitting a mutation receipt. Repair
+that update transaction before certification. It must atomically refresh the
+projection and append a distinct `session_upsert` receipt containing the exact
+registry and projection digests. A receipt append failure must surface
+`mutation_applied_audit_failed` after the mutation, never silently claim that
+the update did not occur. Do not infer, rewrite, or take over legacy claims.
+
+**Accepted evidence:** Existing-session updates now refresh the projection and
+emit `session_upsert`. The retained
+`docs/evidence/plan108_pw02d_session_upsert_projection_receipt.json` records
+the real exact-lane receipt, both-sign receipt-failure control, 56 lifecycle /
+receipt tests under fixture isolation, and clean lint.
+
+#### PW-03 — fixed enforcement pilot (accepted)
 
 The pilot repository is `enforced-planning`; selecting another repository is a
 plan change. Claim only `meta-process.yaml`, the installed hook configuration,
@@ -486,12 +547,35 @@ Use native Codex `apply_patch` for both controls. First attempt an out-of-scope
 append to `README.md`; require a denial receipt and unchanged SHA-256. Then
 apply an in-scope marker change to
 `tests/fixtures/prewrite_live_probe.txt`; require an allow receipt and the
-expected diff. Finally restore `claims.prewrite_mode: observe`, regenerate,
-and require audit readback `observe`. Commit only the fixture/evidence and the
-final observe configuration; do not leave the repository in enforce mode in
-this first pilot. Any changed README hash, false denial, stale projection,
-missing receipt, or failed rollback stops the unit and requires restoring
+expected diff. If both controls pass, retain `claims.prewrite_mode: enforce`,
+regenerate, and require audit readback `enforce`; this is the first live
+prevention surface. Any changed README hash, false denial, stale projection,
+missing receipt, or failed control stops the unit and requires restoring
 observe before further work.
+
+**Accepted evidence:** `docs/evidence/plan108_pw03_enforce_pilot.json`
+records the passing real native deny (`path_outside_claim`) and allow
+(`exact_live_claim`) controls, unchanged `README.md` SHA-256, enforce-mode
+audit readback, and 45 focused regression tests. The first positive probe
+truthfully exposed a Makefile defect: `session-start` recorded a linked
+worktree as `repo_root`. PW-03 repairs that source command to derive the
+canonical Git root before refreshing its exact-session claim.
+
+#### PW-04 — governed fleet enforcement (manifest frozen)
+
+`docs/evidence/plan108_pw04_governed_fleet_manifest.json` freezes the Project
+Meta governance revision and classifies every Brian-owned active record before
+mutation. Eight clean opted-in repositories are targetable through separate
+claimed rollout lanes. Enforced Planning is already covered; dirty or
+non-opted-in repositories remain explicitly excluded until their recorded
+resume event is satisfied. This checkpoint does not alter a target repository.
+
+Before the first target, PW-04 adds the bounded
+`generate_hook_wiring.py --profile prewrite-claim` source profile. It updates
+only pre-write runtime and native hook entries, preventing the rollout from
+using the broad installer to overwrite unrelated stale framework surfaces.
+Its contract and focused regression evidence are retained in
+`docs/evidence/plan108_pw04_bounded_prewrite_profile.json`.
 
 ### PW-01 Evidence
 
@@ -569,9 +653,29 @@ PW-02B1 manifest must be derived from runtime mutation receipts.
 
 This observation changed the remaining design from “infer the writer from the
 claim's repo root” to “record the loaded writer source and digest at mutation
-time.” PW-02B0 is accepted. PW-02B1 inventory is the sole ready leaf; PW-02B2
-rollout, final PW-02B certification, and PW-03 remain dependency-blocked in
-that order.
+time.” PW-02B0 and PW-02B1 are accepted. The accepted inventory contains no
+`update_current_personal` rows, so PW-02B2 is a ready zero-target verification;
+the independent PW-02C Codex matcher repair is also ready. Final PW-02B
+certification, PW-03 pilot promotion, and PW-04 governed-fleet promotion remain
+dependency-blocked in that order.
+
+### PW-04 — governed-fleet hard-enforcement rollout
+
+The single-repository PW-03 pilot is not workspace completion. After its real
+positive and negative native probes pass, freeze the active governed-repository
+set from Project Meta governance, classify each repository by mutation and
+publication authority, and install `claims.prewrite_mode: enforce` plus the
+generated Claude/Codex adapters through one exact claimed lane per repository.
+Repositories outside current mutation authority remain explicit blocked or
+excluded rows; they are never silently treated as covered.
+
+Acceptance requires a deterministic fleet report with every in-scope active
+repository either enforced or carrying a named, evidence-backed exception; no
+repository may remain implicitly `off`. Generator/audit readback is required
+per repository, while live native both-sign canaries may be sampled by distinct
+runtime/configuration shape rather than repeated mechanically for every clone.
+The 24-hour forfeiture process remains recovery for escaped failures, not the
+primary ownership control.
 
 ### PW-02A Evidence
 

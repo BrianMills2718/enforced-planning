@@ -176,6 +176,22 @@ timeout = 3
 statusMessage = "Checking coordination requests"
 
 [[hooks.PreToolUse]]
+matcher = "Bash|apply_patch"
+[[hooks.PreToolUse.hooks]]
+type = "command"
+command = "{command}"
+timeout = 3
+statusMessage = "Checking coordination requests"
+
+[[hooks.Stop]]
+matcher = ""
+[[hooks.Stop.hooks]]
+type = "command"
+command = "{command}"
+timeout = 3
+statusMessage = "Checking coordination requests"
+
+[[hooks.PreToolUse]]
 matcher = "^Bash$"
 [[hooks.PreToolUse.hooks]]
 type = "command"
@@ -205,7 +221,9 @@ def _configured_claude(command: str = CLAUDE_COMMAND) -> dict[str, object]:
             "SessionStart": [entry("startup|resume|clear|compact")],
             "UserPromptSubmit": [entry("")],
             "PostToolUse": [entry("*")],
+            "Stop": [entry("")],
             "PreToolUse": [
+                entry("Bash|Edit|Write"),
                 {
                     "matcher": "Bash",
                     "hooks": [{"type": "command", "command": "python3 /opt/other/guard.py", "timeout": 15}],
@@ -293,7 +311,10 @@ def test_dry_run_candidate_preserves_unrelated_hooks_in_both_native_formats(tmp_
     assert codex_candidate is not None
     parsed_codex = tomllib.loads(codex_candidate[0])
     assert parsed_codex["model"] == "gpt-5"
-    assert parsed_codex["hooks"]["PreToolUse"][0]["hooks"][0]["command"] == "python3 /opt/other/guard.py"
+    codex_guard = next(
+        block for block in parsed_codex["hooks"]["PreToolUse"] if block["matcher"] == "^Bash$"
+    )
+    assert codex_guard["hooks"][0]["command"] == "python3 /opt/other/guard.py"
     assert "UserPromptSubmit" in parsed_codex["hooks"]
     assert parsed_codex["projects"]["/workspace/project"]["trust_level"] == "trusted"
 
@@ -303,7 +324,10 @@ def test_dry_run_candidate_preserves_unrelated_hooks_in_both_native_formats(tmp_
     assert claude_candidate is not None
     parsed_claude = json.loads(claude_candidate[0])
     assert parsed_claude["permissions"] == {"allow": ["Read"]}
-    assert parsed_claude["hooks"]["PreToolUse"][0]["hooks"][0]["command"] == "python3 /opt/other/guard.py"
+    claude_guard = next(
+        block for block in parsed_claude["hooks"]["PreToolUse"] if block["matcher"] == "Bash"
+    )
+    assert claude_guard["hooks"][0]["command"] == "python3 /opt/other/guard.py"
     assert "UserPromptSubmit" in parsed_claude["hooks"]
 
 

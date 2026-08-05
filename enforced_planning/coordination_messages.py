@@ -248,7 +248,6 @@ class MessageReceipt(StrictContract):
         max_length=MAX_NOTE_LENGTH,
         description="Optional bounded recipient note.",
     )
-
     @model_validator(mode="after")
     def validate_acknowledgement_fields(self) -> MessageReceipt:
         """Prevent weaker receipt classes from carrying acknowledgement claims."""
@@ -324,6 +323,43 @@ class StoredDeliveryEventRecord(StrictContract):
         return self
 
 
+class BoundaryBlockRecord(StrictContract):
+    """Immutable evidence that active mailbox debt denied one lifecycle boundary."""
+
+    schema_version: Literal["1.0"] = Field(description="Portable boundary-record schema version.")
+    boundary_id: str = Field(pattern=r"^boundary_[0-9a-f]{32}$", description="Deterministic record identity.")
+    message_id: str = Field(pattern=r"^msg_[0-9a-f]{32}$", description="Active message causing the denial.")
+    recipient_session_id: str = Field(min_length=1, description="Exact session whose boundary was denied.")
+    hook_event_name: Literal["PreToolUse", "Stop"] = Field(description="Denied native lifecycle boundary.")
+    delivery_event_id: str = Field(min_length=1, max_length=500, description="Native callback identity.")
+    tool_name: str | None = Field(default=None, min_length=1, max_length=500)
+    recorded_at: AwareDatetime = Field(description="UTC time at which denial evidence was appended.")
+
+    @model_validator(mode="after")
+    def validate_tool_boundary(self) -> BoundaryBlockRecord:
+        """Only a tool boundary may retain a tool name."""
+
+        if self.hook_event_name == "Stop" and self.tool_name is not None:
+            raise ValueError("Stop boundary records cannot carry tool_name")
+        return self
+
+
+class StoredBoundaryBlockRecord(StrictContract):
+    """Integrity envelope for one immutable mailbox boundary denial."""
+
+    record_type: Literal["mailbox_boundary_block"] = Field(description="Boundary-record discriminator.")
+    payload: BoundaryBlockRecord
+    payload_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+    @model_validator(mode="after")
+    def validate_digest(self) -> StoredBoundaryBlockRecord:
+        """Reject boundary bytes whose payload no longer matches its digest."""
+
+        if self.payload_sha256 != _model_digest(self.payload):
+            raise ValueError("boundary block payload_sha256 mismatch")
+        return self
+
+
 class MessageStatusView(StrictContract):
     """Derived lifecycle view computed from immutable message and receipts."""
 
@@ -382,6 +418,10 @@ class AcknowledgementResult(StrictContract):
     receipt_path: str = Field(min_length=1, description="Evidence path to the canonical acknowledgement receipt.")
     status: MessageStatusView = Field(description="Status projected after appending the receipt.")
     idempotent_replay: bool = Field(description="Whether an identical receipt already existed.")
+    acknowledgement_latency_seconds: float = Field(
+        ge=0,
+        description="Elapsed time from message creation to the durable acknowledgement receipt.",
+    )
 
 
 class SessionInboxNotice(StrictContract):
@@ -454,6 +494,7 @@ class CoordinationMessageStore:
         self.messages_dir = self.root / "messages"
         self.receipts_dir = self.root / "receipts"
         self.deliveries_dir = self.root / "deliveries"
+        self.boundary_blocks_dir = self.root / "boundary-blocks"
         self.quarantine_dir = self.root / "quarantine"
 
     def _live_claims(self, project: str | None = None) -> list[coordination_claims.ClaimRecord]:
@@ -791,6 +832,78 @@ class CoordinationMessageStore:
         path, idempotent = self._store_receipt(receipt)
         return (self._read_receipt_path(path) if idempotent else receipt), path
 
+    def record_boundary_block(
+        self,
+        *,
+        current_session_id: str,
+        message_ids: tuple[str, ...],
+        hook_event_name: Literal["PreToolUse", "Stop"],
+        delivery_event_id: str,
+        tool_name: str | None = None,
+        now: datetime | None = None,
+    ) -> tuple[BoundaryBlockRecord, ...]:
+        """Append idempotent evidence that active mailbox debt denied a boundary."""
+
+        recorded_at = now or _utc_now()
+        records: list[BoundaryBlockRecord] = []
+        for message_id in message_ids:
+            message, _path = self._message(message_id)
+            if message.recipient_session_id != current_session_id:
+                raise WrongRecipientError(
+                    f"Session {current_session_id!r} cannot record a boundary for {message.recipient_session_id!r}"
+                )
+            status = self.status(MessageStatusRequest(message_id=message_id, as_of=recorded_at))
+            if status.expired or status.acknowledged:
+                continue
+            boundary = BoundaryBlockRecord(
+                schema_version=SCHEMA_VERSION,
+                boundary_id=_stable_id(
+                    "boundary",
+                    message_id,
+                    current_session_id,
+                    hook_event_name,
+                    delivery_event_id,
+                ),
+                message_id=message_id,
+                recipient_session_id=current_session_id,
+                hook_event_name=hook_event_name,
+                delivery_event_id=delivery_event_id,
+                tool_name=tool_name,
+                recorded_at=recorded_at,
+            )
+            path = self.boundary_blocks_dir / f"{boundary.boundary_id}.json"
+            stored = StoredBoundaryBlockRecord(
+                record_type="mailbox_boundary_block",
+                payload=boundary,
+                payload_sha256=_model_digest(boundary),
+            )
+            encoded = _canonical_json(stored.model_dump(mode="json")) + b"\n"
+            if not self._write_immutable(path, encoded):
+                existing = StoredBoundaryBlockRecord.model_validate_json(path.read_bytes()).payload
+                comparable_existing = existing.model_copy(update={"recorded_at": recorded_at})
+                if comparable_existing != boundary:
+                    raise RecordCollisionError(
+                        f"Boundary record {boundary.boundary_id} already contains different content"
+                    )
+                boundary = existing
+            records.append(boundary)
+        return tuple(records)
+
+    def boundary_blocks(self, message_id: str) -> tuple[BoundaryBlockRecord, ...]:
+        """Return validated boundary-denial evidence for one message in time order."""
+
+        if not self.boundary_blocks_dir.exists():
+            return ()
+        records: list[BoundaryBlockRecord] = []
+        for path in sorted(self.boundary_blocks_dir.glob("*.json")):
+            try:
+                record = StoredBoundaryBlockRecord.model_validate_json(path.read_bytes()).payload
+            except (OSError, ValidationError, ValueError) as exc:
+                self._quarantine(path, str(exc))
+            if record.message_id == message_id:
+                records.append(record)
+        return tuple(sorted(records, key=lambda item: (item.recorded_at, item.boundary_id)))
+
     def status(self, request: MessageStatusRequest) -> MessageStatusView:
         """Derive lifecycle state from one immutable message and exact receipt set."""
 
@@ -927,6 +1040,10 @@ class CoordinationMessageStore:
             receipt_path=str(path),
             status=status,
             idempotent_replay=idempotent,
+            acknowledgement_latency_seconds=max(
+                0.0,
+                (receipt.recorded_at - message.created_at).total_seconds(),
+            ),
         )
 
 

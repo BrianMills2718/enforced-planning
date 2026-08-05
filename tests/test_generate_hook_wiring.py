@@ -130,13 +130,24 @@ def test_generate_hook_wiring_writes_files_and_merges_settings(tmp_path: Path) -
     ]
     assert [hook["command"] for hook in posttool["hooks"]] == [
         "bash .claude/hooks/track-reads.sh",
+    ]
+    mailbox_posttool = next(
+        item for item in settings["hooks"]["PostToolUse"] if item["matcher"] == "*"
+    )
+    assert [hook["command"] for hook in mailbox_posttool["hooks"]] == [
         "bash .claude/hooks/notify-coordination-messages.sh",
     ]
 
     assert (tmp_path / ".claude" / "hooks" / "gate-edit.sh").exists()
     assert (tmp_path / ".claude" / "hooks" / "track-reads.sh").exists()
     codex_hooks = json.loads((tmp_path / ".codex" / "hooks.json").read_text(encoding="utf-8"))
-    assert set(codex_hooks["hooks"]) == {"SessionStart", "UserPromptSubmit", "PostToolUse"}
+    assert set(codex_hooks["hooks"]) == {
+        "SessionStart",
+        "UserPromptSubmit",
+        "PostToolUse",
+        "PreToolUse",
+        "Stop",
+    }
     assert (tmp_path / ".codex" / "hooks" / "notify-coordination-messages.sh").exists()
     assert (tmp_path / "scripts" / "check_required_reading.py").exists()
     assert (tmp_path / "scripts" / "meta" / "hook_log.py").exists()
@@ -215,12 +226,122 @@ def test_generate_hook_wiring_installs_prewrite_gate_only_when_opted_in(tmp_path
     claude = json.loads((tmp_path / ".claude" / "settings.json").read_text(encoding="utf-8"))
     codex = json.loads((tmp_path / ".codex" / "hooks.json").read_text(encoding="utf-8"))
     claude_pre = next(item for item in claude["hooks"]["PreToolUse"] if item["matcher"] == "Edit|Write")
-    codex_pre = next(item for item in codex["hooks"]["PreToolUse"] if item["matcher"] == "Edit|Write")
+    codex_pre = next(item for item in codex["hooks"]["PreToolUse"] if item["matcher"] == "apply_patch")
     assert "bash .claude/hooks/prewrite-claim-gate.sh" in [item["command"] for item in claude_pre["hooks"]]
     assert (
         'bash "$(git rev-parse --show-toplevel)/.codex/hooks/prewrite-claim-gate.sh"'
         in [item["command"] for item in codex_pre["hooks"]]
     )
+
+
+def test_prewrite_claim_profile_installs_only_native_claim_surfaces(tmp_path: Path) -> None:
+    """The rollout profile must not silently add read or mailbox wiring."""
+
+    _scaffold_target_repo(tmp_path)
+    (tmp_path / "meta-process.yaml").write_text(
+        "meta_process:\n  version: '1.0'\n  claims:\n    prewrite_mode: enforce\n",
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT),
+            "--repo-root",
+            str(tmp_path),
+            "--profile",
+            "prewrite-claim",
+            "--write",
+            "--json",
+        ],
+        cwd=str(PROJECT_META_ROOT),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["profile"] == "prewrite-claim"
+    assert (tmp_path / ".claude/hooks/prewrite-claim-gate.sh").is_file()
+    assert (tmp_path / ".codex/hooks/prewrite-claim-gate.sh").is_file()
+    assert not (tmp_path / ".claude/hooks/gate-edit.sh").exists()
+    assert not (tmp_path / ".claude/hooks/notify-coordination-messages.sh").exists()
+    assert not (tmp_path / "scripts/meta/context_packet.py").exists()
+
+    claude = json.loads((tmp_path / ".claude/settings.json").read_text(encoding="utf-8"))
+    claude_pre = next(item for item in claude["hooks"]["PreToolUse"] if item["matcher"] == "Edit|Write")
+    assert [item["command"] for item in claude_pre["hooks"]] == [
+        "bash .claude/hooks/prewrite-claim-gate.sh"
+    ]
+    codex = json.loads((tmp_path / ".codex/hooks.json").read_text(encoding="utf-8"))
+    assert set(codex["hooks"]) == {"PreToolUse"}
+
+
+def test_generate_hook_wiring_migrates_only_its_stale_codex_prewrite_command(
+    tmp_path: Path,
+) -> None:
+    """Codex migration must preserve unrelated commands in the old matcher block."""
+
+    _scaffold_target_repo(tmp_path)
+    (tmp_path / "meta-process.yaml").write_text(
+        "meta_process:\n  version: '1.0'\n  claims:\n    prewrite_mode: observe\n",
+        encoding="utf-8",
+    )
+    stale_command = (
+        'bash "$(git rev-parse --show-toplevel)/.codex/hooks/'
+        'prewrite-claim-gate.sh"'
+    )
+    custom_hook = {
+        "type": "command",
+        "command": "python scripts/custom_edit_guard.py",
+        "timeout": 7,
+    }
+    (tmp_path / ".codex").mkdir(parents=True)
+    (tmp_path / ".codex" / "hooks.json").write_text(
+        json.dumps(
+            {
+                "hooks": {
+                    "PreToolUse": [
+                        {
+                            "matcher": "Edit|Write",
+                            "hooks": [
+                                custom_hook,
+                                {
+                                    "type": "command",
+                                    "command": stale_command,
+                                    "timeout": 1,
+                                    "statusMessage": "Checking write ownership",
+                                },
+                            ],
+                        }
+                    ]
+                }
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT), "--repo-root", str(tmp_path), "--write", "--json"],
+        cwd=str(PROJECT_META_ROOT),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    codex = json.loads((tmp_path / ".codex" / "hooks.json").read_text(encoding="utf-8"))
+    stale = next(
+        item for item in codex["hooks"]["PreToolUse"] if item["matcher"] == "Edit|Write"
+    )
+    active = next(
+        item for item in codex["hooks"]["PreToolUse"] if item["matcher"] == "apply_patch"
+    )
+    assert stale["hooks"] == [custom_hook]
+    assert [item["command"] for item in active["hooks"]] == [stale_command]
 
 
 def test_generate_hook_wiring_installs_artifact_creation_gate_only_when_opted_in(

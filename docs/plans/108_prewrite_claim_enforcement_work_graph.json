@@ -151,7 +151,7 @@
         "evidence_required": ["Passing create/heartbeat/release/prune/end/closeout receipt tests", "Query output for one real heartbeat", "Failure test proving an unwritable receipt path fails visibly after reporting mutation outcome"],
         "negative_control": "A legacy mutation with no receipt remains unknown and cannot be classified as current."
       }],
-      "readiness": {"status": "accepted", "required_approval_types": [], "approvals": [], "failed_guards": []},
+      "readiness": {"status": "ready", "required_approval_types": [], "approvals": [], "failed_guards": []},
       "claim_policy": {"eligibility_rule": "Claim only the canonical mutation contract, query, tests, and Plan 108 evidence paths.", "lease_policy": "renewable", "lease_duration_minutes": 1440, "max_active_per_claimant": 1, "named_owner_id": null},
       "status": "accepted",
       "record_version": 2
@@ -169,7 +169,7 @@
       "objective": "Produce a timestamped fleet manifest in which every live writer is current, legacy, inactive, or authority-blocked without operator interpretation.",
       "profile": "standard",
       "execution_class": "independently_executable",
-      "claimability": "ready_for_execution",
+      "claimability": "not_applicable",
       "authorization_mode": "registry_claim",
       "scope": {"included": ["Query the global live-claim registry and mutation ledger", "Record canonical repo, remote owner, runtime source digest, active sessions, and disposition", "Fail closed on missing provenance or conflicting identities"], "excluded": ["Updating consumer repositories", "Treating file presence as proof of the executing runtime", "Granting organization-repository write authority"]},
       "inputs": [{"kind": "work_unit_output", "id": "prewrite-pw-02b0-writer-provenance", "revision": "accepted"}],
@@ -179,7 +179,68 @@
       "acceptance": [{"id": "PW02B1-A1", "criterion": "Every live mutation runtime has exactly one mechanical disposition: update_current_personal, already_current, inactive, or authority_blocked.", "evidence_required": ["Timestamped manifest with source SHA-256 and active-session IDs", "Zero unclassified live writer digests", "Fresh projection-current readback"], "negative_control": "A fixture writer without provenance produces unclassified_legacy and fails acceptance."}],
       "readiness": {"status": "ready", "required_approval_types": [], "approvals": [], "failed_guards": []},
       "claim_policy": {"eligibility_rule": "Writer-provenance unit accepted; claim only fleet inventory and evidence paths.", "lease_policy": "renewable", "lease_duration_minutes": 1440, "max_active_per_claimant": 1, "named_owner_id": null},
-      "status": "ready",
+      "status": "accepted",
+      "record_version": 3
+    },
+    {
+      "schema_version": "1.0",
+      "record_type": "work_unit",
+      "id": "prewrite-pw-02c-codex-matcher-repair",
+      "initiative_id": "coordination-integrity",
+      "goal_id": "prewrite-claim-enforcement",
+      "design_revision": "plan-108-v3",
+      "spec_revision": "prewrite-pw-02c-v1",
+      "title": "Route the native Codex pre-write gate through apply_patch",
+      "class": "implementation",
+      "objective": "Make the already-accepted Codex pre-write adapter reachable by generated hook wiring without enabling hard enforcement.",
+      "profile": "small",
+      "execution_class": "independently_executable",
+      "claimability": "not_applicable",
+      "authorization_mode": "registry_claim",
+      "scope": {
+        "included": [
+          "Move the canonical Codex pre-write command from the stale Edit|Write matcher to apply_patch during preserving generation",
+          "Preserve unrelated user hook commands and matcher blocks",
+          "Both-sign generator and migration regression tests"
+        ],
+        "excluded": [
+          "Changing claims.prewrite_mode",
+          "Fleet rollout or host-global installation",
+          "Broadening the adapter to arbitrary shell writes"
+        ]
+      },
+      "inputs": [
+        {"kind": "work_unit_output", "id": "prewrite-pw-02-observe-calibration", "revision": "accepted"},
+        {"kind": "reproduced_failure", "id": "generated-codex-prewrite-matcher", "revision": "2026-07-31"}
+      ],
+      "outputs": [
+        "Correct generated Codex apply_patch matcher",
+        "Preserving stale-matcher migration",
+        "Focused generator regression evidence"
+      ],
+      "dependencies": [
+        {"unit_id": "prewrite-pw-02-observe-calibration", "type": "hard", "gate": {"type": "unit_status", "required_status": "accepted"}, "rationale": "The repair routes the accepted adapter and does not redefine its contract."}
+      ],
+      "conflict_surfaces": [
+        {"kind": "repository_path", "target": "enforced_planning/hook_wiring.py", "repository": "enforced-planning", "access": "exclusive", "coordination_key": "prewrite-codex-matcher"},
+        {"kind": "repository_path", "target": "tests/test_generate_hook_wiring.py", "repository": "enforced-planning", "access": "exclusive", "coordination_key": "prewrite-codex-matcher"}
+      ],
+      "acceptance": [
+        {
+          "id": "PW02C-A1",
+          "criterion": "Generated Codex wiring invokes the canonical pre-write adapter for apply_patch, removes only that canonical command from a stale Edit|Write block, and preserves unrelated hooks.",
+          "evidence_required": [
+            "Focused generator tests",
+            "Generated configuration readback",
+            "Negative migration fixture with an unrelated Edit|Write hook",
+            "git diff --check"
+          ],
+          "negative_control": "Regeneration must not delete an unrelated hook, enable enforcement, or route unsupported Codex tools through the pre-write adapter."
+        }
+      ],
+      "readiness": {"status": "ready", "required_approval_types": [], "approvals": [], "failed_guards": []},
+      "claim_policy": {"eligibility_rule": "Claim only the hook generator, its focused tests, and Plan 108 evidence/status paths.", "lease_policy": "renewable", "lease_duration_minutes": 1440, "max_active_per_claimant": 1, "named_owner_id": null},
+      "status": "accepted",
       "record_version": 2
     },
     {
@@ -195,7 +256,7 @@
       "objective": "Apply the bounded refresh profile only to manifest rows marked update_current_personal and retain exact per-repository proof.",
       "profile": "standard",
       "execution_class": "independently_executable",
-      "claimability": "blocked_dependencies",
+      "claimability": "not_applicable",
       "authorization_mode": "registry_claim",
       "scope": {"included": ["One exact target-repository claim and linked worktree per eligible manifest row", "Dry-run, bounded installer apply, targeted tests, real heartbeat, commit, PR, merge, and sanctioned closeout", "Per-row revision, PR, command, digest, and rollback evidence"], "excluded": ["Organization repositories marked authority_blocked", "Inactive or archived repositories", "Hook mode changes", "Broad governed-repo upgrades"]},
       "inputs": [{"kind": "work_unit_output", "id": "prewrite-pw-02b1-fleet-inventory", "revision": "accepted"}],
@@ -203,10 +264,10 @@
       "dependencies": [{"unit_id": "prewrite-pw-02b1-fleet-inventory", "type": "hard", "gate": {"type": "unit_status", "required_status": "accepted"}, "rationale": "The frozen manifest removes target-selection judgment."}],
       "conflict_surfaces": [{"kind": "external_system", "target": "eligible repositories listed by plan108_pw02b_fleet_inventory.json", "access": "write", "coordination_key": "prewrite-projection-refresh-fleet"}],
       "acceptance": [{"id": "PW02B2-A1", "criterion": "Every update_current_personal row is merged and closed, and its real heartbeat leaves projection_is_current true.", "evidence_required": ["Installer dry-run showing only bounded profile paths", "Targeted test output", "Merge revision and PR URL", "Heartbeat registry/projection digest equality", "Sanctioned lane closeout receipt"], "negative_control": "Any dry-run containing hooks, Makefile, enforcement mode, or an unclaimed path stops that target without applying changes."}],
-      "readiness": {"status": "blocked", "required_approval_types": [], "approvals": [], "failed_guards": ["prewrite-pw-02b1-fleet-inventory must be accepted"]},
+      "readiness": {"status": "ready", "required_approval_types": [], "approvals": [], "failed_guards": []},
       "claim_policy": {"eligibility_rule": "Inventory accepted; target row equals update_current_personal; exact target paths are claimed before mutation.", "lease_policy": "renewable", "lease_duration_minutes": 1440, "max_active_per_claimant": 1, "named_owner_id": null},
-      "status": "blocked",
-      "record_version": 1
+      "status": "accepted",
+      "record_version": 3
     },
     {
       "schema_version": "1.0",
@@ -495,17 +556,107 @@
     {
       "schema_version": "1.0",
       "record_type": "work_unit",
+      "id": "prewrite-pw-02d-session-upsert-projection-receipt",
+      "initiative_id": "coordination-integrity",
+      "goal_id": "prewrite-claim-enforcement",
+      "design_revision": "plan-108-v4",
+      "spec_revision": "prewrite-pw-02d-v1",
+      "title": "Make existing-session claim upserts projection-safe and attributable",
+      "class": "implementation",
+      "objective": "Ensure every sanctioned update of an existing live session claim atomically refreshes the digest-bound projection and emits an exact receipt before hard enforcement certification.",
+      "profile": "standard",
+      "execution_class": "independently_executable",
+      "claimability": "not_applicable",
+      "authorization_mode": "registry_claim",
+      "scope": {
+        "included": [
+          "Existing-claim update path in enforced_planning/session_lifecycle.py",
+          "Typed mutation-operation contract needed to distinguish an existing-claim upsert",
+          "Focused both-sign regression tests and Plan 108 evidence/status paths"
+        ],
+        "excluded": [
+          "Changing claim ownership or path-conflict policy",
+          "Enabling hard pre-write enforcement",
+          "Editing other repositories or host hook configuration",
+          "Inferring or rewriting legacy claims"
+        ]
+      },
+      "inputs": [
+        {
+          "kind": "reproduced_failure",
+          "id": "Plan 108 final-certification control: existing session upsert writes YAML without projection refresh or receipt",
+          "revision": "2026-08-02"
+        }
+      ],
+      "outputs": [
+        "An atomic existing-session upsert that refreshes projection and emits a session_upsert receipt",
+        "Regression proof that the receipt and projection reflect the updated claim state"
+      ],
+      "dependencies": [],
+      "conflict_surfaces": [
+        {
+          "kind": "repository_path",
+          "target": "enforced_planning/session_lifecycle.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "claim-session-upsert-projection"
+        },
+        {
+          "kind": "repository_path",
+          "target": "enforced_planning/claim_mutation_receipts.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "claim-session-upsert-projection"
+        },
+        {
+          "kind": "repository_path",
+          "target": "tests/test_session_cli.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "claim-session-upsert-projection"
+        }
+      ],
+      "acceptance": [
+        {
+          "id": "PW02D-A1",
+          "criterion": "Updating an existing exact-session claim refreshes the shared projection and emits one session_upsert receipt with equal registry and projection digests; a forced receipt-write failure is reported visibly after the mutation rather than concealed.",
+          "evidence_required": [
+            "Focused existing-session upsert regression tests",
+            "Exact durable receipt and digest readback from the claimed implementation lane"
+          ],
+          "negative_control": "A missing or failed receipt append returns mutation_applied_audit_failed and never reports the mutation as absent."
+        }
+      ],
+      "readiness": {
+        "status": "ready",
+        "required_approval_types": [],
+        "approvals": [],
+        "failed_guards": []
+      },
+      "claim_policy": {
+        "eligibility_rule": "Fresh exact claim owns only the named lifecycle, receipt-contract, test, evidence, and Plan-status paths.",
+        "lease_policy": "renewable",
+        "lease_duration_minutes": 1440,
+        "max_active_per_claimant": 1,
+        "named_owner_id": null
+      },
+      "status": "accepted",
+      "record_version": 2
+    },
+    {
+      "schema_version": "1.0",
+      "record_type": "work_unit",
       "id": "prewrite-pw-02b-fleet-projection-refresh",
       "initiative_id": "coordination-integrity",
       "goal_id": "prewrite-claim-enforcement",
-      "design_revision": "plan-108-v2",
-      "spec_revision": "prewrite-pw-02b-v2",
+      "design_revision": "plan-108-v4",
+      "spec_revision": "prewrite-pw-02b-v3",
       "title": "Certify the refreshed fleet and close the stale-projection gate",
       "class": "verification",
       "objective": "Prove the complete active sanctioned writer fleet cannot leave the shared projection stale before hard enforcement is allowed.",
       "profile": "standard",
       "execution_class": "independently_executable",
-      "claimability": "blocked_dependencies",
+      "claimability": "not_applicable",
       "authorization_mode": "registry_claim",
       "scope": {
         "included": [
@@ -541,6 +692,15 @@
             "required_status": "accepted"
           },
           "rationale": "Certification runs only after every eligible fleet update is merged and closed."
+        },
+        {
+          "unit_id": "prewrite-pw-02d-session-upsert-projection-receipt",
+          "type": "hard",
+          "gate": {
+            "type": "unit_status",
+            "required_status": "accepted"
+          },
+          "rationale": "Existing session upserts are sanctioned live claim mutations and must not bypass projection refresh or durable provenance."
         }
       ],
       "conflict_surfaces": [
@@ -571,10 +731,10 @@
         }
       ],
       "readiness": {
-        "status": "blocked",
+        "status": "ready",
         "required_approval_types": [],
         "approvals": [],
-        "failed_guards": ["prewrite-pw-02b2-fleet-rollout must be accepted"]
+        "failed_guards": []
       },
       "claim_policy": {
         "eligibility_rule": "PW-02B2 accepted; claim only final fleet evidence and Plan 108 status paths.",
@@ -583,8 +743,8 @@
         "max_active_per_claimant": 1,
         "named_owner_id": null
       },
-      "status": "blocked",
-      "record_version": 4
+      "status": "accepted",
+      "record_version": 8
     },
     {
       "schema_version": "1.0",
@@ -594,19 +754,19 @@
       "goal_id": "prewrite-claim-enforcement",
       "design_revision": "plan-108-v2",
       "spec_revision": "prewrite-pw-03-v2",
-      "title": "Promote enforced-planning to hard pre-write enforcement and prove rollback",
+      "title": "Promote enforced-planning to hard pre-write enforcement and prove native controls",
       "class": "integration",
       "objective": "Enable enforcement only after accepted calibration, then prove unauthorized native writes are stopped before mutation and exact claimed writes still succeed.",
       "profile": "standard",
       "execution_class": "independently_executable",
-      "claimability": "blocked_dependencies",
+      "claimability": "not_applicable",
       "authorization_mode": "registry_claim",
       "scope": {
         "included": [
           "The enforced-planning repository only",
           "Exact enforce-mode configuration change",
           "Real positive and negative file-hash probes",
-          "Rollback and retained receipts"
+          "Retained enforce-mode configuration and receipts"
         ],
         "excluded": [
           "Fleet-wide enforcement",
@@ -624,12 +784,17 @@
           "kind": "work_unit_output",
           "id": "prewrite-pw-02b-fleet-projection-refresh",
           "revision": "accepted"
+        },
+        {
+          "kind": "work_unit_output",
+          "id": "prewrite-pw-02c-codex-matcher-repair",
+          "revision": "accepted"
         }
       ],
       "outputs": [
         "Enforced native Codex apply_patch path in enforced-planning",
         "Positive and negative native write receipts",
-        "Verified observe/off rollback"
+        "Verified enforce-mode audit readback"
       ],
       "dependencies": [
         {
@@ -649,6 +814,15 @@
             "required_status": "accepted"
           },
           "rationale": "Hard enforcement would create intermittent false denials while any active claim writer can leave the shared projection stale."
+        },
+        {
+          "unit_id": "prewrite-pw-02c-codex-matcher-repair",
+          "type": "hard",
+          "gate": {
+            "type": "unit_status",
+            "required_status": "accepted"
+          },
+          "rationale": "The real Codex pilot requires generated wiring that actually matches native apply_patch events."
         }
       ],
       "conflict_surfaces": [
@@ -662,23 +836,21 @@
       "acceptance": [
         {
           "id": "PW03-A1",
-          "criterion": "In enforced-planning, an out-of-scope native edit attempt against README.md is denied with unchanged SHA-256, an exact claimed edit to tests/fixtures/prewrite_live_probe.txt succeeds, and rollback restores claims.prewrite_mode=observe.",
+          "criterion": "In enforced-planning, an out-of-scope native edit attempt against README.md is denied with unchanged SHA-256, an exact claimed edit to tests/fixtures/prewrite_live_probe.txt succeeds, and audit readback retains claims.prewrite_mode=enforce.",
           "evidence_required": [
             "Real native negative-control receipt and unchanged before/after hash",
             "Real native positive-control receipt and expected diff",
-            "Rollback readback",
+            "Enforce-mode audit readback",
             "Relevant regression suite"
           ],
           "negative_control": "A missing registry, malformed identity, or stale claim must not be converted into an allow decision in enforce mode."
         }
       ],
       "readiness": {
-        "status": "blocked",
+        "status": "ready",
         "required_approval_types": [],
         "approvals": [],
-        "failed_guards": [
-          "prewrite-pw-02b-fleet-projection-refresh must be accepted"
-        ]
+        "failed_guards": []
       },
       "claim_policy": {
         "eligibility_rule": "PW-02 and PW-02B accepted and the target repository/configuration paths declared in a fresh exact claim.",
@@ -687,8 +859,76 @@
         "max_active_per_claimant": 1,
         "named_owner_id": null
       },
-      "status": "blocked",
-      "record_version": 3
+      "status": "accepted",
+      "record_version": 5
+    },
+    {
+      "schema_version": "1.0",
+      "record_type": "work_unit",
+      "id": "prewrite-pw-04-governed-fleet-enforcement",
+      "initiative_id": "coordination-integrity",
+      "goal_id": "prewrite-claim-enforcement",
+      "design_revision": "plan-108-v3",
+      "spec_revision": "prewrite-pw-04-v1",
+      "title": "Promote every authorized active governed repository to hard pre-write enforcement",
+      "class": "integration",
+      "objective": "Make unclaimed native edits fail before mutation across the authorized governed fleet, with explicit exceptions instead of implicit off state.",
+      "profile": "standard",
+      "execution_class": "independently_executable",
+      "claimability": "ready_for_execution",
+      "authorization_mode": "registry_claim",
+      "scope": {
+        "included": [
+          "Fresh active governed-repository target manifest from Project Meta repository governance",
+          "A bounded source-owned pre-write installer profile before the first target rollout",
+          "One exact claimed configuration and generated-hook rollout lane per authorized repository",
+          "Per-repository enforce-mode and adapter audit readback",
+          "Representative both-sign native canaries for each distinct client/configuration shape",
+          "Explicit evidence-backed exceptions with owner and resume event"
+        ],
+        "excluded": [
+          "Archived, vendored, external, or unauthorized repositories",
+          "Arbitrary-process or operating-system write containment",
+          "Force-push, deployment, package publication, or non-Git publication",
+          "Closing or discarding pre-existing dirty work"
+        ]
+      },
+      "inputs": [
+        {"kind": "work_unit_output", "id": "prewrite-pw-03-enforce-promotion", "revision": "accepted"},
+        {"kind": "authority", "id": "project-meta/PROJECT_GRAPH.json", "revision": "fresh-default-branch"}
+      ],
+      "outputs": [
+        "Frozen governed-fleet enforcement manifest",
+        "Bounded pre-write installer/profile contract",
+        "Merged per-repository enforce configuration and generated adapters",
+        "Fleet audit with no implicit off repository",
+        "Representative native denial and exact-claim allow receipts"
+      ],
+      "dependencies": [
+        {"unit_id": "prewrite-pw-03-enforce-promotion", "type": "hard", "gate": {"type": "unit_status", "required_status": "accepted"}, "rationale": "Fleet promotion starts only after the fixed repository pilot proves denial and allow through the real native boundary with retained enforce-mode readback."}
+      ],
+      "conflict_surfaces": [
+        {"kind": "external_system", "target": "Project Meta active governed-repository inventory", "access": "read", "coordination_key": "prewrite-governed-fleet-promotion"},
+        {"kind": "repository_path", "target": "enforced-planning installer and hook-wiring profile", "repository": "enforced-planning", "access": "write", "coordination_key": "prewrite-governed-fleet-promotion"},
+        {"kind": "external_system", "target": "authorized governed repository configuration and generated hook surfaces", "access": "exclusive", "coordination_key": "prewrite-governed-fleet-promotion"}
+      ],
+      "acceptance": [
+        {
+          "id": "PW04-A1",
+          "criterion": "Every authorized active governed repository in the frozen manifest has enforce-mode configuration and current generated native adapters, or an explicit evidence-backed exception with owner and resume event; no row is implicitly off or unclassified.",
+          "evidence_required": [
+            "Revision-bound Project Meta target manifest",
+            "Per-repository claim, merge revision, closeout receipt, and audit readback",
+            "Representative native exact-claim allow and unclaimed-write denial receipts",
+            "Post-rollout fleet audit"
+          ],
+          "negative_control": "An unauthorized, archived, missing, dirty, or actively claimed repository remains unchanged and is reported explicitly rather than counted as enforced."
+        }
+      ],
+      "readiness": {"status": "ready", "required_approval_types": [], "approvals": [], "failed_guards": []},
+      "claim_policy": {"eligibility_rule": "PW-03 accepted; each target matches the frozen governance manifest and receives one exact non-overlapping claim before mutation.", "lease_policy": "renewable", "lease_duration_minutes": 1440, "max_active_per_claimant": 1, "named_owner_id": null},
+      "status": "ready",
+      "record_version": 2
     }
   ]
 }

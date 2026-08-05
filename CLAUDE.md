@@ -19,10 +19,13 @@ Continuous authorization uses one of three profiles from
 All profiles commit and push verified increments, preserve the user outcome,
 and continue past a completed phase while a safe, authorized, outcome-advancing
 next action remains. Keep one stable initiative example above smaller plan
-examples. After three increments or roughly four hours, reassess user-visible
-capability, stakeholder observation, cumulative integration, effort mix, and
-the next step. Reset sequencing when strategic progress is weak even if each
-increment is green; the check needs no new artifact or approval pause.
+examples. Optimize for expected user-visible value or decisive learning per
+wall-clock hour. At the earliest of roughly 45 minutes, two consecutive
+non-outcome increments, or user concern about pace, compare the current path
+with what would make the result substantially more impressive or useful in the
+next 30–60 minutes. Switch reversible in-scope tactics when another action is
+materially better. The check needs no new artifact, approval pause, or narrower
+success criterion.
 
 Do not build parallel coordination identity systems in downstream repos.
 Coordinated assignment and operator surfaces consume the canonical

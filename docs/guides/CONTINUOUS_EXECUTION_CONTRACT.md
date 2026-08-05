@@ -166,13 +166,15 @@ error = new information; same error = not new information), record the finding
 in the active authority and move to the next highest-value unblocked slice. Do
 not retry the same approach indefinitely.
 
-At the earliest of three completed increments, roughly four hours of continuous
-execution, twice the expected effort, user confusion about the deliverable, or
-parallel demos replacing one integrated product, apply the lightweight strategy
-reassessment defined by the shared `initiative-roadmap` skill. Continue when it
-supports the strategy; otherwise reset scope or sequencing before authoring
-successor plans. Apply that skill's roadmap-facing documentation dispositions
-after the decision. The checkpoint occurs in conversation or the existing state
+At the earliest of two consecutive non-outcome increments, roughly 45 minutes
+of continuous execution, twice the expected effort, user concern about pace, or
+parallel demos replacing one integrated product, apply a lightweight strategy
+reassessment. Ask what would make the result substantially more impressive or
+useful in the next 30–60 minutes, then compare the current path with the best
+plausible next action by expected user-visible value or decisive learning per
+wall-clock hour. Switch reversible in-scope tactics when another action is
+materially better; pause only for a material scope, authority, or protected-
+boundary decision. The checkpoint occurs in conversation or the existing state
 authority; it is not a new report, approval gate, cleanup phase, or stop
 condition. A commit, green process test, new schema, refreshed manifest, or
 policy artifact is enabling evidence rather than strategic progress by itself.

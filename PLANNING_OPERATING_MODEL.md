@@ -164,8 +164,8 @@ stage.
 
 Run a lightweight **strategy reassessment** at the earliest of:
 
-- three completed implementation increments;
-- roughly four hours of continuous execution, or the initiative's shorter
+- two consecutive implementation increments without outcome progress;
+- roughly 45 minutes of continuous execution, or the initiative's shorter
   declared checkpoint;
 - elapsed effort exceeding the original estimate or stage boundary by about
   two times;
@@ -178,19 +178,22 @@ Run a lightweight **strategy reassessment** at the earliest of:
 
 The reassessment asks:
 
-1. What can the user concretely do now that was impossible at the previous
+1. What would make the result substantially more impressive or useful in the
+   next 30–60 minutes?
+2. What can the user concretely do now that was impossible at the previous
    checkpoint?
-2. Did stakeholder observation status advance?
-3. Is work converging on one cumulative product or accumulating disconnected
+3. Did stakeholder observation status advance?
+4. Is work converging on one cumulative product or accumulating disconnected
    demonstrations?
-4. How did effort divide among outcome, enabling, and process work?
-5. Is the proposed next increment still the shortest path to the stable
-   initiative probe?
+5. How did effort divide among outcome, enabling, and process work?
+6. Does the current path have at least as much expected user-visible value or
+   decisive learning per wall-clock hour as the best plausible next action?
 
-Continue when the answers support the current strategy. Otherwise stop creating
-successor plans, preserve useful work, and reset sequencing or scope around the
-initiative probe. The reassessment is normally an in-conversation or existing-
-authority update, not a new document, approval ceremony, or hard gate.
+Continue when the answers support the current strategy. Otherwise preserve
+useful work and switch reversible in-scope tactics without requesting approval.
+Pause only when the better path changes material scope, authority, or a
+protected boundary. The reassessment is normally an in-conversation or
+existing-authority update, not a new document, approval ceremony, or hard gate.
 
 After the strategy disposition, reconcile the smallest documentation surface
 that could misdirect subsequent work: the roadmap, current-state authority,

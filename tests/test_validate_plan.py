@@ -393,6 +393,7 @@ def test_validate_plan_reports_missing_outcome_first_contract(tmp_path: Path) ->
         "missing_user_outcome",
         "missing_canonical_behavioral_example",
         "missing_critical_path_classification",
+        "missing_capability_adoption",
     } <= warning_codes
     assert result.missing_sections == []
 
@@ -414,6 +415,8 @@ def test_validate_plan_accepts_outcome_first_contract(tmp_path: Path) -> None:
         "Input: Jane introduces herself, then says I later. Action: query Jane. "
         "Result: both passages are returned.\n\n"
         "## References Reviewed\n- `src/module.py`\n\n"
+        "## Capability Adoption\n"
+        "Disposition: none. No existing capability owns this bounded concern.\n\n"
         "## Plan\n### Critical Path Classification\n"
         "| Increment | Class | Change |\n|---|---|---|\n"
         "| Coreference path | `vertical` | Query works |\n\n"
@@ -431,6 +434,8 @@ def test_validate_plan_accepts_outcome_first_contract(tmp_path: Path) -> None:
     assert "missing_user_outcome" not in warning_codes
     assert "missing_canonical_behavioral_example" not in warning_codes
     assert "missing_critical_path_classification" not in warning_codes
+    assert "missing_capability_adoption" not in warning_codes
+    assert "missing_capability_adoption_disposition" not in warning_codes
 
 
 def test_validate_plan_exempts_trivial_change_from_outcome_first_contract(tmp_path: Path) -> None:

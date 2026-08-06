@@ -14,6 +14,8 @@ import yaml  # type: ignore[import-untyped]
 from pydantic import ValidationError
 
 from enforced_planning.planning_handoff import (
+    CapabilityAdoptionBinding,
+    EvidenceTarget,
     PlanningHandoffExchange,
     RoadmapGoalHandoff,
     canonical_record_sha256,
@@ -88,6 +90,54 @@ def test_handoff_json_schema_is_closed_and_described() -> None:
     assert schema["additionalProperties"] is False
     assert schema["properties"]["objective"]["description"]
     assert schema["properties"]["project_roadmap_ref"]["description"]
+
+
+def test_required_capability_must_have_exact_adoption_binding() -> None:
+    """A capability reference cannot remain disconnected from its consumer path."""
+
+    payload = _load_yaml(VALID_FIXTURE)["handoff"]
+    capability_ref = {
+        "path": "docs/capabilities/person-contract.md",
+        "revision": "abc123",
+        "concern": "person construction",
+    }
+    payload["required_capability_refs"] = [capability_ref]
+
+    with pytest.raises(ValidationError, match="capability_adoptions must exactly match"):
+        RoadmapGoalHandoff.model_validate(payload)
+
+    payload["capability_adoptions"] = [
+        {
+            "capability_ref": capability_ref,
+            "disposition": "reuse",
+            "canonical_seam": "authoring.live.build_live_bindings",
+            "intended_consumer": "regional outbreak scenario",
+            "adoption_proof": {
+                "claim": "An authentic outbreak run records person_contract_v1 for every participant.",
+                "evidence_class": "observed",
+            },
+            "replacement_ref": None,
+            "exception_reason": None,
+        }
+    ]
+
+    handoff = RoadmapGoalHandoff.model_validate(payload)
+    assert handoff.capability_adoptions[0].disposition == "reuse"
+
+
+def test_capability_adoption_disposition_requires_authority_or_reason() -> None:
+    """Supersession and reduced-capability exceptions cannot be silent."""
+
+    common = {
+        "capability_ref": {"path": "capability.md", "revision": "abc123", "concern": "owned seam"},
+        "canonical_seam": "package.factory",
+        "intended_consumer": "flagship demo",
+        "adoption_proof": EvidenceTarget(claim="The demo executes the seam.", evidence_class="observed"),
+    }
+    with pytest.raises(ValidationError, match="supersede requires replacement_ref"):
+        CapabilityAdoptionBinding.model_validate({**common, "disposition": "supersede"})
+    with pytest.raises(ValidationError, match="explicit_exception requires exception_reason"):
+        CapabilityAdoptionBinding.model_validate({**common, "disposition": "explicit_exception"})
 
 
 def test_cli_validates_positive_fixture() -> None:

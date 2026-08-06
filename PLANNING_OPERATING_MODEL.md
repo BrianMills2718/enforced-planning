@@ -84,6 +84,12 @@ an agent:
     candidate or unaccepted evidence until their target, review, integration,
     and authority transitions occur. A target change triggers bounded impact
     reconciliation rather than automatic restart or silent evidence reuse.
+19. **Implementation is not adoption.** A reusable capability is not adopted
+    merely because its code exists or its isolated tests pass. Work affecting a
+    concern already owned by a capability must reuse its canonical seam, extend
+    it, supersede it through an accepted replacement, or declare a visible
+    bounded exception. Completion evidence must cross the intended consumer
+    path; silent parallel implementations are non-conforming.
 
 ## Execution Profiles
 
@@ -214,6 +220,30 @@ large benchmark, or generalized infrastructure. A comparative evaluation enters
 the plan only after the first-principles comparison test above is satisfied.
 
 ### Target Acceptance And Execution Lineage
+
+Track capability progress on separate dimensions rather than collapsing them
+into one ambiguous `complete` status:
+
+| Dimension | States | Question answered |
+|---|---|---|
+| Implementation | `absent`, `candidate`, `merged` | Does the implementation exist in canonical source? |
+| Adoption | `unbound`, `consumer_bound`, `default` | Which intended product paths actually use it? |
+| Evidence | `unobserved`, `observed` | Has an authentic execution crossed the consumer boundary? |
+| Authority | `proposed`, `active`, `superseded` | Which decision or contract currently governs? |
+
+An enabler may be `merged` while still `unbound` and `unobserved`. Do not call
+that product capability complete. Before implementing a concern with an
+existing owner, record the capability authority, canonical seam, intended
+consumer, `reuse|extend|supersede|explicit_exception` disposition, and adoption
+proof. Supersession requires an accepted replacement authority. An exception
+must remain visible to the operator and may not silently become the flagship or
+default path.
+
+Generic planning checks can validate this declaration but cannot prove runtime
+use. The owning repository must protect important seams with the cheapest
+appropriate structural check and an authentic consumer-path test or runtime
+receipt. One integration observation is stronger adoption evidence than many
+isolated capability tests.
 
 For extraction, transformation, analysis, graph, generated UI, migration, or
 other artifact-producing work, the target is reviewable at the boundary where

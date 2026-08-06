@@ -11,7 +11,9 @@ priority, or store handoff state.
 Use this contract only when a roadmap-selected goal crosses into a distinct
 bounded design procedure. It preserves the roadmap's authority while giving
 design an exact objective, governing references, dependencies, unknowns, and
-evidence target. The return record contains proposals and concern dispositions;
+evidence target. When an existing capability is required, the handoff also
+binds it to a concrete seam, intended consumer, disposition, and adoption proof.
+The return record contains proposals and concern dispositions;
 the roadmap owner must adopt any roadmap change in the roadmap's own authority.
 
 ```mermaid
@@ -51,6 +53,14 @@ to a global handoff registry.
 the immutable roadmap revision. It also binds the exact objective text by
 SHA-256. References carry a path, immutable revision, and named concern instead
 of copying source prose.
+
+Every `required_capability_ref` has exactly one `capability_adoptions` entry.
+The disposition is `reuse`, `extend`, `supersede`, or `explicit_exception`.
+Supersession requires an accepted replacement reference; an exception requires
+a visible bounded reason. The binding names the canonical seam, intended
+consumer, and evidence that will prove the consumer actually executed it.
+This prevents a completed substrate implementation from being mistaken for
+product adoption.
 
 `DesignPacketResult` echoes the goal, objective, roadmap revision, and canonical
 handoff digest. Its capability, relationship, and roadmap fields are typed
@@ -105,6 +115,9 @@ does not write files, register current state, or adopt returned proposals.
 | Material concern without closure, native authority, or owner/resume condition | Reject the result. |
 | Proposed objective revision | Permit the proposal, but do not authorize implementation until the roadmap authority adopts it. |
 | Superseded or stale referenced authority | The caller must surface and resolve it; structural validation alone cannot establish freshness. |
+| Required capability lacks one exact adoption binding | Reject the handoff. |
+| Supersession lacks an accepted replacement, or exception lacks a reason | Reject the handoff. |
+| Adoption declaration exists but the consumer never executes it | Repository integration evidence remains incomplete; the handoff cannot prove runtime use. |
 
 ## Compatibility and Promotion
 

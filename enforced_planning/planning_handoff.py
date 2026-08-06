@@ -59,6 +59,49 @@ class EvidenceTarget(StrictRecord):
     )
 
 
+class CapabilityAdoptionBinding(StrictRecord):
+    """Bind an existing capability to the consumer path that must actually use it."""
+
+    capability_ref: AuthorityRef = Field(description="Existing capability authority being adopted or displaced.")
+    disposition: Literal["reuse", "extend", "supersede", "explicit_exception"] = Field(
+        description="Explicit treatment of the existing capability; silent parallel implementations are forbidden."
+    )
+    canonical_seam: str = Field(
+        min_length=1,
+        description="Repository symbol, interface, command, or other concrete entrypoint owned by the capability.",
+    )
+    intended_consumer: str = Field(
+        min_length=1,
+        description="Product path, scenario, service, or other consumer that must bind to the capability.",
+    )
+    adoption_proof: EvidenceTarget = Field(
+        description="Evidence that will show the intended consumer actually executed the selected capability path."
+    )
+    replacement_ref: AuthorityRef | None = Field(
+        default=None,
+        description="Accepted replacement authority required only when the prior capability is superseded.",
+    )
+    exception_reason: str | None = Field(
+        default=None,
+        min_length=1,
+        description="Visible bounded reason required only for an explicit reduced-capability exception.",
+    )
+
+    @model_validator(mode="after")
+    def validate_disposition_fields(self) -> "CapabilityAdoptionBinding":
+        """Keep replacement and exception authority explicit and mutually exclusive."""
+
+        if self.disposition == "supersede":
+            if self.replacement_ref is None or self.exception_reason is not None:
+                raise ValueError("supersede requires replacement_ref and forbids exception_reason")
+        elif self.disposition == "explicit_exception":
+            if self.exception_reason is None or self.replacement_ref is not None:
+                raise ValueError("explicit_exception requires exception_reason and forbids replacement_ref")
+        elif self.replacement_ref is not None or self.exception_reason is not None:
+            raise ValueError(f"{self.disposition} forbids replacement_ref and exception_reason")
+        return self
+
+
 class MaterialUnknown(StrictRecord):
     """Keep an unknown explicit and assign its permitted treatment."""
 
@@ -109,6 +152,10 @@ class RoadmapGoalHandoff(StrictRecord):
     required_capability_refs: tuple[AuthorityRef, ...] = Field(
         default=(), description="Existing authorities for capabilities required by the goal."
     )
+    capability_adoptions: tuple[CapabilityAdoptionBinding, ...] = Field(
+        default=(),
+        description="Exact reuse, extension, supersession, or visible-exception binding for each required capability.",
+    )
     typed_dependencies: tuple[TypedDependency, ...] = Field(default=(), description="Typed project-level dependencies.")
     applicable_decision_refs: tuple[AuthorityRef, ...] = Field(default=(), description="Adopted decisions governing design.")
     applicable_policy_refs: tuple[AuthorityRef, ...] = Field(default=(), description="Policy authorities governing design.")
@@ -143,6 +190,22 @@ class RoadmapGoalHandoff(StrictRecord):
         expected_objective_hash = hashlib.sha256(self.objective.encode("utf-8")).hexdigest()
         if self.objective_sha256 != expected_objective_hash:
             raise ValueError("objective_sha256 does not match objective")
+        required = {
+            (item.path, item.revision, item.concern)
+            for item in self.required_capability_refs
+        }
+        adopted = {
+            (
+                item.capability_ref.path,
+                item.capability_ref.revision,
+                item.capability_ref.concern,
+            )
+            for item in self.capability_adoptions
+        }
+        if len(adopted) != len(self.capability_adoptions):
+            raise ValueError("capability_adoptions must bind each capability exactly once")
+        if adopted != required:
+            raise ValueError("capability_adoptions must exactly match required_capability_refs")
         return self
 
 

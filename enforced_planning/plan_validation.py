@@ -39,6 +39,9 @@ PATH_CLEAN_RE = re.compile(r"[,;:.()]$")
 RESEARCH_CITATION_RE = re.compile(r"^agent_memory:[A-Za-z0-9._-]+$")
 LANDSCAPE_DISPOSITIONS = frozenset({"linked", "inline", "exempt-trivial"})
 CRITICAL_PATH_CLASSES = frozenset({"vertical", "direct_blocker", "enabler", "hardening"})
+CAPABILITY_ADOPTION_DISPOSITIONS = frozenset(
+    {"none", "reuse", "extend", "supersede", "explicit_exception", "explicit-exception"}
+)
 LANDSCAPE_URL_RE = re.compile(r"https?://[^\s)`>]+")
 RESEARCH_PROVENANCE_HINTS = (
     re.compile(r"memory context\s*:\s*`?agent-memory recall", re.IGNORECASE),
@@ -643,6 +646,30 @@ def validate_plan(
                     "advance product status."
                 ),
             })
+
+        capability_adoption = extract_section(content, "Capability Adoption")
+        if len(capability_adoption.strip()) < 10:
+            warnings.append({
+                "code": "missing_capability_adoption",
+                "message": (
+                    "Declare whether the change reuses, extends, supersedes, or explicitly "
+                    "excepts an existing capability, or state that no existing capability "
+                    "owns the concern. Implemented substrate is not proof of consumer adoption."
+                ),
+            })
+        else:
+            normalized_adoption = capability_adoption.lower().replace("`", "")
+            if not any(
+                re.search(rf"\b{re.escape(disposition)}\b", normalized_adoption)
+                for disposition in CAPABILITY_ADOPTION_DISPOSITIONS
+            ):
+                warnings.append({
+                    "code": "missing_capability_adoption_disposition",
+                    "message": (
+                        "Capability Adoption must declare one disposition: none, reuse, "
+                        "extend, supersede, or explicit_exception."
+                    ),
+                })
     uncertainties = parse_uncertainty_register(content)
     covered = {normalize(p) for p in set(affected) | set(references)}
     try:

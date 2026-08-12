@@ -155,10 +155,10 @@ def prune_expired() -> int:
     return _impl.prune_expired()
 
 
-def prune_stale() -> tuple[int, list[str]]:
+def prune_stale(*args: Any, **kwargs: Any) -> tuple[int, list[str]]:
     """Delegate stale-claim pruning while honoring script-level CLAIMS_DIR overrides."""
     _sync_runtime_config()
-    return _impl.prune_stale()
+    return _impl.prune_stale(*args, **kwargs)
 
 
 def prune_completed() -> tuple[int, list[str]]:

@@ -1776,8 +1776,13 @@ def prune_expired() -> int:
     return len(removed_claims)
 
 
-def prune_stale() -> tuple[int, list[str]]:
-    """Remove stale live claims and return the removal count plus scope labels."""
+def prune_stale(
+    *,
+    agent: str | None = None,
+    project: str | None = None,
+    scope: str | None = None,
+) -> tuple[int, list[str]]:
+    """Remove selected stale live claims and return count plus scope labels."""
     removed_claims: list[tuple[Path, ClaimRecord]] = []
     with claim_registry_lock(CLAIMS_DIR):
         registry_digest_before = _registry_digest(CLAIMS_DIR)
@@ -1792,6 +1797,12 @@ def prune_stale() -> tuple[int, list[str]]:
                 continue
             claim = normalize_claim(data, source_file=str(claim_file))
             if claim is None or not claim.is_live():
+                continue
+            if agent is not None and claim.agent != agent:
+                continue
+            if project is not None and project not in claim.projects:
+                continue
+            if scope is not None and claim.scope != scope:
                 continue
             liveness_issues = claim_liveness_issues(claim)
             proven_stale_liveness = [issue for issue in liveness_issues if issue != "missing_session_heartbeat"]
@@ -2301,7 +2312,11 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.prune_stale:
         try:
-            removed, removed_scopes = prune_stale()
+            removed, removed_scopes = prune_stale(
+                agent=args.agent,
+                project=args.project,
+                scope=args.scope,
+            )
         except MutationAuditError as exc:
             return _render_mutation_audit_failure(exc, as_json=args.json)
         payload = {"pruned": removed, "removed_scopes": removed_scopes}

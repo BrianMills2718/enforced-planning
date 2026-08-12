@@ -1755,6 +1755,82 @@ def test_prune_stale_removes_only_mechanically_stale_claims(
     assert (claims_dir / "healthy.yaml").exists()
 
 
+def test_prune_stale_honors_agent_project_and_scope_filters(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Explicit CLI filters must not prune unrelated stale claims."""
+    module = _load_module()
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
+
+    base = {
+        "claimed_at": "2026-04-05T12:00:00+00:00",
+        "expires_at": "2099-04-05T13:00:00+00:00",
+        "intent": "Stale claim",
+        "claim_type": "write",
+        "write_paths": ["README.md"],
+        "status": "active",
+    }
+    fixtures = {
+        "selected.yaml": {
+            **base,
+            "agent": "codex",
+            "projects": ["selected-project"],
+            "scope": "selected-scope",
+            "worktree_path": str(tmp_path / "missing-selected"),
+        },
+        "other-project.yaml": {
+            **base,
+            "agent": "codex",
+            "projects": ["other-project"],
+            "scope": "selected-scope",
+            "worktree_path": str(tmp_path / "missing-project"),
+        },
+        "other-scope.yaml": {
+            **base,
+            "agent": "codex",
+            "projects": ["selected-project"],
+            "scope": "other-scope",
+            "worktree_path": str(tmp_path / "missing-scope"),
+        },
+        "other-agent.yaml": {
+            **base,
+            "agent": "claude-code",
+            "projects": ["selected-project"],
+            "scope": "selected-scope",
+            "worktree_path": str(tmp_path / "missing-agent"),
+        },
+    }
+    for name, payload in fixtures.items():
+        _write_claim(claims_dir, name, payload)
+
+    exit_code = module.main(
+        [
+            "--prune-stale",
+            "--agent",
+            "codex",
+            "--project",
+            "selected-project",
+            "--scope",
+            "selected-scope",
+            "--json",
+        ]
+    )
+
+    assert exit_code == 0
+    output = json.loads(capsys.readouterr().out)
+    assert output == {
+        "pruned": 1,
+        "removed_scopes": ["selected-project:selected-scope"],
+    }
+    assert not (claims_dir / "selected.yaml").exists()
+    assert (claims_dir / "other-project.yaml").exists()
+    assert (claims_dir / "other-scope.yaml").exists()
+    assert (claims_dir / "other-agent.yaml").exists()
+
+
 def test_prune_completed_removes_only_completed_claims(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

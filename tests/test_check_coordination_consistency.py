@@ -8,9 +8,7 @@ from pathlib import Path
 
 import yaml  # type: ignore[import-untyped]
 
-from enforced_planning import active_work_registry
-from enforced_planning import coordination_claims
-from enforced_planning import coordination_consistency
+from enforced_planning import active_work_registry, coordination_claims, coordination_consistency
 
 
 def _run(cmd: list[str], cwd: Path) -> None:
@@ -148,3 +146,76 @@ def test_coordination_consistency_warns_on_unclaimed_linked_worktree(tmp_path: P
     assert exit_code == 0
     assert payload["warning_count"] >= 1
     assert any(issue["code"] == "worktree-unclaimed" for issue in payload["issues"])
+
+
+def test_cli_filters_foreign_claims_and_accepts_explicit_repo_paths(tmp_path: Path, capsys) -> None:
+    """A scoped audit must not misclassify claims owned by repositories outside its target set."""
+
+    workspace = tmp_path / "workspace"
+    repo_root = workspace / "nested" / "project-meta"
+    foreign_root = workspace / "foreign"
+    _init_repo(repo_root)
+    _init_repo(foreign_root)
+
+    claims_dir = tmp_path / "claims"
+    _write_claim(
+        claims_dir,
+        "foreign.yaml",
+        {
+            "agent": "codex",
+            "projects": ["foreign"],
+            "scope": "foreign-lane",
+            "intent": "Unrelated work",
+            "claim_type": "write",
+            "write_paths": ["README.md"],
+            "worktree_path": str(foreign_root),
+            "repo_root": str(foreign_root),
+            "branch": "main",
+            "status": "active",
+            "claimed_at": "2026-04-04T08:00:00+00:00",
+            "expires_at": "2099-04-04T09:00:00+00:00",
+        },
+    )
+
+    exit_code = coordination_consistency.main(
+        [
+            "--repo",
+            f"project-meta={repo_root}",
+            "--claims-dir",
+            str(claims_dir),
+            "--json",
+        ]
+    )
+
+    payload = json.loads(capsys.readouterr().out)
+    assert exit_code == 0
+    assert payload["claim_count"] == 0
+    assert payload["repos"] == {"project-meta": str(repo_root.resolve())}
+    assert not any(issue["code"] == "claim-project-out-of-scope" for issue in payload["issues"])
+
+
+def test_cli_can_require_current_prewrite_projection(tmp_path: Path, capsys) -> None:
+    """The operator audit should visibly reject a missing or stale hook projection."""
+
+    workspace = tmp_path / "workspace"
+    repo_root = workspace / "project-meta"
+    _init_repo(repo_root)
+    claims_dir = tmp_path / "claims"
+
+    exit_code = coordination_consistency.main(
+        [
+            "--workspace-root",
+            str(workspace),
+            "--repo",
+            "project-meta",
+            "--claims-dir",
+            str(claims_dir),
+            "--verify-prewrite-projection",
+            "--json",
+        ]
+    )
+
+    payload = json.loads(capsys.readouterr().out)
+    assert exit_code == 1
+    assert payload["prewrite_projection_current"] is False
+    assert any(issue["code"] == "prewrite-projection-drift" for issue in payload["issues"])

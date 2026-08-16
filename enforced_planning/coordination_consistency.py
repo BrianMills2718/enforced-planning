@@ -9,9 +9,11 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
-from enforced_planning import active_work_registry
-from enforced_planning import coordination_claims
-
+from enforced_planning import (
+    active_work_registry,
+    coordination_claims,
+    prewrite_claim_projection,
+)
 
 DEFAULT_WORKSPACE_ROOT = Path.home() / "projects"
 
@@ -164,6 +166,7 @@ def build_consistency_report(
     repo_roots: dict[str, Path],
     registry_json_path: Path | None = None,
     registry_markdown_path: Path | None = None,
+    projection_current: bool | None = None,
 ) -> dict[str, Any]:
     """Return a structured coordination consistency report."""
     worktrees = load_repo_worktrees(repo_roots)
@@ -174,6 +177,16 @@ def build_consistency_report(
     expected_registry = active_work_registry.build_registry_payload(claims=claims)
     issues: list[ConsistencyIssue] = []
     matched_worktrees: set[tuple[str, str]] = set()
+
+    if projection_current is False:
+        issues.append(
+            ConsistencyIssue(
+                severity="hard",
+                code="prewrite-projection-drift",
+                repo=None,
+                message="The digest-bound pre-write authority projection is missing or stale relative to canonical live claims.",
+            )
+        )
 
     for claim in claims:
         project = claim.primary_project()
@@ -357,6 +370,7 @@ def build_consistency_report(
         "repos": {name: str(path) for name, path in sorted(repo_roots.items())},
         "claim_count": len(claims),
         "worktree_count": len(worktrees),
+        "prewrite_projection_current": projection_current,
         "issues": [issue.to_dict() for issue in issues],
         "hard_issue_count": sum(1 for issue in issues if issue.severity == "hard"),
         "warning_count": sum(1 for issue in issues if issue.severity == "warning"),
@@ -377,7 +391,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--repo",
         action="append",
         required=True,
-        help="Repo name under the workspace root to include in the consistency check. Repeat as needed.",
+        help=(
+            "Repo in scope as NAME (resolved under --workspace-root) or "
+            "NAME=/absolute/path. Repeat as needed. Live claims are filtered to "
+            "these projects before worktree checks."
+        ),
     )
     parser.add_argument(
         "--claims-dir",
@@ -391,6 +409,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--registry-markdown",
         help="Optional registry markdown file to compare against the live claim state.",
     )
+    parser.add_argument(
+        "--verify-prewrite-projection",
+        action="store_true",
+        help="Hard-fail when the automatically refreshed digest-bound projection disagrees with canonical claims.",
+    )
     parser.add_argument("--json", action="store_true", help="Emit structured JSON output.")
     return parser.parse_args(argv)
 
@@ -399,17 +422,34 @@ def main(argv: list[str] | None = None) -> int:
     """Run the coordination consistency checker."""
     args = parse_args(argv)
     workspace_root = Path(args.workspace_root).expanduser().resolve()
-    repo_roots = {repo: (workspace_root / repo).resolve() for repo in args.repo}
+    repo_roots: dict[str, Path] = {}
+    for repo_spec in args.repo:
+        name, separator, explicit_path = repo_spec.partition("=")
+        name = name.strip()
+        if not name:
+            raise ValueError("--repo requires a non-empty project name")
+        repo_roots[name] = (
+            Path(explicit_path).expanduser().resolve()
+            if separator
+            else (workspace_root / name).resolve()
+        )
 
     if args.claims_dir:
         coordination_claims.CLAIMS_DIR = Path(args.claims_dir).expanduser().resolve()
 
-    claims = coordination_claims.check_claims()
+    all_claims = coordination_claims.check_claims()
+    claims = [claim for claim in all_claims if claim.primary_project() in repo_roots]
+    projection_current = None
+    if args.verify_prewrite_projection:
+        projection_current = prewrite_claim_projection.projection_is_current(
+            claims_dir=coordination_claims.CLAIMS_DIR
+        )
     report = build_consistency_report(
         claims=claims,
         repo_roots=repo_roots,
         registry_json_path=Path(args.registry_json).expanduser().resolve() if args.registry_json else None,
         registry_markdown_path=Path(args.registry_markdown).expanduser().resolve() if args.registry_markdown else None,
+        projection_current=projection_current,
     )
 
     if args.json:

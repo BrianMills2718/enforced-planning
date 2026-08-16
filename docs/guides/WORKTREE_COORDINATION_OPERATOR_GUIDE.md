@@ -8,7 +8,12 @@ and project-meta docs; do not treat them as competing operator handbooks.
 ## Canonical Truth Surfaces
 
 - Cross-project coordination claims: `~/.claude/coordination/claims/*.yaml`
-- Readable current-work snapshot: `~/.claude/coordination/active-work-registry.yaml`
+- Automatically refreshed hook projection:
+  `~/.claude/coordination/prewrite-authority-v1.json`
+- Human/operator current-work readout:
+  `python scripts/meta/check_coordination_claims.py --list --json`
+- Claims/worktrees/projection consistency audit:
+  `python scripts/check_coordination_consistency.py --repo PROJECT=/absolute/repo/path --verify-prewrite-projection --json`
 - Repo-local in-flight architectural decisions: `agent-memory recall 'active decisions' --project {project}` (ADR-0010: `agent_memory` is the canonical store; `KNOWLEDGE.md ## Active Decisions` is deprecated)
 - Repo opt-in switch: `meta-process.yaml`
 - Sanctioned repo-local worktree interface: `make worktree`,
@@ -41,6 +46,13 @@ cross-project coordination authority.
 Important rule: **claims are canonical, lanes are derived**. Do not invent a
 second mutable lane registry by hand. Update claims; regenerate readable lane
 surfaces from them.
+
+The legacy `~/.claude/coordination/active-work-registry.yaml` and tracked
+`generated/runtime/active_work_registry.*` files may survive as compatibility,
+historical, or explicitly regenerated snapshot surfaces. They are not live
+ownership authority. Do not consult them instead of the canonical claim CLI or
+the digest-bound projection, and do not compare an old committed snapshot with
+today's claims as a health test.
 
 For repositories that set `meta_process.claims.prewrite_mode: observe`, native
 Claude `Edit|Write` and Codex `apply_patch` calls are evaluated before mutation

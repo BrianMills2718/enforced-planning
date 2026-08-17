@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Inject a periodic non-blocking value-per-time course check into agent sessions."""
+"""Inject a periodic non-blocking goal-equivalence pulse into agent sessions."""
 
 from __future__ import annotations
 
@@ -15,13 +15,17 @@ from pathlib import Path
 from typing import Any
 
 
-DEFAULT_INTERVAL_SECONDS = 45 * 60
+DEFAULT_INTERVAL_SECONDS = 15 * 60
 MESSAGE = (
-    "JUICE CHECK (non-blocking): What would make the result substantially more impressive or useful "
-    "within the next 30–60 minutes? Compare that with the current path by expected user-visible value "
-    "or decisive learning per wall-clock hour. If another reversible in-scope action is materially better, "
-    "switch now without asking. Do not create a plan, audit, checklist, or approval pause solely because "
-    "of this reminder."
+    "GOAL-EQUIVALENCE PULSE (non-blocking): Re-read the accepted user outcome and canonical example. "
+    "Check: (1) is the artifact now being built the same kind, scope, count, and depth; (2) what "
+    "user-visible result changed since the last pulse; (3) is current work outcome-bearing, a demonstrated "
+    "direct blocker, an enabler, or hardening; and (4) what single next action closes the largest remaining "
+    "gap? If deliverable equivalence is no or unclear, or two increments were non-outcome work, create and "
+    "validate ExecutionProgressCheckpointV1 now. Preserve the accepted outcome and switch reversible "
+    "in-scope tactics autonomously. Restart context only when that validated checkpoint requires a capsule "
+    "or the phase changed. Do not create an artifact, plan, audit, checklist, approval pause, or context "
+    "reset solely because of this pulse."
 )
 SUPPORTED_EVENTS = {"SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop"}
 

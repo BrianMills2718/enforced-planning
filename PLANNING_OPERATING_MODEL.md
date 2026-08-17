@@ -168,6 +168,15 @@ After the mechanism proof, repeating a mechanism-sized example is justified
 only by a named uncertainty or blocker. Otherwise move to the next progression
 stage.
 
+At roughly 15 minutes, at the next natural tool boundary, run a lightweight
+**goal-equivalence pulse**. Re-read the accepted user outcome and canonical
+behavioral example. Compare the artifact now being built across kind, scope,
+count, and depth; name the last user-visible result; classify current work; and
+choose the single next action that closes the largest remaining gap. This is a
+non-blocking attention signal: it does not interrupt a running tool, create an
+artifact, change scope, or reset context. Continue silently when the current
+artifact remains equivalent to the accepted deliverable.
+
 Run a lightweight **strategy reassessment** at the earliest of:
 
 - two consecutive implementation increments without outcome progress;
@@ -180,7 +189,9 @@ Run a lightweight **strategy reassessment** at the earliest of:
 - parallel fixtures, models, demos, or surfaces accumulating where the outcome
   requires one integrated product; or
 - a passing increment producing only a trivial variation of demonstrated
-  behavior.
+  behavior; or
+- a goal-equivalence pulse that finds the deliverable is no longer the same
+  kind, scope, count, or depth, or cannot determine that it is.
 
 The reassessment asks:
 
@@ -200,6 +211,10 @@ useful work and switch reversible in-scope tactics without requesting approval.
 Pause only when the better path changes material scope, authority, or a
 protected boundary. The reassessment is normally an in-conversation or
 existing-authority update, not a new document, approval ceremony, or hard gate.
+When the equivalence answer is no or unclear, or drift otherwise fires a
+tripwire, use the existing typed execution-progress checkpoint. Restart context
+only after a second failed checkpoint or an explicit target, agent, or phase
+transition, and only through a compact state-preserving restart capsule.
 
 After the strategy disposition, reconcile the smallest documentation surface
 that could misdirect subsequent work: the roadmap, current-state authority,

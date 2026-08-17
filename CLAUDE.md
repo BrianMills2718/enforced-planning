@@ -20,12 +20,15 @@ All profiles commit and push verified increments, preserve the user outcome,
 and continue past a completed phase while a safe, authorized, outcome-advancing
 next action remains. Keep one stable initiative example above smaller plan
 examples. Optimize for expected user-visible value or decisive learning per
-wall-clock hour. At the earliest of roughly 45 minutes, two consecutive
-non-outcome increments, or user concern about pace, compare the current path
-with what would make the result substantially more impressive or useful in the
-next 30–60 minutes. Switch reversible in-scope tactics when another action is
-materially better. The check needs no new artifact, approval pause, or narrower
-success criterion.
+wall-clock hour. At roughly 15 minutes, at the next natural tool boundary,
+compare the artifact being built with the accepted outcome and canonical
+example across kind, scope, count, and depth; name the last visible result,
+classify current work, and choose the next gap-closing action. At the earliest
+of roughly 45 minutes, two consecutive non-outcome increments, failed
+deliverable equivalence, or user concern about pace, perform the fuller strategy
+reassessment. Switch reversible in-scope tactics when another action is
+materially better. Neither check needs a new artifact, approval pause, narrower
+success criterion, or automatic context reset.
 
 Do not build parallel coordination identity systems in downstream repos.
 Coordinated assignment and operator surfaces consume the canonical

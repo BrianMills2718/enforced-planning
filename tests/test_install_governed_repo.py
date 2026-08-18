@@ -66,6 +66,7 @@ MAILBOX_ROLLOUT_PATHS = MAILBOX_COMMON_ROLLOUT_PATHS | {
     "enforced_planning/push_safety.py",
     "enforced_planning/session_contracts.py",
     "enforced_planning/session_lifecycle.py",
+    "enforced_planning/surface_runtime.py",
     "enforced_planning/worktree_lifecycle.yaml",
     "enforced_planning/worktree_paths.py",
     "scripts/refresh_prewrite_claim_projection.py",
@@ -82,6 +83,7 @@ CLAIM_PROJECTION_REFRESH_PATHS = {
     "enforced_planning/push_safety.py",
     "enforced_planning/session_contracts.py",
     "enforced_planning/session_lifecycle.py",
+    "enforced_planning/surface_runtime.py",
     "enforced_planning/worktree_lifecycle.yaml",
     "enforced_planning/worktree_paths.py",
     "scripts/refresh_prewrite_claim_projection.py",
@@ -833,6 +835,9 @@ def test_install_governed_repo_write_bootstraps_minimum_repo_and_passes_audit(
     assert "$(PROJECT_STATUS_SCRIPT) --repo-root ." in makefile_text
     assert "session-finish:" in makefile_text
     assert "session-close:" in makefile_text
+    assert "surface-up:" in makefile_text
+    assert "surface-preview:" in makefile_text
+    assert "surface-audit:" in makefile_text
     assert "review-claim:" in makefile_text
     assert "raise-concern:" in makefile_text
     assert "verification-batch-freeze:" in makefile_text
@@ -1336,6 +1341,7 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
             "install:enforced_planning/repository_status.py",
             "install:enforced_planning/session_contracts.py",
             "install:enforced_planning/session_lifecycle.py",
+            "install:enforced_planning/surface_runtime.py",
             "install:enforced_planning/verification_batch.py",
             "install:enforced_planning/worktree_lifecycle.yaml",
             "install:enforced_planning/worktree_paths.py",
@@ -1354,6 +1360,7 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
             "install:scripts/meta/session_status.py",
             "install:scripts/meta/project_status.py",
             "install:scripts/meta/session_resume.py",
+            "install:scripts/meta/surface_runtime.py",
             "install:scripts/meta/validate_doc_authority.py",
             "install:scripts/meta/verification_batch.py",
             "install:scripts/coordination_inbox.py",
@@ -1390,6 +1397,7 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
     assert (tmp_path / "scripts" / "meta" / "session_heartbeat.py").exists()
     assert (tmp_path / "scripts" / "meta" / "session_status.py").exists()
     assert (tmp_path / "scripts" / "meta" / "session_resume.py").exists()
+    assert (tmp_path / "scripts" / "meta" / "surface_runtime.py").exists()
     assert (tmp_path / "scripts" / "meta" / "verification_batch.py").exists()
     assert (tmp_path / "scripts" / "coordination_inbox.py").exists()
     assert (tmp_path / "scripts" / "coordination_messages.py").exists()
@@ -1406,6 +1414,7 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
     assert (tmp_path / "scripts" / "meta" / "session_close.py").exists()
     assert (tmp_path / "enforced_planning" / "session_contracts.py").exists()
     assert (tmp_path / "enforced_planning" / "session_lifecycle.py").exists()
+    assert (tmp_path / "enforced_planning" / "surface_runtime.py").exists()
     assert (tmp_path / "enforced_planning" / "verification_batch.py").exists()
     assert (tmp_path / "enforced_planning" / "worktree_lifecycle.yaml").exists()
     assert (tmp_path / "enforced_planning" / "worktree_paths.py").exists()
@@ -1463,6 +1472,16 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
     assert close_help.returncode == 0, close_help.stdout + close_help.stderr
     assert "--disposition" in close_help.stdout
     assert "--recovery-ref" in close_help.stdout
+
+    surface_help = subprocess.run(
+        [sys.executable, str(tmp_path / "scripts" / "meta" / "surface_runtime.py"), "--help"],
+        cwd=str(tmp_path),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert surface_help.returncode == 0, surface_help.stdout + surface_help.stderr
+    assert "revision-bound canonical and preview" in surface_help.stdout
 
     safe_remove_help = subprocess.run(
         [

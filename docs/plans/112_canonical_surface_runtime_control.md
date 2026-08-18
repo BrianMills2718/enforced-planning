@@ -1,6 +1,6 @@
 # Plan 112: Canonical Surface Runtime Control
 
-**Status:** In Progress
+**Status:** Complete
 **Type:** implementation
 **Priority:** High
 **phase_ref:** "Governed repository operations"
@@ -51,6 +51,22 @@ Provide a portable, installed controller that:
 7. The governed-repo installer includes the module, CLI, and Make entrypoints.
 8. Graph Application Toolkit consumes this exact installed path in a follow-on
    repository-owned adoption increment.
+
+## Completion Evidence
+
+- Shared controller and installer: enforced-planning PRs
+  [#120](https://github.com/BrianMills2718/enforced-planning/pull/120),
+  [#121](https://github.com/BrianMills2718/enforced-planning/pull/121), and
+  [#122](https://github.com/BrianMills2718/enforced-planning/pull/122).
+- Downstream adoption: Graph Application Toolkit PR
+  [#43](https://github.com/BrianMills2718/graph_application_toolkit/pull/43),
+  canonical revision `0e00edb39715b77e0028bc8a7c6483fa7a299968`.
+- Cross-project report-only inventory: Project Meta PR
+  [#403](https://github.com/BrianMills2718/project-meta/pull/403).
+- The canonical Graph Application Toolkit surface passed its exact lease and
+  frontend/backend identity audit on ports 5211/8011; compiled Chrome opened
+  Projects, invoked New project, and observed the Goal step without console
+  issues.
 
 ## Failure Behavior
 

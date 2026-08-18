@@ -48,4 +48,7 @@ repos:
   - id: osint_tools
     path: ~/projects/osint_tools
     tier: governed
+  - id: process_tracing
+    path: ~/projects/process_tracing
+    tier: governed
 # Note: agent_ecology2 intentionally excluded (PR #1148 pending merge)

@@ -173,6 +173,19 @@ def load_surface(repo_root: Path, surface_id: str) -> SurfaceDefinition:
 
 
 def _process_start_token(pid: int) -> str | None:
+    stat_path = Path("/proc") / str(pid) / "stat"
+    try:
+        stat = stat_path.read_text(encoding="utf-8")
+        closing_parenthesis = stat.rfind(")")
+        fields_after_command = stat[closing_parenthesis + 2 :].split()
+        if (
+            closing_parenthesis > 0
+            and len(fields_after_command) >= 20
+            and fields_after_command[0] != "Z"
+        ):
+            return f"proc:{fields_after_command[19]}"
+    except OSError:
+        pass
     result = subprocess.run(
         ["ps", "-p", str(pid), "-o", "lstart="],
         check=False,
@@ -180,7 +193,7 @@ def _process_start_token(pid: int) -> str | None:
         text=True,
     )
     token = " ".join(result.stdout.split())
-    return token or None
+    return f"ps:{token}" if token else None
 
 
 def _process_cwd(pid: int) -> str | None:
@@ -342,6 +355,26 @@ def _terminate_exact(lease: Mapping[str, Any], timeout_seconds: float = 5.0) -> 
         os.killpg(pid, signal.SIGKILL)
 
 
+def _terminate_started_process(
+    process: subprocess.Popen[bytes], timeout_seconds: float = 5.0
+) -> None:
+    """Clean the private process group created by this invocation."""
+    try:
+        os.killpg(process.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        return
+    try:
+        process.wait(timeout=timeout_seconds)
+        return
+    except subprocess.TimeoutExpired:
+        pass
+    try:
+        os.killpg(process.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        return
+    process.wait(timeout=timeout_seconds)
+
+
 def _runtime_target(
     surface: SurfaceDefinition,
     *,
@@ -437,7 +470,7 @@ def start_surface(
             )
         start_token = _process_start_token(process.pid)
         if start_token is None:
-            process.terminate()
+            _terminate_started_process(process)
             raise SurfaceRuntimeError("started process disappeared before its lease could be recorded")
         lease: dict[str, Any] = {
             "schema_version": LEASE_SCHEMA,
@@ -465,7 +498,7 @@ def start_surface(
     deadline = time.monotonic() + target.readiness_timeout_seconds
     last_error = "identity endpoint was not observed"
     while time.monotonic() < deadline:
-        if not _lease_live(lease):
+        if process.poll() is not None:
             last_error = "surface process exited before readiness"
             break
         try:
@@ -476,8 +509,7 @@ def start_surface(
             last_error = str(exc)
             time.sleep(0.1)
     with _project_lock(state_root, surface.project_id):
-        if _lease_live(lease):
-            _terminate_exact(lease)
+        _terminate_started_process(process)
         lease_path.unlink(missing_ok=True)
     raise SurfaceRuntimeError(
         f"surface failed readiness: {last_error}; inspect {log_path}"

@@ -417,6 +417,10 @@ def start_surface(
         if mode == "canonical"
         else _git(repo_root, "rev-parse", "HEAD")
     )
+    if mode == "preview" and _git(repo_root, "status", "--short"):
+        raise SurfaceRuntimeError(
+            "preview surface requires a clean checkout so its source revision identifies served content"
+        )
     target, frontend_port, backend_port = _runtime_target(surface, mode=mode)
     lease_id = surface.surface_id if mode == "canonical" else f"{surface.surface_id}-preview-{uuid.uuid4().hex[:10]}"
     lease_path = _lease_path(state_root, surface.project_id, lease_id)

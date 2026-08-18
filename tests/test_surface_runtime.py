@@ -160,6 +160,18 @@ def test_preview_uses_noncanonical_ports_and_independent_lease(tmp_path: Path) -
         stop_surface(repo, "test-ui", lease_id=lease["lease_id"], state_root=state)
 
 
+def test_preview_rejects_dirty_content_that_revision_cannot_identify(tmp_path: Path) -> None:
+    repo, _, _ = _repo(tmp_path)
+    state = tmp_path / "state"
+    _run(repo, "git", "switch", "-c", "feature")
+    (repo / "uncommitted.txt").write_text("not revision bound", encoding="utf-8")
+
+    with pytest.raises(SurfaceRuntimeError, match="preview surface requires a clean checkout"):
+        start_surface(repo, "test-ui", mode="preview", state_root=state)
+
+    assert list_leases(state_root=state) == []
+
+
 def test_identity_mismatch_fails_and_cleans_process_and_lease(tmp_path: Path) -> None:
     repo, _, _ = _repo(tmp_path, wrong_identity=True, spawn_child=True)
     state = tmp_path / "state"

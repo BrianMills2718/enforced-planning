@@ -4,6 +4,7 @@ import json
 import socket
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -31,7 +32,9 @@ def _run(repo: Path, *args: str) -> str:
     return result.stdout.strip()
 
 
-def _repo(tmp_path: Path, *, wrong_identity: bool = False) -> tuple[Path, int, int]:
+def _repo(
+    tmp_path: Path, *, wrong_identity: bool = False, spawn_child: bool = False
+) -> tuple[Path, int, int]:
     repo = tmp_path / "repo"
     repo.mkdir()
     _run(repo, "git", "init", "-b", "main")
@@ -43,11 +46,20 @@ def _repo(tmp_path: Path, *, wrong_identity: bool = False) -> tuple[Path, int, i
     preview_backend = _free_port()
     (repo / "ui").mkdir()
     identity_source = "'wrong'" if wrong_identity else "os.environ['SURFACE_SOURCE_REVISION']"
+    child_source = """
+child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"])
+Path("child.pid").write_text(str(child.pid), encoding="utf-8")
+""" if spawn_child else ""
     (repo / "fake_surface.py").write_text(
         """
 import json
 import os
+from pathlib import Path
+import subprocess
+import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+CHILD_SOURCE
 
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -68,7 +80,7 @@ class Handler(BaseHTTPRequestHandler):
         pass
 
 ThreadingHTTPServer(("127.0.0.1", int(os.environ["API_PORT"])), Handler).serve_forever()
-""".replace("SOURCE_REVISION", identity_source),
+""".replace("SOURCE_REVISION", identity_source).replace("CHILD_SOURCE", child_source),
         encoding="utf-8",
     )
     (repo / "ui" / "registry.yaml").write_text(
@@ -149,11 +161,16 @@ def test_preview_uses_noncanonical_ports_and_independent_lease(tmp_path: Path) -
 
 
 def test_identity_mismatch_fails_and_cleans_process_and_lease(tmp_path: Path) -> None:
-    repo, _, _ = _repo(tmp_path, wrong_identity=True)
+    repo, _, _ = _repo(tmp_path, wrong_identity=True, spawn_child=True)
     state = tmp_path / "state"
     with pytest.raises(SurfaceRuntimeError, match="runtime identity mismatch"):
         start_surface(repo, "test-ui", state_root=state)
     assert list_leases(state_root=state) == []
+    child_pid = int((repo / "child.pid").read_text(encoding="utf-8"))
+    deadline = time.monotonic() + 2
+    while time.monotonic() < deadline and Path(f"/proc/{child_pid}").exists():
+        time.sleep(0.05)
+    assert not Path(f"/proc/{child_pid}").exists()
 
 
 def test_occupied_canonical_port_is_never_killed(tmp_path: Path) -> None:

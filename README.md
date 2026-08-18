@@ -106,6 +106,20 @@ That flow is portable across Codex and Claude Code. The runtime-specific
 session identity is adapter-resolved under the hood; the claim/tracker contract
 stays the same.
 
+Registered human-facing runtimes use the same installed framework surface:
+
+```bash
+make surface-up SURFACE=my-canonical-ui
+make surface-audit SURFACE=my-canonical-ui REQUIRE_RUNNING=1
+make surface-preview SURFACE=my-canonical-ui
+make surface-down SURFACE=my-canonical-ui
+```
+
+The consumer's `ui/registry.yaml` owns the source, integration ref, command,
+ports, and identity endpoint. The controller records exact process and revision
+leases outside Git, reserves canonical ports for the clean integration lineage,
+and prevents worktree closeout from orphaning a live registered surface.
+
 For the shortest adoption path, continue with
 [GETTING_STARTED.md](GETTING_STARTED.md).
 

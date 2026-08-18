@@ -318,6 +318,24 @@ Canonical lifecycle commands:
 - `session-abandon`: explicitly mark a dead lane as abandoned instead of
   leaving it stale forever
 
+Human-facing services have a separate but connected runtime lifecycle:
+
+- `make surface-up SURFACE=<id>` starts the registry-declared canonical surface
+  only from its clean integration lineage and verifies its served identity.
+- `make surface-preview SURFACE=<id>` starts a candidate on noncanonical ports
+  and records an independent preview lease.
+- `make surface-status`, `make surface-audit SURFACE=<id>`, and
+  `make surface-down SURFACE=<id> [LEASE=<id>]` inspect or end exact leases.
+- `session-close` refuses to remove a worktree while a live lease records that
+  worktree as its owner. Stop the exact lease first; never broadly kill matching
+  process names.
+
+The runtime declaration remains in the consumer repository's
+`ui/registry.yaml`. Runtime leases and logs live under `$SURFACE_STATE_ROOT`,
+`$XDG_STATE_HOME/governed-surfaces`, or the default
+`~/.local/state/governed-surfaces`; they are operational state, not Git
+authority.
+
 Supported runtime adapters:
 
 - Codex: `CODEX_THREAD_ID`

@@ -25,6 +25,7 @@ from enforced_planning import (
     doc_authority,
     push_safety,
     session_contracts,
+    surface_runtime,
 )
 from enforced_planning.worktree_paths import resolve_canonical_repo_root
 
@@ -1423,6 +1424,7 @@ def close_session(
         doc_authority.assert_no_unresolved_owned_obligations(claim)
 
     if resolved_worktree_path and resolved_worktree_path.exists():
+        surface_runtime.assert_no_live_leases_for_worktree(resolved_worktree_path)
         clean, dirty_details = _worktree_is_clean(str(resolved_worktree_path))
         if not clean:
             raise ValueError(

@@ -108,10 +108,11 @@ WORKTREE_SESSION_CLOSE_SCRIPT := scripts/meta/worktree-coordination/../session_c
 WORKTREE_REVIEW_CLAIM_SCRIPT := scripts/meta/worktree-coordination/create_review_claim.py
 WORKTREE_RAISE_CONCERN_SCRIPT := scripts/meta/worktree-coordination/raise_concern.py
 WORKTREE_PLAN_READINESS_SCRIPT := scripts/check_plan_readiness.py
-WORKTREE_DIR ?= $(shell python "$(WORKTREE_CREATE_SCRIPT)" --repo-root . --print-default-worktree-dir)
+SURFACE_RUNTIME_SCRIPT := scripts/surface_runtime.py
+WORKTREE_DIR ?= $(shell $(PYTHON) "$(WORKTREE_CREATE_SCRIPT)" --repo-root . --print-default-worktree-dir)
 WORKTREE_REPO_ROOT ?= $(shell git rev-parse --path-format=absolute --git-common-dir 2>/dev/null | sed 's|/\.git$$||')
 WORKTREE_START_POINT ?= HEAD
-WORKTREE_PROJECT ?= $(shell python "$(WORKTREE_CREATE_SCRIPT)" --repo-root . --print-canonical-project)
+WORKTREE_PROJECT ?= $(shell $(PYTHON) "$(WORKTREE_CREATE_SCRIPT)" --repo-root . --print-canonical-project)
 WORKTREE_AGENT ?= $(shell if [ -n "$$CODEX_THREAD_ID" ]; then printf codex; elif [ -n "$$CLAUDE_SESSION_ID" ] || [ -n "$$CLAUDE_CODE_SSE_PORT" ]; then printf claude-code; elif [ -n "$$OPENCLAW_SESSION_ID" ] || [ -n "$$OPENCLAW_RUN_ID" ]; then printf openclaw; fi)
 SESSION_GOAL ?=
 SESSION_PHASE ?=
@@ -140,7 +141,7 @@ REVIEW_SCOPE ?=
 REVIEW_NOTES ?=
 RECIPIENT ?=
 
-.PHONY: worktree worktree-list worktree-remove session-start session-heartbeat session-status session-end session-finish session-close review-claim raise-concern verification-batch-freeze verification-batch-check verification-batch-thaw
+.PHONY: worktree maintenance-worktree worktree-list worktree-remove session-start session-heartbeat session-status session-end session-finish session-close review-claim raise-concern verification-batch-freeze verification-batch-check verification-batch-thaw surface-up surface-preview surface-status surface-down surface-audit
 
 verification-batch-freeze:  ## Freeze clean HEAD for DECISION="..." VERIFY_COMMAND="..."
 	@test -n "$(DECISION)" || (echo "DECISION is required" && exit 1)
@@ -185,7 +186,7 @@ endif
 		echo "Install or sync the sanctioned session lifecycle module before using make worktree."; \
 		exit 1; \
 	fi
-	@python "$(WORKTREE_PLAN_READINESS_SCRIPT)" \
+	@$(PYTHON) "$(WORKTREE_PLAN_READINESS_SCRIPT)" \
 		$(if $(PLAN),--qualified-plan-id "$(PLAN_PROJECT)#$(PLAN)",) \
 		--execution-profile "$(WORKTREE_EXECUTION_PROFILE)" \
 		$(if $(PLAN_READINESS_COMMAND),--query-command "$(PLAN_READINESS_COMMAND)",) \
@@ -198,7 +199,7 @@ endif
 		--scope "$(BRANCH)" \
 		$(if $(PLAN_RESUME),--resume,) \
 		$(if $(ALLOW_UNPLANNED),--allow-unplanned,)
-	@python "$(WORKTREE_CLAIMS_SCRIPT)" --claim \
+	@$(PYTHON) "$(WORKTREE_CLAIMS_SCRIPT)" --claim \
 		--agent "$(WORKTREE_AGENT)" \
 		--project "$(WORKTREE_PROJECT)" \
 		--scope "$(BRANCH)" \
@@ -216,11 +217,11 @@ endif
 		$(if $(SESSION_WORK_UNIT_ID),--work-unit-id "$(SESSION_WORK_UNIT_ID)",) \
 		$(if $(PLAN),--plan "$(PLAN_PROJECT)#$(PLAN)",)
 	@mkdir -p "$(WORKTREE_DIR)"
-	@if ! python "$(WORKTREE_CREATE_SCRIPT)" --repo-root . --path "$(WORKTREE_DIR)/$(BRANCH)" --branch "$(BRANCH)" --start-point "$(WORKTREE_START_POINT)"; then \
-		python "$(WORKTREE_CLAIMS_SCRIPT)" --release --agent "$(WORKTREE_AGENT)" --project "$(WORKTREE_PROJECT)" --scope "$(BRANCH)" >/dev/null 2>&1 || true; \
+	@if ! $(PYTHON) "$(WORKTREE_CREATE_SCRIPT)" --repo-root . --path "$(WORKTREE_DIR)/$(BRANCH)" --branch "$(BRANCH)" --start-point "$(WORKTREE_START_POINT)"; then \
+		$(PYTHON) "$(WORKTREE_CLAIMS_SCRIPT)" --release --agent "$(WORKTREE_AGENT)" --project "$(WORKTREE_PROJECT)" --scope "$(BRANCH)" >/dev/null 2>&1 || true; \
 		exit 1; \
 	fi
-	@if ! python "$(WORKTREE_SESSION_START_SCRIPT)" \
+	@if ! $(PYTHON) "$(WORKTREE_SESSION_START_SCRIPT)" \
 		--agent "$(WORKTREE_AGENT)" \
 		--project "$(WORKTREE_PROJECT)" \
 		--scope "$(BRANCH)" \
@@ -245,13 +246,20 @@ endif
 		$(if $(SESSION_NOTE),--notes "$(SESSION_NOTE)",); then \
 		git worktree remove --force "$(WORKTREE_DIR)/$(BRANCH)" >/dev/null 2>&1 || true; \
 		git branch -D "$(BRANCH)" >/dev/null 2>&1 || true; \
-		python "$(WORKTREE_CLAIMS_SCRIPT)" --release --agent "$(WORKTREE_AGENT)" --project "$(WORKTREE_PROJECT)" --scope "$(BRANCH)" >/dev/null 2>&1 || true; \
+		$(PYTHON) "$(WORKTREE_CLAIMS_SCRIPT)" --release --agent "$(WORKTREE_AGENT)" --project "$(WORKTREE_PROJECT)" --scope "$(BRANCH)" >/dev/null 2>&1 || true; \
 		exit 1; \
 	fi
 	@echo ""
 	@echo "Worktree created at $(WORKTREE_DIR)/$(BRANCH)"
 	@echo "Claim created for branch $(BRANCH)"
 	@echo "Session contract started for $(SESSION_GOAL)"
+
+maintenance-worktree:  ## Create a claimed light maintenance worktree without a numbered plan
+	@$(MAKE) worktree BRANCH="$(BRANCH)" TASK="$(TASK)" SESSION_GOAL="$(SESSION_GOAL)" \
+		SESSION_PHASE="$(SESSION_PHASE)" AGENT="$(WORKTREE_AGENT)" \
+		SESSION_WRITE_PATHS="$(SESSION_WRITE_PATHS)" SESSION_READ_PATHS="$(SESSION_READ_PATHS)" \
+		SESSION_NEXT="$(SESSION_NEXT)" SESSION_DEPENDS="$(SESSION_DEPENDS)" \
+		WORKTREE_EXECUTION_PROFILE=light ALLOW_UNPLANNED=1
 
 session-start:  ## Create or refresh the active session contract for BRANCH=name
 ifndef BRANCH
@@ -269,7 +277,7 @@ endif
 ifndef WORKTREE_AGENT
 	$(error Unable to infer agent runtime. Set AGENT via WORKTREE_AGENT=codex|claude-code|openclaw)
 endif
-	@python "$(WORKTREE_SESSION_START_SCRIPT)" \
+	@$(PYTHON) "$(WORKTREE_SESSION_START_SCRIPT)" \
 		--agent "$(WORKTREE_AGENT)" \
 		--project "$(WORKTREE_PROJECT)" \
 		--scope "$(BRANCH)" \
@@ -299,7 +307,7 @@ endif
 ifndef WORKTREE_AGENT
 	$(error Unable to infer agent runtime. Set AGENT via WORKTREE_AGENT=codex|claude-code|openclaw)
 endif
-	@python "$(WORKTREE_SESSION_HEARTBEAT_SCRIPT)" \
+	@$(PYTHON) "$(WORKTREE_SESSION_HEARTBEAT_SCRIPT)" \
 		--agent "$(WORKTREE_AGENT)" \
 		--project "$(WORKTREE_PROJECT)" \
 		--scope "$(BRANCH)" \
@@ -307,13 +315,13 @@ endif
 		$(if $(SESSION_PHASE),--current-phase "$(SESSION_PHASE)",)
 
 session-status:  ## Show live session summaries for this repo
-	@python "$(WORKTREE_SESSION_STATUS_SCRIPT)" --project "$(WORKTREE_PROJECT)"
+	@$(PYTHON) "$(WORKTREE_SESSION_STATUS_SCRIPT)" --project "$(WORKTREE_PROJECT)"
 
 session-end:  ## Retire this runtime session's live claims without deleting Git work
 ifndef WORKTREE_AGENT
 	$(error Unable to infer agent runtime. Set AGENT via WORKTREE_AGENT=codex|claude-code|openclaw)
 endif
-	@python "$(WORKTREE_SESSION_END_SCRIPT)" \
+	@$(PYTHON) "$(WORKTREE_SESSION_END_SCRIPT)" \
 		--agent "$(WORKTREE_AGENT)" \
 		$(if $(SESSION_NOTE),--reason "$(SESSION_NOTE)",)
 
@@ -324,7 +332,7 @@ endif
 ifndef WORKTREE_AGENT
 	$(error Unable to infer agent runtime. Set AGENT via WORKTREE_AGENT=codex|claude-code|openclaw)
 endif
-	@python "$(WORKTREE_SESSION_FINISH_SCRIPT)" \
+	@$(PYTHON) "$(WORKTREE_SESSION_FINISH_SCRIPT)" \
 		--agent "$(WORKTREE_AGENT)" \
 		--project "$(WORKTREE_PROJECT)" \
 		--scope "$(BRANCH)" \
@@ -338,7 +346,7 @@ endif
 ifndef WORKTREE_AGENT
 	$(error Unable to infer agent runtime. Set AGENT via WORKTREE_AGENT=codex|claude-code|openclaw)
 endif
-	@python "$(WORKTREE_SESSION_CLOSE_SCRIPT)" \
+	@$(PYTHON) "$(WORKTREE_SESSION_CLOSE_SCRIPT)" \
 		--agent "$(WORKTREE_AGENT)" \
 		--project "$(WORKTREE_PROJECT)" \
 		--scope "$(BRANCH)" \
@@ -357,7 +365,7 @@ worktree-list:  ## Show claimed worktree coordination status
 		echo "Install or sync the sanctioned worktree-coordination module before using make worktree-list."; \
 		exit 1; \
 	fi
-	@python "$(WORKTREE_CLAIMS_SCRIPT)" --list
+	@$(PYTHON) "$(WORKTREE_CLAIMS_SCRIPT)" --list
 
 worktree-remove:  ## Safely remove worktree for BRANCH=name
 ifndef BRANCH
@@ -388,7 +396,7 @@ endif
 ifndef WORKTREE_AGENT
 	$(error Unable to infer agent runtime. Set AGENT via WORKTREE_AGENT=codex|claude-code|openclaw)
 endif
-	@python "$(WORKTREE_REVIEW_CLAIM_SCRIPT)" \
+	@$(PYTHON) "$(WORKTREE_REVIEW_CLAIM_SCRIPT)" \
 		--repo-root "$(CURDIR)" \
 		--agent "$(WORKTREE_AGENT)" \
 		--project "$(WORKTREE_PROJECT)" \
@@ -415,7 +423,7 @@ ifndef MESSAGE_FILE
 	$(error MESSAGE or MESSAGE_FILE is required. Provide inline content or a path to a concern file)
 endif
 endif
-	@python "$(WORKTREE_RAISE_CONCERN_SCRIPT)" \
+	@$(PYTHON) "$(WORKTREE_RAISE_CONCERN_SCRIPT)" \
 		--repo-root "$(CURDIR)" \
 		--agent "$(WORKTREE_AGENT)" \
 		--project "$(WORKTREE_PROJECT)" \
@@ -424,4 +432,23 @@ endif
 		$(if $(MESSAGE),--content "$(MESSAGE)",) \
 		$(if $(MESSAGE_FILE),--content-file "$(MESSAGE_FILE)",) \
 		$(if $(RECIPIENT),--recipient "$(RECIPIENT)",)
+
+surface-up:  ## Start the registered canonical UI (SURFACE=id)
+	@test -n "$(SURFACE)" || { echo "SURFACE is required" >&2; exit 2; }
+	$(PYTHON) "$(SURFACE_RUNTIME_SCRIPT)" --repo-root . up "$(SURFACE)"
+
+surface-preview:  ## Start a registered preview on noncanonical ports (SURFACE=id)
+	@test -n "$(SURFACE)" || { echo "SURFACE is required" >&2; exit 2; }
+	$(PYTHON) "$(SURFACE_RUNTIME_SCRIPT)" --repo-root . up "$(SURFACE)" --mode preview
+
+surface-status:  ## Show exact surface leases
+	$(PYTHON) "$(SURFACE_RUNTIME_SCRIPT)" --repo-root . status
+
+surface-down:  ## Stop the exact selected surface lease (SURFACE=id [LEASE=id])
+	@test -n "$(SURFACE)" || { echo "SURFACE is required" >&2; exit 2; }
+	$(PYTHON) "$(SURFACE_RUNTIME_SCRIPT)" --repo-root . down "$(SURFACE)" $(if $(LEASE),--lease-id "$(LEASE)",)
+
+surface-audit:  ## Compare registry, lease, process, and served identity (SURFACE=id)
+	@test -n "$(SURFACE)" || { echo "SURFACE is required" >&2; exit 2; }
+	$(PYTHON) "$(SURFACE_RUNTIME_SCRIPT)" --repo-root . audit "$(SURFACE)" $(if $(REQUIRE_RUNNING),--require-running,)
 # <<< META-PROCESS WORKTREE TARGETS <<<

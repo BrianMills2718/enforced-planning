@@ -518,6 +518,50 @@ def _parse_completed_claim_archive(
     return receipts
 
 
+def _archive_receipts_matching_id(
+    text: str,
+    *,
+    archive_path: Path,
+    archive_id: str,
+) -> list["CompletedClaimArchiveReceiptV1"]:
+    """Validate only the ledger records that could carry one archive_id.
+
+    The append path needs a single question answered: does this exact
+    ``archive_id`` already exist, and if so is it semantically identical?
+    Answering it by validating the whole ledger is what made pruning
+    quadratic -- every record's validator base64-decodes the embedded claim,
+    re-parses its YAML, and recomputes two SHA-256 digests, so an append cost
+    roughly 1.4s against an 875-record ledger and a full prune of 791 claims
+    spent about 18 minutes re-validating, all while holding the global claim
+    registry lock and stalling every other agent session on the machine.
+
+    A raw-substring pre-filter is exact for this purpose because a record can
+    only match the id if the id appears in its serialized text. Records that
+    survive the filter are still fully validated, and the parsed
+    ``archive_id`` is re-checked so an incidental substring hit elsewhere in
+    the record cannot be mistaken for a match.
+
+    Whole-ledger validation still happens on the read path in
+    ``load_completed_claim_archive_receipts``; it is only removed from the
+    per-append hot loop, where it never answered the question being asked.
+    """
+
+    matches: list[CompletedClaimArchiveReceiptV1] = []
+    for number, line in enumerate(text.splitlines(), start=1):
+        if not line.strip() or archive_id not in line:
+            continue
+        try:
+            receipt = CompletedClaimArchiveReceiptV1.model_validate_json(line)
+        except ValueError as exc:
+            raise ValueError(
+                f"Invalid completed-claim archive receipt at {archive_path}:{number}: {exc}"
+            ) from exc
+        if receipt.archive_id != archive_id:
+            continue
+        matches.append(receipt)
+    return matches
+
+
 def append_completed_claim_archive_receipt(
     receipt: CompletedClaimArchiveReceiptV1,
     *,
@@ -537,13 +581,12 @@ def append_completed_claim_archive_receipt(
         fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
         try:
             handle.seek(0)
-            existing_receipts = _parse_completed_claim_archive(
+            existing_receipts = _archive_receipts_matching_id(
                 handle.read(),
                 archive_path=resolved,
+                archive_id=validated.archive_id,
             )
             for existing in existing_receipts:
-                if existing.archive_id != validated.archive_id:
-                    continue
                 if _completed_claim_archive_semantic_payload(
                     existing
                 ) == _completed_claim_archive_semantic_payload(validated):

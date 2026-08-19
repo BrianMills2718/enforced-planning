@@ -2122,6 +2122,133 @@ def test_completed_claim_archive_append_is_idempotent_and_rejects_conflict(
         claim_mutation_receipts.append_completed_claim_archive_receipt(conflicting)
 
 
+def test_completed_claim_archive_append_does_not_rescan_whole_ledger(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Appending must cost the same against a large ledger as a small one.
+
+    Regression guard. This append previously validated every record in the
+    ledger on every call, and each record's validator base64-decodes the
+    embedded claim, re-parses its YAML, and recomputes two SHA-256 digests.
+    Pruning N completed claims therefore cost N full ledger validations while
+    holding the global claim-registry lock: measured at roughly 18 minutes for
+    791 claims against an 875-record ledger, which stalled every other agent
+    session on the machine for the duration.
+    """
+
+    ledger_size = 40
+    for index in range(ledger_size):
+        source_bytes = yaml.safe_dump(
+            _completed_claim_payload(
+                scope=f"bulk-scope-{index:03d}",
+                session_id=f"codex:bulk-scope-{index:03d}",
+            ),
+            sort_keys=False,
+        ).encode("utf-8")
+        claim_mutation_receipts.append_completed_claim_archive_receipt(
+            claim_mutation_receipts.build_completed_claim_archive_receipt(
+                source_kind="live_prune",
+                source_path=tmp_path / f"bulk-{index:03d}.yaml",
+                source_bytes=source_bytes,
+            )
+        )
+
+    fresh_bytes = yaml.safe_dump(
+        _completed_claim_payload(scope="fresh-scope", session_id="codex:fresh-scope"),
+        sort_keys=False,
+    ).encode("utf-8")
+    fresh = claim_mutation_receipts.build_completed_claim_archive_receipt(
+        source_kind="live_prune",
+        source_path=tmp_path / "fresh.yaml",
+        source_bytes=fresh_bytes,
+    )
+
+    validations = 0
+    real_validate = (
+        claim_mutation_receipts.CompletedClaimArchiveReceiptV1.model_validate_json
+    )
+
+    def _counting_validate(*args: object, **kwargs: object):
+        nonlocal validations
+        validations += 1
+        return real_validate(*args, **kwargs)
+
+    monkeypatch.setattr(
+        claim_mutation_receipts.CompletedClaimArchiveReceiptV1,
+        "model_validate_json",
+        _counting_validate,
+    )
+
+    _path, appended = claim_mutation_receipts.append_completed_claim_archive_receipt(fresh)
+
+    assert appended is True
+    # A new archive_id matches no existing record, so nothing needs validating.
+    # The bound is deliberately far below ledger_size: the point is that this
+    # does not grow with the ledger.
+    assert validations < ledger_size, (
+        f"append validated {validations} records against a {ledger_size}-record "
+        "ledger; the whole-ledger rescan has been reintroduced"
+    )
+
+
+def test_completed_claim_archive_append_still_detects_conflict_in_large_ledger(
+    tmp_path: Path,
+) -> None:
+    """The targeted lookup must not let a conflicting record slip through."""
+
+    conflicting_source = yaml.safe_dump(
+        _completed_claim_payload(scope="target-scope", session_id="codex:target-scope"),
+        sort_keys=False,
+    ).encode("utf-8")
+    target = claim_mutation_receipts.build_completed_claim_archive_receipt(
+        source_kind="live_prune",
+        source_path=tmp_path / "target.yaml",
+        source_bytes=conflicting_source,
+    )
+    claim_mutation_receipts.append_completed_claim_archive_receipt(target)
+
+    # Bury the target under unrelated records so a naive "check the last line"
+    # implementation would miss it.
+    for index in range(25):
+        filler_bytes = yaml.safe_dump(
+            _completed_claim_payload(
+                scope=f"filler-{index:03d}",
+                session_id=f"codex:filler-{index:03d}",
+            ),
+            sort_keys=False,
+        ).encode("utf-8")
+        claim_mutation_receipts.append_completed_claim_archive_receipt(
+            claim_mutation_receipts.build_completed_claim_archive_receipt(
+                source_kind="live_prune",
+                source_path=tmp_path / f"filler-{index:03d}.yaml",
+                source_bytes=filler_bytes,
+            )
+        )
+
+    # Same archive_id, different content: still corruption, still fails loud.
+    conflicting_payload = target.model_dump(mode="json")
+    conflicting_payload["source_kind"] = "legacy_reconciliation"
+    conflicting_payload["prune_binding"] = {
+        "kind": "legacy_prune_event",
+        "transaction_id": None,
+        "mutation_event_id": "different-event",
+    }
+    conflicting_payload["receipt_sha256"] = (
+        claim_mutation_receipts.completed_claim_archive_receipt_sha256(conflicting_payload)
+    )
+    conflicting = claim_mutation_receipts.CompletedClaimArchiveReceiptV1.model_validate(
+        conflicting_payload
+    )
+
+    with pytest.raises(ValueError, match="conflicting completed-claim archive"):
+        claim_mutation_receipts.append_completed_claim_archive_receipt(conflicting)
+
+    # And an exact replay of the buried record is still an idempotent no-op.
+    _path, appended = claim_mutation_receipts.append_completed_claim_archive_receipt(target)
+    assert appended is False
+
+
 def test_legacy_completed_claim_backfill_requires_exact_applied_prune_binding(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

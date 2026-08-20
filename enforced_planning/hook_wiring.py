@@ -71,7 +71,6 @@ PREWRITE_SUPPORT_FILES: dict[str, str] = {
     "scripts/prewrite_claim_gate.py": "scripts/prewrite_claim_gate.py",
     "scripts/refresh_prewrite_claim_projection.py": "scripts/refresh_prewrite_claim_projection.py",
     "enforced_planning/prewrite_claim_fast.py": "enforced_planning/prewrite_claim_fast.py",
-    "enforced_planning/prewrite_claim_gate.py": "enforced_planning/prewrite_claim_gate.py",
     "enforced_planning/prewrite_claim_projection.py": "enforced_planning/prewrite_claim_projection.py",
     "enforced_planning/coordination_claims.py": "enforced_planning/coordination_claims.py",
     "enforced_planning/claim_mutation_receipts.py": "enforced_planning/claim_mutation_receipts.py",

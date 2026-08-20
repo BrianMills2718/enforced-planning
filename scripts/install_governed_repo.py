@@ -88,6 +88,8 @@ SYNC_SUPPORT_FILES: dict[str, str] = {
     "scripts/check_push_safety.py": "scripts/check_push_safety.py",
     "scripts/check_markdown_links.py": "scripts/check_markdown_links.py",
     "scripts/audit_dead_code.py": "scripts/audit_dead_code.py",
+    "scripts/check_reachability.py": "scripts/check_reachability.py",
+    "scripts/repo_stats_block.py": "scripts/repo_stats_block.py",
     "scripts/meta/session_finish.py": "scripts/session_finish.py",
     "scripts/meta/session_close.py": "scripts/session_close.py",
     "scripts/meta/session_heartbeat.py": "scripts/session_heartbeat.py",

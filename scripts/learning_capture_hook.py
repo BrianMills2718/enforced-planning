@@ -19,20 +19,60 @@ import os
 import re
 import sys
 import tempfile
+import tomllib
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 DEFAULT_STATE_DIR = Path("~/.claude/coordination/learning-capture-v1")
+DEFAULT_CODEX_CONFIG = Path("~/.codex/config.toml")
+DEFAULT_CLAUDE_SETTINGS = Path("~/.claude/settings.json")
 SUPPORTED_AGENTS = ("claude-code", "codex")
+SCRIPT_PATH = Path(__file__).resolve()
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     """Parse the client identity and deterministic state override."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--agent", choices=SUPPORTED_AGENTS, required=True)
+    parser.add_argument("--agent", choices=SUPPORTED_AGENTS)
     parser.add_argument("--state-dir", type=Path, default=DEFAULT_STATE_DIR)
+    parser.add_argument(
+        "--check-install",
+        action="store_true",
+        help="Check that both user-level client configs invoke this canonical script.",
+    )
+    parser.add_argument("--codex-config", type=Path, default=DEFAULT_CODEX_CONFIG)
+    parser.add_argument("--claude-settings", type=Path, default=DEFAULT_CLAUDE_SETTINGS)
     return parser.parse_args(argv)
+
+
+def _contains_command(value: object, expected: str) -> bool:
+    """Return whether a parsed client config contains one exact command."""
+    if isinstance(value, dict):
+        return any(_contains_command(item, expected) for item in value.values())
+    if isinstance(value, list):
+        return any(_contains_command(item, expected) for item in value)
+    return value == expected
+
+
+def check_install(codex_config: Path, claude_settings: Path) -> dict[str, object]:
+    """Parse both client configs and report exact shared-hook wiring."""
+    codex_path = codex_config.expanduser()
+    claude_path = claude_settings.expanduser()
+    with codex_path.open("rb") as handle:
+        codex_payload = tomllib.load(handle)
+    claude_payload = json.loads(claude_path.read_text(encoding="utf-8"))
+    codex_command = f"python3 {SCRIPT_PATH} --agent codex"
+    claude_command = f"python3 {SCRIPT_PATH} --agent claude-code"
+    codex_live = _contains_command(codex_payload.get("hooks", {}).get("Stop", []), codex_command)
+    claude_live = _contains_command(claude_payload.get("hooks", {}).get("Stop", []), claude_command)
+    return {
+        "schema_version": 1,
+        "live": codex_live and claude_live,
+        "codex_stop_hook": codex_live,
+        "claude_code_stop_hook": claude_live,
+        "script": str(SCRIPT_PATH),
+    }
 
 
 def read_event() -> dict[str, Any]:
@@ -157,6 +197,16 @@ def write_receipt(
 def main(argv: list[str] | None = None) -> int:
     """Block an incomplete learning disposition and record the observed result."""
     args = parse_args(argv)
+    if args.check_install:
+        try:
+            result = check_install(args.codex_config, args.claude_settings)
+        except (json.JSONDecodeError, OSError, tomllib.TOMLDecodeError, TypeError, ValueError) as exc:
+            print(json.dumps({"schema_version": 1, "live": False, "error": f"{type(exc).__name__}: {exc}"}))
+            return 1
+        print(json.dumps(result, sort_keys=True))
+        return 0 if result["live"] else 1
+    if args.agent is None:
+        raise SystemExit("--agent is required unless --check-install is used")
     try:
         payload = read_event()
         report = payload["last_assistant_message"]

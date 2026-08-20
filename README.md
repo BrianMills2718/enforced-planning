@@ -155,6 +155,12 @@ The hook deliberately does not gate discussion-only turns and cannot prove the
 semantic correctness of an agent's judgment. Project Meta owns the policy and
 register; this repository owns the portable lifecycle adapter.
 
+Verify both user-level client adapters without starting a model session:
+
+```bash
+python scripts/learning_capture_hook.py --check-install
+```
+
 ## Installed Layout
 
 The canonical minimum installer produces an installed repo shaped like this:

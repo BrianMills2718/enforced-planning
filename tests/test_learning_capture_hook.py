@@ -122,3 +122,65 @@ def test_non_object_hook_payload_fails_closed(tmp_path: Path) -> None:
     payload = json.loads(result.stdout)
     assert payload["decision"] == "block"
     assert "hook input must be a JSON object" in payload["reason"]
+
+
+def test_install_check_requires_both_exact_client_commands(tmp_path: Path) -> None:
+    """Configuration liveness is true only when both Stop adapters use this source."""
+    codex = tmp_path / "config.toml"
+    claude = tmp_path / "settings.json"
+    codex.write_text(
+        '[[hooks.Stop]]\n[[hooks.Stop.hooks]]\ncommand = "python3 '
+        f'{SCRIPT} --agent codex"\n',
+        encoding="utf-8",
+    )
+    claude.write_text(
+        json.dumps(
+            {
+                "hooks": {
+                    "Stop": [
+                        {
+                            "hooks": [
+                                {"command": f"python3 {SCRIPT} --agent claude-code"},
+                            ]
+                        }
+                    ]
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    live = subprocess.run(
+        [
+            "python3",
+            str(SCRIPT),
+            "--check-install",
+            "--codex-config",
+            str(codex),
+            "--claude-settings",
+            str(claude),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert live.returncode == 0
+    assert json.loads(live.stdout)["live"] is True
+
+    claude.write_text("{}", encoding="utf-8")
+    missing = subprocess.run(
+        [
+            "python3",
+            str(SCRIPT),
+            "--check-install",
+            "--codex-config",
+            str(codex),
+            "--claude-settings",
+            str(claude),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert missing.returncode == 1
+    assert json.loads(missing.stdout)["claude_code_stop_hook"] is False

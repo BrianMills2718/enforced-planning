@@ -1,6 +1,6 @@
 ## enforced-planning — framework for enforced planning, context gating, doc-code alignment
 
-.PHONY: help test test-quick check lint dead-code dead-code-audit dead-code-validate push-check infer check-deps check-caps migrate-rels verify-couplings review-surfaces promote plan-registry ecosystem-status docstring-wiki docstring-wiki-check test-relationships status
+.PHONY: help test test-quick check lint dead-code dead-code-audit dead-code-validate push-check infer check-deps check-caps migrate-rels verify-couplings review-surfaces promote plan-registry ecosystem-status docstring-wiki docstring-wiki-check test-relationships status reachability reachability-check reachability-baseline repo-stats
 
 PYTHON ?= $(if $(wildcard .venv/bin/python),.venv/bin/python,python3)
 PROJECT_STATUS_PYTHON ?= $(PYTHON)
@@ -33,6 +33,18 @@ dead-code-audit:  ## Refresh reviewed dead-code audit file
 
 dead-code-validate:  ## Validate reviewed dead-code dispositions
 	$(PYTHON) scripts/validate_dead_code_audit.py
+
+reachability:  ## Report module reachability (no gating)
+	$(PYTHON) scripts/check_reachability.py --project-root .
+
+reachability-check:  ## Fail if reachability regressed since the baseline (the hook's own check)
+	$(PYTHON) scripts/check_reachability.py --project-root . --check
+
+reachability-baseline:  ## Lower the reachability ratchet baseline to the current count
+	$(PYTHON) scripts/check_reachability.py --project-root . --write-baseline
+
+repo-stats:  ## Print session-start repetition counters
+	$(PYTHON) scripts/repo_stats_block.py --project-root .
 
 push-check:  ## Validate branch push safety against default-branch and coordination state
 	$(PYTHON) scripts/check_push_safety.py

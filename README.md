@@ -140,6 +140,21 @@ The minimum mechanical governed-repo contract is:
 `scripts/audit_governed_repo.py --strict-governed` is the mechanical check for
 that contract.
 
+## Cross-Client Learning Closeout
+
+`scripts/learning_capture_hook.py` is the client-neutral Stop adapter for the
+workspace learning-capture policy. Codex and Claude Code invoke it with their
+native Stop payload and `--agent codex|claude-code`. A response that claims
+completed work with a `Done` bullet must also disposition `Learnings` as either
+`Recorded` with the canonical `project-meta/learnings.md` reference, or `None`
+with a concrete reason. Missing or empty dispositions block the Stop boundary;
+accepted and blocked decisions leave digest-only receipts under
+`~/.claude/coordination/learning-capture-v1/`.
+
+The hook deliberately does not gate discussion-only turns and cannot prove the
+semantic correctness of an agent's judgment. Project Meta owns the policy and
+register; this repository owns the portable lifecycle adapter.
+
 ## Installed Layout
 
 The canonical minimum installer produces an installed repo shaped like this:

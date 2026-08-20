@@ -920,6 +920,7 @@ def test_native_session_binding_does_not_confuse_claude_sse_fallback_with_exact_
     """A fallback SSE port must not contradict an exact hook-provided session ID."""
 
     module = _load_module()
+    monkeypatch.delenv("CLAUDE_CODE_SESSION_ID", raising=False)
     monkeypatch.delenv("CLAUDE_SESSION_ID", raising=False)
     monkeypatch.setenv("CLAUDE_CODE_SSE_PORT", "15193")
 
@@ -1014,6 +1015,7 @@ def test_heartbeat_claims_refreshes_claude_code_session(
     module = _load_module()
     claims_dir = tmp_path / "claims"
     monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
+    monkeypatch.delenv("CLAUDE_CODE_SESSION_ID", raising=False)
     monkeypatch.setenv("CLAUDE_SESSION_ID", "claude-session-42")
     _write_claim(
         claims_dir,

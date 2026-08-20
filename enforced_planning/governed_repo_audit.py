@@ -165,7 +165,6 @@ PREWRITE_HOOK_FILES: tuple[str, ...] = (
     "scripts/prewrite_claim_gate.py",
     "scripts/refresh_prewrite_claim_projection.py",
     "enforced_planning/prewrite_claim_fast.py",
-    "enforced_planning/prewrite_claim_gate.py",
     "enforced_planning/prewrite_claim_projection.py",
 )
 

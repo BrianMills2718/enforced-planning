@@ -437,6 +437,7 @@ def test_start_session_creates_parented_child_and_rejects_second_root(
     claims_dir = tmp_path / "claims"
     trackers_dir = tmp_path / "sessions"
     monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    monkeypatch.delenv("CLAUDE_CODE_SESSION_ID", raising=False)
     monkeypatch.setattr(
         coordination_claims,
         "resolve_canonical_work_unit_binding",
@@ -522,6 +523,7 @@ def test_concurrent_legacy_claim_activation_serializes_hierarchy_refresh(
     claims_dir = tmp_path / "claims"
     claims_dir.mkdir()
     monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    monkeypatch.delenv("CLAUDE_CODE_SESSION_ID", raising=False)
     original_validate = coordination_claims.validate_claim_hierarchy_for_creation
 
     def delayed_validate(*args, **kwargs):
@@ -2219,6 +2221,8 @@ def test_start_session_auto_resolves_claude_code_runtime_session_id(
     claims_dir = tmp_path / "claims"
     trackers_dir = tmp_path / "sessions"
     monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    monkeypatch.delenv("CLAUDE_CODE_SESSION_ID", raising=False)
+    monkeypatch.delenv("CLAUDE_SESSION_ID", raising=False)
     monkeypatch.setenv("CLAUDE_CODE_SSE_PORT", "7777")
 
     payload = session_lifecycle.start_session(

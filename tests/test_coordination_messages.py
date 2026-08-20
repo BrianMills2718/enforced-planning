@@ -545,6 +545,7 @@ def test_native_cli_message_lifecycle_survives_write_claim_completion(
     for path in claims_dir.glob("claude-code_*.yaml"):
         path.unlink()
     claude_env = {**os.environ, "CLAUDE_SESSION_ID": "session-456"}
+    claude_env.pop("CLAUDE_CODE_SESSION_ID", None)
     polled = subprocess.run(
         [
             "python",

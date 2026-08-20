@@ -67,6 +67,24 @@ meta_process:
       whitelist: ".vulture_whitelist.py"
       audit_file: "dead_code_audit.json"
 
+    reachability:
+      enabled: true
+      # This repo is entirely governance tooling (the framework's own source
+      # + its scripts + its tests) -- no separate product/app package, so no
+      # product_entrypoints is configured (same pattern as project-meta,
+      # llm_client, process_tracing: the orphaned-module ratchet is the one
+      # that applies here, not a product-share measurement).
+      packages: ["enforced_planning", "scripts", "tests"]
+      entrypoints:
+        - "scripts/*.py"
+        - "scripts/worktree-coordination/*.py"
+        - "scripts/meta/*.py"
+        - "scripts/meta/worktree-coordination/*.py"
+        - "tests/**/*.py"
+      dynamic: []
+      ignore: []
+      baseline: "reachability_baseline.json"
+
   # =============================================================================
   # CI CONFIGURATION
   # =============================================================================

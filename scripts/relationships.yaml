@@ -5,7 +5,57 @@ required_reading:
     - CLAUDE.md
 
 governance: []
-couplings: []
+couplings:
+  - description: >-
+      The claim/worktree/lane data model and lifecycle. A behavior change here
+      changes what every downstream repo's claim registry actually means.
+    sources:
+      - "enforced_planning/coordination_claims.py"
+      - "enforced_planning/session_lifecycle.py"
+    docs:
+      - "docs/guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md"
+
+  - description: >-
+      meta-process.yaml is the live config surface; CONFIG_REFERENCE.md is the
+      authoritative table of which keys have script effect and which script
+      reads each one. A new or changed key that isn't reflected there is a
+      silently undocumented config surface.
+    sources:
+      - "meta-process.yaml"
+    docs:
+      - "docs/reference/CONFIG_REFERENCE.md"
+
+  - description: >-
+      The canonical installer/upgrader for consumer repos. GETTING_STARTED.md
+      is the first-successful-install path a new consumer follows.
+    sources:
+      - "scripts/install_governed_repo.py"
+    docs:
+      - "GETTING_STARTED.md"
+
+  - description: >-
+      The doc-coupling checker and its config schema/pattern doc. Changing
+      what a coupling entry means (field names, matching semantics) without
+      updating the pattern doc leaves every consumer repo's relationships.yaml
+      authored against a stale contract.
+    sources:
+      - "scripts/check_doc_coupling.py"
+    docs:
+      - "patterns/10_doc-code-coupling.md"
+
+  - description: >-
+      The session lifecycle CLI surface (start/heartbeat/status/end/finish/
+      close). CLAUDE.md's Commands section is this repo's own documented
+      entrypoint list for these scripts.
+    sources:
+      - "scripts/session_start.py"
+      - "scripts/session_heartbeat.py"
+      - "scripts/session_status.py"
+      - "scripts/session_end.py"
+      - "scripts/session_finish.py"
+      - "scripts/session_close.py"
+    docs:
+      - "CLAUDE.md"
 architecture: []
 adrs: {}
 

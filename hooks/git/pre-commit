@@ -21,13 +21,17 @@ cd "$REPO_ROOT"
 
 STAGED_PY=$(git diff --cached --name-only --diff-filter=ACM | grep '\.py$' || true)
 
-# Helper: find a script at either scripts/meta/ or scripts/
+# Helper: find a script at either scripts/ or scripts/meta/.
+# scripts/ is checked first: in this source repo it is the canonical
+# location, and scripts/meta/ may hold a stale self-installed copy that
+# silently shadows it otherwise (the same find_script() shadowing-bug class
+# documented in ACCRETION_DETECTOR_ROLLOUT_BRIEF.md's rollout notes).
 find_script() {
     local name="$1"
-    if [[ -f "$REPO_ROOT/scripts/meta/$name" ]]; then
-        echo "$REPO_ROOT/scripts/meta/$name"
-    elif [[ -f "$REPO_ROOT/scripts/$name" ]]; then
+    if [[ -f "$REPO_ROOT/scripts/$name" ]]; then
         echo "$REPO_ROOT/scripts/$name"
+    elif [[ -f "$REPO_ROOT/scripts/meta/$name" ]]; then
+        echo "$REPO_ROOT/scripts/meta/$name"
     fi
 }
 
@@ -88,7 +92,7 @@ if [[ -n "$LOCKED_COUPLINGS" ]]; then
     fi
 fi
 
-# 2. Doc-coupling check (if script exists)
+# 3. Doc-coupling check (if script exists)
 DOC_COUPLING=$(find_script "check_doc_coupling.py")
 if [[ -n "$DOC_COUPLING" ]]; then
     echo "Checking doc-code coupling..."
@@ -106,7 +110,28 @@ if [[ -n "$DOC_COUPLING" ]]; then
     fi
 fi
 
-# 3. Mypy on changed src/ files (if mypy is installed)
+# 4. Module-reachability ratchet (if script exists). REACHABILITY_RATCHET=off
+# is a named, logged bypass for the first tuning pass on a repo -- see
+# ACCRETION_DETECTOR_ROLLOUT_BRIEF.md section 10a.
+REACHABILITY=$(find_script "check_reachability.py")
+if [[ -n "$REACHABILITY" ]] && [[ "${REACHABILITY_RATCHET:-on}" != "off" ]]; then
+    echo "Checking module reachability..."
+    if ! python "$REACHABILITY" --project-root "$REPO_ROOT" --check; then
+        echo ""
+        echo "Reachability regression: a module became unreachable from every"
+        echo "declared entrypoint since the baseline."
+        echo "Wire it to an entrypoint, delete it, or add it to"
+        echo "quality.reachability.dynamic in meta-process.yaml with a comment"
+        echo "saying why it's only reached by string import."
+        echo "Bypass once with REACHABILITY_RATCHET=off git commit ... (logged, narrow)."
+        echo ""
+        handle_failure "reachability ratchet" || exit 1
+    fi
+elif [[ -n "$REACHABILITY" ]]; then
+    echo "Reachability ratchet bypassed via REACHABILITY_RATCHET=off."
+fi
+
+# 5. Mypy on changed src/ files (if mypy is installed)
 STAGED_SRC=$(echo "$STAGED_PY" | grep '^src/' || true)
 if [[ -n "$STAGED_SRC" ]] && command -v mypy >/dev/null 2>&1; then
     echo "Running mypy on changed files..."
@@ -118,7 +143,7 @@ if [[ -n "$STAGED_SRC" ]] && command -v mypy >/dev/null 2>&1; then
     fi
 fi
 
-# 4. Capabilities section check on staged plan files
+# 6. Capabilities section check on staged plan files
 CHECK_CAPS=$(find_script "check_plan_capabilities.py")
 if [[ -n "$CHECK_CAPS" ]]; then
     STAGED_PLAN_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep '^docs/plans/.*\.md$' || true)
@@ -134,7 +159,7 @@ if [[ -n "$CHECK_CAPS" ]]; then
     fi
 fi
 
-# 5. Plan status consistency (if script exists and plan files staged)
+# 7. Plan status consistency (if script exists and plan files staged)
 SYNC_STATUS=$(find_script "sync_plan_status.py")
 if [[ -n "$SYNC_STATUS" ]]; then
     STAGED_PLANS=$(git diff --cached --name-only --diff-filter=ACM | grep '^docs/plans/' || true)
@@ -150,7 +175,7 @@ if [[ -n "$SYNC_STATUS" ]]; then
     fi
 fi
 
-# 6. Dead code check (the script itself honors meta-process.yaml enablement)
+# 8. Dead code check (the script itself honors meta-process.yaml enablement)
 DEAD_CODE=$(find_script "check_dead_code.py")
 if [[ -n "$DEAD_CODE" ]] && [[ -n "$STAGED_PY" ]]; then
     echo "Checking for dead code..."
@@ -163,7 +188,7 @@ if [[ -n "$DEAD_CODE" ]] && [[ -n "$STAGED_PY" ]]; then
     fi
 fi
 
-# 7. Branch divergence advisory against the existing local remote ref.
+# 9. Branch divergence advisory against the existing local remote ref.
 # Network freshness belongs at push/release time, not in a local commit hook.
 echo "Checking cached branch divergence..."
 BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null) || true
@@ -187,7 +212,7 @@ if git rev-parse --verify "$REMOTE" >/dev/null 2>&1; then
     fi
 fi
 
-# 8. Terminology linter on staged .md files (if vocab pack and script exist)
+# 10. Terminology linter on staged .md files (if vocab pack and script exist)
 TERM_LINTER=$(find_script "check_terminology.py")
 VOCAB_PACK="$REPO_ROOT/generated/vocab_pack.jsonl"
 if [[ -n "$TERM_LINTER" ]] && [[ -f "$VOCAB_PACK" ]]; then

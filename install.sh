@@ -107,6 +107,8 @@ CORE_SCRIPTS=(
     "check_plan_tests.py"
     "check_plan_blockers.py"
     "check_dead_code.py"
+    "check_reachability.py"
+    "repo_stats_block.py"
     "complete_plan.py"
     "parse_plan.py"
     "sync_plan_status.py"

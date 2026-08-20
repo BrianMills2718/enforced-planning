@@ -80,6 +80,39 @@ def test_recorded_learning_is_accepted_and_receipted(tmp_path: Path) -> None:
     assert "last_assistant_message" not in receipt
 
 
+def test_openclaw_adapter_can_request_explicit_allow_result(tmp_path: Path) -> None:
+    """Non-native lifecycle adapters receive a parseable allow decision."""
+    result = subprocess.run(
+        [
+            "python3",
+            str(SCRIPT),
+            "--agent",
+            "openclaw",
+            "--emit-result",
+            "--state-dir",
+            str(tmp_path),
+        ],
+        input=json.dumps(
+            {
+                "session_id": "openclaw-task-123",
+                "hook_event_name": "Stop",
+                "last_assistant_message": (
+                    "- **Done** — Completed the coding task.\n"
+                    "- **Learnings** — None — this repeated a previously verified mechanical change."
+                ),
+            }
+        ),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    payload = json.loads(result.stdout)
+    assert payload["decision"] == "allow"
+    assert payload["classification"] == "none"
+    assert receipts(tmp_path)[0]["agent"] == "openclaw"
+
+
 def test_none_requires_a_concrete_reason(tmp_path: Path) -> None:
     """The no-learning path must be an explicit judgment, not an empty bypass."""
     blocked = run_hook(tmp_path, "- **Done** — Explained.\n- **Learnings** — None.")
@@ -124,10 +157,11 @@ def test_non_object_hook_payload_fails_closed(tmp_path: Path) -> None:
     assert "hook input must be a JSON object" in payload["reason"]
 
 
-def test_install_check_requires_both_exact_client_commands(tmp_path: Path) -> None:
-    """Configuration liveness is true only when both Stop adapters use this source."""
+def test_install_check_requires_all_coding_agent_completion_paths(tmp_path: Path) -> None:
+    """Liveness is true only when all supported agent paths use the shared gate."""
     codex = tmp_path / "config.toml"
     claude = tmp_path / "settings.json"
+    openclaw = tmp_path / "run_task.py"
     codex.write_text(
         '[[hooks.Stop]]\n[[hooks.Stop.hooks]]\ncommand = "python3 '
         f'{SCRIPT} --agent codex"\n',
@@ -149,6 +183,12 @@ def test_install_check_requires_both_exact_client_commands(tmp_path: Path) -> No
         ),
         encoding="utf-8",
     )
+    openclaw.write_text(
+        "OPENCLAW_LEARNING_CAPTURE_HOOK = True\n"
+        "OPENCLAW_LEARNING_CAPTURE_REQUIRED = True\n"
+        "def _apply_learning_capture_gate(): ...\n",
+        encoding="utf-8",
+    )
 
     live = subprocess.run(
         [
@@ -159,6 +199,8 @@ def test_install_check_requires_both_exact_client_commands(tmp_path: Path) -> No
             str(codex),
             "--claude-settings",
             str(claude),
+            "--openclaw-runner",
+            str(openclaw),
         ],
         capture_output=True,
         text=True,
@@ -177,6 +219,8 @@ def test_install_check_requires_both_exact_client_commands(tmp_path: Path) -> No
             str(codex),
             "--claude-settings",
             str(claude),
+            "--openclaw-runner",
+            str(openclaw),
         ],
         capture_output=True,
         text=True,
@@ -184,3 +228,29 @@ def test_install_check_requires_both_exact_client_commands(tmp_path: Path) -> No
     )
     assert missing.returncode == 1
     assert json.loads(missing.stdout)["claude_code_stop_hook"] is False
+
+    claude.write_text(
+        json.dumps(
+            {"hooks": {"Stop": [{"hooks": [{"command": f"python3 {SCRIPT} --agent claude-code"}]}]}},
+        ),
+        encoding="utf-8",
+    )
+    openclaw.write_text("# ungated runner\n", encoding="utf-8")
+    missing_openclaw = subprocess.run(
+        [
+            "python3",
+            str(SCRIPT),
+            "--check-install",
+            "--codex-config",
+            str(codex),
+            "--claude-settings",
+            str(claude),
+            "--openclaw-runner",
+            str(openclaw),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert missing_openclaw.returncode == 1
+    assert json.loads(missing_openclaw.stdout)["openclaw_completion_gate"] is False

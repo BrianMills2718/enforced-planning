@@ -144,7 +144,9 @@ that contract.
 
 `scripts/learning_capture_hook.py` is the client-neutral Stop adapter for the
 workspace learning-capture policy. Codex and Claude Code invoke it with their
-native Stop payload and `--agent codex|claude-code`. A response that claims
+native Stop payload and `--agent codex|claude-code`; OpenClaw invokes the same
+classifier with `--agent openclaw --emit-result` before routing a successful
+coding task to `completed`. A response that claims
 completed work with a `Done` bullet must also disposition `Learnings` as either
 `Recorded` with the canonical `project-meta/learnings.md` reference, or `None`
 with a concrete reason. Missing or empty dispositions block the Stop boundary;
@@ -155,7 +157,8 @@ The hook deliberately does not gate discussion-only turns and cannot prove the
 semantic correctness of an agent's judgment. Project Meta owns the policy and
 register; this repository owns the portable lifecycle adapter.
 
-Verify both user-level client adapters without starting a model session:
+Verify all configured coding-agent completion paths without starting a model
+session:
 
 ```bash
 python scripts/learning_capture_hook.py --check-install

@@ -27,7 +27,8 @@ from typing import Any
 DEFAULT_STATE_DIR = Path("~/.claude/coordination/learning-capture-v1")
 DEFAULT_CODEX_CONFIG = Path("~/.codex/config.toml")
 DEFAULT_CLAUDE_SETTINGS = Path("~/.claude/settings.json")
-SUPPORTED_AGENTS = ("claude-code", "codex")
+DEFAULT_OPENCLAW_RUNNER = Path("~/.openclaw/bin/run_task.py")
+SUPPORTED_AGENTS = ("claude-code", "codex", "openclaw")
 SCRIPT_PATH = Path(__file__).resolve()
 
 
@@ -37,12 +38,18 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--agent", choices=SUPPORTED_AGENTS)
     parser.add_argument("--state-dir", type=Path, default=DEFAULT_STATE_DIR)
     parser.add_argument(
+        "--emit-result",
+        action="store_true",
+        help="Emit an allow result for lifecycle adapters that need an explicit response.",
+    )
+    parser.add_argument(
         "--check-install",
         action="store_true",
-        help="Check that both user-level client configs invoke this canonical script.",
+        help="Check that configured coding-agent completion paths use this policy gate.",
     )
     parser.add_argument("--codex-config", type=Path, default=DEFAULT_CODEX_CONFIG)
     parser.add_argument("--claude-settings", type=Path, default=DEFAULT_CLAUDE_SETTINGS)
+    parser.add_argument("--openclaw-runner", type=Path, default=DEFAULT_OPENCLAW_RUNNER)
     return parser.parse_args(argv)
 
 
@@ -55,22 +62,38 @@ def _contains_command(value: object, expected: str) -> bool:
     return value == expected
 
 
-def check_install(codex_config: Path, claude_settings: Path) -> dict[str, object]:
-    """Parse both client configs and report exact shared-hook wiring."""
+def check_install(
+    codex_config: Path,
+    claude_settings: Path,
+    openclaw_runner: Path,
+) -> dict[str, object]:
+    """Parse client configs and report exact shared-gate wiring."""
     codex_path = codex_config.expanduser()
     claude_path = claude_settings.expanduser()
     with codex_path.open("rb") as handle:
         codex_payload = tomllib.load(handle)
     claude_payload = json.loads(claude_path.read_text(encoding="utf-8"))
+    openclaw_path = openclaw_runner.expanduser().resolve()
+    openclaw_source = openclaw_path.read_text(encoding="utf-8")
     codex_command = f"python3 {SCRIPT_PATH} --agent codex"
     claude_command = f"python3 {SCRIPT_PATH} --agent claude-code"
     codex_live = _contains_command(codex_payload.get("hooks", {}).get("Stop", []), codex_command)
     claude_live = _contains_command(claude_payload.get("hooks", {}).get("Stop", []), claude_command)
+    openclaw_live = all(
+        marker in openclaw_source
+        for marker in (
+            "OPENCLAW_LEARNING_CAPTURE_HOOK",
+            "_apply_learning_capture_gate",
+            "OPENCLAW_LEARNING_CAPTURE_REQUIRED",
+        )
+    )
     return {
         "schema_version": 1,
-        "live": codex_live and claude_live,
+        "live": codex_live and claude_live and openclaw_live,
         "codex_stop_hook": codex_live,
         "claude_code_stop_hook": claude_live,
+        "openclaw_completion_gate": openclaw_live,
+        "openclaw_runner": str(openclaw_path),
         "script": str(SCRIPT_PATH),
     }
 
@@ -199,7 +222,11 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     if args.check_install:
         try:
-            result = check_install(args.codex_config, args.claude_settings)
+            result = check_install(
+                args.codex_config,
+                args.claude_settings,
+                args.openclaw_runner,
+            )
         except (json.JSONDecodeError, OSError, tomllib.TOMLDecodeError, TypeError, ValueError) as exc:
             print(json.dumps({"schema_version": 1, "live": False, "error": f"{type(exc).__name__}: {exc}"}))
             return 1
@@ -222,6 +249,17 @@ def main(argv: list[str] | None = None) -> int:
             )
         if decision.startswith("block_"):
             print(json.dumps({"decision": "block", "reason": detail}))
+        elif args.emit_result:
+            print(
+                json.dumps(
+                    {
+                        "decision": "allow",
+                        "classification": decision,
+                        "detail": detail,
+                    },
+                    sort_keys=True,
+                )
+            )
     except (json.JSONDecodeError, OSError, TypeError, ValueError) as exc:
         reason = f"learning-capture gate unavailable: {type(exc).__name__}: {exc}"
         print(json.dumps({"decision": "block", "reason": reason}))

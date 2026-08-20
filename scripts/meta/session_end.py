@@ -41,6 +41,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--reason", default="session ended")
     parser.add_argument("--claims-dir", type=Path)
     parser.add_argument(
+        "--actor",
+        help=(
+            "Set only when ending a claim on behalf of a DIFFERENT session "
+            "(a sweep/prune tool, an operator, another agent's hook) -- not "
+            "for a session ending its own claim. Requires a specific "
+            "--reason; 'other' is rejected (policy: "
+            "claim-end-requires-liveness-check)."
+        ),
+    )
+    parser.add_argument(
         "--hook",
         action="store_true",
         help="Read and validate a native SessionEnd JSON payload from stdin.",
@@ -78,6 +88,19 @@ def main(argv: list[str] | None = None) -> int:
             session_id=session_id,
             reason=reason,
             claims_dir=args.claims_dir,
+            actor=args.actor,
+            # The native SessionEnd hook fires identically for a real exit and
+            # for a WSL/transport disconnect that leaves the runtime alive
+            # (Defect B, policy claim-end-requires-liveness-check). A specific
+            # native reason (logout/clear/prompt_input_exit) is a real,
+            # deliberate termination and ends immediately as before. reason
+            # "other" is the measured signature of the unreliable case (12 of
+            # the 100 claims sampled for the policy proposal carried
+            # session_end_reason: other with previous_status: active) -- only
+            # that combination is treated as ambiguous, deferring a
+            # recently-heartbeating claim to prune_stale/prune_expired instead
+            # of retiring it eagerly.
+            ambiguous_signal=args.hook and reason.strip().lower() == "other",
         )
     except (json.JSONDecodeError, OSError, ValueError) as exc:
         if args.hook:

@@ -1053,6 +1053,45 @@ def default_message_root(claims_dir: Path | None = None) -> Path:
     return (claims_dir or coordination_claims.CLAIMS_DIR).expanduser().resolve().parent / "messages-v1"
 
 
+def notify_claim_end(
+    *,
+    claims_dir: Path,
+    project: str,
+    scope: str,
+    session_id: str,
+    reason: str,
+    actor: str,
+    now: datetime | None = None,
+) -> PersistedMessageResult:
+    """Tell a session its own claim was force-ended by something else.
+
+    Policy ``claim-end-requires-liveness-check`` requires that a session never
+    lose a claim without a signal it can observe. Call this *before* the
+    caller flips the target claim's status: ``ExactSessionSelector`` routing
+    requires the recipient still own a live claim, and a forced end is
+    exactly the moment that claim stops being one.
+    """
+
+    store = CoordinationMessageStore(root=default_message_root(claims_dir), claims_dir=claims_dir)
+    request = SendMessageRequest(
+        caller_session_id=actor,
+        sender_session_id=actor,
+        recipient=ExactSessionSelector(kind="session", session_id=session_id),
+        project=project,
+        kind="info",
+        subject=f"Claim ended: {project}:{scope}",
+        body=(
+            f"Your live claim {project}:{scope} was ended by {actor!r} "
+            f"(reason: {reason!r}). This was a forced end, not a self-close. "
+            "If your session is still working, re-run session-start to "
+            "reclaim the branch before your next push fails with "
+            "missing_branch_claim. Policy: claim-end-requires-liveness-check."
+        ),
+        claim_ref=scope,
+    )
+    return store.send(request, now=now, require_live_claim=False)
+
+
 def poll_session_inbox(
     *,
     agent: str,

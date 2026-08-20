@@ -1234,15 +1234,58 @@ def end_runtime_session(
     session_id: str | None = None,
     reason: str = "session ended",
     claims_dir: Path | None = None,
+    actor: str | None = None,
+    ambiguous_signal: bool = False,
 ) -> dict[str, Any]:
-    """Detach a terminated runtime from every exact-session live claim."""
+    """Detach a terminated runtime from every exact-session live claim.
 
-    count, identities, resolved_session_id, ended_at = coordination_claims.end_session_claims(
+    ``actor`` marks a forced end performed on behalf of the owning session by
+    something else (a sweep/prune tool, an operator script, another agent's
+    hook). Leave it unset for a session ending its own claim -- the native
+    SessionEnd hook and ``session-finish`` both report on behalf of the exact
+    session that owns the claim, not a different actor. A forced end also
+    gets a best-effort mailbox notice to the ended session so the next
+    mailbox poll surfaces it instead of the next push failing with
+    ``missing_branch_claim`` (policy: claim-end-requires-liveness-check).
+
+    ``ambiguous_signal=True`` marks a trigger that is not itself proof the
+    runtime terminated -- the native SessionEnd hook fires identically for a
+    real exit and for a WSL/transport disconnect (Defect B in the same
+    policy). A claim that heartbeated within the configured staleness window
+    before now is left live rather than retired; a genuinely dead session's
+    claim is still reaped by ``prune_stale``/``prune_expired`` once its
+    heartbeat goes stale.
+    """
+
+    notify_failures: list[str] = []
+
+    def _notify(claim: coordination_claims.ClaimRecord, notify_reason: str, notify_actor: str) -> None:
+        try:
+            coordination_messages.notify_claim_end(
+                claims_dir=claims_dir or coordination_claims.CLAIMS_DIR,
+                project=claim.primary_project() or "unknown",
+                scope=claim.scope,
+                session_id=claim.session_id or "",
+                reason=notify_reason,
+                actor=notify_actor,
+            )
+        except coordination_messages.CoordinationMessageError as exc:
+            # A failed courtesy notice must not block a liveness-checked end:
+            # the durable record is the refusal log plus this returned list,
+            # not the mailbox alone. Never silently drop the failure.
+            notify_failures.append(f"{claim.primary_project()}:{claim.scope}: {exc}")
+
+    result = coordination_claims.end_session_claims(
         agent=agent,
         session_id=session_id,
         reason=reason,
         claims_dir=claims_dir,
+        actor=actor,
+        liveness_grace=coordination_claims._heartbeat_stale_after() if ambiguous_signal else None,
+        notify=_notify if actor is not None else None,
     )
+    resolved_session_id = result.session_id
+    ended_at = result.ended_at
     for claim in coordination_claims.list_claims(
         claims_dir=claims_dir,
         include_inactive=True,
@@ -1262,14 +1305,18 @@ def end_runtime_session(
                 notes=reason.strip() or "session ended",
                 updated_at=ended_at,
             )
-    return {
+    payload: dict[str, Any] = {
         "action": "session_ended",
-        "ended_count": count,
-        "claims": identities,
+        "ended_count": result.ended_count,
+        "claims": result.ended_scopes,
         "session_id": resolved_session_id,
         "session_ended_at": ended_at,
         "reason": reason.strip() or "session ended",
+        "refused": result.refused,
     }
+    if notify_failures:
+        payload["notify_failures"] = notify_failures
+    return payload
 
 
 def finish_session(

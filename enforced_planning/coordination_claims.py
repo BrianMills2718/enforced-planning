@@ -29,12 +29,12 @@ import subprocess
 import sys
 import tempfile
 import time
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 import yaml  # type: ignore[import-untyped]
 
@@ -84,6 +84,18 @@ SESSION_ENV_KEYS = {
     "claude-code": ("CLAUDE_CODE_SESSION_ID", "CLAUDE_SESSION_ID", "CLAUDE_CODE_SSE_PORT"),
     "openclaw": ("OPENCLAW_SESSION_ID", "OPENCLAW_RUN_ID"),
 }
+# CLAUDE_CODE_SSE_PORT is shared by every claude-code session the CLI server
+# spawns on one machine -- it is accepted for matching an *existing* claim
+# (heartbeat, release) so two sessions on one CLI server do not lose contact
+# with claims minted before CLAUDE_CODE_SESSION_ID was available, but it must
+# never be used to select which claim(s) an *end* operation retires: matching
+# it there lets one dying session retire a different live session's claim
+# that happens to share the alias (policy: claim-end-requires-liveness-check,
+# Defect A -- project-meta/policy/proposals/2026-08-20-claim-end-requires-liveness-check.yaml).
+SHARED_ALIAS_SESSION_ENV_KEYS: dict[str, tuple[str, ...]] = {
+    "claude-code": ("CLAUDE_CODE_SSE_PORT",),
+}
+_SHARED_SESSION_ALIAS_PATTERN = re.compile(r"^claude-code:sse:\d+$")
 STRICT_NATIVE_SESSION_ENV_KEYS = {
     "codex": "CODEX_THREAD_ID",
     "claude-code": "CLAUDE_CODE_SESSION_ID",
@@ -920,16 +932,32 @@ def resolve_canonical_work_unit_binding(
     return graph_sha256, tuple(sorted(approval_revisions))
 
 
-def resolve_session_id(agent: str, explicit_session_id: str | None = None) -> str | None:
+def resolve_session_id(
+    agent: str,
+    explicit_session_id: str | None = None,
+    *,
+    allow_shared_alias: bool = True,
+) -> str | None:
     """Return an explicit or environment-derived session identifier.
 
     The result is scoped to the named agent so one tool runtime does not
     accidentally borrow another tool's ambient session marker.
+
+    ``allow_shared_alias=False`` skips env keys listed in
+    ``SHARED_ALIAS_SESSION_ENV_KEYS`` (currently just ``CLAUDE_CODE_SSE_PORT``)
+    so a caller that must select exactly one owning session -- ending a
+    claim -- cannot silently fall back to an identity several sessions share.
+    Heartbeat and release keep the default ``True`` because they only ever
+    touch a claim that already carries a matching ``session_id``; they do not
+    select which claim to retire.
     """
 
     if explicit_session_id:
         return explicit_session_id
+    shared_alias_keys = SHARED_ALIAS_SESSION_ENV_KEYS.get(agent, ())
     for key in SESSION_ENV_KEYS.get(agent, ()):
+        if not allow_shared_alias and key in shared_alias_keys:
+            continue
         raw_value = os.environ.get(key, "").strip()
         if not raw_value:
             continue
@@ -937,6 +965,12 @@ def resolve_session_id(agent: str, explicit_session_id: str | None = None) -> st
             return f"claude-code:sse:{raw_value}"
         return f"{agent}:{raw_value}"
     return None
+
+
+def _is_shared_session_alias(session_id: str) -> bool:
+    """Return whether ``session_id`` is the legacy multi-session SSE-port alias."""
+
+    return bool(_SHARED_SESSION_ALIAS_PATTERN.match(session_id))
 
 
 def validate_native_session_binding(agent: str, session_id: str | None) -> None:
@@ -1612,27 +1646,135 @@ def heartbeat_claims(
     return len(updated_scopes), sorted(updated_scopes), resolved_session_id, heartbeat_at
 
 
+CLAIM_LIVENESS_REFUSAL_LOG_NAME = "claim-liveness-refusals-v1.jsonl"
+
+
+def _record_liveness_refusal(
+    claims_dir: Path,
+    *,
+    project: str | None,
+    scope: str,
+    session_id: str,
+    heartbeat_at: str | None,
+    sweep_started_at: str,
+    actor: str | None,
+    reason: str,
+) -> None:
+    """Append one durable record of a refused end (policy: claim-end-requires-liveness-check).
+
+    This is the refusal-side counterpart to
+    ``scripts/check_claim_liveness_violations.py``: that script detects
+    liveness violations already written to disk, this records the moments the
+    write was blocked before it happened.
+    """
+
+    log_path = claims_dir.parent / CLAIM_LIVENESS_REFUSAL_LOG_NAME
+    entry = {
+        "refused_at": datetime.now(timezone.utc).isoformat(),
+        "project": project,
+        "scope": scope,
+        "session_id": session_id,
+        "heartbeat_at": heartbeat_at,
+        "sweep_started_at": sweep_started_at,
+        "actor": actor,
+        "attempted_reason": reason,
+        "policy": "claim-end-requires-liveness-check",
+    }
+    try:
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        with log_path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(entry, sort_keys=True) + "\n")
+    except OSError:
+        # Best-effort audit trail; a refusal that cannot be logged must still
+        # refuse. The caller's return value is the authoritative signal.
+        pass
+
+
+class EndSessionClaimsResult(NamedTuple):
+    """Outcome of one ``end_session_claims`` call, ended and refused alike."""
+
+    ended_count: int
+    ended_scopes: list[str]
+    session_id: str
+    ended_at: str
+    refused: list[dict[str, str | None]]
+
+
 def end_session_claims(
     *,
     agent: str,
     session_id: str | None = None,
     reason: str = "session ended",
     claims_dir: Path | None = None,
-) -> tuple[int, list[str], str, str]:
-    """Retire exact-session live ownership without deleting recovery state."""
+    actor: str | None = None,
+    sweep_started_at: str | None = None,
+    liveness_grace: timedelta | None = None,
+    notify: Callable[[ClaimRecord, str, str], None] | None = None,
+) -> EndSessionClaimsResult:
+    """Retire exact-session live ownership without deleting recovery state.
 
-    resolved_session_id = resolve_session_id(agent, session_id)
+    Enforces policy ``claim-end-requires-liveness-check``
+    (project-meta/policy/proposals/2026-08-20-claim-end-requires-liveness-check.yaml):
+
+    - Never resolves the shared ``claude-code:sse:<port>`` alias to pick which
+      claim(s) to retire (Defect A); an explicit alias-shaped ``session_id``
+      is rejected outright.
+    - Refuses -- and durably records the refusal -- ending any claim whose
+      ``heartbeat_at`` is newer than the sweep's own reference start time, so
+      a session that heartbeats while a sweep is in flight survives it.
+    - ``actor`` marks a forced end performed by something other than the
+      owning session (a sweep/prune tool, an operator script, a different
+      agent). A forced end requires a specific ``reason``; ``"other"`` is not
+      accepted (self-ends stay reason-free, matching the native SessionEnd
+      hook's own vocabulary).
+    - ``liveness_grace``, when set, treats a claim as not-yet-provably-dead if
+      it heartbeated within that window before now, even with no explicit
+      ``sweep_started_at`` -- this is the Defect B mitigation: a bare
+      SessionEnd signal (a WSL/transport disconnect fires the same event a
+      real exit does) is not by itself evidence the runtime terminated, so it
+      must not retire a claim that heartbeated recently. A genuinely dead
+      session's claim is left for ``prune_stale``/``prune_expired`` to reap
+      once its heartbeat is actually stale.
+    - ``notify``, when given, is invoked once per claim -- while that claim is
+      still recorded live, before its status flips -- so a caller can route a
+      mailbox message to the owning session before the recipient stops being
+      resolvable as a live claim. Only fired for a legitimate forced end
+      (``actor`` set, liveness check passed).
+    """
+
+    if actor is not None and reason.strip().lower() == "other":
+        raise ValueError(
+            "A forced end (actor set) requires a specific session_end_reason; "
+            "'other' is not sufficient for a non-self-initiated end "
+            "(policy: claim-end-requires-liveness-check)."
+        )
+    if session_id is not None and _is_shared_session_alias(session_id):
+        raise ValueError(
+            f"Refusing to end claims via the shared alias {session_id!r}; it can match a "
+            "different live session's claim. Pass the exact native session ID instead "
+            "(policy: claim-end-requires-liveness-check, Defect A)."
+        )
+    resolved_session_id = resolve_session_id(agent, session_id, allow_shared_alias=False)
     if not resolved_session_id:
         raise ValueError(
             "Unable to resolve a session ID. Pass --session-id explicitly or run from a supported tool runtime."
         )
     resolved_claims_dir = claims_dir or CLAIMS_DIR
     ended_at = datetime.now(timezone.utc).isoformat()
+    ended_at_dt = _parse_iso_datetime(ended_at)
+    if sweep_started_at is not None:
+        sweep_reference = sweep_started_at
+    elif liveness_grace is not None and ended_at_dt is not None:
+        sweep_reference = (ended_at_dt - liveness_grace).isoformat()
+    else:
+        sweep_reference = ended_at
+    sweep_reference_dt = _parse_iso_datetime(sweep_reference)
     ended_claims: list[tuple[Path, ClaimRecord]] = []
+    refused: list[dict[str, str | None]] = []
     with claim_registry_lock(resolved_claims_dir):
         registry_digest_before = _registry_digest(resolved_claims_dir)
         if not resolved_claims_dir.exists():
-            return 0, [], resolved_session_id, ended_at
+            return EndSessionClaimsResult(0, [], resolved_session_id, ended_at, [])
         for claim_file in resolved_claims_dir.glob("*.yaml"):
             try:
                 data = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
@@ -1643,11 +1785,36 @@ def end_session_claims(
             claim = normalize_claim(data, source_file=str(claim_file))
             if claim is None or not claim.is_live() or claim.agent != agent or claim.session_id != resolved_session_id:
                 continue
+            heartbeat_dt = _parse_iso_datetime(claim.heartbeat_at)
+            if heartbeat_dt is not None and sweep_reference_dt is not None and heartbeat_dt > sweep_reference_dt:
+                _record_liveness_refusal(
+                    resolved_claims_dir,
+                    project=claim.primary_project(),
+                    scope=claim.scope,
+                    session_id=resolved_session_id,
+                    heartbeat_at=claim.heartbeat_at,
+                    sweep_started_at=sweep_reference,
+                    actor=actor,
+                    reason=reason,
+                )
+                refused.append(
+                    {
+                        "project": claim.primary_project(),
+                        "scope": claim.scope,
+                        "heartbeat_at": claim.heartbeat_at,
+                        "sweep_started_at": sweep_reference,
+                    }
+                )
+                continue
+            if actor is not None and notify is not None:
+                notify(claim, reason, actor)
             data["previous_status"] = claim.status
             data["status"] = SESSION_ENDED_STATUS
             data["session_end_reason"] = reason.strip() or "session ended"
             data["session_ended_at"] = ended_at
             data["updated_at"] = ended_at
+            if actor is not None:
+                data["session_end_actor"] = actor
             _atomic_write_claim(claim_file, data)
             ended_claims.append((claim_file, claim))
         if ended_claims:
@@ -1664,7 +1831,7 @@ def end_session_claims(
                     projection_digest_after=projection_digest_after,
                 )
     ended_labels = [f"{claim.primary_project()}:{claim.scope}" for _path, claim in ended_claims]
-    return len(ended_labels), sorted(ended_labels), resolved_session_id, ended_at
+    return EndSessionClaimsResult(len(ended_labels), sorted(ended_labels), resolved_session_id, ended_at, refused)
 
 
 def release_claim(agent: str, project: str, scope: str) -> tuple[bool, str]:

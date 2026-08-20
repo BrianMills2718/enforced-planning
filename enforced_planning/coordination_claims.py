@@ -909,6 +909,76 @@ def resolve_canonical_work_unit_binding(
     return graph_sha256, tuple(sorted(approval_revisions))
 
 
+#: Claude Code registers each live session here as ``<pid>.json`` carrying the
+#: real per-session UUID. Reading it lets any descendant process recover the
+#: identity of the session it belongs to.
+CLAUDE_SESSION_REGISTRY = Path.home() / ".claude" / "sessions"
+
+
+def _parent_pid(pid: int) -> int | None:
+    """Return a process's parent pid, or None when it cannot be read."""
+    try:
+        stat = Path(f"/proc/{pid}/stat").read_text(encoding="utf-8")
+    except OSError:
+        return None
+    try:
+        # comm may contain spaces and parentheses; fields follow the final ")".
+        return int(stat.rsplit(") ", 1)[1].split()[1])
+    except (IndexError, ValueError):
+        return None
+
+
+def session_id_from_process_tree(registry_dir: Path | None = None) -> str | None:
+    """Recover the owning Claude Code session id by walking process ancestry.
+
+    A hook or CLI subprocess is a descendant of the ``claude`` process that owns
+    the session, and that process has a registry entry naming its real session
+    UUID. Walking to it gives a genuinely per-session identity, which
+    CLAUDE_CODE_SSE_PORT does not: that port belongs to the CLI server and every
+    session hosted by it derives the same value.
+    """
+
+    registry = registry_dir or CLAUDE_SESSION_REGISTRY
+    pid: int | None = os.getpid()
+    seen: set[int] = set()
+    while pid and pid > 1 and pid not in seen:
+        seen.add(pid)
+        entry = registry / f"{pid}.json"
+        if entry.is_file():
+            try:
+                payload = json.loads(entry.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                return None
+            session_id = payload.get("sessionId")
+            if isinstance(session_id, str) and session_id.strip():
+                return session_id.strip()
+            return None
+        pid = _parent_pid(pid)
+    return None
+
+
+def session_identity_aliases(agent: str, resolved_session_id: str | None) -> tuple[str, ...]:
+    """Return every identity this process may legitimately claim ownership under.
+
+    Transitional. Claims filed before per-session resolution carry the shared
+    CLAUDE_CODE_SSE_PORT identity, and their owner must still be able to
+    heartbeat and release them; otherwise this change would strand live lanes it
+    cannot re-file. The legacy alias is as ambiguous as it always was -- two
+    sessions on one CLI server share it -- so it is accepted for matching an
+    existing claim and never minted for a new one.
+    """
+
+    identities: list[str] = []
+    if resolved_session_id:
+        identities.append(resolved_session_id)
+    if agent == "claude-code":
+        port = os.environ.get("CLAUDE_CODE_SSE_PORT", "").strip()
+        legacy = f"claude-code:sse:{port}" if port else ""
+        if legacy and legacy not in identities:
+            identities.append(legacy)
+    return tuple(identities)
+
+
 def resolve_session_id(agent: str, explicit_session_id: str | None = None) -> str | None:
     """Return an explicit or environment-derived session identifier.
 
@@ -923,8 +993,20 @@ def resolve_session_id(agent: str, explicit_session_id: str | None = None) -> st
         if not raw_value:
             continue
         if agent == "claude-code" and key == "CLAUDE_CODE_SSE_PORT":
+            # Last resort only. This port belongs to the CLI server, so every
+            # session it hosts derives the same value and claim ownership stops
+            # being per-session. Prefer the real session id from the registry,
+            # which is also the identity Claude Code puts in hook payloads and
+            # therefore the one the pre-write gate compares against.
+            from_tree = session_id_from_process_tree()
+            if from_tree:
+                return f"{agent}:{from_tree}"
             return f"claude-code:sse:{raw_value}"
         return f"{agent}:{raw_value}"
+    if agent == "claude-code":
+        from_tree = session_id_from_process_tree()
+        if from_tree:
+            return f"{agent}:{from_tree}"
     return None
 
 
@@ -1575,9 +1657,10 @@ def heartbeat_claims(
                 continue
             if branch and claim.branch != branch:
                 continue
-            if require_exact_session and claim.session_id != resolved_session_id:
+            owned = session_identity_aliases(agent, resolved_session_id)
+            if require_exact_session and claim.session_id not in owned:
                 continue
-            if not require_exact_session and claim.session_id and claim.session_id != resolved_session_id:
+            if not require_exact_session and claim.session_id and claim.session_id not in owned:
                 continue
             data["session_id"] = resolved_session_id
             data["heartbeat_at"] = heartbeat_at
@@ -1630,7 +1713,12 @@ def end_session_claims(
             if not isinstance(data, dict):
                 continue
             claim = normalize_claim(data, source_file=str(claim_file))
-            if claim is None or not claim.is_live() or claim.agent != agent or claim.session_id != resolved_session_id:
+            if (
+                claim is None
+                or not claim.is_live()
+                or claim.agent != agent
+                or claim.session_id not in session_identity_aliases(agent, resolved_session_id)
+            ):
                 continue
             data["previous_status"] = claim.status
             data["status"] = SESSION_ENDED_STATUS

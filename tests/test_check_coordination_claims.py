@@ -2576,3 +2576,91 @@ def test_unregistered_format_claim_files_surface_in_list(
     assert exit_code == 0
     assert "unregistered format" in captured.err
     assert "codex-freeform-claim.md" in captured.err
+
+
+from enforced_planning import coordination_claims  # noqa: E402
+
+# ---------------------------------------------------------------------------
+# Per-session claim identity
+#
+# Claims are filed through resolve_session_id, but the pre-write gate compares
+# against the session_id Claude Code puts in its hook payload, which is the real
+# per-session UUID. While resolve_session_id fell back to CLAUDE_CODE_SSE_PORT
+# the two never matched, so a session that filed a claim correctly still failed
+# its own gate -- and every session on one CLI server shared the port, so claim
+# ownership was not per-session at all.
+# ---------------------------------------------------------------------------
+
+
+def _registry_with_self(tmp_path, session_id):
+    import json
+    import os
+
+    entry = tmp_path / f"{os.getpid()}.json"
+    entry.write_text(json.dumps({"pid": os.getpid(), "sessionId": session_id}), encoding="utf-8")
+    return tmp_path
+
+
+def test_session_id_recovered_from_process_tree(tmp_path):
+    registry = _registry_with_self(tmp_path, "uuid-mine")
+    assert coordination_claims.session_id_from_process_tree(registry_dir=registry) == "uuid-mine"
+
+
+def test_absent_registry_entry_yields_no_identity(tmp_path):
+    """No identity is better than a shared one: the caller must be able to tell."""
+    assert coordination_claims.session_id_from_process_tree(registry_dir=tmp_path) is None
+
+
+def test_malformed_registry_entry_does_not_raise(tmp_path):
+    import os
+
+    (tmp_path / f"{os.getpid()}.json").write_text("{not json", encoding="utf-8")
+    assert coordination_claims.session_id_from_process_tree(registry_dir=tmp_path) is None
+
+
+def test_shared_sse_port_is_not_minted_when_a_real_id_exists(monkeypatch, tmp_path):
+    registry = _registry_with_self(tmp_path, "uuid-mine")
+    monkeypatch.setattr(coordination_claims, "CLAUDE_SESSION_REGISTRY", registry)
+    monkeypatch.delenv("CLAUDE_SESSION_ID", raising=False)
+    monkeypatch.setenv("CLAUDE_CODE_SSE_PORT", "41292")
+
+    resolved = coordination_claims.resolve_session_id("claude-code")
+    assert resolved == "claude-code:uuid-mine"
+    assert not resolved.startswith("claude-code:sse:")
+
+
+def test_legacy_shared_identity_still_matches_an_existing_claim(monkeypatch, tmp_path):
+    """Claims filed before this change must remain releasable by their owner."""
+    registry = _registry_with_self(tmp_path, "uuid-mine")
+    monkeypatch.setattr(coordination_claims, "CLAUDE_SESSION_REGISTRY", registry)
+    monkeypatch.delenv("CLAUDE_SESSION_ID", raising=False)
+    monkeypatch.setenv("CLAUDE_CODE_SSE_PORT", "41292")
+
+    resolved = coordination_claims.resolve_session_id("claude-code")
+    aliases = coordination_claims.session_identity_aliases("claude-code", resolved)
+    assert resolved in aliases
+    assert "claude-code:sse:41292" in aliases
+
+
+def test_no_legacy_alias_is_offered_without_a_port(monkeypatch, tmp_path):
+    registry = _registry_with_self(tmp_path, "uuid-mine")
+    monkeypatch.setattr(coordination_claims, "CLAUDE_SESSION_REGISTRY", registry)
+    monkeypatch.delenv("CLAUDE_CODE_SSE_PORT", raising=False)
+
+    resolved = coordination_claims.resolve_session_id("claude-code")
+    aliases = coordination_claims.session_identity_aliases("claude-code", resolved)
+    assert all(not alias.startswith("claude-code:sse:") for alias in aliases)
+
+
+def test_explicit_identity_still_wins(monkeypatch, tmp_path):
+    """Lifecycle hooks and recovery tools pass an explicit id and must keep control."""
+    monkeypatch.setattr(coordination_claims, "CLAUDE_SESSION_REGISTRY", _registry_with_self(tmp_path, "uuid-mine"))
+    assert (
+        coordination_claims.resolve_session_id("claude-code", "claude-code:explicit")
+        == "claude-code:explicit"
+    )
+
+
+def test_codex_identity_is_untouched(monkeypatch):
+    monkeypatch.setenv("CODEX_THREAD_ID", "thread-xyz")
+    assert coordination_claims.resolve_session_id("codex") == "codex:thread-xyz"

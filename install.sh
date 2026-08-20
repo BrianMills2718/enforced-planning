@@ -125,6 +125,8 @@ done
 if [[ "$MODE" == "--full" ]]; then
     FULL_SCRIPTS=(
         "check_doc_coupling.py"
+        "check_reachability.py"
+        "repo_stats_block.py"
         "sync_governance.py"
         "check_mock_usage.py"
         "check_locked_files.py"

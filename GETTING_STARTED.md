@@ -86,6 +86,8 @@ After a successful minimum install, your repo should have:
 - `scripts/meta/check_agents_sync.py`
 - `scripts/meta/check_coordination_claims.py`
 - `scripts/meta/check_doc_coupling.py`
+- `scripts/meta/check_reachability.py`
+- `scripts/meta/repo_stats_block.py`
 - `scripts/meta/file_context.py`
 - `scripts/meta/render_agents_md.py`
 - `scripts/meta/session_finish.py`

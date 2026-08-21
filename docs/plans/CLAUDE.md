@@ -100,6 +100,7 @@ See `ROADMAP.md` for the full phase map and recommended priority order.
 | 121 | Representative Outcome-Admission False-Block Evaluation (`121_outcome_admission_false_block_evaluation.md`) | Critical | ✅ Complete — independently signed off | first-consumer hard-gate design/implementation licensed; activation and fleet rollout excluded |
 | 122 | First-Consumer Outcome Admission Gate (`122_first_consumer_outcome_admission.md`) | Critical | ✅ Complete — opt-in source consumer accepted | separately reviewed source-repository activation pilot; hooks, installer, and fleet remain excluded |
 | 123 | Source Outcome-Admission Activation (`123_source_outcome_admission_activation.md`) | Critical | ✅ Complete — automatic source bootstrap/lifecycle/pre-write accepted | separately designed normal-project pilot; installer and fleet remain excluded |
+| 124 | Qualitative Coding Outcome-Admission Pilot (`124_qualitative_coding_outcome_admission_pilot.md`) | Critical | 📋 Planned — QC target selected; Project Graph ID compatibility prerequisite ready | exact source compatibility, then one isolated QC-local pilot; installer defaults and fleet remain excluded |
 
 ## Status Key
 

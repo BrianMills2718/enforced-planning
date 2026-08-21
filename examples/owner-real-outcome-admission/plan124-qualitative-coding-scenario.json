@@ -1,0 +1,51 @@
+{
+  "schema_version": "1.0.0",
+  "scenario_id": "project-graph-id-compatible-normal-pilot",
+  "contract": {
+    "schema_version": "1.1.0",
+    "outcome_id": "project-graph-id-compatible-normal-pilot",
+    "owner_class": "brian",
+    "project_id": "enforced-planning",
+    "lineage_id": "project-graph-id-compatible-normal-pilot",
+    "portfolio_class": "maintenance",
+    "predecessor_lineage_ids": [
+      "plan-123-source-outcome-admission-activation"
+    ],
+    "intended_consumer": "Brian and his coding agents activating outcome admission in Project Graph-authorized normal projects",
+    "outcome": "Canonical Project Graph project IDs are representable without weakening outcome or lineage slugs, licensing the exact Qualitative Coding pilot.",
+    "canonical_journey": {
+      "starting_state": "The accepted outcome contract rejects the authoritative active Project Graph ID qualitative_coding because project identity reuses an unrelated hyphen-only slug grammar.",
+      "input": "The exact qualitative_coding record from a pinned reviewed Project Graph revision and one otherwise-valid maintenance outcome contract.",
+      "action": "Separate project-ID validation from outcome and lineage slug validation, then resolve the real QC identity through portfolio allocation controls.",
+      "observable_result": "qualitative_coding validates and resolves exactly; existing hyphenated identities remain compatible; malformed IDs and weakened outcome/lineage slugs still fail.",
+      "failure_signal": "The implementation invents an alias, accepts unsafe identifiers, weakens outcome/lineage grammar, or passes only a contract unit test without portfolio resolution."
+    },
+    "baseline_revision": "11cb38153ad41a156b831d4d392522c542799ee7",
+    "allowed_scope": [
+      "enforced_planning/outcome_continuation.py",
+      "tests/test_outcome_continuation.py",
+      "tests/test_outcome_portfolio.py",
+      "docs/evidence/plan124_project_graph_id_compatibility.json",
+      "docs/plans/124_qualitative_coding_outcome_admission_pilot.md",
+      "docs/plans/124_qualitative_coding_outcome_admission_pilot_work_graph.json",
+      "docs/plans/CLAUDE.md",
+      "ROADMAP.md"
+    ],
+    "progress_dimensions": [
+      "Project Graph identity compatibility",
+      "outcome and lineage slug strictness",
+      "real portfolio authority resolution",
+      "normal-project pilot readiness"
+    ]
+  },
+  "receipts": [],
+  "request": {
+    "schema_version": "1.0.0",
+    "operation": "product_write",
+    "target_path": "enforced_planning/outcome_continuation.py",
+    "ordinary_approval": true,
+    "approval_text": "I approve, continue",
+    "cost_telemetry_usd": "1000000",
+    "elapsed_telemetry_seconds": 999999
+  }
+}

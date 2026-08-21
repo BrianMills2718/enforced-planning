@@ -55,7 +55,7 @@ See `ROADMAP.md` for the full phase map and recommended priority order.
 | 48 | ADR-0010 Guide Propagation (`48_adr0010-guide-propagation.md`) | High | ✅ Complete | WORKTREE guide + ROADMAP Phase 6 label |
 | 49 | Canonical Continuous Execution Contract (`49_canonical-execution-contract.md`) | Medium | ✅ Complete | Canonical execution contract pattern in enforced-planning |
 | 50 | Ecosystem Status Renderer (`50_ecosystem-status-renderer.md`) | Medium | ✅ Complete | `make ecosystem-status` builds fleet JSON + Markdown summary |
-| 51 | Upgrade Automation Implementation and Write-Mode Rollout (`51_upgrade-automation-implementation-and-write-mode-rollout.md`) | High | ❓ Complete (impl shipped; write-mode rollout deferred to Mac mini pilot) | Phase 9 fleet write-mode rollout |
+| 51 | Upgrade Automation Implementation and Write-Mode Rollout (`51_upgrade-automation-implementation-and-write-mode-rollout.md`) | High | 🟡 Partial — dry-run shipped; unsafe direct-primary write mode disabled | Phase 9 fleet write-mode rollout |
 | 53 | Agent-Memory Research Citations And Validation (`53_agent-memory-research-citations-and-validation.md`) | High | ✅ Complete | Structured prior-session provenance field and validator coverage |
 | 54 | Recursive Documentation Spine And Required-Read Closure (`54_recursive-documentation-spine-and-required-read-closure.md`) | High | 📋 Planned | [future] recursive doc-spine validation and read-gating rollout |
 | 55 | Enforced-Planning Recursive Doc Spine Dogfood (`55_enforced-planning_recursive_doc_spine_dogfood.md`) | High | 📋 Planned | [future] downstream recursive doc-spine rollout to governed repos |
@@ -65,9 +65,12 @@ See `ROADMAP.md` for the full phase map and recommended priority order.
 | 59 | Worktree Lifecycle Disposition Enforcement (`59_worktree-lifecycle-disposition-enforcement.md`) | Critical | ✅ Complete | Merge-or-disposition preflight and safe closeout propagation |
 | 60 | Loop-Engineering Clean-Room Alpha Slice 1 (`60_loop_engineering_cleanroom_alpha.md`) | High | ✅ Complete | External materialize/verify/reset alpha for shareable ecosystem fixture |
 | 61 | Clean-Room Deterministic Verified Loop (`61_cleanroom_deterministic_verified_loop.md`) | High | ✅ Complete | C3/A5 loop, trace, verifier, and stop-contract proof |
-| 62 | User-Neutral Ecosystem Instantiation (`62_user_neutral_ecosystem_instantiation.md`) | Critical | ✅ Complete | two configured governed-delivery receipts; colleague usability remains open |
+| 62 | User-Neutral Ecosystem Instantiation (`62_user_neutral_ecosystem_instantiation.md`) | Critical | ✅ Complete | two generated governed-delivery receipts; real Brian-owned project dogfooding is next and colleague usability remains downstream |
 | 63 | Relationship Context and Docstring Wiki (`63_relationship_context_and_docstring_wiki.md`) | Critical | ✅ Complete (report-only rollout; hard enforcement deferred) | reviewed consumer edges and calibrated enforcement |
 | 64 | Requirement-Linked Test Relationships (`64_requirement_linked_test_relationships.md`) | High | ✅ Complete (report-only pilot; enforcement deferred) | reviewed expansion before any consolidation or hard gate |
+| 65 | Report-Only Document Archive Lifecycle (`65_document_archive_lifecycle_report.md`) | High | ✅ Complete (report-only; semantic eligibility and enforcement deferred) | Greer lifecycle calibration and archive integration |
+| 66 | Evidence-Bound Semantic Document Lifecycle Assessment (`66_semantic_document_lifecycle_assessment.md`) | High | ✅ Design complete — awaiting human mockup disposition; no implementation authority | [future] reviewed archive-readiness and tombstone integration |
+| — | Plan 66 Semantic Document Lifecycle Assessment Mockup (`66_semantic_document_lifecycle_assessment_mockup.md`) | High | 🟡 Proposed design seam — awaiting human disposition | Plan #66 mockup review |
 | 67 | Cross-Client Mailbox and Acknowledgement (`67_cross_client_mailbox_and_acknowledgement.md`) | High | ✅ Complete | Trustworthy Claude Code ↔ Codex coordination without human copy/paste |
 | 68 | Bounded Mailbox Fleet Rollout (`68_bounded_mailbox_fleet_rollout.md`) | High | ✅ Complete | Mailbox adoption without unrelated governance drift |
 | 71 | Effective-Policy Resolution Pilot (`71_effective-policy-resolution-pilot.md`) | High | ✅ Superseded without implementation | direct stage-aware hook modes and lightweight defaults replaced the generic control-plane build |
@@ -83,6 +86,7 @@ See `ROADMAP.md` for the full phase map and recommended priority order.
 | 107 | Claim Readiness And Merge Closeout Enforcement (`107_claim_readiness_and_merge_closeout_enforcement.md`) | Critical | ✅ Complete | fail closed on blocked/unapproved write claims and merged active ownership |
 | 108 | Low-Friction Pre-Write Claim Enforcement (`108_prewrite_claim_enforcement.md`) | Critical | 🚧 In Progress — PW-01/PW-02A/PW-02/PW-02B0 accepted; PW-02B1 fleet inventory ready | native agent writes checked against exact live claim before mutation |
 | 109 | Artifact Creation and Directory Policy Enforcement (`109_artifact_creation_and_directory_policy_enforcement.md`) | High | 🚧 In Progress — portable mechanism implemented; consumer observe pilot pending | deterministic new-file anti-proliferation gate with receipts and feedback |
+| 110 | No-Passive-Waiting Enforcement (`110_no_passive_waiting_enforcement.md`) | Critical | 🚧 In Progress — work graph validated; NPW-01 and NPW-02 ready | truthful autonomous continuation and recoverable dependency waits |
 | 111 | Portable Ecosystem Feedback Loop (`111_ecosystem_feedback_loop.md`) | High | 🚧 In Progress — design adopted; EF-01 ready | evidence-backed improvement across policies, skills, instructions, tools, projects, and unowned concerns |
 | 112 | Canonical Surface Runtime Control (`112_canonical_surface_runtime_control.md`) | High | ✅ Complete | Graph Application Toolkit canonical-runtime adoption |
 | 113 | Governed Delivery Authentic Vertical (`113_governed_delivery_authentic_vertical.md`) | Critical | ✅ Complete | first real plan/docs/code/course-control/verifier proof |
@@ -94,4 +98,5 @@ See `ROADMAP.md` for the full phase map and recommended priority order.
 |--------|---------|
 | 📋 Planned | Ready to implement |
 | 🚧 In Progress | Being worked on |
+| 🟡 Partial / Proposed | A bounded result exists, but the named rollout or disposition remains open |
 | ✅ Complete | Implemented and verified |

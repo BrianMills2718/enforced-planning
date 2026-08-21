@@ -6,14 +6,14 @@
       "id": "EF-01",
       "initiative_id": "PLAN-111",
       "goal_id": "empirical-ecosystem-improvement",
-      "design_revision": "sha256:645a3e03b4ee7b770236c1b58a5a4fbce96070b564f2f188bf46548e10e4d709",
-      "spec_revision": "EF-01@1",
+      "design_revision": "sha256:ef4bd2ba534c718bc94f9c77cf4ef1cc320552718c552c4659e67589339e46a1",
+      "spec_revision": "EF-01@3",
       "title": "Build the portable ecosystem feedback transport",
       "class": "implementation",
       "objective": "Implement one strict append-only feedback contract and CLI that records, lists, reports, and dispositions evidence-backed policy, skill, instruction, tool, project, and general feedback without changing policy.",
       "profile": "standard",
       "execution_class": "independently_executable",
-      "claimability": "ready_for_execution",
+      "claimability": "not_applicable",
       "authorization_mode": "host_workspace",
       "scope": {
         "included": [
@@ -26,14 +26,16 @@
           "Project Meta legacy register migration or projection",
           "Workspace bootstrap mutation",
           "Automatic policy, skill, instruction, or project changes",
-          "Evidence-content ingestion"
+          "Evidence-content ingestion",
+          "Reusable operational findings or procedural lessons owned by learning/v2",
+          "Policy proposal, acceptance, registry, or enforcement lifecycle"
         ]
       },
       "inputs": [
         {
           "kind": "DesignPacket",
           "id": "PLAN-111",
-          "revision": "sha256:645a3e03b4ee7b770236c1b58a5a4fbce96070b564f2f188bf46548e10e4d709"
+          "revision": "sha256:ef4bd2ba534c718bc94f9c77cf4ef1cc320552718c552c4659e67589339e46a1"
         },
         {
           "kind": "ExistingContract",
@@ -98,8 +100,8 @@
         "approvals": [],
         "failed_guards": []
       },
-      "status": "ready",
-      "record_version": 1
+      "status": "accepted",
+      "record_version": 3
     },
     {
       "schema_version": "1.0",
@@ -107,25 +109,25 @@
       "id": "EF-02",
       "initiative_id": "PLAN-111",
       "goal_id": "empirical-ecosystem-improvement",
-      "design_revision": "sha256:645a3e03b4ee7b770236c1b58a5a4fbce96070b564f2f188bf46548e10e4d709",
-      "spec_revision": "EF-02@1",
+      "design_revision": "sha256:ef4bd2ba534c718bc94f9c77cf4ef1cc320552718c552c4659e67589339e46a1",
+      "spec_revision": "EF-02@2",
       "title": "Integrate Project Meta routing and projections",
       "class": "integration",
-      "objective": "Make Project Meta consume the accepted portable feedback contract, retain explicit compatibility with policy and skill Markdown registers, and expose open feedback for evidence-backed triage.",
+      "objective": "Make Project Meta consume the accepted portable feedback contract, retain explicit compatibility with policy and skill entries in the canonical policy_friction.md register, and expose open feedback for evidence-backed triage.",
       "profile": "standard",
       "execution_class": "independently_executable",
-      "claimability": "blocked_dependencies",
+      "claimability": "ready_for_execution",
       "authorization_mode": "host_workspace",
       "scope": {
         "included": [
           "Project Meta command adapter to the accepted portable transport",
-          "Policy and skill compatibility projection",
+          "Policy and skill compatibility projection from policy_friction.md",
           "Open feedback summary with stable-ID step-down",
           "Legacy behavior and routing documentation"
         ],
         "excluded": [
           "Reimplementing the portable contract",
-          "Deleting or bulk-migrating historical registers",
+          "Deleting or bulk-migrating historical policy_friction.md entries",
           "Automatic acceptance or policy promotion",
           "Workspace bootstrap edits"
         ]
@@ -134,7 +136,7 @@
         {
           "kind": "WorkUnit",
           "id": "EF-01",
-          "revision": "EF-01@1"
+          "revision": "EF-01@3"
         }
       ],
       "outputs": [
@@ -157,7 +159,7 @@
         {
           "kind": "repository_path",
           "repository": "BrianMills2718/project-meta",
-          "target": "Makefile, feedback adapters/tests, policy_friction.md and skill_feedback.md compatibility documentation",
+          "target": "Makefile, feedback adapters/tests, and policy_friction.md compatibility documentation",
           "access": "exclusive",
           "coordination_key": "plan111-ef02-project-meta"
         },
@@ -171,12 +173,12 @@
       "acceptance": [
         {
           "id": "EF02-A1",
-          "criterion": "Project Meta routes all feedback kinds through the accepted contract and preserves legacy policy and skill registers as explicit compatibility surfaces.",
+          "criterion": "Project Meta routes all feedback kinds through the accepted contract and preserves policy and skill entries in policy_friction.md as an explicit compatibility surface.",
           "evidence_required": [
             "adapter tests",
             "legacy compatibility tests"
           ],
-          "negative_control": "A Project Meta-specific feedback schema or silent deletion of a legacy record fails review and tests."
+          "negative_control": "A Project Meta-specific feedback schema, recreation of retired skill_feedback.md, or silent deletion of a legacy policy_friction.md entry fails review and tests."
         },
         {
           "id": "EF02-A2",
@@ -189,15 +191,13 @@
         }
       ],
       "readiness": {
-        "status": "blocked",
+        "status": "ready",
         "required_approval_types": [],
         "approvals": [],
-        "failed_guards": [
-          "EF-01 is not accepted."
-        ]
+        "failed_guards": []
       },
-      "status": "blocked",
-      "record_version": 1
+      "status": "ready",
+      "record_version": 2
     },
     {
       "schema_version": "1.0",
@@ -205,8 +205,8 @@
       "id": "EF-03",
       "initiative_id": "PLAN-111",
       "goal_id": "empirical-ecosystem-improvement",
-      "design_revision": "sha256:645a3e03b4ee7b770236c1b58a5a4fbce96070b564f2f188bf46548e10e4d709",
-      "spec_revision": "EF-03@1",
+      "design_revision": "sha256:ef4bd2ba534c718bc94f9c77cf4ef1cc320552718c552c4659e67589339e46a1",
+      "spec_revision": "EF-03@2",
       "title": "Deliver universal routing and prove the loop",
       "class": "integration",
       "objective": "Add one concise universal feedback-routing rule to the canonical workspace instruction and prove policy, skill, and general records traverse the installed command into Project Meta triage without per-artifact boilerplate.",
@@ -233,7 +233,7 @@
         {
           "kind": "WorkUnit",
           "id": "EF-02",
-          "revision": "EF-02@1"
+          "revision": "EF-02@2"
         }
       ],
       "outputs": [
@@ -295,7 +295,7 @@
         ]
       },
       "status": "blocked",
-      "record_version": 1
+      "record_version": 2
     }
   ]
 }

@@ -4,6 +4,8 @@
 Usage:
     python scripts/merge_pr.py 123           # Merge PR #123
     python scripts/merge_pr.py 123 --dry-run # Check without merging
+    python scripts/merge_pr.py 123 --defer-closeout
+                                            # Merge, then reconcile before closeout
 
 Note: Branch protection rules ensure:
 - PRs require passing CI checks before merge
@@ -17,6 +19,7 @@ makes it redundant, and it cannot work (can't push directly to main).
 import argparse
 import json
 import os
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -129,9 +132,13 @@ def resolve_claim_identity(
         if record.get("status") not in {"active", "blocked", "handoff", "session_ended"}:
             continue
         recorded_path = record.get("worktree_path")
-        if worktree_path is not None and recorded_path:
-            if Path(str(recorded_path)).expanduser().resolve() != worktree_path.expanduser().resolve():
-                continue
+        if (
+            worktree_path is not None
+            and recorded_path
+            and Path(str(recorded_path)).expanduser().resolve()
+            != worktree_path.expanduser().resolve()
+        ):
+            continue
         projects = record.get("projects")
         project = projects[0] if isinstance(projects, list) and projects else record.get("project")
         scope = record.get("scope")
@@ -182,10 +189,22 @@ def release_claim_for_branch(branch: str) -> bool:
     return False
 
 
-def cleanup_worktree(branch: str, *, merge_commit: str | None = None) -> bool:
-    """Close the merged lane and clean up its worktree. Return success."""
+def cleanup_worktree(
+    branch: str,
+    *,
+    merge_commit: str | None = None,
+    execute: bool = True,
+) -> bool:
+    """Execute or print the receipt-bound closeout for one merged lane."""
+    if not execute and not merge_commit:
+        print(
+            "HIGH: deferred closeout requires GitHub's canonical merge receipt; the lane remains open."
+        )
+        return False
+
     worktree_path = find_worktree_for_branch(branch)
-    print(f"🧹 Closing merged lane for branch '{branch}'...")
+    action = "Closing" if execute else "Preparing deferred closeout for"
+    print(f"🧹 {action} merged lane for branch '{branch}'...")
 
     safe_remove_script = find_existing_script(
         [
@@ -193,6 +212,13 @@ def cleanup_worktree(branch: str, *, merge_commit: str | None = None) -> bool:
             "scripts/meta/session_close.py",
         ]
     )
+    if not execute and safe_remove_script is None:
+        print(
+            "HIGH: deferred closeout requires the sanctioned session-close "
+            "entrypoint; no resumable closeout command was emitted."
+        )
+        return False
+
     if safe_remove_script:
         agent = (
             "codex"
@@ -203,9 +229,17 @@ def cleanup_worktree(branch: str, *, merge_commit: str | None = None) -> bool:
             if os.environ.get("OPENCLAW_SESSION_ID") or os.environ.get("OPENCLAW_RUN_ID")
             else None
         )
+        if not execute and not agent:
+            print(
+                "HIGH: deferred closeout requires an exact runtime identity so "
+                "the owning project and claim scope can be resolved."
+            )
+            return False
         if not agent:
             cleanup_cmd = ["make", "worktree-remove", f"BRANCH={branch}"]
-            manual_cmd = f"make worktree-remove BRANCH={branch}"
+            if merge_commit:
+                cleanup_cmd.append(f"WORKTREE_MERGE_COMMIT={merge_commit}")
+            manual_cmd = " ".join(cleanup_cmd)
         else:
             claim_identity = resolve_claim_identity(
                 branch,
@@ -256,7 +290,22 @@ def cleanup_worktree(branch: str, *, merge_commit: str | None = None) -> bool:
             manual_cmd = f"python {safe_remove_script} {worktree_path}"
         else:
             cleanup_cmd = ["make", "worktree-remove", f"BRANCH={branch}"]
-            manual_cmd = f"make worktree-remove BRANCH={branch}"
+            if merge_commit:
+                cleanup_cmd.append(f"WORKTREE_MERGE_COMMIT={merge_commit}")
+            manual_cmd = " ".join(cleanup_cmd)
+
+    if not execute:
+        root_anchored_command = (
+            f"cd {shlex.quote(str(canonical_repo_root()))} && "
+            f"{shlex.join(cleanup_cmd)}"
+        )
+        print(
+            "MERGED; CLOSEOUT DEFERRED: the claim and worktree remain live until "
+            "the required post-merge reconciliation is complete."
+        )
+        print(f"   Canonical merge receipt: {merge_commit}")
+        print(f"   Then run from the canonical root: {root_anchored_command}")
+        return True
 
     result = run_cmd(cleanup_cmd, check=False)
 
@@ -321,12 +370,23 @@ def check_pr_mergeable(pr_number: int) -> tuple[bool, str]:
     return True, "OK"
 
 
-def merge_pr(pr_number: int, dry_run: bool = False) -> bool:
-    """Merge a PR. Returns True if successful."""
+def merge_pr(
+    pr_number: int,
+    dry_run: bool = False,
+    *,
+    defer_closeout: bool = False,
+) -> bool:
+    """Merge a PR and close its lane, or explicitly defer that closeout."""
     print(f"🔍 Checking PR #{pr_number}...")
 
     # Get branch name before merge (needed for worktree cleanup)
     branch = get_pr_branch(pr_number)
+    if not branch:
+        print(
+            f"❌ Refusing to merge PR #{pr_number}: its head branch could not be "
+            "resolved, so closeout cannot be bound to an exact lane."
+        )
+        return False
 
     # Fetch latest
     print("📥 Fetching latest...")
@@ -376,13 +436,24 @@ def merge_pr(pr_number: int, dry_run: bool = False) -> bool:
         print("HIGH: GitHub did not return a canonical merge commit for the merged PR.")
         return False
 
-    # Clean up local worktree if it exists
-    if branch and not cleanup_worktree(branch, merge_commit=merge_commit):
+    # Close immediately by default. A caller may explicitly retain the live lane
+    # when canonical-Git verification or reconciliation must happen first.
+    if not cleanup_worktree(
+        branch,
+        merge_commit=merge_commit,
+        execute=not defer_closeout,
+    ):
         print(
             "HIGH: PR merged, but claim/worktree closeout failed. "
             "The merge command is incomplete until the printed session-close action succeeds."
         )
         return False
+
+    if defer_closeout:
+        print(
+            f"\n✅ PR #{pr_number} merged at {merge_commit}; closeout was explicitly deferred and remains mandatory."
+        )
+        return True
 
     print(f"\n✅ Done! PR #{pr_number} has been merged.")
     return True
@@ -401,6 +472,15 @@ def main() -> int:
     )
     parser.add_argument("pr", type=int, nargs="?", help="PR number to merge")
     parser.add_argument("--dry-run", action="store_true", help="Check without merging")
+    parser.add_argument(
+        "--defer-closeout",
+        action="store_true",
+        help=(
+            "Merge and print the exact receipt-bound closeout command without "
+            "executing it; use only when required post-merge reconciliation must "
+            "precede closeout."
+        ),
+    )
 
     args = parser.parse_args()
 
@@ -408,7 +488,15 @@ def main() -> int:
         parser.print_help()
         return 1
 
-    return 0 if merge_pr(args.pr, args.dry_run) else 1
+    return (
+        0
+        if merge_pr(
+            args.pr,
+            args.dry_run,
+            defer_closeout=args.defer_closeout,
+        )
+        else 1
+    )
 
 
 if __name__ == "__main__":

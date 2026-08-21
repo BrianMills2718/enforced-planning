@@ -8,7 +8,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-
 SCRIPTS_DIR = Path(__file__).resolve().parents[1] / "scripts"
 MODULE_PATH = SCRIPTS_DIR / "merge_pr.py"
 
@@ -291,10 +290,15 @@ def test_merge_reports_high_failure_when_post_merge_closeout_fails(
     module = _load()
     monkeypatch.setattr(module, "get_pr_branch", lambda _pr: "plan-107-landed")
     monkeypatch.setattr(module, "check_pr_mergeable", lambda _pr: (True, "OK"))
+
+    def reject_closeout(_branch, *, merge_commit=None, execute=True) -> bool:
+        assert execute is True
+        return False
+
     monkeypatch.setattr(
         module,
         "cleanup_worktree",
-        lambda _branch, *, merge_commit=None: False,
+        reject_closeout,
     )
     monkeypatch.setattr(module, "get_pr_merge_commit", lambda _pr: "merge-commit")
     monkeypatch.setattr(
@@ -305,3 +309,204 @@ def test_merge_reports_high_failure_when_post_merge_closeout_fails(
 
     assert module.merge_pr(107) is False
     assert "HIGH: PR merged, but claim/worktree closeout failed" in capsys.readouterr().out
+
+
+def test_deferred_closeout_prints_exact_session_close_without_executing(
+    monkeypatch, tmp_path, capsys
+) -> None:
+    """Deferred mode must retain ownership and print one exact receipt-bound command."""
+
+    module = _load()
+    monkeypatch.chdir(tmp_path)
+    session_close = tmp_path / "scripts" / "session_close.py"
+    session_close.parent.mkdir(parents=True)
+    session_close.write_text("#!/usr/bin/env python3\n", encoding="utf-8")
+    worktree = tmp_path / "worktrees" / "feature"
+    canonical_root = tmp_path
+    monkeypatch.setenv("CODEX_THREAD_ID", "test-thread")
+    monkeypatch.setattr(module, "find_worktree_for_branch", lambda _branch: worktree)
+    monkeypatch.setattr(module, "canonical_repo_root", lambda: canonical_root)
+    monkeypatch.setattr(
+        module,
+        "resolve_claim_identity",
+        lambda _branch, *, agent, worktree_path: ("actual-project", "actual-scope"),
+    )
+    observed_calls: list[list[str]] = []
+    monkeypatch.setattr(
+        module,
+        "run_cmd",
+        lambda cmd, check=True, capture=True: (
+            observed_calls.append(cmd) or completed_process(cmd)
+        ),
+    )
+
+    assert (
+        module.cleanup_worktree(
+            "feature",
+            merge_commit="merge-oid",
+            execute=False,
+        )
+        is True
+    )
+
+    assert observed_calls == []
+    output = capsys.readouterr().out
+    assert "MERGED; CLOSEOUT DEFERRED" in output
+    assert "claim and worktree remain live" in output
+    assert (
+        f"cd {canonical_root} && python scripts/session_close.py "
+        "--agent codex --project actual-project "
+        "--scope actual-scope --branch feature "
+        f"--worktree-path {worktree} --merge-commit merge-oid"
+    ) in output
+
+
+def test_deferred_closeout_rejects_missing_runtime_identity(
+    monkeypatch, tmp_path, capsys
+) -> None:
+    """Deferred mode cannot guess claim identity through the make fallback."""
+
+    module = _load()
+    monkeypatch.chdir(tmp_path)
+    session_close = tmp_path / "scripts" / "session_close.py"
+    session_close.parent.mkdir(parents=True)
+    session_close.write_text("#!/usr/bin/env python3\n", encoding="utf-8")
+    worktree = tmp_path / "worktrees" / "feature"
+    monkeypatch.delenv("CODEX_THREAD_ID", raising=False)
+    monkeypatch.delenv("CLAUDE_SESSION_ID", raising=False)
+    monkeypatch.delenv("CLAUDE_CODE_SSE_PORT", raising=False)
+    monkeypatch.delenv("OPENCLAW_SESSION_ID", raising=False)
+    monkeypatch.delenv("OPENCLAW_RUN_ID", raising=False)
+    monkeypatch.setattr(module, "find_worktree_for_branch", lambda _branch: worktree)
+
+    assert not (
+        module.cleanup_worktree(
+            "feature",
+            merge_commit="merge-oid",
+            execute=False,
+        )
+    )
+
+    output = capsys.readouterr().out
+    assert "requires an exact runtime identity" in output
+    assert "Then run" not in output
+
+
+def test_deferred_closeout_rejects_missing_session_close(
+    monkeypatch, tmp_path, capsys
+) -> None:
+    """A legacy remover cannot stand in for atomic receipt-bound closeout."""
+
+    module = _load()
+    monkeypatch.chdir(tmp_path)
+    worktree = tmp_path / "worktrees" / "feature"
+    safe_remove = (
+        tmp_path
+        / "scripts"
+        / "meta"
+        / "worktree-coordination"
+        / "safe_worktree_remove.py"
+    )
+    safe_remove.parent.mkdir(parents=True)
+    safe_remove.write_text("#!/usr/bin/env python3\n", encoding="utf-8")
+    monkeypatch.setenv("CODEX_THREAD_ID", "test-thread")
+    monkeypatch.setattr(module, "find_worktree_for_branch", lambda _branch: worktree)
+
+    assert not module.cleanup_worktree(
+        "feature",
+        merge_commit="merge-oid",
+        execute=False,
+    )
+
+    output = capsys.readouterr().out
+    assert "requires the sanctioned session-close entrypoint" in output
+    assert "safe_worktree_remove.py" not in output
+
+
+def test_merge_defers_closeout_after_canonical_merge_receipt(
+    monkeypatch, capsys
+) -> None:
+    """Explicit deferred mode merges first and prepares, but does not execute, closeout."""
+
+    module = _load()
+    monkeypatch.setattr(module, "get_pr_branch", lambda _pr: "feature")
+    monkeypatch.setattr(module, "check_pr_mergeable", lambda _pr: (True, "OK"))
+    monkeypatch.setattr(module, "get_pr_merge_commit", lambda _pr: "merge-oid")
+    observed_closeouts: list[tuple[str, str | None, bool]] = []
+    monkeypatch.setattr(
+        module,
+        "cleanup_worktree",
+        lambda branch, *, merge_commit=None, execute=True: (
+            observed_closeouts.append((branch, merge_commit, execute)) or True
+        ),
+    )
+    monkeypatch.setattr(
+        module,
+        "run_cmd",
+        lambda cmd, check=True, capture=True: completed_process(cmd),
+    )
+
+    assert module.merge_pr(146, defer_closeout=True) is True
+    assert observed_closeouts == [("feature", "merge-oid", False)]
+    output = capsys.readouterr().out
+    assert "closeout was explicitly deferred and remains mandatory" in output
+    assert "Done!" not in output
+
+
+def test_deferred_closeout_does_not_bypass_missing_merge_receipt(
+    monkeypatch, capsys
+) -> None:
+    """No closeout mode succeeds without GitHub's immutable merge receipt."""
+
+    module = _load()
+    monkeypatch.setattr(module, "get_pr_branch", lambda _pr: "feature")
+    monkeypatch.setattr(module, "check_pr_mergeable", lambda _pr: (True, "OK"))
+    monkeypatch.setattr(module, "get_pr_merge_commit", lambda _pr: None)
+    monkeypatch.setattr(
+        module,
+        "run_cmd",
+        lambda cmd, check=True, capture=True: completed_process(cmd),
+    )
+
+    assert module.merge_pr(146, defer_closeout=True) is False
+    assert "did not return a canonical merge commit" in capsys.readouterr().out
+
+
+def test_merge_refuses_missing_branch_before_github_mutation(
+    monkeypatch, capsys
+) -> None:
+    """A missing branch identity cannot produce a resumable closeout command."""
+
+    module = _load()
+    observed_calls: list[list[str]] = []
+    monkeypatch.setattr(module, "get_pr_branch", lambda _pr: None)
+    monkeypatch.setattr(
+        module,
+        "run_cmd",
+        lambda cmd, check=True, capture=True: (
+            observed_calls.append(cmd) or completed_process(cmd)
+        ),
+    )
+
+    assert module.merge_pr(146, defer_closeout=True) is False
+    assert observed_calls == []
+    assert "head branch could not be resolved" in capsys.readouterr().out
+
+
+def test_main_passes_defer_closeout_flag(monkeypatch, tmp_path) -> None:
+    """The public CLI must preserve explicit deferred-closeout intent."""
+
+    module = _load()
+    observed: list[tuple[int, bool, bool]] = []
+    monkeypatch.setattr(module, "canonical_repo_root", lambda: tmp_path)
+    monkeypatch.setattr(
+        module,
+        "merge_pr",
+        lambda pr, dry_run=False, *, defer_closeout=False: (
+            observed.append((pr, dry_run, defer_closeout)) or True
+        ),
+    )
+    monkeypatch.setattr(sys, "argv", ["merge_pr.py", "146", "--defer-closeout"])
+
+    assert module.main() == 0
+    assert observed == [(146, False, True)]

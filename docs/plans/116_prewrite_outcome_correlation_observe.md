@@ -224,22 +224,40 @@ Not in scope:
 
 ## Acceptance Criteria
 
-- [ ] Without explicit outcome options, existing pre-write JSON/native behavior
+- [x] Without explicit outcome options, existing pre-write JSON/native behavior
   and exit codes are unchanged.
-- [ ] One ordinary decision is durably recorded before one typed outcome
+- [x] One ordinary decision is durably recorded before one typed outcome
   observation references its receipt ID.
-- [ ] Exact target and claim-project correlation fail visibly on mismatch while
+- [x] Exact target and claim-project correlation fail visibly on mismatch while
   preserving ordinary admission.
-- [ ] The same real claimed payload produces ordinary `allow/exact_live_claim`
+- [x] The same real claimed payload produces ordinary `allow/exact_live_claim`
   in both runs, plus outcome `would_allow/active_in_scope` for genuine progress
   and `would_deny/recovery_required` for the synthetic circular control.
-- [ ] Approval text, cost, and elapsed context are identical and ignored in both
+- [x] Approval text, cost, and elapsed context are identical and ignored in both
   signs.
-- [ ] Retained evidence is revision- and digest-bound and truthfully classified
+- [x] Retained evidence is revision- and digest-bound and truthfully classified
   as an explicit manual observe pilot.
-- [ ] Focused pre-write/outcome regressions and plan validation pass.
-- [ ] No claim mutation, automatic lease, installer, host activation, shell,
+- [x] Focused pre-write/outcome regressions and plan validation pass.
+- [x] No claim mutation, automatic lease, installer, host activation, shell,
   enforcement, colleague, or fleet claim is made.
+
+## Accepted Evidence
+
+- Candidate implementation revision `686be2a14ddeb01b329edbd503040cc6fde9922c`
+  and retained evidence revision `9ffb37c87fd34f04c1ca8a04af8c16dfe0b91ae1`.
+- `docs/evidence/plan116_prewrite_outcome_correlation.json` retains the exact
+  live Codex claim, payload digest, ordinary and correlation receipt IDs,
+  scenario and contract digests, timestamps, and both decision signs.
+- The identical claimed payload received ordinary `allow/exact_live_claim` in
+  both runs. Owner progress correlated to `would_allow/active_in_scope`; two
+  synthetic non-outcome receipts correlated to
+  `would_deny/recovery_required`; both exits remained successful and no write
+  or enforcement occurred.
+- Fifty-three focused Plan #108/#114/#116 checks passed in the retained run. A
+  successor-session replay reproduced both signs before status reconciliation.
+- Promotion remains observe-only. Representative owner calibration, durable
+  outcome selection ownership, and projection/session binding are prerequisites
+  for any separately planned blocking or installer work.
 
 ## Failure And Reset Rules
 

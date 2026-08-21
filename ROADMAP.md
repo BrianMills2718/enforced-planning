@@ -134,7 +134,17 @@ In the broader **Agentic Engineering System** vocabulary, Enforced Planning
 currently owns Agentic Delivery planning/control mechanisms and selected
 Orchestration/Loops and Evidence/Improvement controls. It is not the whole
 system and does not absorb Agent Runtime/Harness or optional shared
-infrastructure. A new top-level repository, shared `data-contracts` extraction,
+infrastructure.
+
+**Roadmap authority boundary.** This roadmap owns *control-plane mechanics*:
+the planning, claim, worktree, outcome-admission, and installer machinery, and
+the numbered plan queue in `docs/plans/`. Project Meta's
+`vision/04_ROADMAP.md` owns *program sequence* for the Agentic Engineering
+System: phases, gates, verdicts, and which proof lane comes next. Neither
+overrides the other inside the other's scope. When they appear to disagree,
+that is a scope error to reconcile rather than a decision to arbitrate. Fleet
+distribution of this framework is tracked there as Phase 4a and here as the
+installer/propagation work its gates depend on. A new top-level repository, shared `data-contracts` extraction,
 `llm_client` integration, Plan #111 feedback evolution, installer rollout, and
 blocking remain deferred until a demonstrated consumer seam makes one of them
 the smallest next move.

@@ -367,7 +367,15 @@ def _dynamic_claim_issues(claim: dict[str, Any]) -> tuple[str, ...]:
             check=False,
         )
         if merged.returncode == 0:
-            issues.append("merged_active_claim_requires_disposition")
+            worktree_status = _git(
+                Path(worktree_raw).expanduser(),
+                "status",
+                "--porcelain",
+                "--untracked-files=normal",
+                allow_failure=True,
+            )
+            if worktree_status in {None, ""}:
+                issues.append("merged_active_claim_requires_disposition")
     return tuple(dict.fromkeys(issues))
 
 

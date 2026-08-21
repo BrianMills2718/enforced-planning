@@ -7,11 +7,11 @@ import subprocess
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-import yaml  # type: ignore[import-untyped]
 import pytest
+import yaml  # type: ignore[import-untyped]
 
+from enforced_planning import prewrite_claim_fast, prewrite_claim_projection
 from enforced_planning.prewrite_claim_fast import evaluate_prewrite_fast
-from enforced_planning import prewrite_claim_projection
 from enforced_planning.prewrite_claim_projection import ProjectionBuildError, write_projection
 
 
@@ -221,6 +221,97 @@ def test_merged_active_claim_is_denied(tmp_path: Path) -> None:
     assert decision["decision"] == "deny"
     assert decision["reason_code"] == "claim_not_healthy"
     assert "merged_active_claim_requires_disposition" in decision["details"]
+
+
+@pytest.mark.parametrize("pending_kind", ["modified", "staged", "untracked"])
+def test_merged_active_claim_with_dirty_worktree_remains_authorized(
+    tmp_path: Path,
+    pending_kind: str,
+) -> None:
+    repo, worktree, claims_dir, _claim_path = _fixture(tmp_path)
+    _git(worktree, "add", "src/allowed.py")
+    _git(worktree, "commit", "-m", "lane change")
+    _git(repo, "merge", "--no-ff", "projection-lane", "-m", "merge lane")
+    if pending_kind == "untracked":
+        (worktree / "src" / "pending.py").write_text("PENDING = True\n", encoding="utf-8")
+    else:
+        (worktree / "src" / "allowed.py").write_text("VALUE = 2\n", encoding="utf-8")
+        if pending_kind == "staged":
+            _git(worktree, "add", "src/allowed.py")
+    projection_path = tmp_path / "projection.json"
+    write_projection(claims_dir=claims_dir, projection_path=projection_path)
+
+    decision = _evaluate(tmp_path, worktree, claims_dir, projection_path)
+
+    assert decision["decision"] == "allow"
+    assert decision["reason_code"] == "exact_live_claim"
+
+
+def test_merged_active_claim_with_only_ignored_files_is_denied(tmp_path: Path) -> None:
+    repo, worktree, claims_dir, _claim_path = _fixture(tmp_path)
+    (worktree / ".gitignore").write_text("src/ignored.py\n", encoding="utf-8")
+    _git(worktree, "add", "src/allowed.py", ".gitignore")
+    _git(worktree, "commit", "-m", "lane change")
+    _git(repo, "merge", "--no-ff", "projection-lane", "-m", "merge lane")
+    (worktree / "src" / "ignored.py").write_text("IGNORED = True\n", encoding="utf-8")
+    projection_path = tmp_path / "projection.json"
+    write_projection(claims_dir=claims_dir, projection_path=projection_path)
+
+    decision = _evaluate(tmp_path, worktree, claims_dir, projection_path)
+
+    assert decision["decision"] == "deny"
+    assert decision["reason_code"] == "claim_not_healthy"
+    assert "merged_active_claim_requires_disposition" in decision["details"]
+
+
+def test_merged_active_claim_fails_closed_when_status_is_unavailable(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo, worktree, claims_dir, _claim_path = _fixture(tmp_path)
+    _git(worktree, "add", "src/allowed.py")
+    _git(worktree, "commit", "-m", "lane change")
+    _git(repo, "merge", "--no-ff", "projection-lane", "-m", "merge lane")
+    projection_path = tmp_path / "projection.json"
+    write_projection(claims_dir=claims_dir, projection_path=projection_path)
+    real_git = prewrite_claim_fast._git
+
+    def fail_status(path: Path, *args: str, allow_failure: bool = False) -> str | None:
+        if args[:2] == ("status", "--porcelain"):
+            return None
+        return real_git(path, *args, allow_failure=allow_failure)
+
+    monkeypatch.setattr(prewrite_claim_fast, "_git", fail_status)
+
+    decision = _evaluate(tmp_path, worktree, claims_dir, projection_path)
+
+    assert decision["decision"] == "deny"
+    assert decision["reason_code"] == "claim_not_healthy"
+    assert "merged_active_claim_requires_disposition" in decision["details"]
+
+
+def test_non_ancestor_claim_does_not_probe_worktree_status(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _repo, worktree, claims_dir, _claim_path = _fixture(tmp_path)
+    _git(worktree, "add", "src/allowed.py")
+    _git(worktree, "commit", "-m", "lane change")
+    projection_path = tmp_path / "projection.json"
+    write_projection(claims_dir=claims_dir, projection_path=projection_path)
+    real_git = prewrite_claim_fast._git
+
+    def reject_status(path: Path, *args: str, allow_failure: bool = False) -> str | None:
+        if args[:2] == ("status", "--porcelain"):
+            pytest.fail("non-ancestor claims must not pay for a worktree status probe")
+        return real_git(path, *args, allow_failure=allow_failure)
+
+    monkeypatch.setattr(prewrite_claim_fast, "_git", reject_status)
+
+    decision = _evaluate(tmp_path, worktree, claims_dir, projection_path)
+
+    assert decision["decision"] == "allow"
+    assert decision["reason_code"] == "exact_live_claim"
 
 
 def test_projection_build_rejects_concurrent_registry_change(

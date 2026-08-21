@@ -706,6 +706,22 @@ def _default_integration_ref(repo_root: Path, default_branch: str) -> str:
     return remote_ref if remote_check.returncode == 0 else f"refs/heads/{default_branch}"
 
 
+def _claimed_worktree_has_pending_changes(worktree_path: Path | None) -> bool:
+    """Return whether pending tracked or untracked work is positively proven.
+
+    Branch ancestry proves only that committed history has landed.  A live
+    worktree can still contain unique staged, modified, or untracked work, so
+    that positive evidence preserves the lane.  A failed status probe does not
+    prove pending work and therefore preserves the existing fail-closed merged
+    enforcement instead of silently authorizing writes.
+    """
+
+    if worktree_path is None or not worktree_path.exists():
+        return False
+    status = _run_git(worktree_path, ["status", "--porcelain", "--untracked-files=normal"])
+    return status.returncode == 0 and bool(status.stdout.strip())
+
+
 def claim_lifecycle_issues(claim: ClaimRecord) -> list[str]:
     """Return mechanically provable stale-lifecycle issues for one live claim."""
     if not claim.is_live():
@@ -738,7 +754,7 @@ def claim_lifecycle_issues(claim: ClaimRecord) -> list[str]:
                     repo_root,
                     ["merge-base", "--is-ancestor", branch_ref, default_ref],
                 )
-                if merged_check.returncode == 0:
+                if merged_check.returncode == 0 and not _claimed_worktree_has_pending_changes(worktree_path):
                     issues.append("branch_merged_to_default")
 
     return issues

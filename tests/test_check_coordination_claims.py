@@ -1644,6 +1644,170 @@ def test_claim_lifecycle_issues_detect_branch_merged_to_default(tmp_path: Path) 
     assert module.claim_runtime_status(claim) == "stale"
 
 
+@pytest.mark.parametrize("pending_kind", ["modified", "staged", "untracked"])
+def test_claim_lifecycle_issues_preserve_dirty_work_after_branch_lands(
+    tmp_path: Path,
+    pending_kind: str,
+) -> None:
+    """Landed commit history must not erase distinct worktree-local work."""
+
+    module = _load_module()
+    repo_root = tmp_path / "demo"
+    _init_git_repo(repo_root)
+    worktree_path = tmp_path / "worktree"
+    subprocess.run(
+        ["git", "-C", str(repo_root), "worktree", "add", "-b", "plan-92-still-dirty", str(worktree_path)],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    feature_path = worktree_path / "feature.txt"
+    feature_path.write_text("landed\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(worktree_path), "add", "feature.txt"], check=True, capture_output=True, text=True)
+    subprocess.run(
+        ["git", "-C", str(worktree_path), "commit", "-m", "feature"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(repo_root), "merge", "--no-ff", "plan-92-still-dirty", "-m", "merge feature"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    if pending_kind == "untracked":
+        (worktree_path / "pending.txt").write_text("unique\n", encoding="utf-8")
+    else:
+        feature_path.write_text("landed\nunique\n", encoding="utf-8")
+        if pending_kind == "staged":
+            subprocess.run(
+                ["git", "-C", str(worktree_path), "add", "feature.txt"],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+
+    claim = module.build_candidate_claim(
+        agent="codex",
+        project="demo",
+        scope="landed-but-dirty",
+        intent="Preserve pending work",
+        claim_type="write",
+        write_paths=["feature.txt"],
+        branch="plan-92-still-dirty",
+        worktree_path=str(worktree_path),
+        session_id="codex:test",
+    )
+
+    assert module.claim_lifecycle_issues(claim) == []
+    assert module.claim_enforcement_issues(claim) == []
+
+
+def test_claim_lifecycle_issues_fail_closed_when_worktree_status_is_unavailable(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A failed cleanliness probe must not silently suppress merged enforcement."""
+
+    module = _load_module()
+    repo_root = tmp_path / "demo"
+    _init_git_repo(repo_root)
+    subprocess.run(
+        ["git", "-C", str(repo_root), "checkout", "-b", "plan-92-status-failure"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    (repo_root / "feature.txt").write_text("feature\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(repo_root), "add", "feature.txt"], check=True, capture_output=True, text=True)
+    subprocess.run(
+        ["git", "-C", str(repo_root), "commit", "-m", "feature"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    subprocess.run(["git", "-C", str(repo_root), "checkout", "main"], check=True, capture_output=True, text=True)
+    subprocess.run(
+        ["git", "-C", str(repo_root), "merge", "--no-ff", "plan-92-status-failure", "-m", "merge feature"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    real_run_git = module._impl._run_git
+
+    def fail_status(path: Path, args: list[str]) -> subprocess.CompletedProcess[str]:
+        if args[:2] == ["status", "--porcelain"]:
+            return subprocess.CompletedProcess(["git", *args], 1, "", "status unavailable")
+        return real_run_git(path, args)
+
+    monkeypatch.setattr(module._impl, "_run_git", fail_status)
+    claim = module.build_candidate_claim(
+        agent="codex",
+        project="demo",
+        scope="landed-status-unavailable",
+        intent="Fail closed",
+        claim_type="write",
+        write_paths=["feature.txt"],
+        branch="plan-92-status-failure",
+        worktree_path=str(repo_root),
+        session_id="codex:test",
+    )
+
+    assert module.claim_lifecycle_issues(claim) == ["branch_merged_to_default"]
+    assert module.claim_enforcement_issues(claim)[0]["code"] == "merged_active_claim_requires_disposition"
+
+
+def test_claim_lifecycle_issues_treat_ignored_only_worktree_as_clean(tmp_path: Path) -> None:
+    """Ignored artifacts do not represent closeout-blocking pending work."""
+
+    module = _load_module()
+    repo_root = tmp_path / "demo"
+    _init_git_repo(repo_root)
+    worktree_path = tmp_path / "worktree"
+    subprocess.run(
+        ["git", "-C", str(repo_root), "worktree", "add", "-b", "plan-92-ignored", str(worktree_path)],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    (worktree_path / "feature.txt").write_text("feature\n", encoding="utf-8")
+    (worktree_path / ".gitignore").write_text("ignored.txt\n", encoding="utf-8")
+    subprocess.run(
+        ["git", "-C", str(worktree_path), "add", "feature.txt", ".gitignore"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(worktree_path), "commit", "-m", "feature"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(repo_root), "merge", "--no-ff", "plan-92-ignored", "-m", "merge feature"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    (worktree_path / "ignored.txt").write_text("ignored\n", encoding="utf-8")
+    claim = module.build_candidate_claim(
+        agent="codex",
+        project="demo",
+        scope="landed-with-ignored-artifact",
+        intent="Close landed work",
+        claim_type="write",
+        write_paths=["feature.txt"],
+        branch="plan-92-ignored",
+        worktree_path=str(worktree_path),
+        session_id="codex:test",
+    )
+
+    assert module.claim_lifecycle_issues(claim) == ["branch_merged_to_default"]
+    assert module.claim_enforcement_issues(claim)[0]["code"] == "merged_active_claim_requires_disposition"
+
+
 def test_claim_lifecycle_issues_detect_remote_merge_when_local_default_is_stale(tmp_path: Path) -> None:
     """Remote canonical integration must outrank a stale local main checkout."""
 

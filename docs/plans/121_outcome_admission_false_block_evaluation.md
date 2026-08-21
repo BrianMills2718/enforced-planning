@@ -179,6 +179,20 @@ The candidate returns `allow`, `deny`, or `defer` plus one stable reason. A
 `defer` is valid only for a declared calibration case outside the first-
 consumer promotion scope. The baseline returns the ordinary decision alone.
 
+## Capabilities
+
+| Capability | Input | Output | Producer | Consumer |
+|---|---|---|---|---|
+| frozen-input validation | exact suite and population files | strict models plus exact file digests or visible invalid-run error | `outcome_admission_evaluation` loader | evaluation CLI |
+| candidate admission decision | ordinary, scope, portfolio, and continuation state | typed allow/deny/defer with stable reason | candidate overlay | per-case scorer |
+| decision-ready scoring | frozen cases plus exact candidate revision/source digest | per-case baseline/candidate results and threshold metrics | evaluation runner | independent verifier and promotion decision |
+| corruption detection | in-memory inversion of one control label | explicit mismatch receipt | corruption control | run-validity gate |
+| reproducible public run | portable fixture paths and candidate revision | canonical JSON result and digest | evaluation CLI | operators, tests, and sign-off |
+
+These capabilities extend the existing deterministic outcome-control seam.
+They do not duplicate the live allocation or claim registries and do not
+activate enforcement.
+
 ## Case-Set Provenance, Taxonomy, And Leakage Control
 
 Frozen inputs:

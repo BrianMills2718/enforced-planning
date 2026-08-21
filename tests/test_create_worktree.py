@@ -249,8 +249,12 @@ def test_create_worktree_requires_scoped_write_claim_when_enabled(tmp_path: Path
 
 
 
-def test_create_worktree_rejects_conflicting_scoped_write_claim(tmp_path: Path) -> None:
-    """Strict worktree enforcement should block conflicting active write claims."""
+@pytest.mark.parametrize("authorizing_claim_type", ["write", "program"])
+def test_create_worktree_rejects_conflicting_scoped_write_claim(
+    tmp_path: Path,
+    authorizing_claim_type: str,
+) -> None:
+    """Every write-authorizing claim should remain subject to conflict checks."""
     module = _load_module()
     repo_root = tmp_path / "repo"
     worktree_path = tmp_path / "repo_worktrees" / "plan-62-conflict"
@@ -267,7 +271,7 @@ def test_create_worktree_rejects_conflicting_scoped_write_claim(tmp_path: Path) 
             "projects": ["repo"],
             "scope": "coordination-v2",
             "intent": "Patch docs",
-            "claim_type": "write",
+            "claim_type": authorizing_claim_type,
             "write_paths": ["docs/ops"],
             "branch": "plan-62-conflict",
             "worktree_path": "~/projects/repo_worktrees/plan-62-conflict",
@@ -409,6 +413,59 @@ def test_create_worktree_allows_matching_scoped_write_claim(tmp_path: Path) -> N
     cleanup_result = _run_git(repo_root, "worktree", "remove", "--force", str(worktree_path))
     assert cleanup_result.returncode == 0, cleanup_result.stdout + cleanup_result.stderr
     delete_branch = _run_git(repo_root, "branch", "-D", "plan-62-valid")
+    assert delete_branch.returncode == 0, delete_branch.stdout + delete_branch.stderr
+
+
+def test_create_worktree_allows_program_claim_with_exact_write_paths(tmp_path: Path) -> None:
+    """A program claim with explicit paths should carry the same write authority."""
+    module = _load_module()
+    repo_root = tmp_path / "repo"
+    worktree_path = tmp_path / "repo_worktrees" / "goal-owner-week"
+    claims_dir = tmp_path / "claims"
+    _init_temp_repo(repo_root)
+
+    _write_claim(
+        claims_dir,
+        "codex.yaml",
+        {
+            "agent": "codex",
+            "claimed_at": "2026-04-02T08:00:00+00:00",
+            "expires_at": "2099-04-02T09:00:00+00:00",
+            "projects": ["repo"],
+            "scope": "owner-week",
+            "intent": "Complete one bounded owner outcome",
+            "claim_type": "program",
+            "write_paths": ["docs/reviews/owner-week.md"],
+            "branch": "goal-owner-week",
+            "worktree_path": "~/projects/repo_worktrees/goal-owner-week",
+            "session_id": "codex-session",
+            "session_name": "complete-one-bounded-owner-outcome",
+            "status": "active",
+        },
+    )
+
+    result = module.create_worktree(
+        repo_root=repo_root,
+        worktree_path=worktree_path,
+        branch="goal-owner-week",
+        start_point="HEAD",
+        split_brain_threshold=5,
+        keep_failed_worktree=False,
+        require_write_claim=True,
+        claim_agent="codex",
+        claim_project="repo",
+        claim_write_paths=["docs/reviews/owner-week.md"],
+        claims_dir=claims_dir,
+    )
+
+    assert result.ok, result.message
+    assert result.classification == "clean"
+    assert result.coordination_message is not None
+    assert "program claim" in result.coordination_message
+
+    cleanup_result = _run_git(repo_root, "worktree", "remove", "--force", str(worktree_path))
+    assert cleanup_result.returncode == 0, cleanup_result.stdout + cleanup_result.stderr
+    delete_branch = _run_git(repo_root, "branch", "-D", "goal-owner-week")
     assert delete_branch.returncode == 0, delete_branch.stdout + delete_branch.stderr
 
 

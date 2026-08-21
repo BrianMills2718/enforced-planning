@@ -94,12 +94,15 @@ on Enforced Planning itself:
   source-smuggling bootstrap, and equivalent circular `outcome_stalled` public
   controls also denied, while default lifecycle and ordinary pre-write behavior
   remained compatible across 191 focused tests.
-- Plan #123 owns the separately reviewed source activation. Its bootstrap must
-  create only the Plan/graph/allocation inputs; after exact allocation and
-  selection, source lifecycle and native pre-write must enforce automatically
-  without outcome flags. The first authentic bootstrap already exposed a stale
-  generated lifecycle consumer behind the real Make target, so actual-consumer
-  adoption and a Make-level regression are part of the critical path.
+- Plan #123 activated the source consumer. The sanctioned Make bootstrap
+  admitted only exact Plan artifacts; configured Make lifecycle and native
+  pre-write enforced the selected outcome without flags; and canonical
+  lifecycle sources displaced stale generated mirrors. An authentic second
+  scoped-file probe caught a single-example-target false block before
+  acceptance; the repaired candidate admits every immutable contract-scoped
+  target and still denies claimed-but-contract-out-of-scope writes without
+  mutation. The frozen candidate passed 112 focused checks, retains direct
+  rollback, and did not run the installer against a consumer.
 
 These observations prove useful owner-real behavior at the documentation,
 continuation, exact-session identity, durable current-head, explicit
@@ -108,13 +111,13 @@ enforcement seams. They do not yet make outcome selection mandatory for new
 plans or claims, block default ordinary writes without a selection, establish a
 fleet false-block rate, choose the one product project, or prove installed fleet
 enforcement or usefulness across Brian's ordinary project portfolio. The
-current proof frontier is therefore Plan #123's separately reviewed,
-reversible source-repository activation pilot. It must make the accepted
-bootstrap, heartbeat, and hard pre-write behavior unavoidable on a bounded
-Enforced Planning path while retaining a direct rollback and both-sign
-evidence. Installer and fleet activation remain later decisions. Repeated normal-project use,
-independent evidence selection, colleague packaging, external-user validation,
-and broader usability remain downstream of those next proof stages.
+current proof frontier is therefore one separately designed normal-project
+pilot in a Brian-owned governed repository. It must prove that bootstrap,
+ordinary work, evidence closeout, inactive-state denial, and rollback remain
+usable outside the framework's own repository before any installer default or
+fleet propagation decision. Repeated normal-project use, independent evidence
+selection, colleague packaging, external-user validation, and broader
+usability remain downstream of those next proof stages.
 
 In the broader **Agentic Engineering System** vocabulary, Enforced Planning
 currently owns Agentic Delivery planning/control mechanisms and selected
@@ -303,7 +306,7 @@ authority and directory policy.
 | Pre-write claim enforcement | Check supported native Codex/Claude write events against exact live session, worktree, branch, and path ownership before mutation. See Plan #108. | PW-01/PW-02A/PW-02 are accepted; PW-02B0 writer provenance is the only ready leaf, followed by frozen inventory, bounded rollout, fleet certification, and the fixed enforced-planning pilot |
 | Artifact creation enforcement | Gate selected new tracked artifacts against repository directory rules and durable intent, with receipts and feedback. See Plan #109. | Portable mechanism first, then an Inside Success Markdown observe pilot before any blocking promotion |
 | No-passive-waiting enforcement | Separate liveness from progress, reject whole-goal blockage while compatible work remains, and preserve recoverable true blockers. See Plan #110. | NPW-02 provider-free blocker disposition accepted with replayable both-sign evidence; NPW-01 progress visibility remains the ready leaf before NPW-03 |
-| Outcome continuation lease | Require typed progress evidence before supported coding-agent continuation; ordinary approval and cost do not renew authority. See Plans #114–#122. | Plan #122 is implementing one opt-in first-consumer bootstrap, session renewal/heartbeat, and selected pre-write gate; hook activation and fleet rollout remain excluded |
+| Outcome continuation lease | Require typed progress evidence before supported coding-agent continuation; ordinary approval and cost do not renew authority. See Plans #114–#123. | Plan #123 accepted automatic source bootstrap, lifecycle, and selected pre-write enforcement; one separate normal-project pilot is next, while installer defaults and fleet rollout remain excluded |
 | Multi-tool adoption | Cursor/Windsurf hook adapters when their hook surfaces are publicly documented | External dependency: tool documentation |
 | Project-meta topic-research adoption | Apply portable topic-research pattern in `research_synthesis/` with manifests, ADR links, freshness metadata | Plans #43/#44/#35 complete |
 

@@ -1,6 +1,6 @@
 # Plan #123: Source Outcome-Admission Activation
 
-**Status:** In Progress — bounded source-only activation design adopted
+**Status:** Complete — source activation accepted; terminal allocation park is a merge prerequisite
 **Type:** implementation (reversible source activation; downstream propagation excluded)
 **Priority:** Critical
 **phase_ref:** "Progress-bound coding-agent continuation"
@@ -56,6 +56,33 @@ Work in this order:
    adoption, and focused controls;
 6. exercise the real configured allow and equivalent configured deny paths,
    retain rollback evidence, then park the allocation and merge.
+
+## Implementation Outcome
+
+Accepted candidate `1603a9d58b0e26488ca2625f470aa7cba4ade937`
+makes selected-outcome admission automatic in the Enforced Planning source
+configuration. The actual Make heartbeat and native pre-write entrypoints ran
+without outcome flags; the canonical lifecycle sources and their generated
+source mirrors are byte-identical; and the sanctioned Make bootstrap admitted
+only its three exact Plan-numbered artifacts.
+
+The authentic closeout probe also found and prevented a serious false block in
+the first candidate. Selection still compared every pre-write target with the
+scenario's single canonical example target even when the immutable contract's
+`allowed_scope` contained the requested file. That would have blocked this
+evidence artifact and every nontrivial multi-file project. The accepted
+candidate instead revalidates the exact selection, then requires each
+ordinary-authorized target to be inside the immutable effective contract
+scope. A real second scoped path now admits, while a claimed path outside that
+contract still returns nonzero with unchanged bytes.
+
+The frozen candidate passed 112 focused checks. Exact configuration, mirror,
+claim, tracker, allocation, selection, lease, both-sign receipt, target-byte,
+and rollback evidence is retained in
+`docs/evidence/plan123_source_outcome_admission_activation.json`. The installer
+understands the complete lifecycle import closure, but no installer ran against
+a consumer and no downstream configuration, generated fleet surface, or
+host-level hook changed.
 
 ## Capability Adoption
 
@@ -350,8 +377,13 @@ of progress, or selection of Brian's active product project.
 
 ## Terminal Closeout
 
-Commit and push this design before source implementation. Keep the bootstrap
-claim restricted until the exact Plan #123 graph exists, then allocate/select
-before expansion. Freeze the activation candidate before the authentic
-configured run. Park the maintenance allocation after retained both-sign and
-rollback evidence, merge through a PR, and use sanctioned session closeout.
+The design was committed before source work, the bootstrap claim stayed
+restricted until the graph existed, and allocation/selection preceded source
+expansion. The accepted candidate was frozen before its authentic configured
+run. Its evidence commit must be pushed and the PR made merge-ready while the
+allocation remains active; then the exact disposition request parks the global
+maintenance allocation, configured heartbeat and ordinary-authorized
+pre-write must deny without mutation, the terminal receipts are attached to
+the PR, and only then may the PR merge and sanctioned session closeout run.
+This ordering preserves exact terminal evidence without bypassing the policy
+that intentionally blocks post-park source edits.

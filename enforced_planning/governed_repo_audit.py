@@ -16,6 +16,8 @@ The audit is intentionally conservative:
 
 from __future__ import annotations
 
+from enforced_planning.installed_framework import declares_installed_framework
+
 import argparse
 import importlib.util
 import json
@@ -192,10 +194,12 @@ def _audit_prewrite_claim_gate(repo_root: Path, config: dict[str, Any] | None) -
 
     mode = _prewrite_mode(config)
     expected = mode in {"observe", "enforce"}
+    installs_framework = declares_installed_framework(repo_root)
     files_missing = [
         path
         for path in PREWRITE_HOOK_FILES
         if not _resolve_repo_surface_path(repo_root, path)[0].is_file()
+        and not (installs_framework and path.startswith("enforced_planning/"))
     ]
     installed_commands: set[str] = set()
     for relpath in (".claude/settings.json", ".codex/hooks.json"):

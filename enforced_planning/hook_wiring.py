@@ -19,6 +19,8 @@ non-functional.
 
 from __future__ import annotations
 
+from enforced_planning.installed_framework import drop_vendored_package_files
+
 import argparse
 import json
 import os
@@ -568,6 +570,7 @@ def plan_generation(
     if include_coordination_messages:
         source_files.update(MAILBOX_HOOK_FILES)
         source_files.update(MAILBOX_SUPPORT_FILES)
+    source_files = drop_vendored_package_files(source_files, target.root)
     for target_relpath, source_relpath in source_files.items():
         source_path = FRAMEWORK_ROOT / source_relpath
         target_path = target.root / target_relpath

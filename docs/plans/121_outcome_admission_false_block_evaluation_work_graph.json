@@ -197,9 +197,9 @@
         "max_active_per_claimant": 1,
         "named_owner_id": null
       },
-      "status": "ready",
+      "status": "accepted",
       "record_version": 1,
-      "updated_at": "2026-08-21T08:36:23Z"
+      "updated_at": "2026-08-21T09:04:57Z"
     }
   ]
 }

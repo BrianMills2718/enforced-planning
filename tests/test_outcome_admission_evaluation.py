@@ -366,7 +366,7 @@ def test_cli_rejects_syntactically_valid_nonexistent_revision() -> None:
     assert "does not resolve" in payload["error"]["message"]
 
 
-def test_evidence_retains_every_case_and_blocks_promotion_before_signoff() -> None:
+def test_evidence_retains_every_case_and_bounds_signed_off_promotion() -> None:
     suite = json.loads(CASES.read_text(encoding="utf-8"))
     evidence = json.loads(EVIDENCE.read_text(encoding="utf-8"))
     frozen_ids = [case["case_id"] for case in suite["cases"]]
@@ -379,6 +379,22 @@ def test_evidence_retains_every_case_and_blocks_promotion_before_signoff() -> No
     )
     assert evidence["execution"]["metrics"]["critical_false_blocks"] == 0
     assert evidence["execution"]["metrics"]["critical_false_allows"] == 0
-    assert evidence["coverage"]["summary"]["hard_gate_eligible"] is False
-    assert evidence["independent_signoff"]["status"] == "pending"
-    assert evidence["promotion_decision"]["status"] == "not_effective"
+    assert evidence["coverage"]["summary"]["hard_gate_eligible"] is True
+    assert evidence["coverage"]["summary"]["overall_floor"] == "B"
+    signoff = evidence["independent_signoff"]
+    assert signoff["status"] == "complete"
+    assert signoff["verdict"] == "signed_off"
+    assert signoff["canonical_result_sha256"] == (
+        evidence["execution"]["first_result_sha256"]
+    )
+    assert len(signoff["fresh_adversarial_cases"]) == 8
+    assert all(
+        case["actual"] == case["expected"]
+        for case in signoff["fresh_adversarial_cases"]
+    )
+    promotion = evidence["promotion_decision"]
+    assert promotion["status"] == (
+        "licensed_for_first_consumer_design_and_implementation"
+    )
+    assert "actual hook activation" in promotion["excluded"]
+    assert "fleet or installer rollout" in promotion["excluded"]

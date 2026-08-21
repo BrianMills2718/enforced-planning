@@ -97,7 +97,7 @@ See `ROADMAP.md` for the full phase map and recommended priority order.
 | 118 | Causal Restart Lineage And Restart-Safe Session Handoff Observe (`118_causal_restart_lineage_and_session_handoff_observe.md`) | Critical | 🚧 In Progress — ORST-01 accepted; ORST-02 plan-spine closeout ready | same-project restart custody proven observe-only; independent review, owner-class resolution, cross-project successors, and blocking remain downstream |
 | 119 | Durable Selected Outcome Progress And Continuation (`119_durable_selected_outcome_progress.md`) | Critical | ✅ Complete (observe-only current-head custody) | Project Graph-bound product/maintenance lease classification and deliberate portfolio admission before hard WIP enforcement |
 | 120 | Project Graph-Bound Outcome Portfolio Admission (`120_project_graph_portfolio_admission.md`) | Critical | ✅ Complete (hard explicit allocation/selection admission; ordinary writes remain advisory) | mandatory outcome binding for new plans, claims, worktrees, and selected pre-write after false-block review |
-| 121 | Representative Outcome-Admission False-Block Evaluation (`121_outcome_admission_false_block_evaluation.md`) | Critical | 🚧 In Progress — evaluation pre-registered | independent sign-off before hard first-consumer promotion |
+| 121 | Representative Outcome-Admission False-Block Evaluation (`121_outcome_admission_false_block_evaluation.md`) | Critical | ✅ Complete — independently signed off | first-consumer hard-gate design/implementation licensed; activation and fleet rollout excluded |
 
 ## Status Key
 

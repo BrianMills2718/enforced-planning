@@ -1,6 +1,6 @@
 # Plan #121: Representative Outcome-Admission False-Block Evaluation
 
-**Status:** In Progress — evaluation pre-registered; implementation and run pending
+**Status:** Complete — independently signed off for first-consumer gate design and implementation only
 **Type:** evaluation and decision-support implementation
 **Priority:** Critical
 **phase_ref:** "Progress-bound coding-agent continuation"
@@ -273,16 +273,18 @@ sample.
 | corruption | one in-memory expected inversion | detected mismatch receipt | evaluator can fail |
 | reproduction | unchanged inputs and candidate | identical canonical result digest | deterministic replay |
 
-Planned commands:
+Accepted commands:
 
 ```bash
 python scripts/evaluate_outcome_admission.py \
   --cases evals/outcome_admission/plan121_cases.json \
-  --population evals/outcome_admission/plan121_population_snapshot.json
+  --population evals/outcome_admission/plan121_population_snapshot.json \
+  --candidate-revision d30696a06f5120bb69df255137f2293dbc1a752e
 
 python scripts/evaluate_outcome_admission.py \
   --cases evals/outcome_admission/plan121_cases.json \
   --population evals/outcome_admission/plan121_population_snapshot.json \
+  --candidate-revision d30696a06f5120bb69df255137f2293dbc1a752e \
   --corruption-control
 ```
 
@@ -326,11 +328,33 @@ Pass when:
 
 | ID | Criterion | Current grade | Target grade | Producer | Verification |
 |---|---|---|---|---|---|
-| OAEV01-A1 | Frozen population, taxonomy, labels, splits, thresholds, and non-claims precede implementation | designed | accepted | plan + fixtures | file digests and Git history |
-| OAEV01-A2 | Candidate and baseline emit typed per-case decisions without overriding ordinary denial | absent | accepted | evaluator | focused tests + full suite run |
-| OAEV01-A3 | Positive, negative, and corruption controls prove both-sign evaluator behavior | absent | accepted | evaluator | control run |
-| OAEV01-A4 | Zero critical false blocks/allows and full safe/circular thresholds reproduce byte-identically | absent | accepted | result artifact | two exact runs |
-| OAEV01-A5 | Coverage grading and fresh independent execution sign-off precede promotion | absent | accepted | coverage auditor + verifier | retained reports |
+| OAEV01-A1 | Frozen population, taxonomy, labels, splits, thresholds, and non-claims precede implementation | accepted | accepted | plan + fixtures | file digests and Git history |
+| OAEV01-A2 | Candidate and baseline emit typed per-case decisions without overriding ordinary denial | accepted | accepted | evaluator | focused tests + full suite run |
+| OAEV01-A3 | Positive, negative, and corruption controls prove both-sign evaluator behavior | accepted | accepted | evaluator | control run |
+| OAEV01-A4 | Zero critical false blocks/allows and full safe/circular thresholds reproduce byte-identically | accepted | accepted | result artifact | two exact runs |
+| OAEV01-A5 | Coverage grading and fresh independent execution sign-off precede promotion | accepted | accepted | coverage auditor + verifier | retained reports |
+
+## Accepted Evidence
+
+- Pre-registration revision: `708e98234eaedeaa1fcbc16cdbbcf7dad7d92ca2`;
+  neither frozen fixture changed before the candidate revision.
+- Candidate revision: `d30696a06f5120bb69df255137f2293dbc1a752e`;
+  exact Git source digest
+  `6f9300fde9b7fc0a1c7e82e477ec3f9e0b95172c024b6fa8c34fece8094017bb`.
+- Canonical result:
+  `f7cd2b73f3565025e90b10dcd8cc883ff567fa39dddfd403d68ae174bf98a6b7`,
+  reproduced byte-identically twice with all 29 scored cases matched, zero
+  critical false blocks/allows, zero unexpected defers, and both safe-operation
+  recall and circular/bypass rejection at `1.0`.
+- Controls: positive, negative, in-memory corruption, changed population bytes,
+  and nonexistent exact candidate revision all behaved as pre-registered.
+- Focused verification: 32 tests passed; Ruff and mypy passed on changed source.
+- Promotion coverage: five of five criteria at grade B, floor B, with no
+  missing negative control.
+- Fresh verifier `/root/plan121_eval_signoff` reproduced the canonical result,
+  attempted invalid runs, and matched eight newly invented adversarial cases.
+- Retained artifact:
+  `docs/evidence/plan121_outcome_admission_evaluation.json`.
 
 ## Promotion Boundary
 

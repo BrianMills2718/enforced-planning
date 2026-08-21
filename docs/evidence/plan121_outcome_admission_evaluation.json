@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0.0",
   "record_type": "plan121_outcome_admission_evaluation_evidence",
-  "observed_at": "2026-08-21T08:55:31Z",
+  "observed_at": "2026-08-21T09:04:57Z",
   "decision_scope": "Whether the frozen Plan 121 result licenses independent sign-off and then design of a hard first-consumer outcome-admission gate.",
   "pre_registration": {
     "commit": "708e98234eaedeaa1fcbc16cdbbcf7dad7d92ca2",
@@ -318,7 +318,7 @@
       "-q",
       "tests/test_outcome_admission_evaluation.py"
     ],
-    "result": "31 passed",
+    "result": "32 passed",
     "ruff": "passed",
     "mypy_changed_files": "passed"
   },
@@ -333,17 +333,17 @@
   },
   "coverage": {
     "profile": "promotion",
-    "decision": "Whether Plan 121 evidence may proceed to independent sign-off before first-consumer hard-gate design.",
+    "decision": "Whether Plan 121 evidence licenses design and implementation of one first-consumer hard outcome-admission gate.",
     "summary": {
       "total": 5,
       "grade_a": 0,
-      "grade_b": 4,
+      "grade_b": 5,
       "grade_c": 0,
-      "grade_d": 1,
+      "grade_d": 0,
       "grade_f": 0,
-      "overall_floor": "D",
-      "hard_gate_eligible": false,
-      "blocking_reason": "OAEV01-A5 independent execution-based sign-off is still absent."
+      "overall_floor": "B",
+      "hard_gate_eligible": true,
+      "blocking_reason": null
     },
     "requirements": [
       {
@@ -380,7 +380,7 @@
         ],
         "positive_control": "control-positive-active-product matched allow/outcome_admission_active.",
         "negative_control": "control-negative-circular-approval matched deny/recovery_required.",
-        "gap": "Independent rerun is still required."
+        "gap": "The passing controls license only first-consumer design and implementation, not hook activation."
       },
       {
         "id": "OAEV01-A4",
@@ -396,28 +396,100 @@
       },
       {
         "id": "OAEV01-A5",
-        "grade": "D",
-        "evidence_class": "doc",
+        "grade": "B",
+        "evidence_class": "observed",
         "evidence_refs": [
-          "docs/plans/121_outcome_admission_false_block_evaluation.md#acceptance-criteria"
+          "docs/evidence/plan121_outcome_admission_evaluation.json#independent_signoff",
+          "result:f7cd2b73f3565025e90b10dcd8cc883ff567fa39dddfd403d68ae174bf98a6b7",
+          "verifier:/root/plan121_eval_signoff"
         ],
-        "positive_control": null,
-        "negative_control": null,
-        "gap": "Fresh adversarial execution-based verifier has not yet signed off."
+        "positive_control": "The independent verifier reproduced the canonical result twice and matched fresh active and bounded-recovery allow cases.",
+        "negative_control": "The verifier rejected changed population bytes and a nonexistent exact revision, then matched fresh ordinary-denial, bootstrap-bypass, missing-allocation, and terminal cases.",
+        "gap": "The sign-off excludes activation, fleet/installer adoption, and cross-repository membership."
       }
     ],
-    "missing_negative_controls": [
-      "OAEV01-A5 requires the independent verifier to attempt rejection and may not be self-attested."
-    ]
+    "missing_negative_controls": []
   },
   "independent_signoff": {
-    "status": "pending",
-    "verdict": null,
-    "artifact": null
+    "status": "complete",
+    "verdict": "signed_off",
+    "verifier": {
+      "identity": "/root/plan121_eval_signoff",
+      "execution_role": "fresh execution-based verifier",
+      "implementation_participation": false
+    },
+    "candidate_revision": "d30696a06f5120bb69df255137f2293dbc1a752e",
+    "pre_registration_revision": "708e98234eaedeaa1fcbc16cdbbcf7dad7d92ca2",
+    "canonical_result_sha256": "f7cd2b73f3565025e90b10dcd8cc883ff567fa39dddfd403d68ae174bf98a6b7",
+    "canonical_reproductions": 2,
+    "focused_test_result": "32 passed in 2.61s",
+    "invalid_run_controls": [
+      {
+        "control": "changed_population_fixture",
+        "exit_code": 2,
+        "result": "evaluation_invalid"
+      },
+      {
+        "control": "nonexistent_exact_revision",
+        "exit_code": 2,
+        "result": "evaluation_invalid"
+      }
+    ],
+    "fresh_adversarial_cases": [
+      {
+        "case_id": "fresh-ordinary-denies-safe-closeout",
+        "expected": "deny/ordinary_authority_denied",
+        "actual": "deny/ordinary_authority_denied"
+      },
+      {
+        "case_id": "fresh-safe-beats-missing-portfolio",
+        "expected": "allow/safe_operation_allowed",
+        "actual": "allow/safe_operation_allowed"
+      },
+      {
+        "case_id": "fresh-active-commit-allows",
+        "expected": "allow/outcome_admission_active",
+        "actual": "allow/outcome_admission_active"
+      },
+      {
+        "case_id": "fresh-bounded-recovery-prewrite-allows",
+        "expected": "allow/bounded_recovery_active",
+        "actual": "allow/bounded_recovery_active"
+      },
+      {
+        "case_id": "fresh-bootstrap-state-invalid-deny",
+        "expected": "deny/admission_bootstrap_state_invalid",
+        "actual": "deny/admission_bootstrap_state_invalid"
+      },
+      {
+        "case_id": "fresh-bootstrap-write-deny-precedence",
+        "expected": "deny/admission_bootstrap_scope_violation",
+        "actual": "deny/admission_bootstrap_scope_violation"
+      },
+      {
+        "case_id": "fresh-not-applicable-nonbootstrap-deny",
+        "expected": "deny/portfolio_allocation_required",
+        "actual": "deny/portfolio_allocation_required"
+      },
+      {
+        "case_id": "fresh-terminal-deny",
+        "expected": "deny/outcome_terminal",
+        "actual": "deny/outcome_terminal"
+      }
+    ],
+    "decision": "Proceed to design and implementation of one first Enforced Planning consumer hard admission gate only.",
+    "artifact": "docs/evidence/plan121_outcome_admission_evaluation.json#independent_signoff"
   },
   "promotion_decision": {
-    "status": "not_effective",
-    "reason": "Coverage truthfully remains at floor D until independent execution-based sign-off."
+    "status": "licensed_for_first_consumer_design_and_implementation",
+    "reason": "All 29 scored frozen cases, both-sign and corruption controls, exact reproductions, coverage criteria, invalid-run probes, and eight fresh adversarial cases passed.",
+    "excluded": [
+      "actual hook activation",
+      "fleet or installer rollout",
+      "cross-repository allocation membership",
+      "semantic truth certification for progress receipts",
+      "selection of Brian's active product outcome"
+    ]
   },
   "non_claims": [
     "No hard hook is activated by this evidence artifact.",

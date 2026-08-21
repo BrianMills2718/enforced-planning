@@ -1790,3 +1790,83 @@ def test_source_make_start_executes_canonical_lifecycle_before_stale_mirror(
     assert result.returncode == 0, result.stdout + result.stderr
     assert (tmp_path / "canonical-start-ran").read_text(encoding="utf-8") == "canonical\n"
     assert not (tmp_path / "stale-start-ran").exists()
+
+
+def _write_consumer(root: Path, *, declares_framework: bool) -> None:
+    """Create a minimal consumer, with or without a declared framework dependency."""
+
+    dependency = (
+        '  "enforced-planning @ git+https://example.invalid/enforced-planning.git@abc",\n'
+        if declares_framework
+        else ""
+    )
+    (root / "pyproject.toml").write_text(
+        "[project]\n"
+        'name = "consumer"\n'
+        'version = "0.1.0"\n'
+        "dependencies = [\n"
+        f"{dependency}"
+        "]\n",
+        encoding="utf-8",
+    )
+
+
+def test_installed_dependency_stops_the_installer_re_vendoring(tmp_path: Path) -> None:
+    """A consumer that declares the framework must not have the package copied back in.
+
+    Without this, running the sanctioned installer or upgrader against a
+    converted repository silently restores the vendored tree and undoes the
+    conversion.
+    """
+
+    from enforced_planning.installed_framework import drop_vendored_package_files
+
+    files = {
+        "enforced_planning/coordination_claims.py": "enforced_planning/coordination_claims.py",
+        "scripts/meta/session_start.py": "scripts/session_start.py",
+    }
+
+    _write_consumer(tmp_path, declares_framework=True)
+    reduced = drop_vendored_package_files(files, tmp_path)
+    assert reduced == {"scripts/meta/session_start.py": "scripts/session_start.py"}
+
+
+def test_vendored_consumer_keeps_receiving_the_package(tmp_path: Path) -> None:
+    """A consumer that does not declare the framework keeps the existing behaviour."""
+
+    from enforced_planning.installed_framework import drop_vendored_package_files
+
+    files = {
+        "enforced_planning/coordination_claims.py": "enforced_planning/coordination_claims.py",
+        "scripts/meta/session_start.py": "scripts/session_start.py",
+    }
+
+    _write_consumer(tmp_path, declares_framework=False)
+    assert drop_vendored_package_files(files, tmp_path) == files
+
+
+def test_declaration_detection_handles_real_requirement_forms(tmp_path: Path) -> None:
+    """Underscores, extras, markers, and optional groups all count as a declaration."""
+
+    from enforced_planning.installed_framework import declares_installed_framework
+
+    (tmp_path / "pyproject.toml").write_text(
+        "[project]\n"
+        'name = "consumer"\n'
+        'version = "0.1.0"\n'
+        "dependencies = []\n"
+        "[project.optional-dependencies]\n"
+        'dev = ["Enforced_Planning[extra] >=1.0 ; python_version >= \'3.11\'"]\n',
+        encoding="utf-8",
+    )
+    assert declares_installed_framework(tmp_path) is True
+
+
+def test_missing_or_unparseable_pyproject_is_not_a_declaration(tmp_path: Path) -> None:
+    """Absent or broken metadata must fall back to the vendoring behaviour."""
+
+    from enforced_planning.installed_framework import declares_installed_framework
+
+    assert declares_installed_framework(tmp_path) is False
+    (tmp_path / "pyproject.toml").write_text("this is not toml [[[", encoding="utf-8")
+    assert declares_installed_framework(tmp_path) is False

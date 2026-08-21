@@ -29,6 +29,7 @@ if str(Path(__file__).resolve().parents[1]) not in sys.path:
 
 from enforced_planning.governed_repo_audit import _refresh_agents
 from enforced_planning.governed_repo_audit import audit_repo
+from enforced_planning.installed_framework import drop_vendored_package_files
 from enforced_planning.hook_wiring import TargetRepo
 from enforced_planning.hook_wiring import apply_generation as apply_hook_generation
 from enforced_planning.hook_wiring import context_runtime_error
@@ -554,6 +555,10 @@ def _plan_static_support(
             support_files.update(CLAIM_PROJECTION_LOCAL_PACKAGE_FILES)
     else:
         support_files = SYNC_SUPPORT_FILES
+        reduced = drop_vendored_package_files(support_files, repo_root)
+        if reduced != support_files:
+            support_files = reduced
+            actions.append("mode:installed-package")
     for target_relpath, source_relpath in support_files.items():
         target_path = repo_root / target_relpath
         canonical = _load_source_text(source_relpath)

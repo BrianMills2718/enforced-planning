@@ -1074,6 +1074,11 @@ def restart_selected_outcome_for_session(
                     selected_binding = current
                     selected_transition = prior
                     return
+                if prior.predecessor_binding_sha256 == delta.predecessor_binding_sha256:
+                    raise OutcomeSelectionError(
+                        "restart_conflict",
+                        "the selected predecessor already has a different accepted restart transition",
+                    )
 
             predecessor_scenario = _validate_binding_scenario(current, claim=claim)
             authority = _execution_authority(

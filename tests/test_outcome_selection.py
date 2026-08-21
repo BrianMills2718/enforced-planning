@@ -457,6 +457,25 @@ def test_causal_restart_retains_stalled_failure_history_and_is_idempotent(
     tracker_after_replay = session_contracts.read_session_tracker(Path(restarted.tracker_path))
     assert len(tracker_after_replay["tracker"]["outcome_selection_transitions"]) == 1
 
+    competing_payload = json.loads(delta_path.read_text(encoding="utf-8"))
+    competing_payload["delta_id"] = "plan-118-competing-restart"
+    competing_payload["changed_mechanism"] = (
+        "Create another successor wrapper while retaining the already-consumed predecessor digest."
+    )
+    delta_path.write_text(json.dumps(competing_payload, indent=2) + "\n", encoding="utf-8")
+    with pytest.raises(OutcomeSelectionError) as competing:
+        restart_selected_outcome_for_session(
+            agent="codex",
+            project="enforced-planning",
+            scope="plan117-test",
+            session_id=SESSION,
+            successor_scenario_path=successor_path,
+            restart_delta_path=delta_path,
+            claims_dir=claims_dir,
+        )
+    assert competing.value.code == "restart_conflict"
+    assert Path(restarted.tracker_path).read_bytes() == tracker_before_replay
+
 
 def test_causal_restart_cli_emits_machine_readable_transition(
     tmp_path: Path,

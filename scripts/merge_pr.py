@@ -19,6 +19,7 @@ makes it redundant, and it cannot work (can't push directly to main).
 import argparse
 import json
 import os
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -211,6 +212,13 @@ def cleanup_worktree(
             "scripts/meta/session_close.py",
         ]
     )
+    if not execute and safe_remove_script is None:
+        print(
+            "HIGH: deferred closeout requires the sanctioned session-close "
+            "entrypoint; no resumable closeout command was emitted."
+        )
+        return False
+
     if safe_remove_script:
         agent = (
             "codex"
@@ -221,6 +229,12 @@ def cleanup_worktree(
             if os.environ.get("OPENCLAW_SESSION_ID") or os.environ.get("OPENCLAW_RUN_ID")
             else None
         )
+        if not execute and not agent:
+            print(
+                "HIGH: deferred closeout requires an exact runtime identity so "
+                "the owning project and claim scope can be resolved."
+            )
+            return False
         if not agent:
             cleanup_cmd = ["make", "worktree-remove", f"BRANCH={branch}"]
             if merge_commit:
@@ -281,12 +295,16 @@ def cleanup_worktree(
             manual_cmd = " ".join(cleanup_cmd)
 
     if not execute:
+        root_anchored_command = (
+            f"cd {shlex.quote(str(canonical_repo_root()))} && "
+            f"{shlex.join(cleanup_cmd)}"
+        )
         print(
             "MERGED; CLOSEOUT DEFERRED: the claim and worktree remain live until "
             "the required post-merge reconciliation is complete."
         )
         print(f"   Canonical merge receipt: {merge_commit}")
-        print(f"   Then run: {manual_cmd}")
+        print(f"   Then run from the canonical root: {root_anchored_command}")
         return True
 
     result = run_cmd(cleanup_cmd, check=False)

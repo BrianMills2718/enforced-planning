@@ -322,8 +322,10 @@ def test_deferred_closeout_prints_exact_session_close_without_executing(
     session_close.parent.mkdir(parents=True)
     session_close.write_text("#!/usr/bin/env python3\n", encoding="utf-8")
     worktree = tmp_path / "worktrees" / "feature"
+    canonical_root = tmp_path
     monkeypatch.setenv("CODEX_THREAD_ID", "test-thread")
     monkeypatch.setattr(module, "find_worktree_for_branch", lambda _branch: worktree)
+    monkeypatch.setattr(module, "canonical_repo_root", lambda: canonical_root)
     monkeypatch.setattr(
         module,
         "resolve_claim_identity",
@@ -352,19 +354,23 @@ def test_deferred_closeout_prints_exact_session_close_without_executing(
     assert "MERGED; CLOSEOUT DEFERRED" in output
     assert "claim and worktree remain live" in output
     assert (
-        "python scripts/session_close.py --agent codex --project actual-project "
+        f"cd {canonical_root} && python scripts/session_close.py "
+        "--agent codex --project actual-project "
         "--scope actual-scope --branch feature "
         f"--worktree-path {worktree} --merge-commit merge-oid"
     ) in output
 
 
-def test_deferred_closeout_make_fallback_preserves_merge_receipt(
+def test_deferred_closeout_rejects_missing_runtime_identity(
     monkeypatch, tmp_path, capsys
 ) -> None:
-    """Portable make fallback must remain bound to GitHub's merge receipt."""
+    """Deferred mode cannot guess claim identity through the make fallback."""
 
     module = _load()
     monkeypatch.chdir(tmp_path)
+    session_close = tmp_path / "scripts" / "session_close.py"
+    session_close.parent.mkdir(parents=True)
+    session_close.write_text("#!/usr/bin/env python3\n", encoding="utf-8")
     worktree = tmp_path / "worktrees" / "feature"
     monkeypatch.delenv("CODEX_THREAD_ID", raising=False)
     monkeypatch.delenv("CLAUDE_SESSION_ID", raising=False)
@@ -373,18 +379,48 @@ def test_deferred_closeout_make_fallback_preserves_merge_receipt(
     monkeypatch.delenv("OPENCLAW_RUN_ID", raising=False)
     monkeypatch.setattr(module, "find_worktree_for_branch", lambda _branch: worktree)
 
-    assert (
+    assert not (
         module.cleanup_worktree(
             "feature",
             merge_commit="merge-oid",
             execute=False,
         )
-        is True
     )
 
-    assert (
-        "Then run: make worktree-remove BRANCH=feature WORKTREE_MERGE_COMMIT=merge-oid"
-    ) in capsys.readouterr().out
+    output = capsys.readouterr().out
+    assert "requires an exact runtime identity" in output
+    assert "Then run" not in output
+
+
+def test_deferred_closeout_rejects_missing_session_close(
+    monkeypatch, tmp_path, capsys
+) -> None:
+    """A legacy remover cannot stand in for atomic receipt-bound closeout."""
+
+    module = _load()
+    monkeypatch.chdir(tmp_path)
+    worktree = tmp_path / "worktrees" / "feature"
+    safe_remove = (
+        tmp_path
+        / "scripts"
+        / "meta"
+        / "worktree-coordination"
+        / "safe_worktree_remove.py"
+    )
+    safe_remove.parent.mkdir(parents=True)
+    safe_remove.write_text("#!/usr/bin/env python3\n", encoding="utf-8")
+    monkeypatch.setenv("CODEX_THREAD_ID", "test-thread")
+    monkeypatch.setattr(module, "find_worktree_for_branch", lambda _branch: worktree)
+
+    assert not module.cleanup_worktree(
+        "feature",
+        merge_commit="merge-oid",
+        execute=False,
+    )
+
+    output = capsys.readouterr().out
+    assert "requires the sanctioned session-close entrypoint" in output
+    assert "safe_worktree_remove.py" not in output
 
 
 def test_merge_defers_closeout_after_canonical_merge_receipt(

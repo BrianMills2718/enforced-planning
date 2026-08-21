@@ -2,7 +2,7 @@
   "schema_version": "1.0.0",
   "record_type": "owner_durable_selected_outcome_progress_observation",
   "plan_id": "enforced-planning#119",
-  "recorded_at": "2026-08-21T07:19:27Z",
+  "recorded_at": "2026-08-21T07:28:50Z",
   "policy_authority": {
     "id": "outcome-continuation-lease-hard-gate",
     "revision": "f6091b6b2f2a5357d0fdbbe88b157435a2ce07fb",
@@ -112,6 +112,23 @@
     "ordinary_authority_preserved": true,
     "enforcement_applied": false
   },
+  "clean_merge_candidate_selected_prewrite": {
+    "candidate_revision": "56c1ad2588739ca5a47d1d6da3957e438f2c1e01",
+    "classification": "clean committed branch observed after the real claim/tracker refresh and explicit current-producer projection regeneration",
+    "ordinary_receipt_id": "prewrite_1924d983da244922965c14c9ef2eb0af",
+    "ordinary_decision": "allow",
+    "ordinary_reason_code": "exact_live_claim",
+    "correlation_receipt_id": "ocor-ef939adb050249bbb6821227a5f18fdd",
+    "outcome_observed_at": "2026-08-21T07:28:44.598451Z",
+    "outcome_disposition": "would_allow",
+    "outcome_reason_code": "active_in_scope",
+    "effective_scenario_sha256": "bb5f941091d3dabebad82853855062fabe182384e250e2ae246b8a1a632dd07d",
+    "progress_transition_count": 1,
+    "progress_head_transition_sha256": "de207305cbb425e0da7a59e5cc2231a1d68f7db95c0013c2f6c6a9b4d8707eaa",
+    "current_lease_sha256": "19c53bb86dcb15bb473a47ba569e5e2e930e7db48812f4bd8452a8b1208a5c13",
+    "ordinary_authority_preserved": true,
+    "enforcement_applied": false
+  },
   "stale_projection_control": {
     "classification": "authentic first attempt before refreshing the derived pre-write projection",
     "ordinary_receipt_id": "prewrite_ce49345a970642edb661fd50a36ed560",
@@ -125,6 +142,15 @@
     ],
     "actual_live_claim_was_currently_healthy": true,
     "remediation": "Regenerated the default authority projection with the current producer and repeated the same selected pre-write observation.",
+    "reproduced_after_normal_session_refresh": {
+      "ordinary_receipt_id": "prewrite_63ffeb9219cb48de9f9fb086e7743506",
+      "correlation_receipt_id": "ocor-eac5e81910564b1ba01b9938cf9d9ac6",
+      "ordinary_decision": "observe_violation",
+      "ordinary_reason_code": "claim_not_healthy",
+      "selected_disposition": "would_allow",
+      "selected_reason_code": "active_in_scope",
+      "observed_at": "2026-08-21T07:28:07.456298Z"
+    },
     "durable_learning": "project-meta:learnings/entries/lrn-20260821T071433993400Z-c03672c547.json",
     "learning_merge_revision": "4db70b44a03966bea9ba65003894613af9966196",
     "promotion_consequence": "A registry-digest cache hit is not treated as proof that the projection producer revision or claim-health semantics are current."

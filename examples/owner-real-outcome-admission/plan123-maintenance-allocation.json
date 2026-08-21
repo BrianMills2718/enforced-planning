@@ -1,0 +1,15 @@
+{
+  "schema_version": "1.0.0",
+  "record_type": "outcome_portfolio_allocation_request",
+  "allocation_id": "plan-123-maintenance-allocation",
+  "requested_at": "2026-08-21T10:19:50.657845Z",
+  "project_id": "enforced-planning",
+  "scenario_id": "plan-123-source-outcome-admission-activation",
+  "outcome_contract_sha256": "b594f72159e0a36707616dcbdbc6028b2e7b52dfcdaf1f4221cca59f9f9e690f",
+  "outcome_id": "source-outcome-admission-activation",
+  "outcome_lineage_id": "plan-123-source-outcome-admission-activation",
+  "portfolio_class": "maintenance",
+  "decision_ref": "enforced-planning#123@94e3443e9f779de141b2a0b75c838bf8d87d574d",
+  "purpose": "Activate and exercise automatic selected-outcome enforcement only in the Enforced Planning source repository.",
+  "stopping_condition": "Park the allocation after configured Make, lifecycle, native pre-write, rollback, and both-sign evidence are retained."
+}

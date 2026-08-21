@@ -94,6 +94,12 @@ on Enforced Planning itself:
   source-smuggling bootstrap, and equivalent circular `outcome_stalled` public
   controls also denied, while default lifecycle and ordinary pre-write behavior
   remained compatible across 191 focused tests.
+- Plan #123 owns the separately reviewed source activation. Its bootstrap must
+  create only the Plan/graph/allocation inputs; after exact allocation and
+  selection, source lifecycle and native pre-write must enforce automatically
+  without outcome flags. The first authentic bootstrap already exposed a stale
+  generated lifecycle consumer behind the real Make target, so actual-consumer
+  adoption and a Make-level regression are part of the critical path.
 
 These observations prove useful owner-real behavior at the documentation,
 continuation, exact-session identity, durable current-head, explicit
@@ -102,11 +108,11 @@ enforcement seams. They do not yet make outcome selection mandatory for new
 plans or claims, block default ordinary writes without a selection, establish a
 fleet false-block rate, choose the one product project, or prove installed fleet
 enforcement or usefulness across Brian's ordinary project portfolio. The
-current proof frontier is therefore one separately reviewed, reversible
-source-repository activation pilot that makes the accepted bootstrap,
-heartbeat, and hard pre-write flags unavoidable on a bounded Enforced Planning
-path while retaining a direct rollback and both-sign evidence. Installer and
-fleet activation remain later decisions. Repeated normal-project use,
+current proof frontier is therefore Plan #123's separately reviewed,
+reversible source-repository activation pilot. It must make the accepted
+bootstrap, heartbeat, and hard pre-write behavior unavoidable on a bounded
+Enforced Planning path while retaining a direct rollback and both-sign
+evidence. Installer and fleet activation remain later decisions. Repeated normal-project use,
 independent evidence selection, colleague packaging, external-user validation,
 and broader usability remain downstream of those next proof stages.
 

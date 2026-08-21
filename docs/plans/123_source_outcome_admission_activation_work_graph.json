@@ -1,0 +1,221 @@
+{
+  "units": [
+    {
+      "schema_version": "1.0",
+      "record_type": "work_unit",
+      "id": "soaa-01-source-outcome-admission-activation",
+      "initiative_id": "progress-bound-agent-execution",
+      "goal_id": "source-outcome-admission-activation",
+      "design_revision": "sha256:2ae9da713e619655b12c7c4c3d09cddefaf7ee9469374808313a6531ef01b0d5",
+      "spec_revision": "sha256:2ae9da713e619655b12c7c4c3d09cddefaf7ee9469374808313a6531ef01b0d5",
+      "title": "Activate and exercise the source outcome-admission consumer",
+      "class": "implementation",
+      "objective": "Make Plan 122 selected-outcome admission automatic and reversible at the actual Enforced Planning source bootstrap, lifecycle, and native pre-write boundaries without propagating to consumers.",
+      "profile": "standard",
+      "execution_class": "independently_executable",
+      "claimability": "exclusive",
+      "authorization_mode": "registry_claim",
+      "scope": {
+        "included": [
+          "Strict absent-off and enforce-selected source configuration",
+          "Unique Plan-numbered bootstrap-claim resolver",
+          "Sanctioned source outcome-bootstrap Make entrypoint",
+          "Canonical lifecycle source adoption at the real source Make boundary",
+          "Declared generated lifecycle mirror synchronization inside the source repository",
+          "Automatic configured session start, renewal, and heartbeat admission",
+          "Automatic configured native pre-write admission after ordinary authority",
+          "Authentic Plan 123 bootstrap, allocation, selection, expansion, allow, deny, and rollback evidence",
+          "Truthful source config, guide, plan, graph, evidence, index, and roadmap closeout"
+        ],
+        "excluded": [
+          "Installer execution against any consumer repository",
+          "Downstream meta-process configuration changes",
+          "Generated downstream or fleet propagation",
+          "User-level or host-wide hook mutation",
+          "Cross-repository allocation membership",
+          "Semantic certification of progress evidence",
+          "Selection of Brian's active product outcome",
+          "OS-level or cryptographic resistance to shared-identity bypass"
+        ]
+      },
+      "inputs": [
+        {
+          "kind": "bounded_design",
+          "id": "docs/plans/123_source_outcome_admission_activation.md",
+          "revision": "sha256:2ae9da713e619655b12c7c4c3d09cddefaf7ee9469374808313a6531ef01b0d5"
+        },
+        {
+          "kind": "accepted_capability",
+          "id": "docs/evidence/plan122_first_consumer_outcome_admission.json",
+          "revision": "94e3443e9f779de141b2a0b75c838bf8d87d574d"
+        },
+        {
+          "kind": "approved_policy",
+          "id": "project-meta:policy/proposals/2026-08-20-outcome-continuation-lease-hard-gate.yaml",
+          "revision": "f6091b6b2f2a5357d0fdbbe88b157435a2ce07fb"
+        },
+        {
+          "kind": "operational_finding",
+          "id": "project-meta:learnings/entries/lrn-20260821T101600047477Z-097761bc73.json",
+          "revision": "376b775faa8c407e8fe4a5cfb73b78e023f1236c"
+        }
+      ],
+      "outputs": [
+        "Source outcome-admission configuration owner",
+        "Unique bootstrap-plan resolver",
+        "Sanctioned outcome-bootstrap entrypoint",
+        "Canonical source lifecycle consumer resolution",
+        "Synchronized source lifecycle mirrors",
+        "Automatic configured lifecycle and native pre-write enforcement",
+        "Authentic source activation and rollback evidence",
+        "Bounded normal-project promotion recommendation or rejection"
+      ],
+      "dependencies": [],
+      "conflict_surfaces": [
+        {
+          "kind": "repository_path",
+          "target": "enforced_planning/outcome_admission.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-123-source-outcome-admission-activation"
+        },
+        {
+          "kind": "repository_path",
+          "target": "enforced_planning/session_lifecycle.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-123-source-outcome-admission-activation"
+        },
+        {
+          "kind": "repository_path",
+          "target": "scripts/prewrite_claim_gate.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-123-source-outcome-admission-activation"
+        },
+        {
+          "kind": "repository_path",
+          "target": "scripts/session_start.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-123-source-outcome-admission-activation"
+        },
+        {
+          "kind": "repository_path",
+          "target": "scripts/session_heartbeat.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-123-source-outcome-admission-activation"
+        },
+        {
+          "kind": "repository_path",
+          "target": "Makefile",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-123-source-outcome-admission-activation"
+        },
+        {
+          "kind": "repository_path",
+          "target": "meta-process.yaml",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-123-source-outcome-admission-activation"
+        },
+        {
+          "kind": "repository_path",
+          "target": "tests/test_outcome_admission.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-123-source-outcome-admission-activation"
+        },
+        {
+          "kind": "repository_path",
+          "target": "docs/evidence/plan123_source_outcome_admission_activation.json",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-123-source-outcome-admission-activation"
+        }
+      ],
+      "acceptance": [
+        {
+          "id": "SOAA01-A1",
+          "criterion": "One strict production loader defaults source outcome admission to off, rejects malformed values, and drives both lifecycle and pre-write when enforce_selected.",
+          "evidence_required": [
+            "Absent/off compatibility tests",
+            "Malformed-value failure",
+            "Lifecycle and pre-write config-consumer tests"
+          ],
+          "negative_control": "A caller omission or explicit ordinary mode cannot silently disable configured selected enforcement."
+        },
+        {
+          "id": "SOAA01-A2",
+          "criterion": "One unique-plan bootstrap resolver and sanctioned Make entrypoint create only an exact restricted bootstrap lane.",
+          "evidence_required": [
+            "Authentic Make bootstrap receipt",
+            "Exact restricted claim and tracker",
+            "Ambiguous, mixed, empty, source, traversal, and foreign-plan denials"
+          ],
+          "negative_control": "A source or test path in the bootstrap claim denies the bundle before protected work."
+        },
+        {
+          "id": "SOAA01-A3",
+          "criterion": "The real source Make boundary executes the canonical lifecycle owner and source generated mirrors match their declared canonical sources.",
+          "evidence_required": [
+            "Make-level executable integration",
+            "Mirror synchronization command and digests",
+            "Regression that would fail with the pre-Plan-123 stale mirror"
+          ],
+          "negative_control": "Canonical-source unit tests or Make dry-run text alone cannot satisfy adoption."
+        },
+        {
+          "id": "SOAA01-A4",
+          "criterion": "Configured session start/renewal and heartbeat require exact selected admission without outcome flags and deny before mutation on failure.",
+          "evidence_required": [
+            "Active exact allow receipt",
+            "Missing or inactive denial receipt",
+            "Before/after heartbeat bytes or timestamp"
+          ],
+          "negative_control": "Omitting --outcome-selected cannot renew configured source work."
+        },
+        {
+          "id": "SOAA01-A5",
+          "criterion": "Configured native pre-write preserves ordinary precedence, allows exact bootstrap or active selected work, and denies circular/missing/inactive state without outcome flags.",
+          "evidence_required": [
+            "Installed source-hook active allow",
+            "Ordinary-allow/outcome-deny receipt",
+            "Target bytes unchanged on denial",
+            "Bootstrap allow and source-smuggling deny"
+          ],
+          "negative_control": "Changing approval text, elapsed time, or cost cannot alter the configured decision."
+        },
+        {
+          "id": "SOAA01-A6",
+          "criterion": "Activation has one executable recoverable rollback and retains exact both-sign evidence without downstream mutation or adoption claims.",
+          "evidence_required": [
+            "Activation candidate and rollback ref",
+            "Config and receipt digests",
+            "Downstream non-mutation inventory",
+            "Focused verification"
+          ],
+          "negative_control": "Evidence does not claim installer, fleet, host-wide, cross-repository, semantic-progress, or product-selection promotion."
+        }
+      ],
+      "readiness": {
+        "status": "ready",
+        "required_approval_types": [],
+        "approvals": [],
+        "failed_guards": []
+      },
+      "claim_policy": {
+        "eligibility_rule": "Plan 122 is accepted; one exact Plan 123 lane first owns only bootstrap paths, then may expand only after exact allocation and selection admission.",
+        "lease_policy": "renewable",
+        "lease_duration_minutes": 1440,
+        "max_active_per_claimant": 1,
+        "named_owner_id": null
+      },
+      "status": "ready",
+      "record_version": 1,
+      "updated_at": "2026-08-21T10:19:50Z"
+    }
+  ]
+}

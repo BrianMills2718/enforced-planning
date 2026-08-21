@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+import subprocess
 from pathlib import Path
 from typing import Literal
 
@@ -321,10 +322,60 @@ class LoadedEvaluationInputsV1(StrictModel):
     population_file_sha256: str = Field(pattern=HEX_SHA256_PATTERN)
 
 
+class CandidateSourceBindingV1(StrictModel):
+    """Exact executable source loaded from one verified Git commit."""
+
+    candidate_revision: str = Field(pattern=FULL_GIT_REVISION_PATTERN)
+    source_ref: str = Field(min_length=1)
+    source_sha256: str = Field(pattern=HEX_SHA256_PATTERN)
+
+
 def file_sha256(path: Path) -> str:
     """Hash exact file bytes."""
 
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def resolve_candidate_source_binding(
+    *,
+    repo_root: Path,
+    candidate_revision: str,
+    source_ref: str,
+) -> CandidateSourceBindingV1:
+    """Verify one full commit and prove the executed source matches its Git blob."""
+
+    if not re.fullmatch(FULL_GIT_REVISION_PATTERN, candidate_revision):
+        raise ValueError("candidate_revision must be a full lowercase Git object id")
+    if not source_ref or source_ref.startswith("/") or ".." in Path(source_ref).parts:
+        raise ValueError("source_ref must be a portable repository-relative path")
+    resolved = subprocess.run(
+        ["git", "rev-parse", "--verify", f"{candidate_revision}^{{commit}}"],
+        cwd=repo_root,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if resolved.returncode != 0 or resolved.stdout.strip() != candidate_revision:
+        raise ValueError("candidate_revision does not resolve to that exact commit")
+    blob = subprocess.run(
+        ["git", "show", f"{candidate_revision}:{source_ref}"],
+        cwd=repo_root,
+        check=False,
+        capture_output=True,
+    )
+    if blob.returncode != 0:
+        raise ValueError("candidate source is unavailable at the exact commit")
+    source_sha256 = hashlib.sha256(blob.stdout).hexdigest()
+    working_source = repo_root / source_ref
+    if not working_source.is_file():
+        raise ValueError("candidate source is unavailable in the executing checkout")
+    if file_sha256(working_source) != source_sha256:
+        raise ValueError("executing candidate source differs from the exact committed source")
+    return CandidateSourceBindingV1(
+        candidate_revision=candidate_revision,
+        source_ref=source_ref,
+        source_sha256=source_sha256,
+    )
 
 
 def load_evaluation_inputs(

@@ -16,6 +16,7 @@ from enforced_planning.outcome_admission_evaluation import (
     evaluate_admission_suite,
     file_sha256,
     load_evaluation_inputs,
+    resolve_candidate_source_binding,
     result_sha256,
     run_corruption_control,
 )
@@ -24,6 +25,16 @@ ROOT = Path(__file__).resolve().parents[1]
 CASES = ROOT / "evals" / "outcome_admission" / "plan121_cases.json"
 POPULATION = ROOT / "evals" / "outcome_admission" / "plan121_population_snapshot.json"
 CANDIDATE_REVISION = "a" * 40
+
+
+def _current_revision() -> str:
+    return subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
 
 
 @pytest.fixture
@@ -225,6 +236,58 @@ def test_case_rejects_defer_outside_calibration() -> None:
         OutcomeAdmissionEvaluationCaseV1.model_validate(payload)
 
 
+def test_candidate_source_binding_requires_real_commit_and_matching_source(
+    tmp_path: Path,
+) -> None:
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    subprocess.run(
+        ["git", "config", "user.email", "evaluation@example.invalid"],
+        cwd=tmp_path,
+        check=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "Evaluation Fixture"],
+        cwd=tmp_path,
+        check=True,
+    )
+    source_ref = "enforced_planning/candidate.py"
+    source = tmp_path / source_ref
+    source.parent.mkdir(parents=True)
+    source.write_text("DECISION = 'deny'\n", encoding="utf-8")
+    subprocess.run(["git", "add", source_ref], cwd=tmp_path, check=True)
+    subprocess.run(["git", "commit", "-qm", "candidate"], cwd=tmp_path, check=True)
+    revision = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+    binding = resolve_candidate_source_binding(
+        repo_root=tmp_path,
+        candidate_revision=revision,
+        source_ref=source_ref,
+    )
+
+    assert binding.candidate_revision == revision
+    assert binding.source_sha256 == file_sha256(source)
+    with pytest.raises(ValueError, match="does not resolve"):
+        resolve_candidate_source_binding(
+            repo_root=tmp_path,
+            candidate_revision="f" * 40,
+            source_ref=source_ref,
+        )
+
+    source.write_text("DECISION = 'allow'\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="differs from the exact committed source"):
+        resolve_candidate_source_binding(
+            repo_root=tmp_path,
+            candidate_revision=revision,
+            source_ref=source_ref,
+        )
+
+
 def test_cli_emits_primary_and_corruption_receipts() -> None:
     result = subprocess.run(
         [
@@ -235,7 +298,7 @@ def test_cli_emits_primary_and_corruption_receipts() -> None:
             "--population",
             str(POPULATION),
             "--candidate-revision",
-            CANDIDATE_REVISION,
+            _current_revision(),
             "--corruption-control",
         ],
         cwd=ROOT,
@@ -264,7 +327,7 @@ def test_cli_fails_loud_on_changed_population(tmp_path: Path) -> None:
             "--population",
             str(changed_path),
             "--candidate-revision",
-            CANDIDATE_REVISION,
+            _current_revision(),
         ],
         cwd=ROOT,
         check=False,
@@ -276,3 +339,27 @@ def test_cli_fails_loud_on_changed_population(tmp_path: Path) -> None:
     payload = json.loads(result.stdout)
     assert payload["ok"] is False
     assert payload["error"]["code"] == "evaluation_invalid"
+
+
+def test_cli_rejects_syntactically_valid_nonexistent_revision() -> None:
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(ROOT / "scripts" / "evaluate_outcome_admission.py"),
+            "--cases",
+            str(CASES),
+            "--population",
+            str(POPULATION),
+            "--candidate-revision",
+            "f" * 40,
+        ],
+        cwd=ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 2
+    payload = json.loads(result.stdout)
+    assert payload["error"]["code"] == "evaluation_invalid"
+    assert "does not resolve" in payload["error"]["message"]

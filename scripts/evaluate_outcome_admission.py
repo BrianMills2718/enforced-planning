@@ -24,14 +24,14 @@ ROOT = _add_repo_root_to_path()
 
 from enforced_planning.outcome_admission_evaluation import (
     evaluate_admission_suite,
-    file_sha256,
     load_evaluation_inputs,
+    resolve_candidate_source_binding,
     result_sha256,
     run_corruption_control,
 )
 
 
-def _candidate_revision() -> str:
+def _head_revision() -> str:
     result = subprocess.run(
         ["git", "rev-parse", "HEAD"],
         cwd=ROOT,
@@ -65,12 +65,16 @@ def main(argv: list[str] | None = None) -> int:
             cases_path=args.cases.resolve(),
             population_path=args.population.resolve(),
         )
-        candidate_revision = args.candidate_revision or _candidate_revision()
-        source_path = ROOT / "enforced_planning" / "outcome_admission_evaluation.py"
+        candidate_revision = args.candidate_revision or _head_revision()
+        source_binding = resolve_candidate_source_binding(
+            repo_root=ROOT,
+            candidate_revision=candidate_revision,
+            source_ref="enforced_planning/outcome_admission_evaluation.py",
+        )
         result = evaluate_admission_suite(
             loaded,
-            candidate_revision=candidate_revision,
-            candidate_source_sha256=file_sha256(source_path),
+            candidate_revision=source_binding.candidate_revision,
+            candidate_source_sha256=source_binding.source_sha256,
         )
         corruption = run_corruption_control(loaded) if args.corruption_control else None
     except (OSError, ValueError, ValidationError, subprocess.CalledProcessError) as exc:

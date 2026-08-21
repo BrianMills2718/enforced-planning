@@ -344,7 +344,7 @@ def evaluate_push_safety(
                 )
             )
             continue
-        if claim.claim_type == "write":
+        if claim.claim_type in {"write", "program"} and claim.write_paths:
             live_write_overlap_paths.update(
                 overlap.split(" <-> ", 1)[0] for overlap in overlaps
             )
@@ -353,7 +353,7 @@ def evaluate_push_safety(
                 PushCheckFinding(
                     code="overlapping_write_claim",
                     message=(
-                        "Changed files overlap another live write claim. Publication is "
+                        "Changed files overlap another live claim with write ownership. Publication is "
                         "waiting on those paths; this is not evidence that the whole goal "
                         "is blocked."
                     ),

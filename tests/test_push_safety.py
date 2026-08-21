@@ -90,11 +90,13 @@ def test_push_check_blocks_tracked_uncommitted_changes(
     assert any(item["code"] == "dirty_worktree" for item in payload["issues"])
 
 
-def test_push_check_detects_overlapping_live_write_claim(
+@pytest.mark.parametrize("other_claim_type", ["write", "program"])
+def test_push_check_detects_overlapping_live_write_owned_claim(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    other_claim_type: str,
 ) -> None:
-    """Push-check should block when branch delta overlaps another live write claim."""
+    """Push-check should block when branch delta overlaps another claim's write ownership."""
 
     repo_root = tmp_path / "demo"
     _init_git_repo(repo_root)
@@ -144,7 +146,7 @@ def test_push_check_detects_overlapping_live_write_claim(
             "projects": ["demo"],
             "scope": "reviewed-scope",
                 "intent": "Touch feature file",
-                "claim_type": "write",
+                "claim_type": other_claim_type,
                 "write_paths": ["feature.py"],
                 "branch": "plan-99-other",
                 "worktree_path": str(other_worktree),

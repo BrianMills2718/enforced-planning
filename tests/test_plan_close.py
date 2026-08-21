@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from pathlib import Path
 
 import yaml
 
+from enforced_planning import plan_close
 from enforced_planning.coordination_claims import ClaimRecord
 from enforced_planning.plan_close import close_plan_lanes
 
@@ -140,6 +142,50 @@ def test_dry_run_preflights_without_closing():
     assert result.success is True
     assert closed == []
     assert result.lanes[0].terminal_disposition == "merged"
+
+
+def test_default_preflight_passes_explicit_none_merge_commit(monkeypatch):
+    """The plan-close adapter must track the lifecycle preflight signature."""
+
+    captured: dict[str, object] = {}
+
+    class PreflightResult:
+        branch_exists = True
+
+        def to_dict(self):
+            return {"disposition": "merged", "merge_commit": captured["merge_commit"]}
+
+    def strict_preflight(
+        *,
+        repo_root,
+        branch,
+        disposition,
+        disposition_reason,
+        recovery_ref,
+        merge_commit,
+        allow_discard_unique,
+        delete_branch,
+    ):
+        captured["merge_commit"] = merge_commit
+        return PreflightResult()
+
+    monkeypatch.setattr(
+        plan_close.session_lifecycle,
+        "_resolve_claim_repo_root",
+        lambda claim: Path("/repo"),
+    )
+    monkeypatch.setattr(
+        plan_close.session_lifecycle,
+        "_validate_closeout_preflight",
+        strict_preflight,
+    )
+
+    result = plan_close._default_preflight(
+        replace(_claim(scope="lane-a"), worktree_path=None)
+    )
+
+    assert not isinstance(result, Exception)
+    assert captured == {"merge_commit": None}
 
 
 def test_completed_claim_requires_recoverable_terminal_evidence(tmp_path):

@@ -1,0 +1,42 @@
+{
+  "schema_version": "1.0.0",
+  "scenario_id": "plan-75-reachability-product-path-ratchet",
+  "contract": {
+    "schema_version": "1.1.0",
+    "outcome_id": "reachability-product-path-ratchet",
+    "owner_class": "brian",
+    "project_id": "enforced-planning",
+    "lineage_id": "plan-75-reachability-product-path-ratchet",
+    "portfolio_class": "maintenance",
+    "predecessor_lineage_ids": [],
+    "intended_consumer": "Brian and his coding agents running make reachability-check in any governed repo",
+    "outcome": "The shared reachability sensor fails --check when the share of lines reachable from the declared product entrypoint regresses against its recorded baseline, so code reachable only from tests and scripts stops passing as clean.",
+    "canonical_journey": {
+      "starting_state": "A governed repo whose reachability_baseline.json records product_share, with a module reachable only from its own test file added since that baseline.",
+      "input": "One reachability baseline carrying product_share and one working tree whose product path has regressed against it.",
+      "action": "Run python3 scripts/check_reachability.py --project-root . --check.",
+      "observable_result": "Exit code 1 naming the fall from the baseline share to the current share; an unchanged tree exits 0; a baseline with no product_share key exits 0.",
+      "failure_signal": "--check returns 0 while product_share sits below the baseline, or returns 1 on a baseline that has no product_share key."
+    },
+    "baseline_revision": "9fbfba1b317a07f7b1f022aa419402d6613af142",
+    "allowed_scope": [
+      "scripts/check_reachability.py",
+      "tests/test_check_reachability.py",
+      "docs/reference/CONFIG_REFERENCE.md"
+    ],
+    "progress_dimensions": [
+      "product-path regression detection",
+      "backward compatibility with baselines predating product_share"
+    ]
+  },
+  "receipts": [],
+  "request": {
+    "schema_version": "1.0.0",
+    "operation": "product_write",
+    "target_path": "scripts/check_reachability.py",
+    "ordinary_approval": true,
+    "approval_text": "I approve, continue",
+    "cost_telemetry_usd": "0",
+    "elapsed_telemetry_seconds": 1
+  }
+}

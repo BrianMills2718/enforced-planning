@@ -1,0 +1,108 @@
+{
+  "schema_version": "1.0.0",
+  "scenario_id": "plan116-circular",
+  "contract": {
+    "schema_version": "1.0.0",
+    "outcome_id": "plan116-prewrite-correlation",
+    "owner_class": "brian-agent-owner",
+    "project_id": "enforced-planning",
+    "lineage_id": "plan116-prewrite-correlation",
+    "predecessor_lineage_ids": [
+      "plan115-owner-observation"
+    ],
+    "intended_consumer": "Brian and his coding agents working in Enforced Planning",
+    "outcome": "Correlate progress authority to one exact ordinary claimed write without changing admission.",
+    "canonical_journey": {
+      "starting_state": "A live Plan 116 claimed worktree owns one exact evidence path.",
+      "input": "One supported native pre-write payload and one immutable outcome scenario.",
+      "action": "Record ordinary claim admission, then correlate continuation authority to the same target.",
+      "observable_result": "The linked observation reports would_allow or would_deny while ordinary admission is unchanged.",
+      "failure_signal": "The correlation loses exact identity or changes the ordinary decision or exit status."
+    },
+    "baseline_revision": "218394e0046770acb05b755553e36c7e7ccd136a",
+    "allowed_scope": [
+      "docs/evidence/plan116_prewrite_outcome_correlation.json"
+    ],
+    "progress_dimensions": [
+      "prewrite outcome correlation"
+    ]
+  },
+  "starting_lease": null,
+  "receipts": [
+    {
+      "schema_version": "1.0.0",
+      "receipt_id": "plan116-circular-one",
+      "outcome_contract_sha256": "359d455043abf42a0e7efc297e30b2cd96b74f9ca600e95e5486c5581c546927",
+      "prior_receipt_sha256": null,
+      "progress_kind": "non_outcome",
+      "dimension": "prewrite outcome correlation",
+      "summary": "The first synthetic increment repeats the same boundary without outcome progress.",
+      "evidence": {
+        "source_revision": "80fa9dbcef74d0d85b2a15168f0345e3ab3a4129",
+        "configuration_sha256": "ebbc3cb70869c27486492131c59a624cc369a8ab13370fa5c03ba6764be08162",
+        "route": "plan114-synthetic-circular-control",
+        "command": [
+          "python",
+          "scripts/outcome_continuation.py",
+          "evaluate",
+          "--scenario",
+          "examples/cleanroom-ecosystem/outcome-continuation-circular.json"
+        ],
+        "observation_sha256": "3a5bc711543e139e9360a503d7a22cd8024d55a3b7a7ec91719f872690c72306",
+        "artifact_refs": [
+          "docs/evidence/plan114_outcome_continuation_decisions.json",
+          "examples/cleanroom-ecosystem/outcome-continuation-circular.json"
+        ],
+        "trace_ref": null,
+        "observed_at": "2026-08-21T02:16:39Z"
+      },
+      "failure_boundary": "plan116-prewrite-correlation-loop",
+      "exact_replay_result": null,
+      "decision_delta": null,
+      "discriminating_evidence": false
+    },
+    {
+      "schema_version": "1.0.0",
+      "receipt_id": "plan116-circular-two",
+      "outcome_contract_sha256": "359d455043abf42a0e7efc297e30b2cd96b74f9ca600e95e5486c5581c546927",
+      "prior_receipt_sha256": "4e66071acb6ef30e3826bf579b8aa5d7b4b3eb33f352b700a2364f81135d943d",
+      "progress_kind": "non_outcome",
+      "dimension": "prewrite outcome correlation",
+      "summary": "The second synthetic increment repeats the same boundary without outcome progress.",
+      "evidence": {
+        "source_revision": "80fa9dbcef74d0d85b2a15168f0345e3ab3a4129",
+        "configuration_sha256": "ebbc3cb70869c27486492131c59a624cc369a8ab13370fa5c03ba6764be08162",
+        "route": "plan114-synthetic-circular-control",
+        "command": [
+          "python",
+          "scripts/outcome_continuation.py",
+          "evaluate",
+          "--scenario",
+          "examples/cleanroom-ecosystem/outcome-continuation-circular.json"
+        ],
+        "observation_sha256": "3a5bc711543e139e9360a503d7a22cd8024d55a3b7a7ec91719f872690c72306",
+        "artifact_refs": [
+          "docs/evidence/plan114_outcome_continuation_decisions.json",
+          "examples/cleanroom-ecosystem/outcome-continuation-circular.json"
+        ],
+        "trace_ref": null,
+        "observed_at": "2026-08-21T02:16:39Z"
+      },
+      "failure_boundary": "plan116-prewrite-correlation-loop",
+      "exact_replay_result": null,
+      "decision_delta": null,
+      "discriminating_evidence": false
+    }
+  ],
+  "request": {
+    "schema_version": "1.0.0",
+    "operation": "product_write",
+    "target_path": "docs/evidence/plan116_prewrite_outcome_correlation.json",
+    "recovery_action": null,
+    "ordinary_approval": true,
+    "approval_text": "I approve, continue",
+    "cost_telemetry_usd": "1000000",
+    "elapsed_telemetry_seconds": 999999
+  },
+  "recovery_lease": null
+}

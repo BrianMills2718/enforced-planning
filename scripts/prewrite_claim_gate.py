@@ -35,6 +35,16 @@ def _parser() -> argparse.ArgumentParser:
         help="Compatibility alias: use <dir>/authority-projection-v1.json.",
     )
     parser.add_argument("--receipt-path", type=Path, default=DEFAULT_RECEIPT_PATH)
+    parser.add_argument(
+        "--outcome-scenario",
+        type=Path,
+        help="Explicit immutable continuation scenario to correlate after the ordinary decision.",
+    )
+    parser.add_argument(
+        "--outcome-observation-path",
+        type=Path,
+        help="Append-only Plan 116 observation ledger; active only with --outcome-scenario.",
+    )
     parser.add_argument("--json", action="store_true", help="Print the decision instead of native hook output.")
     return parser
 
@@ -89,6 +99,31 @@ def _native_notice(message: str) -> str:
     return json.dumps({"systemMessage": message}, sort_keys=True)
 
 
+def _observe_outcome(
+    *,
+    decision: dict[str, Any],
+    scenario_path: Path,
+    observation_path: Path | None,
+) -> tuple[dict[str, Any] | None, dict[str, str] | None]:
+    """Lazily evaluate Plan 116 after the ordinary receipt already exists."""
+
+    from enforced_planning.outcome_prewrite_observation import (
+        DEFAULT_OUTCOME_PREWRITE_OBSERVATION_PATH,
+        OutcomePreWriteObservationError,
+        evaluate_and_record_outcome_prewrite,
+    )
+
+    try:
+        observation = evaluate_and_record_outcome_prewrite(
+            prewrite_decision=decision,
+            scenario_path=scenario_path,
+            observation_path=observation_path or DEFAULT_OUTCOME_PREWRITE_OBSERVATION_PATH,
+        )
+    except OutcomePreWriteObservationError as exc:
+        return None, {"code": exc.code, "message": str(exc)}
+    return observation.model_dump(mode="json"), None
+
+
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     payload: object = {}
@@ -134,9 +169,51 @@ def main(argv: list[str] | None = None) -> int:
             print(message, file=sys.stderr)
         return 2 if mode == "enforce" else 0
 
+    outcome_observation: dict[str, Any] | None = None
+    outcome_error: dict[str, str] | None = None
+    if args.outcome_scenario is not None:
+        outcome_observation, outcome_error = _observe_outcome(
+            decision=decision,
+            scenario_path=args.outcome_scenario,
+            observation_path=args.outcome_observation_path,
+        )
+
     if args.json:
-        print(json.dumps(decision, indent=2, sort_keys=True))
+        if args.outcome_scenario is None:
+            print(json.dumps(decision, indent=2, sort_keys=True))
+        else:
+            print(
+                json.dumps(
+                    {
+                        "ok": outcome_error is None,
+                        "prewrite_decision": decision,
+                        "outcome_observation": outcome_observation,
+                        "outcome_observation_error": outcome_error,
+                    },
+                    indent=2,
+                    sort_keys=True,
+                )
+            )
         return 0
+
+    if args.outcome_scenario is not None:
+        if outcome_error is not None:
+            outcome_notice = (
+                "OBSERVE ONLY: outcome correlation failed "
+                f"({outcome_error['code']}): {outcome_error['message']}. "
+                "The ordinary pre-write decision remains authoritative."
+            )
+        else:
+            assert outcome_observation is not None
+            outcome = outcome_observation["outcome"]
+            outcome_notice = (
+                "OBSERVE ONLY: outcome continuation "
+                f"{outcome['disposition']} ({outcome['reason_code']}). "
+                "The ordinary pre-write decision remains authoritative."
+            )
+    else:
+        outcome_notice = None
+
     if decision["decision"] == "deny":
         detail = ", ".join(decision["details"])
         message = f"Pre-write claim denied ({decision['reason_code']})"
@@ -144,10 +221,17 @@ def main(argv: list[str] | None = None) -> int:
             message += f": {detail}"
         if decision["recovery"]:
             message += f". {decision['recovery']}"
+        if outcome_notice:
+            message += f". {outcome_notice}"
         print(message, file=sys.stderr)
         return 2
     if decision["decision"] == "observe_violation":
-        print(_native_notice(f"OBSERVE ONLY: pre-write claim violation ({decision['reason_code']})."))
+        notice = f"OBSERVE ONLY: pre-write claim violation ({decision['reason_code']})."
+        if outcome_notice:
+            notice += f" {outcome_notice}"
+        print(_native_notice(notice))
+    elif outcome_notice:
+        print(_native_notice(outcome_notice))
     return 0
 
 

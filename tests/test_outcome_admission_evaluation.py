@@ -24,6 +24,7 @@ from enforced_planning.outcome_admission_evaluation import (
 ROOT = Path(__file__).resolve().parents[1]
 CASES = ROOT / "evals" / "outcome_admission" / "plan121_cases.json"
 POPULATION = ROOT / "evals" / "outcome_admission" / "plan121_population_snapshot.json"
+EVIDENCE = ROOT / "docs" / "evidence" / "plan121_outcome_admission_evaluation.json"
 CANDIDATE_REVISION = "a" * 40
 
 
@@ -363,3 +364,21 @@ def test_cli_rejects_syntactically_valid_nonexistent_revision() -> None:
     payload = json.loads(result.stdout)
     assert payload["error"]["code"] == "evaluation_invalid"
     assert "does not resolve" in payload["error"]["message"]
+
+
+def test_evidence_retains_every_case_and_blocks_promotion_before_signoff() -> None:
+    suite = json.loads(CASES.read_text(encoding="utf-8"))
+    evidence = json.loads(EVIDENCE.read_text(encoding="utf-8"))
+    frozen_ids = [case["case_id"] for case in suite["cases"]]
+    evidence_ids = [case["case_id"] for case in evidence["case_results"]]
+
+    assert evidence_ids == frozen_ids
+    assert all(case["matched"] for case in evidence["case_results"])
+    assert evidence["execution"]["first_result_sha256"] == (
+        evidence["execution"]["second_result_sha256"]
+    )
+    assert evidence["execution"]["metrics"]["critical_false_blocks"] == 0
+    assert evidence["execution"]["metrics"]["critical_false_allows"] == 0
+    assert evidence["coverage"]["summary"]["hard_gate_eligible"] is False
+    assert evidence["independent_signoff"]["status"] == "pending"
+    assert evidence["promotion_decision"]["status"] == "not_effective"

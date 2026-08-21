@@ -8,6 +8,7 @@ import inspect
 import json
 import sys
 from pathlib import Path
+from typing import Any
 
 
 def _bootstrap_package() -> None:
@@ -35,10 +36,10 @@ _bootstrap_package()
 from enforced_planning import session_lifecycle  # noqa: E402
 
 
-def _supported_start_kwargs(args: argparse.Namespace) -> dict[str, object]:
+def _supported_start_kwargs(args: argparse.Namespace) -> dict[str, Any]:
     """Retain compatibility with a target's older local lifecycle contract."""
 
-    kwargs: dict[str, object] = {
+    kwargs: dict[str, Any] = {
         "agent": args.agent,
         "project": args.project,
         "scope": args.scope,
@@ -64,7 +65,11 @@ def _supported_start_kwargs(args: argparse.Namespace) -> dict[str, object]:
         "requires_shared_infra_changes": args.requires_shared_infra_changes,
         "stop_conditions": args.stop_condition,
         "notes": args.notes,
+        "outcome_selected": args.outcome_selected,
+        "outcome_bootstrap_plan": args.outcome_bootstrap_plan,
     }
+    if args.outcome_admission_receipt_path is not None:
+        kwargs["outcome_admission_receipt_path"] = args.outcome_admission_receipt_path
     supported = inspect.signature(session_lifecycle.start_session).parameters
     return {name: value for name, value in kwargs.items() if name in supported}
 
@@ -97,6 +102,22 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--stop-condition", action="append", default=[])
     parser.add_argument("--requires-shared-infra-changes", action="store_true")
     parser.add_argument("--notes")
+    outcome = parser.add_mutually_exclusive_group()
+    outcome.add_argument(
+        "--outcome-selected",
+        action="store_true",
+        help="Require exact selected outcome admission before session mutation.",
+    )
+    outcome.add_argument(
+        "--outcome-bootstrap-plan",
+        type=int,
+        help="Require the fixed source-consumer allocation bootstrap for this plan.",
+    )
+    parser.add_argument(
+        "--outcome-admission-receipt-path",
+        type=Path,
+        help="Override the append-only outcome-admission receipt stream.",
+    )
     parser.add_argument("--json", action="store_true")
     return parser.parse_args(argv)
 

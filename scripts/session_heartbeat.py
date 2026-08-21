@@ -43,6 +43,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--branch")
     parser.add_argument("--session-id")
     parser.add_argument("--current-phase")
+    parser.add_argument(
+        "--outcome-selected",
+        action="store_true",
+        help="Require exact selected outcome admission before heartbeat mutation.",
+    )
+    parser.add_argument(
+        "--outcome-admission-receipt-path",
+        type=Path,
+        help="Override the append-only outcome-admission receipt stream.",
+    )
     parser.add_argument("--json", action="store_true")
     return parser.parse_args(argv)
 
@@ -57,6 +67,12 @@ def main(argv: list[str] | None = None) -> int:
         scope=args.scope,
         branch=args.branch,
         current_phase=args.current_phase,
+        outcome_selected=args.outcome_selected,
+        **(
+            {"outcome_admission_receipt_path": args.outcome_admission_receipt_path}
+            if args.outcome_admission_receipt_path is not None
+            else {}
+        ),
     )
     if args.json:
         print(json.dumps(payload, indent=2, sort_keys=True))

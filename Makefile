@@ -144,6 +144,9 @@ SESSION_WRITE_PATHS ?=
 SESSION_READ_PATHS ?=
 SESSION_WORK_GRAPH ?=
 SESSION_WORK_UNIT_ID ?=
+OUTCOME_ADMISSION_BOOTSTRAP_PLAN ?=
+OUTCOME_ADMISSION_SELECTED ?=
+OUTCOME_ADMISSION_RECEIPT_PATH ?=
 WORKTREE_DISPOSITION ?= merged
 WORKTREE_DISPOSITION_REASON ?=
 WORKTREE_RECOVERY_REF ?=
@@ -183,6 +186,12 @@ endif
 ifndef WORKTREE_AGENT
 	$(error Unable to infer agent runtime. Set AGENT via WORKTREE_AGENT=codex|claude-code|openclaw)
 endif
+	@if [ -n "$(OUTCOME_ADMISSION_BOOTSTRAP_PLAN)" ]; then \
+		$(PYTHON) scripts/outcome_admission.py bootstrap \
+			--plan "$(OUTCOME_ADMISSION_BOOTSTRAP_PLAN)" \
+			$(foreach path,$(SESSION_WRITE_PATHS),--write-path "$(path)") \
+			$(if $(OUTCOME_ADMISSION_RECEIPT_PATH),--receipt-path "$(OUTCOME_ADMISSION_RECEIPT_PATH)",); \
+	fi
 	@if [ ! -f "$(WORKTREE_CREATE_SCRIPT)" ]; then \
 		echo "Missing worktree coordination module: $(WORKTREE_CREATE_SCRIPT)"; \
 		echo "Install or sync the sanctioned worktree-coordination module before using make worktree."; \
@@ -255,7 +264,10 @@ endif
 		$(if $(SESSION_NEXT),--next-phase "$(SESSION_NEXT)",) \
 		$(if $(SESSION_DEPENDS),--depends-on "$(SESSION_DEPENDS)",) \
 		$(if $(SESSION_STOP_CONDITIONS),--stop-condition "$(SESSION_STOP_CONDITIONS)",) \
-		$(if $(SESSION_NOTE),--notes "$(SESSION_NOTE)",); then \
+		$(if $(SESSION_NOTE),--notes "$(SESSION_NOTE)",) \
+		$(if $(filter 1 true yes,$(OUTCOME_ADMISSION_SELECTED)),--outcome-selected,) \
+		$(if $(OUTCOME_ADMISSION_BOOTSTRAP_PLAN),--outcome-bootstrap-plan "$(OUTCOME_ADMISSION_BOOTSTRAP_PLAN)",) \
+		$(if $(OUTCOME_ADMISSION_RECEIPT_PATH),--outcome-admission-receipt-path "$(OUTCOME_ADMISSION_RECEIPT_PATH)",); then \
 		git worktree remove --force "$(WORKTREE_DIR)/$(BRANCH)" >/dev/null 2>&1 || true; \
 		git branch -D "$(BRANCH)" >/dev/null 2>&1 || true; \
 		$(PYTHON) "$(WORKTREE_CLAIMS_SCRIPT)" --release --agent "$(WORKTREE_AGENT)" --project "$(WORKTREE_PROJECT)" --scope "$(BRANCH)" >/dev/null 2>&1 || true; \
@@ -310,7 +322,10 @@ endif
 		$(if $(SESSION_NEXT),--next-phase "$(SESSION_NEXT)",) \
 		$(if $(SESSION_DEPENDS),--depends-on "$(SESSION_DEPENDS)",) \
 		$(if $(SESSION_STOP_CONDITIONS),--stop-condition "$(SESSION_STOP_CONDITIONS)",) \
-		$(if $(SESSION_NOTE),--notes "$(SESSION_NOTE)",)
+		$(if $(SESSION_NOTE),--notes "$(SESSION_NOTE)",) \
+		$(if $(filter 1 true yes,$(OUTCOME_ADMISSION_SELECTED)),--outcome-selected,) \
+		$(if $(OUTCOME_ADMISSION_BOOTSTRAP_PLAN),--outcome-bootstrap-plan "$(OUTCOME_ADMISSION_BOOTSTRAP_PLAN)",) \
+		$(if $(OUTCOME_ADMISSION_RECEIPT_PATH),--outcome-admission-receipt-path "$(OUTCOME_ADMISSION_RECEIPT_PATH)",)
 
 session-heartbeat:  ## Refresh heartbeat and optional phase for BRANCH=name
 ifndef BRANCH
@@ -324,7 +339,9 @@ endif
 		--project "$(WORKTREE_PROJECT)" \
 		--scope "$(BRANCH)" \
 		--branch "$(BRANCH)" \
-		$(if $(SESSION_PHASE),--current-phase "$(SESSION_PHASE)",)
+		$(if $(SESSION_PHASE),--current-phase "$(SESSION_PHASE)",) \
+		$(if $(filter 1 true yes,$(OUTCOME_ADMISSION_SELECTED)),--outcome-selected,) \
+		$(if $(OUTCOME_ADMISSION_RECEIPT_PATH),--outcome-admission-receipt-path "$(OUTCOME_ADMISSION_RECEIPT_PATH)",)
 
 session-status:  ## Show live session summaries for this repo
 	@$(PYTHON) "$(WORKTREE_SESSION_STATUS_SCRIPT)" --project "$(WORKTREE_PROJECT)"

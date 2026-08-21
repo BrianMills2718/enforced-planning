@@ -24,7 +24,6 @@ from enforced_planning.outcome_continuation import canonical_sha256, evaluate_sc
 from enforced_planning.outcome_selection import (
     OutcomeSelectionError,
     ResolvedOutcomeSelectionV1,
-    resolve_selected_outcome_for_prewrite,
     resolve_selected_outcome_for_session,
 )
 
@@ -560,6 +559,18 @@ def _selection_error_reason(code: str) -> str:
     return "outcome_admission_state_invalid"
 
 
+def _target_is_in_selected_scope(target_path: str, allowed_scope: list[str]) -> bool:
+    """Require a pre-write target to remain inside the selected outcome contract."""
+
+    for candidate in allowed_scope:
+        if candidate.endswith("/"):
+            if target_path.startswith(candidate) and target_path != candidate:
+                return True
+        elif target_path == candidate:
+            return True
+    return False
+
+
 def _continuation_state(
     resolved: ResolvedOutcomeSelectionV1,
 ) -> tuple[ContinuationState, str]:
@@ -618,29 +629,16 @@ def evaluate_selected_outcome_admission(
         )
 
     try:
-        if target_path is None:
-            resolved = resolve_selected_outcome_for_session(
-                agent=agent,
-                project=project,
-                scope=scope,
-                session_id=session_id,
-                repo_root=repo_root,
-                worktree_path=worktree_path,
-                branch=branch,
-                claim_source_file=claim_source_file,
-            )
-        else:
-            resolved = resolve_selected_outcome_for_prewrite(
-                agent=agent,
-                project=project,
-                scope=scope,
-                session_id=session_id,
-                repo_root=repo_root,
-                worktree_path=worktree_path,
-                branch=branch,
-                claim_source_file=claim_source_file,
-                target_path=target_path,
-            )
+        resolved = resolve_selected_outcome_for_session(
+            agent=agent,
+            project=project,
+            scope=scope,
+            session_id=session_id,
+            repo_root=repo_root,
+            worktree_path=worktree_path,
+            branch=branch,
+            claim_source_file=claim_source_file,
+        )
     except OutcomeSelectionError as exc:
         return OutcomeAdmissionResultV1(
             source="selected",
@@ -651,6 +649,23 @@ def evaluate_selected_outcome_admission(
             ),
             resolution_error_code=exc.code,
             resolution_error_message=str(exc),
+        )
+
+    if target_path is not None and not _target_is_in_selected_scope(
+        target_path,
+        resolved.effective_scenario.contract.allowed_scope,
+    ):
+        return OutcomeAdmissionResultV1(
+            source="selected",
+            request=None,
+            decision=OutcomeAdmissionDecisionV1(
+                disposition="deny",
+                reason_code="out_of_scope",
+            ),
+            resolution_error_code="selection_target_mismatch",
+            resolution_error_message=(
+                "ordinary pre-write target is outside the selected outcome allowed_scope"
+            ),
         )
 
     try:

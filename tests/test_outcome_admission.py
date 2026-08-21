@@ -91,7 +91,10 @@ def _resolved_selection(*, classed: bool = True) -> ResolvedOutcomeSelectionV1:
             "failure_signal": "Missing or stalled state still returns allow.",
         },
         "baseline_revision": "a" * 40,
-        "allowed_scope": ["enforced_planning/outcome_admission.py"],
+        "allowed_scope": [
+            "enforced_planning/outcome_admission.py",
+            "docs/evidence/plan122_first_consumer_outcome_admission.json",
+        ],
         "progress_dimensions": ["first-consumer admission"],
     }
     if classed:
@@ -494,6 +497,66 @@ def test_selected_classed_state_is_derived_and_admitted(
     assert result.selected_evidence is not None
     assert result.selected_evidence.selection_binding_sha256 == resolved.binding_sha256
     assert result.selected_evidence.portfolio_allocation_id == "plan122-maintenance"
+
+
+def test_selected_prewrite_accepts_another_contract_scoped_target(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    resolved = _resolved_selection(classed=True)
+    monkeypatch.setattr(
+        outcome_admission,
+        "resolve_selected_outcome_for_session",
+        lambda **_kwargs: resolved,
+    )
+
+    result = evaluate_selected_outcome_admission(
+        agent="codex",
+        project="enforced-planning",
+        scope="plan122-test",
+        session_id="codex:plan122-test",
+        repo_root="/tmp/plan122-repo",
+        worktree_path="/tmp/plan122-worktree",
+        branch="plan122-test",
+        claim_source_file="/tmp/plan122-claim.yaml",
+        boundary="prewrite",
+        ordinary_allowed=True,
+        renewal=False,
+        target_path="docs/evidence/plan122_first_consumer_outcome_admission.json",
+    )
+
+    assert result.decision.disposition == "allow"
+    assert result.decision.reason_code == "outcome_admission_active"
+
+
+def test_selected_prewrite_denies_target_outside_contract_scope(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    resolved = _resolved_selection(classed=True)
+    monkeypatch.setattr(
+        outcome_admission,
+        "resolve_selected_outcome_for_session",
+        lambda **_kwargs: resolved,
+    )
+
+    result = evaluate_selected_outcome_admission(
+        agent="codex",
+        project="enforced-planning",
+        scope="plan122-test",
+        session_id="codex:plan122-test",
+        repo_root="/tmp/plan122-repo",
+        worktree_path="/tmp/plan122-worktree",
+        branch="plan122-test",
+        claim_source_file="/tmp/plan122-claim.yaml",
+        boundary="prewrite",
+        ordinary_allowed=True,
+        renewal=False,
+        target_path="scripts/outcome_admission.py",
+    )
+
+    assert result.request is None
+    assert result.decision.disposition == "deny"
+    assert result.decision.reason_code == "out_of_scope"
+    assert result.resolution_error_code == "selection_target_mismatch"
 
 
 def test_selected_legacy_state_is_grandfathered_only_before_renewal(

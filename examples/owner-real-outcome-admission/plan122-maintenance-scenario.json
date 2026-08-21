@@ -1,0 +1,43 @@
+{
+  "schema_version": "1.0.0",
+  "scenario_id": "plan-122-first-consumer-outcome-admission",
+  "contract": {
+    "schema_version": "1.1.0",
+    "outcome_id": "first-consumer-outcome-admission",
+    "owner_class": "brian",
+    "project_id": "enforced-planning",
+    "lineage_id": "plan-122-first-consumer-outcome-admission",
+    "portfolio_class": "maintenance",
+    "predecessor_lineage_ids": [
+      "plan-121-outcome-admission-evaluation"
+    ],
+    "intended_consumer": "Brian and his coding agents continuing real Brian-owned Enforced Planning work",
+    "outcome": "An explicitly opted-in lifecycle renewal or write succeeds only while its exact selected classed outcome has an active portfolio allocation and continuing lease.",
+    "canonical_journey": {
+      "starting_state": "The exact Plan 122 claim is live and the production admission owner is implemented, but no Plan 122 allocation or selection exists.",
+      "input": "One Project Graph-bound maintenance allocation, one exact selected scenario, and an ordinarily authorized write to the production owner.",
+      "action": "Allocate and select the outcome, then invoke the public selected decision, heartbeat, and pre-write commands with hard admission enabled.",
+      "observable_result": "Active state returns outcome_admission_active and both protected commands succeed; missing or circular state returns nonzero before protected success.",
+      "failure_signal": "The caller can self-certify active state, approval text or cost overrides the lease, or a denied outcome still renews or returns pre-write success."
+    },
+    "baseline_revision": "978512986efcf402970cee98e4c01c238920633c",
+    "allowed_scope": [
+      "enforced_planning/outcome_admission.py"
+    ],
+    "progress_dimensions": [
+      "production outcome admission",
+      "exact selected-state enforcement",
+      "public both-sign lifecycle evidence"
+    ]
+  },
+  "receipts": [],
+  "request": {
+    "schema_version": "1.0.0",
+    "operation": "product_write",
+    "target_path": "enforced_planning/outcome_admission.py",
+    "ordinary_approval": true,
+    "approval_text": "I approve, continue",
+    "cost_telemetry_usd": "1000000",
+    "elapsed_telemetry_seconds": 999999
+  }
+}

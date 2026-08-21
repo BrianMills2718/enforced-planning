@@ -16,6 +16,16 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from enforced_planning.outcome_admission import (
+    SAFE_BOUNDARIES,
+    AdmissionDisposition,
+    ContinuationState,
+    EnforcementScope,
+    OperationBoundary,
+    OutcomeAdmissionRequestV1,
+    PortfolioState,
+    decide_outcome_admission,
+)
 from enforced_planning.outcome_continuation import canonical_sha256
 
 HEX_SHA256_PATTERN = r"^[0-9a-f]{64}$"
@@ -30,52 +40,6 @@ CaseSplit = Literal[
     "calibration",
 ]
 CaseSeverity = Literal["critical", "boundary"]
-OperationBoundary = Literal[
-    "plan_create",
-    "claim_create",
-    "worktree_create",
-    "session_start",
-    "session_resume",
-    "heartbeat",
-    "prewrite",
-    "commit",
-    "portfolio_allocate",
-    "passive_inspection",
-    "exact_replay",
-    "evidence_preservation",
-    "closeout",
-]
-EnforcementScope = Literal[
-    "new_or_renewed",
-    "grandfathered",
-    "always_safe",
-    "calibration_only",
-]
-PortfolioState = Literal[
-    "active_exact",
-    "missing",
-    "occupied_by_other",
-    "disposed",
-    "digest_mismatch",
-    "not_applicable",
-]
-ContinuationState = Literal[
-    "active_in_scope",
-    "out_of_scope",
-    "recovery_required",
-    "bounded_recovery_active",
-    "stalled",
-    "terminal",
-    "missing",
-]
-AdmissionDisposition = Literal["allow", "deny", "defer"]
-
-SAFE_BOUNDARIES = {
-    "passive_inspection",
-    "exact_replay",
-    "evidence_preservation",
-    "closeout",
-}
 CIRCULAR_OR_BYPASS_CLASSES = {
     "circular_continuation",
     "owner_product_wip_overflow",
@@ -92,22 +56,6 @@ CIRCULAR_OR_BYPASS_CLASSES = {
     "restart_laundering",
     "cost_or_approval_as_progress",
 }
-PORTFOLIO_DENIALS: dict[PortfolioState, str] = {
-    "missing": "portfolio_allocation_required",
-    "occupied_by_other": "portfolio_slot_occupied",
-    "disposed": "portfolio_allocation_inactive",
-    "digest_mismatch": "portfolio_allocation_mismatch",
-    "not_applicable": "portfolio_allocation_required",
-}
-CONTINUATION_DENIALS: dict[ContinuationState, str] = {
-    "out_of_scope": "out_of_scope",
-    "recovery_required": "recovery_required",
-    "stalled": "outcome_stalled",
-    "terminal": "outcome_terminal",
-    "missing": "outcome_selection_required",
-}
-
-
 class StrictModel(BaseModel):
     """Strict immutable base for frozen evaluation contracts."""
 
@@ -425,61 +373,21 @@ def baseline_decision(case: OutcomeAdmissionEvaluationCaseV1) -> AdmissionDecisi
 
 
 def candidate_decision(case: OutcomeAdmissionEvaluationCaseV1) -> AdmissionDecisionV1:
-    """Apply the pre-registered first-consumer outcome-admission overlay."""
+    """Adapt one frozen case to the canonical production admission owner."""
 
-    if case.enforcement_scope == "calibration_only":
-        return AdmissionDecisionV1(
-            disposition="defer",
-            reason_code="cross_repository_membership_not_promoted",
+    production = decide_outcome_admission(
+        OutcomeAdmissionRequestV1(
+            boundary=case.boundary,
+            enforcement_scope=case.enforcement_scope,
+            ordinary_allowed=case.ordinary_allowed,
+            portfolio_state=case.portfolio_state,
+            continuation_state=case.continuation_state,
+            bootstrap_product_write_requested=case.bootstrap_product_write_requested,
         )
-    if not case.ordinary_allowed:
-        return AdmissionDecisionV1(
-            disposition="deny",
-            reason_code="ordinary_authority_denied",
-        )
-    if case.enforcement_scope == "always_safe":
-        return AdmissionDecisionV1(
-            disposition="allow",
-            reason_code="safe_operation_allowed",
-        )
-    if case.enforcement_scope == "grandfathered":
-        return AdmissionDecisionV1(
-            disposition="allow",
-            reason_code="grandfathered_until_renewal",
-        )
-    if case.boundary == "portfolio_allocate":
-        if case.bootstrap_product_write_requested:
-            return AdmissionDecisionV1(
-                disposition="deny",
-                reason_code="admission_bootstrap_scope_violation",
-            )
-        if case.portfolio_state != "not_applicable":
-            return AdmissionDecisionV1(
-                disposition="deny",
-                reason_code="admission_bootstrap_state_invalid",
-            )
-        return AdmissionDecisionV1(
-            disposition="allow",
-            reason_code="admission_bootstrap_allowed",
-        )
-    if case.portfolio_state != "active_exact":
-        return AdmissionDecisionV1(
-            disposition="deny",
-            reason_code=PORTFOLIO_DENIALS[case.portfolio_state],
-        )
-    if case.continuation_state == "active_in_scope":
-        return AdmissionDecisionV1(
-            disposition="allow",
-            reason_code="outcome_admission_active",
-        )
-    if case.continuation_state == "bounded_recovery_active":
-        return AdmissionDecisionV1(
-            disposition="allow",
-            reason_code="bounded_recovery_active",
-        )
+    )
     return AdmissionDecisionV1(
-        disposition="deny",
-        reason_code=CONTINUATION_DENIALS[case.continuation_state],
+        disposition=production.disposition,
+        reason_code=production.reason_code,
     )
 
 

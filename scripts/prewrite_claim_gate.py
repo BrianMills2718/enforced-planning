@@ -46,10 +46,15 @@ def _parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Resolve the create-once scenario from the exact claim-linked session tracker.",
     )
+    outcome_source.add_argument(
+        "--outcome-enforce-selected",
+        action="store_true",
+        help="Require exact selected outcome admission after ordinary claim admission.",
+    )
     parser.add_argument(
         "--outcome-receipt-path",
         type=Path,
-        help="Append-only receipt path for an explicit outcome observation.",
+        help="Append-only receipt path for an explicit outcome observation or admission.",
     )
     parser.add_argument("--json", action="store_true", help="Print the decision instead of native hook output.")
     return parser
@@ -189,6 +194,81 @@ def _outcome_notice(observation: dict[str, Any]) -> str:
     )
 
 
+def _enforce_selected_outcome(
+    decision: dict[str, Any],
+    *,
+    receipt_path: Path | None,
+) -> dict[str, Any]:
+    """Derive, record, and return hard selected admission for one ordinary receipt."""
+
+    import yaml  # type: ignore[import-untyped]
+
+    from enforced_planning import coordination_claims
+    from enforced_planning.outcome_admission import (
+        DEFAULT_OUTCOME_ADMISSION_RECEIPT_PATH,
+        OutcomeAdmissionRequestV1,
+        OutcomeAdmissionResultV1,
+        decide_outcome_admission,
+        evaluate_selected_claim_admission,
+        record_outcome_admission,
+    )
+
+    ordinary_allowed = decision.get("decision") == "allow"
+    if not ordinary_allowed:
+        request = OutcomeAdmissionRequestV1(
+            boundary="prewrite",
+            enforcement_scope="new_or_renewed",
+            ordinary_allowed=False,
+            portfolio_state="missing",
+            continuation_state="missing",
+        )
+        result = OutcomeAdmissionResultV1(
+            source="selected",
+            request=request,
+            decision=decide_outcome_admission(request),
+        )
+    else:
+        targets = decision.get("normalized_target_paths")
+        if (
+            not isinstance(targets, list)
+            or len(targets) != 1
+            or not isinstance(targets[0], str)
+            or not targets[0].strip()
+        ):
+            raise FastPreWriteError(
+                "hard selected outcome admission requires exactly one "
+                "normalized_target_paths entry in the ordinary allow decision"
+            )
+        target = targets[0]
+        source_value = decision.get("claim_source_file")
+        if not isinstance(source_value, str) or not source_value.strip():
+            raise FastPreWriteError(
+                "ordinary allow decision lacks exact claim_source_file for outcome admission"
+            )
+        source = Path(source_value).expanduser().resolve()
+        try:
+            payload = yaml.safe_load(source.read_text(encoding="utf-8"))
+        except (OSError, yaml.YAMLError) as exc:
+            raise FastPreWriteError(f"unable to read exact outcome claim source: {exc}") from exc
+        if not isinstance(payload, dict):
+            raise FastPreWriteError("exact outcome claim source must contain a YAML mapping")
+        claim = coordination_claims.normalize_claim(payload, source_file=str(source))
+        if claim is None:
+            raise FastPreWriteError("exact outcome claim source cannot be normalized")
+        result = evaluate_selected_claim_admission(
+            claim,
+            boundary="prewrite",
+            ordinary_allowed=True,
+            renewal=False,
+            target_path=target,
+        )
+    receipt = record_outcome_admission(
+        result,
+        receipt_path=receipt_path or DEFAULT_OUTCOME_ADMISSION_RECEIPT_PATH,
+    )
+    return receipt.model_dump(mode="json")
+
+
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     payload: object = {}
@@ -247,11 +327,58 @@ def main(argv: list[str] | None = None) -> int:
             receipt_path=args.outcome_receipt_path,
         )
 
+    outcome_admission_receipt = None
+    if args.outcome_enforce_selected:
+        if mode != "enforce":
+            message = "hard selected outcome admission requires ordinary --mode enforce"
+            if args.json:
+                print(
+                    json.dumps(
+                        {
+                            "ok": False,
+                            "mode": mode,
+                            "reason_code": "outcome_admission_mode_invalid",
+                            "error": message,
+                        },
+                        sort_keys=True,
+                    )
+                )
+            else:
+                print(message, file=sys.stderr)
+            return 2
+        try:
+            outcome_admission_receipt = _enforce_selected_outcome(
+                decision,
+                receipt_path=args.outcome_receipt_path,
+            )
+        except Exception as exc:  # noqa: BLE001 -- hard admission fails closed
+            message = f"selected outcome admission could not be recorded: {exc}"
+            if args.json:
+                print(
+                    json.dumps(
+                        {
+                            "ok": False,
+                            "mode": mode,
+                            "reason_code": "outcome_admission_state_invalid",
+                            "error": message,
+                        },
+                        sort_keys=True,
+                    )
+                )
+            else:
+                print(message, file=sys.stderr)
+            return 2
+
     if args.json:
         output = decision
         if outcome_observation is not None:
             output = {**decision, "outcome_observation": outcome_observation}
+        if outcome_admission_receipt is not None:
+            output = {**output, "outcome_admission": outcome_admission_receipt}
         print(json.dumps(output, indent=2, sort_keys=True))
+        if outcome_admission_receipt is not None:
+            admission = outcome_admission_receipt["result"]["decision"]
+            return 0 if admission["disposition"] == "allow" else 2
         return 0
     outcome_notice = _outcome_notice(outcome_observation) if outcome_observation is not None else None
     if decision["decision"] == "deny":
@@ -272,6 +399,12 @@ def main(argv: list[str] | None = None) -> int:
         print(_native_notice(message))
     elif outcome_notice is not None:
         print(_native_notice(outcome_notice))
+    if outcome_admission_receipt is not None:
+        admission = outcome_admission_receipt["result"]["decision"]
+        if admission["disposition"] != "allow":
+            message = f"Outcome admission denied ({admission['reason_code']})"
+            print(message, file=sys.stderr)
+            return 2
     return 0
 
 

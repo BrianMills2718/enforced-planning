@@ -104,9 +104,11 @@ python scripts/check_plan_capabilities.py docs/plans/
 python scripts/render_agents_md.py --stdout
 python scripts/sync_plan_status.py
 python scripts/complete_plan.py --plan N
+python scripts/outcome_admission.py --help
 python scripts/session_start.py --help
 python scripts/session_heartbeat.py --help
 python scripts/session_status.py --help
+python scripts/prewrite_claim_gate.py --help
 python scripts/check_coordination_claims.py --progress --help
 python scripts/session_end.py --help
 python scripts/session_finish.py --help
@@ -116,6 +118,16 @@ python scripts/session_close.py --help
 pytest -q
 make test
 ```
+
+Plan #122's source-only hard outcome-admission pilot is explicit and
+default-off. Use `--outcome-selected` on session start/heartbeat or
+`--outcome-enforce-selected` on native pre-write only with an append-only
+admission receipt path. The equivalent Make variables are
+`OUTCOME_ADMISSION_SELECTED=true`,
+`OUTCOME_ADMISSION_BOOTSTRAP_PLAN=<plan>`, and
+`OUTCOME_ADMISSION_RECEIPT_PATH=/path/to/outcome-admission-v1.jsonl`. These
+flags reopen exact selected lifecycle state and deny before mutation or success;
+they do not activate hooks, installer propagation, or fleet defaults.
 
 ## Repo Workflow
 

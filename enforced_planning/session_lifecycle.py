@@ -24,6 +24,7 @@ from enforced_planning import (
     coordination_claims,
     coordination_messages,
     doc_authority,
+    outcome_admission,
     outcome_selection,
     push_safety,
     session_contracts,
@@ -648,6 +649,30 @@ def _single_matching_live_claim(
     return claims[0]
 
 
+def _record_required_outcome_admission(
+    result: outcome_admission.OutcomeAdmissionResultV1,
+    *,
+    receipt_path: Path,
+) -> dict[str, Any]:
+    """Record one required admission and fail before lifecycle mutation on deny."""
+
+    receipt = outcome_admission.record_outcome_admission(
+        result,
+        receipt_path=receipt_path,
+    )
+    if result.decision.disposition != "allow":
+        detail = (
+            f": {result.resolution_error_message}"
+            if result.resolution_error_message is not None
+            else ""
+        )
+        raise PermissionError(
+            "Outcome admission denied "
+            f"({result.decision.reason_code}); receipt {receipt.receipt_id}{detail}"
+        )
+    return receipt.model_dump(mode="json")
+
+
 def _claim_status(claim: coordination_claims.ClaimRecord) -> str:
     """Return the current persisted status string for one claim."""
 
@@ -1086,6 +1111,11 @@ def start_session(
     tracker_dir: Path = session_contracts.DEFAULT_SESSION_TRACKERS_DIR,
     allow_unplanned: bool = False,
     allow_parallel: bool = False,
+    outcome_selected: bool = False,
+    outcome_bootstrap_plan: int | None = None,
+    outcome_admission_receipt_path: Path = (
+        outcome_admission.DEFAULT_OUTCOME_ADMISSION_RECEIPT_PATH
+    ),
 ) -> dict[str, Any]:
     """Create or refresh the session contract plus linked tracker artifact."""
 
@@ -1095,6 +1125,49 @@ def start_session(
             "Unable to resolve a session ID. Pass --session-id explicitly or run from a supported tool runtime."
         )
     coordination_claims.validate_native_session_binding(agent, resolved_session_id)
+
+    if outcome_selected and outcome_bootstrap_plan is not None:
+        raise ValueError(
+            "session start cannot combine selected outcome admission with allocation bootstrap"
+        )
+    outcome_admission_receipts: list[dict[str, Any]] = []
+    if outcome_bootstrap_plan is not None:
+        bootstrap = outcome_admission.bootstrap_admission_result(
+            outcome_admission.OutcomeAdmissionBootstrapV1(
+                plan_number=outcome_bootstrap_plan,
+                write_paths=tuple(write_paths or ()),
+                ordinary_allowed=True,
+            )
+        )
+        outcome_admission_receipts.append(
+            _record_required_outcome_admission(
+                bootstrap,
+                receipt_path=outcome_admission_receipt_path,
+            )
+        )
+    elif outcome_selected:
+        selected_claim = _single_matching_live_claim(
+            agent=agent,
+            project=project,
+            scope=scope,
+        )
+        if selected_claim.session_id != resolved_session_id:
+            raise ValueError(
+                "Selected outcome admission claim belongs to session "
+                f"{selected_claim.session_id}, not {resolved_session_id}"
+            )
+        selected = outcome_admission.evaluate_selected_claim_admission(
+            selected_claim,
+            boundary="session_start",
+            ordinary_allowed=True,
+            renewal=True,
+        )
+        outcome_admission_receipts.append(
+            _record_required_outcome_admission(
+                selected,
+                receipt_path=outcome_admission_receipt_path,
+            )
+        )
 
     contract = session_contracts.SessionContract.build(
         agent=agent,
@@ -1200,6 +1273,7 @@ def start_session(
         "plan_ref": contract.plan_ref,
         "claim_type": persisted_claim.claim_type,
         "parent_scope": persisted_claim.parent_scope,
+        "outcome_admission_receipts": outcome_admission_receipts,
         "coordination_mailbox": _poll_mailbox(
             agent=agent,
             project=project,
@@ -1217,13 +1291,56 @@ def heartbeat_session(
     branch: str | None = None,
     current_phase: str | None = None,
     tracker_dir: Path = session_contracts.DEFAULT_SESSION_TRACKERS_DIR,
+    outcome_selected: bool = False,
+    outcome_admission_receipt_path: Path = (
+        outcome_admission.DEFAULT_OUTCOME_ADMISSION_RECEIPT_PATH
+    ),
 ) -> dict[str, Any]:
     """Refresh claim heartbeat state and the linked tracker timestamp."""
+
+    outcome_admission_receipts: list[dict[str, Any]] = []
+    admitted_session_id = session_id
+    if outcome_selected:
+        admitted_session_id = coordination_claims.resolve_session_id(agent, session_id)
+        if not admitted_session_id:
+            raise ValueError(
+                "Unable to resolve a session ID for selected outcome heartbeat admission"
+            )
+        coordination_claims.validate_native_session_binding(agent, admitted_session_id)
+        selected_claims = [
+            claim
+            for claim in _iter_matching_live_claims(
+                agent=agent,
+                project=project,
+                scope=scope,
+                branch=branch,
+            )
+            if claim.session_id == admitted_session_id
+        ]
+        if not selected_claims:
+            raise ValueError(
+                "Selected outcome heartbeat admission matched no exact live claim for "
+                f"agent={agent}, project={project}, scope={scope or '<any>'}, "
+                f"branch={branch or '<any>'}, session_id={admitted_session_id}."
+            )
+        for claim in selected_claims:
+            result = outcome_admission.evaluate_selected_claim_admission(
+                claim,
+                boundary="heartbeat",
+                ordinary_allowed=True,
+                renewal=True,
+            )
+            outcome_admission_receipts.append(
+                _record_required_outcome_admission(
+                    result,
+                    receipt_path=outcome_admission_receipt_path,
+                )
+            )
 
     updated_count, updated_scopes, resolved_session_id, heartbeat_at = coordination_claims.heartbeat_claims(
         agent=agent,
         project=project,
-        session_id=session_id,
+        session_id=admitted_session_id,
         scope=scope,
         branch=branch,
     )
@@ -1259,6 +1376,7 @@ def heartbeat_session(
         "session_id": resolved_session_id,
         "heartbeat_at": heartbeat_at,
         "tracker_paths_updated": sorted(tracker_paths_updated),
+        "outcome_admission_receipts": outcome_admission_receipts,
         "coordination_mailbox": _poll_mailbox(
             agent=agent,
             project=project,

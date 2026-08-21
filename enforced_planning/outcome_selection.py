@@ -1813,7 +1813,7 @@ def _assert_claim_matches_prewrite(
         )
 
 
-def resolve_selected_outcome_for_prewrite(
+def _resolve_selected_outcome(
     *,
     agent: str,
     project: str,
@@ -1823,9 +1823,9 @@ def resolve_selected_outcome_for_prewrite(
     worktree_path: str,
     branch: str,
     claim_source_file: str,
-    target_path: str,
+    target_path: str | None,
 ) -> ResolvedOutcomeSelectionV1:
-    """Resolve and revalidate selected state for one ordinary pre-write receipt."""
+    """Resolve current selected state, with an optional exact target constraint."""
 
     source_path = Path(claim_source_file).expanduser().resolve()
     with coordination_claims.claim_registry_lock(source_path.parent):
@@ -1889,7 +1889,7 @@ def resolve_selected_outcome_for_prewrite(
                 "selection_claim_identity_stale",
                 "stored selection does not match the current exact claim identity",
             )
-        if binding.target_path != target_path:
+        if target_path is not None and binding.target_path != target_path:
             raise OutcomeSelectionError(
                 "selection_target_mismatch",
                 "selected scenario target does not equal the ordinary pre-write target",
@@ -1956,6 +1956,59 @@ def resolve_selected_outcome_for_prewrite(
     )
 
 
+def resolve_selected_outcome_for_session(
+    *,
+    agent: str,
+    project: str,
+    scope: str,
+    session_id: str,
+    repo_root: str,
+    worktree_path: str,
+    branch: str,
+    claim_source_file: str,
+) -> ResolvedOutcomeSelectionV1:
+    """Resolve and revalidate selected state for one exact live session claim."""
+
+    return _resolve_selected_outcome(
+        agent=agent,
+        project=project,
+        scope=scope,
+        session_id=session_id,
+        repo_root=repo_root,
+        worktree_path=worktree_path,
+        branch=branch,
+        claim_source_file=claim_source_file,
+        target_path=None,
+    )
+
+
+def resolve_selected_outcome_for_prewrite(
+    *,
+    agent: str,
+    project: str,
+    scope: str,
+    session_id: str,
+    repo_root: str,
+    worktree_path: str,
+    branch: str,
+    claim_source_file: str,
+    target_path: str,
+) -> ResolvedOutcomeSelectionV1:
+    """Resolve selected state and require one exact ordinary pre-write target."""
+
+    return _resolve_selected_outcome(
+        agent=agent,
+        project=project,
+        scope=scope,
+        session_id=session_id,
+        repo_root=repo_root,
+        worktree_path=worktree_path,
+        branch=branch,
+        claim_source_file=claim_source_file,
+        target_path=target_path,
+    )
+
+
 __all__ = [
     "OutcomeProgressResultV1",
     "OutcomeProgressTransitionV1",
@@ -1965,5 +2018,6 @@ __all__ = [
     "ResolvedOutcomeSelectionV1",
     "record_selected_outcome_progress_for_session",
     "resolve_selected_outcome_for_prewrite",
+    "resolve_selected_outcome_for_session",
     "select_outcome_for_session",
 ]

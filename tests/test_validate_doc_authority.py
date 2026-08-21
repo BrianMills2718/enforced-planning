@@ -99,6 +99,7 @@ def _create_write_claim(
     claims_dir: Path,
     scope: str,
     write_paths: list[str],
+    claim_type: str = "write",
 ) -> None:
     coordination_claims.CLAIMS_DIR = claims_dir
     ok, message = coordination_claims.create_claim(
@@ -106,7 +107,7 @@ def _create_write_claim(
         project=repo_root.name,
         scope=scope,
         intent="test claim",
-        claim_type="write",
+        claim_type=claim_type,
         write_paths=write_paths,
         worktree_path=str(repo_root),
         repo_root=str(repo_root),
@@ -146,6 +147,26 @@ def test_validate_doc_authority_requires_obligation_when_owner_claim_exists(tmp_
 
     assert [issue.code for issue in issues] == ["missing_reconciliation_obligation"]
     assert issues[0].evidence["owner_scopes"] == ["plan-index-owner"]
+
+
+def test_validate_doc_authority_recognizes_program_claim_write_ownership(tmp_path: Path) -> None:
+    repo_root = tmp_path / "demo"
+    claims_dir = tmp_path / "claims"
+    _write_config(repo_root)
+    _write_plan(repo_root / "docs/plans/41_example.md")
+    _write_plan_index(repo_root / "docs/plans/CLAUDE.md", plan_rows=[])
+    _create_write_claim(
+        repo_root=repo_root,
+        claims_dir=claims_dir,
+        scope="program-plan-index-owner",
+        write_paths=["docs/plans/CLAUDE.md"],
+        claim_type="program",
+    )
+
+    issues = doc_authority.validate_doc_authority(repo_root)
+
+    assert [issue.code for issue in issues] == ["missing_reconciliation_obligation"]
+    assert issues[0].evidence["owner_scopes"] == ["program-plan-index-owner"]
 
 
 def test_validate_doc_authority_accepts_recorded_obligation(tmp_path: Path) -> None:

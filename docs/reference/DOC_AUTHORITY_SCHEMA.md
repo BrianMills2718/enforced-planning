@@ -72,26 +72,23 @@ docs:
   - path: EXECUTION_BRIEF.md
     authority: canonical
     doc_status: active
-    concerns: [execution_brief]
+    concerns: [execution_brief, north_star]
     role: execution_brief
     primary_parent: null
 
-  - path: docs/overview/GAP_SUMMARY.md
+  - path: ROADMAP.md
     authority: canonical
     doc_status: active
-    concerns: [gap_summary]
-    role: summary
+    concerns: [current_state, gap_summary, roadmap]
+    role: reference
     primary_parent: EXECUTION_BRIEF.md
-    required_context:
-      - path: docs/overview/CURRENT_STATE.md
-        reason: Gap summaries are only meaningful when read against current state.
 
-  - path: docs/plans/55_example.md
+  - path: docs/reference/DOC_AUTHORITY_SCHEMA.md
     authority: canonical
     doc_status: active
     concerns: []
-    role: plan
-    primary_parent: docs/overview/GAP_SUMMARY.md
+    role: reference
+    primary_parent: EXECUTION_BRIEF.md
     governed_by:
       - adr/0009-doc-authority-governance-and-enforcement.md
 
@@ -99,7 +96,7 @@ code_surfaces:
   - paths:
       - enforced_planning/doc_authority.py
       - tests/test_validate_doc_authority.py
-    primary_spec: docs/plans/55_example.md
+    primary_spec: docs/reference/DOC_AUTHORITY_SCHEMA.md
 ```
 
 ## Indexed Authority Surfaces
@@ -208,6 +205,10 @@ Open obligations live under:
 They are used for indexed authority drift when the authoritative artifact lands
 before the separately claimed authority surface can be updated.
 
+Write ownership is determined by non-empty `write_paths`, not by a literal
+claim-type label. Sanctioned `program` claims can own the same narrow authority
+surface as `write` claims.
+
 Example:
 
 ```yaml
@@ -255,5 +256,9 @@ Representative deterministic failure codes:
 - Paths remain repo-relative.
 - Validation should fail loudly on malformed config or malformed authority
   structure.
+- A completed implementation plan is historical evidence, not a steady-state
+  `primary_spec`. Graduate maintained code to a stable reference/spec or an
+  active successor plan so old delivery context does not become permanent
+  mandatory reading.
 - The first recursive-spine implementation remains in `scripts/doc_authority.yaml`.
   It does not yet merge into `relationships.yaml`.

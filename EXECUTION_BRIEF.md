@@ -14,45 +14,29 @@ governable through:
 - read-gating and documentation coupling
 - coordination and session lifecycle infrastructure
 
-## Current Gate
+## Operating Result
 
-Phase 9 is the active gate.
+The framework should let an agent enter a governed repository, load a bounded
+and current authority path, execute an approved slice, prove the intended
+behavior, and either continue from progress evidence or replan visibly.
 
-The framework capability set is effectively complete. The active work is now:
-
-- fleet adoption
-- framework maintenance
-- dogfooding the recursive documentation spine before downstream rollout
-
-## Active Workstreams
-
-- installer and upgrade rollout
-- ecosystem status and operator surfaces
-- recursive documentation-spine dogfood in this repo
-- downstream governed-repo adoption support
-
-## Top Risks
-
-- the framework can require documentation discipline downstream before proving
-  the operator experience on itself
-- top-level repo guidance can drift from validator and installer behavior
-- documentation volume can grow faster than abstraction clarity if the
-  execution brief and bounded summaries are not kept small
+Generated fixtures prove mechanics. Current owner-use evidence and the active
+gap live in `ROADMAP.md`; eventual colleague packaging is not the current proof
+frontier.
 
 ## Canonical Descent
 
 - [PLANNING_OPERATING_MODEL.md](PLANNING_OPERATING_MODEL.md)
-  - north star and canonical methodology
-- [docs/overview/CURRENT_STATE.md](docs/overview/CURRENT_STATE.md)
-  - current durable state of the framework
-- [docs/overview/GAP_SUMMARY.md](docs/overview/GAP_SUMMARY.md)
-  - highest-value deltas between current state and target state
+  - detailed canonical planning methodology
 - [ROADMAP.md](ROADMAP.md)
-  - phase map and queued gates
+  - current proof, active gap, phase map, and rollout order
 - [docs/plans/CLAUDE.md](docs/plans/CLAUDE.md)
   - active numbered implementation queue
 
 ## Rules
 
-- This brief stays small and execution-oriented.
+- This brief owns purpose and the north-star summary; it stays small.
+- `ROADMAP.md` is the only mutable current-state and gap summary.
+- Completed implementation plans graduate stable contracts to reference docs;
+  historical plans do not remain mandatory context.
 - Deeper detail belongs in the linked lower-level docs, not here.

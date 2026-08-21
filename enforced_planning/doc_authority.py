@@ -708,7 +708,7 @@ def _owner_claims_for_surface(project: str, authority_surface: str) -> list[coor
     claims = coordination_claims.check_claims(project)
     owners: list[coordination_claims.ClaimRecord] = []
     for claim in claims:
-        if claim.claim_type != "write":
+        if not claim.write_paths:
             continue
         if any(_paths_overlap(authority_surface, write_path) for write_path in claim.write_paths):
             owners.append(claim)

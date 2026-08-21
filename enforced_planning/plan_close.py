@@ -123,6 +123,7 @@ def _default_preflight(claim: coordination_claims.ClaimRecord) -> dict[str, Any]
             disposition=session_lifecycle.MERGED_DISPOSITION,
             disposition_reason=None,
             recovery_ref=None,
+            merge_commit=None,
             allow_discard_unique=False,
             delete_branch=True,
         )

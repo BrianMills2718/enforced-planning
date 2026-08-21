@@ -1,0 +1,103 @@
+{
+  "schema_version": "1.0.0",
+  "record_type": "outcome_continuation_both_sign_evidence",
+  "plan_id": "enforced-planning#114",
+  "recorded_at": "2026-08-21T02:16:39Z",
+  "policy_authority": {
+    "id": "outcome-continuation-lease-hard-gate",
+    "revision": "f6091b6b2f2a5357d0fdbbe88b157435a2ce07fb",
+    "status": "approved"
+  },
+  "implementation": {
+    "repository": "enforced-planning",
+    "revision": "80fa9dbcef74d0d85b2a15168f0345e3ab3a4129",
+    "worktree_clean_before_execution": true,
+    "module": "enforced_planning/outcome_continuation.py",
+    "cli": "scripts/outcome_continuation.py"
+  },
+  "authentic_consumer_binding": {
+    "profile_id": "status-cli-json",
+    "profile_sha256": "9eeaa7d7a8dc7b9b674db585842ee7cfb90c327e75e222b0c970333cca3aca96",
+    "consumer_result_revision": "83f4d599996af00785f55afe56e0127e46296bda",
+    "independent_receipt": "docs/evidence/plan62_status_cli_delivery_receipt.json",
+    "independent_receipt_sha256": "8d0175f50e6b5772f41fe2cc97ca9b5c7e89f2173745f0ac5312d4ecb4fe9346"
+  },
+  "controlled_context": {
+    "ordinary_approval": true,
+    "approval_text": "I approve, continue",
+    "cost_telemetry_usd": "1000000",
+    "elapsed_telemetry_seconds": 999999,
+    "note": "The request context is identical in both controls and is decision-inert. The ordered progress receipts are the material difference."
+  },
+  "positive_control": {
+    "classification": "retained_authentic_behavioral_advance",
+    "input": "examples/cleanroom-ecosystem/outcome-continuation-progress.json",
+    "input_file_sha256": "7baa417079ec2d282ba4caa01d904a078e4ae2c91fb11d685b9c8bb1521505a0",
+    "command": [
+      "python",
+      "scripts/outcome_continuation.py",
+      "evaluate",
+      "--scenario",
+      "examples/cleanroom-ecosystem/outcome-continuation-progress.json"
+    ],
+    "exit_code": 0,
+    "scenario_sha256": "b8426ca966a535d2e69285544f0dc48b6c64c7fca2822eb0fc90bd98526ddb5f",
+    "outcome_contract_sha256": "f79708a2e9d3ea4e8b770ec1635fac9676ef20d135b924ceae6e325c184b53dc",
+    "applied_receipt_sha256s": [
+      "5a9a7ed1aff4781f96e5deab6719e9e15789c0df186a69e5a85b5b64f4b0aa43"
+    ],
+    "lease_sha256": "d29863571e8af5c16972562f1cb380a538a9e8d5ab1634c60d447d6f85611ca9",
+    "lease_state": "active",
+    "decision": {
+      "allowed": true,
+      "reason_code": "active_in_scope",
+      "ordinary_approval_ignored": true,
+      "cost_telemetry_ignored": true,
+      "elapsed_telemetry_ignored": true
+    }
+  },
+  "negative_control": {
+    "classification": "synthetic_two_increment_circular_continuation",
+    "input": "examples/cleanroom-ecosystem/outcome-continuation-circular.json",
+    "input_file_sha256": "ebbc3cb70869c27486492131c59a624cc369a8ab13370fa5c03ba6764be08162",
+    "command": [
+      "python",
+      "scripts/outcome_continuation.py",
+      "evaluate",
+      "--scenario",
+      "examples/cleanroom-ecosystem/outcome-continuation-circular.json"
+    ],
+    "exit_code": 1,
+    "scenario_sha256": "3cb2c3534687b4a1a0e57e7ebdc87ffa6bc29a22c45e9c89f8d0a6e6a863e942",
+    "outcome_contract_sha256": "f79708a2e9d3ea4e8b770ec1635fac9676ef20d135b924ceae6e325c184b53dc",
+    "applied_receipt_sha256s": [
+      "75ff1a1f79b1040549d45045fe877dbd8624794192cd5e9b9493d955a349cad7",
+      "8b60469d553c84c5ebe60ea215ac57455b8e3771fba51a30f8648874c5e98825"
+    ],
+    "lease_sha256": "031dcdd3661af0625649364210b98ad067ccecbcf8f7492307eb8c453a3d36f5",
+    "lease_state": "recovery_required",
+    "consecutive_non_outcome_increments": 2,
+    "same_boundary_failures": 2,
+    "decision": {
+      "allowed": false,
+      "reason_code": "recovery_required",
+      "permitted_next_actions": [
+        "passive_inspection",
+        "exact_replay",
+        "evidence_preservation",
+        "closeout",
+        "bounded_recovery_action"
+      ],
+      "ordinary_approval_ignored": true,
+      "cost_telemetry_ignored": true,
+      "elapsed_telemetry_ignored": true
+    }
+  },
+  "licensed_claim": "At implementation revision 80fa9dbcef74d0d85b2a15168f0345e3ab3a4129, the staged JSON admission boundary allowed the retained authentic status-cli behavioral advance and denied a two-increment circular continuation while approval, cost, and elapsed-time context were identical.",
+  "limitations": [
+    "The negative control is a deterministic synthetic continuation sequence, not a claim about one historical repository event.",
+    "The evaluator is not yet wired to session, heartbeat, claim, worktree, pre-write, commit, or closeout chokepoints.",
+    "No downstream repository or unsupported shell write is claimed to be blocked.",
+    "This evidence does not authorize Project Meta registry promotion or fleet rollout."
+  ]
+}

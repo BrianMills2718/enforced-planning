@@ -225,26 +225,55 @@ through the CLI, not by model construction or unit tests alone.
 
 ## Acceptance Criteria
 
-- [ ] Typed contracts fail loudly on unsafe paths, mismatched digests, broken
+- [x] Typed contracts fail loudly on unsafe paths, mismatched digests, broken
   receipt lineage, missing decision deltas, or unbounded recovery.
-- [ ] All three approved progress classes activate/reset a lease, while a
+- [x] All three approved progress classes activate/reset a lease, while a
   `non_outcome` receipt does not masquerade as progress.
-- [ ] Two consecutive non-outcome increments require recovery/replay and deny
+- [x] Two consecutive non-outcome increments require recovery/replay and deny
   normal product writes; a third same-boundary failure without discriminating
   evidence moves the lease to stalled.
-- [ ] Applying the same receipt twice cannot renew or otherwise change a lease.
-- [ ] Active leases allow only in-scope product operations; stalled, parked,
+- [x] Applying the same receipt twice cannot renew or otherwise change a lease.
+- [x] Active leases allow only in-scope product operations; stalled, parked,
   and complete leases preserve passive inspection, exact replay, evidence
   preservation, and closeout.
-- [ ] A recovery lease authorizes only its named action/path/replay and cannot
+- [x] A recovery lease authorizes only its named action/path/replay and cannot
   create a new front door or general product-write authority.
-- [ ] Ordinary approval and cost/elapsed telemetry have no effect on lease
+- [x] Ordinary approval and cost/elapsed telemetry have no effect on lease
   transition or admission results.
-- [ ] The checked-in positive CLI scenario is allowed and the circular
+- [x] The checked-in positive CLI scenario is allowed and the circular
   scenario is denied from the same clean implementation revision.
-- [ ] The retained evidence licenses only the staged CLI/admission claim; no
+- [x] The retained evidence licenses only the staged CLI/admission claim; no
   session-hook or fleet-enforcement claim is made.
-- [ ] Focused tests and plan validation pass on the integrated candidate.
+- [x] Focused tests and plan validation pass on the integrated candidate.
+
+## Authentic Evidence
+
+- Clean implementation revision:
+  `80fa9dbcef74d0d85b2a15168f0345e3ab3a4129`.
+- Stable outcome contract digest:
+  `f79708a2e9d3ea4e8b770ec1635fac9676ef20d135b924ceae6e325c184b53dc`.
+- Positive scenario: `plan114-genuine-progress` exited `0`, retained the active
+  lease, and admitted the in-scope write as `active_in_scope`.
+- Negative scenario: `plan114-circular-continuation` exited `1`, recorded two
+  consecutive same-boundary non-outcome increments, moved to
+  `recovery_required`, and denied the write.
+- Both scenarios contained the same `ordinary_approval=true`, approval text,
+  `$1,000,000` cost telemetry, and `999999` elapsed-seconds telemetry. Each
+  decision explicitly records those fields as ignored.
+- Retained typed evidence:
+  `docs/evidence/plan114_outcome_continuation_decisions.json`.
+- `ruff check enforced_planning/outcome_continuation.py
+  scripts/outcome_continuation.py tests/test_outcome_continuation.py` — pass.
+- `pytest -q tests/test_outcome_continuation.py` — 35 passed.
+- `python -m mypy enforced_planning/outcome_continuation.py
+  scripts/outcome_continuation.py --ignore-missing-imports` — pass.
+- `python scripts/validate_plan.py --plan-file
+  docs/plans/114_outcome_continuation_lease_enforcement.md --json` — no gaps or
+  warnings.
+
+This licenses only the staged deterministic CLI/admission seam. The negative
+control is synthetic, and no session hook, claim hook, downstream repository,
+unsupported shell write, or fleet enforcement is represented as blocked.
 
 ## Failure And Replan Rules
 

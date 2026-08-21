@@ -245,6 +245,29 @@ def test_receipt_dimension_must_be_declared_by_the_contract() -> None:
     assert exc_info.value.code == "receipt_dimension_mismatch"
 
 
+def test_contract_digest_mismatches_fail_loud() -> None:
+    contract = _contract()
+    mismatched_lease = OutcomeLeaseV1(
+        lease_id="status-cli-json-lease",
+        outcome_contract_sha256="a" * 64,
+    )
+    with pytest.raises(ContinuationError, match="lease outcome contract") as lease_error:
+        admit_operation(
+            contract,
+            mismatched_lease,
+            AdmissionRequestV1(operation="product_write", target_path="src/status_cli.py"),
+        )
+    assert lease_error.value.code == "lease_contract_mismatch"
+
+    lease = issue_initial_lease(contract, lease_id="status-cli-json-lease")
+    mismatched_receipt = _receipt(contract, "progress-1", "behavioral_advance").model_copy(
+        update={"outcome_contract_sha256": "b" * 64}
+    )
+    with pytest.raises(ContinuationError, match="receipt outcome contract") as receipt_error:
+        transition_lease(contract, lease, mismatched_receipt)
+    assert receipt_error.value.code == "receipt_contract_mismatch"
+
+
 def test_contract_and_receipt_reject_unsafe_or_incomplete_inputs() -> None:
     with pytest.raises(ValidationError, match="portable root-relative"):
         _contract().model_copy(update={"allowed_scope": ["../outside.py"]}).model_dump()
@@ -270,6 +293,20 @@ def test_contract_and_receipt_reject_unsafe_or_incomplete_inputs() -> None:
             command=["python", "src/status_cli.py", "--json"],
             observation_sha256="a" * 64,
             observed_at="2026-08-20T12:00:00",
+        )
+
+    with pytest.raises(ValidationError, match="Input should be 1"):
+        RecoveryLeaseV1(
+            recovery_lease_id="status-cli-json-recovery-1",
+            outcome_contract_sha256="a" * 64,
+            parent_lease_sha256="b" * 64,
+            failure_or_question="Why does the exact replay still fail?",
+            changed_causal_hypothesis="The serializer changes the requested output.",
+            allowed_action="inspect-and-repair-serializer",
+            allowed_paths=["src/status_cli.py"],
+            exact_replay_or_readout="python src/status_cli.py --json",
+            stopping_condition="Stop after the exact replay.",
+            max_attempts=2,
         )
 
 
@@ -488,3 +525,32 @@ def test_checked_in_both_sign_scenarios(
     )
     assert completed.returncode == returncode
     assert json.loads(completed.stdout)["decision"]["reason_code"] == reason_code
+
+
+def test_retained_evidence_matches_the_checked_in_scenarios() -> None:
+    evidence_path = ROOT / "docs" / "evidence" / "plan114_outcome_continuation_decisions.json"
+    evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
+    scenario_directory = ROOT / "examples" / "cleanroom-ecosystem"
+    progress_path = scenario_directory / "outcome-continuation-progress.json"
+    circular_path = scenario_directory / "outcome-continuation-circular.json"
+    progress_scenario = load_scenario(str(progress_path))
+    circular_scenario = load_scenario(str(circular_path))
+
+    assert progress_scenario.request == circular_scenario.request
+    for evidence_key, scenario_path, scenario in (
+        ("positive_control", progress_path, progress_scenario),
+        ("negative_control", circular_path, circular_scenario),
+    ):
+        retained = evidence[evidence_key]
+        result = evaluate_scenario(scenario)
+        assert retained["input_file_sha256"] == hashlib.sha256(scenario_path.read_bytes()).hexdigest()
+        assert retained["scenario_sha256"] == result.scenario_sha256
+        assert retained["outcome_contract_sha256"] == result.outcome_contract_sha256
+        assert retained["applied_receipt_sha256s"] == result.applied_receipt_sha256s
+        assert retained["lease_sha256"] == result.lease_sha256
+        assert retained["lease_state"] == result.lease.state
+        assert retained["decision"]["allowed"] is result.decision.allowed
+        assert retained["decision"]["reason_code"] == result.decision.reason_code
+
+    assert evidence["implementation"]["revision"] == "80fa9dbcef74d0d85b2a15168f0345e3ab3a4129"
+    assert "not yet wired" in " ".join(evidence["limitations"])

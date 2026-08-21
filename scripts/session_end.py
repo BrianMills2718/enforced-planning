@@ -26,6 +26,9 @@ def _bootstrap_package() -> None:
 
             bootstrap_upstream_package(current)
             return
+    import importlib.util
+    if importlib.util.find_spec("enforced_planning") is not None:
+        return
     raise RuntimeError("Unable to locate local or upstream enforced_planning support")
 
 

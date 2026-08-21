@@ -31,6 +31,12 @@ def _find_framework_root() -> Path:
     for parent in current.parents:
         if (parent / "enforced_planning").is_dir():
             return parent
+    import importlib.util
+    if importlib.util.find_spec("enforced_planning") is not None:
+        for _ancestor in Path(__file__).resolve().parents:
+            if (_ancestor / ".git").exists():
+                return _ancestor
+        return Path(__file__).resolve().parents[1]
     raise RuntimeError("Unable to locate repository root containing enforced_planning/")
 
 

@@ -17,6 +17,12 @@ def _add_repo_root_to_path() -> Path:
         if (parent / "enforced_planning").is_dir():
             sys.path.insert(0, str(parent))
             return parent
+    import importlib.util
+    if importlib.util.find_spec("enforced_planning") is not None:
+        for _ancestor in Path(__file__).resolve().parents:
+            if (_ancestor / ".git").exists():
+                return _ancestor
+        return Path(__file__).resolve().parents[1]
     raise RuntimeError("Unable to locate repository root containing enforced_planning/")
 
 

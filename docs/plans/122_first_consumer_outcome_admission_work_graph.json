@@ -1,0 +1,204 @@
+{
+  "units": [
+    {
+      "schema_version": "1.0",
+      "record_type": "work_unit",
+      "id": "oag-01-first-consumer-outcome-admission",
+      "initiative_id": "progress-bound-agent-execution",
+      "goal_id": "first-consumer-outcome-admission",
+      "design_revision": "sha256:59df711e1eeb769f1e389fd45237455dca5a7e46873ec4e59f0c9a16ced3791a",
+      "spec_revision": "sha256:59df711e1eeb769f1e389fd45237455dca5a7e46873ec4e59f0c9a16ced3791a",
+      "title": "Implement and exercise first-consumer outcome admission",
+      "class": "implementation",
+      "objective": "Turn the independently signed-off admission ordering into one exact-state, opt-in Enforced Planning consumer without activating hooks or expanding to fleet scope.",
+      "profile": "standard",
+      "execution_class": "independently_executable",
+      "claimability": "exclusive",
+      "authorization_mode": "registry_claim",
+      "scope": {
+        "included": [
+          "Canonical production outcome-admission decision",
+          "Plan 121 evaluator delegation to the production decision",
+          "Fixed source-consumer allocation bootstrap classifier",
+          "Exact selected claim, tracker, scenario, allocation, and effective continuation resolution",
+          "Append-only admission decision receipts",
+          "Explicit opt-in session start, heartbeat, and native pre-write integration",
+          "Sanctioned worktree bootstrap integration with default-off compatibility",
+          "Authentic Plan 122 positive journey",
+          "Public-command missing-selection, circular-continuation, and bootstrap-smuggling negative controls",
+          "Truthful source guide, index, roadmap, and evidence closeout"
+        ],
+        "excluded": [
+          "Hook activation",
+          "meta-process.yaml default changes",
+          "Installer or generated-mirror propagation",
+          "Downstream or fleet adoption",
+          "Cross-repository allocation membership",
+          "Semantic certification of progress evidence",
+          "Selection of Brian's active product outcome",
+          "Cryptographic resistance to shared-identity bypass"
+        ]
+      },
+      "inputs": [
+        {
+          "kind": "bounded_design",
+          "id": "docs/plans/122_first_consumer_outcome_admission.md",
+          "revision": "sha256:59df711e1eeb769f1e389fd45237455dca5a7e46873ec4e59f0c9a16ced3791a"
+        },
+        {
+          "kind": "accepted_evaluation",
+          "id": "docs/evidence/plan121_outcome_admission_evaluation.json",
+          "revision": "2b4643e0040dd6dacc9eaaf25aceebb2e1622610"
+        },
+        {
+          "kind": "accepted_capability",
+          "id": "docs/plans/120_project_graph_portfolio_admission.md",
+          "revision": "4340a2611d6c3bd98a9da2fc182b89e6e44605d0"
+        },
+        {
+          "kind": "approved_policy",
+          "id": "project-meta:policy/proposals/2026-08-20-outcome-continuation-lease-hard-gate.yaml",
+          "revision": "f6091b6b2f2a5357d0fdbbe88b157435a2ce07fb"
+        }
+      ],
+      "outputs": [
+        "Production outcome-admission owner",
+        "Exact selected-state admission resolver",
+        "Narrow source-consumer bootstrap",
+        "Append-only admission receipts",
+        "Explicit first-consumer lifecycle and pre-write adapters",
+        "Authentic both-sign first-consumer evidence",
+        "Bounded activation recommendation or rejection"
+      ],
+      "dependencies": [],
+      "conflict_surfaces": [
+        {
+          "kind": "repository_path",
+          "target": "enforced_planning/outcome_admission.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-122-first-consumer-outcome-admission"
+        },
+        {
+          "kind": "repository_path",
+          "target": "enforced_planning/outcome_selection.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-122-first-consumer-outcome-admission"
+        },
+        {
+          "kind": "repository_path",
+          "target": "enforced_planning/session_lifecycle.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-122-first-consumer-outcome-admission"
+        },
+        {
+          "kind": "repository_path",
+          "target": "scripts/prewrite_claim_gate.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-122-first-consumer-outcome-admission"
+        },
+        {
+          "kind": "repository_path",
+          "target": "Makefile",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-122-first-consumer-outcome-admission"
+        },
+        {
+          "kind": "repository_path",
+          "target": "tests/test_outcome_admission.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-122-first-consumer-outcome-admission"
+        },
+        {
+          "kind": "repository_path",
+          "target": "docs/evidence/plan122_first_consumer_outcome_admission.json",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-122-first-consumer-outcome-admission"
+        },
+        {
+          "kind": "repository_path",
+          "target": "docs/plans/122_first_consumer_outcome_admission.md",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-122-first-consumer-outcome-admission"
+        }
+      ],
+      "acceptance": [
+        {
+          "id": "OAG01-A1",
+          "criterion": "One production decision owns admission ordering and reproduces every frozen Plan 121 case.",
+          "evidence_required": [
+            "Plan 121 full-suite regression",
+            "Evaluator delegates to the production owner",
+            "Ordinary-denial precedence negative control"
+          ],
+          "negative_control": "A changed duplicate candidate implementation cannot silently diverge from production."
+        },
+        {
+          "id": "OAG01-A2",
+          "criterion": "The source-consumer bootstrap permits only nonempty exact Plan, index, roadmap, and Plan 122 admission-input paths.",
+          "evidence_required": [
+            "Public bootstrap allow receipt",
+            "Source-path smuggling denial",
+            "Empty and wrong-plan denial"
+          ],
+          "negative_control": "Adding one enforced_planning, scripts, tests, evidence, traversal, or foreign-plan path denies the bundle before mutation."
+        },
+        {
+          "id": "OAG01-A3",
+          "criterion": "Selected admission derives exact live portfolio and effective continuation state from current canonical owners.",
+          "evidence_required": [
+            "Exact claim/tracker/binding/scenario/allocation digests",
+            "Current effective lease digest",
+            "Missing, inactive, mismatched, target, and circular controls"
+          ],
+          "negative_control": "No public option accepts caller-supplied active portfolio or continuation labels."
+        },
+        {
+          "id": "OAG01-A4",
+          "criterion": "Explicit session start/heartbeat and pre-write adapters deny before mutation or success while default behavior remains compatible.",
+          "evidence_required": [
+            "Before/after tracker byte or timestamp checks",
+            "Ordinary-allow/outcome-deny public command",
+            "Default-off focused regressions"
+          ],
+          "negative_control": "Outcome failure cannot be reduced to an observe notice in explicit hard mode."
+        },
+        {
+          "id": "OAG01-A5",
+          "criterion": "The real Plan 122 lane passes bootstrap, exact allocation/selection, heartbeat, and target pre-write admission with retained both-sign evidence.",
+          "evidence_required": [
+            "Live claim and tracker refs",
+            "Project Graph and allocation refs",
+            "Positive admission receipts",
+            "Public-command negative receipts",
+            "Focused verification and candidate revision"
+          ],
+          "negative_control": "Evidence explicitly denies hook activation, installer/fleet adoption, cross-repository membership, semantic progress certification, and product selection."
+        }
+      ],
+      "readiness": {
+        "status": "ready",
+        "required_approval_types": [],
+        "approvals": [],
+        "failed_guards": []
+      },
+      "claim_policy": {
+        "eligibility_rule": "Plan 121 is accepted and one exact Plan 122 lane owns the first-consumer source, tests, examples, evidence, and truthful closeout surfaces.",
+        "lease_policy": "renewable",
+        "lease_duration_minutes": 1440,
+        "max_active_per_claimant": 1,
+        "named_owner_id": null
+      },
+      "status": "ready",
+      "record_version": 1,
+      "updated_at": "2026-08-21T09:20:00Z"
+    }
+  ]
+}

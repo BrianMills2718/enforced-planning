@@ -95,6 +95,7 @@ def _scenario(
     portfolio_class: PortfolioClass = "maintenance",
     owner_class: str = "brian",
     outcome_id: str | None = None,
+    scenario_id: str | None = None,
 ) -> OutcomeContinuationScenarioV1:
     outcome_id = outcome_id or f"{project_id}-outcome"
     contract = OutcomeContractV1(
@@ -118,7 +119,7 @@ def _scenario(
         progress_dimensions=["portfolio-bound outcome admission"],
     )
     return OutcomeContinuationScenarioV1(
-        scenario_id=f"{project_id}-{portfolio_class.replace('_', '-')}-scenario",
+        scenario_id=scenario_id or f"{project_id}-{portfolio_class.replace('_', '-')}-scenario",
         contract=contract,
         request=AdmissionRequestV1(operation="product_write", target_path=TARGET),
     )
@@ -274,6 +275,45 @@ def test_project_graph_authority_rejects_ineligible_records(
         )
 
     assert exc_info.value.code == code
+
+
+def test_underscore_project_id_allocates_and_resolves_through_portfolio(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CODEX_THREAD_ID", "portfolio-test")
+    project_id = "qualitative_coding"
+    graph_repo, revision = _graph_repo(tmp_path, [_graph_record(project_id)])
+    claims_dir = tmp_path / "claims"
+    ledger_path = tmp_path / "portfolio-ledger.json"
+    scenario = _scenario(
+        project_id,
+        outcome_id="qualitative-coding-outcome",
+        scenario_id="qualitative-coding-maintenance-scenario",
+    )
+    _worktree, scenario_path, request_path = _claimed_inputs(
+        tmp_path,
+        project_id=project_id,
+        scenario=scenario,
+        claims_dir=claims_dir,
+        allocation_id="allocate-qualitative-coding",
+    )
+
+    allocated = _allocate(
+        project_id=project_id,
+        scenario_path=scenario_path,
+        request_path=request_path,
+        graph_repo=graph_repo,
+        graph_revision=revision,
+        claims_dir=claims_dir,
+        ledger_path=ledger_path,
+    )
+    resolved = require_active_portfolio_allocation(scenario, ledger_path=ledger_path)
+
+    assert allocated.status == "allocated"
+    assert allocated.allocation.project_id == project_id
+    assert allocated.allocation.project_authority.project_id == project_id
+    assert resolved.allocation_sha256 == allocated.allocation_sha256
 
 
 def test_allocation_and_disposition_are_append_only_and_byte_idempotent(

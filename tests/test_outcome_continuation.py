@@ -72,6 +72,50 @@ def test_contract_schema_requires_explicit_compatible_portfolio_class() -> None:
         )
 
 
+@pytest.mark.parametrize("project_id", ["qualitative_coding", "enforced-planning"])
+def test_contract_accepts_canonical_project_graph_id_forms(project_id: str) -> None:
+    payload = _contract().model_dump()
+    payload["project_id"] = project_id
+
+    assert OutcomeContractV1.model_validate(payload).project_id == project_id
+
+
+@pytest.mark.parametrize(
+    "project_id",
+    [
+        "Qualitative_coding",
+        "qualitative coding",
+        "_qualitative-coding",
+        "qualitative-coding_",
+        "qualitative__coding",
+        "qualitative--coding",
+        "qualitative-_coding",
+        "qualitative_-coding",
+        "qualitative/coding",
+        "qualitative\\coding",
+        "..",
+    ],
+)
+def test_contract_rejects_unsafe_project_graph_id_forms(project_id: str) -> None:
+    payload = _contract().model_dump()
+    payload["project_id"] = project_id
+
+    with pytest.raises(
+        ValidationError,
+        match="canonical lowercase Project Graph identifier",
+    ):
+        OutcomeContractV1.model_validate(payload)
+
+
+@pytest.mark.parametrize("field_name", ["outcome_id", "lineage_id"])
+def test_project_id_compatibility_does_not_weaken_outcome_slugs(field_name: str) -> None:
+    payload = _contract().model_dump()
+    payload[field_name] = "still_not_a_portable_outcome_slug"
+
+    with pytest.raises(ValidationError, match="portable lowercase identifier"):
+        OutcomeContractV1.model_validate(payload)
+
+
 def _evidence(receipt_id: str) -> EvidenceBindingV1:
     return EvidenceBindingV1(
         source_revision="0c6eab42d4ba092391ed5418b62352475b29d7d8",

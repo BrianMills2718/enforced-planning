@@ -20,6 +20,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 PORTABLE_ID_RE = re.compile(r"^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$")
+PROJECT_ID_RE = re.compile(r"^[a-z][a-z0-9]*(?:[-_][a-z0-9]+)*$")
 PERSONAL_SENTINELS = ("/home/brian", "BrianMills2718")
 HEX_SHA256_PATTERN = r"^[0-9a-f]{64}$"
 
@@ -104,6 +105,11 @@ def _portable_id(value: str, *, field_name: str) -> None:
         raise ValueError(f"{field_name} must be a portable lowercase identifier")
 
 
+def _project_id(value: str) -> None:
+    if not PROJECT_ID_RE.fullmatch(value):
+        raise ValueError("project_id must be a canonical lowercase Project Graph identifier")
+
+
 def _portable_path(value: str, *, field_name: str, directory_allowed: bool = False) -> None:
     raw_path = value[:-1] if directory_allowed and value.endswith("/") else value
     path = PurePosixPath(raw_path)
@@ -167,10 +173,10 @@ class OutcomeContractV1(StrictModel):
         for field_name, value in (
             ("outcome_id", self.outcome_id),
             ("owner_class", self.owner_class),
-            ("project_id", self.project_id),
             ("lineage_id", self.lineage_id),
         ):
             _portable_id(value, field_name=field_name)
+        _project_id(self.project_id)
         for predecessor in self.predecessor_lineage_ids:
             _portable_id(predecessor, field_name="predecessor_lineage_ids")
         if len(set(self.predecessor_lineage_ids)) != len(self.predecessor_lineage_ids):

@@ -1,0 +1,11 @@
+{
+  "schema_version": "1.0.0",
+  "record_type": "outcome_portfolio_disposition_request",
+  "disposition_id": "plan-124-project-id-compatibility-park",
+  "requested_at": "2026-08-21T11:37:34.138778Z",
+  "allocation_id": "plan-124-project-id-compatibility-allocation",
+  "allocation_sha256": "20cc55ae5c64c0016123a0384f785cdea25b9ce5a1c5d49f2557b2c692519022",
+  "disposition": "parked",
+  "decision_ref": "enforced-planning#124-qcop-01b-accepted",
+  "reason": "Release the global maintenance slot after exact qualitative_coding compatibility and portfolio-resolution evidence are retained and merged."
+}

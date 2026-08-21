@@ -1,0 +1,147 @@
+{
+  "schema_version": "1.0.0",
+  "record_type": "outcome_admission_population_snapshot",
+  "snapshot_id": "plan121-live-claims-20260821t083623z",
+  "captured_at": "2026-08-21T08:36:23Z",
+  "producer_revision": "4340a2611d6c3bd98a9da2fc182b89e6e44605d0",
+  "producer_command": [
+    "python",
+    "scripts/check_coordination_claims.py",
+    "--list",
+    "--json"
+  ],
+  "normalized_snapshot_sha256": "5a5ba83c84badd0b273cc5b0b7e5dcd116bd0756ded956e01fa635666b9c0e0f",
+  "claim_count": 11,
+  "claims": [
+    {
+      "project": "dodaf",
+      "scope": "plan100-governed-case-contract-week",
+      "claim_type": "program",
+      "parent_scope": null,
+      "broader_goal": "Complete repeatable governed-case onboarding with a third responsibility-coverage journey",
+      "status": "active",
+      "health_status": "healthy",
+      "plan_ref": "goal:01a02140-1774-7573-97ee-eee93f331f13",
+      "branch": "plan100-governed-case-contract-20260821"
+    },
+    {
+      "project": "enforced-planning",
+      "scope": "plan-111-ef01-feedback-transport",
+      "claim_type": "program",
+      "parent_scope": null,
+      "broader_goal": "implement-plan111-feedback-improvement-vertical",
+      "status": "active",
+      "health_status": "healthy",
+      "plan_ref": "enforced-planning#111",
+      "branch": "plan-111-ef01-feedback-transport"
+    },
+    {
+      "project": "crest_kg",
+      "scope": "next-week-evidence-synthesis-workbench-write",
+      "claim_type": "write",
+      "parent_scope": "next-week-evidence-synthesis-workbench",
+      "broader_goal": null,
+      "status": "active",
+      "health_status": "stale",
+      "plan_ref": null,
+      "branch": "codex/crest-evidence-synthesis-week"
+    },
+    {
+      "project": "Digimon_for_KG_application",
+      "scope": "plan204-sta03h-local-embedding-runtime",
+      "claim_type": "write",
+      "parent_scope": null,
+      "broader_goal": "Complete the Stage-1 Trusted Answers critical path without advancing Parallax-derived UI or later capabilities",
+      "status": "active",
+      "health_status": "healthy",
+      "plan_ref": "Plan #204",
+      "branch": "plan204-sta03h-local-embedding-runtime"
+    },
+    {
+      "project": "causal-trace",
+      "scope": "plan-4-pairwise-contrast-acceptance",
+      "claim_type": "program",
+      "parent_scope": null,
+      "broader_goal": "Complete the frozen Plan 4 acceptance decision and merge terminal evidence",
+      "status": "active",
+      "health_status": "healthy",
+      "plan_ref": "causal-trace#4",
+      "branch": "plan-4-pairwise-contrast-acceptance"
+    },
+    {
+      "project": "enforced-planning",
+      "scope": "plan-121-outcome-admission-evaluation",
+      "claim_type": "program",
+      "parent_scope": null,
+      "broader_goal": "enforce-progress-bound-project-continuation",
+      "status": "active",
+      "health_status": "healthy",
+      "plan_ref": "goal:outcome-admission-evaluation",
+      "branch": "plan-121-outcome-admission-evaluation"
+    },
+    {
+      "project": "crest_kg",
+      "scope": "next-week-evidence-synthesis-workbench",
+      "claim_type": "program",
+      "parent_scope": null,
+      "broader_goal": "Complete and deploy the next seven-day CREST evidence-synthesis increment",
+      "status": "active",
+      "health_status": "stale",
+      "plan_ref": null,
+      "branch": "codex/crest-evidence-synthesis-week"
+    },
+    {
+      "project": "dodaf",
+      "scope": "plan100-governed-case-contract-write",
+      "claim_type": "write",
+      "parent_scope": "plan100-governed-case-contract-week",
+      "broader_goal": "Complete repeatable governed-case onboarding with a third responsibility-coverage journey",
+      "status": "active",
+      "health_status": "healthy",
+      "plan_ref": "goal:01a02140-1774-7573-97ee-eee93f331f13",
+      "branch": "plan100-governed-case-contract-20260821"
+    },
+    {
+      "project": "personal-root",
+      "scope": "osd-outline-led-week",
+      "claim_type": "program",
+      "parent_scope": null,
+      "broader_goal": "Original and Sinister Deeds outline led reconstruction",
+      "status": "active",
+      "health_status": "healthy",
+      "plan_ref": "goal:01a0220d-b7b7-7b93-a936-5702cb3c8739",
+      "branch": "codex/osd-outline-led-week"
+    },
+    {
+      "project": "personal-vault",
+      "scope": "osd-book-corpus-week",
+      "claim_type": "program",
+      "parent_scope": "osd-outline-led-week",
+      "broader_goal": "Original and Sinister Deeds outline led reconstruction",
+      "status": "active",
+      "health_status": "healthy",
+      "plan_ref": "goal:01a0220d-b7b7-7b93-a936-5702cb3c8739",
+      "branch": "codex/osd-outline-led-week"
+    },
+    {
+      "project": "brians-2nd-brain-integration-work",
+      "scope": "stage1-sta03g-local-composition",
+      "claim_type": "write",
+      "parent_scope": null,
+      "broader_goal": "Complete the Stage-1 Trusted Answers critical path without advancing Parallax-derived UI or later capabilities",
+      "status": "active",
+      "health_status": "healthy",
+      "plan_ref": "brians-2nd-brain-integration-work#244",
+      "branch": "stage1-sta03g-local-composition-20260820"
+    }
+  ],
+  "observed_structures": [
+    "healthy same-repository program/write root-child pair",
+    "healthy same-goal cross-repository root-child pair",
+    "healthy same-goal cross-repository independent roots",
+    "stale legacy program/write pair sharing one branch",
+    "healthy independent evaluation and product roots",
+    "first-consumer outcome-admission control lane"
+  ],
+  "privacy_note": "This private-repository fixture retains only routing and lifecycle fields needed to expose admission false blocks; paths, evidence contents, credentials, and claim notes are excluded."
+}

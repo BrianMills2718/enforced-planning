@@ -31,8 +31,8 @@ The first receipt now exists at
 `docs/evidence/plan113_governed_delivery_receipt.json`: framework revision
 `757ebcb7` prepared baseline `af8b4a9`, and this Codex session committed result
 `e5c00c1`; all 15 independent checks passed. The observation licenses one real
-governed-delivery vertical, not colleague-ready portability or a self-improving
-ecosystem.
+governed-delivery vertical, not utility on Brian's real project portfolio,
+colleague-ready portability, or a self-improving ecosystem.
 
 Plan #62 completed the approved repeat: a copied consumer profile selects a
 custom one-project `status-cli` inventory and requests:
@@ -51,17 +51,22 @@ paths.
 
 Two configured generated consumers now pass the same plan, documentation,
 progress, scope, portability, and independent-verifier controls. This is
-repeatability evidence, not colleague usability or a self-improving ecosystem.
-A new top-level repository, shared `data-contracts` extraction, `llm_client`
-integration, and Plan #111 feedback evolution remain downstream of a genuine
-external adopter or demonstrated ownership seam.
+mechanical repeatability evidence. The next consumer frontier is Brian and his
+agents using the system on real Brian-owned project work; colleague packaging,
+external-user validation, and claims of broader usability remain downstream of
+repeated owner dogfooding. A new top-level repository, shared `data-contracts`
+extraction, `llm_client` integration, and Plan #111 feedback evolution remain
+downstream of a demonstrated ownership seam.
 
 Plan #114 is the approved next proof frontier: bind supported continuation to
 progress evidence rather than conversational approval. Its staged gate is one
 positive CLI decision that admits genuine behavioral advance and one negative
 decision that denies two-increment circular continuation. Cost and elapsed-time
 telemetry must be decision-invariant. Session hooks, claim integration, and
-fleet promotion remain downstream of this both-sign result.
+fleet promotion remain downstream of this both-sign result. The first
+observe-mode integration belongs on real Brian-owned work used by Brian and his
+agents; generated fixtures prove mechanics, while colleague or external-user
+packaging waits for repeated owner evidence.
 
 ## Phase Map
 
@@ -241,7 +246,7 @@ authority and directory policy.
 | Pre-write claim enforcement | Check supported native Codex/Claude write events against exact live session, worktree, branch, and path ownership before mutation. See Plan #108. | PW-01/PW-02A/PW-02 are accepted; PW-02B0 writer provenance is the only ready leaf, followed by frozen inventory, bounded rollout, fleet certification, and the fixed enforced-planning pilot |
 | Artifact creation enforcement | Gate selected new tracked artifacts against repository directory rules and durable intent, with receipts and feedback. See Plan #109. | Portable mechanism first, then an Inside Success Markdown observe pilot before any blocking promotion |
 | No-passive-waiting enforcement | Separate liveness from progress, reject whole-goal blockage while compatible work remains, and preserve recoverable true blockers. See Plan #110. | Work graph validated; progress visibility and provider-free blocker disposition are the two ready leaves |
-| Outcome continuation lease | Require typed progress evidence before supported coding-agent continuation; ordinary approval and cost do not renew authority. See Plan #114. | Execute the staged positive/negative CLI proof before any session, claim, or fleet integration |
+| Outcome continuation lease | Require typed progress evidence before supported coding-agent continuation; ordinary approval and cost do not renew authority. See Plan #114. | Staged both-sign CLI proof complete; next observe one real Brian-owned project used by Brian and his agents before fleet or colleague integration |
 | Multi-tool adoption | Cursor/Windsurf hook adapters when their hook surfaces are publicly documented | External dependency: tool documentation |
 | Project-meta topic-research adoption | Apply portable topic-research pattern in `research_synthesis/` with manifests, ADR links, freshness metadata | Plans #43/#44/#35 complete |
 

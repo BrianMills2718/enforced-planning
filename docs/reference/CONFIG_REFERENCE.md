@@ -156,10 +156,11 @@ worktree targets.
 | `quality.reachability.enabled` | bool | `false` | `check_reachability.py` | Reachability reports "disabled in meta-process.yaml" |
 | `quality.reachability.packages` | list | `[]` | `check_reachability.py`, `repo_stats_block.py` (package-root fallback) | Config error (no packages configured) |
 | `quality.reachability.entrypoints` | list | `[]` | `check_reachability.py` | No files treated as entrypoints |
-| `quality.reachability.product_entrypoints` | list | `[]` | `check_reachability.py` | Product-path share not computed (falls back to the full reachable set) |
+| `quality.reachability.product_entrypoints` | list | `[]` | `check_reachability.py` | Product-path share not computed (falls back to the full reachable set); when set, `--check` also fails if `product_share` regresses against the baseline |
 | `quality.reachability.dynamic` | list | `[]` | `check_reachability.py` | No `importlib`-string-imported modules treated as reachable |
 | `quality.reachability.ignore` | list | `[]` | `check_reachability.py` | No modules excluded from the corpus |
 | `quality.reachability.baseline` | string | `"reachability_baseline.json"` | `check_reachability.py` | `reachability_baseline.json` |
+| `product_share` (baseline key, not a config key) | float | absent | `check_reachability.py` | Written by `--write-baseline`. When present, `--check` fails on a regression below it; when absent, the product-path ratchet stays silent so baselines predating the key keep passing |
 | `REACHABILITY_RATCHET` | `on \| off` | `on` (env var, not a config key) | `hooks/git/pre-commit` | Ratchet enforced; `off` is a named, logged bypass for the first tuning pass on a repo (see `ACCRETION_DETECTOR_ROLLOUT_BRIEF.md` §10a in `project-meta`) |
 
 ## acceptance_gates

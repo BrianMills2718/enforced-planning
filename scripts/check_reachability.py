@@ -232,6 +232,10 @@ def analyse(root: Path, config: dict[str, Any]) -> Report:
     )
 
 
+# Baselines store product_share rounded to 4 places; ignore drift below that.
+SHARE_TOLERANCE = 0.0005
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--project-root", default=".", type=Path)
@@ -286,6 +290,8 @@ def main() -> int:
         f"{len(report.entrypoints)} entrypoints "
         f"({report.live_share:.1%} of lines live)"
     )
+    baseline_share = None
+    share_regressed = False
     if report.product_entrypoints:
         baseline_share = baseline.get("product_share")
         drift = (
@@ -299,6 +305,8 @@ def main() -> int:
             f"{report.product_unreachable_count} module(s) are held alive only by "
             "scripts or tests"
         )
+        if isinstance(baseline_share, float):
+            share_regressed = report.product_share < baseline_share - SHARE_TOLERANCE
     if report.newly_unreachable:
         print(
             f"\n{len(report.newly_unreachable)} module(s) became unreachable "
@@ -318,6 +326,17 @@ def main() -> int:
             f"reachability: {report.baseline_count - report.unreachable_count} "
             "module(s) retired since baseline. Run --write-baseline to lower the ratchet."
         )
+    if share_regressed:
+        assert isinstance(baseline_share, float)
+        print(
+            f"\nproduct path fell from {baseline_share:.1%} to "
+            f"{report.product_share:.1%}. Code that only tests and scripts reach is "
+            "the accretion this sensor exists to catch, and the all-entrypoints count "
+            "above cannot see it. Wire it to the product entrypoint, delete it, or - "
+            "if the drop is deliberate - run --write-baseline to lower the ratchet."
+        )
+        if args.check:
+            return 1
     return 0
 
 

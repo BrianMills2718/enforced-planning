@@ -1,0 +1,15 @@
+{
+  "schema_version": "1.0.0",
+  "record_type": "outcome_portfolio_allocation_request",
+  "allocation_id": "plan-75-maintenance-allocation",
+  "requested_at": "2026-08-21T14:39:35.827680Z",
+  "project_id": "enforced-planning",
+  "scenario_id": "plan-75-reachability-product-path-ratchet",
+  "outcome_contract_sha256": "8cc864177d1846ab73eb6c2b5d65a26a66bd5a245fe69cccece3ac52ea4c4d9e",
+  "outcome_id": "reachability-product-path-ratchet",
+  "outcome_lineage_id": "plan-75-reachability-product-path-ratchet",
+  "portfolio_class": "maintenance",
+  "decision_ref": "enforced-planning#75@9fbfba1b317a07f7b1f022aa419402d6613af142",
+  "purpose": "Make the shared reachability sensor fail --check on a product-path regression, so code reachable only from tests and scripts stops passing as clean.",
+  "stopping_condition": "Park the allocation once the regression, unchanged, and legacy-baseline cases are covered by tests and the config reference records the ratchet."
+}

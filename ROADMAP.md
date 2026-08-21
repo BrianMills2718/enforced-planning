@@ -51,7 +51,7 @@ paths.
 
 Two configured generated consumers pass the same plan, documentation, progress,
 scope, portability, and independent-verifier controls. This is mechanical
-repeatability evidence. Plans #55 and #114–#117 then crossed the owner frontier
+repeatability evidence. Plans #55 and #114–#118 then crossed the owner frontier
 on Enforced Planning itself:
 
 - Plan #55 reduced the required context for one real framework module from 11
@@ -65,11 +65,11 @@ on Enforced Planning itself:
   `allow/exact_live_claim`; owner progress correlated to
   `would_allow/active_in_scope`, while two synthetic non-outcome receipts
   correlated to `would_deny/recovery_required`.
-- Plan #117 bound the real claimed session to one create-once scenario in its
-  linked tracker. Heartbeat and replay preserved the same selection digest; the
-  real selected path returned `would_allow/active_in_scope`, while the checked-in
-  same-contract circular control returned `would_deny/recovery_required` in an
-  isolated selected session without changing ordinary admission.
+- Plans #117 and #118 bound the real claimed session to create-once outcome
+  state, then preserved it and its failure history across exact-session handoff
+  and a same-project stalled-to-active causal restart. Both-sign selected
+  observations remained advisory; independent review, owner-class resolution,
+  cross-project successors, and blocking remain downstream.
 
 These observations prove useful owner-real behavior at the documentation,
 continuation, and exact-session identity seams. They do not yet prove automatic
@@ -269,7 +269,7 @@ authority and directory policy.
 | Pre-write claim enforcement | Check supported native Codex/Claude write events against exact live session, worktree, branch, and path ownership before mutation. See Plan #108. | PW-01/PW-02A/PW-02 are accepted; PW-02B0 writer provenance is the only ready leaf, followed by frozen inventory, bounded rollout, fleet certification, and the fixed enforced-planning pilot |
 | Artifact creation enforcement | Gate selected new tracked artifacts against repository directory rules and durable intent, with receipts and feedback. See Plan #109. | Portable mechanism first, then an Inside Success Markdown observe pilot before any blocking promotion |
 | No-passive-waiting enforcement | Separate liveness from progress, reject whole-goal blockage while compatible work remains, and preserve recoverable true blockers. See Plan #110. | NPW-02 provider-free blocker disposition accepted with replayable both-sign evidence; NPW-01 progress visibility remains the ready leaf before NPW-03 |
-| Outcome continuation lease | Require typed progress evidence before supported coding-agent continuation; ordinary approval and cost do not renew authority. See Plans #114–#117. | Plan #117 completed exact-session create-once selection and both-sign observe evidence; representative normal-project calibration, legitimate restart/recovery transitions, and any blocking or rollout remain downstream |
+| Outcome continuation lease | Require typed progress evidence before supported coding-agent continuation; ordinary approval and cost do not renew authority. See Plans #114–#118. | Plan #118 preserved selected outcome and failure state across exact-session handoff and same-project causal restart; independent review, Project Graph owner-class resolution, cross-project successors, blocking, and rollout remain downstream |
 | Multi-tool adoption | Cursor/Windsurf hook adapters when their hook surfaces are publicly documented | External dependency: tool documentation |
 | Project-meta topic-research adoption | Apply portable topic-research pattern in `research_synthesis/` with manifests, ADR links, freshness metadata | Plans #43/#44/#35 complete |
 

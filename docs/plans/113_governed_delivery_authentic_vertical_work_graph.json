@@ -1,0 +1,139 @@
+{
+  "units": [
+    {
+      "schema_version": "1.0",
+      "record_type": "work_unit",
+      "id": "gdv-01-authentic-vertical",
+      "initiative_id": "agentic-engineering-system",
+      "goal_id": "prove-one-authentic-portable-governed-delivery-vertical",
+      "design_revision": "0eb42ffe1308c30780d85c5836387af391ed844d",
+      "spec_revision": "plan-113-v1-user-approved-2026-08-20",
+      "title": "Execute one authentic governed-delivery vertical",
+      "class": "implementation",
+      "objective": "Prepare one neutral governed hello-app, enforce bounded progress and plan/document alignment, complete its --name feature with the current Codex session, and retain an independent verifier receipt.",
+      "profile": "poc",
+      "execution_class": "independently_executable",
+      "claimability": "ready_for_execution",
+      "authorization_mode": "registry_claim",
+      "scope": {
+        "included": [
+          "Governed task preparation on the existing clean-room and installer seam",
+          "Progress probes and course-correction checkpoints",
+          "Independent plan, documentation, Git-diff, and behavior verification",
+          "One fresh current-session hello-app feature execution",
+          "Focused positive and negative controls plus a portable receipt"
+        ],
+        "excluded": [
+          "A new top-level repository or generalized agent runtime",
+          "Feedback automation or fleet migration",
+          "llm_client and data-contracts integration",
+          "Deployment, publication, dashboards, or generalized hardening"
+        ]
+      },
+      "inputs": [
+        {
+          "kind": "bounded_plan",
+          "id": "docs/plans/113_governed_delivery_authentic_vertical.md",
+          "revision": "plan-113-v1-user-approved-2026-08-20"
+        },
+        {
+          "kind": "existing_capability",
+          "id": "enforced_planning/cleanroom_alpha.py",
+          "revision": "0eb42ffe1308c30780d85c5836387af391ed844d"
+        }
+      ],
+      "outputs": [
+        "Native governed-delivery task, progress, checkpoint, and receipt contracts",
+        "Agent-drivable JSON preparation, probe, checkpoint, and verification CLI",
+        "Focused both-sign tests",
+        "One fresh authentic governed hello-app result and portable verifier receipt"
+      ],
+      "dependencies": [],
+      "conflict_surfaces": [
+        {
+          "kind": "repository_path",
+          "target": "enforced_planning/governed_delivery.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "gdv-authentic-vertical"
+        },
+        {
+          "kind": "repository_path",
+          "target": "scripts/governed_delivery.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "gdv-authentic-vertical"
+        },
+        {
+          "kind": "repository_path",
+          "target": "tests/test_governed_delivery.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "gdv-authentic-vertical"
+        },
+        {
+          "kind": "repository_path",
+          "target": "examples/cleanroom-ecosystem/README.md",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "gdv-authentic-vertical"
+        },
+        {
+          "kind": "repository_path",
+          "target": "docs/evidence/plan113_governed_delivery_receipt.json",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "gdv-authentic-vertical"
+        },
+        {
+          "kind": "repository_path",
+          "target": "docs/plans/113_governed_delivery_authentic_vertical.md",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "gdv-authentic-vertical"
+        },
+        {
+          "kind": "repository_path",
+          "target": "docs/plans/CLAUDE.md",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "gdv-authentic-vertical"
+        },
+        {
+          "kind": "repository_path",
+          "target": "ROADMAP.md",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "gdv-authentic-vertical"
+        }
+      ],
+      "acceptance": [
+        {
+          "id": "GDV01-A1",
+          "criterion": "One fresh current-session coding task produces the exact default and --name outputs, a concise README, a truthful completed plan, a declared-path-only clean commit, and a passing independent receipt bound to baseline and result revisions.",
+          "evidence_required": [
+            "Focused governed-delivery tests",
+            "Fresh external-root command transcript and verifier receipt",
+            "Canonical merged source revision"
+          ],
+          "negative_control": "False authority, undeclared writes, unchanged repeated failure, and worker self-report each remain unable to produce a passing receipt."
+        }
+      ],
+      "readiness": {
+        "status": "ready",
+        "required_approval_types": [],
+        "approvals": [],
+        "failed_guards": []
+      },
+      "claim_policy": {
+        "eligibility_rule": "One exact live claim owns only the Plan 113 module, CLI, focused tests, example, plan/index/roadmap reconciliation, and receipt paths.",
+        "lease_policy": "renewable",
+        "lease_duration_minutes": 1440,
+        "max_active_per_claimant": 1,
+        "named_owner_id": null
+      },
+      "status": "ready",
+      "record_version": 1
+    }
+  ]
+}

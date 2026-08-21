@@ -1,6 +1,6 @@
 # Enforced Planning Framework — Roadmap
 
-**Updated:** 2026-04-05
+**Updated:** 2026-08-20
 **Canonical methodology:** `PLANNING_OPERATING_MODEL.md`
 
 ## Vision
@@ -10,6 +10,30 @@ A portable framework where:
 - Agents verify semantic drift and fix or escalate — no "warn and hope"
 - Humans set direction, review escalations, and make architectural decisions
 - Every repo in the ecosystem can adopt incrementally without big-bang migration
+
+## Current Proof Frontier
+
+The immediate proof frontier is Plan #113: one ordinary feature request must
+complete through the existing neutral clean-room, installed planning authority,
+documentation linkage, explicit course-correction control, and an independent
+verifier. The stable probe is:
+
+```text
+python src/hello_app.py --name Ada
+-> Ada uses shared-lib
+```
+
+The existing default behavior must remain, the README and bounded plan must be
+truthful, only declared paths may change, and worker self-report cannot certify
+completion. This is the first authentic vertical of the wider Agentic
+Engineering System direction; it does not rename this repository or make it
+own model-runtime, shared-data-contract, or feedback-evolution concerns.
+
+Until that receipt exists, additional feedback machinery, generalized adapters,
+fleet rollout, and a new top-level repository are downstream work. Plans #60
+and #61 supply the clean-room and verified-loop substrate. Plan #62's remaining
+independent-consumer breadth and Plan #111's feedback system stay valid but do
+not displace the vertical from the critical path.
 
 ## Phase Map
 

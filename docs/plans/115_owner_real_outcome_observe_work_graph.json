@@ -1,0 +1,167 @@
+{
+  "units": [
+    {
+      "schema_version": "1.0",
+      "record_type": "work_unit",
+      "id": "ocov-01-owner-real-cli-observation",
+      "initiative_id": "progress-bound-agent-execution",
+      "goal_id": "observe-existing-continuation-contract-on-real-owner-progress",
+      "design_revision": "project-meta@f6091b6b2f2a5357d0fdbbe88b157435a2ce07fb:outcome-continuation-lease-hard-gate",
+      "spec_revision": "enforced-planning@9e44721bd1b176affbb0aef800cc4a606785fc4e:plan-115",
+      "title": "Execute one owner-real outcome-continuation CLI observation",
+      "class": "implementation",
+      "objective": "Bind the canonical Plan 55 compact-context owner result to the unchanged Plan 114 CLI, retain the admitted next action and manual-friction readout, and select the first evidence-supported runtime integration seam without implementing or promoting it.",
+      "profile": "small",
+      "execution_class": "independently_executable",
+      "claimability": "ready_for_execution",
+      "authorization_mode": "registry_claim",
+      "scope": {
+        "included": [
+          "One strict checked-in scenario bound to the canonical Plan 55 owner result",
+          "Exact configuration and file-context output digest re-observation",
+          "One public CLI allow decision for the named Plan 115 evidence write",
+          "One revision-bound manual observation artifact and next-seam readout",
+          "Focused Plan 114 regression and Plan 115 truth-surface reconciliation"
+        ],
+        "excluded": [
+          "Pre-write, session, claim, heartbeat, commit, closeout, or shell adapters",
+          "Mutable lease persistence or automatic progress classification",
+          "Outcome enforcement, break glass, fleet installation, colleague packaging, or external-user validation",
+          "Spend, subscription, elapsed-time, deployment, or release controls"
+        ]
+      },
+      "inputs": [
+        {
+          "kind": "approved_policy",
+          "id": "project-meta/policy/proposals/2026-08-20-outcome-continuation-lease-hard-gate.yaml",
+          "revision": "f6091b6b2f2a5357d0fdbbe88b157435a2ce07fb"
+        },
+        {
+          "kind": "bounded_plan",
+          "id": "docs/plans/115_owner_real_outcome_observe.md",
+          "revision": "9e44721bd1b176affbb0aef800cc4a606785fc4e"
+        },
+        {
+          "kind": "existing_capability",
+          "id": "enforced_planning/outcome_continuation.py",
+          "revision": "80fa9dbcef74d0d85b2a15168f0345e3ab3a4129"
+        },
+        {
+          "kind": "owner_progress",
+          "id": "docs/plans/55_enforced-planning_recursive_doc_spine_dogfood.md",
+          "revision": "5fbcd6e7679abe323dda7473998f5cd9e086bbb8"
+        },
+        {
+          "kind": "observation_digest",
+          "id": "scripts/file_context.py:enforced_planning/doc_authority.py",
+          "revision": "7f920c7d4d4a6354f8aa39eb18aa5ad983cf18e2435ae33d8e238c7fa09ae668"
+        }
+      ],
+      "outputs": [
+        "Strict Plan 115 owner-progress scenario",
+        "Reproduced Plan 55 configuration and output digests",
+        "Allowed active-in-scope continuation result from the unchanged public CLI",
+        "Revision-bound manual observation and limitations",
+        "Evidence-supported next integration seam with a falsification condition"
+      ],
+      "dependencies": [],
+      "conflict_surfaces": [
+        {
+          "kind": "repository_path",
+          "target": "examples/owner-real-outcome-observe/plan115-owner-progress.json",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-115-owner-real-observation"
+        },
+        {
+          "kind": "repository_path",
+          "target": "docs/evidence/plan115_owner_real_outcome_observation.json",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-115-owner-real-observation"
+        },
+        {
+          "kind": "repository_path",
+          "target": "docs/plans/115_owner_real_outcome_observe.md",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-115-owner-real-observation"
+        },
+        {
+          "kind": "repository_path",
+          "target": "docs/plans/115_owner_real_outcome_observe_work_graph.json",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-115-owner-real-observation"
+        },
+        {
+          "kind": "repository_path",
+          "target": "docs/plans/CLAUDE.md",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-115-owner-real-observation"
+        },
+        {
+          "kind": "repository_path",
+          "target": "ROADMAP.md",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-115-owner-real-observation"
+        }
+      ],
+      "acceptance": [
+        {
+          "id": "OCOV01-A1",
+          "criterion": "The scenario binds the canonical Plan 55 owner result to its exact merge, configuration digest, command, file-context output digest, and artifact references.",
+          "evidence_required": [
+            "Checked-in strict scenario accepted by OutcomeContinuationScenarioV1",
+            "Re-executed configuration and file-context digest commands"
+          ],
+          "negative_control": "A different configuration or stdout digest is preserved as a mismatch rather than accepted as the same progress evidence."
+        },
+        {
+          "id": "OCOV01-A2",
+          "criterion": "The unchanged public CLI leaves the lease active and admits the exact Plan 115 evidence write as active_in_scope while approval, cost, and elapsed context remain ignored.",
+          "evidence_required": [
+            "CLI JSON result and exit code from a clean candidate revision",
+            "Focused Plan 114 continuation regression"
+          ],
+          "negative_control": "The retained Plan 114 circular scenario remains denied as recovery_required with the same decision-inert operator context."
+        },
+        {
+          "id": "OCOV01-A3",
+          "criterion": "The retained observation is revision- and digest-bound and truthfully classified as manual CLI delivery, with no hook, claim, shell, enforcement, colleague, or fleet claim.",
+          "evidence_required": [
+            "Plan 115 evidence artifact",
+            "Truthful Plan 115, index, and roadmap text"
+          ],
+          "negative_control": "The evidence limitations explicitly reject automatic or hard-enforcement interpretations."
+        },
+        {
+          "id": "OCOV01-A4",
+          "criterion": "The manual-friction readout selects the smallest candidate integration seam and states an observation that would falsify that recommendation.",
+          "evidence_required": [
+            "Step-level manual workflow readout",
+            "Named next seam and falsification condition"
+          ],
+          "negative_control": "No lifecycle adapter is implemented merely because it was plausible before the run."
+        }
+      ],
+      "readiness": {
+        "status": "ready",
+        "required_approval_types": [],
+        "approvals": [],
+        "failed_guards": []
+      },
+      "claim_policy": {
+        "eligibility_rule": "One exact live Plan 115 claim owns only the listed scenario, evidence, plan, graph, index, and roadmap paths.",
+        "lease_policy": "renewable",
+        "lease_duration_minutes": 1440,
+        "max_active_per_claimant": 1,
+        "named_owner_id": null
+      },
+      "status": "ready",
+      "record_version": 1
+    }
+  ]
+}

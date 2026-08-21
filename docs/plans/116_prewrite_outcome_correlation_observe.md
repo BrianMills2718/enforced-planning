@@ -114,6 +114,18 @@ evaluation, append-only receipt shape, and exit compatibility are deductive.
 Whether this seam is useful enough to justify durable lease binding or later
 enforcement remains exploratory and must be decided from the retained run.
 
+## Capabilities
+
+| Capability | Input | Output | Producer | Consumer |
+|---|---|---|---|---|
+| ordinary pre-write claim decision | native payload + live claim projection | authoritative claim decision + receipt | `prewrite_claim_fast` | native adapter |
+| outcome pre-write observation | ordinary receipt + immutable continuation scenario | typed correlated `would_allow` or `would_deny` receipt | Plan #116 correlation owner | Brian/operator evidence run |
+| explicit wrapper option | native payload + scenario/receipt paths | unchanged ordinary native result plus visible observation status | `scripts/prewrite_claim_gate.py` | Brian and his coding agents |
+
+These capabilities remain native to Enforced Planning. Shared data contracts
+are deferred until a second repository consumes the boundary; `llm_client` is
+not involved because this is a deterministic local decision.
+
 ## Boundaries And Contracts
 
 1. With no outcome-scenario option, `scripts/prewrite_claim_gate.py` remains
@@ -247,4 +259,3 @@ Not in scope:
 - Preserve ordinary native output and exit behavior in every observation state.
 - Test Brian and his agents on Enforced Planning first; colleagues and fleet
   rollout remain downstream.
-

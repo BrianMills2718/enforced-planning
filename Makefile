@@ -1,6 +1,6 @@
 ## enforced-planning — framework for enforced planning, context gating, doc-code alignment
 
-.PHONY: help test test-quick check lint dead-code dead-code-audit dead-code-validate push-check infer check-deps check-caps migrate-rels verify-couplings review-surfaces promote plan-registry ecosystem-status docstring-wiki docstring-wiki-check test-relationships status reachability reachability-check reachability-baseline repo-stats
+.PHONY: help test test-quick check lint dead-code dead-code-audit dead-code-validate push-check infer check-deps check-caps migrate-rels verify-couplings review-surfaces promote plan-registry ecosystem-status docstring-wiki docstring-wiki-check test-relationships status reachability reachability-check reachability-baseline repo-stats fleet-drift fleet-drift-json
 
 PYTHON ?= $(if $(wildcard .venv/bin/python),.venv/bin/python,python3)
 PROJECT_STATUS_PYTHON ?= $(PYTHON)
@@ -45,6 +45,14 @@ reachability-baseline:  ## Lower the reachability ratchet baseline to the curren
 
 repo-stats:  ## Print session-start repetition counters
 	$(PYTHON) scripts/repo_stats_block.py --project-root .
+
+FLEET_DRIFT_ARGS ?=
+
+fleet-drift:  ## Report vendored enforced_planning drift across consumer repos
+	$(PYTHON) scripts/fleet_drift.py $(FLEET_DRIFT_ARGS)
+
+fleet-drift-json:  ## Same report as machine-readable JSON
+	$(PYTHON) scripts/fleet_drift.py --json $(FLEET_DRIFT_ARGS)
 
 push-check:  ## Validate branch push safety against default-branch and coordination state
 	$(PYTHON) scripts/check_push_safety.py

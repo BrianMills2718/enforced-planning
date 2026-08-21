@@ -6,11 +6,11 @@
       "id": "osel-01-durable-session-binding",
       "initiative_id": "progress-bound-agent-execution",
       "goal_id": "bind-one-claimed-session-to-one-durable-outcome-selection",
-      "design_revision": "sha256:093824d385356de897a3624f3ebb223f3b55a65187ab6962c77eea75b2289214",
-      "spec_revision": "sha256:093824d385356de897a3624f3ebb223f3b55a65187ab6962c77eea75b2289214",
+      "design_revision": "sha256:848cd8322382c3112a317f22fe181e4da561a61ae04c95fde655ae9c8e7ef66c",
+      "spec_revision": "sha256:848cd8322382c3112a317f22fe181e4da561a61ae04c95fde655ae9c8e7ef66c",
       "title": "Bind one exact claimed session to one durable outcome selection",
       "class": "integration",
-      "objective": "Persist one create-once immutable outcome selection with explicit plan-or-goal authority in the exact claim-linked session tracker, resolve it through the existing pre-write observer, and prove real positive, circular negative, authority-mismatch, and stale/tampered behavior without changing ordinary admission.",
+      "objective": "Preserve explicit goal authority on simple sequential write claims without weakening numbered-plan graph readiness, persist one create-once immutable outcome selection in the exact claim-linked tracker, resolve it through the existing pre-write observer, and prove real positive, circular negative, authority-mismatch, and stale/tampered behavior without changing ordinary admission.",
       "profile": "small",
       "execution_class": "independently_executable",
       "claimability": "not_applicable",
@@ -19,6 +19,7 @@
         "included": [
           "Strict outcome-selection binding with stable exact-claim identity",
           "Explicit planned or genuine goal authority with fail-loud mismatch behavior",
+          "Goal-bound sequential write claims without manufactured graph artifacts, while numbered plans retain graph and unit requirements",
           "Locked atomic writes in the existing session tracker",
           "Create-once explicit selection through the outcome-continuation CLI",
           "Selected observation through the existing pre-write wrapper",
@@ -40,7 +41,7 @@
         {
           "kind": "bounded_design",
           "id": "docs/plans/117_durable_outcome_selection_binding_observe.md",
-          "revision": "sha256:093824d385356de897a3624f3ebb223f3b55a65187ab6962c77eea75b2289214"
+          "revision": "sha256:848cd8322382c3112a317f22fe181e4da561a61ae04c95fde655ae9c8e7ef66c"
         },
         {
           "kind": "existing_capability",
@@ -65,6 +66,7 @@
       ],
       "outputs": [
         "One strict create-once outcome selection with canonical plan-or-goal authority in the existing exact-session tracker",
+        "One narrow claim-validation rule that preserves goal authority without weakening numbered-plan graph readiness",
         "One atomic tracker mutation seam shared by lifecycle and selection writers",
         "One selected pre-write option that never accepts a caller scenario",
         "Selected would-allow, would-deny, and stale/tampered visible-failure evidence",
@@ -75,6 +77,13 @@
         {
           "kind": "repository_path",
           "target": "enforced_planning/outcome_selection.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-117-durable-outcome-selection"
+        },
+        {
+          "kind": "repository_path",
+          "target": "enforced_planning/coordination_claims.py",
           "repository": "enforced-planning",
           "access": "exclusive",
           "coordination_key": "plan-117-durable-outcome-selection"
@@ -117,6 +126,13 @@
         {
           "kind": "repository_path",
           "target": "tests/test_outcome_selection.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-117-durable-outcome-selection"
+        },
+        {
+          "kind": "repository_path",
+          "target": "tests/test_check_coordination_claims.py",
           "repository": "enforced-planning",
           "access": "exclusive",
           "coordination_key": "plan-117-durable-outcome-selection"
@@ -192,6 +208,7 @@
           "evidence_required": [
             "Strict binding contract tests",
             "Planned authority preservation, plan-to-unplanned mismatch, and explicit goal authority tests",
+            "Goal-bound write claim succeeds without graph and numbered-plan write claim still fails without graph and unit",
             "Idempotent same-selection and conflicting-replacement tests",
             "Atomic tracker write and unrelated-field preservation tests"
           ],
@@ -245,7 +262,7 @@
         "failed_guards": []
       },
       "claim_policy": {
-        "eligibility_rule": "One exact live Plan 117 claim owns only the listed selection, tracker, wrapper, tests, scenarios, evidence, plan, graph, index, and roadmap paths.",
+        "eligibility_rule": "One exact live Plan 117 claim owns only the listed claim-validation, selection, tracker, wrapper, tests, scenarios, evidence, plan, graph, index, and roadmap paths.",
         "lease_policy": "renewable",
         "lease_duration_minutes": 1440,
         "max_active_per_claimant": 1,
@@ -253,7 +270,7 @@
       },
       "status": "ready",
       "record_version": 1,
-      "updated_at": "2026-08-21T04:21:37Z"
+      "updated_at": "2026-08-21T04:27:11Z"
     }
   ]
 }

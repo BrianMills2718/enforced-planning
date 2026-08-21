@@ -292,6 +292,61 @@ class RecoveryLeaseV1(StrictModel):
         return self
 
 
+class RestartDeltaV1(StrictModel):
+    """Exact causal difference required to restart a stalled or parked lineage."""
+
+    schema_version: Literal["1.0.0"] = "1.0.0"
+    record_type: Literal["restart_delta"] = "restart_delta"
+    delta_id: str
+    recorded_at: datetime
+    predecessor_binding_sha256: str = Field(pattern=HEX_SHA256_PATTERN)
+    predecessor_contract_sha256: str = Field(pattern=HEX_SHA256_PATTERN)
+    predecessor_lease_sha256: str = Field(pattern=HEX_SHA256_PATTERN)
+    predecessor_lineage_id: str
+    predecessor_lease_state: Literal["stalled", "parked"]
+    predecessor_non_outcome_count: int = Field(ge=0)
+    predecessor_failure_boundary: str | None = None
+    predecessor_failure_count: int = Field(ge=0)
+    predecessor_failed_evidence_refs: list[str] = Field(default_factory=list)
+    successor_contract_sha256: str = Field(pattern=HEX_SHA256_PATTERN)
+    successor_lineage_id: str
+    prior_causal_hypothesis: str = Field(min_length=12)
+    changed_causal_hypothesis: str = Field(min_length=12)
+    prior_mechanism: str = Field(min_length=12)
+    changed_mechanism: str = Field(min_length=12)
+    bounded_action: str = Field(min_length=8)
+    next_canonical_observation: str = Field(min_length=8)
+    stopping_condition: str = Field(min_length=8)
+
+    @model_validator(mode="after")
+    def _validate_causal_difference(self) -> RestartDeltaV1:
+        _portable_id(self.delta_id, field_name="delta_id")
+        _portable_id(self.predecessor_lineage_id, field_name="predecessor_lineage_id")
+        _portable_id(self.successor_lineage_id, field_name="successor_lineage_id")
+        if self.recorded_at.tzinfo is None or self.recorded_at.utcoffset() is None:
+            raise ValueError("recorded_at must be timezone-aware")
+        if self.predecessor_lineage_id == self.successor_lineage_id:
+            raise ValueError("restart successor lineage must differ from its predecessor")
+        if self.prior_causal_hypothesis.strip().casefold() == self.changed_causal_hypothesis.strip().casefold():
+            raise ValueError("changed_causal_hypothesis must differ from prior_causal_hypothesis")
+        if self.prior_mechanism.strip().casefold() == self.changed_mechanism.strip().casefold():
+            raise ValueError("changed_mechanism must differ from prior_mechanism")
+        if any(not ref.strip() for ref in self.predecessor_failed_evidence_refs):
+            raise ValueError("predecessor_failed_evidence_refs must contain non-empty values")
+        if len(set(self.predecessor_failed_evidence_refs)) != len(self.predecessor_failed_evidence_refs):
+            raise ValueError("predecessor_failed_evidence_refs must be unique")
+        if self.predecessor_failure_count and not self.predecessor_failure_boundary:
+            raise ValueError("predecessor_failure_count requires predecessor_failure_boundary")
+        if self.predecessor_failure_boundary and not self.predecessor_failure_count:
+            raise ValueError("predecessor_failure_boundary requires predecessor_failure_count")
+        if self.predecessor_lease_state == "stalled":
+            if self.predecessor_failure_count < 3 or not self.predecessor_failure_boundary:
+                raise ValueError("stalled restart requires at least three failures at one named boundary")
+            if not self.predecessor_failed_evidence_refs:
+                raise ValueError("stalled restart requires retained failed evidence references")
+        return self
+
+
 class AdmissionRequestV1(StrictModel):
     """One requested supported operation plus decision-inert operator context."""
 

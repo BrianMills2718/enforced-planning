@@ -56,6 +56,13 @@ A new top-level repository, shared `data-contracts` extraction, `llm_client`
 integration, and Plan #111 feedback evolution remain downstream of a genuine
 external adopter or demonstrated ownership seam.
 
+Plan #114 is the approved next proof frontier: bind supported continuation to
+progress evidence rather than conversational approval. Its staged gate is one
+positive CLI decision that admits genuine behavioral advance and one negative
+decision that denies two-increment circular continuation. Cost and elapsed-time
+telemetry must be decision-invariant. Session hooks, claim integration, and
+fleet promotion remain downstream of this both-sign result.
+
 ## Phase Map
 
 ### Phase 1: Core Framework (COMPLETE)
@@ -234,6 +241,7 @@ authority and directory policy.
 | Pre-write claim enforcement | Check supported native Codex/Claude write events against exact live session, worktree, branch, and path ownership before mutation. See Plan #108. | PW-01/PW-02A/PW-02 are accepted; PW-02B0 writer provenance is the only ready leaf, followed by frozen inventory, bounded rollout, fleet certification, and the fixed enforced-planning pilot |
 | Artifact creation enforcement | Gate selected new tracked artifacts against repository directory rules and durable intent, with receipts and feedback. See Plan #109. | Portable mechanism first, then an Inside Success Markdown observe pilot before any blocking promotion |
 | No-passive-waiting enforcement | Separate liveness from progress, reject whole-goal blockage while compatible work remains, and preserve recoverable true blockers. See Plan #110. | Work graph validated; progress visibility and provider-free blocker disposition are the two ready leaves |
+| Outcome continuation lease | Require typed progress evidence before supported coding-agent continuation; ordinary approval and cost do not renew authority. See Plan #114. | Execute the staged positive/negative CLI proof before any session, claim, or fleet integration |
 | Multi-tool adoption | Cursor/Windsurf hook adapters when their hook surfaces are publicly documented | External dependency: tool documentation |
 | Project-meta topic-research adoption | Apply portable topic-research pattern in `research_synthesis/` with manifests, ADR links, freshness metadata | Plans #43/#44/#35 complete |
 

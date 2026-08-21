@@ -4,9 +4,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
-import subprocess
-import sys
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -25,6 +22,7 @@ from enforced_planning.blocker_policy import (
     decide_blocker_disposition,
     evaluate_ready_queue,
 )
+from scripts import evaluate_blocker as blocker_cli
 
 NOW = datetime(2026, 8, 21, 5, 30, tzinfo=UTC)
 SESSION_ID = "codex:owner-real-session"
@@ -476,6 +474,44 @@ def test_other_session_exact_claim_is_an_integration_wait(tmp_path: Path) -> Non
     assert result.decision == "integration_wait"
 
 
+@pytest.mark.parametrize(
+    ("claimed_path", "surface_repository", "expected_conflicts"),
+    [
+        ("shared/component.py", "enforced-planning", ("B",)),
+        ("other.py", "enforced-planning", ()),
+        ("shared/component.py", "other-repository", ()),
+    ],
+)
+def test_exact_bound_root_claim_maps_overlapping_write_paths_to_units(
+    claimed_path: str,
+    surface_repository: str,
+    expected_conflicts: tuple[str, ...],
+    tmp_path: Path,
+) -> None:
+    unit = _unit("B", "ready")
+    unit["conflict_surfaces"] = [
+        {
+            "kind": "repository_path",
+            "target": "shared/component.py",
+            "repository": surface_repository,
+            "access": "exclusive",
+        }
+    ]
+    _path, digest = _write_graph(tmp_path, [unit])
+    root_claim = ClaimQueueSnapshotV1(
+        session_id=OTHER_SESSION_ID,
+        status="active",
+        goal_or_graph_scope=GRAPH_SCOPE,
+        work_unit_id=None,
+        work_graph_path=GRAPH_REF,
+        work_graph_sha256=digest,
+        claimed_paths=(claimed_path,),
+    )
+    case = _queue(tmp_path, [unit], claims=(root_claim,))
+    assert case.queue.active_conflict_unit_ids == expected_conflicts
+    assert case.queue.eligible_unit_ids == (() if expected_conflicts else ("B",))
+
+
 @pytest.mark.parametrize("status", ["accepted", "in_progress"])
 def test_completed_or_active_state_cannot_verify_a_block(status: str, tmp_path: Path) -> None:
     case = _queue(tmp_path, [_unit("A", status)])
@@ -494,6 +530,22 @@ def test_terminal_units_do_not_mask_a_genuine_remaining_block(tmp_path: Path) ->
     result = _decision(case, _request(blocked_items=("B",)))
     assert case.queue.terminal_unit_ids == ("A",)
     assert result.decision == "goal_blocked_verified"
+
+
+def test_live_claim_bound_to_terminal_unit_fails_queue_coverage(tmp_path: Path) -> None:
+    _path, digest = _write_graph(tmp_path, [_unit("A", "accepted")])
+    claim = ClaimQueueSnapshotV1(
+        session_id=OTHER_SESSION_ID,
+        status="active",
+        goal_or_graph_scope=GRAPH_SCOPE,
+        work_unit_id="A",
+        work_graph_path=GRAPH_REF,
+        work_graph_sha256=digest,
+    )
+    case = _queue(tmp_path, [_unit("A", "accepted")], claims=(claim,))
+    assert case.queue.coverage == "unavailable"
+    assert case.queue.active_conflict_unit_ids == ()
+    assert "terminal_units:A" in case.queue.evidence_refs[0]
 
 
 def test_terminal_status_wins_over_stale_blocked_readiness(tmp_path: Path) -> None:
@@ -580,7 +632,6 @@ def test_overlapping_ready_conflict_surfaces_make_queue_unavailable(tmp_path: Pa
         "target": "shared/component.py",
         "repository": "fixture",
         "access": "exclusive",
-        "coordination_key": None,
     }
     first["conflict_surfaces"] = [surface]
     second["conflict_surfaces"] = [surface]
@@ -645,6 +696,24 @@ def test_same_scope_live_claim_with_stale_or_unbound_graph_fails_closed(
     case = _queue(tmp_path, [_unit("B", "ready")], claims=(claim,))
     assert case.queue.coverage == "unavailable"
     assert case.queue.eligible_unit_ids == ()
+    assert "stale_or_unbound_units" in case.queue.evidence_refs[0]
+
+
+@pytest.mark.parametrize("work_unit_id", ["ghost", None])
+def test_unbound_same_scope_unknown_or_root_claim_fails_closed(
+    work_unit_id: str | None,
+    tmp_path: Path,
+) -> None:
+    claim = ClaimQueueSnapshotV1(
+        session_id=OTHER_SESSION_ID,
+        status="active",
+        goal_or_graph_scope=GRAPH_SCOPE,
+        work_unit_id=work_unit_id,
+        work_graph_path=None,
+        work_graph_sha256=None,
+    )
+    case = _queue(tmp_path, [_unit("A", "blocked")], claims=(claim,))
+    assert case.queue.coverage == "unavailable"
     assert "stale_or_unbound_units" in case.queue.evidence_refs[0]
 
 
@@ -767,6 +836,65 @@ def test_empty_or_duplicate_schema_array_values_fail_closed(
     assert expected
 
 
+@pytest.mark.parametrize(("field", "value"), [("created_at", "not-a-date"), ("updated_at", "2026-08-21")])
+def test_malformed_or_naive_work_unit_timestamps_fail_closed(
+    field: str,
+    value: str,
+    tmp_path: Path,
+) -> None:
+    unit = _unit("A", "ready")
+    unit[field] = value
+    case = _queue(tmp_path, [unit])
+    assert case.queue.coverage == "unavailable"
+    assert "invalid_work_unit" in case.queue.evidence_refs[0]
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        "control_approval_types",
+        "claim_policy",
+        "authorization_mode",
+        "integration_owner_id",
+        "deployment_contract",
+        "deployment_environment",
+        "created_at",
+        "updated_at",
+    ],
+)
+def test_optional_work_unit_fields_may_be_omitted_but_not_null(field: str, tmp_path: Path) -> None:
+    unit = _unit("A", "ready")
+    unit[field] = None
+    case = _queue(tmp_path, [unit])
+    assert case.queue.coverage == "unavailable"
+    assert "invalid_work_unit" in case.queue.evidence_refs[0]
+
+
+@pytest.mark.parametrize("field", ["repository", "coordination_key"])
+def test_optional_conflict_surface_fields_may_be_omitted_but_not_null(field: str, tmp_path: Path) -> None:
+    unit = _unit("A", "ready")
+    surface = {
+        "kind": "contract",
+        "target": "contract:fixture",
+        "access": "read",
+        field: None,
+    }
+    unit["conflict_surfaces"] = [surface]
+    case = _queue(tmp_path, [unit])
+    assert case.queue.coverage == "unavailable"
+    assert "invalid_work_unit" in case.queue.evidence_refs[0]
+
+
+def test_optional_acceptance_negative_control_may_be_omitted_but_not_null(tmp_path: Path) -> None:
+    unit = _unit("A", "ready")
+    assert isinstance(unit["acceptance"], list)
+    assert isinstance(unit["acceptance"][0], dict)
+    unit["acceptance"][0]["negative_control"] = None
+    case = _queue(tmp_path, [unit])
+    assert case.queue.coverage == "unavailable"
+    assert "invalid_work_unit" in case.queue.evidence_refs[0]
+
+
 def test_decision_recomputes_queue_instead_of_accepting_derived_input(tmp_path: Path) -> None:
     case = _queue(tmp_path, [_unit("B", "ready")])
     payload = {
@@ -780,16 +908,49 @@ def test_decision_recomputes_queue_instead_of_accepting_derived_input(tmp_path: 
         BlockerDecisionInputV1.model_validate(payload)
 
 
-def test_cli_queue_round_trip_and_unavailable_exit(tmp_path: Path) -> None:
-    del tmp_path
+def _public_cli_claim(
+    *,
+    graph_ref: str,
+    digest: str,
+    scope: str = GRAPH_SCOPE,
+    session_id: str = SESSION_ID,
+    work_unit_id: str | None = "npw-02-provider-free-blocker-decision",
+) -> ClaimQueueSnapshotV1:
+    return ClaimQueueSnapshotV1(
+        session_id=session_id,
+        status="active",
+        goal_or_graph_scope=scope,
+        work_unit_id=work_unit_id,
+        work_graph_path=graph_ref,
+        work_graph_sha256=digest,
+        claimed_paths=("enforced_planning/blocker_policy.py",),
+    )
+
+
+def _run_public_cli(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    argv: list[str],
+    *,
+    claims: tuple[ClaimQueueSnapshotV1, ...],
+    native_thread_id: str = SESSION_ID.split(":", 1)[1],
+) -> tuple[int, str, str]:
+    monkeypatch.setenv("CODEX_THREAD_ID", native_thread_id)
+    monkeypatch.setattr(blocker_cli, "_canonical_claim_snapshots", lambda _scope: claims)
+    return_code = blocker_cli.main(argv)
+    captured = capsys.readouterr()
+    return return_code, captured.out, captured.err
+
+
+def test_cli_queue_round_trip_and_unavailable_exit(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     repo_root = Path(__file__).parents[1]
     graph_ref = "docs/plans/110_no_passive_waiting_work_graph.json"
     graph_path = repo_root / graph_ref
     digest = hashlib.sha256(graph_path.read_bytes()).hexdigest()
-    script = repo_root / "scripts" / "evaluate_blocker.py"
     command = [
-        sys.executable,
-        str(script),
         "queue",
         "--work-graph-ref",
         graph_ref,
@@ -800,20 +961,33 @@ def test_cli_queue_round_trip_and_unavailable_exit(tmp_path: Path) -> None:
         "--goal-scope",
         GRAPH_SCOPE,
     ]
-    env = {**os.environ, "CODEX_THREAD_ID": SESSION_ID.split(":", 1)[1]}
-    passing = subprocess.run(command, capture_output=True, text=True, check=False, env=env)
+    passing_code, passing_stdout, passing_stderr = _run_public_cli(
+        monkeypatch,
+        capsys,
+        command,
+        claims=(_public_cli_claim(graph_ref=graph_ref, digest=digest),),
+    )
     stale_command = command.copy()
     stale_command[stale_command.index(digest)] = "0" * 64
-    stale = subprocess.run(stale_command, capture_output=True, text=True, check=False, env=env)
-    assert passing.returncode == 0
-    passing_payload = json.loads(passing.stdout)
+    stale_code, stale_stdout, _stale_stderr = _run_public_cli(
+        monkeypatch,
+        capsys,
+        stale_command,
+        claims=(_public_cli_claim(graph_ref=graph_ref, digest="0" * 64),),
+    )
+    assert passing_code == 0, passing_stderr
+    passing_payload = json.loads(passing_stdout)
     assert "npw-01-progress-lease-current-main" in passing_payload["eligible_unit_ids"]
-    assert "npw-02-provider-free-blocker-decision" in passing_payload["active_conflict_unit_ids"]
-    assert stale.returncode == 3
-    assert json.loads(stale.stdout)["coverage"] == "unavailable"
+    assert "npw-02-provider-free-blocker-decision" in passing_payload["eligible_unit_ids"]
+    assert stale_code == 3
+    assert json.loads(stale_stdout)["coverage"] == "unavailable"
 
 
-def test_cli_decide_uses_source_graph(tmp_path: Path) -> None:
+def test_cli_decide_uses_source_graph(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     repo_root = Path(__file__).parents[1]
     graph_ref = "docs/plans/110_no_passive_waiting_work_graph.json"
     digest = hashlib.sha256((repo_root / graph_ref).read_bytes()).hexdigest()
@@ -825,21 +999,23 @@ def test_cli_decide_uses_source_graph(tmp_path: Path) -> None:
         expected_work_graph_sha256=digest,
     )
     input_path.write_text(decision_input.model_dump_json(), encoding="utf-8")
-    script = Path(__file__).parents[1] / "scripts" / "evaluate_blocker.py"
-    completed = subprocess.run(
-        [sys.executable, str(script), "decide", "--input-json", str(input_path)],
-        capture_output=True,
-        text=True,
-        check=False,
-        env={**os.environ, "CODEX_THREAD_ID": SESSION_ID.split(":", 1)[1]},
+    return_code, stdout, stderr = _run_public_cli(
+        monkeypatch,
+        capsys,
+        ["decide", "--input-json", str(input_path)],
+        claims=(_public_cli_claim(graph_ref=graph_ref, digest=digest),),
     )
-    assert completed.returncode == 0, completed.stderr
-    payload = json.loads(completed.stdout)
+    assert return_code == 0, stderr
+    payload = json.loads(stdout)
     assert payload["disposition"]["decision"] == "continue_ready_work"
     assert payload["ready_queue"]["evaluation_id"] == payload["disposition"]["ready_queue_evaluation_ref"]
 
 
-def test_public_cli_rejects_caller_claim_snapshots(tmp_path: Path) -> None:
+def test_public_cli_rejects_caller_claim_snapshots(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     repo_root = Path(__file__).parents[1]
     graph_ref = "docs/plans/110_no_passive_waiting_work_graph.json"
     digest = hashlib.sha256((repo_root / graph_ref).read_bytes()).hexdigest()
@@ -852,26 +1028,28 @@ def test_public_cli_rejects_caller_claim_snapshots(tmp_path: Path) -> None:
         claim_snapshots=(_claim(session_id=OTHER_SESSION_ID, digest=digest),),
     )
     input_path.write_text(decision_input.model_dump_json(), encoding="utf-8")
-    script = repo_root / "scripts" / "evaluate_blocker.py"
-    completed = subprocess.run(
-        [sys.executable, str(script), "decide", "--input-json", str(input_path)],
-        capture_output=True,
-        text=True,
-        check=False,
+    return_code, _stdout, stderr = _run_public_cli(
+        monkeypatch,
+        capsys,
+        ["decide", "--input-json", str(input_path)],
+        claims=(),
     )
-    assert completed.returncode == 2
-    assert "rejects caller-supplied claim snapshots" in completed.stderr
+    assert return_code == 2
+    assert "rejects caller-supplied claim snapshots" in stderr
 
 
-def test_public_cli_rejects_fabricated_session_identity(tmp_path: Path) -> None:
+def test_public_cli_rejects_fabricated_session_identity(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     repo_root = Path(__file__).parents[1]
     graph_ref = "docs/plans/110_no_passive_waiting_work_graph.json"
     digest = hashlib.sha256((repo_root / graph_ref).read_bytes()).hexdigest()
-    script = repo_root / "scripts" / "evaluate_blocker.py"
-    completed = subprocess.run(
+    return_code, _stdout, stderr = _run_public_cli(
+        monkeypatch,
+        capsys,
         [
-            sys.executable,
-            str(script),
             "queue",
             "--work-graph-ref",
             graph_ref,
@@ -882,24 +1060,24 @@ def test_public_cli_rejects_fabricated_session_identity(tmp_path: Path) -> None:
             "--goal-scope",
             GRAPH_SCOPE,
         ],
-        capture_output=True,
-        text=True,
-        check=False,
-        env={**os.environ, "CODEX_THREAD_ID": "different-native-session"},
+        claims=(),
+        native_thread_id="different-native-session",
     )
-    assert completed.returncode == 2
-    assert "does not match" in completed.stderr
+    assert return_code == 2
+    assert "does not match" in stderr
 
 
-def test_public_cli_fails_closed_for_graph_from_different_plan() -> None:
+def test_public_cli_fails_closed_for_graph_from_different_plan(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     repo_root = Path(__file__).parents[1]
     graph_ref = "docs/plans/106_cross_client_mailbox_fleet_delivery_work_graph.json"
     digest = hashlib.sha256((repo_root / graph_ref).read_bytes()).hexdigest()
-    script = repo_root / "scripts" / "evaluate_blocker.py"
-    completed = subprocess.run(
+    return_code, stdout, _stderr = _run_public_cli(
+        monkeypatch,
+        capsys,
         [
-            sys.executable,
-            str(script),
             "queue",
             "--work-graph-ref",
             graph_ref,
@@ -910,10 +1088,60 @@ def test_public_cli_fails_closed_for_graph_from_different_plan() -> None:
             "--goal-scope",
             GRAPH_SCOPE,
         ],
-        capture_output=True,
-        text=True,
-        check=False,
-        env={**os.environ, "CODEX_THREAD_ID": SESSION_ID.split(":", 1)[1]},
+        claims=(_public_cli_claim(graph_ref=graph_ref, digest=digest, work_unit_id=None),),
     )
-    assert completed.returncode == 3
-    assert json.loads(completed.stdout)["evidence_refs"][0] == "work_graph_goal_scope_mismatch"
+    assert return_code == 3
+    assert json.loads(stdout)["evidence_refs"][0] == "work_graph_goal_scope_mismatch"
+
+
+def test_public_cli_rejects_foreign_project_scope_with_same_plan_number(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    repo_root = Path(__file__).parents[1]
+    graph_ref = "docs/plans/110_no_passive_waiting_work_graph.json"
+    digest = hashlib.sha256((repo_root / graph_ref).read_bytes()).hexdigest()
+    return_code, _stdout, stderr = _run_public_cli(
+        monkeypatch,
+        capsys,
+        [
+            "queue",
+            "--work-graph-ref",
+            graph_ref,
+            "--expected-sha256",
+            digest,
+            "--session-id",
+            SESSION_ID,
+            "--goal-scope",
+            "bogus-project#110",
+        ],
+        claims=(),
+    )
+    assert return_code == 2
+    assert "exactly one healthy invoking-session claim" in stderr
+
+
+def test_public_cli_decide_rejects_foreign_project_scope_with_same_plan_number(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    repo_root = Path(__file__).parents[1]
+    graph_ref = "docs/plans/110_no_passive_waiting_work_graph.json"
+    digest = hashlib.sha256((repo_root / graph_ref).read_bytes()).hexdigest()
+    payload = BlockerDecisionInputV1(
+        request_ref="foreign-project",
+        request=_request(blocked_scope="goal").model_copy(update={"claim_scope": "bogus-project#110"}),
+        work_graph_ref_path=graph_ref,
+        expected_work_graph_sha256=digest,
+    )
+    input_path = tmp_path / "foreign-project.json"
+    input_path.write_text(payload.model_dump_json(), encoding="utf-8")
+    return_code, _stdout, stderr = _run_public_cli(
+        monkeypatch,
+        capsys,
+        ["decide", "--input-json", str(input_path)],
+        claims=(),
+    )
+    assert return_code == 2
+    assert "exactly one healthy invoking-session claim" in stderr

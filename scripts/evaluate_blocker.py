@@ -83,6 +83,31 @@ def _require_native_session(session_id: str) -> None:
         )
 
 
+def _require_requesting_claim_binding(
+    *,
+    claim_snapshots: tuple[ClaimQueueSnapshotV1, ...],
+    session_id: str,
+    goal_scope: str,
+    work_graph_ref: str,
+    expected_sha256: str,
+) -> None:
+    """Require public evaluation authority from one exact live canonical claim."""
+
+    matches = [
+        claim
+        for claim in claim_snapshots
+        if claim.session_id == session_id
+        and claim.goal_or_graph_scope == goal_scope
+        and claim.work_graph_path == work_graph_ref
+        and claim.work_graph_sha256 == expected_sha256
+    ]
+    if len(matches) != 1:
+        raise ValueError(
+            "public CLI requires exactly one healthy invoking-session claim bound to "
+            "the requested project-qualified plan, graph path, and graph digest"
+        )
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="operation", required=True)
@@ -112,6 +137,13 @@ def main(argv: list[str] | None = None) -> int:
         if args.operation == "queue":
             _require_native_session(args.session_id)
             claims = _canonical_claim_snapshots(args.goal_scope)
+            _require_requesting_claim_binding(
+                claim_snapshots=claims,
+                session_id=args.session_id,
+                goal_scope=args.goal_scope,
+                work_graph_ref=args.work_graph_ref,
+                expected_sha256=args.expected_sha256,
+            )
             result = evaluate_ready_queue(
                 repository_root=REPOSITORY_ROOT,
                 work_graph_ref_path=args.work_graph_ref,
@@ -129,9 +161,15 @@ def main(argv: list[str] | None = None) -> int:
         if decision_input.mailbox_evidence or decision_input.request.mailbox_dependency:
             raise ValueError("public CLI rejects caller-supplied mailbox state until a canonical loader owns it")
         _require_native_session(decision_input.request.session_id)
-        decision_input = decision_input.model_copy(
-            update={"claim_snapshots": _canonical_claim_snapshots(decision_input.request.claim_scope)}
+        claims = _canonical_claim_snapshots(decision_input.request.claim_scope)
+        _require_requesting_claim_binding(
+            claim_snapshots=claims,
+            session_id=decision_input.request.session_id,
+            goal_scope=decision_input.request.claim_scope,
+            work_graph_ref=decision_input.work_graph_ref_path,
+            expected_sha256=decision_input.expected_work_graph_sha256,
         )
+        decision_input = decision_input.model_copy(update={"claim_snapshots": claims})
         result = evaluate_blocker_request(decision_input, repository_root=REPOSITORY_ROOT)
         print(result.model_dump_json(indent=2))
         return 3 if result.ready_queue.coverage == "unavailable" else 0

@@ -88,6 +88,24 @@ DispositionClaimAction = Literal["retain_narrow", "handoff_scope", "retire_goal_
 NonEmptyString = Annotated[str, Field(min_length=1)]
 
 
+def _require_aware_datetime_string(value: str, *, field_name: str) -> str:
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError as exc:
+        raise ValueError(f"{field_name} must be an ISO 8601 date-time") from exc
+    if parsed.tzinfo is None:
+        raise ValueError(f"{field_name} must carry a timezone")
+    return value
+
+
+def _reject_explicit_nulls(value: Any, *, field_names: frozenset[str], contract_name: str) -> Any:
+    if isinstance(value, dict):
+        explicit_nulls = sorted(field for field in field_names if field in value and value[field] is None)
+        if explicit_nulls:
+            raise ValueError(f"{contract_name} fields may be omitted but not null: {', '.join(explicit_nulls)}")
+    return value
+
+
 class StrictContract(BaseModel):
     """Strict immutable base for Plan 110 public contracts."""
 
@@ -121,6 +139,15 @@ class ConflictSurfaceV1(StrictContract):
     access: Literal["read", "write", "exclusive"]
     coordination_key: str | None = None
 
+    @model_validator(mode="before")
+    @classmethod
+    def omitted_optional_fields_are_not_nullable(cls, value: Any) -> Any:
+        return _reject_explicit_nulls(
+            value,
+            field_names=frozenset({"repository", "coordination_key"}),
+            contract_name="ConflictSurfaceV1",
+        )
+
     @model_validator(mode="after")
     def repository_paths_name_repository(self) -> ConflictSurfaceV1:
         if self.kind == "repository_path" and self.repository is None:
@@ -133,6 +160,15 @@ class AcceptanceCriterionV1(StrictContract):
     criterion: str = Field(min_length=1)
     evidence_required: list[NonEmptyString] = Field(min_length=1)
     negative_control: str | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def omitted_optional_fields_are_not_nullable(cls, value: Any) -> Any:
+        return _reject_explicit_nulls(
+            value,
+            field_names=frozenset({"negative_control"}),
+            contract_name="AcceptanceCriterionV1",
+        )
 
 
 class ApprovalV1(StrictContract):
@@ -149,6 +185,13 @@ class ApprovalV1(StrictContract):
     approved_revision: str = Field(min_length=1)
     approved_at: str = Field(min_length=1)
     expires_at: str | None = None
+
+    @field_validator("approved_at", "expires_at")
+    @classmethod
+    def timestamps_are_aware(cls, value: str | None, info: Any) -> str | None:
+        if value is None:
+            return None
+        return _require_aware_datetime_string(value, field_name=info.field_name)
 
 
 class WorkUnitReadinessV1(StrictContract):
@@ -297,6 +340,33 @@ class QueueWorkUnitV1(StrictContract):
     record_version: int = Field(ge=1)
     created_at: str | None = Field(default=None, min_length=1)
     updated_at: str | None = Field(default=None, min_length=1)
+
+    @model_validator(mode="before")
+    @classmethod
+    def omitted_optional_fields_are_not_nullable(cls, value: Any) -> Any:
+        return _reject_explicit_nulls(
+            value,
+            field_names=frozenset(
+                {
+                    "control_approval_types",
+                    "claim_policy",
+                    "authorization_mode",
+                    "integration_owner_id",
+                    "deployment_contract",
+                    "deployment_environment",
+                    "created_at",
+                    "updated_at",
+                }
+            ),
+            contract_name="QueueWorkUnitV1",
+        )
+
+    @field_validator("created_at", "updated_at")
+    @classmethod
+    def timestamps_are_aware(cls, value: str | None, info: Any) -> str | None:
+        if value is None:
+            return None
+        return _require_aware_datetime_string(value, field_name=info.field_name)
 
     @model_validator(mode="after")
     def conditional_contract_fields_are_present(self) -> QueueWorkUnitV1:
@@ -552,10 +622,8 @@ def _claim_snapshot_digest(claims: tuple[ClaimQueueSnapshotV1, ...]) -> str:
 
 
 def _parse_time(value: str) -> datetime:
-    parsed = datetime.fromisoformat(value)
-    if parsed.tzinfo is None:
-        raise ValueError("approval timestamp must carry a timezone")
-    return parsed
+    _require_aware_datetime_string(value, field_name="approval timestamp")
+    return datetime.fromisoformat(value)
 
 
 def _find_hard_cycle(units_by_id: dict[str, QueueWorkUnitV1]) -> list[str] | None:
@@ -776,6 +844,7 @@ def _unavailable_queue(
 
 def _active_unit_conflicts(
     *,
+    units: tuple[QueueWorkUnitV1, ...],
     claims: tuple[ClaimQueueSnapshotV1, ...],
     requesting_session_id: str,
     goal_or_graph_scope: str,
@@ -784,16 +853,35 @@ def _active_unit_conflicts(
 ) -> set[str]:
     """Return exact-bound units actively owned by another session."""
 
-    return {
-        claim.work_unit_id
-        for claim in claims
-        if claim.work_unit_id
-        and claim.session_id != requesting_session_id
-        and claim.status in LIVE_CLAIM_STATUSES
-        and claim.goal_or_graph_scope == goal_or_graph_scope
-        and claim.work_graph_path == graph_path
-        and claim.work_graph_sha256 == graph_sha256
-    }
+    conflicts: set[str] = set()
+    repository = goal_or_graph_scope.split("#", 1)[0]
+    for claim in claims:
+        if (
+            claim.session_id == requesting_session_id
+            or claim.status not in LIVE_CLAIM_STATUSES
+            or claim.goal_or_graph_scope != goal_or_graph_scope
+            or claim.work_graph_path != graph_path
+            or claim.work_graph_sha256 != graph_sha256
+        ):
+            continue
+        if claim.work_unit_id:
+            conflicts.add(claim.work_unit_id)
+            continue
+        for unit in units:
+            write_surfaces = (
+                surface.target
+                for surface in unit.conflict_surfaces
+                if surface.kind == "repository_path"
+                and surface.repository == repository
+                and surface.access in {"write", "exclusive"}
+            )
+            if any(
+                _path_contains(claimed_path, target) or _path_contains(target, claimed_path)
+                for target in write_surfaces
+                for claimed_path in claim.claimed_paths
+            ):
+                conflicts.add(unit.id)
+    return conflicts
 
 
 def _path_contains(left: str, right: str) -> bool:
@@ -983,13 +1071,12 @@ def evaluate_ready_queue(
         {
             (
                 claim.session_id,
-                claim.work_unit_id,
+                claim.work_unit_id or "root-claim",
                 claim.work_graph_path or "missing-path",
                 claim.work_graph_sha256 or "missing-sha256",
             )
             for claim in claim_snapshots
-            if claim.work_unit_id in known_ids
-            and claim.status in LIVE_CLAIM_STATUSES
+            if claim.status in LIVE_CLAIM_STATUSES
             and claim.goal_or_graph_scope == goal_or_graph_scope
             and (claim.work_graph_path != graph_ref_path or claim.work_graph_sha256 != actual_sha256)
         }
@@ -1026,14 +1113,37 @@ def evaluate_ready_queue(
             reason=f"invalid_claim_snapshot_unknown_units:{','.join(unknown_claim_units)}",
         )
 
+    units_by_id = {unit.id: unit for unit in units}
+    terminal_claim_units = sorted(
+        {
+            claim.work_unit_id
+            for claim in claim_snapshots
+            if claim.work_unit_id in known_ids
+            and claim.status in LIVE_CLAIM_STATUSES
+            and claim.goal_or_graph_scope == goal_or_graph_scope
+            and claim.work_graph_path == graph_ref_path
+            and claim.work_graph_sha256 == actual_sha256
+            and units_by_id[claim.work_unit_id].status in TERMINAL_UNIT_STATUSES
+        }
+    )
+    if terminal_claim_units:
+        return _unavailable_queue(
+            session_id=session_id,
+            goal_or_graph_scope=goal_or_graph_scope,
+            graph_ref_path=graph_ref_path,
+            claim_snapshot_sha256=claim_snapshot_sha256,
+            evaluated_at=observed_at,
+            reason=f"invalid_claim_snapshot_terminal_units:{','.join(terminal_claim_units)}",
+        )
+
     conflicts = _active_unit_conflicts(
+        units=units,
         claims=claim_snapshots,
         requesting_session_id=session_id,
         goal_or_graph_scope=goal_or_graph_scope,
         graph_path=graph_ref_path,
         graph_sha256=actual_sha256,
     )
-    units_by_id = {unit.id: unit for unit in units}
     eligible: list[str] = []
     blocked: list[BlockedUnitV1] = []
     terminal: list[str] = []

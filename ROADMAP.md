@@ -97,7 +97,8 @@ project, or prove installed fleet enforcement or usefulness across Brian's
 ordinary project portfolio. The current proof frontier is therefore design and
 implementation of mandatory outcome binding at the first Enforced Planning
 new-plan, claim, worktree, heartbeat, and selected pre-write boundaries—without
-activating installed hooks yet. Repeated normal-project use,
+activating installed hooks yet. Plan #122 owns that bounded first-consumer
+implementation. Repeated normal-project use,
 independent evidence selection, colleague packaging, external-user validation,
 and broader usability remain downstream of those next proof stages.
 
@@ -288,7 +289,7 @@ authority and directory policy.
 | Pre-write claim enforcement | Check supported native Codex/Claude write events against exact live session, worktree, branch, and path ownership before mutation. See Plan #108. | PW-01/PW-02A/PW-02 are accepted; PW-02B0 writer provenance is the only ready leaf, followed by frozen inventory, bounded rollout, fleet certification, and the fixed enforced-planning pilot |
 | Artifact creation enforcement | Gate selected new tracked artifacts against repository directory rules and durable intent, with receipts and feedback. See Plan #109. | Portable mechanism first, then an Inside Success Markdown observe pilot before any blocking promotion |
 | No-passive-waiting enforcement | Separate liveness from progress, reject whole-goal blockage while compatible work remains, and preserve recoverable true blockers. See Plan #110. | NPW-02 provider-free blocker disposition accepted with replayable both-sign evidence; NPW-01 progress visibility remains the ready leaf before NPW-03 |
-| Outcome continuation lease | Require typed progress evidence before supported coding-agent continuation; ordinary approval and cost do not renew authority. See Plans #114–#121. | Plan #121 independently signed off the deterministic admission overlay; implement one first-consumer new-plan, claim, worktree, heartbeat, and selected pre-write gate next, while hook activation and fleet rollout remain excluded |
+| Outcome continuation lease | Require typed progress evidence before supported coding-agent continuation; ordinary approval and cost do not renew authority. See Plans #114–#122. | Plan #122 is implementing one opt-in first-consumer bootstrap, session renewal/heartbeat, and selected pre-write gate; hook activation and fleet rollout remain excluded |
 | Multi-tool adoption | Cursor/Windsurf hook adapters when their hook surfaces are publicly documented | External dependency: tool documentation |
 | Project-meta topic-research adoption | Apply portable topic-research pattern in `research_synthesis/` with manifests, ADR links, freshness metadata | Plans #43/#44/#35 complete |
 

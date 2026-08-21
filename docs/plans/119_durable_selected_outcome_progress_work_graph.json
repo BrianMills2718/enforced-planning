@@ -1,0 +1,369 @@
+{
+  "units": [
+    {
+      "schema_version": "1.0",
+      "record_type": "work_unit",
+      "id": "oprg-01-durable-selected-progress",
+      "initiative_id": "progress-bound-agent-execution",
+      "goal_id": "durable-selected-outcome-progress",
+      "design_revision": "sha256:8153b370b231e6d693e6c5c28f3677f9386c4c6ffe4fd5a7978aba19822e7d65",
+      "spec_revision": "sha256:8153b370b231e6d693e6c5c28f3677f9386c4c6ffe4fd5a7978aba19822e7d65",
+      "title": "Make selected outcome leases evolve through durable progress receipts",
+      "class": "integration",
+      "objective": "Append strict evidence-bound progress transitions to the existing exact tracker, reconstruct the current selected lease across refresh and sanctioned runtime handoff, and make selected pre-write and causal restart consume that head without changing ordinary claim authority.",
+      "profile": "standard",
+      "execution_class": "independently_executable",
+      "claimability": "ready_for_execution",
+      "authorization_mode": "registry_claim",
+      "scope": {
+        "included": [
+          "Strict OutcomeProgressTransitionV1 and operator result contracts",
+          "Exact live-claim receipt loading from the selected worktree",
+          "Append-only current-head reconstruction and byte-idempotent replay",
+          "Stale-parent, duplicate-ID, changed-file, tamper, and foreign-claim denial",
+          "Selected pre-write evaluation of the effective scenario and current lease",
+          "Causal restart from post-selection stalled or parked evidence",
+          "Progress-preserving sanctioned cross-session resume and successor receipt append",
+          "Preservation of selection, progress, transfer, and restart custody fields on tracker refresh",
+          "Existing outcome-continuation CLI progress subcommand",
+          "One owner-real Plan 119 receipt and selected observation",
+          "Focused tests, retained evidence, operator guide, plan body, and work graph"
+        ],
+        "excluded": [
+          "Project Graph owner or predecessor lookup",
+          "Product versus maintenance lease classification or portfolio slot allocation",
+          "Hard outcome-based pre-write blocking",
+          "Independent reviewer identity or attestation",
+          "A second live registry or mutable selected scenario",
+          "Cross-worktree, cross-branch, or cross-project successor activation",
+          "Installer, fleet propagation, shell interception, deployment, release, or cost controls",
+          "Shared plan index and roadmap mutation while another claim owns those paths"
+        ]
+      },
+      "inputs": [
+        {
+          "kind": "bounded_design",
+          "id": "docs/plans/119_durable_selected_outcome_progress.md",
+          "revision": "sha256:8153b370b231e6d693e6c5c28f3677f9386c4c6ffe4fd5a7978aba19822e7d65"
+        },
+        {
+          "kind": "existing_capability",
+          "id": "docs/plans/118_causal_restart_lineage_and_session_handoff_observe.md",
+          "revision": "0a8c10058d5b42524c141037f4092aadc760ec2f"
+        },
+        {
+          "kind": "approved_policy",
+          "id": "project-meta:policy/proposals/2026-08-20-outcome-continuation-lease-hard-gate.yaml",
+          "revision": "f6091b6b2f2a5357d0fdbbe88b157435a2ce07fb"
+        },
+        {
+          "kind": "history_calibration",
+          "id": "project-meta:investigations/cross-project/2026-08-20-recurring-project-failure-modes.md",
+          "revision": "a2349842a44fbba450875b35f229246de8621d63"
+        },
+        {
+          "kind": "portfolio_boundary_finding",
+          "id": "project-meta:learnings/entries/lrn-20260821T063558270519Z-bb1048ff9a.json",
+          "revision": "e2cb509c7704569c1b9af45a6ee309922f7854c8"
+        }
+      ],
+      "outputs": [
+        "Strict append-only selected-progress transition and result models",
+        "Exact progress CLI with current-head lineage enforcement and byte-idempotent replay",
+        "Effective selected scenario resolution for pre-write observation and causal restart",
+        "Lossless tracker refresh and sanctioned runtime continuation of progress history",
+        "Owner-real Plan 119 selected receipt and current-head observation evidence",
+        "Focused controls and operator documentation with explicit promotion limits"
+      ],
+      "dependencies": [],
+      "conflict_surfaces": [
+        {
+          "kind": "repository_path",
+          "target": "enforced_planning/outcome_continuation.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-119-durable-selected-progress"
+        },
+        {
+          "kind": "repository_path",
+          "target": "enforced_planning/outcome_selection.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-119-durable-selected-progress"
+        },
+        {
+          "kind": "repository_path",
+          "target": "enforced_planning/outcome_prewrite_observation.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-119-durable-selected-progress"
+        },
+        {
+          "kind": "repository_path",
+          "target": "enforced_planning/session_contracts.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-119-durable-selected-progress"
+        },
+        {
+          "kind": "repository_path",
+          "target": "enforced_planning/session_lifecycle.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-119-durable-selected-progress"
+        },
+        {
+          "kind": "repository_path",
+          "target": "scripts/outcome_continuation.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-119-durable-selected-progress"
+        },
+        {
+          "kind": "repository_path",
+          "target": "tests/test_outcome_continuation.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-119-durable-selected-progress"
+        },
+        {
+          "kind": "repository_path",
+          "target": "tests/test_outcome_selection.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-119-durable-selected-progress"
+        },
+        {
+          "kind": "repository_path",
+          "target": "tests/test_outcome_prewrite_observation.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-119-durable-selected-progress"
+        },
+        {
+          "kind": "repository_path",
+          "target": "tests/test_session_contracts.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-119-durable-selected-progress"
+        },
+        {
+          "kind": "repository_path",
+          "target": "examples/owner-real-outcome-observe/plan119-selected-base.json",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-119-durable-selected-progress"
+        },
+        {
+          "kind": "repository_path",
+          "target": "examples/owner-real-outcome-observe/plan119-progress-receipt.json",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-119-durable-selected-progress"
+        },
+        {
+          "kind": "repository_path",
+          "target": "docs/evidence/plan119_durable_outcome_progress.json",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-119-durable-selected-progress"
+        },
+        {
+          "kind": "repository_path",
+          "target": "docs/guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-119-durable-selected-progress"
+        },
+        {
+          "kind": "repository_path",
+          "target": "docs/plans/119_durable_selected_outcome_progress.md",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-119-durable-selected-progress"
+        },
+        {
+          "kind": "repository_path",
+          "target": "docs/plans/119_durable_selected_outcome_progress_work_graph.json",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-119-durable-selected-progress"
+        }
+      ],
+      "acceptance": [
+        {
+          "id": "OPRG01-A1",
+          "criterion": "One strict receipt advances the reconstructed selected lease append-only, and exact accepted file replay returns the retained transition without changing tracker bytes.",
+          "evidence_required": [
+            "Exact receipt file and model digests",
+            "Prior and successor lease snapshots and digests",
+            "Tracker byte comparison across exact replay",
+            "Current-head readback"
+          ],
+          "negative_control": "Stale-parent, duplicate-ID, changed-file, malformed-history, base-receipt replay, or foreign-claim input fails before tracker mutation."
+        },
+        {
+          "id": "OPRG01-A2",
+          "criterion": "Selected pre-write evaluates the immutable base plus accepted transitions and reports the effective current lease while ordinary claim admission and exit behavior remain authoritative.",
+          "evidence_required": [
+            "Base and effective scenario digests",
+            "Progress transition count and head digest",
+            "Current lease digest/state",
+            "Ordinary and selected receipt correlation"
+          ],
+          "negative_control": "An invalid progress history produces a visible observation failure and cannot alter the ordinary decision."
+        },
+        {
+          "id": "OPRG01-A3",
+          "criterion": "Tracker refresh and sanctioned cross-session resume retain the full progress chain, and the successor runtime can append a receipt against the retained head.",
+          "evidence_required": [
+            "All custody fields before and after tracker refresh",
+            "Transfer receipt current-head binding",
+            "Old-runtime denial",
+            "Successor receipt whose parent is the predecessor runtime head"
+          ],
+          "negative_control": "Unsanctioned identity replacement, transfer tamper, or injected partial transition cannot reset or fork the chain."
+        },
+        {
+          "id": "OPRG01-A4",
+          "criterion": "Causal restart consumes post-selection stalled or parked evidence and permanently retains that effective predecessor lease and failed receipt refs.",
+          "evidence_required": [
+            "Appended non-outcome receipt sequence",
+            "Effective stalled predecessor lease",
+            "Exact RestartDeltaV1 binding",
+            "Retained restart transition readback"
+          ],
+          "negative_control": "Restart cannot use the stale selection-time active lease to ignore post-selection failures."
+        },
+        {
+          "id": "OPRG01-A5",
+          "criterion": "The real Plan 119 claim selects one base scenario, records one authentic behavioral receipt, replays it idempotently, and observes the current head through the ordinary selected pre-write entrypoint.",
+          "evidence_required": [
+            "Exact live claim and tracker refs",
+            "Selection, receipt, transition, effective scenario, and lease digests",
+            "Ordinary pre-write and selected correlation receipts",
+            "Candidate revision and focused command outputs"
+          ],
+          "negative_control": "Evidence explicitly says observe-only and makes no portfolio, enforcement, independent-review, installer, deployment, or fleet claim."
+        }
+      ],
+      "readiness": {
+        "status": "ready",
+        "required_approval_types": [],
+        "approvals": [],
+        "failed_guards": []
+      },
+      "claim_policy": {
+        "eligibility_rule": "Plan 118 core is accepted; one exact Plan 119 goal-bound claim owns only the listed current-head contracts, integrations, tests, examples, evidence, guide, plan, and graph paths.",
+        "lease_policy": "renewable",
+        "lease_duration_minutes": 1440,
+        "max_active_per_claimant": 1,
+        "named_owner_id": null
+      },
+      "status": "ready",
+      "record_version": 1,
+      "updated_at": "2026-08-21T07:00:00Z"
+    },
+    {
+      "schema_version": "1.0",
+      "record_type": "work_unit",
+      "id": "oprg-02-plan-spine-closeout",
+      "initiative_id": "progress-bound-agent-execution",
+      "goal_id": "durable-selected-outcome-progress",
+      "design_revision": "sha256:8153b370b231e6d693e6c5c28f3677f9386c4c6ffe4fd5a7978aba19822e7d65",
+      "spec_revision": "sha256:8153b370b231e6d693e6c5c28f3677f9386c4c6ffe4fd5a7978aba19822e7d65",
+      "title": "Reconcile the shared plan index and roadmap after current-head custody is accepted",
+      "class": "integration",
+      "objective": "Publish truthful Plan 119 index and roadmap state after executable evidence is accepted and the current shared-path owner releases those files.",
+      "profile": "standard",
+      "execution_class": "independently_executable",
+      "claimability": "blocked_dependencies",
+      "authorization_mode": "registry_claim",
+      "scope": {
+        "included": [
+          "Add or update the Plan 119 plan-index row",
+          "Reconcile the roadmap frontier to Project Graph-bound portfolio admission"
+        ],
+        "excluded": [
+          "Code, tests, examples, evidence, guide, plan-body, or work-graph behavior changes",
+          "Any portfolio-admission or hard-enforcement implementation claim"
+        ]
+      },
+      "inputs": [
+        {
+          "kind": "work_unit",
+          "id": "oprg-01-durable-selected-progress",
+          "revision": "accepted"
+        },
+        {
+          "kind": "coordination_release",
+          "id": "plan-110-npw02-blocker-policy:docs/plans/CLAUDE.md+ROADMAP.md",
+          "revision": "pending"
+        }
+      ],
+      "outputs": [
+        "Plan 119 index row matching accepted evidence",
+        "Roadmap state naming Project Graph-bound product/maintenance portfolio admission as the next frontier"
+      ],
+      "dependencies": [
+        {
+          "unit_id": "oprg-01-durable-selected-progress",
+          "type": "hard",
+          "gate": {
+            "type": "unit_status",
+            "required_status": "accepted"
+          },
+          "rationale": "Shared status surfaces must describe accepted behavior rather than anticipated implementation."
+        }
+      ],
+      "conflict_surfaces": [
+        {
+          "kind": "repository_path",
+          "target": "docs/plans/CLAUDE.md",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-119-plan-spine-closeout"
+        },
+        {
+          "kind": "repository_path",
+          "target": "ROADMAP.md",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-119-plan-spine-closeout"
+        }
+      ],
+      "acceptance": [
+        {
+          "id": "OPRG02-A1",
+          "criterion": "The index and roadmap match accepted Plan 119 evidence, retain the observe-only boundary, and name Project Graph binding and explicit lease classes as the next unimplemented prerequisite.",
+          "evidence_required": [
+            "Accepted OPRG-01 revision",
+            "Released shared-path claim",
+            "Plan index validation",
+            "Roadmap diff inspection"
+          ],
+          "negative_control": "No portfolio ceiling, hard blocking, independent review, installer, deployment, or fleet completion claim appears."
+        }
+      ],
+      "readiness": {
+        "status": "blocked",
+        "required_approval_types": [],
+        "approvals": [],
+        "failed_guards": [
+          "oprg-01-durable-selected-progress is not yet accepted",
+          "docs/plans/CLAUDE.md and ROADMAP.md remain owned by plan-110-npw02-blocker-policy"
+        ]
+      },
+      "claim_policy": {
+        "eligibility_rule": "Claim only after OPRG-01 is accepted and the active Plan 110 owner releases both shared documentation paths.",
+        "lease_policy": "renewable",
+        "lease_duration_minutes": 1440,
+        "max_active_per_claimant": 1,
+        "named_owner_id": null
+      },
+      "status": "blocked",
+      "record_version": 1,
+      "updated_at": "2026-08-21T07:00:00Z"
+    }
+  ]
+}

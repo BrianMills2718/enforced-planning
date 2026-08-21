@@ -315,6 +315,8 @@ Tracker-only session fields hold restart-safe execution context:
 - `notes`
 - `outcome_selection` when an exact session has explicitly selected one
   create-once outcome scenario
+- `outcome_progress_transitions` as append-only exact receipt, prior-lease, and
+  successor-lease custody for work completed after selection
 - `outcome_session_transfers` as append-only receipts for sanctioned runtime
   handoffs that preserve the selected scenario and lease
 - `outcome_selection_transitions` as append-only retained predecessor and
@@ -322,9 +324,10 @@ Tracker-only session fields hold restart-safe execution context:
 
 Tracker creation, heartbeat, resume-style updates, and explicit refreshes use
 the same locked atomic mutation boundary. Once `outcome_selection` exists, a
-same-runtime refresh preserves it and rejects an implicit change to the bound
-claim identity instead of silently replacing or erasing the choice. A
-sanctioned cross-session resume uses the explicit transfer path below.
+same-runtime refresh preserves the selection plus progress, transfer, and
+restart histories and rejects an implicit change to the bound claim identity
+instead of silently replacing or erasing custody. A sanctioned cross-session
+resume uses the explicit transfer path below.
 
 ### Durable outcome selection observe pilot
 
@@ -401,6 +404,49 @@ This remains same-project observe-mode custody. It does not semantically prove
 that a mechanism is meaningfully different, provide an independent reviewer
 identity, resolve owner-class WIP through Project Graph, allow cross-project
 successors, activate outcome blocking, install hooks, or claim fleet adoption.
+
+### Durable selected progress observe pilot
+
+Plan #119 keeps the selected scenario immutable while allowing later evidence
+to advance its lease. Create one strict `OutcomeProgressReceiptV1` inside the
+exact claimed worktree. Its contract digest and dimension must match the
+selected outcome, and `prior_receipt_sha256` must equal the current selected
+head. Append it through the existing CLI:
+
+```bash
+python scripts/outcome_continuation.py progress \
+  --receipt examples/owner-real-outcome-observe/plan119-progress-receipt.json \
+  --agent codex --project enforced-planning \
+  --scope plan-119-durable-outcome-progress
+```
+
+The command resolves exactly one healthy live claim and its selected binding,
+reconstructs the current lease from the base scenario plus retained progress,
+and appends one `OutcomeProgressTransitionV1`. That transition contains the
+exact receipt file/model digests and full prior/successor lease snapshots.
+Exact accepted file replay returns the retained transition without rewriting
+tracker bytes. A stale parent, changed file, duplicate receipt ID, malformed
+history, foreign claim, or receipt already present in the base scenario fails
+before mutation.
+
+`--outcome-selected` now evaluates the reconstructed effective scenario. Its
+correlation receipt names the immutable base digest, effective scenario digest,
+progress count/head, and current lease. Ordinary claim admission and native
+exit behavior remain authoritative. A malformed progress stream becomes a
+typed observation failure, never a permissive fallback or an outcome-based
+deny.
+
+Sanctioned cross-session resume retains the progress stream and binds its
+current lease/head in `OutcomeSessionTransferV1`; the successor runtime can
+append the next receipt against that retained head. Causal restart likewise
+uses post-selection stalled or parked evidence rather than the stale base
+lease. A restart starts a distinct successor lineage, so predecessor progress
+remains historical and is not replayed into the successor lease.
+
+This pilot establishes current-head custody only. It does not classify product
+versus maintenance leases, allocate a portfolio slot through Project Graph,
+hard-block writes, prove receipt semantics independently, install hooks, or
+claim fleet adoption.
 
 Important rule: do not name sessions after the immediate local task. A branch
 like `plan-31-hygiene-gate` is fine for git, but the session name should derive

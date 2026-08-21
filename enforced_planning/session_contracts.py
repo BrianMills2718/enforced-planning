@@ -14,7 +14,7 @@ import tempfile
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
-from datetime import UTC, datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -46,6 +46,13 @@ TRACKER_ONLY_FIELD_NAMES = (
     "requires_shared_infra_changes",
     "stop_conditions",
     "notes",
+)
+
+OUTCOME_CUSTODY_TRACKER_FIELDS = (
+    "outcome_selection",
+    "outcome_progress_transitions",
+    "outcome_session_transfers",
+    "outcome_selection_transitions",
 )
 
 
@@ -328,7 +335,7 @@ def write_session_tracker(
     *,
     tracker_dir: Path = DEFAULT_SESSION_TRACKERS_DIR,
 ) -> Path:
-    """Persist one tracker without erasing a create-once outcome selection."""
+    """Persist one tracker without erasing selected outcome custody history."""
 
     path = session_tracker_path(record.contract, tracker_dir=tracker_dir)
     with session_tracker_lock(path):
@@ -338,10 +345,20 @@ def write_session_tracker(
             current_tracker = current_payload.get("tracker")
             if not isinstance(current_tracker, dict):
                 raise TypeError(f"Session tracker at {path} is missing tracker metadata")
-            selected_outcome = current_tracker.get("outcome_selection")
-            if selected_outcome is not None:
-                if not isinstance(selected_outcome, dict):
-                    raise TypeError(f"Session tracker at {path} has invalid outcome_selection metadata")
+            custody: dict[str, Any] = {}
+            for field in OUTCOME_CUSTODY_TRACKER_FIELDS:
+                value = current_tracker.get(field)
+                if value is None:
+                    continue
+                expected_type = dict if field == "outcome_selection" else list
+                if not isinstance(value, expected_type):
+                    raise TypeError(f"Session tracker at {path} has invalid {field} metadata")
+                custody[field] = value
+            if custody and "outcome_selection" not in custody:
+                raise TypeError(
+                    f"Session tracker at {path} has outcome custody history without outcome_selection"
+                )
+            if custody:
                 current_claim = current_payload.get("claim")
                 next_claim = next_payload.get("claim")
                 if not isinstance(current_claim, dict) or not isinstance(next_claim, dict):
@@ -377,7 +394,7 @@ def write_session_tracker(
                 next_tracker = next_payload.get("tracker")
                 if not isinstance(next_tracker, dict):
                     raise TypeError(f"Session tracker at {path} is missing tracker metadata")
-                next_tracker["outcome_selection"] = selected_outcome
+                next_tracker.update(custody)
                 current_timestamps = current_payload.get("timestamps")
                 next_timestamps = next_payload.get("timestamps")
                 if isinstance(current_timestamps, dict) and isinstance(next_timestamps, dict):

@@ -19,12 +19,15 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_valida
 from enforced_planning import coordination_claims, session_contracts
 from enforced_planning.outcome_continuation import (
     ContinuationError,
+    OutcomeContinuationResultV1,
     OutcomeContinuationScenarioV1,
     OutcomeContractV1,
     OutcomeLeaseV1,
+    OutcomeProgressReceiptV1,
     RestartDeltaV1,
     canonical_sha256,
     evaluate_scenario,
+    transition_lease,
 )
 
 HEX_SHA256_PATTERN = r"^[0-9a-f]{64}$"
@@ -101,6 +104,70 @@ class OutcomeSelectionResultV1(StrictModel):
     tracker_path: str = Field(min_length=1)
 
 
+class OutcomeProgressTransitionV1(StrictModel):
+    """Append-only exact receipt and lease transition for selected state."""
+
+    schema_version: Literal["1.0.0"] = "1.0.0"
+    record_type: Literal["outcome_progress_transition"] = "outcome_progress_transition"
+    recorded_at: datetime
+    receipt_ref: str = Field(min_length=1)
+    receipt_file_sha256: str = Field(pattern=HEX_SHA256_PATTERN)
+    receipt_sha256: str = Field(pattern=HEX_SHA256_PATTERN)
+    receipt: OutcomeProgressReceiptV1
+    selection_binding_sha256: str = Field(pattern=HEX_SHA256_PATTERN)
+    selection_binding: OutcomeSelectionBindingV1
+    prior_lease_sha256: str = Field(pattern=HEX_SHA256_PATTERN)
+    prior_lease: OutcomeLeaseV1
+    successor_lease_sha256: str = Field(pattern=HEX_SHA256_PATTERN)
+    successor_lease: OutcomeLeaseV1
+
+    @model_validator(mode="after")
+    def validate_transition(self) -> OutcomeProgressTransitionV1:
+        if self.recorded_at.tzinfo is None or self.recorded_at.utcoffset() is None:
+            raise ValueError("recorded_at must be timezone-aware")
+        checks = {
+            "receipt_sha256": (canonical_sha256(self.receipt), self.receipt_sha256),
+            "selection_binding_sha256": (
+                canonical_sha256(self.selection_binding),
+                self.selection_binding_sha256,
+            ),
+            "prior_lease_sha256": (canonical_sha256(self.prior_lease), self.prior_lease_sha256),
+            "successor_lease_sha256": (
+                canonical_sha256(self.successor_lease),
+                self.successor_lease_sha256,
+            ),
+        }
+        mismatches = [name for name, (actual, expected) in checks.items() if actual != expected]
+        if mismatches:
+            raise ValueError("progress transition digest mismatch: " + ", ".join(mismatches))
+        contract_digests = {
+            self.selection_binding.outcome_contract_sha256,
+            self.receipt.outcome_contract_sha256,
+            self.prior_lease.outcome_contract_sha256,
+            self.successor_lease.outcome_contract_sha256,
+        }
+        if len(contract_digests) != 1:
+            raise ValueError("progress transition contract digests must match")
+        if self.receipt.prior_receipt_sha256 != self.prior_lease.last_receipt_sha256:
+            raise ValueError("progress receipt parent must equal the retained prior lease head")
+        if self.successor_lease.last_receipt_sha256 != self.receipt_sha256:
+            raise ValueError("successor lease must end at the retained progress receipt")
+        return self
+
+
+class OutcomeProgressResultV1(StrictModel):
+    """Operator-facing accepted or idempotently replayed progress append."""
+
+    schema_version: Literal["1.0.0"] = "1.0.0"
+    status: Literal["recorded", "idempotent"]
+    binding: OutcomeSelectionBindingV1
+    binding_sha256: str = Field(pattern=HEX_SHA256_PATTERN)
+    transition: OutcomeProgressTransitionV1
+    transition_sha256: str = Field(pattern=HEX_SHA256_PATTERN)
+    progress_transition_count: int = Field(ge=1)
+    tracker_path: str = Field(min_length=1)
+
+
 class ResolvedOutcomeSelectionV1(StrictModel):
     """Validated selected state ready for one exact pre-write correlation."""
 
@@ -108,6 +175,33 @@ class ResolvedOutcomeSelectionV1(StrictModel):
     binding: OutcomeSelectionBindingV1
     binding_sha256: str = Field(pattern=HEX_SHA256_PATTERN)
     scenario_path: str = Field(min_length=1)
+    base_scenario_sha256: str = Field(pattern=HEX_SHA256_PATTERN)
+    effective_scenario: OutcomeContinuationScenarioV1
+    effective_scenario_sha256: str = Field(pattern=HEX_SHA256_PATTERN)
+    current_lease_sha256: str = Field(pattern=HEX_SHA256_PATTERN)
+    current_lease_state: Literal["active", "recovery_required", "stalled", "complete", "parked"]
+    progress_transition_count: int = Field(ge=0)
+    progress_head_transition_sha256: str | None = Field(default=None, pattern=HEX_SHA256_PATTERN)
+    progress_head_receipt_sha256: str | None = Field(default=None, pattern=HEX_SHA256_PATTERN)
+
+    @model_validator(mode="after")
+    def validate_current_head(self) -> ResolvedOutcomeSelectionV1:
+        if canonical_sha256(self.effective_scenario) != self.effective_scenario_sha256:
+            raise ValueError("effective scenario digest does not match its payload")
+        result = evaluate_scenario(self.effective_scenario)
+        if result.lease_sha256 != self.current_lease_sha256:
+            raise ValueError("current lease digest does not match the effective scenario")
+        if result.lease.state != self.current_lease_state:
+            raise ValueError("current lease state does not match the effective scenario")
+        head_fields = (
+            self.progress_head_transition_sha256,
+            self.progress_head_receipt_sha256,
+        )
+        if self.progress_transition_count == 0 and any(value is not None for value in head_fields):
+            raise ValueError("zero progress transitions cannot retain a progress head")
+        if self.progress_transition_count > 0 and not all(value is not None for value in head_fields):
+            raise ValueError("nonzero progress transitions require complete progress-head digests")
+        return self
 
 
 class OutcomeSessionTransferV1(StrictModel):
@@ -130,6 +224,10 @@ class OutcomeSessionTransferV1(StrictModel):
     outcome_id: str = Field(min_length=3)
     outcome_lineage_id: str = Field(min_length=3)
     target_path: str = Field(min_length=1)
+    progress_transition_count: int = Field(default=0, ge=0)
+    progress_head_transition_sha256: str | None = Field(default=None, pattern=HEX_SHA256_PATTERN)
+    current_lease_sha256: str | None = Field(default=None, pattern=HEX_SHA256_PATTERN)
+    current_lease_state: Literal["active", "recovery_required", "stalled", "complete", "parked"] | None = None
 
     @model_validator(mode="after")
     def validate_transfer(self) -> OutcomeSessionTransferV1:
@@ -139,6 +237,12 @@ class OutcomeSessionTransferV1(StrictModel):
             raise ValueError("session transfer requires distinct runtime identities")
         if self.prior_claim_identity_sha256 == self.successor_claim_identity_sha256:
             raise ValueError("session transfer must change the exact claim identity digest")
+        if self.progress_transition_count == 0 and self.progress_head_transition_sha256 is not None:
+            raise ValueError("zero progress transitions cannot retain a progress head")
+        if self.progress_transition_count > 0 and self.progress_head_transition_sha256 is None:
+            raise ValueError("retained progress transitions require a progress head")
+        if (self.current_lease_sha256 is None) != (self.current_lease_state is None):
+            raise ValueError("current lease digest and state must be complete or absent")
         return self
 
 
@@ -214,6 +318,17 @@ class PreparedOutcomeSessionTransfer:
     predecessor_binding: OutcomeSelectionBindingV1
     successor_binding: OutcomeSelectionBindingV1
     transfer: OutcomeSessionTransferV1
+
+
+@dataclass(frozen=True)
+class ResolvedOutcomeProgressHead:
+    """Validated in-memory current head for one selected binding lineage."""
+
+    base_scenario: OutcomeContinuationScenarioV1
+    effective_scenario: OutcomeContinuationScenarioV1
+    result: OutcomeContinuationResultV1
+    transitions: tuple[OutcomeProgressTransitionV1, ...]
+    head_transition_sha256: str | None
 
 
 def _load_claim_records(claims_dir: Path) -> list[coordination_claims.ClaimRecord]:
@@ -467,6 +582,12 @@ def _build_binding(
     scenario_file_sha256: str,
 ) -> OutcomeSelectionBindingV1:
     result = evaluate_scenario(scenario)
+    target_path = scenario.request.target_path
+    if target_path is None:
+        raise OutcomeSelectionError(
+            "unsupported_outcome_operation",
+            "selected pre-write outcome requires a product_write target",
+        )
     return OutcomeSelectionBindingV1(
         selected_at=datetime.now(UTC),
         execution_authority_ref=authority,
@@ -489,7 +610,7 @@ def _build_binding(
         outcome_id=scenario.contract.outcome_id,
         outcome_lineage_id=scenario.contract.lineage_id,
         predecessor_lineage_ids=tuple(scenario.contract.predecessor_lineage_ids),
-        target_path=scenario.request.target_path,
+        target_path=target_path,
         lease_sha256=result.lease_sha256,
         lease_state=result.lease.state,
         outcome_allowed_at_selection=result.decision.allowed,
@@ -578,6 +699,203 @@ def _validate_binding_scenario(
     return scenario
 
 
+def _progress_history(tracker: dict[str, Any]) -> list[OutcomeProgressTransitionV1]:
+    raw_history = tracker.get("outcome_progress_transitions", [])
+    if not isinstance(raw_history, list):
+        raise OutcomeSelectionError(
+            "progress_history_invalid",
+            "outcome_progress_transitions must be a list",
+        )
+    try:
+        return [OutcomeProgressTransitionV1.model_validate(item) for item in raw_history]
+    except ValidationError as exc:
+        raise OutcomeSelectionError(
+            "progress_history_invalid",
+            f"existing outcome progress transition is invalid: {exc}",
+        ) from exc
+
+
+def _session_transfer_history(tracker: dict[str, Any]) -> list[OutcomeSessionTransferV1]:
+    raw_history = tracker.get("outcome_session_transfers", [])
+    if not isinstance(raw_history, list):
+        raise OutcomeSelectionError(
+            "session_transfer_history_invalid",
+            "outcome_session_transfers must be a list",
+        )
+    try:
+        return [OutcomeSessionTransferV1.model_validate(item) for item in raw_history]
+    except ValidationError as exc:
+        raise OutcomeSelectionError(
+            "session_transfer_history_invalid",
+            f"existing outcome session transfer is invalid: {exc}",
+        ) from exc
+
+
+def _binding_transfer_aliases(
+    tracker: dict[str, Any],
+    *,
+    binding: OutcomeSelectionBindingV1,
+) -> set[str]:
+    """Resolve prior exact-runtime bindings sanctioned as the same selection."""
+
+    transfers = _session_transfer_history(tracker)
+    by_successor: dict[str, OutcomeSessionTransferV1] = {}
+    for transfer in transfers:
+        existing = by_successor.get(transfer.successor_binding_sha256)
+        if existing is not None:
+            raise OutcomeSelectionError(
+                "session_transfer_history_invalid",
+                "multiple transfer records target the same successor binding",
+            )
+        by_successor[transfer.successor_binding_sha256] = transfer
+
+    aliases = {canonical_sha256(binding)}
+    cursor = canonical_sha256(binding)
+    invariant_fields = (
+        "scenario_file_sha256",
+        "scenario_sha256",
+        "outcome_contract_sha256",
+        "outcome_id",
+        "outcome_lineage_id",
+        "target_path",
+    )
+    while cursor in by_successor:
+        transfer = by_successor[cursor]
+        mismatches = [
+            field
+            for field in invariant_fields
+            if getattr(transfer, field) != getattr(binding, field)
+        ]
+        if mismatches:
+            raise OutcomeSelectionError(
+                "session_transfer_history_invalid",
+                "selected transfer changes immutable outcome fields: " + ", ".join(mismatches),
+            )
+        cursor = transfer.prior_binding_sha256
+        if cursor in aliases:
+            raise OutcomeSelectionError(
+                "session_transfer_history_invalid",
+                "selected transfer history contains a binding cycle",
+            )
+        aliases.add(cursor)
+    return aliases
+
+
+def _resolve_progress_head(
+    tracker: dict[str, Any],
+    *,
+    binding: OutcomeSelectionBindingV1,
+    scenario: OutcomeContinuationScenarioV1,
+) -> ResolvedOutcomeProgressHead:
+    """Replay accepted transitions for the current selection/transfer lineage."""
+
+    aliases = _binding_transfer_aliases(tracker, binding=binding)
+    history = _progress_history(tracker)
+    base_result = evaluate_scenario(scenario)
+    lease = base_result.lease
+    matching: list[OutcomeProgressTransitionV1] = []
+    appended_receipts: list[OutcomeProgressReceiptV1] = []
+    invariant_fields = (
+        "scenario_file_sha256",
+        "scenario_sha256",
+        "outcome_contract_sha256",
+        "outcome_id",
+        "outcome_lineage_id",
+        "target_path",
+        "lease_sha256",
+    )
+    for item in history:
+        if item.selection_binding_sha256 not in aliases:
+            continue
+        mismatches = [
+            field
+            for field in invariant_fields
+            if getattr(item.selection_binding, field) != getattr(binding, field)
+        ]
+        if mismatches:
+            raise OutcomeSelectionError(
+                "progress_history_invalid",
+                "progress transition changes immutable selection fields: " + ", ".join(mismatches),
+            )
+        if item.prior_lease != lease:
+            raise OutcomeSelectionError(
+                "progress_history_invalid",
+                "progress transition prior lease does not equal the reconstructed current head",
+            )
+        try:
+            expected = transition_lease(scenario.contract, lease, item.receipt)
+        except ContinuationError as exc:
+            raise OutcomeSelectionError(
+                "progress_history_invalid",
+                f"retained progress transition no longer evaluates: {exc}",
+            ) from exc
+        if not expected.applied or expected.lease != item.successor_lease:
+            raise OutcomeSelectionError(
+                "progress_history_invalid",
+                "retained progress transition does not match deterministic lease evolution",
+            )
+        lease = item.successor_lease
+        matching.append(item)
+        appended_receipts.append(item.receipt)
+
+    effective_scenario = scenario.model_copy(
+        deep=True,
+        update={"receipts": [*scenario.receipts, *appended_receipts]},
+    )
+    try:
+        result = evaluate_scenario(effective_scenario)
+    except ContinuationError as exc:
+        raise OutcomeSelectionError(
+            "progress_history_invalid",
+            f"effective selected scenario no longer evaluates: {exc}",
+        ) from exc
+    if result.lease != lease:
+        raise OutcomeSelectionError(
+            "progress_history_invalid",
+            "effective selected scenario lease differs from retained transition history",
+        )
+    return ResolvedOutcomeProgressHead(
+        base_scenario=scenario,
+        effective_scenario=effective_scenario,
+        result=result,
+        transitions=tuple(matching),
+        head_transition_sha256=canonical_sha256(matching[-1]) if matching else None,
+    )
+
+
+def _load_progress_receipt_for_claim(
+    receipt_path: Path,
+    *,
+    claim: coordination_claims.ClaimRecord,
+) -> tuple[OutcomeProgressReceiptV1, str, str]:
+    """Load one strict immutable progress receipt from the exact worktree."""
+
+    resolved = receipt_path.expanduser().resolve()
+    worktree = Path(claim.worktree_path or "").expanduser().resolve()
+    try:
+        receipt_ref = resolved.relative_to(worktree).as_posix()
+    except ValueError as exc:
+        raise OutcomeSelectionError(
+            "progress_receipt_outside_worktree",
+            "selected progress receipt must be inside the exact claim worktree",
+        ) from exc
+    try:
+        content = resolved.read_bytes()
+    except OSError as exc:
+        raise OutcomeSelectionError(
+            "progress_receipt_unavailable",
+            f"unable to read selected progress receipt {receipt_ref}: {exc}",
+        ) from exc
+    try:
+        receipt = OutcomeProgressReceiptV1.model_validate_json(content)
+    except ValidationError as exc:
+        raise OutcomeSelectionError(
+            "progress_receipt_invalid",
+            f"selected progress receipt is invalid: {exc}",
+        ) from exc
+    return receipt, hashlib.sha256(content).hexdigest(), receipt_ref
+
+
 def prepare_outcome_session_transfer(
     *,
     claim: coordination_claims.ClaimRecord,
@@ -606,7 +924,12 @@ def prepare_outcome_session_transfer(
             f"existing outcome selection is invalid: {exc}",
         ) from exc
     _assert_binding_matches_claim(predecessor, claim=claim, tracker_path=tracker_path)
-    _validate_binding_scenario(predecessor, claim=claim)
+    scenario = _validate_binding_scenario(predecessor, claim=claim)
+    progress_head = _resolve_progress_head(
+        tracker,
+        binding=predecessor,
+        scenario=scenario,
+    )
 
     successor_claim = replace(claim, session_id=successor_session_id)
     successor = OutcomeSelectionBindingV1.model_validate(
@@ -631,6 +954,10 @@ def prepare_outcome_session_transfer(
         outcome_id=predecessor.outcome_id,
         outcome_lineage_id=predecessor.outcome_lineage_id,
         target_path=predecessor.target_path,
+        progress_transition_count=len(progress_head.transitions),
+        progress_head_transition_sha256=progress_head.head_transition_sha256,
+        current_lease_sha256=progress_head.result.lease_sha256,
+        current_lease_state=progress_head.result.lease.state,
     )
     return PreparedOutcomeSessionTransfer(
         tracker_path=tracker_path,
@@ -824,6 +1151,178 @@ def select_outcome_for_session(
         status=status,
         binding=binding,
         binding_sha256=binding_sha256,
+        tracker_path=str(tracker_path),
+    )
+
+
+def record_selected_outcome_progress_for_session(
+    *,
+    agent: str,
+    project: str,
+    scope: str,
+    receipt_path: Path,
+    session_id: str | None = None,
+    claims_dir: Path | None = None,
+) -> OutcomeProgressResultV1:
+    """Append one exact current-head receipt to selected outcome custody."""
+
+    resolved_session_id = coordination_claims.resolve_session_id(agent, session_id)
+    if not resolved_session_id:
+        raise OutcomeSelectionError(
+            "session_identity_unavailable",
+            "progress recording requires an explicit or native exact session ID",
+        )
+    coordination_claims.validate_native_session_binding(agent, resolved_session_id)
+    resolved_claims_dir = (claims_dir or coordination_claims.CLAIMS_DIR).expanduser().resolve()
+    with coordination_claims.claim_registry_lock(resolved_claims_dir):
+        claim = _exact_live_claim(
+            agent=agent,
+            project=project,
+            scope=scope,
+            session_id=resolved_session_id,
+            claims_dir=resolved_claims_dir,
+        )
+        if not claim.tracker_path:
+            raise OutcomeSelectionError(
+                "tracker_unavailable",
+                "exact live claim does not link a session tracker",
+            )
+        tracker_path = Path(claim.tracker_path).expanduser().resolve()
+        if not tracker_path.is_file():
+            raise OutcomeSelectionError(
+                "tracker_unavailable",
+                f"exact live claim tracker is not a file: {tracker_path}",
+            )
+        receipt, receipt_file_sha256, receipt_ref = _load_progress_receipt_for_claim(
+            receipt_path,
+            claim=claim,
+        )
+        receipt_sha256 = canonical_sha256(receipt)
+        status: Literal["recorded", "idempotent"] = "recorded"
+        selected_binding: OutcomeSelectionBindingV1 | None = None
+        selected_transition: OutcomeProgressTransitionV1 | None = None
+        progress_transition_count = 0
+
+        def apply_progress(payload: dict[str, Any]) -> None:
+            nonlocal status, selected_binding, selected_transition, progress_transition_count
+            tracker = _validate_tracker_claim(payload, claim=claim, tracker_path=tracker_path)
+            raw_binding = tracker.get("outcome_selection")
+            if raw_binding is None:
+                raise OutcomeSelectionError(
+                    "selection_missing",
+                    "progress recording requires an existing selected outcome",
+                )
+            try:
+                binding = OutcomeSelectionBindingV1.model_validate(raw_binding)
+            except ValidationError as exc:
+                raise OutcomeSelectionError(
+                    "selection_binding_invalid",
+                    f"existing outcome selection is invalid: {exc}",
+                ) from exc
+            _assert_binding_matches_claim(binding, claim=claim, tracker_path=tracker_path)
+            scenario = _validate_binding_scenario(binding, claim=claim)
+            head = _resolve_progress_head(tracker, binding=binding, scenario=scenario)
+            history = _progress_history(tracker)
+
+            for base_receipt in scenario.receipts:
+                if base_receipt.receipt_id == receipt.receipt_id:
+                    raise OutcomeSelectionError(
+                        "progress_receipt_already_in_base",
+                        "progress receipt ID is already retained by the immutable selected scenario",
+                    )
+            current_transition_digests = {
+                canonical_sha256(item): item for item in head.transitions
+            }
+            for item in history:
+                if item.receipt.receipt_id != receipt.receipt_id:
+                    continue
+                item_sha256 = canonical_sha256(item)
+                if (
+                    item_sha256 in current_transition_digests
+                    and item.receipt_sha256 == receipt_sha256
+                    and item.receipt_file_sha256 == receipt_file_sha256
+                    and item.receipt_ref == receipt_ref
+                ):
+                    status = "idempotent"
+                    selected_binding = binding
+                    selected_transition = item
+                    progress_transition_count = len(head.transitions)
+                    return
+                raise OutcomeSelectionError(
+                    "progress_receipt_conflict",
+                    "this outcome already retains a different receipt with the same receipt ID",
+                )
+
+            try:
+                lease_transition = transition_lease(
+                    scenario.contract,
+                    head.result.lease,
+                    receipt,
+                )
+            except ContinuationError as exc:
+                raise OutcomeSelectionError(exc.code, str(exc)) from exc
+            if not lease_transition.applied:
+                raise OutcomeSelectionError(
+                    "progress_receipt_already_applied",
+                    "receipt is already present at the selected scenario or current lease head",
+                )
+            transition = OutcomeProgressTransitionV1(
+                recorded_at=datetime.now(UTC),
+                receipt_ref=receipt_ref,
+                receipt_file_sha256=receipt_file_sha256,
+                receipt_sha256=receipt_sha256,
+                receipt=receipt,
+                selection_binding_sha256=canonical_sha256(binding),
+                selection_binding=binding,
+                prior_lease_sha256=head.result.lease_sha256,
+                prior_lease=head.result.lease,
+                successor_lease_sha256=canonical_sha256(lease_transition.lease),
+                successor_lease=lease_transition.lease,
+            )
+            raw_history = tracker.get("outcome_progress_transitions", [])
+            if not isinstance(raw_history, list):
+                raise OutcomeSelectionError(
+                    "progress_history_invalid",
+                    "outcome_progress_transitions must be a list",
+                )
+            tracker["outcome_progress_transitions"] = [
+                *raw_history,
+                transition.model_dump(mode="json"),
+            ]
+            selected_binding = binding
+            selected_transition = transition
+            progress_transition_count = len(head.transitions) + 1
+
+        try:
+            with session_contracts.session_tracker_lock(tracker_path):
+                payload = session_contracts.read_session_tracker(tracker_path)
+                apply_progress(payload)
+                if status == "recorded":
+                    timestamps = payload.get("timestamps")
+                    if not isinstance(timestamps, dict):
+                        raise TypeError(f"Session tracker at {tracker_path} is missing timestamps section")
+                    timestamps["updated_at"] = datetime.now(UTC).isoformat()
+                    session_contracts._atomic_write_session_tracker(tracker_path, payload)
+        except OutcomeSelectionError:
+            raise
+        except (OSError, TypeError, ValueError, yaml.YAMLError) as exc:
+            raise OutcomeSelectionError(
+                "tracker_invalid",
+                f"unable to mutate exact session tracker for progress: {exc}",
+            ) from exc
+
+    if selected_binding is None or selected_transition is None:
+        raise OutcomeSelectionError(
+            "progress_internal_error",
+            "progress recording completed without a selected transition",
+        )
+    return OutcomeProgressResultV1(
+        status=status,
+        binding=selected_binding,
+        binding_sha256=canonical_sha256(selected_binding),
+        transition=selected_transition,
+        transition_sha256=canonical_sha256(selected_transition),
+        progress_transition_count=progress_transition_count,
         tracker_path=str(tracker_path),
     )
 
@@ -1081,6 +1580,11 @@ def restart_selected_outcome_for_session(
                     )
 
             predecessor_scenario = _validate_binding_scenario(current, claim=claim)
+            predecessor_head = _resolve_progress_head(
+                tracker,
+                binding=current,
+                scenario=predecessor_scenario,
+            )
             authority = _execution_authority(
                 current.execution_authority_ref,
                 claim=claim,
@@ -1096,7 +1600,7 @@ def restart_selected_outcome_for_session(
             )
             predecessor_lease, failed_refs = _assert_restart_contract(
                 predecessor_binding=current,
-                predecessor_scenario=predecessor_scenario,
+                predecessor_scenario=predecessor_head.effective_scenario,
                 successor_binding=successor_binding,
                 successor_scenario=successor_scenario,
                 delta=delta,
@@ -1314,19 +1818,37 @@ def resolve_selected_outcome_for_prewrite(
                 "selection_scenario_stale",
                 "selected scenario changed after selection: " + ", ".join(mismatches),
             )
+        progress_head = _resolve_progress_head(
+            tracker,
+            binding=binding,
+            scenario=scenario,
+        )
         binding_sha256 = canonical_sha256(binding)
     return ResolvedOutcomeSelectionV1(
         binding=binding,
         binding_sha256=binding_sha256,
         scenario_path=str(scenario_path.resolve()),
+        base_scenario_sha256=result.scenario_sha256,
+        effective_scenario=progress_head.effective_scenario,
+        effective_scenario_sha256=progress_head.result.scenario_sha256,
+        current_lease_sha256=progress_head.result.lease_sha256,
+        current_lease_state=progress_head.result.lease.state,
+        progress_transition_count=len(progress_head.transitions),
+        progress_head_transition_sha256=progress_head.head_transition_sha256,
+        progress_head_receipt_sha256=(
+            progress_head.transitions[-1].receipt_sha256 if progress_head.transitions else None
+        ),
     )
 
 
 __all__ = [
+    "OutcomeProgressResultV1",
+    "OutcomeProgressTransitionV1",
     "OutcomeSelectionBindingV1",
     "OutcomeSelectionError",
     "OutcomeSelectionResultV1",
     "ResolvedOutcomeSelectionV1",
+    "record_selected_outcome_progress_for_session",
     "resolve_selected_outcome_for_prewrite",
     "select_outcome_for_session",
 ]

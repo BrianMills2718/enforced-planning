@@ -1,0 +1,41 @@
+{
+  "schema_version": "1.0.0",
+  "scenario_id": "plan-119-selected-base",
+  "contract": {
+    "schema_version": "1.0.0",
+    "outcome_id": "durable-selected-outcome-progress",
+    "owner_class": "brian-agent-owner",
+    "project_id": "enforced-planning",
+    "lineage_id": "plan-119-durable-progress",
+    "predecessor_lineage_ids": [
+      "plan-118-restart-custody"
+    ],
+    "intended_consumer": "Brian and his coding agents continuing complex claimed projects",
+    "outcome": "A selected outcome advances from durable current-head receipts without losing custody across runtime continuation.",
+    "canonical_journey": {
+      "starting_state": "One exact claimed lane has an immutable selected outcome but no post-selection progress history.",
+      "input": "One strict evidence-bound progress receipt whose parent is the current selected lease head.",
+      "action": "Append the receipt, replay it, and observe the reconstructed lease through selected pre-write.",
+      "observable_result": "The tracker retains one append-only transition and selected pre-write reports its current lease.",
+      "failure_signal": "Progress is lost, forked, replayed as a new write, or hidden behind the selection-time lease."
+    },
+    "baseline_revision": "0a8c10058d5b42524c141037f4092aadc760ec2f",
+    "allowed_scope": [
+      "docs/evidence/plan119_durable_outcome_progress.json"
+    ],
+    "progress_dimensions": [
+      "durable selected lease evolution",
+      "restart-safe receipt custody"
+    ]
+  },
+  "receipts": [],
+  "request": {
+    "schema_version": "1.0.0",
+    "operation": "product_write",
+    "target_path": "docs/evidence/plan119_durable_outcome_progress.json",
+    "ordinary_approval": true,
+    "approval_text": "I approve, continue",
+    "cost_telemetry_usd": "1000000",
+    "elapsed_telemetry_seconds": 999999
+  }
+}

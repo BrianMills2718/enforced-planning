@@ -28,7 +28,10 @@ from enforced_planning.outcome_prewrite_observation import (
     load_observation_records,
     observe_prewrite_outcome,
 )
-from enforced_planning.outcome_selection import select_outcome_for_session
+from enforced_planning.outcome_selection import (
+    record_selected_outcome_progress_for_session,
+    select_outcome_for_session,
+)
 from enforced_planning.prewrite_claim_fast import evaluate_prewrite_fast
 from enforced_planning.prewrite_claim_projection import write_projection
 
@@ -563,6 +566,121 @@ def test_selected_circular_control_would_deny_but_preserves_ordinary_allow(
     assert (payload["decision"], payload["reason_code"]) == ("allow", "exact_live_claim")
     assert payload["outcome_observation"]["disposition"] == "would_deny"
     assert payload["outcome_observation"]["outcome_reason_code"] == "recovery_required"
+
+
+def test_selected_prewrite_uses_post_selection_progress_head_without_changing_ordinary_allow(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CODEX_THREAD_ID", "plan116-test")
+    _repo, worktree, claims_dir, _claim_path, projection_path = _fixture(tmp_path)
+    positive, _circular = _scenarios()
+    scenario_path = worktree / "scenarios" / "selected-progress-base.json"
+    _write_scenario(scenario_path, positive)
+    selection = select_outcome_for_session(
+        agent="codex",
+        project="enforced-planning",
+        scope="plan116-test",
+        session_id=SESSION,
+        execution_authority_ref="goal:owner-prewrite-correlation",
+        scenario_path=scenario_path,
+        claims_dir=claims_dir,
+    )
+    base_result = evaluate_scenario(positive)
+    contract_sha256 = canonical_sha256(positive.contract)
+    first = OutcomeProgressReceiptV1(
+        receipt_id="plan-119-post-selection-motion-one",
+        outcome_contract_sha256=contract_sha256,
+        prior_receipt_sha256=base_result.lease.last_receipt_sha256,
+        progress_kind="non_outcome",
+        dimension="owner continuation behavior",
+        summary="One post-selection increment did not advance the canonical owner journey.",
+        evidence=_evidence("plan-119-post-selection-motion-one"),
+        failure_boundary="post-selection-owner-outcome-unchanged",
+    )
+    second = OutcomeProgressReceiptV1(
+        receipt_id="plan-119-post-selection-motion-two",
+        outcome_contract_sha256=contract_sha256,
+        prior_receipt_sha256=canonical_sha256(first),
+        progress_kind="non_outcome",
+        dimension="owner continuation behavior",
+        summary="A second post-selection increment left the canonical owner journey unchanged.",
+        evidence=_evidence("plan-119-post-selection-motion-two"),
+        failure_boundary="post-selection-owner-outcome-unchanged",
+    )
+    first_path = worktree / "scenarios" / "plan119-motion-one.json"
+    second_path = worktree / "scenarios" / "plan119-motion-two.json"
+    first_path.write_text(first.model_dump_json(indent=2) + "\n", encoding="utf-8")
+    second_path.write_text(second.model_dump_json(indent=2) + "\n", encoding="utf-8")
+    first_result = record_selected_outcome_progress_for_session(
+        agent="codex",
+        project="enforced-planning",
+        scope="plan116-test",
+        session_id=SESSION,
+        receipt_path=first_path,
+        claims_dir=claims_dir,
+    )
+    second_result = record_selected_outcome_progress_for_session(
+        agent="codex",
+        project="enforced-planning",
+        scope="plan116-test",
+        session_id=SESSION,
+        receipt_path=second_path,
+        claims_dir=claims_dir,
+    )
+    assert first_result.transition.successor_lease.state == "active"
+    assert second_result.transition.successor_lease.state == "recovery_required"
+
+    completed = _invoke_cli(
+        tmp_path,
+        worktree,
+        claims_dir,
+        projection_path,
+        selected=True,
+    )
+
+    assert completed.returncode == 0
+    payload = json.loads(completed.stdout)
+    assert (payload["decision"], payload["reason_code"]) == ("allow", "exact_live_claim")
+    observation = payload["outcome_observation"]
+    assert observation["disposition"] == "would_deny"
+    assert observation["outcome_reason_code"] == "recovery_required"
+    assert observation["progress_transition_count"] == 2
+    assert observation["progress_head_transition_sha256"] == second_result.transition_sha256
+    assert observation["progress_head_receipt_sha256"] == canonical_sha256(second)
+    assert observation["base_scenario_sha256"] == selection.binding.scenario_sha256
+    assert observation["scenario_sha256"] != selection.binding.scenario_sha256
+    assert observation["lease_sha256"] == second_result.transition.successor_lease_sha256
+    assert observation["ordinary_authority_preserved"] is True
+    assert observation["enforcement_applied"] is False
+
+    def tamper_progress_history(payload: dict[str, object]) -> None:
+        tracker = payload["tracker"]
+        assert isinstance(tracker, dict)
+        history = tracker["outcome_progress_transitions"]
+        assert isinstance(history, list)
+        assert isinstance(history[-1], dict)
+        history[-1]["successor_lease_sha256"] = "0" * 64
+
+    session_contracts.mutate_session_tracker(
+        Path(selection.tracker_path),
+        tamper_progress_history,
+    )
+    tampered = _invoke_cli(
+        tmp_path,
+        worktree,
+        claims_dir,
+        projection_path,
+        selected=True,
+    )
+    assert tampered.returncode == 0
+    tampered_payload = json.loads(tampered.stdout)
+    assert (tampered_payload["decision"], tampered_payload["reason_code"]) == (
+        "allow",
+        "exact_live_claim",
+    )
+    assert tampered_payload["outcome_observation"]["disposition"] == "observation_error"
+    assert tampered_payload["outcome_observation"]["error_code"] == "progress_history_invalid"
 
 
 @pytest.mark.parametrize(

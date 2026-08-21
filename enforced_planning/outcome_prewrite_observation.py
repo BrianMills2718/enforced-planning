@@ -16,7 +16,7 @@ import os
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Literal, TypeAlias
+from typing import Any, Literal, TypeAlias, TypedDict
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
@@ -93,6 +93,7 @@ class OutcomePreWriteCorrelationV1(StrictModel):
     scenario_ref: str = Field(min_length=1)
     scenario_file_sha256: str = Field(pattern=HEX_SHA256_PATTERN)
     scenario_id: str = Field(min_length=3)
+    base_scenario_sha256: str | None = Field(default=None, pattern=HEX_SHA256_PATTERN)
     scenario_sha256: str = Field(pattern=HEX_SHA256_PATTERN)
     outcome_contract_sha256: str = Field(pattern=HEX_SHA256_PATTERN)
     outcome_project_id: str = Field(min_length=1)
@@ -103,6 +104,9 @@ class OutcomePreWriteCorrelationV1(StrictModel):
     replayed_receipt_sha256s: list[str]
     lease_sha256: str = Field(pattern=HEX_SHA256_PATTERN)
     lease_state: Literal["active", "recovery_required", "stalled", "complete", "parked"]
+    progress_transition_count: int = Field(default=0, ge=0)
+    progress_head_transition_sha256: str | None = Field(default=None, pattern=HEX_SHA256_PATTERN)
+    progress_head_receipt_sha256: str | None = Field(default=None, pattern=HEX_SHA256_PATTERN)
     outcome_allowed: bool
     outcome_reason_code: str = Field(min_length=3)
     disposition: ObservationDisposition
@@ -136,6 +140,16 @@ class OutcomePreWriteCorrelationV1(StrictModel):
             value is not None for value in selection_fields
         ):
             raise ValueError("selected correlation metadata must be complete or absent")
+        progress_head_fields = (
+            self.progress_head_transition_sha256,
+            self.progress_head_receipt_sha256,
+        )
+        if self.progress_transition_count == 0 and any(value is not None for value in progress_head_fields):
+            raise ValueError("zero progress transitions cannot retain a progress head")
+        if self.progress_transition_count > 0 and not all(
+            value is not None for value in progress_head_fields
+        ):
+            raise ValueError("nonzero progress transitions require complete progress-head digests")
         return self
 
 
@@ -182,6 +196,15 @@ class OutcomePreWriteObservationFailureV1(StrictModel):
 
 
 OutcomePreWriteObservationRecordV1: TypeAlias = OutcomePreWriteCorrelationV1 | OutcomePreWriteObservationFailureV1
+
+
+class SelectionFields(TypedDict):
+    """Complete optional selection correlation metadata for model construction."""
+
+    selection_binding_sha256: str | None
+    selection_tracker_path: str | None
+    selection_execution_authority_ref: str | None
+    selection_claim_identity_sha256: str | None
 
 
 def _correlation_receipt_id() -> str:
@@ -289,7 +312,7 @@ def _append_record(path: Path, record: OutcomePreWriteObservationRecordV1) -> No
             fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
 
-def _selection_fields(selection: ResolvedOutcomeSelectionV1 | None) -> dict[str, str | None]:
+def _selection_fields(selection: ResolvedOutcomeSelectionV1 | None) -> SelectionFields:
     if selection is None:
         return {
             "selection_binding_sha256": None,
@@ -323,6 +346,7 @@ def observe_prewrite_outcome(
     scenario: OutcomeContinuationScenarioV1 | None = None
     scenario_file_sha256: str | None = None
     scenario_ref: str | None = None
+    evaluation_scenario: OutcomeContinuationScenarioV1 | None = None
     scenario_sha256: str | None = None
     outcome_contract_sha256: str | None = None
     try:
@@ -333,6 +357,7 @@ def observe_prewrite_outcome(
         )
         scenario_sha256 = canonical_sha256(scenario)
         outcome_contract_sha256 = canonical_sha256(scenario.contract)
+        evaluation_scenario = scenario
         if _selection is not None:
             if scenario_path.expanduser().resolve() != Path(_selection.scenario_path).expanduser().resolve():
                 raise OutcomePreWriteObservationError(
@@ -345,6 +370,7 @@ def observe_prewrite_outcome(
                     _selection.binding.scenario_file_sha256,
                 ),
                 "scenario_sha256": (scenario_sha256, _selection.binding.scenario_sha256),
+                "base_scenario_sha256": (scenario_sha256, _selection.base_scenario_sha256),
                 "outcome_contract_sha256": (
                     outcome_contract_sha256,
                     _selection.binding.outcome_contract_sha256,
@@ -355,6 +381,28 @@ def observe_prewrite_outcome(
                 raise OutcomePreWriteObservationError(
                     "selection_scenario_stale",
                     "selected scenario changed before observation: " + ", ".join(mismatches),
+                )
+            evaluation_scenario = _selection.effective_scenario
+            effective_checks = {
+                "effective_scenario_sha256": (
+                    canonical_sha256(evaluation_scenario),
+                    _selection.effective_scenario_sha256,
+                ),
+                "scenario_id": (evaluation_scenario.scenario_id, scenario.scenario_id),
+                "contract": (evaluation_scenario.contract, scenario.contract),
+                "starting_lease": (evaluation_scenario.starting_lease, scenario.starting_lease),
+                "request": (evaluation_scenario.request, scenario.request),
+                "recovery_lease": (evaluation_scenario.recovery_lease, scenario.recovery_lease),
+                "base_receipts": (
+                    evaluation_scenario.receipts[: len(scenario.receipts)],
+                    scenario.receipts,
+                ),
+            }
+            mismatches = [name for name, (actual, expected) in effective_checks.items() if actual != expected]
+            if mismatches:
+                raise OutcomePreWriteObservationError(
+                    "selection_progress_stale",
+                    "resolved selected progress changed before observation: " + ", ".join(mismatches),
                 )
         if scenario.request.operation != "product_write":
             raise OutcomePreWriteObservationError(
@@ -371,7 +419,22 @@ def observe_prewrite_outcome(
                 "project_mismatch",
                 "scenario outcome project does not equal the ordinary claim project",
             )
-        result = evaluate_scenario(scenario)
+        result = evaluate_scenario(evaluation_scenario)
+        if _selection is not None:
+            current_checks = {
+                "effective_scenario_sha256": (
+                    result.scenario_sha256,
+                    _selection.effective_scenario_sha256,
+                ),
+                "current_lease_sha256": (result.lease_sha256, _selection.current_lease_sha256),
+                "current_lease_state": (result.lease.state, _selection.current_lease_state),
+            }
+            mismatches = [name for name, (actual, expected) in current_checks.items() if actual != expected]
+            if mismatches:
+                raise OutcomePreWriteObservationError(
+                    "selection_progress_stale",
+                    "resolved selected progress no longer matches its current head: " + ", ".join(mismatches),
+                )
         record: OutcomePreWriteObservationRecordV1 = OutcomePreWriteCorrelationV1(
             correlation_receipt_id=_correlation_receipt_id(),
             observed_at=datetime.now(UTC),
@@ -380,6 +443,7 @@ def observe_prewrite_outcome(
             scenario_ref=scenario_ref,
             scenario_file_sha256=scenario_file_sha256,
             scenario_id=scenario.scenario_id,
+            base_scenario_sha256=scenario_sha256,
             scenario_sha256=result.scenario_sha256,
             outcome_contract_sha256=result.outcome_contract_sha256,
             outcome_project_id=scenario.contract.project_id,
@@ -390,6 +454,15 @@ def observe_prewrite_outcome(
             replayed_receipt_sha256s=result.replayed_receipt_sha256s,
             lease_sha256=result.lease_sha256,
             lease_state=result.lease.state,
+            progress_transition_count=(
+                _selection.progress_transition_count if _selection is not None else 0
+            ),
+            progress_head_transition_sha256=(
+                _selection.progress_head_transition_sha256 if _selection is not None else None
+            ),
+            progress_head_receipt_sha256=(
+                _selection.progress_head_receipt_sha256 if _selection is not None else None
+            ),
             outcome_allowed=result.decision.allowed,
             outcome_reason_code=result.decision.reason_code,
             disposition="would_allow" if result.decision.allowed else "would_deny",

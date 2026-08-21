@@ -34,6 +34,7 @@ from enforced_planning.prewrite_claim_projection import write_projection
 
 ROOT = Path(__file__).resolve().parents[1]
 TARGET = "docs/evidence/plan116_prewrite_outcome_correlation.json"
+PLAN117_TARGET = "docs/evidence/plan117_durable_outcome_selection_binding.json"
 SESSION = "codex:plan116-test"
 PROFILE_SHA256 = hashlib.sha256(b"plan116-test-profile").hexdigest()
 
@@ -48,7 +49,12 @@ def _git(repo: Path, *args: str) -> str:
     return completed.stdout.strip()
 
 
-def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, Path, Path]:
+def _fixture(
+    tmp_path: Path,
+    *,
+    plan_ref: str = "goal:owner-prewrite-correlation",
+    target: str = TARGET,
+) -> tuple[Path, Path, Path, Path, Path]:
     tmp_path.mkdir(parents=True, exist_ok=True)
     repo = tmp_path / "repo"
     repo.mkdir()
@@ -72,7 +78,7 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, Path, Path]:
         project="enforced-planning",
         scope="plan116-test",
         intent="exercise outcome pre-write observation",
-        plan_ref="goal:owner-prewrite-correlation",
+        plan_ref=plan_ref,
         repo_root=str(repo),
         worktree_path=str(worktree),
         branch="plan116-test",
@@ -100,7 +106,7 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, Path, Path]:
                 "scope": "plan116-test",
                 "intent": "exercise outcome pre-write observation",
                 "claim_type": "program",
-                "write_paths": [TARGET],
+                "write_paths": [target],
                 "read_paths": [],
                 "worktree_path": str(worktree),
                 "repo_root": str(repo),
@@ -109,7 +115,7 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, Path, Path]:
                 "session_id": SESSION,
                 "broader_goal": "Owner Prewrite Correlation",
                 "tracker_path": str(tracker_path),
-                "plan_ref": "goal:owner-prewrite-correlation",
+                "plan_ref": plan_ref,
                 "heartbeat_at": now.isoformat(),
                 "status": "active",
                 "updated_at": now.isoformat(),
@@ -258,6 +264,7 @@ def _invoke_cli(
     selected: bool = False,
     json_output: bool = True,
     mode: str = "observe",
+    target: str = TARGET,
 ) -> subprocess.CompletedProcess[str]:
     command = [
         sys.executable,
@@ -295,7 +302,7 @@ def _invoke_cli(
     return subprocess.run(
         command,
         cwd=worktree,
-        input=json.dumps(_payload(worktree)),
+        input=json.dumps(_payload(worktree, target=target)),
         capture_output=True,
         text=True,
         check=False,
@@ -556,6 +563,61 @@ def test_selected_circular_control_would_deny_but_preserves_ordinary_allow(
     assert (payload["decision"], payload["reason_code"]) == ("allow", "exact_live_claim")
     assert payload["outcome_observation"]["disposition"] == "would_deny"
     assert payload["outcome_observation"]["outcome_reason_code"] == "recovery_required"
+
+
+@pytest.mark.parametrize(
+    ("scenario_name", "disposition", "reason_code"),
+    [
+        ("plan117-owner-progress.json", "would_allow", "active_in_scope"),
+        ("plan117-circular.json", "would_deny", "recovery_required"),
+    ],
+)
+def test_checked_in_plan117_selected_controls_produce_both_signs(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    scenario_name: str,
+    disposition: str,
+    reason_code: str,
+) -> None:
+    """The retained Plan 117 controls execute through selected-state lookup."""
+
+    monkeypatch.setenv("CODEX_THREAD_ID", "plan116-test")
+    _repo, worktree, claims_dir, _claim_path, projection_path = _fixture(
+        tmp_path,
+        plan_ref="goal:durable-outcome-selection",
+        target=PLAN117_TARGET,
+    )
+    source = ROOT / "examples" / "owner-real-outcome-observe" / scenario_name
+    scenario_path = worktree / "scenarios" / scenario_name
+    scenario_path.write_bytes(source.read_bytes())
+    selection = select_outcome_for_session(
+        agent="codex",
+        project="enforced-planning",
+        scope="plan116-test",
+        session_id=SESSION,
+        execution_authority_ref="goal:durable-outcome-selection",
+        scenario_path=scenario_path,
+        claims_dir=claims_dir,
+    )
+
+    completed = _invoke_cli(
+        tmp_path,
+        worktree,
+        claims_dir,
+        projection_path,
+        selected=True,
+        target=PLAN117_TARGET,
+    )
+
+    assert completed.returncode == 0
+    payload = json.loads(completed.stdout)
+    assert (payload["decision"], payload["reason_code"]) == ("allow", "exact_live_claim")
+    observation = payload["outcome_observation"]
+    assert observation["disposition"] == disposition
+    assert observation["outcome_reason_code"] == reason_code
+    assert observation["selection_binding_sha256"] == selection.binding_sha256
+    assert observation["ordinary_authority_preserved"] is True
+    assert observation["enforcement_applied"] is False
 
 
 def test_selected_cli_records_missing_and_tampered_binding_without_changing_exit(

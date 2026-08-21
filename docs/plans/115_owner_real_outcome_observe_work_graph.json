@@ -13,7 +13,7 @@
       "objective": "Bind the canonical Plan 55 compact-context owner result to the unchanged Plan 114 CLI, retain the admitted next action and manual-friction readout, and select the first evidence-supported runtime integration seam without implementing or promoting it.",
       "profile": "small",
       "execution_class": "independently_executable",
-      "claimability": "ready_for_execution",
+      "claimability": "not_applicable",
       "authorization_mode": "registry_claim",
       "scope": {
         "included": [
@@ -160,8 +160,9 @@
         "max_active_per_claimant": 1,
         "named_owner_id": null
       },
-      "status": "ready",
-      "record_version": 1
+      "status": "accepted",
+      "record_version": 2,
+      "updated_at": "2026-08-21T03:05:25Z"
     }
   ]
 }

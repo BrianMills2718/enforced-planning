@@ -142,6 +142,7 @@ class VerificationReceiptV1(StrictModel):
     operation: Literal["verify"] = "verify"
     task_id: str
     task_root: Literal["."] = "."
+    framework_revision: str
     baseline_revision: str
     result_revision: str
     agent_session_id: str
@@ -197,7 +198,7 @@ def _run(
 def _git(task_root: Path, *args: str, check: bool = True) -> str:
     """Run Git against the disposable task repository."""
 
-    return _run(["git", *args], cwd=task_root, check=check).stdout.strip()
+    return _run(["git", *args], cwd=task_root, check=check).stdout.rstrip("\n")
 
 
 def _write(path: Path, content: str) -> None:
@@ -464,6 +465,34 @@ def _tracked_text_has_personal_sentinel(task_root: Path) -> tuple[bool, str]:
     return not findings, ", ".join(findings)
 
 
+def _cleanroom_component_revision(task_root: Path) -> str:
+    """Return the integrity-recorded component revision for this task root."""
+
+    receipt_path = task_root.parents[1] / ".loop-engineering" / "state" / "install_receipt.json"
+    try:
+        payload = json.loads(receipt_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise GovernedDeliveryError(
+            "invalid_cleanroom_receipt",
+            f"Unable to read the clean-room install receipt: {exc}",
+            path=str(receipt_path),
+        ) from exc
+    revision = payload.get("component_revision")
+    if not isinstance(revision, str) or not revision:
+        raise GovernedDeliveryError(
+            "invalid_cleanroom_receipt",
+            "Clean-room receipt has no component revision.",
+            path=str(receipt_path),
+        )
+    return revision
+
+
+def _executing_framework_revision() -> str:
+    """Return the exact Git revision containing the executing verifier source."""
+
+    return _git(Path(__file__).resolve().parents[1], "rev-parse", "HEAD")
+
+
 def _collect_checks(task_root: Path, contract: GovernedTaskV1) -> list[CheckResultV1]:
     """Execute the complete independent check set against current task state."""
 
@@ -574,6 +603,21 @@ def _collect_checks(task_root: Path, contract: GovernedTaskV1) -> list[CheckResu
             "governed_install",
             not missing_governance,
             "canonical governed-repo surfaces are installed" if not missing_governance else "missing: " + ", ".join(missing_governance),
+        )
+    )
+    recorded_framework_revision = _cleanroom_component_revision(task_root)
+    executing_framework_revision = _executing_framework_revision()
+    checks.append(
+        _check_result(
+            "framework_revision_binding",
+            recorded_framework_revision == executing_framework_revision,
+            (
+                "prepared component equals executing verifier revision"
+                if recorded_framework_revision == executing_framework_revision
+                else "prepared component does not equal executing verifier revision: "
+                f"prepared={recorded_framework_revision} executing={executing_framework_revision}"
+            ),
+            observed=executing_framework_revision,
         )
     )
     portable, personal_paths = _tracked_text_has_personal_sentinel(task_root)
@@ -908,6 +952,7 @@ def verify_governed_task(
         "operation": "verify",
         "task_id": contract.task_id,
         "task_root": ".",
+        "framework_revision": _executing_framework_revision(),
         "baseline_revision": _git(root, "rev-parse", BASELINE_TAG),
         "result_revision": _git(root, "rev-parse", "HEAD"),
         "agent_session_id": session_id,

@@ -248,6 +248,20 @@ def test_repeated_unchanged_failure_requires_course_checkpoint(tmp_path: Path) -
     assert probe_governed_task(task_root).decision == "continue"
 
 
+def test_probe_preserves_first_porcelain_path(tmp_path: Path) -> None:
+    """Leading porcelain status whitespace cannot truncate a declared path."""
+
+    task_root, _ = _prepared_task(tmp_path)
+    readme = task_root / "README.md"
+    readme.write_text(readme.read_text(encoding="utf-8") + "\nWorking note.\n", encoding="utf-8")
+
+    receipt = probe_governed_task(task_root)
+    scope = _check(receipt, "declared_write_scope")
+
+    assert scope.verdict == "pass"
+    assert scope.observed == "README.md"
+
+
 def test_verifier_accepts_plan_docs_code_and_declared_git_diff(tmp_path: Path) -> None:
     """The smallest complete consumer result passes every independent check."""
 
@@ -261,6 +275,7 @@ def test_verifier_accepts_plan_docs_code_and_declared_git_diff(tmp_path: Path) -
     assert receipt.verdict == "pass"
     assert receipt.baseline_revision == _git(task_root, "rev-parse", "governed-task-baseline")
     assert receipt.result_revision == _git(task_root, "rev-parse", "HEAD")
+    assert receipt.framework_revision == _git(REPO_ROOT, "rev-parse", "HEAD")
     assert receipt.agent_session_id == "codex:test-session"
     assert receipt.receipt_sha256
     assert all(item.verdict == "pass" for item in receipt.checks)

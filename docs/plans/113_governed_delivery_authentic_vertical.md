@@ -1,6 +1,6 @@
 # Plan #113: Governed Delivery Authentic Vertical
 
-**Status:** In Progress — reusable module/CLI and eight focused both-sign tests pass; fresh authentic consumer run pending
+**Status:** In Progress — reusable module/CLI and nine focused both-sign tests pass; fresh authentic consumer run pending
 **Type:** implementation
 **Priority:** Critical
 **phase_ref:** "Authentic governed-delivery proof frontier"
@@ -282,6 +282,14 @@ The durable contract now stores `python` and resolves the interpreter only at
 execution time; preparation also requires the independent `portable_content`
 check to pass before returning `prepared`. That root is likewise excluded from
 completion evidence.
+
+The first changed-state probe exposed a scope-parser defect: stripping the
+whole porcelain status output removed the first line's leading status byte and
+turned `README.md` into a phantom `EADME.md`. Git output now preserves leading
+whitespace, with a focused working-tree negative control. Terminal receipts
+also include the executing framework revision, and the check set rejects a
+prepared component/verifier revision mismatch. The affected external root is
+diagnostic evidence, not completion evidence.
 
 ## Pre-Made Decisions
 

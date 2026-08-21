@@ -32,6 +32,7 @@ from enforced_planning.outcome_continuation import (
 )
 from enforced_planning.outcome_selection import (
     OutcomeSelectionError,
+    record_selected_outcome_progress_for_session,
     resolve_selected_outcome_for_prewrite,
     restart_selected_outcome_for_session,
     select_outcome_for_session,
@@ -97,6 +98,35 @@ def _scenario(
         contract=contract,
         receipts=[receipt],
         request=AdmissionRequestV1(operation="product_write", target_path=TARGET),
+    )
+
+
+def _progress_receipt(
+    scenario: OutcomeContinuationScenarioV1,
+    *,
+    receipt_id: str,
+    prior_receipt_sha256: str | None,
+    progress_kind: str = "behavioral_advance",
+    failure_boundary: str | None = None,
+) -> OutcomeProgressReceiptV1:
+    return OutcomeProgressReceiptV1(
+        receipt_id=receipt_id,
+        outcome_contract_sha256=canonical_sha256(scenario.contract),
+        prior_receipt_sha256=prior_receipt_sha256,
+        progress_kind=progress_kind,
+        dimension="durable session binding",
+        summary=f"Retain exact selected progress evidence for {receipt_id}.",
+        evidence=EvidenceBindingV1(
+            source_revision="0a8c10058d5b42524c141037f4092aadc760ec2f",
+            configuration_sha256=hashlib.sha256(receipt_id.encode()).hexdigest(),
+            route="plan119-selected-progress",
+            command=["python", "scripts/outcome_continuation.py", "progress"],
+            observation_sha256=hashlib.sha256(f"observed-{receipt_id}".encode()).hexdigest(),
+            artifact_refs=["docs/plans/119_durable_selected_outcome_progress.md"],
+            observed_at="2026-08-21T07:00:00Z",
+        ),
+        failure_boundary=failure_boundary,
+        discriminating_evidence=progress_kind != "non_outcome",
     )
 
 
@@ -781,6 +811,54 @@ def test_selection_cli_persists_machine_readable_binding(
     assert len(payload["binding_sha256"]) == 64
 
 
+def test_progress_cli_records_and_replays_machine_readable_current_head(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _selected, _repo, worktree, claims_dir, _claim_path, scenario_path = _select(
+        tmp_path,
+        monkeypatch,
+    )
+    scenario = OutcomeContinuationScenarioV1.model_validate_json(
+        scenario_path.read_text(encoding="utf-8")
+    )
+    receipt = _progress_receipt(
+        scenario,
+        receipt_id="plan119-cli-progress",
+        prior_receipt_sha256=evaluate_scenario(scenario).lease.last_receipt_sha256,
+    )
+    receipt_path = worktree / "scenarios" / "plan119-cli-progress.json"
+    receipt_path.write_text(receipt.model_dump_json(indent=2) + "\n", encoding="utf-8")
+    command = [
+        sys.executable,
+        str(ROOT / "scripts" / "outcome_continuation.py"),
+        "progress",
+        "--receipt",
+        str(receipt_path),
+        "--agent",
+        "codex",
+        "--project",
+        "enforced-planning",
+        "--scope",
+        "plan117-test",
+        "--session-id",
+        SESSION,
+        "--claims-dir",
+        str(claims_dir),
+    ]
+
+    recorded = subprocess.run(command, cwd=worktree, capture_output=True, text=True, check=False)
+    replay = subprocess.run(command, cwd=worktree, capture_output=True, text=True, check=False)
+
+    assert recorded.returncode == replay.returncode == 0
+    recorded_payload = json.loads(recorded.stdout)
+    replay_payload = json.loads(replay.stdout)
+    assert recorded_payload["status"] == "recorded"
+    assert replay_payload["status"] == "idempotent"
+    assert replay_payload["transition_sha256"] == recorded_payload["transition_sha256"]
+    assert replay_payload["transition"]["receipt_sha256"] == canonical_sha256(receipt)
+
+
 def test_session_start_refresh_preserves_create_once_selection(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -828,6 +906,324 @@ def test_session_start_refresh_preserves_create_once_selection(
     )
     assert replay.status == "idempotent"
     assert replay.binding_sha256 == result.binding_sha256
+
+
+def test_selected_progress_advances_current_head_and_exact_replay_is_byte_idempotent(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    selected, repo, worktree, claims_dir, claim_path, scenario_path = _select(
+        tmp_path,
+        monkeypatch,
+    )
+    scenario = OutcomeContinuationScenarioV1.model_validate_json(
+        scenario_path.read_text(encoding="utf-8")
+    )
+    base = evaluate_scenario(scenario)
+    receipt = _progress_receipt(
+        scenario,
+        receipt_id="plan119-behavioral-advance",
+        prior_receipt_sha256=base.lease.last_receipt_sha256,
+    )
+    receipt_path = worktree / "scenarios" / "plan119-progress.json"
+    receipt_path.write_text(receipt.model_dump_json(indent=2) + "\n", encoding="utf-8")
+
+    recorded = record_selected_outcome_progress_for_session(
+        agent="codex",
+        project="enforced-planning",
+        scope="plan117-test",
+        session_id=SESSION,
+        receipt_path=receipt_path,
+        claims_dir=claims_dir,
+    )
+    tracker_path = Path(selected.tracker_path)
+    tracker_after_record = tracker_path.read_bytes()
+    replay = record_selected_outcome_progress_for_session(
+        agent="codex",
+        project="enforced-planning",
+        scope="plan117-test",
+        session_id=SESSION,
+        receipt_path=receipt_path,
+        claims_dir=claims_dir,
+    )
+
+    assert recorded.status == "recorded"
+    assert replay.status == "idempotent"
+    assert replay.transition_sha256 == recorded.transition_sha256
+    assert tracker_path.read_bytes() == tracker_after_record
+    resolved = resolve_selected_outcome_for_prewrite(
+        agent="codex",
+        project="enforced-planning",
+        scope="plan117-test",
+        session_id=SESSION,
+        repo_root=str(repo),
+        worktree_path=str(worktree),
+        branch="plan117-test",
+        claim_source_file=str(claim_path),
+        target_path=TARGET,
+    )
+    assert resolved.binding_sha256 == selected.binding_sha256
+    assert resolved.progress_transition_count == 1
+    assert resolved.progress_head_transition_sha256 == recorded.transition_sha256
+    assert resolved.progress_head_receipt_sha256 == canonical_sha256(receipt)
+    assert resolved.current_lease_sha256 == recorded.transition.successor_lease_sha256
+    assert resolved.current_lease_state == "active"
+    assert resolved.effective_scenario.receipts == [*scenario.receipts, receipt]
+
+    stale = _progress_receipt(
+        scenario,
+        receipt_id="plan119-stale-parent",
+        prior_receipt_sha256=base.lease.last_receipt_sha256,
+    )
+    stale_path = worktree / "scenarios" / "plan119-stale.json"
+    stale_path.write_text(stale.model_dump_json(indent=2) + "\n", encoding="utf-8")
+    with pytest.raises(OutcomeSelectionError) as stale_error:
+        record_selected_outcome_progress_for_session(
+            agent="codex",
+            project="enforced-planning",
+            scope="plan117-test",
+            session_id=SESSION,
+            receipt_path=stale_path,
+            claims_dir=claims_dir,
+        )
+    assert stale_error.value.code == "receipt_lineage_mismatch"
+    assert tracker_path.read_bytes() == tracker_after_record
+
+    receipt_path.write_text(receipt.model_dump_json(indent=4) + "\n", encoding="utf-8")
+    with pytest.raises(OutcomeSelectionError) as changed_file:
+        record_selected_outcome_progress_for_session(
+            agent="codex",
+            project="enforced-planning",
+            scope="plan117-test",
+            session_id=SESSION,
+            receipt_path=receipt_path,
+            claims_dir=claims_dir,
+        )
+    assert changed_file.value.code == "progress_receipt_conflict"
+    assert tracker_path.read_bytes() == tracker_after_record
+
+
+def test_cross_session_resume_retains_progress_head_and_successor_extends_it(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    selected, repo, worktree, claims_dir, claim_path, scenario_path = _select(
+        tmp_path,
+        monkeypatch,
+    )
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    monkeypatch.setattr(
+        claim_mutation_receipts,
+        "DEFAULT_EVENTS_PATH",
+        tmp_path / "claim-mutation-events.jsonl",
+    )
+    scenario = OutcomeContinuationScenarioV1.model_validate_json(
+        scenario_path.read_text(encoding="utf-8")
+    )
+    base = evaluate_scenario(scenario)
+    first_receipt = _progress_receipt(
+        scenario,
+        receipt_id="plan119-predecessor-progress",
+        prior_receipt_sha256=base.lease.last_receipt_sha256,
+        progress_kind="non_outcome",
+        failure_boundary="selected progress handoff boundary",
+    )
+    first_path = worktree / "scenarios" / "plan119-first.json"
+    first_path.write_text(first_receipt.model_dump_json(indent=2) + "\n", encoding="utf-8")
+    first = record_selected_outcome_progress_for_session(
+        agent="codex",
+        project="enforced-planning",
+        scope="plan117-test",
+        session_id=SESSION,
+        receipt_path=first_path,
+        claims_dir=claims_dir,
+    )
+
+    session_lifecycle.handoff_session(
+        agent="codex",
+        project="enforced-planning",
+        scope="plan117-test",
+        note="continue the exact selected progress head",
+    )
+    successor_session = "codex:plan119-successor"
+    resumed = session_lifecycle.resume_session(
+        agent="codex",
+        project="enforced-planning",
+        scope="plan117-test",
+        worktree_path=str(worktree),
+        branch="plan117-test",
+        current_phase="extend retained selected progress",
+        session_id=successor_session,
+    )
+    assert resumed["outcome_session_transfer"]["progress_transition_count"] == 1
+    assert (
+        resumed["outcome_session_transfer"]["progress_head_transition_sha256"]
+        == first.transition_sha256
+    )
+    assert (
+        resumed["outcome_session_transfer"]["current_lease_sha256"]
+        == first.transition.successor_lease_sha256
+    )
+
+    monkeypatch.setenv("CODEX_THREAD_ID", "plan119-successor")
+    retained = resolve_selected_outcome_for_prewrite(
+        agent="codex",
+        project="enforced-planning",
+        scope="plan117-test",
+        session_id=successor_session,
+        repo_root=str(repo),
+        worktree_path=str(worktree),
+        branch="plan117-test",
+        claim_source_file=str(claim_path),
+        target_path=TARGET,
+    )
+    assert retained.progress_transition_count == 1
+    assert retained.progress_head_receipt_sha256 == canonical_sha256(first_receipt)
+
+    successor_receipt = _progress_receipt(
+        scenario,
+        receipt_id="plan119-successor-progress",
+        prior_receipt_sha256=canonical_sha256(first_receipt),
+    )
+    successor_path = worktree / "scenarios" / "plan119-successor.json"
+    successor_path.write_text(successor_receipt.model_dump_json(indent=2) + "\n", encoding="utf-8")
+    successor = record_selected_outcome_progress_for_session(
+        agent="codex",
+        project="enforced-planning",
+        scope="plan117-test",
+        session_id=successor_session,
+        receipt_path=successor_path,
+        claims_dir=claims_dir,
+    )
+    assert successor.status == "recorded"
+    assert successor.progress_transition_count == 2
+    tracker = session_contracts.read_session_tracker(Path(selected.tracker_path))
+    transitions = tracker["tracker"]["outcome_progress_transitions"]
+    assert [item["selection_binding"]["session_id"] for item in transitions] == [
+        SESSION,
+        successor_session,
+    ]
+    resolved = resolve_selected_outcome_for_prewrite(
+        agent="codex",
+        project="enforced-planning",
+        scope="plan117-test",
+        session_id=successor_session,
+        repo_root=str(repo),
+        worktree_path=str(worktree),
+        branch="plan117-test",
+        claim_source_file=str(claim_path),
+        target_path=TARGET,
+    )
+    assert resolved.progress_transition_count == 2
+    assert resolved.progress_head_receipt_sha256 == canonical_sha256(successor_receipt)
+    assert resolved.current_lease_state == "active"
+
+
+def test_causal_restart_consumes_stalled_post_selection_progress_head(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CODEX_THREAD_ID", "plan117-test")
+    repo, worktree, claims_dir, claim_path, predecessor_path = _fixture(tmp_path)
+    predecessor = _restart_scenario().model_copy(update={"receipts": []})
+    predecessor_path.write_text(predecessor.model_dump_json(indent=2) + "\n", encoding="utf-8")
+    selected = select_outcome_for_session(
+        agent="codex",
+        project="enforced-planning",
+        scope="plan117-test",
+        session_id=SESSION,
+        execution_authority_ref="goal:durable-outcome",
+        scenario_path=predecessor_path,
+        claims_dir=claims_dir,
+    )
+
+    prior: str | None = None
+    final_progress = None
+    for index in range(1, 4):
+        receipt = _progress_receipt(
+            predecessor,
+            receipt_id=f"plan119-stalled-progress-{index}",
+            prior_receipt_sha256=prior,
+            progress_kind="non_outcome",
+            failure_boundary="post-selection-causal-boundary",
+        )
+        receipt_path = worktree / "scenarios" / f"plan119-stalled-{index}.json"
+        receipt_path.write_text(receipt.model_dump_json(indent=2) + "\n", encoding="utf-8")
+        final_progress = record_selected_outcome_progress_for_session(
+            agent="codex",
+            project="enforced-planning",
+            scope="plan117-test",
+            session_id=SESSION,
+            receipt_path=receipt_path,
+            claims_dir=claims_dir,
+        )
+        prior = canonical_sha256(receipt)
+    assert final_progress is not None
+    stalled_lease = final_progress.transition.successor_lease
+    assert stalled_lease.state == "stalled"
+
+    successor = _restart_scenario(successor=True)
+    successor_path = predecessor_path.with_name("plan119-restart-successor.json")
+    successor_path.write_text(successor.model_dump_json(indent=2) + "\n", encoding="utf-8")
+    successor_result = evaluate_scenario(successor)
+    delta = RestartDeltaV1(
+        delta_id="plan119-post-selection-restart",
+        recorded_at="2026-08-21T07:30:00Z",
+        predecessor_binding_sha256=selected.binding_sha256,
+        predecessor_contract_sha256=canonical_sha256(predecessor.contract),
+        predecessor_lease_sha256=canonical_sha256(stalled_lease),
+        predecessor_lineage_id=predecessor.contract.lineage_id,
+        predecessor_lease_state="stalled",
+        predecessor_non_outcome_count=stalled_lease.consecutive_non_outcome_increments,
+        predecessor_failure_boundary=stalled_lease.current_failure_boundary,
+        predecessor_failure_count=stalled_lease.same_boundary_failures,
+        predecessor_failed_evidence_refs=[
+            "docs/plans/119_durable_selected_outcome_progress.md"
+        ],
+        successor_contract_sha256=successor_result.outcome_contract_sha256,
+        successor_lineage_id=successor.contract.lineage_id,
+        prior_causal_hypothesis="Repeated implementation motion would eventually repair selected custody.",
+        changed_causal_hypothesis="The selected current head must drive restart eligibility and retained failure facts.",
+        prior_mechanism="Re-evaluate only the immutable selection-time scenario.",
+        changed_mechanism="Replay append-only progress transitions before validating causal restart.",
+        bounded_action="Replace only the stalled selected lineage after exact current-head validation.",
+        next_canonical_observation="Resolve the active successor through selected pre-write observation.",
+        stopping_condition="Stop if the appended stalled lease or failed evidence is not retained.",
+    )
+    delta_path = predecessor_path.with_name("plan119-restart-delta.json")
+    delta_path.write_text(delta.model_dump_json(indent=2) + "\n", encoding="utf-8")
+
+    restarted = restart_selected_outcome_for_session(
+        agent="codex",
+        project="enforced-planning",
+        scope="plan117-test",
+        session_id=SESSION,
+        successor_scenario_path=successor_path,
+        restart_delta_path=delta_path,
+        claims_dir=claims_dir,
+    )
+
+    assert restarted.status == "restarted"
+    assert restarted.transition.predecessor_lease == stalled_lease
+    assert restarted.transition.predecessor_failed_evidence_refs == (
+        "docs/plans/119_durable_selected_outcome_progress.md",
+    )
+    tracker = session_contracts.read_session_tracker(Path(selected.tracker_path))
+    assert len(tracker["tracker"]["outcome_progress_transitions"]) == 3
+    resolved = resolve_selected_outcome_for_prewrite(
+        agent="codex",
+        project="enforced-planning",
+        scope="plan117-test",
+        session_id=SESSION,
+        repo_root=str(repo),
+        worktree_path=str(worktree),
+        branch="plan117-test",
+        claim_source_file=str(claim_path),
+        target_path=TARGET,
+    )
+    assert resolved.binding.outcome_lineage_id == successor.contract.lineage_id
+    assert resolved.progress_transition_count == 0
+    assert resolved.current_lease_state == "active"
 
 
 def test_cross_session_resume_transfers_selected_outcome_without_reset(

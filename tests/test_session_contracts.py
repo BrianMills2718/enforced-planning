@@ -5,7 +5,7 @@ from __future__ import annotations
 import stat
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
-from datetime import UTC, datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -136,13 +136,19 @@ def test_tracker_update_preserves_outcome_selection_and_unrelated_fields(tmp_pat
     )
     path = session_contracts.write_session_tracker(record, tracker_dir=tmp_path)
 
-    session_contracts.mutate_session_tracker(
-        path,
-        lambda payload: payload["tracker"].__setitem__(
-            "outcome_selection",
-            {"schema_version": "1.0.0", "binding_sha256": "a" * 64},
-        ),
-    )
+    custody = {
+        "outcome_selection": {"schema_version": "1.0.0", "binding_sha256": "a" * 64},
+        "outcome_progress_transitions": [{"transition_sha256": "b" * 64}],
+        "outcome_session_transfers": [{"transfer_sha256": "c" * 64}],
+        "outcome_selection_transitions": [{"restart_sha256": "d" * 64}],
+    }
+
+    def add_custody(payload: dict[str, object]) -> None:
+        tracker = payload["tracker"]
+        assert isinstance(tracker, dict)
+        tracker.update(custody)
+
+    session_contracts.mutate_session_tracker(path, add_custody)
     session_contracts.update_session_tracker(
         path,
         current_phase="observe selected outcome",
@@ -151,7 +157,8 @@ def test_tracker_update_preserves_outcome_selection_and_unrelated_fields(tmp_pat
 
     payload = session_contracts.read_session_tracker(path)
     assert payload["tracker"]["current_phase"] == "observe selected outcome"
-    assert payload["tracker"]["outcome_selection"]["binding_sha256"] == "a" * 64
+    for field, value in custody.items():
+        assert payload["tracker"][field] == value
     assert payload["tracker"]["notes"] == "retain me"
 
 
@@ -176,13 +183,19 @@ def test_tracker_refresh_preserves_selection_and_rejects_identity_change(tmp_pat
         now=datetime(2026, 8, 21, 4, 0, tzinfo=UTC),
     )
     path = session_contracts.write_session_tracker(first, tracker_dir=tmp_path)
-    session_contracts.mutate_session_tracker(
-        path,
-        lambda payload: payload["tracker"].__setitem__(
-            "outcome_selection",
-            {"schema_version": "1.0.0", "binding_sha256": "a" * 64},
-        ),
-    )
+    custody = {
+        "outcome_selection": {"schema_version": "1.0.0", "binding_sha256": "a" * 64},
+        "outcome_progress_transitions": [{"transition_sha256": "b" * 64}],
+        "outcome_session_transfers": [{"transfer_sha256": "c" * 64}],
+        "outcome_selection_transitions": [{"restart_sha256": "d" * 64}],
+    }
+
+    def add_custody(payload: dict[str, object]) -> None:
+        tracker = payload["tracker"]
+        assert isinstance(tracker, dict)
+        tracker.update(custody)
+
+    session_contracts.mutate_session_tracker(path, add_custody)
 
     refreshed = session_contracts.build_session_tracker(
         contract=replace(
@@ -196,7 +209,8 @@ def test_tracker_refresh_preserves_selection_and_rejects_identity_change(tmp_pat
     session_contracts.write_session_tracker(refreshed, tracker_dir=tmp_path)
     payload = session_contracts.read_session_tracker(path)
     assert payload["tracker"]["current_phase"] == "observe outcome"
-    assert payload["tracker"]["outcome_selection"]["binding_sha256"] == "a" * 64
+    for field, value in custody.items():
+        assert payload["tracker"][field] == value
     assert payload["timestamps"]["created_at"] == "2026-08-21T04:00:00+00:00"
 
     changed = session_contracts.build_session_tracker(

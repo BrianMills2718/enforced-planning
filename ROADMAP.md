@@ -51,7 +51,7 @@ paths.
 
 Two configured generated consumers pass the same plan, documentation, progress,
 scope, portability, and independent-verifier controls. This is mechanical
-repeatability evidence. Plans #55 and #114–#118 then crossed the owner frontier
+repeatability evidence. Plans #55 and #114–#119 then crossed the owner frontier
 on Enforced Planning itself:
 
 - Plan #55 reduced the required context for one real framework module from 11
@@ -70,17 +70,22 @@ on Enforced Planning itself:
   and a same-project stalled-to-active causal restart. Both-sign selected
   observations remained advisory; independent review, owner-class resolution,
   cross-project successors, and blocking remain downstream.
+- Plan #119 made that selected lease evolve through append-only progress
+  receipts. The real owner lane advanced and replayed one current head without
+  changing tracker bytes; selected pre-write consumed the effective scenario,
+  while refresh, restart, recovery-required, and successor-session paths passed
+  focused controls without changing ordinary admission.
 
 These observations prove useful owner-real behavior at the documentation,
-continuation, and exact-session identity seams. They do not yet prove automatic
-outcome selection, representative false-block rates, installed outcome
+continuation, exact-session identity, and durable current-head seams. They do
+not yet prove Project Graph ownership/classification, deliberate allocation of
+the single product slot, representative false-block rates, installed outcome
 enforcement, or usefulness across Brian's ordinary project portfolio. The
-current proof frontier is therefore repeated owner-real delivery on normal
-Brian-owned project work, with compact current documentation, plan adherence,
-course correction, and independently selected outcome evidence observed
-together. Colleague packaging,
-external-user validation, and claims of broader usability remain downstream of
-that repeated owner dogfooding.
+current proof frontier is therefore Project Graph-bound product versus
+maintenance lease classification and explicit portfolio admission before a
+hard WIP ceiling. Repeated normal-project use, independent evidence selection,
+colleague packaging, external-user validation, and broader usability remain
+downstream of those next proof stages.
 
 In the broader **Agentic Engineering System** vocabulary, Enforced Planning
 currently owns Agentic Delivery planning/control mechanisms and selected
@@ -269,7 +274,7 @@ authority and directory policy.
 | Pre-write claim enforcement | Check supported native Codex/Claude write events against exact live session, worktree, branch, and path ownership before mutation. See Plan #108. | PW-01/PW-02A/PW-02 are accepted; PW-02B0 writer provenance is the only ready leaf, followed by frozen inventory, bounded rollout, fleet certification, and the fixed enforced-planning pilot |
 | Artifact creation enforcement | Gate selected new tracked artifacts against repository directory rules and durable intent, with receipts and feedback. See Plan #109. | Portable mechanism first, then an Inside Success Markdown observe pilot before any blocking promotion |
 | No-passive-waiting enforcement | Separate liveness from progress, reject whole-goal blockage while compatible work remains, and preserve recoverable true blockers. See Plan #110. | NPW-02 provider-free blocker disposition accepted with replayable both-sign evidence; NPW-01 progress visibility remains the ready leaf before NPW-03 |
-| Outcome continuation lease | Require typed progress evidence before supported coding-agent continuation; ordinary approval and cost do not renew authority. See Plans #114–#118. | Plan #118 preserved selected outcome and failure state across exact-session handoff and same-project causal restart; independent review, Project Graph owner-class resolution, cross-project successors, blocking, and rollout remain downstream |
+| Outcome continuation lease | Require typed progress evidence before supported coding-agent continuation; ordinary approval and cost do not renew authority. See Plans #114–#119. | Plan #119 made the selected lease advance through strict append-only receipts and current-head reconstruction; Project Graph product/maintenance classification and deliberate slot allocation are next before hard blocking or rollout |
 | Multi-tool adoption | Cursor/Windsurf hook adapters when their hook surfaces are publicly documented | External dependency: tool documentation |
 | Project-meta topic-research adoption | Apply portable topic-research pattern in `research_synthesis/` with manifests, ADR links, freshness metadata | Plans #43/#44/#35 complete |
 

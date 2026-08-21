@@ -31,6 +31,7 @@ from enforced_planning.outcome_continuation import (
 )
 from enforced_planning.outcome_selection import (
     OutcomeSelectionError,
+    record_selected_outcome_progress_for_session,
     restart_selected_outcome_for_session,
     select_outcome_for_session,
 )
@@ -51,6 +52,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     select.add_argument("--scope", required=True)
     select.add_argument("--session-id")
     select.add_argument("--claims-dir", type=Path, default=CLAIMS_DIR)
+    progress = subparsers.add_parser(
+        "progress",
+        help="Append one strict current-head receipt to an exact selected outcome",
+    )
+    progress.add_argument("--receipt", required=True, type=Path)
+    progress.add_argument("--agent", required=True, choices=("codex", "claude-code", "openclaw"))
+    progress.add_argument("--project", required=True)
+    progress.add_argument("--scope", required=True)
+    progress.add_argument("--session-id")
+    progress.add_argument("--claims-dir", type=Path, default=CLAIMS_DIR)
     restart = subparsers.add_parser(
         "restart",
         help="Replace stalled selected state through one exact RestartDeltaV1",
@@ -83,6 +94,15 @@ def main(argv: list[str] | None = None) -> int:
                 scenario_path=args.scenario,
                 claims_dir=args.claims_dir,
             )
+        elif args.command == "progress":
+            progress_result = record_selected_outcome_progress_for_session(
+                agent=args.agent,
+                project=args.project,
+                scope=args.scope,
+                session_id=args.session_id,
+                receipt_path=args.receipt,
+                claims_dir=args.claims_dir,
+            )
         else:
             restart = restart_selected_outcome_for_session(
                 agent=args.agent,
@@ -102,6 +122,9 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     if args.command == "select":
         print(selection.model_dump_json(indent=2))
+        return 0
+    if args.command == "progress":
+        print(progress_result.model_dump_json(indent=2))
         return 0
     if args.command == "restart":
         print(restart.model_dump_json(indent=2))

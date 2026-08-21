@@ -130,6 +130,60 @@ def test_validate_doc_authority_fails_for_unowned_plan_index_drift(tmp_path: Pat
     assert issues[0].artifact_path == "docs/plans/41_example.md"
 
 
+def test_validate_doc_authority_matches_artifact_status_when_plan_numbers_repeat(tmp_path: Path) -> None:
+    repo_root = tmp_path / "demo"
+    _write_config(repo_root)
+    _write_plan(
+        repo_root / "docs/plans/51_partial.md",
+        status="🟡 Partial — dry-run shipped",
+    )
+    _write_plan(
+        repo_root / "docs/plans/66_design.md",
+        status="Design complete; awaiting disposition",
+    )
+    _write_plan(
+        repo_root / "docs/plans/66_design_mockup.md",
+        status="Proposed design seam",
+    )
+    _write(
+        repo_root / "docs/plans/CLAUDE.md",
+        """# Implementation Plans
+
+| # | Gap | Priority | Status | Blocks |
+|---|-----|----------|--------|--------|
+| 51 | Partial (`51_partial.md`) | High | 🟡 Partial — dry-run shipped | — |
+| 66 | Design (`66_design.md`) | High | ✅ Design complete | — |
+| — | Design mockup (`66_design_mockup.md`) | High | 🟡 Proposed design seam | — |
+""",
+    )
+
+    issues = doc_authority.validate_doc_authority(repo_root)
+
+    assert issues == []
+
+
+def test_validate_doc_authority_reads_candidate_worktree_surfaces(tmp_path: Path, monkeypatch) -> None:
+    canonical_repo = tmp_path / "canonical" / "demo"
+    candidate_worktree = tmp_path / "worktree" / "demo"
+    _write_config(candidate_worktree)
+    _write_plan(candidate_worktree / "docs/plans/41_example.md")
+    _write_plan_index(
+        candidate_worktree / "docs/plans/CLAUDE.md",
+        plan_rows=[("41", "📋 Planned")],
+    )
+    _write_plan(canonical_repo / "docs/plans/41_example.md")
+    _write_plan_index(canonical_repo / "docs/plans/CLAUDE.md", plan_rows=[])
+    monkeypatch.setattr(
+        doc_authority,
+        "resolve_canonical_repo_root",
+        lambda _repo_root: canonical_repo,
+    )
+
+    issues = doc_authority.validate_doc_authority(candidate_worktree)
+
+    assert issues == []
+
+
 def test_validate_doc_authority_requires_obligation_when_owner_claim_exists(tmp_path: Path) -> None:
     repo_root = tmp_path / "demo"
     claims_dir = tmp_path / "claims"

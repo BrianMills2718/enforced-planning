@@ -7,8 +7,8 @@ inventing a second coordination registry.
 
 from __future__ import annotations
 
-import os
 import hashlib
+import os
 import re
 import subprocess
 from dataclasses import asdict, dataclass
@@ -28,7 +28,6 @@ from enforced_planning import (
     surface_runtime,
 )
 from enforced_planning.worktree_paths import resolve_canonical_repo_root
-
 
 WORKTREE_LIFECYCLE_CONFIG_PATH = Path(__file__).with_name("worktree_lifecycle.yaml")
 
@@ -912,6 +911,11 @@ def _assert_worktree_removal_access(worktree_path: Path) -> None:
 
     if not worktree_path.exists():
         return
+    if _cwd_inside(worktree_path):
+        raise ValueError(
+            "Cannot close a session from a shell whose cwd is inside the target worktree. "
+            "Run closeout from the canonical repo root session instead."
+        )
     directories = [worktree_path.parent]
     directories.extend(Path(root) for root, _dirs, _files in os.walk(worktree_path))
     blocked = sorted(str(path) for path in directories if not os.access(path, os.W_OK | os.X_OK))

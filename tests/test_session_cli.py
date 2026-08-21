@@ -1475,6 +1475,43 @@ def test_close_session_keeps_canonical_root_after_worktree_removal(
     assert repo_root.exists()
 
 
+def test_close_session_rejects_inside_worktree_cwd_before_lifecycle_mutation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An unsafe control cwd must not strand claim or tracker state in closing."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    monkeypatch.delenv("CODEX_THREAD_ID", raising=False)
+    repo_root, worktree, branch = _real_repo_with_worktree(tmp_path)
+    claim_file = _start_real_closeout_claim(
+        repo_root=repo_root,
+        worktree=worktree,
+        branch=branch,
+        claims_dir=claims_dir,
+        trackers_dir=trackers_dir,
+    )
+    _git(repo_root, "merge", "--no-ff", branch, "-m", "merge feature")
+    original_claim = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
+    tracker_path = Path(original_claim["tracker_path"])
+    original_tracker = yaml.safe_load(tracker_path.read_text(encoding="utf-8"))
+    monkeypatch.chdir(worktree)
+
+    with pytest.raises(ValueError, match="cwd is inside the target worktree"):
+        session_lifecycle.close_session(
+            agent="codex",
+            project="enforced-planning",
+            scope=branch,
+        )
+
+    assert yaml.safe_load(claim_file.read_text(encoding="utf-8")) == original_claim
+    assert yaml.safe_load(tracker_path.read_text(encoding="utf-8")) == original_tracker
+    assert worktree.exists()
+    assert _git(repo_root, "show-ref", "--verify", f"refs/heads/{branch}")
+
+
 def test_close_session_fails_before_registry_mutation_when_ignored_directory_is_not_deletable(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

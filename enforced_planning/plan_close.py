@@ -11,6 +11,8 @@ from pydantic import BaseModel, ConfigDict
 
 from enforced_planning import coordination_claims, session_lifecycle
 
+RETRYABLE_PARTIAL_CLOSEOUT_STATUSES = {"closing"}
+
 
 class StrictContract(BaseModel):
     """Base contract that rejects unknown enforcement fields."""
@@ -181,7 +183,10 @@ def close_plan_lanes(
                 failures.append(f"{claim.scope}: {terminal}")
             else:
                 terminal_lanes.append(terminal)
-        elif claim.status in coordination_claims.CLOSEABLE_STATUSES:
+        elif claim.status in (
+            coordination_claims.CLOSEABLE_STATUSES
+            | RETRYABLE_PARTIAL_CLOSEOUT_STATUSES
+        ):
             owned.append(claim)
         else:
             failures.append(

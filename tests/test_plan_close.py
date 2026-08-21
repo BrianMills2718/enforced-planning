@@ -249,3 +249,21 @@ def test_session_ended_lane_remains_closeable_before_plan_completion():
     )
     assert result.success is True
     assert closed == ["preserved"]
+
+
+def test_closing_lane_remains_retryable_after_partial_closeout():
+    """A failed physical cleanup must be finishable from a safe root session."""
+
+    closed: list[str] = []
+    result = close_plan_lanes(
+        qualified_plan_id="alpha#12",
+        submitted_revision="abc123",
+        claims=[_claim(scope="partial", status="closing")],
+        preflight=lambda claim: {"disposition": "merged", "merged_to_default": True},
+        closer=lambda claim: closed.append(claim.scope)
+        or {"action": "closed", "disposition": "merged"},
+    )
+
+    assert result.success is True
+    assert closed == ["partial"]
+    assert result.failures == []

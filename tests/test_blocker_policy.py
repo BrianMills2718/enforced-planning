@@ -919,7 +919,7 @@ def _public_cli_claim(
     digest: str,
     scope: str = GRAPH_SCOPE,
     session_id: str = SESSION_ID,
-    work_unit_id: str | None = "npw-02-provider-free-blocker-decision",
+    work_unit_id: str | None = "npw-01-progress-lease-current-main",
 ) -> ClaimQueueSnapshotV1:
     return ClaimQueueSnapshotV1(
         session_id=session_id,
@@ -983,7 +983,7 @@ def test_cli_queue_round_trip_and_unavailable_exit(
     assert passing_code == 0, passing_stderr
     passing_payload = json.loads(passing_stdout)
     assert "npw-01-progress-lease-current-main" in passing_payload["eligible_unit_ids"]
-    assert "npw-02-provider-free-blocker-decision" in passing_payload["eligible_unit_ids"]
+    assert "npw-02-provider-free-blocker-decision" in passing_payload["terminal_unit_ids"]
     assert stale_code == 3
     assert json.loads(stale_stdout)["coverage"] == "unavailable"
 
@@ -1210,13 +1210,22 @@ def test_checked_in_owner_calibration_receipts_cover_both_signs(
     authentic_result = ReadyQueueEvaluationV1.model_validate_json(json.dumps(authentic["result"]))
     authentic_recorded_at = datetime.fromisoformat(authentic["recorded_at"])
     monkeypatch.setattr(blocker_policy_module, "_now", lambda: authentic_recorded_at)
-    return_code, stdout, stderr = _run_public_cli(
-        monkeypatch,
-        capsys,
-        authentic["argv"],
-        claims=authentic_claims,
-        native_thread_id="01a0217c-7716-76a1-8055-9e17f9e4925b",
-    )
+    authentic_source = authentic["graph_source"]
+    raw_source = authentic_source["serialized_utf8"]
+    assert hashlib.sha256(raw_source.encode("utf-8")).hexdigest() == authentic_source["sha256"]
+    with tempfile.TemporaryDirectory() as directory:
+        replay_root = Path(directory)
+        replay_path = replay_root / authentic_source["path"]
+        replay_path.parent.mkdir(parents=True, exist_ok=True)
+        replay_path.write_text(raw_source, encoding="utf-8")
+        monkeypatch.setattr(blocker_cli, "REPOSITORY_ROOT", replay_root)
+        return_code, stdout, stderr = _run_public_cli(
+            monkeypatch,
+            capsys,
+            authentic["argv"],
+            claims=authentic_claims,
+            native_thread_id="01a0217c-7716-76a1-8055-9e17f9e4925b",
+        )
     assert return_code == authentic["exit_code"], stderr
     assert json.loads(stdout) == authentic_result.model_dump(mode="json")
     assert stdout.strip() == authentic["raw_cli_output"].strip()

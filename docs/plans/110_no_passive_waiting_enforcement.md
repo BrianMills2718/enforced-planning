@@ -1,6 +1,6 @@
 # Plan #110: No-Passive-Waiting Enforcement
 
-**Status:** 🚧 In Progress — work graph validated; NPW-01 and NPW-02 ready
+**Status:** 🚧 In Progress — NPW-02 accepted; NPW-01 ready; NPW-03 blocked on NPW-01
 **Type:** implementation
 **Priority:** Critical
 **phase_ref:** "Coordination runtime maintenance"
@@ -317,6 +317,15 @@ Given the A/B/C work-graph fixture and a `BlockerRequestV1`, return a validated
 unrelated authorized root. This slice is read-only and proves the policy before
 it can change ownership.
 
+**Accepted 2026-08-21.** Candidate `57863d6cbd596348f42427d21c80d8fb124cec27`
+implements the source-bound evaluator and public CLI. The replayable receipt at
+`docs/evidence/plan110_npw02_owner_calibration.json` preserves 11 exact graph,
+request, claim/mailbox and full-result envelopes plus the historical native
+claim snapshot. Its checked-in replay test passes all positive and negative
+signs; 85 focused tests, Ruff, diff-check and canonical graph validation pass.
+Independent code and evidence audits both accepted NPW02-A1 at Grade A. Every
+disposition remains diagnostic with `application_authorized=false`.
+
 ### Slice 3 — Safe lifecycle application
 
 **Epistemic state:** `fully_specifiable_now` after Slice 2 passes.
@@ -397,7 +406,6 @@ behaviors.
 
 ## Next action
 
-Execute `npw-01-progress-lease-current-main` and
-`npw-02-provider-free-blocker-decision` from the validated companion work graph.
-They own disjoint paths and may proceed independently. Do not start NPW-03 until
-both are accepted against their exact submitted revisions.
+Execute `npw-01-progress-lease-current-main` from the validated companion work
+graph. NPW-02 is accepted; do not start NPW-03 until NPW-01 is also accepted
+against its exact submitted revision.

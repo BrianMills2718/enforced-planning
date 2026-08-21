@@ -15,6 +15,9 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 include = ["enforced_planning*"]
 
+[tool.setuptools.package-data]
+enforced_planning = ["*.yaml"]
+
 [tool.ruff]
 line-length = 120
 

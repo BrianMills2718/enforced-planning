@@ -362,6 +362,50 @@ def test_allocation_and_disposition_are_append_only_and_byte_idempotent(
         require_active_portfolio_allocation(scenario, ledger_path=ledger_path)
     assert exc_info.value.code == "portfolio_allocation_inactive"
 
+    changed_disposition = disposition_request.model_copy(
+        update={"reason": "Changing an accepted disposition must fail without rewriting history."}
+    )
+    disposition_path.write_text(
+        changed_disposition.model_dump_json(indent=2) + "\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(OutcomePortfolioError) as exc_info:
+        dispose_outcome_portfolio_allocation(
+            agent="codex",
+            project=project_id,
+            scope=f"scope-{project_id}",
+            session_id=SESSION,
+            request_path=disposition_path,
+            claims_dir=claims_dir,
+            ledger_path=ledger_path,
+        )
+    assert exc_info.value.code == "portfolio_disposition_conflict"
+    assert ledger_path.read_bytes() == disposition_bytes
+
+    second_disposition = disposition_request.model_copy(
+        update={
+            "disposition_id": "complete-enforced-planning",
+            "disposition": "complete",
+            "reason": "A second disposition cannot overwrite the accepted parking event.",
+        }
+    )
+    disposition_path.write_text(
+        second_disposition.model_dump_json(indent=2) + "\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(OutcomePortfolioError) as exc_info:
+        dispose_outcome_portfolio_allocation(
+            agent="codex",
+            project=project_id,
+            scope=f"scope-{project_id}",
+            session_id=SESSION,
+            request_path=disposition_path,
+            claims_dir=claims_dir,
+            ledger_path=ledger_path,
+        )
+    assert exc_info.value.code == "portfolio_allocation_already_disposed"
+    assert ledger_path.read_bytes() == disposition_bytes
+
 
 def test_product_owner_and_global_non_product_caps_are_independent(
     tmp_path: Path,

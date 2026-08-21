@@ -1,0 +1,174 @@
+{
+  "schema_version": "1.0.0",
+  "record_type": "owner_project_graph_portfolio_admission_observation",
+  "plan_id": "enforced-planning#120",
+  "recorded_at": "2026-08-21T08:10:10Z",
+  "policy_authority": {
+    "id": "outcome-continuation-lease-hard-gate",
+    "revision": "f6091b6b2f2a5357d0fdbbe88b157435a2ce07fb",
+    "status": "approved",
+    "product_cap": "one active product outcome per reviewed repository-governance owner class",
+    "non_product_cap": "one global maintenance or external-obligation outcome",
+    "ordinary_approval_allocates": false,
+    "cost_gate_present": false
+  },
+  "design": {
+    "plan_revision": "89b9101",
+    "contract_evolution_revision": "bb9a4a4a54f58a78f76b59284f3fc9239131db8c",
+    "implementation_candidate_revision": "eb8279122067d5a916b02dfddb63592a44254d44",
+    "work_unit_id": "opad-01-graph-bound-portfolio-admission",
+    "allocation_owner": "enforced_planning/outcome_portfolio.py",
+    "selection_consumer": "enforced_planning/outcome_selection.py",
+    "public_cli": "scripts/outcome_continuation.py"
+  },
+  "project_graph_authority": {
+    "repository": "project-meta",
+    "revision": "4db70b44a03966bea9ba65003894613af9966196",
+    "project_graph_file_sha256": "38fbb590d2c4ca507555e4796c528294ee2841ac9b23d4af45e11ffd4588f574",
+    "project_id": "enforced-planning",
+    "project_record_sha256": "d2d7f4f9a4df759cf95548dc0ab2952f65b0193bdfe60c6f6375cb6291a7acfc",
+    "governance_review_sha256": "0650e0a27ddf27222c112d8f4fa7639b16ebe4ce4ab1cb07f7ba4e825bc62a09",
+    "project_authority_sha256": "8283c01c2d5129f39c11586ab1e53cb600e649e0142bfef265f2140dacde85c3",
+    "status": "active",
+    "record_kind": "repository",
+    "owner_class": "brian",
+    "predecessor_project_ids": [],
+    "authority_loaded_from_git_object_not_working_tree": true
+  },
+  "real_session_binding": {
+    "client": "codex",
+    "session_id": "codex:01a021cc-f3a0-7b21-babc-f18617333d1a",
+    "claim_project": "enforced-planning",
+    "claim_scope": "plan-120-project-graph-portfolio-admission",
+    "branch": "plan-120-project-graph-portfolio-admission",
+    "execution_authority_ref": "goal:project-graph-portfolio-admission",
+    "claim_plan_ref": "goal:project-graph-portfolio-admission",
+    "claim_source_sha256": "c9f539650a22d25007f5a768eaa6eef22ee90f3cfbaad37c0e3a2637e668ed62",
+    "selection_claim_identity_sha256": "1e150a5a0fdc0175761921df2ff93c748e8f572c665cad2ec30e23c3a9a9b463",
+    "tracker_sha256_after_selection": "bd49e07c3e8e20319a8f1ae262c21921f81669d31833ef7a037a8f7ae7943381"
+  },
+  "real_inputs": {
+    "scenario_ref": "examples/owner-real-outcome-observe/plan120-maintenance-scenario.json",
+    "scenario_file_sha256": "b01f7cf1840a51421c283fe75083e6080916a4b292429970e2398d0676367dc6",
+    "scenario_sha256": "ddbaaa20cfa905806f244f981d5aa73fc2b3a0df0f660c4f0f280c35d2b1bb22",
+    "outcome_contract_sha256": "eecc5818ebfede3cfefeb982646cbd38c39d2f1e6a0285bb0d62cec51be52aa1",
+    "portfolio_class": "maintenance",
+    "allocation_request_ref": "examples/owner-real-outcome-observe/plan120-maintenance-allocation.json",
+    "allocation_request_file_sha256": "d1870c7fbe8ed06eec5322b6d599dab62b454b5f1ca9870ffedb668e75a510ba",
+    "allocation_request_sha256": "5551f4acaf8103a85848db03a897f22e20d17af7a57ce678f9b136bc521a16e5",
+    "disposition_request_ref": "examples/owner-real-outcome-observe/plan120-maintenance-disposition.json",
+    "disposition_request_file_sha256": "7ffbd227e82cfe22a51ef31d53a8fd77b9a7e20c0d8ef9253802a2bc580a2620",
+    "disposition_request_sha256": "339383fc0cc5a54f168bac36f9b354c803c6e2299aefdf6c40c1b6eca6af19bd"
+  },
+  "unallocated_selection_control": {
+    "command": "python scripts/outcome_continuation.py select --scenario examples/owner-real-outcome-observe/plan120-maintenance-scenario.json --execution-authority goal:project-graph-portfolio-admission --agent codex --project enforced-planning --scope plan-120-project-graph-portfolio-admission",
+    "exit_code": 2,
+    "error_code": "portfolio_allocation_required",
+    "tracker_selection_created": false
+  },
+  "real_allocation": {
+    "command": "python scripts/outcome_continuation.py allocate --scenario examples/owner-real-outcome-observe/plan120-maintenance-scenario.json --request examples/owner-real-outcome-observe/plan120-maintenance-allocation.json --project-graph-repo /home/brian/code/active/project-meta --project-graph-revision 4db70b44a03966bea9ba65003894613af9966196 --agent codex --project enforced-planning --scope plan-120-project-graph-portfolio-admission",
+    "initial_status": "allocated",
+    "exact_replay_status": "idempotent",
+    "allocated_at": "2026-08-21T08:08:00.984871Z",
+    "allocation_id": "plan-120-maintenance-allocation",
+    "allocation_sha256": "23cec4fef20a5d7718d209d4385b2891b82b848e387327d352dec8532fdd9bfa",
+    "bucket": "global:maintenance-or-external-obligation",
+    "owner_class": "brian",
+    "ledger_sha256_after_allocation": "9f6853c404aa9d15c58b7516afa945c102916d737f018a3a27d010ed85ce98de",
+    "ledger_sha256_after_exact_replay": "9f6853c404aa9d15c58b7516afa945c102916d737f018a3a27d010ed85ce98de",
+    "exact_replay_ledger_bytes_unchanged": true,
+    "claim_binding_sha256": "58208867c1fe5fcc7db507bcb35bdb44db2cf357dc48fee8a6ba28f67b9144af"
+  },
+  "real_selection": {
+    "status": "selected",
+    "selected_at": "2026-08-21T08:08:17.793676Z",
+    "binding_schema_version": "1.1.0",
+    "binding_sha256": "db34575ed8d45bc6c22bc97bbf72eb79dfd0502c2dd0132da68adec8d879bf37",
+    "portfolio_allocation_id": "plan-120-maintenance-allocation",
+    "portfolio_allocation_sha256": "23cec4fef20a5d7718d209d4385b2891b82b848e387327d352dec8532fdd9bfa",
+    "lease_state": "active",
+    "outcome_reason_code_at_selection": "active_in_scope"
+  },
+  "authentic_selected_prewrite": {
+    "projection_registry_digest": "1b9517854132584c51e62f344b75928cbd398958e9826b3bdb8ea29d0b6daad1",
+    "projection_refreshed_with_current_producer": true,
+    "hook_event_name": "PreToolUse",
+    "tool_name": "apply_patch",
+    "target_path": "docs/evidence/plan120_project_graph_portfolio_admission.json",
+    "ordinary_receipt_id": "prewrite_aa20033faa4d46398e91300c95bb7bc4",
+    "ordinary_decision": "allow",
+    "ordinary_reason_code": "exact_live_claim",
+    "correlation_receipt_id": "ocor-f02c884b29fe460cad6a2529cdbed846",
+    "outcome_observed_at": "2026-08-21T08:08:43.342317Z",
+    "outcome_disposition": "would_allow",
+    "outcome_reason_code": "active_in_scope",
+    "selection_binding_sha256": "db34575ed8d45bc6c22bc97bbf72eb79dfd0502c2dd0132da68adec8d879bf37",
+    "lease_sha256": "7dfb05f6887dd15c2b43a5e6506a3f8410a2e826ea23578b755bc2531d9db434",
+    "lease_state": "active",
+    "ordinary_authority_preserved": true,
+    "enforcement_applied": false
+  },
+  "real_disposition": {
+    "command": "python scripts/outcome_continuation.py dispose-allocation --request examples/owner-real-outcome-observe/plan120-maintenance-disposition.json --agent codex --project enforced-planning --scope plan-120-project-graph-portfolio-admission",
+    "initial_status": "recorded",
+    "exact_replay_status": "idempotent",
+    "recorded_at": "2026-08-21T08:09:04.872685Z",
+    "disposition": "parked",
+    "disposition_sha256": "02d288e47d239488e3603ac2d2a88dffa59867de9a9b263f51427e89cbb90798",
+    "ledger_record_count": 2,
+    "ledger_record_types": [
+      "outcome_portfolio_allocation",
+      "outcome_portfolio_disposition"
+    ],
+    "ledger_sha256_after_disposition": "656a9660fec74911633a4f0c15e13f7e9d305bff2687ab5f1095daadfc77541d",
+    "ledger_sha256_after_exact_replay": "656a9660fec74911633a4f0c15e13f7e9d305bff2687ab5f1095daadfc77541d",
+    "exact_replay_ledger_bytes_unchanged": true,
+    "post_disposition_selection_error": "portfolio_allocation_inactive",
+    "global_slot_released": true,
+    "allocation_history_deleted": false
+  },
+  "fixture_controls": {
+    "product_owner_cap": "A second product allocation for owner class brian fails portfolio_product_slot_occupied while an other-owner product allocation succeeds.",
+    "global_non_product_cap": "An external-obligation allocation fails portfolio_global_slot_occupied while maintenance is active.",
+    "graph_eligibility": "Unregistered, inactive, non-repository pointer, unreviewed governance, non-exact revision, and owner-mismatched records fail with stable codes.",
+    "tamper": "Changed accepted request bytes fail portfolio_allocation_conflict without changing ledger bytes; malformed digest-bound ledger records fail closed.",
+    "selection": "Missing allocation fails, exact allocation is retained, disposal invalidates resolution, and schema-1.0 binding payloads omit all new fields.",
+    "public_cli": "Allocate and dispose-allocation emit typed machine-readable results."
+  },
+  "focused_verification": {
+    "command": "pytest -q tests/test_outcome_continuation.py tests/test_outcome_portfolio.py tests/test_outcome_selection.py tests/test_outcome_prewrite_observation.py",
+    "passed": 91,
+    "failed": 0,
+    "configuration_sha256": "788b4ceeeb03b5e2b56d8a70515ccf8ef75209d0a27e8c26adee57bf07d7bc7a",
+    "observation_sha256": "432d9d72da8eb18ab920f8929fded9c772ca7c4d8ed6cd71a86333797cf7cc97",
+    "ruff": "passed for changed implementation, CLI, and focused tests",
+    "mypy": "passed for outcome_portfolio.py, outcome_selection.py, outcome_continuation.py, the CLI, and new portfolio tests"
+  },
+  "durable_learning": {
+    "artifact": "project-meta:learnings/entries/lrn-20260821T074515426915Z-28272693a1.json",
+    "merge_revision": "029dd098aec0c2dd83d815db375bc0514609575c",
+    "finding": "Absent optional Pydantic fields must be excluded from legacy digest serialization."
+  },
+  "promotion_boundary": {
+    "hard_entrypoints": [
+      "explicit portfolio allocation",
+      "classed selected-outcome creation",
+      "classed selected-outcome resolution"
+    ],
+    "ordinary_prewrite_authority_changed": false,
+    "new_plan_claim_worktree_binding_active": false,
+    "host_hook_default_changed": false,
+    "installer_or_fleet_adoption_claimed": false,
+    "one_product_project_chosen": false,
+    "cost_or_elapsed_time_affects_admission": false,
+    "next_gate": "Review representative false-block behavior, then require outcome allocation and selection at sanctioned new-plan, claim, worktree, and selected pre-write boundaries."
+  },
+  "licensed_claim": "At implementation revision eb8279122067d5a916b02dfddb63592a44254d44, the real exact Plan 120 claim first rejected classed selection without an allocation, then deliberately allocated the one global maintenance slot from project-meta@4db70b44 reviewed owner authority, replayed without changing ledger bytes, selected and observed the exact active allocation through ordinary selected pre-write, and appended a byte-idempotent parking disposition that released the slot and invalidated further selection resolution. Focused controls prove both WIP caps and graph, request, ledger, lifecycle, and legacy failure behavior. This is hard explicit allocation/selection admission with advisory ordinary write observation; it is not mandatory new-work or fleet enforcement.",
+  "limitations": [
+    "The authentic allocation is maintenance; product and competing-owner behavior is fixture-equivalent so no product project was silently chosen.",
+    "The selected pre-write correlation remains observation-only and does not alter ordinary allow/exact_live_claim.",
+    "The local ledger is protected by atomic locking and append-only validation, not a separate OS identity or tamper-proof control plane.",
+    "No plan, claim, worktree, commit, installer, downstream repository, deployment, release, announcement, or cost-control default changed."
+  ]
+}

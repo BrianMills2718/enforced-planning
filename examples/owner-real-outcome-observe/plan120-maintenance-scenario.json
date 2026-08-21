@@ -1,0 +1,43 @@
+{
+  "schema_version": "1.0.0",
+  "scenario_id": "plan-120-maintenance-portfolio-admission",
+  "contract": {
+    "schema_version": "1.1.0",
+    "outcome_id": "project-graph-portfolio-admission",
+    "owner_class": "brian",
+    "project_id": "enforced-planning",
+    "lineage_id": "plan-120-project-graph-portfolio-admission",
+    "portfolio_class": "maintenance",
+    "predecessor_lineage_ids": [
+      "plan-119-durable-progress"
+    ],
+    "intended_consumer": "Brian and his coding agents starting or continuing governed project work",
+    "outcome": "A coding agent cannot select another classed project outcome until a deliberate Project Graph-bound portfolio allocation exists.",
+    "canonical_journey": {
+      "starting_state": "The exact Plan 120 claim has a classed outcome scenario but the portfolio ledger has no active allocation.",
+      "input": "One immutable maintenance allocation request and the exact reviewed Project Graph Git revision.",
+      "action": "Reject unallocated selection, allocate and replay the slot, select it, observe selected pre-write, then park it.",
+      "observable_result": "Selection retains the exact active allocation digest and parking invalidates later resolution without deleting history.",
+      "failure_signal": "Selection self-allocates, accepts a caller-chosen owner, overbooks a WIP bucket, rewrites replay, or survives disposition."
+    },
+    "baseline_revision": "9c9d0bf244ed3cd20624f56191e932d5a516942b",
+    "allowed_scope": [
+      "docs/evidence/plan120_project_graph_portfolio_admission.json"
+    ],
+    "progress_dimensions": [
+      "deliberate portfolio allocation",
+      "classed selected-outcome admission",
+      "append-only slot release"
+    ]
+  },
+  "receipts": [],
+  "request": {
+    "schema_version": "1.0.0",
+    "operation": "product_write",
+    "target_path": "docs/evidence/plan120_project_graph_portfolio_admission.json",
+    "ordinary_approval": true,
+    "approval_text": "I approve, continue",
+    "cost_telemetry_usd": "1000000",
+    "elapsed_telemetry_seconds": 999999
+  }
+}

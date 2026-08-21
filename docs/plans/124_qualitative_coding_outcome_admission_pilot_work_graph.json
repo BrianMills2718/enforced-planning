@@ -1,0 +1,450 @@
+{
+  "units": [
+    {
+      "schema_version": "1.0",
+      "record_type": "work_unit",
+      "id": "qcop-01-adopt-pilot-design",
+      "initiative_id": "progress-bound-agent-execution",
+      "goal_id": "normal-project-outcome-admission-pilot",
+      "design_revision": "sha256:1c72dda2c7dce194e2b7c184d444c2650c761a54a6fbf7bedfa0acbd4a9acff6",
+      "spec_revision": "sha256:1c72dda2c7dce194e2b7c184d444c2650c761a54a6fbf7bedfa0acbd4a9acff6",
+      "title": "Adopt the Qualitative Coding outcome-admission pilot design",
+      "class": "design",
+      "objective": "Freeze one exact, reversible, non-product QC adoption journey without mutating QC or broadening installer defaults.",
+      "profile": "light",
+      "execution_class": "independently_executable",
+      "claimability": "exclusive",
+      "authorization_mode": "registry_claim",
+      "scope": {
+        "included": [
+          "Exact QC target and governance binding",
+          "Pilot contract templates",
+          "Local adoption, false-block, rollback, and evidence boundaries",
+          "Cross-repository dependency and conflict declaration"
+        ],
+        "excluded": [
+          "Enforced Planning runtime changes",
+          "Installer execution",
+          "QC mutation",
+          "Product feature selection",
+          "LLM calls or deployment",
+          "Installer defaults or fleet propagation"
+        ]
+      },
+      "inputs": [
+        {
+          "kind": "accepted_capability",
+          "id": "docs/evidence/plan123_source_outcome_admission_activation.json",
+          "revision": "11cb38153ad41a156b831d4d392522c542799ee7"
+        },
+        {
+          "kind": "project_graph_authority",
+          "id": "project-meta:PROJECT_GRAPH.json#qualitative_coding",
+          "revision": "adfd051e80ce12a621d160566f89fe428d85ce0d"
+        },
+        {
+          "kind": "target_source",
+          "id": "BrianMills2718/qc",
+          "revision": "785e4d69ab8de29ace8b021fdded6dbf1d22b318"
+        }
+      ],
+      "outputs": [
+        "Implementation-ready QC pilot design",
+        "Three-unit dependency and conflict graph",
+        "Immutable source-prerequisite scenario and allocation inputs",
+        "Bounded downstream promotion rule"
+      ],
+      "dependencies": [],
+      "conflict_surfaces": [
+        {
+          "kind": "repository_path",
+          "target": "docs/plans/124_qualitative_coding_outcome_admission_pilot.md",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-124-qualitative-coding-outcome-admission-pilot"
+        },
+        {
+          "kind": "repository_path",
+          "target": "docs/plans/124_qualitative_coding_outcome_admission_pilot_work_graph.json",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-124-qualitative-coding-outcome-admission-pilot"
+        },
+        {
+          "kind": "repository_path",
+          "target": "examples/owner-real-outcome-admission/plan124-qualitative-coding-*.json",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-124-qualitative-coding-outcome-admission-pilot"
+        },
+        {
+          "kind": "repository_path",
+          "target": "docs/plans/CLAUDE.md",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-124-qualitative-coding-outcome-admission-pilot"
+        },
+        {
+          "kind": "repository_path",
+          "target": "ROADMAP.md",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-124-qualitative-coding-outcome-admission-pilot"
+        }
+      ],
+      "acceptance": [
+        {
+          "id": "QCOP01-A1",
+          "criterion": "The design binds the exact clean QC target, Project Graph authority, local instructions, current pauses, and missing-capsule fallback.",
+          "evidence_required": [
+            "Exact Git and Project Graph revisions",
+            "Clean target and no-live-claim observations",
+            "Canonical QC instruction and roadmap digests"
+          ],
+          "negative_control": "Convenience, nearest-clone location, or an unpinned capsule cannot select the target."
+        },
+        {
+          "id": "QCOP01-A2",
+          "criterion": "The downstream journey has exact bootstrap, selected allow, terminal deny, rollback, stable-product, and non-promotion boundaries.",
+          "evidence_required": [
+            "Plan 124 design",
+            "Source-prerequisite scenario and allocation inputs",
+            "QCOP-02 acceptance contract"
+          ],
+          "negative_control": "Design cannot select a QC product feature, call a model, deploy, or imply installer/fleet adoption."
+        }
+      ],
+      "readiness": {
+        "status": "ready",
+        "required_approval_types": [],
+        "approvals": [],
+        "failed_guards": []
+      },
+      "claim_policy": {
+        "eligibility_rule": "Plan 123 is accepted and the restricted Plan 124 bootstrap owns only design artifacts.",
+        "lease_policy": "renewable",
+        "lease_duration_minutes": 1440,
+        "max_active_per_claimant": 1,
+        "named_owner_id": null
+      },
+      "status": "ready",
+      "record_version": 1,
+      "updated_at": "2026-08-21T11:15:16Z"
+    },
+    {
+      "schema_version": "1.0",
+      "record_type": "work_unit",
+      "id": "qcop-01b-project-id-compatibility",
+      "initiative_id": "progress-bound-agent-execution",
+      "goal_id": "normal-project-outcome-admission-pilot",
+      "design_revision": "sha256:1c72dda2c7dce194e2b7c184d444c2650c761a54a6fbf7bedfa0acbd4a9acff6",
+      "spec_revision": "sha256:1c72dda2c7dce194e2b7c184d444c2650c761a54a6fbf7bedfa0acbd4a9acff6",
+      "title": "Make exact Project Graph IDs representable",
+      "class": "implementation",
+      "objective": "Separate Project Graph project-ID validation from outcome and lineage slug validation and prove the exact qualitative_coding identity through portfolio resolution.",
+      "profile": "light",
+      "execution_class": "independently_executable",
+      "claimability": "exclusive",
+      "authorization_mode": "registry_claim",
+      "scope": {
+        "included": [
+          "A dedicated project-ID grammar matching canonical Project Graph identities",
+          "Unchanged strict outcome, lineage, owner, and scope validation",
+          "Exact qualitative_coding contract and portfolio-resolution coverage",
+          "Focused compatibility evidence and Plan 124 closeout surfaces"
+        ],
+        "excluded": [
+          "QC repository mutation",
+          "Installer execution or propagation",
+          "Product feature selection",
+          "LLM calls or deployment",
+          "Any broadening of outcome or lineage slug grammar"
+        ]
+      },
+      "inputs": [
+        {
+          "kind": "bounded_design",
+          "id": "docs/plans/124_qualitative_coding_outcome_admission_pilot.md",
+          "revision": "sha256:1c72dda2c7dce194e2b7c184d444c2650c761a54a6fbf7bedfa0acbd4a9acff6"
+        },
+        {
+          "kind": "project_graph_authority",
+          "id": "project-meta:PROJECT_GRAPH.json#qualitative_coding",
+          "revision": "adfd051e80ce12a621d160566f89fe428d85ce0d"
+        },
+        {
+          "kind": "operational_finding",
+          "id": "project-meta/learnings/entries/lrn-20260821T112155276277Z-4cd976e7c6.json",
+          "revision": "4c51c2f08525aaabca62c7fa5569b9cbb8d413f3"
+        }
+      ],
+      "outputs": [
+        "Project-ID-specific validation seam",
+        "Exact qualitative_coding portfolio-resolution proof",
+        "Malformed-identifier and outcome/lineage strictness controls",
+        "Accepted source compatibility evidence and parked allocation"
+      ],
+      "dependencies": [
+        "qcop-01-adopt-pilot-design"
+      ],
+      "conflict_surfaces": [
+        {
+          "kind": "repository_path",
+          "target": "enforced_planning/outcome_continuation.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-124-project-id-compatibility"
+        },
+        {
+          "kind": "repository_path",
+          "target": "tests/test_outcome_continuation.py tests/test_outcome_portfolio.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-124-project-id-compatibility"
+        },
+        {
+          "kind": "repository_path",
+          "target": "docs/evidence/plan124_project_graph_id_compatibility.json",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-124-project-id-compatibility"
+        },
+        {
+          "kind": "repository_path",
+          "target": "docs/plans/124_qualitative_coding_outcome_admission_pilot.md docs/plans/124_qualitative_coding_outcome_admission_pilot_work_graph.json docs/plans/CLAUDE.md ROADMAP.md",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-124-project-id-compatibility"
+        }
+      ],
+      "acceptance": [
+        {
+          "id": "QCOP01B-A1",
+          "criterion": "The exact canonical project ID qualitative_coding validates and resolves through a real Project Graph-backed portfolio allocation.",
+          "evidence_required": [
+            "Pinned qualitative_coding Project Graph record",
+            "Contract validation receipt",
+            "Portfolio allocation and resolution receipt"
+          ],
+          "negative_control": "A hyphenated alias or contract-only unit test cannot satisfy exact authority resolution."
+        },
+        {
+          "id": "QCOP01B-A2",
+          "criterion": "Existing hyphenated project IDs remain compatible while malformed, uppercase, path-like, traversal, and boundary-separator project IDs remain invalid.",
+          "evidence_required": [
+            "Focused project-ID compatibility tests",
+            "Malformed and unsafe identifier controls"
+          ],
+          "negative_control": "Compatibility cannot accept leading, trailing, repeated, or mixed boundary separators."
+        },
+        {
+          "id": "QCOP01B-A3",
+          "criterion": "Outcome IDs and lineage IDs retain the existing hyphen-only portable-slug grammar.",
+          "evidence_required": [
+            "Outcome and lineage underscore rejection tests",
+            "Existing continuation contract regression tests"
+          ],
+          "negative_control": "Changing project-ID validation cannot weaken any non-project identity field."
+        },
+        {
+          "id": "QCOP01B-A4",
+          "criterion": "The source prerequisite changes no QC, installer, hook, model, deployment, or user-data surface.",
+          "evidence_required": [
+            "Exact source diff inventory",
+            "QC and installer non-mutation statement"
+          ],
+          "negative_control": "A downstream pilot mutation cannot be bundled into the compatibility source unit."
+        }
+      ],
+      "readiness": {
+        "status": "ready",
+        "required_approval_types": [],
+        "approvals": [],
+        "failed_guards": []
+      },
+      "claim_policy": {
+        "eligibility_rule": "QCOP-01 is merged and an active exact Plan 124 source allocation owns only the declared compatibility files.",
+        "lease_policy": "renewable",
+        "lease_duration_minutes": 1440,
+        "max_active_per_claimant": 1,
+        "named_owner_id": null
+      },
+      "status": "ready",
+      "record_version": 1,
+      "updated_at": "2026-08-21T11:24:00Z"
+    },
+    {
+      "schema_version": "1.0",
+      "record_type": "work_unit",
+      "id": "qcop-02-execute-qc-pilot",
+      "initiative_id": "progress-bound-agent-execution",
+      "goal_id": "normal-project-outcome-admission-pilot",
+      "design_revision": "sha256:1c72dda2c7dce194e2b7c184d444c2650c761a54a6fbf7bedfa0acbd4a9acff6",
+      "spec_revision": "sha256:1c72dda2c7dce194e2b7c184d444c2650c761a54a6fbf7bedfa0acbd4a9acff6",
+      "title": "Execute and evaluate the QC-local automatic admission pilot",
+      "class": "implementation",
+      "objective": "Prove active allow, usable bootstrap, parked deny, rollback, and stable product behavior through installed QC-local commands.",
+      "profile": "standard",
+      "execution_class": "independently_executable",
+      "claimability": "exclusive",
+      "authorization_mode": "registry_claim",
+      "scope": {
+        "included": [
+          "One exact QC plan and linked worktree",
+          "QC-local maintenance allocation and selection",
+          "Existing lifecycle-only installer profile",
+          "Existing prewrite-claim hook generator",
+          "Two named pilot-only wrapper exceptions",
+          "Representative false-block preflight",
+          "Configured active allow and parked denial",
+          "Stable-product check and rollback evidence"
+        ],
+        "excluded": [
+          "QC product feature selection or implementation",
+          "Live LLM calls",
+          "Deployment or user-data mutation",
+          "Full worktree-only or full installer sync",
+          "Installer default or fleet propagation",
+          "Cross-repository allocation membership",
+          "Semantic certification of progress"
+        ]
+      },
+      "inputs": [
+        {
+          "kind": "bounded_design",
+          "id": "docs/plans/124_qualitative_coding_outcome_admission_pilot.md",
+          "revision": "sha256:1c72dda2c7dce194e2b7c184d444c2650c761a54a6fbf7bedfa0acbd4a9acff6"
+        },
+        {
+          "kind": "required_output",
+          "id": "docs/evidence/plan124_project_graph_id_compatibility.json",
+          "revision": "resolved-from:qcop-01b-project-id-compatibility"
+        },
+        {
+          "kind": "target_source",
+          "id": "BrianMills2718/qc",
+          "revision": "785e4d69ab8de29ace8b021fdded6dbf1d22b318"
+        }
+      ],
+      "outputs": [
+        "QC-local automatic outcome-admission activation",
+        "Authentic active and parked both-sign receipts",
+        "Restricted downstream bootstrap proof",
+        "Rollback and stable-product evidence",
+        "Narrow-installer promotion recommendation or rejection"
+      ],
+      "dependencies": [
+        "qcop-01-adopt-pilot-design",
+        "qcop-01b-project-id-compatibility"
+      ],
+      "conflict_surfaces": [
+        {
+          "kind": "repository_path",
+          "target": "meta-process.yaml",
+          "repository": "qualitative_coding",
+          "access": "exclusive",
+          "coordination_key": "qc-outcome-admission-pilot"
+        },
+        {
+          "kind": "repository_path",
+          "target": "Makefile",
+          "repository": "qualitative_coding",
+          "access": "exclusive",
+          "coordination_key": "qc-outcome-admission-pilot"
+        },
+        {
+          "kind": "repository_path",
+          "target": ".claude/ .codex/ scripts/ enforced_planning/",
+          "repository": "qualitative_coding",
+          "access": "exclusive",
+          "coordination_key": "qc-outcome-admission-pilot"
+        },
+        {
+          "kind": "repository_path",
+          "target": "docs/plans/ and local pilot evidence",
+          "repository": "qualitative_coding",
+          "access": "exclusive",
+          "coordination_key": "qc-outcome-admission-pilot"
+        }
+      ],
+      "acceptance": [
+        {
+          "id": "QCOP02-A1",
+          "criterion": "The installed QC consumer is exact-source-bound, local, and limited to the frozen pilot manifest.",
+          "evidence_required": [
+            "Installer/generator action manifest",
+            "Installed file digests and local import receipts",
+            "Primary-checkout and unrelated-repository non-mutation inventory"
+          ],
+          "negative_control": "A full or worktree-only installer expansion stops rather than silently broadening the pilot."
+        },
+        {
+          "id": "QCOP02-A2",
+          "criterion": "Representative ordinary pre-write targets pass with zero compliant false blocks, zero outside-claim false allows, and local p95 at or below 250 ms before enforcement.",
+          "evidence_required": [
+            "Frozen preflight cases and results",
+            "Ordinary receipts",
+            "Latency summary"
+          ],
+          "negative_control": "One compliant false block or outside-claim false allow prevents activation."
+        },
+        {
+          "id": "QCOP02-A3",
+          "criterion": "Active exact QC selection admits flagless Make lifecycle and two distinct contract-scoped native writes.",
+          "evidence_required": [
+            "QC claim/tracker/allocation/selection digests",
+            "Heartbeat and both-sign prewrite receipts",
+            "Distinct target paths"
+          ],
+          "negative_control": "Caller flags, approval text, cost, or elapsed time cannot manufacture active state."
+        },
+        {
+          "id": "QCOP02-A4",
+          "criterion": "The installed sanctioned bootstrap admits only one exact Plan-numbered artifact lane.",
+          "evidence_required": [
+            "Authentic Make bootstrap receipt",
+            "Restricted child claim",
+            "Source-smuggling denial and child closeout"
+          ],
+          "negative_control": "One source, test, traversal, or foreign-Plan path denies before claim/worktree creation."
+        },
+        {
+          "id": "QCOP02-A5",
+          "criterion": "Parking the QC allocation denies flagless heartbeat and ordinary-authorized native pre-write before mutation.",
+          "evidence_required": [
+            "Disposition and ledger digests",
+            "Terminal admission receipts",
+            "Heartbeat and target before/after hashes"
+          ],
+          "negative_control": "Ordinary allow cannot revive an inactive allocation."
+        },
+        {
+          "id": "QCOP02-A6",
+          "criterion": "Rollback and stable-product controls pass without model calls, deployment, user-data changes, product selection, or fleet claims.",
+          "evidence_required": [
+            "Activation and rollback refs",
+            "Focused QC product/control checks",
+            "Explicit non-mutation and non-promotion inventory"
+          ],
+          "negative_control": "Governance installation alone cannot be reported as product progress or fleet adoption."
+        }
+      ],
+      "readiness": {
+        "status": "ready",
+        "required_approval_types": [],
+        "approvals": [],
+        "failed_guards": []
+      },
+      "claim_policy": {
+        "eligibility_rule": "QCOP-01 and QCOP-01B are accepted; QC remains clean and remote-equal; one exact QC plan owns every downstream mutation path before installation.",
+        "lease_policy": "renewable",
+        "lease_duration_minutes": 1440,
+        "max_active_per_claimant": 1,
+        "named_owner_id": null
+      },
+      "status": "ready",
+      "record_version": 1,
+      "updated_at": "2026-08-21T11:15:16Z"
+    }
+  ]
+}

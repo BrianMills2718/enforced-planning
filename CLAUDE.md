@@ -107,6 +107,7 @@ python scripts/complete_plan.py --plan N
 python scripts/session_start.py --help
 python scripts/session_heartbeat.py --help
 python scripts/session_status.py --help
+python scripts/check_coordination_claims.py --progress --help
 python scripts/session_end.py --help
 python scripts/session_finish.py --help
 python scripts/session_close.py --help

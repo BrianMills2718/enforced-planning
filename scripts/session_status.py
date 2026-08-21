@@ -99,6 +99,20 @@ def main(argv: list[str] | None = None) -> int:
         )
         if session["health_issues"]:
             print(f"  issues={','.join(session['health_issues'])}")
+        if session.get("progress_at"):
+            print(
+                "  progress="
+                f"{session['progress_at']} {session.get('progress_kind') or '<invalid-kind>'}; "
+                f"evidence={session.get('evidence_ref') or '<missing>'}; "
+                f"next={session.get('next_action') or '<missing>'}"
+            )
+        if session.get("expected_quiet_until"):
+            print(
+                f"  quiet_until={session['expected_quiet_until']}; "
+                f"reason={session.get('quiet_reason') or '<missing>'}"
+            )
+        if session.get("progress_issues"):
+            print(f"  progress_issues={','.join(session['progress_issues'])}")
     return 0
 
 

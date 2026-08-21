@@ -34,9 +34,17 @@ from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal, get_args
 
 import yaml  # type: ignore[import-untyped]
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 
 from enforced_planning import claim_mutation_receipts
 from enforced_planning.claim_mutation_receipts import (
@@ -66,6 +74,23 @@ CREATION_BLOCKING_HEALTH_ISSUES = {
     "missing_work_graph_sha256",
 }
 DEFAULT_HEARTBEAT_STALE_MINUTES = 120
+DEFAULT_PROGRESS_STALE_MINUTES = 60
+ProgressKind = Literal[
+    "claim_started",
+    "verified_commit",
+    "accepted_artifact",
+    "new_diagnostic",
+    "integration_result",
+]
+PROGRESS_KINDS = frozenset(get_args(ProgressKind))
+PROGRESS_FIELD_NAMES = (
+    "progress_at",
+    "progress_kind",
+    "evidence_ref",
+    "next_action",
+    "expected_quiet_until",
+    "quiet_reason",
+)
 CLAIM_WRITE_STAGING_MAX_AGE_SECONDS = 300
 _LEGACY_CLAIM_TEMP_PATTERN = re.compile(r"^\..+\.ya?ml\.[A-Za-z0-9_-]+\.tmp$")
 SESSION_ENV_KEYS = {
@@ -90,6 +115,48 @@ STRICT_NATIVE_SESSION_ENV_KEYS = {
     "openclaw": "OPENCLAW_SESSION_ID",
 }
 GOAL_AUTHORITY_PATTERN = re.compile(r"^goal:[A-Za-z0-9][A-Za-z0-9._:-]*$")
+
+
+class ProgressEventV1(BaseModel):
+    """One explicit durable-advancement event for an owning live claim."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    schema_version: Literal["1.0"] = "1.0"
+    recorded_at: datetime
+    kind: ProgressKind
+    evidence_ref: str = Field(min_length=1)
+    next_action: str = Field(min_length=1)
+    expected_quiet_until: datetime | None = None
+    quiet_reason: str | None = None
+
+    @field_validator("recorded_at", "expected_quiet_until")
+    @classmethod
+    def _require_aware_timestamp(cls, value: datetime | None) -> datetime | None:
+        if value is not None and (value.tzinfo is None or value.utcoffset() is None):
+            raise ValueError("progress timestamps must include a timezone")
+        return value.astimezone(timezone.utc) if value is not None else None
+
+    @field_validator("evidence_ref", "next_action", "quiet_reason")
+    @classmethod
+    def _strip_nonempty_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("progress text fields must not be blank")
+        return stripped
+
+    @model_validator(mode="after")
+    def _validate_quiet_interval(self) -> ProgressEventV1:
+        quiet_values = (self.expected_quiet_until, self.quiet_reason)
+        if any(value is not None for value in quiet_values) and not all(
+            value is not None for value in quiet_values
+        ):
+            raise ValueError("expected_quiet_until and quiet_reason must be supplied together")
+        if self.expected_quiet_until is not None and self.expected_quiet_until <= self.recorded_at:
+            raise ValueError("expected_quiet_until must be later than recorded_at")
+        return self
 
 
 @contextmanager
@@ -293,6 +360,12 @@ class ClaimRecord:
     work_graph_sha256: str | None = None
     approval_revisions: tuple[str, ...] = ()
     parallel_root_authorized: bool = False
+    progress_at: str | None = None
+    progress_kind: str | None = None
+    evidence_ref: str | None = None
+    next_action: str | None = None
+    expected_quiet_until: str | None = None
+    quiet_reason: str | None = None
 
     def primary_project(self) -> str | None:
         """Return the first project for CLI compatibility surfaces."""
@@ -652,6 +725,21 @@ def _heartbeat_stale_after() -> timedelta:
     return timedelta(minutes=minutes)
 
 
+def _progress_stale_after() -> timedelta:
+    """Return the configured durable-progress lease and fail on invalid policy."""
+
+    raw = os.environ.get("COORDINATION_PROGRESS_STALE_MINUTES", "").strip()
+    if not raw:
+        return timedelta(minutes=DEFAULT_PROGRESS_STALE_MINUTES)
+    try:
+        minutes = float(raw)
+    except ValueError as exc:
+        raise ValueError("COORDINATION_PROGRESS_STALE_MINUTES must be a positive number") from exc
+    if minutes <= 0:
+        raise ValueError("COORDINATION_PROGRESS_STALE_MINUTES must be greater than zero")
+    return timedelta(minutes=minutes)
+
+
 def _run_git(repo_root: Path, args: list[str]) -> subprocess.CompletedProcess[str]:
     """Run one git command for lifecycle diagnostics without throwing."""
     return subprocess.run(
@@ -787,23 +875,142 @@ def claim_liveness_issues(
     return []
 
 
+def _parse_aware_iso_datetime(value: Any) -> datetime | None:
+    """Parse a timezone-aware ISO timestamp without silently assuming UTC."""
+
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.strip())
+    except ValueError:
+        return None
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        return None
+    return parsed.astimezone(timezone.utc)
+
+
+def build_progress_event(
+    *,
+    progress_kind: str,
+    evidence_ref: str,
+    next_action: str,
+    expected_quiet_until: str | datetime | None = None,
+    quiet_reason: str | None = None,
+    progress_at: datetime | None = None,
+) -> ProgressEventV1:
+    """Validate one server-timestamped progress event before claim mutation."""
+
+    observed_at = progress_at or datetime.now(timezone.utc)
+    try:
+        return ProgressEventV1(
+            recorded_at=observed_at,
+            kind=progress_kind,
+            evidence_ref=evidence_ref,
+            next_action=next_action,
+            expected_quiet_until=expected_quiet_until,
+            quiet_reason=quiet_reason,
+        )
+    except ValidationError as exc:
+        raise ValueError(f"invalid progress event: {exc}") from exc
+
+
+def _progress_event_payload(event: ProgressEventV1) -> dict[str, str | None]:
+    """Flatten a validated event into the additive claim storage contract."""
+
+    return {
+        "progress_at": event.recorded_at.isoformat(),
+        "progress_kind": event.kind,
+        "evidence_ref": event.evidence_ref,
+        "next_action": event.next_action,
+        "expected_quiet_until": (
+            event.expected_quiet_until.isoformat() if event.expected_quiet_until is not None else None
+        ),
+        "quiet_reason": event.quiet_reason,
+    }
+
+
+def claim_progress_issues(
+    claim: ClaimRecord,
+    *,
+    now: datetime | None = None,
+) -> list[str]:
+    """Return instrumentation defects or an expired durable-progress lease."""
+
+    if not claim.is_live():
+        return []
+    core_values = (
+        claim.progress_at,
+        claim.progress_kind,
+        claim.evidence_ref,
+        claim.next_action,
+    )
+    quiet_values = (claim.expected_quiet_until, claim.quiet_reason)
+    if not any(value is not None for value in core_values + quiet_values):
+        return []
+
+    issues: list[str] = []
+    if not all(isinstance(value, str) and value.strip() for value in core_values):
+        issues.append("incomplete_progress_event")
+
+    progress_at = _parse_aware_iso_datetime(claim.progress_at)
+    if claim.progress_at is not None and progress_at is None:
+        issues.append("invalid_progress_at")
+    if claim.progress_kind is not None and claim.progress_kind not in PROGRESS_KINDS:
+        issues.append("invalid_progress_kind")
+
+    quiet_until: datetime | None = None
+    if any(value is not None for value in quiet_values):
+        if not all(isinstance(value, str) and value.strip() for value in quiet_values):
+            issues.append("incomplete_quiet_interval")
+        else:
+            quiet_until = _parse_aware_iso_datetime(claim.expected_quiet_until)
+            if quiet_until is None:
+                issues.append("invalid_expected_quiet_until")
+            elif progress_at is not None and quiet_until <= progress_at:
+                issues.append("invalid_quiet_interval")
+            expires_at = _parse_aware_iso_datetime(claim.expires_at)
+            if expires_at is None:
+                issues.append("quiet_interval_requires_valid_claim_expiry")
+            elif quiet_until is not None and quiet_until > expires_at:
+                issues.append("quiet_interval_exceeds_claim_expiry")
+
+    if issues:
+        return list(dict.fromkeys(issues))
+    assert progress_at is not None
+    reference_now = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
+    if progress_at > reference_now:
+        return ["future_progress_at"]
+    if quiet_until is not None and reference_now < quiet_until:
+        return []
+    if reference_now >= progress_at + _progress_stale_after():
+        return ["stalled_progress_lease"]
+    return []
+
+
 def claim_runtime_status(
     claim: ClaimRecord,
     *,
     active_claims: list[ClaimRecord] | None = None,
+    now: datetime | None = None,
 ) -> str:
-    """Classify one live claim across stale/weak/healthy states."""
+    """Classify one live claim across stale/stalled/weak/healthy states."""
     if claim_lifecycle_issues(claim):
         return "stale"
-    liveness_issues = claim_liveness_issues(claim)
+    liveness_issues = claim_liveness_issues(claim, now=now)
     if any(issue != "missing_session_heartbeat" for issue in liveness_issues):
         return "stale"
+    progress_issues = claim_progress_issues(claim, now=now)
     issues = (
         coordination_health_issues(claim, active_claims=active_claims)
         if active_claims is not None
         else claim_health_issues(claim)
     )
-    return "weak" if issues or liveness_issues else "healthy"
+    invalid_progress = [issue for issue in progress_issues if issue != "stalled_progress_lease"]
+    if issues or liveness_issues or invalid_progress:
+        return "weak"
+    if progress_issues == ["stalled_progress_lease"]:
+        return "stalled"
+    return "healthy"
 
 
 def claim_enforcement_issues(claim: ClaimRecord) -> list[dict[str, str]]:
@@ -1049,7 +1256,12 @@ def resolve_session_id(agent: str, explicit_session_id: str | None = None) -> st
     return None
 
 
-def validate_native_session_binding(agent: str, session_id: str | None) -> None:
+def validate_native_session_binding(
+    agent: str,
+    session_id: str | None,
+    *,
+    require_native_marker: bool = False,
+) -> None:
     """Reject an explicit session identity that contradicts the native runtime.
 
     Explicit identities remain necessary for lifecycle hooks and recovery tools
@@ -1058,11 +1270,17 @@ def validate_native_session_binding(agent: str, session_id: str | None) -> None:
     that no real session can heartbeat, receive mailbox messages for, or close.
     """
 
-    if not session_id:
-        return
     native_key = STRICT_NATIVE_SESSION_ENV_KEYS.get(agent)
     native_value = os.environ.get(native_key, "").strip() if native_key else ""
     native_session_id = f"{agent}:{native_value}" if native_value else None
+    if require_native_marker and native_session_id is None:
+        expected = native_key or "a supported native session marker"
+        raise ValueError(
+            f"This mutation requires the current native {agent} runtime via {expected}; "
+            "an explicit session ID alone cannot renew another runtime's progress lease."
+        )
+    if not session_id:
+        return
     if native_session_id is None or session_id == native_session_id:
         return
     raise ValueError(
@@ -1146,6 +1364,22 @@ def _parse_iso_datetime(value: Any) -> datetime | None:
     if parsed.tzinfo is None:
         return parsed.replace(tzinfo=timezone.utc)
     return parsed
+
+
+def _progress_text_with_presence(
+    data: dict[str, Any],
+    key: str,
+    *,
+    null_is_invalid: bool = True,
+) -> str | None:
+    """Preserve invalid explicit progress keys instead of erasing them as legacy absence."""
+
+    if key not in data:
+        return None
+    value = data.get(key)
+    if value is None and not null_is_invalid:
+        return None
+    return value if isinstance(value, str) else ""
 
 
 def normalize_claim(data: dict[str, Any], *, source_file: str | None = None) -> ClaimRecord | None:
@@ -1245,6 +1479,20 @@ def normalize_claim(data: dict[str, Any], *, source_file: str | None = None) -> 
         work_graph_sha256=(data.get("work_graph_sha256") if isinstance(data.get("work_graph_sha256"), str) else None),
         approval_revisions=tuple(_safe_string_list(data.get("approval_revisions"))),
         parallel_root_authorized=data.get("parallel_root_authorized") is True,
+        progress_at=_progress_text_with_presence(data, "progress_at"),
+        progress_kind=_progress_text_with_presence(data, "progress_kind"),
+        evidence_ref=_progress_text_with_presence(data, "evidence_ref"),
+        next_action=_progress_text_with_presence(data, "next_action"),
+        expected_quiet_until=_progress_text_with_presence(
+            data,
+            "expected_quiet_until",
+            null_is_invalid=False,
+        ),
+        quiet_reason=_progress_text_with_presence(
+            data,
+            "quiet_reason",
+            null_is_invalid=False,
+        ),
     )
 
 
@@ -1444,6 +1692,12 @@ def build_candidate_claim(
     work_graph_sha256: str | None = None,
     approval_revisions: tuple[str, ...] = (),
     parallel_root_authorized: bool = False,
+    progress_at: str | None = None,
+    progress_kind: str | None = None,
+    evidence_ref: str | None = None,
+    next_action: str | None = None,
+    expected_quiet_until: str | None = None,
+    quiet_reason: str | None = None,
 ) -> ClaimRecord:
     """Build a normalized candidate claim from CLI or test inputs."""
     normalized_write_paths = [_normalize_repo_path(path) for path in (write_paths or [])]
@@ -1484,6 +1738,12 @@ def build_candidate_claim(
         work_graph_sha256=work_graph_sha256,
         approval_revisions=approval_revisions,
         parallel_root_authorized=parallel_root_authorized,
+        progress_at=progress_at,
+        progress_kind=progress_kind,
+        evidence_ref=evidence_ref,
+        next_action=next_action,
+        expected_quiet_until=expected_quiet_until,
+        quiet_reason=quiet_reason,
     )
 
 
@@ -1514,6 +1774,12 @@ def create_claim(
 ) -> tuple[bool, str]:
     """Create a new claim after checking for hard conflicts."""
     now = datetime.now(timezone.utc)
+    initial_progress = build_progress_event(
+        progress_kind="claim_started",
+        evidence_ref=plan_ref or scope,
+        next_action=intent,
+        progress_at=now,
+    )
     if require_native_session_binding:
         validate_native_session_binding(agent, session_id)
     resolved_claim_type = claim_type or ("write" if write_paths else "program")
@@ -1558,6 +1824,7 @@ def create_claim(
         claimed_at=now.isoformat(),
         expires_at=(now + timedelta(hours=ttl_hours)).isoformat(),
         updated_at=now.isoformat(),
+        **_progress_event_payload(initial_progress),
     )
     validate_claim_for_creation(candidate)
 
@@ -1748,6 +2015,120 @@ def heartbeat_claims(
                 )
     updated_scopes = [claim.scope for _path, claim in updated_claims]
     return len(updated_scopes), sorted(updated_scopes), resolved_session_id, heartbeat_at
+
+
+def record_progress_claims(
+    *,
+    agent: str,
+    project: str,
+    scope: str,
+    progress_kind: str,
+    evidence_ref: str,
+    next_action: str,
+    session_id: str | None = None,
+    expected_quiet_until: str | datetime | None = None,
+    quiet_reason: str | None = None,
+    claims_dir: Path | None = None,
+    require_native_session_binding: bool = False,
+    now: datetime | None = None,
+) -> tuple[ClaimRecord, ProgressEventV1]:
+    """Record durable advancement on exactly one live claim owned by this session."""
+
+    if not scope.strip():
+        raise ValueError("Progress recording requires one exact non-empty scope")
+    if require_native_session_binding:
+        validate_native_session_binding(
+            agent,
+            session_id,
+            require_native_marker=True,
+        )
+    resolved_session_id = resolve_session_id(agent, session_id)
+    if not resolved_session_id:
+        raise ValueError(
+            "Unable to resolve a session ID. Pass --session-id explicitly or run from a supported tool runtime."
+        )
+    event = build_progress_event(
+        progress_kind=progress_kind,
+        evidence_ref=evidence_ref,
+        next_action=next_action,
+        expected_quiet_until=expected_quiet_until,
+        quiet_reason=quiet_reason,
+        progress_at=now,
+    )
+    resolved_claims_dir = (claims_dir or CLAIMS_DIR).expanduser().resolve()
+
+    with claim_registry_lock(resolved_claims_dir):
+        registry_digest_before = _registry_digest(resolved_claims_dir)
+        matches: list[tuple[Path, dict[str, Any], ClaimRecord]] = []
+        if resolved_claims_dir.exists():
+            for claim_file in sorted(resolved_claims_dir.glob("*.yaml")):
+                try:
+                    data = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
+                except Exception:
+                    continue
+                if not isinstance(data, dict):
+                    continue
+                claim = normalize_claim(data, source_file=str(claim_file))
+                if claim is None or not claim.is_live():
+                    continue
+                if claim.agent != agent or project not in claim.projects or claim.scope != scope:
+                    continue
+                if claim.session_id != resolved_session_id:
+                    continue
+                matches.append((claim_file, data, claim))
+
+        if not matches:
+            raise ValueError(
+                "Progress matched no exact live owning claim for "
+                f"agent={agent}, project={project}, scope={scope}, session_id={resolved_session_id}."
+            )
+        if len(matches) != 1:
+            raise ValueError(
+                "Progress matched multiple live claims; repair duplicate claim identity before recording advancement."
+            )
+
+        claim_file, data, claim = matches[0]
+        previous_progress_at = _parse_aware_iso_datetime(claim.progress_at)
+        if previous_progress_at is not None and event.recorded_at <= previous_progress_at:
+            raise ValueError(
+                "Progress event timestamp must advance beyond the claim's current progress_at"
+            )
+        expires_at = _parse_aware_iso_datetime(claim.expires_at)
+        if expires_at is not None and event.recorded_at > expires_at:
+            raise ValueError("Cannot record progress after the claim expiry")
+        if event.expected_quiet_until is not None and expires_at is None:
+            raise ValueError("A quiet interval requires a valid timezone-aware claim expiry")
+        if (
+            expires_at is not None
+            and event.expected_quiet_until is not None
+            and event.expected_quiet_until > expires_at
+        ):
+            raise ValueError("expected_quiet_until cannot exceed the current claim expiry")
+
+        data.update(_progress_event_payload(event))
+        data["updated_at"] = event.recorded_at.isoformat()
+        _atomic_write_claim(claim_file, data)
+        _projection_path, projection_digest_after = refresh_prewrite_authority_projection(
+            resolved_claims_dir
+        )
+        record_claim_mutation(
+            # `session_upsert` is the backward-compatible typed ledger class for
+            # additive claim/session state. Adding a new closed Literal would
+            # make older installed readers reject the shared v1 event stream.
+            operation="session_upsert",
+            claims_dir=resolved_claims_dir,
+            registry_digest_before=registry_digest_before,
+            target_project=claim.primary_project(),
+            target_scope=claim.scope,
+            target_claim_path=claim_file,
+            session_id=resolved_session_id,
+            projection_digest_after=projection_digest_after,
+        )
+
+    updated = normalize_claim(data, source_file=str(claim_file))
+    if updated is None:
+        raise RuntimeError("Progress mutation produced an invalid claim")
+    return updated, event
 
 
 def end_session_claims(
@@ -2196,6 +2577,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Refresh heartbeat metadata for matching live claims owned by the current session.",
     )
+    group.add_argument(
+        "--progress",
+        action="store_true",
+        help="Record one durable progress event on an exact live claim owned by the current session.",
+    )
 
     parser.add_argument("--agent", help="Agent brain name (claude-code, codex, openclaw)")
     parser.add_argument("--project", help="Project name")
@@ -2210,6 +2596,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--repo-root", help="Canonical repository root for readiness validation")
     parser.add_argument("--branch", help="Branch for this claim")
     parser.add_argument("--session-id", help="Session identifier")
+    parser.add_argument("--progress-kind", choices=sorted(PROGRESS_KINDS), help="Durable progress kind")
+    parser.add_argument("--evidence-ref", help="Non-empty durable evidence reference")
+    parser.add_argument("--next-action", help="Concrete next action after this progress event")
+    parser.add_argument("--expected-quiet-until", help="Bounded timezone-aware quiet deadline")
+    parser.add_argument("--quiet-reason", help="Reason for a paired quiet deadline")
     parser.add_argument(
         "--session-name",
         help="Human-readable broader-goal session name; required for live program/write/research claims",
@@ -2255,6 +2646,7 @@ def _render_check_output(
     candidate: ClaimRecord | None,
 ) -> dict[str, Any]:
     """Build a structured report for list/check operations."""
+    observed_at = datetime.now(timezone.utc)
     enforcement_issues = [issue for claim in claims for issue in claim_enforcement_issues(claim)]
     payload: dict[str, Any] = {
         "project": project,
@@ -2266,13 +2658,15 @@ def _render_check_output(
                 "health_status": claim_runtime_status(
                     claim,
                     active_claims=claims,
+                    now=observed_at,
                 ),
                 "health_issues": coordination_health_issues(
                     claim,
                     active_claims=claims,
                 ),
                 "lifecycle_issues": claim_lifecycle_issues(claim),
-                "liveness_issues": claim_liveness_issues(claim),
+                "liveness_issues": claim_liveness_issues(claim, now=observed_at),
+                "progress_issues": claim_progress_issues(claim, now=observed_at),
                 "enforcement_issues": claim_enforcement_issues(claim),
             }
             for claim in claims
@@ -2286,13 +2680,15 @@ def _render_check_output(
             "candidate_health_status": claim_runtime_status(
                 candidate,
                 active_claims=prospective_claims,
+                now=observed_at,
             ),
             "candidate_health_issues": coordination_health_issues(
                 candidate,
                 active_claims=prospective_claims,
             ),
             "candidate_lifecycle_issues": claim_lifecycle_issues(candidate),
-            "candidate_liveness_issues": claim_liveness_issues(candidate),
+            "candidate_liveness_issues": claim_liveness_issues(candidate, now=observed_at),
+            "candidate_progress_issues": claim_progress_issues(candidate, now=observed_at),
         }
     return payload
 
@@ -2397,6 +2793,58 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         for claim in claims:
             print(f"  [{claim.agent}] {claim.primary_project()}:{claim.scope} [{claim.claim_type}] — {claim.intent}")
+        return 0
+
+    if args.progress:
+        if not all(
+            [
+                args.agent,
+                args.project,
+                args.scope,
+                args.progress_kind,
+                args.evidence_ref,
+                args.next_action,
+            ]
+        ):
+            raise SystemExit(
+                "--progress requires --agent, --project, --scope, --progress-kind, "
+                "--evidence-ref, and --next-action"
+            )
+        try:
+            claim, event = record_progress_claims(
+                agent=args.agent,
+                project=args.project,
+                scope=args.scope,
+                progress_kind=args.progress_kind,
+                evidence_ref=args.evidence_ref,
+                next_action=args.next_action,
+                session_id=args.session_id,
+                expected_quiet_until=args.expected_quiet_until,
+                quiet_reason=args.quiet_reason,
+                require_native_session_binding=True,
+            )
+        except MutationAuditError as exc:
+            return _render_mutation_audit_failure(exc, as_json=args.json)
+        except ValueError as exc:
+            if args.json:
+                print(json.dumps({"ok": False, "error": str(exc)}, indent=2, sort_keys=True))
+            else:
+                print(str(exc), file=sys.stderr)
+            return 1
+        payload = {
+            "ok": True,
+            "project": claim.primary_project(),
+            "scope": claim.scope,
+            "session_id": claim.session_id,
+            "progress_event": event.model_dump(mode="json"),
+        }
+        if args.json:
+            print(json.dumps(payload, indent=2, sort_keys=True))
+        else:
+            print(
+                f"Progress recorded: {claim.primary_project()}:{claim.scope} "
+                f"[{event.kind}] at {event.recorded_at.isoformat()}"
+            )
         return 0
 
     if args.claim:

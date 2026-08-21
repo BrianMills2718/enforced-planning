@@ -290,6 +290,52 @@ For Claude Code, the same command shape applies with `--agent claude-code`.
 Session identity is auto-resolved from the supported runtime env vars when
 available.
 
+Heartbeat proves that a runtime is still attached; it does not prove that work
+advanced. New or explicitly upgraded claims therefore carry one separate
+durable progress event:
+
+- `progress_at`: server-recorded UTC time of the last accepted event
+- `progress_kind`: `claim_started`, `verified_commit`, `accepted_artifact`,
+  `new_diagnostic`, or `integration_result`
+- `evidence_ref`: exact durable evidence for that advancement
+- `next_action`: the concrete next useful action
+- optional paired `expected_quiet_until` and `quiet_reason`
+
+Record advancement on one exact owned scope from the current native runtime:
+
+```bash
+python scripts/check_coordination_claims.py --progress \
+  --agent codex --project enforced-planning --scope your-exact-scope \
+  --progress-kind verified_commit --evidence-ref commit:abc123 \
+  --next-action "run the focused integration check"
+```
+
+The installed `scripts/meta/check_coordination_claims.py` entrypoint accepts
+the same arguments after the governed-repository wrapper is updated. The
+command requires exactly one live claim owned by the native session, timestamps
+the event itself, updates the claim atomically, refreshes the pre-write
+projection, and emits the existing backward-compatible typed session-mutation
+receipt. A new event without a quiet interval clears an obsolete interval.
+
+By default, a complete event becomes `stalled` at 60 minutes without another
+accepted event. `COORDINATION_PROGRESS_STALE_MINUTES` may set a positive numeric
+window; invalid values fail visibly. A quiet interval suppresses the stall only
+before its timezone-aware deadline, must end after `progress_at`, and cannot
+extend beyond the claim expiry. Equality with the quiet deadline is expired.
+
+`stalled` is report-only. It preserves the claim, session, write ownership,
+push authority, and worktree; `--prune-stale` does not remove it. The operator
+must record real advancement, move to ready work, or hand off explicitly.
+Heartbeat, blocker records, handoff, tracker timestamps, Git activity, and file
+dirt do not advance `progress_at`. A stale lifecycle or heartbeat still
+outranks a progress stall. Claims with no progress fields retain legacy
+behavior; partial, invalid, or future-dated events are `weak` contract defects,
+not genuine stalls.
+
+This operational claim progress is distinct from the tracker-backed selected
+outcome progress described below. Neither stream renews the other implicitly;
+an accepted outcome receipt may be named explicitly as `evidence_ref`.
+
 ## Session Contract Model
 
 The coordination stack uses one canonical mutable object plus one linked

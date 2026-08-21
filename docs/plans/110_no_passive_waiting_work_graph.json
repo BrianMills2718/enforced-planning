@@ -13,7 +13,7 @@
       "objective": "Distinguish durable advancement from heartbeat and blocker lifecycle events on the current claim/session runtime without changing ownership automatically.",
       "profile": "standard",
       "execution_class": "independently_executable",
-      "claimability": "ready_for_execution",
+      "claimability": "not_applicable",
       "authorization_mode": "registry_claim",
       "scope": {
         "included": [
@@ -117,8 +117,8 @@
         "max_active_per_claimant": 1,
         "named_owner_id": null
       },
-      "status": "ready",
-      "record_version": 1
+      "status": "accepted",
+      "record_version": 2
     },
     {
       "schema_version": "1.0",
@@ -233,8 +233,8 @@
       "class": "integration",
       "objective": "Record the deterministic disposition and either continue another unit or safely narrow, hand off, or retire only the blocked goal scope while preserving unrelated roots and dirty work.",
       "profile": "standard",
-      "execution_class": "coupled",
-      "claimability": "blocked_dependencies",
+      "execution_class": "independently_executable",
+      "claimability": "ready_for_execution",
       "authorization_mode": "registry_claim",
       "integration_owner_id": "enforced-planning",
       "scope": {
@@ -333,12 +333,10 @@
         }
       ],
       "readiness": {
-        "status": "blocked",
+        "status": "ready",
         "required_approval_types": [],
         "approvals": [],
-        "failed_guards": [
-          "npw-01-progress-lease-current-main must be accepted"
-        ]
+        "failed_guards": []
       },
       "claim_policy": {
         "eligibility_rule": "Both provider units are accepted and one integration claim exclusively owns their shared lifecycle and installer paths.",
@@ -347,8 +345,8 @@
         "max_active_per_claimant": 1,
         "named_owner_id": null
       },
-      "status": "blocked",
-      "record_version": 1
+      "status": "ready",
+      "record_version": 2
     },
     {
       "schema_version": "1.0",

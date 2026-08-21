@@ -9,8 +9,7 @@ from __future__ import annotations
 
 import json
 import subprocess
-from dataclasses import asdict
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
@@ -142,12 +141,16 @@ def _branch_claims(project: str, branch: str) -> list[coordination_claims.ClaimR
 def _healthy_branch_claims(
     claims: list[coordination_claims.ClaimRecord],
 ) -> list[coordination_claims.ClaimRecord]:
-    """Return branch claims with complete, live ownership metadata."""
+    """Return branch claims that still confer live push ownership.
+
+    A stalled progress lease is report-only: it requests advancement or
+    handoff but does not revoke claim ownership.
+    """
 
     return [
         claim
         for claim in claims
-        if coordination_claims.claim_runtime_status(claim) == "healthy"
+        if coordination_claims.claim_runtime_status(claim) in {"healthy", "stalled"}
     ]
 
 
@@ -268,8 +271,8 @@ def evaluate_push_safety(
             PushCheckFinding(
                 code="no_healthy_branch_claim",
                 message=(
-                    "The current branch has no healthy canonical claim with complete "
-                    "session identity. Resume or recreate the lane before pushing."
+                    "The current branch has no healthy or report-only stalled canonical "
+                    "claim with complete session identity. Resume or recreate the lane before pushing."
                 ),
                 details={
                     "branch": resolved_branch,
@@ -281,6 +284,7 @@ def evaluate_push_safety(
                             "session_name": claim.session_name,
                             "health_issues": coordination_claims.claim_health_issues(claim),
                             "liveness_issues": coordination_claims.claim_liveness_issues(claim),
+                            "progress_issues": coordination_claims.claim_progress_issues(claim),
                         }
                         for claim in branch_claims
                     ],

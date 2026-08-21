@@ -1,0 +1,182 @@
+{
+  "schema_version": "1.0.0",
+  "record_type": "owner_prewrite_outcome_correlation_observation",
+  "plan_id": "enforced-planning#116",
+  "recorded_at": "2026-08-21T03:42:45Z",
+  "policy_authority": {
+    "id": "outcome-continuation-lease-hard-gate",
+    "revision": "f6091b6b2f2a5357d0fdbbe88b157435a2ce07fb",
+    "status": "approved"
+  },
+  "design": {
+    "plan_revision": "3b849c12bde08e1266d81fa7c827c0a5258e4bed",
+    "work_graph_revision": "ab385bf4d0f209c8ebf5f67856df0c6835893aac",
+    "unit_id": "ocor-01-prewrite-outcome-observe"
+  },
+  "execution": {
+    "repository": "enforced-planning",
+    "candidate_revision": "686be2a14ddeb01b329edbd503040cc6fde9922c",
+    "worktree_clean_before_execution": true,
+    "delivery_classification": "explicit_manual_prewrite_observe_pilot",
+    "ordinary_module": "enforced_planning/prewrite_claim_fast.py",
+    "correlation_module": "enforced_planning/outcome_prewrite_observation.py",
+    "public_cli": "scripts/prewrite_claim_gate.py",
+    "write_performed": false,
+    "host_activation_claimed": false,
+    "enforcement_applied": false
+  },
+  "ordinary_boundary": {
+    "client": "codex",
+    "session_id": "codex:01a021cc-f3a0-7b21-babc-f18617333d1a",
+    "branch": "plan-116-prewrite-outcome-observe",
+    "claim_project": "enforced-planning",
+    "claim_scope": "plan-116-prewrite-outcome-observe",
+    "claim_source_file": "codex_enforced-planning_plan-116-prewrite-outcome-observe.yaml",
+    "target_path": "docs/evidence/plan116_prewrite_outcome_correlation.json",
+    "hook_event_name": "PreToolUse",
+    "tool_name": "apply_patch",
+    "payload_sha256": "66222badbbd12c74be787eddfb8f321fc0b2e9c39c9a8c1ecd4afff69526898e",
+    "projection_refreshed_at": "2026-08-21T03:42:45.179464Z",
+    "projection_registry_sha256": "6053496b23614b5853d479561fd1251847a074584da8e41247d024192f123922",
+    "claim_source_sha256": "915b95240017e479eed4d33d90393e295617c21027911b9fbbe9843fa5b14525",
+    "ordinary_decision_remained_authoritative": true
+  },
+  "controlled_context": {
+    "ordinary_approval": true,
+    "approval_text": "I approve, continue",
+    "cost_telemetry_usd": "1000000",
+    "elapsed_telemetry_seconds": 999999,
+    "contract_request_and_target_identical": true,
+    "only_progress_receipts_differ": true,
+    "note": "Approval, cost, and elapsed time are retained only as decision-inert context."
+  },
+  "owner_progress_positive": {
+    "scenario_path": "examples/owner-real-outcome-observe/plan116-owner-progress.json",
+    "scenario_file_sha256": "5cbcaaeced2947277a48e93ad0cda482d5a499e4406560a0e21a4bb84a34af5b",
+    "scenario_sha256": "5513be77facaec4c64be2e0bb49ee9ded079b3580c9bb82f4f6b4d2c1fa3048f",
+    "outcome_contract_sha256": "f1b0b53db196e4bfa54b50b086d72f1e2bb401c42937aa3efdd8b3a32d735bab",
+    "command": [
+      "python",
+      "scripts/prewrite_claim_gate.py",
+      "--client",
+      "codex",
+      "--mode",
+      "observe",
+      "--outcome-scenario",
+      "examples/owner-real-outcome-observe/plan116-owner-progress.json",
+      "--json"
+    ],
+    "exit_code": 0,
+    "ordinary": {
+      "receipt_id": "prewrite_dfc575d5617146dbbcd6162578c8cffb",
+      "recorded_at": "2026-08-21T03:42:45.255152Z",
+      "decision": "allow",
+      "reason_code": "exact_live_claim"
+    },
+    "correlation": {
+      "receipt_id": "ocor-134c5533ba924e849323fd5e7ce70e96",
+      "recorded_at": "2026-08-21T03:42:45.364687Z",
+      "ordinary_receipt_recorded_first": true,
+      "disposition": "would_allow",
+      "outcome_allowed": true,
+      "reason_code": "active_in_scope",
+      "lease_state": "active",
+      "applied_receipt_sha256s": [
+        "53eb4f8d758d10b3ab7fed56d0dfa4029066123f46345bca06f2b54e02adff37"
+      ],
+      "lease_sha256": "bd79e6b277155da2ea098f6280138b0da65fc959df6ab8f420cf3c79824eccb0",
+      "enforcement_applied": false
+    }
+  },
+  "synthetic_circular_negative": {
+    "classification": "two_synthetic_non_outcome_increments",
+    "scenario_path": "examples/owner-real-outcome-observe/plan116-circular.json",
+    "scenario_file_sha256": "c92bf7f188442ce162d0f2ee648433f29113fd7155d9946dc6acc053053b32be",
+    "scenario_sha256": "06299bfe30a81d93fd5e40b7756e87bd0f5b642f4b78a97e08710a15049e3a2f",
+    "outcome_contract_sha256": "f1b0b53db196e4bfa54b50b086d72f1e2bb401c42937aa3efdd8b3a32d735bab",
+    "command": [
+      "python",
+      "scripts/prewrite_claim_gate.py",
+      "--client",
+      "codex",
+      "--mode",
+      "observe",
+      "--outcome-scenario",
+      "examples/owner-real-outcome-observe/plan116-circular.json",
+      "--json"
+    ],
+    "exit_code": 0,
+    "ordinary": {
+      "receipt_id": "prewrite_1e8e6ec8a58c47a593f7c5e0373ed298",
+      "recorded_at": "2026-08-21T03:42:45.445160Z",
+      "decision": "allow",
+      "reason_code": "exact_live_claim"
+    },
+    "correlation": {
+      "receipt_id": "ocor-59d95fbedb8d4e3da09af937a02f3b1f",
+      "recorded_at": "2026-08-21T03:42:45.546866Z",
+      "ordinary_receipt_recorded_first": true,
+      "disposition": "would_deny",
+      "outcome_allowed": false,
+      "reason_code": "recovery_required",
+      "lease_state": "recovery_required",
+      "consecutive_non_outcome_increments": 2,
+      "applied_receipt_sha256s": [
+        "94df0654498d5a5f19a435f7050dd49fa66b257c9f55a9494d197d3842e29913",
+        "f9c2a118ece681f29a8bead44b2f27c81803052ca20af1f0622a8859265a31da"
+      ],
+      "lease_sha256": "726e1093c799fff9b3d028bee28dcbd975101da725efc610a32a6d55899af388",
+      "enforcement_applied": false
+    },
+    "limitation": "The two non-outcome receipts are a deterministic control, not a claim about one historical Brian-owned failure."
+  },
+  "failure_visibility_observation": {
+    "classification": "pre_candidate_operational_probe",
+    "ordinary_reason_code": "projection_unavailable_or_stale",
+    "ordinary_decision": "observe_violation",
+    "correlation_disposition": "observation_error",
+    "correlation_error_code": "ordinary_identity_invalid",
+    "ordinary_exit_preserved": true,
+    "response": "Refresh the digest-bound ordinary projection immediately before the paired replay; do not reinterpret stale ordinary authority as an outcome denial.",
+    "accepted_claim": "A stale ordinary projection fails visibly and does not fabricate an outcome decision."
+  },
+  "focused_verification": {
+    "command": [
+      "pytest",
+      "-q",
+      "tests/test_outcome_prewrite_observation.py",
+      "tests/test_outcome_continuation.py",
+      "tests/test_prewrite_claim_projection.py",
+      "tests/test_generate_hook_wiring.py::test_installed_prewrite_runtime_projects_and_classifies_native_payloads"
+    ],
+    "passed": 53,
+    "failed": 0,
+    "ruff": "passed",
+    "mypy": "passed"
+  },
+  "next_integration_decision": {
+    "decision": "retain_observe_only_and_calibrate_on_representative_owner_work_before_any_blocking",
+    "why": "Exact same-payload correlation is technically unambiguous, but this pilot uses explicit operator-authored scenarios and has not measured false blocks across representative owner sessions.",
+    "promotion_prerequisites": [
+      "define a durable owner for selecting the current outcome scenario without silently replacing the outcome",
+      "calibrate progress classification and false-block risk on representative real owner continuations",
+      "prove projection freshness or bind outcome state through a separately bounded durable session or claim contract"
+    ],
+    "explicitly_deferred": [
+      "claim schema or projection mutation",
+      "automatic or mutable outcome lease selection",
+      "installer or native host activation",
+      "shell interception",
+      "outcome-based blocking or fleet enforcement",
+      "colleague adoption"
+    ]
+  },
+  "licensed_claim": "At clean candidate revision 686be2a14ddeb01b329edbd503040cc6fde9922c, one exact real Plan 116 Codex claimed-write payload produced ordinary allow/exact_live_claim in both runs, then a typed correlated would_allow/active_in_scope observation for owner progress and would_deny/recovery_required for two synthetic non-outcome increments; ordinary exit behavior remained unchanged and no write or enforcement occurred.",
+  "limitations": [
+    "This is an explicit manual source-repository observation, not installed native host delivery.",
+    "Scenarios and progress classifications are immutable but operator-authored; no automatic semantic classifier or durable mutable lease is present.",
+    "The negative control is synthetic and does not reconstruct one historical abandoned project.",
+    "No claim mutation, installer, shell, colleague, downstream repository, or fleet behavior changed.",
+    "The evidence licenses continued observe-mode calibration only, not outcome-based blocking."
+  ]
+}

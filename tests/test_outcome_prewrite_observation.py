@@ -524,3 +524,48 @@ def test_checked_in_controls_share_context_and_differ_only_on_progress_receipts(
     assert positive_result.decision.reason_code == "active_in_scope"
     assert circular_result.decision.allowed is False
     assert circular_result.decision.reason_code == "recovery_required"
+
+
+def test_retained_plan116_evidence_matches_scenarios_and_correlation_results() -> None:
+    evidence = json.loads(
+        (ROOT / "docs" / "evidence" / "plan116_prewrite_outcome_correlation.json").read_text(encoding="utf-8")
+    )
+    scenario_root = ROOT / "examples" / "owner-real-outcome-observe"
+    cases = (
+        (
+            "owner_progress_positive",
+            scenario_root / "plan116-owner-progress.json",
+            "would_allow",
+            "active_in_scope",
+        ),
+        (
+            "synthetic_circular_negative",
+            scenario_root / "plan116-circular.json",
+            "would_deny",
+            "recovery_required",
+        ),
+    )
+
+    scenarios = []
+    for evidence_key, scenario_path, disposition, reason_code in cases:
+        scenario = load_scenario(str(scenario_path))
+        result = evaluate_scenario(scenario)
+        retained = evidence[evidence_key]
+        scenarios.append(scenario)
+        assert retained["scenario_file_sha256"] == hashlib.sha256(scenario_path.read_bytes()).hexdigest()
+        assert retained["scenario_sha256"] == result.scenario_sha256
+        assert retained["outcome_contract_sha256"] == result.outcome_contract_sha256
+        assert retained["correlation"]["disposition"] == disposition
+        assert retained["correlation"]["reason_code"] == reason_code
+        assert retained["correlation"]["lease_sha256"] == result.lease_sha256
+        assert retained["correlation"]["applied_receipt_sha256s"] == result.applied_receipt_sha256s
+        assert datetime.fromisoformat(retained["ordinary"]["recorded_at"]) < datetime.fromisoformat(
+            retained["correlation"]["recorded_at"]
+        )
+
+    assert scenarios[0].contract == scenarios[1].contract
+    assert scenarios[0].request == scenarios[1].request
+    assert evidence["execution"]["candidate_revision"] == "686be2a14ddeb01b329edbd503040cc6fde9922c"
+    assert evidence["execution"]["enforcement_applied"] is False
+    assert evidence["ordinary_boundary"]["ordinary_decision_remained_authoritative"] is True
+    assert "not outcome-based blocking" in evidence["limitations"][-1]

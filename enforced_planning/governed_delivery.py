@@ -13,6 +13,7 @@ import hashlib
 import json
 import os
 import re
+import shlex
 import subprocess
 import sys
 import uuid
@@ -30,6 +31,7 @@ CHECKPOINTS_FILE = "checkpoints.jsonl"
 VERIFICATION_RECEIPT_FILE = "verification-receipt.json"
 BASELINE_TAG = "governed-task-baseline"
 PERSONAL_SENTINELS = ("/home/brian", "BrianMills2718")
+PORTABLE_ID_RE = re.compile(r"^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$")
 
 
 class GovernedDeliveryError(RuntimeError):
@@ -56,10 +58,17 @@ class StrictModel(BaseModel):
 
 
 class GovernedTaskV1(StrictModel):
-    """Frozen contract for the one real clean-room feature request."""
+    """Validated consumer profile copied into one governed task repository."""
 
-    schema_version: Literal["1.0.0"] = "1.0.0"
-    task_id: Literal["hello-app-add-name"] = "hello-app-add-name"
+    schema_version: Literal["1.1.0"] = "1.1.0"
+    profile_id: str = "hello-app-name"
+    project_id: str = "hello-app"
+    project_relative_path: str = TASK_RELATIVE_PATH
+    source_adapter: Literal["hello-shared-lib", "manifest-status-cli"] = (
+        "hello-shared-lib"
+    )
+    source_path: str = "src/hello_app.py"
+    task_id: str = "hello-app-add-name"
     title: str = "Add an optional --name argument"
     authority_path: Literal["CLAUDE.md"] = "CLAUDE.md"
     plan_glob: Literal["docs/plans/[0-9][0-9]_*.md"] = "docs/plans/[0-9][0-9]_*.md"
@@ -71,11 +80,73 @@ class GovernedTaskV1(StrictModel):
             "docs/plans/[0-9][0-9]_*.md",
         ]
     )
-    expected_default_output: Literal["hello-app uses shared-lib"] = "hello-app uses shared-lib"
-    expected_named_output: Literal["Ada uses shared-lib"] = "Ada uses shared-lib"
+    default_command: list[str] = Field(
+        default_factory=lambda: ["python", "src/hello_app.py"]
+    )
+    expected_default_output: str = "hello-app uses shared-lib"
     requested_command: list[str] = Field(
         default_factory=lambda: ["python", "src/hello_app.py", "--name", "Ada"]
     )
+    expected_requested_output: str = "Ada uses shared-lib"
+
+    @model_validator(mode="after")
+    def _portable_profile(self) -> GovernedTaskV1:
+        """Reject unsafe or internally inconsistent consumer configuration."""
+
+        for field_name, value in (
+            ("profile_id", self.profile_id),
+            ("project_id", self.project_id),
+            ("task_id", self.task_id),
+        ):
+            if not PORTABLE_ID_RE.fullmatch(value):
+                raise ValueError(f"{field_name} must be a portable lowercase identifier")
+        if self.project_relative_path != f"projects/{self.project_id}":
+            raise ValueError("project_relative_path must equal projects/<project_id>")
+        self._validate_relative_path(self.source_path, field_name="source_path")
+        if not self.source_path.startswith("src/") or not self.source_path.endswith(".py"):
+            raise ValueError("source_path must name a Python file under src/")
+        if self.default_command != ["python", self.source_path]:
+            raise ValueError("default_command must be ['python', source_path]")
+        if (
+            len(self.requested_command) <= len(self.default_command)
+            or self.requested_command[: len(self.default_command)] != self.default_command
+        ):
+            raise ValueError("requested_command must extend default_command")
+        for command in (self.default_command, self.requested_command):
+            if any(not item or "\n" in item or "\r" in item for item in command):
+                raise ValueError("commands must contain non-empty single-line arguments")
+            if any(sentinel.casefold() in " ".join(command).casefold() for sentinel in PERSONAL_SENTINELS):
+                raise ValueError("commands must not contain a personal sentinel")
+        if not self.allowed_paths:
+            raise ValueError("allowed_paths must not be empty")
+        for path in self.allowed_paths:
+            self._validate_relative_path(path, field_name="allowed_paths")
+        required_paths = {
+            "README.md",
+            self.source_path,
+            "docs/plans/CLAUDE.md",
+            self.plan_glob,
+        }
+        if not required_paths.issubset(self.allowed_paths):
+            raise ValueError("allowed_paths must include README, source, plan index, and plan glob")
+        for output in (self.expected_default_output, self.expected_requested_output):
+            if not output or "\n" in output or "\r" in output:
+                raise ValueError("expected outputs must be non-empty single lines")
+            if any(sentinel.casefold() in output.casefold() for sentinel in PERSONAL_SENTINELS):
+                raise ValueError("expected outputs must not contain a personal sentinel")
+        return self
+
+    @staticmethod
+    def _validate_relative_path(value: str, *, field_name: str) -> None:
+        path = Path(value)
+        if (
+            not value
+            or path.is_absolute()
+            or ".." in path.parts
+            or "\\" in value
+            or any(sentinel.casefold() in value.casefold() for sentinel in PERSONAL_SENTINELS)
+        ):
+            raise ValueError(f"{field_name} must contain portable root-relative paths")
 
 
 class CheckResultV1(StrictModel):
@@ -90,10 +161,12 @@ class CheckResultV1(StrictModel):
 class PreparationReceiptV1(StrictModel):
     """Receipt for the prepared, failing governed baseline."""
 
-    schema_version: Literal["1.0.0"] = "1.0.0"
+    schema_version: Literal["1.1.0"] = "1.1.0"
     operation: Literal["prepare"] = "prepare"
+    profile_id: str
+    profile_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     task_id: str
-    task_root: Literal["projects/hello-app"] = TASK_RELATIVE_PATH
+    task_root: str
     framework_revision: str
     baseline_revision: str
     installer_verdict: Literal["governed"]
@@ -138,8 +211,10 @@ class CourseCheckpointV1(StrictModel):
 class VerificationReceiptV1(StrictModel):
     """Integrity-bound independent completion receipt."""
 
-    schema_version: Literal["1.0.0"] = "1.0.0"
+    schema_version: Literal["1.1.0"] = "1.1.0"
     operation: Literal["verify"] = "verify"
+    profile_id: str
+    profile_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     task_id: str
     task_root: Literal["."] = "."
     framework_revision: str
@@ -169,6 +244,31 @@ def _resolve(path: str | Path) -> Path:
     """Resolve an explicit caller-supplied path."""
 
     return Path(path).expanduser().resolve()
+
+
+def load_governed_task_profile(profile_path: str | Path | None = None) -> GovernedTaskV1:
+    """Load one consumer-owned profile or return the stable default profile."""
+
+    if profile_path is None:
+        return GovernedTaskV1()
+    path = _resolve(profile_path)
+    try:
+        raw = path.read_text(encoding="utf-8")
+        if any(sentinel.casefold() in raw.casefold() for sentinel in PERSONAL_SENTINELS):
+            raise ValueError("profile contains a personal sentinel")
+        return GovernedTaskV1.model_validate_json(raw)
+    except (OSError, ValueError) as exc:
+        raise GovernedDeliveryError(
+            "invalid_task_profile",
+            f"Unable to load governed task profile: {exc}",
+            path=str(path),
+        ) from exc
+
+
+def _profile_sha256(contract: GovernedTaskV1) -> str:
+    """Hash one normalized task profile independently of JSON formatting."""
+
+    return _canonical_sha256(contract.model_dump(mode="json"))
 
 
 def _run(
@@ -208,10 +308,11 @@ def _write(path: Path, content: str) -> None:
     path.write_text(content if content.endswith("\n") else content + "\n", encoding="utf-8")
 
 
-def _baseline_source() -> str:
-    """Return the working default CLI whose requested option is still absent."""
+def _baseline_source(contract: GovernedTaskV1) -> str:
+    """Return the selected adapter's working default and missing requested feature."""
 
-    return '''"""Synthetic application consuming the clean-room shared library."""
+    if contract.source_adapter == "hello-shared-lib":
+        return '''"""Synthetic application consuming the clean-room shared library."""
 
 from __future__ import annotations
 
@@ -239,11 +340,46 @@ if __name__ == "__main__":
     raise SystemExit(main())
 '''
 
+    return '''"""Consumer status CLI backed by the clean-room project manifest."""
 
-def _acceptance_tests() -> str:
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+
+
+def load_status() -> dict[str, str]:
+    """Load the consumer-owned project manifest."""
+
+    return json.loads(Path(__file__).resolve().parents[1].joinpath("project.json").read_text())
+
+
+def message() -> str:
+    """Return the stable human-readable project status."""
+
+    status = load_status()
+    return f"{status['project_id']}: {status['status']}"
+
+
+def main() -> int:
+    """Print the current human-readable project status."""
+
+    parser = argparse.ArgumentParser()
+    parser.parse_args()
+    print(message())
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+'''
+
+
+def _acceptance_tests(contract: GovernedTaskV1) -> str:
     """Return consumer-owned black-box tests, including the initial failure."""
 
-    return '''"""Acceptance tests supplied with the governed feature request."""
+    return f'''"""Acceptance tests supplied with the governed feature request."""
 
 from __future__ import annotations
 
@@ -252,24 +388,28 @@ import sys
 import unittest
 
 
-class HelloAppCliTest(unittest.TestCase):
-    def run_app(self, *args: str) -> subprocess.CompletedProcess[str]:
+DEFAULT_ARGS = {contract.default_command[1:]!r}
+REQUESTED_ARGS = {contract.requested_command[1:]!r}
+
+
+class GovernedTaskCliTest(unittest.TestCase):
+    def run_app(self, args: list[str]) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
-            [sys.executable, "src/hello_app.py", *args],
+            [sys.executable, *args],
             capture_output=True,
             text=True,
             check=False,
         )
 
-    def test_default_message_is_preserved(self) -> None:
-        completed = self.run_app()
+    def test_default_behavior_is_preserved(self) -> None:
+        completed = self.run_app(DEFAULT_ARGS)
         self.assertEqual(completed.returncode, 0, completed.stderr)
-        self.assertEqual(completed.stdout.strip(), "hello-app uses shared-lib")
+        self.assertEqual(completed.stdout.strip(), {contract.expected_default_output!r})
 
-    def test_name_personalizes_message(self) -> None:
-        completed = self.run_app("--name", "Ada")
+    def test_requested_behavior(self) -> None:
+        completed = self.run_app(REQUESTED_ARGS)
         self.assertEqual(completed.returncode, 0, completed.stderr)
-        self.assertEqual(completed.stdout.strip(), "Ada uses shared-lib")
+        self.assertEqual(completed.stdout.strip(), {contract.expected_requested_output!r})
 
 
 if __name__ == "__main__":
@@ -277,12 +417,12 @@ if __name__ == "__main__":
 '''
 
 
-def _consumer_authority() -> str:
+def _consumer_authority(contract: GovernedTaskV1) -> str:
     """Return the canonical minimal authority for the disposable consumer."""
 
-    return """# hello-app
+    return f"""# {contract.project_id}
 
-This repository is the disposable consumer for one governed-delivery task.
+This repository is the disposable consumer for `{contract.title}`.
 
 ## Authority
 
@@ -308,8 +448,8 @@ evidence surfaces; they do not replace this authority.
 
 ```bash
 make verify
-python src/hello_app.py
-python src/hello_app.py --name Ada
+{shlex.join(contract.default_command)}
+{shlex.join(contract.requested_command)}
 ```
 
 ## Principles
@@ -333,16 +473,16 @@ python src/hello_app.py --name Ada
 """
 
 
-def _baseline_readme() -> str:
+def _baseline_readme(contract: GovernedTaskV1) -> str:
     """Return concise documentation for the already-working default behavior."""
 
-    return """# hello-app
+    return f"""# {contract.project_id}
 
-Print the shared-library dependency using the default application name:
+Run the current default behavior:
 
 ```bash
-python src/hello_app.py
-# hello-app uses shared-lib
+{shlex.join(contract.default_command)}
+# {contract.expected_default_output}
 ```
 """
 
@@ -493,6 +633,20 @@ def _executing_framework_revision() -> str:
     return _git(Path(__file__).resolve().parents[1], "rev-parse", "HEAD")
 
 
+def _baseline_contract(task_root: Path) -> GovernedTaskV1:
+    """Load the immutable task profile committed at the governed baseline."""
+
+    try:
+        raw = _git(task_root, "show", f"{BASELINE_TAG}:{TASK_CONTRACT_FILE}")
+        return GovernedTaskV1.model_validate_json(raw)
+    except (GovernedDeliveryError, ValueError) as exc:
+        raise GovernedDeliveryError(
+            "invalid_baseline_profile",
+            f"Unable to load the baseline task profile: {exc}",
+            path=TASK_CONTRACT_FILE,
+        ) from exc
+
+
 def _collect_checks(task_root: Path, contract: GovernedTaskV1) -> list[CheckResultV1]:
     """Execute the complete independent check set against current task state."""
 
@@ -501,16 +655,16 @@ def _collect_checks(task_root: Path, contract: GovernedTaskV1) -> list[CheckResu
         _command_check(
             task_root,
             check_id="default_behavior",
-            argv=[sys.executable, "src/hello_app.py"],
+            argv=contract.default_command,
             expected_stdout=contract.expected_default_output,
         )
     )
     checks.append(
         _command_check(
             task_root,
-            check_id="named_behavior",
+            check_id="requested_behavior",
             argv=contract.requested_command,
-            expected_stdout=contract.expected_named_output,
+            expected_stdout=contract.expected_requested_output,
         )
     )
     checks.append(
@@ -584,15 +738,15 @@ def _collect_checks(task_root: Path, contract: GovernedTaskV1) -> list[CheckResu
     readme_path = task_root / "README.md"
     readme = readme_path.read_text(encoding="utf-8") if readme_path.is_file() else ""
     readme_ok = (
-        "python src/hello_app.py --name Ada" in readme
-        and contract.expected_named_output in readme
+        shlex.join(contract.requested_command) in readme
+        and contract.expected_requested_output in readme
         and len(readme.splitlines()) <= 80
     )
     checks.append(
         _check_result(
             "documentation_current_minimal",
             readme_ok,
-            "README has one concise runnable named example" if readme_ok else "README example is missing, stale, or over 80 lines",
+            "README has one concise runnable requested example" if readme_ok else "README example is missing, stale, or over 80 lines",
         )
     )
 
@@ -618,6 +772,21 @@ def _collect_checks(task_root: Path, contract: GovernedTaskV1) -> list[CheckResu
                 f"prepared={recorded_framework_revision} executing={executing_framework_revision}"
             ),
             observed=executing_framework_revision,
+        )
+    )
+    baseline_contract = _baseline_contract(task_root)
+    baseline_profile_sha256 = _profile_sha256(baseline_contract)
+    current_profile_sha256 = _profile_sha256(contract)
+    checks.append(
+        _check_result(
+            "profile_contract_binding",
+            baseline_profile_sha256 == current_profile_sha256,
+            (
+                "current task profile equals the governed baseline profile"
+                if baseline_profile_sha256 == current_profile_sha256
+                else "current task profile differs from the governed baseline profile"
+            ),
+            observed=current_profile_sha256,
         )
     )
     portable, personal_paths = _tracked_text_has_personal_sentinel(task_root)
@@ -687,23 +856,105 @@ def _append_jsonl(path: Path, record: StrictModel) -> None:
         handle.write(record.model_dump_json() + "\n")
 
 
+def _validate_cleanroom_project(root: Path, contract: GovernedTaskV1) -> None:
+    """Require the selected task project to be declared by the clean-room owner."""
+
+    config_path = root / "consumer-config.json"
+    try:
+        payload = json.loads(config_path.read_text(encoding="utf-8"))
+        projects = payload["projects"]
+    except (OSError, json.JSONDecodeError, KeyError, TypeError) as exc:
+        raise GovernedDeliveryError(
+            "invalid_consumer_inventory",
+            f"Unable to read the clean-room consumer inventory: {exc}",
+            path="consumer-config.json",
+        ) from exc
+    selected = {
+        "project_id": contract.project_id,
+        "relative_path": contract.project_relative_path,
+    }
+    if selected not in projects:
+        raise GovernedDeliveryError(
+            "task_project_not_declared",
+            "Task profile project is not declared by the clean-room inventory.",
+            path=contract.project_relative_path,
+        )
+
+
+def _validate_source_adapter(task_root: Path, contract: GovernedTaskV1) -> None:
+    """Validate the exact placeholder seam one known source adapter replaces."""
+
+    source_path = task_root / contract.source_path
+    if contract.source_adapter == "hello-shared-lib":
+        try:
+            original = source_path.read_text(encoding="utf-8")
+        except OSError as exc:
+            raise GovernedDeliveryError(
+                "unexpected_adapter_source",
+                f"Unable to read the hello shared-library source: {exc}",
+                path=contract.source_path,
+            ) from exc
+        if "from cleanroom_shared import label" not in original or "def message()" not in original:
+            raise GovernedDeliveryError(
+                "unexpected_adapter_source",
+                "hello-shared-lib adapter requires the clean-room hello-app source.",
+                path=contract.source_path,
+            )
+        return
+
+    manifest_path = task_root / "project.json"
+    if source_path.exists():
+        raise GovernedDeliveryError(
+            "unexpected_adapter_source",
+            "manifest-status-cli adapter refuses to overwrite an existing source file.",
+            path=contract.source_path,
+        )
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise GovernedDeliveryError(
+            "unexpected_adapter_source",
+            f"manifest-status-cli adapter requires a valid project.json: {exc}",
+            path="project.json",
+        ) from exc
+    expected_manifest = {
+        "project_id": contract.project_id,
+        "status": "adapter-placeholder",
+    }
+    expected_json = json.dumps(expected_manifest, sort_keys=True, separators=(",", ":"))
+    if (
+        manifest != expected_manifest
+        or contract.expected_default_output
+        != f"{contract.project_id}: adapter-placeholder"
+        or contract.expected_requested_output != expected_json
+        or contract.requested_command != ["python", contract.source_path, "--json"]
+    ):
+        raise GovernedDeliveryError(
+            "adapter_profile_mismatch",
+            "manifest-status-cli profile does not match the declared placeholder and --json contract.",
+            path="project.json",
+        )
+
+
 def prepare_governed_task(
     *,
     cleanroom_root: str | Path,
     framework_root: str | Path,
+    profile_path: str | Path | None = None,
 ) -> PreparationReceiptV1:
-    """Overlay, govern, and commit the one failing hello-app task baseline."""
+    """Overlay, govern, and commit one profile-selected failing task baseline."""
 
     root = _resolve(cleanroom_root)
     framework = _resolve(framework_root)
-    task_root = root / TASK_RELATIVE_PATH
-    source_path = task_root / "src" / "hello_app.py"
+    contract = load_governed_task_profile(profile_path)
+    task_root = root / contract.project_relative_path
+    source_path = task_root / contract.source_path
     receipt_path = root / ".loop-engineering" / "state" / "install_receipt.json"
     installer = framework / "scripts" / "install_governed_repo.py"
-    if not receipt_path.is_file() or not source_path.is_file():
+    if not receipt_path.is_file() or not task_root.is_dir():
         raise GovernedDeliveryError(
             "cleanroom_not_materialized",
-            "Prepare requires a materialized default clean-room fixture.",
+            "Prepare requires a materialized clean-room containing the selected project.",
             path=str(root),
         )
     if (task_root / ".git").exists() or (task_root / TASK_CONTRACT_FILE).exists():
@@ -718,6 +969,8 @@ def prepare_governed_task(
             "Canonical governed-repo installer is unavailable.",
             path=str(installer),
         )
+    _validate_cleanroom_project(root, contract)
+    _validate_source_adapter(task_root, contract)
     framework_revision = _git(framework, "rev-parse", "HEAD")
     try:
         cleanroom_receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
@@ -735,19 +988,10 @@ def prepare_governed_task(
             f"receipt={component_revision!r} framework={framework_revision!r}",
             path=str(receipt_path),
         )
-    original = source_path.read_text(encoding="utf-8")
-    if "from cleanroom_shared import label" not in original or "def message()" not in original:
-        raise GovernedDeliveryError(
-            "unexpected_cleanroom_source",
-            "hello-app source does not match the clean-room capability seam.",
-            path="src/hello_app.py",
-        )
-
-    contract = GovernedTaskV1()
-    _write(source_path, _baseline_source())
-    _write(task_root / "tests" / "test_cli.py", _acceptance_tests())
-    _write(task_root / "README.md", _baseline_readme())
-    _write(task_root / "CLAUDE.md", _consumer_authority())
+    _write(source_path, _baseline_source(contract))
+    _write(task_root / "tests" / "test_cli.py", _acceptance_tests(contract))
+    _write(task_root / "README.md", _baseline_readme(contract))
+    _write(task_root / "CLAUDE.md", _consumer_authority(contract))
     _write(task_root / "Makefile", _baseline_makefile())
     _write(task_root / TASK_CONTRACT_FILE, contract.model_dump_json(indent=2))
     _write(task_root / ".gitignore", f"{STATE_DIRECTORY}/\n__pycache__/\n*.pyc\n")
@@ -798,11 +1042,13 @@ def prepare_governed_task(
             "initial_failure_not_observed",
             "Prepared task unexpectedly satisfies every acceptance check.",
         )
-    named_check = next(check for check in initial_checks if check.check_id == "named_behavior")
-    if named_check.verdict != "fail":
+    requested_check = next(
+        check for check in initial_checks if check.check_id == "requested_behavior"
+    )
+    if requested_check.verdict != "fail":
         raise GovernedDeliveryError(
-            "named_failure_not_observed",
-            "Prepared task must fail the requested --name behavior.",
+            "requested_failure_not_observed",
+            "Prepared task must fail the requested profile behavior.",
         )
     portable_check = next(check for check in initial_checks if check.check_id == "portable_content")
     if portable_check.verdict != "pass":
@@ -811,7 +1057,10 @@ def prepare_governed_task(
             portable_check.detail,
         )
     return PreparationReceiptV1(
+        profile_id=contract.profile_id,
+        profile_sha256=_profile_sha256(contract),
         task_id=contract.task_id,
+        task_root=contract.project_relative_path,
         framework_revision=framework_revision,
         baseline_revision=baseline_revision,
         installer_verdict="governed",
@@ -947,9 +1196,12 @@ def verify_governed_task(
     verdict: Literal["pass", "fail"] = (
         "pass" if all(check.verdict == "pass" for check in checks) else "fail"
     )
+    baseline_contract = _baseline_contract(root)
     unsigned = {
-        "schema_version": "1.0.0",
+        "schema_version": "1.1.0",
         "operation": "verify",
+        "profile_id": baseline_contract.profile_id,
+        "profile_sha256": _profile_sha256(baseline_contract),
         "task_id": contract.task_id,
         "task_root": ".",
         "framework_revision": _executing_framework_revision(),

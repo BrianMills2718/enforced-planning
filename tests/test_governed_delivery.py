@@ -20,6 +20,7 @@ from enforced_planning.governed_delivery import (
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = REPO_ROOT / "scripts" / "governed_delivery.py"
+STATUS_PROFILE = REPO_ROOT / "examples" / "cleanroom-ecosystem" / "status-cli-profile.json"
 
 
 def _git(task_root: Path, *args: str) -> str:
@@ -53,6 +54,39 @@ def _prepared_task(tmp_path: Path) -> tuple[Path, object]:
     return spec.root / "projects" / "hello-app", receipt
 
 
+def _status_cleanroom(tmp_path: Path) -> CleanroomSpec:
+    """Materialize the custom one-project inventory used by the second profile."""
+
+    projects_root = tmp_path / "workspace" / "projects"
+    projects_root.mkdir(parents=True)
+    spec = CleanroomSpec.build(
+        root=tmp_path / "external" / "status-cleanroom",
+        component_revision=_git(REPO_ROOT, "rev-parse", "HEAD"),
+        projects_root=projects_root,
+        instance_id="status-consumer",
+        consumer_projects=[
+            {
+                "project_id": "status-cli",
+                "relative_path": "projects/status-cli",
+            }
+        ],
+    )
+    materialize_cleanroom(spec)
+    return spec
+
+
+def _prepared_status_task(tmp_path: Path) -> tuple[Path, object]:
+    """Prepare the copied status profile in its consumer-owned inventory."""
+
+    spec = _status_cleanroom(tmp_path)
+    receipt = prepare_governed_task(
+        cleanroom_root=spec.root,
+        framework_root=REPO_ROOT,
+        profile_path=STATUS_PROFILE,
+    )
+    return spec.root / "projects" / "status-cli", receipt
+
+
 def _completed_source() -> str:
     """Return the accepted hello-app implementation used by verifier tests."""
 
@@ -81,6 +115,43 @@ def main() -> int:
     parser.add_argument("--name", default="hello-app")
     args = parser.parse_args()
     print(message(args.name))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+'''
+
+
+def _completed_status_source() -> str:
+    """Return the accepted status-cli implementation used by verifier tests."""
+
+    return '''"""Consumer status CLI backed by the clean-room project manifest."""
+
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+
+
+def load_status() -> dict[str, str]:
+    """Load the consumer-owned project manifest."""
+
+    return json.loads(Path(__file__).resolve().parents[1].joinpath("project.json").read_text())
+
+
+def main() -> int:
+    """Print human-readable or compact JSON status."""
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--json", action="store_true")
+    args = parser.parse_args()
+    status = load_status()
+    if args.json:
+        print(json.dumps(status, sort_keys=True, separators=(",", ":")))
+    else:
+        print(f"{status['project_id']}: {status['status']}")
     return 0
 
 
@@ -174,6 +245,72 @@ python src/hello_app.py --name Ada
     _git(task_root, "commit", "-m", "[Plan #1] Add optional name")
 
 
+def _complete_status_task(task_root: Path) -> None:
+    """Create and commit the configured status-cli result candidate."""
+
+    task_root.joinpath("src/status_cli.py").write_text(
+        _completed_status_source(), encoding="utf-8"
+    )
+    task_root.joinpath("README.md").write_text(
+        """# status-cli
+
+Show the current project status:
+
+```bash
+python src/status_cli.py
+# status-cli: adapter-placeholder
+```
+
+Emit compact JSON for machine consumers:
+
+```bash
+python src/status_cli.py --json
+# {"project_id":"status-cli","status":"adapter-placeholder"}
+```
+""",
+        encoding="utf-8",
+    )
+    plan_path = task_root / "docs" / "plans" / "01_add_json_status.md"
+    plan_path.parent.mkdir(parents=True, exist_ok=True)
+    plan_path.write_text(
+        """# Plan #1: Add JSON Status
+
+**Status:** Complete
+**Type:** implementation
+
+## User Outcome
+
+Machine consumers can request compact JSON without changing the default output.
+
+## Canonical Behavioral Example
+
+`python src/status_cli.py --json` prints the compact project manifest.
+
+## Authority Used
+
+- `CLAUDE.md`
+
+## Required Tests
+
+- Default status remains unchanged.
+- `--json` prints the exact compact manifest.
+
+## Acceptance Criteria
+
+- [x] Both exact commands pass.
+- [x] README contains one concise example for each public mode.
+- [x] Independent governed-delivery verifier passes.
+""",
+        encoding="utf-8",
+    )
+    task_root.joinpath("docs/plans/CLAUDE.md").write_text(
+        "# Implementation Plans\n\n- [Plan #1: Add JSON Status](01_add_json_status.md) — Complete\n",
+        encoding="utf-8",
+    )
+    _git(task_root, "add", "-A")
+    _git(task_root, "commit", "-m", "[Plan #1] Add compact JSON status")
+
+
 def _check(receipt: object, check_id: str) -> object:
     """Return one check from a typed probe or verification receipt."""
 
@@ -221,6 +358,67 @@ def test_prepare_rejects_component_revision_drift(tmp_path: Path) -> None:
         prepare_governed_task(cleanroom_root=spec.root, framework_root=REPO_ROOT)
 
     assert exc_info.value.code == "component_revision_mismatch"
+
+
+def test_external_status_profile_prepares_different_consumer(tmp_path: Path) -> None:
+    """A copied profile selects a custom inventory, adapter, commands, and outputs."""
+
+    task_root, receipt = _prepared_status_task(tmp_path)
+
+    assert receipt.profile_id == "status-cli-json"
+    assert receipt.task_id == "status-cli-add-json"
+    assert receipt.task_root == "projects/status-cli"
+    assert len(receipt.profile_sha256) == 64
+    default = subprocess.run(
+        [sys.executable, "src/status_cli.py"],
+        cwd=task_root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    requested = subprocess.run(
+        [sys.executable, "src/status_cli.py", "--json"],
+        cwd=task_root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert default.returncode == 0
+    assert default.stdout.strip() == "status-cli: adapter-placeholder"
+    assert requested.returncode != 0
+    assert _git(task_root, "status", "--porcelain") == ""
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("project_relative_path", "/tmp/status-cli"),
+        ("source_path", "../status_cli.py"),
+        ("source_adapter", "arbitrary-shell"),
+    ],
+)
+def test_profile_rejects_unsafe_paths_and_unknown_adapters_before_git(
+    tmp_path: Path,
+    field: str,
+    value: str,
+) -> None:
+    """Invalid consumer configuration fails before task repository mutation."""
+
+    spec = _status_cleanroom(tmp_path)
+    profile = json.loads(STATUS_PROFILE.read_text(encoding="utf-8"))
+    profile[field] = value
+    invalid_profile = tmp_path / "invalid-profile.json"
+    invalid_profile.write_text(json.dumps(profile), encoding="utf-8")
+
+    with pytest.raises(GovernedDeliveryError) as exc_info:
+        prepare_governed_task(
+            cleanroom_root=spec.root,
+            framework_root=REPO_ROOT,
+            profile_path=invalid_profile,
+        )
+
+    assert exc_info.value.code == "invalid_task_profile"
+    assert not (spec.root / "projects" / "status-cli" / ".git").exists()
 
 
 def test_repeated_unchanged_failure_requires_course_checkpoint(tmp_path: Path) -> None:
@@ -279,7 +477,47 @@ def test_verifier_accepts_plan_docs_code_and_declared_git_diff(tmp_path: Path) -
     assert receipt.agent_session_id == "codex:test-session"
     assert receipt.receipt_sha256
     assert all(item.verdict == "pass" for item in receipt.checks)
-    assert _check(receipt, "named_behavior").observed == "Ada uses shared-lib"
+    assert _check(receipt, "requested_behavior").observed == "Ada uses shared-lib"
+
+
+def test_verifier_accepts_configured_status_consumer(tmp_path: Path) -> None:
+    """The different task profile crosses the same independent completion gate."""
+
+    task_root, prepared = _prepared_status_task(tmp_path)
+    initial = probe_governed_task(task_root)
+    assert initial.verdict == "fail"
+    _complete_status_task(task_root)
+
+    receipt = verify_governed_task(task_root, agent_session_id="codex:status-session")
+
+    assert receipt.verdict == "pass"
+    assert receipt.profile_id == prepared.profile_id
+    assert receipt.profile_sha256 == prepared.profile_sha256
+    assert receipt.task_id == "status-cli-add-json"
+    assert _check(receipt, "default_behavior").observed == "status-cli: adapter-placeholder"
+    assert _check(receipt, "requested_behavior").observed == (
+        '{"project_id":"status-cli","status":"adapter-placeholder"}'
+    )
+    assert _check(receipt, "profile_contract_binding").verdict == "pass"
+
+
+def test_verifier_rejects_profile_drift_from_baseline(tmp_path: Path) -> None:
+    """A worker cannot rewrite its profile and certify the changed success contract."""
+
+    task_root, _ = _prepared_status_task(tmp_path)
+    probe_governed_task(task_root)
+    _complete_status_task(task_root)
+    contract_path = task_root / "governed-task.json"
+    contract = json.loads(contract_path.read_text(encoding="utf-8"))
+    contract["title"] = "Worker-rewritten task contract"
+    contract_path.write_text(json.dumps(contract, indent=2) + "\n", encoding="utf-8")
+    _git(task_root, "add", "governed-task.json")
+    _git(task_root, "commit", "-m", "[Plan #1] Rewrite task contract")
+
+    receipt = verify_governed_task(task_root, agent_session_id="codex:status-session")
+
+    assert receipt.verdict == "fail"
+    assert _check(receipt, "profile_contract_binding").verdict == "fail"
 
 
 def test_false_generated_authority_is_rejected(tmp_path: Path) -> None:
@@ -325,7 +563,7 @@ def test_worker_self_report_cannot_certify_completion(tmp_path: Path) -> None:
     receipt = verify_governed_task(task_root, agent_session_id="codex:test-session")
 
     assert receipt.verdict == "fail"
-    assert _check(receipt, "named_behavior").verdict == "fail"
+    assert _check(receipt, "requested_behavior").verdict == "fail"
 
 
 def test_cli_json_prepare_probe_checkpoint_and_verify(tmp_path: Path) -> None:
@@ -407,3 +645,30 @@ def test_cli_json_prepare_probe_checkpoint_and_verify(tmp_path: Path) -> None:
         text=True,
     )
     assert json.loads(verified.stdout)["verdict"] == "pass"
+
+
+def test_cli_prepare_accepts_copied_status_profile(tmp_path: Path) -> None:
+    """The public JSON CLI selects the second consumer without Python imports."""
+
+    spec = _status_cleanroom(tmp_path)
+    prepared = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT),
+            "prepare",
+            "--cleanroom-root",
+            str(spec.root),
+            "--framework-root",
+            str(REPO_ROOT),
+            "--profile",
+            str(STATUS_PROFILE),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    payload = json.loads(prepared.stdout)
+    assert payload["verdict"] == "prepared"
+    assert payload["profile_id"] == "status-cli-json"
+    assert payload["task_root"] == "projects/status-cli"

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prepare, probe, checkpoint, and verify the Plan 113 governed task."""
+"""Prepare, probe, checkpoint, and verify configured governed tasks."""
 
 from __future__ import annotations
 
@@ -39,6 +39,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     prepare = subparsers.add_parser("prepare", help="Prepare a governed failing task baseline")
     prepare.add_argument("--cleanroom-root", required=True)
     prepare.add_argument("--framework-root", default=str(Path(__file__).resolve().parents[1]))
+    prepare.add_argument("--profile", help="Optional consumer-owned governed-task profile JSON")
 
     probe = subparsers.add_parser("probe", help="Execute checks and return the next control decision")
     probe.add_argument("--task-root", required=True)
@@ -64,6 +65,7 @@ def main(argv: list[str] | None = None) -> int:
             result = prepare_governed_task(
                 cleanroom_root=args.cleanroom_root,
                 framework_root=args.framework_root,
+                profile_path=args.profile,
             )
         elif args.command == "probe":
             result = probe_governed_task(args.task_root)
@@ -90,4 +92,3 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

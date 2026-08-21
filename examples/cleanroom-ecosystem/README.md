@@ -78,3 +78,33 @@ Two unchanged failing probes return `course_correction_required`. Before
 probing again, use the `checkpoint` command to name the prior assumption, the
 changed assumption, and the next tactic. A worker-authored completion report is
 never an input to the terminal verdict.
+
+## Configured Consumer Profile
+
+Plan 62 preserves the default example and adds a copied profile for a different
+one-project inventory. Save this consumer config as `/tmp/status-consumer.json`:
+
+```json
+{"instance_id":"status-consumer","component_source":"local-enforced-planning","policy_pack_name":"example-policy-pack","projects":[{"project_id":"status-cli","relative_path":"projects/status-cli"}]}
+```
+
+Then prepare and observe the profile-selected task:
+
+```bash
+status_root="$(mktemp -d)/cleanroom"
+python scripts/cleanroom_alpha.py \
+  --consumer-config /tmp/status-consumer.json \
+  --root "$status_root" apply
+python scripts/governed_delivery.py prepare \
+  --cleanroom-root "$status_root" \
+  --framework-root . \
+  --profile examples/cleanroom-ecosystem/status-cli-profile.json
+python scripts/governed_delivery.py probe \
+  --task-root "$status_root/projects/status-cli"
+```
+
+The baseline command `python src/status_cli.py` prints
+`status-cli: adapter-placeholder`; the initial probe fails because `--json` is
+not implemented. The copied profile supplies the project, adapter, source path,
+commands, exact outputs, and allowed paths. Preparation stores its normalized
+digest, and terminal verification rejects any worker rewrite of that contract.

@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.1.0",
+  "profile_id": "status-cli-json",
+  "project_id": "status-cli",
+  "project_relative_path": "projects/status-cli",
+  "source_adapter": "manifest-status-cli",
+  "source_path": "src/status_cli.py",
+  "task_id": "status-cli-add-json",
+  "title": "Add compact JSON status output",
+  "authority_path": "CLAUDE.md",
+  "plan_glob": "docs/plans/[0-9][0-9]_*.md",
+  "allowed_paths": [
+    "README.md",
+    "src/status_cli.py",
+    "docs/plans/CLAUDE.md",
+    "docs/plans/[0-9][0-9]_*.md"
+  ],
+  "default_command": [
+    "python",
+    "src/status_cli.py"
+  ],
+  "expected_default_output": "status-cli: adapter-placeholder",
+  "requested_command": [
+    "python",
+    "src/status_cli.py",
+    "--json"
+  ],
+  "expected_requested_output": "{\"project_id\":\"status-cli\",\"status\":\"adapter-placeholder\"}"
+}

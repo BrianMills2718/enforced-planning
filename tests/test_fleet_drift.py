@@ -574,3 +574,20 @@ def test_makefile_exposes_fleet_drift() -> None:
     assert "scripts/fleet_drift.py" in makefile
     assert "fleet-drift" in makefile.splitlines()[2]  # declared .PHONY
     assert (SCRIPTS_DIR / "fleet_drift.py").is_file()
+
+
+def test_makefile_json_target_is_silenced() -> None:
+    """`make fleet-drift-json | jq` must work.
+
+    Make echoes each recipe line to stdout, which would put a non-JSON first
+    line in front of the payload. Caught by running the real target rather than
+    the script directly.
+    """
+    makefile = (SCRIPTS_DIR.parent / "Makefile").read_text(encoding="utf-8")
+    recipe = [
+        line
+        for line in makefile.splitlines()
+        if "fleet_drift.py --json" in line
+    ]
+    assert recipe, "fleet-drift-json recipe not found"
+    assert all(line.lstrip("\t").startswith("@") for line in recipe)

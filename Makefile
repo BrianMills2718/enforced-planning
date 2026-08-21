@@ -51,8 +51,10 @@ FLEET_DRIFT_ARGS ?=
 fleet-drift:  ## Report vendored enforced_planning drift across consumer repos
 	$(PYTHON) scripts/fleet_drift.py $(FLEET_DRIFT_ARGS)
 
+# Silenced with @: make echoes the recipe line to stdout, which would put a
+# non-JSON first line in front of the payload and break `| jq`.
 fleet-drift-json:  ## Same report as machine-readable JSON
-	$(PYTHON) scripts/fleet_drift.py --json $(FLEET_DRIFT_ARGS)
+	@$(PYTHON) scripts/fleet_drift.py --json $(FLEET_DRIFT_ARGS)
 
 push-check:  ## Validate branch push safety against default-branch and coordination state
 	$(PYTHON) scripts/check_push_safety.py

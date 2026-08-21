@@ -162,6 +162,23 @@ def test_validate_doc_authority_matches_artifact_status_when_plan_numbers_repeat
     assert issues == []
 
 
+def test_validate_doc_authority_prefers_in_progress_over_later_complete_detail(tmp_path: Path) -> None:
+    repo_root = tmp_path / "demo"
+    _write_config(repo_root)
+    _write_plan(
+        repo_root / "docs/plans/55_mixed_status.md",
+        status="In Progress — implementation complete; reconciliation pending",
+    )
+    _write_plan_index(
+        repo_root / "docs/plans/CLAUDE.md",
+        plan_rows=[("55", "🚧 In Progress")],
+    )
+
+    issues = doc_authority.validate_doc_authority(repo_root)
+
+    assert issues == []
+
+
 def test_validate_doc_authority_reads_candidate_worktree_surfaces(tmp_path: Path, monkeypatch) -> None:
     canonical_repo = tmp_path / "canonical" / "demo"
     candidate_worktree = tmp_path / "worktree" / "demo"

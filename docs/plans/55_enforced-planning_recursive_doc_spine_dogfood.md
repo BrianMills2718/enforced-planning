@@ -1,6 +1,6 @@
 # Plan #55: Enforced-Planning Recursive Doc Spine Dogfood
 
-**Status:** In Progress — implementation and self-hosting repair complete; plan-index reconciliation pending
+**Status:** Complete
 **Type:** implementation
 **Priority:** High
 **phase_ref:** "Owner-first agentic-system dogfood"
@@ -129,8 +129,8 @@ schema reference. No new documentation layer or registry is introduced.
 3. Reproduce and fix live-owner detection for `program` claims with
    `write_paths`.
 4. Prove the compact context path and focused validator behavior.
-5. Let the existing plan-index owner reconcile its claimed shared surface;
-   then mark this plan and its index row complete.
+5. Integrate the existing plan-index owner's reconciliation, then align this
+   plan and its index row in the now-unclaimed surface.
 
 ## Acceptance Criteria
 
@@ -146,14 +146,14 @@ schema reference. No new documentation layer or registry is introduced.
   owner of an authority surface.
 - [x] Focused doc-authority, plan-validation, and file-context tests pass.
 - [x] Documentation and link self-tests pass.
-- [ ] The repo-wide doc-authority check is clean after the separately claimed
+- [x] The repo-wide doc-authority check is clean after the separately claimed
   plan index reconciles its remaining historical entries.
 
 ## Evidence
 
 - Historical implementation: `23eb18bb`, `94e9610e`, and `b2d9a539`.
 - Focused regression: `test_validate_doc_authority_recognizes_program_claim_write_ownership`.
-- Focused suite: 40 tests passed across doc authority, plan validation, file
+- Focused suite: 43 tests passed across doc authority, plan validation, file
   context, and recursive closure.
 - Documentation self-test: links and docs passed.
 - Context observation: four required documents, including the root, totaling
@@ -170,9 +170,10 @@ schema reference. No new documentation layer or registry is introduced.
 | An owner claim is still mislabeled unowned | Inspect explicit `write_paths` and path overlap before adding claim-type exceptions. |
 | Index reconciliation expands this lane into archive cleanup | Keep the obligation with the existing index owner and proceed to the integrated owner-first proof. |
 
-## Remaining Reconciliation
+## Completion Disposition
 
-The live Plan 114 lane owns `docs/plans/CLAUDE.md` and has accepted the missing
-historical index entries. Once that claimed surface is updated and the
-repo-wide doc-authority check passes, this plan can move from `In Progress` to
-`Complete` without another design cycle.
+The Plan 114 lane reconciled the shared historical index entries and released
+the index. This lane then aligned Plan 55's row and fixed artifact identity,
+partial/proposed status, explicit lifecycle precedence, and worktree-local
+validation. The repo-wide doc-authority check is therefore a candidate check,
+not a report about some other checkout.

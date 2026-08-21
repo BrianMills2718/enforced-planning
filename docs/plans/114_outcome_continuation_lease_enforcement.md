@@ -1,6 +1,6 @@
 # Plan #114: Outcome Continuation Lease Enforcement
 
-**Status:** Planned
+**Status:** Complete
 **Type:** implementation
 **Priority:** Critical
 **phase_ref:** "Progress-bound coding-agent continuation"
@@ -65,8 +65,9 @@ allowed actions are exact replay/readout, passive inspection, evidence
 preservation, closeout, or one separately bound recovery action. Approval text
 and cost telemetry do not renew or widen the lease.
 
-**Behavioral evidence:** Unobserved until both CLI scenarios execute from a
-clean implementation revision and their decisions are retained.
+**Behavioral evidence:** Observed from clean implementation revision
+`80fa9dbcef74d0d85b2a15168f0345e3ab3a4129` and retained in
+`docs/evidence/plan114_outcome_continuation_decisions.json`.
 
 **Substrate/process evidence:** Focused transition, digest, replay, scope,
 recovery, approval-invariance, and cost-invariance tests.

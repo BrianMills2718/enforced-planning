@@ -220,10 +220,10 @@ def _normalize_plan_status(raw_status: str) -> str:
         if emoji in raw_status:
             return emoji
     lowered = raw_status.lower()
-    if "complete" in lowered:
-        return "✅"
     if "progress" in lowered:
         return "🚧"
+    if "complete" in lowered:
+        return "✅"
     if "partial" in lowered or "proposed" in lowered:
         return "🟡"
     if "planned" in lowered:

@@ -58,7 +58,7 @@ See `ROADMAP.md` for the full phase map and recommended priority order.
 | 51 | Upgrade Automation Implementation and Write-Mode Rollout (`51_upgrade-automation-implementation-and-write-mode-rollout.md`) | High | 🟡 Partial — dry-run shipped; unsafe direct-primary write mode disabled | Phase 9 fleet write-mode rollout |
 | 53 | Agent-Memory Research Citations And Validation (`53_agent-memory-research-citations-and-validation.md`) | High | ✅ Complete | Structured prior-session provenance field and validator coverage |
 | 54 | Recursive Documentation Spine And Required-Read Closure (`54_recursive-documentation-spine-and-required-read-closure.md`) | High | 📋 Planned | [future] recursive doc-spine validation and read-gating rollout |
-| 55 | Enforced-Planning Recursive Doc Spine Dogfood (`55_enforced-planning_recursive_doc_spine_dogfood.md`) | High | 📋 Planned | [future] downstream recursive doc-spine rollout to governed repos |
+| 55 | Enforced-Planning Recursive Doc Spine Dogfood (`55_enforced-planning_recursive_doc_spine_dogfood.md`) | High | ✅ Complete | integrated owner-first context-and-continuation proof |
 | 56 | Modality-Aware Planning Protocol (`56_modality-aware-planning-protocol.md`) | High | ✅ Complete | Design-plan skill folded into canonical planning methodology |
 | 57 | Plan Status Index Parser Compatibility (`57_plan-status-index-parser-compatibility.md`) | High | ✅ Complete | sync_plan_status parser now supports current Implementation Plans index |
 | 58 | Ops Archive Centralization (`58_ops-archive-centralization.md`) | Medium | ✅ Complete | Completed ops sprint notes moved to central archive |
@@ -90,7 +90,7 @@ See `ROADMAP.md` for the full phase map and recommended priority order.
 | 111 | Portable Ecosystem Feedback Loop (`111_ecosystem_feedback_loop.md`) | High | 🚧 In Progress — design adopted; EF-01 ready | evidence-backed improvement across policies, skills, instructions, tools, projects, and unowned concerns |
 | 112 | Canonical Surface Runtime Control (`112_canonical_surface_runtime_control.md`) | High | ✅ Complete | Graph Application Toolkit canonical-runtime adoption |
 | 113 | Governed Delivery Authentic Vertical (`113_governed_delivery_authentic_vertical.md`) | Critical | ✅ Complete | first real plan/docs/code/course-control/verifier proof |
-| 114 | Outcome Continuation Lease Enforcement (`114_outcome_continuation_lease_enforcement.md`) | Critical | 📋 Planned | staged progress-only lease/admission proof before session or fleet integration |
+| 114 | Outcome Continuation Lease Enforcement (`114_outcome_continuation_lease_enforcement.md`) | Critical | ✅ Complete | observe the staged gate on real Brian-owned work before session or fleet integration |
 
 ## Status Key
 

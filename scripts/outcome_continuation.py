@@ -23,6 +23,7 @@ def _add_repo_root_to_path() -> None:
 
 _add_repo_root_to_path()
 
+from enforced_planning.coordination_claims import CLAIMS_DIR
 from enforced_planning.outcome_continuation import (
     ContinuationError,
     evaluate_scenario,
@@ -32,7 +33,6 @@ from enforced_planning.outcome_selection import (
     OutcomeSelectionError,
     select_outcome_for_session,
 )
-from enforced_planning.coordination_claims import CLAIMS_DIR
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -72,9 +72,7 @@ def main(argv: list[str] | None = None) -> int:
                 claims_dir=args.claims_dir,
             )
     except (ContinuationError, OutcomeSelectionError, ValidationError, ValueError) as exc:
-        if isinstance(exc, ContinuationError):
-            error = exc.to_dict()
-        elif isinstance(exc, OutcomeSelectionError):
+        if isinstance(exc, (ContinuationError, OutcomeSelectionError)):
             error = exc.to_dict()
         else:
             error = {"code": "input_validation_failed", "message": str(exc)}

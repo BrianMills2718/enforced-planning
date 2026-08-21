@@ -350,11 +350,7 @@ def observe_prewrite_outcome(
                     _selection.binding.outcome_contract_sha256,
                 ),
             }
-            mismatches = [
-                name
-                for name, (actual, expected) in selection_checks.items()
-                if actual != expected
-            ]
+            mismatches = [name for name, (actual, expected) in selection_checks.items() if actual != expected]
             if mismatches:
                 raise OutcomePreWriteObservationError(
                     "selection_scenario_stale",

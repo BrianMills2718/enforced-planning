@@ -25,7 +25,6 @@ from enforced_planning.outcome_selection import (
     select_outcome_for_session,
 )
 
-
 ROOT = Path(__file__).resolve().parents[1]
 TARGET = "docs/evidence/plan117.json"
 SESSION = "codex:plan117-test"
@@ -41,7 +40,9 @@ def _git(repo: Path, *args: str) -> str:
     return completed.stdout.strip()
 
 
-def _scenario(*, scenario_id: str = "plan117-progress", outcome_id: str = "durable-outcome") -> OutcomeContinuationScenarioV1:
+def _scenario(
+    *, scenario_id: str = "plan117-progress", outcome_id: str = "durable-outcome"
+) -> OutcomeContinuationScenarioV1:
     contract = OutcomeContractV1(
         outcome_id=outcome_id,
         owner_class="brian-agent-owner",
@@ -360,6 +361,55 @@ def test_selection_cli_persists_machine_readable_binding(
     assert len(payload["binding_sha256"]) == 64
 
 
+def test_session_start_refresh_preserves_create_once_selection(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Refreshing the same sanctioned session cannot erase selected state."""
+
+    result, repo, worktree, claims_dir, _claim_path, scenario_path = _select(
+        tmp_path,
+        monkeypatch,
+    )
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    monkeypatch.setattr(
+        claim_mutation_receipts,
+        "DEFAULT_EVENTS_PATH",
+        tmp_path / "claim-mutation-events.jsonl",
+    )
+    refreshed = session_lifecycle.start_session(
+        agent="codex",
+        project="enforced-planning",
+        scope="plan117-test",
+        intent="exercise durable outcome selection",
+        plan_ref="goal:durable-outcome",
+        repo_root=str(repo),
+        worktree_path=str(worktree),
+        branch="plan117-test",
+        session_id=SESSION,
+        broader_goal="Durable Outcome Selection Test",
+        current_phase="observe selected outcome",
+        claim_type="program",
+        write_paths=[TARGET],
+        tracker_dir=Path(result.tracker_path).parents[1],
+    )
+
+    assert refreshed["action"] == "updated"
+    tracker = session_contracts.read_session_tracker(Path(result.tracker_path))
+    assert tracker["tracker"]["outcome_selection"]["scenario_ref"] == "scenarios/selected.json"
+    replay = select_outcome_for_session(
+        agent="codex",
+        project="enforced-planning",
+        scope="plan117-test",
+        session_id=SESSION,
+        execution_authority_ref="goal:durable-outcome",
+        scenario_path=scenario_path,
+        claims_dir=claims_dir,
+    )
+    assert replay.status == "idempotent"
+    assert replay.binding_sha256 == result.binding_sha256
+
+
 def test_session_upsert_keeps_goal_on_actual_write_claim_without_graph(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -396,9 +446,7 @@ def test_session_upsert_keeps_goal_on_actual_write_claim_without_graph(
     )
 
     assert action == "created"
-    payload = yaml.safe_load(
-        (claims_dir / "codex_enforced-planning_owner-week.yaml").read_text(encoding="utf-8")
-    )
+    payload = yaml.safe_load((claims_dir / "codex_enforced-planning_owner-week.yaml").read_text(encoding="utf-8"))
     assert payload["plan_ref"] == "goal:durable-outcome"
     assert payload["write_paths"] == [TARGET]
     assert payload["work_graph_path"] is None

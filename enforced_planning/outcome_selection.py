@@ -18,11 +18,11 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_valida
 
 from enforced_planning import coordination_claims, session_contracts
 from enforced_planning.outcome_continuation import (
+    ContinuationError,
     OutcomeContinuationScenarioV1,
     canonical_sha256,
     evaluate_scenario,
 )
-
 
 HEX_SHA256_PATTERN = r"^[0-9a-f]{64}$"
 UNPLANNED_PLAN_REF = session_contracts.UNPLANNED_PLAN_REF
@@ -79,7 +79,7 @@ class OutcomeSelectionBindingV1(StrictModel):
     outcome_reason_code_at_selection: str = Field(min_length=3)
 
     @model_validator(mode="after")
-    def validate_binding(self) -> "OutcomeSelectionBindingV1":
+    def validate_binding(self) -> OutcomeSelectionBindingV1:
         if self.selected_at.tzinfo is None or self.selected_at.utcoffset() is None:
             raise ValueError("selected_at must be timezone-aware")
         expected_goal = f"goal:{self.outcome_id}"
@@ -540,6 +540,16 @@ def resolve_selected_outcome_for_prewrite(
     source_path = Path(claim_source_file).expanduser().resolve()
     with coordination_claims.claim_registry_lock(source_path.parent):
         claim = _claim_from_source(source_path)
+        live_claims = [item for item in _load_claim_records(source_path.parent) if item.is_live()]
+        health_issues = coordination_claims.coordination_health_issues(
+            claim,
+            active_claims=live_claims,
+        )
+        if health_issues:
+            raise OutcomeSelectionError(
+                "claim_not_healthy",
+                "exact claim source is not healthy: " + ", ".join(health_issues),
+            )
         _assert_claim_matches_prewrite(
             claim,
             agent=agent,
@@ -590,10 +600,24 @@ def resolve_selected_outcome_for_prewrite(
             )
         scenario_path = Path(binding.worktree_path) / binding.scenario_ref
         scenario, file_sha256, scenario_ref = _load_scenario_for_claim(scenario_path, claim=claim)
-        result = evaluate_scenario(scenario)
-        checks = {
+        immutable_file_checks = {
             "scenario_ref": (scenario_ref, binding.scenario_ref),
             "scenario_file_sha256": (file_sha256, binding.scenario_file_sha256),
+        }
+        mismatches = [name for name, (actual, expected) in immutable_file_checks.items() if actual != expected]
+        if mismatches:
+            raise OutcomeSelectionError(
+                "selection_scenario_stale",
+                "selected scenario changed after selection: " + ", ".join(mismatches),
+            )
+        try:
+            result = evaluate_scenario(scenario)
+        except ContinuationError as exc:
+            raise OutcomeSelectionError(
+                "selection_evaluation_failed",
+                f"selected scenario no longer evaluates: {exc}",
+            ) from exc
+        result_checks = {
             "scenario_sha256": (result.scenario_sha256, binding.scenario_sha256),
             "outcome_contract_sha256": (
                 result.outcome_contract_sha256,
@@ -601,7 +625,7 @@ def resolve_selected_outcome_for_prewrite(
             ),
             "lease_sha256": (result.lease_sha256, binding.lease_sha256),
         }
-        mismatches = [name for name, (actual, expected) in checks.items() if actual != expected]
+        mismatches = [name for name, (actual, expected) in result_checks.items() if actual != expected]
         if mismatches:
             raise OutcomeSelectionError(
                 "selection_scenario_stale",

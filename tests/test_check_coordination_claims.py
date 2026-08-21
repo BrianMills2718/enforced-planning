@@ -21,7 +21,6 @@ import yaml  # type: ignore[import-untyped]
 from enforced_planning import claim_mutation_receipts
 from enforced_planning.prewrite_claim_fast import projection_path_for, registry_digest
 
-
 MODULE_PATH = Path(__file__).resolve().parents[1] / "scripts" / "check_coordination_claims.py"
 
 

@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import stat
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
+from dataclasses import replace
+from datetime import UTC, datetime, timezone
 from pathlib import Path
 
+import pytest
 import yaml
 
 from enforced_planning import coordination_claims, session_contracts
@@ -92,7 +94,7 @@ def test_write_session_tracker_persists_nested_claim_and_tracker_sections(tmp_pa
         requires_shared_infra_changes=True,
         stop_conditions=["irreversible shared-state action"],
         notes="bootstrap slice in progress",
-        now=datetime(2026, 4, 5, 18, 0, tzinfo=timezone.utc),
+        now=datetime(2026, 4, 5, 18, 0, tzinfo=UTC),
     )
 
     path = session_contracts.write_session_tracker(tracker, tracker_dir=tmp_path)
@@ -151,6 +153,55 @@ def test_tracker_update_preserves_outcome_selection_and_unrelated_fields(tmp_pat
     assert payload["tracker"]["current_phase"] == "observe selected outcome"
     assert payload["tracker"]["outcome_selection"]["binding_sha256"] == "a" * 64
     assert payload["tracker"]["notes"] == "retain me"
+
+
+def test_tracker_refresh_preserves_selection_and_rejects_identity_change(tmp_path: Path) -> None:
+    """Session-start refresh cannot erase or move a create-once selection."""
+
+    contract = session_contracts.SessionContract.build(
+        agent="codex",
+        project="enforced-planning",
+        scope="plan-117",
+        intent="bind one exact outcome",
+        plan_ref="goal:durable-outcome",
+        repo_root="/tmp/enforced-planning",
+        worktree_path="/tmp/enforced-planning/worktrees/plan-117",
+        branch="plan-117",
+        session_id="codex:plan117",
+        broader_goal="Bind One Exact Outcome",
+    )
+    first = session_contracts.build_session_tracker(
+        contract=contract,
+        current_phase="select outcome",
+        now=datetime(2026, 8, 21, 4, 0, tzinfo=UTC),
+    )
+    path = session_contracts.write_session_tracker(first, tracker_dir=tmp_path)
+    session_contracts.mutate_session_tracker(
+        path,
+        lambda payload: payload["tracker"].__setitem__(
+            "outcome_selection",
+            {"schema_version": "1.0.0", "binding_sha256": "a" * 64},
+        ),
+    )
+
+    refreshed = session_contracts.build_session_tracker(
+        contract=contract,
+        current_phase="observe outcome",
+        now=datetime(2026, 8, 21, 5, 0, tzinfo=UTC),
+    )
+    session_contracts.write_session_tracker(refreshed, tracker_dir=tmp_path)
+    payload = session_contracts.read_session_tracker(path)
+    assert payload["tracker"]["current_phase"] == "observe outcome"
+    assert payload["tracker"]["outcome_selection"]["binding_sha256"] == "a" * 64
+    assert payload["timestamps"]["created_at"] == "2026-08-21T04:00:00+00:00"
+
+    changed = session_contracts.build_session_tracker(
+        contract=replace(contract, branch="replacement-branch"),
+        current_phase="replace outcome",
+    )
+    with pytest.raises(ValueError, match="cannot change exact claim identity"):
+        session_contracts.write_session_tracker(changed, tracker_dir=tmp_path)
+    assert session_contracts.read_session_tracker(path) == payload
 
 
 def test_tracker_mutations_are_serialized_without_lost_updates(tmp_path: Path) -> None:

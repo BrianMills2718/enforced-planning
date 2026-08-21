@@ -659,13 +659,47 @@ recovery-required, stalled, or terminal state fails visibly before lifecycle
 mutation or pre-write success. Receipt append failure also fails the opted-in
 operation.
 
-Without these flags, session lifecycle and ordinary pre-write behavior are
-unchanged. This source pilot has not enabled a hook or default, changed
-`meta-process.yaml`, propagated through the installer or generated mirrors,
-established downstream/fleet adoption, solved cross-repository allocation
-membership, certified the semantic truth of progress, or selected Brian's
-active product outcome. Its accepted evidence is
-`docs/evidence/plan122_first_consumer_outcome_admission.json`.
+Those flags remain the explicit compatibility path for repositories whose
+`claims.outcome_admission_mode` is absent or `off`. Plan #123 activates the
+same owner only in the Enforced Planning source repository:
+
+```yaml
+meta_process:
+  claims:
+    prewrite_mode: enforce
+    outcome_admission_mode: enforce_selected
+```
+
+In that configured source checkout:
+
+- `make outcome-bootstrap PLAN=N ...` performs the explicit bootstrap
+  admission before claim, worktree, or session creation; the complete
+  `SESSION_WRITE_PATHS` set must contain one unique Plan number and only that
+  Plan's plan, work graph, allocation fixtures, plan index, or roadmap;
+- source `make worktree`, `make session-start`, and
+  `make session-heartbeat` prefer the canonical `scripts/session_*.py`
+  owners when present, with installed `scripts/meta/` files only as fallback;
+- session renewal and heartbeat automatically require exact selected state;
+- native pre-write automatically requires selected state after ordinary
+  authority, except for an exact restricted bootstrap claim writing one of its
+  own bootstrap paths; and
+- omitting an outcome flag, changing approval text, increasing elapsed time or
+  cost, or passing a weaker ordinary mode cannot change the decision.
+
+Malformed mode values, ambiguous or mixed bootstrap claims, source smuggling,
+missing selection, inactive allocation, and stalled or terminal continuation
+all fail visibly before protected success. Set
+`claims.outcome_admission_mode: off` or revert the activation commit to roll
+back. The accepted Plan #122 explicit-pilot evidence remains
+`docs/evidence/plan122_first_consumer_outcome_admission.json`; Plan #123's
+source-activation evidence is
+`docs/evidence/plan123_source_outcome_admission_activation.json`.
+
+Plan #123 synchronizes source lifecycle mirrors and closes the installer's
+runtime dependency closure, but it does not execute an installer against a
+consumer, change a downstream config, install a user-level hook, establish
+fleet adoption, solve cross-repository allocation membership, certify semantic
+progress, or select Brian's active product outcome.
 
 Important rule: do not name sessions after the immediate local task. A branch
 like `plan-31-hygiene-gate` is fine for git, but the session name should derive

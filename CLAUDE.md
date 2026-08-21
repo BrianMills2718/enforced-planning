@@ -119,15 +119,21 @@ pytest -q
 make test
 ```
 
-Plan #122's source-only hard outcome-admission pilot is explicit and
-default-off. Use `--outcome-selected` on session start/heartbeat or
-`--outcome-enforce-selected` on native pre-write only with an append-only
-admission receipt path. The equivalent Make variables are
-`OUTCOME_ADMISSION_SELECTED=true`,
-`OUTCOME_ADMISSION_BOOTSTRAP_PLAN=<plan>`, and
-`OUTCOME_ADMISSION_RECEIPT_PATH=/path/to/outcome-admission-v1.jsonl`. These
-flags reopen exact selected lifecycle state and deny before mutation or success;
-they do not activate hooks, installer propagation, or fleet defaults.
+Plan #123 activates hard selected-outcome admission only in this source
+repository through
+`meta_process.claims.outcome_admission_mode: enforce_selected`. Session
+start/heartbeat and supported native pre-write now derive the exact selected
+claim state without an outcome flag and deny before mutation or success.
+`make outcome-bootstrap PLAN=N ...` is the only sanctioned new-lane path: its
+entire claim must resolve to one Plan-numbered bootstrap surface before it may
+create the restricted worktree/session. After the graph is canonical, bind,
+allocate, select, and only then expand that same claim. The canonical
+`scripts/session_start.py` and `scripts/session_heartbeat.py` own source Make
+execution; their `scripts/meta/` mirrors must remain byte-identical through the
+installer-declared lineage. Setting the mode to `off` or reverting the
+activation commit is the recoverable rollback. This source activation does not
+configure a downstream repo, execute an installer target, or establish fleet
+adoption.
 
 ## Repo Workflow
 

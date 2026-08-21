@@ -27,6 +27,8 @@ meta_process:
     require_for_worktree: true
     # Record pre-write ownership decisions without blocking edits during calibration.
     prewrite_mode: enforce
+    # Require the exact selected outcome at source lifecycle and native writes.
+    outcome_admission_mode: enforce_selected
 
   artifact_creation:
     # Portable support is installed; each repository owns its directory rules.

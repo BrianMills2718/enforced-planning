@@ -4,9 +4,11 @@
 from __future__ import annotations
 
 import argparse
+import inspect
 import json
 import sys
 from pathlib import Path
+from typing import Any
 
 
 def _bootstrap_package() -> None:
@@ -32,6 +34,44 @@ def _bootstrap_package() -> None:
 _bootstrap_package()
 
 from enforced_planning import session_lifecycle  # noqa: E402
+
+
+def _supported_start_kwargs(args: argparse.Namespace) -> dict[str, Any]:
+    """Retain compatibility with a target's older local lifecycle contract."""
+
+    kwargs: dict[str, Any] = {
+        "agent": args.agent,
+        "project": args.project,
+        "scope": args.scope,
+        "intent": args.intent,
+        "repo_root": args.repo_root,
+        "worktree_path": args.worktree_path,
+        "branch": args.branch,
+        "broader_goal": args.broader_goal,
+        "current_phase": args.current_phase,
+        "plan_ref": args.plan,
+        "allow_unplanned": args.allow_unplanned,
+        "allow_parallel": args.allow_parallel,
+        "session_id": args.session_id,
+        "session_name": args.session_name,
+        "claim_type": args.claim_type,
+        "parent_scope": args.parent_scope,
+        "write_paths": args.write_path or None,
+        "read_paths": args.read_path or None,
+        "work_graph_path": args.work_graph,
+        "work_unit_id": args.work_unit_id,
+        "intended_next_phases": args.next_phase,
+        "depends_on_repos": args.depends_on,
+        "requires_shared_infra_changes": args.requires_shared_infra_changes,
+        "stop_conditions": args.stop_condition,
+        "notes": args.notes,
+        "outcome_selected": args.outcome_selected,
+        "outcome_bootstrap_plan": args.outcome_bootstrap_plan,
+    }
+    if args.outcome_admission_receipt_path is not None:
+        kwargs["outcome_admission_receipt_path"] = args.outcome_admission_receipt_path
+    supported = inspect.signature(session_lifecycle.start_session).parameters
+    return {name: value for name, value in kwargs.items() if name in supported}
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -62,6 +102,22 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--stop-condition", action="append", default=[])
     parser.add_argument("--requires-shared-infra-changes", action="store_true")
     parser.add_argument("--notes")
+    outcome = parser.add_mutually_exclusive_group()
+    outcome.add_argument(
+        "--outcome-selected",
+        action="store_true",
+        help="Require exact selected outcome admission before session mutation.",
+    )
+    outcome.add_argument(
+        "--outcome-bootstrap-plan",
+        type=int,
+        help="Require the fixed source-consumer allocation bootstrap for this plan.",
+    )
+    parser.add_argument(
+        "--outcome-admission-receipt-path",
+        type=Path,
+        help="Override the append-only outcome-admission receipt stream.",
+    )
     parser.add_argument("--json", action="store_true")
     return parser.parse_args(argv)
 
@@ -69,39 +125,31 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     """Start the session and expose its initial mailbox state."""
     args = parse_args(argv)
-    payload = session_lifecycle.start_session(
-        agent=args.agent,
-        project=args.project,
-        scope=args.scope,
-        intent=args.intent,
-        repo_root=args.repo_root,
-        worktree_path=args.worktree_path,
-        branch=args.branch,
-        broader_goal=args.broader_goal,
-        current_phase=args.current_phase,
-        plan_ref=args.plan,
-        allow_unplanned=args.allow_unplanned,
-        allow_parallel=args.allow_parallel,
-        session_id=args.session_id,
-        session_name=args.session_name,
-        claim_type=args.claim_type,
-        parent_scope=args.parent_scope,
-        write_paths=args.write_path or None,
-        read_paths=args.read_path or None,
-        work_graph_path=args.work_graph,
-        work_unit_id=args.work_unit_id,
-        intended_next_phases=args.next_phase,
-        depends_on_repos=args.depends_on,
-        requires_shared_infra_changes=args.requires_shared_infra_changes,
-        stop_conditions=args.stop_condition,
-        notes=args.notes,
-    )
+    try:
+        payload = session_lifecycle.start_session(**_supported_start_kwargs(args))
+    except session_lifecycle.OutcomeAdmissionDeniedError as exc:
+        if args.json:
+            print(
+                json.dumps(
+                    {
+                        "ok": False,
+                        "error": {
+                            "code": "outcome_admission_denied",
+                            "message": str(exc),
+                        },
+                    },
+                    indent=2,
+                    sort_keys=True,
+                )
+            )
+        else:
+            print(str(exc), file=sys.stderr)
+        return 2
     if args.json:
         print(json.dumps(payload, indent=2, sort_keys=True))
     else:
         print(
-            f"{payload['action']}: {payload['session_name']} "
-            f"({payload['broader_goal']}) -> {payload['tracker_path']}"
+            f"{payload['action']}: {payload['session_name']} ({payload['broader_goal']}) -> {payload['tracker_path']}"
         )
         print(payload["coordination_mailbox"]["summary"])
     return 0

@@ -127,9 +127,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     try:
         payload = session_lifecycle.start_session(**_supported_start_kwargs(args))
-    except PermissionError as exc:
-        if not (args.outcome_selected or args.outcome_bootstrap_plan is not None):
-            raise
+    except session_lifecycle.OutcomeAdmissionDeniedError as exc:
         if args.json:
             print(
                 json.dumps(
@@ -151,8 +149,7 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(payload, indent=2, sort_keys=True))
     else:
         print(
-            f"{payload['action']}: {payload['session_name']} "
-            f"({payload['broader_goal']}) -> {payload['tracker_path']}"
+            f"{payload['action']}: {payload['session_name']} ({payload['broader_goal']}) -> {payload['tracker_path']}"
         )
         print(payload["coordination_mailbox"]["summary"])
     return 0

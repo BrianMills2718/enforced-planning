@@ -35,6 +35,7 @@ pretending it is mechanically enforced today.
 | `claims.enforce_exclusivity` | bool | `true` | Not enforced by script | No effect |
 | `claims.require_for_worktree` | bool | `false` | `audit_governed_repo.py` (mechanical sanctioned-entrypoint expectation) | Audit does not expect sanctioned entrypoints unless another worktree signal requires them |
 | `claims.prewrite_mode` | enum `off \| observe \| enforce` | `off` | native pre-write adapters, hook generator, governed-repo audit | No pre-write wiring or lookup; `observe` records without blocking; `enforce` denies unauthorized supported native writes |
+| `claims.outcome_admission_mode` | enum `off \| enforce_selected` | `off` | session start/heartbeat and native pre-write adapter | `off`; malformed configured values fail visibly instead of degrading to off |
 | `claims.enforce_in_ci` | bool | `false` | Not enforced by script | No effect |
 | `claims.claims_file` | string | `.claude/active-work.yaml` | Not enforced by script | No effect |
 
@@ -51,6 +52,17 @@ digest-bound projection; a legacy writer can otherwise make the projection
 stale, which is visible in `observe` and correctly denied in `enforce`.
 The current adapters cover Claude `Edit|Write` and Codex `apply_patch`; they do
 not provide OS-level protection or infer arbitrary shell write targets.
+
+`outcome_admission_mode: enforce_selected` is a separate, stricter source
+continuation gate. It requires ordinary `prewrite_mode: enforce`, derives the
+exact selected outcome from the claim-linked tracker, and records admission
+before session renewal, heartbeat mutation, or supported native write success.
+It cannot be disabled by omitting a CLI flag or by passing a weaker ordinary
+mode. A new lane must enter through `make outcome-bootstrap`, whose complete
+claim is restricted to one uniquely identified Plan's plan, graph, allocation
+fixtures, index, and roadmap. This mode is enabled only in the Enforced
+Planning source repository as of Plan #123; the installer does not configure or
+activate it in downstream repositories.
 
 ## worktrees
 

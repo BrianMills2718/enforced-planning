@@ -111,8 +111,8 @@ status:  ## Verify repository authority freshness and show branch status
 WORKTREE_CREATE_SCRIPT := scripts/meta/worktree-coordination/create_worktree.py
 WORKTREE_REMOVE_SCRIPT := scripts/meta/worktree-coordination/safe_worktree_remove.py
 WORKTREE_CLAIMS_SCRIPT := scripts/meta/worktree-coordination/../check_coordination_claims.py
-WORKTREE_SESSION_START_SCRIPT := scripts/meta/worktree-coordination/../session_start.py
-WORKTREE_SESSION_HEARTBEAT_SCRIPT := scripts/meta/worktree-coordination/../session_heartbeat.py
+WORKTREE_SESSION_START_SCRIPT := $(if $(wildcard scripts/session_start.py),scripts/session_start.py,scripts/meta/worktree-coordination/../session_start.py)
+WORKTREE_SESSION_HEARTBEAT_SCRIPT := $(if $(wildcard scripts/session_heartbeat.py),scripts/session_heartbeat.py,scripts/meta/worktree-coordination/../session_heartbeat.py)
 WORKTREE_SESSION_STATUS_SCRIPT := scripts/meta/worktree-coordination/../session_status.py
 WORKTREE_SESSION_END_SCRIPT := scripts/meta/worktree-coordination/../session_end.py
 WORKTREE_SESSION_FINISH_SCRIPT := scripts/meta/worktree-coordination/../session_finish.py
@@ -156,7 +156,7 @@ REVIEW_SCOPE ?=
 REVIEW_NOTES ?=
 RECIPIENT ?=
 
-.PHONY: worktree maintenance-worktree worktree-list worktree-remove session-start session-heartbeat session-status session-end session-finish session-close review-claim raise-concern verification-batch-freeze verification-batch-check verification-batch-thaw surface-up surface-preview surface-status surface-down surface-audit
+.PHONY: outcome-bootstrap worktree maintenance-worktree worktree-list worktree-remove session-start session-heartbeat session-status session-end session-finish session-close review-claim raise-concern verification-batch-freeze verification-batch-check verification-batch-thaw surface-up surface-preview surface-status surface-down surface-audit
 
 verification-batch-freeze:  ## Freeze clean HEAD for DECISION="..." VERIFY_COMMAND="..."
 	@test -n "$(DECISION)" || (echo "DECISION is required" && exit 1)
@@ -169,6 +169,13 @@ verification-batch-check:  ## Require the active batch to match exact clean HEAD
 verification-batch-thaw:  ## Invalidate the batch with REASON="..." before a scoped fix
 	@test -n "$(REASON)" || (echo "REASON is required" && exit 1)
 	$(PYTHON) scripts/verification_batch.py --repo-root . thaw --reason "$(REASON)"
+
+outcome-bootstrap:  ## Create one restricted unplanned outcome lane (PLAN=N plus worktree inputs)
+ifndef PLAN
+	$(error PLAN is required. Usage: make outcome-bootstrap PLAN=123 BRANCH=plan-123-feature TASK="..." SESSION_GOAL="..." SESSION_PHASE="..." SESSION_WRITE_PATHS="...")
+endif
+	@$(MAKE) worktree PLAN= WORKTREE_EXECUTION_PROFILE=light ALLOW_UNPLANNED=1 \
+		OUTCOME_ADMISSION_BOOTSTRAP_PLAN="$(PLAN)"
 
 worktree:  ## Create claimed worktree (BRANCH=name TASK="..." [PLAN=N] [AGENT=name])
 ifndef BRANCH
@@ -318,7 +325,7 @@ endif
 		$(foreach path,$(SESSION_READ_PATHS),--read-path "$(path)") \
 		$(if $(SESSION_WORK_GRAPH),--work-graph "$(SESSION_WORK_GRAPH)",) \
 		$(if $(SESSION_WORK_UNIT_ID),--work-unit-id "$(SESSION_WORK_UNIT_ID)",) \
-		$(if $(PLAN),--plan "Plan #$(PLAN)",) \
+		$(if $(PLAN),--plan "$(PLAN_PROJECT)#$(PLAN)",) \
 		$(if $(SESSION_NEXT),--next-phase "$(SESSION_NEXT)",) \
 		$(if $(SESSION_DEPENDS),--depends-on "$(SESSION_DEPENDS)",) \
 		$(if $(SESSION_STOP_CONDITIONS),--stop-condition "$(SESSION_STOP_CONDITIONS)",) \

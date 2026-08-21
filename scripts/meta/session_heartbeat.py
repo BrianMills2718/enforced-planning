@@ -43,6 +43,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--branch")
     parser.add_argument("--session-id")
     parser.add_argument("--current-phase")
+    parser.add_argument(
+        "--outcome-selected",
+        action="store_true",
+        help="Require exact selected outcome admission before heartbeat mutation.",
+    )
+    parser.add_argument(
+        "--outcome-admission-receipt-path",
+        type=Path,
+        help="Override the append-only outcome-admission receipt stream.",
+    )
     parser.add_argument("--json", action="store_true")
     return parser.parse_args(argv)
 
@@ -50,14 +60,39 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     """Refresh the session heartbeat and expose its mailbox state."""
     args = parse_args(argv)
-    payload = session_lifecycle.heartbeat_session(
-        agent=args.agent,
-        project=args.project,
-        session_id=args.session_id,
-        scope=args.scope,
-        branch=args.branch,
-        current_phase=args.current_phase,
-    )
+    try:
+        payload = session_lifecycle.heartbeat_session(
+            agent=args.agent,
+            project=args.project,
+            session_id=args.session_id,
+            scope=args.scope,
+            branch=args.branch,
+            current_phase=args.current_phase,
+            outcome_selected=args.outcome_selected,
+            **(
+                {"outcome_admission_receipt_path": args.outcome_admission_receipt_path}
+                if args.outcome_admission_receipt_path is not None
+                else {}
+            ),
+        )
+    except session_lifecycle.OutcomeAdmissionDeniedError as exc:
+        if args.json:
+            print(
+                json.dumps(
+                    {
+                        "ok": False,
+                        "error": {
+                            "code": "outcome_admission_denied",
+                            "message": str(exc),
+                        },
+                    },
+                    indent=2,
+                    sort_keys=True,
+                )
+            )
+        else:
+            print(str(exc), file=sys.stderr)
+        return 2
     if args.json:
         print(json.dumps(payload, indent=2, sort_keys=True))
     else:

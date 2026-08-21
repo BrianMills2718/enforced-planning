@@ -41,6 +41,12 @@ class SessionTransferIncompleteError(RuntimeError):
     code = "session_transfer_incomplete"
 
 
+class OutcomeAdmissionDeniedError(PermissionError):
+    """One recorded outcome denial raised before lifecycle mutation."""
+
+    code = "outcome_admission_denied"
+
+
 def _poll_mailbox(*, agent: str, project: str, session_id: str) -> dict[str, Any]:
     """Inject canonical mailbox state into a shared lifecycle response."""
 
@@ -354,9 +360,7 @@ def _rollback_outcome_session_transfer(
     ):
         current = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
         if not isinstance(current, dict) or current.get("session_id") != successor_session_id:
-            raise ValueError(
-                "resumed claim changed before transfer rollback; refusing to overwrite current ownership"
-            )
+            raise ValueError("resumed claim changed before transfer rollback; refusing to overwrite current ownership")
         registry_digest_before = coordination_claims._registry_digest(coordination_claims.CLAIMS_DIR)
         _atomic_restore_bytes(claim_file, claim_bytes)
         if tracker_path.read_bytes() != tracker_bytes:
@@ -661,14 +665,9 @@ def _record_required_outcome_admission(
         receipt_path=receipt_path,
     )
     if result.decision.disposition != "allow":
-        detail = (
-            f": {result.resolution_error_message}"
-            if result.resolution_error_message is not None
-            else ""
-        )
-        raise PermissionError(
-            "Outcome admission denied "
-            f"({result.decision.reason_code}); receipt {receipt.receipt_id}{detail}"
+        detail = f": {result.resolution_error_message}" if result.resolution_error_message is not None else ""
+        raise OutcomeAdmissionDeniedError(
+            f"Outcome admission denied ({result.decision.reason_code}); receipt {receipt.receipt_id}{detail}"
         )
     return receipt.model_dump(mode="json")
 
@@ -1113,9 +1112,7 @@ def start_session(
     allow_parallel: bool = False,
     outcome_selected: bool = False,
     outcome_bootstrap_plan: int | None = None,
-    outcome_admission_receipt_path: Path = (
-        outcome_admission.DEFAULT_OUTCOME_ADMISSION_RECEIPT_PATH
-    ),
+    outcome_admission_receipt_path: Path = (outcome_admission.DEFAULT_OUTCOME_ADMISSION_RECEIPT_PATH),
 ) -> dict[str, Any]:
     """Create or refresh the session contract plus linked tracker artifact."""
 
@@ -1125,11 +1122,11 @@ def start_session(
             "Unable to resolve a session ID. Pass --session-id explicitly or run from a supported tool runtime."
         )
     coordination_claims.validate_native_session_binding(agent, resolved_session_id)
+    configured_outcome_mode = outcome_admission.load_outcome_admission_mode(Path(worktree_path))
+    selected_admission_required = outcome_selected or configured_outcome_mode == "enforce_selected"
 
     if outcome_selected and outcome_bootstrap_plan is not None:
-        raise ValueError(
-            "session start cannot combine selected outcome admission with allocation bootstrap"
-        )
+        raise ValueError("session start cannot combine selected outcome admission with allocation bootstrap")
     outcome_admission_receipts: list[dict[str, Any]] = []
     if outcome_bootstrap_plan is not None:
         bootstrap = outcome_admission.bootstrap_admission_result(
@@ -1145,7 +1142,7 @@ def start_session(
                 receipt_path=outcome_admission_receipt_path,
             )
         )
-    elif outcome_selected:
+    elif selected_admission_required:
         selected_claim = _single_matching_live_claim(
             agent=agent,
             project=project,
@@ -1245,9 +1242,7 @@ def start_session(
             try:
                 with session_contracts.session_tracker_lock(tracker_path):
                     if tracker_path.read_bytes() != tracker_bytes_written:
-                        raise ValueError(
-                            "session tracker changed after this start attempt; refusing unsafe rollback"
-                        )
+                        raise ValueError("session tracker changed after this start attempt; refusing unsafe rollback")
                     if tracker_preexisting:
                         assert tracker_bytes_before is not None
                         _atomic_restore_bytes(tracker_path, tracker_bytes_before)
@@ -1292,22 +1287,18 @@ def heartbeat_session(
     current_phase: str | None = None,
     tracker_dir: Path = session_contracts.DEFAULT_SESSION_TRACKERS_DIR,
     outcome_selected: bool = False,
-    outcome_admission_receipt_path: Path = (
-        outcome_admission.DEFAULT_OUTCOME_ADMISSION_RECEIPT_PATH
-    ),
+    outcome_admission_receipt_path: Path = (outcome_admission.DEFAULT_OUTCOME_ADMISSION_RECEIPT_PATH),
 ) -> dict[str, Any]:
     """Refresh claim heartbeat state and the linked tracker timestamp."""
 
     outcome_admission_receipts: list[dict[str, Any]] = []
     admitted_session_id = session_id
-    if outcome_selected:
-        admitted_session_id = coordination_claims.resolve_session_id(agent, session_id)
-        if not admitted_session_id:
-            raise ValueError(
-                "Unable to resolve a session ID for selected outcome heartbeat admission"
-            )
-        coordination_claims.validate_native_session_binding(agent, admitted_session_id)
-        selected_claims = [
+    selected_claims: list[coordination_claims.ClaimRecord] = []
+    candidate_session_id = coordination_claims.resolve_session_id(agent, session_id)
+    if outcome_selected and not candidate_session_id:
+        raise ValueError("Unable to resolve a session ID for selected outcome heartbeat admission")
+    if candidate_session_id:
+        matching_claims = [
             claim
             for claim in _iter_matching_live_claims(
                 agent=agent,
@@ -1315,14 +1306,22 @@ def heartbeat_session(
                 scope=scope,
                 branch=branch,
             )
-            if claim.session_id == admitted_session_id
+            if claim.session_id == candidate_session_id
         ]
-        if not selected_claims:
-            raise ValueError(
-                "Selected outcome heartbeat admission matched no exact live claim for "
-                f"agent={agent}, project={project}, scope={scope or '<any>'}, "
-                f"branch={branch or '<any>'}, session_id={admitted_session_id}."
-            )
+        if outcome_selected:
+            selected_claims = matching_claims
+        else:
+            selected_claims = [
+                claim
+                for claim in matching_claims
+                if (claim.worktree_path or claim.repo_root)
+                and outcome_admission.load_outcome_admission_mode(Path(str(claim.worktree_path or claim.repo_root)))
+                == "enforce_selected"
+            ]
+    if selected_claims:
+        admitted_session_id = candidate_session_id
+        assert admitted_session_id is not None
+        coordination_claims.validate_native_session_binding(agent, admitted_session_id)
         for claim in selected_claims:
             result = outcome_admission.evaluate_selected_claim_admission(
                 claim,
@@ -1336,6 +1335,14 @@ def heartbeat_session(
                     receipt_path=outcome_admission_receipt_path,
                 )
             )
+    elif outcome_selected:
+        assert candidate_session_id is not None
+        admitted_session_id = candidate_session_id
+        raise ValueError(
+            "Selected outcome heartbeat admission matched no exact live claim for "
+            f"agent={agent}, project={project}, scope={scope or '<any>'}, "
+            f"branch={branch or '<any>'}, session_id={admitted_session_id}."
+        )
 
     updated_count, updated_scopes, resolved_session_id, heartbeat_at = coordination_claims.heartbeat_claims(
         agent=agent,
@@ -1926,8 +1933,7 @@ def resume_session(
             raise
         if claim_bytes_before is None or tracker_bytes_before is None:
             raise SessionTransferIncompleteError(
-                "selected outcome transfer failed without exact rollback evidence: "
-                f"transfer={transfer_error}"
+                f"selected outcome transfer failed without exact rollback evidence: transfer={transfer_error}"
             ) from transfer_error
         try:
             claim_changed = claim_file.read_bytes() != claim_bytes_before

@@ -1,0 +1,288 @@
+{
+  "schema_version": "1.0.0",
+  "record_type": "source_outcome_admission_activation_observation",
+  "plan_id": "enforced-planning#123",
+  "recorded_at": "2026-08-21T11:05:59Z",
+  "decision_scope": "Whether Enforced Planning can make selected-outcome admission automatic at its real source bootstrap, lifecycle, and native pre-write boundaries without propagating activation to another repository.",
+  "policy_authority": {
+    "id": "outcome-continuation-lease-hard-gate",
+    "revision": "f6091b6b2f2a5357d0fdbbe88b157435a2ce07fb",
+    "status": "approved",
+    "ordinary_operator_approval_is_progress_evidence": false,
+    "cost_or_elapsed_time_affects_admission": false
+  },
+  "licensed_predecessors": {
+    "plan_121": {
+      "accepted_revision": "2b4643e0040dd6dacc9eaaf25aceebb2e1622610",
+      "scored_cases": 29,
+      "critical_false_blocks": 0,
+      "critical_false_allows": 0,
+      "unexpected_scored_defers": 0,
+      "independent_signoff": "accepted for one first Enforced Planning consumer"
+    },
+    "plan_122": {
+      "accepted_revision": "94e3443e9f779de141b2a0b75c838bf8d87d574d",
+      "source_consumer_implemented": true,
+      "source_consumer_default_enabled": false,
+      "licensed_next_step": "one separately reviewed source-repository activation pilot"
+    }
+  },
+  "candidate": {
+    "revision": "1603a9d58b0e26488ca2625f470aa7cba4ade937",
+    "tree": "e0632fe53c9b10a5ca664373712818b5fce89d75",
+    "implementation_base_revision": "573bf3cd398f57347da437006c95ff49cd9cad0f",
+    "revision_object_verified": true,
+    "working_tree_clean_before_evidence_closeout": true,
+    "source_sha256": {
+      "enforced_planning/outcome_admission.py": "5f1d508889e0140dd34b4d2c6d0c7b28d2f614edeaf40cf818b1197ba456576d",
+      "enforced_planning/session_lifecycle.py": "a20e97e76d16dfff4d26d1cc7b14f84be89b5bdd956bf076e50c07737b977051",
+      "scripts/prewrite_claim_gate.py": "3f6deefe5b6a7f7826fc4a547a9fbbd402aa74b239bd86d8e01e32c840580212",
+      "scripts/session_start.py": "90908e14ad0321e0156b895b2e8eafdfa315bd5ba568185c16c53b36883ddc70",
+      "scripts/session_heartbeat.py": "89adcb53d4d5158f6dae2d049b25ccab1e3509816ccd00810b5576fc244a0806",
+      "scripts/install_governed_repo.py": "f34f81fb1a9b0adadbc805c456b01ccfa6d0ef6aed1b6fef65bd21152f3dd86d",
+      "meta-process.yaml": "5634a9320a4ea69886215af65f37055e99712150dd34cbc8ca5fc54ab05476e7",
+      "Makefile": "aa49d39ecd4554edf30a5d931da4adfe39d9da7be9a4e1c253a217213f995416",
+      "tests/test_outcome_admission.py": "22464dc59bd98c073d285396e40baa8b174c6474592e7a2fb1e8c94b4123eeec",
+      "tests/test_session_cli.py": "138eb24212e7e845382d7487700386cc8334a7461d6aa77233a8a5ad3cdadaa2",
+      "tests/test_install_governed_repo.py": "7638cf1d57e7feb8620c007860dd56e253b525d76076032d84d38d2025a20f25"
+    }
+  },
+  "source_activation": {
+    "configuration_path": "meta-process.yaml",
+    "configuration_mode": "enforce_selected",
+    "configuration_absence_defaults_to": "off",
+    "malformed_configuration_fails": true,
+    "configured_mode_cannot_be_weakened_by_omitted_or_ordinary_flags": true,
+    "make_prefers_canonical_lifecycle_sources": true,
+    "session_start_canonical_and_mirror_sha256": "90908e14ad0321e0156b895b2e8eafdfa315bd5ba568185c16c53b36883ddc70",
+    "session_heartbeat_canonical_and_mirror_sha256": "89adcb53d4d5158f6dae2d049b25ccab1e3509816ccd00810b5576fc244a0806",
+    "canonical_mirrors_byte_identical": true,
+    "installer_runtime_dependency_closure_updated": true,
+    "source_installer_dry_run": {
+      "write_mode": false,
+      "action_count": 4,
+      "drift_count": 0,
+      "blockers": [],
+      "downstream_action_roots": []
+    }
+  },
+  "real_session_binding": {
+    "client": "codex",
+    "session_id": "codex:01a021cc-f3a0-7b21-babc-f18617333d1a",
+    "project": "enforced-planning",
+    "scope": "plan-123-source-outcome-admission-activation",
+    "branch": "plan-123-source-outcome-admission-activation",
+    "execution_authority_ref": "enforced-planning#123",
+    "work_unit_id": "soaa-01-source-outcome-admission-activation",
+    "claim_sha256_at_candidate_evidence": "856b12e075a9449a854f27a15b1f71cae98aaef910364d9ac12d286fc76ee661",
+    "tracker_sha256_at_candidate_evidence": "d1f3535685707fe8fec2ab9dc106693cffc33a8365d53bc50a8b55de9daf6169",
+    "heartbeat_at_candidate_evidence": "2026-08-21T11:05:13.974549+00:00"
+  },
+  "real_inputs": {
+    "scenario_ref": "examples/owner-real-outcome-admission/plan123-maintenance-scenario.json",
+    "scenario_file_sha256": "ed41a33be5d52ed9de2100ec086fbfe73cc7c9f506071ce45376886bb50b1e03",
+    "scenario_sha256": "d401fd6ec8d4416f374907b3742b45e19e5d1f6e4d81128337c177c979120ccd",
+    "outcome_contract_sha256": "b594f72159e0a36707616dcbdbc6028b2e7b52dfcdaf1f4221cca59f9f9e690f",
+    "lease_sha256": "fc0ea750a4a14549f70f4796e9c0a266ff671e07e728f071d224f070f8cc2efd",
+    "allocation_request_ref": "examples/owner-real-outcome-admission/plan123-maintenance-allocation.json",
+    "allocation_request_file_sha256": "ac7c50e00a5105d986ab5499c7264a2fed00da6aef5bbf8c4bbb4186b1e7ea37",
+    "disposition_request_ref": "examples/owner-real-outcome-admission/plan123-maintenance-disposition.json",
+    "disposition_request_file_sha256": "3d6afd23c826f37c132561264c3e4cda9d1ab6399465cea206d42ed797b5b110"
+  },
+  "project_graph_authority": {
+    "repository": "project-meta",
+    "revision": "376b775faa8c407e8fe4a5cfb73b78e023f1236c",
+    "project_graph_file_sha256": "38fbb590d2c4ca507555e4796c528294ee2841ac9b23d4af45e11ffd4588f574",
+    "project_record_sha256": "d2d7f4f9a4df759cf95548dc0ab2952f65b0193bdfe60c6f6375cb6291a7acfc",
+    "project_authority_sha256": "841bf0851534aa8e281ae56238605130394aa8faecd5f419a2eb478c95b134b9",
+    "owner_class": "brian",
+    "status": "active"
+  },
+  "real_allocation_and_selection": {
+    "allocation_id": "plan-123-maintenance-allocation",
+    "allocation_sha256": "6ff6eb80d0473b9a4acd6181647041200036c3537f2f11104700ce5d27f84b54",
+    "allocated_at": "2026-08-21T10:28:25.486930Z",
+    "portfolio_class": "maintenance",
+    "bucket": "global:maintenance-or-external-obligation",
+    "automatic_allocation": false,
+    "ordinary_approval_allocated": false,
+    "selected_at": "2026-08-21T10:28:31.421152Z",
+    "selection_binding_sha256": "3e16ac9de0cbd80623a99b9d49939ed82e971fd290b77a347fb13d2e8e41da37",
+    "lease_state": "active",
+    "outcome_reason_code_at_selection": "active_in_scope"
+  },
+  "authentic_bootstrap_controls": {
+    "restricted_make_bootstrap": {
+      "plan": 9125,
+      "exit_code": 0,
+      "receipt_id": "oadm-f1de7847eef646949143c1bb17495d6d",
+      "result_sha256": "e3041952c9aa3234f0e1ee7ce7b6ed7c6d8a7a54bda8b7fac088a3b7cec77007",
+      "reason_code": "admission_bootstrap_allowed",
+      "allowed_path_count": 3,
+      "claim_inspected_as_exact_restricted_scope": true,
+      "child_lane_sanctioned_closeout": true
+    },
+    "source_path_smuggling": {
+      "plan": 9124,
+      "exit_code": 2,
+      "receipt_id": "oadm-641f9522144d475abdaac5e7db7364fc",
+      "result_sha256": "3bd3ee23a0ca16fbe3cb7c55ab8b64b84a0d2f93cd6427fc90cc431c1bb7734e",
+      "reason_code": "admission_bootstrap_scope_violation",
+      "rejected_path": "enforced_planning/outcome_admission.py",
+      "claim_or_worktree_created": false
+    },
+    "bootstrap_native_prewrite": {
+      "ordinary_receipt_id": "prewrite_d9b647d368ed41eb957d4b7587ab97a9",
+      "outcome_receipt_id": "oadm-5cd7eed1a04648a686f6f2e7a85b3a08",
+      "ordinary_decision": "allow",
+      "outcome_reason_code": "admission_bootstrap_allowed"
+    }
+  },
+  "automatic_configured_controls": {
+    "session_start_without_outcome_flag": {
+      "exit_code": 0,
+      "receipt_id": "oadm-f5ade97a2982410bbc7f0c7bd80a5490",
+      "reason_code": "outcome_admission_active"
+    },
+    "candidate_heartbeat_without_outcome_flag": {
+      "exit_code": 0,
+      "receipt_id": "oadm-f3142ac6ada24f8eb163faa2120f23ef",
+      "result_sha256": "de4092c6e8c968e48a6dc020cf7410996c2d430aca279dc7dd1b954c256ffb45",
+      "reason_code": "outcome_admission_active",
+      "heartbeat_after": "2026-08-21T11:05:13.974549+00:00"
+    },
+    "candidate_multi_file_prewrite_allow": {
+      "target_path": "docs/evidence/plan123_source_outcome_admission_activation.json",
+      "exit_code": 0,
+      "ordinary_receipt_id": "prewrite_9da0891b2d20438e921fe91966f04f02",
+      "ordinary_reason_code": "exact_live_claim",
+      "outcome_receipt_id": "oadm-8e5db733b4de4e9ca4e5613231d54859",
+      "outcome_result_sha256": "eaee6db8020b004e3341a91453fffbbcfeba1f7004fdf51502257a5fb862ea07",
+      "outcome_reason_code": "outcome_admission_active"
+    },
+    "candidate_claimed_but_contract_out_of_scope_deny": {
+      "target_path": "examples/owner-real-outcome-admission/plan123-maintenance-allocation.json",
+      "exit_code": 2,
+      "ordinary_receipt_id": "prewrite_4e8809cc8dd841aa9fc918d688eb5a1f",
+      "ordinary_reason_code": "exact_live_claim",
+      "outcome_receipt_id": "oadm-092fed382bfa45909b3df3d918d399cc",
+      "outcome_result_sha256": "8af1f560749a6bd17485334e9c3811864f91b4c0d2c034e476106a025c80bacc",
+      "outcome_reason_code": "out_of_scope",
+      "target_sha256_before": "ac7c50e00a5105d986ab5499c7264a2fed00da6aef5bbf8c4bbb4186b1e7ea37",
+      "target_sha256_after": "ac7c50e00a5105d986ab5499c7264a2fed00da6aef5bbf8c4bbb4186b1e7ea37",
+      "mutation_prevented": true
+    },
+    "ordinary_denial_precedence": {
+      "ordinary_receipt_id": "prewrite_f43651dd7d5c435db12a8278414c4b5b",
+      "outcome_receipt_id": "oadm-0d5ff9ffc91c4e3bb1f255f4ffb93632",
+      "ordinary_reason_code": "path_outside_claim",
+      "outcome_reason_code": "ordinary_authority_denied",
+      "target_sha256_before_and_after": "f842f0987f5cc30e56610e2d04433e7e8beb272832d71d424daa292800a07154"
+    },
+    "circular_continuation": {
+      "test": "tests/test_outcome_admission.py::test_public_selected_and_configured_prewrite_deny_circular_live_state",
+      "ordinary_reason_code": "exact_live_claim",
+      "outcome_reason_code": "outcome_stalled",
+      "selected_and_prewrite_exit_code": 2,
+      "target_bytes_unchanged": true,
+      "same_public_entrypoints_as_source_lane": true
+    }
+  },
+  "false_block_found_and_repaired": {
+    "initial_candidate_revision": "ad1135adecdf215b5695073e860c1b23d14fa46c",
+    "failing_target": "docs/evidence/plan123_source_outcome_admission_activation.json",
+    "failing_receipt_id": "oadm-515c07d8eb9e44c590e645e2ff6d6d27",
+    "failing_result_sha256": "2fcafa14be2f7d4ad3f0757b209115a0ecfa7a30465bd7eab790c3344e2cafd5",
+    "failing_reason_code": "out_of_scope",
+    "cause": "The selected resolver required every write to equal the scenario's single canonical example target even when the immutable outcome contract explicitly allowed the requested path.",
+    "repair": "The automatic admission owner now revalidates the exact selection and then admits only ordinary-authorized targets inside the immutable effective contract allowed_scope.",
+    "repair_revision": "1603a9d58b0e26488ca2625f470aa7cba4ade937",
+    "positive_regression_receipt_id": "oadm-8e5db733b4de4e9ca4e5613231d54859",
+    "negative_regression_receipt_id": "oadm-092fed382bfa45909b3df3d918d399cc"
+  },
+  "rollback": {
+    "activation_recovery_ref": "573bf3cd398f57347da437006c95ff49cd9cad0f",
+    "recovery_ref_is_remote_ancestor": true,
+    "recovery_config_sha256": "3d3a7b72d2e0d3cc6e0648f51f3454c7c00164d0ab7fc9be0d8f3a3204f15b1c",
+    "recovery_config_has_outcome_admission_mode": false,
+    "recovery_test_command": "env -u CODEX_THREAD_ID pytest -q tests/test_outcome_admission.py",
+    "recovery_tests_passed": 34,
+    "recovery_tests_failed": 0,
+    "config_only_rollback": "Set claims.outcome_admission_mode to the quoted YAML string off through a claimed Git change."
+  },
+  "focused_verification": {
+    "frozen_candidate_revision": "1603a9d58b0e26488ca2625f470aa7cba4ade937",
+    "command": "env -u CODEX_THREAD_ID pytest -q tests/test_outcome_admission.py tests/test_session_cli.py tests/test_install_governed_repo.py::test_source_make_heartbeat_executes_canonical_lifecycle_before_stale_mirror tests/test_install_governed_repo.py::test_source_make_start_executes_canonical_lifecycle_before_stale_mirror",
+    "passed": 112,
+    "failed": 0,
+    "ruff": "passed on the changed admission owner and focused tests with inherited RUF100 exclusions",
+    "mypy": "passed on the changed admission owner and focused tests with follow-imports=skip and ignore-missing-imports",
+    "plan_validation": "passed",
+    "strict_doc_coupling": "passed",
+    "git_diff_check": "passed",
+    "module_reachability": "273/273 modules reachable from 227 entrypoints",
+    "vulture": "unavailable; repository hook is warn-mode and retained the limitation"
+  },
+  "receipt_custody_at_candidate_evidence": {
+    "outcome_admission_stream": "/home/brian/.claude/coordination/plan123-outcome-admission-v1.jsonl",
+    "outcome_admission_record_count": 35,
+    "outcome_admission_stream_sha256": "7bc87d2b538cb81aaf97dec317b77492d7488d2a784483f899b5b7ac188c85a1",
+    "ordinary_prewrite_stream": "/home/brian/.claude/coordination/plan123-prewrite-ordinary-v1.jsonl",
+    "ordinary_prewrite_record_count": 17,
+    "ordinary_prewrite_stream_sha256": "660978ba8f01ae159169987884cbb299f88d558d9ca8ea57afe0f082d45dddde",
+    "portfolio_ledger": "/home/brian/.claude/coordination/outcome-portfolio-allocations-v1.json",
+    "portfolio_ledger_sha256_before_terminal_disposition": "b454bd3502eb07a45e27aebd0a0e0b5c0fa55f6e004b9d41ac72ee16fa1b2863"
+  },
+  "terminal_disposition_contract": {
+    "disposition_id": "plan-123-maintenance-park",
+    "disposition": "parked",
+    "request_ref": "examples/owner-real-outcome-admission/plan123-maintenance-disposition.json",
+    "request_file_sha256": "3d6afd23c826f37c132561264c3e4cda9d1ab6399465cea206d42ed797b5b110",
+    "state_at_evidence_capture": "active",
+    "required_execution_order": "Commit and push this immutable evidence, create a merge-ready PR, park the allocation, prove configured heartbeat and ordinary-authorized pre-write denial without mutation, attach exact terminal receipts to the PR, then merge and use sanctioned session closeout.",
+    "reason_for_external_terminal_receipts": "Configured enforcement must remain active; after parking, it intentionally denies further tracked evidence writes. The append-only ledger, receipt streams, and merge PR retain the terminal observation without bypassing the gate."
+  },
+  "durable_learnings": [
+    {
+      "artifact": "project-meta:learnings/entries/lrn-20260821T101600047477Z-097761bc73.json",
+      "merge_revision": "376b775faa8c407e8fe4a5cfb73b78e023f1236c",
+      "finding": "Adoption must execute the real generated consumer; canonical-source tests and dry-run text did not expose the stale lifecycle mirror."
+    },
+    {
+      "artifact": "project-meta:learnings/entries/lrn-20260821T110150705215Z-173ac12f36.json",
+      "merge_revision": "fb17a721008a617c14428158c12225e5d3f1cc05",
+      "finding": "A multi-file selected-outcome gate must validate each ordinary-authorized target against immutable allowed_scope rather than the scenario's single example target."
+    }
+  ],
+  "acceptance": {
+    "SOAA01-A1": "accepted: one strict absent-off/enforce-selected loader drives lifecycle and pre-write, and configured enforcement cannot be omitted or weakened",
+    "SOAA01-A2": "accepted: authentic Make bootstrap admitted only three exact Plan-numbered artifacts and source-smuggling denied before claim or worktree creation",
+    "SOAA01-A3": "accepted: source Make executes canonical lifecycle owners, both declared mirrors are byte-identical, and Make-level regressions fail for the stale pre-Plan-123 shape",
+    "SOAA01-A4": "accepted: configured flagless session start and heartbeat admitted active exact state; focused missing/inactive controls deny before heartbeat mutation",
+    "SOAA01-A5": "accepted: configured native pre-write preserved ordinary precedence, admitted active bootstrap and selected scope, denied circular and out-of-contract state, and preserved target bytes",
+    "SOAA01-A6": "accepted subject to the terminal sequence: exact candidate, rollback, receipt, source-only dry-run, and non-adoption evidence are retained before parking and merge"
+  },
+  "promotion_boundary": {
+    "licensed_next_step": "one separately designed normal-project pilot in a Brian-owned governed repository",
+    "source_configuration_enabled": true,
+    "source_bootstrap_and_rollback_implemented": true,
+    "installer_runtime_closure_updated": true,
+    "installer_executed_against_consumer": false,
+    "downstream_configuration_changed": false,
+    "generated_downstream_or_fleet_propagated": false,
+    "user_or_host_wide_hook_mutated": false,
+    "cross_repository_allocation_membership_supported": false,
+    "semantic_progress_truth_certified": false,
+    "active_product_outcome_selected": false,
+    "cryptographic_shared_identity_bypass_resistance_claimed": false
+  },
+  "licensed_claim": "At exact candidate 1603a9d58b0e26488ca2625f470aa7cba4ade937, Enforced Planning source configuration made selected-outcome admission automatic for its real Make lifecycle and native pre-write path without outcome flags. The sanctioned bootstrap admitted only exact Plan artifacts; canonical lifecycle sources displaced stale mirrors; active exact state admitted flagless start, heartbeat, and multiple immutable contract-scoped writes; ordinary denial remained denial; circular and claimed-but-contract-out-of-scope writes returned nonzero without target mutation. A real false block against a second contract-scoped file was observed, repaired, and re-exercised before acceptance. The activation has an exact Git/config rollback and licenses only a separate normal-project pilot, not installer or fleet adoption.",
+  "limitations": [
+    "The real lane used a maintenance allocation and did not choose Brian's active product outcome.",
+    "The real allocation is intentionally parked only after this evidence commit is immutable; terminal receipt IDs live in append-only local custody and the merge PR because configured enforcement correctly blocks post-park source edits.",
+    "No installer command ran against a consumer repository and no downstream configuration changed.",
+    "The broader worktree-only installer test reaches 152 inherited whole-surface Ruff findings after the repaired dependency closure; the focused source adoption tests pass and this result does not claim repository-wide lint cleanliness.",
+    "The append-only local stores fail closed under their current OS identity but are not a separate tamper-resistant control plane.",
+    "Cross-repository allocation membership and semantic validation of claimed progress remain outside this result."
+  ]
+}

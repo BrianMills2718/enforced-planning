@@ -1,0 +1,75 @@
+{
+  "schema_version": "1.0.0",
+  "scenario_id": "plan-115-owner-real-progress",
+  "contract": {
+    "schema_version": "1.0.0",
+    "outcome_id": "owner-real-continuation",
+    "owner_class": "brian-agent-owner",
+    "project_id": "enforced-planning",
+    "lineage_id": "plan-115-owner-observation",
+    "predecessor_lineage_ids": [
+      "plan-114-staged-admission"
+    ],
+    "intended_consumer": "Brian and his coding agents working on Enforced Planning",
+    "outcome": "Use real progress evidence to authorize the next in-scope owner-dogfood action.",
+    "canonical_journey": {
+      "starting_state": "Plan 55 compact-context owner dogfood is merged on canonical main.",
+      "input": "The exact Plan 55 merge, configuration, command, and observed output digest.",
+      "action": "Evaluate one lineage-bound behavioral advance before the next Plan 115 write.",
+      "observable_result": "The in-scope evidence write is admitted because the lease remains active.",
+      "failure_signal": "Real progress is denied, unbound evidence is accepted, or operator telemetry changes admission."
+    },
+    "baseline_revision": "2d9f53c812b5a54afbd38f96981ae18ae2bfeed5",
+    "allowed_scope": [
+      "docs/evidence/plan115_owner_real_outcome_observation.json"
+    ],
+    "progress_dimensions": [
+      "owner dogfood behavior"
+    ]
+  },
+  "receipts": [
+    {
+      "schema_version": "1.0.0",
+      "receipt_id": "plan-115-plan-55-owner-progress",
+      "outcome_contract_sha256": "b5e00aaaec0d5decc683734045bba319b61748a658bf5962b3186afefe58ad96",
+      "prior_receipt_sha256": null,
+      "progress_kind": "behavioral_advance",
+      "dimension": "owner dogfood behavior",
+      "summary": "Plan 55 reduced the live doc-authority context from 11 documents and 13,052 words to four documents and 2,577 words, then merged the owner-dogfood result.",
+      "evidence": {
+        "source_revision": "5fbcd6e7679abe323dda7473998f5cd9e086bbb8",
+        "configuration_sha256": "81e5c7635e0131e30ecb5e7028f7b88e31020315a44bc43a6178563ddfdee7ef",
+        "route": "owner-real-plan55-file-context",
+        "command": [
+          "python",
+          "scripts/file_context.py",
+          "--json",
+          "enforced_planning/doc_authority.py"
+        ],
+        "observation_sha256": "7f920c7d4d4a6354f8aa39eb18aa5ad983cf18e2435ae33d8e238c7fa09ae668",
+        "artifact_refs": [
+          "docs/plans/55_enforced-planning_recursive_doc_spine_dogfood.md",
+          "scripts/doc_authority.yaml",
+          "docs/reference/DOC_AUTHORITY_SCHEMA.md"
+        ],
+        "trace_ref": null,
+        "observed_at": "2026-08-21T02:48:58.266854Z"
+      },
+      "failure_boundary": null,
+      "exact_replay_result": null,
+      "decision_delta": null,
+      "discriminating_evidence": true
+    }
+  ],
+  "request": {
+    "schema_version": "1.0.0",
+    "operation": "product_write",
+    "target_path": "docs/evidence/plan115_owner_real_outcome_observation.json",
+    "recovery_action": null,
+    "ordinary_approval": true,
+    "approval_text": "I approve, continue",
+    "cost_telemetry_usd": "1000000",
+    "elapsed_telemetry_seconds": 999999
+  },
+  "recovery_lease": null
+}

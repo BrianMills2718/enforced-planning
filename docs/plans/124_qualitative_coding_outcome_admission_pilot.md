@@ -1,6 +1,6 @@
 # Plan #124: Qualitative Coding Outcome-Admission Pilot
 
-**Status:** Planned — implementation-ready normal-project pilot
+**Status:** In Progress — source compatibility accepted; merge and terminal park precede QC execution
 **Type:** cross-repository adoption pilot (design and evidence boundary)
 **Priority:** Critical
 **phase_ref:** "Progress-bound coding-agent continuation"
@@ -71,6 +71,28 @@ Work in this order:
    stable-product controls through QC's installed entrypoints; and
 6. merge and close the QC lane without promoting an installer default or fleet
    policy.
+
+## Compatibility Outcome
+
+Candidate `70d2d334f33b94ff4e0c4fddd68b8fc337281a17` gives `project_id`
+its own conservative lowercase Project Graph grammar while leaving outcome,
+lineage, predecessor-lineage, and owner identity validation unchanged. The two
+focused owner suites pass 61 checks.
+
+An authentic probe then loaded the exact `qualitative_coding` record from
+Project Meta revision `4c51c2f08525aaabca62c7fa5569b9cbb8d413f3`, validated
+the contract, allocated it through the production portfolio owner using an
+isolated ledger, and resolved the same active allocation digest
+`daecf18ee549b191cc31b71d4fc7f265c89e44cb61294378fbd9cf395d4392c5`.
+Uppercase, path-like, and repeated-separator project IDs still rejected;
+underscore outcome and lineage IDs still rejected on the original portable
+slug validator.
+
+The full evidence is
+`docs/evidence/plan124_project_graph_id_compatibility.json`. QC remains
+unchanged. The real Plan #124 source allocation is active only until this
+candidate merges; the prepared parked disposition is a terminal prerequisite
+for QCOP-02.
 
 ## Why Qualitative Coding
 

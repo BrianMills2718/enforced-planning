@@ -1,0 +1,85 @@
+{
+  "schema_version": "1.0.0",
+  "scenario_id": "plan114-genuine-progress",
+  "contract": {
+    "schema_version": "1.0.0",
+    "outcome_id": "status-cli-json-outcome",
+    "owner_class": "brian",
+    "project_id": "enforced-planning",
+    "lineage_id": "status-cli-json-lineage",
+    "predecessor_lineage_ids": [],
+    "intended_consumer": "A user running the configured status-cli task",
+    "outcome": "The configured status CLI emits its independently verified JSON result.",
+    "canonical_journey": {
+      "starting_state": "The Plan 62 status-cli governed baseline is prepared.",
+      "input": "python src/status_cli.py --json",
+      "action": "Run the configured requested command through the governed task.",
+      "observable_result": "{\"project_id\":\"status-cli\",\"status\":\"adapter-placeholder\"}",
+      "failure_signal": "The command fails or emits any other output."
+    },
+    "baseline_revision": "c9d77fa68ffef727e0a334ade644859642dea766",
+    "allowed_scope": [
+      "src/status_cli.py",
+      "README.md",
+      "docs/plans/"
+    ],
+    "progress_dimensions": [
+      "behavior",
+      "reachability",
+      "decision_quality"
+    ]
+  },
+  "starting_lease": {
+    "schema_version": "1.0.0",
+    "lease_id": "status-cli-json-lease",
+    "outcome_contract_sha256": "f79708a2e9d3ea4e8b770ec1635fac9676ef20d135b924ceae6e325c184b53dc",
+    "state": "active",
+    "last_receipt_sha256": null,
+    "last_progress_receipt_sha256": null,
+    "consecutive_non_outcome_increments": 0,
+    "current_failure_boundary": null,
+    "same_boundary_failures": 0
+  },
+  "receipts": [
+    {
+      "schema_version": "1.0.0",
+      "receipt_id": "plan62-behavioral-advance",
+      "outcome_contract_sha256": "f79708a2e9d3ea4e8b770ec1635fac9676ef20d135b924ceae6e325c184b53dc",
+      "prior_receipt_sha256": null,
+      "progress_kind": "behavioral_advance",
+      "dimension": "behavior",
+      "summary": "The configured canonical journey produced the independently verified JSON result.",
+      "evidence": {
+        "source_revision": "83f4d599996af00785f55afe56e0127e46296bda",
+        "configuration_sha256": "9eeaa7d7a8dc7b9b674db585842ee7cfb90c327e75e222b0c970333cca3aca96",
+        "route": "status-cli-json/requested-command",
+        "command": [
+          "python",
+          "src/status_cli.py",
+          "--json"
+        ],
+        "observation_sha256": "8d0175f50e6b5772f41fe2cc97ca9b5c7e89f2173745f0ac5312d4ecb4fe9346",
+        "artifact_refs": [
+          "docs/evidence/plan62_status_cli_delivery_receipt.json"
+        ],
+        "trace_ref": null,
+        "observed_at": "2026-08-21T01:50:25.713850Z"
+      },
+      "failure_boundary": null,
+      "exact_replay_result": null,
+      "decision_delta": null,
+      "discriminating_evidence": false
+    }
+  ],
+  "request": {
+    "schema_version": "1.0.0",
+    "operation": "product_write",
+    "target_path": "src/status_cli.py",
+    "recovery_action": null,
+    "ordinary_approval": true,
+    "approval_text": "I approve, continue",
+    "cost_telemetry_usd": "1000000",
+    "elapsed_telemetry_seconds": 999999
+  },
+  "recovery_lease": null
+}

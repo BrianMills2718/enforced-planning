@@ -1,0 +1,75 @@
+{
+  "schema_version": "1.0.0",
+  "scenario_id": "plan-110-npw02-owner-progress",
+  "contract": {
+    "schema_version": "1.0.0",
+    "outcome_id": "provider-free-blocker-decision",
+    "owner_class": "brian-agent-owner",
+    "project_id": "enforced-planning",
+    "lineage_id": "plan-110-npw02-source-bound-decision",
+    "predecessor_lineage_ids": [
+      "plan-117-durable-selection"
+    ],
+    "intended_consumer": "Brian and his coding agents operating governed project lanes",
+    "outcome": "Produce deterministic source-bound blocker decisions that continue ready work, isolate local collisions, and fail closed on incomplete evidence.",
+    "canonical_journey": {
+      "starting_state": "An agent reports a blocker while one revision-bound plan graph and canonical claim snapshot describe the available work.",
+      "input": "The exact native session, canonical claim binding, graph path and digest, blocker request, and any canonical delivery evidence.",
+      "action": "Recompute the ready queue from source bytes and emit one diagnostic disposition without mutating ownership.",
+      "observable_result": "Ready alternatives continue, verified local collisions wait, complete blockers are diagnosed, and unavailable evidence returns control unverified.",
+      "failure_signal": "A fabricated session, project scope, graph, claim, path, mailbox state, or incomplete schema can create a verified decision or hide ready work."
+    },
+    "baseline_revision": "6340ff80cb8c514d8f3170d7818b0b324a1d04cb",
+    "allowed_scope": [
+      "docs/evidence/plan110_npw02_owner_calibration.json"
+    ],
+    "progress_dimensions": [
+      "provider-free blocker decision"
+    ]
+  },
+  "receipts": [
+    {
+      "schema_version": "1.0.0",
+      "receipt_id": "plan-110-npw02-source-bound-decision-implemented",
+      "outcome_contract_sha256": "e2f4941fd8bab8ec39732b749f8212e8481a083aef65406b467d81178efce083",
+      "prior_receipt_sha256": null,
+      "progress_kind": "behavioral_advance",
+      "dimension": "provider-free blocker decision",
+      "summary": "The exact claimed session can now derive both-sign blocker dispositions from canonical graph and claim evidence without authorizing mutation.",
+      "evidence": {
+        "source_revision": "57863d6cbd596348f42427d21c80d8fb124cec27",
+        "configuration_sha256": "115a99d8e32f1bd4beb4e62c51ac4733bdae9184956618b8631dcb995e389a02",
+        "route": "plan-110-provider-free-blocker-decision",
+        "command": [
+          "pytest",
+          "-q",
+          "tests/test_blocker_policy.py"
+        ],
+        "observation_sha256": "96b2a5303ad110feb587431ddfb9811f81780944312126a21e4a51cb66e913f4",
+        "artifact_refs": [
+          "enforced_planning/blocker_policy.py",
+          "scripts/evaluate_blocker.py",
+          "tests/test_blocker_policy.py",
+          "docs/evidence/plan110_npw02_owner_calibration.json"
+        ],
+        "trace_ref": "ready_queue_4100f89c675fc76076106571fb9fb140",
+        "observed_at": "2026-08-21T06:33:51Z"
+      },
+      "failure_boundary": null,
+      "exact_replay_result": null,
+      "decision_delta": null,
+      "discriminating_evidence": true
+    }
+  ],
+  "request": {
+    "schema_version": "1.0.0",
+    "operation": "product_write",
+    "target_path": "docs/evidence/plan110_npw02_owner_calibration.json",
+    "recovery_action": null,
+    "ordinary_approval": true,
+    "approval_text": "I approve, continue",
+    "cost_telemetry_usd": "1000000",
+    "elapsed_telemetry_seconds": 999999
+  },
+  "recovery_lease": null
+}

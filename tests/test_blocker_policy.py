@@ -1145,3 +1145,38 @@ def test_public_cli_decide_rejects_foreign_project_scope_with_same_plan_number(
     )
     assert return_code == 2
     assert "exactly one healthy invoking-session claim" in stderr
+
+
+def test_checked_in_owner_calibration_receipts_cover_both_signs() -> None:
+    evidence_path = Path(__file__).parents[1] / "docs/evidence/plan110_npw02_owner_calibration.json"
+    payload = json.loads(evidence_path.read_text(encoding="utf-8"))
+    receipts = {item["case_id"]: item for item in payload["fixture_receipts"]}
+    assert {case_id: item["decision"] for case_id, item in receipts.items()} == {
+        "a_blocked_b_ready_c_blocked": "continue_ready_work",
+        "verified_path_collision": "integration_wait",
+        "asserted_path_collision_without_claim_evidence": "blocker_unverified_return_control",
+        "complete_blocked_queue": "goal_blocked_verified",
+        "persisted_only_mailbox": "blocker_unverified_return_control",
+        "observed_mailbox": "goal_blocked_verified",
+        "same_session_claim": "continue_ready_work",
+        "other_session_claim": "integration_wait",
+        "stale_graph": "blocker_unverified_return_control",
+        "missing_graph": "blocker_unverified_return_control",
+        "malformed_graph": "blocker_unverified_return_control",
+    }
+    assert all(item["application_authorized"] is False for item in receipts.values())
+    assert all(item["evaluation_id"].startswith("ready_queue_") for item in receipts.values())
+    assert all(item["disposition_id"].startswith("blocker_disposition_") for item in receipts.values())
+    unavailable = {"stale_graph", "missing_graph", "malformed_graph"}
+    assert {case_id for case_id, item in receipts.items() if item["coverage"] == "unavailable"} == unavailable
+    assert receipts["a_blocked_b_ready_c_blocked"]["eligible_unit_ids"] == ["B"]
+    assert receipts["verified_path_collision"]["active_conflict_unit_ids"] == ["A"]
+    assert receipts["asserted_path_collision_without_claim_evidence"]["active_conflict_unit_ids"] == []
+    authentic = payload["authentic_native_claim_observation"]
+    assert authentic["native_session_binding"] is True
+    assert authentic["canonical_claim_binding"] is True
+    assert authentic["coverage"] == "complete"
+    progress = payload["selection_and_progress_observation"]
+    assert progress["outcome_disposition"] == "would_allow"
+    assert progress["ordinary_authority_preserved"] is True
+    assert progress["enforcement_applied"] is False

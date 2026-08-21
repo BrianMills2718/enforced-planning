@@ -29,11 +29,20 @@ completion. This is the first authentic vertical of the wider Agentic
 Engineering System direction; it does not rename this repository or make it
 own model-runtime, shared-data-contract, or feedback-evolution concerns.
 
-Until that receipt exists, additional feedback machinery, generalized adapters,
-fleet rollout, and a new top-level repository are downstream work. Plans #60
-and #61 supply the clean-room and verified-loop substrate. Plan #62's remaining
-independent-consumer breadth and Plan #111's feedback system stay valid but do
-not displace the vertical from the critical path.
+The first receipt now exists at
+`docs/evidence/plan113_governed_delivery_receipt.json`: framework revision
+`757ebcb7` prepared baseline `af8b4a9`, and this Codex session committed result
+`e5c00c1`; all 15 independent checks passed. The observation licenses one real
+governed-delivery vertical, not colleague-ready portability or a self-improving
+ecosystem.
+
+Plans #60 and #61 supplied the clean-room and verified-loop substrate. Plan
+#62's remaining independent-consumer breadth and Plan #111's feedback system
+stay valid but do not retroactively expand this claim. The next roadmap choice
+must build from the observed vertical: repeat it with a genuinely independent
+consumer/profile, or repair only a blocker that observation exposes. A new
+top-level repository and generalized adapters still require a demonstrated
+distribution or ownership need.
 
 ## Phase Map
 

@@ -1,6 +1,6 @@
 # Plan #113: Governed Delivery Authentic Vertical
 
-**Status:** In Progress — reusable module/CLI and nine focused both-sign tests pass; fresh authentic consumer run pending
+**Status:** Complete
 **Type:** implementation
 **Priority:** Critical
 **phase_ref:** "Authentic governed-delivery proof frontier"
@@ -238,25 +238,44 @@ adds a portable public CLI/module surface.
 
 ## Acceptance Criteria
 
-- [ ] A fresh external root can be prepared through the canonical clean-room
+- [x] A fresh external root can be prepared through the canonical clean-room
   and governed-repo installer without personal paths or credentials.
-- [ ] Its initial feature probe fails for the missing `--name` behavior.
-- [ ] The current Codex session creates a bounded consumer plan and commits only
+- [x] Its initial feature probe fails for the missing `--name` behavior.
+- [x] The current Codex session creates a bounded consumer plan and commits only
   declared code, documentation, and plan paths.
-- [ ] Default and `--name Ada` commands produce the exact expected outputs.
-- [ ] The README contains one concise runnable example and the plan is truthful,
+- [x] Default and `--name Ada` commands produce the exact expected outputs.
+- [x] The README contains one concise runnable example and the plan is truthful,
   complete, and rooted in `CLAUDE.md` rather than generated orientation.
-- [ ] Two unchanged failing probes require a course checkpoint with a changed
+- [x] Two unchanged failing probes require a course checkpoint with a changed
   assumption/tactic before work can continue.
-- [ ] Worker self-report cannot produce a passing result.
-- [ ] The independent verifier emits a digest-bound receipt naming task,
+- [x] Worker self-report cannot produce a passing result.
+- [x] The independent verifier emits a digest-bound receipt naming task,
   baseline revision, result revision, session, executed checks, and verdict.
-- [ ] Focused positive/negative tests, reused clean-room tests, plan validation,
+- [x] Focused positive/negative tests, reused clean-room tests, plan validation,
   and terminal repository validation pass.
-- [ ] The exact receipt licenses only: “One real coding-agent task completed
+- [x] The exact receipt licenses only: “One real coding-agent task completed
   through the portable governed-delivery path with visible plan adherence,
   documentation alignment, course correction controls, and independent
   verification.”
+
+## Authentic Evidence
+
+- Framework/verifier revision: `757ebcb727eb5407318a1c80629d9b3e803282c7`
+- Generated consumer baseline: `af8b4a9ddbb62dc133b80ceaf62e6cb38cf666af`
+- Generated consumer result: `e5c00c1b4a3a13530ce12455f335977e636243b2`
+- Independent receipt: `docs/evidence/plan113_governed_delivery_receipt.json`
+- Receipt digest: `b162b168c2117e692b8eae631958ede9e1a5c56849e32fc02f36c10ddb286bcd`
+
+The receipt is path-neutral and contains no disposable `/tmp` root. Its 15
+checks all pass. The source revision is retained on the pushed Plan 113 branch;
+terminal integration retained that exact ancestry. Final framework evidence:
+
+- `ruff check enforced_planning/governed_delivery.py scripts/governed_delivery.py tests/test_governed_delivery.py` — pass.
+- `pytest -q tests/test_cleanroom_alpha.py tests/test_governed_delivery.py` —
+  41 passed.
+- `python scripts/validate_plan.py --plan-file docs/plans/113_governed_delivery_authentic_vertical.md --warn-only` — no gaps or warnings.
+- `python scripts/self_test.py` — file, Markdown-link, documentation, plan, and
+  install checks all passed.
 
 ## Failure And Replan Rules
 

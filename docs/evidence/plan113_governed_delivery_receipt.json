@@ -1,0 +1,105 @@
+{
+  "schema_version": "1.0.0",
+  "operation": "verify",
+  "task_id": "hello-app-add-name",
+  "task_root": ".",
+  "framework_revision": "757ebcb727eb5407318a1c80629d9b3e803282c7",
+  "baseline_revision": "af8b4a9ddbb62dc133b80ceaf62e6cb38cf666af",
+  "result_revision": "e5c00c1b4a3a13530ce12455f335977e636243b2",
+  "agent_session_id": "codex:01a0217c-7716-76a1-8055-9e17f9e4925b",
+  "checks": [
+    {
+      "check_id": "default_behavior",
+      "verdict": "pass",
+      "detail": "exit=0 expected='hello-app uses shared-lib' observed='hello-app uses shared-lib'",
+      "observed": "hello-app uses shared-lib"
+    },
+    {
+      "check_id": "named_behavior",
+      "verdict": "pass",
+      "detail": "exit=0 expected='Ada uses shared-lib' observed='Ada uses shared-lib'",
+      "observed": "Ada uses shared-lib"
+    },
+    {
+      "check_id": "acceptance_tests",
+      "verdict": "pass",
+      "detail": "exit=0 stderr='..\\n----------------------------------------------------------------------\\nRan 2 tests in 0.077s\\n\\nOK'",
+      "observed": ""
+    },
+    {
+      "check_id": "declared_write_scope",
+      "verdict": "pass",
+      "detail": "all changed paths are declared",
+      "observed": "README.md, docs/plans/01_add_optional_name.md, docs/plans/CLAUDE.md, src/hello_app.py"
+    },
+    {
+      "check_id": "bounded_plan_present",
+      "verdict": "pass",
+      "detail": "expected one changed plan, found ['docs/plans/01_add_optional_name.md']",
+      "observed": "docs/plans/01_add_optional_name.md"
+    },
+    {
+      "check_id": "plan_truthful_complete",
+      "verdict": "pass",
+      "detail": "plan is complete with required sections",
+      "observed": null
+    },
+    {
+      "check_id": "plan_authority",
+      "verdict": "pass",
+      "detail": "CLAUDE.md is the declared authority",
+      "observed": "- `CLAUDE.md`"
+    },
+    {
+      "check_id": "plan_index_current",
+      "verdict": "pass",
+      "detail": "plan index names the active plan",
+      "observed": null
+    },
+    {
+      "check_id": "documentation_current_minimal",
+      "verdict": "pass",
+      "detail": "README has one concise runnable named example",
+      "observed": null
+    },
+    {
+      "check_id": "governed_install",
+      "verdict": "pass",
+      "detail": "canonical governed-repo surfaces are installed",
+      "observed": null
+    },
+    {
+      "check_id": "framework_revision_binding",
+      "verdict": "pass",
+      "detail": "prepared component equals executing verifier revision",
+      "observed": "757ebcb727eb5407318a1c80629d9b3e803282c7"
+    },
+    {
+      "check_id": "portable_content",
+      "verdict": "pass",
+      "detail": "tracked content contains no maintainer sentinel",
+      "observed": null
+    },
+    {
+      "check_id": "clean_committed_result",
+      "verdict": "pass",
+      "detail": "result is clean and committed",
+      "observed": null
+    },
+    {
+      "check_id": "result_revision_advanced",
+      "verdict": "pass",
+      "detail": "baseline=af8b4a9ddbb62dc133b80ceaf62e6cb38cf666af result=e5c00c1b4a3a13530ce12455f335977e636243b2",
+      "observed": null
+    },
+    {
+      "check_id": "initial_failure_observed",
+      "verdict": "pass",
+      "detail": "first persisted probe failed before implementation",
+      "observed": null
+    }
+  ],
+  "verdict": "pass",
+  "verified_at": "2026-08-21T01:17:20.462970+00:00",
+  "receipt_sha256": "b162b168c2117e692b8eae631958ede9e1a5c56849e32fc02f36c10ddb286bcd"
+}

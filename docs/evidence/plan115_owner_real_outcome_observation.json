@@ -1,0 +1,163 @@
+{
+  "schema_version": "1.0.0",
+  "record_type": "owner_real_outcome_continuation_observation",
+  "plan_id": "enforced-planning#115",
+  "recorded_at": "2026-08-21T03:05:25Z",
+  "policy_authority": {
+    "id": "outcome-continuation-lease-hard-gate",
+    "revision": "f6091b6b2f2a5357d0fdbbe88b157435a2ce07fb",
+    "status": "approved"
+  },
+  "design": {
+    "plan_revision": "9e44721bd1b176affbb0aef800cc4a606785fc4e",
+    "work_graph_revision": "124459196d799ba528a0365fe677c9eaf796d94b",
+    "unit_id": "ocov-01-owner-real-cli-observation"
+  },
+  "execution": {
+    "repository": "enforced-planning",
+    "candidate_revision": "8bcff194b2e2d2d725169ee3f158cf6c7b4510db",
+    "worktree_clean_before_execution": true,
+    "delivery_classification": "manual_cli_observation",
+    "evaluator_revision": "80fa9dbcef74d0d85b2a15168f0345e3ab3a4129",
+    "module": "enforced_planning/outcome_continuation.py",
+    "cli": "scripts/outcome_continuation.py"
+  },
+  "owner_progress_source": {
+    "plan": "docs/plans/55_enforced-planning_recursive_doc_spine_dogfood.md",
+    "canonical_merge_revision": "5fbcd6e7679abe323dda7473998f5cd9e086bbb8",
+    "baseline_revision": "2d9f53c812b5a54afbd38f96981ae18ae2bfeed5",
+    "progress_kind": "behavioral_advance",
+    "dimension": "owner dogfood behavior",
+    "configuration_path": "scripts/doc_authority.yaml",
+    "configuration_sha256": "81e5c7635e0131e30ecb5e7028f7b88e31020315a44bc43a6178563ddfdee7ef",
+    "observation_command": [
+      "python",
+      "scripts/file_context.py",
+      "--json",
+      "enforced_planning/doc_authority.py"
+    ],
+    "observation_stdout_sha256": "7f920c7d4d4a6354f8aa39eb18aa5ad983cf18e2435ae33d8e238c7fa09ae668",
+    "observed_required_reads": [
+      "CLAUDE.md",
+      "EXECUTION_BRIEF.md",
+      "adr/0009-doc-authority-governance-and-enforcement.md",
+      "docs/reference/DOC_AUTHORITY_SCHEMA.md"
+    ],
+    "reported_before_after": {
+      "before_documents": 11,
+      "before_words": 13052,
+      "after_documents": 4,
+      "after_words": 2577
+    },
+    "reproduced_from_candidate": true
+  },
+  "controlled_context": {
+    "ordinary_approval": true,
+    "approval_text": "I approve, continue",
+    "cost_telemetry_usd": "1000000",
+    "elapsed_telemetry_seconds": 999999,
+    "note": "All four fields are present as decision-inert context. The owner-progress receipt is the material continuation evidence."
+  },
+  "owner_real_positive_observation": {
+    "scenario_path": "examples/owner-real-outcome-observe/plan115-owner-progress.json",
+    "scenario_file_sha256": "8cd91fc2fdaf64a65afe160f29590682ccb91cc5d9bd1ef20f872367ff7485f3",
+    "command": [
+      "python",
+      "scripts/outcome_continuation.py",
+      "evaluate",
+      "--scenario",
+      "examples/owner-real-outcome-observe/plan115-owner-progress.json"
+    ],
+    "exit_code": 0,
+    "scenario_sha256": "553e30d13b997df5c8823475e43007cc6ab76b849460f750f0782a02e58cef6a",
+    "outcome_contract_sha256": "b5e00aaaec0d5decc683734045bba319b61748a658bf5962b3186afefe58ad96",
+    "applied_receipt_sha256": "b118b84fc7f37d8b47e678f5c622f4a58a1fe9ea25dd6b0f903580121acc6d36",
+    "lease_sha256": "abfc6e5cd4800a6848dad1962ae42fc1d9d91e1a0673f5917d357a2610229567",
+    "lease_state": "active",
+    "decision": {
+      "allowed": true,
+      "reason_code": "active_in_scope",
+      "operation": "product_write",
+      "target_path": "docs/evidence/plan115_owner_real_outcome_observation.json",
+      "ordinary_approval_ignored": true,
+      "cost_telemetry_ignored": true,
+      "elapsed_telemetry_ignored": true
+    }
+  },
+  "synthetic_negative_control": {
+    "classification": "retained_plan114_two_increment_circular_control",
+    "scenario_path": "examples/cleanroom-ecosystem/outcome-continuation-circular.json",
+    "command": [
+      "python",
+      "scripts/outcome_continuation.py",
+      "evaluate",
+      "--scenario",
+      "examples/cleanroom-ecosystem/outcome-continuation-circular.json"
+    ],
+    "exit_code": 1,
+    "scenario_sha256": "3cb2c3534687b4a1a0e57e7ebdc87ffa6bc29a22c45e9c89f8d0a6e6a863e942",
+    "lease_sha256": "031dcdd3661af0625649364210b98ad067ccecbcf8f7492307eb8c453a3d36f5",
+    "lease_state": "recovery_required",
+    "consecutive_non_outcome_increments": 2,
+    "decision": {
+      "allowed": false,
+      "reason_code": "recovery_required",
+      "ordinary_approval_ignored": true,
+      "cost_telemetry_ignored": true,
+      "elapsed_telemetry_ignored": true
+    },
+    "limitation": "This is a deterministic synthetic control retained from Plan 114, not a claim about one historical Brian-owned failure."
+  },
+  "manual_workflow_readout": [
+    {
+      "step": "outcome_selection",
+      "manual_input": "Select the owner outcome, lineage, canonical journey, allowed path, and progress dimension.",
+      "runtime_owner_today": "operator-authored scenario",
+      "observed_risk": "A vague or silently replaced outcome could license motion unrelated to the project result."
+    },
+    {
+      "step": "progress_observation_and_classification",
+      "manual_input": "Classify the Plan 55 result and bind its merge, configuration, command, output digest, and prior receipt lineage.",
+      "runtime_owner_today": "operator-authored receipt",
+      "observed_risk": "An agent could overclaim behavioral progress unless the evidence remains independently reproducible and digest-bound."
+    },
+    {
+      "step": "lease_lineage",
+      "manual_input": "Supply ordered receipts in one scenario; the CLI issues and transitions an ephemeral lease.",
+      "runtime_owner_today": "pure evaluator only",
+      "observed_risk": "No durable current lease yet connects separate coding-agent continuations."
+    },
+    {
+      "step": "operation_admission",
+      "manual_input": "Name the product operation and target path, run the CLI separately, then perform the real claimed write.",
+      "runtime_owner_today": "operator invocation",
+      "observed_risk": "A correct decision is advisory and uncorrelated with the ordinary pre-write claim receipt."
+    }
+  ],
+  "next_integration_seam": {
+    "recommendation": "observe-only pre-write correlation using an explicit immutable outcome scenario",
+    "why_now": "The public evaluator already distinguishes the owner-real positive case from the synthetic circular control. The smallest missing bridge is correlation between that decision and one supported real claimed-write payload, which the existing pre-write adapter already identifies and receipts.",
+    "bounded_shape": [
+      "Consume an exact immutable scenario path supplied explicitly for the observation run.",
+      "Evaluate the same current session, claim, worktree, branch, and target payload as the ordinary pre-write adapter.",
+      "Append a correlated would_allow or would_deny observation after the ordinary claim decision.",
+      "Keep the ordinary claim result and process exit code unchanged."
+    ],
+    "falsification_condition": "If one exact scenario cannot be correlated to the current claimed-write receipt without ambiguous or stale session selection, or if observe mode changes ordinary admission, stop the adapter experiment and make durable claim/session lease binding the prerequisite seam.",
+    "explicitly_deferred": [
+      "claim-schema mutation and outcome binder",
+      "pre-write projection refresh for outcome data",
+      "installer or fleet propagation",
+      "native host activation claims",
+      "outcome-based blocking or enforcement"
+    ]
+  },
+  "licensed_claim": "At clean candidate revision 8bcff194b2e2d2d725169ee3f158cf6c7b4510db, the unchanged Plan 114 CLI accepted one digest-bound behavioral advance from the canonical Plan 55 Enforced Planning owner dogfood and admitted the exact in-scope Plan 115 evidence write while approval, cost, and elapsed context remained ignored.",
+  "limitations": [
+    "The positive result is a manual CLI observation, not automatic lifecycle or native hook delivery.",
+    "The requested write was evaluated separately from the ordinary claim gate and has no correlated pre-write receipt in this plan.",
+    "The lease is reconstructed from the immutable scenario and is not durable mutable session or claim state.",
+    "No historical owner failure, unsupported shell write, downstream repository, colleague, or fleet is represented as blocked.",
+    "This evidence does not authorize outcome enforcement or Project Meta fleet promotion."
+  ]
+}

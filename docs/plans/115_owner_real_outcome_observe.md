@@ -225,23 +225,62 @@ Not in scope:
 
 ## Acceptance Criteria
 
-- [ ] One checked-in strict scenario binds the canonical Plan #55 owner result
+- [x] One checked-in strict scenario binds the canonical Plan #55 owner result
   to its exact merge, configuration digest, command, output digest, and
   artifacts.
-- [ ] The source command is re-observed with the expected four-document output
+- [x] The source command is re-observed with the expected four-document output
   and both expected digests.
-- [ ] The unchanged Plan #114 CLI exits `0`, leaves the lease `active`, and
+- [x] The unchanged Plan #114 CLI exits `0`, leaves the lease `active`, and
   admits the exact Plan #115 evidence path as `active_in_scope`.
-- [ ] Approval text, cost telemetry, and elapsed telemetry are present and
+- [x] Approval text, cost telemetry, and elapsed telemetry are present and
   explicitly ignored by the decision.
-- [ ] Retained evidence includes exact revisions, scenario/contract/receipt/
+- [x] Retained evidence includes exact revisions, scenario/contract/receipt/
   lease digests, command, exit code, delivery classification, and limitations.
-- [ ] The readout identifies the manual step that is the strongest candidate
+- [x] The readout identifies the manual step that is the strongest candidate
   for the next integration seam and states what evidence would falsify it.
-- [ ] Focused continuation tests and plan validation pass on the integrated
+- [x] Focused continuation tests and plan validation pass on the integrated
   candidate.
-- [ ] No hook, claim binding, automatic delivery, historical failure, hard
+- [x] No hook, claim binding, automatic delivery, historical failure, hard
   enforcement, shell coverage, colleague, or fleet claim is made.
+
+## Authentic Evidence
+
+- Clean scenario revision:
+  `8bcff194b2e2d2d725169ee3f158cf6c7b4510db`.
+- Scenario file SHA-256:
+  `8cd91fc2fdaf64a65afe160f29590682ccb91cc5d9bd1ef20f872367ff7485f3`.
+- Re-observed `scripts/doc_authority.yaml` SHA-256:
+  `81e5c7635e0131e30ecb5e7028f7b88e31020315a44bc43a6178563ddfdee7ef`.
+- Re-observed `file_context --json` stdout SHA-256:
+  `7f920c7d4d4a6354f8aa39eb18aa5ad983cf18e2435ae33d8e238c7fa09ae668`;
+  required reads were exactly `CLAUDE.md`, `EXECUTION_BRIEF.md`,
+  `adr/0009-doc-authority-governance-and-enforcement.md`, and
+  `docs/reference/DOC_AUTHORITY_SCHEMA.md`.
+- Owner-real scenario exited `0`; scenario digest was
+  `553e30d13b997df5c8823475e43007cc6ab76b849460f750f0782a02e58cef6a`,
+  contract digest was
+  `b5e00aaaec0d5decc683734045bba319b61748a658bf5962b3186afefe58ad96`,
+  receipt digest was
+  `b118b84fc7f37d8b47e678f5c622f4a58a1fe9ea25dd6b0f903580121acc6d36`,
+  and lease digest was
+  `abfc6e5cd4800a6848dad1962ae42fc1d9d91e1a0673f5917d357a2610229567`.
+  The lease stayed active and admitted the exact evidence path as
+  `active_in_scope`.
+- The retained Plan #114 circular control still exited `1` as
+  `recovery_required`; approval, cost, and elapsed fields were ignored in both
+  signs.
+- `pytest -q tests/test_outcome_continuation.py` — 35 passed.
+- Retained typed readout:
+  `docs/evidence/plan115_owner_real_outcome_observation.json`.
+
+The manual run selected an observe-only extension of the existing pre-write
+adapter as the smallest next seam: consume an explicit immutable scenario,
+correlate its `would_allow` or `would_deny` result to the ordinary current-claim
+receipt, and leave ordinary admission unchanged. If exact scenario selection is
+ambiguous or stale for the current claim, or if observation changes ordinary
+admission, that recommendation is falsified and durable claim/session lease
+binding becomes a prerequisite. Claim mutation, projection refresh, installer
+propagation, native-host activation claims, and blocking remain deferred.
 
 ## Failure And Reset Rules
 

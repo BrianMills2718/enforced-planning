@@ -706,6 +706,11 @@ Atomicity does not replace integration safety. Before any mutation,
    closeout preflight proved that unique commits will remain recoverable or are
    intentionally abandoned.
 
+Committed ancestry is not sufficient while the claimed worktree still contains
+staged, modified, or untracked work. `branch_merged_to_default` may classify the
+branch only after the worktree is clean, so closeout cannot erase changes that
+were never represented by the compared commits.
+
 The default closeout path does not merge automatically. Merge and verification
 remain explicit root-anchored control-session actions. `git branch -D` must not
 be used as a substitute for merge/disposition evidence.

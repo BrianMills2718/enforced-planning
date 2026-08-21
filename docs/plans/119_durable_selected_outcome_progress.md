@@ -1,6 +1,6 @@
 # Plan #119: Durable Selected Outcome Progress And Continuation
 
-**Status:** In Progress
+**Status:** Complete (observe-only current-head custody; portfolio admission and hard enforcement remain downstream)
 **Type:** implementation (observe-only progress custody)
 **Priority:** Critical
 **phase_ref:** "Progress-bound coding-agent continuation"
@@ -75,10 +75,16 @@ the ordinary allow/deny result untouched. Session handoff changes exact runtime
 identity but retains the progress chain, and the successor receipt extends that
 same chain rather than starting over.
 
-**Behavioral evidence:** Pending implementation. Acceptance requires one real
-Plan #119 selected-owner receipt and selected pre-write observation plus
-fixture-equivalent recovery-required, recovery-to-active, refresh, restart, and
-cross-session continuation controls.
+**Behavioral evidence:** At implementation revision `694620d4`, the real exact
+Plan #119 owner claim selected `plan119-selected-base.json`, appended the strict
+receipt `plan-119-current-head-custody`, advanced to current active lease
+`19c53bb8`, and replayed without changing tracker digest `49231d04`. After the
+ordinary projection was refreshed, selected pre-write retained ordinary
+`allow/exact_live_claim` and reported one applied transition, effective scenario
+`bb5f9410`, and `would_allow/active_in_scope`. Eighty-nine focused tests plus
+Ruff and mypy passed, including recovery-required, tracker-refresh, causal
+restart, and cross-session successor controls. The retained record is
+`docs/evidence/plan119_durable_outcome_progress.json`.
 
 **Failure signal:** A receipt is accepted against a stale parent; replay changes
 tracker bytes; a tracker refresh erases custody history; session handoff loses
@@ -105,6 +111,9 @@ hard enforcement, portfolio admission, independent review, or fleet adoption.
   — calibrated circular-delivery and restart-laundering evidence.
 - `project-meta@e2cb509c:learnings/entries/lrn-20260821T063558270519Z-bb1048ff9a.json`
   — Project Graph and lease-class prerequisites for portfolio admission.
+- `project-meta@4db70b44:learnings/entries/lrn-20260821T071433993400Z-c03672c547.json`
+  — an authentic stale pre-write projection showed that a registry-digest cache
+  hit does not bind the producer revision or its claim-health semantics.
 
 ## Research
 
@@ -207,6 +216,8 @@ restart and transfer only where they consume the current progress head.
 - `docs/guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md`
 - `docs/plans/119_durable_selected_outcome_progress.md`
 - `docs/plans/119_durable_selected_outcome_progress_work_graph.json`
+- `docs/plans/CLAUDE.md`
+- `ROADMAP.md`
 
 ## Plan
 
@@ -252,9 +263,9 @@ Pass when:
 
 Select the Plan #119 base scenario in the real claimed lane, append one authentic
 behavioral receipt, observe it through the ordinary selected pre-write path,
-retain revision-bound evidence, and reconcile guide/plan/graph. Shared plan index
-and roadmap files remain with the active Plan #110 owner and its accepted
-Plan #118 closeout obligation.
+retain revision-bound evidence, and reconcile guide/plan/graph. The Plan #110
+owner released the shared plan index and roadmap at `9f37b041`; reconcile those
+surfaces only after the executable unit is accepted.
 
 Pass when the retained evidence binds claim, tracker, binding, receipt,
 transition, effective scenario, lease, ordinary receipt, selected correlation,
@@ -272,6 +283,25 @@ Focused invalidation budget:
 4. Existing continuation/restart/session-transfer regression subset.
 5. One real exact-session selection, progress append, replay, and selected
    pre-write observation from the same entrypoints an agent uses.
+
+## Accepted Evidence
+
+- Implementation candidate: `694620d4db7318b749b0123a09534daf6dd39871`.
+- Exact selection binding: `2237689a37522f4aaea1b4392f1736c261da915beffbc3ec62dc273e74782ef8`.
+- Exact receipt and transition: `3d7b3c9c` and `de207305c`; successor lease
+  `19c53bb8` remained active.
+- Exact replay left tracker bytes at
+  `49231d043596354ad7d6fc043c092878caed95b54af5b9f823ff36e9acb7fec1`.
+- Authentic selected pre-write retained ordinary receipt
+  `prewrite_c7fcf87237d34dfdbdde7f6a3c984518` as
+  `allow/exact_live_claim` and correlated it as
+  `ocor-101609502b1b40b59bdb0b86cf6eaed0`,
+  `would_allow/active_in_scope`.
+- Focused verification: 89 tests passed; Ruff and mypy passed at the receipt's
+  source revision.
+- A first authentic observation exposed a stale cached claim-health projection.
+  It was refreshed and rerun rather than omitted; the limitation and durable
+  Project Meta learning are retained in the evidence record.
 
 Broad suite, installer propagation, downstream repository adoption, portfolio
 admission, and release checks are outside this development increment.
@@ -305,8 +335,8 @@ lease classification and deliberate portfolio admission using this current head.
 
 ## Terminal Closeout
 
-Merge OPRG-01 through OPRG-03 as one coherent observed pilot if focused evidence
-passes. Preserve the shared Plan #118 index/roadmap obligation with the Plan #110
-owner; do not edit those paths from this lane. Push, merge, close the sanctioned
-worktree/claim, and record any reusable failure pattern through Project Meta's
-typed learning register.
+Merge OPRG-01 through OPRG-03 as one coherent observed pilot after focused
+evidence passes. The shared paths were released by Plan #110 at `9f37b041`, so
+the final increment reconciles the Plan #119 index and roadmap before merging.
+Push, merge, close the sanctioned worktree/claim, and retain the projection
+producer-drift finding through Project Meta's typed learning register.

@@ -6,14 +6,14 @@
       "id": "oprg-01-durable-selected-progress",
       "initiative_id": "progress-bound-agent-execution",
       "goal_id": "durable-selected-outcome-progress",
-      "design_revision": "sha256:8153b370b231e6d693e6c5c28f3677f9386c4c6ffe4fd5a7978aba19822e7d65",
-      "spec_revision": "sha256:8153b370b231e6d693e6c5c28f3677f9386c4c6ffe4fd5a7978aba19822e7d65",
+      "design_revision": "sha256:d3b0603c5b24a85842336e593d4c05bf87acb90029b7cf6ef1325f574f359168",
+      "spec_revision": "sha256:d3b0603c5b24a85842336e593d4c05bf87acb90029b7cf6ef1325f574f359168",
       "title": "Make selected outcome leases evolve through durable progress receipts",
       "class": "integration",
       "objective": "Append strict evidence-bound progress transitions to the existing exact tracker, reconstruct the current selected lease across refresh and sanctioned runtime handoff, and make selected pre-write and causal restart consume that head without changing ordinary claim authority.",
       "profile": "standard",
       "execution_class": "independently_executable",
-      "claimability": "ready_for_execution",
+      "claimability": "not_applicable",
       "authorization_mode": "registry_claim",
       "scope": {
         "included": [
@@ -260,9 +260,9 @@
         "max_active_per_claimant": 1,
         "named_owner_id": null
       },
-      "status": "ready",
-      "record_version": 1,
-      "updated_at": "2026-08-21T07:00:00Z"
+      "status": "accepted",
+      "record_version": 2,
+      "updated_at": "2026-08-21T07:19:27Z"
     },
     {
       "schema_version": "1.0",
@@ -270,14 +270,14 @@
       "id": "oprg-02-plan-spine-closeout",
       "initiative_id": "progress-bound-agent-execution",
       "goal_id": "durable-selected-outcome-progress",
-      "design_revision": "sha256:8153b370b231e6d693e6c5c28f3677f9386c4c6ffe4fd5a7978aba19822e7d65",
-      "spec_revision": "sha256:8153b370b231e6d693e6c5c28f3677f9386c4c6ffe4fd5a7978aba19822e7d65",
+      "design_revision": "sha256:d3b0603c5b24a85842336e593d4c05bf87acb90029b7cf6ef1325f574f359168",
+      "spec_revision": "sha256:d3b0603c5b24a85842336e593d4c05bf87acb90029b7cf6ef1325f574f359168",
       "title": "Reconcile the shared plan index and roadmap after current-head custody is accepted",
       "class": "integration",
       "objective": "Publish truthful Plan 119 index and roadmap state after executable evidence is accepted and the current shared-path owner releases those files.",
       "profile": "standard",
       "execution_class": "independently_executable",
-      "claimability": "blocked_dependencies",
+      "claimability": "not_applicable",
       "authorization_mode": "registry_claim",
       "scope": {
         "included": [
@@ -298,7 +298,7 @@
         {
           "kind": "coordination_release",
           "id": "plan-110-npw02-blocker-policy:docs/plans/CLAUDE.md+ROADMAP.md",
-          "revision": "pending"
+          "revision": "9f37b041f867ccdde17ecd933d19a084e3570b10"
         }
       ],
       "outputs": [
@@ -346,13 +346,10 @@
         }
       ],
       "readiness": {
-        "status": "blocked",
+        "status": "ready",
         "required_approval_types": [],
         "approvals": [],
-        "failed_guards": [
-          "oprg-01-durable-selected-progress is not yet accepted",
-          "docs/plans/CLAUDE.md and ROADMAP.md remain owned by plan-110-npw02-blocker-policy"
-        ]
+        "failed_guards": []
       },
       "claim_policy": {
         "eligibility_rule": "Claim only after OPRG-01 is accepted and the active Plan 110 owner releases both shared documentation paths.",
@@ -361,9 +358,9 @@
         "max_active_per_claimant": 1,
         "named_owner_id": null
       },
-      "status": "blocked",
-      "record_version": 1,
-      "updated_at": "2026-08-21T07:00:00Z"
+      "status": "accepted",
+      "record_version": 3,
+      "updated_at": "2026-08-21T07:25:00Z"
     }
   ]
 }

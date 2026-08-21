@@ -1,0 +1,171 @@
+{
+  "schema_version": "1.0.0",
+  "record_type": "owner_durable_selected_outcome_progress_observation",
+  "plan_id": "enforced-planning#119",
+  "recorded_at": "2026-08-21T07:19:27Z",
+  "policy_authority": {
+    "id": "outcome-continuation-lease-hard-gate",
+    "revision": "f6091b6b2f2a5357d0fdbbe88b157435a2ce07fb",
+    "status": "approved",
+    "ordinary_approval_renews_lease": false,
+    "cost_gate_present": false
+  },
+  "history_calibration": {
+    "repository_count": 12,
+    "revision": "a2349842a44fbba450875b35f229246de8621d63",
+    "artifact": "project-meta:investigations/cross-project/2026-08-20-recurring-project-failure-modes.md",
+    "use": "Calibrates circular delivery and restart-laundering risks; it does not claim that every repository had a previously registered outcome lease."
+  },
+  "design": {
+    "plan_sha256": "d3b0603c5b24a85842336e593d4c05bf87acb90029b7cf6ef1325f574f359168",
+    "work_graph_sha256_before_acceptance_update": "ed4f8e0e9ae0ca0cff0e9c682b2bcae53a5a85ae7033fa24bd0f1be07b7843fe",
+    "work_graph_sha256": "c2d4d74a9cc982d78fd49dc93d29d6d86d4696a9c3486966edd593789eb2ef6c",
+    "implementation_unit_id": "oprg-01-durable-selected-progress",
+    "plan_spine_unit_id": "oprg-02-plan-spine-closeout",
+    "shared_path_release_revision": "9f37b041f867ccdde17ecd933d19a084e3570b10"
+  },
+  "execution": {
+    "repository": "enforced-planning",
+    "implementation_candidate_revision": "694620d4db7318b749b0123a09534daf6dd39871",
+    "delivery_classification": "exact_claim_selected_progress_observe_pilot",
+    "selection_module": "enforced_planning/outcome_selection.py",
+    "tracker_refresh_module": "enforced_planning/session_contracts.py",
+    "public_progress_cli": "scripts/outcome_continuation.py progress",
+    "public_observation_cli": "scripts/prewrite_claim_gate.py --outcome-selected",
+    "ordinary_prewrite_authority_changed": false,
+    "host_activation_claimed": false,
+    "portfolio_admission_applied": false,
+    "hard_enforcement_applied": false
+  },
+  "real_session_binding": {
+    "client": "codex",
+    "session_id": "codex:01a021cc-f3a0-7b21-babc-f18617333d1a",
+    "claim_project": "enforced-planning",
+    "claim_scope": "plan-119-durable-outcome-progress",
+    "branch": "plan-119-durable-outcome-progress",
+    "execution_authority_ref": "goal:durable-selected-outcome-progress",
+    "claim_plan_ref": "goal:durable-selected-outcome-progress",
+    "claim_identity_sha256": "ae1911061a7a18e8c3e7708e408163d789c759906003280a941fb4c82b422689",
+    "tracker_ref": "/home/brian/.claude/coordination/sessions/enforced-planning/codex__enforced-planning__codex-01a021cc-f3a0-7b21-babc-f18617333d1a__make-selected-outcome-leases-evolve-through-durable-progress-receipts.yaml",
+    "tracker_sha256_after_record_and_exact_replay": "49231d043596354ad7d6fc043c092878caed95b54af5b9f823ff36e9acb7fec1"
+  },
+  "real_selected_base": {
+    "selected_at": "2026-08-21T07:08:35.955268Z",
+    "scenario_path": "examples/owner-real-outcome-observe/plan119-selected-base.json",
+    "scenario_file_sha256": "27f3209f46c31462c4fba40649c9c699d3c6b72a56df9411ff7d7fc59630ad4e",
+    "scenario_sha256": "8f48ba35616a5cb770826b66066aeaf73a69cac93a937858201596e950753a5a",
+    "binding_sha256": "2237689a37522f4aaea1b4392f1736c261da915beffbc3ec62dc273e74782ef8",
+    "outcome_contract_sha256": "48a79847a9564241ada8bb9c0f3fd63be038675baccfedc59ba0a832022f5be2",
+    "outcome_id": "durable-selected-outcome-progress",
+    "lineage_id": "plan-119-durable-progress",
+    "base_lease_sha256": "0261ee120c614fc5bf6ff0d9e5447c2ef201df04f0fe0a2fbeb02eda20352336",
+    "base_lease_state": "active"
+  },
+  "real_progress_append": {
+    "command": "python scripts/outcome_continuation.py progress --receipt examples/owner-real-outcome-observe/plan119-progress-receipt.json --agent codex --project enforced-planning --scope plan-119-durable-outcome-progress",
+    "initial_status": "recorded",
+    "exact_replay_status": "idempotent",
+    "recorded_at": "2026-08-21T07:11:20.629081Z",
+    "receipt_path": "examples/owner-real-outcome-observe/plan119-progress-receipt.json",
+    "receipt_file_sha256": "898c8010baa0b7139a20fae804366d0ba2184ae44036d9a28d061d67383a8ccd",
+    "receipt_sha256": "3d7b3c9cc3760ec5ac7dc55b2a2af14ff3c496f19c1951d4d085498eeaae86dd",
+    "receipt_id": "plan-119-current-head-custody",
+    "progress_kind": "behavioral_advance",
+    "transition_sha256": "de207305cbb425e0da7a59e5cc2231a1d68f7db95c0013c2f6c6a9b4d8707eaa",
+    "prior_lease_sha256": "0261ee120c614fc5bf6ff0d9e5447c2ef201df04f0fe0a2fbeb02eda20352336",
+    "successor_lease_sha256": "19c53bb86dcb15bb473a47ba569e5e2e930e7db48812f4bd8452a8b1208a5c13",
+    "successor_lease_state": "active",
+    "progress_transition_count": 1,
+    "exact_replay_tracker_bytes_unchanged": true,
+    "tracker_sha256_before_replay": "49231d043596354ad7d6fc043c092878caed95b54af5b9f823ff36e9acb7fec1",
+    "tracker_sha256_after_replay": "49231d043596354ad7d6fc043c092878caed95b54af5b9f823ff36e9acb7fec1"
+  },
+  "real_tracker_refresh": {
+    "action": "updated",
+    "purpose": "Extend the exact claim to the released shared plan-index and roadmap paths through the normal session-start refresh boundary.",
+    "tracker_sha256_after_refresh": "bc354e7f305713c69426a525c73ffecfbd273dc1554260e27d583c17e3f2b2b8",
+    "selection_binding_sha256_after_refresh": "2237689a37522f4aaea1b4392f1736c261da915beffbc3ec62dc273e74782ef8",
+    "claim_identity_sha256_after_refresh": "ae1911061a7a18e8c3e7708e408163d789c759906003280a941fb4c82b422689",
+    "progress_transition_count_after_refresh": 1,
+    "progress_head_transition_sha256_after_refresh": "de207305cbb425e0da7a59e5cc2231a1d68f7db95c0013c2f6c6a9b4d8707eaa",
+    "custody_preserved": true
+  },
+  "authentic_selected_prewrite": {
+    "hook_event_name": "PreToolUse",
+    "tool_name": "apply_patch",
+    "target_path": "docs/evidence/plan119_durable_outcome_progress.json",
+    "ordinary_receipt_id": "prewrite_c7fcf87237d34dfdbdde7f6a3c984518",
+    "ordinary_recorded_at": "2026-08-21T07:13:28.725448+00:00",
+    "ordinary_decision": "allow",
+    "ordinary_reason_code": "exact_live_claim",
+    "correlation_receipt_id": "ocor-101609502b1b40b59bdb0b86cf6eaed0",
+    "outcome_observed_at": "2026-08-21T07:13:29.737411Z",
+    "outcome_disposition": "would_allow",
+    "outcome_reason_code": "active_in_scope",
+    "base_scenario_sha256": "8f48ba35616a5cb770826b66066aeaf73a69cac93a937858201596e950753a5a",
+    "effective_scenario_sha256": "bb5f941091d3dabebad82853855062fabe182384e250e2ae246b8a1a632dd07d",
+    "progress_transition_count": 1,
+    "progress_head_transition_sha256": "de207305cbb425e0da7a59e5cc2231a1d68f7db95c0013c2f6c6a9b4d8707eaa",
+    "progress_head_receipt_sha256": "3d7b3c9cc3760ec5ac7dc55b2a2af14ff3c496f19c1951d4d085498eeaae86dd",
+    "current_lease_sha256": "19c53bb86dcb15bb473a47ba569e5e2e930e7db48812f4bd8452a8b1208a5c13",
+    "current_lease_state": "active",
+    "ordinary_authority_preserved": true,
+    "enforcement_applied": false
+  },
+  "stale_projection_control": {
+    "classification": "authentic first attempt before refreshing the derived pre-write projection",
+    "ordinary_receipt_id": "prewrite_ce49345a970642edb661fd50a36ed560",
+    "ordinary_decision": "observe_violation",
+    "ordinary_reason_code": "claim_not_healthy",
+    "cache_hit": true,
+    "stale_details": [
+      "missing_work_unit_id",
+      "missing_work_graph_path",
+      "missing_work_graph_sha256"
+    ],
+    "actual_live_claim_was_currently_healthy": true,
+    "remediation": "Regenerated the default authority projection with the current producer and repeated the same selected pre-write observation.",
+    "durable_learning": "project-meta:learnings/entries/lrn-20260821T071433993400Z-c03672c547.json",
+    "learning_merge_revision": "4db70b44a03966bea9ba65003894613af9966196",
+    "promotion_consequence": "A registry-digest cache hit is not treated as proof that the projection producer revision or claim-health semantics are current."
+  },
+  "fixture_controls": {
+    "current_head_and_conflicts": {
+      "positive": "One strict post-selection receipt advances the current head and exact replay preserves tracker bytes.",
+      "negative": "Stale parent, changed accepted file, duplicate receipt ID, malformed history, base receipt replay, and foreign claim fail before mutation."
+    },
+    "selected_recovery_required": {
+      "positive": "Two appended non-outcome receipts move the effective lease from active to recovery_required.",
+      "ordinary_decision": "allow",
+      "selected_disposition": "would_deny",
+      "tampered_history": "observation_error/progress_history_invalid without changing ordinary allow"
+    },
+    "tracker_refresh": "Session-start and ordinary tracker refresh preserve selection, progress, transfer, and restart custody fields and reject exact-identity changes.",
+    "cross_session_continuation": "Sanctioned handoff binds the retained head, denies the predecessor runtime, and permits the successor runtime to append against that exact parent.",
+    "causal_restart": "Three appended non-outcome receipts make an initially active selected predecessor stalled; restart consumes the post-selection lease and retained failed-evidence refs rather than the base lease."
+  },
+  "focused_verification": {
+    "command": "pytest -q tests/test_outcome_continuation.py tests/test_outcome_selection.py tests/test_outcome_prewrite_observation.py tests/test_session_contracts.py --disable-warnings --maxfail=1",
+    "passed": 89,
+    "failed": 0,
+    "verification_revision": "694620d4db7318b749b0123a09534daf6dd39871",
+    "ruff": "passed for changed source and focused test files",
+    "mypy": "passed for enforced_planning/outcome_selection.py, enforced_planning/outcome_prewrite_observation.py, enforced_planning/session_contracts.py, and scripts/outcome_continuation.py",
+    "configuration_sha256": "6606e7bf7b5f1aae2dffb87a1dcc7a24586372603e8e8fc3526d251531953417",
+    "observation_sha256": "5cdbbb6940e63181c70e81d78c88fce6fbc1d5f13e30c6e935db0a9b8a035172"
+  },
+  "next_integration_decision": {
+    "decision": "Bind the current selected lease to Project Graph lifecycle and explicit product versus maintenance classes before imposing a hard portfolio WIP ceiling.",
+    "why": "Durable per-lane current-head custody now exists, but Project Graph has no lease-product or lease-maintenance class and no deliberate allocator; an arbitrary first writer must not choose the single product slot.",
+    "source_learning": "project-meta:learnings/entries/lrn-20260821T063558270519Z-bb1048ff9a.json"
+  },
+  "licensed_claim": "At implementation revision 694620d4db7318b749b0123a09534daf6dd39871, the real exact Plan 119 Codex claim selected one immutable active base scenario, appended one strict behavioral-progress receipt, advanced and reconstructed the current active lease, replayed the exact receipt without changing tracker bytes, and exposed that current head through the ordinary selected pre-write boundary while preserving allow/exact_live_claim and advisory would_allow/active_in_scope. Focused controls separately prove current-head conflict rejection, recovery-required observation, custody-preserving refresh, causal restart from post-selection failure evidence, and successor-session extension. This is same-lane observe-only custody; no portfolio admission, hard enforcement, independent review, installer, deployment, or fleet adoption is claimed.",
+  "limitations": [
+    "The authentic receipt proves executable behavioral custody and focused verification, not independent semantic verification of its prose summary.",
+    "The owner-real lane remained active; recovery-required, stalled restart, and cross-session successor paths are fixture-equivalent controls.",
+    "The derived pre-write projection can be current by registry digest while stale by producer semantics; the authentic first failure and Project Meta learning are retained.",
+    "Project Graph does not yet classify or deliberately allocate product and maintenance outcome leases.",
+    "No outcome result changes ordinary pre-write admission or native exit behavior.",
+    "No installer, host hook default, shell interception, downstream repository, colleague, fleet, deployment, release, or cost-control behavior changed."
+  ]
+}

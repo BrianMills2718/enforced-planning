@@ -1,0 +1,27 @@
+{
+  "schema_version": "1.0.0",
+  "receipt_id": "plan-119-current-head-custody",
+  "outcome_contract_sha256": "48a79847a9564241ada8bb9c0f3fd63be038675baccfedc59ba0a832022f5be2",
+  "prior_receipt_sha256": null,
+  "progress_kind": "behavioral_advance",
+  "dimension": "durable selected lease evolution",
+  "summary": "The selected owner lane now appends, reconstructs, transfers, observes, and causally restarts from a durable current receipt head.",
+  "evidence": {
+    "source_revision": "694620d4db7318b749b0123a09534daf6dd39871",
+    "configuration_sha256": "6606e7bf7b5f1aae2dffb87a1dcc7a24586372603e8e8fc3526d251531953417",
+    "route": "plan119-owner-real-selected-progress",
+    "command": [
+      "bash",
+      "-lc",
+      "pytest -q tests/test_outcome_continuation.py tests/test_outcome_selection.py tests/test_outcome_prewrite_observation.py tests/test_session_contracts.py --disable-warnings --maxfail=1 && ruff check enforced_planning/outcome_selection.py enforced_planning/outcome_prewrite_observation.py enforced_planning/session_contracts.py scripts/outcome_continuation.py tests/test_outcome_selection.py tests/test_outcome_prewrite_observation.py tests/test_session_contracts.py && python -m mypy enforced_planning/outcome_selection.py enforced_planning/outcome_prewrite_observation.py enforced_planning/session_contracts.py scripts/outcome_continuation.py"
+    ],
+    "observation_sha256": "5cdbbb6940e63181c70e81d78c88fce6fbc1d5f13e30c6e935db0a9b8a035172",
+    "artifact_refs": [
+      "docs/plans/119_durable_selected_outcome_progress.md",
+      "docs/plans/119_durable_selected_outcome_progress_work_graph.json",
+      "docs/evidence/plan119_durable_outcome_progress.json"
+    ],
+    "observed_at": "2026-08-21T07:10:49Z"
+  },
+  "discriminating_evidence": true
+}

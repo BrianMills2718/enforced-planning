@@ -276,6 +276,13 @@ now compares the clean-room receipt to `git rev-parse HEAD` and fails with
 `component_revision_mismatch`; the focused negative control passes. The invalid
 external root is excluded from completion evidence.
 
+The next fresh root exposed a second portability defect before source editing:
+`governed-task.json` serialized this machine's absolute Python interpreter.
+The durable contract now stores `python` and resolves the interpreter only at
+execution time; preparation also requires the independent `portable_content`
+check to pass before returning `prepared`. That root is likewise excluded from
+completion evidence.
+
 ## Pre-Made Decisions
 
 - Reuse the existing clean-room and canonical installer.

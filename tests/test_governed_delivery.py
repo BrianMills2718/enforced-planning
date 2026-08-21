@@ -192,6 +192,9 @@ def test_prepare_creates_governed_failing_baseline(tmp_path: Path) -> None:
     assert _git(task_root, "status", "--porcelain") == ""
     assert (task_root / "AGENTS.md").exists()
     assert (task_root / "governed-task.json").exists()
+    task_contract = (task_root / "governed-task.json").read_text(encoding="utf-8")
+    assert "/home/brian" not in task_contract
+    assert json.loads(task_contract)["requested_command"][0] == "python"
     named = subprocess.run(
         [sys.executable, "src/hello_app.py", "--name", "Ada"],
         cwd=task_root,

@@ -74,7 +74,7 @@ class GovernedTaskV1(StrictModel):
     expected_default_output: Literal["hello-app uses shared-lib"] = "hello-app uses shared-lib"
     expected_named_output: Literal["Ada uses shared-lib"] = "Ada uses shared-lib"
     requested_command: list[str] = Field(
-        default_factory=lambda: [sys.executable, "src/hello_app.py", "--name", "Ada"]
+        default_factory=lambda: ["python", "src/hello_app.py", "--name", "Ada"]
     )
 
 
@@ -398,7 +398,8 @@ def _command_check(
 ) -> CheckResultV1:
     """Execute one behavioral command and compare its exact result."""
 
-    completed = _run(argv, cwd=task_root)
+    executing_argv = [sys.executable, *argv[1:]] if argv and argv[0] == "python" else argv
+    completed = _run(executing_argv, cwd=task_root)
     observed = completed.stdout.strip()
     passed = completed.returncode == 0 and (
         expected_stdout is None or observed == expected_stdout
@@ -758,6 +759,12 @@ def prepare_governed_task(
         raise GovernedDeliveryError(
             "named_failure_not_observed",
             "Prepared task must fail the requested --name behavior.",
+        )
+    portable_check = next(check for check in initial_checks if check.check_id == "portable_content")
+    if portable_check.verdict != "pass":
+        raise GovernedDeliveryError(
+            "prepared_content_not_portable",
+            portable_check.detail,
         )
     return PreparationReceiptV1(
         task_id=contract.task_id,

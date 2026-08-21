@@ -46,3 +46,35 @@ python scripts/cleanroom_alpha.py --root /tmp/loop-engineering-cleanroom verify-
 
 Reset and apply again between demo modes because the successful repair changes
 the disposable fixture state.
+
+## Authentic Governed-Delivery Vertical
+
+Plan 113 adds a separate real-agent path on top of the same clean-room. Prepare
+the default fixture first, then install the governed `hello-app` task:
+
+```bash
+cleanroom_root="$(mktemp -d)/cleanroom"
+python scripts/cleanroom_alpha.py --root "$cleanroom_root" apply
+python scripts/governed_delivery.py prepare \
+  --cleanroom-root "$cleanroom_root" \
+  --framework-root .
+python scripts/governed_delivery.py probe \
+  --task-root "$cleanroom_root/projects/hello-app"
+```
+
+The first probe is expected to fail because `--name Ada` is not implemented.
+The coding agent works only in the generated `hello-app`: it reads
+`governed-task.json` and `CLAUDE.md`, creates one bounded plan, changes the
+declared source/docs/plan paths, runs `make verify`, and commits the result.
+Completion is then checked independently:
+
+```bash
+python scripts/governed_delivery.py verify \
+  --task-root "$cleanroom_root/projects/hello-app" \
+  --agent-session-id "codex:SESSION_ID"
+```
+
+Two unchanged failing probes return `course_correction_required`. Before
+probing again, use the `checkpoint` command to name the prior assumption, the
+changed assumption, and the next tactic. A worker-authored completion report is
+never an input to the terminal verdict.

@@ -1,6 +1,6 @@
 # Plan #113: Governed Delivery Authentic Vertical
 
-**Status:** Planned
+**Status:** In Progress — reusable module/CLI and seven focused both-sign tests pass; fresh authentic consumer run pending
 **Type:** implementation
 **Priority:** Critical
 **phase_ref:** "Authentic governed-delivery proof frontier"

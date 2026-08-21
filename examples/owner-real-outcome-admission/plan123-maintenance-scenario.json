@@ -1,0 +1,64 @@
+{
+  "schema_version": "1.0.0",
+  "scenario_id": "plan-123-source-outcome-admission-activation",
+  "contract": {
+    "schema_version": "1.1.0",
+    "outcome_id": "source-outcome-admission-activation",
+    "owner_class": "brian",
+    "project_id": "enforced-planning",
+    "lineage_id": "plan-123-source-outcome-admission-activation",
+    "portfolio_class": "maintenance",
+    "predecessor_lineage_ids": [
+      "plan-122-first-consumer-outcome-admission"
+    ],
+    "intended_consumer": "Brian and his coding agents continuing real Brian-owned Enforced Planning work without remembering outcome-admission flags",
+    "outcome": "The Enforced Planning source lifecycle and native pre-write automatically enforce the exact selected outcome while retaining one restricted bootstrap and recoverable rollback.",
+    "canonical_journey": {
+      "starting_state": "The exact Plan 123 bootstrap claim owns only its plan, graph, index, roadmap, and Plan-numbered allocation inputs; source outcome admission is still explicit-only.",
+      "input": "One Project Graph-bound maintenance allocation, one exact selected scenario, and source configuration set to enforce_selected.",
+      "action": "Upgrade, allocate, select, expand, and then invoke the real Make lifecycle and installed source pre-write hook without any outcome flag.",
+      "observable_result": "Active exact state succeeds with outcome_admission_active receipts; missing, inactive, or circular state returns nonzero before protected mutation or write success.",
+      "failure_signal": "Omitting a flag bypasses the gate, bootstrap admits source work, a stale mirror owns the Make path, approval or cost changes the result, or any downstream repository changes."
+    },
+    "baseline_revision": "94e3443e9f779de141b2a0b75c838bf8d87d574d",
+    "allowed_scope": [
+      "enforced_planning/outcome_admission.py",
+      "enforced_planning/session_lifecycle.py",
+      "scripts/outcome_admission.py",
+      "scripts/prewrite_claim_gate.py",
+      "scripts/session_start.py",
+      "scripts/session_heartbeat.py",
+      "scripts/meta/session_start.py",
+      "scripts/meta/session_heartbeat.py",
+      "Makefile",
+      "meta-process.yaml",
+      "docs/reference/CONFIG_REFERENCE.md",
+      "tests/test_outcome_admission.py",
+      "tests/test_session_cli.py",
+      "tests/test_install_governed_repo.py",
+      "docs/evidence/plan123_source_outcome_admission_activation.json",
+      "docs/plans/123_source_outcome_admission_activation.md",
+      "docs/plans/123_source_outcome_admission_activation_work_graph.json",
+      "docs/plans/CLAUDE.md",
+      "docs/guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md",
+      "CLAUDE.md",
+      "ROADMAP.md"
+    ],
+    "progress_dimensions": [
+      "source configuration activation",
+      "actual lifecycle consumer adoption",
+      "automatic selected-outcome enforcement",
+      "sanctioned bootstrap and rollback"
+    ]
+  },
+  "receipts": [],
+  "request": {
+    "schema_version": "1.0.0",
+    "operation": "product_write",
+    "target_path": "meta-process.yaml",
+    "ordinary_approval": true,
+    "approval_text": "I approve, continue",
+    "cost_telemetry_usd": "1000000",
+    "elapsed_telemetry_seconds": 999999
+  }
+}

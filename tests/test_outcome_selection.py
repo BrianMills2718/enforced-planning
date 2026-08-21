@@ -6,6 +6,7 @@ import subprocess
 import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 import pytest
 import yaml  # type: ignore[import-untyped]
@@ -978,6 +979,115 @@ def test_cross_session_resume_restores_exact_preflight_state_when_tracker_transf
             branch="plan117-test",
             current_phase="this phase must roll back",
             session_id="codex:plan118-failed-successor",
+        )
+
+    assert claim_path.read_bytes() == claim_before
+    assert tracker_path.read_bytes() == tracker_before
+    assert prewrite_claim_projection.projection_is_current(claims_dir=claims_dir)
+
+
+def test_cross_session_resume_restores_exact_preflight_state_when_successor_claim_is_invalid(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    selected, _repo, worktree, claims_dir, claim_path, _scenario_path = _select(
+        tmp_path,
+        monkeypatch,
+    )
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    monkeypatch.setattr(
+        claim_mutation_receipts,
+        "DEFAULT_EVENTS_PATH",
+        tmp_path / "claim-mutation-events.jsonl",
+    )
+    session_lifecycle.handoff_session(
+        agent="codex",
+        project="enforced-planning",
+        scope="plan117-test",
+        note="preserve preflight bytes if the successor claim is invalid",
+    )
+    claim_before = claim_path.read_bytes()
+    tracker_path = Path(selected.tracker_path)
+    tracker_before = tracker_path.read_bytes()
+
+    original_normalize_claim = coordination_claims.normalize_claim
+    normalize_calls = 0
+
+    def invalidate_successor_claim(
+        data: dict[str, Any],
+        *,
+        source_file: str | None = None,
+    ) -> coordination_claims.ClaimRecord | None:
+        nonlocal normalize_calls
+        normalize_calls += 1
+        if normalize_calls == 3:
+            return None
+        return original_normalize_claim(data, source_file=source_file)
+
+    monkeypatch.setattr(coordination_claims, "normalize_claim", invalidate_successor_claim)
+    with pytest.raises(ValueError, match="could not be normalized"):
+        session_lifecycle.resume_session(
+            agent="codex",
+            project="enforced-planning",
+            scope="plan117-test",
+            worktree_path=str(worktree),
+            branch="plan117-test",
+            current_phase="this phase must roll back",
+            session_id="codex:plan118-invalid-successor",
+        )
+
+    assert claim_path.read_bytes() == claim_before
+    assert tracker_path.read_bytes() == tracker_before
+    assert prewrite_claim_projection.projection_is_current(claims_dir=claims_dir)
+
+
+def test_cross_session_resume_rolls_back_if_claim_projection_refresh_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    selected, _repo, worktree, claims_dir, claim_path, _scenario_path = _select(
+        tmp_path,
+        monkeypatch,
+    )
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    monkeypatch.setattr(
+        claim_mutation_receipts,
+        "DEFAULT_EVENTS_PATH",
+        tmp_path / "claim-mutation-events.jsonl",
+    )
+    session_lifecycle.handoff_session(
+        agent="codex",
+        project="enforced-planning",
+        scope="plan117-test",
+        note="preserve preflight bytes if projection refresh fails",
+    )
+    claim_before = claim_path.read_bytes()
+    tracker_path = Path(selected.tracker_path)
+    tracker_before = tracker_path.read_bytes()
+    original_normalize_claim = coordination_claims.normalize_claim
+    normalize_calls = 0
+
+    def fail_projection_refresh(
+        data: dict[str, Any],
+        *,
+        source_file: str | None = None,
+    ) -> coordination_claims.ClaimRecord | None:
+        nonlocal normalize_calls
+        normalize_calls += 1
+        if normalize_calls == 2:
+            return None
+        return original_normalize_claim(data, source_file=source_file)
+
+    monkeypatch.setattr(coordination_claims, "normalize_claim", fail_projection_refresh)
+    with pytest.raises(ValueError, match="cannot be normalized"):
+        session_lifecycle.resume_session(
+            agent="codex",
+            project="enforced-planning",
+            scope="plan117-test",
+            worktree_path=str(worktree),
+            branch="plan117-test",
+            current_phase="this phase must roll back",
+            session_id="codex:plan118-projection-failure",
         )
 
     assert claim_path.read_bytes() == claim_before

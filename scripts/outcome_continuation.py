@@ -29,6 +29,12 @@ from enforced_planning.outcome_continuation import (
     evaluate_scenario,
     load_scenario,
 )
+from enforced_planning.outcome_portfolio import (
+    DEFAULT_OUTCOME_PORTFOLIO_LEDGER_PATH,
+    OutcomePortfolioError,
+    allocate_outcome_portfolio,
+    dispose_outcome_portfolio_allocation,
+)
 from enforced_planning.outcome_selection import (
     OutcomeSelectionError,
     record_selected_outcome_progress_for_session,
@@ -52,6 +58,44 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     select.add_argument("--scope", required=True)
     select.add_argument("--session-id")
     select.add_argument("--claims-dir", type=Path, default=CLAIMS_DIR)
+    select.add_argument(
+        "--portfolio-ledger",
+        type=Path,
+        default=DEFAULT_OUTCOME_PORTFOLIO_LEDGER_PATH,
+    )
+    allocate = subparsers.add_parser(
+        "allocate",
+        help="Deliberately allocate one graph-bound outcome portfolio slot",
+    )
+    allocate.add_argument("--scenario", required=True, type=Path)
+    allocate.add_argument("--request", required=True, type=Path)
+    allocate.add_argument("--project-graph-repo", required=True, type=Path)
+    allocate.add_argument("--project-graph-revision", required=True)
+    allocate.add_argument("--agent", required=True, choices=("codex", "claude-code", "openclaw"))
+    allocate.add_argument("--project", required=True)
+    allocate.add_argument("--scope", required=True)
+    allocate.add_argument("--session-id")
+    allocate.add_argument("--claims-dir", type=Path, default=CLAIMS_DIR)
+    allocate.add_argument(
+        "--portfolio-ledger",
+        type=Path,
+        default=DEFAULT_OUTCOME_PORTFOLIO_LEDGER_PATH,
+    )
+    dispose = subparsers.add_parser(
+        "dispose-allocation",
+        help="Append a parked or complete disposition for one exact allocation",
+    )
+    dispose.add_argument("--request", required=True, type=Path)
+    dispose.add_argument("--agent", required=True, choices=("codex", "claude-code", "openclaw"))
+    dispose.add_argument("--project", required=True)
+    dispose.add_argument("--scope", required=True)
+    dispose.add_argument("--session-id")
+    dispose.add_argument("--claims-dir", type=Path, default=CLAIMS_DIR)
+    dispose.add_argument(
+        "--portfolio-ledger",
+        type=Path,
+        default=DEFAULT_OUTCOME_PORTFOLIO_LEDGER_PATH,
+    )
     progress = subparsers.add_parser(
         "progress",
         help="Append one strict current-head receipt to an exact selected outcome",
@@ -73,6 +117,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     restart.add_argument("--scope", required=True)
     restart.add_argument("--session-id")
     restart.add_argument("--claims-dir", type=Path, default=CLAIMS_DIR)
+    restart.add_argument(
+        "--portfolio-ledger",
+        type=Path,
+        default=DEFAULT_OUTCOME_PORTFOLIO_LEDGER_PATH,
+    )
     return parser.parse_args(argv)
 
 
@@ -93,6 +142,30 @@ def main(argv: list[str] | None = None) -> int:
                 execution_authority_ref=args.execution_authority,
                 scenario_path=args.scenario,
                 claims_dir=args.claims_dir,
+                portfolio_ledger_path=args.portfolio_ledger,
+            )
+        elif args.command == "allocate":
+            allocation_result = allocate_outcome_portfolio(
+                agent=args.agent,
+                project=args.project,
+                scope=args.scope,
+                session_id=args.session_id,
+                scenario_path=args.scenario,
+                request_path=args.request,
+                project_graph_repo=args.project_graph_repo,
+                project_graph_revision=args.project_graph_revision,
+                claims_dir=args.claims_dir,
+                ledger_path=args.portfolio_ledger,
+            )
+        elif args.command == "dispose-allocation":
+            disposition_result = dispose_outcome_portfolio_allocation(
+                agent=args.agent,
+                project=args.project,
+                scope=args.scope,
+                session_id=args.session_id,
+                request_path=args.request,
+                claims_dir=args.claims_dir,
+                ledger_path=args.portfolio_ledger,
             )
         elif args.command == "progress":
             progress_result = record_selected_outcome_progress_for_session(
@@ -112,9 +185,16 @@ def main(argv: list[str] | None = None) -> int:
                 successor_scenario_path=args.successor_scenario,
                 restart_delta_path=args.restart_delta,
                 claims_dir=args.claims_dir,
+                portfolio_ledger_path=args.portfolio_ledger,
             )
-    except (ContinuationError, OutcomeSelectionError, ValidationError, ValueError) as exc:
-        if isinstance(exc, (ContinuationError, OutcomeSelectionError)):
+    except (
+        ContinuationError,
+        OutcomePortfolioError,
+        OutcomeSelectionError,
+        ValidationError,
+        ValueError,
+    ) as exc:
+        if isinstance(exc, (ContinuationError, OutcomePortfolioError, OutcomeSelectionError)):
             error = exc.to_dict()
         else:
             error = {"code": "input_validation_failed", "message": str(exc)}
@@ -122,6 +202,12 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     if args.command == "select":
         print(selection.model_dump_json(indent=2))
+        return 0
+    if args.command == "allocate":
+        print(allocation_result.model_dump_json(indent=2))
+        return 0
+    if args.command == "dispose-allocation":
+        print(disposition_result.model_dump_json(indent=2))
         return 0
     if args.command == "progress":
         print(progress_result.model_dump_json(indent=2))

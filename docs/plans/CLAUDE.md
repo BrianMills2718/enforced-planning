@@ -92,6 +92,7 @@ See `ROADMAP.md` for the full phase map and recommended priority order.
 | 113 | Governed Delivery Authentic Vertical (`113_governed_delivery_authentic_vertical.md`) | Critical | ✅ Complete | first real plan/docs/code/course-control/verifier proof |
 | 114 | Outcome Continuation Lease Enforcement (`114_outcome_continuation_lease_enforcement.md`) | Critical | ✅ Complete | observe the staged gate on real Brian-owned work before session or fleet integration |
 | 115 | Owner-Real Outcome Continuation Observation (`115_owner_real_outcome_observe.md`) | Critical | ✅ Complete | bind merged owner progress to the existing CLI before selecting a runtime seam |
+| 116 | Pre-Write Outcome Correlation Observe Pilot (`116_prewrite_outcome_correlation_observe.md`) | Critical | 📋 Planned | correlate one immutable continuation scenario with the ordinary claimed-write receipt without changing admission |
 
 ## Status Key
 

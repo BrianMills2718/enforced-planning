@@ -1,0 +1,196 @@
+{
+  "units": [
+    {
+      "schema_version": "1.0",
+      "record_type": "work_unit",
+      "id": "ocor-01-prewrite-outcome-observe",
+      "initiative_id": "progress-bound-agent-execution",
+      "goal_id": "correlate-continuation-authority-with-one-ordinary-claimed-write",
+      "design_revision": "enforced-planning@3b849c12bde08e1266d81fa7c827c0a5258e4bed:plan-116-design",
+      "spec_revision": "enforced-planning@3b849c12bde08e1266d81fa7c827c0a5258e4bed:plan-116",
+      "title": "Correlate one outcome decision with an ordinary pre-write receipt",
+      "class": "integration",
+      "objective": "Extend the existing pre-write wrapper with an explicit observe-only correlation that binds one immutable outcome scenario to the same real claimed-write payload, proves would-allow and would-deny signs, and preserves ordinary admission and exit behavior.",
+      "profile": "small",
+      "execution_class": "independently_executable",
+      "claimability": "ready_for_execution",
+      "authorization_mode": "registry_claim",
+      "scope": {
+        "included": [
+          "One typed append-only correlation receipt owned by Enforced Planning",
+          "One lazy explicit outcome-scenario path on the existing pre-write wrapper",
+          "Same-target owner-progress and synthetic circular scenarios",
+          "Focused both-sign, mismatch, failure-visibility, and exit-preservation tests",
+          "One real Enforced Planning claimed-payload observation and retained evidence",
+          "Plan, work graph, index, and roadmap reconciliation"
+        ],
+        "excluded": [
+          "Changes to the dependency-light ordinary claim evaluator",
+          "Claim schema, projection, mutable lease, or automatic progress classification changes",
+          "Installer, hook wiring, downstream repository, colleague, or fleet changes",
+          "Outcome blocking, shell interception, deployment, or release",
+          "Shared llm_client or data-contracts integration"
+        ]
+      },
+      "inputs": [
+        {
+          "kind": "bounded_design",
+          "id": "docs/plans/116_prewrite_outcome_correlation_observe.md",
+          "revision": "3b849c12bde08e1266d81fa7c827c0a5258e4bed"
+        },
+        {
+          "kind": "owner_observation",
+          "id": "docs/evidence/plan115_owner_real_outcome_observation.json",
+          "revision": "058f92f88ae1e948810033a8c0a8c60d051544f1"
+        },
+        {
+          "kind": "existing_capability",
+          "id": "scripts/prewrite_claim_gate.py",
+          "revision": "218394e0046770acb05b755553e36c7e7ccd136a"
+        },
+        {
+          "kind": "existing_contract",
+          "id": "enforced_planning/outcome_continuation.py",
+          "revision": "80fa9dbcef74d0d85b2a15168f0345e3ab3a4129"
+        }
+      ],
+      "outputs": [
+        "Typed receipt linking one ordinary pre-write receipt to one outcome decision",
+        "Optional public wrapper path whose absence preserves current behavior",
+        "Same-payload would-allow and would-deny evidence with unchanged ordinary admission",
+        "Visible mismatch and observation-failure behavior",
+        "Evidence-supported decision about durable binding or further promotion"
+      ],
+      "dependencies": [],
+      "conflict_surfaces": [
+        {
+          "kind": "repository_path",
+          "target": "enforced_planning/outcome_prewrite_observation.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-116-prewrite-outcome-correlation"
+        },
+        {
+          "kind": "repository_path",
+          "target": "scripts/prewrite_claim_gate.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-116-prewrite-outcome-correlation"
+        },
+        {
+          "kind": "repository_path",
+          "target": "tests/test_outcome_prewrite_observation.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-116-prewrite-outcome-correlation"
+        },
+        {
+          "kind": "repository_path",
+          "target": "examples/owner-real-outcome-observe/plan116-owner-progress.json",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-116-prewrite-outcome-correlation"
+        },
+        {
+          "kind": "repository_path",
+          "target": "examples/owner-real-outcome-observe/plan116-circular.json",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-116-prewrite-outcome-correlation"
+        },
+        {
+          "kind": "repository_path",
+          "target": "docs/evidence/plan116_prewrite_outcome_correlation.json",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-116-prewrite-outcome-correlation"
+        },
+        {
+          "kind": "repository_path",
+          "target": "docs/plans/116_prewrite_outcome_correlation_observe.md",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-116-prewrite-outcome-correlation"
+        },
+        {
+          "kind": "repository_path",
+          "target": "docs/plans/116_prewrite_outcome_correlation_observe_work_graph.json",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-116-prewrite-outcome-correlation"
+        },
+        {
+          "kind": "repository_path",
+          "target": "docs/plans/CLAUDE.md",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-116-prewrite-outcome-correlation"
+        },
+        {
+          "kind": "repository_path",
+          "target": "ROADMAP.md",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-116-prewrite-outcome-correlation"
+        }
+      ],
+      "acceptance": [
+        {
+          "id": "OCOR01-A1",
+          "criterion": "The ordinary pre-write decision is recorded first and remains the only authority controlling native output and exit behavior.",
+          "evidence_required": [
+            "No-option CLI regression",
+            "Both-sign CLI exit-preservation assertions",
+            "Receipt ordering and ordinary receipt ID binding"
+          ],
+          "negative_control": "An ordinary denied claim remains denied even when the outcome scenario would allow."
+        },
+        {
+          "id": "OCOR01-A2",
+          "criterion": "One typed observation binds the exact ordinary session, repository, worktree, branch, claim, target, receipt ID, and immutable scenario decision.",
+          "evidence_required": [
+            "Strict typed observation tests",
+            "Target and project mismatch failures",
+            "Append/read replay check"
+          ],
+          "negative_control": "A different target or claim project produces a visible observation error without changing ordinary admission."
+        },
+        {
+          "id": "OCOR01-A3",
+          "criterion": "The same real claimed payload produces ordinary allow in both runs, outcome would_allow for owner progress, and outcome would_deny for two synthetic non-outcome receipts.",
+          "evidence_required": [
+            "Plan 116 positive and circular scenarios with identical request context",
+            "Real claimed-worktree CLI receipts",
+            "Retained revision- and digest-bound evidence"
+          ],
+          "negative_control": "Approval, cost, elapsed time, and the ordinary payload remain identical; only progress receipts differ."
+        },
+        {
+          "id": "OCOR01-A4",
+          "criterion": "The pilot makes no outcome-enforcement, automatic-lease, installer, hook-activation, shell, colleague, or fleet claim.",
+          "evidence_required": [
+            "Truthful evidence limitations",
+            "Plan/index/roadmap reconciliation",
+            "Focused Plan 108/114 regressions"
+          ],
+          "negative_control": "No installer, projection, claim schema, or blocking file changes appear in the submitted revision."
+        }
+      ],
+      "readiness": {
+        "status": "ready",
+        "required_approval_types": [],
+        "approvals": [],
+        "failed_guards": []
+      },
+      "claim_policy": {
+        "eligibility_rule": "One exact live Plan 116 claim owns only the listed implementation, scenario, evidence, plan, graph, index, and roadmap paths.",
+        "lease_policy": "renewable",
+        "lease_duration_minutes": 1440,
+        "max_active_per_claimant": 1,
+        "named_owner_id": null
+      },
+      "status": "ready",
+      "record_version": 1
+    }
+  ]
+}

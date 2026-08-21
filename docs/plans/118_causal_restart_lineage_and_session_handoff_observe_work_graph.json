@@ -6,8 +6,8 @@
       "id": "orst-01-restart-safe-outcome-custody",
       "initiative_id": "progress-bound-agent-execution",
       "goal_id": "retain-outcome-and-failure-state-across-restarts",
-      "design_revision": "sha256:11352e5f6fff6675d1ba02878aba3afa754bfea9b8abb5682f16de7cf272bbd1",
-      "spec_revision": "sha256:11352e5f6fff6675d1ba02878aba3afa754bfea9b8abb5682f16de7cf272bbd1",
+      "design_revision": "sha256:beca36c56d9f8b0e53429afdcc578ad9a0917bd78684347de0a8f1eeb2b44c3d",
+      "spec_revision": "sha256:beca36c56d9f8b0e53429afdcc578ad9a0917bd78684347de0a8f1eeb2b44c3d",
       "title": "Preserve selected outcome custody across session handoff and causal restart",
       "class": "integration",
       "objective": "Make sanctioned cross-session resume preserve the exact selected outcome and failure state, and permit a stalled or parked lineage to adopt a different mechanism only through an exact same-outcome causal restart delta with append-only transition history, without changing ordinary pre-write authority.",
@@ -43,7 +43,7 @@
         {
           "kind": "bounded_design",
           "id": "docs/plans/118_causal_restart_lineage_and_session_handoff_observe.md",
-          "revision": "sha256:11352e5f6fff6675d1ba02878aba3afa754bfea9b8abb5682f16de7cf272bbd1"
+          "revision": "sha256:beca36c56d9f8b0e53429afdcc578ad9a0917bd78684347de0a8f1eeb2b44c3d"
         },
         {
           "kind": "existing_capability",
@@ -226,8 +226,8 @@
         "named_owner_id": null
       },
       "status": "accepted",
-      "record_version": 3,
-      "updated_at": "2026-08-21T06:06:00Z"
+      "record_version": 4,
+      "updated_at": "2026-08-21T06:24:00Z"
     },
     {
       "schema_version": "1.0",
@@ -235,8 +235,8 @@
       "id": "orst-02-plan-spine-closeout",
       "initiative_id": "progress-bound-agent-execution",
       "goal_id": "retain-outcome-and-failure-state-across-restarts",
-      "design_revision": "sha256:11352e5f6fff6675d1ba02878aba3afa754bfea9b8abb5682f16de7cf272bbd1",
-      "spec_revision": "sha256:11352e5f6fff6675d1ba02878aba3afa754bfea9b8abb5682f16de7cf272bbd1",
+      "design_revision": "sha256:beca36c56d9f8b0e53429afdcc578ad9a0917bd78684347de0a8f1eeb2b44c3d",
+      "spec_revision": "sha256:beca36c56d9f8b0e53429afdcc578ad9a0917bd78684347de0a8f1eeb2b44c3d",
       "title": "Reconcile the plan index and roadmap after restart custody is accepted",
       "class": "integration",
       "objective": "Publish truthful Plan 118 index and roadmap state only after the executable restart-custody unit has accepted evidence, without forcing its shared documentation paths into the implementation claim.",
@@ -258,7 +258,7 @@
         {
           "kind": "bounded_design",
           "id": "docs/plans/118_causal_restart_lineage_and_session_handoff_observe.md",
-          "revision": "sha256:11352e5f6fff6675d1ba02878aba3afa754bfea9b8abb5682f16de7cf272bbd1"
+          "revision": "sha256:beca36c56d9f8b0e53429afdcc578ad9a0917bd78684347de0a8f1eeb2b44c3d"
         },
         {
           "kind": "work_unit",
@@ -323,8 +323,8 @@
         "named_owner_id": null
       },
       "status": "ready",
-      "record_version": 2,
-      "updated_at": "2026-08-21T06:06:00Z"
+      "record_version": 3,
+      "updated_at": "2026-08-21T06:24:00Z"
     }
   ]
 }

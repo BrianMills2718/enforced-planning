@@ -16,18 +16,21 @@
     "use": "Calibrates restart laundering and status-truth gaps; it does not classify the checked-in stalled control as a reconstructed historical lineage."
   },
   "design": {
-    "plan_sha256": "11352e5f6fff6675d1ba02878aba3afa754bfea9b8abb5682f16de7cf272bbd1",
-    "work_graph_sha256": "84dbbc232f98b849b539464d20d2c0516b79edaa4b553d99463596bcfa330a79",
+    "plan_sha256": "beca36c56d9f8b0e53429afdcc578ad9a0917bd78684347de0a8f1eeb2b44c3d",
+    "work_graph_sha256": "6f6da77b09b8c1fd4032fda6a001849d5f4693f8d71b20e80a90b6fb0416bd08",
     "implementation_unit_id": "orst-01-restart-safe-outcome-custody",
     "plan_spine_unit_id": "orst-02-plan-spine-closeout",
     "unit_split_reason": "The shared plan index and roadmap were already exclusively claimed by Plan 110; the executable core remained path-disjoint and proceeded without passive waiting."
   },
   "execution": {
     "repository": "enforced-planning",
-    "candidate_revision": "6912ce898ff6e9d4715a2370efe528c9fd4e1547",
+    "candidate_revision": "ebcfa98aed29e4eabd27f63f7d1bafbc51ad87db",
+    "owner_real_observation_revision": "6912ce898ff6e9d4715a2370efe528c9fd4e1547",
     "core_revision": "4a47f064eb2adfad31810eac92f4636753dd87ab",
     "guide_and_legacy_control_revision": "53c5954235749f07a8bdc647ac5b030cf74c6575",
     "byte_idempotence_revision": "14439acbb800904b73a51080a97667fb756c9947",
+    "complete_transfer_rollback_revision": "ebcfa98aed29e4eabd27f63f7d1bafbc51ad87db",
+    "guide_revision": "43c717761521893e12fd838e47151e8d7e3c5138",
     "delivery_classification": "manual_same-project_restart_custody_observe_pilot",
     "selection_module": "enforced_planning/outcome_selection.py",
     "continuation_contract_module": "enforced_planning/outcome_continuation.py",
@@ -137,11 +140,11 @@
   },
   "session_transfer_controls": {
     "classification": "fixture-equivalent exact claim/tracker lanes; no fake runtime was attached to the live owner claim",
-    "command": "env -u CODEX_THREAD_ID pytest -q tests/test_outcome_selection.py::test_legacy_claim_only_resume_reproduces_selected_tracker_failure tests/test_outcome_selection.py::test_cross_session_resume_transfers_selected_outcome_without_reset tests/test_outcome_selection.py::test_cross_session_resume_restores_exact_preflight_state_when_tracker_transfer_fails tests/test_outcome_selection.py::test_cross_session_resume_reports_typed_incomplete_transition_if_rollback_fails",
-    "passed": 4,
+    "command": "env -u CODEX_THREAD_ID pytest -q tests/test_outcome_selection.py::test_legacy_claim_only_resume_reproduces_selected_tracker_failure tests/test_outcome_selection.py::test_cross_session_resume_transfers_selected_outcome_without_reset tests/test_outcome_selection.py::test_cross_session_resume_restores_exact_preflight_state_when_tracker_transfer_fails tests/test_outcome_selection.py::test_cross_session_resume_restores_exact_preflight_state_when_successor_claim_is_invalid tests/test_outcome_selection.py::test_cross_session_resume_rolls_back_if_claim_projection_refresh_fails tests/test_outcome_selection.py::test_cross_session_resume_reports_typed_incomplete_transition_if_rollback_fails",
+    "passed": 6,
     "failed": 0,
     "positive": "Successor runtime retained scenario/contract/lease/lineage, resolved the selected outcome, and predecessor runtime was denied.",
-    "rollback": "Injected tracker failure restored exact preflight claim and tracker bytes and left the derived projection current.",
+    "rollback": "Injected tracker, successor-normalization, and derived-projection failures after mutation began restored exact preflight claim and tracker bytes and left the derived projection current.",
     "incomplete_failure": "Injected rollback failure raised typed session_transfer_incomplete and never reported resumed."
   },
   "negative_controls": {
@@ -153,12 +156,14 @@
     "changed_target": "restart_target_mismatch",
     "missing_direct_predecessor": "restart_predecessor_missing",
     "mismatched_delta": "restart_delta_mismatch",
-    "competing_direct_selection": "selection_conflict"
+    "competing_direct_selection": "selection_conflict",
+    "competing_restart": "restart_conflict"
   },
   "focused_verification": {
     "command": "env -u CODEX_THREAD_ID pytest -q tests/test_outcome_continuation.py tests/test_outcome_prewrite_observation.py tests/test_outcome_selection.py tests/test_prewrite_claim_projection.py tests/test_session_cli.py",
-    "passed": 137,
+    "passed": 139,
     "failed": 0,
+    "verification_revision": "43c717761521893e12fd838e47151e8d7e3c5138",
     "covers": [
       "Plan 108 ordinary pre-write projection",
       "Plan 114 outcome continuation contracts",
@@ -167,7 +172,7 @@
       "Plan 118 session transfer and causal restart"
     ],
     "changed_file_import_and_finding_lint": "ruff check --select F,I passed",
-    "doc_code_coupling": "passed at revision 53c5954235749f07a8bdc647ac5b030cf74c6575",
+    "doc_code_coupling": "passed at revision 43c717761521893e12fd838e47151e8d7e3c5138",
     "module_reachability": "259/259 modules and 100 percent of lines reachable",
     "broad_make_lint": "not green because the repository currently reports 415 pre-existing Ruff findings; not used as acceptance evidence",
     "dead_code_hook": "warned because vulture is unavailable; no finding count was fabricated"
@@ -191,7 +196,7 @@
       "downstream repository, colleague, fleet, deployment, or release claims"
     ]
   },
-  "licensed_claim": "At candidate revision 6912ce898ff6e9d4715a2370efe528c9fd4e1547, the real exact Plan 118 Codex claim rejected direct replacement of its selected stalled control, accepted one strict same-outcome causal restart, retained the full predecessor binding/contract/lease with three failure counters and four failed-evidence refs, resolved the successor from an ordinary allow/exact_live_claim receipt to would_allow/active_in_scope, replayed the exact restart without changing tracker bytes, and rejected a competing restart against the consumed predecessor. Fixture-equivalent lifecycle tests separately prove lossless selected-state transfer, predecessor-runtime denial, exact rollback, and typed incomplete failure. Ordinary pre-write remains authoritative and no hard enforcement, independent review, Project Graph owner-class resolution, cross-project successor, or fleet adoption is claimed.",
+  "licensed_claim": "At owner-real observation revision 6912ce898ff6e9d4715a2370efe528c9fd4e1547, the real exact Plan 118 Codex claim rejected direct replacement of its selected stalled control, accepted one strict same-outcome causal restart, retained the full predecessor binding/contract/lease with three failure counters and four failed-evidence refs, resolved the successor from an ordinary allow/exact_live_claim receipt to would_allow/active_in_scope, replayed the exact restart without changing tracker bytes, and rejected a competing restart against the consumed predecessor. Review candidate ebcfa98aed29e4eabd27f63f7d1bafbc51ad87db extends exact rollback across claim projection and successor-normalization failures. Fixture-equivalent lifecycle tests separately prove lossless selected-state transfer, predecessor-runtime denial, exact rollback, and typed incomplete failure. Ordinary pre-write remains authoritative and no hard enforcement, independent review, Project Graph owner-class resolution, cross-project successor, or fleet adoption is claimed.",
   "limitations": [
     "The stalled predecessor is an explicit synthetic control executed through a real exact claim, not a reconstructed historical project lease.",
     "The successor starts an active initial lease to exercise restart custody; this is mechanical transition evidence, not a semantic claim that the portfolio outcome is complete or that a progress receipt renewed it.",

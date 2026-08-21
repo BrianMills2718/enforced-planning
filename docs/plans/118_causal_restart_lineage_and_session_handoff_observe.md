@@ -78,7 +78,7 @@ keeps the original scenario, contract, lease, and failure digests while only
 the exact claim/session binding changes; the new session resolves it and the old
 session cannot.
 
-**Behavioral evidence:** Observed at candidate revision `6912ce8`: the real
+**Behavioral evidence:** Observed at owner-real revision `6912ce8`: the real
 exact Plan #118 claim rejected direct replacement, accepted one strict causal
 restart, retained the predecessor binding/contract/lease and failure facts,
 and resolved the successor from ordinary `allow/exact_live_claim` to
@@ -386,14 +386,19 @@ Not in scope:
 
 ## Implementation Readout
 
-ORST01 is accepted at candidate revision `6912ce898ff6e9d4715a2370efe528c9fd4e1547`.
-The Plan #108/#114/#116/#117/#118 focused boundary passed 137 tests, exact
-restart replay preserved tracker bytes, doc-code coupling passed, and the
-canonical push gate reported zero issues. The checked-in stalled predecessor
-is explicitly a synthetic mechanical control executed through the real claim;
-it is not represented as a reconstructed historical product lease. ORST02
-remains the path-disjoint plan-index/roadmap closeout and is blocked only while
-those two shared documentation paths have a live owner.
+ORST01 is accepted at review candidate `ebcfa98aed29e4eabd27f63f7d1bafbc51ad87db`;
+the owner-real transition itself remains bound to revision
+`6912ce898ff6e9d4715a2370efe528c9fd4e1547`. The
+Plan #108/#114/#116/#117/#118 focused boundary passed 139 tests, including
+exact rollback when claim projection or successor normalization fails after
+the first file write. Exact restart replay preserved tracker bytes, doc-code
+coupling passed, and the canonical push gate reported zero issues. The
+checked-in stalled predecessor is explicitly a synthetic mechanical control
+executed through the real claim; it is not represented as a reconstructed
+historical product lease. ORST02 remains the path-disjoint plan-index/roadmap
+closeout and is blocked only while those two shared documentation paths have a
+live owner; reconciliation obligation `enforced-planning-59192e19dfba` records
+that temporary drift.
 
 ## Failure And Reset Rules
 

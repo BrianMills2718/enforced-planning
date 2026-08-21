@@ -535,8 +535,31 @@ def _upsert_session_claim(
             active_claims=coordination_claims.check_claims(),
         )
         coordination_claims.validate_claim_for_creation(candidate)
+        conflict_result = coordination_claims.evaluate_claim(
+            candidate,
+            active_claims=coordination_claims.check_claims(project),
+        )
+        if conflict_result.hard_conflicts:
+            formatted = "; ".join(
+                f"{item.other_agent} ({item.other_scope}: {', '.join(item.overlapping_write_paths)})"
+                for item in conflict_result.hard_conflicts
+            )
+            raise ValueError(
+                f"CONFLICT: existing-session update would overlap active write ownership in "
+                f"{project!r} — {formatted}. Narrow the requested write paths or coordinate "
+                "with the current owner before refreshing the claim."
+            )
 
         expires_at = existing.expires_at or (now + timedelta(hours=ttl_hours)).isoformat()
+        progress_payload: dict[str, str | None] = {}
+        if not any(field in refreshed_payload for field in coordination_claims.PROGRESS_FIELD_NAMES):
+            initial_progress = coordination_claims.build_progress_event(
+                progress_kind="claim_started",
+                evidence_ref=plan_ref or scope,
+                next_action=intent,
+                progress_at=now,
+            )
+            progress_payload = coordination_claims._progress_event_payload(initial_progress)
         payload = {
             **refreshed_payload,
             "agent": agent,
@@ -566,6 +589,7 @@ def _upsert_session_claim(
             "work_graph_sha256": work_graph_sha256,
             "approval_revisions": list(approval_revisions),
             "parallel_root_authorized": candidate.parallel_root_authorized,
+            **progress_payload,
         }
         _write_claim_payload(path, payload)
         _projection_path, projection_digest_after = coordination_claims.refresh_prewrite_authority_projection(
@@ -634,12 +658,14 @@ def _recovery_action_for_claim(
     claim: coordination_claims.ClaimRecord,
     *,
     active_claims: list[coordination_claims.ClaimRecord] | None = None,
+    now: datetime | None = None,
 ) -> str:
     """Return the operator action implied by one claim's lifecycle state."""
 
     health_status = coordination_claims.claim_runtime_status(
         claim,
         active_claims=active_claims,
+        now=now,
     )
     if claim.status == "handoff":
         return "resume_or_finish_handoff"
@@ -647,7 +673,12 @@ def _recovery_action_for_claim(
         return "resume_take_over_or_close_preserved_lane"
     if health_status == "stale":
         return "resume_or_abandon_or_prune"
+    if health_status == "stalled":
+        return "record_progress_or_handoff"
     if health_status == "weak":
+        progress_issues = coordination_claims.claim_progress_issues(claim, now=now)
+        if any(issue != "stalled_progress_lease" for issue in progress_issues):
+            return "repair_progress_contract"
         if active_claims and coordination_claims.claim_hierarchy_issues(
             claim,
             active_claims=active_claims,
@@ -1101,8 +1132,12 @@ def start_session(
         stop_conditions=stop_conditions,
         notes=notes,
     )
+    claim_slot_path = _claim_path(agent, project, scope)
+    claim_bytes_before = claim_slot_path.read_bytes() if claim_slot_path.is_file() else None
     tracker_preexisting = tracker_path.is_file()
+    tracker_bytes_before = tracker_path.read_bytes() if tracker_preexisting else None
     session_contracts.write_session_tracker(tracker, tracker_dir=tracker_dir)
+    tracker_bytes_written = tracker_path.read_bytes()
     try:
         action = _upsert_session_claim(
             agent=agent,
@@ -1125,9 +1160,31 @@ def start_session(
             work_unit_id=work_unit_id,
             allow_parallel=allow_parallel,
         )
-    except Exception:
-        if not tracker_preexisting:
-            tracker_path.unlink(missing_ok=True)
+    except Exception as claim_error:
+        try:
+            claim_bytes_after = claim_slot_path.read_bytes() if claim_slot_path.is_file() else None
+        except OSError as inspection_error:
+            raise RuntimeError(
+                "session claim update failed and claim state could not be inspected before tracker rollback: "
+                f"claim={claim_error}; inspection={inspection_error}"
+            ) from claim_error
+        if claim_bytes_after == claim_bytes_before:
+            try:
+                with session_contracts.session_tracker_lock(tracker_path):
+                    if tracker_path.read_bytes() != tracker_bytes_written:
+                        raise ValueError(
+                            "session tracker changed after this start attempt; refusing unsafe rollback"
+                        )
+                    if tracker_preexisting:
+                        assert tracker_bytes_before is not None
+                        _atomic_restore_bytes(tracker_path, tracker_bytes_before)
+                    else:
+                        tracker_path.unlink(missing_ok=True)
+            except Exception as rollback_error:
+                raise RuntimeError(
+                    "session claim update failed and exact tracker rollback was incomplete: "
+                    f"claim={claim_error}; rollback={rollback_error}"
+                ) from claim_error
         raise
     persisted_claim = _single_matching_live_claim(
         agent=agent,
@@ -1218,10 +1275,12 @@ def status_sessions(
     branch: str | None = None,
     session_id: str | None = None,
     include_ended: bool = False,
+    now: datetime | None = None,
 ) -> dict[str, Any]:
     """Return session summaries derived from claims plus linked trackers."""
 
     sessions: list[dict[str, Any]] = []
+    observed_at = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
     all_claims = coordination_claims.list_claims(
         include_inactive=include_ended,
     )
@@ -1255,6 +1314,10 @@ def status_sessions(
             claim,
             active_claims=project_claims,
         )
+        progress_issues = coordination_claims.claim_progress_issues(
+            claim,
+            now=observed_at,
+        )
         sessions.append(
             {
                 "project": claim.primary_project(),
@@ -1280,8 +1343,16 @@ def status_sessions(
                 "health_status": coordination_claims.claim_runtime_status(
                     claim,
                     active_claims=project_claims,
+                    now=observed_at,
                 ),
                 "health_issues": health_issues,
+                "progress_at": claim.progress_at,
+                "progress_kind": claim.progress_kind,
+                "evidence_ref": claim.evidence_ref,
+                "next_action": claim.next_action,
+                "expected_quiet_until": claim.expected_quiet_until,
+                "quiet_reason": claim.quiet_reason,
+                "progress_issues": progress_issues,
                 "current_phase": tracker_section.get("current_phase") if isinstance(tracker_section, dict) else None,
                 "intended_next_phases": tracker_section.get("intended_next_phases")
                 if isinstance(tracker_section, dict)
@@ -1298,10 +1369,12 @@ def status_sessions(
                 "recovery_action": _recovery_action_for_claim(
                     claim,
                     active_claims=project_claims,
+                    now=observed_at,
                 ),
             }
         )
     return {
+        "observed_at": observed_at.isoformat(),
         "session_count": len(sessions),
         "sessions": sessions,
     }

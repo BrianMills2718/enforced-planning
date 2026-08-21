@@ -970,7 +970,13 @@ def test_cli_queue_round_trip_and_unavailable_exit(
         monkeypatch,
         capsys,
         command,
-        claims=(_public_cli_claim(graph_ref=graph_ref, digest=digest),),
+        claims=(
+            _public_cli_claim(
+                graph_ref=graph_ref,
+                digest=digest,
+                work_unit_id=None,
+            ),
+        ),
     )
     stale_command = command.copy()
     stale_command[stale_command.index(digest)] = "0" * 64
@@ -978,11 +984,18 @@ def test_cli_queue_round_trip_and_unavailable_exit(
         monkeypatch,
         capsys,
         stale_command,
-        claims=(_public_cli_claim(graph_ref=graph_ref, digest="0" * 64),),
+        claims=(
+            _public_cli_claim(
+                graph_ref=graph_ref,
+                digest="0" * 64,
+                work_unit_id=None,
+            ),
+        ),
     )
     assert passing_code == 0, passing_stderr
     passing_payload = json.loads(passing_stdout)
-    assert "npw-01-progress-lease-current-main" in passing_payload["eligible_unit_ids"]
+    assert "npw-03-safe-lifecycle-integration" in passing_payload["eligible_unit_ids"]
+    assert "npw-01-progress-lease-current-main" in passing_payload["terminal_unit_ids"]
     assert "npw-02-provider-free-blocker-decision" in passing_payload["terminal_unit_ids"]
     assert stale_code == 3
     assert json.loads(stale_stdout)["coverage"] == "unavailable"
@@ -1008,7 +1021,13 @@ def test_cli_decide_uses_source_graph(
         monkeypatch,
         capsys,
         ["decide", "--input-json", str(input_path)],
-        claims=(_public_cli_claim(graph_ref=graph_ref, digest=digest),),
+        claims=(
+            _public_cli_claim(
+                graph_ref=graph_ref,
+                digest=digest,
+                work_unit_id=None,
+            ),
+        ),
     )
     assert return_code == 0, stderr
     payload = json.loads(stdout)

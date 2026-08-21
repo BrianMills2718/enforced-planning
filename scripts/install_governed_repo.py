@@ -60,6 +60,10 @@ SYNC_SUPPORT_FILES: dict[str, str] = {
     "enforced_planning/client_session_metadata.py": "enforced_planning/client_session_metadata.py",
     "enforced_planning/coordination_claims.py": "enforced_planning/coordination_claims.py",
     "enforced_planning/coordination_messages.py": "enforced_planning/coordination_messages.py",
+    "enforced_planning/outcome_admission.py": "enforced_planning/outcome_admission.py",
+    "enforced_planning/outcome_continuation.py": "enforced_planning/outcome_continuation.py",
+    "enforced_planning/outcome_portfolio.py": "enforced_planning/outcome_portfolio.py",
+    "enforced_planning/outcome_selection.py": "enforced_planning/outcome_selection.py",
     "enforced_planning/prewrite_claim_fast.py": "enforced_planning/prewrite_claim_fast.py",
     "enforced_planning/prewrite_claim_projection.py": "enforced_planning/prewrite_claim_projection.py",
     "enforced_planning/artifact_creation.py": "enforced_planning/artifact_creation.py",
@@ -145,6 +149,10 @@ WORKTREE_ONLY_SYNC_SUPPORT_FILES: dict[str, str] = {
     "enforced_planning/client_session_metadata.py": "enforced_planning/client_session_metadata.py",
     "enforced_planning/coordination_claims.py": "enforced_planning/coordination_claims.py",
     "enforced_planning/coordination_messages.py": "enforced_planning/coordination_messages.py",
+    "enforced_planning/outcome_admission.py": "enforced_planning/outcome_admission.py",
+    "enforced_planning/outcome_continuation.py": "enforced_planning/outcome_continuation.py",
+    "enforced_planning/outcome_portfolio.py": "enforced_planning/outcome_portfolio.py",
+    "enforced_planning/outcome_selection.py": "enforced_planning/outcome_selection.py",
     "enforced_planning/prewrite_claim_fast.py": "enforced_planning/prewrite_claim_fast.py",
     "enforced_planning/prewrite_claim_projection.py": "enforced_planning/prewrite_claim_projection.py",
     "enforced_planning/artifact_creation.py": "enforced_planning/artifact_creation.py",
@@ -223,6 +231,10 @@ COORDINATION_MESSAGES_LOCAL_PACKAGE_FILES: dict[str, str] = {
     "enforced_planning/client_session_metadata.py": "enforced_planning/client_session_metadata.py",
     "enforced_planning/coordination_claims.py": "enforced_planning/coordination_claims.py",
     "enforced_planning/coordination_messages.py": "enforced_planning/coordination_messages.py",
+    "enforced_planning/outcome_admission.py": "enforced_planning/outcome_admission.py",
+    "enforced_planning/outcome_continuation.py": "enforced_planning/outcome_continuation.py",
+    "enforced_planning/outcome_portfolio.py": "enforced_planning/outcome_portfolio.py",
+    "enforced_planning/outcome_selection.py": "enforced_planning/outcome_selection.py",
     "enforced_planning/prewrite_claim_fast.py": "enforced_planning/prewrite_claim_fast.py",
     "enforced_planning/prewrite_claim_projection.py": "enforced_planning/prewrite_claim_projection.py",
     "enforced_planning/doc_authority.py": "enforced_planning/doc_authority.py",
@@ -248,9 +260,7 @@ CLAIM_PROJECTION_SHARED_FILES: dict[str, str] = {
 # Lifecycle mutation and projection refresh are one import/runtime boundary. Keep
 # the complete local dependency closure compatible while leaving hook wiring and
 # mailbox client configuration outside this bounded installer profile.
-CLAIM_PROJECTION_LOCAL_PACKAGE_FILES: dict[str, str] = dict(
-    COORDINATION_MESSAGES_LOCAL_PACKAGE_FILES
-)
+CLAIM_PROJECTION_LOCAL_PACKAGE_FILES: dict[str, str] = dict(COORDINATION_MESSAGES_LOCAL_PACKAGE_FILES)
 
 RELATIONSHIP_CONTEXT_TARGETS = (
     "relationship-context",
@@ -298,10 +308,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     mode.add_argument(
         "--check",
         action="store_true",
-        help=(
-            "Check installer-managed drift without writing; exit non-zero "
-            "when repair actions are required."
-        ),
+        help=("Check installer-managed drift without writing; exit non-zero when repair actions are required."),
     )
     parser.add_argument(
         "--json",
@@ -317,10 +324,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     scope.add_argument(
         "--worktree-only",
         action="store_true",
-        help=(
-            "Only sync the sanctioned Makefile worktree block plus the local "
-            "worktree-coordination scripts."
-        ),
+        help=("Only sync the sanctioned Makefile worktree block plus the local worktree-coordination scripts."),
     )
     scope.add_argument(
         "--relationship-context-only",
@@ -369,9 +373,7 @@ def _render_makefile_relationship_block() -> str:
     template = _load_source_text(MAKEFILE_TEMPLATE)
     try:
         start = template.index(MAKEFILE_RELATIONSHIP_BLOCK_START)
-        end = template.index(MAKEFILE_RELATIONSHIP_BLOCK_END) + len(
-            MAKEFILE_RELATIONSHIP_BLOCK_END
-        )
+        end = template.index(MAKEFILE_RELATIONSHIP_BLOCK_END) + len(MAKEFILE_RELATIONSHIP_BLOCK_END)
     except ValueError as exc:
         raise RuntimeError("canonical Makefile template lacks relationship-context markers") from exc
     return template[start:end].rstrip()
@@ -391,8 +393,7 @@ def _sync_makefile_relationship_block(
             return (
                 current_makefile,
                 None,
-                "malformed relationship-context Makefile markers: "
-                f"starts={start_count}, ends={end_count}",
+                f"malformed relationship-context Makefile markers: starts={start_count}, ends={end_count}",
             )
         start = normalized.index(MAKEFILE_RELATIONSHIP_BLOCK_START)
         end_start = normalized.index(MAKEFILE_RELATIONSHIP_BLOCK_END)
@@ -402,9 +403,7 @@ def _sync_makefile_relationship_block(
                 None,
                 "malformed relationship-context Makefile markers: end precedes start",
             )
-        end = end_start + len(
-            MAKEFILE_RELATIONSHIP_BLOCK_END
-        )
+        end = end_start + len(MAKEFILE_RELATIONSHIP_BLOCK_END)
         existing = normalized[start:end].rstrip()
         if existing == block:
             return normalized + "\n", None, None
@@ -420,17 +419,13 @@ def _sync_makefile_relationship_block(
     collisions = [
         target
         for target in RELATIONSHIP_CONTEXT_TARGETS
-        if any(
-            line.startswith(f"{target}:")
-            for line in normalized.splitlines()
-        )
+        if any(line.startswith(f"{target}:") for line in normalized.splitlines())
     ]
     if collisions:
         return (
             current_makefile,
             None,
-            "unmarked relationship-context Make targets already exist: "
-            + ", ".join(collisions),
+            "unmarked relationship-context Make targets already exist: " + ", ".join(collisions),
         )
     prefix = normalized + "\n\n" if normalized else ""
     return prefix + block + "\n", "append:Makefile.relationship-context", None
@@ -602,22 +597,16 @@ def _plan_static_support(
         makefile_action: str | None = None
         status_action: str | None = None
         if relationship_context_only:
-            synced_makefile, makefile_action, makefile_blocker = (
-                _sync_makefile_relationship_block(current_makefile)
-            )
+            synced_makefile, makefile_action, makefile_blocker = _sync_makefile_relationship_block(current_makefile)
             if makefile_blocker:
                 blockers.append(makefile_blocker)
         else:
-            status_synced, status_action, status_blocker = _sync_makefile_status_target(
-                current_makefile
-            )
+            status_synced, status_action, status_blocker = _sync_makefile_status_target(current_makefile)
             if status_blocker:
                 blockers.append(status_blocker)
                 synced_makefile, makefile_action = current_makefile, None
             else:
-                synced_makefile, makefile_action = _sync_makefile_worktree_block(
-                    status_synced
-                )
+                synced_makefile, makefile_action = _sync_makefile_worktree_block(status_synced)
                 if status_action:
                     actions.append(status_action)
         if makefile_action:
@@ -733,10 +722,7 @@ def _activate_git_hooks(repo_root: Path) -> None:
         check=False,
     )
     if configured.returncode != 0:
-        raise RuntimeError(
-            (configured.stderr or configured.stdout).strip()
-            or "failed to configure core.hooksPath"
-        )
+        raise RuntimeError((configured.stderr or configured.stdout).strip() or "failed to configure core.hooksPath")
 
 
 def _write_agents(repo_root: Path) -> str:
@@ -794,20 +780,14 @@ def install_or_plan(
         local_package = (repo_root / "enforced_planning").is_dir()
         upstream_bootstrap = (repo_root / "scripts/_upstream_enforced_planning.py").is_file()
         if not local_package and not upstream_bootstrap:
-            profile = (
-                "coordination-messages-only"
-                if coordination_messages_only
-                else "claim-projection-refresh-only"
-            )
+            profile = "coordination-messages-only" if coordination_messages_only else "claim-projection-refresh-only"
             blockers.append(
                 f"{profile} rollout requires either a local "
                 "enforced_planning package or scripts/_upstream_enforced_planning.py"
             )
     file_writes = dict(static_plan.file_writes)
     install_git_push_gate = (
-        not relationship_context_only
-        and not coordination_messages_only
-        and not claim_projection_refresh_only
+        not relationship_context_only and not coordination_messages_only and not claim_projection_refresh_only
     )
     git_hook_action: str | None = None
     if install_git_push_gate:
@@ -816,9 +796,7 @@ def install_or_plan(
             actions.append(git_hook_action)
         if git_hook_blocker:
             blockers.append(git_hook_blocker)
-    relationships_will_change = any(
-        path == repo_root / "scripts" / "relationships.yaml" for path in file_writes
-    )
+    relationships_will_change = any(path == repo_root / "scripts" / "relationships.yaml" for path in file_writes)
 
     pre_audit = audit_repo(
         repo_root,
@@ -830,9 +808,7 @@ def install_or_plan(
 
     if not skip_hook_wiring and not worktree_only and not claim_projection_refresh_only:
         if coordination_messages_only:
-            hook_actions, hook_writes, _ = plan_coordination_message_generation(
-                _hook_target(repo_root)
-            )
+            hook_actions, hook_writes, _ = plan_coordination_message_generation(_hook_target(repo_root))
         else:
             hook_actions, hook_writes, _ = plan_hook_generation(
                 _hook_target(repo_root),
@@ -843,15 +819,9 @@ def install_or_plan(
             if file_writes[path] != hook_writes[path]:
                 raise RuntimeError(f"conflicting canonical installer content for {path}")
         actions.extend(
-            action
-            for action in hook_actions
-            if repo_root / action.split(":", 1)[1] not in duplicate_hook_paths
+            action for action in hook_actions if repo_root / action.split(":", 1)[1] not in duplicate_hook_paths
         )
-        hook_writes = {
-            path: content
-            for path, content in hook_writes.items()
-            if path not in duplicate_hook_paths
-        }
+        hook_writes = {path: content for path, content in hook_writes.items() if path not in duplicate_hook_paths}
         file_writes.update(hook_writes)
 
     if (
@@ -863,8 +833,7 @@ def install_or_plan(
         agent_actions, agent_blockers = _plan_agents_refresh(
             repo_root,
             relationships_present_or_planned=(
-                (repo_root / "scripts" / "relationships.yaml").exists()
-                or relationships_will_change
+                (repo_root / "scripts" / "relationships.yaml").exists() or relationships_will_change
             ),
         )
         if _needs_agents_refresh(
@@ -884,9 +853,15 @@ def install_or_plan(
                 _activate_git_hooks(repo_root)
             if not skip_hook_wiring and not worktree_only and not claim_projection_refresh_only:
                 apply_hook_generation(_hook_target(repo_root), hook_writes)
-            if not worktree_only and not relationship_context_only and not coordination_messages_only and not claim_projection_refresh_only and _needs_agents_refresh(
-                pre_audit,
-                relationships_will_change=relationships_will_change,
+            if (
+                not worktree_only
+                and not relationship_context_only
+                and not coordination_messages_only
+                and not claim_projection_refresh_only
+                and _needs_agents_refresh(
+                    pre_audit,
+                    relationships_will_change=relationships_will_change,
+                )
             ):
                 applied_actions.append(_write_agents(repo_root))
             post_audit = audit_repo(

@@ -60,6 +60,10 @@ MAILBOX_ROLLOUT_PATHS = MAILBOX_COMMON_ROLLOUT_PATHS | {
     "enforced_planning/client_session_metadata.py",
     "enforced_planning/coordination_claims.py",
     "enforced_planning/coordination_messages.py",
+    "enforced_planning/outcome_admission.py",
+    "enforced_planning/outcome_continuation.py",
+    "enforced_planning/outcome_portfolio.py",
+    "enforced_planning/outcome_selection.py",
     "enforced_planning/prewrite_claim_fast.py",
     "enforced_planning/prewrite_claim_projection.py",
     "enforced_planning/doc_authority.py",
@@ -77,6 +81,10 @@ CLAIM_PROJECTION_REFRESH_PATHS = {
     "enforced_planning/client_session_metadata.py",
     "enforced_planning/coordination_claims.py",
     "enforced_planning/coordination_messages.py",
+    "enforced_planning/outcome_admission.py",
+    "enforced_planning/outcome_continuation.py",
+    "enforced_planning/outcome_portfolio.py",
+    "enforced_planning/outcome_selection.py",
     "enforced_planning/doc_authority.py",
     "enforced_planning/prewrite_claim_fast.py",
     "enforced_planning/prewrite_claim_projection.py",
@@ -204,9 +212,7 @@ def _prepare_mailbox_target(repo_root: Path) -> None:
     """Create a partial local package like a real incrementally governed repo."""
 
     _write_minimal_claude(repo_root)
-    required = (
-        "enforced_planning/__init__.py",
-    )
+    required = ("enforced_planning/__init__.py",)
     for relative in required:
         source = PROJECT_META_ROOT / relative
         target = repo_root / relative
@@ -214,12 +220,8 @@ def _prepare_mailbox_target(repo_root: Path) -> None:
         target.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
     stale_lifecycle = repo_root / "enforced_planning/session_lifecycle.py"
     stale_lifecycle.write_text('"""Stale lifecycle fixture."""\n', encoding="utf-8")
-    (repo_root / "enforced_planning/push_safety.py").write_text(
-        '"""Stale push-safety fixture."""\n', encoding="utf-8"
-    )
-    (repo_root / "enforced_planning/worktree_lifecycle.yaml").write_text(
-        "schema_version: 0\n", encoding="utf-8"
-    )
+    (repo_root / "enforced_planning/push_safety.py").write_text('"""Stale push-safety fixture."""\n', encoding="utf-8")
+    (repo_root / "enforced_planning/worktree_lifecycle.yaml").write_text("schema_version: 0\n", encoding="utf-8")
     settings = repo_root / ".claude/settings.json"
     settings.parent.mkdir(parents=True, exist_ok=True)
     settings.write_text(
@@ -337,9 +339,7 @@ def test_claim_projection_refresh_only_is_bounded_and_idempotent(tmp_path: Path)
     """Fleet repair must update mutation support without touching hook configuration."""
 
     _prepare_mailbox_target(tmp_path)
-    original_claude_settings = (tmp_path / ".claude" / "settings.json").read_text(
-        encoding="utf-8"
-    )
+    original_claude_settings = (tmp_path / ".claude" / "settings.json").read_text(encoding="utf-8")
     dry_run = _run(
         "--repo-root",
         str(tmp_path),
@@ -350,9 +350,7 @@ def test_claim_projection_refresh_only_is_bounded_and_idempotent(tmp_path: Path)
     assert dry_run.returncode == 0, dry_run.stdout + dry_run.stderr
     payload = json.loads(dry_run.stdout)
     assert payload["claim_projection_refresh_only_mode"] is True
-    assert {action.split(":", 1)[1] for action in payload["actions"]} == (
-        CLAIM_PROJECTION_REFRESH_PATHS
-    )
+    assert {action.split(":", 1)[1] for action in payload["actions"]} == (CLAIM_PROJECTION_REFRESH_PATHS)
     assert payload["blockers"] == []
 
     written = _run(
@@ -365,16 +363,15 @@ def test_claim_projection_refresh_only_is_bounded_and_idempotent(tmp_path: Path)
     )
     assert written.returncode == 0, written.stdout + written.stderr
     assert not (tmp_path / ".codex" / "hooks.json").exists()
-    assert (tmp_path / ".claude" / "settings.json").read_text(
-        encoding="utf-8"
-    ) == original_claude_settings
+    assert (tmp_path / ".claude" / "settings.json").read_text(encoding="utf-8") == original_claude_settings
     for relative in CLAIM_PROJECTION_REFRESH_PATHS:
         assert (tmp_path / relative).is_file()
 
     installed_lifecycle = tmp_path / "enforced_planning" / "session_lifecycle.py"
-    assert installed_lifecycle.read_bytes() == (
-        PROJECT_META_ROOT / "enforced_planning" / "session_lifecycle.py"
-    ).read_bytes()
+    assert (
+        installed_lifecycle.read_bytes()
+        == (PROJECT_META_ROOT / "enforced_planning" / "session_lifecycle.py").read_bytes()
+    )
     for wrapper in ("session_start.py", "session_close.py"):
         help_result = subprocess.run(
             [sys.executable, str(tmp_path / "scripts/meta" / wrapper), "--help"],
@@ -651,16 +648,12 @@ def test_install_governed_repo_check_fails_on_managed_drift(tmp_path: Path) -> N
     """Check mode must expose stale installed support files without repairing them."""
 
     _write_minimal_claude(tmp_path)
-    installed = _run(
-        "--repo-root", str(tmp_path), "--write", "--json", cwd=PROJECT_META_ROOT
-    )
+    installed = _run("--repo-root", str(tmp_path), "--write", "--json", cwd=PROJECT_META_ROOT)
     assert installed.returncode == 0, installed.stdout + installed.stderr
     renderer = tmp_path / "scripts" / "meta" / "render_agents_md.py"
     renderer.write_text("# stale installed renderer\n", encoding="utf-8")
 
-    checked = _run(
-        "--repo-root", str(tmp_path), "--check", "--json", cwd=PROJECT_META_ROOT
-    )
+    checked = _run("--repo-root", str(tmp_path), "--check", "--json", cwd=PROJECT_META_ROOT)
 
     assert checked.returncode == 1
     payload = json.loads(checked.stdout)
@@ -674,9 +667,7 @@ def test_installed_agents_tools_run_from_linked_worktree(tmp_path: Path) -> None
     repo_root = tmp_path / "consumer"
     repo_root.mkdir()
     _write_minimal_claude(repo_root)
-    installed = _run(
-        "--repo-root", str(repo_root), "--write", "--json", cwd=PROJECT_META_ROOT
-    )
+    installed = _run("--repo-root", str(repo_root), "--write", "--json", cwd=PROJECT_META_ROOT)
     assert installed.returncode == 0, installed.stdout + installed.stderr
     for command in (
         ["git", "init", "-b", "main"],
@@ -685,9 +676,7 @@ def test_installed_agents_tools_run_from_linked_worktree(tmp_path: Path) -> None
         ["git", "add", "."],
         ["git", "commit", "-m", "initial"],
     ):
-        result = subprocess.run(
-            command, cwd=repo_root, capture_output=True, text=True, check=False
-        )
+        result = subprocess.run(command, cwd=repo_root, capture_output=True, text=True, check=False)
         assert result.returncode == 0, result.stdout + result.stderr
 
     linked = repo_root / "worktrees" / "portability-probe"
@@ -752,9 +741,7 @@ def test_install_governed_repo_write_bootstraps_minimum_repo_and_passes_audit(
     assert (tmp_path / "AGENTS.md").exists()
     assert not (tmp_path / "AGENTS.md").is_symlink()
     assert (tmp_path / "meta-process.yaml").exists()
-    starter = yaml.safe_load(
-        (tmp_path / "meta-process.yaml").read_text(encoding="utf-8")
-    )["meta_process"]
+    starter = yaml.safe_load((tmp_path / "meta-process.yaml").read_text(encoding="utf-8"))["meta_process"]
     assert starter["claims"] == {
         "enabled": False,
         "require_for_worktree": False,
@@ -802,15 +789,9 @@ def test_install_governed_repo_write_bootstraps_minimum_repo_and_passes_audit(
     assert (tmp_path / "scripts" / "meta" / "session_close.py").exists()
     assert (tmp_path / "scripts" / "meta" / "validate_dead_code_audit.py").exists()
     assert (tmp_path / "scripts" / "meta" / "validate_doc_authority.py").exists()
-    assert (
-        tmp_path / "scripts" / "meta" / "worktree-coordination" / "create_publish_worktree.py"
-    ).exists()
-    assert (
-        tmp_path / "scripts" / "meta" / "worktree-coordination" / "create_review_claim.py"
-    ).exists()
-    assert (
-        tmp_path / "scripts" / "meta" / "worktree-coordination" / "raise_concern.py"
-    ).exists()
+    assert (tmp_path / "scripts" / "meta" / "worktree-coordination" / "create_publish_worktree.py").exists()
+    assert (tmp_path / "scripts" / "meta" / "worktree-coordination" / "create_review_claim.py").exists()
+    assert (tmp_path / "scripts" / "meta" / "worktree-coordination" / "raise_concern.py").exists()
     assert (tmp_path / "scripts" / "meta" / "file_context.py").exists()
     assert (tmp_path / "scripts" / "meta" / "relationship_context.py").exists()
     assert (tmp_path / "scripts" / "meta" / "context_packet.py").exists()
@@ -853,26 +834,20 @@ def test_install_governed_repo_write_bootstraps_minimum_repo_and_passes_audit(
     assert '--agent "$(WORKTREE_AGENT)"' in makefile_text
     assert '--project "$(WORKTREE_PROJECT)"' in makefile_text
     assert '--scope "$(BRANCH)"' in makefile_text
-    assert 'SESSION_GOAL is required' in makefile_text
-    assert 'SESSION_PHASE is required' in makefile_text
-    assert 'SESSION_CLAIM_TYPE ?= program' in makefile_text
-    assert 'ALLOW_UNPLANNED ?=' in makefile_text
+    assert "SESSION_GOAL is required" in makefile_text
+    assert "SESSION_PHASE is required" in makefile_text
+    assert "SESSION_CLAIM_TYPE ?= program" in makefile_text
+    assert "ALLOW_UNPLANNED ?=" in makefile_text
     assert makefile_text.count("$(if $(ALLOW_UNPLANNED),--allow-unplanned,)") == 3
     assert '--claim-type "$(SESSION_CLAIM_TYPE)"' in makefile_text
-    assert '--parent-scope' in makefile_text
-    assert '--write-path' in makefile_text
+    assert "--parent-scope" in makefile_text
+    assert "--write-path" in makefile_text
     assert "WORKTREE_DISPOSITION ?= merged" in makefile_text
     assert '--disposition "$(WORKTREE_DISPOSITION)"' in makefile_text
     assert "$(filter 1 true yes,$(WORKTREE_ALLOW_DISCARD_UNIQUE))" in makefile_text
     assert "WORKTREE_MERGE_COMMIT ?=" in makefile_text
-    assert (
-        '$(if $(WORKTREE_MERGE_COMMIT),--merge-commit "$(WORKTREE_MERGE_COMMIT)",)'
-        in makefile_text
-    )
-    assert (
-        '$(if $(WORKTREE_MERGE_COMMIT),WORKTREE_MERGE_COMMIT="$(WORKTREE_MERGE_COMMIT)",)'
-        in makefile_text
-    )
+    assert '$(if $(WORKTREE_MERGE_COMMIT),--merge-commit "$(WORKTREE_MERGE_COMMIT)",)' in makefile_text
+    assert '$(if $(WORKTREE_MERGE_COMMIT),WORKTREE_MERGE_COMMIT="$(WORKTREE_MERGE_COMMIT)",)' in makefile_text
     assert 'SESSION_ALLOW_PARALLEL="$(SESSION_ALLOW_PARALLEL)"' in makefile_text
     maintenance_with_plan = subprocess.run(
         ["make", "maintenance-worktree", "PLAN=123"],
@@ -911,9 +886,7 @@ def test_install_governed_repo_write_bootstraps_minimum_repo_and_passes_audit(
         text=True,
         check=False,
     )
-    assert file_context_result.returncode == 0, (
-        file_context_result.stdout + file_context_result.stderr
-    )
+    assert file_context_result.returncode == 0, file_context_result.stdout + file_context_result.stderr
     authority_help = subprocess.run(
         [
             sys.executable,
@@ -992,9 +965,7 @@ def test_install_governed_repo_reports_and_syncs_drifted_validator(tmp_path: Pat
         cwd=PROJECT_META_ROOT,
     )
     assert second.returncode == 0, second.stdout + second.stderr
-    assert drifted_path.read_text(encoding="utf-8") == CANONICAL_FILE_CONTEXT.read_text(
-        encoding="utf-8"
-    )
+    assert drifted_path.read_text(encoding="utf-8") == CANONICAL_FILE_CONTEXT.read_text(encoding="utf-8")
 
 
 def test_installed_context_packet_wrapper_resolves_target_repo_root(tmp_path: Path) -> None:
@@ -1143,10 +1114,7 @@ def test_session_close_make_target_forwards_exact_squash_merge_commit(tmp_path: 
 def test_worktree_remove_make_target_forwards_exact_squash_merge_commit(tmp_path: Path) -> None:
     """The compatibility worktree-remove wrapper cannot drop squash evidence."""
     source_makefile = (PROJECT_META_ROOT / "Makefile").read_text(encoding="utf-8")
-    assert (
-        '$(if $(WORKTREE_MERGE_COMMIT),WORKTREE_MERGE_COMMIT="$(WORKTREE_MERGE_COMMIT)",)'
-        in source_makefile
-    )
+    assert '$(if $(WORKTREE_MERGE_COMMIT),WORKTREE_MERGE_COMMIT="$(WORKTREE_MERGE_COMMIT)",)' in source_makefile
     (tmp_path / "Makefile").write_text(
         source_makefile,
         encoding="utf-8",
@@ -1276,14 +1244,15 @@ def test_install_governed_repo_syncs_worktree_block_into_existing_meta_makefile(
     makefile_text = (tmp_path / "Makefile").read_text(encoding="utf-8")
     assert "# >>> META-PROCESS WORKTREE TARGETS >>>" in makefile_text
     assert "WORKTREE_CREATE_SCRIPT := scripts/meta/worktree-coordination/create_worktree.py" in makefile_text
-    assert "WORKTREE_CLAIMS_SCRIPT := scripts/meta/worktree-coordination/../check_coordination_claims.py" in makefile_text
+    assert (
+        "WORKTREE_CLAIMS_SCRIPT := scripts/meta/worktree-coordination/../check_coordination_claims.py" in makefile_text
+    )
     assert "WORKTREE_SESSION_START_SCRIPT := scripts/meta/worktree-coordination/../session_start.py" in makefile_text
     assert "WORKTREE_START_POINT ?= HEAD" in makefile_text
     assert "--print-canonical-project" in makefile_text
     assert "SESSION_CLAIM_TYPE ?= program" in makefile_text
     assert (
-        "WORKTREE_PLAN_READINESS_SCRIPT := "
-        "scripts/meta/worktree-coordination/../check_plan_readiness.py"
+        "WORKTREE_PLAN_READINESS_SCRIPT := scripts/meta/worktree-coordination/../check_plan_readiness.py"
     ) in makefile_text
     assert "PLAN_READINESS_COMMAND ?=" in makefile_text
     assert "PLAN_RESUME ?=" in makefile_text
@@ -1320,9 +1289,7 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
     assert result.returncode == 0, result.stdout + result.stderr
     payload = json.loads(result.stdout)
     assert payload["worktree_only_mode"] is True
-    assert not (
-        tmp_path / "enforced_planning" / "__init__.py"
-    ).read_bytes().endswith(b"\n\n")
+    assert not (tmp_path / "enforced_planning" / "__init__.py").read_bytes().endswith(b"\n\n")
     assert sorted(payload["actions"]) == sorted(
         [
             "install:enforced_planning/__init__.py",
@@ -1332,6 +1299,10 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
             "install:enforced_planning/client_session_metadata.py",
             "install:enforced_planning/coordination_claims.py",
             "install:enforced_planning/coordination_messages.py",
+            "install:enforced_planning/outcome_admission.py",
+            "install:enforced_planning/outcome_continuation.py",
+            "install:enforced_planning/outcome_portfolio.py",
+            "install:enforced_planning/outcome_selection.py",
             "install:enforced_planning/prewrite_claim_fast.py",
             "install:enforced_planning/prewrite_claim_projection.py",
             "install:enforced_planning/plan_readiness.py",
@@ -1352,9 +1323,9 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
             "install:scripts/meta/check_push_safety.py",
             "install:scripts/meta/check_plan_readiness.py",
             "install:scripts/meta/plan_close.py",
-                "install:scripts/meta/session_close.py",
-                "install:scripts/meta/session_end.py",
-                "install:scripts/meta/session_finish.py",
+            "install:scripts/meta/session_close.py",
+            "install:scripts/meta/session_end.py",
+            "install:scripts/meta/session_finish.py",
             "install:scripts/meta/session_heartbeat.py",
             "install:scripts/meta/session_start.py",
             "install:scripts/meta/session_status.py",
@@ -1431,23 +1402,9 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
             check=False,
         )
         assert help_result.returncode == 0, help_result.stdout + help_result.stderr
-    assert (
-        tmp_path / "scripts" / "meta" / "worktree-coordination" / "create_worktree.py"
-    ).exists()
-    assert (
-        tmp_path
-        / "scripts"
-        / "meta"
-        / "worktree-coordination"
-        / "create_publish_worktree.py"
-    ).exists()
-    assert (
-        tmp_path
-        / "scripts"
-        / "meta"
-        / "worktree-coordination"
-        / "safe_worktree_remove.py"
-    ).exists()
+    assert (tmp_path / "scripts" / "meta" / "worktree-coordination" / "create_worktree.py").exists()
+    assert (tmp_path / "scripts" / "meta" / "worktree-coordination" / "create_publish_worktree.py").exists()
+    assert (tmp_path / "scripts" / "meta" / "worktree-coordination" / "safe_worktree_remove.py").exists()
     makefile_text = (tmp_path / "Makefile").read_text(encoding="utf-8")
     assert "worktree:" in makefile_text
     assert "worktree-list:" in makefile_text
@@ -1486,13 +1443,7 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
     safe_remove_help = subprocess.run(
         [
             sys.executable,
-            str(
-                tmp_path
-                / "scripts"
-                / "meta"
-                / "worktree-coordination"
-                / "safe_worktree_remove.py"
-            ),
+            str(tmp_path / "scripts" / "meta" / "worktree-coordination" / "safe_worktree_remove.py"),
             "--help",
         ],
         cwd=str(tmp_path),
@@ -1500,9 +1451,7 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
         text=True,
         check=False,
     )
-    assert safe_remove_help.returncode == 0, (
-        safe_remove_help.stdout + safe_remove_help.stderr
-    )
+    assert safe_remove_help.returncode == 0, safe_remove_help.stdout + safe_remove_help.stderr
 
     subprocess.run(["git", "init", "-q", "-b", "main", str(tmp_path)], check=True)
     subprocess.run(["git", "-C", str(tmp_path), "add", "-A"], check=True)
@@ -1619,9 +1568,7 @@ def test_worktree_rollout_refuses_to_replace_custom_git_hook_path(tmp_path: Path
 
     assert result.returncode == 1
     payload = json.loads(result.stdout)
-    assert payload["blockers"] == [
-        "core.hooksPath is already '.custom-hooks'; refusing to replace custom Git hooks"
-    ]
+    assert payload["blockers"] == ["core.hooksPath is already '.custom-hooks'; refusing to replace custom Git hooks"]
     assert _git(tmp_path, "config", "--local", "--get", "core.hooksPath") == ".custom-hooks"
     assert not (tmp_path / "hooks" / "pre-push").exists()
 
@@ -1752,3 +1699,94 @@ def test_install_governed_repo_rejects_write_and_dry_run(tmp_path: Path) -> None
 
     assert result.returncode == 2
     assert "not allowed with argument" in result.stderr
+
+
+def test_source_make_heartbeat_executes_canonical_lifecycle_before_stale_mirror(
+    tmp_path: Path,
+) -> None:
+    """The real Make target must consume the canonical source adapter when present."""
+
+    canonical = tmp_path / "scripts" / "session_heartbeat.py"
+    stale = tmp_path / "scripts" / "meta" / "session_heartbeat.py"
+    (stale.parent / "worktree-coordination").mkdir(parents=True)
+    canonical.parent.mkdir(parents=True, exist_ok=True)
+    canonical.write_text(
+        "from pathlib import Path\nPath('canonical-lifecycle-ran').write_text('canonical\\n', encoding='utf-8')\n",
+        encoding="utf-8",
+    )
+    stale.write_text(
+        "from pathlib import Path\n"
+        "Path('stale-lifecycle-ran').write_text('stale\\n', encoding='utf-8')\n"
+        "raise SystemExit(23)\n",
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        [
+            "make",
+            "-f",
+            str(PROJECT_META_ROOT / "Makefile"),
+            "session-heartbeat",
+            "BRANCH=plan123-make-adoption",
+            "WORKTREE_AGENT=codex",
+            "WORKTREE_PROJECT=enforced-planning",
+            f"WORKTREE_REPO_ROOT={tmp_path}",
+            f"WORKTREE_DIR={tmp_path / 'worktrees'}",
+            f"PYTHON={sys.executable}",
+        ],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert (tmp_path / "canonical-lifecycle-ran").read_text(encoding="utf-8") == "canonical\n"
+    assert not (tmp_path / "stale-lifecycle-ran").exists()
+
+
+def test_source_make_start_executes_canonical_lifecycle_before_stale_mirror(
+    tmp_path: Path,
+) -> None:
+    """The exact source start target must not regress to its generated mirror."""
+
+    canonical = tmp_path / "scripts" / "session_start.py"
+    stale = tmp_path / "scripts" / "meta" / "session_start.py"
+    (stale.parent / "worktree-coordination").mkdir(parents=True)
+    canonical.parent.mkdir(parents=True, exist_ok=True)
+    canonical.write_text(
+        "from pathlib import Path\nPath('canonical-start-ran').write_text('canonical\\n', encoding='utf-8')\n",
+        encoding="utf-8",
+    )
+    stale.write_text(
+        "from pathlib import Path\n"
+        "Path('stale-start-ran').write_text('stale\\n', encoding='utf-8')\n"
+        "raise SystemExit(24)\n",
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        [
+            "make",
+            "-f",
+            str(PROJECT_META_ROOT / "Makefile"),
+            "session-start",
+            "BRANCH=plan123-make-start-adoption",
+            "TASK=exercise canonical start",
+            "SESSION_GOAL=exercise-canonical-start",
+            "SESSION_PHASE=source Make integration",
+            "WORKTREE_AGENT=codex",
+            "WORKTREE_PROJECT=enforced-planning",
+            f"WORKTREE_REPO_ROOT={tmp_path}",
+            f"WORKTREE_DIR={tmp_path / 'worktrees'}",
+            f"PYTHON={sys.executable}",
+        ],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert (tmp_path / "canonical-start-ran").read_text(encoding="utf-8") == "canonical\n"
+    assert not (tmp_path / "stale-start-ran").exists()

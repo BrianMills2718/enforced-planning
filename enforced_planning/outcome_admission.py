@@ -14,8 +14,9 @@ import re
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
-from typing import Literal
+from typing import Any, Literal
 
+import yaml  # type: ignore[import-untyped]
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from enforced_planning import coordination_claims
@@ -66,6 +67,7 @@ ContinuationState = Literal[
     "missing",
 ]
 AdmissionDisposition = Literal["allow", "deny", "defer"]
+OutcomeAdmissionMode = Literal["off", "enforce_selected"]
 
 SAFE_BOUNDARIES = frozenset(
     {
@@ -92,17 +94,53 @@ CONTINUATION_DENIALS: dict[ContinuationState, str] = {
 }
 
 _PLAN_DOCUMENT_RE = re.compile(r"^docs/plans/(?P<plan>[1-9][0-9]*)_[a-z0-9_]+\.md$")
-_PLAN_WORK_GRAPH_RE = re.compile(
-    r"^docs/plans/(?P<plan>[1-9][0-9]*)_[a-z0-9_]+_work_graph\.json$"
-)
+_PLAN_WORK_GRAPH_RE = re.compile(r"^docs/plans/(?P<plan>[1-9][0-9]*)_[a-z0-9_]+_work_graph\.json$")
 _BOOTSTRAP_EXAMPLE_RE = re.compile(
     r"^examples/owner-real-outcome-admission/plan(?P<plan>[1-9][0-9]*)-[a-z0-9-]+\.json$"
 )
 _SHARED_BOOTSTRAP_PATHS = frozenset({"docs/plans/CLAUDE.md", "ROADMAP.md"})
-DEFAULT_OUTCOME_ADMISSION_RECEIPT_PATH = (
-    Path.home() / ".claude" / "coordination" / "outcome-admission-v1.jsonl"
-)
+DEFAULT_OUTCOME_ADMISSION_RECEIPT_PATH = Path.home() / ".claude" / "coordination" / "outcome-admission-v1.jsonl"
 HEX_SHA256_PATTERN = r"^[0-9a-f]{64}$"
+
+
+def _mapping(value: object, *, field_name: str) -> dict[str, Any]:
+    """Return one strict configuration mapping or fail visibly."""
+
+    if not isinstance(value, dict):
+        raise TypeError(f"{field_name} must be a mapping")
+    return value
+
+
+def load_outcome_admission_mode(repo_root: Path) -> OutcomeAdmissionMode:
+    """Load the strict repo-local outcome-admission mode.
+
+    Absence is the compatibility state.  A present malformed configuration is
+    never treated as off because that would turn a typo into an enforcement
+    bypass.
+    """
+
+    config_path = repo_root.expanduser().resolve() / "meta-process.yaml"
+    if not config_path.is_file():
+        return "off"
+    try:
+        payload = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError) as exc:
+        raise ValueError(f"unable to load {config_path}: {exc}") from exc
+    if payload is None:
+        return "off"
+    root = _mapping(payload, field_name="meta-process.yaml")
+    meta_process = _mapping(
+        root.get("meta_process", root),
+        field_name="meta-process.yaml meta_process",
+    )
+    if "claims" not in meta_process:
+        return "off"
+    claims_value = meta_process["claims"]
+    claims = _mapping(claims_value, field_name="meta-process.yaml claims")
+    mode = claims.get("outcome_admission_mode", "off")
+    if mode not in {"off", "enforce_selected"}:
+        raise ValueError("claims.outcome_admission_mode must be one of: off, enforce_selected")
+    return mode
 
 
 class StrictModel(BaseModel):
@@ -125,9 +163,7 @@ class OutcomeAdmissionRequestV1(StrictModel):
     @model_validator(mode="after")
     def validate_request(self) -> OutcomeAdmissionRequestV1:
         if self.bootstrap_product_write_requested and self.boundary != "portfolio_allocate":
-            raise ValueError(
-                "bootstrap_product_write_requested is valid only for portfolio_allocate"
-            )
+            raise ValueError("bootstrap_product_write_requested is valid only for portfolio_allocate")
         if self.enforcement_scope == "always_safe" and self.boundary not in SAFE_BOUNDARIES:
             raise ValueError("always_safe scope requires a declared safe boundary")
         if self.boundary in SAFE_BOUNDARIES and self.enforcement_scope != "always_safe":
@@ -178,9 +214,7 @@ class OutcomeAdmissionBootstrapResultV1(StrictModel):
                 plan_number=self.bootstrap.plan_number,
             )
         )
-        expected_rejected = tuple(
-            path for path in self.bootstrap.write_paths if path not in expected_allowed
-        )
+        expected_rejected = tuple(path for path in self.bootstrap.write_paths if path not in expected_allowed)
         if self.allowed_paths != expected_allowed or self.rejected_paths != expected_rejected:
             raise ValueError("bootstrap path classification does not match the fixed source set")
         expected_request = OutcomeAdmissionRequestV1(
@@ -189,9 +223,7 @@ class OutcomeAdmissionBootstrapResultV1(StrictModel):
             ordinary_allowed=self.bootstrap.ordinary_allowed,
             portfolio_state="not_applicable",
             continuation_state="missing",
-            bootstrap_product_write_requested=(
-                not self.bootstrap.write_paths or bool(expected_rejected)
-            ),
+            bootstrap_product_write_requested=(not self.bootstrap.write_paths or bool(expected_rejected)),
         )
         if self.request != expected_request:
             raise ValueError("bootstrap request does not match its classified write scope")
@@ -237,13 +269,9 @@ class SelectedOutcomeAdmissionEvidenceV1(StrictModel):
             self.portfolio_allocation_sha256,
             self.portfolio_ledger_path,
         )
-        if self.selection_schema_version == "1.0.0" and any(
-            value is not None for value in fields
-        ):
+        if self.selection_schema_version == "1.0.0" and any(value is not None for value in fields):
             raise ValueError("legacy selected evidence cannot retain portfolio fields")
-        if self.selection_schema_version == "1.1.0" and not all(
-            value is not None for value in fields
-        ):
+        if self.selection_schema_version == "1.1.0" and not all(value is not None for value in fields):
             raise ValueError("classed selected evidence requires complete portfolio fields")
         return self
 
@@ -276,8 +304,7 @@ class OutcomeAdmissionResultV1(StrictModel):
         if self.source == "bootstrap" and self.selected_evidence is not None:
             raise ValueError("bootstrap result cannot retain selected evidence")
         if self.bootstrap_evidence is not None and (
-            self.request != self.bootstrap_evidence.request
-            or self.decision != self.bootstrap_evidence.decision
+            self.request != self.bootstrap_evidence.request or self.decision != self.bootstrap_evidence.decision
         ):
             raise ValueError("bootstrap result does not match its retained classification")
         if self.source == "selected" and self.bootstrap_evidence is not None:
@@ -406,6 +433,59 @@ def is_first_consumer_bootstrap_path(path: str, *, plan_number: int) -> bool:
         if match is not None and int(match.group("plan")) == plan_number:
             return True
     return False
+
+
+def _bootstrap_path_plan(path: str) -> int | None:
+    """Return the Plan number carried by one exact bootstrap path."""
+
+    normalized = _portable_repo_path(path)
+    if normalized is None or normalized in _SHARED_BOOTSTRAP_PATHS:
+        return None
+    for pattern in (_PLAN_DOCUMENT_RE, _PLAN_WORK_GRAPH_RE, _BOOTSTRAP_EXAMPLE_RE):
+        match = pattern.fullmatch(normalized)
+        if match is not None:
+            return int(match.group("plan"))
+    return None
+
+
+def infer_first_consumer_bootstrap_plan(write_paths: tuple[str, ...]) -> int | None:
+    """Infer one unique Plan only when the complete claim is bootstrap-safe."""
+
+    if not write_paths or len(set(write_paths)) != len(write_paths):
+        return None
+    plan_numbers = {plan_number for path in write_paths if (plan_number := _bootstrap_path_plan(path)) is not None}
+    if len(plan_numbers) != 1:
+        return None
+    plan_number = next(iter(plan_numbers))
+    if not all(is_first_consumer_bootstrap_path(path, plan_number=plan_number) for path in write_paths):
+        return None
+    return plan_number
+
+
+def evaluate_claim_bootstrap_admission(
+    claim: coordination_claims.ClaimRecord,
+    *,
+    target_path: str,
+    ordinary_allowed: bool = True,
+) -> OutcomeAdmissionResultV1 | None:
+    """Return bootstrap admission only for an exact target in one safe claim.
+
+    None means the claim is not a bootstrap claim and the caller must use
+    selected-outcome admission.  This prevents a mixed or ambiguous claim from
+    acquiring bootstrap authority.
+    """
+
+    write_paths = tuple(claim.write_paths)
+    plan_number = infer_first_consumer_bootstrap_plan(write_paths)
+    if plan_number is None or target_path not in write_paths:
+        return None
+    return bootstrap_admission_result(
+        OutcomeAdmissionBootstrapV1(
+            plan_number=plan_number,
+            write_paths=write_paths,
+            ordinary_allowed=ordinary_allowed,
+        )
+    )
 
 
 def evaluate_first_consumer_bootstrap(
@@ -589,9 +669,7 @@ def evaluate_selected_outcome_admission(
 
     is_classed = resolved.binding.schema_version == "1.1.0"
     renewal_required = renewal or boundary in RENEWAL_BOUNDARIES
-    enforcement_scope: EnforcementScope = (
-        "new_or_renewed" if is_classed or renewal_required else "grandfathered"
-    )
+    enforcement_scope: EnforcementScope = "new_or_renewed" if is_classed or renewal_required else "grandfathered"
     request = OutcomeAdmissionRequestV1(
         boundary=boundary,
         enforcement_scope=enforcement_scope,
@@ -750,6 +828,7 @@ __all__ = [
     "OutcomeAdmissionBootstrapResultV1",
     "OutcomeAdmissionBootstrapV1",
     "OutcomeAdmissionDecisionV1",
+    "OutcomeAdmissionMode",
     "OutcomeAdmissionReceiptV1",
     "OutcomeAdmissionRequestV1",
     "OutcomeAdmissionResultV1",
@@ -759,10 +838,13 @@ __all__ = [
     "bootstrap_admission_result",
     "build_outcome_admission_receipt",
     "decide_outcome_admission",
+    "evaluate_claim_bootstrap_admission",
     "evaluate_first_consumer_bootstrap",
     "evaluate_selected_claim_admission",
     "evaluate_selected_outcome_admission",
+    "infer_first_consumer_bootstrap_plan",
     "is_first_consumer_bootstrap_path",
+    "load_outcome_admission_mode",
     "load_outcome_admission_receipts",
     "record_outcome_admission",
 ]

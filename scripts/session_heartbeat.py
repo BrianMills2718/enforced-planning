@@ -75,9 +75,7 @@ def main(argv: list[str] | None = None) -> int:
                 else {}
             ),
         )
-    except PermissionError as exc:
-        if not args.outcome_selected:
-            raise
+    except session_lifecycle.OutcomeAdmissionDeniedError as exc:
         if args.json:
             print(
                 json.dumps(

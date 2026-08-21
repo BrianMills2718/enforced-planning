@@ -1,0 +1,11 @@
+{
+  "schema_version": "1.0.0",
+  "record_type": "outcome_portfolio_disposition_request",
+  "disposition_id": "plan-123-maintenance-park",
+  "requested_at": "2026-08-21T10:28:38.862564Z",
+  "allocation_id": "plan-123-maintenance-allocation",
+  "allocation_sha256": "6ff6eb80d0473b9a4acd6181647041200036c3537f2f11104700ce5d27f84b54",
+  "disposition": "parked",
+  "decision_ref": "enforced-planning#123-authentic-source-activation-observation",
+  "reason": "Release the global maintenance slot after configured Make lifecycle, native pre-write, rollback, and both-sign source-only evidence are retained."
+}

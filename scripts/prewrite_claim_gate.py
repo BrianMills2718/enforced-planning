@@ -106,6 +106,17 @@ def _mode(payload: dict[str, Any], explicit: str | None) -> str:
     return _load_mode(_git_root(cwd))
 
 
+def _configured_outcome_mode(payload: dict[str, Any]) -> str:
+    """Load the strict repo-local outcome mode from the actual checkout."""
+
+    from enforced_planning.outcome_admission import load_outcome_admission_mode
+
+    cwd = payload.get("cwd")
+    if not isinstance(cwd, str) or not cwd.strip():
+        cwd = str(Path.cwd())
+    return load_outcome_admission_mode(_git_root(cwd))
+
+
 def _native_notice(message: str) -> str:
     return json.dumps({"systemMessage": message}, sort_keys=True)
 
@@ -198,6 +209,7 @@ def _enforce_selected_outcome(
     decision: dict[str, Any],
     *,
     receipt_path: Path | None,
+    allow_bootstrap: bool = False,
 ) -> dict[str, Any]:
     """Derive, record, and return hard selected admission for one ordinary receipt."""
 
@@ -209,6 +221,7 @@ def _enforce_selected_outcome(
         OutcomeAdmissionRequestV1,
         OutcomeAdmissionResultV1,
         decide_outcome_admission,
+        evaluate_claim_bootstrap_admission,
         evaluate_selected_claim_admission,
         record_outcome_admission,
     )
@@ -242,9 +255,7 @@ def _enforce_selected_outcome(
         target = targets[0]
         source_value = decision.get("claim_source_file")
         if not isinstance(source_value, str) or not source_value.strip():
-            raise FastPreWriteError(
-                "ordinary allow decision lacks exact claim_source_file for outcome admission"
-            )
+            raise FastPreWriteError("ordinary allow decision lacks exact claim_source_file for outcome admission")
         source = Path(source_value).expanduser().resolve()
         try:
             payload = yaml.safe_load(source.read_text(encoding="utf-8"))
@@ -255,13 +266,25 @@ def _enforce_selected_outcome(
         claim = coordination_claims.normalize_claim(payload, source_file=str(source))
         if claim is None:
             raise FastPreWriteError("exact outcome claim source cannot be normalized")
-        result = evaluate_selected_claim_admission(
-            claim,
-            boundary="prewrite",
-            ordinary_allowed=True,
-            renewal=False,
-            target_path=target,
+        bootstrap_result = (
+            evaluate_claim_bootstrap_admission(
+                claim,
+                target_path=target,
+                ordinary_allowed=True,
+            )
+            if allow_bootstrap
+            else None
         )
+        if bootstrap_result is None:
+            result = evaluate_selected_claim_admission(
+                claim,
+                boundary="prewrite",
+                ordinary_allowed=True,
+                renewal=False,
+                target_path=target,
+            )
+        else:
+            result = bootstrap_result
     receipt = record_outcome_admission(
         result,
         receipt_path=receipt_path or DEFAULT_OUTCOME_ADMISSION_RECEIPT_PATH,
@@ -272,10 +295,17 @@ def _enforce_selected_outcome(
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     payload: object = {}
+    outcome_mode = "off"
+    outcome_config_invalid = False
     try:
         payload = json.loads(sys.stdin.read())
         if not isinstance(payload, dict):
             raise FastPreWriteError("PreToolUse payload must be a JSON object")
+        try:
+            outcome_mode = _configured_outcome_mode(payload)
+        except (FastPreWriteError, OSError, TypeError, ValueError):
+            outcome_config_invalid = True
+            raise
         mode = _mode(payload, args.mode)
         projection_path = args.projection_path
         if projection_path is None and args.cache_dir is not None:
@@ -290,7 +320,7 @@ def main(argv: list[str] | None = None) -> int:
             projection_path=projection_path,
             receipt_path=args.receipt_path,
         )
-    except (json.JSONDecodeError, FastPreWriteError, OSError, ValueError) as exc:
+    except (json.JSONDecodeError, FastPreWriteError, OSError, TypeError, ValueError) as exc:
         try:
             mode = _mode(payload if isinstance(payload, dict) else {}, args.mode)
         except Exception:  # noqa: BLE001 -- retain the original fail-safe mode resolution
@@ -312,7 +342,7 @@ def main(argv: list[str] | None = None) -> int:
             print(_native_notice(f"OBSERVE ONLY: {message}"))
         elif mode == "enforce":
             print(message, file=sys.stderr)
-        return 2 if mode == "enforce" else 0
+        return 2 if mode == "enforce" or outcome_config_invalid else 0
 
     outcome_observation = None
     if args.outcome_scenario is not None:
@@ -328,7 +358,8 @@ def main(argv: list[str] | None = None) -> int:
         )
 
     outcome_admission_receipt = None
-    if args.outcome_enforce_selected:
+    enforce_selected_outcome = args.outcome_enforce_selected or outcome_mode == "enforce_selected"
+    if enforce_selected_outcome:
         if mode != "enforce":
             message = "hard selected outcome admission requires ordinary --mode enforce"
             if args.json:
@@ -350,6 +381,7 @@ def main(argv: list[str] | None = None) -> int:
             outcome_admission_receipt = _enforce_selected_outcome(
                 decision,
                 receipt_path=args.outcome_receipt_path,
+                allow_bootstrap=outcome_mode == "enforce_selected",
             )
         except Exception as exc:  # noqa: BLE001 -- hard admission fails closed
             message = f"selected outcome admission could not be recorded: {exc}"

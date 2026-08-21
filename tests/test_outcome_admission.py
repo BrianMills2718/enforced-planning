@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import subprocess
 import sys
@@ -27,9 +28,12 @@ from enforced_planning.outcome_admission import (
     bootstrap_admission_result,
     build_outcome_admission_receipt,
     decide_outcome_admission,
+    evaluate_claim_bootstrap_admission,
     evaluate_first_consumer_bootstrap,
     evaluate_selected_outcome_admission,
+    infer_first_consumer_bootstrap_plan,
     is_first_consumer_bootstrap_path,
+    load_outcome_admission_mode,
     load_outcome_admission_receipts,
     record_outcome_admission,
 )
@@ -66,9 +70,7 @@ CLI = ROOT / "scripts" / "outcome_admission.py"
 
 
 def _frozen_suite() -> OutcomeAdmissionEvaluationSuiteV1:
-    return OutcomeAdmissionEvaluationSuiteV1.model_validate_json(
-        CASES.read_text(encoding="utf-8")
-    )
+    return OutcomeAdmissionEvaluationSuiteV1.model_validate_json(CASES.read_text(encoding="utf-8"))
 
 
 def _resolved_selection(*, classed: bool = True) -> ResolvedOutcomeSelectionV1:
@@ -176,10 +178,7 @@ def test_production_decision_reproduces_every_frozen_plan121_case() -> None:
                 bootstrap_product_write_requested=case.bootstrap_product_write_requested,
             )
         )
-        if (
-            decision.disposition != case.expected_disposition
-            or decision.reason_code != case.expected_reason_code
-        ):
+        if decision.disposition != case.expected_disposition or decision.reason_code != case.expected_reason_code:
             mismatches.append(case.case_id)
 
     assert mismatches == []
@@ -220,9 +219,7 @@ def test_first_consumer_bootstrap_allows_only_exact_plan_and_shared_paths() -> N
         "ROADMAP.md",
     )
 
-    result = evaluate_first_consumer_bootstrap(
-        OutcomeAdmissionBootstrapV1(plan_number=122, write_paths=paths)
-    )
+    result = evaluate_first_consumer_bootstrap(OutcomeAdmissionBootstrapV1(plan_number=122, write_paths=paths))
 
     assert result.allowed_paths == paths
     assert result.rejected_paths == ()
@@ -263,9 +260,7 @@ def test_first_consumer_bootstrap_rejects_product_foreign_and_unsafe_paths(
 
 
 def test_empty_bootstrap_is_denied() -> None:
-    result = evaluate_first_consumer_bootstrap(
-        OutcomeAdmissionBootstrapV1(plan_number=122, write_paths=())
-    )
+    result = evaluate_first_consumer_bootstrap(OutcomeAdmissionBootstrapV1(plan_number=122, write_paths=()))
 
     assert result.decision.disposition == "deny"
     assert result.decision.reason_code == "admission_bootstrap_scope_violation"
@@ -303,6 +298,112 @@ def test_bootstrap_path_classifier_is_plan_bound() -> None:
     assert not is_first_consumer_bootstrap_path(
         "docs/plans/122_first_consumer_outcome_admission.md",
         plan_number=123,
+    )
+
+
+@pytest.mark.parametrize(
+    ("configured", "expected"),
+    [
+        (None, "off"),
+        ({"meta_process": {"claims": {}}}, "off"),
+        (
+            {"meta_process": {"claims": {"outcome_admission_mode": "off"}}},
+            "off",
+        ),
+        (
+            {"meta_process": {"claims": {"outcome_admission_mode": "enforce_selected"}}},
+            "enforce_selected",
+        ),
+    ],
+)
+def test_outcome_admission_mode_is_strict_and_absent_off(
+    tmp_path: Path,
+    configured: dict[str, object] | None,
+    expected: str,
+) -> None:
+    if configured is not None:
+        (tmp_path / "meta-process.yaml").write_text(
+            yaml.safe_dump(configured),
+            encoding="utf-8",
+        )
+
+    assert load_outcome_admission_mode(tmp_path) == expected
+
+
+@pytest.mark.parametrize(
+    "configured",
+    [
+        [],
+        {"meta_process": []},
+        {"meta_process": {"claims": None}},
+        {"meta_process": {"claims": {"outcome_admission_mode": "observe"}}},
+    ],
+)
+def test_outcome_admission_mode_rejects_malformed_values(
+    tmp_path: Path,
+    configured: object,
+) -> None:
+    (tmp_path / "meta-process.yaml").write_text(
+        yaml.safe_dump(configured),
+        encoding="utf-8",
+    )
+
+    with pytest.raises((TypeError, ValueError), match="must be"):
+        load_outcome_admission_mode(tmp_path)
+
+
+def test_bootstrap_plan_inference_requires_one_complete_exact_plan() -> None:
+    exact = (
+        "docs/plans/123_source_outcome_admission_activation.md",
+        "docs/plans/123_source_outcome_admission_activation_work_graph.json",
+        "examples/owner-real-outcome-admission/plan123-maintenance-scenario.json",
+        "docs/plans/CLAUDE.md",
+        "ROADMAP.md",
+    )
+
+    assert infer_first_consumer_bootstrap_plan(exact) == 123
+    assert infer_first_consumer_bootstrap_plan(("ROADMAP.md",)) is None
+    assert (
+        infer_first_consumer_bootstrap_plan(
+            (
+                exact[0],
+                "docs/plans/124_foreign.md",
+            )
+        )
+        is None
+    )
+    assert (
+        infer_first_consumer_bootstrap_plan(
+            (
+                exact[0],
+                "enforced_planning/outcome_admission.py",
+            )
+        )
+        is None
+    )
+
+
+def test_claim_bootstrap_admission_requires_exact_claimed_target() -> None:
+    claim = SimpleNamespace(
+        write_paths=[
+            "docs/plans/123_source_outcome_admission_activation.md",
+            "docs/plans/CLAUDE.md",
+        ]
+    )
+
+    allowed = evaluate_claim_bootstrap_admission(
+        claim,
+        target_path="docs/plans/123_source_outcome_admission_activation.md",
+    )
+
+    assert allowed is not None
+    assert allowed.decision.reason_code == "admission_bootstrap_allowed"
+    assert (
+        evaluate_claim_bootstrap_admission(
+            claim,
+            target_path="enforced_planning/outcome_admission.py",
+        )
+        is None
     )
 
 
@@ -521,9 +622,7 @@ def test_admission_receipt_is_append_only_and_digest_validated(tmp_path: Path) -
     payload = json.loads(path.read_text(encoding="utf-8").splitlines()[0])
     evidence = payload["result"]["bootstrap_evidence"]
     evidence["bootstrap"]["plan_number"] = 123
-    evidence["bootstrap"]["write_paths"] = [
-        "docs/plans/123_first_consumer_outcome_admission.md"
-    ]
+    evidence["bootstrap"]["write_paths"] = ["docs/plans/123_first_consumer_outcome_admission.md"]
     evidence["allowed_paths"] = ["docs/plans/123_first_consumer_outcome_admission.md"]
     path.write_text(json.dumps(payload) + "\n", encoding="utf-8")
     with pytest.raises(ValueError, match="result_sha256"):
@@ -545,9 +644,7 @@ def test_receipt_builder_rejects_naive_result_tamper() -> None:
     payload = receipt.model_dump(mode="json")
     evidence = payload["result"]["bootstrap_evidence"]
     evidence["bootstrap"]["plan_number"] = 123
-    evidence["bootstrap"]["write_paths"] = [
-        "docs/plans/123_first_consumer_outcome_admission.md"
-    ]
+    evidence["bootstrap"]["write_paths"] = ["docs/plans/123_first_consumer_outcome_admission.md"]
     evidence["allowed_paths"] = ["docs/plans/123_first_consumer_outcome_admission.md"]
 
     with pytest.raises(ValidationError, match="result_sha256"):
@@ -674,6 +771,58 @@ def test_selected_session_denial_precedes_tracker_or_claim_mutation(
     assert receipt.result.resolution_error_code == "selection_missing"
 
 
+def test_configured_session_start_requires_selection_without_a_flag(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    worktree = tmp_path / "worktree"
+    worktree.mkdir()
+    (worktree / "meta-process.yaml").write_text(
+        "meta_process:\n  claims:\n    outcome_admission_mode: enforce_selected\n",
+        encoding="utf-8",
+    )
+    tracker_dir = tmp_path / "sessions"
+    receipt_path = tmp_path / "configured-start-denial.jsonl"
+    claim = SimpleNamespace(session_id="codex:plan123-configured")
+    monkeypatch.setattr(
+        session_lifecycle.coordination_claims,
+        "resolve_session_id",
+        lambda _agent, _session_id: "codex:plan123-configured",
+    )
+    monkeypatch.setattr(
+        session_lifecycle.coordination_claims,
+        "validate_native_session_binding",
+        lambda _agent, _session_id: None,
+    )
+    monkeypatch.setattr(session_lifecycle, "_single_matching_live_claim", lambda **_kwargs: claim)
+    monkeypatch.setattr(
+        outcome_admission,
+        "evaluate_selected_claim_admission",
+        lambda *_args, **_kwargs: _missing_selected_result(),
+    )
+
+    with pytest.raises(PermissionError, match="outcome_selection_required"):
+        session_lifecycle.start_session(
+            agent="codex",
+            project="enforced-planning",
+            scope="plan123-configured",
+            intent="prove configured start admission",
+            repo_root=str(tmp_path / "repo"),
+            worktree_path=str(worktree),
+            branch="plan123-configured",
+            broader_goal="Plan 123 configured admission",
+            current_phase="configured renewal",
+            plan_ref="enforced-planning#123",
+            session_id="codex:plan123-configured",
+            tracker_dir=tracker_dir,
+            outcome_admission_receipt_path=receipt_path,
+        )
+
+    assert not tracker_dir.exists()
+    [receipt] = load_outcome_admission_receipts(receipt_path)
+    assert receipt.result.resolution_error_code == "selection_missing"
+
+
 def test_selected_heartbeat_denial_precedes_heartbeat_mutation(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -725,12 +874,72 @@ def test_selected_heartbeat_denial_precedes_heartbeat_mutation(
     assert receipt.result.decision.disposition == "deny"
 
 
+def test_configured_heartbeat_requires_selection_without_a_flag(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    worktree = tmp_path / "worktree"
+    worktree.mkdir()
+    (worktree / "meta-process.yaml").write_text(
+        "meta_process:\n  claims:\n    outcome_admission_mode: enforce_selected\n",
+        encoding="utf-8",
+    )
+    receipt_path = tmp_path / "configured-heartbeat-denial.jsonl"
+    claim = SimpleNamespace(
+        session_id="codex:plan123-configured",
+        worktree_path=str(worktree),
+        repo_root=str(tmp_path / "repo"),
+    )
+    monkeypatch.setattr(
+        session_lifecycle.coordination_claims,
+        "resolve_session_id",
+        lambda _agent, _session_id: "codex:plan123-configured",
+    )
+    monkeypatch.setattr(
+        session_lifecycle.coordination_claims,
+        "validate_native_session_binding",
+        lambda _agent, _session_id: None,
+    )
+    monkeypatch.setattr(
+        session_lifecycle,
+        "_iter_matching_live_claims",
+        lambda **_kwargs: [claim],
+    )
+    monkeypatch.setattr(
+        outcome_admission,
+        "evaluate_selected_claim_admission",
+        lambda *_args, **_kwargs: _missing_selected_result(),
+    )
+
+    def forbidden_heartbeat(**_kwargs: object) -> tuple[int, list[str], str, datetime]:
+        raise AssertionError("heartbeat mutation ran after configured admission denial")
+
+    monkeypatch.setattr(
+        session_lifecycle.coordination_claims,
+        "heartbeat_claims",
+        forbidden_heartbeat,
+    )
+
+    with pytest.raises(PermissionError, match="outcome_selection_required"):
+        session_lifecycle.heartbeat_session(
+            agent="codex",
+            project="enforced-planning",
+            scope="plan123-configured",
+            branch="plan123-configured",
+            session_id="codex:plan123-configured",
+            outcome_admission_receipt_path=receipt_path,
+        )
+
+    [receipt] = load_outcome_admission_receipts(receipt_path)
+    assert receipt.result.decision.disposition == "deny"
+
+
 def test_opted_in_heartbeat_cli_returns_structured_denial(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     def deny(**_kwargs: object) -> dict[str, object]:
-        raise PermissionError("Outcome admission denied (outcome_selection_required)")
+        raise session_lifecycle.OutcomeAdmissionDeniedError("Outcome admission denied (outcome_selection_required)")
 
     monkeypatch.setattr(session_heartbeat_cli.session_lifecycle, "heartbeat_session", deny)
 
@@ -753,12 +962,38 @@ def test_opted_in_heartbeat_cli_returns_structured_denial(
     assert payload["error"]["code"] == "outcome_admission_denied"
 
 
+def test_configured_heartbeat_cli_returns_structured_denial_without_flag(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    def deny(**_kwargs: object) -> dict[str, object]:
+        raise session_lifecycle.OutcomeAdmissionDeniedError("Outcome admission denied (outcome_selection_required)")
+
+    monkeypatch.setattr(session_heartbeat_cli.session_lifecycle, "heartbeat_session", deny)
+
+    exit_code = session_heartbeat_cli.main(
+        [
+            "--agent",
+            "codex",
+            "--project",
+            "enforced-planning",
+            "--scope",
+            "plan123-configured",
+            "--json",
+        ]
+    )
+
+    assert exit_code == 2
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["error"]["code"] == "outcome_admission_denied"
+
+
 def test_opted_in_session_start_cli_returns_structured_denial(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     def deny(**_kwargs: object) -> dict[str, object]:
-        raise PermissionError("Outcome admission denied (outcome_selection_required)")
+        raise session_lifecycle.OutcomeAdmissionDeniedError("Outcome admission denied (outcome_selection_required)")
 
     monkeypatch.setattr(session_start_cli.session_lifecycle, "start_session", deny)
 
@@ -836,6 +1071,107 @@ def test_hard_prewrite_consumes_exactly_one_canonical_target(
     assert receipt["result"]["decision"]["reason_code"] == "outcome_selection_required"
 
 
+def test_configured_prewrite_allows_only_an_exact_bootstrap_claim(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    claim_path = tmp_path / "claim.yaml"
+    claim_path.write_text("{}\n", encoding="utf-8")
+    claim = SimpleNamespace(
+        write_paths=[
+            "docs/plans/123_source_outcome_admission_activation.md",
+            "docs/plans/CLAUDE.md",
+        ]
+    )
+    monkeypatch.setattr(
+        session_lifecycle.coordination_claims,
+        "normalize_claim",
+        lambda _payload, *, source_file: claim,
+    )
+
+    def forbidden_selected(*_args: object, **_kwargs: object) -> OutcomeAdmissionResultV1:
+        raise AssertionError("exact bootstrap unexpectedly required selected state")
+
+    monkeypatch.setattr(
+        outcome_admission,
+        "evaluate_selected_claim_admission",
+        forbidden_selected,
+    )
+
+    receipt = prewrite_claim_gate_cli._enforce_selected_outcome(
+        {
+            "decision": "allow",
+            "claim_source_file": str(claim_path),
+            "normalized_target_paths": ["docs/plans/123_source_outcome_admission_activation.md"],
+        },
+        receipt_path=tmp_path / "admission.jsonl",
+        allow_bootstrap=True,
+    )
+
+    assert receipt["result"]["source"] == "bootstrap"
+    assert receipt["result"]["decision"]["reason_code"] == "admission_bootstrap_allowed"
+
+
+def test_configured_prewrite_rejects_bootstrap_source_smuggling(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    claim_path = tmp_path / "claim.yaml"
+    claim_path.write_text("{}\n", encoding="utf-8")
+    claim = SimpleNamespace(
+        write_paths=[
+            "docs/plans/123_source_outcome_admission_activation.md",
+            "enforced_planning/outcome_admission.py",
+        ]
+    )
+    monkeypatch.setattr(
+        session_lifecycle.coordination_claims,
+        "normalize_claim",
+        lambda _payload, *, source_file: claim,
+    )
+    monkeypatch.setattr(
+        outcome_admission,
+        "evaluate_selected_claim_admission",
+        lambda *_args, **_kwargs: _missing_selected_result(),
+    )
+
+    receipt = prewrite_claim_gate_cli._enforce_selected_outcome(
+        {
+            "decision": "allow",
+            "claim_source_file": str(claim_path),
+            "normalized_target_paths": ["enforced_planning/outcome_admission.py"],
+        },
+        receipt_path=tmp_path / "admission.jsonl",
+        allow_bootstrap=True,
+    )
+
+    assert receipt["result"]["decision"]["disposition"] == "deny"
+    assert receipt["result"]["decision"]["reason_code"] == "outcome_selection_required"
+
+
+def test_configured_prewrite_cannot_be_disabled_by_explicit_ordinary_off(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr(
+        prewrite_claim_gate_cli,
+        "_configured_outcome_mode",
+        lambda _payload: "enforce_selected",
+    )
+    monkeypatch.setattr(
+        prewrite_claim_gate_cli,
+        "evaluate_prewrite_fast",
+        lambda *_args, **_kwargs: {"decision": "allow"},
+    )
+    monkeypatch.setattr(sys, "stdin", io.StringIO("{}"))
+
+    exit_code = prewrite_claim_gate_cli.main(["--client", "codex", "--mode", "off", "--json"])
+
+    assert exit_code == 2
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["reason_code"] == "outcome_admission_mode_invalid"
+
+
 def test_hard_prewrite_rejects_ambiguous_target_cardinality(tmp_path: Path) -> None:
     claim_path = tmp_path / "claim.yaml"
     claim_path.write_text("{}\n", encoding="utf-8")
@@ -857,7 +1193,7 @@ def test_hard_prewrite_rejects_ambiguous_target_cardinality(tmp_path: Path) -> N
         )
 
 
-def test_public_selected_and_prewrite_commands_deny_circular_live_state(
+def test_public_selected_and_configured_prewrite_deny_circular_live_state(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -887,6 +1223,10 @@ def test_public_selected_and_prewrite_commands_deny_circular_live_state(
     target_path = worktree / target
     target_path.parent.mkdir(parents=True)
     target_path.write_text("original\n", encoding="utf-8")
+    (worktree / "meta-process.yaml").write_text(
+        "meta_process:\n  claims:\n    prewrite_mode: enforce\n    outcome_admission_mode: enforce_selected\n",
+        encoding="utf-8",
+    )
     scenarios_dir = worktree / "scenarios"
     scenarios_dir.mkdir()
 
@@ -1141,7 +1481,6 @@ def test_public_selected_and_prewrite_commands_deny_circular_live_state(
             str(projection_path),
             "--receipt-path",
             str(tmp_path / "ordinary.jsonl"),
-            "--outcome-enforce-selected",
             "--outcome-receipt-path",
             str(admission_receipts),
             "--json",
@@ -1153,13 +1492,7 @@ def test_public_selected_and_prewrite_commands_deny_circular_live_state(
                 "cwd": str(worktree),
                 "hook_event_name": "PreToolUse",
                 "tool_name": "apply_patch",
-                "tool_input": {
-                    "command": (
-                        "*** Begin Patch\n"
-                        f"*** Update File: {target}\n"
-                        "*** End Patch"
-                    )
-                },
+                "tool_input": {"command": (f"*** Begin Patch\n*** Update File: {target}\n*** End Patch")},
             }
         ),
         check=False,
@@ -1169,8 +1502,5 @@ def test_public_selected_and_prewrite_commands_deny_circular_live_state(
     assert prewrite.returncode == 2
     prewrite_payload = json.loads(prewrite.stdout)
     assert prewrite_payload["decision"] == "allow"
-    assert (
-        prewrite_payload["outcome_admission"]["result"]["decision"]["reason_code"]
-        == "outcome_stalled"
-    )
+    assert prewrite_payload["outcome_admission"]["result"]["decision"]["reason_code"] == "outcome_stalled"
     assert target_path.read_text(encoding="utf-8") == "original\n"

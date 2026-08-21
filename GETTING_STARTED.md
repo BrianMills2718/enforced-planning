@@ -108,6 +108,29 @@ metadata stays truthful without inventing fake broad write ownership.
 The same sanctioned flow also starts a linked session contract and tracker, and
 it uses the same claim/tracker model for Codex and Claude Code.
 
+The Enforced Planning source repository additionally sets
+`meta_process.claims.outcome_admission_mode: enforce_selected`. New source
+outcome work starts with the restricted wrapper:
+
+```bash
+make outcome-bootstrap \
+  PLAN=124 \
+  BRANCH=plan-124-example \
+  TASK="Create the bounded Plan 124 bootstrap" \
+  SESSION_GOAL=deliver-the-selected-source-outcome \
+  SESSION_PHASE="adopt plan and allocate outcome" \
+  SESSION_WRITE_PATHS="docs/plans/124_example.md docs/plans/124_example_work_graph.json docs/plans/CLAUDE.md ROADMAP.md"
+```
+
+The target rejects empty, mixed-Plan, traversal, source, test, evidence, or
+foreign-Plan write scope before protected work. After the plan and graph are
+canonical, upgrade the same claim to that work unit, allocate and select its
+outcome, and only then expand its write paths. Subsequent `make session-start`,
+`make session-heartbeat`, and supported native writes enforce selected state
+without outcome flags. Set the source config back to `off` or revert the
+activation commit for the recoverable rollback. This is a source-only workflow;
+installing the framework does not opt a consumer into it.
+
 ## Verify The Install
 
 From your target repo root:

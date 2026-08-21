@@ -365,6 +365,11 @@ The coordination stack uses lease semantics, not perfect real-time presence.
 - once the heartbeat ages out, the lane becomes stale
 - the next runtime must explicitly choose to resume, hand off, abandon, or
   prune that lane
+- a different runtime may resume only after explicit `handoff`, true
+  `session_ended`, or `stale_session_heartbeat`; a healthy `active` or `blocked`
+  lane remains owned by its exact `session_id`
+- client UI state such as "resolved" is not lifecycle or liveness evidence and
+  cannot authorize takeover
 
 Do not treat "I reopened the repo" as implicit recovery. Recovery must be
 explicitly attached to the same `project + plan_ref + scope` lane or declared

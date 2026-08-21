@@ -310,6 +310,7 @@ def _apply_claim_payload_updates(
     claim_file: Path,
     updates: dict[str, Any],
     operation: claim_mutation_receipts.MutationOperation = "session_upsert",
+    expected_fields: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Apply one lifecycle mutation and refresh its projection under one lock."""
 
@@ -318,6 +319,12 @@ def _apply_claim_payload_updates(
         current = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
         if not isinstance(current, dict):
             raise ValueError(f"Claim file at {claim_file} must be a YAML mapping")
+        for field, expected in (expected_fields or {}).items():
+            if current.get(field) != expected:
+                raise ValueError(
+                    f"Claim at {claim_file} changed while preparing {operation}; "
+                    "retry from current ownership state"
+                )
         current.update(updates)
         _write_claim_payload(claim_file, current)
         _projection_path, projection_digest_after = coordination_claims.refresh_prewrite_authority_projection(
@@ -1577,6 +1584,20 @@ def resume_session(
     if not resolved_session_id:
         raise ValueError("Unable to resolve a session ID for session-resume.")
 
+    same_runtime = claim.session_id == resolved_session_id
+    explicitly_transferable = claim.status in {
+        "handoff",
+        coordination_claims.SESSION_ENDED_STATUS,
+    }
+    stale_heartbeat = "stale_session_heartbeat" in coordination_claims.claim_liveness_issues(claim)
+    if not (same_runtime or explicitly_transferable or stale_heartbeat):
+        current_owner = claim.session_id or "an unbound runtime"
+        raise ValueError(
+            f"Cannot resume lane {project}:{scope} as {resolved_session_id}; it is still owned by "
+            f"runtime session {current_owner} with status {claim.status!r}. Cross-session resume "
+            "requires an explicit handoff, a true session end, or a stale session heartbeat."
+        )
+
     updated_at = datetime.now(timezone.utc).isoformat()
     payload = _apply_claim_payload_updates(
         claim=claim,
@@ -1587,6 +1608,12 @@ def resume_session(
             "heartbeat_at": updated_at,
             "updated_at": updated_at,
             "notes": note or "session resumed with a fresh runtime attachment",
+        },
+        expected_fields={
+            "status": claim.status,
+            "session_id": claim.session_id,
+            "heartbeat_at": claim.heartbeat_at,
+            "updated_at": claim.updated_at,
         },
     )
 

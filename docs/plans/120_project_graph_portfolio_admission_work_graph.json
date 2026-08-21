@@ -1,0 +1,250 @@
+{
+  "units": [
+    {
+      "schema_version": "1.0",
+      "record_type": "work_unit",
+      "id": "opad-01-graph-bound-portfolio-admission",
+      "initiative_id": "progress-bound-agent-execution",
+      "goal_id": "project-graph-portfolio-admission",
+      "design_revision": "sha256:43bd4410fb18320c0d87ee0d7dfb9566a93479696c7ea35a3c1fc0e48ccf67ee",
+      "spec_revision": "sha256:43bd4410fb18320c0d87ee0d7dfb9566a93479696c7ea35a3c1fc0e48ccf67ee",
+      "title": "Bind deliberate outcome allocation and selection to exact Project Graph authority",
+      "class": "integration",
+      "objective": "Require new classed outcome selection to consume a separately recorded, append-only portfolio allocation whose project lifecycle and owner class are resolved from one exact Project Meta Git revision; cap product WIP per owner class and maintenance/external-obligation WIP globally without changing ordinary pre-write authority.",
+      "profile": "standard",
+      "execution_class": "independently_executable",
+      "claimability": "ready_for_execution",
+      "authorization_mode": "registry_claim",
+      "scope": {
+        "included": [
+          "Backward-compatible schema-1.1 outcome portfolio class",
+          "Exact Git-object Project Graph loader and digest-bound authority model",
+          "Exact live-claim allocation and disposition request loading",
+          "Append-only atomic portfolio allocation ledger",
+          "One product allocation per reviewed Project Graph owner class",
+          "One shared global maintenance or external-obligation allocation",
+          "Byte-idempotent allocation and disposition replay",
+          "Hard classed selected-outcome admission against an exact active allocation",
+          "Legacy schema-1.0 selection compatibility without portfolio-admission claims",
+          "Public allocation/disposition CLI",
+          "One owner-real Plan 120 maintenance allocate/select/observe/park journey",
+          "Focused tests, evidence, operator guide, plan, graph, index, and roadmap"
+        ],
+        "excluded": [
+          "Project Graph mutation or a second static authority",
+          "Automatic first-writer allocation",
+          "Mandatory outcome selection for every claim or plan",
+          "Ordinary pre-write, claim, worktree, commit, shell, or closeout enforcement",
+          "Choosing Brian's one product project",
+          "Independent semantic verification of progress receipts",
+          "Installer, host-hook, downstream repository, colleague, fleet, deployment, or release rollout",
+          "Cost or elapsed-time authorization"
+        ]
+      },
+      "inputs": [
+        {
+          "kind": "bounded_design",
+          "id": "docs/plans/120_project_graph_portfolio_admission.md",
+          "revision": "sha256:43bd4410fb18320c0d87ee0d7dfb9566a93479696c7ea35a3c1fc0e48ccf67ee"
+        },
+        {
+          "kind": "accepted_capability",
+          "id": "docs/plans/119_durable_selected_outcome_progress.md",
+          "revision": "9c9d0bf244ed3cd20624f56191e932d5a516942b"
+        },
+        {
+          "kind": "approved_policy",
+          "id": "project-meta:policy/proposals/2026-08-20-outcome-continuation-lease-hard-gate.yaml",
+          "revision": "f6091b6b2f2a5357d0fdbbe88b157435a2ce07fb"
+        },
+        {
+          "kind": "project_graph_authority",
+          "id": "project-meta:PROJECT_GRAPH.json",
+          "revision": "4db70b44a03966bea9ba65003894613af9966196"
+        },
+        {
+          "kind": "integration_finding",
+          "id": "project-meta:learnings/entries/lrn-20260821T063558270519Z-bb1048ff9a.json",
+          "revision": "e2cb509c7704569c1b9af45a6ee309922f7854c8"
+        }
+      ],
+      "outputs": [
+        "Explicit schema-1.1 product, maintenance, or external-obligation class",
+        "Revision-bound Project Graph authority contract",
+        "Append-only portfolio allocation and disposition ledger",
+        "Hard selected-outcome admission requiring the exact active allocation",
+        "Owner-real maintenance allocation and release evidence",
+        "Focused controls and operator documentation with explicit promotion limits"
+      ],
+      "dependencies": [],
+      "conflict_surfaces": [
+        {
+          "kind": "repository_path",
+          "target": "enforced_planning/outcome_continuation.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-120-project-graph-portfolio-admission"
+        },
+        {
+          "kind": "repository_path",
+          "target": "enforced_planning/outcome_portfolio.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-120-project-graph-portfolio-admission"
+        },
+        {
+          "kind": "repository_path",
+          "target": "enforced_planning/outcome_selection.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-120-project-graph-portfolio-admission"
+        },
+        {
+          "kind": "repository_path",
+          "target": "scripts/outcome_continuation.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-120-project-graph-portfolio-admission"
+        },
+        {
+          "kind": "repository_path",
+          "target": "tests/test_outcome_portfolio.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-120-project-graph-portfolio-admission"
+        },
+        {
+          "kind": "repository_path",
+          "target": "tests/test_outcome_selection.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-120-project-graph-portfolio-admission"
+        },
+        {
+          "kind": "repository_path",
+          "target": "examples/owner-real-outcome-observe/plan120-maintenance-scenario.json",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-120-project-graph-portfolio-admission"
+        },
+        {
+          "kind": "repository_path",
+          "target": "examples/owner-real-outcome-observe/plan120-maintenance-allocation.json",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-120-project-graph-portfolio-admission"
+        },
+        {
+          "kind": "repository_path",
+          "target": "examples/owner-real-outcome-observe/plan120-maintenance-disposition.json",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-120-project-graph-portfolio-admission"
+        },
+        {
+          "kind": "repository_path",
+          "target": "docs/evidence/plan120_project_graph_portfolio_admission.json",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-120-project-graph-portfolio-admission"
+        },
+        {
+          "kind": "repository_path",
+          "target": "docs/guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-120-project-graph-portfolio-admission"
+        },
+        {
+          "kind": "repository_path",
+          "target": "docs/plans/120_project_graph_portfolio_admission.md",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-120-project-graph-portfolio-admission"
+        },
+        {
+          "kind": "repository_path",
+          "target": "docs/plans/120_project_graph_portfolio_admission_work_graph.json",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-120-project-graph-portfolio-admission"
+        },
+        {
+          "kind": "repository_path",
+          "target": "docs/plans/CLAUDE.md",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-120-project-graph-portfolio-admission"
+        },
+        {
+          "kind": "repository_path",
+          "target": "ROADMAP.md",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-120-project-graph-portfolio-admission"
+        }
+      ],
+      "acceptance": [
+        {
+          "id": "OPAD01-A1",
+          "criterion": "New classed contracts use an explicit controlled portfolio class and exact Project Graph owner/lifecycle authority rather than caller-selected identity.",
+          "evidence_required": [
+            "Schema-version compatibility controls",
+            "Exact graph commit, file, and record digests",
+            "Owner, status, record-kind, and governance validation"
+          ],
+          "negative_control": "Legacy, unregistered, inactive, pointer, unreviewed, owner-mismatched, or tampered graph input cannot create portfolio proof."
+        },
+        {
+          "id": "OPAD01-A2",
+          "criterion": "A separate append-only command allocates at most one product per owner class and one global maintenance/external-obligation slot with byte-idempotent replay.",
+          "evidence_required": [
+            "Exact claim/scenario/request bindings",
+            "Active bucket reconstruction",
+            "Ledger byte comparison across replay",
+            "Competing product and non-product denials"
+          ],
+          "negative_control": "First selection never auto-allocates; conflicting id/file/request or malformed history fails before mutation."
+        },
+        {
+          "id": "OPAD01-A3",
+          "criterion": "Schema-1.1 selection fails without its exact active allocation, retains the allocation digest on success, and becomes invalid after disposition while legacy selection remains compatible.",
+          "evidence_required": [
+            "Missing-allocation selection denial",
+            "Selected binding allocation id/digest",
+            "Post-disposition resolution denial",
+            "Legacy regression result"
+          ],
+          "negative_control": "An allocation for a different contract, outcome, class, project, claim, or disposed event cannot authorize selection."
+        },
+        {
+          "id": "OPAD01-A4",
+          "criterion": "The real Plan 120 claim executes maintenance allocate, exact replay, select, selected observe, and park against a current exact Project Meta revision without claiming mandatory fleet writes.",
+          "evidence_required": [
+            "Live claim and tracker refs",
+            "Allocation, graph authority, selection, and disposition digests",
+            "Ordinary and selected observation receipts",
+            "Candidate revision and focused checks"
+          ],
+          "negative_control": "Evidence explicitly denies product-project choice, auto-selection, hard ordinary pre-write, installer, deployment, and fleet claims."
+        }
+      ],
+      "readiness": {
+        "status": "ready",
+        "required_approval_types": [],
+        "approvals": [],
+        "failed_guards": []
+      },
+      "claim_policy": {
+        "eligibility_rule": "Plan 119 is accepted; one exact Plan 120 goal-bound claim owns only the listed contracts, allocation state integration, tests, examples, evidence, guide, plan, graph, index, and roadmap paths.",
+        "lease_policy": "renewable",
+        "lease_duration_minutes": 1440,
+        "max_active_per_claimant": 1,
+        "named_owner_id": null
+      },
+      "status": "ready",
+      "record_version": 1,
+      "updated_at": "2026-08-21T07:45:00Z"
+    }
+  ]
+}

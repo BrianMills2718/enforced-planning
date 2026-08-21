@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import tempfile
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -11,15 +12,19 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
+from enforced_planning import blocker_policy as blocker_policy_module
 from enforced_planning.blocker_policy import (
     BlockerDecisionInputV1,
+    BlockerDecisionResultV1,
     BlockerRequestV1,
     ClaimQueueSnapshotV1,
     MailboxDependencyV1,
     MailboxEvidenceV1,
     QueueWorkUnitV1,
     ReadyQueueEvaluationV1,
+    _claim_snapshot_digest,
     decide_blocker_disposition,
+    evaluate_blocker_request,
     evaluate_ready_queue,
 )
 from scripts import evaluate_blocker as blocker_cli
@@ -1147,11 +1152,39 @@ def test_public_cli_decide_rejects_foreign_project_scope_with_same_plan_number(
     assert "exactly one healthy invoking-session claim" in stderr
 
 
-def test_checked_in_owner_calibration_receipts_cover_both_signs() -> None:
+def test_checked_in_owner_calibration_receipts_cover_both_signs(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     evidence_path = Path(__file__).parents[1] / "docs/evidence/plan110_npw02_owner_calibration.json"
     payload = json.loads(evidence_path.read_text(encoding="utf-8"))
+    sources = {item["source_id"]: item for item in payload["replay_sources"]}
     receipts = {item["case_id"]: item for item in payload["fixture_receipts"]}
-    assert {case_id: item["decision"] for case_id, item in receipts.items()} == {
+    observed_decisions: dict[str, str] = {}
+    for case_id, receipt in receipts.items():
+        source = sources[receipt["source_id"]]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            if source["present"]:
+                raw = source["serialized_utf8"]
+                assert isinstance(raw, str)
+                assert hashlib.sha256(raw.encode("utf-8")).hexdigest() == source["sha256"]
+                graph_path = root / source["path"]
+                graph_path.parent.mkdir(parents=True, exist_ok=True)
+                graph_path.write_text(raw, encoding="utf-8")
+            decision_input = BlockerDecisionInputV1.model_validate_json(json.dumps(receipt["input"]))
+            expected = BlockerDecisionResultV1.model_validate_json(json.dumps(receipt["result"]))
+            recorded_at = datetime.fromisoformat(receipt["recorded_at"])
+            actual = evaluate_blocker_request(
+                decision_input,
+                repository_root=root,
+                recorded_at=recorded_at,
+            )
+        assert actual.model_dump(mode="json") == expected.model_dump(mode="json")
+        assert actual.disposition.application_authorized is False
+        observed_decisions[case_id] = actual.disposition.decision
+
+    assert observed_decisions == {
         "a_blocked_b_ready_c_blocked": "continue_ready_work",
         "verified_path_collision": "integration_wait",
         "asserted_path_collision_without_claim_evidence": "blocker_unverified_return_control",
@@ -1164,18 +1197,30 @@ def test_checked_in_owner_calibration_receipts_cover_both_signs() -> None:
         "missing_graph": "blocker_unverified_return_control",
         "malformed_graph": "blocker_unverified_return_control",
     }
-    assert all(item["application_authorized"] is False for item in receipts.values())
-    assert all(item["evaluation_id"].startswith("ready_queue_") for item in receipts.values())
-    assert all(item["disposition_id"].startswith("blocker_disposition_") for item in receipts.values())
     unavailable = {"stale_graph", "missing_graph", "malformed_graph"}
-    assert {case_id for case_id, item in receipts.items() if item["coverage"] == "unavailable"} == unavailable
-    assert receipts["a_blocked_b_ready_c_blocked"]["eligible_unit_ids"] == ["B"]
-    assert receipts["verified_path_collision"]["active_conflict_unit_ids"] == ["A"]
-    assert receipts["asserted_path_collision_without_claim_evidence"]["active_conflict_unit_ids"] == []
-    authentic = payload["authentic_native_claim_observation"]
-    assert authentic["native_session_binding"] is True
-    assert authentic["canonical_claim_binding"] is True
-    assert authentic["coverage"] == "complete"
+    assert {
+        case_id for case_id, item in receipts.items() if item["result"]["ready_queue"]["coverage"] == "unavailable"
+    } == unavailable
+
+    authentic = payload["authentic_native_claim_receipt"]
+    authentic_claims = tuple(
+        ClaimQueueSnapshotV1.model_validate_json(json.dumps(item)) for item in authentic["claim_snapshots"]
+    )
+    assert _claim_snapshot_digest(authentic_claims) == authentic["claim_snapshot_sha256"]
+    authentic_result = ReadyQueueEvaluationV1.model_validate_json(json.dumps(authentic["result"]))
+    authentic_recorded_at = datetime.fromisoformat(authentic["recorded_at"])
+    monkeypatch.setattr(blocker_policy_module, "_now", lambda: authentic_recorded_at)
+    return_code, stdout, stderr = _run_public_cli(
+        monkeypatch,
+        capsys,
+        authentic["argv"],
+        claims=authentic_claims,
+        native_thread_id="01a0217c-7716-76a1-8055-9e17f9e4925b",
+    )
+    assert return_code == authentic["exit_code"], stderr
+    assert json.loads(stdout) == authentic_result.model_dump(mode="json")
+    assert stdout.strip() == authentic["raw_cli_output"].strip()
+
     progress = payload["selection_and_progress_observation"]
     assert progress["outcome_disposition"] == "would_allow"
     assert progress["ordinary_authority_preserved"] is True

@@ -90,7 +90,7 @@ See `ROADMAP.md` for the full phase map and recommended priority order.
 | 111 | Portable Ecosystem Feedback Loop (`111_ecosystem_feedback_loop.md`) | High | 🚧 In Progress — design adopted; EF-01 ready | evidence-backed improvement across policies, skills, instructions, tools, projects, and unowned concerns |
 | 112 | Canonical Surface Runtime Control (`112_canonical_surface_runtime_control.md`) | High | ✅ Complete | Graph Application Toolkit canonical-runtime adoption |
 | 113 | Governed Delivery Authentic Vertical (`113_governed_delivery_authentic_vertical.md`) | Critical | ✅ Complete | first real plan/docs/code/course-control/verifier proof |
-| 114 | Outcome Continuation Lease Enforcement (`114_outcome_continuation_lease_enforcement.md`) | Critical | 📋 Planned | staged progress-only lease/admission proof before session or fleet integration |
+| 114 | Outcome Continuation Lease Enforcement (`114_outcome_continuation_lease_enforcement.md`) | Critical | ✅ Complete | staged progress-only lease/admission proof before session or fleet integration |
 
 ## Status Key
 

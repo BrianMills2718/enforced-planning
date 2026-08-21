@@ -23,10 +23,15 @@ Nothing in the live claim or its linked session tracker owns that choice. An
 agent can omit the option, choose a different scenario on the next write, or
 carry an old scenario into a replacement session without producing a binding
 failure. The outcome decision is useful, but continuation identity is still
-caller-selected.
+caller-selected. A concurrent owner audit also reproduced two plan-named live
+lanes whose notes cite Plans #40/#97 while both canonical claims expose
+`plan_ref: null` and both trackers retain `UNPLANNED`; a selected outcome must
+not silently legitimize that authority mismatch.
 
 **Target:** Let one exact live claimed session select one immutable outcome
 scenario into its existing linked session tracker. A new explicit
+execution-authority reference distinguishes a canonical planned lane from a
+genuinely unplanned `goal:<outcome-id>` lane. A new explicit
 `--outcome-selected` pre-write option resolves that stored choice through the
 ordinary receipt's exact claim source, validates session/worktree/branch and
 scenario digests, and appends the existing observe-only outcome decision with
@@ -54,13 +59,15 @@ worktree produces a typed visible failure instead of a fresh permissive choice.
 and owns `docs/evidence/plan117_durable_outcome_selection_binding.json`. The
 Plan #117 owner-progress scenario is an immutable file inside that worktree.
 
-**Action:** Select the scenario once through the outcome-continuation CLI, then
+**Action:** Select the scenario once with execution authority
+`enforced-planning#117` through the outcome-continuation CLI, then
 send the claimed evidence-file `apply_patch` payload through
 `scripts/prewrite_claim_gate.py --mode observe --outcome-selected` without
 passing a scenario path.
 
 **Expected result:** The tracker contains one strict `outcome_selection`
-binding. The ordinary decision remains `allow/exact_live_claim`; the outcome
+binding whose authority matches the claim's `enforced-planning#117` plan ref.
+The ordinary decision remains `allow/exact_live_claim`; the outcome
 observation resolves the exact claim and tracker, records the selection digest,
 and returns `would_allow/active_in_scope`. In an isolated same-contract control,
 a selected circular scenario returns `would_deny/recovery_required`. Replaying
@@ -69,9 +76,11 @@ observation error while retaining the ordinary result and exit code.
 
 **Failure signal:** A second different selection overwrites the first; a
 heartbeat erases the selection; a replacement session, branch, worktree, claim,
-or modified scenario is accepted; selected observation falls back to a caller
-scenario; ordinary admission changes; storage is partial or unlocked; or the
-result is described as automatic, blocking, installed, or fleet-wide.
+or modified scenario is accepted; a plan authority degrades to `UNPLANNED` or a
+plan-shaped authority is accepted against a null claim ref; selected
+observation falls back to a caller scenario; ordinary admission changes;
+storage is partial or unlocked; or the result is described as automatic,
+blocking, installed, or fleet-wide.
 
 ## Authorities And Evidence Reviewed
 
@@ -94,6 +103,10 @@ result is described as automatic, blocking, installed, or fleet-wide.
   and its JSON evidence — calibrated burst thrash, local-completion inflation,
   governance substitution, restart laundering, and status-truth gaps across 12
   retained repository revisions.
+- Coordination message `msg_71ca242f87e48f220519b29b85ec0d57` and exact
+  read-only inspection of the active DIGIMON Plan #40 and DoDAF Plan #97 claims
+  — both plan-named lanes currently expose null canonical plan refs and
+  `UNPLANNED` tracker refs despite plan-authority notes.
 
 ## Research
 
@@ -128,7 +141,7 @@ when denial may block remain exploratory and require retained observations.
 
 | Capability | Input | Output | Producer | Consumer |
 |---|---|---|---|---|
-| exact-session outcome selection | live claim identity + immutable scenario | strict create-once binding in the linked tracker | Plan #117 selection owner | selected pre-write observer |
+| exact-session outcome selection | live claim identity + execution authority + immutable scenario | strict create-once binding in the linked tracker | Plan #117 selection owner | selected pre-write observer |
 | atomic tracker mutation | existing tracker + bounded transformation | locked, atomically replaced YAML preserving unrelated session fields | session-contract owner | lifecycle and outcome selection |
 | selected outcome observation | ordinary receipt + exact claim/tracker state | typed `would_allow`, `would_deny`, or visible binding failure | existing Plan #116 observer extended by Plan #117 | Brian/operator evidence run |
 | explicit selection CLI | claim/session identity + scenario | machine-readable selected/idempotent/error result | existing outcome-continuation CLI | Brian and his coding agents |
@@ -145,24 +158,30 @@ needed for this deterministic binding slice.
 2. The selected scenario must be a strict `OutcomeContinuationScenarioV1`
    file inside the claim worktree and its outcome project must equal the claim
    project.
-3. `OutcomeSelectionBindingV1` retains the stable claim-identity digest,
+3. Selection requires an explicit execution authority. A planned authority must
+   equal the canonical claim `plan_ref`; a claim with null/`UNPLANNED` authority
+   accepts only exact `goal:<scenario-outcome-id>`. A plan-shaped authority
+   against unplanned claim state fails visibly rather than being inferred from
+   branch names, prose, or notes.
+4. `OutcomeSelectionBindingV1` retains the execution authority, stable
+   claim-identity digest,
    tracker path, scenario path/file/scenario/contract/lease digests, outcome and
    predecessor lineage, target, initial decision, and selection timestamp.
-4. Stable claim identity includes agent, project, scope, session ID, repository,
+5. Stable claim identity includes agent, project, scope, session ID, repository,
    worktree, branch, tracker, and claim source. Mutable heartbeat/expiry fields
    do not invalidate an otherwise identical session.
-5. Selection is create-once: the same binding is idempotent; a different
+6. Selection is create-once: the same binding is idempotent; a different
    scenario or identity cannot replace it through the selection command.
-6. Tracker reads and writes use one sibling lock and same-filesystem atomic
+7. Tracker reads and writes use one sibling lock and same-filesystem atomic
    replacement. Existing heartbeat/resume updates preserve the selection.
-7. `--outcome-selected` and `--outcome-scenario` are mutually exclusive. The
+8. `--outcome-selected` and `--outcome-scenario` are mutually exclusive. The
    selected path derives its scenario only from the exact tracker binding.
-8. No-option behavior and the existing explicit scenario behavior remain
+9. No-option behavior and the existing explicit scenario behavior remain
    compatible. The ordinary decision runs and records first and remains the
    only authority controlling output and exit status.
-9. Selected success receipts retain the selection-binding digest and tracker
+10. Selected success receipts retain the selection-binding digest and tracker
    reference. Expected binding failures append typed visible observations.
-10. The pilot neither performs the write nor claims automatic selection,
+11. The pilot neither performs the write nor claims automatic selection,
     mutable lease renewal, hard denial, installation, shell coverage, colleague
     use, or fleet adoption.
 
@@ -183,8 +202,8 @@ In scope:
 - atomic/locked tracker writes that preserve unrelated fields;
 - one explicit selection subcommand and one selected pre-write flag;
 - selected success/failure receipt metadata;
-- focused identity, tamper, concurrency-preservation, both-sign, and
-  compatibility tests;
+- focused identity, authority-ref, tamper, concurrency-preservation, both-sign,
+  and compatibility tests;
 - one real Plan #117 positive selection observation, one isolated circular
   control, and retained evidence;
 - plan, work graph, index, and roadmap reconciliation.
@@ -232,7 +251,8 @@ Not in scope:
 ### Steps
 
 1. Add failing focused tests for strict binding, idempotence, replacement denial,
-   exact identity, scenario tamper, and tracker-field preservation.
+   exact identity, plan/goal authority, scenario tamper, and tracker-field
+   preservation.
 2. Add one locked atomic tracker mutation seam and route existing tracker
    writers plus selection through it.
 3. Extend the outcome CLI with exact-live-claim selection and the pre-write
@@ -249,6 +269,7 @@ Not in scope:
 |---|---|
 | strict selection and create-once idempotence | the same session can silently switch outcomes |
 | exact claim/tracker/session/worktree/branch binding | stale or foreign state can authorize observation |
+| planned and explicit-goal authority binding | a plan-named session silently degrades to `UNPLANNED`, or every goal is forced to have a numbered plan |
 | scenario file and typed-content digest binding | selected authority changes in place |
 | atomic tracker update and heartbeat preservation | concurrent/lifecycle writes erase or truncate selection |
 | selected positive and circular negative paths | the durable path cannot discriminate progress from motion |
@@ -266,6 +287,10 @@ Not in scope:
 - [ ] Binding and lookup validate stable claim identity, tracker identity,
   session, repository, worktree, branch, claim source, scenario file, scenario
   content, contract, lease, outcome lineage, and target.
+- [ ] A fixture-equivalent planned session preserves the canonical plan ref in
+  claim, tracker, and outcome selection; a plan authority against null or
+  `UNPLANNED` claim state fails loud, while exact `goal:<outcome-id>` remains a
+  valid authority for genuinely unplanned work.
 - [ ] Tracker creation/update/selection writes are locked and atomic, and a
   normal heartbeat/resume-style update preserves `outcome_selection`.
 - [ ] `--outcome-selected` derives the scenario only from exact live session
@@ -290,6 +315,7 @@ Not in scope:
 | tracker mutation can truncate or lose unrelated fields | keep selection unshipped and repair the atomic owner before another adapter run |
 | heartbeat or claim refresh invalidates stable identity | remove mutable claim fields from the identity digest only after proving exact session identity remains intact |
 | a different selection can replace the first | reject replacement and require a separately reviewed restart/change path |
+| planned authority is null/`UNPLANNED` | fail selection with the exact mismatch; use a plan-bound claim entrypoint or explicitly adopt a genuine `goal:<outcome-id>` authority rather than inferring from prose |
 | selected lookup needs projection changes | stop the unit and plan that prerequisite instead of widening the fast gate |
 | ordinary decision or exit changes | revert selected wrapper coupling; retain standalone selection evidence |
 | real selected observation cannot bind exactly | retain the mismatch as the result; do not claim durable ownership |
@@ -299,6 +325,8 @@ Not in scope:
 
 - Use the existing linked session tracker; do not create another live registry.
 - Bind stable exact-session identity, not mutable heartbeat or cost telemetry.
+- Bind explicit canonical plan authority or exact `goal:<outcome-id>`; never
+  infer authority from plan-shaped branch names, goals, notes, or filenames.
 - Make selection create-once and explicit for this pilot.
 - Extend the existing outcome and pre-write owners; do not create a second gate.
 - Keep ordinary claim admission authoritative and observe-only.

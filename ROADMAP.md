@@ -51,7 +51,7 @@ paths.
 
 Two configured generated consumers pass the same plan, documentation, progress,
 scope, portability, and independent-verifier controls. This is mechanical
-repeatability evidence. Plans #55 and #114–#116 then crossed the owner frontier
+repeatability evidence. Plans #55 and #114–#117 then crossed the owner frontier
 on Enforced Planning itself:
 
 - Plan #55 reduced the required context for one real framework module from 11
@@ -65,14 +65,20 @@ on Enforced Planning itself:
   `allow/exact_live_claim`; owner progress correlated to
   `would_allow/active_in_scope`, while two synthetic non-outcome receipts
   correlated to `would_deny/recovery_required`.
+- Plan #117 bound the real claimed session to one create-once scenario in its
+  linked tracker. Heartbeat and replay preserved the same selection digest; the
+  real selected path returned `would_allow/active_in_scope`, while the checked-in
+  same-contract circular control returned `would_deny/recovery_required` in an
+  isolated selected session without changing ordinary admission.
 
-These observations prove useful owner-real behavior at the documentation and
-continuation seams. They do not yet prove automatic outcome selection,
-representative false-block rates, installed outcome enforcement, or usefulness
-across Brian's ordinary project portfolio. The current proof frontier is
-therefore repeated owner-real delivery on normal Brian-owned project work, with
-compact current documentation, plan adherence, course correction, and
-independent outcome evidence observed together. Colleague packaging,
+These observations prove useful owner-real behavior at the documentation,
+continuation, and exact-session identity seams. They do not yet prove automatic
+outcome selection, representative false-block rates, installed outcome
+enforcement, or usefulness across Brian's ordinary project portfolio. The
+current proof frontier is therefore repeated owner-real delivery on normal
+Brian-owned project work, with compact current documentation, plan adherence,
+course correction, and independently selected outcome evidence observed
+together. Colleague packaging,
 external-user validation, and claims of broader usability remain downstream of
 that repeated owner dogfooding.
 
@@ -263,7 +269,7 @@ authority and directory policy.
 | Pre-write claim enforcement | Check supported native Codex/Claude write events against exact live session, worktree, branch, and path ownership before mutation. See Plan #108. | PW-01/PW-02A/PW-02 are accepted; PW-02B0 writer provenance is the only ready leaf, followed by frozen inventory, bounded rollout, fleet certification, and the fixed enforced-planning pilot |
 | Artifact creation enforcement | Gate selected new tracked artifacts against repository directory rules and durable intent, with receipts and feedback. See Plan #109. | Portable mechanism first, then an Inside Success Markdown observe pilot before any blocking promotion |
 | No-passive-waiting enforcement | Separate liveness from progress, reject whole-goal blockage while compatible work remains, and preserve recoverable true blockers. See Plan #110. | Work graph validated; progress visibility and provider-free blocker disposition are the two ready leaves |
-| Outcome continuation lease | Require typed progress evidence before supported coding-agent continuation; ordinary approval and cost do not renew authority. See Plans #114–#117. | Plan #117 is ready to bind one exact claimed session to one create-once outcome selection in existing tracker state; representative normal-project calibration and any blocking or rollout remain downstream |
+| Outcome continuation lease | Require typed progress evidence before supported coding-agent continuation; ordinary approval and cost do not renew authority. See Plans #114–#117. | Plan #117 completed exact-session create-once selection and both-sign observe evidence; representative normal-project calibration, legitimate restart/recovery transitions, and any blocking or rollout remain downstream |
 | Multi-tool adoption | Cursor/Windsurf hook adapters when their hook surfaces are publicly documented | External dependency: tool documentation |
 | Project-meta topic-research adoption | Apply portable topic-research pattern in `research_synthesis/` with manifests, ADR links, freshness metadata | Plans #43/#44/#35 complete |
 

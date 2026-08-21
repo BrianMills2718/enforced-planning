@@ -1,0 +1,101 @@
+{
+  "schema_version": "1.0.0",
+  "scenario_id": "plan-117-circular",
+  "contract": {
+    "schema_version": "1.0.0",
+    "outcome_id": "durable-outcome-selection",
+    "owner_class": "brian-agent-owner",
+    "project_id": "enforced-planning",
+    "lineage_id": "plan-117-durable-selection",
+    "predecessor_lineage_ids": [
+      "plan-116-prewrite-correlation"
+    ],
+    "intended_consumer": "Brian and his coding agents working on Enforced Planning",
+    "outcome": "Bind one exact claimed session to one immutable outcome selection and resolve it without caller substitution.",
+    "canonical_journey": {
+      "starting_state": "One exact live Plan 117 claim has no durable outcome selection.",
+      "input": "One immutable Plan 117 scenario and its exact execution authority.",
+      "action": "Select the scenario once, then observe the evidence write from the claim-linked tracker.",
+      "observable_result": "The ordinary claimed write remains allowed and the selected outcome returns would_allow with binding evidence.",
+      "failure_signal": "The selection can be erased, replaced, borrowed by another session, or supplied again by the caller."
+    },
+    "baseline_revision": "efc08583017c915abccc3ecf9b9959e8cc734fb6",
+    "allowed_scope": [
+      "docs/evidence/plan117_durable_outcome_selection_binding.json"
+    ],
+    "progress_dimensions": [
+      "durable session binding"
+    ]
+  },
+  "receipts": [
+    {
+      "schema_version": "1.0.0",
+      "receipt_id": "plan-117-motion-one",
+      "outcome_contract_sha256": "56bfc4ca0c6cf33da7b1eda0c7004ca90aca909c941104b15c4feff37dc8ffa1",
+      "prior_receipt_sha256": null,
+      "progress_kind": "non_outcome",
+      "dimension": "durable session binding",
+      "summary": "One supporting increment completed while the stable durable-session outcome did not advance.",
+      "evidence": {
+        "source_revision": "efc08583017c915abccc3ecf9b9959e8cc734fb6",
+        "configuration_sha256": "a0a7596938b8636b8f45bd1bedb2913b3be5cd31b5d056954575d7dbbcf5c0f7",
+        "route": "plan-117-synthetic-circular-control",
+        "command": [
+          "synthetic-control",
+          "non-outcome-increment",
+          "one"
+        ],
+        "observation_sha256": "f6d183f28c9079b2076aed2d054fd7597dec8e9b97d9d274180cc02c4e1ffad5",
+        "artifact_refs": [
+          "docs/plans/117_durable_outcome_selection_binding_observe.md"
+        ],
+        "trace_ref": null,
+        "observed_at": "2026-08-21T04:48:38Z"
+      },
+      "failure_boundary": "owner-outcome-unchanged",
+      "exact_replay_result": null,
+      "decision_delta": null,
+      "discriminating_evidence": false
+    },
+    {
+      "schema_version": "1.0.0",
+      "receipt_id": "plan-117-motion-two",
+      "outcome_contract_sha256": "56bfc4ca0c6cf33da7b1eda0c7004ca90aca909c941104b15c4feff37dc8ffa1",
+      "prior_receipt_sha256": "9327ccff2192121c546f85b94abcd5be6c7554e8b8c605011002a88be0f4bf8f",
+      "progress_kind": "non_outcome",
+      "dimension": "durable session binding",
+      "summary": "A second supporting increment completed while the same durable-session outcome stayed unchanged.",
+      "evidence": {
+        "source_revision": "efc08583017c915abccc3ecf9b9959e8cc734fb6",
+        "configuration_sha256": "a0a7596938b8636b8f45bd1bedb2913b3be5cd31b5d056954575d7dbbcf5c0f7",
+        "route": "plan-117-synthetic-circular-control",
+        "command": [
+          "synthetic-control",
+          "non-outcome-increment",
+          "two"
+        ],
+        "observation_sha256": "8be92952119ae7549a50a5d6dd9fb1befa5c51ced7e86ddfc21a29fb9d27edb5",
+        "artifact_refs": [
+          "docs/plans/117_durable_outcome_selection_binding_observe.md"
+        ],
+        "trace_ref": null,
+        "observed_at": "2026-08-21T04:48:38Z"
+      },
+      "failure_boundary": "owner-outcome-unchanged",
+      "exact_replay_result": null,
+      "decision_delta": null,
+      "discriminating_evidence": false
+    }
+  ],
+  "request": {
+    "schema_version": "1.0.0",
+    "operation": "product_write",
+    "target_path": "docs/evidence/plan117_durable_outcome_selection_binding.json",
+    "recovery_action": null,
+    "ordinary_approval": true,
+    "approval_text": "I approve, continue",
+    "cost_telemetry_usd": "1000000",
+    "elapsed_telemetry_seconds": 999999
+  },
+  "recovery_lease": null
+}

@@ -1,6 +1,22 @@
 # Plan #117: Durable Outcome Selection And Exact-Session Binding Observe Pilot
 
-**Status:** 📋 Planned
+**Status:** ✅ Complete
+
+**Verified:** 2026-08-21T04:55:00Z
+**Verification Evidence:**
+```yaml
+completed_by: exact Plan 117 claimed Codex session
+timestamp: 2026-08-21T04:55:00Z
+tests:
+  selection_and_coordination: 111 passed
+  plan_108_114_116_regressions: 98 passed
+  checked_in_selected_both_signs: 2 passed
+  retained_evidence_replay: passed
+  changed_file_ruff: passed
+implementation_commit: 091951aa466d0f6babd91d6ecfb989e967d554da
+evidence_commit: f4ed5da1a602509016da740e7d914709d9637d8f
+evidence: docs/evidence/plan117_durable_outcome_selection_binding.json
+```
 **Type:** implementation (observe-only session binding)
 **Priority:** Critical
 **phase_ref:** "Progress-bound coding-agent continuation"
@@ -251,6 +267,7 @@ Not in scope:
 - `examples/owner-real-outcome-observe/plan117-owner-progress.json` (create)
 - `examples/owner-real-outcome-observe/plan117-circular.json` (create)
 - `docs/evidence/plan117_durable_outcome_selection_binding.json` (create)
+- `docs/guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md` (update)
 - `docs/plans/117_durable_outcome_selection_binding_observe.md` (create/update)
 - `docs/plans/117_durable_outcome_selection_binding_observe_work_graph.json` (create/update)
 - `docs/plans/CLAUDE.md` (update)
@@ -303,35 +320,61 @@ Not in scope:
 
 ## Acceptance Criteria
 
-- [ ] One exact live session can select one strict immutable scenario into its
+- [x] One exact live session can select one strict immutable scenario into its
   existing linked tracker; identical reselection is idempotent and a different
   selection is rejected.
-- [ ] Binding and lookup validate stable claim identity, tracker identity,
+- [x] Binding and lookup validate stable claim identity, tracker identity,
   session, repository, worktree, branch, claim source, scenario file, scenario
   content, contract, lease, outcome lineage, and target.
-- [ ] A fixture-equivalent planned session preserves the canonical plan ref in
+- [x] A fixture-equivalent planned session preserves the canonical plan ref in
   claim, tracker, and outcome selection; a plan authority against null or
   `UNPLANNED` claim state fails loud, while exact `goal:<outcome-id>` remains a
   valid authority for genuinely unplanned work.
-- [ ] An exact `goal:<id>` write claim preserves that ref in claim and tracker
+- [x] An exact `goal:<id>` write claim preserves that ref in claim and tracker
   without a manufactured work graph, while a numbered plan write claim remains
   rejected unless its canonical graph and unit are present.
-- [ ] Tracker creation/update/selection writes are locked and atomic, and a
+- [x] Tracker creation/update/selection writes are locked and atomic, and a
   normal heartbeat/resume-style update preserves `outcome_selection`.
-- [ ] `--outcome-selected` derives the scenario only from exact live session
+- [x] `--outcome-selected` derives the scenario only from exact live session
   state; it is mutually exclusive with `--outcome-scenario`.
-- [ ] Missing, stale, foreign, replaced, or tampered selection state appends a
+- [x] Missing, stale, foreign, replaced, or tampered selection state appends a
   typed visible observation failure without changing ordinary admission or its
   exit code.
-- [ ] A selected positive scenario produces `would_allow/active_in_scope`; an
+- [x] A selected positive scenario produces `would_allow/active_in_scope`; an
   isolated selected circular control produces
   `would_deny/recovery_required`.
-- [ ] No-option and explicit Plan #116 behavior remain compatible, and focused
+- [x] No-option and explicit Plan #116 behavior remain compatible, and focused
   Plan #108/#114/#116 regressions pass.
-- [ ] Retained real evidence binds the Plan #117 claim, tracker, selection,
+- [x] Retained real evidence binds the Plan #117 claim, tracker, selection,
   scenario, ordinary receipt, correlation receipt, revisions, and digests.
-- [ ] Evidence and status truthfully say manual opt-in observe pilot—not
+- [x] Evidence and status truthfully say manual opt-in observe pilot—not
   automatic selection, mutable lease, enforcement, installation, or fleet use.
+
+## Accepted Evidence
+
+- Candidate implementation revision
+  `091951aa466d0f6babd91d6ecfb989e967d554da` and retained evidence revision
+  `f4ed5da1a602509016da740e7d914709d9637d8f`.
+- `docs/evidence/plan117_durable_outcome_selection_binding.json` binds the real
+  exact Plan #117 claim and tracker, selection and claim-identity digests,
+  checked-in scenario/contract/lease digests, ordinary and correlation receipt
+  IDs, projection/payload digests, timestamps, and both decision signs.
+- The real session selected the positive scenario once, survived a heartbeat,
+  and replayed idempotently with the same binding digest. Its selected pre-write
+  path produced ordinary `allow/exact_live_claim` followed by
+  `would_allow/active_in_scope` without caller scenario input.
+- The checked-in same-contract circular scenario ran through an isolated
+  selected session and produced ordinary `allow/exact_live_claim` followed by
+  `would_deny/recovery_required`; approval, cost, elapsed time, and the target
+  stayed identical while only progress receipts differed.
+- Exact goal refs now own simple sequential writes without a manufactured graph;
+  numbered plan refs retain graph+unit readiness. Session refresh and heartbeat
+  preserve selected state, while conflicting selection, identity replacement,
+  and scenario tamper fail visibly.
+- One hundred eleven focused selection/coordination checks, 98 Plan
+  #108/#114/#116 regressions, and two checked-in both-sign controls passed.
+  Promotion remains manual and observe-only; representative normal-project
+  calibration and a reviewed restart/recovery transition precede any blocking.
 
 ## Failure And Reset Rules
 

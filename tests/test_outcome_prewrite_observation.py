@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 import yaml  # type: ignore[import-untyped]
 
+from enforced_planning import session_contracts
 from enforced_planning.outcome_continuation import (
     AdmissionRequestV1,
     EvidenceBindingV1,
@@ -27,11 +28,13 @@ from enforced_planning.outcome_prewrite_observation import (
     load_observation_records,
     observe_prewrite_outcome,
 )
+from enforced_planning.outcome_selection import select_outcome_for_session
 from enforced_planning.prewrite_claim_fast import evaluate_prewrite_fast
 from enforced_planning.prewrite_claim_projection import write_projection
 
 ROOT = Path(__file__).resolve().parents[1]
 TARGET = "docs/evidence/plan116_prewrite_outcome_correlation.json"
+PLAN117_TARGET = "docs/evidence/plan117_durable_outcome_selection_binding.json"
 SESSION = "codex:plan116-test"
 PROFILE_SHA256 = hashlib.sha256(b"plan116-test-profile").hexdigest()
 
@@ -46,7 +49,13 @@ def _git(repo: Path, *args: str) -> str:
     return completed.stdout.strip()
 
 
-def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, Path, Path]:
+def _fixture(
+    tmp_path: Path,
+    *,
+    plan_ref: str = "goal:owner-prewrite-correlation",
+    target: str = TARGET,
+) -> tuple[Path, Path, Path, Path, Path]:
+    tmp_path.mkdir(parents=True, exist_ok=True)
     repo = tmp_path / "repo"
     repo.mkdir()
     _git(repo, "init", "-b", "main")
@@ -63,6 +72,28 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, Path, Path]:
     claims_dir = tmp_path / "claims"
     claims_dir.mkdir()
     now = datetime.now(UTC)
+    tracker_dir = tmp_path / "sessions"
+    session_contract = session_contracts.SessionContract.build(
+        agent="codex",
+        project="enforced-planning",
+        scope="plan116-test",
+        intent="exercise outcome pre-write observation",
+        plan_ref=plan_ref,
+        repo_root=str(repo),
+        worktree_path=str(worktree),
+        branch="plan116-test",
+        session_id=SESSION,
+        broader_goal="Owner Prewrite Correlation",
+    )
+    tracker_path = session_contracts.session_tracker_path(session_contract, tracker_dir=tracker_dir)
+    session_contract = session_contract.with_tracker_path(str(tracker_path))
+    session_contracts.write_session_tracker(
+        session_contracts.build_session_tracker(
+            contract=session_contract,
+            current_phase="observe outcome pre-write",
+        ),
+        tracker_dir=tracker_dir,
+    )
     claim_path = claims_dir / "codex_plan116-test_plan116-test.yaml"
     claim_path.write_text(
         yaml.safe_dump(
@@ -75,13 +106,16 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, Path, Path]:
                 "scope": "plan116-test",
                 "intent": "exercise outcome pre-write observation",
                 "claim_type": "program",
-                "write_paths": [TARGET],
+                "write_paths": [target],
                 "read_paths": [],
                 "worktree_path": str(worktree),
                 "repo_root": str(repo),
                 "branch": "plan116-test",
                 "session_name": "plan116-test",
                 "session_id": SESSION,
+                "broader_goal": "Owner Prewrite Correlation",
+                "tracker_path": str(tracker_path),
+                "plan_ref": plan_ref,
                 "heartbeat_at": now.isoformat(),
                 "status": "active",
                 "updated_at": now.isoformat(),
@@ -227,8 +261,10 @@ def _invoke_cli(
     projection_path: Path,
     *,
     scenario_path: Path | None = None,
+    selected: bool = False,
     json_output: bool = True,
     mode: str = "observe",
+    target: str = TARGET,
 ) -> subprocess.CompletedProcess[str]:
     command = [
         sys.executable,
@@ -253,12 +289,20 @@ def _invoke_cli(
                 str(tmp_path / "outcome-cli.jsonl"),
             ]
         )
+    if selected:
+        command.extend(
+            [
+                "--outcome-selected",
+                "--outcome-receipt-path",
+                str(tmp_path / "outcome-cli.jsonl"),
+            ]
+        )
     if json_output:
         command.append("--json")
     return subprocess.run(
         command,
         cwd=worktree,
-        input=json.dumps(_payload(worktree)),
+        input=json.dumps(_payload(worktree, target=target)),
         capture_output=True,
         text=True,
         check=False,
@@ -449,6 +493,226 @@ def test_cli_no_option_is_unchanged_and_both_signs_preserve_ordinary_allow(
         assert datetime.fromisoformat(ordinary_record["recorded_at"]) <= observation.observed_at
 
 
+def test_selected_cli_resolves_tracker_binding_and_preserves_ordinary_allow(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CODEX_THREAD_ID", "plan116-test")
+    _repo, worktree, claims_dir, _claim_path, projection_path = _fixture(tmp_path)
+    positive, _circular = _scenarios()
+    scenario_path = worktree / "scenarios" / "selected.json"
+    _write_scenario(scenario_path, positive)
+    selection = select_outcome_for_session(
+        agent="codex",
+        project="enforced-planning",
+        scope="plan116-test",
+        session_id=SESSION,
+        execution_authority_ref="goal:owner-prewrite-correlation",
+        scenario_path=scenario_path,
+        claims_dir=claims_dir,
+    )
+
+    completed = _invoke_cli(
+        tmp_path,
+        worktree,
+        claims_dir,
+        projection_path,
+        selected=True,
+    )
+
+    assert completed.returncode == 0
+    payload = json.loads(completed.stdout)
+    assert (payload["decision"], payload["reason_code"]) == ("allow", "exact_live_claim")
+    observation = payload["outcome_observation"]
+    assert observation["disposition"] == "would_allow"
+    assert observation["selection_binding_sha256"] == selection.binding_sha256
+    assert observation["selection_execution_authority_ref"] == "goal:owner-prewrite-correlation"
+    assert observation["ordinary_authority_preserved"] is True
+    assert observation["enforcement_applied"] is False
+
+
+def test_selected_circular_control_would_deny_but_preserves_ordinary_allow(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CODEX_THREAD_ID", "plan116-test")
+    _repo, worktree, claims_dir, _claim_path, projection_path = _fixture(tmp_path)
+    _positive, circular = _scenarios()
+    scenario_path = worktree / "scenarios" / "selected-circular.json"
+    _write_scenario(scenario_path, circular)
+    select_outcome_for_session(
+        agent="codex",
+        project="enforced-planning",
+        scope="plan116-test",
+        session_id=SESSION,
+        execution_authority_ref="goal:owner-prewrite-correlation",
+        scenario_path=scenario_path,
+        claims_dir=claims_dir,
+    )
+
+    completed = _invoke_cli(
+        tmp_path,
+        worktree,
+        claims_dir,
+        projection_path,
+        selected=True,
+    )
+
+    assert completed.returncode == 0
+    payload = json.loads(completed.stdout)
+    assert (payload["decision"], payload["reason_code"]) == ("allow", "exact_live_claim")
+    assert payload["outcome_observation"]["disposition"] == "would_deny"
+    assert payload["outcome_observation"]["outcome_reason_code"] == "recovery_required"
+
+
+@pytest.mark.parametrize(
+    ("scenario_name", "disposition", "reason_code"),
+    [
+        ("plan117-owner-progress.json", "would_allow", "active_in_scope"),
+        ("plan117-circular.json", "would_deny", "recovery_required"),
+    ],
+)
+def test_checked_in_plan117_selected_controls_produce_both_signs(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    scenario_name: str,
+    disposition: str,
+    reason_code: str,
+) -> None:
+    """The retained Plan 117 controls execute through selected-state lookup."""
+
+    monkeypatch.setenv("CODEX_THREAD_ID", "plan116-test")
+    _repo, worktree, claims_dir, _claim_path, projection_path = _fixture(
+        tmp_path,
+        plan_ref="goal:durable-outcome-selection",
+        target=PLAN117_TARGET,
+    )
+    source = ROOT / "examples" / "owner-real-outcome-observe" / scenario_name
+    scenario_path = worktree / "scenarios" / scenario_name
+    scenario_path.write_bytes(source.read_bytes())
+    selection = select_outcome_for_session(
+        agent="codex",
+        project="enforced-planning",
+        scope="plan116-test",
+        session_id=SESSION,
+        execution_authority_ref="goal:durable-outcome-selection",
+        scenario_path=scenario_path,
+        claims_dir=claims_dir,
+    )
+
+    completed = _invoke_cli(
+        tmp_path,
+        worktree,
+        claims_dir,
+        projection_path,
+        selected=True,
+        target=PLAN117_TARGET,
+    )
+
+    assert completed.returncode == 0
+    payload = json.loads(completed.stdout)
+    assert (payload["decision"], payload["reason_code"]) == ("allow", "exact_live_claim")
+    observation = payload["outcome_observation"]
+    assert observation["disposition"] == disposition
+    assert observation["outcome_reason_code"] == reason_code
+    assert observation["selection_binding_sha256"] == selection.binding_sha256
+    assert observation["ordinary_authority_preserved"] is True
+    assert observation["enforcement_applied"] is False
+
+
+def test_selected_cli_records_missing_and_tampered_binding_without_changing_exit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CODEX_THREAD_ID", "plan116-test")
+    _repo, worktree, claims_dir, _claim_path, projection_path = _fixture(tmp_path)
+
+    missing = _invoke_cli(
+        tmp_path,
+        worktree,
+        claims_dir,
+        projection_path,
+        selected=True,
+    )
+    assert missing.returncode == 0
+    missing_payload = json.loads(missing.stdout)
+    assert missing_payload["decision"] == "allow"
+    assert missing_payload["outcome_observation"]["error_code"] == "selection_missing"
+
+    positive, _circular = _scenarios()
+    scenario_path = worktree / "scenarios" / "selected.json"
+    _write_scenario(scenario_path, positive)
+    select_outcome_for_session(
+        agent="codex",
+        project="enforced-planning",
+        scope="plan116-test",
+        session_id=SESSION,
+        execution_authority_ref="goal:owner-prewrite-correlation",
+        scenario_path=scenario_path,
+        claims_dir=claims_dir,
+    )
+    scenario_path.write_text(scenario_path.read_text(encoding="utf-8") + "\n", encoding="utf-8")
+    tampered = _invoke_cli(
+        tmp_path,
+        worktree,
+        claims_dir,
+        projection_path,
+        selected=True,
+    )
+    assert tampered.returncode == 0
+    tampered_payload = json.loads(tampered.stdout)
+    assert tampered_payload["decision"] == "allow"
+    assert tampered_payload["outcome_observation"]["error_code"] == "selection_scenario_stale"
+
+
+def test_selected_cli_records_missing_tracker_as_typed_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A missing tracker is durable observation failure, not an uncaught fallback."""
+
+    monkeypatch.setenv("CODEX_THREAD_ID", "plan116-test")
+    _repo, worktree, claims_dir, claim_path, projection_path = _fixture(tmp_path)
+    claim = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    Path(claim["tracker_path"]).unlink()
+
+    completed = _invoke_cli(
+        tmp_path,
+        worktree,
+        claims_dir,
+        projection_path,
+        selected=True,
+    )
+
+    assert completed.returncode == 0
+    payload = json.loads(completed.stdout)
+    assert payload["decision"] == "allow"
+    observation = payload["outcome_observation"]
+    assert observation["record_type"] == "outcome_prewrite_observation_failure"
+    assert observation["error_code"] in {"claim_not_healthy", "tracker_unavailable"}
+    assert observation["ordinary_authority_preserved"] is True
+    assert observation["enforcement_applied"] is False
+
+
+def test_selected_and_explicit_scenario_flags_are_mutually_exclusive(
+    tmp_path: Path,
+) -> None:
+    _repo, worktree, claims_dir, _claim_path, projection_path = _fixture(tmp_path)
+    positive, _circular = _scenarios()
+    scenario_path = worktree / "scenarios" / "selected.json"
+    _write_scenario(scenario_path, positive)
+    completed = _invoke_cli(
+        tmp_path,
+        worktree,
+        claims_dir,
+        projection_path,
+        scenario_path=scenario_path,
+        selected=True,
+    )
+    assert completed.returncode == 2
+    assert "not allowed with argument" in completed.stderr
+
+
 def test_native_ordinary_deny_and_observation_error_keep_original_exit_authority(
     tmp_path: Path,
 ) -> None:
@@ -568,4 +832,46 @@ def test_retained_plan116_evidence_matches_scenarios_and_correlation_results() -
     assert evidence["execution"]["candidate_revision"] == "686be2a14ddeb01b329edbd503040cc6fde9922c"
     assert evidence["execution"]["enforcement_applied"] is False
     assert evidence["ordinary_boundary"]["ordinary_decision_remained_authoritative"] is True
+    assert "not outcome-based blocking" in evidence["limitations"][-1]
+
+
+def test_retained_plan117_evidence_matches_selected_scenarios_and_receipts() -> None:
+    """Plan 117 evidence must remain bound to both checked-in scenario signs."""
+
+    evidence = json.loads(
+        (ROOT / "docs" / "evidence" / "plan117_durable_outcome_selection_binding.json").read_text(encoding="utf-8")
+    )
+    scenario_root = ROOT / "examples" / "owner-real-outcome-observe"
+    positive_path = scenario_root / "plan117-owner-progress.json"
+    circular_path = scenario_root / "plan117-circular.json"
+    positive = load_scenario(str(positive_path))
+    circular = load_scenario(str(circular_path))
+    positive_result = evaluate_scenario(positive)
+    circular_result = evaluate_scenario(circular)
+
+    selected = evidence["selection"]
+    retained_positive = evidence["selected_owner_progress_positive"]
+    retained_circular = evidence["isolated_selected_circular_negative"]
+    assert selected["scenario_file_sha256"] == hashlib.sha256(positive_path.read_bytes()).hexdigest()
+    assert selected["scenario_sha256"] == positive_result.scenario_sha256
+    assert selected["outcome_contract_sha256"] == positive_result.outcome_contract_sha256
+    assert selected["lease_sha256"] == positive_result.lease_sha256
+    assert retained_positive["disposition"] == "would_allow"
+    assert retained_positive["reason_code"] == "active_in_scope"
+    assert retained_positive["applied_receipt_sha256s"] == positive_result.applied_receipt_sha256s
+    assert retained_circular["scenario_file_sha256"] == hashlib.sha256(circular_path.read_bytes()).hexdigest()
+    assert retained_circular["scenario_sha256"] == circular_result.scenario_sha256
+    assert retained_circular["outcome_contract_sha256"] == circular_result.outcome_contract_sha256
+    assert retained_circular["lease_sha256"] == circular_result.lease_sha256
+    assert retained_circular["disposition"] == "would_deny"
+    assert retained_circular["reason_code"] == "recovery_required"
+    assert retained_circular["applied_receipt_sha256s"] == circular_result.applied_receipt_sha256s
+    assert positive.contract == circular.contract
+    assert positive.request == circular.request
+    assert evidence["execution"]["candidate_revision"] == "091951aa466d0f6babd91d6ecfb989e967d554da"
+    assert evidence["execution"]["enforcement_applied"] is False
+    assert selected["binding_sha256"] == retained_positive["selection_binding_sha256"]
+    assert datetime.fromisoformat(evidence["ordinary_boundary"]["recorded_at"]) < datetime.fromisoformat(
+        retained_positive["observed_at"]
+    )
     assert "not outcome-based blocking" in evidence["limitations"][-1]

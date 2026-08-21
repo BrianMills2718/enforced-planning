@@ -1,0 +1,77 @@
+{
+  "schema_version": "1.0.0",
+  "scenario_id": "plan-117-owner-progress",
+  "contract": {
+    "schema_version": "1.0.0",
+    "outcome_id": "durable-outcome-selection",
+    "owner_class": "brian-agent-owner",
+    "project_id": "enforced-planning",
+    "lineage_id": "plan-117-durable-selection",
+    "predecessor_lineage_ids": [
+      "plan-116-prewrite-correlation"
+    ],
+    "intended_consumer": "Brian and his coding agents working on Enforced Planning",
+    "outcome": "Bind one exact claimed session to one immutable outcome selection and resolve it without caller substitution.",
+    "canonical_journey": {
+      "starting_state": "One exact live Plan 117 claim has no durable outcome selection.",
+      "input": "One immutable Plan 117 scenario and its exact execution authority.",
+      "action": "Select the scenario once, then observe the evidence write from the claim-linked tracker.",
+      "observable_result": "The ordinary claimed write remains allowed and the selected outcome returns would_allow with binding evidence.",
+      "failure_signal": "The selection can be erased, replaced, borrowed by another session, or supplied again by the caller."
+    },
+    "baseline_revision": "efc08583017c915abccc3ecf9b9959e8cc734fb6",
+    "allowed_scope": [
+      "docs/evidence/plan117_durable_outcome_selection_binding.json"
+    ],
+    "progress_dimensions": [
+      "durable session binding"
+    ]
+  },
+  "receipts": [
+    {
+      "schema_version": "1.0.0",
+      "receipt_id": "plan-117-durable-binding-implemented",
+      "outcome_contract_sha256": "56bfc4ca0c6cf33da7b1eda0c7004ca90aca909c941104b15c4feff37dc8ffa1",
+      "prior_receipt_sha256": null,
+      "progress_kind": "behavioral_advance",
+      "dimension": "durable session binding",
+      "summary": "The exact claimed session can now select one immutable outcome and resolve it without a caller scenario.",
+      "evidence": {
+        "source_revision": "efc08583017c915abccc3ecf9b9959e8cc734fb6",
+        "configuration_sha256": "a0a7596938b8636b8f45bd1bedb2913b3be5cd31b5d056954575d7dbbcf5c0f7",
+        "route": "plan-117-focused-owner-binding",
+        "command": [
+          "pytest",
+          "-q",
+          "tests/test_outcome_selection.py",
+          "tests/test_session_contracts.py",
+          "tests/test_outcome_prewrite_observation.py",
+          "tests/test_check_coordination_claims.py"
+        ],
+        "observation_sha256": "227e736d509727a99c2121fca439a47b504a8faed76acc6dd8d3f86d17a0d986",
+        "artifact_refs": [
+          "enforced_planning/outcome_selection.py",
+          "tests/test_outcome_selection.py",
+          "tests/test_session_contracts.py"
+        ],
+        "trace_ref": null,
+        "observed_at": "2026-08-21T04:48:38Z"
+      },
+      "failure_boundary": null,
+      "exact_replay_result": null,
+      "decision_delta": null,
+      "discriminating_evidence": true
+    }
+  ],
+  "request": {
+    "schema_version": "1.0.0",
+    "operation": "product_write",
+    "target_path": "docs/evidence/plan117_durable_outcome_selection_binding.json",
+    "recovery_action": null,
+    "ordinary_approval": true,
+    "approval_text": "I approve, continue",
+    "cost_telemetry_usd": "1000000",
+    "elapsed_telemetry_seconds": 999999
+  },
+  "recovery_lease": null
+}

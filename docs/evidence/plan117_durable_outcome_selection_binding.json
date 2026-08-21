@@ -1,0 +1,190 @@
+{
+  "schema_version": "1.0.0",
+  "record_type": "owner_durable_outcome_selection_observation",
+  "plan_id": "enforced-planning#117",
+  "recorded_at": "2026-08-21T04:55:00Z",
+  "policy_authority": {
+    "id": "outcome-continuation-lease-hard-gate",
+    "revision": "f6091b6b2f2a5357d0fdbbe88b157435a2ce07fb",
+    "status": "approved"
+  },
+  "history_calibration": {
+    "repository_count": 12,
+    "revision": "a2349842a44fbba450875b35f229246de8621d63",
+    "artifact": "project-meta:investigations/cross-project/2026-08-20-recurring-project-failure-modes.md",
+    "use": "Representative failure-mode calibration, not causal proof or an automatic progress label."
+  },
+  "design": {
+    "plan_revision": "376578f1f5b9f7b9d8083aff63ac768d2bb16d43",
+    "plan_sha256": "848cd8322382c3112a317f22fe181e4da561a61ae04c95fde655ae9c8e7ef66c",
+    "work_graph_revision": "376578f1f5b9f7b9d8083aff63ac768d2bb16d43",
+    "work_graph_sha256": "a0a7596938b8636b8f45bd1bedb2913b3be5cd31b5d056954575d7dbbcf5c0f7",
+    "unit_id": "osel-01-durable-session-binding"
+  },
+  "execution": {
+    "repository": "enforced-planning",
+    "candidate_revision": "091951aa466d0f6babd91d6ecfb989e967d554da",
+    "delivery_classification": "manual_exact_session_selection_observe_pilot",
+    "selection_module": "enforced_planning/outcome_selection.py",
+    "tracker_module": "enforced_planning/session_contracts.py",
+    "correlation_module": "enforced_planning/outcome_prewrite_observation.py",
+    "public_selection_cli": "scripts/outcome_continuation.py select",
+    "public_observation_cli": "scripts/prewrite_claim_gate.py --outcome-selected",
+    "write_performed_by_observation": false,
+    "host_activation_claimed": false,
+    "enforcement_applied": false
+  },
+  "real_session_binding": {
+    "client": "codex",
+    "session_id": "codex:01a021cc-f3a0-7b21-babc-f18617333d1a",
+    "claim_project": "enforced-planning",
+    "claim_scope": "plan-117-outcome-selection-binding",
+    "branch": "plan-117-outcome-selection-binding",
+    "claim_source_ref": "~/.claude/coordination/claims/codex_enforced-planning_plan-117-outcome-selection-binding.yaml",
+    "claim_source_sha256": "6386abfd9170da74d4f7ebeb07251f750c46e97726f5afede10520166017ec5a",
+    "tracker_ref": "~/.claude/coordination/sessions/enforced-planning/codex__enforced-planning__codex-01a021cc-f3a0-7b21-babc-f18617333d1a__prevent-circular-continuation-by-binding-claimed-sessions-to-one-durable-outcome.yaml",
+    "tracker_sha256_after_heartbeat": "a432d0cb605121e14f8965754d99c4481561e0a614ad69029164364da49a9da7",
+    "execution_authority_ref": "enforced-planning#117",
+    "claim_plan_ref": "enforced-planning#117",
+    "claim_identity_sha256": "2370305425158802ee9e0e4f003b3d7aa7d8b87adefde0e00352f7643959e672"
+  },
+  "selection": {
+    "selected_at": "2026-08-21T04:51:25.033895Z",
+    "initial_status": "selected",
+    "post_heartbeat_replay_status": "idempotent",
+    "binding_sha256": "2eb7a80463e64589b39ef5966a246e456cb0c7cdcaaa7eb7ddfa4d0b217da500",
+    "scenario_path": "examples/owner-real-outcome-observe/plan117-owner-progress.json",
+    "scenario_file_sha256": "591553ac9dbbc594950296923269749b05a484df84b270002a363d75deb319d2",
+    "scenario_sha256": "8b7f9a594f31ccb01d713f24d9dfc2508a3e3b29fa2df699dcd34f566c8da1f8",
+    "outcome_contract_sha256": "56bfc4ca0c6cf33da7b1eda0c7004ca90aca909c941104b15c4feff37dc8ffa1",
+    "outcome_id": "durable-outcome-selection",
+    "lineage_id": "plan-117-durable-selection",
+    "predecessor_lineage_ids": [
+      "plan-116-prewrite-correlation"
+    ],
+    "lease_sha256": "6faef02ce3f639c8ef3e827d2cd13e21cc72735adccdc6757e5209be725911b2",
+    "lease_state": "active",
+    "heartbeat_after_selection": "2026-08-21T04:51:32.642513+00:00",
+    "heartbeat_preserved_selection": true,
+    "conflicting_replacement_rejected_by_focused_test": true
+  },
+  "ordinary_boundary": {
+    "hook_event_name": "PreToolUse",
+    "tool_name": "apply_patch",
+    "target_path": "docs/evidence/plan117_durable_outcome_selection_binding.json",
+    "payload_sha256": "af55a0fcfb32b22126bb041c5eff14d45fcc2809b439592e838f530f0408e9df",
+    "projection_generated_at": "2026-08-21T04:51:39.160304Z",
+    "projection_registry_sha256": "630b500bef8c20d66d9767d42fb24fb778244367ce137a05cdbe1c32b0d0b36f",
+    "ordinary_receipt_log_sha256": "02bcf44e40b5ff47fe910b2c00f63977b112c5ed3e427d7d9902602373dd07ea",
+    "receipt_id": "prewrite_7f424bc06de74db18780902a0092f9f3",
+    "recorded_at": "2026-08-21T04:52:14.599010+00:00",
+    "decision": "allow",
+    "reason_code": "exact_live_claim",
+    "ordinary_decision_remained_authoritative": true
+  },
+  "selected_owner_progress_positive": {
+    "outcome_receipt_log_sha256": "1435c85ce910afee857bdfcbdaa8d9811806265130d8638402941bb82cd5a05c",
+    "correlation_receipt_id": "ocor-3161cb2a29d348a29939e18375fa244f",
+    "observed_at": "2026-08-21T04:52:15.625585Z",
+    "ordinary_receipt_recorded_first": true,
+    "selection_binding_sha256": "2eb7a80463e64589b39ef5966a246e456cb0c7cdcaaa7eb7ddfa4d0b217da500",
+    "disposition": "would_allow",
+    "outcome_allowed": true,
+    "reason_code": "active_in_scope",
+    "lease_state": "active",
+    "applied_receipt_sha256s": [
+      "b52103a090bb6887717ffd437d163eeb96bab340077e3b054ca1d9b01ab8c3ee"
+    ],
+    "ordinary_approval_ignored": true,
+    "cost_telemetry_ignored": true,
+    "elapsed_telemetry_ignored": true,
+    "ordinary_authority_preserved": true,
+    "enforcement_applied": false
+  },
+  "isolated_selected_circular_negative": {
+    "classification": "checked_in_same_contract_two_non_outcome_control",
+    "scenario_path": "examples/owner-real-outcome-observe/plan117-circular.json",
+    "scenario_file_sha256": "613dbf7ba952278ed67a6313b00205555a25967ea8ba9875bab91144238da1b7",
+    "scenario_sha256": "37f0e0485ac36b9d7b93db7abc532573ccb57ce9e42fb81b730883aa954d7757",
+    "outcome_contract_sha256": "56bfc4ca0c6cf33da7b1eda0c7004ca90aca909c941104b15c4feff37dc8ffa1",
+    "selection_binding_sha256": "7b238a59b6f52a7b27cb1aa9628028d144de973d7812abab62b421722a5af207",
+    "selection_claim_identity_sha256": "f5560927deae775ddff73d6f141ecaac94d48e80ecb56b6c8b7ce12a1193fb98",
+    "ordinary_receipt_log_sha256": "c9da7e2de64215268f36dcd65d1df01232baa1d9007f332fbc22a076c1840c22",
+    "outcome_receipt_log_sha256": "97b08c79c4e6fd796a25ed877783aeb2187fe4b22f3c4fa826dc6f2727732985",
+    "ordinary_receipt_id": "prewrite_e1f8b18856514db5b8cd1d9daeca1b0d",
+    "correlation_receipt_id": "ocor-01c7fb014de54513a0b9591475e51a39",
+    "ordinary_decision": "allow",
+    "ordinary_reason_code": "exact_live_claim",
+    "disposition": "would_deny",
+    "outcome_allowed": false,
+    "reason_code": "recovery_required",
+    "lease_state": "recovery_required",
+    "lease_sha256": "ffc1f93fe7458f5a993efe284ca67645660bd921d864ce4a9047a3e9cc10db91",
+    "applied_receipt_sha256s": [
+      "9327ccff2192121c546f85b94abcd5be6c7554e8b8c605011002a88be0f4bf8f",
+      "1fa23718c11e84128c527968a99c6e52a1d3015ee1a304104e9647f6f3448ef7"
+    ],
+    "ordinary_authority_preserved": true,
+    "enforcement_applied": false,
+    "limitation": "This deterministic isolated control proves the selected path's negative sign; it is not a claim about one reconstructed historical abandoned project."
+  },
+  "authority_and_persistence_controls": {
+    "goal_bound_write_without_graph": "passed",
+    "numbered_plan_without_graph": "rejected",
+    "plan_authority_against_null_claim": "rejected",
+    "tracker_refresh_preserves_selection": "passed",
+    "heartbeat_preserves_selection": "passed",
+    "different_selection_conflict": "rejected",
+    "scenario_tamper": "typed selection_scenario_stale",
+    "replacement_session": "typed prewrite_claim_identity_mismatch",
+    "selected_and_explicit_flags": "mutually exclusive"
+  },
+  "controlled_context": {
+    "ordinary_approval": true,
+    "approval_text": "I approve, continue",
+    "cost_telemetry_usd": "1000000",
+    "elapsed_telemetry_seconds": 999999,
+    "contract_request_and_target_identical": true,
+    "only_progress_receipts_differ": true,
+    "note": "Approval, cost, and elapsed time are retained only as decision-inert context."
+  },
+  "focused_verification": {
+    "selection_command": "pytest -q tests/test_outcome_selection.py tests/test_session_contracts.py tests/test_outcome_prewrite_observation.py tests/test_check_coordination_claims.py",
+    "selection_passed": 111,
+    "selection_failed": 0,
+    "regression_command": "env -u CODEX_THREAD_ID pytest -q tests/test_outcome_continuation.py tests/test_prewrite_claim_projection.py tests/test_session_cli.py",
+    "regression_passed": 98,
+    "regression_failed": 0,
+    "checked_in_both_sign_command": "pytest -q tests/test_outcome_prewrite_observation.py::test_checked_in_plan117_selected_controls_produce_both_signs",
+    "checked_in_both_sign_passed": 2,
+    "changed_file_ruff": "passed",
+    "broad_make_lint": "not_green_due_to_420_pre_existing_repository_findings_and_missing_vulture; not used as acceptance evidence"
+  },
+  "next_integration_decision": {
+    "decision": "retain_manual_observe_selection_and_calibrate_on_representative_normal_owner_work",
+    "why": "This unit closes caller substitution and restart/session identity drift for opted-in observations, but progress receipts are still operator-authored and no representative false-block rate exists.",
+    "promotion_prerequisites": [
+      "observe selected outcomes on representative normal Brian-owned project sessions",
+      "measure false-denial and missing-selection behavior on supported continuations",
+      "define the reviewed transition for legitimate outcome replacement, restart lineage, recovery, and break-glass",
+      "only then promote selected denial from observation to blocking"
+    ],
+    "explicitly_deferred": [
+      "automatic semantic outcome selection",
+      "mutable progress-receipt authoring and lease renewal",
+      "hard outcome denial",
+      "installer or native host activation",
+      "shell interception",
+      "downstream fleet or colleague rollout"
+    ]
+  },
+  "licensed_claim": "At candidate revision 091951aa466d0f6babd91d6ecfb989e967d554da, the real exact Plan 117 Codex session selected one create-once outcome in its linked tracker, retained the same binding through heartbeat and idempotent replay, and resolved it from an ordinary allow/exact_live_claim payload to would_allow/active_in_scope without caller scenario input. The checked-in same-contract circular control resolved through an isolated selected session to would_deny/recovery_required while ordinary admission and exit behavior remained unchanged.",
+  "limitations": [
+    "This is an explicit manual opt-in source-repository observation, not automatic selection or installed host delivery.",
+    "The selected scenario and progress classifications are immutable but operator-authored; no semantic classifier or mutable progress lease exists.",
+    "The circular case is a deterministic isolated control, not a reconstructed historical project failure.",
+    "The selected option remains observation-only; no write was blocked or performed by the observation.",
+    "No projection schema, installer, shell, downstream repository, colleague, fleet, deployment, or release behavior changed.",
+    "The evidence licenses representative owner calibration, not outcome-based blocking."
+  ]
+}

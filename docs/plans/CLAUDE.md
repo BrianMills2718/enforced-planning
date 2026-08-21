@@ -93,7 +93,7 @@ See `ROADMAP.md` for the full phase map and recommended priority order.
 | 114 | Outcome Continuation Lease Enforcement (`114_outcome_continuation_lease_enforcement.md`) | Critical | ✅ Complete | observe the staged gate on real Brian-owned work before session or fleet integration |
 | 115 | Owner-Real Outcome Continuation Observation (`115_owner_real_outcome_observe.md`) | Critical | ✅ Complete | bind merged owner progress to the existing CLI before selecting a runtime seam |
 | 116 | Pre-Write Outcome Correlation Observe Pilot (`116_prewrite_outcome_correlation_observe.md`) | Critical | ✅ Complete | correlate one immutable continuation scenario with the ordinary claimed-write receipt without changing admission |
-| 117 | Durable Outcome Selection And Exact-Session Binding Observe Pilot (`117_durable_outcome_selection_binding_observe.md`) | Critical | 📋 Planned | bind one claimed session to one immutable outcome selection before representative calibration or blocking |
+| 117 | Durable Outcome Selection And Exact-Session Binding Observe Pilot (`117_durable_outcome_selection_binding_observe.md`) | Critical | ✅ Complete | exact-session selection proven; representative normal-project calibration and any blocking remain downstream |
 
 ## Status Key
 

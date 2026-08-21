@@ -70,6 +70,7 @@
         "One atomic tracker mutation seam shared by lifecycle and selection writers",
         "One selected pre-write option that never accepts a caller scenario",
         "Selected would-allow, would-deny, and stale/tampered visible-failure evidence",
+        "Operator guidance for goal-bound writes and manual selected observation",
         "A revision- and digest-bound owner-real observation with truthful promotion limits"
       ],
       "dependencies": [],
@@ -174,6 +175,13 @@
         },
         {
           "kind": "repository_path",
+          "target": "docs/guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-117-durable-outcome-selection"
+        },
+        {
+          "kind": "repository_path",
           "target": "docs/plans/117_durable_outcome_selection_binding_observe.md",
           "repository": "enforced-planning",
           "access": "exclusive",
@@ -262,15 +270,15 @@
         "failed_guards": []
       },
       "claim_policy": {
-        "eligibility_rule": "One exact live Plan 117 claim owns only the listed claim-validation, selection, tracker, wrapper, tests, scenarios, evidence, plan, graph, index, and roadmap paths.",
+        "eligibility_rule": "One exact live Plan 117 claim owns only the listed claim-validation, selection, tracker, wrapper, tests, scenarios, evidence, operator guide, plan, graph, index, and roadmap paths.",
         "lease_policy": "renewable",
         "lease_duration_minutes": 1440,
         "max_active_per_claimant": 1,
         "named_owner_id": null
       },
-      "status": "ready",
-      "record_version": 1,
-      "updated_at": "2026-08-21T04:27:11Z"
+      "status": "accepted",
+      "record_version": 2,
+      "updated_at": "2026-08-21T04:55:00Z"
     }
   ]
 }

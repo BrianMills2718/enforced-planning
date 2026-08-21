@@ -322,8 +322,7 @@ def _apply_claim_payload_updates(
         for field, expected in (expected_fields or {}).items():
             if current.get(field) != expected:
                 raise ValueError(
-                    f"Claim at {claim_file} changed while preparing {operation}; "
-                    "retry from current ownership state"
+                    f"Claim at {claim_file} changed while preparing {operation}; retry from current ownership state"
                 )
         current.update(updates)
         _write_claim_payload(claim_file, current)
@@ -424,7 +423,7 @@ def _upsert_session_claim(
         effective_work_unit_id = existing.work_unit_id if work_unit_id is None else work_unit_id
         work_graph_sha256 = existing.work_graph_sha256
         approval_revisions = existing.approval_revisions
-        if effective_write_paths and plan_ref:
+        if effective_write_paths and plan_ref and not coordination_claims.is_goal_authority_ref(plan_ref):
             if not effective_work_graph_path or not effective_work_unit_id:
                 raise ValueError("Plan-bound write ownership requires --work-graph and --work-unit-id")
             work_graph_sha256, approval_revisions = coordination_claims.resolve_canonical_work_unit_binding(
@@ -1031,11 +1030,8 @@ def start_session(
         stop_conditions=stop_conditions,
         notes=notes,
     )
-    tracker_path.parent.mkdir(parents=True, exist_ok=True)
-    tracker_path.write_text(
-        yaml.safe_dump(tracker.to_dict(), default_flow_style=False, sort_keys=False),
-        encoding="utf-8",
-    )
+    tracker_preexisting = tracker_path.is_file()
+    session_contracts.write_session_tracker(tracker, tracker_dir=tracker_dir)
     try:
         action = _upsert_session_claim(
             agent=agent,
@@ -1059,7 +1055,8 @@ def start_session(
             allow_parallel=allow_parallel,
         )
     except Exception:
-        tracker_path.unlink(missing_ok=True)
+        if not tracker_preexisting:
+            tracker_path.unlink(missing_ok=True)
         raise
     persisted_claim = _single_matching_live_claim(
         agent=agent,

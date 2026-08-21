@@ -1,0 +1,75 @@
+{
+  "schema_version": "1.0.0",
+  "scenario_id": "plan-116-owner-progress",
+  "contract": {
+    "schema_version": "1.0.0",
+    "outcome_id": "owner-prewrite-correlation",
+    "owner_class": "brian-agent-owner",
+    "project_id": "enforced-planning",
+    "lineage_id": "plan-116-prewrite-correlation",
+    "predecessor_lineage_ids": [
+      "plan-115-owner-observation"
+    ],
+    "intended_consumer": "Brian and his coding agents working on Enforced Planning",
+    "outcome": "Link progress-bound continuation evidence to one exact claimed write without changing ordinary admission.",
+    "canonical_journey": {
+      "starting_state": "One exact Plan 116 claimed evidence write is ready for observation.",
+      "input": "The same native apply_patch payload and one explicit immutable outcome scenario.",
+      "action": "Record ordinary claim admission first, then correlate the outcome continuation decision.",
+      "observable_result": "The ordinary receipt links to would_allow or would_deny while remaining authoritative.",
+      "failure_signal": "Identity is lost, a mismatch is silent, or observation changes ordinary admission or exit behavior."
+    },
+    "baseline_revision": "218394e0046770acb05b755553e36c7e7ccd136a",
+    "allowed_scope": [
+      "docs/evidence/plan116_prewrite_outcome_correlation.json"
+    ],
+    "progress_dimensions": [
+      "owner continuation behavior"
+    ]
+  },
+  "receipts": [
+    {
+      "schema_version": "1.0.0",
+      "receipt_id": "plan-116-plan-115-owner-progress",
+      "outcome_contract_sha256": "f1b0b53db196e4bfa54b50b086d72f1e2bb401c42937aa3efdd8b3a32d735bab",
+      "prior_receipt_sha256": null,
+      "progress_kind": "behavioral_advance",
+      "dimension": "owner continuation behavior",
+      "summary": "Plan 115 proved owner-real progress with the unchanged evaluator and selected this exact pre-write correlation seam.",
+      "evidence": {
+        "source_revision": "218394e0046770acb05b755553e36c7e7ccd136a",
+        "configuration_sha256": "8cd91fc2fdaf64a65afe160f29590682ccb91cc5d9bd1ef20f872367ff7485f3",
+        "route": "owner-real-plan115-outcome-observation",
+        "command": [
+          "python",
+          "scripts/outcome_continuation.py",
+          "evaluate",
+          "--scenario",
+          "examples/owner-real-outcome-observe/plan115-owner-progress.json"
+        ],
+        "observation_sha256": "91c9dcab86fc8bb3811980937274809e6fbfee5b317d468a9472f71c52056a53",
+        "artifact_refs": [
+          "docs/evidence/plan115_owner_real_outcome_observation.json",
+          "examples/owner-real-outcome-observe/plan115-owner-progress.json"
+        ],
+        "trace_ref": null,
+        "observed_at": "2026-08-21T03:05:25Z"
+      },
+      "failure_boundary": null,
+      "exact_replay_result": null,
+      "decision_delta": null,
+      "discriminating_evidence": true
+    }
+  ],
+  "request": {
+    "schema_version": "1.0.0",
+    "operation": "product_write",
+    "target_path": "docs/evidence/plan116_prewrite_outcome_correlation.json",
+    "recovery_action": null,
+    "ordinary_approval": true,
+    "approval_text": "I approve, continue",
+    "cost_telemetry_usd": "1000000",
+    "elapsed_telemetry_seconds": 999999
+  },
+  "recovery_lease": null
+}

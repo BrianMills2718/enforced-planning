@@ -1,0 +1,101 @@
+{
+  "schema_version": "1.0.0",
+  "scenario_id": "plan-116-circular",
+  "contract": {
+    "schema_version": "1.0.0",
+    "outcome_id": "owner-prewrite-correlation",
+    "owner_class": "brian-agent-owner",
+    "project_id": "enforced-planning",
+    "lineage_id": "plan-116-prewrite-correlation",
+    "predecessor_lineage_ids": [
+      "plan-115-owner-observation"
+    ],
+    "intended_consumer": "Brian and his coding agents working on Enforced Planning",
+    "outcome": "Link progress-bound continuation evidence to one exact claimed write without changing ordinary admission.",
+    "canonical_journey": {
+      "starting_state": "One exact Plan 116 claimed evidence write is ready for observation.",
+      "input": "The same native apply_patch payload and one explicit immutable outcome scenario.",
+      "action": "Record ordinary claim admission first, then correlate the outcome continuation decision.",
+      "observable_result": "The ordinary receipt links to would_allow or would_deny while remaining authoritative.",
+      "failure_signal": "Identity is lost, a mismatch is silent, or observation changes ordinary admission or exit behavior."
+    },
+    "baseline_revision": "218394e0046770acb05b755553e36c7e7ccd136a",
+    "allowed_scope": [
+      "docs/evidence/plan116_prewrite_outcome_correlation.json"
+    ],
+    "progress_dimensions": [
+      "owner continuation behavior"
+    ]
+  },
+  "receipts": [
+    {
+      "schema_version": "1.0.0",
+      "receipt_id": "plan-116-motion-one",
+      "outcome_contract_sha256": "f1b0b53db196e4bfa54b50b086d72f1e2bb401c42937aa3efdd8b3a32d735bab",
+      "prior_receipt_sha256": null,
+      "progress_kind": "non_outcome",
+      "dimension": "owner continuation behavior",
+      "summary": "One supporting increment completed while the stable owner-visible outcome did not advance.",
+      "evidence": {
+        "source_revision": "218394e0046770acb05b755553e36c7e7ccd136a",
+        "configuration_sha256": "8cd91fc2fdaf64a65afe160f29590682ccb91cc5d9bd1ef20f872367ff7485f3",
+        "route": "plan-116-synthetic-circular-control",
+        "command": [
+          "synthetic-control",
+          "non-outcome-increment",
+          "one"
+        ],
+        "observation_sha256": "596256861b3578a447285d14f27226ce1dbb7164f392a41220d55f7ab31b89c6",
+        "artifact_refs": [
+          "docs/evidence/plan115_owner_real_outcome_observation.json"
+        ],
+        "trace_ref": null,
+        "observed_at": "2026-08-21T03:05:25Z"
+      },
+      "failure_boundary": "owner-outcome-unchanged",
+      "exact_replay_result": null,
+      "decision_delta": null,
+      "discriminating_evidence": false
+    },
+    {
+      "schema_version": "1.0.0",
+      "receipt_id": "plan-116-motion-two",
+      "outcome_contract_sha256": "f1b0b53db196e4bfa54b50b086d72f1e2bb401c42937aa3efdd8b3a32d735bab",
+      "prior_receipt_sha256": "94df0654498d5a5f19a435f7050dd49fa66b257c9f55a9494d197d3842e29913",
+      "progress_kind": "non_outcome",
+      "dimension": "owner continuation behavior",
+      "summary": "A second supporting increment completed while the same stable owner-visible outcome stayed unchanged.",
+      "evidence": {
+        "source_revision": "218394e0046770acb05b755553e36c7e7ccd136a",
+        "configuration_sha256": "8cd91fc2fdaf64a65afe160f29590682ccb91cc5d9bd1ef20f872367ff7485f3",
+        "route": "plan-116-synthetic-circular-control",
+        "command": [
+          "synthetic-control",
+          "non-outcome-increment",
+          "two"
+        ],
+        "observation_sha256": "50a92025f1bd228f553cae51fc1c6f2391d6badd3b3a40b38c0d5dcc8e170c9d",
+        "artifact_refs": [
+          "docs/evidence/plan115_owner_real_outcome_observation.json"
+        ],
+        "trace_ref": null,
+        "observed_at": "2026-08-21T03:05:25Z"
+      },
+      "failure_boundary": "owner-outcome-unchanged",
+      "exact_replay_result": null,
+      "decision_delta": null,
+      "discriminating_evidence": false
+    }
+  ],
+  "request": {
+    "schema_version": "1.0.0",
+    "operation": "product_write",
+    "target_path": "docs/evidence/plan116_prewrite_outcome_correlation.json",
+    "recovery_action": null,
+    "ordinary_approval": true,
+    "approval_text": "I approve, continue",
+    "cost_telemetry_usd": "1000000",
+    "elapsed_telemetry_seconds": 999999
+  },
+  "recovery_lease": null
+}

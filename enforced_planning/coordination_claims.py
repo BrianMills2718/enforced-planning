@@ -34,7 +34,7 @@ from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, get_args
 
 import yaml  # type: ignore[import-untyped]
 from pydantic import (
@@ -75,13 +75,14 @@ CREATION_BLOCKING_HEALTH_ISSUES = {
 }
 DEFAULT_HEARTBEAT_STALE_MINUTES = 120
 DEFAULT_PROGRESS_STALE_MINUTES = 60
-PROGRESS_KINDS = {
+ProgressKind = Literal[
     "claim_started",
     "verified_commit",
     "accepted_artifact",
     "new_diagnostic",
     "integration_result",
-}
+]
+PROGRESS_KINDS = frozenset(get_args(ProgressKind))
 PROGRESS_FIELD_NAMES = (
     "progress_at",
     "progress_kind",
@@ -116,29 +117,20 @@ STRICT_NATIVE_SESSION_ENV_KEYS = {
 GOAL_AUTHORITY_PATTERN = re.compile(r"^goal:[A-Za-z0-9][A-Za-z0-9._:-]*$")
 
 
-ProgressKind = Literal[
-    "claim_started",
-    "verified_commit",
-    "accepted_artifact",
-    "new_diagnostic",
-    "integration_result",
-]
-
-
 class ProgressEventV1(BaseModel):
     """One explicit durable-advancement event for an owning live claim."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     schema_version: Literal["1.0"] = "1.0"
-    progress_at: datetime
-    progress_kind: ProgressKind
+    recorded_at: datetime
+    kind: ProgressKind
     evidence_ref: str = Field(min_length=1)
     next_action: str = Field(min_length=1)
     expected_quiet_until: datetime | None = None
     quiet_reason: str | None = None
 
-    @field_validator("progress_at", "expected_quiet_until")
+    @field_validator("recorded_at", "expected_quiet_until")
     @classmethod
     def _require_aware_timestamp(cls, value: datetime | None) -> datetime | None:
         if value is not None and (value.tzinfo is None or value.utcoffset() is None):
@@ -162,8 +154,8 @@ class ProgressEventV1(BaseModel):
             value is not None for value in quiet_values
         ):
             raise ValueError("expected_quiet_until and quiet_reason must be supplied together")
-        if self.expected_quiet_until is not None and self.expected_quiet_until <= self.progress_at:
-            raise ValueError("expected_quiet_until must be later than progress_at")
+        if self.expected_quiet_until is not None and self.expected_quiet_until <= self.recorded_at:
+            raise ValueError("expected_quiet_until must be later than recorded_at")
         return self
 
 
@@ -911,8 +903,8 @@ def build_progress_event(
     observed_at = progress_at or datetime.now(timezone.utc)
     try:
         return ProgressEventV1(
-            progress_at=observed_at,
-            progress_kind=progress_kind,
+            recorded_at=observed_at,
+            kind=progress_kind,
             evidence_ref=evidence_ref,
             next_action=next_action,
             expected_quiet_until=expected_quiet_until,
@@ -926,8 +918,8 @@ def _progress_event_payload(event: ProgressEventV1) -> dict[str, str | None]:
     """Flatten a validated event into the additive claim storage contract."""
 
     return {
-        "progress_at": event.progress_at.isoformat(),
-        "progress_kind": event.progress_kind,
+        "progress_at": event.recorded_at.isoformat(),
+        "progress_kind": event.kind,
         "evidence_ref": event.evidence_ref,
         "next_action": event.next_action,
         "expected_quiet_until": (
@@ -977,7 +969,9 @@ def claim_progress_issues(
             elif progress_at is not None and quiet_until <= progress_at:
                 issues.append("invalid_quiet_interval")
             expires_at = _parse_aware_iso_datetime(claim.expires_at)
-            if quiet_until is not None and expires_at is not None and quiet_until > expires_at:
+            if expires_at is None:
+                issues.append("quiet_interval_requires_valid_claim_expiry")
+            elif quiet_until is not None and quiet_until > expires_at:
                 issues.append("quiet_interval_exceeds_claim_expiry")
 
     if issues:
@@ -1006,14 +1000,17 @@ def claim_runtime_status(
     if any(issue != "missing_session_heartbeat" for issue in liveness_issues):
         return "stale"
     progress_issues = claim_progress_issues(claim, now=now)
-    if progress_issues == ["stalled_progress_lease"]:
-        return "stalled"
     issues = (
         coordination_health_issues(claim, active_claims=active_claims)
         if active_claims is not None
         else claim_health_issues(claim)
     )
-    return "weak" if issues or liveness_issues or progress_issues else "healthy"
+    invalid_progress = [issue for issue in progress_issues if issue != "stalled_progress_lease"]
+    if issues or liveness_issues or invalid_progress:
+        return "weak"
+    if progress_issues == ["stalled_progress_lease"]:
+        return "stalled"
+    return "healthy"
 
 
 def claim_enforcement_issues(claim: ClaimRecord) -> list[dict[str, str]]:
@@ -1259,7 +1256,12 @@ def resolve_session_id(agent: str, explicit_session_id: str | None = None) -> st
     return None
 
 
-def validate_native_session_binding(agent: str, session_id: str | None) -> None:
+def validate_native_session_binding(
+    agent: str,
+    session_id: str | None,
+    *,
+    require_native_marker: bool = False,
+) -> None:
     """Reject an explicit session identity that contradicts the native runtime.
 
     Explicit identities remain necessary for lifecycle hooks and recovery tools
@@ -1268,11 +1270,17 @@ def validate_native_session_binding(agent: str, session_id: str | None) -> None:
     that no real session can heartbeat, receive mailbox messages for, or close.
     """
 
-    if not session_id:
-        return
     native_key = STRICT_NATIVE_SESSION_ENV_KEYS.get(agent)
     native_value = os.environ.get(native_key, "").strip() if native_key else ""
     native_session_id = f"{agent}:{native_value}" if native_value else None
+    if require_native_marker and native_session_id is None:
+        expected = native_key or "a supported native session marker"
+        raise ValueError(
+            f"This mutation requires the current native {agent} runtime via {expected}; "
+            "an explicit session ID alone cannot renew another runtime's progress lease."
+        )
+    if not session_id:
+        return
     if native_session_id is None or session_id == native_session_id:
         return
     raise ValueError(
@@ -1358,6 +1366,22 @@ def _parse_iso_datetime(value: Any) -> datetime | None:
     return parsed
 
 
+def _progress_text_with_presence(
+    data: dict[str, Any],
+    key: str,
+    *,
+    null_is_invalid: bool = True,
+) -> str | None:
+    """Preserve invalid explicit progress keys instead of erasing them as legacy absence."""
+
+    if key not in data:
+        return None
+    value = data.get(key)
+    if value is None and not null_is_invalid:
+        return None
+    return value if isinstance(value, str) else ""
+
+
 def normalize_claim(data: dict[str, Any], *, source_file: str | None = None) -> ClaimRecord | None:
     """Normalize a raw YAML claim into the v2 in-memory representation."""
     agent = data.get("agent")
@@ -1396,7 +1420,6 @@ def normalize_claim(data: dict[str, Any], *, source_file: str | None = None) -> 
             "work_graph_path",
             "work_graph_sha256",
             "approval_revisions",
-            *PROGRESS_FIELD_NAMES,
         )
     ):
         schema_version = 3
@@ -1456,16 +1479,20 @@ def normalize_claim(data: dict[str, Any], *, source_file: str | None = None) -> 
         work_graph_sha256=(data.get("work_graph_sha256") if isinstance(data.get("work_graph_sha256"), str) else None),
         approval_revisions=tuple(_safe_string_list(data.get("approval_revisions"))),
         parallel_root_authorized=data.get("parallel_root_authorized") is True,
-        progress_at=data.get("progress_at") if isinstance(data.get("progress_at"), str) else None,
-        progress_kind=(data.get("progress_kind") if isinstance(data.get("progress_kind"), str) else None),
-        evidence_ref=data.get("evidence_ref") if isinstance(data.get("evidence_ref"), str) else None,
-        next_action=data.get("next_action") if isinstance(data.get("next_action"), str) else None,
-        expected_quiet_until=(
-            data.get("expected_quiet_until")
-            if isinstance(data.get("expected_quiet_until"), str)
-            else None
+        progress_at=_progress_text_with_presence(data, "progress_at"),
+        progress_kind=_progress_text_with_presence(data, "progress_kind"),
+        evidence_ref=_progress_text_with_presence(data, "evidence_ref"),
+        next_action=_progress_text_with_presence(data, "next_action"),
+        expected_quiet_until=_progress_text_with_presence(
+            data,
+            "expected_quiet_until",
+            null_is_invalid=False,
         ),
-        quiet_reason=data.get("quiet_reason") if isinstance(data.get("quiet_reason"), str) else None,
+        quiet_reason=_progress_text_with_presence(
+            data,
+            "quiet_reason",
+            null_is_invalid=False,
+        ),
     )
 
 
@@ -2010,7 +2037,11 @@ def record_progress_claims(
     if not scope.strip():
         raise ValueError("Progress recording requires one exact non-empty scope")
     if require_native_session_binding:
-        validate_native_session_binding(agent, session_id)
+        validate_native_session_binding(
+            agent,
+            session_id,
+            require_native_marker=True,
+        )
     resolved_session_id = resolve_session_id(agent, session_id)
     if not resolved_session_id:
         raise ValueError(
@@ -2057,9 +2088,16 @@ def record_progress_claims(
             )
 
         claim_file, data, claim = matches[0]
+        previous_progress_at = _parse_aware_iso_datetime(claim.progress_at)
+        if previous_progress_at is not None and event.recorded_at <= previous_progress_at:
+            raise ValueError(
+                "Progress event timestamp must advance beyond the claim's current progress_at"
+            )
         expires_at = _parse_aware_iso_datetime(claim.expires_at)
-        if expires_at is not None and event.progress_at > expires_at:
+        if expires_at is not None and event.recorded_at > expires_at:
             raise ValueError("Cannot record progress after the claim expiry")
+        if event.expected_quiet_until is not None and expires_at is None:
+            raise ValueError("A quiet interval requires a valid timezone-aware claim expiry")
         if (
             expires_at is not None
             and event.expected_quiet_until is not None
@@ -2068,7 +2106,7 @@ def record_progress_claims(
             raise ValueError("expected_quiet_until cannot exceed the current claim expiry")
 
         data.update(_progress_event_payload(event))
-        data["updated_at"] = event.progress_at.isoformat()
+        data["updated_at"] = event.recorded_at.isoformat()
         _atomic_write_claim(claim_file, data)
         _projection_path, projection_digest_after = refresh_prewrite_authority_projection(
             resolved_claims_dir
@@ -2805,7 +2843,7 @@ def main(argv: list[str] | None = None) -> int:
         else:
             print(
                 f"Progress recorded: {claim.primary_project()}:{claim.scope} "
-                f"[{event.progress_kind}] at {event.progress_at.isoformat()}"
+                f"[{event.kind}] at {event.recorded_at.isoformat()}"
             )
         return 0
 

@@ -4,7 +4,7 @@
 <!-- generated_by: scripts/render_agents_md.py -->
 <!-- canonical_claude: CLAUDE.md -->
 <!-- canonical_relationships: scripts/relationships.yaml -->
-<!-- canonical_relationships_sha256: 840b164dcfa4 -->
+<!-- canonical_relationships_sha256: eeb1e86208e8 -->
 <!-- sync_check: python scripts/check_agents_sync.py --check -->
 
 This file is a generated Codex-oriented projection of repo governance.
@@ -44,6 +44,7 @@ python scripts/complete_plan.py --plan N
 python scripts/session_start.py --help
 python scripts/session_heartbeat.py --help
 python scripts/session_status.py --help
+python scripts/check_coordination_claims.py --progress --help
 python scripts/session_end.py --help
 python scripts/session_finish.py --help
 python scripts/session_close.py --help

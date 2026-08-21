@@ -122,10 +122,15 @@ def build_lane_entries(*, claim_entries: list[dict[str, Any]]) -> list[dict[str,
             issue != "missing_session_heartbeat" for issue in liveness_issues
         ):
             health_status = "stale"
+        elif (
+            any(item.get("health_status") == "weak" for item in items)
+            or health_issues
+            or liveness_issues
+            or any(issue != "stalled_progress_lease" for issue in progress_issues)
+        ):
+            health_status = "weak"
         elif any(item.get("health_status") == "stalled" for item in items):
             health_status = "stalled"
-        elif health_issues or liveness_issues or progress_issues:
-            health_status = "weak"
         elif hard_conflicts:
             health_status = "attention"
         elif soft_overlaps:

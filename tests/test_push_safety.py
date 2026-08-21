@@ -9,7 +9,26 @@ from pathlib import Path
 import pytest
 import yaml  # type: ignore[import-untyped]
 
-from enforced_planning import concern_routing, coordination_claims, push_safety
+from enforced_planning import (
+    claim_mutation_receipts,
+    concern_routing,
+    coordination_claims,
+    push_safety,
+)
+
+
+@pytest.fixture(autouse=True)
+def _isolate_claim_mutation_ledger(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Keep push-safety fixtures out of the shared operator ledger."""
+
+    monkeypatch.setattr(
+        claim_mutation_receipts,
+        "DEFAULT_EVENTS_PATH",
+        tmp_path / "claim-mutation-events.jsonl",
+    )
 
 
 def _init_git_repo(repo_root: Path) -> None:
@@ -252,7 +271,13 @@ def test_push_check_rejects_branch_claim_without_complete_session_identity(
             "branch": "plan-identity",
             "worktree_path": str(repo_root),
             "session_id": "codex:legacy",
+            "heartbeat_at": datetime.now(timezone.utc).isoformat(),
+            "expires_at": "2099-08-22T00:00:00+00:00",
             "status": "active",
+            "progress_at": "2000-01-01T00:00:00+00:00",
+            "progress_kind": "verified_commit",
+            "evidence_ref": "commit:legacy",
+            "next_action": "publish only with a complete owner contract",
         },
     )
 
@@ -261,6 +286,9 @@ def test_push_check_rejects_branch_claim_without_complete_session_identity(
     assert not payload["ok"]
     finding = next(item for item in payload["issues"] if item["code"] == "no_healthy_branch_claim")
     assert finding["details"]["claims"][0]["health_issues"] == ["missing_session_name"]
+    assert coordination_claims.claim_runtime_status(
+        coordination_claims.check_claims("demo")[0]
+    ) == "weak"
 
 
 def test_push_check_preserves_authority_for_report_only_stalled_claim(

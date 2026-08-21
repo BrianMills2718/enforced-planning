@@ -420,3 +420,51 @@ def test_registry_reports_correlated_stalled_progress_evidence(tmp_path: Path) -
     assert "Stalled claims: `1`" in markdown
     assert "commit:abc123" in markdown
     assert "run the authentic status receipt" in markdown
+
+
+def test_registry_lane_reports_weak_before_stalled_for_mixed_progress_claims(
+    tmp_path: Path,
+) -> None:
+    """One malformed event keeps a mixed lane weak instead of certifying a pure stall."""
+
+    repo_root = tmp_path / "demo"
+    _init_git_repo(repo_root)
+    common = {
+        "agent": "codex",
+        "project": "demo",
+        "intent": "Expose mixed progress health",
+        "claim_type": "review",
+        "worktree_path": str(repo_root),
+        "repo_root": str(repo_root),
+        "branch": "main",
+        "session_name": "mixed-progress-lane",
+        "broader_goal": "Progress Lease",
+        "session_id": "codex:owner",
+        "heartbeat_at": "2026-08-21T09:59:00+00:00",
+        "expires_at": "2099-08-22T00:00:00+00:00",
+        "progress_kind": "verified_commit",
+        "evidence_ref": "commit:abc123",
+        "next_action": "repair the malformed event before treating the lane as stalled",
+    }
+    stalled = coordination_claims.build_candidate_claim(
+        scope="stalled-progress",
+        progress_at="2026-08-21T08:00:00+00:00",
+        **common,
+    )
+    weak = coordination_claims.build_candidate_claim(
+        scope="invalid-progress",
+        progress_at="not-a-timestamp",
+        **common,
+    )
+    now = datetime.fromisoformat("2026-08-21T10:00:00+00:00")
+
+    payload = module.build_registry_payload(claims=[stalled, weak], now=now)
+    claim_statuses = {claim["scope"]: claim["health_status"] for claim in payload["claims"]}
+    lane = payload["lanes"][0]
+
+    assert claim_statuses == {
+        "invalid-progress": "weak",
+        "stalled-progress": "stalled",
+    }
+    assert lane["health_status"] == "weak"
+    assert lane["progress_issues"] == ["invalid_progress_at", "stalled_progress_lease"]

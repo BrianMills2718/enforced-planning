@@ -148,6 +148,83 @@ def test_normalize_claim_reads_v1_schema_as_program_claim(tmp_path: Path, monkey
     assert claim.schema_version == 1
 
 
+@pytest.mark.parametrize("invalid_progress_at", [None, 123, {"not": "text"}])
+def test_normalize_claim_preserves_explicit_invalid_progress_as_weak(
+    invalid_progress_at: object,
+    tmp_path: Path,
+) -> None:
+    """Wrong-typed or null keys cannot masquerade as field-absent legacy claims."""
+
+    worktree = tmp_path / "legacy-or-invalid"
+    worktree.mkdir()
+    base = {
+        "agent": "codex",
+        "projects": ["demo"],
+        "scope": "legacy-or-invalid",
+        "intent": "Classify instrumentation",
+        "claim_type": "program",
+        "branch": "legacy-or-invalid",
+        "worktree_path": str(worktree),
+        "session_id": "codex:owner",
+        "session_name": "legacy-or-invalid",
+        "heartbeat_at": datetime.now(timezone.utc).isoformat(),
+        "status": "active",
+    }
+    legacy = claims_impl.normalize_claim(base)
+    invalid = claims_impl.normalize_claim({**base, "progress_at": invalid_progress_at})
+
+    assert legacy is not None and claims_impl.claim_progress_issues(legacy) == []
+    assert invalid is not None
+    assert "incomplete_progress_event" in claims_impl.claim_progress_issues(invalid)
+    assert "invalid_progress_at" in claims_impl.claim_progress_issues(invalid)
+    assert claims_impl.claim_runtime_status(invalid) == "weak"
+
+
+def test_valid_progress_remains_additive_for_implicit_v2_plan_write(tmp_path: Path) -> None:
+    """Progress instrumentation cannot activate unrelated v3 work-graph requirements."""
+
+    worktree = tmp_path / "legacy-plan-write"
+    worktree.mkdir()
+    base = {
+        "agent": "codex",
+        "projects": ["demo"],
+        "scope": "legacy-plan-write",
+        "intent": "Continue a pre-work-graph plan lane",
+        "claim_type": "write",
+        "write_paths": ["src/legacy.py"],
+        "branch": "legacy-plan-write",
+        "worktree_path": str(worktree),
+        "repo_root": str(tmp_path / "repo"),
+        "session_id": "codex:owner",
+        "session_name": "legacy-plan-write",
+        "broader_goal": "Preserve additive claim compatibility",
+        "tracker_path": str(tmp_path / "tracker.yaml"),
+        "heartbeat_at": "2026-08-21T09:59:00+00:00",
+        "status": "active",
+        "expires_at": "2099-08-22T00:00:00+00:00",
+        "plan_ref": "Plan #70",
+    }
+    legacy = claims_impl.normalize_claim(base)
+    instrumented = claims_impl.normalize_claim(
+        {
+            **base,
+            "progress_at": "2026-08-21T09:30:00+00:00",
+            "progress_kind": "verified_commit",
+            "evidence_ref": "commit:abc123",
+            "next_action": "run the focused compatibility check",
+        }
+    )
+
+    assert legacy is not None and instrumented is not None
+    assert legacy.schema_version == instrumented.schema_version == 2
+    assert claims_impl.claim_health_issues(legacy) == []
+    assert claims_impl.claim_health_issues(instrumented) == []
+    assert claims_impl.claim_progress_issues(
+        instrumented,
+        now=datetime.fromisoformat("2026-08-21T10:00:00+00:00"),
+    ) == []
+
+
 def test_evaluate_claim_detects_parent_child_write_overlap_as_hard_conflict(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -348,6 +425,9 @@ def test_create_claim_accepts_program_claim_with_live_metadata(
     assert payload["evidence_ref"] == "Plan #62"
     assert payload["next_action"] == "Broad governance cleanup"
     assert isinstance(payload["progress_at"], str)
+    normalized = claims_impl.normalize_claim(payload)
+    assert normalized is not None
+    assert claims_impl.claim_progress_issues(normalized) == []
     projection_path = projection_path_for(claims_dir)
     projection = json.loads(projection_path.read_text(encoding="utf-8"))
     assert projection["registry_digest"] == registry_digest(claims_dir)
@@ -3045,7 +3125,7 @@ def test_record_progress_updates_exact_owner_and_preserves_sibling(tmp_path: Pat
         )
         assert updated.progress_kind == kind
         assert updated.evidence_ref == f"receipt-{index}"
-        assert event.progress_at == observed_at
+        assert event.recorded_at == observed_at
 
     persisted = yaml.safe_load((claims_dir / "owner.yaml").read_text(encoding="utf-8"))
     assert persisted["heartbeat_at"] == heartbeat_at
@@ -3061,6 +3141,21 @@ def test_record_progress_updates_exact_owner_and_preserves_sibling(tmp_path: Pat
     receipts = claim_mutation_receipts.load_receipts()
     assert [receipt.operation for receipt in receipts] == ["session_upsert"] * len(kinds)
     assert all(receipt.projection_current_after for receipt in receipts)
+    owner_before_regression = (claims_dir / "owner.yaml").read_bytes()
+    with pytest.raises(ValueError, match="must advance beyond"):
+        claims_impl.record_progress_claims(
+            agent="codex",
+            project="demo",
+            scope="progress-lane",
+            progress_kind="integration_result",
+            evidence_ref="older-receipt",
+            next_action="must not replace newer evidence",
+            session_id="codex:progress-owner",
+            claims_dir=claims_dir,
+            now=datetime.fromisoformat("2026-08-21T08:00:04+00:00"),
+        )
+    assert (claims_dir / "owner.yaml").read_bytes() == owner_before_regression
+    assert len(claim_mutation_receipts.load_receipts()) == len(kinds)
 
 
 @pytest.mark.parametrize(
@@ -3160,6 +3255,177 @@ def test_record_progress_rejects_ambiguous_exact_claim_without_mutation(tmp_path
     assert claim_mutation_receipts.load_receipts() == []
 
 
+def test_record_progress_rejects_quiet_interval_without_bounded_claim_expiry(tmp_path: Path) -> None:
+    """Malformed legacy expiry cannot authorize an effectively indefinite quiet interval."""
+
+    claims_dir = tmp_path / "claims"
+    _write_claim(
+        claims_dir,
+        "owner.yaml",
+        {
+            "agent": "codex",
+            "projects": ["demo"],
+            "scope": "quiet-lane",
+            "intent": "Bound quiet work",
+            "claim_type": "program",
+            "session_id": "codex:owner",
+            "status": "active",
+            "expires_at": "not-a-timestamp",
+        },
+    )
+    claim_path = claims_dir / "owner.yaml"
+    before = claim_path.read_bytes()
+
+    with pytest.raises(ValueError, match="requires a valid timezone-aware claim expiry"):
+        claims_impl.record_progress_claims(
+            agent="codex",
+            project="demo",
+            scope="quiet-lane",
+            progress_kind="new_diagnostic",
+            evidence_ref="trace:1",
+            next_action="wait for the bounded tool run",
+            expected_quiet_until="2026-08-21T09:00:00+00:00",
+            quiet_reason="bounded tool run",
+            session_id="codex:owner",
+            claims_dir=claims_dir,
+            now=datetime.fromisoformat("2026-08-21T08:00:00+00:00"),
+        )
+
+    assert claim_path.read_bytes() == before
+    assert claim_mutation_receipts.load_receipts() == []
+
+
+def test_progress_cli_requires_and_uses_exact_native_runtime(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The public command accepts its ambient owner and rejects asserted or absent identity."""
+
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(claims_impl, "CLAIMS_DIR", claims_dir)
+    _write_claim(
+        claims_dir,
+        "owner.yaml",
+        {
+            "agent": "codex",
+            "projects": ["demo"],
+            "scope": "native-lane",
+            "intent": "Exercise public progress",
+            "claim_type": "program",
+            "session_id": "codex:native-owner",
+            "heartbeat_at": "2026-08-21T08:00:00+00:00",
+            "status": "active",
+            "expires_at": "2099-08-22T00:00:00+00:00",
+        },
+    )
+    claim_path = claims_dir / "owner.yaml"
+    monkeypatch.setenv("CODEX_THREAD_ID", "native-owner")
+    args = [
+        "--progress",
+        "--agent",
+        "codex",
+        "--project",
+        "demo",
+        "--scope",
+        "native-lane",
+        "--progress-kind",
+        "integration_result",
+        "--evidence-ref",
+        "receipt:public-cli",
+        "--next-action",
+        "inspect public status",
+        "--json",
+    ]
+
+    assert claims_impl.main(args) == 0
+    result = json.loads(capsys.readouterr().out)
+    assert result["progress_event"]["kind"] == "integration_result"
+    assert "recorded_at" in result["progress_event"]
+    persisted = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    assert persisted["heartbeat_at"] == "2026-08-21T08:00:00+00:00"
+    assert persisted["evidence_ref"] == "receipt:public-cli"
+    after_success = claim_path.read_bytes()
+
+    monkeypatch.delenv("CODEX_THREAD_ID")
+    assert claims_impl.main([*args[:-1], "--session-id", "codex:native-owner", "--json"]) == 1
+    missing_native = json.loads(capsys.readouterr().out)
+    assert "requires the current native codex runtime" in missing_native["error"]
+    assert claim_path.read_bytes() == after_success
+
+    monkeypatch.setenv("CODEX_THREAD_ID", "different-owner")
+    assert claims_impl.main([*args[:-1], "--session-id", "codex:native-owner", "--json"]) == 1
+    mismatch = json.loads(capsys.readouterr().out)
+    assert "does not match the current codex runtime" in mismatch["error"]
+    assert claim_path.read_bytes() == after_success
+
+    monkeypatch.setenv("CODEX_THREAD_ID", "native-owner")
+    missing_scope_args = ["missing-scope" if value == "native-lane" else value for value in args]
+    assert claims_impl.main(missing_scope_args) == 1
+    zero_match = json.loads(capsys.readouterr().out)
+    assert "matched no exact live owning claim" in zero_match["error"]
+    assert claim_path.read_bytes() == after_success
+
+
+def test_progress_cli_reports_applied_mutation_when_receipt_append_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A ledger outage returns nonzero without pretending the applied claim write rolled back."""
+
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(claims_impl, "CLAIMS_DIR", claims_dir)
+    monkeypatch.setenv("CODEX_THREAD_ID", "audit-owner")
+    _write_claim(
+        claims_dir,
+        "owner.yaml",
+        {
+            "agent": "codex",
+            "projects": ["demo"],
+            "scope": "audit-lane",
+            "intent": "Prove audit failure semantics",
+            "claim_type": "program",
+            "session_id": "codex:audit-owner",
+            "heartbeat_at": "2026-08-21T08:00:00+00:00",
+            "status": "active",
+            "expires_at": "2099-08-22T00:00:00+00:00",
+        },
+    )
+
+    def fail_append(*_args: object, **_kwargs: object) -> None:
+        raise OSError("simulated progress receipt outage")
+
+    monkeypatch.setattr(claim_mutation_receipts, "append_receipt", fail_append)
+    exit_code = claims_impl.main(
+        [
+            "--progress",
+            "--agent",
+            "codex",
+            "--project",
+            "demo",
+            "--scope",
+            "audit-lane",
+            "--progress-kind",
+            "new_diagnostic",
+            "--evidence-ref",
+            "trace:audit",
+            "--next-action",
+            "repair receipt sink",
+            "--json",
+        ]
+    )
+
+    assert exit_code == 1
+    failure = json.loads(capsys.readouterr().out)
+    assert failure["mutation_applied"] is True
+    assert failure["error_code"] == "mutation_applied_audit_failed"
+    persisted = yaml.safe_load((claims_dir / "owner.yaml").read_text(encoding="utf-8"))
+    assert persisted["progress_kind"] == "new_diagnostic"
+    assert persisted["evidence_ref"] == "trace:audit"
+    assert json.loads(projection_path_for(claims_dir).read_text(encoding="utf-8"))["registry_digest"] == registry_digest(claims_dir)
+
+
 def test_progress_classifier_has_frozen_boundaries_and_stale_precedence(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -3208,6 +3474,11 @@ def test_progress_classifier_has_frozen_boundaries_and_stale_precedence(
         quiet,
         now=datetime.fromisoformat("2026-08-21T10:15:00+00:00"),
     ) == ["stalled_progress_lease"]
+    unbounded_quiet = replace(quiet, expires_at="not-a-timestamp")
+    assert "quiet_interval_requires_valid_claim_expiry" in claims_impl.claim_progress_issues(
+        unbounded_quiet,
+        now=datetime.fromisoformat("2026-08-21T10:14:59+00:00"),
+    )
 
     malformed = replace(base, evidence_ref=None)
     assert claims_impl.claim_runtime_status(malformed, now=boundary) == "weak"
@@ -3227,6 +3498,11 @@ def test_progress_classifier_has_frozen_boundaries_and_stale_precedence(
 
     stale = replace(base, heartbeat_at="2026-08-21T07:00:00+00:00")
     assert claims_impl.claim_runtime_status(stale, now=boundary) == "stale"
+    missing_heartbeat = replace(base, heartbeat_at=None)
+    assert claims_impl.claim_progress_issues(missing_heartbeat, now=boundary) == [
+        "stalled_progress_lease"
+    ]
+    assert claims_impl.claim_runtime_status(missing_heartbeat, now=boundary) == "weak"
     monkeypatch.setenv("COORDINATION_PROGRESS_STALE_MINUTES", "not-a-number")
     with pytest.raises(ValueError, match="must be a positive number"):
         claims_impl.claim_progress_issues(base, now=boundary)

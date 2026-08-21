@@ -535,6 +535,20 @@ def _upsert_session_claim(
             active_claims=coordination_claims.check_claims(),
         )
         coordination_claims.validate_claim_for_creation(candidate)
+        conflict_result = coordination_claims.evaluate_claim(
+            candidate,
+            active_claims=coordination_claims.check_claims(project),
+        )
+        if conflict_result.hard_conflicts:
+            formatted = "; ".join(
+                f"{item.other_agent} ({item.other_scope}: {', '.join(item.overlapping_write_paths)})"
+                for item in conflict_result.hard_conflicts
+            )
+            raise ValueError(
+                f"CONFLICT: existing-session update would overlap active write ownership in "
+                f"{project!r} — {formatted}. Narrow the requested write paths or coordinate "
+                "with the current owner before refreshing the claim."
+            )
 
         expires_at = existing.expires_at or (now + timedelta(hours=ttl_hours)).isoformat()
         progress_payload: dict[str, str | None] = {}
@@ -662,7 +676,8 @@ def _recovery_action_for_claim(
     if health_status == "stalled":
         return "record_progress_or_handoff"
     if health_status == "weak":
-        if coordination_claims.claim_progress_issues(claim, now=now):
+        progress_issues = coordination_claims.claim_progress_issues(claim, now=now)
+        if any(issue != "stalled_progress_lease" for issue in progress_issues):
             return "repair_progress_contract"
         if active_claims and coordination_claims.claim_hierarchy_issues(
             claim,
@@ -1117,8 +1132,12 @@ def start_session(
         stop_conditions=stop_conditions,
         notes=notes,
     )
+    claim_slot_path = _claim_path(agent, project, scope)
+    claim_bytes_before = claim_slot_path.read_bytes() if claim_slot_path.is_file() else None
     tracker_preexisting = tracker_path.is_file()
+    tracker_bytes_before = tracker_path.read_bytes() if tracker_preexisting else None
     session_contracts.write_session_tracker(tracker, tracker_dir=tracker_dir)
+    tracker_bytes_written = tracker_path.read_bytes()
     try:
         action = _upsert_session_claim(
             agent=agent,
@@ -1141,9 +1160,31 @@ def start_session(
             work_unit_id=work_unit_id,
             allow_parallel=allow_parallel,
         )
-    except Exception:
-        if not tracker_preexisting:
-            tracker_path.unlink(missing_ok=True)
+    except Exception as claim_error:
+        try:
+            claim_bytes_after = claim_slot_path.read_bytes() if claim_slot_path.is_file() else None
+        except OSError as inspection_error:
+            raise RuntimeError(
+                "session claim update failed and claim state could not be inspected before tracker rollback: "
+                f"claim={claim_error}; inspection={inspection_error}"
+            ) from claim_error
+        if claim_bytes_after == claim_bytes_before:
+            try:
+                with session_contracts.session_tracker_lock(tracker_path):
+                    if tracker_path.read_bytes() != tracker_bytes_written:
+                        raise ValueError(
+                            "session tracker changed after this start attempt; refusing unsafe rollback"
+                        )
+                    if tracker_preexisting:
+                        assert tracker_bytes_before is not None
+                        _atomic_restore_bytes(tracker_path, tracker_bytes_before)
+                    else:
+                        tracker_path.unlink(missing_ok=True)
+            except Exception as rollback_error:
+                raise RuntimeError(
+                    "session claim update failed and exact tracker rollback was incomplete: "
+                    f"claim={claim_error}; rollback={rollback_error}"
+                ) from claim_error
         raise
     persisted_claim = _single_matching_live_claim(
         agent=agent,

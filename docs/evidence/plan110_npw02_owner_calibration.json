@@ -1,0 +1,1294 @@
+{
+  "authentic_native_claim_receipt": {
+    "argv": [
+      "queue",
+      "--work-graph-ref",
+      "docs/plans/110_no_passive_waiting_work_graph.json",
+      "--expected-sha256",
+      "115a99d8e32f1bd4beb4e62c51ac4733bdae9184956618b8631dcb995e389a02",
+      "--session-id",
+      "codex:01a0217c-7716-76a1-8055-9e17f9e4925b",
+      "--goal-scope",
+      "enforced-planning#110"
+    ],
+    "claim_snapshot_sha256": "ce8e7c552e5e6f5c5c8209278adde921508af300af9847c8b75b9a185cab6315",
+    "claim_snapshots": [
+      {
+        "claimed_paths": [
+          "enforced_planning/blocker_policy.py",
+          "scripts/evaluate_blocker.py",
+          "tests/test_blocker_policy.py",
+          "tests/fixtures/plan110_npw02_owner_progress.json",
+          "docs/evidence/plan110_npw02_owner_calibration.json",
+          "docs/plans/110_no_passive_waiting_enforcement.md",
+          "docs/plans/110_no_passive_waiting_work_graph.json",
+          "docs/plans/CLAUDE.md",
+          "ROADMAP.md"
+        ],
+        "goal_or_graph_scope": "enforced-planning#110",
+        "session_id": "codex:01a0217c-7716-76a1-8055-9e17f9e4925b",
+        "status": "active",
+        "work_graph_path": "docs/plans/110_no_passive_waiting_work_graph.json",
+        "work_graph_sha256": "115a99d8e32f1bd4beb4e62c51ac4733bdae9184956618b8631dcb995e389a02",
+        "work_unit_id": "npw-02-provider-free-blocker-decision"
+      },
+      {
+        "claimed_paths": [
+          "enforced_planning/outcome_continuation.py",
+          "enforced_planning/outcome_selection.py",
+          "enforced_planning/session_lifecycle.py",
+          "scripts/outcome_continuation.py",
+          "tests/test_outcome_continuation.py",
+          "tests/test_outcome_selection.py",
+          "tests/test_session_cli.py",
+          "examples/owner-real-outcome-observe/plan118-stalled-predecessor.json",
+          "examples/owner-real-outcome-observe/plan118-active-successor.json",
+          "examples/owner-real-outcome-observe/plan118-restart-delta.json",
+          "docs/evidence/plan118_causal_restart_lineage.json",
+          "docs/guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md",
+          "docs/plans/118_causal_restart_lineage_and_session_handoff_observe.md",
+          "docs/plans/118_causal_restart_lineage_and_session_handoff_observe_work_graph.json"
+        ],
+        "goal_or_graph_scope": "goal:prevent-circular-project-failure",
+        "session_id": "codex:01a021cc-f3a0-7b21-babc-f18617333d1a",
+        "status": "active",
+        "work_graph_path": "docs/plans/118_causal_restart_lineage_and_session_handoff_observe_work_graph.json",
+        "work_graph_sha256": null,
+        "work_unit_id": "orst-01-restart-safe-outcome-custody"
+      }
+    ],
+    "exit_code": 0,
+    "graph_source": {
+      "path": "docs/plans/110_no_passive_waiting_work_graph.json",
+      "present": true,
+      "serialized_utf8": "{\n  \"units\": [\n    {\n      \"schema_version\": \"1.0\",\n      \"record_type\": \"work_unit\",\n      \"id\": \"npw-01-progress-lease-current-main\",\n      \"initiative_id\": \"coordination-integrity\",\n      \"goal_id\": \"no-passive-waiting\",\n      \"design_revision\": \"405f7423f9e5673185cea604a8d594d68d69c85c\",\n      \"spec_revision\": \"npw-01-v1\",\n      \"title\": \"Port truthful progress leases onto current main\",\n      \"class\": \"implementation\",\n      \"objective\": \"Distinguish durable advancement from heartbeat and blocker lifecycle events on the current claim/session runtime without changing ownership automatically.\",\n      \"profile\": \"standard\",\n      \"execution_class\": \"independently_executable\",\n      \"claimability\": \"ready_for_execution\",\n      \"authorization_mode\": \"registry_claim\",\n      \"scope\": {\n        \"included\": [\n          \"Additive ProgressEventV1 fields and owning-session mutation\",\n          \"Stalled classification with bounded quiet intervals\",\n          \"Registry and session status step-down context\",\n          \"Current-main salvage of the useful Plan 70 fixtures\",\n          \"Correction that blocker and handoff events do not renew progress\"\n        ],\n        \"excluded\": [\n          \"Blocker disposition or ready-queue evaluation\",\n          \"Automatic claim release, takeover, rebase or deletion\",\n          \"Fleet threshold tuning\",\n          \"Workspace bootstrap edits\"\n        ]\n      },\n      \"inputs\": [\n        {\n          \"kind\": \"bounded_design\",\n          \"id\": \"docs/plans/110_no_passive_waiting_enforcement.md\",\n          \"revision\": \"405f7423f9e5673185cea604a8d594d68d69c85c\"\n        },\n        {\n          \"kind\": \"historical_salvage\",\n          \"id\": \"origin/plan-70-progress-leases\",\n          \"revision\": \"2d56f6cf04db75789304de3af4a5503cfa822dda\"\n        }\n      ],\n      \"outputs\": [\n        \"ProgressEventV1-compatible claim fields and mutation command\",\n        \"One canonical stalled classifier used by registry and session status\",\n        \"Both-sign current-main tests for heartbeat, blocker, quiet interval, legacy state and pruning\"\n      ],\n      \"dependencies\": [],\n      \"conflict_surfaces\": [\n        {\n          \"kind\": \"repository_path\",\n          \"target\": \"enforced_planning/coordination_claims.py\",\n          \"repository\": \"enforced-planning\",\n          \"access\": \"exclusive\",\n          \"coordination_key\": \"npw-progress-lease\"\n        },\n        {\n          \"kind\": \"repository_path\",\n          \"target\": \"enforced_planning/session_lifecycle.py\",\n          \"repository\": \"enforced-planning\",\n          \"access\": \"exclusive\",\n          \"coordination_key\": \"npw-progress-lease\"\n        },\n        {\n          \"kind\": \"repository_path\",\n          \"target\": \"enforced_planning/active_work_registry.py\",\n          \"repository\": \"enforced-planning\",\n          \"access\": \"exclusive\",\n          \"coordination_key\": \"npw-progress-lease\"\n        },\n        {\n          \"kind\": \"repository_path\",\n          \"target\": \"tests/test_check_coordination_claims.py\",\n          \"repository\": \"enforced-planning\",\n          \"access\": \"exclusive\",\n          \"coordination_key\": \"npw-progress-lease\"\n        },\n        {\n          \"kind\": \"repository_path\",\n          \"target\": \"tests/test_generate_active_work_registry.py\",\n          \"repository\": \"enforced-planning\",\n          \"access\": \"exclusive\",\n          \"coordination_key\": \"npw-progress-lease\"\n        },\n        {\n          \"kind\": \"repository_path\",\n          \"target\": \"tests/test_session_cli.py\",\n          \"repository\": \"enforced-planning\",\n          \"access\": \"exclusive\",\n          \"coordination_key\": \"npw-progress-lease\"\n        }\n      ],\n      \"acceptance\": [\n        {\n          \"id\": \"NPW01-A1\",\n          \"criterion\": \"A live claim with fresh heartbeats and expired durable progress is reported stalled with exact evidence and next action while ownership remains unchanged.\",\n          \"evidence_required\": [\n            \"Focused claim, registry and session status tests\",\n            \"Frozen-clock before/after progress deadline fixture\",\n            \"Legacy-claim compatibility fixture\"\n          ],\n          \"negative_control\": \"Heartbeat, blocker, handoff, file dirt and stalled pruning cannot change progress_at or release the claim.\"\n        }\n      ],\n      \"readiness\": {\n        \"status\": \"ready\",\n        \"required_approval_types\": [],\n        \"approvals\": [],\n        \"failed_guards\": []\n      },\n      \"claim_policy\": {\n        \"eligibility_rule\": \"One exact live registry claim owns only the progress-lease runtime, status, documentation and focused-test paths.\",\n        \"lease_policy\": \"renewable\",\n        \"lease_duration_minutes\": 1440,\n        \"max_active_per_claimant\": 1,\n        \"named_owner_id\": null\n      },\n      \"status\": \"ready\",\n      \"record_version\": 1\n    },\n    {\n      \"schema_version\": \"1.0\",\n      \"record_type\": \"work_unit\",\n      \"id\": \"npw-02-provider-free-blocker-decision\",\n      \"initiative_id\": \"coordination-integrity\",\n      \"goal_id\": \"no-passive-waiting\",\n      \"design_revision\": \"405f7423f9e5673185cea604a8d594d68d69c85c\",\n      \"spec_revision\": \"npw-02-v1\",\n      \"title\": \"Implement provider-free blocker and ready-queue decisions\",\n      \"class\": \"implementation\",\n      \"objective\": \"Return a typed deterministic disposition that distinguishes ready alternatives, path waits, verified blockers and incomplete queue knowledge without mutating claims.\",\n      \"profile\": \"standard\",\n      \"execution_class\": \"independently_executable\",\n      \"claimability\": \"ready_for_execution\",\n      \"authorization_mode\": \"registry_claim\",\n      \"scope\": {\n        \"included\": [\n          \"Strict BlockerRequestV1, ReadyQueueEvaluationV1 and BlockerDispositionV1 contracts\",\n          \"Revision-bound work-graph queue evaluation\",\n          \"Claim-conflict and mailbox-delivery evidence inputs\",\n          \"A/B/C and unrelated-root fixtures\",\n          \"Read-only decision CLI\"\n        ],\n        \"excluded\": [\n          \"Claim or tracker mutation\",\n          \"Progress-lease implementation\",\n          \"LLM judgment\",\n          \"Work-graph requirement for unplanned light work\",\n          \"Workspace bootstrap edits\"\n        ]\n      },\n      \"inputs\": [\n        {\n          \"kind\": \"bounded_design\",\n          \"id\": \"docs/plans/110_no_passive_waiting_enforcement.md\",\n          \"revision\": \"405f7423f9e5673185cea604a8d594d68d69c85c\"\n        },\n        {\n          \"kind\": \"existing_contract\",\n          \"id\": \"enforced_planning/plan_readiness.py\",\n          \"revision\": \"812759dcb09ec2cebc5954601b418434256b31b4\"\n        }\n      ],\n      \"outputs\": [\n        \"Strict blocker and queue Pydantic contracts\",\n        \"Pure ready-queue and blocker disposition evaluator\",\n        \"Read-only CLI and both-sign fixtures\"\n      ],\n      \"dependencies\": [],\n      \"conflict_surfaces\": [\n        {\n          \"kind\": \"repository_path\",\n          \"target\": \"enforced_planning/blocker_policy.py\",\n          \"repository\": \"enforced-planning\",\n          \"access\": \"exclusive\",\n          \"coordination_key\": \"npw-blocker-policy\"\n        },\n        {\n          \"kind\": \"repository_path\",\n          \"target\": \"scripts/evaluate_blocker.py\",\n          \"repository\": \"enforced-planning\",\n          \"access\": \"exclusive\",\n          \"coordination_key\": \"npw-blocker-policy\"\n        },\n        {\n          \"kind\": \"repository_path\",\n          \"target\": \"tests/test_blocker_policy.py\",\n          \"repository\": \"enforced-planning\",\n          \"access\": \"exclusive\",\n          \"coordination_key\": \"npw-blocker-policy\"\n        }\n      ],\n      \"acceptance\": [\n        {\n          \"id\": \"NPW02-A1\",\n          \"criterion\": \"The same deterministic evaluator returns continue_ready_work for A blocked/B ready, integration_wait for a path collision, and goal_blocked_verified only for complete queue coverage with no eligible units and a supported blocker.\",\n          \"evidence_required\": [\n            \"Provider-free contract and decision tests\",\n            \"A/B/C positive and negative fixture receipts\",\n            \"Stale, missing and malformed graph tests\",\n            \"Persisted-versus-observed mailbox tests\"\n          ],\n          \"negative_control\": \"Partial or unavailable queue coverage and a merely persisted mailbox message cannot produce goal_blocked_verified.\"\n        }\n      ],\n      \"readiness\": {\n        \"status\": \"ready\",\n        \"required_approval_types\": [],\n        \"approvals\": [],\n        \"failed_guards\": []\n      },\n      \"claim_policy\": {\n        \"eligibility_rule\": \"One exact live registry claim owns only the new blocker-policy module, read-only CLI and focused tests.\",\n        \"lease_policy\": \"renewable\",\n        \"lease_duration_minutes\": 1440,\n        \"max_active_per_claimant\": 1,\n        \"named_owner_id\": null\n      },\n      \"status\": \"ready\",\n      \"record_version\": 1\n    },\n    {\n      \"schema_version\": \"1.0\",\n      \"record_type\": \"work_unit\",\n      \"id\": \"npw-03-safe-lifecycle-integration\",\n      \"initiative_id\": \"coordination-integrity\",\n      \"goal_id\": \"no-passive-waiting\",\n      \"design_revision\": \"405f7423f9e5673185cea604a8d594d68d69c85c\",\n      \"spec_revision\": \"npw-03-v1\",\n      \"title\": \"Apply blocker dispositions through safe scoped lifecycle operations\",\n      \"class\": \"integration\",\n      \"objective\": \"Record the deterministic disposition and either continue another unit or safely narrow, hand off, or retire only the blocked goal scope while preserving unrelated roots and dirty work.\",\n      \"profile\": \"standard\",\n      \"execution_class\": \"coupled\",\n      \"claimability\": \"blocked_dependencies\",\n      \"authorization_mode\": \"registry_claim\",\n      \"integration_owner_id\": \"enforced-planning\",\n      \"scope\": {\n        \"included\": [\n          \"Sanctioned blocker-session entrypoint\",\n          \"Scoped blocker receipt persistence\",\n          \"Scoped handoff or retirement of one goal root and descendants\",\n          \"Installed wrapper generation\",\n          \"End-to-end A/B/C and true-blocker lifecycle tests\"\n        ],\n        \"excluded\": [\n          \"Automatic takeover or deletion\",\n          \"Ending unrelated roots owned by the same runtime\",\n          \"Workspace bootstrap edit\",\n          \"Fleet deadline tuning\"\n        ]\n      },\n      \"inputs\": [\n        {\n          \"kind\": \"work_unit_output\",\n          \"id\": \"npw-01-progress-lease-current-main\",\n          \"revision\": \"accepted\"\n        },\n        {\n          \"kind\": \"work_unit_output\",\n          \"id\": \"npw-02-provider-free-blocker-decision\",\n          \"revision\": \"accepted\"\n        }\n      ],\n      \"outputs\": [\n        \"Sanctioned blocker disposition and scoped lifecycle command\",\n        \"Installed consumer wrappers\",\n        \"End-to-end receipts for continue-ready-work and true-blocker paths\"\n      ],\n      \"dependencies\": [\n        {\n          \"unit_id\": \"npw-01-progress-lease-current-main\",\n          \"type\": \"hard\",\n          \"gate\": {\n            \"type\": \"unit_status\",\n            \"required_status\": \"accepted\"\n          },\n          \"rationale\": \"Lifecycle application must preserve the accepted progress-versus-liveness state model.\"\n        },\n        {\n          \"unit_id\": \"npw-02-provider-free-blocker-decision\",\n          \"type\": \"hard\",\n          \"gate\": {\n            \"type\": \"unit_status\",\n            \"required_status\": \"accepted\"\n          },\n          \"rationale\": \"Ownership changes may consume only an accepted deterministic disposition.\"\n        }\n      ],\n      \"conflict_surfaces\": [\n        {\n          \"kind\": \"repository_path\",\n          \"target\": \"enforced_planning/session_lifecycle.py\",\n          \"repository\": \"enforced-planning\",\n          \"access\": \"exclusive\",\n          \"coordination_key\": \"npw-lifecycle-integration\"\n        },\n        {\n          \"kind\": \"repository_path\",\n          \"target\": \"enforced_planning/coordination_claims.py\",\n          \"repository\": \"enforced-planning\",\n          \"access\": \"exclusive\",\n          \"coordination_key\": \"npw-lifecycle-integration\"\n        },\n        {\n          \"kind\": \"repository_path\",\n          \"target\": \"scripts/install_governed_repo.py\",\n          \"repository\": \"enforced-planning\",\n          \"access\": \"exclusive\",\n          \"coordination_key\": \"npw-lifecycle-integration\"\n        },\n        {\n          \"kind\": \"repository_path\",\n          \"target\": \"tests/test_session_cli.py\",\n          \"repository\": \"enforced-planning\",\n          \"access\": \"exclusive\",\n          \"coordination_key\": \"npw-lifecycle-integration\"\n        }\n      ],\n      \"acceptance\": [\n        {\n          \"id\": \"NPW03-A1\",\n          \"criterion\": \"One installed command denies a whole-goal block while a unit is ready and safely records and retires only the selected goal scope for a verified true blocker.\",\n          \"evidence_required\": [\n            \"End-to-end fixture receipt for continue_ready_work\",\n            \"End-to-end fixture receipt for goal_blocked_verified\",\n            \"Installed-wrapper parity test\",\n            \"Idempotent replay and dirty-work preservation tests\"\n          ],\n          \"negative_control\": \"An unrelated authorized root remains active and no dirty worktree, branch or claim is deleted, rebased or taken over.\"\n        }\n      ],\n      \"readiness\": {\n        \"status\": \"blocked\",\n        \"required_approval_types\": [],\n        \"approvals\": [],\n        \"failed_guards\": [\n          \"npw-01-progress-lease-current-main must be accepted\",\n          \"npw-02-provider-free-blocker-decision must be accepted\"\n        ]\n      },\n      \"claim_policy\": {\n        \"eligibility_rule\": \"Both provider units are accepted and one integration claim exclusively owns their shared lifecycle and installer paths.\",\n        \"lease_policy\": \"renewable\",\n        \"lease_duration_minutes\": 1440,\n        \"max_active_per_claimant\": 1,\n        \"named_owner_id\": null\n      },\n      \"status\": \"blocked\",\n      \"record_version\": 1\n    },\n    {\n      \"schema_version\": \"1.0\",\n      \"record_type\": \"work_unit\",\n      \"id\": \"npw-04-workspace-bootstrap-integration\",\n      \"initiative_id\": \"coordination-integrity\",\n      \"goal_id\": \"no-passive-waiting\",\n      \"design_revision\": \"405f7423f9e5673185cea604a8d594d68d69c85c\",\n      \"spec_revision\": \"npw-04-v1\",\n      \"title\": \"Integrate the compact workspace no-passive-waiting instruction\",\n      \"class\": \"integration\",\n      \"objective\": \"Add one compact universal instruction that routes agents to the enforced blocker lifecycle without conflicting with the concurrently implemented ecosystem-feedback instruction.\",\n      \"profile\": \"standard\",\n      \"execution_class\": \"coupled\",\n      \"claimability\": \"blocked_dependencies\",\n      \"authorization_mode\": \"registry_claim\",\n      \"integration_owner_id\": \"project-meta\",\n      \"scope\": {\n        \"included\": [\n          \"Canonical workspace bootstrap source edit after feedback-lane integration\",\n          \"Generated instruction-surface synchronization\",\n          \"One navigation test showing both compact instructions\"\n        ],\n        \"excluded\": [\n          \"Feedback command or register implementation\",\n          \"Duplicating detailed blocker policy in every repository\",\n          \"Editing another agent's active branch or claim\"\n        ]\n      },\n      \"inputs\": [\n        {\n          \"kind\": \"work_unit_output\",\n          \"id\": \"npw-03-safe-lifecycle-integration\",\n          \"revision\": \"accepted\"\n        },\n        {\n          \"kind\": \"external_integration\",\n          \"id\": \"project-meta-universal-feedback-bootstrap\",\n          \"revision\": \"pending\"\n        }\n      ],\n      \"outputs\": [\n        \"One canonical workspace instruction covering no-passive-waiting\",\n        \"Synchronized generated instruction surfaces\",\n        \"Navigation and non-duplication evidence\"\n      ],\n      \"dependencies\": [\n        {\n          \"unit_id\": \"npw-03-safe-lifecycle-integration\",\n          \"type\": \"hard\",\n          \"gate\": {\n            \"type\": \"unit_status\",\n            \"required_status\": \"accepted\"\n          },\n          \"rationale\": \"The workspace instruction must point to a real installed lifecycle capability.\"\n        }\n      ],\n      \"conflict_surfaces\": [\n        {\n          \"kind\": \"repository_path\",\n          \"target\": \".claude/CLAUDE.md canonical workspace bootstrap source\",\n          \"repository\": \"project-meta\",\n          \"access\": \"exclusive\",\n          \"coordination_key\": \"workspace-bootstrap-feedback-and-waiting\"\n        }\n      ],\n      \"acceptance\": [\n        {\n          \"id\": \"NPW04-A1\",\n          \"criterion\": \"The always-loaded workspace instruction tells agents to evaluate ready work before reporting blocked and to record a precise blocker/resume event, while preserving the accepted feedback-routing instruction.\",\n          \"evidence_required\": [\n            \"Canonical-source diff\",\n            \"Instruction-surface sync check\",\n            \"Navigation test for both feedback and blocker routes\"\n          ],\n          \"negative_control\": \"No derived AGENTS.md is hand-edited and neither compact instruction duplicates the other's detailed implementation.\"\n        }\n      ],\n      \"readiness\": {\n        \"status\": \"blocked\",\n        \"required_approval_types\": [],\n        \"approvals\": [],\n        \"failed_guards\": [\n          \"npw-03-safe-lifecycle-integration must be accepted\",\n          \"the project-meta universal-feedback bootstrap claim must be integrated or released\"\n        ]\n      },\n      \"claim_policy\": {\n        \"eligibility_rule\": \"Claim only after the active workspace-bootstrap feedback lane is integrated or released and NPW-03 is accepted.\",\n        \"lease_policy\": \"renewable\",\n        \"lease_duration_minutes\": 1440,\n        \"max_active_per_claimant\": 1,\n        \"named_owner_id\": null\n      },\n      \"status\": \"blocked\",\n      \"record_version\": 1\n    },\n    {\n      \"schema_version\": \"1.0\",\n      \"record_type\": \"work_unit\",\n      \"id\": \"npw-05-fleet-observation\",\n      \"initiative_id\": \"coordination-integrity\",\n      \"goal_id\": \"no-passive-waiting\",\n      \"design_revision\": \"405f7423f9e5673185cea604a8d594d68d69c85c\",\n      \"spec_revision\": \"npw-05-v1\",\n      \"title\": \"Observe stalled-lane usefulness without enabling takeover\",\n      \"class\": \"verification\",\n      \"objective\": \"Classify real stalled reports and determine whether the reporting deadline or instrumentation needs adjustment without changing ownership semantics.\",\n      \"profile\": \"standard\",\n      \"execution_class\": \"independently_executable\",\n      \"claimability\": \"blocked_dependencies\",\n      \"authorization_mode\": \"registry_claim\",\n      \"scope\": {\n        \"included\": [\n          \"Read-only fleet status capture\",\n          \"Classification as genuine stall, legitimate quiet work, missing instrumentation or noisy threshold\",\n          \"Bounded recommendation on reporting configuration\"\n        ],\n        \"excluded\": [\n          \"Automatic takeover, deletion or reassignment\",\n          \"Model-based progress scoring\",\n          \"Changing blocker semantics from an observational sample\"\n        ]\n      },\n      \"inputs\": [\n        {\n          \"kind\": \"work_unit_output\",\n          \"id\": \"npw-04-workspace-bootstrap-integration\",\n          \"revision\": \"accepted\"\n        }\n      ],\n      \"outputs\": [\n        \"Timestamped read-only stalled-lane observation set\",\n        \"Per-case classification and evidence references\",\n        \"Keep, tune or repair-instrumentation recommendation\"\n      ],\n      \"dependencies\": [\n        {\n          \"unit_id\": \"npw-04-workspace-bootstrap-integration\",\n          \"type\": \"hard\",\n          \"gate\": {\n            \"type\": \"unit_status\",\n            \"required_status\": \"accepted\"\n          },\n          \"rationale\": \"Observation is meaningful only after the runtime and compact agent instruction are installed together.\"\n        }\n      ],\n      \"conflict_surfaces\": [\n        {\n          \"kind\": \"external_system\",\n          \"target\": \"shared coordination claim registry\",\n          \"access\": \"read\",\n          \"coordination_key\": \"npw-fleet-observation\"\n        }\n      ],\n      \"acceptance\": [\n        {\n          \"id\": \"NPW05-A1\",\n          \"criterion\": \"Every observed stalled row steps down to one exact claim and is classified with evidence without mutating any claim or worktree.\",\n          \"evidence_required\": [\n            \"Timestamped registry snapshot\",\n            \"Per-case evidence and classification\",\n            \"Explicit stopping rule and recommendation\"\n          ],\n          \"negative_control\": \"The observation command performs zero claim, branch, worktree or tracker mutations.\"\n        }\n      ],\n      \"readiness\": {\n        \"status\": \"blocked\",\n        \"required_approval_types\": [],\n        \"approvals\": [],\n        \"failed_guards\": [\n          \"npw-04-workspace-bootstrap-integration must be accepted\"\n        ]\n      },\n      \"claim_policy\": {\n        \"eligibility_rule\": \"NPW-04 is accepted; claim only the read-only evidence output path.\",\n        \"lease_policy\": \"renewable\",\n        \"lease_duration_minutes\": 1440,\n        \"max_active_per_claimant\": 1,\n        \"named_owner_id\": null\n      },\n      \"status\": \"blocked\",\n      \"record_version\": 1\n    }\n  ]\n}\n",
+      "sha256": "115a99d8e32f1bd4beb4e62c51ac4733bdae9184956618b8631dcb995e389a02"
+    },
+    "raw_cli_output": "{\n  \"schema_version\": \"1.0\",\n  \"evaluation_id\": \"ready_queue_4100f89c675fc76076106571fb9fb140\",\n  \"session_id\": \"codex:01a0217c-7716-76a1-8055-9e17f9e4925b\",\n  \"goal_or_graph_scope\": \"enforced-planning#110\",\n  \"work_graph_ref\": {\n    \"path\": \"docs/plans/110_no_passive_waiting_work_graph.json\",\n    \"sha256\": \"115a99d8e32f1bd4beb4e62c51ac4733bdae9184956618b8631dcb995e389a02\",\n    \"design_revisions\": [\n      \"405f7423f9e5673185cea604a8d594d68d69c85c\"\n    ],\n    \"spec_revisions\": [\n      \"npw-01-v1\",\n      \"npw-02-v1\",\n      \"npw-03-v1\",\n      \"npw-04-v1\",\n      \"npw-05-v1\"\n    ]\n  },\n  \"claim_snapshot_sha256\": \"ce8e7c552e5e6f5c5c8209278adde921508af300af9847c8b75b9a185cab6315\",\n  \"coverage\": \"complete\",\n  \"eligible_unit_ids\": [\n    \"npw-01-progress-lease-current-main\",\n    \"npw-02-provider-free-blocker-decision\"\n  ],\n  \"blocked_unit_ids\": [\n    {\n      \"unit_id\": \"npw-03-safe-lifecycle-integration\",\n      \"blocker_refs\": [\n        \"unit_blocked:blocked:blocked\",\n        \"hard_dependency_status:npw-01-progress-lease-current-main:required=accepted:observed=ready\",\n        \"hard_dependency_status:npw-02-provider-free-blocker-decision:required=accepted:observed=ready\"\n      ]\n    },\n    {\n      \"unit_id\": \"npw-04-workspace-bootstrap-integration\",\n      \"blocker_refs\": [\n        \"unit_blocked:blocked:blocked\",\n        \"hard_dependency_status:npw-03-safe-lifecycle-integration:required=accepted:observed=blocked\"\n      ]\n    },\n    {\n      \"unit_id\": \"npw-05-fleet-observation\",\n      \"blocker_refs\": [\n        \"unit_blocked:blocked:blocked\",\n        \"hard_dependency_status:npw-04-workspace-bootstrap-integration:required=accepted:observed=blocked\"\n      ]\n    }\n  ],\n  \"terminal_unit_ids\": [],\n  \"active_or_indeterminate_unit_ids\": [],\n  \"active_conflict_unit_ids\": [],\n  \"evaluated_at\": \"2026-08-21T06:29:44.567621Z\",\n  \"evidence_refs\": [\n    \"work-graph-ref:docs/plans/110_no_passive_waiting_work_graph.json\",\n    \"work-graph-sha256:115a99d8e32f1bd4beb4e62c51ac4733bdae9184956618b8631dcb995e389a02\",\n    \"claim-snapshot-sha256:ce8e7c552e5e6f5c5c8209278adde921508af300af9847c8b75b9a185cab6315\"\n  ]\n}",
+    "recorded_at": "2026-08-21T06:29:44.567621Z",
+    "result": {
+      "active_conflict_unit_ids": [],
+      "active_or_indeterminate_unit_ids": [],
+      "blocked_unit_ids": [
+        {
+          "blocker_refs": [
+            "unit_blocked:blocked:blocked",
+            "hard_dependency_status:npw-01-progress-lease-current-main:required=accepted:observed=ready",
+            "hard_dependency_status:npw-02-provider-free-blocker-decision:required=accepted:observed=ready"
+          ],
+          "unit_id": "npw-03-safe-lifecycle-integration"
+        },
+        {
+          "blocker_refs": [
+            "unit_blocked:blocked:blocked",
+            "hard_dependency_status:npw-03-safe-lifecycle-integration:required=accepted:observed=blocked"
+          ],
+          "unit_id": "npw-04-workspace-bootstrap-integration"
+        },
+        {
+          "blocker_refs": [
+            "unit_blocked:blocked:blocked",
+            "hard_dependency_status:npw-04-workspace-bootstrap-integration:required=accepted:observed=blocked"
+          ],
+          "unit_id": "npw-05-fleet-observation"
+        }
+      ],
+      "claim_snapshot_sha256": "ce8e7c552e5e6f5c5c8209278adde921508af300af9847c8b75b9a185cab6315",
+      "coverage": "complete",
+      "eligible_unit_ids": [
+        "npw-01-progress-lease-current-main",
+        "npw-02-provider-free-blocker-decision"
+      ],
+      "evaluated_at": "2026-08-21T06:29:44.567621Z",
+      "evaluation_id": "ready_queue_4100f89c675fc76076106571fb9fb140",
+      "evidence_refs": [
+        "work-graph-ref:docs/plans/110_no_passive_waiting_work_graph.json",
+        "work-graph-sha256:115a99d8e32f1bd4beb4e62c51ac4733bdae9184956618b8631dcb995e389a02",
+        "claim-snapshot-sha256:ce8e7c552e5e6f5c5c8209278adde921508af300af9847c8b75b9a185cab6315"
+      ],
+      "goal_or_graph_scope": "enforced-planning#110",
+      "schema_version": "1.0",
+      "session_id": "codex:01a0217c-7716-76a1-8055-9e17f9e4925b",
+      "terminal_unit_ids": [],
+      "work_graph_ref": {
+        "design_revisions": [
+          "405f7423f9e5673185cea604a8d594d68d69c85c"
+        ],
+        "path": "docs/plans/110_no_passive_waiting_work_graph.json",
+        "sha256": "115a99d8e32f1bd4beb4e62c51ac4733bdae9184956618b8631dcb995e389a02",
+        "spec_revisions": [
+          "npw-01-v1",
+          "npw-02-v1",
+          "npw-03-v1",
+          "npw-04-v1",
+          "npw-05-v1"
+        ]
+      }
+    }
+  },
+  "execution": {
+    "baseline_revision": "6340ff80cb8c514d8f3170d7818b0b324a1d04cb",
+    "candidate_revision": "57863d6cbd596348f42427d21c80d8fb124cec27",
+    "canonical_work_graph_sha256": "115a99d8e32f1bd4beb4e62c51ac4733bdae9184956618b8631dcb995e389a02",
+    "cli_sha256": "a5fde121466e7f947221f8269ca8fbc58dd0347f29ef9393fa9a16a82c41c981",
+    "implementation_sha256": "1b1b2a9419f1ed9830f494a8b895461c6c8c89a29a22f5e80b98223c2db7d593",
+    "ownership_mutated_by_evaluator": false,
+    "plan_sha256": "5476e621f51265759fc2cdac161dc18c99f4783525892aecffd96886587c0ea7",
+    "profile": "provider_free_read_only_diagnostic",
+    "repository": "enforced-planning",
+    "test_sha256": "9cc46aac8644060fa88749f9166a1ed1aa3bdf7026581a644797f579b4276a2e"
+  },
+  "fixture_receipts": [
+    {
+      "case_id": "a_blocked_b_ready_c_blocked",
+      "input": {
+        "claim_snapshots": [],
+        "expected_work_graph_sha256": "6b6da7f8f83810479137b24a6f078b3683583e8a1728f4aa808768fe530f07d5",
+        "mailbox_evidence": [],
+        "request": {
+          "blocked_item_refs": [
+            "A"
+          ],
+          "blocked_scope": "unit",
+          "blocker_class": "hard_dependency",
+          "claim_scope": "enforced-planning#110",
+          "dependency_owner": "another-session",
+          "evidence_refs": [
+            "git:fixture@abc123"
+          ],
+          "mailbox_dependency": null,
+          "requested_claim_action": "session_end",
+          "resume_event": "The dependency revision becomes canonical.",
+          "schema_version": "1.0",
+          "session_id": "codex:owner-real-session"
+        },
+        "request_ref": "plan110-npw02-calibration",
+        "schema_version": "1.0",
+        "work_graph_ref_path": "tests/fixtures/plan110_npw02_work_graph.json"
+      },
+      "recorded_at": "2026-08-21T05:30:00Z",
+      "result": {
+        "disposition": {
+          "alternative_unit_ids": [
+            "B"
+          ],
+          "application_authorized": false,
+          "claim_action": "none",
+          "decision": "continue_ready_work",
+          "disposition_id": "blocker_disposition_516ea7650f3f36b4fbe294402a4c48a9",
+          "evidence_refs": [
+            "git:fixture@abc123",
+            "work-graph-ref:tests/fixtures/plan110_npw02_work_graph.json",
+            "work-graph-sha256:6b6da7f8f83810479137b24a6f078b3683583e8a1728f4aa808768fe530f07d5",
+            "claim-snapshot-sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          ],
+          "ready_queue_evaluation_ref": "ready_queue_51a5cb07bfae71639d959c9fa0eda883",
+          "reason_codes": [
+            "eligible_alternative_exists"
+          ],
+          "recorded_at": "2026-08-21T05:30:00Z",
+          "request_ref": "plan110-npw02-calibration",
+          "resume_event": "The dependency revision becomes canonical.",
+          "schema_version": "1.0"
+        },
+        "ready_queue": {
+          "active_conflict_unit_ids": [],
+          "active_or_indeterminate_unit_ids": [],
+          "blocked_unit_ids": [
+            {
+              "blocker_refs": [
+                "unit_blocked:blocked:blocked"
+              ],
+              "unit_id": "A"
+            },
+            {
+              "blocker_refs": [
+                "unit_blocked:blocked:blocked",
+                "hard_dependency_status:A:required=accepted:observed=blocked"
+              ],
+              "unit_id": "C"
+            }
+          ],
+          "claim_snapshot_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "coverage": "complete",
+          "eligible_unit_ids": [
+            "B"
+          ],
+          "evaluated_at": "2026-08-21T05:30:00Z",
+          "evaluation_id": "ready_queue_51a5cb07bfae71639d959c9fa0eda883",
+          "evidence_refs": [
+            "work-graph-ref:tests/fixtures/plan110_npw02_work_graph.json",
+            "work-graph-sha256:6b6da7f8f83810479137b24a6f078b3683583e8a1728f4aa808768fe530f07d5",
+            "claim-snapshot-sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          ],
+          "goal_or_graph_scope": "enforced-planning#110",
+          "schema_version": "1.0",
+          "session_id": "codex:owner-real-session",
+          "terminal_unit_ids": [],
+          "work_graph_ref": {
+            "design_revisions": [
+              "design-v1"
+            ],
+            "path": "tests/fixtures/plan110_npw02_work_graph.json",
+            "sha256": "6b6da7f8f83810479137b24a6f078b3683583e8a1728f4aa808768fe530f07d5",
+            "spec_revisions": [
+              "A-v1",
+              "B-v1",
+              "C-v1"
+            ]
+          }
+        },
+        "schema_version": "1.0"
+      },
+      "source_id": "graph_abc"
+    },
+    {
+      "case_id": "verified_path_collision",
+      "input": {
+        "claim_snapshots": [
+          {
+            "claimed_paths": [
+              "shared/component.py"
+            ],
+            "goal_or_graph_scope": "enforced-planning#110",
+            "session_id": "codex:other-owner-session",
+            "status": "active",
+            "work_graph_path": "tests/fixtures/plan110_npw02_work_graph.json",
+            "work_graph_sha256": "61fc6b77124f3cfe6ff56a7e5e7eabdfc04994c28c67258444ae5fe47b900815",
+            "work_unit_id": "A"
+          }
+        ],
+        "expected_work_graph_sha256": "61fc6b77124f3cfe6ff56a7e5e7eabdfc04994c28c67258444ae5fe47b900815",
+        "mailbox_evidence": [],
+        "request": {
+          "blocked_item_refs": [
+            "shared/component.py"
+          ],
+          "blocked_scope": "path",
+          "blocker_class": "path_conflict",
+          "claim_scope": "enforced-planning#110",
+          "dependency_owner": "another-session",
+          "evidence_refs": [
+            "git:fixture@abc123"
+          ],
+          "mailbox_dependency": null,
+          "requested_claim_action": "session_end",
+          "resume_event": "The dependency revision becomes canonical.",
+          "schema_version": "1.0",
+          "session_id": "codex:owner-real-session"
+        },
+        "request_ref": "plan110-npw02-calibration",
+        "schema_version": "1.0",
+        "work_graph_ref_path": "tests/fixtures/plan110_npw02_work_graph.json"
+      },
+      "recorded_at": "2026-08-21T05:30:00Z",
+      "result": {
+        "disposition": {
+          "alternative_unit_ids": [
+            "B"
+          ],
+          "application_authorized": false,
+          "claim_action": "none",
+          "decision": "integration_wait",
+          "disposition_id": "blocker_disposition_42e31e3e2bead10b64d6f57efade2e80",
+          "evidence_refs": [
+            "git:fixture@abc123",
+            "work-graph-ref:tests/fixtures/plan110_npw02_work_graph.json",
+            "work-graph-sha256:61fc6b77124f3cfe6ff56a7e5e7eabdfc04994c28c67258444ae5fe47b900815",
+            "claim-snapshot-sha256:07ba6866b72df52f8e85f91a6baf9eecdbbeff3c6790e9e483e0dee6a90c7294",
+            "path-conflict:codex:other-owner-session:shared/component.py:shared/component.py"
+          ],
+          "ready_queue_evaluation_ref": "ready_queue_46c9216d234588f048257f929c970521",
+          "reason_codes": [
+            "path_conflict_verified_local"
+          ],
+          "recorded_at": "2026-08-21T05:30:00Z",
+          "request_ref": "plan110-npw02-calibration",
+          "resume_event": "The dependency revision becomes canonical.",
+          "schema_version": "1.0"
+        },
+        "ready_queue": {
+          "active_conflict_unit_ids": [
+            "A"
+          ],
+          "active_or_indeterminate_unit_ids": [],
+          "blocked_unit_ids": [
+            {
+              "blocker_refs": [
+                "unit_blocked:blocked:blocked",
+                "active_claim_conflict"
+              ],
+              "unit_id": "A"
+            }
+          ],
+          "claim_snapshot_sha256": "07ba6866b72df52f8e85f91a6baf9eecdbbeff3c6790e9e483e0dee6a90c7294",
+          "coverage": "complete",
+          "eligible_unit_ids": [
+            "B"
+          ],
+          "evaluated_at": "2026-08-21T05:30:00Z",
+          "evaluation_id": "ready_queue_46c9216d234588f048257f929c970521",
+          "evidence_refs": [
+            "work-graph-ref:tests/fixtures/plan110_npw02_work_graph.json",
+            "work-graph-sha256:61fc6b77124f3cfe6ff56a7e5e7eabdfc04994c28c67258444ae5fe47b900815",
+            "claim-snapshot-sha256:07ba6866b72df52f8e85f91a6baf9eecdbbeff3c6790e9e483e0dee6a90c7294"
+          ],
+          "goal_or_graph_scope": "enforced-planning#110",
+          "schema_version": "1.0",
+          "session_id": "codex:owner-real-session",
+          "terminal_unit_ids": [],
+          "work_graph_ref": {
+            "design_revisions": [
+              "design-v1"
+            ],
+            "path": "tests/fixtures/plan110_npw02_work_graph.json",
+            "sha256": "61fc6b77124f3cfe6ff56a7e5e7eabdfc04994c28c67258444ae5fe47b900815",
+            "spec_revisions": [
+              "A-v1",
+              "B-v1"
+            ]
+          }
+        },
+        "schema_version": "1.0"
+      },
+      "source_id": "graph_ab"
+    },
+    {
+      "case_id": "asserted_path_collision_without_claim_evidence",
+      "input": {
+        "claim_snapshots": [],
+        "expected_work_graph_sha256": "61fc6b77124f3cfe6ff56a7e5e7eabdfc04994c28c67258444ae5fe47b900815",
+        "mailbox_evidence": [],
+        "request": {
+          "blocked_item_refs": [
+            "shared/component.py"
+          ],
+          "blocked_scope": "path",
+          "blocker_class": "path_conflict",
+          "claim_scope": "enforced-planning#110",
+          "dependency_owner": "another-session",
+          "evidence_refs": [
+            "git:fixture@abc123"
+          ],
+          "mailbox_dependency": null,
+          "requested_claim_action": "session_end",
+          "resume_event": "The dependency revision becomes canonical.",
+          "schema_version": "1.0",
+          "session_id": "codex:owner-real-session"
+        },
+        "request_ref": "plan110-npw02-calibration",
+        "schema_version": "1.0",
+        "work_graph_ref_path": "tests/fixtures/plan110_npw02_work_graph.json"
+      },
+      "recorded_at": "2026-08-21T05:30:00Z",
+      "result": {
+        "disposition": {
+          "alternative_unit_ids": [
+            "B"
+          ],
+          "application_authorized": false,
+          "claim_action": "none",
+          "decision": "blocker_unverified_return_control",
+          "disposition_id": "blocker_disposition_7ad7ba28dae8e31e76ffe0fb989024ed",
+          "evidence_refs": [
+            "git:fixture@abc123",
+            "work-graph-ref:tests/fixtures/plan110_npw02_work_graph.json",
+            "work-graph-sha256:61fc6b77124f3cfe6ff56a7e5e7eabdfc04994c28c67258444ae5fe47b900815",
+            "claim-snapshot-sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          ],
+          "ready_queue_evaluation_ref": "ready_queue_85fd9f49b3de90ff6b2dfd46a311f57d",
+          "reason_codes": [
+            "path_conflict_evidence_unverified"
+          ],
+          "recorded_at": "2026-08-21T05:30:00Z",
+          "request_ref": "plan110-npw02-calibration",
+          "resume_event": "The dependency revision becomes canonical.",
+          "schema_version": "1.0"
+        },
+        "ready_queue": {
+          "active_conflict_unit_ids": [],
+          "active_or_indeterminate_unit_ids": [],
+          "blocked_unit_ids": [
+            {
+              "blocker_refs": [
+                "unit_blocked:blocked:blocked"
+              ],
+              "unit_id": "A"
+            }
+          ],
+          "claim_snapshot_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "coverage": "complete",
+          "eligible_unit_ids": [
+            "B"
+          ],
+          "evaluated_at": "2026-08-21T05:30:00Z",
+          "evaluation_id": "ready_queue_85fd9f49b3de90ff6b2dfd46a311f57d",
+          "evidence_refs": [
+            "work-graph-ref:tests/fixtures/plan110_npw02_work_graph.json",
+            "work-graph-sha256:61fc6b77124f3cfe6ff56a7e5e7eabdfc04994c28c67258444ae5fe47b900815",
+            "claim-snapshot-sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          ],
+          "goal_or_graph_scope": "enforced-planning#110",
+          "schema_version": "1.0",
+          "session_id": "codex:owner-real-session",
+          "terminal_unit_ids": [],
+          "work_graph_ref": {
+            "design_revisions": [
+              "design-v1"
+            ],
+            "path": "tests/fixtures/plan110_npw02_work_graph.json",
+            "sha256": "61fc6b77124f3cfe6ff56a7e5e7eabdfc04994c28c67258444ae5fe47b900815",
+            "spec_revisions": [
+              "A-v1",
+              "B-v1"
+            ]
+          }
+        },
+        "schema_version": "1.0"
+      },
+      "source_id": "graph_ab"
+    },
+    {
+      "case_id": "complete_blocked_queue",
+      "input": {
+        "claim_snapshots": [],
+        "expected_work_graph_sha256": "720e6eb86fd3907ea0cdf9346498814d440bf5e27b3530cc12ba8be8d7f5b144",
+        "mailbox_evidence": [],
+        "request": {
+          "blocked_item_refs": [
+            "A"
+          ],
+          "blocked_scope": "unit",
+          "blocker_class": "hard_dependency",
+          "claim_scope": "enforced-planning#110",
+          "dependency_owner": "another-session",
+          "evidence_refs": [
+            "git:fixture@abc123"
+          ],
+          "mailbox_dependency": null,
+          "requested_claim_action": "session_end",
+          "resume_event": "The dependency revision becomes canonical.",
+          "schema_version": "1.0",
+          "session_id": "codex:owner-real-session"
+        },
+        "request_ref": "plan110-npw02-calibration",
+        "schema_version": "1.0",
+        "work_graph_ref_path": "tests/fixtures/plan110_npw02_work_graph.json"
+      },
+      "recorded_at": "2026-08-21T05:30:00Z",
+      "result": {
+        "disposition": {
+          "alternative_unit_ids": [],
+          "application_authorized": false,
+          "claim_action": "retire_goal_scope",
+          "decision": "goal_blocked_verified",
+          "disposition_id": "blocker_disposition_f1805b9fb5ffdb494ec24ba65a9890b9",
+          "evidence_refs": [
+            "git:fixture@abc123",
+            "work-graph-ref:tests/fixtures/plan110_npw02_work_graph.json",
+            "work-graph-sha256:720e6eb86fd3907ea0cdf9346498814d440bf5e27b3530cc12ba8be8d7f5b144",
+            "claim-snapshot-sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          ],
+          "ready_queue_evaluation_ref": "ready_queue_a400e25135c3bf152c920e20d274f529",
+          "reason_codes": [
+            "complete_queue_no_eligible_unit",
+            "supported_blocker:hard_dependency"
+          ],
+          "recorded_at": "2026-08-21T05:30:00Z",
+          "request_ref": "plan110-npw02-calibration",
+          "resume_event": "The dependency revision becomes canonical.",
+          "schema_version": "1.0"
+        },
+        "ready_queue": {
+          "active_conflict_unit_ids": [],
+          "active_or_indeterminate_unit_ids": [],
+          "blocked_unit_ids": [
+            {
+              "blocker_refs": [
+                "unit_blocked:blocked:blocked"
+              ],
+              "unit_id": "A"
+            }
+          ],
+          "claim_snapshot_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "coverage": "complete",
+          "eligible_unit_ids": [],
+          "evaluated_at": "2026-08-21T05:30:00Z",
+          "evaluation_id": "ready_queue_a400e25135c3bf152c920e20d274f529",
+          "evidence_refs": [
+            "work-graph-ref:tests/fixtures/plan110_npw02_work_graph.json",
+            "work-graph-sha256:720e6eb86fd3907ea0cdf9346498814d440bf5e27b3530cc12ba8be8d7f5b144",
+            "claim-snapshot-sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          ],
+          "goal_or_graph_scope": "enforced-planning#110",
+          "schema_version": "1.0",
+          "session_id": "codex:owner-real-session",
+          "terminal_unit_ids": [],
+          "work_graph_ref": {
+            "design_revisions": [
+              "design-v1"
+            ],
+            "path": "tests/fixtures/plan110_npw02_work_graph.json",
+            "sha256": "720e6eb86fd3907ea0cdf9346498814d440bf5e27b3530cc12ba8be8d7f5b144",
+            "spec_revisions": [
+              "A-v1"
+            ]
+          }
+        },
+        "schema_version": "1.0"
+      },
+      "source_id": "graph_a"
+    },
+    {
+      "case_id": "persisted_only_mailbox",
+      "input": {
+        "claim_snapshots": [],
+        "expected_work_graph_sha256": "720e6eb86fd3907ea0cdf9346498814d440bf5e27b3530cc12ba8be8d7f5b144",
+        "mailbox_evidence": [
+          {
+            "evidence_refs": [
+              "mailbox:persisted-only"
+            ],
+            "message_id": "msg_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "state": "persisted"
+          }
+        ],
+        "request": {
+          "blocked_item_refs": [
+            "A"
+          ],
+          "blocked_scope": "unit",
+          "blocker_class": "hard_dependency",
+          "claim_scope": "enforced-planning#110",
+          "dependency_owner": "another-session",
+          "evidence_refs": [
+            "git:fixture@abc123"
+          ],
+          "mailbox_dependency": {
+            "message_id": "msg_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "required_delivery_state": "observed"
+          },
+          "requested_claim_action": "session_end",
+          "resume_event": "The dependency revision becomes canonical.",
+          "schema_version": "1.0",
+          "session_id": "codex:owner-real-session"
+        },
+        "request_ref": "plan110-npw02-calibration",
+        "schema_version": "1.0",
+        "work_graph_ref_path": "tests/fixtures/plan110_npw02_work_graph.json"
+      },
+      "recorded_at": "2026-08-21T05:30:00Z",
+      "result": {
+        "disposition": {
+          "alternative_unit_ids": [],
+          "application_authorized": false,
+          "claim_action": "retire_goal_scope",
+          "decision": "blocker_unverified_return_control",
+          "disposition_id": "blocker_disposition_3fc21e684eaa60f326e15e34fe5a9853",
+          "evidence_refs": [
+            "git:fixture@abc123",
+            "work-graph-ref:tests/fixtures/plan110_npw02_work_graph.json",
+            "work-graph-sha256:720e6eb86fd3907ea0cdf9346498814d440bf5e27b3530cc12ba8be8d7f5b144",
+            "claim-snapshot-sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+            "mailbox_delivery_below_required",
+            "msg_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "mailbox:persisted-only"
+          ],
+          "ready_queue_evaluation_ref": "ready_queue_a400e25135c3bf152c920e20d274f529",
+          "reason_codes": [
+            "mailbox_delivery_below_required"
+          ],
+          "recorded_at": "2026-08-21T05:30:00Z",
+          "request_ref": "plan110-npw02-calibration",
+          "resume_event": "The dependency revision becomes canonical.",
+          "schema_version": "1.0"
+        },
+        "ready_queue": {
+          "active_conflict_unit_ids": [],
+          "active_or_indeterminate_unit_ids": [],
+          "blocked_unit_ids": [
+            {
+              "blocker_refs": [
+                "unit_blocked:blocked:blocked"
+              ],
+              "unit_id": "A"
+            }
+          ],
+          "claim_snapshot_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "coverage": "complete",
+          "eligible_unit_ids": [],
+          "evaluated_at": "2026-08-21T05:30:00Z",
+          "evaluation_id": "ready_queue_a400e25135c3bf152c920e20d274f529",
+          "evidence_refs": [
+            "work-graph-ref:tests/fixtures/plan110_npw02_work_graph.json",
+            "work-graph-sha256:720e6eb86fd3907ea0cdf9346498814d440bf5e27b3530cc12ba8be8d7f5b144",
+            "claim-snapshot-sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          ],
+          "goal_or_graph_scope": "enforced-planning#110",
+          "schema_version": "1.0",
+          "session_id": "codex:owner-real-session",
+          "terminal_unit_ids": [],
+          "work_graph_ref": {
+            "design_revisions": [
+              "design-v1"
+            ],
+            "path": "tests/fixtures/plan110_npw02_work_graph.json",
+            "sha256": "720e6eb86fd3907ea0cdf9346498814d440bf5e27b3530cc12ba8be8d7f5b144",
+            "spec_revisions": [
+              "A-v1"
+            ]
+          }
+        },
+        "schema_version": "1.0"
+      },
+      "source_id": "graph_a"
+    },
+    {
+      "case_id": "observed_mailbox",
+      "input": {
+        "claim_snapshots": [],
+        "expected_work_graph_sha256": "720e6eb86fd3907ea0cdf9346498814d440bf5e27b3530cc12ba8be8d7f5b144",
+        "mailbox_evidence": [
+          {
+            "evidence_refs": [
+              "mailbox:observed-receipt"
+            ],
+            "message_id": "msg_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "state": "observed"
+          }
+        ],
+        "request": {
+          "blocked_item_refs": [
+            "A"
+          ],
+          "blocked_scope": "unit",
+          "blocker_class": "hard_dependency",
+          "claim_scope": "enforced-planning#110",
+          "dependency_owner": "another-session",
+          "evidence_refs": [
+            "git:fixture@abc123"
+          ],
+          "mailbox_dependency": {
+            "message_id": "msg_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "required_delivery_state": "observed"
+          },
+          "requested_claim_action": "session_end",
+          "resume_event": "The dependency revision becomes canonical.",
+          "schema_version": "1.0",
+          "session_id": "codex:owner-real-session"
+        },
+        "request_ref": "plan110-npw02-calibration",
+        "schema_version": "1.0",
+        "work_graph_ref_path": "tests/fixtures/plan110_npw02_work_graph.json"
+      },
+      "recorded_at": "2026-08-21T05:30:00Z",
+      "result": {
+        "disposition": {
+          "alternative_unit_ids": [],
+          "application_authorized": false,
+          "claim_action": "retire_goal_scope",
+          "decision": "goal_blocked_verified",
+          "disposition_id": "blocker_disposition_c103e3bafa8668a0643143178ff51bee",
+          "evidence_refs": [
+            "git:fixture@abc123",
+            "work-graph-ref:tests/fixtures/plan110_npw02_work_graph.json",
+            "work-graph-sha256:720e6eb86fd3907ea0cdf9346498814d440bf5e27b3530cc12ba8be8d7f5b144",
+            "claim-snapshot-sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+            "mailbox_delivery_satisfied",
+            "msg_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "mailbox:observed-receipt"
+          ],
+          "ready_queue_evaluation_ref": "ready_queue_a400e25135c3bf152c920e20d274f529",
+          "reason_codes": [
+            "complete_queue_no_eligible_unit",
+            "supported_blocker:hard_dependency"
+          ],
+          "recorded_at": "2026-08-21T05:30:00Z",
+          "request_ref": "plan110-npw02-calibration",
+          "resume_event": "The dependency revision becomes canonical.",
+          "schema_version": "1.0"
+        },
+        "ready_queue": {
+          "active_conflict_unit_ids": [],
+          "active_or_indeterminate_unit_ids": [],
+          "blocked_unit_ids": [
+            {
+              "blocker_refs": [
+                "unit_blocked:blocked:blocked"
+              ],
+              "unit_id": "A"
+            }
+          ],
+          "claim_snapshot_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "coverage": "complete",
+          "eligible_unit_ids": [],
+          "evaluated_at": "2026-08-21T05:30:00Z",
+          "evaluation_id": "ready_queue_a400e25135c3bf152c920e20d274f529",
+          "evidence_refs": [
+            "work-graph-ref:tests/fixtures/plan110_npw02_work_graph.json",
+            "work-graph-sha256:720e6eb86fd3907ea0cdf9346498814d440bf5e27b3530cc12ba8be8d7f5b144",
+            "claim-snapshot-sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          ],
+          "goal_or_graph_scope": "enforced-planning#110",
+          "schema_version": "1.0",
+          "session_id": "codex:owner-real-session",
+          "terminal_unit_ids": [],
+          "work_graph_ref": {
+            "design_revisions": [
+              "design-v1"
+            ],
+            "path": "tests/fixtures/plan110_npw02_work_graph.json",
+            "sha256": "720e6eb86fd3907ea0cdf9346498814d440bf5e27b3530cc12ba8be8d7f5b144",
+            "spec_revisions": [
+              "A-v1"
+            ]
+          }
+        },
+        "schema_version": "1.0"
+      },
+      "source_id": "graph_a"
+    },
+    {
+      "case_id": "same_session_claim",
+      "input": {
+        "claim_snapshots": [
+          {
+            "claimed_paths": [],
+            "goal_or_graph_scope": "enforced-planning#110",
+            "session_id": "codex:owner-real-session",
+            "status": "active",
+            "work_graph_path": "tests/fixtures/plan110_npw02_work_graph.json",
+            "work_graph_sha256": "f448dbd07df1fae127a34e52c15b858d3129c7b4e617d57ca97dd8db5281593b",
+            "work_unit_id": "B"
+          }
+        ],
+        "expected_work_graph_sha256": "f448dbd07df1fae127a34e52c15b858d3129c7b4e617d57ca97dd8db5281593b",
+        "mailbox_evidence": [],
+        "request": {
+          "blocked_item_refs": [
+            "B"
+          ],
+          "blocked_scope": "unit",
+          "blocker_class": "hard_dependency",
+          "claim_scope": "enforced-planning#110",
+          "dependency_owner": "another-session",
+          "evidence_refs": [
+            "git:fixture@abc123"
+          ],
+          "mailbox_dependency": null,
+          "requested_claim_action": "session_end",
+          "resume_event": "The dependency revision becomes canonical.",
+          "schema_version": "1.0",
+          "session_id": "codex:owner-real-session"
+        },
+        "request_ref": "plan110-npw02-calibration",
+        "schema_version": "1.0",
+        "work_graph_ref_path": "tests/fixtures/plan110_npw02_work_graph.json"
+      },
+      "recorded_at": "2026-08-21T05:30:00Z",
+      "result": {
+        "disposition": {
+          "alternative_unit_ids": [
+            "B"
+          ],
+          "application_authorized": false,
+          "claim_action": "none",
+          "decision": "continue_ready_work",
+          "disposition_id": "blocker_disposition_4cad94cf6b782eaa57bffdaa1bd8bfcf",
+          "evidence_refs": [
+            "git:fixture@abc123",
+            "work-graph-ref:tests/fixtures/plan110_npw02_work_graph.json",
+            "work-graph-sha256:f448dbd07df1fae127a34e52c15b858d3129c7b4e617d57ca97dd8db5281593b",
+            "claim-snapshot-sha256:4861769dd0abb0f4cb216a4f48cd69cb2a47a059cedecd07954f67d5e773b49e"
+          ],
+          "ready_queue_evaluation_ref": "ready_queue_019a234ca2720200eac196a885a46f53",
+          "reason_codes": [
+            "eligible_alternative_exists"
+          ],
+          "recorded_at": "2026-08-21T05:30:00Z",
+          "request_ref": "plan110-npw02-calibration",
+          "resume_event": "The dependency revision becomes canonical.",
+          "schema_version": "1.0"
+        },
+        "ready_queue": {
+          "active_conflict_unit_ids": [],
+          "active_or_indeterminate_unit_ids": [],
+          "blocked_unit_ids": [],
+          "claim_snapshot_sha256": "4861769dd0abb0f4cb216a4f48cd69cb2a47a059cedecd07954f67d5e773b49e",
+          "coverage": "complete",
+          "eligible_unit_ids": [
+            "B"
+          ],
+          "evaluated_at": "2026-08-21T05:30:00Z",
+          "evaluation_id": "ready_queue_019a234ca2720200eac196a885a46f53",
+          "evidence_refs": [
+            "work-graph-ref:tests/fixtures/plan110_npw02_work_graph.json",
+            "work-graph-sha256:f448dbd07df1fae127a34e52c15b858d3129c7b4e617d57ca97dd8db5281593b",
+            "claim-snapshot-sha256:4861769dd0abb0f4cb216a4f48cd69cb2a47a059cedecd07954f67d5e773b49e"
+          ],
+          "goal_or_graph_scope": "enforced-planning#110",
+          "schema_version": "1.0",
+          "session_id": "codex:owner-real-session",
+          "terminal_unit_ids": [],
+          "work_graph_ref": {
+            "design_revisions": [
+              "design-v1"
+            ],
+            "path": "tests/fixtures/plan110_npw02_work_graph.json",
+            "sha256": "f448dbd07df1fae127a34e52c15b858d3129c7b4e617d57ca97dd8db5281593b",
+            "spec_revisions": [
+              "B-v1"
+            ]
+          }
+        },
+        "schema_version": "1.0"
+      },
+      "source_id": "graph_b"
+    },
+    {
+      "case_id": "other_session_claim",
+      "input": {
+        "claim_snapshots": [
+          {
+            "claimed_paths": [],
+            "goal_or_graph_scope": "enforced-planning#110",
+            "session_id": "codex:other-owner-session",
+            "status": "active",
+            "work_graph_path": "tests/fixtures/plan110_npw02_work_graph.json",
+            "work_graph_sha256": "f448dbd07df1fae127a34e52c15b858d3129c7b4e617d57ca97dd8db5281593b",
+            "work_unit_id": "B"
+          }
+        ],
+        "expected_work_graph_sha256": "f448dbd07df1fae127a34e52c15b858d3129c7b4e617d57ca97dd8db5281593b",
+        "mailbox_evidence": [],
+        "request": {
+          "blocked_item_refs": [
+            "B"
+          ],
+          "blocked_scope": "unit",
+          "blocker_class": "hard_dependency",
+          "claim_scope": "enforced-planning#110",
+          "dependency_owner": "another-session",
+          "evidence_refs": [
+            "git:fixture@abc123"
+          ],
+          "mailbox_dependency": null,
+          "requested_claim_action": "session_end",
+          "resume_event": "The dependency revision becomes canonical.",
+          "schema_version": "1.0",
+          "session_id": "codex:owner-real-session"
+        },
+        "request_ref": "plan110-npw02-calibration",
+        "schema_version": "1.0",
+        "work_graph_ref_path": "tests/fixtures/plan110_npw02_work_graph.json"
+      },
+      "recorded_at": "2026-08-21T05:30:00Z",
+      "result": {
+        "disposition": {
+          "alternative_unit_ids": [],
+          "application_authorized": false,
+          "claim_action": "none",
+          "decision": "integration_wait",
+          "disposition_id": "blocker_disposition_891c58222270b9cfc6df9f2f0e68e447",
+          "evidence_refs": [
+            "git:fixture@abc123",
+            "work-graph-ref:tests/fixtures/plan110_npw02_work_graph.json",
+            "work-graph-sha256:f448dbd07df1fae127a34e52c15b858d3129c7b4e617d57ca97dd8db5281593b",
+            "claim-snapshot-sha256:9c243f4131beeabf16e9a174c813108b7e0fbd0aa3f46ac747c0ecc31375feaa"
+          ],
+          "ready_queue_evaluation_ref": "ready_queue_d837fb40522f729c780068fe82116b91",
+          "reason_codes": [
+            "active_unit_in_progress"
+          ],
+          "recorded_at": "2026-08-21T05:30:00Z",
+          "request_ref": "plan110-npw02-calibration",
+          "resume_event": "The dependency revision becomes canonical.",
+          "schema_version": "1.0"
+        },
+        "ready_queue": {
+          "active_conflict_unit_ids": [
+            "B"
+          ],
+          "active_or_indeterminate_unit_ids": [],
+          "blocked_unit_ids": [
+            {
+              "blocker_refs": [
+                "active_claim_conflict"
+              ],
+              "unit_id": "B"
+            }
+          ],
+          "claim_snapshot_sha256": "9c243f4131beeabf16e9a174c813108b7e0fbd0aa3f46ac747c0ecc31375feaa",
+          "coverage": "complete",
+          "eligible_unit_ids": [],
+          "evaluated_at": "2026-08-21T05:30:00Z",
+          "evaluation_id": "ready_queue_d837fb40522f729c780068fe82116b91",
+          "evidence_refs": [
+            "work-graph-ref:tests/fixtures/plan110_npw02_work_graph.json",
+            "work-graph-sha256:f448dbd07df1fae127a34e52c15b858d3129c7b4e617d57ca97dd8db5281593b",
+            "claim-snapshot-sha256:9c243f4131beeabf16e9a174c813108b7e0fbd0aa3f46ac747c0ecc31375feaa"
+          ],
+          "goal_or_graph_scope": "enforced-planning#110",
+          "schema_version": "1.0",
+          "session_id": "codex:owner-real-session",
+          "terminal_unit_ids": [],
+          "work_graph_ref": {
+            "design_revisions": [
+              "design-v1"
+            ],
+            "path": "tests/fixtures/plan110_npw02_work_graph.json",
+            "sha256": "f448dbd07df1fae127a34e52c15b858d3129c7b4e617d57ca97dd8db5281593b",
+            "spec_revisions": [
+              "B-v1"
+            ]
+          }
+        },
+        "schema_version": "1.0"
+      },
+      "source_id": "graph_b"
+    },
+    {
+      "case_id": "stale_graph",
+      "input": {
+        "claim_snapshots": [],
+        "expected_work_graph_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+        "mailbox_evidence": [],
+        "request": {
+          "blocked_item_refs": [
+            "A"
+          ],
+          "blocked_scope": "unit",
+          "blocker_class": "hard_dependency",
+          "claim_scope": "enforced-planning#110",
+          "dependency_owner": "another-session",
+          "evidence_refs": [
+            "git:fixture@abc123"
+          ],
+          "mailbox_dependency": null,
+          "requested_claim_action": "session_end",
+          "resume_event": "The dependency revision becomes canonical.",
+          "schema_version": "1.0",
+          "session_id": "codex:owner-real-session"
+        },
+        "request_ref": "plan110-npw02-calibration",
+        "schema_version": "1.0",
+        "work_graph_ref_path": "tests/fixtures/plan110_npw02_work_graph.json"
+      },
+      "recorded_at": "2026-08-21T05:30:00Z",
+      "result": {
+        "disposition": {
+          "alternative_unit_ids": [],
+          "application_authorized": false,
+          "claim_action": "retire_goal_scope",
+          "decision": "blocker_unverified_return_control",
+          "disposition_id": "blocker_disposition_d61fe0cbc9f93fa368e1b70e3c9e9529",
+          "evidence_refs": [
+            "git:fixture@abc123",
+            "stale_graph_digest:expected=0000000000000000000000000000000000000000000000000000000000000000:actual=720e6eb86fd3907ea0cdf9346498814d440bf5e27b3530cc12ba8be8d7f5b144",
+            "work-graph-ref:tests/fixtures/plan110_npw02_work_graph.json",
+            "claim-snapshot-sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          ],
+          "ready_queue_evaluation_ref": "ready_queue_a929641c14ac50f6e79161195d9cc387",
+          "reason_codes": [
+            "queue_coverage_unavailable"
+          ],
+          "recorded_at": "2026-08-21T05:30:00Z",
+          "request_ref": "plan110-npw02-calibration",
+          "resume_event": "The dependency revision becomes canonical.",
+          "schema_version": "1.0"
+        },
+        "ready_queue": {
+          "active_conflict_unit_ids": [],
+          "active_or_indeterminate_unit_ids": [],
+          "blocked_unit_ids": [
+            {
+              "blocker_refs": [
+                "stale_graph_digest:expected=0000000000000000000000000000000000000000000000000000000000000000:actual=720e6eb86fd3907ea0cdf9346498814d440bf5e27b3530cc12ba8be8d7f5b144"
+              ],
+              "unit_id": "queue"
+            }
+          ],
+          "claim_snapshot_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "coverage": "unavailable",
+          "eligible_unit_ids": [],
+          "evaluated_at": "2026-08-21T05:30:00Z",
+          "evaluation_id": "ready_queue_a929641c14ac50f6e79161195d9cc387",
+          "evidence_refs": [
+            "stale_graph_digest:expected=0000000000000000000000000000000000000000000000000000000000000000:actual=720e6eb86fd3907ea0cdf9346498814d440bf5e27b3530cc12ba8be8d7f5b144",
+            "work-graph-ref:tests/fixtures/plan110_npw02_work_graph.json",
+            "claim-snapshot-sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          ],
+          "goal_or_graph_scope": "enforced-planning#110",
+          "schema_version": "1.0",
+          "session_id": "codex:owner-real-session",
+          "terminal_unit_ids": [],
+          "work_graph_ref": null
+        },
+        "schema_version": "1.0"
+      },
+      "source_id": "graph_a"
+    },
+    {
+      "case_id": "missing_graph",
+      "input": {
+        "claim_snapshots": [],
+        "expected_work_graph_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+        "mailbox_evidence": [],
+        "request": {
+          "blocked_item_refs": [
+            "A"
+          ],
+          "blocked_scope": "unit",
+          "blocker_class": "hard_dependency",
+          "claim_scope": "enforced-planning#110",
+          "dependency_owner": "another-session",
+          "evidence_refs": [
+            "git:fixture@abc123"
+          ],
+          "mailbox_dependency": null,
+          "requested_claim_action": "session_end",
+          "resume_event": "The dependency revision becomes canonical.",
+          "schema_version": "1.0",
+          "session_id": "codex:owner-real-session"
+        },
+        "request_ref": "plan110-npw02-calibration",
+        "schema_version": "1.0",
+        "work_graph_ref_path": "tests/fixtures/plan110_npw02_work_graph.json"
+      },
+      "recorded_at": "2026-08-21T05:30:00Z",
+      "result": {
+        "disposition": {
+          "alternative_unit_ids": [],
+          "application_authorized": false,
+          "claim_action": "retire_goal_scope",
+          "decision": "blocker_unverified_return_control",
+          "disposition_id": "blocker_disposition_2e6b0b3a73dc315c6c235a614791bbf1",
+          "evidence_refs": [
+            "git:fixture@abc123",
+            "work_graph_unreadable:FileNotFoundError",
+            "work-graph-ref:tests/fixtures/plan110_npw02_work_graph.json",
+            "claim-snapshot-sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          ],
+          "ready_queue_evaluation_ref": "ready_queue_aa7544a554119a1dc6d002dc6c132a17",
+          "reason_codes": [
+            "queue_coverage_unavailable"
+          ],
+          "recorded_at": "2026-08-21T05:30:00Z",
+          "request_ref": "plan110-npw02-calibration",
+          "resume_event": "The dependency revision becomes canonical.",
+          "schema_version": "1.0"
+        },
+        "ready_queue": {
+          "active_conflict_unit_ids": [],
+          "active_or_indeterminate_unit_ids": [],
+          "blocked_unit_ids": [
+            {
+              "blocker_refs": [
+                "work_graph_unreadable:FileNotFoundError"
+              ],
+              "unit_id": "queue"
+            }
+          ],
+          "claim_snapshot_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "coverage": "unavailable",
+          "eligible_unit_ids": [],
+          "evaluated_at": "2026-08-21T05:30:00Z",
+          "evaluation_id": "ready_queue_aa7544a554119a1dc6d002dc6c132a17",
+          "evidence_refs": [
+            "work_graph_unreadable:FileNotFoundError",
+            "work-graph-ref:tests/fixtures/plan110_npw02_work_graph.json",
+            "claim-snapshot-sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          ],
+          "goal_or_graph_scope": "enforced-planning#110",
+          "schema_version": "1.0",
+          "session_id": "codex:owner-real-session",
+          "terminal_unit_ids": [],
+          "work_graph_ref": null
+        },
+        "schema_version": "1.0"
+      },
+      "source_id": "missing"
+    },
+    {
+      "case_id": "malformed_graph",
+      "input": {
+        "claim_snapshots": [],
+        "expected_work_graph_sha256": "0c21a879c732a67910d80988df4919d794f6a070aab610ef865032a28046b021",
+        "mailbox_evidence": [],
+        "request": {
+          "blocked_item_refs": [
+            "A"
+          ],
+          "blocked_scope": "unit",
+          "blocker_class": "hard_dependency",
+          "claim_scope": "enforced-planning#110",
+          "dependency_owner": "another-session",
+          "evidence_refs": [
+            "git:fixture@abc123"
+          ],
+          "mailbox_dependency": null,
+          "requested_claim_action": "session_end",
+          "resume_event": "The dependency revision becomes canonical.",
+          "schema_version": "1.0",
+          "session_id": "codex:owner-real-session"
+        },
+        "request_ref": "plan110-npw02-calibration",
+        "schema_version": "1.0",
+        "work_graph_ref_path": "tests/fixtures/plan110_npw02_work_graph.json"
+      },
+      "recorded_at": "2026-08-21T05:30:00Z",
+      "result": {
+        "disposition": {
+          "alternative_unit_ids": [],
+          "application_authorized": false,
+          "claim_action": "retire_goal_scope",
+          "decision": "blocker_unverified_return_control",
+          "disposition_id": "blocker_disposition_4c8bd3b8def6c5b887e17139717944d4",
+          "evidence_refs": [
+            "git:fixture@abc123",
+            "malformed_work_graph:JSONDecodeError",
+            "work-graph-ref:tests/fixtures/plan110_npw02_work_graph.json",
+            "claim-snapshot-sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          ],
+          "ready_queue_evaluation_ref": "ready_queue_277ef460b4a95b489ba523c85ceca330",
+          "reason_codes": [
+            "queue_coverage_unavailable"
+          ],
+          "recorded_at": "2026-08-21T05:30:00Z",
+          "request_ref": "plan110-npw02-calibration",
+          "resume_event": "The dependency revision becomes canonical.",
+          "schema_version": "1.0"
+        },
+        "ready_queue": {
+          "active_conflict_unit_ids": [],
+          "active_or_indeterminate_unit_ids": [],
+          "blocked_unit_ids": [
+            {
+              "blocker_refs": [
+                "malformed_work_graph:JSONDecodeError"
+              ],
+              "unit_id": "queue"
+            }
+          ],
+          "claim_snapshot_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "coverage": "unavailable",
+          "eligible_unit_ids": [],
+          "evaluated_at": "2026-08-21T05:30:00Z",
+          "evaluation_id": "ready_queue_277ef460b4a95b489ba523c85ceca330",
+          "evidence_refs": [
+            "malformed_work_graph:JSONDecodeError",
+            "work-graph-ref:tests/fixtures/plan110_npw02_work_graph.json",
+            "claim-snapshot-sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          ],
+          "goal_or_graph_scope": "enforced-planning#110",
+          "schema_version": "1.0",
+          "session_id": "codex:owner-real-session",
+          "terminal_unit_ids": [],
+          "work_graph_ref": null
+        },
+        "schema_version": "1.0"
+      },
+      "source_id": "malformed"
+    }
+  ],
+  "licensed_claim": "At candidate revision 57863d6cbd596348f42427d21c80d8fb124cec27, the read-only provider-free evaluator recomputed source-bound ready queues, continued eligible work, isolated exact local ownership conflicts, diagnosed a complete supported blocker without authorizing mutation, and returned control unverified for missing, stale, malformed, fabricated, or below-threshold evidence.",
+  "limitations": [
+    "NPW-02 produces diagnostic dispositions only; application_authorized remains false.",
+    "NPW-03 must atomically reload canonical claims and graph bytes, recompute both stable IDs, and issue a separate application receipt before any ownership mutation.",
+    "Mailbox evidence remains fixture-only in this slice because the public CLI rejects caller-supplied mailbox state until a canonical loader owns it.",
+    "No installer, host hook activation, downstream repository, colleague, or fleet enforcement changed in this work unit."
+  ],
+  "plan_id": "enforced-planning#110",
+  "record_type": "plan110_provider_free_blocker_calibration",
+  "recorded_at": "2026-08-21T06:35:05.968071Z",
+  "replay_sources": [
+    {
+      "path": "tests/fixtures/plan110_npw02_work_graph.json",
+      "present": true,
+      "serialized_utf8": "{\"units\": [{\"acceptance\": [{\"criterion\": \"The A fixture is classified deterministically.\", \"evidence_required\": [\"focused provider-free test\"], \"id\": \"A-A1\"}], \"authorization_mode\": \"registry_claim\", \"claim_policy\": {\"eligibility_rule\": \"One exact fixture claimant.\", \"lease_duration_minutes\": 60, \"lease_policy\": \"renewable\", \"max_active_per_claimant\": 1, \"named_owner_id\": null}, \"claimability\": \"blocked_dependencies\", \"class\": \"implementation\", \"conflict_surfaces\": [], \"dependencies\": [], \"design_revision\": \"design-v1\", \"execution_class\": \"independently_executable\", \"goal_id\": \"provider-free-blocker-decision\", \"id\": \"A\", \"initiative_id\": \"plan110-fixture\", \"inputs\": [], \"objective\": \"Exercise blocker behavior for A.\", \"outputs\": [\"fixture-output:A\"], \"profile\": \"small\", \"readiness\": {\"approvals\": [], \"failed_guards\": [], \"required_approval_types\": [], \"status\": \"blocked\"}, \"record_type\": \"work_unit\", \"record_version\": 1, \"schema_version\": \"1.0\", \"scope\": {\"excluded\": [], \"included\": [\"fixture:A\"]}, \"spec_revision\": \"A-v1\", \"status\": \"blocked\", \"title\": \"Fixture unit A\"}, {\"acceptance\": [{\"criterion\": \"The B fixture is classified deterministically.\", \"evidence_required\": [\"focused provider-free test\"], \"id\": \"B-A1\"}], \"authorization_mode\": \"registry_claim\", \"claim_policy\": {\"eligibility_rule\": \"One exact fixture claimant.\", \"lease_duration_minutes\": 60, \"lease_policy\": \"renewable\", \"max_active_per_claimant\": 1, \"named_owner_id\": null}, \"claimability\": \"ready_for_execution\", \"class\": \"implementation\", \"conflict_surfaces\": [], \"dependencies\": [], \"design_revision\": \"design-v1\", \"execution_class\": \"independently_executable\", \"goal_id\": \"provider-free-blocker-decision\", \"id\": \"B\", \"initiative_id\": \"plan110-fixture\", \"inputs\": [], \"objective\": \"Exercise blocker behavior for B.\", \"outputs\": [\"fixture-output:B\"], \"profile\": \"small\", \"readiness\": {\"approvals\": [], \"failed_guards\": [], \"required_approval_types\": [], \"status\": \"ready\"}, \"record_type\": \"work_unit\", \"record_version\": 1, \"schema_version\": \"1.0\", \"scope\": {\"excluded\": [], \"included\": [\"fixture:B\"]}, \"spec_revision\": \"B-v1\", \"status\": \"ready\", \"title\": \"Fixture unit B\"}, {\"acceptance\": [{\"criterion\": \"The C fixture is classified deterministically.\", \"evidence_required\": [\"focused provider-free test\"], \"id\": \"C-A1\"}], \"authorization_mode\": \"registry_claim\", \"claim_policy\": {\"eligibility_rule\": \"One exact fixture claimant.\", \"lease_duration_minutes\": 60, \"lease_policy\": \"renewable\", \"max_active_per_claimant\": 1, \"named_owner_id\": null}, \"claimability\": \"blocked_dependencies\", \"class\": \"implementation\", \"conflict_surfaces\": [], \"dependencies\": [{\"gate\": {\"required_status\": \"accepted\", \"type\": \"unit_status\"}, \"rationale\": \"A supplies the required predecessor state.\", \"type\": \"hard\", \"unit_id\": \"A\"}], \"design_revision\": \"design-v1\", \"execution_class\": \"independently_executable\", \"goal_id\": \"provider-free-blocker-decision\", \"id\": \"C\", \"initiative_id\": \"plan110-fixture\", \"inputs\": [], \"objective\": \"Exercise blocker behavior for C.\", \"outputs\": [\"fixture-output:C\"], \"profile\": \"small\", \"readiness\": {\"approvals\": [], \"failed_guards\": [], \"required_approval_types\": [], \"status\": \"blocked\"}, \"record_type\": \"work_unit\", \"record_version\": 1, \"schema_version\": \"1.0\", \"scope\": {\"excluded\": [], \"included\": [\"fixture:C\"]}, \"spec_revision\": \"C-v1\", \"status\": \"blocked\", \"title\": \"Fixture unit C\"}]}",
+      "sha256": "6b6da7f8f83810479137b24a6f078b3683583e8a1728f4aa808768fe530f07d5",
+      "source_id": "graph_abc"
+    },
+    {
+      "path": "tests/fixtures/plan110_npw02_work_graph.json",
+      "present": true,
+      "serialized_utf8": "{\"units\": [{\"acceptance\": [{\"criterion\": \"The A fixture is classified deterministically.\", \"evidence_required\": [\"focused provider-free test\"], \"id\": \"A-A1\"}], \"authorization_mode\": \"registry_claim\", \"claim_policy\": {\"eligibility_rule\": \"One exact fixture claimant.\", \"lease_duration_minutes\": 60, \"lease_policy\": \"renewable\", \"max_active_per_claimant\": 1, \"named_owner_id\": null}, \"claimability\": \"blocked_dependencies\", \"class\": \"implementation\", \"conflict_surfaces\": [], \"dependencies\": [], \"design_revision\": \"design-v1\", \"execution_class\": \"independently_executable\", \"goal_id\": \"provider-free-blocker-decision\", \"id\": \"A\", \"initiative_id\": \"plan110-fixture\", \"inputs\": [], \"objective\": \"Exercise blocker behavior for A.\", \"outputs\": [\"fixture-output:A\"], \"profile\": \"small\", \"readiness\": {\"approvals\": [], \"failed_guards\": [], \"required_approval_types\": [], \"status\": \"blocked\"}, \"record_type\": \"work_unit\", \"record_version\": 1, \"schema_version\": \"1.0\", \"scope\": {\"excluded\": [], \"included\": [\"fixture:A\"]}, \"spec_revision\": \"A-v1\", \"status\": \"blocked\", \"title\": \"Fixture unit A\"}, {\"acceptance\": [{\"criterion\": \"The B fixture is classified deterministically.\", \"evidence_required\": [\"focused provider-free test\"], \"id\": \"B-A1\"}], \"authorization_mode\": \"registry_claim\", \"claim_policy\": {\"eligibility_rule\": \"One exact fixture claimant.\", \"lease_duration_minutes\": 60, \"lease_policy\": \"renewable\", \"max_active_per_claimant\": 1, \"named_owner_id\": null}, \"claimability\": \"ready_for_execution\", \"class\": \"implementation\", \"conflict_surfaces\": [], \"dependencies\": [], \"design_revision\": \"design-v1\", \"execution_class\": \"independently_executable\", \"goal_id\": \"provider-free-blocker-decision\", \"id\": \"B\", \"initiative_id\": \"plan110-fixture\", \"inputs\": [], \"objective\": \"Exercise blocker behavior for B.\", \"outputs\": [\"fixture-output:B\"], \"profile\": \"small\", \"readiness\": {\"approvals\": [], \"failed_guards\": [], \"required_approval_types\": [], \"status\": \"ready\"}, \"record_type\": \"work_unit\", \"record_version\": 1, \"schema_version\": \"1.0\", \"scope\": {\"excluded\": [], \"included\": [\"fixture:B\"]}, \"spec_revision\": \"B-v1\", \"status\": \"ready\", \"title\": \"Fixture unit B\"}]}",
+      "sha256": "61fc6b77124f3cfe6ff56a7e5e7eabdfc04994c28c67258444ae5fe47b900815",
+      "source_id": "graph_ab"
+    },
+    {
+      "path": "tests/fixtures/plan110_npw02_work_graph.json",
+      "present": true,
+      "serialized_utf8": "{\"units\": [{\"acceptance\": [{\"criterion\": \"The A fixture is classified deterministically.\", \"evidence_required\": [\"focused provider-free test\"], \"id\": \"A-A1\"}], \"authorization_mode\": \"registry_claim\", \"claim_policy\": {\"eligibility_rule\": \"One exact fixture claimant.\", \"lease_duration_minutes\": 60, \"lease_policy\": \"renewable\", \"max_active_per_claimant\": 1, \"named_owner_id\": null}, \"claimability\": \"blocked_dependencies\", \"class\": \"implementation\", \"conflict_surfaces\": [], \"dependencies\": [], \"design_revision\": \"design-v1\", \"execution_class\": \"independently_executable\", \"goal_id\": \"provider-free-blocker-decision\", \"id\": \"A\", \"initiative_id\": \"plan110-fixture\", \"inputs\": [], \"objective\": \"Exercise blocker behavior for A.\", \"outputs\": [\"fixture-output:A\"], \"profile\": \"small\", \"readiness\": {\"approvals\": [], \"failed_guards\": [], \"required_approval_types\": [], \"status\": \"blocked\"}, \"record_type\": \"work_unit\", \"record_version\": 1, \"schema_version\": \"1.0\", \"scope\": {\"excluded\": [], \"included\": [\"fixture:A\"]}, \"spec_revision\": \"A-v1\", \"status\": \"blocked\", \"title\": \"Fixture unit A\"}]}",
+      "sha256": "720e6eb86fd3907ea0cdf9346498814d440bf5e27b3530cc12ba8be8d7f5b144",
+      "source_id": "graph_a"
+    },
+    {
+      "path": "tests/fixtures/plan110_npw02_work_graph.json",
+      "present": true,
+      "serialized_utf8": "{\"units\": [{\"acceptance\": [{\"criterion\": \"The B fixture is classified deterministically.\", \"evidence_required\": [\"focused provider-free test\"], \"id\": \"B-A1\"}], \"authorization_mode\": \"registry_claim\", \"claim_policy\": {\"eligibility_rule\": \"One exact fixture claimant.\", \"lease_duration_minutes\": 60, \"lease_policy\": \"renewable\", \"max_active_per_claimant\": 1, \"named_owner_id\": null}, \"claimability\": \"ready_for_execution\", \"class\": \"implementation\", \"conflict_surfaces\": [], \"dependencies\": [], \"design_revision\": \"design-v1\", \"execution_class\": \"independently_executable\", \"goal_id\": \"provider-free-blocker-decision\", \"id\": \"B\", \"initiative_id\": \"plan110-fixture\", \"inputs\": [], \"objective\": \"Exercise blocker behavior for B.\", \"outputs\": [\"fixture-output:B\"], \"profile\": \"small\", \"readiness\": {\"approvals\": [], \"failed_guards\": [], \"required_approval_types\": [], \"status\": \"ready\"}, \"record_type\": \"work_unit\", \"record_version\": 1, \"schema_version\": \"1.0\", \"scope\": {\"excluded\": [], \"included\": [\"fixture:B\"]}, \"spec_revision\": \"B-v1\", \"status\": \"ready\", \"title\": \"Fixture unit B\"}]}",
+      "sha256": "f448dbd07df1fae127a34e52c15b858d3129c7b4e617d57ca97dd8db5281593b",
+      "source_id": "graph_b"
+    },
+    {
+      "path": "tests/fixtures/plan110_npw02_work_graph.json",
+      "present": true,
+      "serialized_utf8": "not-json",
+      "sha256": "0c21a879c732a67910d80988df4919d794f6a070aab610ef865032a28046b021",
+      "source_id": "malformed"
+    },
+    {
+      "path": "tests/fixtures/plan110_npw02_work_graph.json",
+      "present": false,
+      "serialized_utf8": null,
+      "sha256": null,
+      "source_id": "missing"
+    }
+  ],
+  "schema_version": "1.0.0",
+  "selection_and_progress_observation": {
+    "enforcement_applied": false,
+    "lease_sha256": "864af76c1dd5879b315fa3b58a12cea5a1ab06518292618270eaf929536f9d71",
+    "lease_state": "active",
+    "ordinary_authority_preserved": true,
+    "ordinary_decision": "allow",
+    "ordinary_prewrite_receipt_id": "prewrite_bb4399a3844849aaa346c89565e6d068",
+    "ordinary_reason_code": "exact_live_claim",
+    "outcome_contract_sha256": "e2f4941fd8bab8ec39732b749f8212e8481a083aef65406b467d81178efce083",
+    "outcome_correlation_receipt_id": "ocor-370371cc626e4dc1bd36323a79154c0b",
+    "outcome_disposition": "would_allow",
+    "outcome_reason_code": "active_in_scope",
+    "progress_receipt_sha256": "6596cc64129452a7ef9a999462a1f3753dfc56783c4765d568623e9aa2dc4d2c",
+    "scenario_file_sha256": "ae8ea24ce3a0620103f6c8697614b1eebd75e3e0c9bb42c0d340a18bd93827b4",
+    "scenario_path": "tests/fixtures/plan110_npw02_owner_progress.json",
+    "scenario_sha256": "11c6a4184d704b2c3e43a2428d4bcd1c11c122ea622fead88de579a9a6c6e652",
+    "selected_at": "2026-08-21T06:34:48.642331Z",
+    "selection_binding_sha256": "5151c50c57698849d7a7580b1a12a2ca966c58cfa8ddbe78a969ec5bd9a330f0"
+  },
+  "stable_identity_control": {
+    "focused_test": "test_semantically_identical_replays_keep_stable_ids",
+    "same_source_state_different_observation_times_kept_disposition_id": true,
+    "same_source_state_different_observation_times_kept_evaluation_id": true,
+    "timestamps_remained_distinct_receipt_metadata": true
+  },
+  "verification": {
+    "candidate_code_tests_passed_before_receipt_check": 84,
+    "canonical_graph_validation": "passed",
+    "checked_in_receipt_validation_tests": 1,
+    "focused_command": [
+      "pytest",
+      "-q",
+      "tests/test_blocker_policy.py"
+    ],
+    "focused_failed": 0,
+    "focused_passed": 85,
+    "git_diff_check": "passed",
+    "independent_code_review": "accept",
+    "independent_final_audit": "pass_with_notes",
+    "remaining_false_accept_findings": 0,
+    "ruff": "passed",
+    "schema_mutations_checked": 424,
+    "semantic_combinations_checked": 1785
+  },
+  "work_unit_id": "npw-02-provider-free-blocker-decision"
+}

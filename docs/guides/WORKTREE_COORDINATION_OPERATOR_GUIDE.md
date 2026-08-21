@@ -369,8 +369,9 @@ lifecycle command first validates the old claim, tracker, binding, scenario,
 contract, and lease. It then changes the claim identity and tracker binding
 together, appends one `OutcomeSessionTransferV1`, and preserves every outcome
 and lease digest. The prior runtime no longer resolves the selection. If the
-tracker transition fails, the exact preflight claim and tracker bytes are
-restored; an unsuccessful rollback raises a visible
+claim write, derived-claim projection, successor normalization, or tracker
+transition fails after mutation begins, the exact preflight claim and tracker
+bytes are restored; an unsuccessful rollback raises a visible
 `session_transfer_incomplete` error rather than reporting success. Lanes with
 no selected outcome keep the existing resume behavior.
 

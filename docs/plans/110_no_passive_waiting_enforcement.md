@@ -1,6 +1,6 @@
 # Plan #110: No-Passive-Waiting Enforcement
 
-**Status:** 🚧 In Progress — NPW-02 accepted; NPW-01 ready; NPW-03 blocked on NPW-01
+**Status:** 🚧 In Progress — NPW-01 and NPW-02 accepted; NPW-03 ready
 **Type:** implementation
 **Priority:** Critical
 **phase_ref:** "Coordination runtime maintenance"
@@ -308,6 +308,17 @@ Port the useful Plan 70 behavior onto current `main`, correct the blocker-as-
 progress defect, and prove claim write → classifier → registry/session output.
 No ownership action is triggered by a stall.
 
+**Accepted 2026-08-21.** Candidate `419ffc7` adds exact-owner durable progress
+events, one frozen-clock weak/stale/stalled classifier, report-only stalled
+ownership, registry/session recovery context, and additive legacy-claim
+compatibility. The authentic live claim recorded an `integration_result` at
+`2026-08-21T08:13:33.950867Z`; both session status and a freshly generated
+registry reported the exact `commit:419ffc7` evidence and next action while
+the claim remained healthy and owned. The stable focused suite passed 250
+tests, generated instruction sync and diff checks passed, no new synthetic
+test receipts entered the live ledger, and all three independent reviews
+accepted the candidate.
+
 ### Slice 2 — Provider-free blocker decision
 
 **Epistemic state:** `fully_specifiable_now`.
@@ -328,7 +339,7 @@ disposition remains diagnostic with `application_authorized=false`.
 
 ### Slice 3 — Safe lifecycle application
 
-**Epistemic state:** `fully_specifiable_now` after Slice 2 passes.
+**Epistemic state:** `fully_specifiable_now`.
 
 Add the sanctioned session command that records the disposition and invokes
 only the safe narrow, scoped-handoff, or scoped-retirement operations. Prove
@@ -406,6 +417,6 @@ behaviors.
 
 ## Next action
 
-Execute `npw-01-progress-lease-current-main` from the validated companion work
-graph. NPW-02 is accepted; do not start NPW-03 until NPW-01 is also accepted
-against its exact submitted revision.
+Execute `npw-03-safe-lifecycle-integration` from the validated companion work
+graph. NPW-01 and NPW-02 are accepted, so the lifecycle integration is now
+ready; preserve both accepted contracts and their negative controls.

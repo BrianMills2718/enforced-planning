@@ -31,6 +31,7 @@ from enforced_planning.outcome_continuation import (
 )
 from enforced_planning.outcome_selection import (
     OutcomeSelectionError,
+    restart_selected_outcome_for_session,
     select_outcome_for_session,
 )
 
@@ -50,6 +51,17 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     select.add_argument("--scope", required=True)
     select.add_argument("--session-id")
     select.add_argument("--claims-dir", type=Path, default=CLAIMS_DIR)
+    restart = subparsers.add_parser(
+        "restart",
+        help="Replace stalled selected state through one exact RestartDeltaV1",
+    )
+    restart.add_argument("--successor-scenario", required=True, type=Path)
+    restart.add_argument("--restart-delta", required=True, type=Path)
+    restart.add_argument("--agent", required=True, choices=("codex", "claude-code", "openclaw"))
+    restart.add_argument("--project", required=True)
+    restart.add_argument("--scope", required=True)
+    restart.add_argument("--session-id")
+    restart.add_argument("--claims-dir", type=Path, default=CLAIMS_DIR)
     return parser.parse_args(argv)
 
 
@@ -61,7 +73,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "evaluate":
             scenario = load_scenario(args.scenario)
             result = evaluate_scenario(scenario)
-        else:
+        elif args.command == "select":
             selection = select_outcome_for_session(
                 agent=args.agent,
                 project=args.project,
@@ -69,6 +81,16 @@ def main(argv: list[str] | None = None) -> int:
                 session_id=args.session_id,
                 execution_authority_ref=args.execution_authority,
                 scenario_path=args.scenario,
+                claims_dir=args.claims_dir,
+            )
+        else:
+            restart = restart_selected_outcome_for_session(
+                agent=args.agent,
+                project=args.project,
+                scope=args.scope,
+                session_id=args.session_id,
+                successor_scenario_path=args.successor_scenario,
+                restart_delta_path=args.restart_delta,
                 claims_dir=args.claims_dir,
             )
     except (ContinuationError, OutcomeSelectionError, ValidationError, ValueError) as exc:
@@ -80,6 +102,9 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     if args.command == "select":
         print(selection.model_dump_json(indent=2))
+        return 0
+    if args.command == "restart":
+        print(restart.model_dump_json(indent=2))
         return 0
     print(result.model_dump_json(indent=2))
     return 0 if result.decision.allowed else 1

@@ -19,6 +19,7 @@ from enforced_planning.outcome_continuation import (
     OutcomeLeaseV1,
     OutcomeProgressReceiptV1,
     RecoveryLeaseV1,
+    RestartDeltaV1,
     admit_operation,
     canonical_sha256,
     evaluate_scenario,
@@ -307,6 +308,51 @@ def test_contract_and_receipt_reject_unsafe_or_incomplete_inputs() -> None:
             exact_replay_or_readout="python src/status_cli.py --json",
             stopping_condition="Stop after the exact replay.",
             max_attempts=2,
+        )
+
+
+def test_restart_delta_requires_retained_failure_facts_and_a_changed_mechanism() -> None:
+    values = {
+        "delta_id": "plan-118-restart-one",
+        "recorded_at": "2026-08-21T05:45:00Z",
+        "predecessor_binding_sha256": "a" * 64,
+        "predecessor_contract_sha256": "b" * 64,
+        "predecessor_lease_sha256": "c" * 64,
+        "predecessor_lineage_id": "plan-117-predecessor",
+        "predecessor_lease_state": "stalled",
+        "predecessor_non_outcome_count": 3,
+        "predecessor_failure_boundary": "selected-session-handoff",
+        "predecessor_failure_count": 3,
+        "predecessor_failed_evidence_refs": ["docs/evidence/plan117-resume-failure.json"],
+        "successor_contract_sha256": "d" * 64,
+        "successor_lineage_id": "plan-118-successor",
+        "prior_causal_hypothesis": "Refreshing only the claim session identity would preserve custody.",
+        "changed_causal_hypothesis": "Claim and tracker identities must transition as one fail-loud operation.",
+        "prior_mechanism": "Update the claim session ID and leave the tracker untouched.",
+        "changed_mechanism": "Preflight and atomically rebind the selected tracker with rollback.",
+        "bounded_action": "Implement one exact same-worktree transition.",
+        "next_canonical_observation": "Resume under a successor runtime and resolve the selected outcome.",
+        "stopping_condition": "Stop if the successor cannot resolve or predecessor evidence is absent.",
+    }
+
+    delta = RestartDeltaV1.model_validate(values)
+    assert delta.predecessor_failure_count == 3
+
+    with pytest.raises(ValidationError, match="changed_mechanism"):
+        RestartDeltaV1.model_validate(
+            {**values, "changed_mechanism": values["prior_mechanism"]}
+        )
+    with pytest.raises(ValidationError, match="retained failed evidence"):
+        RestartDeltaV1.model_validate(
+            {**values, "predecessor_failed_evidence_refs": []}
+        )
+    with pytest.raises(ValidationError, match="stalled restart"):
+        RestartDeltaV1.model_validate(
+            {**values, "predecessor_failure_count": 2}
+        )
+    with pytest.raises(ValidationError, match="Input should be 'stalled' or 'parked'"):
+        RestartDeltaV1.model_validate(
+            {**values, "predecessor_lease_state": "active"}
         )
 
 

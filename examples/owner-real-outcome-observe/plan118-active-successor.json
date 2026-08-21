@@ -1,0 +1,43 @@
+{
+  "schema_version": "1.0.0",
+  "scenario_id": "plan-118-restart-safe-successor",
+  "contract": {
+    "schema_version": "1.0.0",
+    "outcome_id": "prevent-circular-project-failure",
+    "owner_class": "brian-agent-owner",
+    "project_id": "enforced-planning",
+    "lineage_id": "plan-118-restart-safe-custody",
+    "predecessor_lineage_ids": [
+      "plan-118-stalled-control"
+    ],
+    "intended_consumer": "Brian and his coding agents working across Brian-owned projects",
+    "outcome": "Prevent complex coding-agent projects from cycling through approvals, plans, repairs, and restarts without durable user-visible progress.",
+    "canonical_journey": {
+      "starting_state": "A complex project has supporting work and repeated failure evidence but no restart-safe outcome custody.",
+      "input": "One exact claimed session, its selected outcome, and retained predecessor failure evidence.",
+      "action": "Resume the lane or deliberately change mechanism without resetting the outcome or evidence scoreboard.",
+      "observable_result": "The successor runtime resolves the retained outcome and a causal restart preserves every predecessor failure fact.",
+      "failure_signal": "A new session, plan, branch, or scenario silently drops the outcome selection or predecessor failure history."
+    },
+    "baseline_revision": "6340ff80cb8c514d8f3170d7818b0b324a1d04cb",
+    "allowed_scope": [
+      "docs/evidence/plan118_causal_restart_lineage.json"
+    ],
+    "progress_dimensions": [
+      "restart-safe outcome custody"
+    ]
+  },
+  "starting_lease": null,
+  "receipts": [],
+  "request": {
+    "schema_version": "1.0.0",
+    "operation": "product_write",
+    "target_path": "docs/evidence/plan118_causal_restart_lineage.json",
+    "recovery_action": null,
+    "ordinary_approval": true,
+    "approval_text": "I approve, continue",
+    "cost_telemetry_usd": "1000000",
+    "elapsed_telemetry_seconds": 999999
+  },
+  "recovery_lease": null
+}

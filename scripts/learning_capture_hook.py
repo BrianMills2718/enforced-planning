@@ -134,7 +134,10 @@ def classify_report(report: str) -> tuple[str, str]:
             ),
         )
 
-    normalized = disposition.strip().strip("*_ ")
+    # Strip markdown emphasis AND code spans: a disposition written as
+    # `Recorded` -- correct content, ordinary formatting -- failed the
+    # startswith check twice in one session and cost two round-trips.
+    normalized = disposition.strip().strip("*_` ")
     if re.match(r"^recorded\b", normalized, re.IGNORECASE):
         if "learnings.md" not in normalized.casefold():
             return (

@@ -16,6 +16,9 @@ def _add_repo_root_to_path() -> None:
         if (parent / "enforced_planning").is_dir():
             sys.path.insert(0, str(parent))
             return
+    import importlib.util
+    if importlib.util.find_spec("enforced_planning") is not None:
+        return
     raise RuntimeError("Unable to locate repository root containing enforced_planning/")
 
 

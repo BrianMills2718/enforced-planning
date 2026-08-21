@@ -16,7 +16,9 @@ for parent in Path(__file__).resolve().parents:
             sys.path.insert(0, str(parent))
         break
 else:
-    raise RuntimeError("cannot locate installed enforced_planning package")
+    import importlib.util
+    if importlib.util.find_spec("enforced_planning") is None:
+        raise RuntimeError("cannot locate installed enforced_planning package")
 
 from enforced_planning.verification_batch import VerificationBatchError  # noqa: E402
 from enforced_planning.verification_batch import check_batch  # noqa: E402

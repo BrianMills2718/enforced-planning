@@ -14,7 +14,9 @@ for candidate in Path(__file__).resolve().parents:
             sys.path.insert(0, str(candidate))
         break
 else:
-    raise RuntimeError("cannot locate installed enforced_planning package")
+    import importlib.util
+    if importlib.util.find_spec("enforced_planning") is None:
+        raise RuntimeError("cannot locate installed enforced_planning package")
 
 from enforced_planning.surface_runtime import (
     SurfaceRuntimeError,

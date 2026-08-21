@@ -6,14 +6,14 @@
       "id": "opad-01-graph-bound-portfolio-admission",
       "initiative_id": "progress-bound-agent-execution",
       "goal_id": "project-graph-portfolio-admission",
-      "design_revision": "sha256:43bd4410fb18320c0d87ee0d7dfb9566a93479696c7ea35a3c1fc0e48ccf67ee",
-      "spec_revision": "sha256:43bd4410fb18320c0d87ee0d7dfb9566a93479696c7ea35a3c1fc0e48ccf67ee",
+      "design_revision": "sha256:edb09cbf9d11b38a705be0d8928c2cbcb8aa255fa991410a10fb9874a6fb7765",
+      "spec_revision": "sha256:edb09cbf9d11b38a705be0d8928c2cbcb8aa255fa991410a10fb9874a6fb7765",
       "title": "Bind deliberate outcome allocation and selection to exact Project Graph authority",
       "class": "integration",
       "objective": "Require new classed outcome selection to consume a separately recorded, append-only portfolio allocation whose project lifecycle and owner class are resolved from one exact Project Meta Git revision; cap product WIP per owner class and maintenance/external-obligation WIP globally without changing ordinary pre-write authority.",
       "profile": "standard",
       "execution_class": "independently_executable",
-      "claimability": "ready_for_execution",
+      "claimability": "not_applicable",
       "authorization_mode": "registry_claim",
       "scope": {
         "included": [
@@ -45,7 +45,7 @@
         {
           "kind": "bounded_design",
           "id": "docs/plans/120_project_graph_portfolio_admission.md",
-          "revision": "sha256:43bd4410fb18320c0d87ee0d7dfb9566a93479696c7ea35a3c1fc0e48ccf67ee"
+          "revision": "sha256:edb09cbf9d11b38a705be0d8928c2cbcb8aa255fa991410a10fb9874a6fb7765"
         },
         {
           "kind": "accepted_capability",
@@ -242,9 +242,9 @@
         "max_active_per_claimant": 1,
         "named_owner_id": null
       },
-      "status": "ready",
-      "record_version": 1,
-      "updated_at": "2026-08-21T07:45:00Z"
+      "status": "accepted",
+      "record_version": 2,
+      "updated_at": "2026-08-21T08:11:00Z"
     }
   ]
 }

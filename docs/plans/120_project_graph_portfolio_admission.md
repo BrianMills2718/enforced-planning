@@ -1,6 +1,6 @@
 # Plan #120: Project Graph-Bound Outcome Portfolio Admission
 
-**Status:** In Progress
+**Status:** Complete (hard explicit allocation/selection admission; mandatory new-work and ordinary-write enforcement remain downstream)
 **Type:** implementation (hard allocation/selection admission; write observation remains advisory)
 **Priority:** Critical
 **phase_ref:** "Progress-bound coding-agent continuation"
@@ -78,10 +78,18 @@ inactive, pointer, owner-mismatched, graph-tampered, request-changed, and
 disposed allocations fail visibly. Parking releases the global slot without
 deleting history.
 
-**Behavioral evidence:** Unobserved. Acceptance requires one real Plan #120
-maintenance allocate/replay/select/observe/park journey plus fixture-equivalent
-product, competing-owner, global-maintenance, lifecycle, tamper, and legacy
-compatibility controls.
+**Behavioral evidence:** At implementation revision `eb827912`, the real exact
+Plan #120 claim first failed classed selection with
+`portfolio_allocation_required`. It then allocated the global maintenance slot
+from `project-meta@4db70b44` reviewed owner authority, replayed without changing
+ledger digest `9f6853c4`, selected binding `db34575e`, and produced ordinary
+`allow/exact_live_claim` plus advisory `would_allow/active_in_scope`. Parking
+appended disposition `02d288e4`, released the slot, replayed without changing
+ledger digest `656a9660`, and made later selection fail
+`portfolio_allocation_inactive`. Ninety-one focused tests plus Ruff and mypy
+passed. Product-owner, competing-owner, global non-product, lifecycle, tamper,
+CLI, and legacy compatibility controls are retained with the authentic journey
+in `docs/evidence/plan120_project_graph_portfolio_admission.json`.
 
 **Substrate/process evidence:** Typed models, exact Git-object loading,
 append-only atomic ledger mutation, focused tests, Ruff, mypy, plan validation,
@@ -287,6 +295,25 @@ Pass when:
 6. Legacy contracts remain readable without being promoted to portfolio proof.
 7. Focused tests, Ruff, mypy, plan validation, and digest-bound evidence pass.
 
+## Accepted Evidence
+
+- Contract evolution: `bb9a4a4a54f58a78f76b59284f3fc9239131db8c`.
+- Allocation and selection implementation: `eb8279122067d5a916b02dfddb63592a44254d44`.
+- Authentic journey and retained inputs: `720ebbd` plus
+  `docs/evidence/plan120_project_graph_portfolio_admission.json`.
+- Exact Project Graph authority: `project-meta@4db70b44`, graph digest
+  `38fbb590`, reviewed `enforced-planning` record digest `d2d7f4f9`, owner class
+  `brian`.
+- Exact allocation and selected binding: `23cec4fe` and `db34575e`.
+- Exact ordinary/selected observation: `prewrite_aa20033faa4d46398e91300c95bb7bc4`
+  and `ocor-f02c884b29fe460cad6a2529cdbed846`.
+- Exact parking disposition: `02d288e4`; the two-event append-only ledger ends
+  at digest `656a9660` with no active maintenance allocation.
+- Focused verification: 91 tests passed; Ruff and mypy passed for the changed
+  implementation and public CLI surfaces.
+- Contract-evolution finding: Project Meta learning
+  `lrn-20260821T074515426915Z-28272693a1`, merged at `029dd098`.
+
 ## Promotion Boundary
 
 This plan proves hard portfolio admission at the explicit allocation and
@@ -295,7 +322,9 @@ every claim, block ordinary writes when no selection exists, activate a host
 hook, choose Brian's one product project, independently verify receipt meaning,
 or claim installer/fleet adoption. The next promotion integrates this admitted
 state into new plan/claim/worktree creation and selected pre-write enforcement
-after representative false-block review.
+after representative false-block review. That downstream promotion, rather
+than this accepted pilot, is the ecosystem control that prevents an
+unallocated new project or plan from starting supported writes.
 
 ## Trace Evaluation
 
@@ -303,8 +332,8 @@ after representative false-block review.
 
 ## Terminal Closeout
 
-Retain one authentic allocation ledger snapshot and selected observation,
-append a parking disposition so the pilot does not leak the global maintenance
-slot, merge the coherent vertical, close the claim/worktree atomically, and
-continue to mandatory new-work binding if the evidence remains both-sign and
-no authority decision is required.
+The authentic allocation ledger snapshot and selected observation are retained
+in the evidence record. Parking released the global maintenance slot without
+deleting allocation history. Merge the coherent vertical, close the
+claim/worktree atomically, and continue to mandatory new-work binding if the
+evidence remains both-sign and no authority decision is required.

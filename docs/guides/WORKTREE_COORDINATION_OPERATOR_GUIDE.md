@@ -555,6 +555,38 @@ choose Brian's active product outcome, alter ordinary claim authority, install
 hooks, or establish fleet adoption. Those boundaries require a representative
 false-block review before the ratchet can become mandatory.
 
+### Representative outcome-admission decision
+
+Plan #121 completed that first-consumer review without activating a hook. The
+frozen suite contains 30 cases: 29 scored positive, negative, validation, and
+held-out cases plus one unscored cross-repository calibration case. Run the
+exact accepted candidate with:
+
+```bash
+python scripts/evaluate_outcome_admission.py \
+  --cases evals/outcome_admission/plan121_cases.json \
+  --population evals/outcome_admission/plan121_population_snapshot.json \
+  --candidate-revision d30696a06f5120bb69df255137f2293dbc1a752e \
+  --corruption-control
+```
+
+The canonical result digest is
+`f7cd2b73f3565025e90b10dcd8cc883ff567fa39dddfd403d68ae174bf98a6b7`.
+Two exact runs matched all 29 scored cases with zero critical false blocks,
+zero critical false allows, zero unexpected defers, and complete safe-operation
+recall and circular/bypass rejection. An independent verifier reproduced the
+result, rejected changed fixture bytes and a nonexistent candidate revision,
+and matched eight newly invented precedence and boundary cases.
+
+This result licenses design and implementation of one hard Enforced Planning
+consumer only. It does not activate host hooks, establish installer or fleet
+adoption, support cross-repository allocation membership, judge the semantic
+truth of progress evidence, or choose Brian's active product outcome. The
+future hard consumer must preserve ordinary-authority precedence, passive
+inspection/replay/preservation/closeout, a write-free allocation bootstrap,
+active-child reuse, bounded recovery, legacy cutover until renewal, and visible
+denial for missing, inactive, mismatched, stalled, or terminal outcome state.
+
 Important rule: do not name sessions after the immediate local task. A branch
 like `plan-31-hygiene-gate` is fine for git, but the session name should derive
 from the broader goal, such as `digimon-truthful-controller-grounding`.

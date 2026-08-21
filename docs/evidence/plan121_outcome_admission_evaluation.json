@@ -1,0 +1,502 @@
+{
+  "schema_version": "1.0.0",
+  "record_type": "plan121_outcome_admission_evaluation_evidence",
+  "observed_at": "2026-08-21T09:04:57Z",
+  "decision_scope": "Whether the frozen Plan 121 result licenses independent sign-off and then design of a hard first-consumer outcome-admission gate.",
+  "pre_registration": {
+    "commit": "708e98234eaedeaa1fcbc16cdbbcf7dad7d92ca2",
+    "plan_ref": "docs/plans/121_outcome_admission_false_block_evaluation.md",
+    "suite_ref": "evals/outcome_admission/plan121_cases.json",
+    "suite_file_sha256": "2ca787a98645d28004dd5abdf02cb82c1dc1afc6462c0a66981ebd09b47a383f",
+    "population_ref": "evals/outcome_admission/plan121_population_snapshot.json",
+    "population_file_sha256": "cd773a78a412be6c09814dd712d0b745de10611a0b600dc7608b55938c94e55d",
+    "population_normalized_snapshot_sha256": "5a5ba83c84badd0b273cc5b0b7e5dcd116bd0756ded956e01fa635666b9c0e0f",
+    "case_count": 30,
+    "scored_case_count": 29,
+    "calibration_case_count": 1
+  },
+  "candidate": {
+    "revision": "d30696a06f5120bb69df255137f2293dbc1a752e",
+    "source_ref": "enforced_planning/outcome_admission_evaluation.py",
+    "source_sha256": "6f9300fde9b7fc0a1c7e82e477ec3f9e0b95172c024b6fa8c34fece8094017bb",
+    "revision_object_verified": true,
+    "executing_source_matches_git_blob": true,
+    "public_cli_ref": "scripts/evaluate_outcome_admission.py"
+  },
+  "execution": {
+    "primary_command": [
+      "python",
+      "scripts/evaluate_outcome_admission.py",
+      "--cases",
+      "evals/outcome_admission/plan121_cases.json",
+      "--population",
+      "evals/outcome_admission/plan121_population_snapshot.json",
+      "--candidate-revision",
+      "d30696a06f5120bb69df255137f2293dbc1a752e"
+    ],
+    "corruption_command_suffix": [
+      "--corruption-control"
+    ],
+    "first_result_sha256": "f7cd2b73f3565025e90b10dcd8cc883ff567fa39dddfd403d68ae174bf98a6b7",
+    "second_result_sha256": "f7cd2b73f3565025e90b10dcd8cc883ff567fa39dddfd403d68ae174bf98a6b7",
+    "byte_stable_reproduction": true,
+    "decision": "continue_to_independent_signoff",
+    "metrics": {
+      "total_cases": 30,
+      "scored_cases": 29,
+      "calibration_cases": 1,
+      "matched_scored_cases": 29,
+      "mismatched_scored_cases": 0,
+      "critical_false_blocks": 0,
+      "critical_false_allows": 0,
+      "unexpected_scored_defers": 0,
+      "safe_operation_recall": 1.0,
+      "circular_or_bypass_rejection": 1.0,
+      "baseline_false_blocks": 0,
+      "baseline_false_allows": 13
+    },
+    "controls": {
+      "build_adequacy_passed": true,
+      "positive_control_passed": true,
+      "negative_control_passed": true,
+      "corruption_control": {
+        "control_case_id": "control-positive-active-product",
+        "original_expected_disposition": "allow",
+        "corrupted_expected_disposition": "deny",
+        "candidate_disposition": "allow",
+        "mismatch_detected": true
+      }
+    }
+  },
+  "case_results": [
+    {
+      "case_id": "control-positive-active-product",
+      "split": "positive_control",
+      "expected": "allow/outcome_admission_active",
+      "baseline": "allow/ordinary_authority_allowed",
+      "candidate": "allow/outcome_admission_active",
+      "matched": true
+    },
+    {
+      "case_id": "control-negative-circular-approval",
+      "split": "negative_control",
+      "expected": "deny/recovery_required",
+      "baseline": "allow/ordinary_authority_allowed",
+      "candidate": "deny/recovery_required",
+      "matched": true
+    },
+    {
+      "case_id": "validation-product-root-claim",
+      "split": "validation",
+      "expected": "allow/outcome_admission_active",
+      "baseline": "allow/ordinary_authority_allowed",
+      "candidate": "allow/outcome_admission_active",
+      "matched": true
+    },
+    {
+      "case_id": "validation-same-outcome-child-worktree",
+      "split": "validation",
+      "expected": "allow/outcome_admission_active",
+      "baseline": "allow/ordinary_authority_allowed",
+      "candidate": "allow/outcome_admission_active",
+      "matched": true
+    },
+    {
+      "case_id": "validation-maintenance-start",
+      "split": "validation",
+      "expected": "allow/outcome_admission_active",
+      "baseline": "allow/ordinary_authority_allowed",
+      "candidate": "allow/outcome_admission_active",
+      "matched": true
+    },
+    {
+      "case_id": "validation-external-obligation-start",
+      "split": "validation",
+      "expected": "allow/outcome_admission_active",
+      "baseline": "allow/ordinary_authority_allowed",
+      "candidate": "allow/outcome_admission_active",
+      "matched": true
+    },
+    {
+      "case_id": "validation-competing-product",
+      "split": "validation",
+      "expected": "deny/portfolio_slot_occupied",
+      "baseline": "allow/ordinary_authority_allowed",
+      "candidate": "deny/portfolio_slot_occupied",
+      "matched": true
+    },
+    {
+      "case_id": "validation-competing-nonproduct",
+      "split": "validation",
+      "expected": "deny/portfolio_slot_occupied",
+      "baseline": "allow/ordinary_authority_allowed",
+      "candidate": "deny/portfolio_slot_occupied",
+      "matched": true
+    },
+    {
+      "case_id": "validation-unallocated-plan",
+      "split": "validation",
+      "expected": "deny/portfolio_allocation_required",
+      "baseline": "allow/ordinary_authority_allowed",
+      "candidate": "deny/portfolio_allocation_required",
+      "matched": true
+    },
+    {
+      "case_id": "validation-disposed-allocation-renewal",
+      "split": "validation",
+      "expected": "deny/portfolio_allocation_inactive",
+      "baseline": "allow/ordinary_authority_allowed",
+      "candidate": "deny/portfolio_allocation_inactive",
+      "matched": true
+    },
+    {
+      "case_id": "validation-tampered-binding-prewrite",
+      "split": "validation",
+      "expected": "deny/portfolio_allocation_mismatch",
+      "baseline": "allow/ordinary_authority_allowed",
+      "candidate": "deny/portfolio_allocation_mismatch",
+      "matched": true
+    },
+    {
+      "case_id": "validation-stalled-heartbeat-with-approval",
+      "split": "validation",
+      "expected": "deny/outcome_stalled",
+      "baseline": "allow/ordinary_authority_allowed",
+      "candidate": "deny/outcome_stalled",
+      "matched": true
+    },
+    {
+      "case_id": "validation-passive-inspection-stalled",
+      "split": "validation",
+      "expected": "allow/safe_operation_allowed",
+      "baseline": "allow/ordinary_authority_allowed",
+      "candidate": "allow/safe_operation_allowed",
+      "matched": true
+    },
+    {
+      "case_id": "validation-exact-replay-stalled",
+      "split": "validation",
+      "expected": "allow/safe_operation_allowed",
+      "baseline": "allow/ordinary_authority_allowed",
+      "candidate": "allow/safe_operation_allowed",
+      "matched": true
+    },
+    {
+      "case_id": "validation-evidence-preservation-parked",
+      "split": "validation",
+      "expected": "allow/safe_operation_allowed",
+      "baseline": "allow/ordinary_authority_allowed",
+      "candidate": "allow/safe_operation_allowed",
+      "matched": true
+    },
+    {
+      "case_id": "validation-clean-closeout-stalled",
+      "split": "validation",
+      "expected": "allow/safe_operation_allowed",
+      "baseline": "allow/ordinary_authority_allowed",
+      "candidate": "allow/safe_operation_allowed",
+      "matched": true
+    },
+    {
+      "case_id": "validation-allocation-bootstrap",
+      "split": "validation",
+      "expected": "allow/admission_bootstrap_allowed",
+      "baseline": "allow/ordinary_authority_allowed",
+      "candidate": "allow/admission_bootstrap_allowed",
+      "matched": true
+    },
+    {
+      "case_id": "validation-bootstrap-smuggles-product-write",
+      "split": "validation",
+      "expected": "deny/admission_bootstrap_scope_violation",
+      "baseline": "allow/ordinary_authority_allowed",
+      "candidate": "deny/admission_bootstrap_scope_violation",
+      "matched": true
+    },
+    {
+      "case_id": "heldout-ordinary-authority-denial",
+      "split": "held_out",
+      "expected": "deny/ordinary_authority_denied",
+      "baseline": "deny/ordinary_authority_denied",
+      "candidate": "deny/ordinary_authority_denied",
+      "matched": true
+    },
+    {
+      "case_id": "heldout-active-but-out-of-scope",
+      "split": "held_out",
+      "expected": "deny/out_of_scope",
+      "baseline": "allow/ordinary_authority_allowed",
+      "candidate": "deny/out_of_scope",
+      "matched": true
+    },
+    {
+      "case_id": "heldout-bounded-recovery-action",
+      "split": "held_out",
+      "expected": "allow/bounded_recovery_active",
+      "baseline": "allow/ordinary_authority_allowed",
+      "candidate": "allow/bounded_recovery_active",
+      "matched": true
+    },
+    {
+      "case_id": "heldout-unbounded-recovery-write",
+      "split": "held_out",
+      "expected": "deny/recovery_required",
+      "baseline": "allow/ordinary_authority_allowed",
+      "candidate": "deny/recovery_required",
+      "matched": true
+    },
+    {
+      "case_id": "heldout-grandfathered-healthy-prewrite",
+      "split": "held_out",
+      "expected": "allow/grandfathered_until_renewal",
+      "baseline": "allow/ordinary_authority_allowed",
+      "candidate": "allow/grandfathered_until_renewal",
+      "matched": true
+    },
+    {
+      "case_id": "heldout-grandfathered-heartbeat-renewal",
+      "split": "held_out",
+      "expected": "deny/portfolio_allocation_required",
+      "baseline": "allow/ordinary_authority_allowed",
+      "candidate": "deny/portfolio_allocation_required",
+      "matched": true
+    },
+    {
+      "case_id": "heldout-stale-legacy-lane",
+      "split": "held_out",
+      "expected": "deny/ordinary_authority_denied",
+      "baseline": "deny/ordinary_authority_denied",
+      "candidate": "deny/ordinary_authority_denied",
+      "matched": true
+    },
+    {
+      "case_id": "heldout-decision-changing-learning",
+      "split": "held_out",
+      "expected": "allow/outcome_admission_active",
+      "baseline": "allow/ordinary_authority_allowed",
+      "candidate": "allow/outcome_admission_active",
+      "matched": true
+    },
+    {
+      "case_id": "heldout-direct-blocker-removed",
+      "split": "held_out",
+      "expected": "allow/outcome_admission_active",
+      "baseline": "allow/ordinary_authority_allowed",
+      "candidate": "allow/outcome_admission_active",
+      "matched": true
+    },
+    {
+      "case_id": "heldout-equivalent-successor-laundering",
+      "split": "held_out",
+      "expected": "deny/outcome_stalled",
+      "baseline": "allow/ordinary_authority_allowed",
+      "candidate": "deny/outcome_stalled",
+      "matched": true
+    },
+    {
+      "case_id": "heldout-high-cost-approval-nonprogress",
+      "split": "held_out",
+      "expected": "deny/recovery_required",
+      "baseline": "allow/ordinary_authority_allowed",
+      "candidate": "deny/recovery_required",
+      "matched": true
+    },
+    {
+      "case_id": "calibration-cross-repository-child-membership",
+      "split": "calibration",
+      "expected": "defer/cross_repository_membership_not_promoted",
+      "baseline": "allow/ordinary_authority_allowed",
+      "candidate": "defer/cross_repository_membership_not_promoted",
+      "matched": true
+    }
+  ],
+  "focused_verification": {
+    "command": [
+      "python",
+      "-m",
+      "pytest",
+      "-q",
+      "tests/test_outcome_admission_evaluation.py"
+    ],
+    "result": "32 passed",
+    "ruff": "passed",
+    "mypy_changed_files": "passed"
+  },
+  "invalid_preliminary_run": {
+    "retained_for_audit": true,
+    "candidate_revision_input": "d04b071fbdc0d03d5cfec379fc0e4f33ae5bb3bd",
+    "result_sha256": "27cfd86e60209669a6bad4804f3e104d87b6cccf78cd3540f9e63f38868b4eb0",
+    "invalid_reason": "The syntactically valid full-length SHA did not identify a Git commit, and the pre-fix CLI hashed working-tree source. The result was never accepted as promotion evidence.",
+    "corrective_commit": "d30696a06f5120bb69df255137f2293dbc1a752e",
+    "learning_ref": "project-meta:learnings/entries/lrn-20260821T085320189088Z-c6365ab339.json",
+    "learning_merge_revision": "52ee9eeec157a7a10d11b83449b32acb9a2ba387"
+  },
+  "coverage": {
+    "profile": "promotion",
+    "decision": "Whether Plan 121 evidence licenses design and implementation of one first-consumer hard outcome-admission gate.",
+    "summary": {
+      "total": 5,
+      "grade_a": 0,
+      "grade_b": 5,
+      "grade_c": 0,
+      "grade_d": 0,
+      "grade_f": 0,
+      "overall_floor": "B",
+      "hard_gate_eligible": true,
+      "blocking_reason": null
+    },
+    "requirements": [
+      {
+        "id": "OAEV01-A1",
+        "grade": "B",
+        "evidence_class": "schema_validated",
+        "evidence_refs": [
+          "commit:708e98234eaedeaa1fcbc16cdbbcf7dad7d92ca2",
+          "tests/test_outcome_admission_evaluation.py::test_frozen_inputs_load_with_exact_pre_registered_shape"
+        ],
+        "positive_control": "The exact frozen suite and population parse with retained digests.",
+        "negative_control": "Population byte drift and duplicate case ids fail visibly.",
+        "gap": "Local test evidence is not yet merged CI evidence."
+      },
+      {
+        "id": "OAEV01-A2",
+        "grade": "B",
+        "evidence_class": "schema_validated",
+        "evidence_refs": [
+          "commit:d30696a06f5120bb69df255137f2293dbc1a752e",
+          "tests/test_outcome_admission_evaluation.py::test_every_frozen_candidate_decision_matches_disposition_and_reason"
+        ],
+        "positive_control": "Exact active allocation plus active in-scope outcome is allowed.",
+        "negative_control": "Ordinary authority denial remains denial even with active outcome state.",
+        "gap": "Candidate remains decision-only and is not an activated hook."
+      },
+      {
+        "id": "OAEV01-A3",
+        "grade": "B",
+        "evidence_class": "observed",
+        "evidence_refs": [
+          "result:f7cd2b73f3565025e90b10dcd8cc883ff567fa39dddfd403d68ae174bf98a6b7",
+          "tests/test_outcome_admission_evaluation.py::test_corruption_control_inverts_label_and_is_detected"
+        ],
+        "positive_control": "control-positive-active-product matched allow/outcome_admission_active.",
+        "negative_control": "control-negative-circular-approval matched deny/recovery_required.",
+        "gap": "The passing controls license only first-consumer design and implementation, not hook activation."
+      },
+      {
+        "id": "OAEV01-A4",
+        "grade": "B",
+        "evidence_class": "observed",
+        "evidence_refs": [
+          "result:f7cd2b73f3565025e90b10dcd8cc883ff567fa39dddfd403d68ae174bf98a6b7",
+          "tests/test_outcome_admission_evaluation.py::test_primary_readout_is_canonical_and_reproducible"
+        ],
+        "positive_control": "Two exact candidate runs reproduced one digest with all 29 scored cases matched.",
+        "negative_control": "The in-memory inverted control produced a mismatch.",
+        "gap": "Cross-repository membership remains one unscored calibration case."
+      },
+      {
+        "id": "OAEV01-A5",
+        "grade": "B",
+        "evidence_class": "observed",
+        "evidence_refs": [
+          "docs/evidence/plan121_outcome_admission_evaluation.json#independent_signoff",
+          "result:f7cd2b73f3565025e90b10dcd8cc883ff567fa39dddfd403d68ae174bf98a6b7",
+          "verifier:/root/plan121_eval_signoff"
+        ],
+        "positive_control": "The independent verifier reproduced the canonical result twice and matched fresh active and bounded-recovery allow cases.",
+        "negative_control": "The verifier rejected changed population bytes and a nonexistent exact revision, then matched fresh ordinary-denial, bootstrap-bypass, missing-allocation, and terminal cases.",
+        "gap": "The sign-off excludes activation, fleet/installer adoption, and cross-repository membership."
+      }
+    ],
+    "missing_negative_controls": []
+  },
+  "independent_signoff": {
+    "status": "complete",
+    "verdict": "signed_off",
+    "verifier": {
+      "identity": "/root/plan121_eval_signoff",
+      "execution_role": "fresh execution-based verifier",
+      "implementation_participation": false
+    },
+    "candidate_revision": "d30696a06f5120bb69df255137f2293dbc1a752e",
+    "pre_registration_revision": "708e98234eaedeaa1fcbc16cdbbcf7dad7d92ca2",
+    "canonical_result_sha256": "f7cd2b73f3565025e90b10dcd8cc883ff567fa39dddfd403d68ae174bf98a6b7",
+    "canonical_reproductions": 2,
+    "focused_test_result": "32 passed in 2.61s",
+    "invalid_run_controls": [
+      {
+        "control": "changed_population_fixture",
+        "exit_code": 2,
+        "result": "evaluation_invalid"
+      },
+      {
+        "control": "nonexistent_exact_revision",
+        "exit_code": 2,
+        "result": "evaluation_invalid"
+      }
+    ],
+    "fresh_adversarial_cases": [
+      {
+        "case_id": "fresh-ordinary-denies-safe-closeout",
+        "expected": "deny/ordinary_authority_denied",
+        "actual": "deny/ordinary_authority_denied"
+      },
+      {
+        "case_id": "fresh-safe-beats-missing-portfolio",
+        "expected": "allow/safe_operation_allowed",
+        "actual": "allow/safe_operation_allowed"
+      },
+      {
+        "case_id": "fresh-active-commit-allows",
+        "expected": "allow/outcome_admission_active",
+        "actual": "allow/outcome_admission_active"
+      },
+      {
+        "case_id": "fresh-bounded-recovery-prewrite-allows",
+        "expected": "allow/bounded_recovery_active",
+        "actual": "allow/bounded_recovery_active"
+      },
+      {
+        "case_id": "fresh-bootstrap-state-invalid-deny",
+        "expected": "deny/admission_bootstrap_state_invalid",
+        "actual": "deny/admission_bootstrap_state_invalid"
+      },
+      {
+        "case_id": "fresh-bootstrap-write-deny-precedence",
+        "expected": "deny/admission_bootstrap_scope_violation",
+        "actual": "deny/admission_bootstrap_scope_violation"
+      },
+      {
+        "case_id": "fresh-not-applicable-nonbootstrap-deny",
+        "expected": "deny/portfolio_allocation_required",
+        "actual": "deny/portfolio_allocation_required"
+      },
+      {
+        "case_id": "fresh-terminal-deny",
+        "expected": "deny/outcome_terminal",
+        "actual": "deny/outcome_terminal"
+      }
+    ],
+    "decision": "Proceed to design and implementation of one first Enforced Planning consumer hard admission gate only.",
+    "artifact": "docs/evidence/plan121_outcome_admission_evaluation.json#independent_signoff"
+  },
+  "promotion_decision": {
+    "status": "licensed_for_first_consumer_design_and_implementation",
+    "reason": "All 29 scored frozen cases, both-sign and corruption controls, exact reproductions, coverage criteria, invalid-run probes, and eight fresh adversarial cases passed.",
+    "excluded": [
+      "actual hook activation",
+      "fleet or installer rollout",
+      "cross-repository allocation membership",
+      "semantic truth certification for progress receipts",
+      "selection of Brian's active product outcome"
+    ]
+  },
+  "non_claims": [
+    "No hard hook is activated by this evidence artifact.",
+    "No cross-repository allocation membership is supported.",
+    "No fleet or installer adoption is claimed.",
+    "No semantic truth judgment of progress receipts is made.",
+    "No product outcome is selected for Brian.",
+    "Cost and elapsed time remain decision-inert."
+  ]
+}

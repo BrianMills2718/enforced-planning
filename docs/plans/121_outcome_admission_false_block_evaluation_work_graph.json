@@ -1,0 +1,205 @@
+{
+  "units": [
+    {
+      "schema_version": "1.0",
+      "record_type": "work_unit",
+      "id": "oaev-01-representative-admission-evaluation",
+      "initiative_id": "progress-bound-agent-execution",
+      "goal_id": "outcome-admission-evaluation",
+      "design_revision": "sha256:249012a9b725827c973325c5f5c38495317c8e0c157a3eb40f684234c6ed4476",
+      "spec_revision": "sha256:249012a9b725827c973325c5f5c38495317c8e0c157a3eb40f684234c6ed4476",
+      "title": "Freeze, execute, and independently sign off representative outcome admission",
+      "class": "evaluation",
+      "objective": "Produce a decision-ready, both-sign false-block and bypass evaluation for mandatory first-consumer outcome admission without silently expanding to cross-repository or fleet enforcement.",
+      "profile": "standard",
+      "execution_class": "independently_executable",
+      "claimability": "not_applicable",
+      "authorization_mode": "registry_claim",
+      "scope": {
+        "included": [
+          "Revision-bound snapshot of current live claim structures",
+          "Pre-registered positive, negative, validation, held-out, and calibration cases",
+          "Ordinary-authority baseline",
+          "Deterministic candidate admission overlay",
+          "Positive, negative, and corruption controls",
+          "Per-case false-block, false-allow, safe-operation, and bypass readout",
+          "Exact repeated-run reproduction digest",
+          "Coverage grading and fresh execution-based sign-off",
+          "Truthful plan, work graph, evidence, guide, index, and roadmap closeout"
+        ],
+        "excluded": [
+          "Activation of a hard lifecycle or write hook",
+          "Cross-repository allocation membership",
+          "Installer or downstream fleet rollout",
+          "Semantic verification of progress receipt meaning",
+          "Selection of Brian's one active product outcome",
+          "Break-glass implementation",
+          "Cost or elapsed-time authorization"
+        ]
+      },
+      "inputs": [
+        {
+          "kind": "bounded_design",
+          "id": "docs/plans/121_outcome_admission_false_block_evaluation.md",
+          "revision": "sha256:249012a9b725827c973325c5f5c38495317c8e0c157a3eb40f684234c6ed4476"
+        },
+        {
+          "kind": "frozen_case_suite",
+          "id": "evals/outcome_admission/plan121_cases.json",
+          "revision": "sha256:2ca787a98645d28004dd5abdf02cb82c1dc1afc6462c0a66981ebd09b47a383f"
+        },
+        {
+          "kind": "population_snapshot",
+          "id": "evals/outcome_admission/plan121_population_snapshot.json",
+          "revision": "sha256:cd773a78a412be6c09814dd712d0b745de10611a0b600dc7608b55938c94e55d"
+        },
+        {
+          "kind": "accepted_capability",
+          "id": "docs/plans/120_project_graph_portfolio_admission.md",
+          "revision": "4340a2611d6c3bd98a9da2fc182b89e6e44605d0"
+        },
+        {
+          "kind": "approved_policy",
+          "id": "project-meta:policy/proposals/2026-08-20-outcome-continuation-lease-hard-gate.yaml",
+          "revision": "f6091b6b2f2a5357d0fdbbe88b157435a2ce07fb"
+        }
+      ],
+      "outputs": [
+        "Typed deterministic admission evaluation",
+        "Public read-only evaluation CLI",
+        "Per-case baseline and candidate result artifact",
+        "Both-sign and corruption-control receipts",
+        "Reproduction digest",
+        "Coverage grade and independent sign-off",
+        "Bounded promote, revise, or stop decision"
+      ],
+      "dependencies": [],
+      "conflict_surfaces": [
+        {
+          "kind": "repository_path",
+          "target": "enforced_planning/outcome_admission_evaluation.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-121-outcome-admission-evaluation"
+        },
+        {
+          "kind": "repository_path",
+          "target": "scripts/evaluate_outcome_admission.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-121-outcome-admission-evaluation"
+        },
+        {
+          "kind": "repository_path",
+          "target": "tests/test_outcome_admission_evaluation.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-121-outcome-admission-evaluation"
+        },
+        {
+          "kind": "repository_path",
+          "target": "evals/outcome_admission/plan121_cases.json",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-121-outcome-admission-evaluation"
+        },
+        {
+          "kind": "repository_path",
+          "target": "evals/outcome_admission/plan121_population_snapshot.json",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-121-outcome-admission-evaluation"
+        },
+        {
+          "kind": "repository_path",
+          "target": "docs/evidence/plan121_outcome_admission_evaluation.json",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-121-outcome-admission-evaluation"
+        },
+        {
+          "kind": "repository_path",
+          "target": "docs/plans/121_outcome_admission_false_block_evaluation.md",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-121-outcome-admission-evaluation"
+        },
+        {
+          "kind": "repository_path",
+          "target": "docs/plans/121_outcome_admission_false_block_evaluation_work_graph.json",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-121-outcome-admission-evaluation"
+        }
+      ],
+      "acceptance": [
+        {
+          "id": "OAEV01-A1",
+          "criterion": "Population, cases, labels, thresholds, and non-claims are frozen before candidate implementation.",
+          "evidence_required": [
+            "Pre-implementation commit",
+            "Exact plan and fixture digests",
+            "Unique case ids and declared splits"
+          ],
+          "negative_control": "A post-run fixture or label change is retained as a new suite revision and cannot overwrite the frozen result."
+        },
+        {
+          "id": "OAEV01-A2",
+          "criterion": "The candidate composes ordinary authority, safe operations, bootstrap scope, active allocation, and continuation state into typed per-case decisions.",
+          "evidence_required": [
+            "Focused deterministic tests",
+            "All 30 case decisions",
+            "Ordinary denial precedence"
+          ],
+          "negative_control": "Active outcome state cannot override an ordinary authority denial."
+        },
+        {
+          "id": "OAEV01-A3",
+          "criterion": "Known-good, known-bad, and in-memory corruption controls demonstrate that the evaluator can both allow and reject.",
+          "evidence_required": [
+            "Positive control receipt",
+            "Negative control receipt",
+            "Detected corruption mismatch"
+          ],
+          "negative_control": "A scorer that accepts the inverted expectation invalidates the run."
+        },
+        {
+          "id": "OAEV01-A4",
+          "criterion": "Every scored case meets the zero-error thresholds and exact rerun reproduces the canonical result digest.",
+          "evidence_required": [
+            "Per-case baseline and candidate results",
+            "Metric summary",
+            "Repeated canonical digest"
+          ],
+          "negative_control": "No aggregate score can hide one critical false block or false allow."
+        },
+        {
+          "id": "OAEV01-A5",
+          "criterion": "Coverage grading and fresh execution-based sign-off disposition the evidence before any hard-gate decision.",
+          "evidence_required": [
+            "Coverage report",
+            "Independent verifier identity and exact rerun",
+            "Bounded promote/revise/stop decision"
+          ],
+          "negative_control": "Implementer self-report alone cannot promote the gate."
+        }
+      ],
+      "readiness": {
+        "status": "ready",
+        "required_approval_types": [],
+        "approvals": [],
+        "failed_guards": []
+      },
+      "claim_policy": {
+        "eligibility_rule": "Plan 120 is accepted; one exact goal-bound Plan 121 claim owns only the frozen evaluation, result, and truthful closeout surfaces.",
+        "lease_policy": "renewable",
+        "lease_duration_minutes": 1440,
+        "max_active_per_claimant": 1,
+        "named_owner_id": null
+      },
+      "status": "accepted",
+      "record_version": 1,
+      "updated_at": "2026-08-21T09:04:57Z"
+    }
+  ]
+}

@@ -6,6 +6,7 @@ import json
 import subprocess
 import time
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -203,8 +204,66 @@ def test_start_session_creates_tracker_and_updates_claim(tmp_path: Path, monkeyp
     assert loaded_claim.session_name == "cross-project-session-lifecycle-enforcement"
     assert loaded_claim.broader_goal == "Cross-Project Session Lifecycle Enforcement"
     assert loaded_claim.tracker_path == payload["tracker_path"]
+    assert loaded_claim.progress_kind == "claim_started"
+    assert loaded_claim.evidence_ref == "Plan #31"
+    assert loaded_claim.next_action == "implement session lifecycle CLI and governed repo enforcement"
     assert Path(payload["tracker_path"]).exists()
     assert payload["plan_ref"] == "Plan #31"
+
+
+def test_status_sessions_exposes_stalled_progress_with_one_frozen_clock(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Session JSON reports exact stalled evidence and the bounded recovery action."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    worktree = tmp_path / "worktree"
+    worktree.mkdir()
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    session_lifecycle.start_session(
+        agent="codex",
+        project="enforced-planning",
+        scope="plan-110-progress-status",
+        intent="Expose stalled progress",
+        repo_root=str(tmp_path / "repo"),
+        worktree_path=str(worktree),
+        branch="plan-110-progress-status",
+        broader_goal="Progress Lease",
+        current_phase="status evidence",
+        plan_ref="Plan #110",
+        session_id="codex:test-session",
+        tracker_dir=trackers_dir,
+    )
+    claim_path = claims_dir / "codex_enforced-planning_plan-110-progress-status.yaml"
+    claim = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    claim.update(
+        {
+            "heartbeat_at": "2026-08-21T09:59:00+00:00",
+            "progress_at": "2026-08-21T08:00:00+00:00",
+            "progress_kind": "integration_result",
+            "evidence_ref": "receipt:integration-7",
+            "next_action": "record progress or hand off the lane",
+        }
+    )
+    claim_path.write_text(yaml.safe_dump(claim, sort_keys=False), encoding="utf-8")
+    observed_at = datetime.fromisoformat("2026-08-21T10:00:00+00:00")
+
+    payload = session_lifecycle.status_sessions(
+        project="enforced-planning",
+        scope="plan-110-progress-status",
+        now=observed_at,
+    )
+    session = payload["sessions"][0]
+
+    assert payload["observed_at"] == observed_at.isoformat()
+    assert session["health_status"] == "stalled"
+    assert session["progress_issues"] == ["stalled_progress_lease"]
+    assert session["progress_kind"] == "integration_result"
+    assert session["evidence_ref"] == "receipt:integration-7"
+    assert session["next_action"] == "record progress or hand off the lane"
+    assert session["recovery_action"] == "record_progress_or_handoff"
 
 
 def test_existing_session_upsert_refreshes_projection_and_emits_receipt(
@@ -231,7 +290,13 @@ def test_existing_session_upsert_refreshes_projection_and_emits_receipt(
     }
 
     session_lifecycle.start_session(current_phase="initial", **common)
+    claim_path = claims_dir / "codex_enforced-planning_plan-108-upsert-receipt.yaml"
+    progress_before = {
+        field: yaml.safe_load(claim_path.read_text(encoding="utf-8")).get(field)
+        for field in coordination_claims.PROGRESS_FIELD_NAMES
+    }
     refreshed = session_lifecycle.start_session(current_phase="refreshed", **common)
+    refreshed_claim = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
 
     records = claim_mutation_receipts.load_receipts()
     upserts = [record for record in records if record.operation == "session_upsert"]
@@ -242,6 +307,7 @@ def test_existing_session_upsert_refreshes_projection_and_emits_receipt(
     assert receipt.registry_digest_after == receipt.projection_digest_after
     assert receipt.projection_current_after is True
     assert refreshed["action"] == "updated"
+    assert {field: refreshed_claim.get(field) for field in coordination_claims.PROGRESS_FIELD_NAMES} == progress_before
 
 
 def test_existing_session_upsert_reports_audit_failure_after_persisting_mutation(
@@ -2082,6 +2148,11 @@ def test_handoff_session_marks_lane_for_resume(
         session_id="codex:test-session",
         tracker_dir=trackers_dir,
     )
+    claim_path = claims_dir / "codex_enforced-planning_plan-37-session-recovery.yaml"
+    before_handoff = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    progress_before = {
+        field: before_handoff.get(field) for field in coordination_claims.PROGRESS_FIELD_NAMES
+    }
 
     payload = session_lifecycle.handoff_session(
         agent="codex",
@@ -2091,11 +2162,13 @@ def test_handoff_session_marks_lane_for_resume(
     )
     status_payload = session_lifecycle.status_sessions(project="enforced-planning", scope="plan-37-session-recovery")
     tracker_payload = yaml.safe_load(Path(started["tracker_path"]).read_text(encoding="utf-8"))
+    after_handoff = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
 
     assert payload["action"] == "handoff"
     assert status_payload["sessions"][0]["claim_status"] == "handoff"
     assert status_payload["sessions"][0]["recovery_action"] == "resume_or_finish_handoff"
     assert tracker_payload["tracker"]["current_phase"] == "handoff required"
+    assert {field: after_handoff.get(field) for field in coordination_claims.PROGRESS_FIELD_NAMES} == progress_before
     assert prewrite_claim_projection.projection_is_current(claims_dir=claims_dir)
 
 
@@ -2125,6 +2198,11 @@ def test_resume_session_rebinds_stale_or_handoff_lane(
         session_id="codex:old-session",
         tracker_dir=trackers_dir,
     )
+    claim_path = claims_dir / "codex_enforced-planning_plan-37-session-recovery.yaml"
+    progress_before = {
+        field: yaml.safe_load(claim_path.read_text(encoding="utf-8")).get(field)
+        for field in coordination_claims.PROGRESS_FIELD_NAMES
+    }
     session_lifecycle.handoff_session(
         agent="codex",
         project="enforced-planning",
@@ -2144,12 +2222,14 @@ def test_resume_session_rebinds_stale_or_handoff_lane(
     )
     tracker_payload = yaml.safe_load(Path(started["tracker_path"]).read_text(encoding="utf-8"))
     status_payload = session_lifecycle.status_sessions(project="enforced-planning", scope="plan-37-session-recovery")
+    resumed_claim = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
 
     assert payload["action"] == "resumed"
     assert payload["session_id"] == "codex:new-session"
     assert status_payload["sessions"][0]["claim_status"] == "active"
     assert status_payload["sessions"][0]["recovery_action"] == "continue"
     assert tracker_payload["tracker"]["current_phase"] == "fresh runtime resumed"
+    assert {field: resumed_claim.get(field) for field in coordination_claims.PROGRESS_FIELD_NAMES} == progress_before
     assert prewrite_claim_projection.projection_is_current(claims_dir=claims_dir)
 
 

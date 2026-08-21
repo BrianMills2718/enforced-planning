@@ -9,9 +9,7 @@ from pathlib import Path
 import pytest
 import yaml  # type: ignore[import-untyped]
 
-from enforced_planning import concern_routing
-from enforced_planning import coordination_claims
-from enforced_planning import push_safety
+from enforced_planning import concern_routing, coordination_claims, push_safety
 
 
 def _init_git_repo(repo_root: Path) -> None:
@@ -263,6 +261,69 @@ def test_push_check_rejects_branch_claim_without_complete_session_identity(
     assert not payload["ok"]
     finding = next(item for item in payload["issues"] if item["code"] == "no_healthy_branch_claim")
     assert finding["details"]["claims"][0]["health_issues"] == ["missing_session_name"]
+
+
+def test_push_check_preserves_authority_for_report_only_stalled_claim(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A progress stall requests action but cannot revoke the live branch owner's push authority."""
+
+    repo_root = tmp_path / "demo"
+    _init_git_repo(repo_root)
+    subprocess.run(
+        ["git", "-C", str(repo_root), "checkout", "-b", "plan-110-progress"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    (repo_root / "progress.py").write_text("result = 'observed'\n", encoding="utf-8")
+    subprocess.run(
+        ["git", "-C", str(repo_root), "add", "progress.py"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(repo_root), "commit", "-m", "progress"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    monkeypatch.setattr(push_safety, "load_active_decisions", lambda project, limit=5: [])
+    _write_claim(
+        claims_dir,
+        "owner.yaml",
+        {
+            "agent": "codex",
+            "projects": ["demo"],
+            "scope": "plan-110-progress",
+            "intent": "Own the progress branch",
+            "claim_type": "program",
+            "branch": "plan-110-progress",
+            "worktree_path": str(repo_root),
+            "repo_root": str(repo_root),
+            "session_id": "codex:owner",
+            "session_name": "progress-owner",
+            "heartbeat_at": datetime.now(timezone.utc).isoformat(),
+            "expires_at": "2099-08-22T00:00:00+00:00",
+            "status": "active",
+            "progress_at": "2000-01-01T00:00:00+00:00",
+            "progress_kind": "verified_commit",
+            "evidence_ref": "commit:abc123",
+            "next_action": "publish the checkpoint",
+        },
+    )
+
+    payload = push_safety.evaluate_push_safety(repo_root)
+
+    assert payload["ok"]
+    assert coordination_claims.claim_runtime_status(
+        coordination_claims.check_claims("demo")[0]
+    ) == "stalled"
+    assert not any(item["code"] == "no_healthy_branch_claim" for item in payload["issues"])
 
 
 def test_push_check_resolves_canonical_project_from_linked_worktree(

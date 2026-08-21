@@ -12,6 +12,7 @@ import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
+from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -19,6 +20,7 @@ import pytest
 import yaml  # type: ignore[import-untyped]
 
 from enforced_planning import claim_mutation_receipts
+from enforced_planning import coordination_claims as claims_impl
 from enforced_planning.prewrite_claim_fast import projection_path_for, registry_digest
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / "scripts" / "check_coordination_claims.py"
@@ -342,6 +344,10 @@ def test_create_claim_accepts_program_claim_with_live_metadata(
     assert payload["claim_type"] == "program"
     assert payload["branch"] == "plan-90-coordination-graph-runtime"
     assert payload["session_id"] == "codex-session-1"
+    assert payload["progress_kind"] == "claim_started"
+    assert payload["evidence_ref"] == "Plan #62"
+    assert payload["next_action"] == "Broad governance cleanup"
+    assert isinstance(payload["progress_at"], str)
     projection_path = projection_path_for(claims_dir)
     projection = json.loads(projection_path.read_text(encoding="utf-8"))
     assert projection["registry_digest"] == registry_digest(claims_dir)
@@ -2978,3 +2984,324 @@ def test_explicit_identity_still_wins(monkeypatch, tmp_path):
 def test_codex_identity_is_untouched(monkeypatch):
     monkeypatch.setenv("CODEX_THREAD_ID", "thread-xyz")
     assert coordination_claims.resolve_session_id("codex") == "codex:thread-xyz"
+
+
+def test_record_progress_updates_exact_owner_and_preserves_sibling(tmp_path: Path) -> None:
+    """Every accepted kind updates one exact owner without refreshing liveness or siblings."""
+
+    claims_dir = tmp_path / "claims"
+    heartbeat_at = "2026-08-21T08:00:00+00:00"
+    ownership = {
+        "agent": "codex",
+        "projects": ["demo"],
+        "scope": "progress-lane",
+        "intent": "Implement the progress lease",
+        "claim_type": "program",
+        "write_paths": ["src/progress.py"],
+        "read_paths": [],
+        "worktree_path": str(tmp_path / "worktree"),
+        "repo_root": str(tmp_path / "repo"),
+        "branch": "plan-progress",
+        "session_name": "progress-lease",
+        "broader_goal": "Finish progress lease",
+        "tracker_path": str(tmp_path / "tracker.yaml"),
+        "session_id": "codex:progress-owner",
+        "heartbeat_at": heartbeat_at,
+        "status": "active",
+        "claimed_at": "2026-08-21T07:00:00+00:00",
+        "updated_at": heartbeat_at,
+        "expires_at": "2099-08-22T00:00:00+00:00",
+        "progress_at": "2026-08-21T07:00:00+00:00",
+        "progress_kind": "claim_started",
+        "evidence_ref": "Plan #110",
+        "next_action": "Implement mutation",
+        "expected_quiet_until": "2026-08-21T09:00:00+00:00",
+        "quiet_reason": "bounded initial operation",
+    }
+    _write_claim(claims_dir, "owner.yaml", ownership)
+    sibling = {**ownership, "scope": "sibling-lane", "write_paths": ["src/sibling.py"]}
+    _write_claim(claims_dir, "sibling.yaml", sibling)
+    sibling_before = (claims_dir / "sibling.yaml").read_bytes()
+
+    kinds = [
+        "claim_started",
+        "verified_commit",
+        "accepted_artifact",
+        "new_diagnostic",
+        "integration_result",
+    ]
+    for index, kind in enumerate(kinds, start=1):
+        observed_at = datetime.fromisoformat(f"2026-08-21T08:00:0{index}+00:00")
+        updated, event = claims_impl.record_progress_claims(
+            agent="codex",
+            project="demo",
+            scope="progress-lane",
+            progress_kind=kind,
+            evidence_ref=f"receipt-{index}",
+            next_action=f"continue-{index}",
+            session_id="codex:progress-owner",
+            claims_dir=claims_dir,
+            now=observed_at,
+        )
+        assert updated.progress_kind == kind
+        assert updated.evidence_ref == f"receipt-{index}"
+        assert event.progress_at == observed_at
+
+    persisted = yaml.safe_load((claims_dir / "owner.yaml").read_text(encoding="utf-8"))
+    assert persisted["heartbeat_at"] == heartbeat_at
+    assert persisted["session_id"] == "codex:progress-owner"
+    assert persisted["progress_kind"] == "integration_result"
+    assert persisted["evidence_ref"] == "receipt-5"
+    assert persisted["next_action"] == "continue-5"
+    assert persisted["expected_quiet_until"] is None
+    assert persisted["quiet_reason"] is None
+    assert (claims_dir / "sibling.yaml").read_bytes() == sibling_before
+    projection = json.loads(projection_path_for(claims_dir).read_text(encoding="utf-8"))
+    assert projection["registry_digest"] == registry_digest(claims_dir)
+    receipts = claim_mutation_receipts.load_receipts()
+    assert [receipt.operation for receipt in receipts] == ["session_upsert"] * len(kinds)
+    assert all(receipt.projection_current_after for receipt in receipts)
+
+
+@pytest.mark.parametrize(
+    ("overrides", "error"),
+    [
+        ({"session_id": "codex:wrong-owner"}, "matched no exact live owning claim"),
+        ({"progress_kind": "blocker"}, "invalid progress event"),
+        ({"progress_kind": "handoff"}, "invalid progress event"),
+        ({"evidence_ref": "  "}, "invalid progress event"),
+        (
+            {"expected_quiet_until": "2026-08-21T09:00:00", "quiet_reason": "suite"},
+            "invalid progress event",
+        ),
+        ({"expected_quiet_until": "2026-08-21T09:00:00+00:00"}, "invalid progress event"),
+    ],
+)
+def test_record_progress_rejects_invalid_or_wrong_owner_without_mutation(
+    tmp_path: Path,
+    overrides: dict[str, str],
+    error: str,
+) -> None:
+    """Rejected progress input leaves canonical claim bytes and receipts unchanged."""
+
+    claims_dir = tmp_path / "claims"
+    _write_claim(
+        claims_dir,
+        "owner.yaml",
+        {
+            "agent": "codex",
+            "projects": ["demo"],
+            "scope": "progress-lane",
+            "intent": "Implement progress",
+            "claim_type": "program",
+            "session_id": "codex:owner",
+            "status": "active",
+            "expires_at": "2099-08-22T00:00:00+00:00",
+            "progress_at": "2026-08-21T07:00:00+00:00",
+            "progress_kind": "claim_started",
+            "evidence_ref": "Plan #110",
+            "next_action": "continue",
+        },
+    )
+    claim_path = claims_dir / "owner.yaml"
+    before = claim_path.read_bytes()
+    kwargs = {
+        "agent": "codex",
+        "project": "demo",
+        "scope": "progress-lane",
+        "progress_kind": "verified_commit",
+        "evidence_ref": "abc123",
+        "next_action": "run focused tests",
+        "session_id": "codex:owner",
+        "claims_dir": claims_dir,
+        "now": datetime.fromisoformat("2026-08-21T08:00:00+00:00"),
+        **overrides,
+    }
+
+    with pytest.raises(ValueError, match=error):
+        claims_impl.record_progress_claims(**kwargs)
+
+    assert claim_path.read_bytes() == before
+    assert claim_mutation_receipts.load_receipts() == []
+
+
+def test_record_progress_rejects_ambiguous_exact_claim_without_mutation(tmp_path: Path) -> None:
+    """Duplicate exact identities fail before either claim can be changed."""
+
+    claims_dir = tmp_path / "claims"
+    payload = {
+        "agent": "codex",
+        "projects": ["demo"],
+        "scope": "duplicate-lane",
+        "intent": "Repair duplicates",
+        "claim_type": "program",
+        "session_id": "codex:owner",
+        "status": "active",
+        "expires_at": "2099-08-22T00:00:00+00:00",
+    }
+    _write_claim(claims_dir, "duplicate-a.yaml", payload)
+    _write_claim(claims_dir, "duplicate-b.yaml", payload)
+    before = {path.name: path.read_bytes() for path in claims_dir.glob("*.yaml")}
+
+    with pytest.raises(ValueError, match="matched multiple live claims"):
+        claims_impl.record_progress_claims(
+            agent="codex",
+            project="demo",
+            scope="duplicate-lane",
+            progress_kind="new_diagnostic",
+            evidence_ref="duplicate-receipt",
+            next_action="repair claim identity",
+            session_id="codex:owner",
+            claims_dir=claims_dir,
+            now=datetime.fromisoformat("2026-08-21T08:00:00+00:00"),
+        )
+
+    assert {path.name: path.read_bytes() for path in claims_dir.glob("*.yaml")} == before
+    assert claim_mutation_receipts.load_receipts() == []
+
+
+def test_progress_classifier_has_frozen_boundaries_and_stale_precedence(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """One frozen clock distinguishes healthy, stalled, quiet, malformed, legacy, and stale."""
+
+    repo_root = tmp_path / "repo"
+    _init_git_repo(repo_root)
+    base = claims_impl.build_candidate_claim(
+        agent="codex",
+        project="demo",
+        scope="progress-lane",
+        intent="Classify progress",
+        claim_type="program",
+        worktree_path=str(repo_root),
+        repo_root=str(repo_root),
+        branch="main",
+        session_name="progress-lane",
+        broader_goal="Progress lease",
+        tracker_path=str(tmp_path / "tracker.yaml"),
+        session_id="codex:owner",
+        heartbeat_at="2026-08-21T09:59:00+00:00",
+        expires_at="2099-08-22T00:00:00+00:00",
+        progress_at="2026-08-21T09:00:00+00:00",
+        progress_kind="verified_commit",
+        evidence_ref="abc123",
+        next_action="run integration",
+    )
+    before = datetime.fromisoformat("2026-08-21T09:59:59+00:00")
+    boundary = datetime.fromisoformat("2026-08-21T10:00:00+00:00")
+
+    assert claims_impl.claim_runtime_status(base, now=before) == "healthy"
+    assert claims_impl.claim_progress_issues(base, now=boundary) == ["stalled_progress_lease"]
+    assert claims_impl.claim_runtime_status(base, now=boundary) == "stalled"
+
+    quiet = replace(
+        base,
+        expected_quiet_until="2026-08-21T10:15:00+00:00",
+        quiet_reason="bounded repository suite",
+    )
+    assert claims_impl.claim_progress_issues(
+        quiet,
+        now=datetime.fromisoformat("2026-08-21T10:14:59+00:00"),
+    ) == []
+    assert claims_impl.claim_progress_issues(
+        quiet,
+        now=datetime.fromisoformat("2026-08-21T10:15:00+00:00"),
+    ) == ["stalled_progress_lease"]
+
+    malformed = replace(base, evidence_ref=None)
+    assert claims_impl.claim_runtime_status(malformed, now=boundary) == "weak"
+    assert "incomplete_progress_event" in claims_impl.claim_progress_issues(malformed, now=boundary)
+    future = replace(base, progress_at="2026-08-21T10:01:00+00:00")
+    assert claims_impl.claim_progress_issues(future, now=boundary) == ["future_progress_at"]
+    assert claims_impl.claim_runtime_status(future, now=boundary) == "weak"
+    legacy = replace(
+        base,
+        progress_at=None,
+        progress_kind=None,
+        evidence_ref=None,
+        next_action=None,
+    )
+    assert claims_impl.claim_progress_issues(legacy, now=boundary) == []
+    assert claims_impl.claim_runtime_status(legacy, now=boundary) == "healthy"
+
+    stale = replace(base, heartbeat_at="2026-08-21T07:00:00+00:00")
+    assert claims_impl.claim_runtime_status(stale, now=boundary) == "stale"
+    monkeypatch.setenv("COORDINATION_PROGRESS_STALE_MINUTES", "not-a-number")
+    with pytest.raises(ValueError, match="must be a positive number"):
+        claims_impl.claim_progress_issues(base, now=boundary)
+
+
+def test_heartbeat_file_dirt_and_stalled_prune_preserve_progress_and_ownership(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Non-progress activity cannot renew or release a fresh-heartbeat stalled claim."""
+
+    module = _load_module()
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
+    repo_root = tmp_path / "repo"
+    _init_git_repo(repo_root)
+    claim_payload = {
+        "agent": "codex",
+        "projects": ["demo"],
+        "scope": "stalled-lane",
+        "intent": "Preserve stalled work",
+        "claim_type": "program",
+        "write_paths": ["src/progress.py"],
+        "worktree_path": str(repo_root),
+        "repo_root": str(repo_root),
+        "branch": "main",
+        "session_name": "stalled-lane",
+        "session_id": "codex:owner",
+        "heartbeat_at": datetime.now(timezone.utc).isoformat(),
+        "status": "active",
+        "expires_at": "2099-08-22T00:00:00+00:00",
+        "progress_at": "2000-01-01T00:00:00+00:00",
+        "progress_kind": "verified_commit",
+        "evidence_ref": "abc123",
+        "next_action": "record real advancement or hand off",
+    }
+    _write_claim(claims_dir, "stalled.yaml", claim_payload)
+    path = claims_dir / "stalled.yaml"
+    invariant_fields = (
+        "agent",
+        "projects",
+        "scope",
+        "status",
+        "claim_type",
+        "write_paths",
+        "worktree_path",
+        "repo_root",
+        "branch",
+        "session_id",
+        "expires_at",
+        "progress_at",
+        "progress_kind",
+        "evidence_ref",
+        "next_action",
+    )
+    before = yaml.safe_load(path.read_text(encoding="utf-8"))
+
+    count, scopes, _session, _heartbeat = module.heartbeat_claims(
+        agent="codex",
+        project="demo",
+        scope="stalled-lane",
+        session_id="codex:owner",
+        require_exact_session=True,
+    )
+    assert (count, scopes) == (1, ["stalled-lane"])
+    after_heartbeat = yaml.safe_load(path.read_text(encoding="utf-8"))
+    assert {field: after_heartbeat.get(field) for field in invariant_fields} == {
+        field: before.get(field) for field in invariant_fields
+    }
+
+    (repo_root / "untracked.txt").write_text("local work\n", encoding="utf-8")
+    claim = module.check_claims("demo")[0]
+    assert module.claim_runtime_status(claim) == "stalled"
+    after_dirt = path.read_bytes()
+    removed, scopes = module.prune_stale(agent="codex", project="demo", scope="stalled-lane")
+    assert (removed, scopes) == (0, [])
+    assert path.read_bytes() == after_dirt
+    assert path.exists()

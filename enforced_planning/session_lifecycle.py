@@ -537,6 +537,15 @@ def _upsert_session_claim(
         coordination_claims.validate_claim_for_creation(candidate)
 
         expires_at = existing.expires_at or (now + timedelta(hours=ttl_hours)).isoformat()
+        progress_payload: dict[str, str | None] = {}
+        if not any(field in refreshed_payload for field in coordination_claims.PROGRESS_FIELD_NAMES):
+            initial_progress = coordination_claims.build_progress_event(
+                progress_kind="claim_started",
+                evidence_ref=plan_ref or scope,
+                next_action=intent,
+                progress_at=now,
+            )
+            progress_payload = coordination_claims._progress_event_payload(initial_progress)
         payload = {
             **refreshed_payload,
             "agent": agent,
@@ -566,6 +575,7 @@ def _upsert_session_claim(
             "work_graph_sha256": work_graph_sha256,
             "approval_revisions": list(approval_revisions),
             "parallel_root_authorized": candidate.parallel_root_authorized,
+            **progress_payload,
         }
         _write_claim_payload(path, payload)
         _projection_path, projection_digest_after = coordination_claims.refresh_prewrite_authority_projection(
@@ -634,12 +644,14 @@ def _recovery_action_for_claim(
     claim: coordination_claims.ClaimRecord,
     *,
     active_claims: list[coordination_claims.ClaimRecord] | None = None,
+    now: datetime | None = None,
 ) -> str:
     """Return the operator action implied by one claim's lifecycle state."""
 
     health_status = coordination_claims.claim_runtime_status(
         claim,
         active_claims=active_claims,
+        now=now,
     )
     if claim.status == "handoff":
         return "resume_or_finish_handoff"
@@ -647,7 +659,11 @@ def _recovery_action_for_claim(
         return "resume_take_over_or_close_preserved_lane"
     if health_status == "stale":
         return "resume_or_abandon_or_prune"
+    if health_status == "stalled":
+        return "record_progress_or_handoff"
     if health_status == "weak":
+        if coordination_claims.claim_progress_issues(claim, now=now):
+            return "repair_progress_contract"
         if active_claims and coordination_claims.claim_hierarchy_issues(
             claim,
             active_claims=active_claims,
@@ -1218,10 +1234,12 @@ def status_sessions(
     branch: str | None = None,
     session_id: str | None = None,
     include_ended: bool = False,
+    now: datetime | None = None,
 ) -> dict[str, Any]:
     """Return session summaries derived from claims plus linked trackers."""
 
     sessions: list[dict[str, Any]] = []
+    observed_at = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
     all_claims = coordination_claims.list_claims(
         include_inactive=include_ended,
     )
@@ -1255,6 +1273,10 @@ def status_sessions(
             claim,
             active_claims=project_claims,
         )
+        progress_issues = coordination_claims.claim_progress_issues(
+            claim,
+            now=observed_at,
+        )
         sessions.append(
             {
                 "project": claim.primary_project(),
@@ -1280,8 +1302,16 @@ def status_sessions(
                 "health_status": coordination_claims.claim_runtime_status(
                     claim,
                     active_claims=project_claims,
+                    now=observed_at,
                 ),
                 "health_issues": health_issues,
+                "progress_at": claim.progress_at,
+                "progress_kind": claim.progress_kind,
+                "evidence_ref": claim.evidence_ref,
+                "next_action": claim.next_action,
+                "expected_quiet_until": claim.expected_quiet_until,
+                "quiet_reason": claim.quiet_reason,
+                "progress_issues": progress_issues,
                 "current_phase": tracker_section.get("current_phase") if isinstance(tracker_section, dict) else None,
                 "intended_next_phases": tracker_section.get("intended_next_phases")
                 if isinstance(tracker_section, dict)
@@ -1298,10 +1328,12 @@ def status_sessions(
                 "recovery_action": _recovery_action_for_claim(
                     claim,
                     active_claims=project_claims,
+                    now=observed_at,
                 ),
             }
         )
     return {
+        "observed_at": observed_at.isoformat(),
         "session_count": len(sessions),
         "sessions": sessions,
     }

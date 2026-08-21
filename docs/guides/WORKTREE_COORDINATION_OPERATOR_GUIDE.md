@@ -494,6 +494,67 @@ versus maintenance leases, allocate a portfolio slot through Project Graph,
 hard-block writes, prove receipt semantics independently, install hooks, or
 claim fleet adoption.
 
+### Project Graph-bound portfolio admission pilot
+
+Plan #120 adds deliberate portfolio admission for new schema `1.1.0` outcome
+contracts. Each such contract declares exactly one `portfolio_class`:
+`product`, `maintenance`, or `external_obligation`. Allocation resolves the
+project from an exact full 40-character Project Meta commit, requires one
+active Project Graph record with a complete reviewed repository-governance
+authority, and retains digests for the graph bytes, project record, review,
+and resolved authority. A branch name, local clone location, or available Git
+identity cannot substitute for that authority.
+
+Allocation is always an explicit operator action; `select` never allocates a
+slot implicitly:
+
+```bash
+python scripts/outcome_continuation.py allocate \
+  --scenario examples/owner-real-outcome-observe/plan120-maintenance-scenario.json \
+  --request examples/owner-real-outcome-observe/plan120-maintenance-allocation.json \
+  --project-graph-repo /path/to/project-meta \
+  --project-graph-revision <full-40-character-commit> \
+  --agent codex --project enforced-planning \
+  --scope plan-120-project-graph-portfolio-admission
+
+python scripts/outcome_continuation.py select \
+  --scenario examples/owner-real-outcome-observe/plan120-maintenance-scenario.json \
+  --execution-authority enforced-planning#120 \
+  --agent codex --project enforced-planning \
+  --scope plan-120-project-graph-portfolio-admission \
+  --portfolio-ledger /path/to/outcome-portfolio-allocations-v1.json
+```
+
+One active `product` allocation is allowed per resolved Project Graph owner
+class. `maintenance` and `external_obligation` share one global non-product
+slot. The append-only ledger is reconstructed under a file lock before every
+mutation; exact request replay is byte-inert, while a competing request,
+changed replay, malformed history, owner mismatch, or exceeded cap fails
+visibly without allocating.
+
+Release a slot only through an explicit `parked` or `completed` disposition:
+
+```bash
+python scripts/outcome_continuation.py dispose-allocation \
+  --request examples/owner-real-outcome-observe/plan120-maintenance-disposition.json \
+  --agent codex --project enforced-planning \
+  --scope plan-120-project-graph-portfolio-admission \
+  --portfolio-ledger /path/to/outcome-portfolio-allocations-v1.json
+```
+
+A classed selection and every later selected-outcome resolution require the
+bound allocation to remain active with the retained allocation digest. A
+disposed allocation therefore invalidates later selected observation instead
+of silently reopening capacity. Legacy schema `1.0.0` scenarios remain
+readable and retain their byte-compatible digest, but they are not evidence of
+portfolio admission.
+
+This pilot does not yet bind ordinary plan creation, claim creation, worktree
+creation, or authoritative pre-write admission to an allocation. It does not
+choose Brian's active product outcome, alter ordinary claim authority, install
+hooks, or establish fleet adoption. Those boundaries require a representative
+false-block review before the ratchet can become mandatory.
+
 Important rule: do not name sessions after the immediate local task. A branch
 like `plan-31-hygiene-gate` is fine for git, but the session name should derive
 from the broader goal, such as `digimon-truthful-controller-grounding`.

@@ -1,6 +1,6 @@
 # Enforced Planning Framework — Roadmap
 
-**Updated:** 2026-08-20
+**Updated:** 2026-08-21
 **Canonical methodology:** `PLANNING_OPERATING_MODEL.md`
 
 ## Vision
@@ -49,24 +49,41 @@ The retained receipt at
 its consumer plan before source work and changed only the four declared result
 paths.
 
-Two configured generated consumers now pass the same plan, documentation,
-progress, scope, portability, and independent-verifier controls. This is
-mechanical repeatability evidence. The next consumer frontier is Brian and his
-agents using the system on real Brian-owned project work; colleague packaging,
-external-user validation, and claims of broader usability remain downstream of
-repeated owner dogfooding. A new top-level repository, shared `data-contracts`
-extraction, `llm_client` integration, and Plan #111 feedback evolution remain
-downstream of a demonstrated ownership seam.
+Two configured generated consumers pass the same plan, documentation, progress,
+scope, portability, and independent-verifier controls. This is mechanical
+repeatability evidence. Plans #55 and #114–#116 then crossed the owner frontier
+on Enforced Planning itself:
 
-Plan #114 is the approved next proof frontier: bind supported continuation to
-progress evidence rather than conversational approval. Its staged gate is one
-positive CLI decision that admits genuine behavioral advance and one negative
-decision that denies two-increment circular continuation. Cost and elapsed-time
-telemetry must be decision-invariant. Session hooks, claim integration, and
-fleet promotion remain downstream of this both-sign result. The first
-observe-mode integration belongs on real Brian-owned work used by Brian and his
-agents; generated fixtures prove mechanics, while colleague or external-user
-packaging waits for repeated owner evidence.
+- Plan #55 reduced the required context for one real framework module from 11
+  documents and 13,052 words to four documents and 2,577 words while retaining
+  its plan, decision, schema, and repository authority.
+- Plans #114 and #115 made progress evidence—not approval, cost, or elapsed
+  time—the continuation signal and bound the positive case to that merged owner
+  result.
+- Plan #116 sent the identical real claimed Codex pre-write payload through the
+  ordinary gate twice. Both ordinary decisions remained
+  `allow/exact_live_claim`; owner progress correlated to
+  `would_allow/active_in_scope`, while two synthetic non-outcome receipts
+  correlated to `would_deny/recovery_required`.
+
+These observations prove useful owner-real behavior at the documentation and
+continuation seams. They do not yet prove automatic outcome selection,
+representative false-block rates, installed outcome enforcement, or usefulness
+across Brian's ordinary project portfolio. The current proof frontier is
+therefore repeated owner-real delivery on normal Brian-owned project work, with
+compact current documentation, plan adherence, course correction, and
+independent outcome evidence observed together. Colleague packaging,
+external-user validation, and claims of broader usability remain downstream of
+that repeated owner dogfooding.
+
+In the broader **Agentic Engineering System** vocabulary, Enforced Planning
+currently owns Agentic Delivery planning/control mechanisms and selected
+Orchestration/Loops and Evidence/Improvement controls. It is not the whole
+system and does not absorb Agent Runtime/Harness or optional shared
+infrastructure. A new top-level repository, shared `data-contracts` extraction,
+`llm_client` integration, Plan #111 feedback evolution, installer rollout, and
+blocking remain deferred until a demonstrated consumer seam makes one of them
+the smallest next move.
 
 ## Phase Map
 

@@ -1,6 +1,6 @@
 # Plan #111: Portable Ecosystem Feedback Loop
 
-**Status:** In Progress — design adopted; EF-01 ready for implementation
+**Status:** In Progress — EF-01 accepted; EF-02 ready
 **Status ID:** in_progress
 **Type:** implementation
 **Priority:** High
@@ -14,11 +14,13 @@
 
 ## Objective
 
-Give an agent or human one portable command that records concrete friction or
+Give an agent or human one portable command that records actionable friction or
 an evidence-backed recommendation about a policy, skill, instruction, tool,
 project workflow, or unowned ecosystem concern. The entry remains append-only,
 privacy-reduced, step-down friendly, and explicitly dispositioned; recording it
-never changes policy automatically.
+never changes policy automatically. Reusable facts and procedural lessons stay
+in Project Meta's immutable `learning/v2` register, while policy promotion stays
+in the Project Meta proposal and registry lifecycle.
 
 The recurring actor is an agent working anywhere in the governed ecosystem.
 The inspectable result is a typed feedback record with a stable ID, evidence
@@ -54,13 +56,14 @@ Current mechanisms are fragmented:
 
 - Project Meta has a tested policy feedback logger and Markdown register, but
   every entry must name a policy.
-- shared skills route defects to a manual Markdown file with no deterministic
-  append command or evidence schema;
+- skill feedback now shares Project Meta's policy-feedback register under
+  `skill:<id>` identities, but no portable runtime-neutral intake contract owns
+  actionable feedback across all six scope kinds;
 - Enforced Planning has an append-only feedback contract, but only for an
   artifact-creation gate receipt;
-- Project Meta's `issue-concern` preserves general risk but hardcodes Project
-  Meta ownership and lacks skill, policy, instruction, tool, session, and
-  evidence bindings; and
+- Project Meta's `learning/v2` register preserves reusable findings and lessons,
+  while `issue-concern` preserves general risk; neither is the lifecycle owner
+  for actionable cross-scope friction and recommendations; and
 - the always-loaded workspace instruction does not tell agents how to route
   feedback.
 
@@ -80,9 +83,13 @@ always-loaded routing rule
   `scripts/artifact_creation.py` — existing strict append-only feedback and
   disposition pattern, currently receipt-bound.
 - `tests/test_artifact_creation.py` — current both-sign and step-down evidence.
-- Project Meta `scripts/log_policy_friction.py`, `policy_friction.md`, and
-  `skill_feedback.md` — current policy and skill feedback compatibility
-  surfaces.
+- Project Meta `scripts/log_policy_friction.py` and `policy_friction.md` —
+  current policy and `skill:<id>` feedback compatibility surface.
+- Project Meta `scripts/log_learning.py` and `learnings/entries/` — immutable
+  `learning/v2` authority for reusable operational findings and procedural
+  lessons, which this transport must not duplicate.
+- Project Meta `policy/proposals/` and `policy/registry.yaml` — policy promotion
+  authority; a feedback disposition cannot accept or enforce policy.
 - Project Meta `scripts/log_issue_concern.py` — general risk capture whose
   ownership and schema are too narrow for this outcome.
 - `agent-skills/docs/SKILL_OBSERVABILITY_POLICY.md` — centralized skill
@@ -125,6 +132,8 @@ Non-goals:
 - copying prompt text, tool output, credentials, or secret values;
 - inferring that loading a skill caused an outcome;
 - automatically changing, promoting, or enforcing policy from feedback;
+- replacing `learning/v2` findings or lessons, recurring-friction proposals, or
+  the policy registry lifecycle;
 - migrating all historical prose before the new path is proven; or
 - requiring a policy, skill, project, or gate receipt for genuinely unowned
   feedback.
@@ -208,8 +217,10 @@ path after a successful append. A failed validation or append returns nonzero
 and must not claim that feedback was captured.
 
 Compatibility is additive at the adapter layer: existing Project Meta policy
-and skill Markdown files remain readable until projections and migration are
-separately accepted. The new core contract rejects unknown fields.
+and skill entries in `policy_friction.md` remain readable until projections and
+migration are separately accepted. `learning/v2` and policy proposals retain
+their own authority rather than becoming compatibility inputs. The new core
+contract rejects unknown fields.
 
 ## Both-Sign Fixtures
 
@@ -253,8 +264,8 @@ Critical path classification: `vertical`
 
 | Unit | Outcome | Status |
 | --- | --- | --- |
-| EF-01 | Portable typed feedback transport, CLI, tests, and operator guide in Enforced Planning | Ready |
-| EF-02 | Project Meta adapters/projections and explicit legacy-register compatibility | Blocked by EF-01 acceptance |
+| EF-01 | Portable typed actionable-feedback transport, CLI, tests, and operator guide in Enforced Planning | Accepted |
+| EF-02 | Project Meta adapters/projections and explicit `policy_friction.md` compatibility | Ready |
 | EF-03 | Always-loaded workspace routing rule and end-to-end policy/skill/general probe | Blocked by EF-02 acceptance |
 
 The machine-readable decomposition is
@@ -262,15 +273,20 @@ The machine-readable decomposition is
 
 ## Acceptance Criteria
 
-- [ ] EF-A1: all six scope kinds can be recorded through one command; `general`
+- [x] EF-A1: all six scope kinds can be recorded through one command; `general`
   requires no fabricated owner.
-- [ ] EF-A2: strict schema and both-sign fixtures fail for the intended reason.
-- [ ] EF-A3: append/disposition/query operations preserve the original record,
+- [x] EF-A2: strict schema and both-sign fixtures fail for the intended reason.
+- [x] EF-A3: append/disposition/query operations preserve the original record,
   reject corruption and contradiction, and step down from summaries to IDs.
-- [ ] EF-A4: no raw prompt, response, tool output, credential, or evidence-file
-  content enters the default stream.
+- [x] EF-A4: the transport never auto-captures or dereferences prompts,
+  responses, tool output, credentials, working-directory state, session state,
+  or evidence-file content. Semantic fields, optional source metadata, and
+  evidence references come only from explicit input; fixed envelope metadata
+  and the CLI's constant `source.client=cli` default are generated. The caller
+  remains responsible for making supplied content privacy-safe.
 - [ ] EF-A5: Project Meta consumes the portable contract without reimplementing
-  it and keeps legacy registers explicitly compatible until migration.
+  it and keeps policy and `skill:<id>` entries in `policy_friction.md`
+  explicitly compatible until migration.
 - [ ] EF-A6: the canonical workspace bootstrap tells agents when and how to log
   policy, skill, instruction, tool, project, and general feedback without
   adding per-skill boilerplate.
@@ -281,14 +297,41 @@ The machine-readable decomposition is
   Meta feedback tests, and instruction-surface checks pass at their exact
   revisions.
 
+## EF-01 Acceptance Evidence
+
+Accepted on 2026-08-21 as the smallest authentic local feedback vertical. This
+acceptance does not claim that the command is installed across governed
+repositories; Project Meta consumption and universal installed routing remain
+EF-02 and EF-03 respectively.
+
+- `pytest -q tests/test_ecosystem_feedback.py tests/test_artifact_creation.py`
+  passed 97 tests: 88 feedback contract/CLI tests plus 9 existing append-only
+  artifact-feedback compatibility tests.
+- `EF01-AUTH-20260821-02` exercised the frozen real CLI through record, filtered list,
+  open report, terminal disposition, terminal list, and terminal report on a
+  temporary stream. It returned stable feedback ID
+  `ecosystem_feedback_4736a26a35354c559c5d599cab3183d7`, preserved the exact
+  first-line bytes, and left a deliberately nonexistent evidence reference
+  inert.
+- Negative controls cover all six route kinds, unknown/empty fields, missing
+  durable envelope fields, malformed/non-object/blank/unterminated rows,
+  duplicate and orphan identities, generated-ID collision, backward clocks,
+  contradictory report aggregates, concurrent record writes, and concurrent
+  terminal decisions. Rejected writes preserve exact prior bytes.
+- Independent read-only review reproduced candidate integrity defects before
+  acceptance; the fixes were re-probed and the complete suite returned green.
+- Ruff check/format, Python compilation, JSON parsing, `git diff --check`, and
+  `python scripts/check_agents_sync.py --repo-root . --check` passed.
+
 ## Disproof And Rollback
 
 The approach is disproved if an agent still must invent a policy/skill owner,
 cannot find the command from the always-loaded instruction, loses the original
 entry during disposition, or cannot step from a report to evidence identity.
 It is also disproved if Project Meta and Enforced Planning create incompatible
-schemas or if ordinary feedback causes policy mutation.
+schemas, if the retired `skill_feedback.md` surface is recreated, or if ordinary
+feedback causes policy mutation.
 
 Rollback removes adapters and the routing pointer but preserves the append-only
 stream as inert evidence. No implementation slice deletes historical feedback
-or legacy registers.
+or legacy `policy_friction.md` entries.

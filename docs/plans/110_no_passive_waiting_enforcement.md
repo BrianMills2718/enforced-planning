@@ -157,15 +157,27 @@ evaluation_id
 session_id
 goal_or_graph_scope
 work_graph_ref: path + sha256 + design/spec revision, when bound
+claim_snapshot_sha256
 coverage: complete | partial | unavailable
 eligible_unit_ids[]
 blocked_unit_ids[] with typed blocker/gate references
+terminal_unit_ids[]
+active_or_indeterminate_unit_ids[]
 active_conflict_unit_ids[]
 evaluated_at
 ```
 
 Only `coverage=complete` can support `goal_blocked_verified`. A path-local claim
 collision remains an `integration_wait` even when it prevents the current unit.
+The graph identity is repository-relative, and the evaluation identity binds
+that path, exact graph bytes, and the canonical claim-snapshot digest. Its
+numbered filename must match the project-qualified plan identity. A live claim
+for a known unit with missing or mismatched graph binding makes coverage
+unavailable instead of silently exposing owned work as eligible. Terminal units
+do not mask a genuine remaining blocker; an all-terminal graph, active or
+indeterminate work, invalid readiness, or a hard-dependency cycle cannot prove
+goal blockage. Observation timestamps remain in receipts but are excluded from
+stable evaluation and disposition identities when the source state is unchanged.
 
 ### `BlockerRequestV1`
 
@@ -185,7 +197,9 @@ requested_claim_action: retain_narrow | handoff | session_end
 ```
 
 The request is evidence supplied by the agent. It is not itself the blocker
-decision.
+decision. Path-scoped references must be canonical portable repository-relative
+paths; dot, traversal, absolute, duplicate, empty, and backslash forms fail
+contract validation.
 
 ### `BlockerDispositionV1`
 
@@ -200,10 +214,23 @@ reason_codes[]
 evidence_refs[]
 resume_event
 recorded_at
+application_authorized: false in the provider-free diagnostic slice
 ```
 
 The deterministic evaluator owns `decision`. The agent cannot directly write a
-verified blocked state.
+verified blocked state. The read-only CLI returns a replayable envelope carrying
+both the exact `ReadyQueueEvaluationV1` and its `BlockerDispositionV1`; the
+disposition reference therefore never points to an omitted derived queue.
+NPW-02 dispositions are diagnostic and cannot authorize claim mutation. NPW-03
+must atomically reload the canonical claim registry, resolve the graph bytes
+from that claim's repository root plus repository-relative graph reference,
+recompute the queue and disposition, and refuse application unless both stable
+IDs match the supplied envelope. Only that lifecycle boundary may emit a
+separate application receipt.
+
+The public CLI additionally binds `session_id` to the exact native invoking
+runtime before loading canonical claims. A fabricated identity cannot suppress
+a self-conflict or manufacture an other-session conflict.
 
 ## Capabilities
 
@@ -211,13 +238,14 @@ verified blocked state.
 | --- | --- | --- | --- | --- | --- |
 | `record_progress_event` | owning claim selector + `ProgressEventV1` | updated claim identity + timestamp | claim/session lifecycle | status surfaces and owning agents | free |
 | `evaluate_ready_queue` | revision-bound work graph + claim snapshot | `ReadyQueueEvaluationV1` | readiness evaluator | blocker policy evaluator | free |
-| `decide_blocker_disposition` | `BlockerRequestV1` + queue and mailbox evidence | `BlockerDispositionV1` | blocker policy evaluator | sanctioned lifecycle command and status views | free |
+| `decide_blocker_disposition` | `BlockerRequestV1` + revision-bound graph, claim snapshot, and mailbox evidence | queue + `BlockerDispositionV1` envelope | blocker policy evaluator | sanctioned lifecycle command and status views | free |
 | `apply_blocker_disposition` | accepted disposition + selected goal-root identity | scoped lifecycle receipt | session lifecycle | agents, operators and installed governed repos | free |
 
 ## Decision rules
 
-1. A path conflict always produces `integration_wait`; it never proves the goal
-   blocked.
+1. A path conflict produces `integration_wait` only when an exact-bound live
+   other-session claim overlaps the requested path; an agent assertion alone
+   remains unverified and never proves the goal blocked.
 2. Complete queue coverage plus at least one eligible unit produces
    `continue_ready_work`.
 3. A required mailbox dependency below its required delivery state produces a
@@ -295,7 +323,9 @@ it can change ownership.
 
 Add the sanctioned session command that records the disposition and invokes
 only the safe narrow, scoped-handoff, or scoped-retirement operations. Prove
-idempotence and dirty-work preservation. If scoped retirement is missing,
+idempotence and dirty-work preservation. Before any mutation, atomically rebind
+the diagnostic envelope to canonical claim-registry and repository bytes and
+require the recomputed queue and disposition IDs to match. If scoped retirement is missing,
 implement it here; the unrelated-root fixture must remain active.
 
 ### Slice 4 — Installed-consumer integration

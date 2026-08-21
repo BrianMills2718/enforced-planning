@@ -886,6 +886,36 @@ def test_cross_session_resume_transfers_selected_outcome_without_reset(
     assert predecessor_runtime.value.code == "prewrite_claim_identity_mismatch"
 
 
+def test_legacy_claim_only_resume_reproduces_selected_tracker_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The pre-Plan-118 claim-only identity change strands selected state."""
+
+    _selected, repo, worktree, _claims_dir, claim_path, _scenario_path = _select(
+        tmp_path,
+        monkeypatch,
+    )
+    successor_session = "codex:legacy-claim-only-successor"
+    claim = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    claim["session_id"] = successor_session
+    claim_path.write_text(yaml.safe_dump(claim, sort_keys=False), encoding="utf-8")
+
+    with pytest.raises(OutcomeSelectionError) as caught:
+        resolve_selected_outcome_for_prewrite(
+            agent="codex",
+            project="enforced-planning",
+            scope="plan117-test",
+            session_id=successor_session,
+            repo_root=str(repo),
+            worktree_path=str(worktree),
+            branch="plan117-test",
+            claim_source_file=str(claim_path),
+            target_path=TARGET,
+        )
+    assert caught.value.code == "tracker_claim_mismatch"
+
+
 def test_cross_session_resume_restores_exact_preflight_state_when_tracker_transfer_fails(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

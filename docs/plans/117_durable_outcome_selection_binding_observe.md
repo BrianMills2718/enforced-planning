@@ -26,12 +26,18 @@ failure. The outcome decision is useful, but continuation identity is still
 caller-selected. A concurrent owner audit also reproduced two plan-named live
 lanes whose notes cite Plans #40/#97 while both canonical claims expose
 `plan_ref: null` and both trackers retain `UNPLANNED`; a selected outcome must
-not silently legitimize that authority mismatch.
+not silently legitimize that authority mismatch. A second reproduction found
+the forcing rule: any non-null `plan_ref`, including `goal:<id>`, currently
+requires a work graph and unit before a write claim can exist. Sequential goal
+lanes therefore split into a goal-bound root and an `UNPLANNED` child at the
+actual write boundary.
 
 **Target:** Let one exact live claimed session select one immutable outcome
 scenario into its existing linked session tracker. A new explicit
 execution-authority reference distinguishes a canonical planned lane from a
-genuinely unplanned `goal:<outcome-id>` lane. A new explicit
+genuinely unplanned `goal:<outcome-id>` lane. Goal-bound sequential write
+claims retain that ref without manufacturing a work graph; numbered plans keep
+the existing graph+unit requirement. A new explicit
 `--outcome-selected` pre-write option resolves that stored choice through the
 ordinary receipt's exact claim source, validates session/worktree/branch and
 scenario digests, and appends the existing observe-only outcome decision with
@@ -107,6 +113,10 @@ blocking, installed, or fleet-wide.
   read-only inspection of the active DIGIMON Plan #40 and DoDAF Plan #97 claims
   — both plan-named lanes currently expose null canonical plan refs and
   `UNPLANNED` tracker refs despite plan-authority notes.
+- Coordination message `msg_f82176604a3ac58cb5d22bc9c7d1bc71` — a fresh
+  owner lane reproduced that `goal:<id>` plus write ownership is rejected as
+  plan-bound unless it manufactures a work graph, forcing the actual child
+  write claim back to `UNPLANNED`.
 
 ## Research
 
@@ -121,6 +131,7 @@ decide how this exact claim and tracker must bind.
 |---|---|---|
 | Store selection in the existing claim-linked session tracker | The tracker is already the richer per-session authority and is linked from the exact live claim. This satisfies the approved lineage without another registry. | Adopted. |
 | Add scenario or outcome fields to the fast projection | It would change the dependency-light ordinary boundary before selection ownership is proven. The ordinary receipt already exposes the exact claim source needed for a lazy selected lookup. | Rejected for this pilot. |
+| Treat every non-null `plan_ref` as graph-coordinated execution | This currently rejects simple `goal:<id>` write ownership and causes the real write claim to lose its goal. Numbered plans have a graph consumer; explicit outcome goals do not. | Narrow to numbered-plan identities while retaining graph+unit validation for those plans. |
 | Continue accepting `--outcome-scenario` on every write | Plan #116 proved evaluation but leaves the deciding agent free to omit or switch the scenario. | Retained only as backward-compatible explicit observation, not the selected path. |
 | Automatically infer an outcome from plans or repository names | The history calibration shows that plans and successor names can launder unchanged outcomes. No representative semantic selector exists. | Deferred. |
 | Block writes immediately when selection is missing or denied | Representative false-block evidence and supported-flow calibration do not exist. | Deferred. |
@@ -163,25 +174,29 @@ needed for this deterministic binding slice.
    accepts only exact `goal:<scenario-outcome-id>`. A plan-shaped authority
    against unplanned claim state fails visibly rather than being inferred from
    branch names, prose, or notes.
-4. `OutcomeSelectionBindingV1` retains the execution authority, stable
+4. Canonical write-claim creation treats exact `goal:<id>` as sequential
+   outcome authority, not a numbered plan. It preserves the goal ref without a
+   work graph. Numbered `project#N`/`Plan #N` authorities continue to require
+   canonical graph+unit readiness; arbitrary descriptive refs gain no bypass.
+5. `OutcomeSelectionBindingV1` retains the execution authority, stable
    claim-identity digest,
    tracker path, scenario path/file/scenario/contract/lease digests, outcome and
    predecessor lineage, target, initial decision, and selection timestamp.
-5. Stable claim identity includes agent, project, scope, session ID, repository,
+6. Stable claim identity includes agent, project, scope, session ID, repository,
    worktree, branch, tracker, and claim source. Mutable heartbeat/expiry fields
    do not invalidate an otherwise identical session.
-6. Selection is create-once: the same binding is idempotent; a different
+7. Selection is create-once: the same binding is idempotent; a different
    scenario or identity cannot replace it through the selection command.
-7. Tracker reads and writes use one sibling lock and same-filesystem atomic
+8. Tracker reads and writes use one sibling lock and same-filesystem atomic
    replacement. Existing heartbeat/resume updates preserve the selection.
-8. `--outcome-selected` and `--outcome-scenario` are mutually exclusive. The
+9. `--outcome-selected` and `--outcome-scenario` are mutually exclusive. The
    selected path derives its scenario only from the exact tracker binding.
-9. No-option behavior and the existing explicit scenario behavior remain
+10. No-option behavior and the existing explicit scenario behavior remain
    compatible. The ordinary decision runs and records first and remains the
    only authority controlling output and exit status.
-10. Selected success receipts retain the selection-binding digest and tracker
+11. Selected success receipts retain the selection-binding digest and tracker
    reference. Expected binding failures append typed visible observations.
-11. The pilot neither performs the write nor claims automatic selection,
+12. The pilot neither performs the write nor claims automatic selection,
     mutable lease renewal, hard denial, installation, shell coverage, colleague
     use, or fleet adoption.
 
@@ -198,6 +213,8 @@ evidence must include one real Plan #117 claimed session, not only unit tests.
 In scope:
 
 - one strict outcome-selection binding and exact-claim resolver;
+- one narrow claim-validation distinction between exact goal refs and numbered
+  plan refs, preserving graph+unit enforcement for numbered plans;
 - create-once storage in the existing linked session tracker;
 - atomic/locked tracker writes that preserve unrelated fields;
 - one explicit selection subcommand and one selected pre-write flag;
@@ -221,12 +238,14 @@ Not in scope:
 ## Files Affected
 
 - `enforced_planning/outcome_selection.py` (create)
+- `enforced_planning/coordination_claims.py` (update)
 - `enforced_planning/session_contracts.py` (update)
 - `enforced_planning/session_lifecycle.py` (update)
 - `enforced_planning/outcome_prewrite_observation.py` (update)
 - `scripts/outcome_continuation.py` (update)
 - `scripts/prewrite_claim_gate.py` (update)
 - `tests/test_outcome_selection.py` (create)
+- `tests/test_check_coordination_claims.py` (update)
 - `tests/test_outcome_prewrite_observation.py` (update)
 - `tests/test_session_contracts.py` (update)
 - `examples/owner-real-outcome-observe/plan117-owner-progress.json` (create)
@@ -253,15 +272,17 @@ Not in scope:
 1. Add failing focused tests for strict binding, idempotence, replacement denial,
    exact identity, plan/goal authority, scenario tamper, and tracker-field
    preservation.
-2. Add one locked atomic tracker mutation seam and route existing tracker
+2. Prove an exact `goal:<id>` write claim retains its authority without graph
+   artifacts while numbered plan write claims still fail without graph+unit.
+3. Add one locked atomic tracker mutation seam and route existing tracker
    writers plus selection through it.
-3. Extend the outcome CLI with exact-live-claim selection and the pre-write
+4. Extend the outcome CLI with exact-live-claim selection and the pre-write
    wrapper with mutually exclusive selected observation.
-4. Prove unchanged no-option/explicit behavior, selected both signs, stale
+5. Prove unchanged no-option/explicit behavior, selected both signs, stale
    session/branch/worktree failures, and ordinary decision/exit preservation.
-5. Execute and retain one real Plan #117 claimed-session selection and pre-write
+6. Execute and retain one real Plan #117 claimed-session selection and pre-write
    observation; retain the isolated circular negative control.
-6. Reconcile evidence, plan, graph, index, and roadmap without promotion.
+7. Reconcile evidence, plan, graph, index, and roadmap without promotion.
 
 ## Required Tests
 
@@ -270,6 +291,7 @@ Not in scope:
 | strict selection and create-once idempotence | the same session can silently switch outcomes |
 | exact claim/tracker/session/worktree/branch binding | stale or foreign state can authorize observation |
 | planned and explicit-goal authority binding | a plan-named session silently degrades to `UNPLANNED`, or every goal is forced to have a numbered plan |
+| goal-ref write claim without graph plus numbered-plan negative control | simple sequential outcome ownership is forced into an `UNPLANNED` child, or plan execution bypasses graph readiness |
 | scenario file and typed-content digest binding | selected authority changes in place |
 | atomic tracker update and heartbeat preservation | concurrent/lifecycle writes erase or truncate selection |
 | selected positive and circular negative paths | the durable path cannot discriminate progress from motion |
@@ -291,6 +313,9 @@ Not in scope:
   claim, tracker, and outcome selection; a plan authority against null or
   `UNPLANNED` claim state fails loud, while exact `goal:<outcome-id>` remains a
   valid authority for genuinely unplanned work.
+- [ ] An exact `goal:<id>` write claim preserves that ref in claim and tracker
+  without a manufactured work graph, while a numbered plan write claim remains
+  rejected unless its canonical graph and unit are present.
 - [ ] Tracker creation/update/selection writes are locked and atomic, and a
   normal heartbeat/resume-style update preserves `outcome_selection`.
 - [ ] `--outcome-selected` derives the scenario only from exact live session
@@ -316,6 +341,7 @@ Not in scope:
 | heartbeat or claim refresh invalidates stable identity | remove mutable claim fields from the identity digest only after proving exact session identity remains intact |
 | a different selection can replace the first | reject replacement and require a separately reviewed restart/change path |
 | planned authority is null/`UNPLANNED` | fail selection with the exact mismatch; use a plan-bound claim entrypoint or explicitly adopt a genuine `goal:<outcome-id>` authority rather than inferring from prose |
+| goal-bound writes still require a graph | do not accept the split root/`UNPLANNED` child workaround; narrow only the numbered-plan predicate and retain its existing negative control |
 | selected lookup needs projection changes | stop the unit and plan that prerequisite instead of widening the fast gate |
 | ordinary decision or exit changes | revert selected wrapper coupling; retain standalone selection evidence |
 | real selected observation cannot bind exactly | retain the mismatch as the result; do not claim durable ownership |
@@ -327,6 +353,8 @@ Not in scope:
 - Bind stable exact-session identity, not mutable heartbeat or cost telemetry.
 - Bind explicit canonical plan authority or exact `goal:<outcome-id>`; never
   infer authority from plan-shaped branch names, goals, notes, or filenames.
+- Require graph+unit for numbered plans, not exact goal refs; do not weaken the
+  graph requirement for actual plan-coordinated execution.
 - Make selection create-once and explicit for this pilot.
 - Extend the existing outcome and pre-write owners; do not create a second gate.
 - Keep ordinary claim admission authoritative and observe-only.

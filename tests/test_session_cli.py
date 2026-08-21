@@ -2103,7 +2103,7 @@ def test_resume_session_rebinds_stale_or_handoff_lane(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Resume should attach a fresh runtime session to the same plan-bound lane."""
+    """Explicit handoff should authorize a fresh runtime on the same plan-bound lane."""
 
     claims_dir = tmp_path / "claims"
     trackers_dir = tmp_path / "sessions"
@@ -2150,6 +2150,124 @@ def test_resume_session_rebinds_stale_or_handoff_lane(
     assert status_payload["sessions"][0]["claim_status"] == "active"
     assert status_payload["sessions"][0]["recovery_action"] == "continue"
     assert tracker_payload["tracker"]["current_phase"] == "fresh runtime resumed"
+    assert prewrite_claim_projection.projection_is_current(claims_dir=claims_dir)
+
+
+@pytest.mark.parametrize("claim_status", ["active", "blocked"])
+def test_resume_session_rejects_different_runtime_for_healthy_live_lane_without_mutation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    claim_status: str,
+) -> None:
+    """A healthy owner must remain authoritative until an explicit recovery condition exists."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    worktree = tmp_path / "worktree"
+    worktree.mkdir()
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    monkeypatch.delenv("CODEX_THREAD_ID", raising=False)
+
+    started = session_lifecycle.start_session(
+        agent="codex",
+        project="enforced-planning",
+        scope="healthy-live-lane",
+        intent="preserve exact runtime ownership",
+        repo_root="~/projects/enforced-planning",
+        worktree_path=str(worktree),
+        branch="healthy-live-lane",
+        broader_goal="Reliable Runtime Handoffs",
+        current_phase="healthy owner is still working",
+        plan_ref="Plan #37",
+        session_id="codex:owning-runtime",
+        tracker_dir=trackers_dir,
+    )
+    claim_path = claims_dir / "codex_enforced-planning_healthy-live-lane.yaml"
+    if claim_status != "active":
+        claim_payload = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+        claim_payload["status"] = claim_status
+        claim_path.write_text(yaml.safe_dump(claim_payload, sort_keys=False), encoding="utf-8")
+        prewrite_claim_projection.write_projection(claims_dir=claims_dir)
+    projection_path = prewrite_claim_projection.projection_path_for(claims_dir)
+    tracker_path = Path(started["tracker_path"])
+    claim_before = claim_path.read_bytes()
+    projection_before = projection_path.read_bytes()
+    tracker_before = tracker_path.read_bytes()
+
+    with pytest.raises(ValueError, match="still owned by runtime session codex:owning-runtime"):
+        session_lifecycle.resume_session(
+            agent="codex",
+            project="enforced-planning",
+            scope="healthy-live-lane",
+            worktree_path=str(worktree),
+            branch="healthy-live-lane",
+            current_phase="unauthorized takeover",
+            session_id="codex:different-runtime",
+        )
+
+    assert claim_path.read_bytes() == claim_before
+    assert projection_path.read_bytes() == projection_before
+    assert tracker_path.read_bytes() == tracker_before
+
+    resumed = session_lifecycle.resume_session(
+        agent="codex",
+        project="enforced-planning",
+        scope="healthy-live-lane",
+        worktree_path=str(worktree),
+        branch="healthy-live-lane",
+        current_phase="owning runtime refreshed",
+        session_id="codex:owning-runtime",
+    )
+    assert resumed["action"] == "resumed"
+    assert resumed["session_id"] == "codex:owning-runtime"
+
+
+def test_resume_session_rebinds_lane_with_stale_heartbeat(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A genuinely stale heartbeat should remain an explicit crash-recovery path."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    worktree = tmp_path / "worktree"
+    worktree.mkdir()
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    monkeypatch.delenv("CODEX_THREAD_ID", raising=False)
+
+    session_lifecycle.start_session(
+        agent="codex",
+        project="enforced-planning",
+        scope="stale-heartbeat-lane",
+        intent="recover a crashed runtime",
+        repo_root="~/projects/enforced-planning",
+        worktree_path=str(worktree),
+        branch="stale-heartbeat-lane",
+        broader_goal="Reliable Runtime Handoffs",
+        current_phase="runtime stopped heartbeating",
+        plan_ref="Plan #37",
+        session_id="codex:stale-runtime",
+        tracker_dir=trackers_dir,
+    )
+    claim_path = claims_dir / "codex_enforced-planning_stale-heartbeat-lane.yaml"
+    claim_payload = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    claim_payload["heartbeat_at"] = "2000-01-01T00:00:00+00:00"
+    claim_path.write_text(yaml.safe_dump(claim_payload, sort_keys=False), encoding="utf-8")
+
+    payload = session_lifecycle.resume_session(
+        agent="codex",
+        project="enforced-planning",
+        scope="stale-heartbeat-lane",
+        worktree_path=str(worktree),
+        branch="stale-heartbeat-lane",
+        current_phase="crash recovery",
+        session_id="codex:recovery-runtime",
+    )
+    resumed_claim = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+
+    assert payload["action"] == "resumed"
+    assert resumed_claim["session_id"] == "codex:recovery-runtime"
+    assert resumed_claim["status"] == "active"
     assert prewrite_claim_projection.projection_is_current(claims_dir=claims_dir)
 
 

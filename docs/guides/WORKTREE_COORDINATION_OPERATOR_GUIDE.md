@@ -108,7 +108,8 @@ and refresh the pre-write projection in the same locked mutation.
    - `project`
    - `scope`
    - `intent`
-   - `plan_ref`
+   - `plan_ref` (a canonical numbered/qualified plan authority or exact
+     `goal:<outcome-id>` authority)
    - `branch`
    - `worktree_path`
    - `session_id`
@@ -143,8 +144,10 @@ duplicate, or overlapping configuration fails at import rather than silently
 changing closeout semantics.
 
 Mandatory rule: no live session without `plan_ref`, except explicitly marked
-unplanned emergency work. If work resumes in a new runtime, reattach it to the
-existing plan-bound lane instead of silently creating a new one.
+unplanned emergency work. Exact `goal:<outcome-id>` is a real sequential
+outcome authority, not an alias for `UNPLANNED`. If work resumes in a new
+runtime, reattach it to the existing plan- or goal-bound lane instead of
+silently creating a new one.
 
 A runtime session may own one unparented live claim root by default. Claim type
 classifies work and path-conflict behavior; it does not exempt a lane from
@@ -195,7 +198,8 @@ reported merge commit automatically.
 
 ### Work-unit readiness binding
 
-Every new plan-bound claim with write ownership must name its exact canonical work unit:
+Every new numbered or qualified plan-bound claim with write ownership must
+name its exact canonical work unit:
 
 ```bash
 python scripts/meta/check_coordination_claims.py --claim \
@@ -214,6 +218,14 @@ or when any `control_approval_types` entry lacks exactly one non-empty approval
 revision. A successful claim retains `work_graph_sha256`, `work_unit_id`, and
 the exact approval revisions. Existing historical claims remain readable, but
 creating or refreshing a plan-bound claim with write ownership cannot omit this binding.
+
+An exact `goal:<outcome-id>` ref is the narrow exception for one sequential
+outcome lane that has no work-graph consumer. It may own write paths without a
+manufactured graph or unit, and the sanctioned session entrypoint must preserve
+that exact ref on the actual write claim. This exception does not apply to
+`Plan #N`, `project#N`, descriptive strings, or other plan-shaped authorities;
+those still require canonical graph and unit readiness and must not degrade to
+`UNPLANNED` to get a write claim.
 
 Use `SESSION_WORK_GRAPH` and `SESSION_WORK_UNIT_ID` with `make worktree` and
 `make session-start`; these variables propagate the same validation through
@@ -301,6 +313,46 @@ Tracker-only session fields hold restart-safe execution context:
 - `requires_shared_infra_changes`
 - `stop_conditions`
 - `notes`
+- `outcome_selection` when an exact session has explicitly selected one
+  create-once outcome scenario
+
+Tracker creation, heartbeat, resume-style updates, and explicit refreshes use
+the same locked atomic mutation boundary. Once `outcome_selection` exists, a
+refresh preserves it and rejects a change to the bound claim identity instead
+of silently replacing or erasing the choice.
+
+### Durable outcome selection observe pilot
+
+Plan #117 adds an explicit, manual observe-only path for binding one exact live
+session to one immutable outcome scenario:
+
+```bash
+python scripts/outcome_continuation.py select \
+  --scenario examples/owner-real-outcome-observe/plan117-owner-progress.json \
+  --execution-authority enforced-planning#117 \
+  --agent codex --project enforced-planning \
+  --scope plan-117-outcome-selection-binding
+```
+
+The selection command resolves exactly one healthy live claim, validates its
+linked tracker and execution authority, requires the scenario to live inside
+the claimed worktree, and stores one digest-bound selection. Identical replay
+is idempotent. A different scenario, claim/session identity, branch, worktree,
+tracker, authority, target, or modified scenario fails visibly.
+
+An opted-in pre-write observation then resolves only that stored choice:
+
+```bash
+python scripts/prewrite_claim_gate.py \
+  --client codex --mode observe --outcome-selected --json
+```
+
+`--outcome-selected` and `--outcome-scenario` are mutually exclusive. The
+ordinary claim decision is recorded first and remains authoritative; the
+selected outcome appends `would_allow`, `would_deny`, or a typed observation
+failure without performing or blocking the write. This pilot is not automatic
+selection, mutable progress-lease renewal, installed hook activation, or fleet
+enforcement.
 
 Important rule: do not name sessions after the immediate local task. A branch
 like `plan-31-hygiene-gate` is fine for git, but the session name should derive

@@ -804,3 +804,45 @@ def test_retained_plan116_evidence_matches_scenarios_and_correlation_results() -
     assert evidence["execution"]["enforcement_applied"] is False
     assert evidence["ordinary_boundary"]["ordinary_decision_remained_authoritative"] is True
     assert "not outcome-based blocking" in evidence["limitations"][-1]
+
+
+def test_retained_plan117_evidence_matches_selected_scenarios_and_receipts() -> None:
+    """Plan 117 evidence must remain bound to both checked-in scenario signs."""
+
+    evidence = json.loads(
+        (ROOT / "docs" / "evidence" / "plan117_durable_outcome_selection_binding.json").read_text(encoding="utf-8")
+    )
+    scenario_root = ROOT / "examples" / "owner-real-outcome-observe"
+    positive_path = scenario_root / "plan117-owner-progress.json"
+    circular_path = scenario_root / "plan117-circular.json"
+    positive = load_scenario(str(positive_path))
+    circular = load_scenario(str(circular_path))
+    positive_result = evaluate_scenario(positive)
+    circular_result = evaluate_scenario(circular)
+
+    selected = evidence["selection"]
+    retained_positive = evidence["selected_owner_progress_positive"]
+    retained_circular = evidence["isolated_selected_circular_negative"]
+    assert selected["scenario_file_sha256"] == hashlib.sha256(positive_path.read_bytes()).hexdigest()
+    assert selected["scenario_sha256"] == positive_result.scenario_sha256
+    assert selected["outcome_contract_sha256"] == positive_result.outcome_contract_sha256
+    assert selected["lease_sha256"] == positive_result.lease_sha256
+    assert retained_positive["disposition"] == "would_allow"
+    assert retained_positive["reason_code"] == "active_in_scope"
+    assert retained_positive["applied_receipt_sha256s"] == positive_result.applied_receipt_sha256s
+    assert retained_circular["scenario_file_sha256"] == hashlib.sha256(circular_path.read_bytes()).hexdigest()
+    assert retained_circular["scenario_sha256"] == circular_result.scenario_sha256
+    assert retained_circular["outcome_contract_sha256"] == circular_result.outcome_contract_sha256
+    assert retained_circular["lease_sha256"] == circular_result.lease_sha256
+    assert retained_circular["disposition"] == "would_deny"
+    assert retained_circular["reason_code"] == "recovery_required"
+    assert retained_circular["applied_receipt_sha256s"] == circular_result.applied_receipt_sha256s
+    assert positive.contract == circular.contract
+    assert positive.request == circular.request
+    assert evidence["execution"]["candidate_revision"] == "091951aa466d0f6babd91d6ecfb989e967d554da"
+    assert evidence["execution"]["enforcement_applied"] is False
+    assert selected["binding_sha256"] == retained_positive["selection_binding_sha256"]
+    assert datetime.fromisoformat(evidence["ordinary_boundary"]["recorded_at"]) < datetime.fromisoformat(
+        retained_positive["observed_at"]
+    )
+    assert "not outcome-based blocking" in evidence["limitations"][-1]

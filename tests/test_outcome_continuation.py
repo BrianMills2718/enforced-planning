@@ -54,6 +54,24 @@ def _contract() -> OutcomeContractV1:
     )
 
 
+def test_contract_schema_requires_explicit_compatible_portfolio_class() -> None:
+    legacy = _contract()
+
+    classed = legacy.model_copy(
+        update={"schema_version": "1.1.0", "portfolio_class": "maintenance"}
+    )
+    assert OutcomeContractV1.model_validate(classed.model_dump()).portfolio_class == "maintenance"
+
+    with pytest.raises(ValidationError, match="1.0.0 contracts cannot declare portfolio_class"):
+        OutcomeContractV1.model_validate(
+            {**legacy.model_dump(), "portfolio_class": "product"}
+        )
+    with pytest.raises(ValidationError, match="1.1.0 contracts require portfolio_class"):
+        OutcomeContractV1.model_validate(
+            {**legacy.model_dump(), "schema_version": "1.1.0"}
+        )
+
+
 def _evidence(receipt_id: str) -> EvidenceBindingV1:
     return EvidenceBindingV1(
         source_revision="0c6eab42d4ba092391ed5418b62352475b29d7d8",

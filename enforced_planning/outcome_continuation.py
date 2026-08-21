@@ -29,6 +29,7 @@ ProgressKind = Literal[
     "decision_changing_learning",
     "non_outcome",
 ]
+PortfolioClass = Literal["product", "maintenance", "external_obligation"]
 LeaseState = Literal["active", "recovery_required", "stalled", "complete", "parked"]
 OperationKind = Literal[
     "product_write",
@@ -140,11 +141,15 @@ class CanonicalJourneyV1(StrictModel):
 class OutcomeContractV1(StrictModel):
     """Immutable identity, scope, and canonical journey for one outcome lineage."""
 
-    schema_version: Literal["1.0.0"] = "1.0.0"
+    schema_version: Literal["1.0.0", "1.1.0"] = "1.0.0"
     outcome_id: str
     owner_class: str
     project_id: str
     lineage_id: str
+    portfolio_class: PortfolioClass | None = Field(
+        default=None,
+        exclude_if=lambda value: value is None,
+    )
     predecessor_lineage_ids: list[str] = Field(default_factory=list)
     intended_consumer: str = Field(min_length=8)
     outcome: str = Field(min_length=12)
@@ -155,6 +160,10 @@ class OutcomeContractV1(StrictModel):
 
     @model_validator(mode="after")
     def _validate_identity_and_scope(self) -> OutcomeContractV1:
+        if self.schema_version == "1.0.0" and self.portfolio_class is not None:
+            raise ValueError("schema 1.0.0 contracts cannot declare portfolio_class")
+        if self.schema_version == "1.1.0" and self.portfolio_class is None:
+            raise ValueError("schema 1.1.0 contracts require portfolio_class")
         for field_name, value in (
             ("outcome_id", self.outcome_id),
             ("owner_class", self.owner_class),

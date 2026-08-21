@@ -1,0 +1,197 @@
+{
+  "units": [
+    {
+      "schema_version": "1.0",
+      "record_type": "work_unit",
+      "id": "ocop-01-same-payload-observation",
+      "initiative_id": "progress-bound-agent-execution",
+      "goal_id": "correlate-outcome-admission-with-one-real-claimed-write",
+      "design_revision": "project-meta@f6091b6b2f2a5357d0fdbbe88b157435a2ce07fb:outcome-continuation-lease-hard-gate",
+      "spec_revision": "enforced-planning@ce4462fc81071a1cadc135f4a74888b76823050d:plan-116",
+      "title": "Observe both outcome signs on one current claimed-write payload",
+      "class": "integration",
+      "objective": "Lazily extend the existing source pre-write adapter with a typed explicit-scenario observer, then retain would_allow and would_deny correlations for one byte-identical current Plan 116 payload without changing ordinary admission.",
+      "profile": "small",
+      "execution_class": "independently_executable",
+      "claimability": "ready_for_execution",
+      "authorization_mode": "registry_claim",
+      "scope": {
+        "included": [
+          "Strict typed outcome pre-write observation and append-only writer",
+          "Lazy explicit-scenario option in the existing source adapter",
+          "Default-path, target-binding, claim-precedence, and non-blocking focused tests",
+          "Active and recovery scenarios sharing one exact Plan 116 target",
+          "Current-claim same-payload manual replay and retained both-sign evidence",
+          "Plan 116 plan, graph, index, and roadmap reconciliation"
+        ],
+        "excluded": [
+          "Claim-schema mutation, outcome binder, or projection fields for outcome state",
+          "Durable lease storage or automatic progress classification",
+          "Hook wiring, native activation, installer, fleet, colleague, or external-user propagation",
+          "Outcome blocking, shell coverage, break glass, deployment, or release controls",
+          "Spend, subscription, or elapsed-time gates"
+        ]
+      },
+      "inputs": [
+        {
+          "kind": "approved_policy",
+          "id": "project-meta/policy/proposals/2026-08-20-outcome-continuation-lease-hard-gate.yaml",
+          "revision": "f6091b6b2f2a5357d0fdbbe88b157435a2ce07fb"
+        },
+        {
+          "kind": "bounded_plan",
+          "id": "docs/plans/116_outcome_prewrite_observation.md",
+          "revision": "ce4462fc81071a1cadc135f4a74888b76823050d"
+        },
+        {
+          "kind": "owner_observation",
+          "id": "docs/evidence/plan115_owner_real_outcome_observation.json",
+          "revision": "2472176c952151771225aa9546aba8a851e21a65"
+        },
+        {
+          "kind": "existing_capability",
+          "id": "enforced_planning/outcome_continuation.py",
+          "revision": "80fa9dbcef74d0d85b2a15168f0345e3ab3a4129"
+        },
+        {
+          "kind": "existing_capability",
+          "id": "scripts/prewrite_claim_gate.py",
+          "revision": "a0e9ca1af985be26d49318107146bd4861790505"
+        }
+      ],
+      "outputs": [
+        "Typed content-free OutcomePreWriteObservationV1 receipts",
+        "Lazy opt-in source adapter correlation with unchanged default behavior",
+        "Active and recovery immutable Plan 116 scenarios",
+        "Two ordinary allow receipts correlated to would_allow and would_deny outcome effects",
+        "Revision-bound manual replay evidence and explicit promotion limits"
+      ],
+      "dependencies": [],
+      "conflict_surfaces": [
+        {
+          "kind": "repository_path",
+          "target": "enforced_planning/outcome_prewrite_observe.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-116-outcome-prewrite-observe"
+        },
+        {
+          "kind": "repository_path",
+          "target": "scripts/prewrite_claim_gate.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-116-outcome-prewrite-observe"
+        },
+        {
+          "kind": "repository_path",
+          "target": "tests/test_outcome_prewrite_observe.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-116-outcome-prewrite-observe"
+        },
+        {
+          "kind": "repository_path",
+          "target": "examples/owner-real-outcome-observe/plan116-prewrite-active.json",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-116-outcome-prewrite-observe"
+        },
+        {
+          "kind": "repository_path",
+          "target": "examples/owner-real-outcome-observe/plan116-prewrite-recovery.json",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-116-outcome-prewrite-observe"
+        },
+        {
+          "kind": "repository_path",
+          "target": "docs/evidence/plan116_outcome_prewrite_observations.json",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-116-outcome-prewrite-observe"
+        },
+        {
+          "kind": "repository_path",
+          "target": "docs/plans/116_outcome_prewrite_observation.md",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-116-outcome-prewrite-observe"
+        },
+        {
+          "kind": "repository_path",
+          "target": "docs/plans/116_outcome_prewrite_observation_work_graph.json",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-116-outcome-prewrite-observe"
+        },
+        {
+          "kind": "repository_path",
+          "target": "docs/plans/CLAUDE.md",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-116-outcome-prewrite-observe"
+        },
+        {
+          "kind": "repository_path",
+          "target": "ROADMAP.md",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-116-outcome-prewrite-observe"
+        }
+      ],
+      "acceptance": [
+        {
+          "id": "OCOP01-A1",
+          "criterion": "With no outcome option, the existing adapter follows its prior import, output, ordinary-receipt, and exit path and creates no outcome ledger.",
+          "evidence_required": [
+            "Focused lazy/default-path regression",
+            "Source adapter diff and ordinary decision assertion"
+          ],
+          "negative_control": "Importing or running the default adapter does not require the outcome observer or Pydantic evaluator."
+        },
+        {
+          "id": "OCOP01-A2",
+          "criterion": "The same current claimed-write payload retains ordinary allow in both runs and correlates would_allow active_in_scope and would_deny recovery_required observations to their exact ordinary receipts.",
+          "evidence_required": [
+            "Active/recovery both-sign focused tests",
+            "Current-session manual adapter replay artifact"
+          ],
+          "negative_control": "The recovery outcome cannot change the ordinary adapter decision or exit code."
+        },
+        {
+          "id": "OCOP01-A3",
+          "criterion": "Target mismatch, scenario failure, and ordinary claim denial are visible without being mislabeled or applied as outcome enforcement.",
+          "evidence_required": [
+            "Mismatch and claim-precedence tests",
+            "Observation records with enforcement_applied=false"
+          ],
+          "negative_control": "An ordinary claim denial records not_evaluated_claim_denied rather than would_deny."
+        },
+        {
+          "id": "OCOP01-A4",
+          "criterion": "Evidence is truthfully limited to manual source-adapter replay and licenses no claim mutation, native delivery, installer, shell, enforcement, colleague, or fleet claim.",
+          "evidence_required": [
+            "Revision-bound Plan 116 evidence artifact",
+            "Truthful Plan 116 and roadmap status"
+          ],
+          "negative_control": "No hook or installer file is in the unit conflict surface."
+        }
+      ],
+      "readiness": {
+        "status": "ready",
+        "required_approval_types": [],
+        "approvals": [],
+        "failed_guards": []
+      },
+      "claim_policy": {
+        "eligibility_rule": "One exact live Plan 116 claim owns only the observer, existing adapter, focused test, two scenarios, evidence, plan, graph, index, and roadmap paths.",
+        "lease_policy": "renewable",
+        "lease_duration_minutes": 1440,
+        "max_active_per_claimant": 1,
+        "named_owner_id": null
+      },
+      "status": "ready",
+      "record_version": 1
+    }
+  ]
+}

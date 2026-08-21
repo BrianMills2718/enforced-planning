@@ -94,6 +94,7 @@ See `ROADMAP.md` for the full phase map and recommended priority order.
 | 115 | Owner-Real Outcome Continuation Observation (`115_owner_real_outcome_observe.md`) | Critical | ✅ Complete | bind merged owner progress to the existing CLI before selecting a runtime seam |
 | 116 | Pre-Write Outcome Correlation Observe Pilot (`116_prewrite_outcome_correlation_observe.md`) | Critical | ✅ Complete | correlate one immutable continuation scenario with the ordinary claimed-write receipt without changing admission |
 | 117 | Durable Outcome Selection And Exact-Session Binding Observe Pilot (`117_durable_outcome_selection_binding_observe.md`) | Critical | ✅ Complete | exact-session selection proven; representative normal-project calibration and any blocking remain downstream |
+| 118 | Causal Restart Lineage And Restart-Safe Session Handoff Observe (`118_causal_restart_lineage_and_session_handoff_observe.md`) | Critical | 🚧 In Progress — ORST-01 accepted; ORST-02 plan-spine closeout ready | same-project restart custody proven observe-only; independent review, owner-class resolution, cross-project successors, and blocking remain downstream |
 
 ## Status Key
 

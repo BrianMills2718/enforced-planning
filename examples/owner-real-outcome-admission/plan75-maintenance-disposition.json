@@ -1,0 +1,11 @@
+{
+  "schema_version": "1.0.0",
+  "record_type": "outcome_portfolio_disposition_request",
+  "disposition_id": "plan-75-maintenance-complete",
+  "requested_at": "2026-08-21T16:55:00.000000Z",
+  "allocation_id": "plan-75-maintenance-allocation",
+  "allocation_sha256": "45b27091600bae090ec5bb55542064398bd2bcfd04b90c15e9343f3545148051",
+  "disposition": "complete",
+  "decision_ref": "enforced-planning#75@b8a05c617dd7f674ff9155dc4cfcf249e1f79aeb",
+  "reason": "Stopping condition met: the regression, unchanged, and legacy-baseline cases are covered by tests/test_check_reachability.py and docs/reference/CONFIG_REFERENCE.md records the product-path ratchet. Releasing the single global maintenance slot so other agents can allocate."
+}

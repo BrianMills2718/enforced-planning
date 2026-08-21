@@ -77,7 +77,7 @@ See `ROADMAP.md` for the full phase map and recommended priority order.
 | 72 | Engineering Control-Plane System Model and Planning Handoff (`72_engineering-control-plane-system-model-and-planning-handoff.md`) | High | 🚧 In Progress | explicit roadmap-to-design transport and bounded skill alignment |
 | 73 | Coordination Status Integrity (`73_coordination_status_integrity.md`) | Critical | ✅ Complete | trustworthy continuous multi-agent execution status |
 | 74 | Plan-DAG-Governed Worktree Lifecycle (`74_plan-dag-governed-worktree-lifecycle.md`) | Critical | ✅ Complete | ready-plan start gating and plan-owned lane closeout |
-| 75 | Reachability Product-Path Ratchet (`75_reachability_product_share_ratchet.md`) | Medium | 📋 Planned | `--check` fails when product_share regresses |
+| 75 | Reachability Product-Path Ratchet (`75_reachability_product_share_ratchet.md`) | Medium | ✅ Complete | — |
 | 100 | Native Codex Mailbox Lifecycle Delivery (`100_codex_mailbox_lifecycle_delivery.md`) | Critical | ✅ Complete | reliable request observation without human relay |
 | 101 | Landscape And Prior-Art Planning Contract (`101_landscape_and_prior_art_contract.md`) | High | ✅ Complete | reusable research-before-build contract and report-only validation |
 | 102 | Plan Status Projection Repair (`102_plan_status_projection.md`) | Low | ✅ Complete | truthful cross-repo status metadata |

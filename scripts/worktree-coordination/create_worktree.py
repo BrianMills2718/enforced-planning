@@ -9,7 +9,9 @@ status, classifies stronger split-brain-like symptoms, and optionally cleans up
 the failed worktree instead of leaving an ambiguous checkout in circulation.
 
 When strict coordination enforcement is enabled, the wrapper also requires an
-active scoped write claim before the worktree is created.
+active scoped claim with explicit write authority before the worktree is
+created. Narrow ``write`` claims and bounded ``program`` claims with exact
+``write_paths`` both carry that authority.
 """
 
 from __future__ import annotations
@@ -25,6 +27,7 @@ from typing import Any
 
 
 DEFAULT_WORKTREE_EXCLUDE = "/worktrees/"
+WRITE_AUTHORIZING_CLAIM_TYPES = frozenset({"write", "program"})
 
 
 @dataclass(frozen=True)
@@ -427,7 +430,7 @@ def verify_scoped_write_claim(
     claim_write_paths: list[str],
     claims_dir: Path | None,
 ) -> tuple[bool, str]:
-    """Require a matching active write claim and reject conflicting claims."""
+    """Require matching explicit write authority and reject conflicting claims."""
     if not claim_agent:
         return False, "Scoped write-claim enforcement requires --claim-agent."
     if not claim_write_paths:
@@ -455,7 +458,7 @@ def verify_scoped_write_claim(
         claim
         for claim in active_claims
         if claim.agent == claim_agent
-        and claim.claim_type == "write"
+        and claim.claim_type in WRITE_AUTHORIZING_CLAIM_TYPES
         and project_name in claim.projects
         and _write_paths_are_covered(
             claims_module=claims_module,
@@ -487,7 +490,11 @@ def verify_scoped_write_claim(
             f"issues=[{', '.join(issues)}]. Refresh the claim with explicit live ownership metadata first.",
         )
 
-    check_result = claims_module.evaluate_claim(candidate, active_claims=active_claims)
+    matched_claim = matching_claims[0]
+    check_result = claims_module.evaluate_claim(
+        candidate,
+        active_claims=[claim for claim in active_claims if claim is not matched_claim],
+    )
     hard_conflicts = check_result.hard_conflicts
     if hard_conflicts:
         formatted = "; ".join(
@@ -500,8 +507,11 @@ def verify_scoped_write_claim(
             f"{formatted}",
         )
 
-    matched_scope = matching_claims[0].scope
-    return True, f"Scoped write claim verified via {claim_agent}:{project_name}:{matched_scope}."
+    message = (
+        f"Scoped write claim verified via {claim_agent}:{project_name}:{matched_claim.scope} "
+        f"({matched_claim.claim_type} claim)."
+    )
+    return True, message
 
 
 def create_worktree(

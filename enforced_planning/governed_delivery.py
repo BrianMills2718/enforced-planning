@@ -1,9 +1,10 @@
-"""Prepare, control, and independently verify one governed coding task.
+"""Prepare, control, and independently verify configured governed coding tasks.
 
-This is the Plan 113 authentic vertical.  It deliberately composes the
-existing clean-room and governed-repo installer instead of implementing an
-agent runtime.  A worker may change the disposable consumer, but only this
-module's executed checks can produce a passing receipt.
+Plans 113 and 62 deliberately compose the existing clean-room and governed-repo
+installer instead of implementing an agent runtime. A validated consumer
+profile selects a bounded source adapter and behavioral contract. A worker may
+change the disposable consumer, but only this module's executed checks can
+produce a passing receipt.
 """
 
 from __future__ import annotations
@@ -1202,7 +1203,7 @@ def verify_governed_task(
         "operation": "verify",
         "profile_id": baseline_contract.profile_id,
         "profile_sha256": _profile_sha256(baseline_contract),
-        "task_id": contract.task_id,
+        "task_id": baseline_contract.task_id,
         "task_root": ".",
         "framework_revision": _executing_framework_revision(),
         "baseline_revision": _git(root, "rev-parse", BASELINE_TAG),

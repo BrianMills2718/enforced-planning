@@ -509,7 +509,7 @@ def test_verifier_rejects_profile_drift_from_baseline(tmp_path: Path) -> None:
     _complete_status_task(task_root)
     contract_path = task_root / "governed-task.json"
     contract = json.loads(contract_path.read_text(encoding="utf-8"))
-    contract["title"] = "Worker-rewritten task contract"
+    contract["task_id"] = "worker-rewritten-task"
     contract_path.write_text(json.dumps(contract, indent=2) + "\n", encoding="utf-8")
     _git(task_root, "add", "governed-task.json")
     _git(task_root, "commit", "-m", "[Plan #1] Rewrite task contract")
@@ -517,6 +517,7 @@ def test_verifier_rejects_profile_drift_from_baseline(tmp_path: Path) -> None:
     receipt = verify_governed_task(task_root, agent_session_id="codex:status-session")
 
     assert receipt.verdict == "fail"
+    assert receipt.task_id == "status-cli-add-json"
     assert _check(receipt, "profile_contract_binding").verdict == "fail"
 
 

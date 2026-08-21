@@ -29,6 +29,8 @@ DEFAULT_DOC_AUTHORITY_CONFIG = Path("scripts/doc_authority.yaml")
 AUTHORITY_OBLIGATIONS_DIR = Path.home() / ".claude" / "coordination" / "authority_obligations"
 STATUS_RE = re.compile(r"\*\*Status:\*\*\s*(.+?)(?:\n|$)")
 PLAN_NUMBER_RE = re.compile(r"^(\d+)_")
+PLAN_INDEX_ARTIFACT_RE = re.compile(r"`([^`]+\.md)`")
+PLAN_STATUS_EMOJIS = ("✅", "🚧", "📋", "⏸️", "❌", "🟡")
 
 
 @dataclass(frozen=True)
@@ -211,8 +213,30 @@ def _severity_rank(value: str) -> int:
     return {"info": 0, "warn": 1, "fail": 2}.get(value, 2)
 
 
+def _normalize_plan_status(raw_status: str) -> str:
+    """Return the stable status marker used by plan docs and their index."""
+
+    for emoji in PLAN_STATUS_EMOJIS:
+        if emoji in raw_status:
+            return emoji
+    lowered = raw_status.lower()
+    if "progress" in lowered:
+        return "🚧"
+    if "complete" in lowered:
+        return "✅"
+    if "partial" in lowered or "proposed" in lowered:
+        return "🟡"
+    if "planned" in lowered:
+        return "📋"
+    if "blocked" in lowered:
+        return "⏸️"
+    if "needs plan" in lowered:
+        return "❌"
+    return raw_status
+
+
 def _parse_plan_doc_status(plan_path: Path) -> tuple[str, str] | None:
-    """Return one plan number plus normalized status emoji."""
+    """Return one plan number plus normalized status marker."""
 
     match = PLAN_NUMBER_RE.match(plan_path.name)
     if not match:
@@ -221,26 +245,11 @@ def _parse_plan_doc_status(plan_path: Path) -> tuple[str, str] | None:
     status_match = STATUS_RE.search(plan_path.read_text(encoding="utf-8"))
     if not status_match:
         return None
-    raw_status = status_match.group(1).strip()
-    for emoji in ("✅", "🚧", "📋", "⏸️", "❌"):
-        if emoji in raw_status:
-            return plan_number, emoji
-    lowered = raw_status.lower()
-    if "complete" in lowered:
-        return plan_number, "✅"
-    if "progress" in lowered:
-        return plan_number, "🚧"
-    if "planned" in lowered:
-        return plan_number, "📋"
-    if "blocked" in lowered:
-        return plan_number, "⏸️"
-    if "needs plan" in lowered:
-        return plan_number, "❌"
-    return plan_number, raw_status
+    return plan_number, _normalize_plan_status(status_match.group(1).strip())
 
 
 def _parse_plan_index(index_path: Path) -> dict[str, str]:
-    """Return plan-number to status-emoji mapping from the plan index table."""
+    """Return artifact-or-number to status-marker mapping from the plan index."""
 
     statuses: dict[str, str] = {}
     for line in index_path.read_text(encoding="utf-8").splitlines():
@@ -250,13 +259,14 @@ def _parse_plan_index(index_path: Path) -> dict[str, str]:
         if len(parts) < 4:
             continue
         plan_text = parts[0]
-        if not plan_text.isdigit():
-            continue
         status_cell = parts[3]
-        for emoji in ("✅", "🚧", "📋", "⏸️", "❌"):
-            if emoji in status_cell:
-                statuses[plan_text] = emoji
-                break
+        status = _normalize_plan_status(status_cell)
+        if status == status_cell and status not in PLAN_STATUS_EMOJIS:
+            continue
+        for artifact in PLAN_INDEX_ARTIFACT_RE.findall(parts[1]):
+            statuses[Path(artifact).name] = status
+        if plan_text.isdigit():
+            statuses.setdefault(str(int(plan_text)), status)
     return statuses
 
 
@@ -708,7 +718,7 @@ def _owner_claims_for_surface(project: str, authority_surface: str) -> list[coor
     claims = coordination_claims.check_claims(project)
     owners: list[coordination_claims.ClaimRecord] = []
     for claim in claims:
-        if claim.claim_type != "write":
+        if not claim.write_paths:
             continue
         if any(_paths_overlap(authority_surface, write_path) for write_path in claim.write_paths):
             owners.append(claim)
@@ -760,28 +770,29 @@ def _issue(
 def _validate_plan_index_rule(repo_root: Path, rule: AuthorityRule) -> list[AuthorityIssue]:
     """Validate one indexed plan authority surface."""
 
-    canonical_repo_root = resolve_canonical_repo_root(repo_root)
-    authority_surface_path = canonical_repo_root / rule.authority_surface
+    candidate_repo_root = repo_root.resolve()
+    authority_surface_path = candidate_repo_root / rule.authority_surface
     if not authority_surface_path.exists():
         raise ValueError(f"Authority surface does not exist: {authority_surface_path}")
     index_statuses = _parse_plan_index(authority_surface_path)
     issues: list[AuthorityIssue] = []
-    project = _repo_project_name(canonical_repo_root)
-    for plan_path in sorted(canonical_repo_root.glob(rule.source_glob)):
+    project = _repo_project_name(candidate_repo_root)
+    for plan_path in sorted(candidate_repo_root.glob(rule.source_glob)):
         parsed = _parse_plan_doc_status(plan_path)
         if parsed is None:
             continue
         plan_number, file_status = parsed
-        artifact_path = _normalize_repo_path(str(plan_path.relative_to(canonical_repo_root)))
+        artifact_path = _normalize_repo_path(str(plan_path.relative_to(candidate_repo_root)))
+        index_identity = plan_path.name if plan_path.name in index_statuses else plan_number
         issue_code: str | None = None
         issue_message: str | None = None
-        if plan_number not in index_statuses:
+        if index_identity not in index_statuses:
             issue_code = "authority_surface_missing_artifact"
             issue_message = f"{rule.authority_surface} does not index {artifact_path}."
-        elif index_statuses[plan_number] != file_status:
+        elif index_statuses[index_identity] != file_status:
             issue_code = "authority_surface_status_mismatch"
             issue_message = (
-                f"{rule.authority_surface} reports Plan #{plan_number} as {index_statuses[plan_number]} "
+                f"{rule.authority_surface} reports Plan #{plan_number} as {index_statuses[index_identity]} "
                 f"but {artifact_path} is {file_status}."
             )
         if issue_code is None or issue_message is None:
@@ -796,6 +807,7 @@ def _validate_plan_index_rule(repo_root: Path, rule: AuthorityRule) -> list[Auth
         )
         evidence = {
             "plan_number": plan_number,
+            "index_identity": index_identity,
             "authority_surface": rule.authority_surface,
             "artifact_path": artifact_path,
             "owner_scopes": [claim.scope for claim in owners],

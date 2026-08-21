@@ -228,6 +228,18 @@ def _enforce_selected_outcome(
             decision=decide_outcome_admission(request),
         )
     else:
+        targets = decision.get("normalized_target_paths")
+        if (
+            not isinstance(targets, list)
+            or len(targets) != 1
+            or not isinstance(targets[0], str)
+            or not targets[0].strip()
+        ):
+            raise FastPreWriteError(
+                "hard selected outcome admission requires exactly one "
+                "normalized_target_paths entry in the ordinary allow decision"
+            )
+        target = targets[0]
         source_value = decision.get("claim_source_file")
         if not isinstance(source_value, str) or not source_value.strip():
             raise FastPreWriteError(
@@ -243,11 +255,6 @@ def _enforce_selected_outcome(
         claim = coordination_claims.normalize_claim(payload, source_file=str(source))
         if claim is None:
             raise FastPreWriteError("exact outcome claim source cannot be normalized")
-        target = decision.get("normalized_target_path")
-        if not isinstance(target, str) or not target.strip():
-            raise FastPreWriteError(
-                "ordinary allow decision lacks normalized_target_path for outcome admission"
-            )
         result = evaluate_selected_claim_admission(
             claim,
             boundary="prewrite",

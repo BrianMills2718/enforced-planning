@@ -125,7 +125,28 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     """Start the session and expose its initial mailbox state."""
     args = parse_args(argv)
-    payload = session_lifecycle.start_session(**_supported_start_kwargs(args))
+    try:
+        payload = session_lifecycle.start_session(**_supported_start_kwargs(args))
+    except PermissionError as exc:
+        if not (args.outcome_selected or args.outcome_bootstrap_plan is not None):
+            raise
+        if args.json:
+            print(
+                json.dumps(
+                    {
+                        "ok": False,
+                        "error": {
+                            "code": "outcome_admission_denied",
+                            "message": str(exc),
+                        },
+                    },
+                    indent=2,
+                    sort_keys=True,
+                )
+            )
+        else:
+            print(str(exc), file=sys.stderr)
+        return 2
     if args.json:
         print(json.dumps(payload, indent=2, sort_keys=True))
     else:

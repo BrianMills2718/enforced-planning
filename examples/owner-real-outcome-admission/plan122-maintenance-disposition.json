@@ -1,0 +1,11 @@
+{
+  "schema_version": "1.0.0",
+  "record_type": "outcome_portfolio_disposition_request",
+  "disposition_id": "plan-122-maintenance-park",
+  "requested_at": "2026-08-21T09:56:39.832031Z",
+  "allocation_id": "plan-122-maintenance-allocation",
+  "allocation_sha256": "8a63b760df3d31eaee288567c1220fe556f2d62f28f0e4564fe391a4df6bf081",
+  "disposition": "parked",
+  "decision_ref": "enforced-planning#122-authentic-first-consumer-observation",
+  "reason": "Release the global maintenance slot after active heartbeat and pre-write admission both succeeded through public commands."
+}

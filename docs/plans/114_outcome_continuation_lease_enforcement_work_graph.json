@@ -1,0 +1,153 @@
+{
+  "units": [
+    {
+      "schema_version": "1.0",
+      "record_type": "work_unit",
+      "id": "ocl-01-outcome-continuation-vertical",
+      "initiative_id": "agentic-engineering-system",
+      "goal_id": "deny-circular-continuation-without-blocking-real-progress",
+      "design_revision": "b3f704726cf9741665dd204dce2323d40d60fd3a",
+      "spec_revision": "plan-114-v1-owner-approved-2026-08-20",
+      "title": "Execute the outcome-continuation both-sign vertical",
+      "class": "implementation",
+      "objective": "Dogfood one typed continuation boundary in Brian's Enforced Planning system that admits demonstrated behavioral progress and denies circular project-writing continuation despite ordinary approval.",
+      "profile": "poc",
+      "execution_class": "independently_executable",
+      "claimability": "ready_for_execution",
+      "authorization_mode": "registry_claim",
+      "scope": {
+        "included": [
+          "Native typed outcome, progress-receipt, lease, recovery, and admission contracts",
+          "One JSON CLI with positive-progress and circular-continuation scenarios",
+          "Replay, scope, recovery, approval-invariance, and telemetry-invariance checks",
+          "One retained both-sign decision artifact",
+          "Owner-first roadmap and plan-index reconciliation"
+        ],
+        "excluded": [
+          "Session, claim, pre-write, commit, or fleet hook integration",
+          "A new repository or shared-contract extraction",
+          "llm_client integration, feedback automation, or colleague rollout",
+          "Spend, subscription, or elapsed-time authorization gates",
+          "Deployment, publication, or generalized hardening"
+        ]
+      },
+      "inputs": [
+        {
+          "kind": "bounded_plan",
+          "id": "docs/plans/114_outcome_continuation_lease_enforcement.md",
+          "revision": "plan-114-v1-owner-approved-2026-08-20"
+        },
+        {
+          "kind": "accepted_consumer_identity",
+          "id": "docs/evidence/plan62_status_cli_delivery_receipt.json",
+          "revision": "8d0175f50e6b5772f41fe2cc97ca9b5c7e89f2173745f0ac5312d4ecb4fe9346"
+        },
+        {
+          "kind": "approved_policy",
+          "id": "project-meta:outcome-continuation-lease-hard-gate",
+          "revision": "f6091b6b2f2a5357d0fdbbe88b157435a2ce07fb"
+        }
+      ],
+      "outputs": [
+        "Typed outcome-continuation contracts and pure transitions",
+        "Agent-drivable JSON scenario CLI",
+        "Focused both-sign tests and scenario inputs",
+        "One revision-bound positive/negative decision artifact"
+      ],
+      "dependencies": [],
+      "conflict_surfaces": [
+        {
+          "kind": "repository_path",
+          "target": "enforced_planning/outcome_continuation.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "outcome-continuation-vertical"
+        },
+        {
+          "kind": "repository_path",
+          "target": "scripts/outcome_continuation.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "outcome-continuation-vertical"
+        },
+        {
+          "kind": "repository_path",
+          "target": "tests/test_outcome_continuation.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "outcome-continuation-vertical"
+        },
+        {
+          "kind": "repository_path",
+          "target": "examples/cleanroom-ecosystem/outcome-continuation-progress.json",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "outcome-continuation-vertical"
+        },
+        {
+          "kind": "repository_path",
+          "target": "examples/cleanroom-ecosystem/outcome-continuation-circular.json",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "outcome-continuation-vertical"
+        },
+        {
+          "kind": "repository_path",
+          "target": "docs/evidence/plan114_outcome_continuation_decisions.json",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "outcome-continuation-vertical"
+        },
+        {
+          "kind": "repository_path",
+          "target": "docs/plans/114_outcome_continuation_lease_enforcement.md",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "outcome-continuation-vertical"
+        },
+        {
+          "kind": "repository_path",
+          "target": "docs/plans/CLAUDE.md",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "outcome-continuation-vertical"
+        },
+        {
+          "kind": "repository_path",
+          "target": "ROADMAP.md",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "outcome-continuation-vertical"
+        }
+      ],
+      "acceptance": [
+        {
+          "id": "OCL01-A1",
+          "criterion": "From one clean revision, the public CLI allows the stable Plan 62 consumer after a digest-bound behavioral advance and denies another product write after two distinct non-outcome receipts even when ordinary approval is true, with replay, scope, recovery, and cost invariants passing.",
+          "evidence_required": [
+            "Focused outcome-continuation tests",
+            "Positive and circular CLI transcripts",
+            "Revision-bound retained decision artifact",
+            "Canonical merged source revision"
+          ],
+          "negative_control": "Duplicate receipts, mismatched lineage, unbounded recovery, out-of-scope writes, ordinary approval, and cost telemetry remain unable to renew or widen continuation."
+        }
+      ],
+      "readiness": {
+        "status": "ready",
+        "required_approval_types": [],
+        "approvals": [],
+        "failed_guards": []
+      },
+      "claim_policy": {
+        "eligibility_rule": "One exact live claim owns only the Plan 114 module, CLI, focused tests, two scenarios, retained decision artifact, plan/index, and roadmap paths.",
+        "lease_policy": "renewable",
+        "lease_duration_minutes": 1440,
+        "max_active_per_claimant": 1,
+        "named_owner_id": null
+      },
+      "status": "ready",
+      "record_version": 1
+    }
+  ]
+}

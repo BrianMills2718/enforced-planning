@@ -178,6 +178,7 @@ through the CLI, not by model construction or unit tests alone.
 - `examples/cleanroom-ecosystem/outcome-continuation-circular.json` (create)
 - `docs/evidence/plan114_outcome_continuation_decisions.json` (create)
 - `docs/plans/114_outcome_continuation_lease_enforcement.md` (create/update)
+- `docs/plans/114_outcome_continuation_lease_enforcement_work_graph.json` (create)
 - `docs/plans/CLAUDE.md` (update)
 - `ROADMAP.md` (update)
 

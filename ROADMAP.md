@@ -13,10 +13,10 @@ A portable framework where:
 
 ## Current Proof Frontier
 
-The immediate proof frontier is Plan #113: one ordinary feature request must
-complete through the existing neutral clean-room, installed planning authority,
-documentation linkage, explicit course-correction control, and an independent
-verifier. The stable probe is:
+Plan #113 established the first authentic vertical through the neutral
+clean-room, installed planning authority, documentation linkage, explicit
+course-correction control, and an independent verifier. Its stable regression
+probe remains:
 
 ```text
 python src/hello_app.py --name Ada
@@ -25,9 +25,7 @@ python src/hello_app.py --name Ada
 
 The existing default behavior must remain, the README and bounded plan must be
 truthful, only declared paths may change, and worker self-report cannot certify
-completion. This is the first authentic vertical of the wider Agentic
-Engineering System direction; it does not rename this repository or make it
-own model-runtime, shared-data-contract, or feedback-evolution concerns.
+completion.
 
 The first receipt now exists at
 `docs/evidence/plan113_governed_delivery_receipt.json`: framework revision
@@ -36,13 +34,20 @@ The first receipt now exists at
 governed-delivery vertical, not colleague-ready portability or a self-improving
 ecosystem.
 
-Plans #60 and #61 supplied the clean-room and verified-loop substrate. Plan
-#62's remaining independent-consumer breadth and Plan #111's feedback system
-stay valid but do not retroactively expand this claim. The next roadmap choice
-must build from the observed vertical: repeat it with a genuinely independent
-consumer/profile, or repair only a blocker that observation exposes. A new
-top-level repository and generalized adapters still require a demonstrated
-distribution or ownership need.
+Plan #62 now owns the approved repeat: a copied consumer profile selects a
+custom one-project `status-cli` inventory and requests:
+
+```text
+python src/status_cli.py --json
+-> {"project_id":"status-cli","status":"adapter-placeholder"}
+```
+
+This second vertical must reuse the same plan, documentation, progress, scope,
+portability, and independent-verifier controls while binding its different
+profile into the receipt. It may add one observed source adapter, not a plugin
+framework. A new top-level repository, shared `data-contracts` extraction,
+`llm_client` integration, colleague-readiness, and Plan #111 feedback evolution
+remain downstream of demonstrated repeatability and a real ownership seam.
 
 ## Phase Map
 

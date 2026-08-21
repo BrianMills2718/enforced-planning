@@ -1,0 +1,153 @@
+{
+  "units": [
+    {
+      "schema_version": "1.0",
+      "record_type": "work_unit",
+      "id": "une-01-independent-status-profile",
+      "initiative_id": "agentic-engineering-system",
+      "goal_id": "prove-configurable-governed-delivery-repeat",
+      "design_revision": "679c95c5aaf4d6c1d1736157502507ce3d9cd8e8",
+      "spec_revision": "plan-62-independent-profile-user-approved-2026-08-20",
+      "title": "Execute one independent configured status-cli profile",
+      "class": "implementation",
+      "objective": "Generalize the accepted governed-delivery seam around one validated consumer profile, preserve the hello-app vertical, and complete a fresh status-cli --json task with an independently bound receipt.",
+      "profile": "poc",
+      "execution_class": "independently_executable",
+      "claimability": "ready_for_execution",
+      "authorization_mode": "registry_claim",
+      "scope": {
+        "included": [
+          "Validated root-relative governed-task profile",
+          "Default hello-app and manifest-status source adapters",
+          "Generic behavior, plan, documentation, scope, progress, and receipt checks",
+          "One fresh custom-inventory status-cli execution",
+          "Focused negative controls and retained portable receipt"
+        ],
+        "excluded": [
+          "A new top-level repository or arbitrary adapter framework",
+          "Feedback automation or fleet migration",
+          "llm_client or data-contracts integration",
+          "Existing shared-project mutation, deployment, publication, or generalized hardening"
+        ]
+      },
+      "inputs": [
+        {
+          "kind": "bounded_plan",
+          "id": "docs/plans/62_user_neutral_ecosystem_instantiation.md",
+          "revision": "plan-62-independent-profile-user-approved-2026-08-20"
+        },
+        {
+          "kind": "accepted_vertical",
+          "id": "docs/evidence/plan113_governed_delivery_receipt.json",
+          "revision": "b162b168c2117e692b8eae631958ede9e1a5c56849e32fc02f36c10ddb286bcd"
+        }
+      ],
+      "outputs": [
+        "Validated consumer-owned governed-task profile contract",
+        "Generic preparation, checks, CLI, and receipt binding with default compatibility",
+        "Focused both-sign tests and copied status-cli example profile",
+        "One fresh authentic status-cli result and portable verifier receipt"
+      ],
+      "dependencies": [],
+      "conflict_surfaces": [
+        {
+          "kind": "repository_path",
+          "target": "enforced_planning/governed_delivery.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "une-independent-profile"
+        },
+        {
+          "kind": "repository_path",
+          "target": "scripts/governed_delivery.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "une-independent-profile"
+        },
+        {
+          "kind": "repository_path",
+          "target": "tests/test_governed_delivery.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "une-independent-profile"
+        },
+        {
+          "kind": "repository_path",
+          "target": "examples/cleanroom-ecosystem/status-cli-profile.json",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "une-independent-profile"
+        },
+        {
+          "kind": "repository_path",
+          "target": "examples/cleanroom-ecosystem/README.md",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "une-independent-profile"
+        },
+        {
+          "kind": "repository_path",
+          "target": "docs/evidence/plan62_status_cli_delivery_receipt.json",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "une-independent-profile"
+        },
+        {
+          "kind": "repository_path",
+          "target": "docs/plans/62_user_neutral_ecosystem_instantiation.md",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "une-independent-profile"
+        },
+        {
+          "kind": "repository_path",
+          "target": "docs/plans/62_user_neutral_ecosystem_instantiation_work_graph.json",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "une-independent-profile"
+        },
+        {
+          "kind": "repository_path",
+          "target": "docs/plans/CLAUDE.md",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "une-independent-profile"
+        },
+        {
+          "kind": "repository_path",
+          "target": "ROADMAP.md",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "une-independent-profile"
+        }
+      ],
+      "acceptance": [
+        {
+          "id": "UNE01-A1",
+          "criterion": "A copied status-cli profile applied to a custom one-project clean-room completes the exact default and --json behaviors, plan/docs/scope controls, and a receipt bound to the profile and Git revisions while the default hello-app vertical remains green.",
+          "evidence_required": [
+            "Focused profile and governed-delivery tests",
+            "Fresh external-root status-cli transcript and verifier receipt",
+            "Canonical merged source revision"
+          ],
+          "negative_control": "Unsafe profile paths, unknown adapters, profile drift, unchanged repeated failure, undeclared writes, and worker self-report remain unable to produce a passing receipt."
+        }
+      ],
+      "readiness": {
+        "status": "ready",
+        "required_approval_types": [],
+        "approvals": [],
+        "failed_guards": []
+      },
+      "claim_policy": {
+        "eligibility_rule": "One exact live claim owns only the Plan 62 governed-delivery module, CLI, focused tests, example profile/readme, plan/index/roadmap reconciliation, work graph, and receipt paths.",
+        "lease_policy": "renewable",
+        "lease_duration_minutes": 1440,
+        "max_active_per_claimant": 1,
+        "named_owner_id": null
+      },
+      "status": "ready",
+      "record_version": 1
+    }
+  ]
+}

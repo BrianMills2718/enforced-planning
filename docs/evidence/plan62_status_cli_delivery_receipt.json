@@ -1,0 +1,113 @@
+{
+  "schema_version": "1.1.0",
+  "operation": "verify",
+  "profile_id": "status-cli-json",
+  "profile_sha256": "9eeaa7d7a8dc7b9b674db585842ee7cfb90c327e75e222b0c970333cca3aca96",
+  "task_id": "status-cli-add-json",
+  "task_root": ".",
+  "framework_revision": "0c6eab42d4ba092391ed5418b62352475b29d7d8",
+  "baseline_revision": "c9d77fa68ffef727e0a334ade644859642dea766",
+  "result_revision": "83f4d599996af00785f55afe56e0127e46296bda",
+  "agent_session_id": "codex:01a0217c-7716-76a1-8055-9e17f9e4925b",
+  "checks": [
+    {
+      "check_id": "default_behavior",
+      "verdict": "pass",
+      "detail": "exit=0 expected='status-cli: adapter-placeholder' observed='status-cli: adapter-placeholder'",
+      "observed": "status-cli: adapter-placeholder"
+    },
+    {
+      "check_id": "requested_behavior",
+      "verdict": "pass",
+      "detail": "exit=0 expected='{\"project_id\":\"status-cli\",\"status\":\"adapter-placeholder\"}' observed='{\"project_id\":\"status-cli\",\"status\":\"adapter-placeholder\"}'",
+      "observed": "{\"project_id\":\"status-cli\",\"status\":\"adapter-placeholder\"}"
+    },
+    {
+      "check_id": "acceptance_tests",
+      "verdict": "pass",
+      "detail": "exit=0 stderr='..\\n----------------------------------------------------------------------\\nRan 2 tests in 0.052s\\n\\nOK'",
+      "observed": ""
+    },
+    {
+      "check_id": "declared_write_scope",
+      "verdict": "pass",
+      "detail": "all changed paths are declared",
+      "observed": "README.md, docs/plans/01_add_json_status.md, docs/plans/CLAUDE.md, src/status_cli.py"
+    },
+    {
+      "check_id": "bounded_plan_present",
+      "verdict": "pass",
+      "detail": "expected one changed plan, found ['docs/plans/01_add_json_status.md']",
+      "observed": "docs/plans/01_add_json_status.md"
+    },
+    {
+      "check_id": "plan_truthful_complete",
+      "verdict": "pass",
+      "detail": "plan is complete with required sections",
+      "observed": null
+    },
+    {
+      "check_id": "plan_authority",
+      "verdict": "pass",
+      "detail": "CLAUDE.md is the declared authority",
+      "observed": "- `CLAUDE.md`\n- `governed-task.json`"
+    },
+    {
+      "check_id": "plan_index_current",
+      "verdict": "pass",
+      "detail": "plan index names the active plan",
+      "observed": null
+    },
+    {
+      "check_id": "documentation_current_minimal",
+      "verdict": "pass",
+      "detail": "README has one concise runnable requested example",
+      "observed": null
+    },
+    {
+      "check_id": "governed_install",
+      "verdict": "pass",
+      "detail": "canonical governed-repo surfaces are installed",
+      "observed": null
+    },
+    {
+      "check_id": "framework_revision_binding",
+      "verdict": "pass",
+      "detail": "prepared component equals executing verifier revision",
+      "observed": "0c6eab42d4ba092391ed5418b62352475b29d7d8"
+    },
+    {
+      "check_id": "profile_contract_binding",
+      "verdict": "pass",
+      "detail": "current task profile equals the governed baseline profile",
+      "observed": "9eeaa7d7a8dc7b9b674db585842ee7cfb90c327e75e222b0c970333cca3aca96"
+    },
+    {
+      "check_id": "portable_content",
+      "verdict": "pass",
+      "detail": "tracked content contains no maintainer sentinel",
+      "observed": null
+    },
+    {
+      "check_id": "clean_committed_result",
+      "verdict": "pass",
+      "detail": "result is clean and committed",
+      "observed": null
+    },
+    {
+      "check_id": "result_revision_advanced",
+      "verdict": "pass",
+      "detail": "baseline=c9d77fa68ffef727e0a334ade644859642dea766 result=83f4d599996af00785f55afe56e0127e46296bda",
+      "observed": null
+    },
+    {
+      "check_id": "initial_failure_observed",
+      "verdict": "pass",
+      "detail": "first persisted probe failed before implementation",
+      "observed": null
+    }
+  ],
+  "verdict": "pass",
+  "verified_at": "2026-08-21T01:50:25.713850+00:00",
+  "receipt_sha256": "8d0175f50e6b5772f41fe2cc97ca9b5c7e89f2173745f0ac5312d4ecb4fe9346"
+}

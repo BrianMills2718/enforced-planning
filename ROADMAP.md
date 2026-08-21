@@ -34,7 +34,7 @@ The first receipt now exists at
 governed-delivery vertical, not colleague-ready portability or a self-improving
 ecosystem.
 
-Plan #62 now owns the approved repeat: a copied consumer profile selects a
+Plan #62 completed the approved repeat: a copied consumer profile selects a
 custom one-project `status-cli` inventory and requests:
 
 ```text
@@ -42,12 +42,19 @@ python src/status_cli.py --json
 -> {"project_id":"status-cli","status":"adapter-placeholder"}
 ```
 
-This second vertical must reuse the same plan, documentation, progress, scope,
-portability, and independent-verifier controls while binding its different
-profile into the receipt. It may add one observed source adapter, not a plugin
-framework. A new top-level repository, shared `data-contracts` extraction,
-`llm_client` integration, colleague-readiness, and Plan #111 feedback evolution
-remain downstream of demonstrated repeatability and a real ownership seam.
+The retained receipt at
+`docs/evidence/plan62_status_cli_delivery_receipt.json` binds profile
+`status-cli-json`, framework revision `0c6eab42`, baseline `c9d77fa`, result
+`83f4d59`, the authentic session, and 16 passing checks. The worker committed
+its consumer plan before source work and changed only the four declared result
+paths.
+
+Two configured generated consumers now pass the same plan, documentation,
+progress, scope, portability, and independent-verifier controls. This is
+repeatability evidence, not colleague usability or a self-improving ecosystem.
+A new top-level repository, shared `data-contracts` extraction, `llm_client`
+integration, and Plan #111 feedback evolution remain downstream of a genuine
+external adopter or demonstrated ownership seam.
 
 ## Phase Map
 

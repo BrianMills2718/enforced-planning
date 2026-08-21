@@ -1,6 +1,6 @@
 # Plan #62: User-Neutral Ecosystem Instantiation
 
-**Status:** In Progress
+**Status:** Complete
 **Type:** design + implementation
 **Priority:** Critical
 **phase_ref:** "Shareable governed-delivery proof"
@@ -64,7 +64,9 @@ is unchanged; one concise README and one completed consumer plan describe the
 behavior; only declared paths change; and the independent verifier accepts a
 receipt bound to the profile and Git revisions.
 
-**Behavioral evidence:** Unobserved until the fresh external-root run completes.
+**Behavioral evidence:** Observed in the retained fresh-root receipt: the default
+and requested commands, plan/docs/scope controls, initial failure, and committed
+result all passed independently.
 
 **Substrate/process evidence:** Focused profile-validation, default-profile
 regression, negative-path, progress-control, and receipt-binding tests.
@@ -215,29 +217,51 @@ continue to pass through the same seam.
 
 ## Acceptance Criteria
 
-- [ ] The unchanged default profile still prepares and verifies the Plan #113
+- [x] The unchanged default profile still prepares and verifies the Plan #113
   `hello-app --name Ada` example.
-- [ ] A copied JSON profile selects `projects/status-cli`, a different source
+- [x] A copied JSON profile selects `projects/status-cli`, a different source
   adapter, source path, commands, outputs, title, and task id without source edits.
-- [ ] Absolute/traversing paths, personal sentinels, unsafe commands, and unknown
+- [x] Absolute/traversing paths, personal sentinels, unsafe commands, and unknown
   adapters fail loudly before Git initialization.
-- [ ] The fresh status baseline preserves its default output and fails only the
+- [x] The fresh status baseline preserves its default output and fails only the
   requested `--json` behavior.
-- [ ] The real worker changes only source, concise README, one plan, and its plan
+- [x] The real worker changes only source, concise README, one plan, and its plan
   index; the result is clean and committed.
-- [ ] Default and `--json` outputs match the canonical example exactly.
-- [ ] The same plan-authority, documentation, progress, self-report, portability,
+- [x] Default and `--json` outputs match the canonical example exactly.
+- [x] The same plan-authority, documentation, progress, self-report, portability,
   and independent-verifier controls pass for the second profile.
-- [ ] The terminal receipt binds profile id/digest, framework, baseline, result,
+- [x] The terminal receipt binds profile id/digest, framework, baseline, result,
   session, checks, and verdict without an external-root path.
-- [ ] Focused tests, clean-room regressions, plan validation, and repository
+- [x] Focused tests, clean-room regressions, plan validation, and repository
   self-test pass on the exact integrated candidate.
-- [ ] The licensed claim remains: two configured governed-delivery tasks have
+- [x] The licensed claim remains: two configured governed-delivery tasks have
   completed; colleague usability and autonomous policy improvement remain open.
 
 ## Authentic Evidence
 
-Unobserved. Completion requires a fresh external root and a retained receipt.
+- Framework/verifier revision: `0c6eab42d4ba092391ed5418b62352475b29d7d8`
+- Profile: `status-cli-json`
+- Profile digest: `9eeaa7d7a8dc7b9b674db585842ee7cfb90c327e75e222b0c970333cca3aca96`
+- Generated consumer baseline: `c9d77fa68ffef727e0a334ade644859642dea766`
+- Generated consumer plan-first commit: `1d29b90`
+- Generated consumer result: `83f4d599996af00785f55afe56e0127e46296bda`
+- Independent receipt: `docs/evidence/plan62_status_cli_delivery_receipt.json`
+- Receipt digest: `8d0175f50e6b5772f41fe2cc97ca9b5c7e89f2173745f0ac5312d4ecb4fe9346`
+
+The copied consumer config materialized only `projects/status-cli`; clean-room
+structural verification passed before preparation. The first persisted probe
+failed the absent `--json` behavior while default behavior and profile binding
+passed. The worker then committed its bounded plan before source work, changed
+only the four declared result paths, and passed all 16 terminal checks. The
+receipt is path-neutral and contains no disposable external-root path.
+
+Final framework evidence:
+
+- `ruff check enforced_planning/governed_delivery.py scripts/governed_delivery.py tests/test_governed_delivery.py` — pass.
+- `pytest -q tests/test_cleanroom_alpha.py tests/test_governed_delivery.py` — 48 passed.
+- `python scripts/validate_plan.py --plan-file docs/plans/62_user_neutral_ecosystem_instantiation.md --warn-only` — no gaps or warnings.
+- `python scripts/self_test.py` — file, Markdown-link, documentation, plan, and
+  install checks passed.
 
 ## Failure And Replan Rules
 

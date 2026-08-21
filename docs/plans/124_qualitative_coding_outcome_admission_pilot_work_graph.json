@@ -6,8 +6,8 @@
       "id": "qcop-01-adopt-pilot-design",
       "initiative_id": "progress-bound-agent-execution",
       "goal_id": "normal-project-outcome-admission-pilot",
-      "design_revision": "sha256:1c72dda2c7dce194e2b7c184d444c2650c761a54a6fbf7bedfa0acbd4a9acff6",
-      "spec_revision": "sha256:1c72dda2c7dce194e2b7c184d444c2650c761a54a6fbf7bedfa0acbd4a9acff6",
+      "design_revision": "sha256:0e1063845629f79d2dc6c494fb8ed78794b8618fe762f1c4c6488214e3f20592",
+      "spec_revision": "sha256:0e1063845629f79d2dc6c494fb8ed78794b8618fe762f1c4c6488214e3f20592",
       "title": "Adopt the Qualitative Coding outcome-admission pilot design",
       "class": "design",
       "objective": "Freeze one exact, reversible, non-product QC adoption journey without mutating QC or broadening installer defaults.",
@@ -127,9 +127,9 @@
         "max_active_per_claimant": 1,
         "named_owner_id": null
       },
-      "status": "ready",
+      "status": "accepted",
       "record_version": 1,
-      "updated_at": "2026-08-21T11:15:16Z"
+      "updated_at": "2026-08-21T11:34:06Z"
     },
     {
       "schema_version": "1.0",
@@ -137,8 +137,8 @@
       "id": "qcop-01b-project-id-compatibility",
       "initiative_id": "progress-bound-agent-execution",
       "goal_id": "normal-project-outcome-admission-pilot",
-      "design_revision": "sha256:1c72dda2c7dce194e2b7c184d444c2650c761a54a6fbf7bedfa0acbd4a9acff6",
-      "spec_revision": "sha256:1c72dda2c7dce194e2b7c184d444c2650c761a54a6fbf7bedfa0acbd4a9acff6",
+      "design_revision": "sha256:0e1063845629f79d2dc6c494fb8ed78794b8618fe762f1c4c6488214e3f20592",
+      "spec_revision": "sha256:0e1063845629f79d2dc6c494fb8ed78794b8618fe762f1c4c6488214e3f20592",
       "title": "Make exact Project Graph IDs representable",
       "class": "implementation",
       "objective": "Separate Project Graph project-ID validation from outcome and lineage slug validation and prove the exact qualitative_coding identity through portfolio resolution.",
@@ -165,7 +165,7 @@
         {
           "kind": "bounded_design",
           "id": "docs/plans/124_qualitative_coding_outcome_admission_pilot.md",
-          "revision": "sha256:1c72dda2c7dce194e2b7c184d444c2650c761a54a6fbf7bedfa0acbd4a9acff6"
+          "revision": "sha256:0e1063845629f79d2dc6c494fb8ed78794b8618fe762f1c4c6488214e3f20592"
         },
         {
           "kind": "project_graph_authority",
@@ -269,9 +269,9 @@
         "max_active_per_claimant": 1,
         "named_owner_id": null
       },
-      "status": "ready",
+      "status": "accepted",
       "record_version": 1,
-      "updated_at": "2026-08-21T11:24:00Z"
+      "updated_at": "2026-08-21T11:44:13Z"
     },
     {
       "schema_version": "1.0",
@@ -279,8 +279,8 @@
       "id": "qcop-02-execute-qc-pilot",
       "initiative_id": "progress-bound-agent-execution",
       "goal_id": "normal-project-outcome-admission-pilot",
-      "design_revision": "sha256:1c72dda2c7dce194e2b7c184d444c2650c761a54a6fbf7bedfa0acbd4a9acff6",
-      "spec_revision": "sha256:1c72dda2c7dce194e2b7c184d444c2650c761a54a6fbf7bedfa0acbd4a9acff6",
+      "design_revision": "sha256:0e1063845629f79d2dc6c494fb8ed78794b8618fe762f1c4c6488214e3f20592",
+      "spec_revision": "sha256:0e1063845629f79d2dc6c494fb8ed78794b8618fe762f1c4c6488214e3f20592",
       "title": "Execute and evaluate the QC-local automatic admission pilot",
       "class": "implementation",
       "objective": "Prove active allow, usable bootstrap, parked deny, rollback, and stable product behavior through installed QC-local commands.",
@@ -313,7 +313,7 @@
         {
           "kind": "bounded_design",
           "id": "docs/plans/124_qualitative_coding_outcome_admission_pilot.md",
-          "revision": "sha256:1c72dda2c7dce194e2b7c184d444c2650c761a54a6fbf7bedfa0acbd4a9acff6"
+          "revision": "sha256:0e1063845629f79d2dc6c494fb8ed78794b8618fe762f1c4c6488214e3f20592"
         },
         {
           "kind": "required_output",

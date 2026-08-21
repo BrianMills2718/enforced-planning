@@ -1,0 +1,106 @@
+{
+  "schema_version": "1.0.0",
+  "record_type": "plan_124_project_graph_id_compatibility_evidence",
+  "captured_at": "2026-08-21T11:44:13.024526Z",
+  "decision_scope": "Whether the outcome contract can represent the exact authoritative qualitative_coding Project Graph identity and resolve it through the real portfolio owner without weakening outcome or lineage slugs.",
+  "baseline_revision": "660c0b1aac2785a66ce660e2f884664d6392e93d",
+  "candidate_revision": "70d2d334f33b94ff4e0c4fddd68b8fc337281a17",
+  "implementation": {
+    "source_path": "enforced_planning/outcome_continuation.py",
+    "source_file_sha256": "0c59175e6778993089b9d37aa73374964e2b4bf9c525b3ba1c9a4c7aef7f04a1",
+    "project_id_pattern": "^[a-z][a-z0-9]*(?:[-_][a-z0-9]+)*$",
+    "portable_outcome_and_lineage_pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
+    "seam": "OutcomeContractV1 validates project_id separately; outcome_id, lineage_id, predecessor lineage IDs, owner class, and all other validation remain on their prior owner."
+  },
+  "focused_verification": {
+    "command": "pytest -q tests/test_outcome_continuation.py tests/test_outcome_portfolio.py",
+    "passed": 61,
+    "failed": 0,
+    "duration_seconds": 2.42,
+    "lint_command": "ruff check enforced_planning/outcome_continuation.py tests/test_outcome_continuation.py tests/test_outcome_portfolio.py",
+    "lint_result": "passed"
+  },
+  "authentic_project_graph_probe": {
+    "mode": "ephemeral exact-claim and isolated ledger using the candidate code; Project Meta was read only at the exact revision below",
+    "candidate_clean": true,
+    "project_id": "qualitative_coding",
+    "contract_valid": true,
+    "contract_sha256": "68e223f85d16f6c6009e93af207ebbe544469732e749b0209b68682a011e8e88",
+    "scenario_sha256": "5d612d08a6df1ba3161f1d15b9c133679651d63537575d7ad8a986b4b8a647b0",
+    "allocation_status": "allocated",
+    "allocation_sha256": "daecf18ee549b191cc31b71d4fc7f265c89e44cb61294378fbd9cf395d4392c5",
+    "resolved_allocation_sha256": "daecf18ee549b191cc31b71d4fc7f265c89e44cb61294378fbd9cf395d4392c5",
+    "active_resolution_matches": true,
+    "isolated_ledger_sha256": "66faad7c9d4531335214c1809af6292b41b4435cac905c3e6ffe717a80b86748",
+    "project_authority": {
+      "project_graph_revision": "4c51c2f08525aaabca62c7fa5569b9cbb8d413f3",
+      "project_graph_file_sha256": "38fbb590d2c4ca507555e4796c528294ee2841ac9b23d4af45e11ffd4588f574",
+      "project_record_sha256": "e46bfaf0dd0623a6056da8b13c8c367db7c477d43f9bb68113b210a09c259149",
+      "governance_review_sha256": "3f567d5e0ad9c91630848a3616d7fa34917a193c0c938bb5ac1672abc11cdb08",
+      "project_authority_sha256": "53bc82516019f7d5c3b2bed0ffd70eac72310b95621c9945b8dac650704bfbd3",
+      "owner_class": "brian",
+      "status": "active",
+      "record_kind": "repository",
+      "predecessor_project_ids": [
+        "qc",
+        "qc2",
+        "qualitative_coding_20250910"
+      ]
+    }
+  },
+  "negative_controls": {
+    "uppercase_project": {
+      "value": "Qualitative_coding",
+      "rejected": true,
+      "error": "project_id must be a canonical lowercase Project Graph identifier"
+    },
+    "path_project": {
+      "value": "qualitative/coding",
+      "rejected": true,
+      "error": "project_id must be a canonical lowercase Project Graph identifier"
+    },
+    "repeated_separator_project": {
+      "value": "qualitative__coding",
+      "rejected": true,
+      "error": "project_id must be a canonical lowercase Project Graph identifier"
+    },
+    "underscore_outcome": {
+      "value": "qualitative_coding_outcome",
+      "rejected": true,
+      "error": "outcome_id must be a portable lowercase identifier"
+    },
+    "underscore_lineage": {
+      "value": "qualitative_coding_lineage",
+      "rejected": true,
+      "error": "lineage_id must be a portable lowercase identifier"
+    }
+  },
+  "source_allocation_and_selection": {
+    "allocation_id": "plan-124-project-id-compatibility-allocation",
+    "allocation_sha256": "20cc55ae5c64c0016123a0384f785cdea25b9ce5a1c5d49f2557b2c692519022",
+    "ledger_sha256_before_terminal_park": "75216f9feffe4612636e020bce57efd4e4646155843b61e236f1e265ec0b4fb4",
+    "selection_binding_sha256": "b4e229ee7848ebc5ccaf4ecc6c6efc184283e45ec0d9994ab621ab2fa316f1ac",
+    "active_lifecycle_receipt_id": "oadm-e97e5a694aa4487db231d797047aa290",
+    "active_lifecycle_result_sha256": "dcbda92522073d19892d12a7d9b0e34824eb0efcd601c86ac77fbf42fec95753",
+    "scenario_file_sha256": "72e7653b8ed16aefebd611edae061689dd3e3f1b1103bf0ec7dadd01f8254e63",
+    "allocation_request_file_sha256": "4fb3f7f04780192d2b113e5f53a70e81241511c41c9382d1405175c8c7f3754d",
+    "park_request_file_sha256": "057f63d3e9624b47dc32fa7ec935802a7e94df7e0c7d81d52e5fafcc5bce7bda"
+  },
+  "acceptance": {
+    "QCOP01B-A1": "accepted: exact qualitative_coding validates and an isolated authentic allocation resolves the exact pinned reviewed Project Graph record through the production portfolio owner",
+    "QCOP01B-A2": "accepted: hyphenated and underscore project IDs pass while uppercase, whitespace, paths, traversal, leading/trailing/repeated, and adjacent mixed separators are covered by focused controls",
+    "QCOP01B-A3": "accepted: outcome and lineage underscore controls still fail on the unchanged portable slug owner",
+    "QCOP01B-A4": "accepted: the candidate changes one source validator, focused tests, Plan 124 evidence/status, and its park request; QC, installer, hook, model, deployment, and user-data surfaces remain unchanged"
+  },
+  "non_mutation": {
+    "qualitative_coding_repository": "unchanged",
+    "project_meta_repository": "read-only exact Git object",
+    "installer_or_hook_surface": "unchanged",
+    "model_calls": 0,
+    "deployments": 0,
+    "user_data_changes": 0,
+    "shared_portfolio_probe_effect": "none; the real-record allocation used an isolated temporary ledger"
+  },
+  "terminal_closeout": "The candidate is accepted for merge. Merge and append the prepared parked disposition to the shared source allocation before QCOP-02 starts; retain the post-park ledger and admission denial as PR evidence.",
+  "promotion_decision": "After canonical merge and terminal source-allocation park, QCOP-02 may create its separately governed QC plan lane. This evidence does not license installer defaults or fleet propagation."
+}

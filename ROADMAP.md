@@ -108,7 +108,10 @@ on Enforced Planning itself:
   run, deployment, or user-data change. Its design probe exposed one exact
   source prerequisite: the contract's project identity grammar cannot yet
   represent QC's authoritative Project Graph ID `qualitative_coding`.
-  Compatibility must be proved through the real portfolio boundary before the
+  Candidate `70d2d334` now validates that exact ID and resolves it through the
+  production portfolio owner against pinned Project Meta source; 61 focused
+  checks and malformed/outcome-lineage controls pass. Canonical merge and
+  terminal parking of the source allocation remain prerequisites before the
   separately claimed QC-local activation may start.
 
 These observations prove useful owner-real behavior at the documentation,
@@ -314,7 +317,7 @@ authority and directory policy.
 | Pre-write claim enforcement | Check supported native Codex/Claude write events against exact live session, worktree, branch, and path ownership before mutation. See Plan #108. | PW-01/PW-02A/PW-02 are accepted; PW-02B0 writer provenance is the only ready leaf, followed by frozen inventory, bounded rollout, fleet certification, and the fixed enforced-planning pilot |
 | Artifact creation enforcement | Gate selected new tracked artifacts against repository directory rules and durable intent, with receipts and feedback. See Plan #109. | Portable mechanism first, then an Inside Success Markdown observe pilot before any blocking promotion |
 | No-passive-waiting enforcement | Separate liveness from progress, reject whole-goal blockage while compatible work remains, and preserve recoverable true blockers. See Plan #110. | NPW-02 provider-free blocker disposition accepted with replayable both-sign evidence; NPW-01 progress visibility remains the ready leaf before NPW-03 |
-| Outcome continuation lease | Require typed progress evidence before supported coding-agent continuation; ordinary approval and cost do not renew authority. See Plans #114–#124. | Plan #124 selected Qualitative Coding for the first normal-project pilot and exposed an exact Project Graph ID compatibility prerequisite; installer defaults and fleet rollout remain excluded |
+| Outcome continuation lease | Require typed progress evidence before supported coding-agent continuation; ordinary approval and cost do not renew authority. See Plans #114–#124. | Plan #124 accepted the exact qualitative_coding identity candidate against the real portfolio owner; merge/park then the isolated QC-local pilot are next, while installer defaults and fleet rollout remain excluded |
 | Multi-tool adoption | Cursor/Windsurf hook adapters when their hook surfaces are publicly documented | External dependency: tool documentation |
 | Project-meta topic-research adoption | Apply portable topic-research pattern in `research_synthesis/` with manifests, ADR links, freshness metadata | Plans #43/#44/#35 complete |
 

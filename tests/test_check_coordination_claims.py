@@ -183,7 +183,7 @@ def test_evaluate_claim_detects_parent_child_write_overlap_as_hard_conflict(
 
     assert len(result.hard_conflicts) == 1
     conflict = result.hard_conflicts[0]
-    assert conflict.reason == "write_paths overlap across active write claims"
+    assert conflict.reason == "write ownership overlaps across active claims"
     assert conflict.overlapping_write_paths == ["docs/ops/INDEX.md <-> docs/ops"]
     assert result.to_dict()["continuation"] == {
         "state": "integration_wait",
@@ -1435,6 +1435,81 @@ def test_runtime_session_can_refresh_same_non_program_root(
     ok, _message = module.create_claim(**kwargs)
     assert ok is True
     assert len(module.check_claims()) == 1
+
+
+def test_cross_session_refresh_cannot_replace_live_claim_slot(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A second runtime with the same client label must preserve the first owner."""
+
+    module = _load_module()
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
+    common = {
+        "agent": "codex",
+        "project": "enforced-planning",
+        "scope": "plan-116-prewrite-outcome-observe",
+        "intent": "Exercise exact-slot ownership",
+        "claim_type": "program",
+        "write_paths": ["docs/evidence/plan116.json"],
+        "repo_root": str(tmp_path / "repo"),
+        "worktree_path": str(tmp_path / "worktrees" / "plan116-first"),
+        "branch": "plan116-first",
+        "session_name": "owner-first",
+    }
+    ok, _message = module.create_claim(session_id="codex:first-runtime", **common)
+    assert ok is True
+    claim_path = claims_dir / "codex_enforced-planning_plan-116-prewrite-outcome-observe.yaml"
+    projection_path = projection_path_for(claims_dir)
+    claim_before = claim_path.read_bytes()
+    projection_before = projection_path.read_bytes()
+
+    with pytest.raises(ValueError, match="owned by runtime session codex:first-runtime"):
+        module.create_claim(
+            session_id="codex:second-runtime",
+            worktree_path=str(tmp_path / "worktrees" / "plan116-second"),
+            branch="plan116-second",
+            **{key: value for key, value in common.items() if key not in {"worktree_path", "branch"}},
+        )
+
+    assert claim_path.read_bytes() == claim_before
+    assert projection_path.read_bytes() == projection_before
+
+
+def test_same_client_different_sessions_conflict_on_program_write_ownership(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Client type is not writer identity; independent Codex sessions can collide."""
+
+    module = _load_module()
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
+    existing = module.build_candidate_claim(
+        agent="codex",
+        project="enforced-planning",
+        scope="first-lane",
+        intent="Own the coordination module",
+        claim_type="program",
+        write_paths=["enforced_planning/coordination_claims.py"],
+        session_id="codex:first-runtime",
+    )
+    candidate = module.build_candidate_claim(
+        agent="codex",
+        project="enforced-planning",
+        scope="second-lane",
+        intent="Attempt the same write",
+        claim_type="program",
+        write_paths=["enforced_planning/coordination_claims.py"],
+        session_id="codex:second-runtime",
+    )
+
+    result = module.evaluate_claim(candidate, active_claims=[existing])
+
+    assert len(result.hard_conflicts) == 1
+    assert result.hard_conflicts[0].other_scope == "first-lane"
+    assert result.hard_conflicts[0].reason == "write ownership overlaps across active claims"
 
 
 def test_claim_lifecycle_issues_detect_missing_branch_ref(tmp_path: Path) -> None:

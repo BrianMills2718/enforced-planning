@@ -47,6 +47,13 @@ Important rule: **claims are canonical, lanes are derived**. Do not invent a
 second mutable lane registry by hand. Update claims; regenerate readable lane
 surfaces from them.
 
+`agent` identifies the client class; `session_id` identifies the runtime that
+owns a live claim. Two Codex windows are therefore two writers even though both
+claims say `agent: codex`. A live `agent + project + scope` slot may be refreshed
+only by its exact owning session. A different session must use sanctioned
+handoff/session-end plus session-resume, or close the lane; claim creation fails
+without changing the claim or its derived projection.
+
 The legacy `~/.claude/coordination/active-work-registry.yaml` and tracked
 `generated/runtime/active_work_registry.*` files may survive as compatibility,
 historical, or explicitly regenerated snapshot surfaces. They are not live

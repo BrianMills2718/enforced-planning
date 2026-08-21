@@ -1096,6 +1096,17 @@ def _compute_overlapping_write_paths(candidate: ClaimRecord, other: ClaimRecord)
     return sorted(set(overlaps))
 
 
+def _has_write_ownership(claim: ClaimRecord) -> bool:
+    """Return whether a claim owns its declared write paths.
+
+    Sanctioned worktree lanes use ``program`` claims as their root while still
+    carrying exact write paths. Those paths are ownership, just as they are for
+    a narrow ``write`` claim.
+    """
+
+    return claim.claim_type in {"program", "write"} and bool(claim.write_paths)
+
+
 def _parse_iso_datetime(value: Any) -> datetime | None:
     """Parse an ISO timestamp from claim data if present."""
     if not isinstance(value, str):
@@ -1288,17 +1299,21 @@ def evaluate_claim(candidate: ClaimRecord, *, active_claims: list[ClaimRecord] |
     claims = active_claims if active_claims is not None else check_claims()
     interactions: list[ClaimInteraction] = []
     for other in claims:
-        if other.agent == candidate.agent:
+        if (
+            other.agent == candidate.agent
+            and candidate.session_id
+            and other.session_id == candidate.session_id
+        ):
             continue
         if not _projects_overlap(candidate, other):
             continue
 
         overlapping_write_paths = _compute_overlapping_write_paths(candidate, other)
-        if candidate.claim_type == "write" and other.claim_type == "write" and overlapping_write_paths:
+        if _has_write_ownership(candidate) and _has_write_ownership(other) and overlapping_write_paths:
             interactions.append(
                 ClaimInteraction(
                     severity="hard_conflict",
-                    reason="write_paths overlap across active write claims",
+                    reason="write ownership overlaps across active claims",
                     other_agent=other.agent,
                     other_scope=other.scope,
                     other_claim_type=other.claim_type,
@@ -1309,7 +1324,10 @@ def evaluate_claim(candidate: ClaimRecord, *, active_claims: list[ClaimRecord] |
             )
             continue
 
-        if overlapping_write_paths and {candidate.claim_type, other.claim_type} == {"write", "review"}:
+        if overlapping_write_paths and (
+            (candidate.claim_type == "review" and _has_write_ownership(other))
+            or (other.claim_type == "review" and _has_write_ownership(candidate))
+        ):
             interactions.append(
                 ClaimInteraction(
                     severity="soft_overlap",
@@ -1527,6 +1545,15 @@ def create_claim(
                 raise ValueError(
                     "Existing claim is session_ended; use session-resume/takeover "
                     "or sanctioned closeout instead of overwriting it."
+                )
+            if existing and existing.is_live() and (
+                not candidate.session_id or existing.session_id != candidate.session_id
+            ):
+                owner = existing.session_id or "<missing-session-id>"
+                raise ValueError(
+                    f"Existing live claim slot {project}:{scope} is owned by runtime session {owner}; "
+                    "use sanctioned handoff/session-end plus session-resume, or close the lane, "
+                    "instead of overwriting it."
                 )
         active_claims = check_claims(project)
         validate_no_preserved_lane_conflict(

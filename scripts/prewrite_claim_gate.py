@@ -35,10 +35,16 @@ def _parser() -> argparse.ArgumentParser:
         help="Compatibility alias: use <dir>/authority-projection-v1.json.",
     )
     parser.add_argument("--receipt-path", type=Path, default=DEFAULT_RECEIPT_PATH)
-    parser.add_argument(
+    outcome_source = parser.add_mutually_exclusive_group()
+    outcome_source.add_argument(
         "--outcome-scenario",
         type=Path,
         help="Explicit immutable scenario to correlate after the ordinary decision.",
+    )
+    outcome_source.add_argument(
+        "--outcome-selected",
+        action="store_true",
+        help="Resolve the create-once scenario from the exact claim-linked session tracker.",
     )
     parser.add_argument(
         "--outcome-receipt-path",
@@ -135,6 +141,38 @@ def _observe_outcome(
         }
 
 
+def _observe_selected_outcome(
+    decision: dict[str, Any],
+    *,
+    receipt_path: Path | None,
+) -> dict[str, Any]:
+    """Lazy-load exact-session selected observation after ordinary admission."""
+
+    try:
+        from enforced_planning.outcome_prewrite_observation import (
+            DEFAULT_OUTCOME_PREWRITE_RECEIPT_PATH,
+            observe_selected_prewrite_outcome,
+        )
+
+        record = observe_selected_prewrite_outcome(
+            decision,
+            receipt_path=receipt_path or DEFAULT_OUTCOME_PREWRITE_RECEIPT_PATH,
+        )
+        return record.model_dump(mode="json")
+    except Exception as exc:  # noqa: BLE001 -- observation cannot override ordinary admission
+        return {
+            "schema_version": "1.0.0",
+            "record_type": "outcome_prewrite_observation_unrecorded_failure",
+            "ordinary_receipt_id": decision.get("receipt_id"),
+            "scenario_path": "<selected-outcome>",
+            "disposition": "observation_error",
+            "error_code": getattr(exc, "code", type(exc).__name__),
+            "error_message": str(exc),
+            "ordinary_authority_preserved": True,
+            "enforcement_applied": False,
+        }
+
+
 def _outcome_notice(observation: dict[str, Any]) -> str:
     disposition = observation.get("disposition", "observation_error")
     receipt_id = observation.get("ordinary_receipt_id")
@@ -201,6 +239,11 @@ def main(argv: list[str] | None = None) -> int:
         outcome_observation = _observe_outcome(
             decision,
             scenario_path=args.outcome_scenario,
+            receipt_path=args.outcome_receipt_path,
+        )
+    elif args.outcome_selected:
+        outcome_observation = _observe_selected_outcome(
+            decision,
             receipt_path=args.outcome_receipt_path,
         )
 

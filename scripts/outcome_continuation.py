@@ -28,6 +28,11 @@ from enforced_planning.outcome_continuation import (
     evaluate_scenario,
     load_scenario,
 )
+from enforced_planning.outcome_selection import (
+    OutcomeSelectionError,
+    select_outcome_for_session,
+)
+from enforced_planning.coordination_claims import CLAIMS_DIR
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -37,6 +42,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     subparsers = parser.add_subparsers(dest="command", required=True)
     evaluate = subparsers.add_parser("evaluate", help="Evaluate one continuation scenario")
     evaluate.add_argument("--scenario", required=True, help="Path to OutcomeContinuationScenarioV1 JSON")
+    select = subparsers.add_parser("select", help="Bind one immutable scenario to an exact live session")
+    select.add_argument("--scenario", required=True, type=Path)
+    select.add_argument("--execution-authority", required=True)
+    select.add_argument("--agent", required=True, choices=("codex", "claude-code", "openclaw"))
+    select.add_argument("--project", required=True)
+    select.add_argument("--scope", required=True)
+    select.add_argument("--session-id")
+    select.add_argument("--claims-dir", type=Path, default=CLAIMS_DIR)
     return parser.parse_args(argv)
 
 
@@ -45,15 +58,31 @@ def main(argv: list[str] | None = None) -> int:
 
     args = parse_args(argv)
     try:
-        scenario = load_scenario(args.scenario)
-        result = evaluate_scenario(scenario)
-    except (ContinuationError, ValidationError) as exc:
+        if args.command == "evaluate":
+            scenario = load_scenario(args.scenario)
+            result = evaluate_scenario(scenario)
+        else:
+            selection = select_outcome_for_session(
+                agent=args.agent,
+                project=args.project,
+                scope=args.scope,
+                session_id=args.session_id,
+                execution_authority_ref=args.execution_authority,
+                scenario_path=args.scenario,
+                claims_dir=args.claims_dir,
+            )
+    except (ContinuationError, OutcomeSelectionError, ValidationError, ValueError) as exc:
         if isinstance(exc, ContinuationError):
             error = exc.to_dict()
+        elif isinstance(exc, OutcomeSelectionError):
+            error = exc.to_dict()
         else:
-            error = {"code": "scenario_validation_failed", "message": str(exc)}
+            error = {"code": "input_validation_failed", "message": str(exc)}
         print(json.dumps({"ok": False, "error": error}, indent=2, sort_keys=True))
         return 2
+    if args.command == "select":
+        print(selection.model_dump_json(indent=2))
+        return 0
     print(result.model_dump_json(indent=2))
     return 0 if result.decision.allowed else 1
 

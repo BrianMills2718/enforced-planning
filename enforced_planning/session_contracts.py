@@ -7,11 +7,16 @@ should live in a linked per-session artifact.
 
 from __future__ import annotations
 
+import fcntl
+import os
 import re
+import tempfile
+from collections.abc import Callable
+from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 import yaml  # type: ignore[import-untyped]
 
@@ -334,12 +339,51 @@ def write_session_tracker(
     """Persist one session tracker artifact and return its concrete path."""
 
     path = session_tracker_path(record.contract, tracker_dir=tracker_dir)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        yaml.safe_dump(record.to_dict(), default_flow_style=False, sort_keys=False),
-        encoding="utf-8",
-    )
+    with session_tracker_lock(path):
+        _atomic_write_session_tracker(path, record.to_dict())
     return path
+
+
+@contextmanager
+def session_tracker_lock(path: Path) -> Iterator[None]:
+    """Serialize exact-session tracker mutations through one sibling lock."""
+
+    resolved = path.expanduser().resolve()
+    resolved.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    lock_path = resolved.parent / f".{resolved.name}.lock"
+    with lock_path.open("a+", encoding="utf-8") as handle:
+        lock_path.chmod(0o600)
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
+
+def _atomic_write_session_tracker(path: Path, payload: dict[str, Any]) -> None:
+    """Replace one tracker without exposing partial YAML to another reader."""
+
+    resolved = path.expanduser().resolve()
+    resolved.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    temp_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            "w",
+            encoding="utf-8",
+            dir=resolved.parent,
+            prefix=f".{resolved.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as handle:
+            temp_path = Path(handle.name)
+            yaml.safe_dump(payload, handle, default_flow_style=False, sort_keys=False)
+            handle.flush()
+            os.fsync(handle.fileno())
+        temp_path.chmod(0o600)
+        os.replace(temp_path, resolved)
+    finally:
+        if temp_path is not None and temp_path.exists():
+            temp_path.unlink()
 
 
 def read_session_tracker(path: Path) -> dict[str, Any]:
@@ -349,6 +393,26 @@ def read_session_tracker(path: Path) -> dict[str, Any]:
     if not isinstance(raw, dict):
         raise ValueError(f"Session tracker at {path} must be a YAML mapping")
     return raw
+
+
+def mutate_session_tracker(
+    path: Path,
+    mutation: Callable[[dict[str, Any]], None],
+    *,
+    updated_at: str | None = None,
+) -> dict[str, Any]:
+    """Apply one locked tracker transformation and atomically persist it."""
+
+    resolved = path.expanduser().resolve()
+    with session_tracker_lock(resolved):
+        payload = read_session_tracker(resolved)
+        mutation(payload)
+        timestamps = payload.get("timestamps")
+        if not isinstance(timestamps, dict):
+            raise ValueError(f"Session tracker at {resolved} is missing timestamps section")
+        timestamps["updated_at"] = updated_at or datetime.now(timezone.utc).isoformat()
+        _atomic_write_session_tracker(resolved, payload)
+    return payload
 
 
 def update_session_tracker(
@@ -364,28 +428,22 @@ def update_session_tracker(
 ) -> dict[str, Any]:
     """Update one existing tracker artifact in place and return the payload."""
 
-    payload = read_session_tracker(path)
-    tracker = payload.get("tracker")
-    timestamps = payload.get("timestamps")
-    if not isinstance(tracker, dict) or not isinstance(timestamps, dict):
-        raise ValueError(f"Session tracker at {path} is missing tracker/timestamps sections")
+    def apply_updates(payload: dict[str, Any]) -> None:
+        tracker = payload.get("tracker")
+        timestamps = payload.get("timestamps")
+        if not isinstance(tracker, dict) or not isinstance(timestamps, dict):
+            raise ValueError(f"Session tracker at {path} is missing tracker/timestamps sections")
+        if current_phase is not None:
+            tracker["current_phase"] = _require_text(current_phase, field_name="current_phase")
+        if intended_next_phases is not None:
+            tracker["intended_next_phases"] = _clean_string_list(intended_next_phases)
+        if depends_on_repos is not None:
+            tracker["depends_on_repos"] = _clean_string_list(depends_on_repos)
+        if requires_shared_infra_changes is not None:
+            tracker["requires_shared_infra_changes"] = requires_shared_infra_changes
+        if stop_conditions is not None:
+            tracker["stop_conditions"] = _clean_string_list(stop_conditions)
+        if notes is not None:
+            tracker["notes"] = notes.strip()
 
-    if current_phase is not None:
-        tracker["current_phase"] = _require_text(current_phase, field_name="current_phase")
-    if intended_next_phases is not None:
-        tracker["intended_next_phases"] = _clean_string_list(intended_next_phases)
-    if depends_on_repos is not None:
-        tracker["depends_on_repos"] = _clean_string_list(depends_on_repos)
-    if requires_shared_infra_changes is not None:
-        tracker["requires_shared_infra_changes"] = requires_shared_infra_changes
-    if stop_conditions is not None:
-        tracker["stop_conditions"] = _clean_string_list(stop_conditions)
-    if notes is not None:
-        tracker["notes"] = notes.strip()
-
-    timestamps["updated_at"] = updated_at or datetime.now(timezone.utc).isoformat()
-    path.write_text(
-        yaml.safe_dump(payload, default_flow_style=False, sort_keys=False),
-        encoding="utf-8",
-    )
-    return payload
+    return mutate_session_tracker(path, apply_updates, updated_at=updated_at)

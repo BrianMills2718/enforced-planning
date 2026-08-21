@@ -26,6 +26,11 @@ from enforced_planning.outcome_continuation import (
     canonical_sha256,
     evaluate_scenario,
 )
+from enforced_planning.outcome_selection import (
+    OutcomeSelectionError,
+    ResolvedOutcomeSelectionV1,
+    resolve_selected_outcome_for_prewrite,
+)
 
 DEFAULT_OUTCOME_PREWRITE_RECEIPT_PATH = (
     Path.home() / ".claude" / "coordination" / "outcome-prewrite-observations-v1.jsonl"
@@ -81,6 +86,10 @@ class OutcomePreWriteCorrelationV1(StrictModel):
     correlation_receipt_id: str = Field(pattern=r"^ocor-[0-9a-f]{32}$")
     observed_at: datetime
     ordinary: OrdinaryPreWriteIdentityV1
+    selection_binding_sha256: str | None = Field(default=None, pattern=HEX_SHA256_PATTERN)
+    selection_tracker_path: str | None = None
+    selection_execution_authority_ref: str | None = None
+    selection_claim_identity_sha256: str | None = Field(default=None, pattern=HEX_SHA256_PATTERN)
     scenario_ref: str = Field(min_length=1)
     scenario_file_sha256: str = Field(pattern=HEX_SHA256_PATTERN)
     scenario_id: str = Field(min_length=3)
@@ -117,6 +126,16 @@ class OutcomePreWriteCorrelationV1(StrictModel):
         for digest in [*self.applied_receipt_sha256s, *self.replayed_receipt_sha256s]:
             if len(digest) != 64 or any(character not in "0123456789abcdef" for character in digest):
                 raise ValueError("receipt digests must be lowercase SHA-256 values")
+        selection_fields = (
+            self.selection_binding_sha256,
+            self.selection_tracker_path,
+            self.selection_execution_authority_ref,
+            self.selection_claim_identity_sha256,
+        )
+        if any(value is not None for value in selection_fields) and not all(
+            value is not None for value in selection_fields
+        ):
+            raise ValueError("selected correlation metadata must be complete or absent")
         return self
 
 
@@ -129,6 +148,10 @@ class OutcomePreWriteObservationFailureV1(StrictModel):
     observed_at: datetime
     ordinary_receipt_id: str | None = None
     ordinary: OrdinaryPreWriteIdentityV1 | None = None
+    selection_binding_sha256: str | None = Field(default=None, pattern=HEX_SHA256_PATTERN)
+    selection_tracker_path: str | None = None
+    selection_execution_authority_ref: str | None = None
+    selection_claim_identity_sha256: str | None = Field(default=None, pattern=HEX_SHA256_PATTERN)
     scenario_path: str = Field(min_length=1)
     scenario_file_sha256: str | None = Field(default=None, pattern=HEX_SHA256_PATTERN)
     scenario_sha256: str | None = Field(default=None, pattern=HEX_SHA256_PATTERN)
@@ -145,6 +168,16 @@ class OutcomePreWriteObservationFailureV1(StrictModel):
             raise ValueError("observed_at must be timezone-aware")
         if self.ordinary is not None and self.ordinary_receipt_id != self.ordinary.receipt_id:
             raise ValueError("ordinary_receipt_id must match the typed ordinary identity")
+        selection_fields = (
+            self.selection_binding_sha256,
+            self.selection_tracker_path,
+            self.selection_execution_authority_ref,
+            self.selection_claim_identity_sha256,
+        )
+        if any(value is not None for value in selection_fields) and not all(
+            value is not None for value in selection_fields
+        ):
+            raise ValueError("selected failure metadata must be complete or absent")
         return self
 
 
@@ -256,11 +289,28 @@ def _append_record(path: Path, record: OutcomePreWriteObservationRecordV1) -> No
             fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
 
+def _selection_fields(selection: ResolvedOutcomeSelectionV1 | None) -> dict[str, str | None]:
+    if selection is None:
+        return {
+            "selection_binding_sha256": None,
+            "selection_tracker_path": None,
+            "selection_execution_authority_ref": None,
+            "selection_claim_identity_sha256": None,
+        }
+    return {
+        "selection_binding_sha256": selection.binding_sha256,
+        "selection_tracker_path": selection.binding.tracker_path,
+        "selection_execution_authority_ref": selection.binding.execution_authority_ref,
+        "selection_claim_identity_sha256": selection.binding.claim_identity_sha256,
+    }
+
+
 def observe_prewrite_outcome(
     ordinary_decision: dict[str, Any],
     *,
     scenario_path: Path,
     receipt_path: Path = DEFAULT_OUTCOME_PREWRITE_RECEIPT_PATH,
+    _selection: ResolvedOutcomeSelectionV1 | None = None,
 ) -> OutcomePreWriteObservationRecordV1:
     """Append one non-authoritative correlation after ordinary admission.
 
@@ -283,6 +333,33 @@ def observe_prewrite_outcome(
         )
         scenario_sha256 = canonical_sha256(scenario)
         outcome_contract_sha256 = canonical_sha256(scenario.contract)
+        if _selection is not None:
+            if scenario_path.expanduser().resolve() != Path(_selection.scenario_path).expanduser().resolve():
+                raise OutcomePreWriteObservationError(
+                    "selection_scenario_path_mismatch",
+                    "resolved selection and observer scenario paths differ",
+                )
+            selection_checks = {
+                "scenario_file_sha256": (
+                    scenario_file_sha256,
+                    _selection.binding.scenario_file_sha256,
+                ),
+                "scenario_sha256": (scenario_sha256, _selection.binding.scenario_sha256),
+                "outcome_contract_sha256": (
+                    outcome_contract_sha256,
+                    _selection.binding.outcome_contract_sha256,
+                ),
+            }
+            mismatches = [
+                name
+                for name, (actual, expected) in selection_checks.items()
+                if actual != expected
+            ]
+            if mismatches:
+                raise OutcomePreWriteObservationError(
+                    "selection_scenario_stale",
+                    "selected scenario changed before observation: " + ", ".join(mismatches),
+                )
         if scenario.request.operation != "product_write":
             raise OutcomePreWriteObservationError(
                 "unsupported_outcome_operation",
@@ -303,6 +380,7 @@ def observe_prewrite_outcome(
             correlation_receipt_id=_correlation_receipt_id(),
             observed_at=datetime.now(UTC),
             ordinary=ordinary,
+            **_selection_fields(_selection),
             scenario_ref=scenario_ref,
             scenario_file_sha256=scenario_file_sha256,
             scenario_id=scenario.scenario_id,
@@ -337,6 +415,7 @@ def observe_prewrite_outcome(
             observed_at=datetime.now(UTC),
             ordinary_receipt_id=ordinary_receipt_id,
             ordinary=ordinary,
+            **_selection_fields(_selection),
             scenario_path=str(scenario_path),
             scenario_file_sha256=scenario_file_sha256,
             scenario_sha256=scenario_sha256,
@@ -351,6 +430,7 @@ def observe_prewrite_outcome(
             observed_at=datetime.now(UTC),
             ordinary_receipt_id=ordinary.receipt_id if ordinary is not None else None,
             ordinary=ordinary,
+            **_selection_fields(_selection),
             scenario_path=str(scenario_path),
             scenario_file_sha256=scenario_file_sha256,
             scenario_sha256=scenario_sha256,
@@ -360,6 +440,55 @@ def observe_prewrite_outcome(
         )
     _append_record(receipt_path, record)
     return record
+
+
+def observe_selected_prewrite_outcome(
+    ordinary_decision: dict[str, Any],
+    *,
+    receipt_path: Path = DEFAULT_OUTCOME_PREWRITE_RECEIPT_PATH,
+) -> OutcomePreWriteObservationRecordV1:
+    """Resolve exact-session selected state and append one observe-only result."""
+
+    ordinary: OrdinaryPreWriteIdentityV1 | None = None
+    try:
+        ordinary = _ordinary_identity(ordinary_decision)
+        selection = resolve_selected_outcome_for_prewrite(
+            agent=ordinary.client,
+            project=ordinary.claim_project,
+            scope=ordinary.claim_scope,
+            session_id=ordinary.session_id,
+            repo_root=ordinary.repo_root,
+            worktree_path=ordinary.worktree_path,
+            branch=ordinary.branch,
+            claim_source_file=ordinary.claim_source_file,
+            target_path=ordinary.normalized_target_path,
+        )
+    except (OutcomePreWriteObservationError, OutcomeSelectionError) as exc:
+        raw_receipt_id = ordinary_decision.get("receipt_id")
+        ordinary_receipt_id = (
+            ordinary.receipt_id
+            if ordinary is not None
+            else raw_receipt_id
+            if isinstance(raw_receipt_id, str) and raw_receipt_id.strip()
+            else None
+        )
+        record = OutcomePreWriteObservationFailureV1(
+            correlation_receipt_id=_correlation_receipt_id(),
+            observed_at=datetime.now(UTC),
+            ordinary_receipt_id=ordinary_receipt_id,
+            ordinary=ordinary,
+            scenario_path="<selected-outcome>",
+            error_code=exc.code,
+            error_message=str(exc),
+        )
+        _append_record(receipt_path, record)
+        return record
+    return observe_prewrite_outcome(
+        ordinary_decision,
+        scenario_path=Path(selection.scenario_path),
+        receipt_path=receipt_path,
+        _selection=selection,
+    )
 
 
 def load_observation_records(path: Path) -> list[OutcomePreWriteObservationRecordV1]:
@@ -406,4 +535,5 @@ __all__ = [
     "OutcomePreWriteObservationRecordV1",
     "load_observation_records",
     "observe_prewrite_outcome",
+    "observe_selected_prewrite_outcome",
 ]

@@ -89,6 +89,7 @@ STRICT_NATIVE_SESSION_ENV_KEYS = {
     "claude-code": "CLAUDE_CODE_SESSION_ID",
     "openclaw": "OPENCLAW_SESSION_ID",
 }
+GOAL_AUTHORITY_PATTERN = re.compile(r"^goal:[A-Za-z0-9][A-Za-z0-9._:-]*$")
 
 
 @contextmanager
@@ -391,6 +392,12 @@ class ClaimCheckResult:
         }
 
 
+def is_goal_authority_ref(plan_ref: str | None) -> bool:
+    """Return whether a ref names one explicit non-plan outcome authority."""
+
+    return isinstance(plan_ref, str) and GOAL_AUTHORITY_PATTERN.fullmatch(plan_ref.strip()) is not None
+
+
 def claim_health_issues(claim: ClaimRecord) -> list[str]:
     """Return machine-readable health issues for one normalized claim."""
     issues: list[str] = []
@@ -414,7 +421,12 @@ def claim_health_issues(claim: ClaimRecord) -> list[str]:
                 issues.append("missing_broader_goal")
             if not claim.tracker_path:
                 issues.append("missing_tracker_path")
-        if claim.schema_version >= 3 and claim.write_paths and claim.plan_ref:
+        if (
+            claim.schema_version >= 3
+            and claim.write_paths
+            and claim.plan_ref
+            and not is_goal_authority_ref(claim.plan_ref)
+        ):
             if not claim.work_unit_id:
                 issues.append("missing_work_unit_id")
             if not claim.work_graph_path:
@@ -1491,7 +1503,7 @@ def create_claim(
     resolved_claim_type = claim_type or ("write" if write_paths else "program")
     work_graph_sha256: str | None = None
     approval_revisions: tuple[str, ...] = ()
-    if write_paths and plan_ref:
+    if write_paths and plan_ref and not is_goal_authority_ref(plan_ref):
         if not repo_root:
             raise ValueError("Plan-bound write ownership requires --repo-root for canonical work-unit validation")
         if not work_graph_path or not work_unit_id:

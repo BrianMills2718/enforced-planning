@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import stat
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -106,6 +108,89 @@ def test_write_session_tracker_persists_nested_claim_and_tracker_sections(tmp_pa
     ]
     assert payload["tracker"]["depends_on_repos"] == ["project-meta"]
     assert payload["timestamps"]["created_at"] == "2026-04-05T18:00:00+00:00"
+    assert stat.S_IMODE(path.stat().st_mode) == 0o600
+    assert not list(path.parent.glob(f".{path.name}.*.tmp"))
+
+
+def test_tracker_update_preserves_outcome_selection_and_unrelated_fields(tmp_path: Path) -> None:
+    """Lifecycle updates cannot erase the durable outcome selected by the session."""
+
+    contract = session_contracts.SessionContract.build(
+        agent="codex",
+        project="enforced-planning",
+        scope="plan-117",
+        intent="bind one exact outcome",
+        plan_ref="enforced-planning#117",
+        repo_root="/tmp/enforced-planning",
+        worktree_path="/tmp/enforced-planning/worktrees/plan-117",
+        branch="plan-117",
+        session_id="codex:plan117",
+        broader_goal="Bind One Exact Outcome",
+    )
+    record = session_contracts.build_session_tracker(
+        contract=contract,
+        current_phase="select outcome",
+        notes="retain me",
+    )
+    path = session_contracts.write_session_tracker(record, tracker_dir=tmp_path)
+
+    session_contracts.mutate_session_tracker(
+        path,
+        lambda payload: payload["tracker"].__setitem__(
+            "outcome_selection",
+            {"schema_version": "1.0.0", "binding_sha256": "a" * 64},
+        ),
+    )
+    session_contracts.update_session_tracker(
+        path,
+        current_phase="observe selected outcome",
+        intended_next_phases=["retain evidence"],
+    )
+
+    payload = session_contracts.read_session_tracker(path)
+    assert payload["tracker"]["current_phase"] == "observe selected outcome"
+    assert payload["tracker"]["outcome_selection"]["binding_sha256"] == "a" * 64
+    assert payload["tracker"]["notes"] == "retain me"
+
+
+def test_tracker_mutations_are_serialized_without_lost_updates(tmp_path: Path) -> None:
+    """Concurrent heartbeat-style mutations must not clobber selected state."""
+
+    contract = session_contracts.SessionContract.build(
+        agent="codex",
+        project="enforced-planning",
+        scope="plan-117",
+        intent="serialize tracker writes",
+        plan_ref="enforced-planning#117",
+        repo_root="/tmp/enforced-planning",
+        worktree_path="/tmp/enforced-planning/worktrees/plan-117",
+        branch="plan-117",
+        session_id="codex:plan117",
+        broader_goal="Serialize Tracker Writes",
+    )
+    path = session_contracts.write_session_tracker(
+        session_contracts.build_session_tracker(contract=contract, current_phase="start"),
+        tracker_dir=tmp_path,
+    )
+    session_contracts.mutate_session_tracker(
+        path,
+        lambda payload: payload["tracker"].__setitem__("mutation_count", 0),
+    )
+
+    def increment(_index: int) -> None:
+        def mutation(payload: dict[str, object]) -> None:
+            tracker = payload["tracker"]
+            assert isinstance(tracker, dict)
+            tracker["mutation_count"] = int(tracker["mutation_count"]) + 1
+
+        session_contracts.mutate_session_tracker(path, mutation)
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        list(executor.map(increment, range(24)))
+
+    payload = session_contracts.read_session_tracker(path)
+    assert payload["tracker"]["mutation_count"] == 24
+    assert not list(path.parent.glob(f".{path.name}.*.tmp"))
 
 
 def test_coordination_claims_accept_session_contract_fields() -> None:

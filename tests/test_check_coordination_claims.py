@@ -843,6 +843,80 @@ def test_plan_bound_write_claim_persists_exact_canonical_binding(
     assert payload["approval_revisions"] == [f"readiness={digest}"]
 
 
+def test_goal_bound_write_claim_preserves_authority_without_work_graph(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A sequential outcome goal is not graph-coordinated plan execution."""
+
+    module = _load_module()
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
+    repo_root = tmp_path / "demo"
+    worktree = repo_root / "worktrees" / "owner-week"
+    worktree.mkdir(parents=True)
+
+    ok, _message = module.create_claim(
+        agent="codex",
+        project="demo",
+        scope="owner-week",
+        intent="advance one owner-visible outcome",
+        plan_ref="goal:owner-visible-outcome",
+        claim_type="program",
+        write_paths=["src/vertical.py", "tests/test_vertical.py"],
+        repo_root=str(repo_root),
+        worktree_path=str(worktree),
+        branch="owner-week",
+        session_id="codex:goal-test",
+        session_name="owner-visible-outcome",
+        broader_goal="Owner visible outcome",
+        tracker_path=str(tmp_path / "tracker.yaml"),
+    )
+
+    assert ok is True
+    payload = yaml.safe_load((claims_dir / "codex_demo_owner-week.yaml").read_text(encoding="utf-8"))
+    assert payload["plan_ref"] == "goal:owner-visible-outcome"
+    assert payload["write_paths"] == ["src/vertical.py", "tests/test_vertical.py"]
+    assert payload["work_graph_path"] is None
+    assert payload["work_unit_id"] is None
+    claim = module.normalize_claim(payload)
+    assert claim is not None
+    assert "missing_work_graph_path" not in module.claim_health_issues(claim)
+
+
+@pytest.mark.parametrize("authority", ["Plan #117", "enforced-planning#117", "descriptive authority"])
+def test_non_goal_write_authority_still_requires_work_graph(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    authority: str,
+) -> None:
+    """The goal exception cannot weaken numbered or arbitrary plan authority."""
+
+    module = _load_module()
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
+
+    with pytest.raises(ValueError, match="Plan-bound write ownership"):
+        module.create_claim(
+            agent="codex",
+            project="demo",
+            scope="plan117",
+            intent="execute coordinated authority",
+            plan_ref=authority,
+            claim_type="write",
+            write_paths=["src/vertical.py"],
+            repo_root=str(tmp_path / "demo"),
+            worktree_path=str(tmp_path / "demo" / "worktrees" / "plan117"),
+            branch="plan117",
+            session_id="codex:plan-test",
+            session_name="coordinated-authority",
+            broader_goal="Coordinated authority",
+            tracker_path=str(tmp_path / "tracker.yaml"),
+        )
+
+    assert not claims_dir.exists()
+
+
 def test_heartbeat_claims_refreshes_codex_session(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

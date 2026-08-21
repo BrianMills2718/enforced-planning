@@ -1,0 +1,204 @@
+{
+  "schema_version": "1.0.0",
+  "record_type": "owner_causal_restart_and_session_transfer_observation",
+  "plan_id": "enforced-planning#118",
+  "recorded_at": "2026-08-21T06:05:02Z",
+  "policy_authority": {
+    "id": "outcome-continuation-lease-hard-gate",
+    "revision": "f6091b6b2f2a5357d0fdbbe88b157435a2ce07fb",
+    "status": "approved",
+    "cost_gate_present": false
+  },
+  "history_calibration": {
+    "repository_count": 12,
+    "revision": "a2349842a44fbba450875b35f229246de8621d63",
+    "artifact": "project-meta:investigations/cross-project/2026-08-20-recurring-project-failure-modes.md",
+    "use": "Calibrates restart laundering and status-truth gaps; it does not classify the checked-in stalled control as a reconstructed historical lineage."
+  },
+  "design": {
+    "plan_sha256": "11352e5f6fff6675d1ba02878aba3afa754bfea9b8abb5682f16de7cf272bbd1",
+    "work_graph_sha256": "84dbbc232f98b849b539464d20d2c0516b79edaa4b553d99463596bcfa330a79",
+    "implementation_unit_id": "orst-01-restart-safe-outcome-custody",
+    "plan_spine_unit_id": "orst-02-plan-spine-closeout",
+    "unit_split_reason": "The shared plan index and roadmap were already exclusively claimed by Plan 110; the executable core remained path-disjoint and proceeded without passive waiting."
+  },
+  "execution": {
+    "repository": "enforced-planning",
+    "candidate_revision": "6912ce898ff6e9d4715a2370efe528c9fd4e1547",
+    "core_revision": "4a47f064eb2adfad31810eac92f4636753dd87ab",
+    "guide_and_legacy_control_revision": "53c5954235749f07a8bdc647ac5b030cf74c6575",
+    "byte_idempotence_revision": "14439acbb800904b73a51080a97667fb756c9947",
+    "delivery_classification": "manual_same-project_restart_custody_observe_pilot",
+    "selection_module": "enforced_planning/outcome_selection.py",
+    "continuation_contract_module": "enforced_planning/outcome_continuation.py",
+    "session_lifecycle_module": "enforced_planning/session_lifecycle.py",
+    "public_restart_cli": "scripts/outcome_continuation.py restart",
+    "public_observation_cli": "scripts/prewrite_claim_gate.py --outcome-selected",
+    "ordinary_prewrite_authority_changed": false,
+    "host_activation_claimed": false,
+    "enforcement_applied": false
+  },
+  "reproduced_predecessor_gap": {
+    "checked_in_control": "tests/test_outcome_selection.py::test_legacy_claim_only_resume_reproduces_selected_tracker_failure",
+    "legacy_action": "Change only the canonical claim session_id while leaving the selected tracker and binding on the predecessor runtime.",
+    "observed_result": "typed tracker_claim_mismatch",
+    "why_it_matters": "The pre-Plan-118 session-resume path could report resumed after making the selected outcome unusable to the successor runtime."
+  },
+  "contracts_added": {
+    "outcome_session_transfer_v1": {
+      "purpose": "Bind predecessor and successor exact runtime identities while preserving the scenario, contract, lease, outcome, lineage, target, and tracker.",
+      "history_key": "tracker.outcome_session_transfers"
+    },
+    "restart_delta_v1": {
+      "purpose": "Bind exact predecessor state and successor lineage to both the prior and changed causal hypothesis/mechanism, one bounded action, next observation, and stopping condition.",
+      "allowed_predecessor_states": [
+        "stalled",
+        "parked"
+      ]
+    },
+    "outcome_restart_transition_v1": {
+      "purpose": "Retain the full predecessor binding, contract, lease counters, failure facts, failed-evidence refs, delta, and successor binding.",
+      "history_key": "tracker.outcome_selection_transitions"
+    }
+  },
+  "real_session_binding": {
+    "client": "codex",
+    "session_id": "codex:01a021cc-f3a0-7b21-babc-f18617333d1a",
+    "claim_project": "enforced-planning",
+    "claim_scope": "plan-118-restart-lineage-design",
+    "branch": "plan-118-restart-lineage-design",
+    "execution_authority_ref": "goal:prevent-circular-project-failure",
+    "claim_plan_ref": "goal:prevent-circular-project-failure",
+    "claim_identity_sha256": "ee596655713d5a29c0ae348c3525ceeefdccd1dbca8005679ed0b9bce75b0201",
+    "claim_source_sha256_at_observation": "86922b068abc24951ab46302ab6c27f1c12591ff799faf7e12e6ae8c8f6c84ce",
+    "tracker_sha256_after_restart_and_exact_replay": "aaa5d92d611402e6437950ac8e9a4ff1a0fa54a6cc819dec6ebd798b985f959a"
+  },
+  "selected_stalled_control": {
+    "classification": "checked-in synthetic same-outcome stalled control executed through the real exact Plan 118 claim",
+    "scenario_path": "examples/owner-real-outcome-observe/plan118-stalled-predecessor.json",
+    "scenario_file_sha256": "58b36e1c8d57361b21939df9e5fbf4a8f967e705d0ccab80a52a309541786b94",
+    "scenario_sha256": "c6dfd41b2b54c7fbf2ff36c4f6efdb0ce54851777a2d3ce410a96c32b6476bfa",
+    "binding_sha256": "886821afd857be94eba8b87df667da2084cb72c4737b181d43edbf2b54d64f45",
+    "outcome_contract_sha256": "5a503cadceb2bb062fff1a5fb5f1a2fd70574f68ed6e2c10c0577efcfcc4f740",
+    "lineage_id": "plan-118-stalled-control",
+    "lease_sha256": "af91c87a65aa4b7bd4ac82255ef7fb46cd5b5cf762022878cc296583b6ffb3ee",
+    "lease_state": "stalled",
+    "consecutive_non_outcome_increments": 3,
+    "failure_boundary": "restart-evidence-reset",
+    "same_boundary_failures": 3,
+    "ordinary_approval_ignored": true,
+    "cost_telemetry_ignored": true,
+    "elapsed_telemetry_ignored": true,
+    "limitation": "The three retained non-outcome receipts are an explicit mechanical control grounded in known policy/history/runtime gaps, not a claim that three historical attempts belonged to one previously registered lease."
+  },
+  "direct_replacement_negative": {
+    "command": "python scripts/outcome_continuation.py select --scenario examples/owner-real-outcome-observe/plan118-active-successor.json --execution-authority goal:prevent-circular-project-failure --agent codex --project enforced-planning --scope plan-118-restart-lineage-design",
+    "exit_code": 2,
+    "error_code": "selection_conflict",
+    "tracker_mutated": false
+  },
+  "real_causal_restart_positive": {
+    "command": "python scripts/outcome_continuation.py restart --successor-scenario examples/owner-real-outcome-observe/plan118-active-successor.json --restart-delta examples/owner-real-outcome-observe/plan118-restart-delta.json --agent codex --project enforced-planning --scope plan-118-restart-lineage-design",
+    "initial_status": "restarted",
+    "exact_replay_status": "idempotent",
+    "restart_delta_path": "examples/owner-real-outcome-observe/plan118-restart-delta.json",
+    "restart_delta_file_sha256": "7036869326b15d4f7984418b5cc6f9c108a4bf40aec78321f20dd0284193e211",
+    "restart_delta_sha256": "d5c37794adbfdeb9c23664991eef91f27fb607e6c2ee7195c9cfb2b9d04fbe86",
+    "transition_sha256": "e6dd3d66c514c113568adbc2234de3d15c18bb97af892260533ec4e490a1dd82",
+    "successor_scenario_path": "examples/owner-real-outcome-observe/plan118-active-successor.json",
+    "successor_scenario_file_sha256": "18e0809e16a460d3ad7d5195104deb8b12709c73b925a8829e1e605eb990777f",
+    "successor_scenario_sha256": "1d3c6315a9f3e45e20cd107836cb3edc7800f98c88679c1c4a4166bea225e40a",
+    "successor_binding_sha256": "c02f0ae92b8164c8b087c42f7f502a3e2009a254dbf26771cbe157a9cb3d9762",
+    "successor_contract_sha256": "1194586319475dc0b6a5365c5e3688dff07bcad74a912c88a8d1b4c5a72a3e40",
+    "successor_lineage_id": "plan-118-restart-safe-custody",
+    "successor_lease_sha256": "33663ea857afc638bb86e2854cf97632c76aa83e0100e33d02811ba00ae179b6",
+    "successor_lease_state": "active",
+    "retained_predecessor_failure_refs": 4,
+    "transition_history_count": 1,
+    "exact_replay_tracker_bytes_unchanged": true
+  },
+  "post_restart_selected_prewrite": {
+    "hook_event_name": "PreToolUse",
+    "tool_name": "apply_patch",
+    "target_path": "docs/evidence/plan118_causal_restart_lineage.json",
+    "ordinary_receipt_id": "prewrite_3b12b695f6364ac1bfb3cd8832502373",
+    "ordinary_recorded_at": "2026-08-21T05:53:37.529194+00:00",
+    "ordinary_decision": "allow",
+    "ordinary_reason_code": "exact_live_claim",
+    "correlation_receipt_id": "ocor-40e529eb64d24fc6a28fcbacea0901fd",
+    "outcome_observed_at": "2026-08-21T05:53:38.836025Z",
+    "outcome_disposition": "would_allow",
+    "outcome_reason_code": "active_in_scope",
+    "selection_binding_sha256": "c02f0ae92b8164c8b087c42f7f502a3e2009a254dbf26771cbe157a9cb3d9762",
+    "ordinary_authority_preserved": true,
+    "enforcement_applied": false,
+    "ordinary_log_sha256_at_observation": "e2ecea177ce322d63920cb661dd523421a09c68bcf135a9f70e423df5ffdd328",
+    "outcome_log_sha256_at_observation": "da363a864e944914c75cd94b5935ce8f69dff0934c9ba01950489a1cd836fb45"
+  },
+  "session_transfer_controls": {
+    "classification": "fixture-equivalent exact claim/tracker lanes; no fake runtime was attached to the live owner claim",
+    "command": "env -u CODEX_THREAD_ID pytest -q tests/test_outcome_selection.py::test_legacy_claim_only_resume_reproduces_selected_tracker_failure tests/test_outcome_selection.py::test_cross_session_resume_transfers_selected_outcome_without_reset tests/test_outcome_selection.py::test_cross_session_resume_restores_exact_preflight_state_when_tracker_transfer_fails tests/test_outcome_selection.py::test_cross_session_resume_reports_typed_incomplete_transition_if_rollback_fails",
+    "passed": 4,
+    "failed": 0,
+    "positive": "Successor runtime retained scenario/contract/lease/lineage, resolved the selected outcome, and predecessor runtime was denied.",
+    "rollback": "Injected tracker failure restored exact preflight claim and tracker bytes and left the derived projection current.",
+    "incomplete_failure": "Injected rollback failure raised typed session_transfer_incomplete and never reported resumed."
+  },
+  "negative_controls": {
+    "active_predecessor": "restart_predecessor_state",
+    "recovery_required_predecessor": "restart_predecessor_state",
+    "complete_predecessor": "restart_predecessor_state",
+    "changed_outcome": "authority_outcome_mismatch",
+    "changed_canonical_journey": "restart_outcome_mismatch",
+    "changed_target": "restart_target_mismatch",
+    "missing_direct_predecessor": "restart_predecessor_missing",
+    "mismatched_delta": "restart_delta_mismatch",
+    "competing_direct_selection": "selection_conflict"
+  },
+  "focused_verification": {
+    "command": "env -u CODEX_THREAD_ID pytest -q tests/test_outcome_continuation.py tests/test_outcome_prewrite_observation.py tests/test_outcome_selection.py tests/test_prewrite_claim_projection.py tests/test_session_cli.py",
+    "passed": 137,
+    "failed": 0,
+    "covers": [
+      "Plan 108 ordinary pre-write projection",
+      "Plan 114 outcome continuation contracts",
+      "Plan 116 ordinary/outcome correlation",
+      "Plan 117 durable selection",
+      "Plan 118 session transfer and causal restart"
+    ],
+    "changed_file_import_and_finding_lint": "ruff check --select F,I passed",
+    "doc_code_coupling": "passed at revision 53c5954235749f07a8bdc647ac5b030cf74c6575",
+    "module_reachability": "259/259 modules and 100 percent of lines reachable",
+    "broad_make_lint": "not green because the repository currently reports 415 pre-existing Ruff findings; not used as acceptance evidence",
+    "dead_code_hook": "warned because vulture is unavailable; no finding count was fabricated"
+  },
+  "durable_learning": {
+    "entry": "project-meta:learnings/entries/lrn-20260821T060100000000Z-cc4b43ea42.json",
+    "merge_revision": "7667d69f9d0b3de56108a28767ac9883b5a24c83",
+    "finding": "Logical no-op replay is not durable idempotence when a generic mutator still stamps and rewrites the tracker; assert exact bytes or digest."
+  },
+  "next_integration_decision": {
+    "decision": "retain same-project observe custody and next add independently authorized restart review plus Project Graph owner-class/predecessor resolution before hard blocking",
+    "why": "Plan 118 closes sanctioned runtime handoff and same-project causal restart laundering, but the same agent still authors and executes RestartDeltaV1 and no owner-class WIP ceiling is consulted.",
+    "explicitly_deferred": [
+      "independent reviewer identity and attestation",
+      "Project Graph owner-class and predecessor resolution",
+      "cross-project or successor-repository restart custody",
+      "break-glass continuation",
+      "hard outcome denial",
+      "default hook or installer activation",
+      "shell interception",
+      "downstream repository, colleague, fleet, deployment, or release claims"
+    ]
+  },
+  "licensed_claim": "At candidate revision 6912ce898ff6e9d4715a2370efe528c9fd4e1547, the real exact Plan 118 Codex claim rejected direct replacement of its selected stalled control, accepted one strict same-outcome causal restart, retained the full predecessor binding/contract/lease with three failure counters and four failed-evidence refs, resolved the successor from an ordinary allow/exact_live_claim receipt to would_allow/active_in_scope, replayed the exact restart without changing tracker bytes, and rejected a competing restart against the consumed predecessor. Fixture-equivalent lifecycle tests separately prove lossless selected-state transfer, predecessor-runtime denial, exact rollback, and typed incomplete failure. Ordinary pre-write remains authoritative and no hard enforcement, independent review, Project Graph owner-class resolution, cross-project successor, or fleet adoption is claimed.",
+  "limitations": [
+    "The stalled predecessor is an explicit synthetic control executed through a real exact claim, not a reconstructed historical project lease.",
+    "The successor starts an active initial lease to exercise restart custody; this is mechanical transition evidence, not a semantic claim that the portfolio outcome is complete or that a progress receipt renewed it.",
+    "Session transfer evidence is fixture-equivalent; the live owner claim was not deliberately orphaned onto a fabricated runtime ID.",
+    "Prior and changed mechanism text is structurally validated but not semantically or independently reviewed.",
+    "The pilot is same-project and same-worktree only.",
+    "No selected outcome denial changes ordinary admission or exit behavior.",
+    "No installer, host hook, shell, downstream repository, colleague, fleet, deployment, release, or cost-control behavior changed."
+  ]
+}

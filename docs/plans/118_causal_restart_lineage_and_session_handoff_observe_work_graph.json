@@ -1,0 +1,330 @@
+{
+  "units": [
+    {
+      "schema_version": "1.0",
+      "record_type": "work_unit",
+      "id": "orst-01-restart-safe-outcome-custody",
+      "initiative_id": "progress-bound-agent-execution",
+      "goal_id": "retain-outcome-and-failure-state-across-restarts",
+      "design_revision": "sha256:11352e5f6fff6675d1ba02878aba3afa754bfea9b8abb5682f16de7cf272bbd1",
+      "spec_revision": "sha256:11352e5f6fff6675d1ba02878aba3afa754bfea9b8abb5682f16de7cf272bbd1",
+      "title": "Preserve selected outcome custody across session handoff and causal restart",
+      "class": "integration",
+      "objective": "Make sanctioned cross-session resume preserve the exact selected outcome and failure state, and permit a stalled or parked lineage to adopt a different mechanism only through an exact same-outcome causal restart delta with append-only transition history, without changing ordinary pre-write authority.",
+      "profile": "standard",
+      "execution_class": "independently_executable",
+      "claimability": "not_applicable",
+      "authorization_mode": "registry_claim",
+      "scope": {
+        "included": [
+          "Strict session-transfer, causal-restart-delta, and restart-transition contracts",
+          "Automatic exact selected-state preservation on sanctioned cross-session resume",
+          "Preflighted claim/tracker mutation with exact rollback or typed incomplete failure",
+          "Explicit same-project stalled-or-parked causal restart command",
+          "Same owner, project, outcome, consumer, canonical journey, target, and authority validation",
+          "Retained predecessor binding, lease state, counters, failure boundary, failure count, and failed-evidence references",
+          "Idempotent exact replay and competing-restart rejection",
+          "Post-transfer and post-restart selected pre-write observations with ordinary exit preservation",
+          "One real Plan 118 causal transition and one cross-session resume control",
+          "Evidence, guide, plan, graph, index, and roadmap reconciliation"
+        ],
+        "excluded": [
+          "Independent reviewer-attestation enforcement or break glass",
+          "Semantic proof that a changed mechanism is genuinely different",
+          "Project Graph owner-class resolution or active-outcome WIP ceilings",
+          "A new global lease or outcome registry",
+          "Cross-project, cross-worktree, or cross-branch successor activation",
+          "Completed-outcome successor selection",
+          "Automatic selection for unrelated new sessions or repositories",
+          "Outcome blocking, default hook activation, installer or fleet rollout, shell interception, deployment, release, or cost controls"
+        ]
+      },
+      "inputs": [
+        {
+          "kind": "bounded_design",
+          "id": "docs/plans/118_causal_restart_lineage_and_session_handoff_observe.md",
+          "revision": "sha256:11352e5f6fff6675d1ba02878aba3afa754bfea9b8abb5682f16de7cf272bbd1"
+        },
+        {
+          "kind": "existing_capability",
+          "id": "docs/plans/117_durable_outcome_selection_binding_observe.md",
+          "revision": "6340ff80cb8c514d8f3170d7818b0b324a1d04cb"
+        },
+        {
+          "kind": "approved_policy",
+          "id": "project-meta:policy/proposals/2026-08-20-outcome-continuation-lease-hard-gate.yaml",
+          "revision": "f6091b6b2f2a5357d0fdbbe88b157435a2ce07fb"
+        },
+        {
+          "kind": "history_calibration",
+          "id": "project-meta:investigations/cross-project/2026-08-20-recurring-project-failure-modes.md",
+          "revision": "a2349842a44fbba450875b35f229246de8621d63"
+        },
+        {
+          "kind": "downstream_adoption_evidence",
+          "id": "project-meta:learnings/entries/lrn-20260821T051119239282Z-c16372dc0f.json",
+          "revision": "c853c5742013799ece485b97c942f8cf71604663"
+        }
+      ],
+      "outputs": [
+        "Strict OutcomeSessionTransferV1, RestartDeltaV1, and OutcomeRestartTransitionV1 contracts",
+        "Sanctioned cross-session resume that retains the exact selected outcome and failure state",
+        "One explicit same-project causal restart command with exact predecessor and successor bindings",
+        "Append-only transfer/restart history in the existing exact tracker",
+        "Post-transfer and post-restart selected pre-write both-sign evidence",
+        "Operator guidance and revision-bound pilot evidence with explicit promotion limits"
+      ],
+      "dependencies": [],
+      "conflict_surfaces": [
+        {
+          "kind": "repository_path",
+          "target": "enforced_planning/outcome_continuation.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-118-restart-outcome-custody"
+        },
+        {
+          "kind": "repository_path",
+          "target": "enforced_planning/outcome_selection.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-118-restart-outcome-custody"
+        },
+        {
+          "kind": "repository_path",
+          "target": "enforced_planning/session_lifecycle.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-118-restart-outcome-custody"
+        },
+        {
+          "kind": "repository_path",
+          "target": "scripts/outcome_continuation.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-118-restart-outcome-custody"
+        },
+        {
+          "kind": "repository_path",
+          "target": "tests/test_outcome_continuation.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-118-restart-outcome-custody"
+        },
+        {
+          "kind": "repository_path",
+          "target": "tests/test_outcome_selection.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-118-restart-outcome-custody"
+        },
+        {
+          "kind": "repository_path",
+          "target": "examples/owner-real-outcome-observe/plan118-stalled-predecessor.json",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-118-restart-outcome-custody"
+        },
+        {
+          "kind": "repository_path",
+          "target": "examples/owner-real-outcome-observe/plan118-active-successor.json",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-118-restart-outcome-custody"
+        },
+        {
+          "kind": "repository_path",
+          "target": "examples/owner-real-outcome-observe/plan118-restart-delta.json",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-118-restart-outcome-custody"
+        },
+        {
+          "kind": "repository_path",
+          "target": "docs/evidence/plan118_causal_restart_lineage.json",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-118-restart-outcome-custody"
+        },
+        {
+          "kind": "repository_path",
+          "target": "docs/guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-118-restart-outcome-custody"
+        },
+        {
+          "kind": "repository_path",
+          "target": "docs/plans/118_causal_restart_lineage_and_session_handoff_observe.md",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-118-restart-outcome-custody"
+        },
+        {
+          "kind": "repository_path",
+          "target": "docs/plans/118_causal_restart_lineage_and_session_handoff_observe_work_graph.json",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-118-restart-outcome-custody"
+        }
+      ],
+      "acceptance": [
+        {
+          "id": "ORST01-A1",
+          "criterion": "Sanctioned cross-session resume preserves every selected outcome and lease fact except exact runtime identity, appends one transfer record, and leaves selected resolution usable only by the new session.",
+          "evidence_required": [
+            "Reproduced pre-fix resume-success/selection-failure control",
+            "Exact transfer contract and identity-diff assertions",
+            "Post-resume selected pre-write observation",
+            "Old-session denial"
+          ],
+          "negative_control": "Invalid or tampered selected state leaves claim ownership unchanged; injected partial mutation restores exact preflight bytes or reports a typed incomplete transition."
+        },
+        {
+          "id": "ORST01-A2",
+          "criterion": "Only stalled or parked selected state can enter causal restart, and the successor retains exact owner, project, outcome, consumer, canonical journey, progress dimensions, target, authority, and direct predecessor lineage.",
+          "evidence_required": [
+            "Strict delta/model tests",
+            "Same-outcome successor validation tests",
+            "Active, recovery-required, complete, changed-outcome, changed-journey, and missing-predecessor denials"
+          ],
+          "negative_control": "A fresh scenario cannot be relabeled as a restart by supplying prose or a mismatched digest."
+        },
+        {
+          "id": "ORST01-A3",
+          "criterion": "An accepted restart permanently retains predecessor binding, contract, lease, state, counters, failure boundary/count, and failed-evidence references while replacing only the current selected binding.",
+          "evidence_required": [
+            "Atomic tracker mutation test",
+            "Append-only transition history assertion",
+            "Exact retained failure-fact readback",
+            "Idempotent replay and competing-delta denial"
+          ],
+          "negative_control": "No successful transition can erase or decrement predecessor failure facts."
+        },
+        {
+          "id": "ORST01-A4",
+          "criterion": "The successor current binding resolves through the existing selected pre-write observer while ordinary claim admission and exit behavior remain unchanged.",
+          "evidence_required": [
+            "Real Plan 118 claimed-session transition",
+            "Ordinary and selected receipt IDs/digests",
+            "Focused Plan 108, 114, 116, and 117 regressions"
+          ],
+          "negative_control": "A selected transition error remains advisory and cannot alter the ordinary decision or exit code."
+        }
+      ],
+      "readiness": {
+        "status": "ready",
+        "required_approval_types": [],
+        "approvals": [],
+        "failed_guards": []
+      },
+      "claim_policy": {
+        "eligibility_rule": "Plan 117 is accepted; one exact Plan 118 claimed lane owns only the listed contracts, lifecycle seam, CLI, tests, scenarios, evidence, guide, plan, and graph paths.",
+        "lease_policy": "renewable",
+        "lease_duration_minutes": 1440,
+        "max_active_per_claimant": 1,
+        "named_owner_id": null
+      },
+      "status": "accepted",
+      "record_version": 3,
+      "updated_at": "2026-08-21T06:06:00Z"
+    },
+    {
+      "schema_version": "1.0",
+      "record_type": "work_unit",
+      "id": "orst-02-plan-spine-closeout",
+      "initiative_id": "progress-bound-agent-execution",
+      "goal_id": "retain-outcome-and-failure-state-across-restarts",
+      "design_revision": "sha256:11352e5f6fff6675d1ba02878aba3afa754bfea9b8abb5682f16de7cf272bbd1",
+      "spec_revision": "sha256:11352e5f6fff6675d1ba02878aba3afa754bfea9b8abb5682f16de7cf272bbd1",
+      "title": "Reconcile the plan index and roadmap after restart custody is accepted",
+      "class": "integration",
+      "objective": "Publish truthful Plan 118 index and roadmap state only after the executable restart-custody unit has accepted evidence, without forcing its shared documentation paths into the implementation claim.",
+      "profile": "standard",
+      "execution_class": "independently_executable",
+      "claimability": "ready_for_execution",
+      "authorization_mode": "registry_claim",
+      "scope": {
+        "included": [
+          "Add or update the Plan 118 plan-index row",
+          "Reconcile the roadmap frontier and observe-only promotion boundary"
+        ],
+        "excluded": [
+          "Code, tests, scenarios, evidence, guide, plan-body, or work-graph behavior changes",
+          "Independent review, owner-class resolution, cross-project restart, blocking, installation, deployment, release, or fleet claims"
+        ]
+      },
+      "inputs": [
+        {
+          "kind": "bounded_design",
+          "id": "docs/plans/118_causal_restart_lineage_and_session_handoff_observe.md",
+          "revision": "sha256:11352e5f6fff6675d1ba02878aba3afa754bfea9b8abb5682f16de7cf272bbd1"
+        },
+        {
+          "kind": "work_unit",
+          "id": "orst-01-restart-safe-outcome-custody",
+          "revision": "accepted"
+        }
+      ],
+      "outputs": [
+        "Plan 118 index row matching accepted evidence",
+        "Roadmap state naming the next unimplemented enforcement dependency"
+      ],
+      "dependencies": [
+        {
+          "unit_id": "orst-01-restart-safe-outcome-custody",
+          "type": "hard",
+          "gate": {
+            "type": "unit_status",
+            "required_status": "accepted"
+          },
+          "rationale": "Shared status documentation must describe accepted runtime evidence rather than anticipated implementation."
+        }
+      ],
+      "conflict_surfaces": [
+        {
+          "kind": "repository_path",
+          "target": "docs/plans/CLAUDE.md",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-118-plan-spine-closeout"
+        },
+        {
+          "kind": "repository_path",
+          "target": "ROADMAP.md",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-118-plan-spine-closeout"
+        }
+      ],
+      "acceptance": [
+        {
+          "id": "ORST02-A1",
+          "criterion": "The index and roadmap match accepted Plan 118 evidence and remain truthful about the observe-only, same-project boundary and unimplemented independent review, owner-class resolution, cross-project successors, and hard blocking.",
+          "evidence_required": [
+            "Accepted ORST01 evidence revision",
+            "Plan index validation",
+            "Roadmap diff inspection"
+          ],
+          "negative_control": "No reviewer-attestation, Project Graph resolver, installer, hook promotion, downstream repository, deployment, or fleet completion claim appears."
+        }
+      ],
+      "readiness": {
+        "status": "ready",
+        "required_approval_types": [],
+        "approvals": [],
+        "failed_guards": []
+      },
+      "claim_policy": {
+        "eligibility_rule": "Claim only after ORST01 is accepted and the two shared documentation paths have no conflicting live owner.",
+        "lease_policy": "renewable",
+        "lease_duration_minutes": 1440,
+        "max_active_per_claimant": 1,
+        "named_owner_id": null
+      },
+      "status": "ready",
+      "record_version": 2,
+      "updated_at": "2026-08-21T06:06:00Z"
+    }
+  ]
+}

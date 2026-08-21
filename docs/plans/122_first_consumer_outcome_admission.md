@@ -1,6 +1,6 @@
 # Plan #122: First-Consumer Outcome Admission Gate
 
-**Status:** In Progress — bounded first-consumer design adopted; implementation pending
+**Status:** Complete — opt-in first source consumer implemented and accepted; activation excluded
 **Type:** implementation (hard opt-in source consumer; activation excluded)
 **Priority:** Critical
 **phase_ref:** "Progress-bound coding-agent continuation"
@@ -282,6 +282,7 @@ configuration remain unchanged until a later activation decision.
 - `docs/plans/CLAUDE.md`
 - `docs/guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md`
 - `ROADMAP.md`
+- `CLAUDE.md`
 
 ## Work Unit OAG-01 — Implement and exercise first-consumer admission
 
@@ -309,25 +310,58 @@ Pass when:
 
 ## Acceptance Criteria
 
-1. One canonical production decision reproduces every frozen Plan #121
-   disposition/reason and the evaluator no longer owns a duplicate algorithm.
-2. Bootstrap is source-owned, nonempty, plan-bound, and rejects any source,
-   script, test, evidence, or arbitrary path.
-3. Selected admission derives exact live state and cannot be made active by a
-   caller-provided boolean or label.
-4. Opted-in session renewal and heartbeat deny before mutation when admission
-   fails, while default calls preserve existing behavior.
-5. Opted-in pre-write preserves ordinary-denial precedence and changes an
-   ordinary allow to nonzero on outcome denial.
-6. Admission receipts are strict, append-only, replay-readable, and name exact
-   evidence digests and the final reason.
-7. The authentic Plan #122 positive journey and public-command negative
-   controls are retained with focused tests, Ruff, mypy, plan validation, and
-   exact candidate revision.
+| ID | Criterion | Result | Evidence |
+|---|---|---|---|
+| OAG01-A1 | One production decision owns admission ordering and reproduces every frozen Plan #121 case | accepted | production-owner delegation, 30 frozen decisions, ordinary-denial control |
+| OAG01-A2 | Bootstrap permits only the fixed nonempty Plan/index/roadmap/input scope | accepted | allow receipt plus source-smuggling and focused malformed-scope denials |
+| OAG01-A3 | Selected admission derives exact current canonical state | accepted | claim, tracker, binding, Project Graph, allocation, scenario, and lease digests |
+| OAG01-A4 | Explicit lifecycle and pre-write adapters deny before mutation or success while defaults remain compatible | accepted | missing/disposed no-mutation heartbeats, ordinary-allow/outcome-deny pre-write, default regressions |
+| OAG01-A5 | One real Plan #122 lane retains both-sign public-command evidence and truthful non-claims | accepted | active allow, parked deny, circular-state deny, focused verification, exact candidate |
+
+## Accepted Evidence
+
+- Exact implementation candidate:
+  `8eae9b3e3e12634571134e26ab7422bcab7457af`; all production source digests
+  are retained in
+  `docs/evidence/plan122_first_consumer_outcome_admission.json`.
+- The fixed seven-path bootstrap returned
+  `allow/admission_bootstrap_allowed` in receipt
+  `oadm-bd4076263f354ffaa1118bc4c054e0ff`; adding
+  `enforced_planning/outcome_admission.py` returned
+  `deny/admission_bootstrap_scope_violation` in
+  `oadm-9a8164f1ffc248d290a02c3d6c25b5d3`.
+- Missing selection returned `deny/outcome_selection_required` through the
+  public selected command and heartbeat. The heartbeat timestamp did not
+  change.
+- The exact Project Meta revision
+  `58ba96b01da2bad35cd3feae034d86c705bf2b9a` admitted maintenance allocation
+  `8a63b760df3d31eaee288567c1220fe556f2d62f28f0e4564fe391a4df6bf081`.
+  The retained selection binding
+  `4773865d1486a5a03306cae9bb758d8d020c49746195b630e33d530ed6e7d460`
+  then allowed the public selected check, opted-in heartbeat, and an
+  ordinary-authorized hard pre-write.
+- Parking that allocation caused the same selected check and heartbeat to
+  return `deny/portfolio_allocation_inactive`; heartbeat bytes remained
+  unchanged. The hard pre-write also returned nonzero even though ordinary
+  authority still returned `allow/exact_live_claim`.
+- The equivalent circular-state public-command control returned
+  `deny/outcome_stalled` from selected admission and hard pre-write and left
+  target bytes unchanged.
+- Focused verification passed 191 tests, including every frozen Plan #121
+  decision, live-state adapters, default compatibility, lifecycle, ordinary
+  projection, and public CLIs. Changed source passed focused Ruff and mypy;
+  Makefile dry-runs and `git diff --check` passed.
+- The first authentic pre-write composition exposed a plural-field adapter
+  mismatch. The fixed adapter now requires exactly one string in
+  `normalized_target_paths`; the reusable finding is retained at
+  `project-meta:learnings/entries/lrn-20260821T095107688885Z-8bba26ab79.json`.
+- Retained acceptance artifact:
+  `docs/evidence/plan122_first_consumer_outcome_admission.json`.
 
 ## Promotion Boundary
 
-Completion licenses a separately reviewed source-repository activation pilot.
+This accepted result licenses a separately reviewed source-repository
+activation pilot.
 It does not activate a hook, change `meta-process.yaml` defaults, modify the
 installer, propagate generated mirrors, claim fleet adoption, resolve
 cross-repository allocation membership, certify progress semantics, or choose
@@ -339,8 +373,7 @@ Brian's active product outcome.
 
 ## Terminal Closeout
 
-Commit and push this design before production implementation. Retain the exact
-bootstrap and selected-outcome inputs before the authentic run. Merge only the
-first-consumer implementation and both-sign evidence, close its claimed lane,
-and continue to activation only if that evidence justifies a new bounded
-promotion.
+The design preceded production implementation, and the exact bootstrap and
+selected-outcome inputs preceded the authentic run. Merge only this opt-in
+consumer and its both-sign evidence, close the claimed lane, and treat source
+activation as a new bounded promotion with its own rollback and evidence.

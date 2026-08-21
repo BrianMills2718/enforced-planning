@@ -587,6 +587,86 @@ inspection/replay/preservation/closeout, a write-free allocation bootstrap,
 active-child reuse, bounded recovery, legacy cutover until renewal, and visible
 denial for missing, inactive, mismatched, stalled, or terminal outcome state.
 
+### First-consumer hard outcome admission (explicit source pilot)
+
+Plan #122 implements that one source consumer, but leaves every new path
+default-off. The production owner is `enforced_planning/outcome_admission.py`;
+the Plan #121 evaluator now calls the same owner instead of retaining a second
+decision algorithm. Admission derives portfolio and continuation labels from
+the exact live claim, tracker, selection, allocation ledger, scenario, and
+effective lease. A caller can select the boundary and opt in to enforcement,
+but cannot claim that an allocation is active or progress is healthy.
+
+Inspect the fixed allocation-bootstrap scope before mutation with:
+
+```bash
+python scripts/outcome_admission.py bootstrap \
+  --plan 122 \
+  --write-path docs/plans/122_first_consumer_outcome_admission.md \
+  --write-path docs/plans/122_first_consumer_outcome_admission_work_graph.json \
+  --write-path examples/owner-real-outcome-admission/plan122-maintenance-scenario.json \
+  --write-path examples/owner-real-outcome-admission/plan122-maintenance-allocation.json \
+  --write-path examples/owner-real-outcome-admission/plan122-maintenance-disposition.json \
+  --write-path docs/plans/CLAUDE.md \
+  --write-path ROADMAP.md \
+  --receipt-path /path/to/outcome-admission-v1.jsonl
+```
+
+The bootstrap allows only the exact nonempty plan, matching work graph,
+Plan-numbered input examples, plan index, and roadmap shapes. It grants no Git
+or claim authority. Any source, script, test, evidence, traversal, foreign-plan,
+or arbitrary path returns nonzero. The sanctioned worktree bundle invokes the
+same check only when `OUTCOME_ADMISSION_BOOTSTRAP_PLAN=<plan>` is set.
+
+Once the exact allocation and selection exist, operators can inspect admission
+without mutating lifecycle state:
+
+```bash
+python scripts/outcome_admission.py selected \
+  --agent codex --project enforced-planning \
+  --scope plan-122-first-consumer-outcome-admission \
+  --session-id codex:EXACT_SESSION_ID \
+  --boundary heartbeat --renewal \
+  --receipt-path /path/to/outcome-admission-v1.jsonl
+```
+
+Hard lifecycle admission is explicit:
+
+```bash
+python scripts/session_heartbeat.py \
+  --agent codex --project enforced-planning \
+  --scope plan-122-first-consumer-outcome-admission \
+  --session-id codex:EXACT_SESSION_ID \
+  --outcome-selected \
+  --outcome-admission-receipt-path /path/to/outcome-admission-v1.jsonl \
+  --json
+
+python scripts/prewrite_claim_gate.py \
+  --client codex --mode enforce \
+  --outcome-enforce-selected \
+  --outcome-receipt-path /path/to/outcome-admission-v1.jsonl \
+  --json
+```
+
+`session-start` and `session-heartbeat` also receive the same opt-in through
+`OUTCOME_ADMISSION_SELECTED=true`; their receipt path comes from
+`OUTCOME_ADMISSION_RECEIPT_PATH`. Session start, resume, and heartbeat are
+renewal boundaries even when a lower-level caller omits a renewal hint. Hard
+pre-write runs only after ordinary claim admission, so an ordinary denial stays
+denied. An ordinary allow becomes nonzero when selected outcome admission
+denies. Missing, malformed, inaccessible, inactive, mismatched, out-of-scope,
+recovery-required, stalled, or terminal state fails visibly before lifecycle
+mutation or pre-write success. Receipt append failure also fails the opted-in
+operation.
+
+Without these flags, session lifecycle and ordinary pre-write behavior are
+unchanged. This source pilot has not enabled a hook or default, changed
+`meta-process.yaml`, propagated through the installer or generated mirrors,
+established downstream/fleet adoption, solved cross-repository allocation
+membership, certified the semantic truth of progress, or selected Brian's
+active product outcome. Its accepted evidence is
+`docs/evidence/plan122_first_consumer_outcome_admission.json`.
+
 Important rule: do not name sessions after the immediate local task. A branch
 like `plan-31-hygiene-gate` is fine for git, but the session name should derive
 from the broader goal, such as `digimon-truthful-controller-grounding`.

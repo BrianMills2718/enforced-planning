@@ -1,0 +1,280 @@
+{
+  "schema_version": "1.0.0",
+  "record_type": "owner_first_consumer_outcome_admission_observation",
+  "plan_id": "enforced-planning#122",
+  "recorded_at": "2026-08-21T10:02:43Z",
+  "decision_scope": "Whether one explicit Enforced Planning source consumer can deny circular selected-outcome renewal and writes before mutation or success while preserving default-off behavior.",
+  "policy_authority": {
+    "id": "outcome-continuation-lease-hard-gate",
+    "revision": "f6091b6b2f2a5357d0fdbbe88b157435a2ce07fb",
+    "status": "approved",
+    "ordinary_operator_approval_is_progress_evidence": false,
+    "cost_or_elapsed_time_affects_admission": false
+  },
+  "licensed_predecessor": {
+    "plan_id": "enforced-planning#121",
+    "accepted_revision": "2b4643e0040dd6dacc9eaaf25aceebb2e1622610",
+    "candidate_revision": "d30696a06f5120bb69df255137f2293dbc1a752e",
+    "canonical_result_sha256": "f7cd2b73f3565025e90b10dcd8cc883ff567fa39dddfd403d68ae174bf98a6b7",
+    "scored_cases": 29,
+    "critical_false_blocks": 0,
+    "critical_false_allows": 0,
+    "unexpected_scored_defers": 0,
+    "independent_signoff": "accepted for one first Enforced Planning consumer only"
+  },
+  "candidate": {
+    "revision": "8eae9b3e3e12634571134e26ab7422bcab7457af",
+    "revision_object_verified": true,
+    "working_tree_clean_before_evidence_closeout": true,
+    "source_sha256": {
+      "enforced_planning/outcome_admission.py": "6ad72c218f20304101ca910b7ef38a5a4fb5b0ba1942a388f1bef3bb4269d7bc",
+      "enforced_planning/outcome_admission_evaluation.py": "29ec7840d387108712a3d5bb99f8ec2ceb5bbbceb20cb1bdd15a1e5908329648",
+      "enforced_planning/outcome_selection.py": "5fba7b03aa04b905ced25e06c9c5702051971df51076fda169233a2bb15f2eaf",
+      "enforced_planning/session_lifecycle.py": "b3e9e0df26f5c0de2e12cb0e6db5803eec24f87492053af8eeb9c6503e1269d8",
+      "scripts/outcome_admission.py": "db18528e38425e43de198bf7f1d1316a73416b1f760c3601c8f5136222a159db",
+      "scripts/session_start.py": "9dcdf2bf204a5b0249bc4bf51b45d7b52cbe370d2c402708acd2522f047ca3b1",
+      "scripts/session_heartbeat.py": "2b0748871d5ef3a621e4338658f21d5977b5c91f74623f1a2ec793652c679389",
+      "scripts/prewrite_claim_gate.py": "bdc669af6675a6489dbc40a8560472e13b7e5a2a604aa212b5d4ded34abac814",
+      "Makefile": "8b8d03bb20b567d79047aa99a7d8f816dca57f31a36a59a45297abdf2095d8b9",
+      "tests/test_outcome_admission.py": "417620bb3a2f37dc1d0aa2bc7619befaeddb7320b1fa84b09ce62ab2331ed00d"
+    },
+    "production_decision_owner": "enforced_planning/outcome_admission.py",
+    "public_cli": "scripts/outcome_admission.py",
+    "evaluation_delegates_to_production_owner": true
+  },
+  "project_graph_authority": {
+    "repository": "project-meta",
+    "revision": "58ba96b01da2bad35cd3feae034d86c705bf2b9a",
+    "revision_object_reverified": true,
+    "project_graph_file_sha256": "38fbb590d2c4ca507555e4796c528294ee2841ac9b23d4af45e11ffd4588f574",
+    "project_id": "enforced-planning",
+    "project_record_sha256": "d2d7f4f9a4df759cf95548dc0ab2952f65b0193bdfe60c6f6375cb6291a7acfc",
+    "governance_review_sha256": "0650e0a27ddf27222c112d8f4fa7639b16ebe4ce4ab1cb07f7ba4e825bc62a09",
+    "project_authority_sha256": "cb2257a4860aa679a16194a0204596fb0055f65b2e7f557450ec92fc538d39de",
+    "owner_class": "brian",
+    "status": "active",
+    "record_kind": "repository",
+    "authority_loaded_from_exact_git_object": true
+  },
+  "real_session_binding": {
+    "client": "codex",
+    "session_id": "codex:01a021cc-f3a0-7b21-babc-f18617333d1a",
+    "project": "enforced-planning",
+    "scope": "plan-122-first-consumer-outcome-admission",
+    "branch": "plan-122-first-consumer-outcome-admission",
+    "execution_authority_ref": "enforced-planning#122",
+    "claim_plan_ref": "enforced-planning#122",
+    "selected_claim_identity_sha256": "236f8559ae135dc0e10be0110ddfcab3bf3cc1b211825bee8b43451be2d27d6c",
+    "selection_binding_sha256": "4773865d1486a5a03306cae9bb758d8d020c49746195b630e33d530ed6e7d460",
+    "selected_at": "2026-08-21T09:48:45.713728Z"
+  },
+  "real_inputs": {
+    "scenario_ref": "examples/owner-real-outcome-admission/plan122-maintenance-scenario.json",
+    "scenario_file_sha256": "6ad39b174c565e08cb4d91797b8e9d3f08808d4aef54d2bda8660a90992e7f40",
+    "scenario_sha256": "ecdfc71e0b980738a0f4ece4490f4021265e55469429f0e9d7f41bb82e90879f",
+    "outcome_contract_sha256": "88c7756980f00121a1d553b0edc0f023fa3c6c992ae1da2c5229e53dbbbd3bfd",
+    "lease_sha256": "e09eaa50a45e3c9a39484147f6312c2d4bf83702c3c60c106d593fa5a161f64",
+    "allocation_request_ref": "examples/owner-real-outcome-admission/plan122-maintenance-allocation.json",
+    "allocation_request_file_sha256": "d3510d0f4d3acc48b73286fb6375077b2622a21a2e8c792c67f166e597f936bb",
+    "allocation_request_sha256": "3be63a76822a412e81cfeb9714234e4701298a7e32b1670812577fdacd9f5d96",
+    "disposition_request_ref": "examples/owner-real-outcome-admission/plan122-maintenance-disposition.json",
+    "disposition_request_file_sha256": "2269dfb186a7d9abb0fd193384ae6be829adc7f12f3af23ac142aca099ab526b",
+    "disposition_request_sha256": "e44a69cb01762ac014cf860a2aaa9b19d8949f35cac0cf54638c54194684c904"
+  },
+  "bootstrap_controls": {
+    "allowed_scope": {
+      "exit_code": 0,
+      "receipt_id": "oadm-bd4076263f354ffaa1118bc4c054e0ff",
+      "result_sha256": "c903d3758a3c1707de8f0798a56aab677eb6b1664ec1a601f3ab9eeec8ba98bd",
+      "decision": "allow",
+      "reason_code": "admission_bootstrap_allowed",
+      "allowed_path_count": 7
+    },
+    "source_path_smuggling": {
+      "exit_code": 2,
+      "receipt_id": "oadm-9a8164f1ffc248d290a02c3d6c25b5d3",
+      "result_sha256": "17c4147dc0564ebb17ea03ae6c18be7ece64d7ad2c55d52051bd5d7f3a9acf3f",
+      "decision": "deny",
+      "reason_code": "admission_bootstrap_scope_violation",
+      "rejected_path": "enforced_planning/outcome_admission.py"
+    },
+    "empty_wrong_plan_traversal_and_nonartifact_controls": "passed in focused tests"
+  },
+  "missing_selection_controls": {
+    "selected_cli": {
+      "exit_code": 2,
+      "receipt_id": "oadm-3284072abb2a4c25941ce323c2840e53",
+      "result_sha256": "325231b73f077e70909838d0dcaac6c89e8a28ee16185417c39e18124ea1e3c8",
+      "decision": "deny",
+      "reason_code": "outcome_selection_required"
+    },
+    "heartbeat": {
+      "exit_code": 2,
+      "receipt_id": "oadm-caa1e489ce384330a7ffdb5ef8ae85c2",
+      "result_sha256": "325231b73f077e70909838d0dcaac6c89e8a28ee16185417c39e18124ea1e3c8",
+      "decision": "deny",
+      "reason_code": "outcome_selection_required",
+      "heartbeat_before": "2026-08-21T09:20:20.826750+00:00",
+      "heartbeat_after": "2026-08-21T09:20:20.826750+00:00",
+      "mutation_prevented": true
+    }
+  },
+  "real_allocation": {
+    "status": "allocated",
+    "allocated_at": "2026-08-21T09:48:37.914092Z",
+    "allocation_id": "plan-122-maintenance-allocation",
+    "allocation_sha256": "8a63b760df3d31eaee288567c1220fe556f2d62f28f0e4564fe391a4df6bf081",
+    "portfolio_class": "maintenance",
+    "bucket": "global:maintenance-or-external-obligation",
+    "owner_class": "brian",
+    "automatic_allocation": false,
+    "ordinary_approval_allocated": false
+  },
+  "real_selection": {
+    "status": "selected",
+    "binding_schema_version": "1.1.0",
+    "binding_sha256": "4773865d1486a5a03306cae9bb758d8d020c49746195b630e33d530ed6e7d460",
+    "portfolio_allocation_id": "plan-122-maintenance-allocation",
+    "portfolio_allocation_sha256": "8a63b760df3d31eaee288567c1220fe556f2d62f28f0e4564fe391a4df6bf081",
+    "lease_state": "active",
+    "outcome_reason_code_at_selection": "active_in_scope"
+  },
+  "active_selected_controls": {
+    "public_selected_cli": {
+      "exit_code": 0,
+      "receipt_id": "oadm-6945d12336b44e00bb88707ad47e2c2d",
+      "result_sha256": "f84be9c8d191bc56479a5bfb2f0039850d49179349d700f151fe3e8a32047f0d",
+      "decision": "allow",
+      "reason_code": "outcome_admission_active"
+    },
+    "prewrite": {
+      "exit_code": 0,
+      "target_path": "enforced_planning/outcome_admission.py",
+      "ordinary_receipt_id": "prewrite_6883dfffe34940baabec68343512275f",
+      "ordinary_decision": "allow",
+      "ordinary_reason_code": "exact_live_claim",
+      "admission_receipt_id": "oadm-9c3431b4407f4acba5c39c23fcd7c408",
+      "admission_result_sha256": "fafe22a3329c775177fab7790314bc09595dde01e90d953da50d3fd9d49dc3f0",
+      "outcome_decision": "allow",
+      "outcome_reason_code": "outcome_admission_active"
+    },
+    "heartbeat": {
+      "exit_code": 0,
+      "receipt_id": "oadm-4c6ab43c27e44fbe82f41e050e6915e8",
+      "result_sha256": "f84be9c8d191bc56479a5bfb2f0039850d49179349d700f151fe3e8a32047f0d",
+      "decision": "allow",
+      "reason_code": "outcome_admission_active",
+      "heartbeat_after": "2026-08-21T09:53:54.241264+00:00",
+      "mutation_observed": true
+    }
+  },
+  "disposed_allocation_controls": {
+    "disposition_id": "plan-122-maintenance-park",
+    "disposition": "parked",
+    "recorded_at": "2026-08-21T09:56:51.822775Z",
+    "disposition_sha256": "f635abfea11e9a26c6b10ec361e1d09f0847128b5287683c99f864cd292aa06e",
+    "portfolio_ledger_sha256_after_disposition": "ef7f52e1f98c8c3aa7d1b29c5a963415736403db21e93bd05000949d74b6d46b",
+    "selected_cli": {
+      "exit_code": 2,
+      "receipt_id": "oadm-92f4e40852314f36b1364ad44c8a2f53",
+      "decision": "deny",
+      "reason_code": "portfolio_allocation_inactive"
+    },
+    "heartbeat": {
+      "exit_code": 2,
+      "receipt_id": "oadm-03ebceddfe2c4dd794efd88ff3d7aaf2",
+      "decision": "deny",
+      "reason_code": "portfolio_allocation_inactive",
+      "heartbeat_before": "2026-08-21T09:53:54.241264+00:00",
+      "heartbeat_after": "2026-08-21T09:53:54.241264+00:00",
+      "mutation_prevented": true
+    },
+    "prewrite": {
+      "exit_code": 2,
+      "ordinary_receipt_id": "prewrite_ff9c1e45780646ceb3f17a89c7418265",
+      "ordinary_decision": "allow",
+      "ordinary_reason_code": "exact_live_claim",
+      "admission_receipt_id": "oadm-c935aa6097664d32bc660f578bdf192d",
+      "admission_result_sha256": "607a5387640b60688b38a27d62083eae700bad978e1afe71a63a028de1e1bd0d",
+      "outcome_decision": "deny",
+      "outcome_reason_code": "portfolio_allocation_inactive",
+      "ordinary_allow_did_not_override_outcome_denial": true
+    },
+    "allocation_history_deleted": false,
+    "global_slot_released": true
+  },
+  "circular_continuation_control": {
+    "test": "tests/test_outcome_admission.py::test_public_selected_and_prewrite_commands_deny_circular_live_state",
+    "state": "stalled",
+    "ordinary_claim_decision": "allow/exact_live_claim",
+    "selected_cli_exit_code": 2,
+    "hard_prewrite_exit_code": 2,
+    "outcome_reason_code": "outcome_stalled",
+    "target_bytes_unchanged": true,
+    "same_public_entrypoints_as_real_lane": true
+  },
+  "default_compatibility": {
+    "session_start_without_opt_in": "unchanged",
+    "session_heartbeat_without_opt_in": "unchanged",
+    "ordinary_prewrite_without_hard_selected_mode": "unchanged",
+    "focused_regressions_passed": true
+  },
+  "receipt_custody": {
+    "outcome_admission_stream": "/home/brian/.claude/coordination/plan122-outcome-admission-v1.jsonl",
+    "outcome_admission_record_count": 11,
+    "outcome_admission_stream_sha256": "cb9c5f3b6a26bbce7bd4f076cceb2ac04b420a7fa8898ea6e83c07fd42d55f70",
+    "ordinary_prewrite_stream": "/home/brian/.claude/coordination/plan122-prewrite-claim-v1.jsonl",
+    "ordinary_prewrite_record_count": 4,
+    "ordinary_prewrite_stream_sha256": "08a5d23c68bc20ade6de56efc49d53fa2d934ccde76bafbf87f76d7d7d3ef885",
+    "portfolio_ledger": "/home/brian/.claude/coordination/outcome-portfolio-allocations-v1.json",
+    "portfolio_ledger_sha256": "ef7f52e1f98c8c3aa7d1b29c5a963415736403db21e93bd05000949d74b6d46b"
+  },
+  "focused_verification": {
+    "pytest_command": "env -u CODEX_THREAD_ID pytest -q tests/test_outcome_admission.py tests/test_outcome_admission_evaluation.py tests/test_outcome_selection.py tests/test_outcome_prewrite_observation.py tests/test_prewrite_claim_projection.py tests/test_session_cli.py tests/test_session_contracts.py",
+    "passed": 191,
+    "failed": 0,
+    "plan121_frozen_decisions_reproduced": 30,
+    "ruff": "passed for changed source and focused tests with inherited whole-file TRY004, UP017, BLE001, and RUF100 checks excluded",
+    "mypy": "passed on nine changed source and test files with follow-imports=skip; the repository-wide import closure retains unrelated coordination_claims errors",
+    "make_dry_runs": [
+      "session-start",
+      "session-heartbeat",
+      "worktree bootstrap"
+    ],
+    "git_diff_check": "passed"
+  },
+  "durable_learning": {
+    "artifact": "project-meta:learnings/entries/lrn-20260821T095107688885Z-8bba26ab79.json",
+    "merge_revision": "c055930c9762f7921344a476aa291569d494e6f9",
+    "finding": "A composed hard gate must consume the upstream adapter's actual public field shape and cardinality, not an inferred singular alias.",
+    "applied_fix": "The pre-write outcome adapter now requires exactly one string in normalized_target_paths and focused tests cover zero and multiple targets."
+  },
+  "acceptance": {
+    "OAG01-A1": "accepted: one production owner reproduces the frozen Plan 121 suite and ordinary-denial precedence",
+    "OAG01-A2": "accepted: exact bootstrap allow plus source-smuggling and focused wrong-scope denials",
+    "OAG01-A3": "accepted: live claim, tracker, selection, scenario, allocation, and effective lease are reopened and digest-bound",
+    "OAG01-A4": "accepted: hard heartbeat and pre-write both deny before mutation or success; default-off regressions pass",
+    "OAG01-A5": "accepted: one real Plan 122 lane produced active allow and parked deny receipts, plus an equivalent circular-state public-command denial"
+  },
+  "promotion_boundary": {
+    "licensed_next_step": "one separately reviewed source-repository activation pilot",
+    "source_consumer_implemented": true,
+    "source_consumer_default_enabled": false,
+    "hook_activation": false,
+    "meta_process_default_changed": false,
+    "installer_or_generated_mirror_propagated": false,
+    "downstream_or_fleet_adoption_claimed": false,
+    "cross_repository_allocation_membership_supported": false,
+    "semantic_progress_truth_certified": false,
+    "active_product_outcome_selected": false,
+    "cryptographic_shared_identity_bypass_resistance_claimed": false
+  },
+  "licensed_claim": "At exact candidate revision 8eae9b3e3e12634571134e26ab7422bcab7457af, one opt-in Enforced Planning source consumer derived admission from exact live claim, tracker, selection, Project Graph-bound portfolio allocation, scenario, and effective continuation evidence. Public bootstrap rejected source-write smuggling; missing selection denied heartbeat without mutation; the active allocation allowed selected inspection, ordinary-authorized hard pre-write, and heartbeat; parking the allocation then made the same heartbeat and ordinary-authorized hard pre-write fail closed without heartbeat mutation. An equivalent circular live-state test denies outcome_stalled and preserves target bytes. This licenses a separately reviewed source activation pilot, not activation or fleet adoption.",
+  "limitations": [
+    "The real lane exercised maintenance allocation; it did not choose or allocate Brian's active product outcome.",
+    "The circular continuation control is equivalent synthetic live state through the same public commands, not a deliberate stall of the real Plan 122 lane.",
+    "The pilot is explicit and default-off; no hook, installer, generated mirror, or downstream configuration consumes it yet.",
+    "The append-only local stores fail closed under their current OS identity but are not a separate tamper-resistant control plane.",
+    "Cross-repository allocation membership and semantic validation of claimed progress remain outside this result."
+  ]
+}

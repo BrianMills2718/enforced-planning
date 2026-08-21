@@ -51,7 +51,7 @@ paths.
 
 Two configured generated consumers pass the same plan, documentation, progress,
 scope, portability, and independent-verifier controls. This is mechanical
-repeatability evidence. Plans #55 and #114–#121 then crossed the owner frontier
+repeatability evidence. Plans #55 and #114–#122 then crossed the owner frontier
 on Enforced Planning itself:
 
 - Plan #55 reduced the required context for one real framework module from 11
@@ -87,18 +87,26 @@ on Enforced Planning itself:
   corruption, invalid-input, and eight fresh adversarial verifier controls
   passed. Independent sign-off licenses one first-consumer implementation but
   excludes hook activation, fleet rollout, and cross-repository membership.
+- Plan #122 implemented that first source consumer behind explicit flags. One
+  real maintenance allocation admitted selected inspection, heartbeat, and an
+  ordinary-authorized hard pre-write; parking the allocation then denied the
+  same heartbeat and pre-write before mutation or success. Missing selection,
+  source-smuggling bootstrap, and equivalent circular `outcome_stalled` public
+  controls also denied, while default lifecycle and ordinary pre-write behavior
+  remained compatible across 191 focused tests.
 
 These observations prove useful owner-real behavior at the documentation,
-continuation, exact-session identity, durable current-head, and explicit
-portfolio-admission and deterministic admission-decision seams. They do not yet
-make outcome selection mandatory for new plans or claims, block ordinary writes
-without a selection, establish a fleet false-block rate, choose the one product
-project, or prove installed fleet enforcement or usefulness across Brian's
-ordinary project portfolio. The current proof frontier is therefore design and
-implementation of mandatory outcome binding at the first Enforced Planning
-new-plan, claim, worktree, heartbeat, and selected pre-write boundaries—without
-activating installed hooks yet. Plan #122 owns that bounded first-consumer
-implementation. Repeated normal-project use,
+continuation, exact-session identity, durable current-head, explicit
+portfolio-admission, deterministic admission-decision, and opt-in source
+enforcement seams. They do not yet make outcome selection mandatory for new
+plans or claims, block default ordinary writes without a selection, establish a
+fleet false-block rate, choose the one product project, or prove installed fleet
+enforcement or usefulness across Brian's ordinary project portfolio. The
+current proof frontier is therefore one separately reviewed, reversible
+source-repository activation pilot that makes the accepted bootstrap,
+heartbeat, and hard pre-write flags unavoidable on a bounded Enforced Planning
+path while retaining a direct rollback and both-sign evidence. Installer and
+fleet activation remain later decisions. Repeated normal-project use,
 independent evidence selection, colleague packaging, external-user validation,
 and broader usability remain downstream of those next proof stages.
 

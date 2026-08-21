@@ -1,0 +1,190 @@
+{
+  "units": [
+    {
+      "schema_version": "1.0",
+      "record_type": "work_unit",
+      "id": "oclv-01-both-sign-admission-vertical",
+      "initiative_id": "progress-bound-agent-execution",
+      "goal_id": "deny-circular-continuation-without-blocking-real-progress",
+      "design_revision": "project-meta@f6091b6b2f2a5357d0fdbbe88b157435a2ce07fb:outcome-continuation-lease-hard-gate",
+      "spec_revision": "enforced-planning@b3f70472fb53a2ce6462fc2c81eaf78cba1f285f:plan-114",
+      "title": "Implement and execute the progress-only continuation admission vertical",
+      "class": "implementation",
+      "objective": "Add replay-safe typed lease transitions and a JSON admission boundary, then retain one allowed genuine-progress decision and one denied circular-continuation decision from the same clean revision.",
+      "profile": "small",
+      "execution_class": "independently_executable",
+      "claimability": "ready_for_execution",
+      "authorization_mode": "registry_claim",
+      "scope": {
+        "included": [
+          "Native outcome, progress receipt, continuation lease, recovery lease, and admission contracts",
+          "Pure replay-safe transition and scope-aware admission logic",
+          "One JSON scenario CLI",
+          "Focused both-sign tests and two checked-in Plan 62 consumer scenarios",
+          "One revision-bound evidence artifact and truthful Plan 114 status reconciliation"
+        ],
+        "excluded": [
+          "Session, heartbeat, worktree, claim, pre-write, commit, or fleet hook wiring",
+          "Project Meta registry promotion or downstream installation",
+          "Break-glass and restart-review implementation",
+          "Spend, subscription, elapsed-time, deployment, or release controls"
+        ]
+      },
+      "inputs": [
+        {
+          "kind": "approved_policy",
+          "id": "project-meta/policy/proposals/2026-08-20-outcome-continuation-lease-hard-gate.yaml",
+          "revision": "f6091b6b2f2a5357d0fdbbe88b157435a2ce07fb"
+        },
+        {
+          "kind": "bounded_plan",
+          "id": "docs/plans/114_outcome_continuation_lease_enforcement.md",
+          "revision": "b3f70472fb53a2ce6462fc2c81eaf78cba1f285f"
+        },
+        {
+          "kind": "plan_readiness",
+          "id": "enforced-planning#114",
+          "revision": "d830b5445059524afa1a3e5197a6c178e77a5c008252998963208ce82628a1cf"
+        },
+        {
+          "kind": "authentic_consumer",
+          "id": "status-cli-json",
+          "revision": "b22ea0354e020dbcc3194ff48f21141a029a7fda"
+        }
+      ],
+      "outputs": [
+        "Typed outcome continuation contracts and stable digests",
+        "Replay-safe lease state transition and operation admission result",
+        "Operator-drivable JSON scenario CLI",
+        "Focused transition/admission tests",
+        "Allowed progress and denied circular-continuation evidence bound to one clean revision"
+      ],
+      "dependencies": [],
+      "conflict_surfaces": [
+        {
+          "kind": "repository_path",
+          "target": "enforced_planning/outcome_continuation.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-114-outcome-continuation"
+        },
+        {
+          "kind": "repository_path",
+          "target": "scripts/outcome_continuation.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-114-outcome-continuation"
+        },
+        {
+          "kind": "repository_path",
+          "target": "tests/test_outcome_continuation.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-114-outcome-continuation"
+        },
+        {
+          "kind": "repository_path",
+          "target": "examples/cleanroom-ecosystem/outcome-continuation-progress.json",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-114-outcome-continuation"
+        },
+        {
+          "kind": "repository_path",
+          "target": "examples/cleanroom-ecosystem/outcome-continuation-circular.json",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-114-outcome-continuation"
+        },
+        {
+          "kind": "repository_path",
+          "target": "docs/evidence/plan114_outcome_continuation_decisions.json",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-114-outcome-continuation"
+        },
+        {
+          "kind": "repository_path",
+          "target": "docs/plans/114_outcome_continuation_lease_enforcement.md",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-114-outcome-continuation"
+        },
+        {
+          "kind": "repository_path",
+          "target": "docs/plans/114_outcome_continuation_lease_enforcement_work_graph.json",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-114-outcome-continuation"
+        },
+        {
+          "kind": "repository_path",
+          "target": "docs/plans/CLAUDE.md",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-114-outcome-continuation"
+        },
+        {
+          "kind": "repository_path",
+          "target": "ROADMAP.md",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-114-outcome-continuation"
+        }
+      ],
+      "acceptance": [
+        {
+          "id": "OCLV01-A1",
+          "criterion": "The public CLI allows an in-scope product operation after a digest-bound behavioral-advance receipt.",
+          "evidence_required": [
+            "Focused transition/admission tests",
+            "Positive scenario output from the clean implementation revision"
+          ],
+          "negative_control": "An out-of-scope product path remains denied even with the same receipt."
+        },
+        {
+          "id": "OCLV01-A2",
+          "criterion": "The public CLI denies normal product continuation after two consecutive non-outcome increments and returns exact recovery/readout actions.",
+          "evidence_required": [
+            "Focused two-increment and stalled-transition tests",
+            "Circular scenario output from the same clean implementation revision"
+          ],
+          "negative_control": "Setting ordinary_approval to true cannot change the denial."
+        },
+        {
+          "id": "OCLV01-A3",
+          "criterion": "Receipt replay, cost telemetry, and elapsed-time telemetry cannot renew or alter continuation authority.",
+          "evidence_required": [
+            "Duplicate-receipt test",
+            "Approval/cost/time metamorphic tests"
+          ],
+          "negative_control": "Changing only telemetry produces an identical lease and admission reason."
+        },
+        {
+          "id": "OCLV01-A4",
+          "criterion": "The retained evidence is bound to one clean implementation revision and makes no session-hook or fleet-enforcement claim.",
+          "evidence_required": [
+            "Revision-bound decision artifact",
+            "Truthful Plan 114 and roadmap status"
+          ],
+          "negative_control": "The evidence text does not describe unsupported shell writes or downstream repositories as blocked."
+        }
+      ],
+      "readiness": {
+        "status": "ready",
+        "required_approval_types": [],
+        "approvals": [],
+        "failed_guards": []
+      },
+      "claim_policy": {
+        "eligibility_rule": "One exact live Plan 114 claim owns only the listed implementation, scenario, evidence, graph, plan, index, and roadmap paths.",
+        "lease_policy": "renewable",
+        "lease_duration_minutes": 1440,
+        "max_active_per_claimant": 1,
+        "named_owner_id": null
+      },
+      "status": "ready",
+      "record_version": 1
+    }
+  ]
+}

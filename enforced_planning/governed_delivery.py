@@ -673,6 +673,23 @@ def prepare_governed_task(
             "Canonical governed-repo installer is unavailable.",
             path=str(installer),
         )
+    framework_revision = _git(framework, "rev-parse", "HEAD")
+    try:
+        cleanroom_receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise GovernedDeliveryError(
+            "invalid_cleanroom_receipt",
+            f"Unable to read the clean-room install receipt: {exc}",
+            path=str(receipt_path),
+        ) from exc
+    component_revision = cleanroom_receipt.get("component_revision")
+    if component_revision != framework_revision:
+        raise GovernedDeliveryError(
+            "component_revision_mismatch",
+            "Clean-room component revision does not match the executing framework revision: "
+            f"receipt={component_revision!r} framework={framework_revision!r}",
+            path=str(receipt_path),
+        )
     original = source_path.read_text(encoding="utf-8")
     if "from cleanroom_shared import label" not in original or "def message()" not in original:
         raise GovernedDeliveryError(
@@ -729,7 +746,6 @@ def prepare_governed_task(
     _git(task_root, "add", "-A")
     _git(task_root, "commit", "-m", "[Unplanned] Prepare governed task baseline")
     _git(task_root, "tag", BASELINE_TAG)
-    framework_revision = _git(framework, "rev-parse", "HEAD")
     baseline_revision = _git(task_root, "rev-parse", BASELINE_TAG)
     initial_checks = _collect_checks(task_root, contract)
     if all(check.verdict == "pass" for check in initial_checks):

@@ -1,6 +1,6 @@
 # Plan #113: Governed Delivery Authentic Vertical
 
-**Status:** In Progress — reusable module/CLI and seven focused both-sign tests pass; fresh authentic consumer run pending
+**Status:** In Progress — reusable module/CLI and eight focused both-sign tests pass; fresh authentic consumer run pending
 **Type:** implementation
 **Priority:** Critical
 **phase_ref:** "Authentic governed-delivery proof frontier"
@@ -268,6 +268,13 @@ adds a portable public CLI/module surface.
 | A changed path is undeclared | Revert the accidental file or update the consumer plan/task contract truthfully before continuing. |
 | Worker says complete but checks fail | Retain the failing verifier result and continue only from its concrete failure. |
 | The vertical requires a new runtime/framework | Reassess expected value; add only a reproduced direct blocker, not speculative generalization. |
+
+The first authentic preparation attempt exposed a concrete revision-binding
+defect: a syntactically valid but hand-constructed component revision could be
+recorded even when it did not equal the executing framework commit. Preparation
+now compares the clean-room receipt to `git rev-parse HEAD` and fails with
+`component_revision_mismatch`; the focused negative control passes. The invalid
+external root is excluded from completion evidence.
 
 ## Pre-Made Decisions
 

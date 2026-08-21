@@ -42,7 +42,7 @@ def _prepared_task(tmp_path: Path) -> tuple[Path, object]:
     projects_root.mkdir(parents=True)
     spec = CleanroomSpec.build(
         root=tmp_path / "external" / "cleanroom",
-        component_revision="test-revision",
+        component_revision=_git(REPO_ROOT, "rev-parse", "HEAD"),
         projects_root=projects_root,
     )
     materialize_cleanroom(spec)
@@ -202,6 +202,24 @@ def test_prepare_creates_governed_failing_baseline(tmp_path: Path) -> None:
     assert named.stdout.strip() != "Ada uses shared-lib"
 
 
+def test_prepare_rejects_component_revision_drift(tmp_path: Path) -> None:
+    """Preparation cannot bless a hand-written revision that did not execute."""
+
+    projects_root = tmp_path / "workspace" / "projects"
+    projects_root.mkdir(parents=True)
+    spec = CleanroomSpec.build(
+        root=tmp_path / "external" / "cleanroom",
+        component_revision="0" * 40,
+        projects_root=projects_root,
+    )
+    materialize_cleanroom(spec)
+
+    with pytest.raises(GovernedDeliveryError) as exc_info:
+        prepare_governed_task(cleanroom_root=spec.root, framework_root=REPO_ROOT)
+
+    assert exc_info.value.code == "component_revision_mismatch"
+
+
 def test_repeated_unchanged_failure_requires_course_checkpoint(tmp_path: Path) -> None:
     """An unchanged failing loop cannot continue without changing its tactic."""
 
@@ -299,7 +317,7 @@ def test_cli_json_prepare_probe_checkpoint_and_verify(tmp_path: Path) -> None:
     projects_root.mkdir(parents=True)
     spec = CleanroomSpec.build(
         root=tmp_path / "external" / "cleanroom",
-        component_revision="test-revision",
+        component_revision=_git(REPO_ROOT, "rev-parse", "HEAD"),
         projects_root=projects_root,
     )
     materialize_cleanroom(spec)

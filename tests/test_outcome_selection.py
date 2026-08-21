@@ -441,6 +441,7 @@ def test_causal_restart_retains_stalled_failure_history_and_is_idempotent(
     )
     assert resolved.binding_sha256 == restarted.binding_sha256
 
+    tracker_before_replay = Path(restarted.tracker_path).read_bytes()
     replay = restart_selected_outcome_for_session(
         agent="codex",
         project="enforced-planning",
@@ -452,6 +453,7 @@ def test_causal_restart_retains_stalled_failure_history_and_is_idempotent(
     )
     assert replay.status == "idempotent"
     assert replay.transition_sha256 == restarted.transition_sha256
+    assert Path(restarted.tracker_path).read_bytes() == tracker_before_replay
     tracker_after_replay = session_contracts.read_session_tracker(Path(restarted.tracker_path))
     assert len(tracker_after_replay["tracker"]["outcome_selection_transitions"]) == 1
 

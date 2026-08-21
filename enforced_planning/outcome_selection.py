@@ -1121,7 +1121,15 @@ def restart_selected_outcome_for_session(
             selected_transition = transition
 
         try:
-            session_contracts.mutate_session_tracker(tracker_path, apply_restart)
+            with session_contracts.session_tracker_lock(tracker_path):
+                payload = session_contracts.read_session_tracker(tracker_path)
+                apply_restart(payload)
+                if status == "restarted":
+                    timestamps = payload.get("timestamps")
+                    if not isinstance(timestamps, dict):
+                        raise TypeError(f"Session tracker at {tracker_path} is missing timestamps section")
+                    timestamps["updated_at"] = datetime.now(UTC).isoformat()
+                    session_contracts._atomic_write_session_tracker(tracker_path, payload)
         except OutcomeSelectionError:
             raise
         except (OSError, TypeError, ValueError, yaml.YAMLError) as exc:

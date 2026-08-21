@@ -665,6 +665,35 @@ def test_selected_cli_records_missing_and_tampered_binding_without_changing_exit
     assert tampered_payload["outcome_observation"]["error_code"] == "selection_scenario_stale"
 
 
+def test_selected_cli_records_missing_tracker_as_typed_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A missing tracker is durable observation failure, not an uncaught fallback."""
+
+    monkeypatch.setenv("CODEX_THREAD_ID", "plan116-test")
+    _repo, worktree, claims_dir, claim_path, projection_path = _fixture(tmp_path)
+    claim = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    Path(claim["tracker_path"]).unlink()
+
+    completed = _invoke_cli(
+        tmp_path,
+        worktree,
+        claims_dir,
+        projection_path,
+        selected=True,
+    )
+
+    assert completed.returncode == 0
+    payload = json.loads(completed.stdout)
+    assert payload["decision"] == "allow"
+    observation = payload["outcome_observation"]
+    assert observation["record_type"] == "outcome_prewrite_observation_failure"
+    assert observation["error_code"] in {"claim_not_healthy", "tracker_unavailable"}
+    assert observation["ordinary_authority_preserved"] is True
+    assert observation["enforcement_applied"] is False
+
+
 def test_selected_and_explicit_scenario_flags_are_mutually_exclusive(
     tmp_path: Path,
 ) -> None:

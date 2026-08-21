@@ -357,7 +357,19 @@ def write_session_tracker(
                     "session_id",
                     "tracker_path",
                 )
-                mismatches = [field for field in identity_fields if current_claim.get(field) != next_claim.get(field)]
+                path_identity_fields = {"repo_root", "worktree_path", "tracker_path"}
+
+                def identity_value(claim: dict[str, Any], field: str) -> object:
+                    value = claim.get(field)
+                    if field not in path_identity_fields or not isinstance(value, str) or not value:
+                        return value
+                    return str(Path(value).expanduser().resolve())
+
+                mismatches = [
+                    field
+                    for field in identity_fields
+                    if identity_value(current_claim, field) != identity_value(next_claim, field)
+                ]
                 if mismatches:
                     raise ValueError(
                         "A tracker with a selected outcome cannot change exact claim identity: " + ", ".join(mismatches)

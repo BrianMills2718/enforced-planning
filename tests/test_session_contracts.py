@@ -185,7 +185,11 @@ def test_tracker_refresh_preserves_selection_and_rejects_identity_change(tmp_pat
     )
 
     refreshed = session_contracts.build_session_tracker(
-        contract=contract,
+        contract=replace(
+            contract,
+            repo_root="/tmp/../tmp/enforced-planning",
+            worktree_path="/tmp/../tmp/enforced-planning/worktrees/plan-117",
+        ),
         current_phase="observe outcome",
         now=datetime(2026, 8, 21, 5, 0, tzinfo=UTC),
     )

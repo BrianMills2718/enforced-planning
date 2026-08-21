@@ -430,6 +430,11 @@ def select_outcome_for_session(
                 "exact live claim does not link a session tracker",
             )
         tracker_path = Path(claim.tracker_path).expanduser().resolve()
+        if not tracker_path.is_file():
+            raise OutcomeSelectionError(
+                "tracker_unavailable",
+                f"exact live claim tracker is not a file: {tracker_path}",
+            )
         scenario, scenario_file_sha256, scenario_ref = _load_scenario_for_claim(
             scenario_path,
             claim=claim,
@@ -474,7 +479,15 @@ def select_outcome_for_session(
             binding_sha256 = canonical_sha256(existing)
             status = "idempotent"
 
-        session_contracts.mutate_session_tracker(tracker_path, store_binding)
+        try:
+            session_contracts.mutate_session_tracker(tracker_path, store_binding)
+        except OutcomeSelectionError:
+            raise
+        except (OSError, TypeError, ValueError, yaml.YAMLError) as exc:
+            raise OutcomeSelectionError(
+                "tracker_invalid",
+                f"unable to mutate exact session tracker: {exc}",
+            ) from exc
     return OutcomeSelectionResultV1(
         status=status,
         binding=binding,
@@ -567,7 +580,18 @@ def resolve_selected_outcome_for_prewrite(
                 "exact claim source does not link a session tracker",
             )
         tracker_path = Path(claim.tracker_path).expanduser().resolve()
-        payload = session_contracts.read_session_tracker(tracker_path)
+        try:
+            payload = session_contracts.read_session_tracker(tracker_path)
+        except OSError as exc:
+            raise OutcomeSelectionError(
+                "tracker_unavailable",
+                f"unable to read exact session tracker: {exc}",
+            ) from exc
+        except (TypeError, ValueError, yaml.YAMLError) as exc:
+            raise OutcomeSelectionError(
+                "tracker_invalid",
+                f"exact session tracker is invalid: {exc}",
+            ) from exc
         tracker = _validate_tracker_claim(payload, claim=claim, tracker_path=tracker_path)
         raw_binding = tracker.get("outcome_selection")
         if raw_binding is None:

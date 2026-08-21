@@ -29,6 +29,12 @@ from enforced_planning.outcome_continuation import (
     evaluate_scenario,
     transition_lease,
 )
+from enforced_planning.outcome_portfolio import (
+    DEFAULT_OUTCOME_PORTFOLIO_LEDGER_PATH,
+    OutcomePortfolioError,
+    ResolvedOutcomePortfolioAllocationV1,
+    require_active_portfolio_allocation,
+)
 
 HEX_SHA256_PATTERN = r"^[0-9a-f]{64}$"
 UNPLANNED_PLAN_REF = session_contracts.UNPLANNED_PLAN_REF
@@ -54,7 +60,7 @@ class StrictModel(BaseModel):
 class OutcomeSelectionBindingV1(StrictModel):
     """Create-once outcome choice bound to one stable exact claim identity."""
 
-    schema_version: Literal["1.0.0"] = "1.0.0"
+    schema_version: Literal["1.0.0", "1.1.0"] = "1.0.0"
     record_type: Literal["outcome_selection_binding"] = "outcome_selection_binding"
     selected_at: datetime
     observe_only: Literal[True] = True
@@ -83,6 +89,19 @@ class OutcomeSelectionBindingV1(StrictModel):
     lease_state: Literal["active", "recovery_required", "stalled", "complete", "parked"]
     outcome_allowed_at_selection: bool
     outcome_reason_code_at_selection: str = Field(min_length=3)
+    portfolio_allocation_id: str | None = Field(
+        default=None,
+        exclude_if=lambda value: value is None,
+    )
+    portfolio_allocation_sha256: str | None = Field(
+        default=None,
+        pattern=HEX_SHA256_PATTERN,
+        exclude_if=lambda value: value is None,
+    )
+    portfolio_ledger_path: str | None = Field(
+        default=None,
+        exclude_if=lambda value: value is None,
+    )
 
     @model_validator(mode="after")
     def validate_binding(self) -> OutcomeSelectionBindingV1:
@@ -91,6 +110,19 @@ class OutcomeSelectionBindingV1(StrictModel):
         expected_goal = f"goal:{self.outcome_id}"
         if self.execution_authority_ref.startswith("goal:") and self.execution_authority_ref != expected_goal:
             raise ValueError("goal authority must equal goal:<outcome-id>")
+        allocation_fields = (
+            self.portfolio_allocation_id,
+            self.portfolio_allocation_sha256,
+            self.portfolio_ledger_path,
+        )
+        if self.schema_version == "1.0.0" and any(
+            value is not None for value in allocation_fields
+        ):
+            raise ValueError("schema 1.0.0 selections cannot bind portfolio allocation")
+        if self.schema_version == "1.1.0" and not all(
+            value is not None for value in allocation_fields
+        ):
+            raise ValueError("schema 1.1.0 selections require complete portfolio allocation")
         return self
 
 
@@ -572,6 +604,70 @@ def _execution_authority(
     return authority
 
 
+def _portfolio_allocation_for_scenario(
+    scenario: OutcomeContinuationScenarioV1,
+    *,
+    ledger_path: Path,
+) -> ResolvedOutcomePortfolioAllocationV1 | None:
+    try:
+        return require_active_portfolio_allocation(
+            scenario,
+            ledger_path=ledger_path,
+        )
+    except OutcomePortfolioError as exc:
+        raise OutcomeSelectionError(exc.code, str(exc)) from exc
+
+
+def _assert_binding_portfolio_allocation(
+    binding: OutcomeSelectionBindingV1,
+    *,
+    scenario: OutcomeContinuationScenarioV1,
+) -> None:
+    """Reopen the exact active allocation retained by a classed binding."""
+
+    if scenario.contract.schema_version == "1.0.0":
+        if binding.schema_version != "1.0.0":
+            raise OutcomeSelectionError(
+                "portfolio_binding_mismatch",
+                "legacy scenario cannot carry a classed selection binding",
+            )
+        return
+    if binding.schema_version != "1.1.0" or binding.portfolio_ledger_path is None:
+        raise OutcomeSelectionError(
+            "portfolio_binding_mismatch",
+            "classed scenario requires a complete portfolio selection binding",
+        )
+    resolved = _portfolio_allocation_for_scenario(
+        scenario,
+        ledger_path=Path(binding.portfolio_ledger_path),
+    )
+    if resolved is None:
+        raise OutcomeSelectionError(
+            "portfolio_binding_mismatch",
+            "classed scenario resolved without a portfolio allocation",
+        )
+    checks = {
+        "portfolio_allocation_id": (
+            resolved.allocation.allocation_id,
+            binding.portfolio_allocation_id,
+        ),
+        "portfolio_allocation_sha256": (
+            resolved.allocation_sha256,
+            binding.portfolio_allocation_sha256,
+        ),
+        "portfolio_ledger_path": (
+            resolved.ledger_path,
+            _normalized_path(binding.portfolio_ledger_path),
+        ),
+    }
+    mismatches = [name for name, (actual, expected) in checks.items() if actual != expected]
+    if mismatches:
+        raise OutcomeSelectionError(
+            "portfolio_binding_mismatch",
+            "selected portfolio allocation changed: " + ", ".join(mismatches),
+        )
+
+
 def _build_binding(
     *,
     claim: coordination_claims.ClaimRecord,
@@ -580,8 +676,13 @@ def _build_binding(
     scenario: OutcomeContinuationScenarioV1,
     scenario_ref: str,
     scenario_file_sha256: str,
+    portfolio_ledger_path: Path,
 ) -> OutcomeSelectionBindingV1:
     result = evaluate_scenario(scenario)
+    portfolio = _portfolio_allocation_for_scenario(
+        scenario,
+        ledger_path=portfolio_ledger_path,
+    )
     target_path = scenario.request.target_path
     if target_path is None:
         raise OutcomeSelectionError(
@@ -589,6 +690,7 @@ def _build_binding(
             "selected pre-write outcome requires a product_write target",
         )
     return OutcomeSelectionBindingV1(
+        schema_version="1.1.0" if portfolio is not None else "1.0.0",
         selected_at=datetime.now(UTC),
         execution_authority_ref=authority,
         claim_plan_ref=claim.plan_ref,
@@ -615,6 +717,13 @@ def _build_binding(
         lease_state=result.lease.state,
         outcome_allowed_at_selection=result.decision.allowed,
         outcome_reason_code_at_selection=result.decision.reason_code,
+        portfolio_allocation_id=(
+            portfolio.allocation.allocation_id if portfolio is not None else None
+        ),
+        portfolio_allocation_sha256=(
+            portfolio.allocation_sha256 if portfolio is not None else None
+        ),
+        portfolio_ledger_path=(portfolio.ledger_path if portfolio is not None else None),
     )
 
 
@@ -696,6 +805,7 @@ def _validate_binding_scenario(
             "selection_scenario_stale",
             "selected scenario changed after selection: " + ", ".join(mismatches),
         )
+    _assert_binding_portfolio_allocation(binding, scenario=scenario)
     return scenario
 
 
@@ -1064,6 +1174,7 @@ def select_outcome_for_session(
     scenario_path: Path,
     session_id: str | None = None,
     claims_dir: Path | None = None,
+    portfolio_ledger_path: Path = DEFAULT_OUTCOME_PORTFOLIO_LEDGER_PATH,
 ) -> OutcomeSelectionResultV1:
     """Create or idempotently replay one exact-session outcome selection."""
 
@@ -1110,6 +1221,7 @@ def select_outcome_for_session(
             scenario=scenario,
             scenario_ref=scenario_ref,
             scenario_file_sha256=scenario_file_sha256,
+            portfolio_ledger_path=portfolio_ledger_path,
         )
         binding_sha256 = canonical_sha256(binding)
         binding_identity_sha256 = _binding_identity_sha256(binding)
@@ -1483,6 +1595,7 @@ def restart_selected_outcome_for_session(
     restart_delta_path: Path,
     session_id: str | None = None,
     claims_dir: Path | None = None,
+    portfolio_ledger_path: Path = DEFAULT_OUTCOME_PORTFOLIO_LEDGER_PATH,
 ) -> OutcomeRestartResultV1:
     """Replace stalled selected state only through one exact causal restart."""
 
@@ -1597,6 +1710,7 @@ def restart_selected_outcome_for_session(
                 scenario=successor_scenario,
                 scenario_ref=successor_ref,
                 scenario_file_sha256=successor_file_sha256,
+                portfolio_ledger_path=portfolio_ledger_path,
             )
             predecessor_lease, failed_refs = _assert_restart_contract(
                 predecessor_binding=current,
@@ -1818,6 +1932,7 @@ def resolve_selected_outcome_for_prewrite(
                 "selection_scenario_stale",
                 "selected scenario changed after selection: " + ", ".join(mismatches),
             )
+        _assert_binding_portfolio_allocation(binding, scenario=scenario)
         progress_head = _resolve_progress_head(
             tracker,
             binding=binding,

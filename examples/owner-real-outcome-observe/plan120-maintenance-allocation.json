@@ -1,0 +1,15 @@
+{
+  "schema_version": "1.0.0",
+  "record_type": "outcome_portfolio_allocation_request",
+  "allocation_id": "plan-120-maintenance-allocation",
+  "requested_at": "2026-08-21T08:06:55.083611Z",
+  "project_id": "enforced-planning",
+  "scenario_id": "plan-120-maintenance-portfolio-admission",
+  "outcome_contract_sha256": "eecc5818ebfede3cfefeb982646cbd38c39d2f1e6a0285bb0d62cec51be52aa1",
+  "outcome_id": "project-graph-portfolio-admission",
+  "outcome_lineage_id": "plan-120-project-graph-portfolio-admission",
+  "portfolio_class": "maintenance",
+  "decision_ref": "enforced-planning#120@89b9101",
+  "purpose": "Exercise the first deliberate Project Graph-bound global maintenance allocation before selected-outcome admission.",
+  "stopping_condition": "Park the allocation after exact replay, selected pre-write observation, and retained evidence."
+}

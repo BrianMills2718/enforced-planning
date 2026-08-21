@@ -30,6 +30,12 @@ from enforced_planning.outcome_continuation import (
     canonical_sha256,
     evaluate_scenario,
 )
+from enforced_planning.outcome_portfolio import (
+    OutcomePortfolioAllocationRequestV1,
+    OutcomePortfolioDispositionRequestV1,
+    allocate_outcome_portfolio,
+    dispose_outcome_portfolio_allocation,
+)
 from enforced_planning.outcome_selection import (
     OutcomeSelectionError,
     record_selected_outcome_progress_for_session,
@@ -99,6 +105,58 @@ def _scenario(
         receipts=[receipt],
         request=AdmissionRequestV1(operation="product_write", target_path=TARGET),
     )
+
+
+def _classed_scenario() -> OutcomeContinuationScenarioV1:
+    legacy = _scenario(scenario_id="plan120-classed-selection")
+    contract = OutcomeContractV1.model_validate(
+        {
+            **legacy.contract.model_dump(mode="json"),
+            "schema_version": "1.1.0",
+            "portfolio_class": "maintenance",
+            "owner_class": "brian",
+        }
+    )
+    return OutcomeContinuationScenarioV1(
+        scenario_id=legacy.scenario_id,
+        contract=contract,
+        receipts=[],
+        request=legacy.request,
+    )
+
+
+def _project_graph_repo(tmp_path: Path) -> tuple[Path, str]:
+    graph_repo = tmp_path / "project-meta"
+    graph_repo.mkdir()
+    _git(graph_repo, "init", "-b", "main")
+    _git(graph_repo, "config", "user.name", "Test User")
+    _git(graph_repo, "config", "user.email", "test@example.com")
+    graph = [
+        {
+            "id": "enforced-planning",
+            "record_kind": "repository",
+            "status": "active",
+            "repository_governance": {
+                "owner_class": "brian",
+                "approved_remote_owners": ["BrianMills2718"],
+                "mutation_authority": "normal_push",
+                "publication_authority": "recoverable_git",
+                "review": {
+                    "reviewed_by": "Brian Mills",
+                    "reviewed_at": "2026-08-21",
+                    "evidence": ["Approved selection fixture governance."],
+                },
+            },
+            "supersedes": [],
+        }
+    ]
+    (graph_repo / "PROJECT_GRAPH.json").write_text(
+        json.dumps(graph, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    _git(graph_repo, "add", "PROJECT_GRAPH.json")
+    _git(graph_repo, "commit", "-m", "graph")
+    return graph_repo, _git(graph_repo, "rev-parse", "HEAD")
 
 
 def _progress_receipt(
@@ -384,6 +442,11 @@ def test_planned_selection_is_create_once_and_idempotent(
     assert replay.binding_sha256 == result.binding_sha256
     assert replay.binding.selected_at == result.binding.selected_at
     assert result.binding.execution_authority_ref == "enforced-planning#117"
+    legacy_payload = result.binding.model_dump(mode="json")
+    assert result.binding.schema_version == "1.0.0"
+    assert "portfolio_allocation_id" not in legacy_payload
+    assert "portfolio_allocation_sha256" not in legacy_payload
+    assert "portfolio_ledger_path" not in legacy_payload
     tracker = session_contracts.read_session_tracker(Path(result.tracker_path))
     assert tracker["claim"]["plan_ref"] == "enforced-planning#117"
     assert tracker["tracker"]["outcome_selection"]["claim_plan_ref"] == "enforced-planning#117"
@@ -404,6 +467,128 @@ def test_planned_selection_is_create_once_and_idempotent(
             claims_dir=claims_dir,
         )
     assert caught.value.code == "selection_conflict"
+
+
+def test_classed_selection_requires_retains_and_revalidates_active_allocation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CODEX_THREAD_ID", "plan117-test")
+    repo, worktree, claims_dir, claim_path, scenario_path = _fixture(tmp_path)
+    scenario = _classed_scenario()
+    scenario_path.write_text(scenario.model_dump_json(indent=2) + "\n", encoding="utf-8")
+    ledger_path = tmp_path / "portfolio-ledger.json"
+    graph_repo, graph_revision = _project_graph_repo(tmp_path)
+
+    with pytest.raises(OutcomeSelectionError) as missing:
+        select_outcome_for_session(
+            agent="codex",
+            project="enforced-planning",
+            scope="plan117-test",
+            session_id=SESSION,
+            execution_authority_ref="goal:durable-outcome",
+            scenario_path=scenario_path,
+            claims_dir=claims_dir,
+            portfolio_ledger_path=ledger_path,
+        )
+    assert missing.value.code == "portfolio_allocation_required"
+
+    portfolio_class = scenario.contract.portfolio_class
+    assert portfolio_class is not None
+    allocation_request = OutcomePortfolioAllocationRequestV1(
+        allocation_id="plan120-maintenance-allocation",
+        requested_at=datetime(2026, 8, 21, 8, tzinfo=UTC),
+        project_id="enforced-planning",
+        scenario_id=scenario.scenario_id,
+        outcome_contract_sha256=canonical_sha256(scenario.contract),
+        outcome_id=scenario.contract.outcome_id,
+        outcome_lineage_id=scenario.contract.lineage_id,
+        portfolio_class=portfolio_class,
+        decision_ref="decision:plan120-maintenance",
+        purpose="Admit the bounded Plan 120 maintenance outcome explicitly.",
+        stopping_condition="Park the allocation after selected pre-write resolution.",
+    )
+    allocation_path = scenario_path.with_name("allocation.json")
+    allocation_path.write_text(
+        allocation_request.model_dump_json(indent=2) + "\n",
+        encoding="utf-8",
+    )
+    allocated = allocate_outcome_portfolio(
+        agent="codex",
+        project="enforced-planning",
+        scope="plan117-test",
+        session_id=SESSION,
+        scenario_path=scenario_path,
+        request_path=allocation_path,
+        project_graph_repo=graph_repo,
+        project_graph_revision=graph_revision,
+        claims_dir=claims_dir,
+        ledger_path=ledger_path,
+    )
+    selected = select_outcome_for_session(
+        agent="codex",
+        project="enforced-planning",
+        scope="plan117-test",
+        session_id=SESSION,
+        execution_authority_ref="goal:durable-outcome",
+        scenario_path=scenario_path,
+        claims_dir=claims_dir,
+        portfolio_ledger_path=ledger_path,
+    )
+
+    assert selected.binding.schema_version == "1.1.0"
+    assert selected.binding.portfolio_allocation_id == allocated.allocation.allocation_id
+    assert selected.binding.portfolio_allocation_sha256 == allocated.allocation_sha256
+    resolved = resolve_selected_outcome_for_prewrite(
+        agent="codex",
+        project="enforced-planning",
+        scope="plan117-test",
+        session_id=SESSION,
+        repo_root=str(repo),
+        worktree_path=str(worktree),
+        branch="plan117-test",
+        claim_source_file=str(claim_path),
+        target_path=TARGET,
+    )
+    assert resolved.binding_sha256 == selected.binding_sha256
+
+    disposition_request = OutcomePortfolioDispositionRequestV1(
+        disposition_id="plan120-maintenance-park",
+        requested_at=datetime(2026, 8, 21, 8, 5, tzinfo=UTC),
+        allocation_id=allocated.allocation.allocation_id,
+        allocation_sha256=allocated.allocation_sha256,
+        disposition="parked",
+        decision_ref="decision:plan120-maintenance-close",
+        reason="Release the maintenance slot after the exact selection observation.",
+    )
+    disposition_path = scenario_path.with_name("disposition.json")
+    disposition_path.write_text(
+        disposition_request.model_dump_json(indent=2) + "\n",
+        encoding="utf-8",
+    )
+    dispose_outcome_portfolio_allocation(
+        agent="codex",
+        project="enforced-planning",
+        scope="plan117-test",
+        session_id=SESSION,
+        request_path=disposition_path,
+        claims_dir=claims_dir,
+        ledger_path=ledger_path,
+    )
+
+    with pytest.raises(OutcomeSelectionError) as inactive:
+        resolve_selected_outcome_for_prewrite(
+            agent="codex",
+            project="enforced-planning",
+            scope="plan117-test",
+            session_id=SESSION,
+            repo_root=str(repo),
+            worktree_path=str(worktree),
+            branch="plan117-test",
+            claim_source_file=str(claim_path),
+            target_path=TARGET,
+        )
+    assert inactive.value.code == "portfolio_allocation_inactive"
 
 
 def test_causal_restart_retains_stalled_failure_history_and_is_idempotent(

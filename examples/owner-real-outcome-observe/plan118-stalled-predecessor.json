@@ -1,0 +1,132 @@
+{
+  "schema_version": "1.0.0",
+  "scenario_id": "plan-118-stalled-restart-control",
+  "contract": {
+    "schema_version": "1.0.0",
+    "outcome_id": "prevent-circular-project-failure",
+    "owner_class": "brian-agent-owner",
+    "project_id": "enforced-planning",
+    "lineage_id": "plan-118-stalled-control",
+    "predecessor_lineage_ids": [
+      "plan-117-durable-selection"
+    ],
+    "intended_consumer": "Brian and his coding agents working across Brian-owned projects",
+    "outcome": "Prevent complex coding-agent projects from cycling through approvals, plans, repairs, and restarts without durable user-visible progress.",
+    "canonical_journey": {
+      "starting_state": "A complex project has supporting work and repeated failure evidence but no restart-safe outcome custody.",
+      "input": "One exact claimed session, its selected outcome, and retained predecessor failure evidence.",
+      "action": "Resume the lane or deliberately change mechanism without resetting the outcome or evidence scoreboard.",
+      "observable_result": "The successor runtime resolves the retained outcome and a causal restart preserves every predecessor failure fact.",
+      "failure_signal": "A new session, plan, branch, or scenario silently drops the outcome selection or predecessor failure history."
+    },
+    "baseline_revision": "6340ff80cb8c514d8f3170d7818b0b324a1d04cb",
+    "allowed_scope": [
+      "docs/evidence/plan118_causal_restart_lineage.json"
+    ],
+    "progress_dimensions": [
+      "restart-safe outcome custody"
+    ]
+  },
+  "starting_lease": null,
+  "receipts": [
+    {
+      "schema_version": "1.0.0",
+      "receipt_id": "plan-118-control-policy-only",
+      "outcome_contract_sha256": "5a503cadceb2bb062fff1a5fb5f1a2fd70574f68ed6e2c10c0577efcfcc4f740",
+      "prior_receipt_sha256": null,
+      "progress_kind": "non_outcome",
+      "dimension": "restart-safe outcome custody",
+      "summary": "The approved continuation policy named restart lineage, but no runtime transition yet retained selected state.",
+      "evidence": {
+        "source_revision": "f6091b6b2f2a5357d0fdbbe88b157435a2ce07fb",
+        "configuration_sha256": "b5231e15a40f62092ee9d9c7771fd58318875e85c80f4ef2ae6d8d128f9f1525",
+        "route": "project-meta/approved-outcome-continuation-policy",
+        "command": [
+          "git",
+          "show",
+          "f6091b6b:policy/proposals/2026-08-20-outcome-continuation-lease-hard-gate.yaml"
+        ],
+        "observation_sha256": "09ec1c91e000e7a880e7be5ad61cff20e42971d649deabed0bac1e8a79f9e80e",
+        "artifact_refs": [
+          "project-meta@f6091b6b:policy/proposals/2026-08-20-outcome-continuation-lease-hard-gate.yaml"
+        ],
+        "trace_ref": null,
+        "observed_at": "2026-08-21T05:50:51Z"
+      },
+      "failure_boundary": "restart-evidence-reset",
+      "exact_replay_result": null,
+      "decision_delta": null,
+      "discriminating_evidence": false
+    },
+    {
+      "schema_version": "1.0.0",
+      "receipt_id": "plan-118-control-history-only",
+      "outcome_contract_sha256": "5a503cadceb2bb062fff1a5fb5f1a2fd70574f68ed6e2c10c0577efcfcc4f740",
+      "prior_receipt_sha256": "cfe3da228e95131081eacebee6a1755c55031b51fa26bbcac698ab63c7422979",
+      "progress_kind": "non_outcome",
+      "dimension": "restart-safe outcome custody",
+      "summary": "Cross-repository history calibrated restart laundering, but runtime restarts could still reset selected state.",
+      "evidence": {
+        "source_revision": "a2349842a44fbba450875b35f229246de8621d63",
+        "configuration_sha256": "b5231e15a40f62092ee9d9c7771fd58318875e85c80f4ef2ae6d8d128f9f1525",
+        "route": "project-meta/cross-project-failure-history",
+        "command": [
+          "git",
+          "show",
+          "a2349842:investigations/cross-project/2026-08-20-recurring-project-failure-modes.md"
+        ],
+        "observation_sha256": "71700d39e32b22bd25af225226f57a5273b56b22cbffe4e0217aadc644c6d9d7",
+        "artifact_refs": [
+          "project-meta@a2349842:investigations/cross-project/2026-08-20-recurring-project-failure-modes.md"
+        ],
+        "trace_ref": null,
+        "observed_at": "2026-08-21T05:50:51Z"
+      },
+      "failure_boundary": "restart-evidence-reset",
+      "exact_replay_result": null,
+      "decision_delta": null,
+      "discriminating_evidence": false
+    },
+    {
+      "schema_version": "1.0.0",
+      "receipt_id": "plan-118-control-selection-only",
+      "outcome_contract_sha256": "5a503cadceb2bb062fff1a5fb5f1a2fd70574f68ed6e2c10c0577efcfcc4f740",
+      "prior_receipt_sha256": "cc30cd7a6a5f18c6bba6381393d4c42f4192ef2693eff6a6373cf0b08e6e2024",
+      "progress_kind": "non_outcome",
+      "dimension": "restart-safe outcome custody",
+      "summary": "Plan 117 bound one exact runtime to an outcome, but sanctioned cross-session resume still made that binding stale.",
+      "evidence": {
+        "source_revision": "6340ff80cb8c514d8f3170d7818b0b324a1d04cb",
+        "configuration_sha256": "b5231e15a40f62092ee9d9c7771fd58318875e85c80f4ef2ae6d8d128f9f1525",
+        "route": "enforced-planning/plan117-resume-gap",
+        "command": [
+          "pytest",
+          "-q",
+          "tests/test_outcome_selection.py::test_cross_session_resume_transfers_selected_outcome_without_reset"
+        ],
+        "observation_sha256": "e08fec36540abb4446677c07811f5a2a52c8f45910130ce3af895f73884f259a",
+        "artifact_refs": [
+          "docs/evidence/plan117_durable_outcome_selection_binding.json",
+          "docs/plans/117_durable_outcome_selection_binding_observe.md"
+        ],
+        "trace_ref": null,
+        "observed_at": "2026-08-21T05:50:51Z"
+      },
+      "failure_boundary": "restart-evidence-reset",
+      "exact_replay_result": null,
+      "decision_delta": null,
+      "discriminating_evidence": false
+    }
+  ],
+  "request": {
+    "schema_version": "1.0.0",
+    "operation": "product_write",
+    "target_path": "docs/evidence/plan118_causal_restart_lineage.json",
+    "recovery_action": null,
+    "ordinary_approval": true,
+    "approval_text": "I approve, continue",
+    "cost_telemetry_usd": "1000000",
+    "elapsed_telemetry_seconds": 999999
+  },
+  "recovery_lease": null
+}

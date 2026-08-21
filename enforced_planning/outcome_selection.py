@@ -8,7 +8,7 @@ resolving it never changes the ordinary pre-write decision.
 from __future__ import annotations
 
 import hashlib
-import re
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
@@ -20,6 +20,9 @@ from enforced_planning import coordination_claims, session_contracts
 from enforced_planning.outcome_continuation import (
     ContinuationError,
     OutcomeContinuationScenarioV1,
+    OutcomeContractV1,
+    OutcomeLeaseV1,
+    RestartDeltaV1,
     canonical_sha256,
     evaluate_scenario,
 )
@@ -105,6 +108,112 @@ class ResolvedOutcomeSelectionV1(StrictModel):
     binding: OutcomeSelectionBindingV1
     binding_sha256: str = Field(pattern=HEX_SHA256_PATTERN)
     scenario_path: str = Field(min_length=1)
+
+
+class OutcomeSessionTransferV1(StrictModel):
+    """Append-only receipt for a sanctioned exact-runtime handoff."""
+
+    schema_version: Literal["1.0.0"] = "1.0.0"
+    record_type: Literal["outcome_session_transfer"] = "outcome_session_transfer"
+    transferred_at: datetime
+    reason: Literal["session_resume"] = "session_resume"
+    prior_session_id: str = Field(min_length=3)
+    successor_session_id: str = Field(min_length=3)
+    prior_claim_identity_sha256: str = Field(pattern=HEX_SHA256_PATTERN)
+    successor_claim_identity_sha256: str = Field(pattern=HEX_SHA256_PATTERN)
+    prior_binding_sha256: str = Field(pattern=HEX_SHA256_PATTERN)
+    successor_binding_sha256: str = Field(pattern=HEX_SHA256_PATTERN)
+    scenario_file_sha256: str = Field(pattern=HEX_SHA256_PATTERN)
+    scenario_sha256: str = Field(pattern=HEX_SHA256_PATTERN)
+    outcome_contract_sha256: str = Field(pattern=HEX_SHA256_PATTERN)
+    lease_sha256: str = Field(pattern=HEX_SHA256_PATTERN)
+    outcome_id: str = Field(min_length=3)
+    outcome_lineage_id: str = Field(min_length=3)
+    target_path: str = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def validate_transfer(self) -> OutcomeSessionTransferV1:
+        if self.transferred_at.tzinfo is None or self.transferred_at.utcoffset() is None:
+            raise ValueError("transferred_at must be timezone-aware")
+        if self.prior_session_id == self.successor_session_id:
+            raise ValueError("session transfer requires distinct runtime identities")
+        if self.prior_claim_identity_sha256 == self.successor_claim_identity_sha256:
+            raise ValueError("session transfer must change the exact claim identity digest")
+        return self
+
+
+class OutcomeRestartTransitionV1(StrictModel):
+    """Append-only retained predecessor and successor state for one restart."""
+
+    schema_version: Literal["1.0.0"] = "1.0.0"
+    record_type: Literal["outcome_restart_transition"] = "outcome_restart_transition"
+    restarted_at: datetime
+    restart_delta_ref: str = Field(min_length=1)
+    restart_delta_file_sha256: str = Field(pattern=HEX_SHA256_PATTERN)
+    restart_delta_sha256: str = Field(pattern=HEX_SHA256_PATTERN)
+    restart_delta: RestartDeltaV1
+    predecessor_binding_sha256: str = Field(pattern=HEX_SHA256_PATTERN)
+    predecessor_binding: OutcomeSelectionBindingV1
+    predecessor_contract_sha256: str = Field(pattern=HEX_SHA256_PATTERN)
+    predecessor_contract: OutcomeContractV1
+    predecessor_lease_sha256: str = Field(pattern=HEX_SHA256_PATTERN)
+    predecessor_lease: OutcomeLeaseV1
+    predecessor_failed_evidence_refs: tuple[str, ...]
+    successor_binding_sha256: str = Field(pattern=HEX_SHA256_PATTERN)
+    successor_binding: OutcomeSelectionBindingV1
+
+    @model_validator(mode="after")
+    def validate_transition_bindings(self) -> OutcomeRestartTransitionV1:
+        if self.restarted_at.tzinfo is None or self.restarted_at.utcoffset() is None:
+            raise ValueError("restarted_at must be timezone-aware")
+        checks = {
+            "restart_delta_sha256": (canonical_sha256(self.restart_delta), self.restart_delta_sha256),
+            "predecessor_binding_sha256": (
+                canonical_sha256(self.predecessor_binding),
+                self.predecessor_binding_sha256,
+            ),
+            "predecessor_contract_sha256": (
+                canonical_sha256(self.predecessor_contract),
+                self.predecessor_contract_sha256,
+            ),
+            "predecessor_lease_sha256": (
+                canonical_sha256(self.predecessor_lease),
+                self.predecessor_lease_sha256,
+            ),
+            "successor_binding_sha256": (
+                canonical_sha256(self.successor_binding),
+                self.successor_binding_sha256,
+            ),
+        }
+        mismatches = [name for name, (actual, expected) in checks.items() if actual != expected]
+        if mismatches:
+            raise ValueError("restart transition digest mismatch: " + ", ".join(mismatches))
+        if tuple(self.restart_delta.predecessor_failed_evidence_refs) != self.predecessor_failed_evidence_refs:
+            raise ValueError("restart transition failed evidence differs from RestartDeltaV1")
+        return self
+
+
+class OutcomeRestartResultV1(StrictModel):
+    """Operator-facing accepted or idempotently replayed causal restart."""
+
+    schema_version: Literal["1.0.0"] = "1.0.0"
+    status: Literal["restarted", "idempotent"]
+    binding: OutcomeSelectionBindingV1
+    binding_sha256: str = Field(pattern=HEX_SHA256_PATTERN)
+    transition: OutcomeRestartTransitionV1
+    transition_sha256: str = Field(pattern=HEX_SHA256_PATTERN)
+    tracker_path: str = Field(min_length=1)
+
+
+@dataclass(frozen=True)
+class PreparedOutcomeSessionTransfer:
+    """Validated in-memory tracker mutation prepared before claim ownership changes."""
+
+    tracker_path: Path
+    tracker_payload_sha256: str
+    predecessor_binding: OutcomeSelectionBindingV1
+    successor_binding: OutcomeSelectionBindingV1
+    transfer: OutcomeSessionTransferV1
 
 
 def _load_claim_records(claims_dir: Path) -> list[coordination_claims.ClaimRecord]:
@@ -388,6 +497,229 @@ def _build_binding(
     )
 
 
+def _assert_binding_matches_claim(
+    binding: OutcomeSelectionBindingV1,
+    *,
+    claim: coordination_claims.ClaimRecord,
+    tracker_path: Path,
+) -> None:
+    """Require every stored binding identity field to match its exact claim."""
+
+    expected = {
+        "agent": claim.agent,
+        "project": claim.primary_project(),
+        "scope": claim.scope,
+        "session_id": claim.session_id,
+        "repo_root": _normalized_path(claim.repo_root or ""),
+        "worktree_path": _normalized_path(claim.worktree_path or ""),
+        "branch": claim.branch,
+        "tracker_path": str(tracker_path.resolve()),
+        "claim_source_file": _normalized_path(claim.source_file or ""),
+        "claim_plan_ref": claim.plan_ref,
+        "claim_identity_sha256": _claim_identity_sha256(claim),
+    }
+    actual = {
+        "agent": binding.agent,
+        "project": binding.project,
+        "scope": binding.scope,
+        "session_id": binding.session_id,
+        "repo_root": _normalized_path(binding.repo_root),
+        "worktree_path": _normalized_path(binding.worktree_path),
+        "branch": binding.branch,
+        "tracker_path": _normalized_path(binding.tracker_path),
+        "claim_source_file": _normalized_path(binding.claim_source_file),
+        "claim_plan_ref": binding.claim_plan_ref,
+        "claim_identity_sha256": binding.claim_identity_sha256,
+    }
+    mismatches = [name for name, value in expected.items() if actual.get(name) != value]
+    if mismatches:
+        raise OutcomeSelectionError(
+            "selection_claim_identity_stale",
+            "stored selection does not match the current exact claim identity: " + ", ".join(mismatches),
+        )
+
+
+def _validate_binding_scenario(
+    binding: OutcomeSelectionBindingV1,
+    *,
+    claim: coordination_claims.ClaimRecord,
+) -> OutcomeContinuationScenarioV1:
+    """Reopen and evaluate the immutable scenario behind one stored binding."""
+
+    scenario_path = Path(binding.worktree_path) / binding.scenario_ref
+    scenario, file_sha256, scenario_ref = _load_scenario_for_claim(scenario_path, claim=claim)
+    try:
+        result = evaluate_scenario(scenario)
+    except ContinuationError as exc:
+        raise OutcomeSelectionError(
+            "selection_evaluation_failed",
+            f"selected scenario no longer evaluates: {exc}",
+        ) from exc
+    checks = {
+        "scenario_ref": (scenario_ref, binding.scenario_ref),
+        "scenario_file_sha256": (file_sha256, binding.scenario_file_sha256),
+        "scenario_sha256": (result.scenario_sha256, binding.scenario_sha256),
+        "outcome_contract_sha256": (
+            result.outcome_contract_sha256,
+            binding.outcome_contract_sha256,
+        ),
+        "outcome_id": (scenario.contract.outcome_id, binding.outcome_id),
+        "outcome_lineage_id": (scenario.contract.lineage_id, binding.outcome_lineage_id),
+        "target_path": (scenario.request.target_path, binding.target_path),
+        "lease_sha256": (result.lease_sha256, binding.lease_sha256),
+        "lease_state": (result.lease.state, binding.lease_state),
+    }
+    mismatches = [name for name, (actual, expected) in checks.items() if actual != expected]
+    if mismatches:
+        raise OutcomeSelectionError(
+            "selection_scenario_stale",
+            "selected scenario changed after selection: " + ", ".join(mismatches),
+        )
+    return scenario
+
+
+def prepare_outcome_session_transfer(
+    *,
+    claim: coordination_claims.ClaimRecord,
+    successor_session_id: str,
+    transferred_at: datetime | None = None,
+) -> PreparedOutcomeSessionTransfer | None:
+    """Validate selected state before a cross-session claim mutation begins."""
+
+    if claim.session_id == successor_session_id:
+        return None
+    if not claim.session_id or not claim.tracker_path:
+        return None
+    tracker_path = Path(claim.tracker_path).expanduser().resolve()
+    if not tracker_path.is_file():
+        return None
+    payload = session_contracts.read_session_tracker(tracker_path)
+    tracker = _validate_tracker_claim(payload, claim=claim, tracker_path=tracker_path)
+    raw_binding = tracker.get("outcome_selection")
+    if raw_binding is None:
+        return None
+    try:
+        predecessor = OutcomeSelectionBindingV1.model_validate(raw_binding)
+    except ValidationError as exc:
+        raise OutcomeSelectionError(
+            "selection_binding_invalid",
+            f"existing outcome selection is invalid: {exc}",
+        ) from exc
+    _assert_binding_matches_claim(predecessor, claim=claim, tracker_path=tracker_path)
+    _validate_binding_scenario(predecessor, claim=claim)
+
+    successor_claim = replace(claim, session_id=successor_session_id)
+    successor = OutcomeSelectionBindingV1.model_validate(
+        {
+            **predecessor.model_dump(mode="json"),
+            "session_id": successor_session_id,
+            "claim_identity_sha256": _claim_identity_sha256(successor_claim),
+        }
+    )
+    transfer = OutcomeSessionTransferV1(
+        transferred_at=transferred_at or datetime.now(UTC),
+        prior_session_id=claim.session_id,
+        successor_session_id=successor_session_id,
+        prior_claim_identity_sha256=predecessor.claim_identity_sha256,
+        successor_claim_identity_sha256=successor.claim_identity_sha256,
+        prior_binding_sha256=canonical_sha256(predecessor),
+        successor_binding_sha256=canonical_sha256(successor),
+        scenario_file_sha256=predecessor.scenario_file_sha256,
+        scenario_sha256=predecessor.scenario_sha256,
+        outcome_contract_sha256=predecessor.outcome_contract_sha256,
+        lease_sha256=predecessor.lease_sha256,
+        outcome_id=predecessor.outcome_id,
+        outcome_lineage_id=predecessor.outcome_lineage_id,
+        target_path=predecessor.target_path,
+    )
+    return PreparedOutcomeSessionTransfer(
+        tracker_path=tracker_path,
+        tracker_payload_sha256=canonical_sha256(payload),
+        predecessor_binding=predecessor,
+        successor_binding=successor,
+        transfer=transfer,
+    )
+
+
+def apply_prepared_outcome_session_transfer(
+    prepared: PreparedOutcomeSessionTransfer,
+    *,
+    predecessor_claim: coordination_claims.ClaimRecord,
+    successor_claim: coordination_claims.ClaimRecord,
+    current_phase: str,
+    notes: str,
+    updated_at: str,
+) -> OutcomeSessionTransferV1:
+    """Atomically rebind one prepared selection and append its transfer receipt."""
+
+    if _claim_identity_sha256(successor_claim) != prepared.transfer.successor_claim_identity_sha256:
+        raise OutcomeSelectionError(
+            "session_transfer_claim_mismatch",
+            "resumed claim identity does not match the prepared successor binding",
+        )
+
+    def apply_transfer(payload: dict[str, Any]) -> None:
+        if canonical_sha256(payload) != prepared.tracker_payload_sha256:
+            raise OutcomeSelectionError(
+                "session_transfer_tracker_changed",
+                "session tracker changed after transfer preflight",
+            )
+        tracker = _validate_tracker_claim(
+            payload,
+            claim=predecessor_claim,
+            tracker_path=prepared.tracker_path,
+        )
+        try:
+            current = OutcomeSelectionBindingV1.model_validate(tracker.get("outcome_selection"))
+        except ValidationError as exc:
+            raise OutcomeSelectionError(
+                "selection_binding_invalid",
+                f"existing outcome selection is invalid: {exc}",
+            ) from exc
+        if current != prepared.predecessor_binding:
+            raise OutcomeSelectionError(
+                "session_transfer_selection_changed",
+                "selected outcome changed after transfer preflight",
+            )
+        raw_history = tracker.get("outcome_session_transfers", [])
+        if not isinstance(raw_history, list):
+            raise OutcomeSelectionError(
+                "session_transfer_history_invalid",
+                "outcome_session_transfers must be a list",
+            )
+        try:
+            history = [OutcomeSessionTransferV1.model_validate(item) for item in raw_history]
+        except ValidationError as exc:
+            raise OutcomeSelectionError(
+                "session_transfer_history_invalid",
+                f"existing outcome session transfer is invalid: {exc}",
+            ) from exc
+
+        tracker_claim = payload.get("claim")
+        if not isinstance(tracker_claim, dict):
+            raise OutcomeSelectionError("tracker_invalid", "session tracker is missing claim metadata")
+        tracker_claim["session_id"] = successor_claim.session_id
+        tracker["current_phase"] = current_phase.strip()
+        tracker["notes"] = notes.strip()
+        tracker["outcome_selection"] = prepared.successor_binding.model_dump(mode="json")
+        tracker["outcome_session_transfers"] = [
+            *[item.model_dump(mode="json") for item in history],
+            prepared.transfer.model_dump(mode="json"),
+        ]
+        _validate_tracker_claim(
+            payload,
+            claim=successor_claim,
+            tracker_path=prepared.tracker_path,
+        )
+
+    session_contracts.mutate_session_tracker(
+        prepared.tracker_path,
+        apply_transfer,
+        updated_at=updated_at,
+    )
+    return prepared.transfer
+
+
 def _binding_identity_sha256(binding: OutcomeSelectionBindingV1) -> str:
     """Hash the create-once choice while excluding its first-write timestamp."""
 
@@ -492,6 +824,333 @@ def select_outcome_for_session(
         status=status,
         binding=binding,
         binding_sha256=binding_sha256,
+        tracker_path=str(tracker_path),
+    )
+
+
+def _load_restart_delta_for_claim(
+    restart_delta_path: Path,
+    *,
+    claim: coordination_claims.ClaimRecord,
+) -> tuple[RestartDeltaV1, str, str]:
+    """Load one strict restart delta from the exact claim worktree."""
+
+    resolved = restart_delta_path.expanduser().resolve()
+    worktree = Path(claim.worktree_path or "").expanduser().resolve()
+    try:
+        delta_ref = resolved.relative_to(worktree).as_posix()
+    except ValueError as exc:
+        raise OutcomeSelectionError(
+            "restart_delta_outside_worktree",
+            "RestartDeltaV1 must be inside the exact claim worktree",
+        ) from exc
+    try:
+        content = resolved.read_bytes()
+    except OSError as exc:
+        raise OutcomeSelectionError(
+            "restart_delta_unavailable",
+            f"unable to read restart delta {delta_ref}: {exc}",
+        ) from exc
+    try:
+        delta = RestartDeltaV1.model_validate_json(content)
+    except ValidationError as exc:
+        raise OutcomeSelectionError(
+            "restart_delta_invalid",
+            f"RestartDeltaV1 is invalid: {exc}",
+        ) from exc
+    return delta, hashlib.sha256(content).hexdigest(), delta_ref
+
+
+def _failed_evidence_refs(scenario: OutcomeContinuationScenarioV1) -> tuple[str, ...]:
+    """Return stable unique evidence refs retained from non-outcome receipts."""
+
+    refs: list[str] = []
+    for receipt in scenario.receipts:
+        if receipt.progress_kind != "non_outcome":
+            continue
+        candidates = [*receipt.evidence.artifact_refs]
+        if receipt.evidence.trace_ref:
+            candidates.append(receipt.evidence.trace_ref)
+        for ref in candidates:
+            if ref not in refs:
+                refs.append(ref)
+    return tuple(refs)
+
+
+def _assert_restart_contract(
+    *,
+    predecessor_binding: OutcomeSelectionBindingV1,
+    predecessor_scenario: OutcomeContinuationScenarioV1,
+    successor_binding: OutcomeSelectionBindingV1,
+    successor_scenario: OutcomeContinuationScenarioV1,
+    delta: RestartDeltaV1,
+) -> tuple[OutcomeLeaseV1, tuple[str, ...]]:
+    """Validate exact same-outcome custody and retained predecessor failure state."""
+
+    predecessor_result = evaluate_scenario(predecessor_scenario)
+    successor_result = evaluate_scenario(successor_scenario)
+    predecessor_lease = predecessor_result.lease
+    successor_lease = successor_result.lease
+    if predecessor_lease.state not in {"stalled", "parked"}:
+        raise OutcomeSelectionError(
+            "restart_predecessor_state",
+            "causal restart requires a stalled or parked selected predecessor",
+        )
+    if (
+        successor_lease.state != "active"
+        or successor_lease.consecutive_non_outcome_increments != 0
+        or successor_lease.same_boundary_failures != 0
+        or successor_lease.current_failure_boundary is not None
+    ):
+        raise OutcomeSelectionError(
+            "restart_successor_lease_invalid",
+            "restart successor must begin active with zero current failure counters",
+        )
+
+    predecessor = predecessor_scenario.contract
+    successor = successor_scenario.contract
+    retained_contract_fields = (
+        "owner_class",
+        "project_id",
+        "outcome_id",
+        "intended_consumer",
+        "outcome",
+        "canonical_journey",
+        "progress_dimensions",
+    )
+    mismatches = [
+        field
+        for field in retained_contract_fields
+        if getattr(predecessor, field) != getattr(successor, field)
+    ]
+    if mismatches:
+        raise OutcomeSelectionError(
+            "restart_outcome_mismatch",
+            "restart successor changed retained outcome identity: " + ", ".join(mismatches),
+        )
+    if predecessor_binding.target_path != successor_binding.target_path:
+        raise OutcomeSelectionError(
+            "restart_target_mismatch",
+            "restart successor changed the canonical write target",
+        )
+    if predecessor_binding.execution_authority_ref != successor_binding.execution_authority_ref:
+        raise OutcomeSelectionError(
+            "restart_authority_mismatch",
+            "restart successor changed execution authority",
+        )
+    if successor.lineage_id == predecessor.lineage_id:
+        raise OutcomeSelectionError(
+            "restart_lineage_unchanged",
+            "restart successor requires a distinct outcome lineage",
+        )
+    if predecessor.lineage_id not in successor.predecessor_lineage_ids:
+        raise OutcomeSelectionError(
+            "restart_predecessor_missing",
+            "restart successor must directly list the selected predecessor lineage",
+        )
+
+    failed_refs = _failed_evidence_refs(predecessor_scenario)
+    expected_delta = {
+        "predecessor_binding_sha256": canonical_sha256(predecessor_binding),
+        "predecessor_contract_sha256": predecessor_result.outcome_contract_sha256,
+        "predecessor_lease_sha256": predecessor_result.lease_sha256,
+        "predecessor_lineage_id": predecessor.lineage_id,
+        "predecessor_lease_state": predecessor_lease.state,
+        "predecessor_non_outcome_count": predecessor_lease.consecutive_non_outcome_increments,
+        "predecessor_failure_boundary": predecessor_lease.current_failure_boundary,
+        "predecessor_failure_count": predecessor_lease.same_boundary_failures,
+        "predecessor_failed_evidence_refs": list(failed_refs),
+        "successor_contract_sha256": successor_result.outcome_contract_sha256,
+        "successor_lineage_id": successor.lineage_id,
+    }
+    actual_delta = delta.model_dump(mode="json")
+    mismatches = [
+        name for name, expected in expected_delta.items() if actual_delta.get(name) != expected
+    ]
+    if mismatches:
+        raise OutcomeSelectionError(
+            "restart_delta_mismatch",
+            "RestartDeltaV1 does not bind exact predecessor/successor state: " + ", ".join(mismatches),
+        )
+    return predecessor_lease, failed_refs
+
+
+def restart_selected_outcome_for_session(
+    *,
+    agent: str,
+    project: str,
+    scope: str,
+    successor_scenario_path: Path,
+    restart_delta_path: Path,
+    session_id: str | None = None,
+    claims_dir: Path | None = None,
+) -> OutcomeRestartResultV1:
+    """Replace stalled selected state only through one exact causal restart."""
+
+    resolved_session_id = coordination_claims.resolve_session_id(agent, session_id)
+    if not resolved_session_id:
+        raise OutcomeSelectionError(
+            "session_identity_unavailable",
+            "restart requires an explicit or native exact session ID",
+        )
+    coordination_claims.validate_native_session_binding(agent, resolved_session_id)
+    resolved_claims_dir = (claims_dir or coordination_claims.CLAIMS_DIR).expanduser().resolve()
+    with coordination_claims.claim_registry_lock(resolved_claims_dir):
+        claim = _exact_live_claim(
+            agent=agent,
+            project=project,
+            scope=scope,
+            session_id=resolved_session_id,
+            claims_dir=resolved_claims_dir,
+        )
+        if not claim.tracker_path:
+            raise OutcomeSelectionError("tracker_unavailable", "exact live claim does not link a session tracker")
+        tracker_path = Path(claim.tracker_path).expanduser().resolve()
+        if not tracker_path.is_file():
+            raise OutcomeSelectionError(
+                "tracker_unavailable",
+                f"exact live claim tracker is not a file: {tracker_path}",
+            )
+        successor_scenario, successor_file_sha256, successor_ref = _load_scenario_for_claim(
+            successor_scenario_path,
+            claim=claim,
+        )
+        delta, delta_file_sha256, delta_ref = _load_restart_delta_for_claim(
+            restart_delta_path,
+            claim=claim,
+        )
+        delta_sha256 = canonical_sha256(delta)
+        status: Literal["restarted", "idempotent"] = "restarted"
+        selected_binding: OutcomeSelectionBindingV1 | None = None
+        selected_transition: OutcomeRestartTransitionV1 | None = None
+
+        def apply_restart(payload: dict[str, Any]) -> None:
+            nonlocal status, selected_binding, selected_transition
+            tracker = _validate_tracker_claim(payload, claim=claim, tracker_path=tracker_path)
+            raw_binding = tracker.get("outcome_selection")
+            if raw_binding is None:
+                raise OutcomeSelectionError(
+                    "selection_missing",
+                    "causal restart requires an existing selected predecessor",
+                )
+            try:
+                current = OutcomeSelectionBindingV1.model_validate(raw_binding)
+            except ValidationError as exc:
+                raise OutcomeSelectionError(
+                    "selection_binding_invalid",
+                    f"existing outcome selection is invalid: {exc}",
+                ) from exc
+            _assert_binding_matches_claim(current, claim=claim, tracker_path=tracker_path)
+
+            raw_history = tracker.get("outcome_selection_transitions", [])
+            if not isinstance(raw_history, list):
+                raise OutcomeSelectionError(
+                    "restart_history_invalid",
+                    "outcome_selection_transitions must be a list",
+                )
+            try:
+                history = [OutcomeRestartTransitionV1.model_validate(item) for item in raw_history]
+            except ValidationError as exc:
+                raise OutcomeSelectionError(
+                    "restart_history_invalid",
+                    f"existing outcome restart transition is invalid: {exc}",
+                ) from exc
+
+            for prior in history:
+                if (
+                    prior.restart_delta_file_sha256 == delta_file_sha256
+                    and prior.restart_delta_sha256 == delta_sha256
+                ):
+                    if (
+                        current != prior.successor_binding
+                        or prior.successor_binding.scenario_ref != successor_ref
+                        or prior.successor_binding.scenario_file_sha256 != successor_file_sha256
+                    ):
+                        raise OutcomeSelectionError(
+                            "restart_replay_conflict",
+                            "accepted restart no longer matches the current selected successor",
+                        )
+                    status = "idempotent"
+                    selected_binding = current
+                    selected_transition = prior
+                    return
+                if prior.predecessor_binding_sha256 == delta.predecessor_binding_sha256:
+                    raise OutcomeSelectionError(
+                        "restart_conflict",
+                        "the selected predecessor already has a different accepted restart transition",
+                    )
+
+            predecessor_scenario = _validate_binding_scenario(current, claim=claim)
+            authority = _execution_authority(
+                current.execution_authority_ref,
+                claim=claim,
+                scenario=successor_scenario,
+            )
+            successor_binding = _build_binding(
+                claim=claim,
+                tracker_path=tracker_path,
+                authority=authority,
+                scenario=successor_scenario,
+                scenario_ref=successor_ref,
+                scenario_file_sha256=successor_file_sha256,
+            )
+            predecessor_lease, failed_refs = _assert_restart_contract(
+                predecessor_binding=current,
+                predecessor_scenario=predecessor_scenario,
+                successor_binding=successor_binding,
+                successor_scenario=successor_scenario,
+                delta=delta,
+            )
+            transition = OutcomeRestartTransitionV1(
+                restarted_at=datetime.now(UTC),
+                restart_delta_ref=delta_ref,
+                restart_delta_file_sha256=delta_file_sha256,
+                restart_delta_sha256=delta_sha256,
+                restart_delta=delta,
+                predecessor_binding_sha256=canonical_sha256(current),
+                predecessor_binding=current,
+                predecessor_contract_sha256=canonical_sha256(predecessor_scenario.contract),
+                predecessor_contract=predecessor_scenario.contract,
+                predecessor_lease_sha256=canonical_sha256(predecessor_lease),
+                predecessor_lease=predecessor_lease,
+                predecessor_failed_evidence_refs=failed_refs,
+                successor_binding_sha256=canonical_sha256(successor_binding),
+                successor_binding=successor_binding,
+            )
+            tracker["outcome_selection"] = successor_binding.model_dump(mode="json")
+            tracker["outcome_selection_transitions"] = [
+                *[item.model_dump(mode="json") for item in history],
+                transition.model_dump(mode="json"),
+            ]
+            selected_binding = successor_binding
+            selected_transition = transition
+
+        try:
+            with session_contracts.session_tracker_lock(tracker_path):
+                payload = session_contracts.read_session_tracker(tracker_path)
+                apply_restart(payload)
+                if status == "restarted":
+                    timestamps = payload.get("timestamps")
+                    if not isinstance(timestamps, dict):
+                        raise TypeError(f"Session tracker at {tracker_path} is missing timestamps section")
+                    timestamps["updated_at"] = datetime.now(UTC).isoformat()
+                    session_contracts._atomic_write_session_tracker(tracker_path, payload)
+        except OutcomeSelectionError:
+            raise
+        except (OSError, TypeError, ValueError, yaml.YAMLError) as exc:
+            raise OutcomeSelectionError(
+                "tracker_invalid",
+                f"unable to mutate exact session tracker for restart: {exc}",
+            ) from exc
+
+    if selected_binding is None or selected_transition is None:
+        raise OutcomeSelectionError("restart_internal_error", "restart completed without a selected transition")
+    return OutcomeRestartResultV1(
+        status=status,
+        binding=selected_binding,
+        binding_sha256=canonical_sha256(selected_binding),
+        transition=selected_transition,
+        transition_sha256=canonical_sha256(selected_transition),
         tracker_path=str(tracker_path),
     )
 

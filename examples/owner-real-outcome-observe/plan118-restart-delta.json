@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.0.0",
+  "record_type": "restart_delta",
+  "delta_id": "plan-118-owner-real-causal-restart",
+  "recorded_at": "2026-08-21T05:52:31Z",
+  "predecessor_binding_sha256": "886821afd857be94eba8b87df667da2084cb72c4737b181d43edbf2b54d64f45",
+  "predecessor_contract_sha256": "5a503cadceb2bb062fff1a5fb5f1a2fd70574f68ed6e2c10c0577efcfcc4f740",
+  "predecessor_lease_sha256": "af91c87a65aa4b7bd4ac82255ef7fb46cd5b5cf762022878cc296583b6ffb3ee",
+  "predecessor_lineage_id": "plan-118-stalled-control",
+  "predecessor_lease_state": "stalled",
+  "predecessor_non_outcome_count": 3,
+  "predecessor_failure_boundary": "restart-evidence-reset",
+  "predecessor_failure_count": 3,
+  "predecessor_failed_evidence_refs": [
+    "project-meta@f6091b6b:policy/proposals/2026-08-20-outcome-continuation-lease-hard-gate.yaml",
+    "project-meta@a2349842:investigations/cross-project/2026-08-20-recurring-project-failure-modes.md",
+    "docs/evidence/plan117_durable_outcome_selection_binding.json",
+    "docs/plans/117_durable_outcome_selection_binding_observe.md"
+  ],
+  "successor_contract_sha256": "1194586319475dc0b6a5365c5e3688dff07bcad74a912c88a8d1b4c5a72a3e40",
+  "successor_lineage_id": "plan-118-restart-safe-custody",
+  "prior_causal_hypothesis": "A create-once binding inside one exact session was sufficient to prevent restart evidence reset.",
+  "changed_causal_hypothesis": "Runtime identity transfer and mechanism restart must explicitly transition selected state while retaining predecessor evidence.",
+  "prior_mechanism": "Keep one immutable selected binding in the exact session tracker and reject direct replacement.",
+  "changed_mechanism": "Atomically rebind claim and tracker identity, and require a strict causal delta with append-only restart history.",
+  "bounded_action": "Transition this claimed session from the stalled control to the same-outcome restart-safe lineage.",
+  "next_canonical_observation": "Resolve the successor selection through ordinary pre-write and inspect every retained predecessor failure fact.",
+  "stopping_condition": "Stop if the selected successor cannot resolve, ordinary admission changes, or any predecessor failure fact is absent."
+}

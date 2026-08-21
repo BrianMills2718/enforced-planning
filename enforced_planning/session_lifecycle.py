@@ -11,6 +11,7 @@ import hashlib
 import os
 import re
 import subprocess
+import tempfile
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -23,6 +24,7 @@ from enforced_planning import (
     coordination_claims,
     coordination_messages,
     doc_authority,
+    outcome_selection,
     push_safety,
     session_contracts,
     surface_runtime,
@@ -30,6 +32,12 @@ from enforced_planning import (
 from enforced_planning.worktree_paths import resolve_canonical_repo_root
 
 WORKTREE_LIFECYCLE_CONFIG_PATH = Path(__file__).with_name("worktree_lifecycle.yaml")
+
+
+class SessionTransferIncompleteError(RuntimeError):
+    """A cross-file session transfer failed and exact rollback was incomplete."""
+
+    code = "session_transfer_incomplete"
 
 
 def _poll_mailbox(*, agent: str, project: str, session_id: str) -> dict[str, Any]:
@@ -302,6 +310,69 @@ def _write_claim_payload(path: Path, payload: dict[str, Any]) -> None:
     """Persist one normalized claim payload through the canonical atomic writer."""
 
     coordination_claims._atomic_write_claim(path, payload)
+
+
+def _atomic_restore_bytes(path: Path, content: bytes) -> None:
+    """Atomically restore exact preflight bytes for a failed two-file transfer."""
+
+    resolved = path.expanduser().resolve()
+    resolved.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    temp_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            "wb",
+            dir=resolved.parent,
+            prefix=f".{resolved.name}.",
+            suffix=".rollback.tmp",
+            delete=False,
+        ) as handle:
+            temp_path = Path(handle.name)
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temp_path, resolved)
+    finally:
+        if temp_path is not None and temp_path.exists():
+            temp_path.unlink()
+
+
+def _rollback_outcome_session_transfer(
+    *,
+    claim: coordination_claims.ClaimRecord,
+    claim_file: Path,
+    successor_session_id: str,
+    claim_bytes: bytes,
+    tracker_path: Path,
+    tracker_bytes: bytes,
+) -> None:
+    """Restore the exact claim and tracker bytes after a failed transfer."""
+
+    with (
+        coordination_claims.claim_registry_lock(coordination_claims.CLAIMS_DIR),
+        session_contracts.session_tracker_lock(tracker_path),
+    ):
+        current = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
+        if not isinstance(current, dict) or current.get("session_id") != successor_session_id:
+            raise ValueError(
+                "resumed claim changed before transfer rollback; refusing to overwrite current ownership"
+            )
+        registry_digest_before = coordination_claims._registry_digest(coordination_claims.CLAIMS_DIR)
+        _atomic_restore_bytes(claim_file, claim_bytes)
+        if tracker_path.read_bytes() != tracker_bytes:
+            _atomic_restore_bytes(tracker_path, tracker_bytes)
+        _projection_path, projection_digest_after = coordination_claims.refresh_prewrite_authority_projection(
+            coordination_claims.CLAIMS_DIR
+        )
+        coordination_claims.record_claim_mutation(
+            operation="session_upsert",
+            claims_dir=coordination_claims.CLAIMS_DIR,
+            registry_digest_before=registry_digest_before,
+            target_project=claim.primary_project(),
+            target_scope=claim.scope,
+            target_claim_path=claim_file,
+            session_id=claim.session_id,
+            projection_digest_after=projection_digest_after,
+        )
 
 
 def _apply_claim_payload_updates(
@@ -1596,40 +1667,111 @@ def resume_session(
         )
 
     updated_at = datetime.now(timezone.utc).isoformat()
-    payload = _apply_claim_payload_updates(
-        claim=claim,
-        claim_file=claim_file,
-        updates={
-            "status": "active",
-            "session_id": resolved_session_id,
-            "heartbeat_at": updated_at,
-            "updated_at": updated_at,
-            "notes": note or "session resumed with a fresh runtime attachment",
-        },
-        expected_fields={
+    transfer_preflight: outcome_selection.PreparedOutcomeSessionTransfer | None = None
+    claim_bytes_before: bytes | None = None
+    tracker_bytes_before: bytes | None = None
+    if not same_runtime:
+        transfer_preflight = outcome_selection.prepare_outcome_session_transfer(
+            claim=claim,
+            successor_session_id=resolved_session_id,
+            transferred_at=datetime.fromisoformat(updated_at),
+        )
+        if transfer_preflight is not None:
+            claim_bytes_before = claim_file.read_bytes()
+            tracker_bytes_before = transfer_preflight.tracker_path.read_bytes()
+
+    expected_fields = (
+        payload
+        if transfer_preflight is not None
+        else {
             "status": claim.status,
             "session_id": claim.session_id,
             "heartbeat_at": claim.heartbeat_at,
             "updated_at": claim.updated_at,
-        },
+        }
     )
-
     tracker_path_text = claim.tracker_path
-    if tracker_path_text:
-        path = Path(tracker_path_text).expanduser()
-        if path.exists():
-            session_contracts.update_session_tracker(
-                path,
+    transfer_receipt: outcome_selection.OutcomeSessionTransferV1 | None = None
+    try:
+        payload = _apply_claim_payload_updates(
+            claim=claim,
+            claim_file=claim_file,
+            updates={
+                "status": "active",
+                "session_id": resolved_session_id,
+                "heartbeat_at": updated_at,
+                "updated_at": updated_at,
+                "notes": note or "session resumed with a fresh runtime attachment",
+            },
+            expected_fields=expected_fields,
+        )
+
+        if transfer_preflight is not None:
+            successor_claim = coordination_claims.normalize_claim(
+                payload,
+                source_file=str(claim_file.resolve()),
+            )
+            if successor_claim is None:
+                raise ValueError("resumed claim could not be normalized before tracker transfer")
+            transfer_receipt = outcome_selection.apply_prepared_outcome_session_transfer(
+                transfer_preflight,
+                predecessor_claim=claim,
+                successor_claim=successor_claim,
                 current_phase=current_phase,
                 notes=payload["notes"],
                 updated_at=updated_at,
             )
+        elif tracker_path_text:
+            path = Path(tracker_path_text).expanduser()
+            if path.exists():
+                session_contracts.update_session_tracker(
+                    path,
+                    current_phase=current_phase,
+                    notes=payload["notes"],
+                    updated_at=updated_at,
+                )
+    except Exception as transfer_error:
+        if transfer_preflight is None:
+            raise
+        if claim_bytes_before is None or tracker_bytes_before is None:
+            raise SessionTransferIncompleteError(
+                "selected outcome transfer failed without exact rollback evidence: "
+                f"transfer={transfer_error}"
+            ) from transfer_error
+        try:
+            claim_changed = claim_file.read_bytes() != claim_bytes_before
+            tracker_changed = transfer_preflight.tracker_path.read_bytes() != tracker_bytes_before
+        except OSError as inspection_error:
+            raise SessionTransferIncompleteError(
+                "selected outcome transfer failed and current state could not be inspected for rollback: "
+                f"transfer={transfer_error}; inspection={inspection_error}"
+            ) from transfer_error
+        if not claim_changed and not tracker_changed:
+            raise
+        try:
+            _rollback_outcome_session_transfer(
+                claim=claim,
+                claim_file=claim_file,
+                successor_session_id=resolved_session_id,
+                claim_bytes=claim_bytes_before,
+                tracker_path=transfer_preflight.tracker_path,
+                tracker_bytes=tracker_bytes_before,
+            )
+        except Exception as rollback_error:  # noqa: BLE001 - every rollback failure is terminal evidence
+            raise SessionTransferIncompleteError(
+                "selected outcome transfer failed and exact rollback was incomplete: "
+                f"transfer={transfer_error}; rollback={rollback_error}"
+            ) from transfer_error
+        raise
 
     return {
         "action": "resumed",
         "session_id": resolved_session_id,
         "tracker_path": tracker_path_text,
         "plan_ref": claim.plan_ref,
+        "outcome_session_transfer": (
+            transfer_receipt.model_dump(mode="json") if transfer_receipt is not None else None
+        ),
         "coordination_mailbox": _poll_mailbox(
             agent=agent,
             project=project,

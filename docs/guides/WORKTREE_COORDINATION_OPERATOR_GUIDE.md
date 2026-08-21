@@ -315,11 +315,16 @@ Tracker-only session fields hold restart-safe execution context:
 - `notes`
 - `outcome_selection` when an exact session has explicitly selected one
   create-once outcome scenario
+- `outcome_session_transfers` as append-only receipts for sanctioned runtime
+  handoffs that preserve the selected scenario and lease
+- `outcome_selection_transitions` as append-only retained predecessor and
+  successor state for explicit causal restarts
 
 Tracker creation, heartbeat, resume-style updates, and explicit refreshes use
 the same locked atomic mutation boundary. Once `outcome_selection` exists, a
-refresh preserves it and rejects a change to the bound claim identity instead
-of silently replacing or erasing the choice.
+same-runtime refresh preserves it and rejects an implicit change to the bound
+claim identity instead of silently replacing or erasing the choice. A
+sanctioned cross-session resume uses the explicit transfer path below.
 
 ### Durable outcome selection observe pilot
 
@@ -354,6 +359,49 @@ failure without performing or blocking the write. This pilot is not automatic
 selection, mutable progress-lease renewal, installed hook activation, or fleet
 enforcement.
 
+### Restart-safe outcome custody observe pilot
+
+Plan #118 distinguishes routine runtime turnover from a deliberate mechanism
+restart.
+
+When a selected lane is eligible for cross-session `session-resume`, the
+lifecycle command first validates the old claim, tracker, binding, scenario,
+contract, and lease. It then changes the claim identity and tracker binding
+together, appends one `OutcomeSessionTransferV1`, and preserves every outcome
+and lease digest. The prior runtime no longer resolves the selection. If the
+claim write, derived claim projection, successor normalization, or tracker
+transition fails after mutation begins, the exact preflight claim and tracker
+bytes are restored; an unsuccessful rollback raises a visible
+`session_transfer_incomplete` error rather than reporting success. Lanes with
+no selected outcome keep the existing resume behavior.
+
+A stalled or deliberately parked lineage cannot be replaced with `select`.
+Create a strict `RestartDeltaV1` inside the same claimed worktree, then use the
+explicit command:
+
+```bash
+python scripts/outcome_continuation.py restart \
+  --successor-scenario examples/owner-real-outcome-observe/plan118-active-successor.json \
+  --restart-delta examples/owner-real-outcome-observe/plan118-restart-delta.json \
+  --agent codex --project enforced-planning \
+  --scope plan-118-restart-lineage-design
+```
+
+The successor must keep the same owner class, project, outcome, intended
+consumer, canonical journey, progress dimensions, target, and execution
+authority; it must name a different lineage that directly lists the selected
+predecessor. The delta names both the prior and changed hypothesis/mechanism,
+one bounded action, the next canonical observation, and the stopping
+condition. An accepted restart replaces only the current binding and appends
+an `OutcomeRestartTransitionV1` containing the full predecessor binding,
+contract, lease counters, failure boundary/count, and failed-evidence refs.
+Exact replay is idempotent; competing deltas fail visibly.
+
+This remains same-project observe-mode custody. It does not semantically prove
+that a mechanism is meaningfully different, provide an independent reviewer
+identity, resolve owner-class WIP through Project Graph, allow cross-project
+successors, activate outcome blocking, install hooks, or claim fleet adoption.
+
 Important rule: do not name sessions after the immediate local task. A branch
 like `plan-31-hygiene-gate` is fine for git, but the session name should derive
 from the broader goal, such as `digimon-truthful-controller-grounding`.
@@ -372,7 +420,8 @@ Canonical lifecycle commands:
 - `create_publish_worktree.py`: create a merge/push control worktree only when
   the canonical main checkout is already clean
 
-- `session-resume`: attach a new runtime to an existing plan-bound lane
+- `session-resume`: attach a new runtime to an existing plan-bound lane and,
+  when selected state exists, append an exact lossless outcome transfer
 - `session-handoff`: intentionally pause or transfer work with a durable note
 - `session-abandon`: explicitly mark a dead lane as abandoned instead of
   leaving it stale forever

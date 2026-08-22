@@ -75,6 +75,11 @@ Equivalent convenience wrapper:
 
 That wrapper delegates to the same canonical minimum installer.
 
+The installer activates the repository's versioned `hooks/` directory when no
+hook path is configured. An existing relative or absolute `core.hooksPath` is
+preserved when it resolves to that same directory; a genuinely custom hook
+directory remains a blocking ownership decision and is never overwritten.
+
 ## What Gets Installed
 
 After a successful minimum install, your repo should have:

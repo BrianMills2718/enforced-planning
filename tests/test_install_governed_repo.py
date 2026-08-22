@@ -1549,6 +1549,35 @@ def test_worktree_rollout_activates_versioned_git_hooks(tmp_path: Path) -> None:
     assert os.access(tmp_path / "hooks" / "pre-push", os.X_OK)
 
 
+def test_worktree_rollout_accepts_equivalent_absolute_git_hook_path(
+    tmp_path: Path,
+) -> None:
+    """An absolute path to the installed hooks directory is not a custom stack."""
+
+    _write_minimal_claude(tmp_path)
+    (tmp_path / "Makefile").write_text("help:\n\t@echo hello\n", encoding="utf-8")
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "config", "--local", "core.hooksPath", str(tmp_path / "hooks"))
+
+    result = _run(
+        "--repo-root",
+        str(tmp_path),
+        "--write",
+        "--worktree-only",
+        "--json",
+        cwd=PROJECT_META_ROOT,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["blockers"] == []
+    assert "configure:git.core.hooksPath=hooks" not in payload["applied_actions"]
+    assert _git(tmp_path, "config", "--local", "--get", "core.hooksPath") == str(
+        tmp_path / "hooks"
+    )
+    assert os.access(tmp_path / "hooks" / "pre-push", os.X_OK)
+
+
 def test_worktree_rollout_refuses_to_replace_custom_git_hook_path(tmp_path: Path) -> None:
     """Installer must not silently displace a consumer-owned hook stack."""
 

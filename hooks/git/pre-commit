@@ -19,6 +19,56 @@ echo "Running pre-commit checks (mode: $HOOK_MODE)..."
 REPO_ROOT=$(git rev-parse --show-toplevel)
 cd "$REPO_ROOT"
 
+# --- Canonical-checkout guard -------------------------------------------------
+# Implementation belongs in a claimed worktree at <repo>/worktrees/<branch>/,
+# never the canonical checkout. Only two of 88 active governed repositories
+# enforced that on 2026-08-21, both hand-edited, because this template did not
+# carry the check and so no repository ever received it by installation.
+#
+# On that day two sessions worked one canonical checkout at once. A finished,
+# verified edit vanished leaving a clean `git status`, and another session's
+# unfinished work came within one command of being committed by the wrong
+# agent, twice. The repositories that already had this guard are the ones where
+# nothing went wrong.
+#
+# The pre-write claim gate cannot cover this. It is wired to PreToolUse on
+# Edit|Write, and bypass-permissions mode instructs agents to change files with
+# sed and heredocs instead, so shell writes never reach it. A commit-time check
+# sees every write regardless of how it was made.
+#
+# This check deliberately blocks in warn mode, unlike every other check below.
+# Prose already said to use a worktree and was ignored; a warning here would
+# reproduce the failure it exists to prevent. HOOK_MODE=off still disables it,
+# and ALLOW_CANONICAL_CHECKOUT_COMMIT=1 skips only this check while the rest of
+# the suite still runs -- unlike --no-verify, which skips everything.
+#
+# Detect canonical vs. linked worktree by comparing --git-common-dir (always the
+# main repo's .git) with --git-dir (the same path in the canonical checkout, but
+# .git/worktrees/<name> in a linked worktree); equal means canonical. Both need
+# --path-format=absolute: from a subdirectory, plain --git-common-dir returns a
+# relative path while --git-dir returns absolute, so an unnormalized compare is
+# always unequal and the guard silently never fires.
+if [[ "$HOOK_MODE" != "off" && "${ALLOW_CANONICAL_CHECKOUT_COMMIT:-0}" != "1" ]]; then
+    GIT_COMMON_DIR_ABS=$(git rev-parse --path-format=absolute --git-common-dir)
+    GIT_DIR_ABS=$(git rev-parse --path-format=absolute --git-dir)
+    if [[ "$GIT_COMMON_DIR_ABS" == "$GIT_DIR_ABS" ]]; then
+        echo ""
+        echo "ERROR: Commit blocked - this is the CANONICAL checkout, not a worktree."
+        echo "Implementation belongs in a claimed worktree at worktrees/<branch>/."
+        echo ""
+        echo "Fix - prefer the repository entry point, which also registers a claim:"
+        echo "  make worktree BRANCH=<name> TASK=\"...\"    # if this repo has it"
+        echo "  git worktree add worktrees/<name> -b <name>  # otherwise"
+        echo "  cd worktrees/<name>   # re-stage and commit there"
+        echo ""
+        echo "Escape hatch (reversible single-writer maintenance only):"
+        echo "  ALLOW_CANONICAL_CHECKOUT_COMMIT=1 git commit ..."
+        echo ""
+        exit 1
+    fi
+fi
+# --- end canonical-checkout guard ---------------------------------------------
+
 STAGED_PY=$(git diff --cached --name-only --diff-filter=ACM | grep '\.py$' || true)
 
 # Helper: find a script at either scripts/ or scripts/meta/.

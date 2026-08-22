@@ -1,0 +1,70 @@
+{
+  "schema_version": "1.0.0",
+  "scenario_id": "planning-integrity-semantic-admission",
+  "contract": {
+    "schema_version": "1.1.0",
+    "outcome_id": "planning-integrity-semantic-admission",
+    "owner_class": "brian",
+    "project_id": "enforced-planning",
+    "lineage_id": "planning-integrity-semantic-admission",
+    "portfolio_class": "maintenance",
+    "predecessor_lineage_ids": [
+      "plan-123-source-outcome-admission-activation"
+    ],
+    "intended_consumer": "Brian and coding agents starting consequential Agentic Engineering work",
+    "outcome": "A selected repository rejects a structurally incomplete new plan before coordination mutation and admits an exact declared-structure plan with an inspectable epistemic frontier, reassessment contract, and explicit coverage non-claim.",
+    "canonical_journey": {
+      "starting_state": "The plan validator reports outcome, behavioral example, critical-path class, and capability adoption as nonblocking warnings, while plan-start readiness checks only graph state.",
+      "input": "One configured incomplete Plan 125-or-newer fixture and one complete Planning Integrity 1.0.0 plan with an exploration row.",
+      "action": "Run the shared plan validator and sanctioned plan-start boundary against both exact plans before any claim, branch, worktree, or tracker mutation.",
+      "observable_result": "The incomplete plan returns a typed fail with no coordination mutation; the complete declared structure returns a digest-bound pass, retains its frontier and reassessment fields, and states that omitted material areas or optimality are not mechanically proven.",
+      "failure_signal": "Missing or malformed semantic fields pass, structural PASS is presented as proof of material completeness or optimality, checker errors appear compliant, stale plan bytes reuse a receipt, installed templates omit the gate, compatibility work breaks historical plans or unplanned-light work, or a duplicate planning/runtime owner is introduced."
+    },
+    "baseline_revision": "c774dc1bcb8b697eeee09261c8a2cd9f0c75c719",
+    "allowed_scope": [
+      "enforced_planning/plan_validation.py",
+      "enforced_planning/plan_readiness.py",
+      "enforced_planning/coordination_claims.py",
+      "scripts/check_plan_readiness.py",
+      "scripts/check_coordination_claims.py",
+      "scripts/validate_plan.py",
+      "scripts/install_governed_repo.py",
+      "Makefile",
+      "meta-process.yaml",
+      "templates/Makefile.worktree.block.template",
+      "templates/meta-process.yaml.example",
+      "templates/meta-process.future.yaml.example",
+      "templates/plan.md.template",
+      "scripts/relationships.yaml",
+      "docs/reference/CONFIG_REFERENCE.md",
+      "docs/evidence/plan125_planning_integrity.json",
+      "tests/test_validate_plan.py",
+      "tests/test_plan_readiness.py",
+      "tests/test_check_coordination_claims.py",
+      "tests/test_install_governed_repo.py",
+      "docs/plans/125_planning_integrity_loop.md",
+      "docs/plans/125_planning_integrity_loop_work_graph.json",
+      "docs/plans/CLAUDE.md",
+      "ROADMAP.md",
+      "examples/owner-real-outcome-admission/plan125-planning-integrity-scenario.json",
+      "examples/owner-real-outcome-admission/plan125-planning-integrity-allocation.json",
+      "examples/owner-real-outcome-admission/plan125-planning-integrity-disposition.json"
+    ],
+    "progress_dimensions": [
+      "semantic plan completeness",
+      "pre-mutation admission",
+      "historical and light-work compatibility",
+      "installed consumer readiness"
+    ]
+  },
+  "receipts": [],
+  "request": {
+    "schema_version": "1.0.0",
+    "operation": "product_write",
+    "target_path": "enforced_planning/plan_validation.py",
+    "ordinary_approval": true,
+    "approval_text": "I approve",
+    "cost_telemetry_usd": "0",
+    "elapsed_telemetry_seconds": 0
+  }
+}

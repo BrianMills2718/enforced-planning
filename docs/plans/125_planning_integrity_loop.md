@@ -45,6 +45,9 @@ runtime surfaces are disconnected:
 - user outcome, canonical behavior, critical-path class, and capability
   adoption remain warnings;
 - the plan-start gate checks graph readiness but not semantic plan integrity;
+- the installer derives consumer configuration, plan scaffolds, and worktree
+  entrypoints from canonical templates, so root-only changes would create a
+  false installed-consumer proof;
 - outcome continuation can enforce selected progress, but a selected outcome
   is not proof that the owning plan classified uncertainty or defined when to
   revise itself; and
@@ -152,20 +155,26 @@ admission controls; isolated parser tests prove only implementation.
 4. **Exact evidence.** A result binds repository-relative plan identity,
    content digest, contract version, validator revision, mode, findings, and
    frontier summary. Changed bytes invalidate the receipt.
-5. **Fail loud.** Missing, malformed, unreadable, unsupported-version, or
+5. **Bounded completeness claim.** A structural `PASS` proves that every
+   declared frontier row is classified and executable; it does not prove that
+   an author named every material area or chose an optimal plan. The typed
+   result and AES projection carry this non-claim explicitly.
+6. **Fail loud.** Missing, malformed, unreadable, unsupported-version, or
    checker-failure states never become `PASS`.
-6. **Admission before mutation.** In enforcement mode, coordinated and release
-   lane creation validates the exact plan before claim, branch, worktree, or
-   tracker mutation. Explicitly unplanned light work retains its current
-   bounded exception.
-7. **Incremental adoption.** Repository configuration declares
+7. **Admission before mutation.** In enforcement mode, coordinated and release
+   lane creation validates plan and configuration bytes from the exact Git
+   start revision before claim, branch, worktree, or tracker mutation. Direct
+   plan-bound claim acquisition reuses the same gate, so omitting Make is not a
+   bypass. Explicitly unplanned light work retains its current bounded
+   exception.
+8. **Incremental adoption.** Repository configuration declares
    `off | observe | enforce`, contract version, and the first plan number to
    which enforcement applies. Historical lower-numbered plans remain visible
    and non-claimable as proof for the new contract.
-8. **Adaptive execution.** Existing outcome continuation remains the runtime
+9. **Adaptive execution.** Existing outcome continuation remains the runtime
    decision owner. Planning Integrity supplies revision and reassessment
    obligations; it does not duplicate continuation state.
-9. **One human surface.** AES projects authoritative plan fields plus generated
+10. **One human surface.** AES projects authoritative plan fields plus generated
    current evidence and variance; generated output remains disposable.
 
 ## Boundaries And Contracts
@@ -189,7 +198,13 @@ admission controls; isolated parser tests prove only implementation.
 - typed blocking findings and nonblocking warnings;
 - parsed frontier rows; and
 - the exact user outcome, canonical example, critical-path class, capability
-  disposition, and reassessment summary needed by AES projection.
+  disposition, reassessment summary, and structural-coverage non-claim needed
+  by AES projection.
+
+`PASS` means **declared planning-integrity structure passes**. It is not a
+claim that the plan is globally optimal or that an omitted material area was
+mechanically detected. Human/agent authorship review and subsequent observed
+variance remain responsible for challenging frontier coverage.
 
 Unknown fields reject at the enforcement boundary. Human Markdown is rendered
 from the typed result rather than parsed downstream.
@@ -198,8 +213,8 @@ from the typed result rather than parsed downstream.
 
 | Area | State | Current contract | Trigger or stopping rule | Downstream update |
 |---|---|---|---|---|
-| Planning-integrity schema and parser | fully_specifiable_now | Deterministic Markdown contract, Pydantic result, exact digest and findings | Complete when positive and malformed fixtures discriminate | `plan_validation.py`, config reference, installed wrapper |
-| Start-gate integration | fully_specifiable_now | Configured coordinated/release start must consume a passing exact result before mutation | Complete when an incomplete plan leaves no claim, branch, worktree, or tracker | plan readiness and Make/install surfaces |
+| Planning-integrity schema and parser | fully_specifiable_now | Deterministic Markdown contract, Pydantic result, exact-byte and validator-source digests, findings, and an explicit structural-coverage non-claim | Complete when positive, malformed, unfilled-template, and byte-distinct fixtures discriminate | `plan_validation.py`, config reference, installed wrapper |
+| Start-gate integration | fully_specifiable_now | Configured coordinated/release start and direct plan-bound claim acquisition must validate the plan/config bytes at the exact Git start revision before mutation | Complete when incomplete committed bytes plus a complete dirty edit still leave no claim, branch, worktree, or tracker | plan readiness, claim acquisition, and Make/install surfaces |
 | Runtime course-correction join | conditional | Reuse selected outcome continuation; add only the plan revision/reassessment evidence it demonstrably lacks | Extend only if focused integration shows the current receipt cannot carry the required reference | Plan 125 design or existing outcome contract owner |
 | AES four-layer planning projection | fully_specifiable_now | Installed result joins generated current/variance/topic output without becoming normative | Complete when delete/regenerate preserves normative bytes and exact evidence refs | AES topic and proof receipt |
 | First valuable project anchor | exploration_required | Portfolio audit selects by personal value, lineage, learning value, and bounded effort; WhyGame is provisional | Stop after one lineage/value probe can select or reject the candidate | Project Meta anchor decision and target repo plan |
@@ -231,8 +246,9 @@ revision-bound human-readable planning state through installed AES.
 1. **PI-01 — accepted design and graph.** Freeze this contract, its work graph,
    current roadmap boundary, and focused checks.
 2. **PI-02 — Enforced Planning semantic admission.** Implement the typed
-   contract, config, parser, strict results, Make/start admission, installation
-   propagation, and both-sign mutation-order tests.
+   contract, config, parser, strict results, exact-start-revision Make/start
+   admission, direct-claim admission, installation propagation, and both-sign
+   mutation-order tests.
 3. **PI-03 — AES installed integration.** Consume a pinned Enforced Planning
    candidate, retain an immutable result, and project the planning fields into
    AES's existing topic without new authority.
@@ -258,9 +274,14 @@ revision-bound human-readable planning state through installed AES.
    its existing generated documentation projection and preserves normative
    bytes across delete/regenerate.
 7. Source and installed wrappers use the same implementation; the installer is
-   idempotent for the changed files.
+   idempotent for the changed files, and consumer configuration, plan, and
+   worktree behavior comes from the actual canonical template owners.
 8. The implementation does not modify Company Planning, Project Meta portfolio
    authority, WhyGame product source, fleet defaults, or external systems.
+9. Every passing result and AES readout says that structural conformance does
+   not establish omitted-area coverage or plan optimality.
+10. Dirty complete bytes cannot admit an incomplete Git start revision, and a
+    direct plan-bound claim cannot bypass configured enforcement.
 
 ## Required Tests
 
@@ -270,6 +291,8 @@ revision-bound human-readable planning state through installed AES.
   adoption-floor compatibility;
 - start-gate mutation-order test proving semantic denial precedes claim and
   worktree creation;
+- direct-claim and dirty-working-tree negative controls proving the configured
+  gate cannot be omitted and binds the exact start revision;
 - regression tests for unplanned light work, historical plan compatibility,
   and existing outcome admission;
 - installer idempotence and installed-wrapper parity for changed files; and
@@ -283,14 +306,22 @@ the installer/shared gate boundary changes.
 
 - `enforced_planning/plan_validation.py`
 - `enforced_planning/plan_readiness.py`
+- `enforced_planning/coordination_claims.py`
 - `scripts/check_plan_readiness.py`
+- `scripts/check_coordination_claims.py`
 - `scripts/validate_plan.py`
 - `scripts/install_governed_repo.py`
 - `Makefile`
 - `meta-process.yaml`
+- `templates/Makefile.worktree.block.template`
+- `templates/meta-process.yaml.example`
+- `templates/meta-process.future.yaml.example`
+- `templates/plan.md.template`
+- `scripts/relationships.yaml`
 - `docs/reference/CONFIG_REFERENCE.md`
 - `tests/test_validate_plan.py`
 - `tests/test_plan_readiness.py`
+- `tests/test_check_coordination_claims.py`
 - `tests/test_install_governed_repo.py`
 - `ROADMAP.md`
 - `docs/plans/CLAUDE.md`
@@ -314,6 +345,7 @@ AES-owned paths are recorded in its own claimed lane after PI-02 is accepted.
 - `docs/plans/124_qualitative_coding_outcome_admission_pilot.md`
 - `docs/reference/CONFIG_REFERENCE.md`
 - `docs/reference/DOC_AUTHORITY_SCHEMA.md`
+- `docs/guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md`
 - `scripts/relationships.yaml`
 - `Makefile`
 - `../agentic-engineering-system/ROADMAP.md`

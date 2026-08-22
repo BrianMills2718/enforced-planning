@@ -1,0 +1,15 @@
+{
+  "schema_version": "1.0.0",
+  "record_type": "outcome_portfolio_allocation_request",
+  "allocation_id": "plan-125-planning-integrity-allocation-v2",
+  "requested_at": "2026-08-22T22:55:52Z",
+  "project_id": "enforced-planning",
+  "scenario_id": "planning-integrity-semantic-admission",
+  "outcome_contract_sha256": "a23ad523f478ec5b74e78c0c43198fb9aa21b0fb4031385606fec84fb81564ac",
+  "outcome_id": "planning-integrity-semantic-admission",
+  "outcome_lineage_id": "planning-integrity-semantic-admission",
+  "portfolio_class": "maintenance",
+  "decision_ref": "enforced-planning#125-scope-revision-v2@c774dc1bcb8b697eeee09261c8a2cd9f0c75c719",
+  "purpose": "Make structural planning integrity non-omittable before coordination mutation, propagate through the actual installed templates, and prepare one installed AES consumer proof.",
+  "stopping_condition": "Park the allocation after PI-02 is merged with focused both-sign evidence and PI-03 has an accepted exact provider revision."
+}

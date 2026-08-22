@@ -1,0 +1,11 @@
+{
+  "schema_version": "1.0.0",
+  "record_type": "outcome_portfolio_disposition_request",
+  "disposition_id": "plan-125-planning-integrity-scope-revision-park",
+  "requested_at": "2026-08-22T22:55:00Z",
+  "allocation_id": "plan-125-planning-integrity-allocation",
+  "allocation_sha256": "282f32bb24a663b92004b537a2b8961a3a6b7cc6ff6100f64ed954bb3204ae59",
+  "disposition": "parked",
+  "decision_ref": "enforced-planning#125-scope-revision",
+  "reason": "Release the original maintenance allocation before revising the selected scope to include the actual installed-consumer template owners."
+}

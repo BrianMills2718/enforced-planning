@@ -7,7 +7,7 @@
       "initiative_id": "agentic-engineering",
       "goal_id": "planning-integrity-loop",
       "design_revision": "user-approved:codex-session-01a02a1b-a798-78c0-a0ba-b0270bb028d9:2026-08-22",
-      "spec_revision": "plan-125-bootstrap-v1",
+      "spec_revision": "plan-125-bootstrap-v2",
       "title": "Adopt the planning-integrity design and graph",
       "class": "documentation",
       "objective": "Freeze the owner boundaries, contract, acceptance, frontier, and risk-ordered integration path.",
@@ -97,7 +97,7 @@
       "initiative_id": "agentic-engineering",
       "goal_id": "planning-integrity-loop",
       "design_revision": "user-approved:codex-session-01a02a1b-a798-78c0-a0ba-b0270bb028d9:2026-08-22",
-      "spec_revision": "plan-125-bootstrap-v1",
+      "spec_revision": "plan-125-bootstrap-v2",
       "title": "Enforce revision-bound plan integrity before lane mutation",
       "class": "implementation",
       "objective": "Implement the versioned semantic plan contract, opt-in migration configuration, start-gate join, installation propagation, and focused controls.",
@@ -109,7 +109,10 @@
           "PlanIntegrityResultV1 and frontier parser",
           "Repository opt-in mode and adoption floor",
           "Coordinated and release plan-start admission before mutation",
+          "Direct plan-bound claim admission against the exact Git start revision",
           "Source and installed CLI parity",
+          "Canonical installer configuration, plan, worktree, and advisory-config templates",
+          "Documentation relationship linkage for the live contract",
           "Focused positive, negative, compatibility, and mutation-order tests",
           "Configuration and changed-boundary documentation"
         ],
@@ -135,7 +138,8 @@
       ],
       "outputs": [
         "Typed Planning Integrity result",
-        "Pre-mutation semantic plan admission",
+          "Pre-mutation semantic plan admission",
+          "Non-omittable direct-claim enforcement",
         "Installed wrapper and config support",
         "Focused both-sign evidence"
       ],
@@ -177,6 +181,13 @@
           "repository": "enforced-planning",
           "access": "exclusive",
           "coordination_key": "planning-integrity-v1"
+        },
+        {
+          "kind": "repository_path",
+          "target": "templates",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "planning-integrity-v1"
         }
       ],
       "acceptance": [
@@ -191,10 +202,11 @@
         },
         {
           "id": "PI02-A2",
-          "criterion": "Configured coordinated or release work is denied before claim, branch, worktree, or tracker mutation when exact plan integrity fails.",
+          "criterion": "Configured coordinated or release work and direct plan-bound claim acquisition are denied before mutation when integrity fails at the exact Git start revision.",
           "evidence_required": [
             "Mutation-order integration test",
-            "No-side-effect assertions"
+            "No-side-effect assertions",
+            "Dirty-working-tree and direct-claim bypass controls"
           ],
           "negative_control": "Explicitly unplanned light work and below-floor historical plans retain documented compatibility."
         },
@@ -203,7 +215,9 @@
           "criterion": "Source and installed commands use the same implementation and installer rerun is idempotent.",
           "evidence_required": [
             "Installed consumer test",
-            "Installer second-run no-op result"
+            "Installer second-run no-op result",
+            "Canonical template propagation assertions",
+            "Relationship-coupling assertion"
           ]
         }
       ],
@@ -233,7 +247,7 @@
       "initiative_id": "agentic-engineering",
       "goal_id": "planning-integrity-loop",
       "design_revision": "user-approved:codex-session-01a02a1b-a798-78c0-a0ba-b0270bb028d9:2026-08-22",
-      "spec_revision": "plan-125-bootstrap-v1",
+      "spec_revision": "plan-125-bootstrap-v2",
       "title": "Join installed Planning Integrity evidence into AES",
       "class": "integration",
       "objective": "Prove an installed AES consumer can retain and render exact planning-integrity evidence through its existing four-layer projection.",

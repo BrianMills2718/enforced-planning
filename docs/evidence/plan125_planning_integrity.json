@@ -1,0 +1,75 @@
+{
+  "schema_version": "1.0.0",
+  "record_type": "plan_125_planning_integrity_provider_evidence",
+  "captured_at": "2026-08-22T23:23:45Z",
+  "plan_id": "enforced-planning#125",
+  "decision_scope": "Whether Enforced Planning now provides an opt-in, exact-revision structural planning gate that cannot be bypassed through the installed Make entrypoint or direct plan-bound claim acquisition.",
+  "candidate": {
+    "revision": "c2e5fcd2732ec2fc9b1ac2a89bfa35d9ff7e848a",
+    "revision_object_verified": true,
+    "validator_source_sha256": "b9295f491a5208bc904eb79c67327ff230c07b9148e3dc4a91611d21088acfa6",
+    "plan_path": "docs/plans/125_planning_integrity_loop.md",
+    "plan_sha256": "4cfca73e0024270ed70ec2487b0715a6e78668f5077d7c26abc31daf47494989",
+    "config_sha256": "e7c07451192c405b757c23355ecb8e5912fd4d76d40fda7b942e6e3b2156f0a8",
+    "integrity_disposition": "pass",
+    "integrity_findings": []
+  },
+  "contract": {
+    "version": "1.0.0",
+    "modes": [
+      "off",
+      "observe",
+      "enforce"
+    ],
+    "frontier_states": [
+      "fully_specifiable_now",
+      "conditional",
+      "exploration_required",
+      "enabling_work_blocked",
+      "human_decision_required",
+      "deliberately_deferred"
+    ],
+    "coverage_nonclaim": "PASS proves the declared planning-integrity structure, not that every material area was named or that the plan is optimal."
+  },
+  "focused_verification": {
+    "command": "pytest -q --tb=short tests/test_check_coordination_claims.py tests/test_plan_readiness.py tests/test_validate_plan.py tests/test_install_governed_repo.py -k 'not worktree_only_mode_stays_bounded'",
+    "passed": 203,
+    "failed": 0,
+    "deselected": 1,
+    "duration_seconds": 16.01,
+    "excluded_test": {
+      "path": "tests/test_install_governed_repo.py::test_install_governed_repo_worktree_only_mode_stays_bounded",
+      "reason": "This pre-existing portable whole-corpus lint assertion reports 152 unrelated installed-corpus findings; it is not a focused discriminator for the Planning Integrity boundary."
+    },
+    "changed_file_lint": "No changed file increased its Ruff finding count relative to the exact pre-change Git-object baseline.",
+    "compileall": "passed",
+    "git_diff_check": "passed",
+    "terminal_self_test": "passed"
+  },
+  "both_sign_controls": {
+    "complete_structure": "pass with retained acceptance, frontier, reassessment, exact plan digest, and executing-validator digest",
+    "incomplete_structure": "fail with stable finding codes",
+    "dirty_worktree_override": "denied; committed incomplete bytes remain authoritative",
+    "ambiguous_plan_identity": "denied",
+    "duplicate_yaml_key": "denied",
+    "coerced_config_type": "denied",
+    "unsupported_contract_version": "denied",
+    "warn_only_under_enforcement": "denied",
+    "historical_plan_below_floor": "not_applicable",
+    "observe_mode": "reports fail without denying graph-ready work",
+    "direct_claim_bypass": "denied before claim registry mutation",
+    "installed_make_bypass": "denied before claim, branch, or worktree mutation",
+    "unfilled_installed_template": "fail"
+  },
+  "installer": {
+    "canonical_config_template": "templates/meta-process.yaml.example",
+    "canonical_plan_template": "templates/plan.md.template",
+    "canonical_worktree_template": "templates/Makefile.worktree.block.template",
+    "starter_default": "off",
+    "idempotence_test": "passed"
+  },
+  "known_followup": {
+    "operator_guide": "The pre-commit coupling check correctly identified that docs/guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md must name the new exact-revision prerequisite. That path was outside the immutable selected outcome scope and is now the explicit pi-02d-sync-operator-guide work unit, required before AES consumer admission."
+  },
+  "promotion_boundary": "This evidence accepts the provider candidate for merge and one installed AES consumer. It does not prove planning completeness, plan optimality, fleet readiness, or a stable public 1.0 contract."
+}

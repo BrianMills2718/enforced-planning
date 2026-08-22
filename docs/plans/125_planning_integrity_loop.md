@@ -1,6 +1,6 @@
 # Plan #125: Planning Integrity Loop
 
-**Status:** In Progress — design accepted; semantic admission implementation ready
+**Status:** In Progress — PI-02 provider accepted; operator-doc sync ready before AES
 **Type:** cross-repository shared-contract implementation
 **Priority:** Critical
 **phase_ref:** "Agentic Engineering first external consumer"
@@ -196,7 +196,7 @@ admission controls; isolated parser tests prove only implementation.
 - plan SHA-256 and validator source revision;
 - configured mode and adoption floor;
 - typed blocking findings and nonblocking warnings;
-- parsed frontier rows; and
+- parsed frontier rows and authored acceptance criteria; and
 - the exact user outcome, canonical example, critical-path class, capability
   disposition, reassessment summary, and structural-coverage non-claim needed
   by AES projection.
@@ -215,6 +215,7 @@ from the typed result rather than parsed downstream.
 |---|---|---|---|---|
 | Planning-integrity schema and parser | fully_specifiable_now | Deterministic Markdown contract, Pydantic result, exact-byte and validator-source digests, findings, and an explicit structural-coverage non-claim | Complete when positive, malformed, unfilled-template, and byte-distinct fixtures discriminate | `plan_validation.py`, config reference, installed wrapper |
 | Start-gate integration | fully_specifiable_now | Configured coordinated/release start and direct plan-bound claim acquisition must validate the plan/config bytes at the exact Git start revision before mutation | Complete when incomplete committed bytes plus a complete dirty edit still leave no claim, branch, worktree, or tracker | plan readiness, claim acquisition, and Make/install surfaces |
+| Operator documentation coupling | fully_specifiable_now | The config reference describes the contract, while the canonical worktree operator guide must name the new exact-revision prerequisite at the real claim/start entrypoint | Complete when the coupling check sees the guide updated in its separately claimed path | operator guide and relationship coupling |
 | Runtime course-correction join | conditional | Reuse selected outcome continuation; add only the plan revision/reassessment evidence it demonstrably lacks | Extend only if focused integration shows the current receipt cannot carry the required reference | Plan 125 design or existing outcome contract owner |
 | AES four-layer planning projection | fully_specifiable_now | Installed result joins generated current/variance/topic output without becoming normative | Complete when delete/regenerate preserves normative bytes and exact evidence refs | AES topic and proof receipt |
 | First valuable project anchor | exploration_required | Portfolio audit selects by personal value, lineage, learning value, and bounded effort; WhyGame is provisional | Stop after one lineage/value probe can select or reject the candidate | Project Meta anchor decision and target repo plan |
@@ -237,6 +238,18 @@ from the typed result rather than parsed downstream.
   consumer prove the exact seam, stop framework expansion and proceed to the
   selected project anchor.
 
+### Course-correction receipt — operator documentation coupling
+
+The PI-02 commit hook reported that changing
+`enforced_planning/coordination_claims.py` requires an aligned update to
+`docs/guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md`. The selected outcome's
+immutable allowed scope did not include that guide. Acknowledging the warning
+would leave the operator path stale, while expanding the existing claim would
+invalidate its exact outcome-selection binding. Plan 125 therefore adds the
+bounded `pi-02d-sync-operator-guide` work unit and makes AES depend on it. This
+is a plan revision caused by an observed write-scope and dependency-graph
+change, exactly as the reassessment contract requires.
+
 ## Plan
 
 **Critical-path classification: vertical.** The visible vertical is an agent
@@ -249,7 +262,10 @@ revision-bound human-readable planning state through installed AES.
    contract, config, parser, strict results, exact-start-revision Make/start
    admission, direct-claim admission, installation propagation, and both-sign
    mutation-order tests.
-3. **PI-03 — AES installed integration.** Consume a pinned Enforced Planning
+3. **PI-02D — operator documentation sync.** In a separately claimed path,
+   document exact-revision Planning Integrity at the canonical worktree/claim
+   entrypoint and pass the focused coupling check.
+4. **PI-03 — AES installed integration.** Consume a pinned Enforced Planning
    candidate, retain an immutable result, and project the planning fields into
    AES's existing topic without new authority.
 4. Stop. The selected anchor repository owns its own exploratory lineage/value
@@ -319,6 +335,7 @@ the installer/shared gate boundary changes.
 - `templates/plan.md.template`
 - `scripts/relationships.yaml`
 - `docs/reference/CONFIG_REFERENCE.md`
+- `docs/guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md` (PI-02D only)
 - `tests/test_validate_plan.py`
 - `tests/test_plan_readiness.py`
 - `tests/test_check_coordination_claims.py`

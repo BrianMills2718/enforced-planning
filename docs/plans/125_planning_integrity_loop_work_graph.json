@@ -103,7 +103,7 @@
       "objective": "Implement the versioned semantic plan contract, opt-in migration configuration, start-gate join, installation propagation, and focused controls.",
       "profile": "standard",
       "execution_class": "independently_executable",
-      "claimability": "ready_for_execution",
+      "claimability": "not_applicable",
       "scope": {
         "included": [
           "PlanIntegrityResultV1 and frontier parser",
@@ -234,11 +234,102 @@
         "max_active_per_claimant": 1
       },
       "authorization_mode": "registry_claim",
+      "integration_owner_id": "pi-02d-sync-operator-guide",
+      "status": "accepted",
+      "record_version": 2,
+      "created_at": "2026-08-22T22:23:19Z",
+      "updated_at": "2026-08-22T23:23:45Z"
+    },
+    {
+      "schema_version": "1.0",
+      "record_type": "work_unit",
+      "id": "pi-02d-sync-operator-guide",
+      "initiative_id": "agentic-engineering",
+      "goal_id": "planning-integrity-loop",
+      "design_revision": "plan-125-course-correction-1@2026-08-22",
+      "spec_revision": "plan-125-operator-doc-sync-v1",
+      "title": "Sync the canonical operator entrypoint after provider acceptance",
+      "class": "documentation",
+      "objective": "Document exact-revision Planning Integrity at the real worktree and direct-claim entrypoint, then satisfy the focused coupling check before AES consumes the provider.",
+      "profile": "small",
+      "execution_class": "independently_executable",
+      "claimability": "ready_for_execution",
+      "scope": {
+        "included": [
+          "docs/guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md",
+          "Focused documentation-coupling validation"
+        ],
+        "excluded": [
+          "Provider source changes",
+          "AES mutation",
+          "Fleet documentation reconciliation"
+        ]
+      },
+      "inputs": [
+        {
+          "kind": "provider_evidence",
+          "id": "docs/evidence/plan125_planning_integrity.json",
+          "revision": "c2e5fcd2732ec2fc9b1ac2a89bfa35d9ff7e848a"
+        },
+        {
+          "kind": "reassessment_trigger",
+          "id": "pre-commit-doc-coupling",
+          "revision": "2026-08-22T23:22:48Z"
+        }
+      ],
+      "outputs": [
+        "Accurate worktree and direct-claim Planning Integrity operator guidance",
+        "Passing focused documentation-coupling check"
+      ],
+      "dependencies": [
+        {
+          "unit_id": "pi-02-enforce-plan-integrity",
+          "type": "hard",
+          "gate": {
+            "type": "unit_status",
+            "required_status": "accepted"
+          },
+          "rationale": "The guide documents an accepted exact provider revision, not moving implementation bytes."
+        }
+      ],
+      "conflict_surfaces": [
+        {
+          "kind": "repository_path",
+          "target": "docs/guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "planning-integrity-operator-doc"
+        }
+      ],
+      "acceptance": [
+        {
+          "id": "PI02D-A1",
+          "criterion": "The canonical guide says that configured plan integrity reads exact plan/config bytes from the selected Git start revision before graph query or coordination mutation.",
+          "evidence_required": [
+            "Operator-guide diff",
+            "Focused doc-coupling pass"
+          ],
+          "negative_control": "The guide must not present structural PASS as proof of omitted-area coverage or plan optimality."
+        }
+      ],
+      "readiness": {
+        "status": "ready",
+        "required_approval_types": [],
+        "approvals": [],
+        "failed_guards": []
+      },
+      "claim_policy": {
+        "eligibility_rule": "PI-02 is accepted and no claim owns the operator guide.",
+        "lease_policy": "renewable",
+        "lease_duration_minutes": 240,
+        "max_active_per_claimant": 1
+      },
+      "authorization_mode": "registry_claim",
       "integration_owner_id": "pi-03-aes-installed-dogfood",
       "status": "ready",
       "record_version": 1,
-      "created_at": "2026-08-22T22:23:19Z",
-      "updated_at": "2026-08-22T22:23:19Z"
+      "created_at": "2026-08-22T23:23:45Z",
+      "updated_at": "2026-08-22T23:23:45Z"
     },
     {
       "schema_version": "1.0",
@@ -288,13 +379,13 @@
       ],
       "dependencies": [
         {
-          "unit_id": "pi-02-enforce-plan-integrity",
+          "unit_id": "pi-02d-sync-operator-guide",
           "type": "hard",
           "gate": {
             "type": "unit_status",
             "required_status": "accepted"
           },
-          "rationale": "AES must consume an accepted exact provider revision rather than a moving worktree."
+          "rationale": "AES must consume an accepted exact provider revision whose canonical operator entrypoint is also accurate."
         }
       ],
       "conflict_surfaces": [
@@ -351,15 +442,15 @@
         "required_approval_types": [],
         "approvals": [],
         "failed_guards": [
-          "pi-02-enforce-plan-integrity is not yet accepted"
+          "pi-02d-sync-operator-guide is not yet accepted"
         ]
       },
       "authorization_mode": "registry_claim",
       "integration_owner_id": "pi-03-aes-installed-dogfood",
       "status": "blocked",
-      "record_version": 1,
+      "record_version": 2,
       "created_at": "2026-08-22T22:23:19Z",
-      "updated_at": "2026-08-22T22:23:19Z"
+      "updated_at": "2026-08-22T23:23:45Z"
     }
   ]
 }

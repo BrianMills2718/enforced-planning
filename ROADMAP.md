@@ -135,7 +135,8 @@ accepted Agentic Engineering roadmap. The planning method, outcome-continuation
 engine, and four-layer documentation mechanism already exist; the new frontier
 is to bind them through one versioned Planning Integrity result. The bounded
 order is: accept the Plan 125 contract, enforce it before coordinated/release
-lane mutation in this source repository, prove an installed AES evidence join,
+lane mutation in this source repository, sync the coupled operator entrypoint,
+prove an installed AES evidence join,
 then stop framework expansion and exercise the same contract in the selected
 valuable project reboot. This does not replace or broaden Plan #124's separate
 Qualitative Coding outcome-admission pilot.
@@ -338,7 +339,7 @@ authority and directory policy.
 | Artifact creation enforcement | Gate selected new tracked artifacts against repository directory rules and durable intent, with receipts and feedback. See Plan #109. | Portable mechanism first, then an Inside Success Markdown observe pilot before any blocking promotion |
 | No-passive-waiting enforcement | Separate liveness from progress, reject whole-goal blockage while compatible work remains, and preserve recoverable true blockers. See Plan #110. | NPW-02 provider-free blocker disposition accepted with replayable both-sign evidence; NPW-01 progress visibility remains the ready leaf before NPW-03 |
 | Outcome continuation lease | Require typed progress evidence before supported coding-agent continuation; ordinary approval and cost do not renew authority. See Plans #114–#124. | Plan #124 accepted the exact qualitative_coding identity candidate against the real portfolio owner; merge/park then the isolated QC-local pilot are next, while installer defaults and fleet rollout remain excluded |
-| Planning integrity loop | Require a versioned, revision-bound semantic plan result before selected coordinated/release work; join its frontier and reassessment obligations to existing outcome continuation and AES projection. See Plan #125. | PI-02 source enforcement, then one installed AES dogfood; the selected product anchor follows without fleet rollout |
+| Planning integrity loop | Require a versioned, revision-bound semantic plan result before selected coordinated/release work; join its frontier and reassessment obligations to existing outcome continuation and AES projection. See Plan #125. | PI-02 provider accepted; PI-02D operator-guide sync is the ready leaf before installed AES dogfood; the selected product anchor follows without fleet rollout |
 | Multi-tool adoption | Cursor/Windsurf hook adapters when their hook surfaces are publicly documented | External dependency: tool documentation |
 | Project-meta topic-research adoption | Apply portable topic-research pattern in `research_synthesis/` with manifests, ADR links, freshness metadata | Plans #43/#44/#35 complete |
 

@@ -118,6 +118,23 @@ def report_field(report: str, name: str) -> str | None:
     return match.group(1).strip() if match else None
 
 
+# A decline is only checkable when it points at something. These are the shapes a
+# reference actually takes in practice: a register entry id, a commit sha, an
+# agent-memory slug, or a path. Anything else is an assertion.
+REFERENCE_PATTERNS = (
+    r"\blrn-\d{8}T\d{6,}",              # learnings register entry id
+    r"\b[0-9a-f]{7,40}\b",               # commit sha
+    r"\b(?:project|feedback|user|reference)_[a-z0-9_]+\b",  # agent-memory slug
+    r"\b[\w./-]+\.(?:md|json|ya?ml|py)\b",  # file path
+    r"#\d+",                              # pull request or issue
+)
+
+
+def _names_a_reference(reason: str) -> bool:
+    """Return whether a decline points at something a reader could open."""
+    return any(re.search(pattern, reason, re.IGNORECASE) for pattern in REFERENCE_PATTERNS)
+
+
 def classify_report(report: str) -> tuple[str, str]:
     """Return ``(decision, detail)`` for one final assistant report."""
     if report_field(report, "Done") is None:
@@ -155,6 +172,22 @@ def classify_report(report: str) -> tuple[str, str]:
                 (
                     "A `None` learning disposition requires a concrete reason of at least 20 characters; "
                     "do not use it as an empty bypass."
+                ),
+            )
+        prior_claim = re.search(
+            r"already\s+(?:been\s+)?(?:recorded|captured|covered|logged|filed)|"
+            r"belongs\s+(?:in|to|elsewhere)|lives\s+in|covered\s+by",
+            reason,
+            re.IGNORECASE,
+        )
+        if prior_claim and not _names_a_reference(reason):
+            return (
+                "block_unreferenced_decline",
+                (
+                    "A decline that claims something is already recorded must name it: an entry id "
+                    "(lrn-...), a commit sha, a memory slug, or a file path. Measured across 296 closing "
+                    "reports, 51% of `already recorded` declines cited nothing at all, which makes the "
+                    "reason unfalsifiable. Cite what you are deferring to, or record the finding."
                 ),
             )
         return "none", reason

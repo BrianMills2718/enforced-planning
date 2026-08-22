@@ -1,0 +1,351 @@
+{
+  "units": [
+    {
+      "schema_version": "1.0",
+      "record_type": "work_unit",
+      "id": "pi-01-adopt-design",
+      "initiative_id": "agentic-engineering",
+      "goal_id": "planning-integrity-loop",
+      "design_revision": "user-approved:codex-session-01a02a1b-a798-78c0-a0ba-b0270bb028d9:2026-08-22",
+      "spec_revision": "plan-125-bootstrap-v1",
+      "title": "Adopt the planning-integrity design and graph",
+      "class": "documentation",
+      "objective": "Freeze the owner boundaries, contract, acceptance, frontier, and risk-ordered integration path.",
+      "profile": "small",
+      "execution_class": "independently_executable",
+      "claimability": "not_applicable",
+      "scope": {
+        "included": [
+          "Plan 125 design",
+          "Plan 125 work graph",
+          "Enforced Planning roadmap and plan index"
+        ],
+        "excluded": [
+          "Runtime source changes",
+          "AES mutation",
+          "Consumer-project product work"
+        ]
+      },
+      "inputs": [
+        {
+          "kind": "user_decision",
+          "id": "planning-integrity-sequencing-approval",
+          "revision": "codex-session-01a02a1b-a798-78c0-a0ba-b0270bb028d9@2026-08-22"
+        }
+      ],
+      "outputs": [
+        "Accepted bounded design",
+        "Validated three-unit work graph",
+        "Updated current proof frontier"
+      ],
+      "dependencies": [],
+      "conflict_surfaces": [
+        {
+          "kind": "repository_path",
+          "target": "docs/plans/125_planning_integrity_loop.md",
+          "repository": "enforced-planning",
+          "access": "exclusive"
+        },
+        {
+          "kind": "repository_path",
+          "target": "docs/plans/125_planning_integrity_loop_work_graph.json",
+          "repository": "enforced-planning",
+          "access": "exclusive"
+        },
+        {
+          "kind": "repository_path",
+          "target": "ROADMAP.md",
+          "repository": "enforced-planning",
+          "access": "exclusive"
+        }
+      ],
+      "acceptance": [
+        {
+          "id": "PI01-A1",
+          "criterion": "The design assigns methodology, enforcement, runtime continuation, AES projection, and portfolio authority to one existing owner each.",
+          "evidence_required": [
+            "Plan 125 boundaries table",
+            "Current source references"
+          ],
+          "negative_control": "No new planner, outcome engine, or portfolio authority is introduced."
+        },
+        {
+          "id": "PI01-A2",
+          "criterion": "Every material future area is classified and the next two executable units have exact both-sign evidence.",
+          "evidence_required": [
+            "Plan 125 epistemic frontier",
+            "This work graph"
+          ]
+        }
+      ],
+      "readiness": {
+        "status": "ready",
+        "required_approval_types": [],
+        "approvals": [],
+        "failed_guards": []
+      },
+      "authorization_mode": "registry_claim",
+      "status": "accepted",
+      "record_version": 1,
+      "created_at": "2026-08-22T22:23:19Z",
+      "updated_at": "2026-08-22T22:23:19Z"
+    },
+    {
+      "schema_version": "1.0",
+      "record_type": "work_unit",
+      "id": "pi-02-enforce-plan-integrity",
+      "initiative_id": "agentic-engineering",
+      "goal_id": "planning-integrity-loop",
+      "design_revision": "user-approved:codex-session-01a02a1b-a798-78c0-a0ba-b0270bb028d9:2026-08-22",
+      "spec_revision": "plan-125-bootstrap-v1",
+      "title": "Enforce revision-bound plan integrity before lane mutation",
+      "class": "implementation",
+      "objective": "Implement the versioned semantic plan contract, opt-in migration configuration, start-gate join, installation propagation, and focused controls.",
+      "profile": "standard",
+      "execution_class": "independently_executable",
+      "claimability": "ready_for_execution",
+      "scope": {
+        "included": [
+          "PlanIntegrityResultV1 and frontier parser",
+          "Repository opt-in mode and adoption floor",
+          "Coordinated and release plan-start admission before mutation",
+          "Source and installed CLI parity",
+          "Focused positive, negative, compatibility, and mutation-order tests",
+          "Configuration and changed-boundary documentation"
+        ],
+        "excluded": [
+          "Company Planning changes",
+          "LLM semantic blocker",
+          "Fleet activation",
+          "New continuation or feedback engine",
+          "Consumer-project product work"
+        ]
+      },
+      "inputs": [
+        {
+          "kind": "bounded_design",
+          "id": "docs/plans/125_planning_integrity_loop.md",
+          "revision": "plan-125-bootstrap-v1"
+        },
+        {
+          "kind": "existing_capability",
+          "id": "enforced_planning.plan_validation+plan_readiness+outcome_continuation",
+          "revision": "7fb9af8911d1cd83b5c17e9b28b2480a461d86a2"
+        }
+      ],
+      "outputs": [
+        "Typed Planning Integrity result",
+        "Pre-mutation semantic plan admission",
+        "Installed wrapper and config support",
+        "Focused both-sign evidence"
+      ],
+      "dependencies": [
+        {
+          "unit_id": "pi-01-adopt-design",
+          "type": "hard",
+          "gate": {
+            "type": "unit_status",
+            "required_status": "accepted"
+          },
+          "rationale": "Implementation must consume the accepted owner boundaries and contract."
+        }
+      ],
+      "conflict_surfaces": [
+        {
+          "kind": "contract",
+          "target": "PlanningIntegrityResultV1",
+          "access": "exclusive",
+          "coordination_key": "planning-integrity-v1"
+        },
+        {
+          "kind": "repository_path",
+          "target": "enforced_planning",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "planning-integrity-v1"
+        },
+        {
+          "kind": "repository_path",
+          "target": "scripts",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "planning-integrity-v1"
+        },
+        {
+          "kind": "repository_path",
+          "target": "tests",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "planning-integrity-v1"
+        }
+      ],
+      "acceptance": [
+        {
+          "id": "PI02-A1",
+          "criterion": "A complete declared plan yields an exact passing result while omitted, malformed, unsupported, and checker-error cases never yield pass.",
+          "evidence_required": [
+            "Focused parser and result tests",
+            "Exact plan and validator digests"
+          ],
+          "negative_control": "A plan missing its frontier and reassessment contract fails."
+        },
+        {
+          "id": "PI02-A2",
+          "criterion": "Configured coordinated or release work is denied before claim, branch, worktree, or tracker mutation when exact plan integrity fails.",
+          "evidence_required": [
+            "Mutation-order integration test",
+            "No-side-effect assertions"
+          ],
+          "negative_control": "Explicitly unplanned light work and below-floor historical plans retain documented compatibility."
+        },
+        {
+          "id": "PI02-A3",
+          "criterion": "Source and installed commands use the same implementation and installer rerun is idempotent.",
+          "evidence_required": [
+            "Installed consumer test",
+            "Installer second-run no-op result"
+          ]
+        }
+      ],
+      "readiness": {
+        "status": "ready",
+        "required_approval_types": [],
+        "approvals": [],
+        "failed_guards": []
+      },
+      "claim_policy": {
+        "eligibility_rule": "PI-01 accepted and no overlapping Enforced Planning claim exists.",
+        "lease_policy": "renewable",
+        "lease_duration_minutes": 1440,
+        "max_active_per_claimant": 1
+      },
+      "authorization_mode": "registry_claim",
+      "integration_owner_id": "pi-03-aes-installed-dogfood",
+      "status": "ready",
+      "record_version": 1,
+      "created_at": "2026-08-22T22:23:19Z",
+      "updated_at": "2026-08-22T22:23:19Z"
+    },
+    {
+      "schema_version": "1.0",
+      "record_type": "work_unit",
+      "id": "pi-03-aes-installed-dogfood",
+      "initiative_id": "agentic-engineering",
+      "goal_id": "planning-integrity-loop",
+      "design_revision": "user-approved:codex-session-01a02a1b-a798-78c0-a0ba-b0270bb028d9:2026-08-22",
+      "spec_revision": "plan-125-bootstrap-v1",
+      "title": "Join installed Planning Integrity evidence into AES",
+      "class": "integration",
+      "objective": "Prove an installed AES consumer can retain and render exact planning-integrity evidence through its existing four-layer projection.",
+      "profile": "standard",
+      "execution_class": "independently_executable",
+      "claimability": "blocked_dependencies",
+      "scope": {
+        "included": [
+          "Pinned installed Enforced Planning candidate",
+          "AES evidence join",
+          "Existing topic projection",
+          "Delete and regenerate proof",
+          "Exact both-sign receipt"
+        ],
+        "excluded": [
+          "New AES planning engine",
+          "WhyGame product source",
+          "Fleet rollout",
+          "Dashboard or publication"
+        ]
+      },
+      "inputs": [
+        {
+          "kind": "required_output",
+          "id": "PlanningIntegrityResultV1",
+          "revision": "1.0.0"
+        },
+        {
+          "kind": "consumer_authority",
+          "id": "agentic-engineering-system:ROADMAP.md",
+          "revision": "accepted-gate-1"
+        }
+      ],
+      "outputs": [
+        "Installed AES planning-integrity receipt",
+        "Generated current-target-variance-plan topic",
+        "Delete and regenerate comparison"
+      ],
+      "dependencies": [
+        {
+          "unit_id": "pi-02-enforce-plan-integrity",
+          "type": "hard",
+          "gate": {
+            "type": "unit_status",
+            "required_status": "accepted"
+          },
+          "rationale": "AES must consume an accepted exact provider revision rather than a moving worktree."
+        }
+      ],
+      "conflict_surfaces": [
+        {
+          "kind": "contract",
+          "target": "PlanningIntegrityResultV1",
+          "access": "read",
+          "coordination_key": "planning-integrity-v1"
+        },
+        {
+          "kind": "repository_path",
+          "target": "docs",
+          "repository": "agentic-engineering-system",
+          "access": "exclusive",
+          "coordination_key": "planning-integrity-v1"
+        },
+        {
+          "kind": "repository_path",
+          "target": "src",
+          "repository": "agentic-engineering-system",
+          "access": "exclusive",
+          "coordination_key": "planning-integrity-v1"
+        },
+        {
+          "kind": "repository_path",
+          "target": "tests",
+          "repository": "agentic-engineering-system",
+          "access": "exclusive",
+          "coordination_key": "planning-integrity-v1"
+        }
+      ],
+      "acceptance": [
+        {
+          "id": "PI03-A1",
+          "criterion": "AES consumes the installed provider, retains exact plan and validator evidence, and renders it without granting generated authority.",
+          "evidence_required": [
+            "Isolated installation receipt",
+            "Generated topic",
+            "Exact evidence join"
+          ],
+          "negative_control": "Source-path imports and stale plan digests fail."
+        },
+        {
+          "id": "PI03-A2",
+          "criterion": "Deleting generated output and regenerating preserves normative bytes and produces the same portable projection for the same evidence.",
+          "evidence_required": [
+            "Before/after hashes",
+            "Pinned revisions and command"
+          ]
+        }
+      ],
+      "readiness": {
+        "status": "blocked",
+        "required_approval_types": [],
+        "approvals": [],
+        "failed_guards": [
+          "pi-02-enforce-plan-integrity is not yet accepted"
+        ]
+      },
+      "authorization_mode": "registry_claim",
+      "integration_owner_id": "pi-03-aes-installed-dogfood",
+      "status": "blocked",
+      "record_version": 1,
+      "created_at": "2026-08-22T22:23:19Z",
+      "updated_at": "2026-08-22T22:23:19Z"
+    }
+  ]
+}

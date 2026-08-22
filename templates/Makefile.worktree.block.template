@@ -14,6 +14,7 @@ WORKTREE_RAISE_CONCERN_SCRIPT := __WORKTREE_SCRIPT_ROOT__/raise_concern.py
 WORKTREE_PLAN_READINESS_SCRIPT := __WORKTREE_SCRIPT_ROOT__/../check_plan_readiness.py
 SURFACE_RUNTIME_SCRIPT := __WORKTREE_SCRIPT_ROOT__/../surface_runtime.py
 WORKTREE_DIR ?= $(shell $(PYTHON) "$(WORKTREE_CREATE_SCRIPT)" --repo-root . --print-default-worktree-dir)
+WORKTREE_REPO_ROOT ?= $(shell git rev-parse --path-format=absolute --git-common-dir 2>/dev/null | sed 's|/\.git$$||')
 WORKTREE_START_POINT ?= HEAD
 WORKTREE_PROJECT ?= $(shell $(PYTHON) "$(WORKTREE_CREATE_SCRIPT)" --repo-root . --print-canonical-project)
 WORKTREE_AGENT ?= $(shell if [ -n "$$CODEX_THREAD_ID" ]; then printf codex; elif [ -n "$$CLAUDE_SESSION_ID" ] || [ -n "$$CLAUDE_CODE_SSE_PORT" ]; then printf claude-code; elif [ -n "$$OPENCLAW_SESSION_ID" ] || [ -n "$$OPENCLAW_RUN_ID" ]; then printf openclaw; fi)
@@ -33,6 +34,8 @@ SESSION_CLAIM_TYPE ?= program
 SESSION_PARENT_SCOPE ?=
 SESSION_WRITE_PATHS ?=
 SESSION_READ_PATHS ?=
+SESSION_WORK_GRAPH ?=
+SESSION_WORK_UNIT_ID ?=
 WORKTREE_DISPOSITION ?= merged
 WORKTREE_DISPOSITION_REASON ?=
 WORKTREE_RECOVERY_REF ?=
@@ -106,6 +109,7 @@ endif
 		--scope "$(BRANCH)" \
 		--intent "$(TASK)" \
 		--claim-type "$(SESSION_CLAIM_TYPE)" \
+		--repo-root "$(WORKTREE_REPO_ROOT)" \
 		--branch "$(BRANCH)" \
 		--worktree-path "$(WORKTREE_DIR)/$(BRANCH)" \
 		--session-name "$(SESSION_GOAL)" \
@@ -113,6 +117,8 @@ endif
 		$(if $(filter 1 true yes,$(SESSION_ALLOW_PARALLEL)),--allow-parallel,) \
 		$(foreach path,$(SESSION_WRITE_PATHS),--write-path "$(path)") \
 		$(foreach path,$(SESSION_READ_PATHS),--read-path "$(path)") \
+		$(if $(SESSION_WORK_GRAPH),--work-graph "$(SESSION_WORK_GRAPH)",) \
+		$(if $(SESSION_WORK_UNIT_ID),--work-unit-id "$(SESSION_WORK_UNIT_ID)",) \
 		$(if $(PLAN),--plan "$(PLAN_PROJECT)#$(PLAN)",)
 	@mkdir -p "$(WORKTREE_DIR)"
 	@if ! $(PYTHON) "$(WORKTREE_CREATE_SCRIPT)" --repo-root . --path "$(WORKTREE_DIR)/$(BRANCH)" --branch "$(BRANCH)" --start-point "$(WORKTREE_START_POINT)"; then \
@@ -124,7 +130,7 @@ endif
 		--project "$(WORKTREE_PROJECT)" \
 		--scope "$(BRANCH)" \
 		--intent "$(TASK)" \
-		--repo-root "$(CURDIR)" \
+		--repo-root "$(WORKTREE_REPO_ROOT)" \
 		--worktree-path "$(WORKTREE_DIR)/$(BRANCH)" \
 		--branch "$(BRANCH)" \
 		--broader-goal "$(SESSION_GOAL)" \
@@ -134,6 +140,8 @@ endif
 		$(if $(filter 1 true yes,$(SESSION_ALLOW_PARALLEL)),--allow-parallel,) \
 		$(foreach path,$(SESSION_WRITE_PATHS),--write-path "$(path)") \
 		$(foreach path,$(SESSION_READ_PATHS),--read-path "$(path)") \
+		$(if $(SESSION_WORK_GRAPH),--work-graph "$(SESSION_WORK_GRAPH)",) \
+		$(if $(SESSION_WORK_UNIT_ID),--work-unit-id "$(SESSION_WORK_UNIT_ID)",) \
 		$(if $(PLAN),--plan "$(PLAN_PROJECT)#$(PLAN)",) \
 		$(if $(ALLOW_UNPLANNED),--allow-unplanned,) \
 		$(if $(SESSION_NEXT),--next-phase "$(SESSION_NEXT)",) \
@@ -186,7 +194,7 @@ endif
 		--project "$(WORKTREE_PROJECT)" \
 		--scope "$(BRANCH)" \
 		--intent "$(TASK)" \
-		--repo-root "$(CURDIR)" \
+		--repo-root "$(WORKTREE_REPO_ROOT)" \
 		--worktree-path "$(WORKTREE_DIR)/$(BRANCH)" \
 		--branch "$(BRANCH)" \
 		--broader-goal "$(SESSION_GOAL)" \
@@ -196,7 +204,9 @@ endif
 		$(if $(filter 1 true yes,$(SESSION_ALLOW_PARALLEL)),--allow-parallel,) \
 		$(foreach path,$(SESSION_WRITE_PATHS),--write-path "$(path)") \
 		$(foreach path,$(SESSION_READ_PATHS),--read-path "$(path)") \
-		$(if $(PLAN),--plan "Plan #$(PLAN)",) \
+		$(if $(SESSION_WORK_GRAPH),--work-graph "$(SESSION_WORK_GRAPH)",) \
+		$(if $(SESSION_WORK_UNIT_ID),--work-unit-id "$(SESSION_WORK_UNIT_ID)",) \
+		$(if $(PLAN),--plan "$(PLAN_PROJECT)#$(PLAN)",) \
 		$(if $(ALLOW_UNPLANNED),--allow-unplanned,) \
 		$(if $(SESSION_NEXT),--next-phase "$(SESSION_NEXT)",) \
 		$(if $(SESSION_DEPENDS),--depends-on "$(SESSION_DEPENDS)",) \

@@ -843,6 +843,11 @@ def test_install_governed_repo_write_bootstraps_minimum_repo_and_passes_audit(
     assert "--parent-scope" in makefile_text
     assert "--write-path" in makefile_text
     assert "WORKTREE_DISPOSITION ?= merged" in makefile_text
+    assert "WORKTREE_REPO_ROOT ?=" in makefile_text
+    assert "SESSION_WORK_GRAPH ?=" in makefile_text
+    assert "SESSION_WORK_UNIT_ID ?=" in makefile_text
+    assert '--work-graph "$(SESSION_WORK_GRAPH)"' in makefile_text
+    assert '--work-unit-id "$(SESSION_WORK_UNIT_ID)"' in makefile_text
     assert '--disposition "$(WORKTREE_DISPOSITION)"' in makefile_text
     assert "$(filter 1 true yes,$(WORKTREE_ALLOW_DISCARD_UNIQUE))" in makefile_text
     assert "WORKTREE_MERGE_COMMIT ?=" in makefile_text

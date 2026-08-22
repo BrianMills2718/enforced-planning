@@ -79,6 +79,9 @@ The installer activates the repository's versioned `hooks/` directory when no
 hook path is configured. An existing relative or absolute `core.hooksPath` is
 preserved when it resolves to that same directory; a genuinely custom hook
 directory remains a blocking ownership decision and is never overwritten.
+The installed `make worktree` target also accepts `SESSION_WORK_GRAPH` and
+`SESSION_WORK_UNIT_ID` so a numbered plan lane can bind its claim and session
+to the exact ready work unit at creation time.
 
 ## What Gets Installed
 

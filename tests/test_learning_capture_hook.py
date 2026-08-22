@@ -254,3 +254,46 @@ def test_install_check_requires_all_coding_agent_completion_paths(tmp_path: Path
     )
     assert missing_openclaw.returncode == 1
     assert json.loads(missing_openclaw.stdout)["openclaw_completion_gate"] is False
+
+
+def _report(learnings: str) -> str:
+    return f"- **Done** — shipped a change.\n- **Learnings** — {learnings}\n"
+
+
+def test_decline_claiming_prior_capture_must_name_it(tmp_path: Path) -> None:
+    """An unfalsifiable 'already recorded' is the most common decline in practice.
+
+    Measured across 296 closing reports, 51% of declines given on those grounds
+    cited nothing at all. The reason was honest wherever it was checkable --
+    every cited reference spot-checked resolved -- but nobody reading the report
+    can separate the halves.
+    """
+    result = run_hook(
+        tmp_path, _report("None new: today's reusable findings are already recorded.")
+    )
+
+    payload = json.loads(result.stdout)
+    assert payload["decision"] == "block"
+    assert "name it" in payload["reason"]
+
+
+def test_decline_naming_a_reference_passes(tmp_path: Path) -> None:
+    """Any shape a real reference takes is accepted: entry id, sha, slug, path."""
+    for reason in (
+        "None: already recorded as lrn-20260822T055157292299Z-8a2a99c14a.",
+        "None new; the finding is already recorded at 310022af in the register.",
+        "None: already captured in memory as project_kops_quote_provenance today.",
+        "None — already covered by project-meta/learnings.md from this morning.",
+    ):
+        result = run_hook(tmp_path, _report(reason))
+        assert result.returncode == 0, reason
+
+
+def test_ordinary_declines_are_untouched(tmp_path: Path) -> None:
+    """The gate fires only on a claim of prior capture, not on every decline."""
+    result = run_hook(
+        tmp_path,
+        _report("None: this turn produced no durable finding, only a status check."),
+    )
+
+    assert result.returncode == 0

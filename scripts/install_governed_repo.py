@@ -706,8 +706,12 @@ def _plan_git_hook_activation(repo_root: Path) -> tuple[str | None, str | None]:
         check=False,
     )
     current = configured.stdout.strip() if configured.returncode == 0 else ""
-    if current == "hooks":
-        return None, None
+    if current:
+        configured_path = Path(current).expanduser()
+        if not configured_path.is_absolute():
+            configured_path = repo_root / configured_path
+        if configured_path.resolve() == (repo_root / "hooks").resolve():
+            return None, None
     if current:
         return (
             None,

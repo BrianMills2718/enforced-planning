@@ -191,6 +191,120 @@ def test_push_check_detects_overlapping_live_write_owned_claim(
     }
 
 
+@pytest.mark.parametrize(
+    ("claim_session_id", "change_after_integration", "integration_allowed"),
+    [
+        ("codex:thread-1", False, True),
+        ("codex:thread-2", False, False),
+        ("codex:thread-1", True, False),
+    ],
+)
+def test_default_push_allows_only_current_session_integrated_source_claim(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    claim_session_id: str,
+    change_after_integration: bool,
+    integration_allowed: bool,
+) -> None:
+    """Integration may retain its source claim, but another session still blocks."""
+
+    repo_root = tmp_path / "demo"
+    _init_git_repo(repo_root)
+    subprocess.run(
+        ["git", "-C", str(repo_root), "update-ref", "refs/remotes/origin/main", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(repo_root), "checkout", "-b", "maintenance-source"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    (repo_root / "feature.py").write_text("integrated\n", encoding="utf-8")
+    subprocess.run(
+        ["git", "-C", str(repo_root), "add", "feature.py"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(repo_root), "commit", "-m", "maintenance source"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(repo_root), "checkout", "main"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(repo_root), "merge", "--ff-only", "maintenance-source"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    if change_after_integration:
+        (repo_root / "feature.py").write_text("changed after integration\n", encoding="utf-8")
+        subprocess.run(
+            ["git", "-C", str(repo_root), "commit", "-am", "later claimed-path change"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    monkeypatch.setenv("CODEX_THREAD_ID", "thread-1")
+    now = datetime.now(timezone.utc).isoformat()
+    _write_claim(
+        claims_dir,
+        "source.yaml",
+        {
+            "schema_version": 3,
+            "agent": "codex",
+            "claimed_at": now,
+            "expires_at": "2099-04-09T11:00:00+00:00",
+            "projects": ["demo"],
+            "scope": "maintenance-source",
+            "intent": "Own the integrated feature path until publication",
+            "plan_ref": "UNPLANNED",
+            "claim_type": "write",
+            "write_paths": ["feature.py"],
+            "repo_root": str(repo_root),
+            "branch": "maintenance-source",
+            "worktree_path": str(repo_root),
+            "session_id": claim_session_id,
+            "session_name": "maintenance-source",
+            "broader_goal": "Publish maintenance source",
+            "tracker_path": str(tmp_path / "sessions" / "source.yaml"),
+            "heartbeat_at": now,
+            "updated_at": now,
+            "progress_at": now,
+            "progress_kind": "verified_commit",
+            "evidence_ref": "maintenance-source",
+            "next_action": "Publish the integrated commit",
+            "status": "active",
+        },
+    )
+
+    payload = push_safety.evaluate_push_safety(repo_root)
+
+    issue_codes = {item["code"] for item in payload["issues"]}
+    warning_codes = {item["code"] for item in payload["warnings"]}
+    if integration_allowed:
+        assert payload["ok"]
+        assert "overlapping_write_claim" not in issue_codes
+        assert "same_session_integrated_claim" in warning_codes
+    else:
+        assert not payload["ok"]
+        assert "overlapping_write_claim" in issue_codes
+        assert "same_session_integrated_claim" not in warning_codes
+
+
 def test_push_check_warns_on_active_decisions_without_blocking(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

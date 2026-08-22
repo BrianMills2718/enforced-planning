@@ -471,6 +471,17 @@ def is_goal_authority_ref(plan_ref: str | None) -> bool:
     return isinstance(plan_ref, str) and GOAL_AUTHORITY_PATTERN.fullmatch(plan_ref.strip()) is not None
 
 
+def requires_work_graph(plan_ref: str | None) -> bool:
+    """Return whether write ownership names plan-like authority needing a graph."""
+
+    return (
+        isinstance(plan_ref, str)
+        and bool(plan_ref.strip())
+        and plan_ref.strip() != "UNPLANNED"
+        and not is_goal_authority_ref(plan_ref)
+    )
+
+
 def claim_health_issues(claim: ClaimRecord) -> list[str]:
     """Return machine-readable health issues for one normalized claim."""
     issues: list[str] = []
@@ -497,8 +508,7 @@ def claim_health_issues(claim: ClaimRecord) -> list[str]:
         if (
             claim.schema_version >= 3
             and claim.write_paths
-            and claim.plan_ref
-            and not is_goal_authority_ref(claim.plan_ref)
+            and requires_work_graph(claim.plan_ref)
         ):
             if not claim.work_unit_id:
                 issues.append("missing_work_unit_id")
@@ -1785,7 +1795,7 @@ def create_claim(
     resolved_claim_type = claim_type or ("write" if write_paths else "program")
     work_graph_sha256: str | None = None
     approval_revisions: tuple[str, ...] = ()
-    if write_paths and plan_ref and not is_goal_authority_ref(plan_ref):
+    if write_paths and requires_work_graph(plan_ref):
         if not repo_root:
             raise ValueError("Plan-bound write ownership requires --repo-root for canonical work-unit validation")
         if not work_graph_path or not work_unit_id:

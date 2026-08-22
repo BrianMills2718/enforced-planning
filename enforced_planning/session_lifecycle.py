@@ -499,7 +499,7 @@ def _upsert_session_claim(
         effective_work_unit_id = existing.work_unit_id if work_unit_id is None else work_unit_id
         work_graph_sha256 = existing.work_graph_sha256
         approval_revisions = existing.approval_revisions
-        if effective_write_paths and plan_ref and not coordination_claims.is_goal_authority_ref(plan_ref):
+        if effective_write_paths and coordination_claims.requires_work_graph(plan_ref):
             if not effective_work_graph_path or not effective_work_unit_id:
                 raise ValueError("Plan-bound write ownership requires --work-graph and --work-unit-id")
             work_graph_sha256, approval_revisions = coordination_claims.resolve_canonical_work_unit_binding(
@@ -1123,7 +1123,15 @@ def start_session(
         )
     coordination_claims.validate_native_session_binding(agent, resolved_session_id)
     configured_outcome_mode = outcome_admission.load_outcome_admission_mode(Path(worktree_path))
-    selected_admission_required = outcome_selected or configured_outcome_mode == "enforce_selected"
+    explicit_unplanned_maintenance = (
+        allow_unplanned
+        and not plan_ref
+        and outcome_bootstrap_plan is None
+        and not outcome_selected
+    )
+    selected_admission_required = outcome_selected or (
+        configured_outcome_mode == "enforce_selected" and not explicit_unplanned_maintenance
+    )
 
     if outcome_selected and outcome_bootstrap_plan is not None:
         raise ValueError("session start cannot combine selected outcome admission with allocation bootstrap")
@@ -1214,7 +1222,7 @@ def start_session(
             project=project,
             scope=scope,
             intent=intent,
-            plan_ref=plan_ref,
+            plan_ref=contract.plan_ref,
             repo_root=repo_root,
             worktree_path=worktree_path,
             branch=branch,

@@ -207,6 +207,48 @@ def _claim_overlap_for_paths(
     return sorted(set(overlaps))
 
 
+def _is_same_session_default_integration(
+    repo_root: Path,
+    *,
+    canonical_repo_root: Path,
+    resolved_branch: str,
+    default_branch: str,
+    changed_paths: list[str],
+    claim: coordination_claims.ClaimRecord,
+) -> bool:
+    """Return whether HEAD safely contains one current-session source lane.
+
+    The source claim must remain live until its integration is published.  A
+    default-branch push may therefore overlap that claim only when native
+    runtime identity proves the same owner, the claimed branch is already an
+    ancestor of HEAD, and HEAD has not changed any claimed path after that
+    branch tip.
+    """
+
+    if resolved_branch != default_branch or not claim.branch or not claim.session_id:
+        return False
+    if not claim.repo_root or Path(claim.repo_root).expanduser().resolve() != canonical_repo_root:
+        return False
+    if coordination_claims.resolve_session_id(claim.agent) != claim.session_id:
+        return False
+    claim_ref = f"refs/heads/{claim.branch}"
+    if _run_git(repo_root, ["show-ref", "--verify", claim_ref]).returncode != 0:
+        return False
+    if _run_git(repo_root, ["merge-base", "--is-ancestor", claim_ref, "HEAD"]).returncode != 0:
+        return False
+    claimed_changed_paths = sorted(
+        path
+        for path in changed_paths
+        if any(coordination_claims._paths_overlap(path, write_path) for write_path in claim.write_paths)
+    )
+    if not claimed_changed_paths:
+        return False
+    return (
+        _run_git(repo_root, ["diff", "--quiet", claim_ref, "HEAD", "--", *claimed_changed_paths]).returncode
+        == 0
+    )
+
+
 def evaluate_push_safety(
     repo_root: str | Path = ".",
     *,
@@ -349,6 +391,25 @@ def evaluate_push_safety(
             )
             continue
         if claim.claim_type in {"write", "program"} and claim.write_paths:
+            if runtime_status in {"healthy", "stalled"} and _is_same_session_default_integration(
+                resolved_repo_root,
+                canonical_repo_root=canonical_repo_root,
+                resolved_branch=resolved_branch,
+                default_branch=default_branch,
+                changed_paths=changed_paths,
+                claim=claim,
+            ):
+                warnings.append(
+                    PushCheckFinding(
+                        code="same_session_integrated_claim",
+                        message=(
+                            "The current native session still owns this source claim, and its branch is "
+                            "integrated without later changes to the claimed paths."
+                        ),
+                        details=claim_details,
+                    )
+                )
+                continue
             live_write_overlap_paths.update(
                 overlap.split(" <-> ", 1)[0] for overlap in overlaps
             )

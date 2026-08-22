@@ -14,6 +14,7 @@ import yaml  # type: ignore[import-untyped]
 from pydantic import ValidationError
 
 from enforced_planning import (
+    coordination_claims,
     outcome_admission,
     outcome_admission_evaluation,
     prewrite_claim_projection,
@@ -884,6 +885,69 @@ def test_configured_session_start_requires_selection_without_a_flag(
     assert not tracker_dir.exists()
     [receipt] = load_outcome_admission_receipts(receipt_path)
     assert receipt.result.resolution_error_code == "selection_missing"
+
+
+def test_configured_session_start_completes_explicit_unplanned_maintenance_claim(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Maintenance bootstrap may enrich its claim before a selected outcome exists."""
+
+    repo_root = tmp_path / "repo"
+    worktree = repo_root / "worktrees" / "maintenance-fixture"
+    worktree.mkdir(parents=True)
+    (worktree / "meta-process.yaml").write_text(
+        "meta_process:\n  claims:\n    outcome_admission_mode: enforce_selected\n",
+        encoding="utf-8",
+    )
+    claims_dir = tmp_path / "claims"
+    tracker_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    monkeypatch.setattr(
+        coordination_claims,
+        "validate_native_session_binding",
+        lambda _agent, _session_id: None,
+    )
+
+    created, _message = coordination_claims.create_claim(
+        agent="codex",
+        project="enforced-planning",
+        scope="maintenance-fixture",
+        intent="repair a bounded maintenance defect",
+        claim_type="write",
+        write_paths=["enforced_planning/example.py"],
+        repo_root=str(repo_root),
+        worktree_path=str(worktree),
+        branch="maintenance-fixture",
+        session_id="codex:maintenance-fixture",
+        session_name="repair-maintenance-bootstrap",
+    )
+    assert created
+
+    payload = session_lifecycle.start_session(
+        agent="codex",
+        project="enforced-planning",
+        scope="maintenance-fixture",
+        intent="repair a bounded maintenance defect",
+        repo_root=str(repo_root),
+        worktree_path=str(worktree),
+        branch="maintenance-fixture",
+        broader_goal="Repair Maintenance Bootstrap",
+        current_phase="bootstrap",
+        session_id="codex:maintenance-fixture",
+        claim_type="write",
+        write_paths=["enforced_planning/example.py"],
+        tracker_dir=tracker_dir,
+        allow_unplanned=True,
+    )
+
+    assert payload["plan_ref"] == "UNPLANNED"
+    assert Path(payload["tracker_path"]).is_file()
+    [claim] = coordination_claims.check_claims("enforced-planning")
+    assert claim.plan_ref == "UNPLANNED"
+    assert claim.tracker_path == payload["tracker_path"]
+    assert claim.broader_goal == "Repair Maintenance Bootstrap"
+    assert coordination_claims.claim_runtime_status(claim) == "healthy"
 
 
 def test_selected_heartbeat_denial_precedes_heartbeat_mutation(

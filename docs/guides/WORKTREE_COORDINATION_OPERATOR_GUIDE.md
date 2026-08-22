@@ -91,6 +91,9 @@ and refresh the pre-write projection in the same locked mutation.
    In sanctioned repos use
    `make worktree BRANCH=... TASK="..." [PLAN=N]`; do not create new lanes in
    `~/worktrees/`, `_worktrees/`, `<repo>_worktrees/`, or ad hoc sibling paths.
+   For bounded light maintenance without a numbered plan, use
+   `make maintenance-worktree ...`; it creates the initial claim, worktree,
+   tracker, and explicit `UNPLANNED` claim linkage as one sanctioned journey.
 3. Give each worktree one mission and one plan or one bounded temporary plan
    doc. Do not let a worktree become a second long-lived control plane.
 4. Keep generated proof artifacts inside the worktree until they are
@@ -108,8 +111,9 @@ and refresh the pre-write projection in the same locked mutation.
    - `project`
    - `scope`
    - `intent`
-   - `plan_ref` (a canonical numbered/qualified plan authority or exact
-     `goal:<outcome-id>` authority)
+   - `plan_ref` (a canonical numbered/qualified plan authority, exact
+     `goal:<outcome-id>` authority, or `UNPLANNED` only through the explicit
+     maintenance path)
    - `branch`
    - `worktree_path`
    - `session_id`
@@ -119,7 +123,11 @@ and refresh the pre-write projection in the same locked mutation.
 5. Push from the checked-out claimed branch. The installed `pre-push` hook runs
    the canonical deterministic push check automatically. Use `make push-check`
    directly when diagnosing a blocked push.
-6. Merge/push from the safe root-anchored control session.
+6. Merge/push from the safe root-anchored control session. Keep the source
+   claim live until the default-branch integration is pushed. The push gate
+   permits that overlap only for the exact native session when the claimed
+   branch is an ancestor of `HEAD` and no claimed path changed after its tip;
+   cross-session ownership or later claimed-path changes still block.
 7. Record the lane disposition and use `session-close` to make the claim
    non-live, retain its completed audit record, remove the worktree, and safely
    delete the local branch.
@@ -143,8 +151,10 @@ loaded from `enforced_planning/worktree_lifecycle.yaml`. Invalid, blank,
 duplicate, or overlapping configuration fails at import rather than silently
 changing closeout semantics.
 
-Mandatory rule: no live session without `plan_ref`, except explicitly marked
-unplanned emergency work. Exact `goal:<outcome-id>` is a real sequential
+Mandatory rule: no live session without `plan_ref`. Bounded light maintenance
+may use the explicit `UNPLANNED` marker through `make maintenance-worktree`;
+it is not an absent plan reference and does not require a manufactured work
+graph. Exact `goal:<outcome-id>` is a real sequential
 outcome authority, not an alias for `UNPLANNED`. If work resumes in a new
 runtime, reattach it to the existing plan- or goal-bound lane instead of
 silently creating a new one.

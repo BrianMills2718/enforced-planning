@@ -1083,6 +1083,7 @@ def resolve_canonical_work_unit_binding(
     plan_ref: str,
     work_graph_path: str,
     work_unit_id: str,
+    start_point: str = "HEAD",
 ) -> tuple[str, tuple[str, ...]]:
     """Validate one work unit from the canonical default ref and return its binding."""
 
@@ -1093,6 +1094,22 @@ def resolve_canonical_work_unit_binding(
     plan_number = _plan_number(plan_ref)
     if plan_number is None:
         raise ValueError(f"Unable to resolve numbered plan identity from {plan_ref!r}")
+    qualified_match = re.fullmatch(r"([a-zA-Z0-9_-]+)#0*(\d+)", plan_ref.strip())
+    repository_id = qualified_match.group(1) if qualified_match else root.name
+    from enforced_planning.plan_validation import validate_plan_integrity_at_revision
+
+    integrity = validate_plan_integrity_at_revision(
+        repo_root=root,
+        repository_id=repository_id,
+        plan_number=plan_number,
+        start_point=start_point,
+    )
+    if integrity.mode == "enforce" and integrity.disposition == "fail":
+        finding_codes = ", ".join(item.code for item in integrity.findings)
+        raise ValueError(
+            f"Planning integrity rejected {plan_ref} at {integrity.source_revision}: "
+            f"{finding_codes}"
+        )
     if not Path(normalized_path).name.startswith(f"{plan_number}_"):
         raise ValueError(f"Work graph {normalized_path!r} does not match {plan_ref}; expected a {plan_number}_ prefix")
     default_branch = _resolve_default_branch(root)
@@ -1779,6 +1796,7 @@ def create_claim(
     notes: str | None = None,
     work_graph_path: str | None = None,
     work_unit_id: str | None = None,
+    start_point: str = "HEAD",
     allow_parallel: bool = False,
     require_native_session_binding: bool = False,
 ) -> tuple[bool, str]:
@@ -1805,6 +1823,7 @@ def create_claim(
             plan_ref=plan_ref,
             work_graph_path=work_graph_path,
             work_unit_id=work_unit_id,
+            start_point=start_point,
         )
     candidate = build_candidate_claim(
         agent=agent,
@@ -2605,6 +2624,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--worktree-path", help="Worktree path for this claim")
     parser.add_argument("--repo-root", help="Canonical repository root for readiness validation")
     parser.add_argument("--branch", help="Branch for this claim")
+    parser.add_argument(
+        "--start-point",
+        default="HEAD",
+        help="Exact Git start point whose committed plan/config bytes must pass admission.",
+    )
     parser.add_argument("--session-id", help="Session identifier")
     parser.add_argument("--progress-kind", choices=sorted(PROGRESS_KINDS), help="Durable progress kind")
     parser.add_argument("--evidence-ref", help="Non-empty durable evidence reference")
@@ -2881,6 +2905,7 @@ def main(argv: list[str] | None = None) -> int:
                 notes=args.notes,
                 work_graph_path=args.work_graph,
                 work_unit_id=args.work_unit_id,
+                start_point=args.start_point,
                 allow_parallel=args.allow_parallel,
                 require_native_session_binding=True,
             )

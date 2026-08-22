@@ -20,6 +20,11 @@ meta_process:
     require_tests: true
     # Max lines for [Trivial] commits (no plan required)
     plans_dir: "docs/plans"
+    integrity:
+      # off | observe | enforce. Applies only at/above minimum_plan_number.
+      mode: "enforce"
+      contract_version: "1.0.0"
+      minimum_plan_number: 125
 
   claims:
     enabled: true

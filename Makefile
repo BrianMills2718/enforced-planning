@@ -227,6 +227,8 @@ endif
 	@$(PYTHON) "$(WORKTREE_PLAN_READINESS_SCRIPT)" \
 		$(if $(PLAN),--qualified-plan-id "$(PLAN_PROJECT)#$(PLAN)",) \
 		--execution-profile "$(WORKTREE_EXECUTION_PROFILE)" \
+		--repo-root "$(WORKTREE_REPO_ROOT)" \
+		--start-point "$(WORKTREE_START_POINT)" \
 		$(if $(PLAN_READINESS_COMMAND),--query-command "$(PLAN_READINESS_COMMAND)",) \
 		--repository "$(WORKTREE_PROJECT)" \
 		--lane-id "$(BRANCH)" \
@@ -246,6 +248,7 @@ endif
 		--repo-root "$(WORKTREE_REPO_ROOT)" \
 		--branch "$(BRANCH)" \
 		--worktree-path "$(WORKTREE_DIR)/$(BRANCH)" \
+		--start-point "$(WORKTREE_START_POINT)" \
 		--session-name "$(SESSION_GOAL)" \
 		$(if $(SESSION_PARENT_SCOPE),--parent-scope "$(SESSION_PARENT_SCOPE)",) \
 		$(if $(filter 1 true yes,$(SESSION_ALLOW_PARALLEL)),--allow-parallel,) \

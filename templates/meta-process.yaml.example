@@ -24,6 +24,12 @@ meta_process:
     require_tests: true
     # Max lines for [Trivial] commits (no plan required)
     plans_dir: "docs/plans"
+    integrity:
+      # Structural plan admission is explicitly adopted per repository.
+      # off | observe | enforce
+      mode: "off"
+      contract_version: "1.0.0"
+      minimum_plan_number: 1
 
   claims:
     enabled: false

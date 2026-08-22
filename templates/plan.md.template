@@ -59,6 +59,19 @@
 
 ---
 
+## Capability Adoption
+
+> **REQUIRED for Planning Integrity.** Declare one existing-capability
+> disposition: `none`, `reuse`, `extend`, `supersede`, or
+> `explicit_exception`.
+
+**Disposition:** [none | reuse | extend | supersede | explicit_exception]
+
+[Name the owning seam and the consumer proof required, or explain why no
+existing capability owns this bounded concern.]
+
+---
+
 ## References Reviewed
 
 > **REQUIRED:** Cite specific code/docs reviewed before planning.
@@ -171,6 +184,8 @@ the concrete cases that explain it?
 
 ### Critical Path Classification
 
+**Critical-path classification:** [vertical | direct_blocker | enabler | hardening]
+
 > Classify every increment. Before the canonical example is observed, only
 > `vertical` and reproduced `direct_blocker` work belongs on the critical path.
 > `enabler` and `hardening` completion does not advance product status.
@@ -187,6 +202,28 @@ the concrete cases that explain it?
 2. Modify Y
 3. Add tests
 4. Update docs
+
+---
+
+## Epistemic Planning Frontier
+
+> **REQUIRED for Planning Integrity.** Classify every declared material area.
+> Structural PASS cannot prove that an author remembered every material area
+> or selected an optimal plan.
+
+| Area | State | Current contract | Trigger or stopping rule | Downstream update |
+|---|---|---|---|---|
+| [material area] | [fully_specifiable_now | conditional | exploration_required | enabling_work_blocked | human_decision_required | deliberately_deferred] | [what is known now] | [condition, probe, blocker, decision, or resume rule] | [authority or plan field updated when resolved] |
+
+---
+
+## Reassessment Contract
+
+- **Triggers:** [evidence or elapsed-work conditions that force reassessment]
+- **Autonomous action:** [reversible in-scope changes the agent may make]
+- **Plan revision required:** [material changes that require a new plan digest]
+- **Human decision required:** [scope, authority, irreversible, or spend forks]
+- **Stopping rule:** [when to stop framework work and advance or park the outcome]
 
 ---
 

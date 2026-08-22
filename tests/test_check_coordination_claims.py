@@ -790,6 +790,73 @@ def test_plan_bound_write_claim_rejects_blocked_canonical_work_unit(
     assert not claims_dir.exists()
 
 
+def test_direct_plan_bound_claim_cannot_bypass_enforced_integrity(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The canonical claim seam must deny before registry mutation, even without Make."""
+
+    module = _load_module()
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
+    repo_root = tmp_path / "demo"
+    _init_git_repo(repo_root)
+    graph = _commit_work_graph(
+        repo_root,
+        plan=106,
+        unit={
+            "id": "integrity-unit",
+            "status": "ready",
+            "readiness": {
+                "status": "ready",
+                "required_approval_types": [],
+                "approvals": [],
+                "failed_guards": [],
+            },
+        },
+    )
+    (repo_root / "meta-process.yaml").write_text(
+        "meta_process:\n  plans:\n    integrity:\n      mode: enforce\n      contract_version: 1.0.0\n      minimum_plan_number: 106\n",
+        encoding="utf-8",
+    )
+    plan_path = repo_root / "docs/plans/106_incomplete.md"
+    plan_path.write_text("# Incomplete enforced plan\n", encoding="utf-8")
+    subprocess.run(
+        ["git", "-C", str(repo_root), "add", "meta-process.yaml", str(plan_path.relative_to(repo_root))],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(repo_root), "commit", "-m", "enforce incomplete plan"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    with pytest.raises(ValueError, match="missing_epistemic_frontier"):
+        module.create_claim(
+            agent="codex",
+            project="demo",
+            scope="integrity-unit",
+            intent="attempt direct claim bypass",
+            plan_ref="demo#106",
+            claim_type="write",
+            write_paths=["src/feature.py"],
+            repo_root=str(repo_root),
+            worktree_path=str(repo_root / "worktrees" / "integrity-unit"),
+            branch="integrity-unit",
+            session_id="codex:test",
+            session_name="integrity-unit",
+            broader_goal="prove direct claim admission",
+            tracker_path=str(tmp_path / "tracker.yaml"),
+            work_graph_path=graph,
+            work_unit_id="integrity-unit",
+        )
+
+    assert not claims_dir.exists()
+
+
 def test_plan_bound_review_cannot_bypass_write_readiness_binding(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

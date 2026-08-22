@@ -33,6 +33,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--qualified-plan-id")
     parser.add_argument("--execution-profile", choices=("light", "coordinated", "release"), required=True)
     parser.add_argument("--query-command")
+    parser.add_argument("--repo-root", required=True)
+    parser.add_argument("--start-point", default="HEAD")
     parser.add_argument("--repository", required=True)
     parser.add_argument("--lane-id", required=True)
     parser.add_argument("--parent-lane-id")
@@ -65,6 +67,8 @@ def main(argv: list[str] | None = None) -> int:
             worktree_path=args.worktree_path,
             claim_identity=f"{args.agent}:{args.repository}:{args.scope}",
             session_identity=session_id,
+            repo_root=args.repo_root,
+            start_point=args.start_point,
             allow_unplanned=args.allow_unplanned,
             resume_requested=args.resume,
         )

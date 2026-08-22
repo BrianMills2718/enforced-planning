@@ -6,11 +6,13 @@ import json
 import re
 import shlex
 import subprocess
+from pathlib import Path
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from enforced_planning import coordination_claims
+from enforced_planning.plan_validation import validate_plan_integrity_at_revision
 
 ExecutionProfile = Literal["light", "coordinated", "release"]
 ReadinessErrorCode = Literal[
@@ -107,6 +109,8 @@ def check_plan_start_readiness(
     worktree_path: str,
     claim_identity: str,
     session_identity: str,
+    repo_root: Path | str | None = None,
+    start_point: str = "HEAD",
     parent_lane_id: str | None = None,
     allow_unplanned: bool = False,
     resume_requested: bool = False,
@@ -126,6 +130,29 @@ def check_plan_start_readiness(
         )
     if not qualified_plan_id:
         raise ValueError(f"{execution_profile} work requires a qualified plan identity")
+    plan_number = _plan_number(qualified_plan_id)
+    if plan_number is None:
+        raise ValueError(f"invalid qualified plan identity: {qualified_plan_id}")
+    if "#" in qualified_plan_id:
+        plan_repository = qualified_plan_id.rsplit("#", 1)[0].strip()
+        if plan_repository and plan_repository != repository:
+            raise ValueError(
+                f"qualified plan repository mismatch: requested {plan_repository!r}, "
+                f"lane repository is {repository!r}"
+            )
+    if repo_root is None:
+        raise ValueError(f"{execution_profile} work requires --repo-root for exact plan integrity")
+    integrity = validate_plan_integrity_at_revision(
+        repo_root=repo_root,
+        repository_id=repository,
+        plan_number=plan_number,
+        start_point=start_point,
+    )
+    if integrity.mode == "enforce" and integrity.disposition == "fail":
+        codes = ", ".join(item.code for item in integrity.findings)
+        raise ValueError(
+            f"planning integrity rejected {qualified_plan_id} at {integrity.source_revision}: {codes}"
+        )
     if not query_command or not query_command.strip():
         raise ValueError(
             f"{execution_profile} work requires a configured plan-readiness query command"

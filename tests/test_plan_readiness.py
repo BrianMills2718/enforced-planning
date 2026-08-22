@@ -10,9 +10,22 @@ import pytest
 
 from enforced_planning import plan_readiness
 
-
 PLAN_ID = "project-meta#234"
 GRAPH_REVISION = "a" * 64
+
+
+@pytest.fixture(autouse=True)
+def _default_integrity_off(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        plan_readiness,
+        "validate_plan_integrity_at_revision",
+        lambda **_kwargs: SimpleNamespace(
+            mode="off",
+            disposition="not_applicable",
+            source_revision=GRAPH_REVISION,
+            findings=[],
+        ),
+    )
 
 
 def _payload(*, decision: str, qualified_plan_id: str = PLAN_ID) -> str:
@@ -41,6 +54,7 @@ def _gate(*, resume_requested: bool = False):
         worktree_path="/tmp/project-meta/worktrees/plan-234-resume",
         claim_identity="codex:project-meta:plan-234-resume",
         session_identity="codex:test",
+        repo_root="/tmp/project-meta",
         resume_requested=resume_requested,
     )
 
@@ -86,6 +100,7 @@ def test_governed_profiles_require_query_configuration(profile: str) -> None:
             worktree_path="/tmp/project-meta/worktrees/plan-234-resume",
             claim_identity="codex:project-meta:plan-234-resume",
             session_identity="codex:test",
+            repo_root="/tmp/project-meta",
         )
 
 
@@ -232,3 +247,67 @@ def test_nonzero_graph_response_is_rejected(monkeypatch: pytest.MonkeyPatch) -> 
 
     with pytest.raises(ValueError, match="plan readiness rejected"):
         _gate(resume_requested=True)
+
+
+def test_enforced_integrity_denies_before_graph_query(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        plan_readiness,
+        "validate_plan_integrity_at_revision",
+        lambda **_kwargs: SimpleNamespace(
+            mode="enforce",
+            disposition="fail",
+            source_revision="b" * 40,
+            findings=[SimpleNamespace(code="missing_epistemic_frontier")],
+        ),
+    )
+    monkeypatch.setattr(
+        plan_readiness.subprocess,
+        "run",
+        lambda *_args, **_kwargs: pytest.fail("graph query must not run after integrity denial"),
+    )
+
+    with pytest.raises(ValueError, match="missing_epistemic_frontier"):
+        _gate()
+
+
+def test_observed_integrity_reports_without_denial(monkeypatch: pytest.MonkeyPatch) -> None:
+    _patch_graph(monkeypatch, decision="ready")
+    monkeypatch.setattr(
+        plan_readiness,
+        "validate_plan_integrity_at_revision",
+        lambda **_kwargs: SimpleNamespace(
+            mode="observe",
+            disposition="fail",
+            source_revision="b" * 40,
+            findings=[SimpleNamespace(code="missing_epistemic_frontier")],
+        ),
+    )
+
+    result = _gate()
+
+    assert result.readiness is not None
+    assert result.readiness.decision == "ready"
+
+
+def test_qualified_plan_repository_mismatch_fails_before_integrity(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        plan_readiness,
+        "validate_plan_integrity_at_revision",
+        lambda **_kwargs: pytest.fail("mismatched repository must fail before validation"),
+    )
+
+    with pytest.raises(ValueError, match="repository mismatch"):
+        plan_readiness.check_plan_start_readiness(
+            qualified_plan_id="other-repo#234",
+            execution_profile="coordinated",
+            query_command="plan-graph",
+            repository="project-meta",
+            lane_id="lane",
+            branch="lane",
+            worktree_path="/tmp/lane",
+            claim_identity="codex:project-meta:lane",
+            session_identity="codex:test",
+            repo_root="/tmp/project-meta",
+        )

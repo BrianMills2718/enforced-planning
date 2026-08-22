@@ -742,6 +742,11 @@ def test_install_governed_repo_write_bootstraps_minimum_repo_and_passes_audit(
     assert not (tmp_path / "AGENTS.md").is_symlink()
     assert (tmp_path / "meta-process.yaml").exists()
     starter = yaml.safe_load((tmp_path / "meta-process.yaml").read_text(encoding="utf-8"))["meta_process"]
+    assert starter["plans"]["integrity"] == {
+        "mode": "off",
+        "contract_version": "1.0.0",
+        "minimum_plan_number": 1,
+    }
     assert starter["claims"] == {
         "enabled": False,
         "require_for_worktree": False,
@@ -756,6 +761,10 @@ def test_install_governed_repo_write_bootstraps_minimum_repo_and_passes_audit(
     assert (tmp_path / "scripts" / "relationships.yaml").exists()
     assert (tmp_path / "docs" / "plans" / "CLAUDE.md").exists()
     assert (tmp_path / "docs" / "plans" / "TEMPLATE.md").exists()
+    plan_template = (tmp_path / "docs" / "plans" / "TEMPLATE.md").read_text(encoding="utf-8")
+    assert "## Epistemic Planning Frontier" in plan_template
+    assert "## Reassessment Contract" in plan_template
+    assert "Structural PASS cannot prove" in plan_template
     assert (tmp_path / "Makefile").exists()
     assert (tmp_path / "enforced_planning" / "__init__.py").exists()
     assert (tmp_path / "enforced_planning" / "agents_rendering.py").exists()
@@ -904,6 +913,99 @@ def test_install_governed_repo_write_bootstraps_minimum_repo_and_passes_audit(
         check=False,
     )
     assert authority_help.returncode == 0, authority_help.stdout + authority_help.stderr
+
+
+def test_installed_make_denies_incomplete_plan_before_lane_mutation(tmp_path: Path) -> None:
+    """The real installed operator entrypoint must stop before claim or Git mutation."""
+
+    _write_minimal_claude(tmp_path)
+    installed = _run(
+        "--repo-root",
+        str(tmp_path),
+        "--write",
+        "--strict-governed",
+        "--json",
+        cwd=PROJECT_META_ROOT,
+    )
+    assert installed.returncode == 0, installed.stdout + installed.stderr
+
+    config_path = tmp_path / "meta-process.yaml"
+    config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    config["meta_process"]["plans"]["integrity"] = {
+        "mode": "enforce",
+        "contract_version": "1.0.0",
+        "minimum_plan_number": 1,
+    }
+    config_path.write_text(yaml.safe_dump(config, sort_keys=False), encoding="utf-8")
+    plan_path = tmp_path / "docs" / "plans" / "1_incomplete.md"
+    plan_path.write_text("# Incomplete installed plan\n", encoding="utf-8")
+
+    subprocess.run(["git", "init", "-b", "main"], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "config", "user.name", "Test User"],
+        cwd=tmp_path,
+        check=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.email", "test@example.com"],
+        cwd=tmp_path,
+        check=True,
+    )
+    subprocess.run(["git", "add", "."], cwd=tmp_path, check=True)
+    subprocess.run(
+        ["git", "commit", "-m", "install incomplete governed plan"],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+    )
+
+    scope = f"pi02-denied-{tmp_path.name}"
+    worktree_dir = tmp_path / "worktrees"
+    claim_path = (
+        Path.home()
+        / ".claude"
+        / "coordination"
+        / "claims"
+        / f"codex_fixture_{scope}.yaml"
+    )
+    assert not claim_path.exists()
+    environment = os.environ.copy()
+    environment["CODEX_THREAD_ID"] = f"pi02-installed-{tmp_path.name}"
+
+    denied = subprocess.run(
+        [
+            "make",
+            "worktree",
+            f"BRANCH={scope}",
+            "TASK=Attempt incomplete installed plan",
+            "SESSION_GOAL=Prove installed planning admission",
+            "SESSION_PHASE=Attempt denied lane start",
+            "WORKTREE_AGENT=codex",
+            "WORKTREE_PROJECT=fixture",
+            "PLAN_PROJECT=fixture",
+            "PLAN=1",
+            f"WORKTREE_DIR={worktree_dir}",
+            "SESSION_WRITE_PATHS=src/feature.py",
+        ],
+        cwd=tmp_path,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert denied.returncode != 0
+    assert "missing_epistemic_frontier" in denied.stderr
+    assert not claim_path.exists()
+    assert not worktree_dir.exists()
+    branches = subprocess.run(
+        ["git", "branch", "--list", scope],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert branches.stdout.strip() == ""
 
 
 def test_installed_make_gate_rejects_stale_agents_projection(tmp_path: Path) -> None:
@@ -1262,6 +1364,8 @@ def test_install_governed_repo_syncs_worktree_block_into_existing_meta_makefile(
     assert "PLAN_READINESS_COMMAND ?=" in makefile_text
     assert "PLAN_RESUME ?=" in makefile_text
     assert '--qualified-plan-id "$(PLAN_PROJECT)#$(PLAN)"' in makefile_text
+    assert '--repo-root "$(WORKTREE_REPO_ROOT)"' in makefile_text
+    assert '--start-point "$(WORKTREE_START_POINT)"' in makefile_text
     assert "$(if $(PLAN_RESUME),--resume,)" in makefile_text
     assert makefile_text.index('"$(WORKTREE_PLAN_READINESS_SCRIPT)"') < makefile_text.index(
         '"$(WORKTREE_CLAIMS_SCRIPT)" --claim'

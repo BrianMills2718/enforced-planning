@@ -21,7 +21,6 @@ import yaml  # type: ignore[import-untyped]
 
 from enforced_planning import doc_authority
 
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG = Path("scripts/relationships.yaml")
 DEFAULT_READS_FILE = Path("/tmp/.claude_session_reads")
@@ -234,15 +233,27 @@ def load_relationships(
     repo_root: Path | None = None,
     config_path: str | Path | None = None,
 ) -> dict[str, Any]:
-    root = repo_root or REPO_ROOT
-    if config_path is None:
-        config_path = DEFAULT_CONFIG
-    rel_path = Path(config_path)
+    """Load a consumer repository's relationship graph.
+
+    Relative paths belong to ``repo_root``. The package's own source checkout
+    remains the compatibility default for import callers that omit the root,
+    but portable CLI consumers pass their root explicitly. An explicitly named
+    missing config is an error; silently falling back to the provider graph can
+    produce a valid-looking answer about the wrong repository.
+    """
+
+    root = (repo_root or REPO_ROOT).expanduser().resolve()
+    explicit_config = config_path is not None
+    rel_path = Path(config_path if config_path is not None else DEFAULT_CONFIG)
     if not rel_path.is_absolute():
         rel_path = root / rel_path
 
     if rel_path.exists():
         relationships = load_yaml(rel_path)
+    elif explicit_config:
+        raise FileNotFoundError(
+            f"requested relationships config does not exist: {rel_path}"
+        )
     else:
         legacy = root / "scripts" / "doc_coupling.yaml"
         legacy_legacy = root / "scripts" / "governance.yaml"
@@ -515,9 +526,17 @@ def check_required_reads(
     file_path: str,
     relationships: dict[str, Any],
     reads_file: Path,
+    *,
+    repo_root: Path | None = None,
+    authority_config_path: str | Path | None = None,
 ) -> ReadCheckResult:
     """Check whether file-specific required reads were completed for a given file."""
-    context = collect_context(file_path, relationships)
+    context = collect_context(
+        file_path,
+        relationships,
+        repo_root=repo_root,
+        authority_config_path=authority_config_path,
+    )
     required = [path for path in context.required_reads if path != _normalize(file_path)]
     seen = _load_reads(reads_file)
     missing = [
@@ -610,8 +629,16 @@ def main() -> int:
     )
     parser.add_argument(
         "--config",
-        default=str(DEFAULT_CONFIG),
-        help="Path to relationships.yaml (legacy fallbacks supported)",
+        default=None,
+        help=(
+            "Path to relationships.yaml relative to --repo-root; when omitted, "
+            "the standard config and legacy fallbacks are checked"
+        ),
+    )
+    parser.add_argument(
+        "--repo-root",
+        default=".",
+        help="Consumer repository root used to resolve portable relative paths",
     )
     parser.add_argument(
         "--json",
@@ -631,8 +658,14 @@ def main() -> int:
 
     args = parser.parse_args()
 
-    relationships = load_relationships(config_path=args.config)
-    contexts: list[FileContext] = [collect_context(f, relationships) for f in args.files]
+    consumer_root = Path(args.repo_root).expanduser().resolve()
+    relationships = load_relationships(
+        repo_root=consumer_root,
+        config_path=args.config,
+    )
+    contexts: list[FileContext] = [
+        collect_context(f, relationships, repo_root=consumer_root) for f in args.files
+    ]
 
     if args.check_reads:
         overall_ok = True
@@ -641,6 +674,7 @@ def main() -> int:
                 context.path,
                 relationships,
                 Path(args.reads_file),
+                repo_root=consumer_root,
             )
             required = check_result.required_reads
             missing = check_result.missing_reads
@@ -674,6 +708,7 @@ def main() -> int:
                 context.path,
                 relationships,
                 Path(args.reads_file),
+                repo_root=consumer_root,
             )
             for context in contexts
         ]
@@ -725,4 +760,3 @@ __all__ = [
     "load_yaml",
     "main",
 ]
-

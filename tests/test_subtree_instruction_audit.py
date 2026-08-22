@@ -186,8 +186,8 @@ def test_subtree_audit_cleans_up_stale_agents_symlinks_with_explicit_flag(
     result = _run_check(tmp_path, cleanup_stale_agents=True)
 
     payload = json.loads(result.stdout)
-    assert "removed-stale-symlink:docs/AGENTS.md" in payload["actions"]
-    assert "removed-stale-symlink:scripts/meta/AGENTS.md" in payload["actions"]
+    assert "removed-subdirectory-agents:docs/AGENTS.md" in payload["actions"]
+    assert "removed-subdirectory-agents:scripts/meta/AGENTS.md" in payload["actions"]
     assert result.returncode == 0
     assert not (docs_dir / "AGENTS.md").exists()
     assert not (meta_dir / "AGENTS.md").exists()
@@ -262,3 +262,120 @@ def test_subtree_audit_errors_on_regular_agents_file_in_subdir(tmp_path: Path) -
         "AGENTS.md should not exist in subdirectories" in error
         for error in payload["errors"]
     )
+
+
+
+def _load_checker():
+    """Import the checker directly for unit-level cases.
+
+    The cases above drive it as a subprocess, which is right for CLI behaviour
+    but cannot reach the sweep and registry-resolution helpers.
+    """
+
+    import importlib.util
+
+    name = "_check_subtree_instructions"
+    if name in sys.modules:
+        return sys.modules[name]
+    spec = importlib.util.spec_from_file_location(name, CHECK_SCRIPT)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+check_subtree_instructions = _load_checker()
+
+
+def _repo(tmp_path: Path) -> Path:
+    """Build a bare Git repository root."""
+
+    (tmp_path / ".git").mkdir(parents=True)
+    return tmp_path
+
+
+def test_sweep_finds_every_subdirectory_agents_file(tmp_path: Path):
+    """Cleanup used to run only over registered subtrees.
+
+    That made it useless for the repositories that needed it: agentic_scaffolding
+    and prompt_eval carried 31 dead symlinks between them and have no registry at
+    all, so all 31 had to be deleted by hand on 2026-08-21.
+    """
+
+    repo = _repo(tmp_path)
+    for rel in ("docs", "docs/plans", "scripts"):
+        (repo / rel).mkdir(parents=True)
+        (repo / rel / "CLAUDE.md").write_text(f"rules for {rel}\n", encoding="utf-8")
+        (repo / rel / "AGENTS.md").symlink_to("CLAUDE.md")
+
+    redundant, distinct = check_subtree_instructions.sweep_subdirectory_agents(
+        repo, remove=False
+    )
+    assert redundant == ["docs/AGENTS.md", "docs/plans/AGENTS.md", "scripts/AGENTS.md"]
+    assert distinct == []
+    assert (repo / "scripts" / "AGENTS.md").is_file(), "dry run must not delete"
+
+    check_subtree_instructions.sweep_subdirectory_agents(repo, remove=True)
+    assert check_subtree_instructions.sweep_subdirectory_agents(repo, remove=False) == ([], [])
+
+
+def test_sweep_skips_nested_repositories_and_vendor_trees(tmp_path: Path):
+    """A nested repo's root AGENTS.md is its own artifact, and Codex does load it.
+
+    A depth-based sweep over ~/code/active counted 80 dead files; 33 of them were
+    the root file of a nested clone or worktree and deleting those would have
+    removed live guidance.
+    """
+
+    repo = _repo(tmp_path)
+    nested = repo / "repos" / "inner"
+    (nested / ".git").mkdir(parents=True)
+    (nested / "AGENTS.md").write_text("inner root\n", encoding="utf-8")
+    (nested / "ui").mkdir()
+    (nested / "ui" / "AGENTS.md").write_text("below a nested root\n", encoding="utf-8")
+    vendored = repo / "node_modules" / "pkg"
+    vendored.mkdir(parents=True)
+    (vendored / "AGENTS.md").write_text("vendor\n", encoding="utf-8")
+
+    assert check_subtree_instructions.sweep_subdirectory_agents(repo, remove=True) == ([], [])
+    assert (nested / "AGENTS.md").is_file()
+    assert (nested / "ui" / "AGENTS.md").is_file()
+    assert (vendored / "AGENTS.md").is_file()
+
+
+def test_registry_defaults_to_the_audited_repository(tmp_path: Path):
+    """The default pointed at this repository's own path, which does not exist.
+
+    Every caller that omitted --registry failed with a FileNotFoundError naming a
+    file in enforced-planning, whatever repository they were auditing.
+    """
+
+    repo = _repo(tmp_path)
+    (repo / "scripts").mkdir()
+    local = repo / "scripts" / "subtree_instruction_registry.yaml"
+    local.write_text("version: 1\nincluded: []\nexcluded: []\n", encoding="utf-8")
+    assert check_subtree_instructions._resolve_registry(repo, None) == local
+
+    bare = _repo(tmp_path / "bare")
+    assert (
+        check_subtree_instructions._resolve_registry(bare, None)
+        == check_subtree_instructions.DEFAULT_REGISTRY
+    )
+
+
+def test_missing_registry_still_sweeps_and_says_so(tmp_path: Path):
+    """A repository with no registry is exactly the one carrying dead mirrors."""
+
+    repo = _repo(tmp_path)
+    (repo / "docs").mkdir()
+    (repo / "docs" / "CLAUDE.md").write_text("rules\n", encoding="utf-8")
+    (repo / "docs" / "AGENTS.md").write_text("rules\n", encoding="utf-8")
+
+    result = check_subtree_instructions.audit_subtree_instructions(
+        repo, repo / "no-such-registry.yaml", cleanup_stale_agents=True
+    )
+    assert "removed-subdirectory-agents:docs/AGENTS.md" in result.actions
+    assert not (repo / "docs" / "AGENTS.md").exists()
+    assert any("classification skipped" in error for error in result.errors)
+    assert not any("Unclassified directory" in error for error in result.errors)

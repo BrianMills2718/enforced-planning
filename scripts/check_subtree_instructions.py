@@ -127,8 +127,11 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--registry",
-        default=str(DEFAULT_REGISTRY),
-        help="Path to the subtree instruction registry YAML file.",
+        default=None,
+        help=(
+            "Path to the subtree instruction registry YAML. Defaults to "
+            "<repo-root>/scripts/subtree_instruction_registry.yaml."
+        ),
     )
     parser.add_argument(
         "--json",
@@ -283,36 +286,82 @@ def _classify_unclassified_paths(
     return unclassified
 
 
-def _cleanup_subdirectory_agents(dir_path: Path, relpath: str) -> str | None:
-    """Remove stale ``AGENTS.md`` symlinks from subdirectories.
+# Directories whose contents are dependencies, build output, or history rather
+# than authored instruction surfaces.
+_SWEEP_SKIP = frozenset(
+    {".git", "node_modules", "__pycache__", ".venv", "venv", ".mypy_cache",
+     ".pytest_cache", ".ruff_cache", "worktrees", "site-packages"}
+)
 
-    AGENTS.md is a root-level artifact only.  Subdirectories should never
-    have one.  This function removes symlink-based AGENTS.md files that
-    were created by older versions of this script.  Regular files are left
-    alone with a warning (they may be hand-authored).
+
+def _is_redundant(candidate: Path) -> bool:
+    """Return whether an AGENTS.md carries nothing its CLAUDE.md does not."""
+
+    if candidate.is_symlink():
+        return True
+    sibling = candidate.parent / "CLAUDE.md"
+    if not sibling.is_file():
+        return False
+    try:
+        return candidate.read_bytes() == sibling.read_bytes()
+    except OSError:
+        return False
+
+
+def sweep_subdirectory_agents(
+    repo_root: Path, *, remove: bool
+) -> tuple[list[str], list[str]]:
+    """Return subdirectory ``AGENTS.md`` paths as (redundant, distinct).
+
+    The no-subdirectory-AGENTS.md rule is repo-wide and owes nothing to the
+    subtree registry, but cleanup used to run only over registered subtrees.
+    That made it useless for the repositories that needed it: agentic_scaffolding
+    and prompt_eval carried 31 dead symlinks between them and have no registry
+    at all, so 31 files had to be deleted by hand on 2026-08-21.
+
+    Only redundant files -- symlinks, and copies byte-identical to the CLAUDE.md
+    beside them -- are removed when ``remove`` is set. A file that differs is
+    reported instead: ecosystem-ops' ui/AGENTS.md held the whole extend/compose/
+    prototype/migrate vocabulary and the list of canonical surfaces, none of it
+    in ui/CLAUDE.md. Deleting that would have destroyed live guidance rather
+    than a stale mirror, so merging it is a judgment for a person.
+
+    A nested Git root is skipped along with its whole tree. Its ``AGENTS.md`` is
+    that repository's own root artifact, which Codex does load.
     """
 
-    agents_path = dir_path / "AGENTS.md"
-
-    if agents_path.is_symlink():
-        agents_path.unlink()
-        return f"removed-stale-symlink:{relpath}/AGENTS.md"
-
-    if agents_path.exists():
-        warnings.warn(
-            f"{relpath}/AGENTS.md exists as a regular file in a subdirectory; "
-            "AGENTS.md should only exist at the repo root. Remove it manually.",
-            stacklevel=2,
-        )
-    return None
+    redundant: list[str] = []
+    distinct: list[str] = []
+    stack = [repo_root]
+    while stack:
+        directory = stack.pop()
+        try:
+            children = sorted(directory.iterdir())
+        except OSError:
+            continue
+        for child in children:
+            if not child.is_dir() or child.is_symlink():
+                continue
+            if child.name in _SWEEP_SKIP:
+                continue
+            if (child / ".git").exists():
+                continue
+            candidate = child / "AGENTS.md"
+            if candidate.is_symlink() or candidate.is_file():
+                relpath = candidate.relative_to(repo_root).as_posix()
+                if _is_redundant(candidate):
+                    redundant.append(relpath)
+                    if remove:
+                        candidate.unlink()
+                else:
+                    distinct.append(relpath)
+            stack.append(child)
+    return sorted(redundant), sorted(distinct)
 
 
 def _audit_included_directory(
     repo_root: Path,
     relpath: str,
-    *,
-    actions: list[str],
-    cleanup_stale_agents: bool,
 ) -> DirectoryAudit:
     """Audit one included subtree directory."""
 
@@ -330,11 +379,6 @@ def _audit_included_directory(
             ok=False,
             errors=errors,
         )
-
-    if cleanup_stale_agents:
-        action = _cleanup_subdirectory_agents(dir_path, relpath)
-        if action is not None:
-            actions.append(action)
 
     claude_path = dir_path / "CLAUDE.md"
     agents_path = dir_path / "AGENTS.md"
@@ -389,7 +433,20 @@ def audit_subtree_instructions(
             stacklevel=2,
         )
 
-    registry = load_registry(registry_path)
+    if registry_path.is_file():
+        registry = load_registry(registry_path)
+        registry_error = None
+    else:
+        # A missing registry must not suppress the repo-wide AGENTS.md sweep.
+        # Classification needs the registry; the no-subdirectory-AGENTS.md rule
+        # does not, and the repositories carrying dead mirrors are exactly the
+        # ones that never had a registry.
+        registry = SubtreeRegistry(classification_depth=1, included=(), excluded=())
+        registry_error = (
+            f"No subtree registry at {registry_path}; classification skipped. "
+            "The subdirectory AGENTS.md sweep still ran."
+        )
+
     result = SubtreeAuditResult(
         repo_root=str(repo_root),
         registry_path=str(registry_path),
@@ -398,10 +455,14 @@ def audit_subtree_instructions(
         excluded_paths=list(registry.excluded_paths),
     )
 
-    relpaths = _relative_dir_paths(repo_root, registry.classification_depth)
-    result.unclassified_paths = _classify_unclassified_paths(registry, relpaths)
-    for relpath in result.unclassified_paths:
-        result.errors.append(f"Unclassified directory within audit depth: {relpath}")
+    if registry_error is not None:
+        result.errors.append(registry_error)
+
+    if registry_error is None:
+        relpaths = _relative_dir_paths(repo_root, registry.classification_depth)
+        result.unclassified_paths = _classify_unclassified_paths(registry, relpaths)
+        for relpath in result.unclassified_paths:
+            result.errors.append(f"Unclassified directory within audit depth: {relpath}")
 
     for entry in registry.excluded:
         if any(char in entry.path for char in "*?[]"):
@@ -415,17 +476,47 @@ def audit_subtree_instructions(
             result.excluded_conflicts.append(conflict)
             result.errors.append(conflict)
 
-    for entry in registry.included:
-        directory_audit = _audit_included_directory(
-            repo_root,
-            entry.path,
-            actions=result.actions,
-            cleanup_stale_agents=cleanup_stale_agents,
+    redundant, distinct = sweep_subdirectory_agents(
+        repo_root, remove=cleanup_stale_agents
+    )
+    for relpath in redundant:
+        if cleanup_stale_agents:
+            result.actions.append(f"removed-subdirectory-agents:{relpath}")
+        else:
+            result.errors.append(
+                f"{relpath}: subdirectory AGENTS.md duplicates its CLAUDE.md and is "
+                "read by no client; run --cleanup-stale-agents to remove it"
+            )
+    for relpath in distinct:
+        result.errors.append(
+            f"{relpath}: subdirectory AGENTS.md is read by no client, but its "
+            "content is not in the CLAUDE.md beside it. Merge it there, then "
+            "remove this file; cleanup will not delete it."
         )
+
+    for entry in registry.included:
+        directory_audit = _audit_included_directory(repo_root, entry.path)
         result.directories.append(directory_audit)
         result.errors.extend(directory_audit.errors)
 
     return result
+
+
+def _resolve_registry(repo_root: Path, explicit: str | None) -> Path:
+    """Return the registry to audit ``repo_root`` against.
+
+    The default used to be this repository's own registry path, which does not
+    exist. Every caller that did not pass --registry therefore failed with a
+    FileNotFoundError naming a file in enforced-planning, whatever repository
+    they were auditing.
+    """
+
+    if explicit is not None:
+        return Path(explicit).resolve()
+    local = repo_root / "scripts" / "subtree_instruction_registry.yaml"
+    if local.is_file():
+        return local
+    return DEFAULT_REGISTRY
 
 
 def main() -> int:
@@ -433,7 +524,7 @@ def main() -> int:
 
     args = parse_args()
     repo_root = Path(args.repo_root).resolve()
-    registry_path = Path(args.registry).resolve()
+    registry_path = _resolve_registry(repo_root, args.registry)
 
     try:
         result = audit_subtree_instructions(

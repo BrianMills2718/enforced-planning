@@ -279,4 +279,31 @@ if [[ -n "$TERM_LINTER" ]] && [[ -f "$VOCAB_PACK" ]]; then
     fi
 fi
 
+# 11. Topic-tag vocabulary gate and view regeneration (if installed).
+# A `Topics:` tag in a module docstring must resolve against
+# docs/topics/registry.yaml. Free-text tags fragment into near-duplicates and
+# the aggregated view silently stops being one view -- the same pattern applied
+# to entity identity in this ecosystem produced 4,226 ids for 190 distinct
+# people. Commit time is the only point where the author still knows whether an
+# unknown tag is a typo or a genuinely new topic. Regenerating on the way
+# through is what makes a topic page a projection of the code rather than an
+# artifact somebody has to remember to refresh.
+TOPIC_VIEWS=$(find_script "topic_views.py")
+if [[ -n "$TOPIC_VIEWS" ]] && [[ -f "$REPO_ROOT/docs/topics/registry.yaml" ]]; then
+    echo "Checking topic tags..."
+    if ! "$PYTHON" "$TOPIC_VIEWS" --root "$REPO_ROOT" --check --write >/dev/null; then
+        echo ""
+        echo "ERROR: undeclared topic tag."
+        "$PYTHON" "$TOPIC_VIEWS" --root "$REPO_ROOT" --check >/dev/null || true
+        echo "Declare it in docs/topics/registry.yaml with a one-sentence"
+        echo "definition, or fix the tag."
+        echo ""
+        handle_failure "topic tag check" || exit 1
+    fi
+    if ! git diff --quiet -- docs/topics/views 2>/dev/null; then
+        git add docs/topics/views
+        echo "  topic views regenerated and staged"
+    fi
+fi
+
 echo "Pre-commit checks passed!"

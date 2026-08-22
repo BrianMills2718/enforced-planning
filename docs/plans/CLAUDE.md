@@ -102,6 +102,7 @@ See `ROADMAP.md` for the full phase map and recommended priority order.
 | 122 | First-Consumer Outcome Admission Gate (`122_first_consumer_outcome_admission.md`) | Critical | ✅ Complete — opt-in source consumer accepted | separately reviewed source-repository activation pilot; hooks, installer, and fleet remain excluded |
 | 123 | Source Outcome-Admission Activation (`123_source_outcome_admission_activation.md`) | Critical | ✅ Complete — automatic source bootstrap/lifecycle/pre-write accepted | separately designed normal-project pilot; installer and fleet remain excluded |
 | 124 | Qualitative Coding Outcome-Admission Pilot (`124_qualitative_coding_outcome_admission_pilot.md`) | Critical | 🚧 In Progress — exact Project Graph compatibility accepted; source merge/park precedes QC | one isolated QC-local pilot; installer defaults and fleet remain excluded |
+| 125 | Planning Integrity Loop (`125_planning_integrity_loop.md`) | Critical | 🚧 In Progress — design accepted; semantic admission implementation ready | installed AES dogfood, then the selected valuable project anchor |
 
 ## Status Key
 

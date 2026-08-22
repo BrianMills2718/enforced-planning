@@ -1,6 +1,6 @@
 # Plan #125: Planning Integrity Loop
 
-**Status:** Accepted design — PI-02 ready for implementation
+**Status:** In Progress — design accepted; semantic admission implementation ready
 **Type:** cross-repository shared-contract implementation
 **Priority:** Critical
 **phase_ref:** "Agentic Engineering first external consumer"
@@ -126,6 +126,15 @@ plan. No Company Planning or Project Meta runtime dependency is added.
 `plan_validation`, `plan_readiness`, and outcome-continuation seams. AES is the
 intended first consumer. Proof requires an installed AES path plus both-sign
 admission controls; isolated parser tests prove only implementation.
+
+## Capabilities
+
+| Capability | Input | Output | Producer | Consumer |
+|---|---|---|---|---|
+| semantic plan-integrity validation | exact plan bytes + repository adoption config | typed pass/fail/not-applicable result with findings and frontier | Enforced Planning plan validator | plan-start admission and AES evidence join |
+| pre-mutation planning admission | qualified plan identity + exact integrity result + graph readiness | allow or visible denial before coordination state changes | Enforced Planning plan-start gate | sanctioned worktree/session entrypoints |
+| adaptive execution linkage | accepted plan revision + selected outcome progress | continue, course correction, restart, or terminal decision | existing Enforced Planning outcome continuation | coding-agent lifecycle and human progress surface |
+| four-layer planning projection | normative plan fields + immutable integrity/progress evidence | generated current, target, variance, and plan topic | AES projection | Brian and fresh coding agents |
 
 ## Requirements And Invariants
 

@@ -415,6 +415,7 @@ def test_bootstrap_plan_inference_requires_one_complete_exact_plan() -> None:
 
 def test_claim_bootstrap_admission_requires_exact_claimed_target() -> None:
     claim = SimpleNamespace(
+        plan_ref="UNPLANNED",
         write_paths=[
             "docs/plans/123_source_outcome_admission_activation.md",
             "docs/plans/CLAUDE.md",
@@ -432,6 +433,25 @@ def test_claim_bootstrap_admission_requires_exact_claimed_target() -> None:
         evaluate_claim_bootstrap_admission(
             claim,
             target_path="enforced_planning/outcome_admission.py",
+        )
+        is None
+    )
+
+
+def test_claim_bootstrap_admission_rejects_qualified_plan_with_only_safe_paths() -> None:
+    claim = SimpleNamespace(
+        plan_ref="enforced-planning#125",
+        write_paths=[
+            "examples/owner-real-outcome-admission/plan125-planning-integrity-scenario.json",
+            "examples/owner-real-outcome-admission/plan125-planning-integrity-allocation.json",
+            "examples/owner-real-outcome-admission/plan125-planning-integrity-disposition.json",
+        ],
+    )
+
+    assert (
+        evaluate_claim_bootstrap_admission(
+            claim,
+            target_path="examples/owner-real-outcome-admission/plan125-planning-integrity-scenario.json",
         )
         is None
     )
@@ -1231,6 +1251,7 @@ def test_configured_prewrite_allows_only_an_exact_bootstrap_claim(
     claim_path = tmp_path / "claim.yaml"
     claim_path.write_text("{}\n", encoding="utf-8")
     claim = SimpleNamespace(
+        plan_ref="UNPLANNED",
         write_paths=[
             "docs/plans/123_source_outcome_admission_activation.md",
             "docs/plans/CLAUDE.md",
@@ -1265,6 +1286,47 @@ def test_configured_prewrite_allows_only_an_exact_bootstrap_claim(
     assert receipt["result"]["decision"]["reason_code"] == "admission_bootstrap_allowed"
 
 
+def test_configured_prewrite_requires_selection_for_qualified_safe_path_claim(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    claim_path = tmp_path / "claim.yaml"
+    claim_path.write_text("{}\n", encoding="utf-8")
+    claim = SimpleNamespace(
+        plan_ref="enforced-planning#125",
+        write_paths=[
+            "examples/owner-real-outcome-admission/plan125-planning-integrity-scenario.json",
+            "examples/owner-real-outcome-admission/plan125-planning-integrity-allocation.json",
+            "examples/owner-real-outcome-admission/plan125-planning-integrity-disposition.json",
+        ],
+    )
+    monkeypatch.setattr(
+        session_lifecycle.coordination_claims,
+        "normalize_claim",
+        lambda _payload, *, source_file: claim,
+    )
+    monkeypatch.setattr(
+        outcome_admission,
+        "evaluate_selected_claim_admission",
+        lambda *_args, **_kwargs: _missing_selected_result(),
+    )
+
+    receipt = prewrite_claim_gate_cli._enforce_selected_outcome(
+        {
+            "decision": "allow",
+            "claim_source_file": str(claim_path),
+            "normalized_target_paths": [
+                "examples/owner-real-outcome-admission/plan125-planning-integrity-scenario.json"
+            ],
+        },
+        receipt_path=tmp_path / "admission.jsonl",
+        allow_bootstrap=True,
+    )
+
+    assert receipt["result"]["source"] == "selected"
+    assert receipt["result"]["decision"]["reason_code"] == "outcome_selection_required"
+
+
 def test_configured_prewrite_rejects_bootstrap_source_smuggling(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -1272,6 +1334,7 @@ def test_configured_prewrite_rejects_bootstrap_source_smuggling(
     claim_path = tmp_path / "claim.yaml"
     claim_path.write_text("{}\n", encoding="utf-8")
     claim = SimpleNamespace(
+        plan_ref="UNPLANNED",
         write_paths=[
             "docs/plans/123_source_outcome_admission_activation.md",
             "enforced_planning/outcome_admission.py",

@@ -13,7 +13,7 @@
       "objective": "Freeze the owner boundaries, contract, acceptance, frontier, and risk-ordered integration path.",
       "profile": "small",
       "execution_class": "independently_executable",
-      "claimability": "not_applicable",
+      "claimability": "ready_for_execution",
       "scope": {
         "included": [
           "Plan 125 design",
@@ -1108,14 +1108,14 @@
       "id": "pi-03-aes-installed-dogfood",
       "initiative_id": "agentic-engineering",
       "goal_id": "planning-integrity-loop",
-      "design_revision": "plan-125-course-correction-11@2026-08-23",
-      "spec_revision": "plan-125-bootstrap-v3",
+      "design_revision": "plan-125-course-correction-12@2026-08-23",
+      "spec_revision": "plan-125-bootstrap-v4",
       "title": "Join installed Planning Integrity evidence into AES",
       "class": "integration",
       "objective": "Prove an installed AES consumer can retain and render exact planning-integrity evidence through its existing four-layer projection.",
       "profile": "standard",
       "execution_class": "independently_executable",
-      "claimability": "ready_for_execution",
+      "claimability": "not_applicable",
       "scope": {
         "included": [
           "Pinned installed Enforced Planning candidate",
@@ -1146,12 +1146,28 @@
           "kind": "work_unit_output",
           "id": "pi-02d-operator-docs-accepted",
           "revision": "12b8180dda2b8cbe2a0b0d0f664864546eba3944"
+        },
+        {
+          "kind": "merged_change",
+          "id": "agentic-engineering-system-pr-4",
+          "revision": "db22cab50a9cf4c9f94ed3fa2c574168a192887c"
+        },
+        {
+          "kind": "consumer_evidence",
+          "id": "agentic-engineering-system:evidence/runs/2026-08-23-planning-integrity-installed.json",
+          "revision": "sha256:02807161a5d72cb1eedc1f710104d3a0fb902506db21db7f85e49daae1d7e4fa"
+        },
+        {
+          "kind": "work_unit_output",
+          "id": "pi-03-v11-selection",
+          "revision": "sha256:87228928f8a688ad7e1fdc9c65a69ce51ae08480ec9becb0dbb789129e3fa753"
         }
       ],
       "outputs": [
         "Installed AES planning-integrity receipt",
         "Generated current-target-variance-plan topic",
-        "Delete and regenerate comparison"
+        "Delete and regenerate comparison",
+        "Synchronized PI-03 acceptance and complete Plan 125 authority surfaces"
       ],
       "dependencies": [
         {
@@ -1200,6 +1216,55 @@
           "repository": "agentic-engineering-system",
           "access": "exclusive",
           "coordination_key": "planning-integrity-v1"
+        },
+        {
+          "kind": "repository_path",
+          "target": "examples/owner-real-outcome-admission/plan125-planning-integrity-scenario.json",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "planning-integrity-acceptance-transition"
+        },
+        {
+          "kind": "repository_path",
+          "target": "examples/owner-real-outcome-admission/plan125-planning-integrity-allocation.json",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "planning-integrity-acceptance-transition"
+        },
+        {
+          "kind": "repository_path",
+          "target": "examples/owner-real-outcome-admission/plan125-planning-integrity-disposition.json",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "planning-integrity-acceptance-transition"
+        },
+        {
+          "kind": "repository_path",
+          "target": "docs/plans/125_planning_integrity_loop.md",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "planning-integrity-acceptance-transition"
+        },
+        {
+          "kind": "repository_path",
+          "target": "docs/plans/125_planning_integrity_loop_work_graph.json",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "planning-integrity-acceptance-transition"
+        },
+        {
+          "kind": "repository_path",
+          "target": "ROADMAP.md",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "planning-integrity-acceptance-transition"
+        },
+        {
+          "kind": "repository_path",
+          "target": "docs/plans/CLAUDE.md",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "planning-integrity-acceptance-transition"
         }
       ],
       "acceptance": [
@@ -1209,7 +1274,9 @@
           "evidence_required": [
             "Isolated installation receipt",
             "Generated topic",
-            "Exact evidence join"
+            "Exact evidence join",
+            "AES PR 4 merge db22cab50a9cf4c9f94ed3fa2c574168a192887c",
+            "Canonical AES suite: 62 passed"
           ],
           "negative_control": "Source-path imports and stale plan digests fail."
         },
@@ -1231,9 +1298,9 @@
       "authorization_mode": "registry_claim",
       "integration_owner_id": "pi-03-aes-installed-dogfood",
       "status": "ready",
-      "record_version": 4,
+      "record_version": 5,
       "created_at": "2026-08-22T22:23:19Z",
-      "updated_at": "2026-08-23T11:29:12Z"
+      "updated_at": "2026-08-23T12:03:13Z"
     }
   ]
 }

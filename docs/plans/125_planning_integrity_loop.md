@@ -1,6 +1,6 @@
 # Plan #125: Planning Integrity Loop
 
-**Status:** In Progress — PI-02 through PI-02F are accepted; installed AES dogfood (PI-03) is ready
+**Status:** In Progress — installed AES dogfood is proven; one terminal queue-ownership transition remains
 **Type:** cross-repository shared-contract implementation
 **Priority:** Critical
 **phase_ref:** "Agentic Engineering first external consumer"
@@ -557,6 +557,46 @@ that exact evidence; PI-03 is the next ready unit. Future coordinated units
 must assign completion/status-transition ownership before they are called
 executable.
 
+### Consumer evidence and course correction — terminal queue ownership
+
+AES PR #4 merged the installed-consumer vertical at
+`db22cab50a9cf4c9f94ed3fa2c574168a192887c`. AES pins Enforced Planning
+revision `b47bd9c74e7c2d0f4a9246c18977bc93baaa4dba`, loads the installed Git
+distribution rather than a source-path substitute, validates exact plan,
+configuration, validator, and result digests, and stores an immutable
+`PlanningIntegrityResultV1` receipt at
+`evidence/runs/2026-08-23-planning-integrity-installed.json`. That receipt's
+SHA-256 is
+`02807161a5d72cb1eedc1f710104d3a0fb902506db21db7f85e49daae1d7e4fa`.
+The canonical AES suite passed 62 tests. Source-path substitution and stale
+plan digests fail; an existing evidence output cannot be overwritten; and
+delete/regenerate produced byte-identical generated projection output while
+leaving normative sources unchanged.
+
+The v11 acceptance transition exercised the selected-outcome boundary
+instead of treating the merged AES change as self-authorizing. Exact PI-03
+claim prewrite receipt `oadm-87f1728939f24831932a3fa0f3dee1f2` denied the
+plan path before selection. V11 allocation
+`855ceb2bd0567ede5121b3640fb38fc47243e822d6649909793e307d46b81c47`
+and selection binding
+`87228928f8a688ad7e1fdc9c65a69ce51ae08480ec9becb0dbb789129e3fa753`
+bind the exact claim and immutable Plan 125 baseline. The identical plan path
+then admitted through receipt `oadm-bb247485eef84851a85c7536cf09d6e1`.
+
+The terminal verification then found that v11 still omitted
+`docs/plans/CLAUDE.md`, the canonical plan-queue entrypoint. Recording Plan 125
+complete in the plan, graph, and roadmap alone would therefore recreate the
+same split-brain that completion ownership was intended to prevent. V11 is
+parked without recording acceptance. PI-03 now explicitly owns the queue path,
+and v12 must select one exact claim that updates the plan, graph, roadmap, and
+queue together. No provider or AES product behavior is added by that repair.
+
+The authentic consumer also exposed a bounded provider defect: the parsed
+reassessment stopping rule can overcapture later level-three receipt sections.
+AES preserves that limitation visibly and does not claim clean feedback
+semantics from this run. It is follow-up consumer feedback, not a reason to
+erase the successful exact installed boundary or delay the external rewrite.
+
 ### Failure-mode taxonomy reassessment
 
 **Review charter:** The target is Plan 125 after PI-02B; the stage is the first
@@ -645,9 +685,11 @@ revision-bound human-readable planning state through installed AES.
    selection to the exact PI-02D claim. Then document exact-revision Planning
    Integrity at the canonical worktree/claim entrypoint and installed first-
    success path and pass the focused coupling check.
-8. **PI-03 — AES installed integration.** Consume a pinned Enforced Planning
-   candidate, retain an immutable result, and project the planning fields into
-   AES's existing topic without new authority.
+8. **PI-03 — AES installed integration and terminal acceptance.** A pinned
+   installed Enforced Planning distribution produced an immutable exact result
+   that AES retained and projected through its existing topic without granting
+   generated authority. One v12 terminal transition must update every canonical
+   Plan 125 status entrypoint together before the unit is accepted.
 9. Stop framework expansion. In parallel once a project-local plan is ready,
    the selected anchor repository owns its exploratory lineage/value probe and
    useful product vertical. Observed governance failures return as focused

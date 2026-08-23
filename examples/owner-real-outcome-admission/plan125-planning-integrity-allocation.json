@@ -1,15 +1,15 @@
 {
   "schema_version": "1.0.0",
   "record_type": "outcome_portfolio_allocation_request",
-  "allocation_id": "plan-125-planning-integrity-allocation-v7",
-  "requested_at": "2026-08-23T05:10:52Z",
+  "allocation_id": "plan-125-planning-integrity-allocation-v8",
+  "requested_at": "2026-08-23T05:26:16Z",
   "project_id": "enforced-planning",
   "scenario_id": "planning-integrity-semantic-admission",
-  "outcome_contract_sha256": "e5f5afb49139628b54f409be43039de24147304250e278a530fc835bc3663cf8",
+  "outcome_contract_sha256": "50c0f9f9089b2da508ec8c840d5f13d12bf1d21057a4fe0ceb02473b827eda85",
   "outcome_id": "planning-integrity-semantic-admission",
   "outcome_lineage_id": "planning-integrity-semantic-admission",
   "portfolio_class": "maintenance",
-  "decision_ref": "enforced-planning#125-bootstrap-identity@51f7869a3ddfaa30b461a0e989251eb246f9e2c5",
-  "purpose": "Select the exact staged PI-02F claim before applying the bootstrap-identity authorization repair to source and focused tests.",
-  "stopping_condition": "Park the allocation after PI-02F is accepted and before the corrected documentation-scoped successor allocation is selected."
+  "decision_ref": "enforced-planning#125-successor-custody@acb8d7f6c53c3155f7567e8dd141000b6031b580",
+  "purpose": "Select the exact qualified safe-path-only PI-02E successor claim to prove immutable Plan 125 binding and the merged bootstrap-identity repair through the public deny/select/allow path.",
+  "stopping_condition": "Park the allocation after PI-02E is accepted and before the separate documentation-scoped PI-02D allocation is selected."
 }

@@ -102,7 +102,7 @@ See `ROADMAP.md` for the full phase map and recommended priority order.
 | 122 | First-Consumer Outcome Admission Gate (`122_first_consumer_outcome_admission.md`) | Critical | ✅ Complete — opt-in source consumer accepted | separately reviewed source-repository activation pilot; hooks, installer, and fleet remain excluded |
 | 123 | Source Outcome-Admission Activation (`123_source_outcome_admission_activation.md`) | Critical | ✅ Complete — automatic source bootstrap/lifecycle/pre-write accepted | separately designed normal-project pilot; installer and fleet remain excluded |
 | 124 | Qualitative Coding Outcome-Admission Pilot (`124_qualitative_coding_outcome_admission_pilot.md`) | Critical | 🚧 In Progress — exact Project Graph compatibility accepted; source merge/park precedes QC | one isolated QC-local pilot; installer defaults and fleet remain excluded |
-| 125 | Planning Integrity Loop (`125_planning_integrity_loop.md`) | Critical | 🚧 In Progress — PI-02 candidate under revision after adversarial boundary review | accept revision custody and visible observation, then runtime/doc joins and installed AES dogfood |
+| 125 | Planning Integrity Loop (`125_planning_integrity_loop.md`) | Critical | 🚧 In Progress — PI-02/02B/02C/02F accepted; safe-path-only PI-02E v8 successor proof ready | prove exact successor selection, then separately select PI-02D docs and run installed AES dogfood |
 
 ## Status Key
 

@@ -14,31 +14,29 @@
     "intended_consumer": "Brian and coding agents starting consequential Agentic Engineering work",
     "outcome": "A selected repository rejects a structurally incomplete new plan before coordination mutation, binds continuation to the accepted plan revision, and never grants a planned claim bootstrap authority merely from path shape.",
     "canonical_journey": {
-      "starting_state": "PI-02C is accepted, the exact v5 maintenance allocation remains active on its closed claim, and authentic PI-02E dogfood proved a qualified planned claim can be misclassified as bootstrap when all owned paths match the bootstrap allowlist.",
-      "input": "The exact active v5 allocation, one revision-bound PI-02F claim and selection-pending tracker, the accepted Plan 125 graph, and a v7 contract limited to the bootstrap-identity source, focused tests, and transition artifacts.",
-      "action": "Prove the pending claim cannot write source, park v5, allocate and select v7 on that exact claim through runtime plan binding, then require exact UNPLANNED identity before path-scoped bootstrap admission.",
-      "observable_result": "The explicit unplanned bootstrap remains admitted; the qualified planned safe-path claim routes to selected admission; claim, tracker, worktree, graph, allocation, and selection agree before the source repair is applied.",
-      "failure_signal": "A qualified plan receives bootstrap authority from path shape; the source patch lands before v7 selection; v5 remains active while v7 allocates; allocation or selection binds another claim; or mixed and foreign bootstrap paths are admitted."
+      "starting_state": "PI-02F is accepted on main, the exact v7 maintenance allocation remains active on its closed claim, and PI-02E is ready for the first authentic safe-path-only successor selection through the merged runtime controls.",
+      "input": "The exact active v7 allocation, one qualified revision-bound PI-02E claim and selection-pending tracker, the accepted Plan 125 graph, and a v8 contract limited to the three Plan 125 transition artifacts.",
+      "action": "Prove the qualified safe-path-only claim cannot write before selection, park v7, allocate and select v8 on that exact claim through immutable Plan 125 validation, then replay the same prewrite target.",
+      "observable_result": "The planned claim returns outcome_selection_required before v8 selection and outcome_admission_active afterward; claim, tracker, worktree, graph, allocation, selection, and baseline revision agree.",
+      "failure_signal": "The qualified claim receives bootstrap authority from path shape; preselection write succeeds; v7 remains active while v8 allocates; baseline validation is bypassed; allocation or selection binds another claim; or post-selection admission fails."
     },
-    "baseline_revision": "51f7869a3ddfaa30b461a0e989251eb246f9e2c5",
+    "baseline_revision": "acb8d7f6c53c3155f7567e8dd141000b6031b580",
     "allowed_scope": [
       "examples/owner-real-outcome-admission/plan125-planning-integrity-scenario.json",
       "examples/owner-real-outcome-admission/plan125-planning-integrity-allocation.json",
-      "examples/owner-real-outcome-admission/plan125-planning-integrity-disposition.json",
-      "enforced_planning/outcome_admission.py",
-      "tests/test_outcome_admission.py"
+      "examples/owner-real-outcome-admission/plan125-planning-integrity-disposition.json"
     ],
     "progress_dimensions": [
-      "bootstrap claim identity",
-      "selected-outcome continuity",
-      "planned-claim negative control"
+      "safe-path planned-claim admission",
+      "immutable baseline selection",
+      "successor custody continuity"
     ]
   },
   "receipts": [],
   "request": {
     "schema_version": "1.0.0",
     "operation": "product_write",
-    "target_path": "enforced_planning/outcome_admission.py",
+    "target_path": "examples/owner-real-outcome-admission/plan125-planning-integrity-scenario.json",
     "ordinary_approval": true,
     "approval_text": "I approve",
     "cost_telemetry_usd": "0",

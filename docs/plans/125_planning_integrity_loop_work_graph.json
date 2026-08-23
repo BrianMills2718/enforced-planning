@@ -592,14 +592,14 @@
       "id": "pi-02f-restrict-bootstrap-identity",
       "initiative_id": "agentic-engineering",
       "goal_id": "planning-integrity-loop",
-      "design_revision": "plan-125-course-correction-8@2026-08-23",
-      "spec_revision": "plan-125-bootstrap-identity-v2",
+      "design_revision": "plan-125-course-correction-9@2026-08-23",
+      "spec_revision": "plan-125-bootstrap-identity-v3",
       "title": "Require explicit unplanned identity for bootstrap prewrite",
       "class": "implementation",
       "objective": "Prevent a qualified planned claim whose complete write set happens to match Plan-numbered bootstrap paths from bypassing selected-outcome admission, while preserving the sanctioned explicit unplanned bootstrap.",
       "profile": "small",
       "execution_class": "independently_executable",
-      "claimability": "ready_for_execution",
+      "claimability": "not_applicable",
       "scope": {
         "included": [
           "Restricted v7 source-selection input bootstrap",
@@ -639,7 +639,8 @@
         "Active v7 selection bound to the exact revision-bound PI-02F claim",
         "Bootstrap admission gated by exact UNPLANNED claim identity",
         "Qualified planned safe-path claim routed to selected admission",
-        "Focused public-entrypoint both-sign evidence"
+        "Focused public-entrypoint both-sign evidence",
+        "Merged provider commit acb8d7f6c53c3155f7567e8dd141000b6031b580"
       ],
       "dependencies": [
         {
@@ -732,17 +733,17 @@
         "failed_guards": []
       },
       "claim_policy": {
-        "eligibility_rule": "PI-02C is accepted, both authentic denial receipts are retained, v5 remains the exact active allocation, and no claim owns the v7 transition inputs or repair source; begin with the sanctioned restricted bootstrap before the normal source claim.",
+        "eligibility_rule": "Accepted through exact v7 allocation and selection, public deny/allow receipts, and merged provider commit acb8d7f6c53c3155f7567e8dd141000b6031b580; no further claim is eligible under this work unit.",
         "lease_policy": "renewable",
         "lease_duration_minutes": 240,
         "max_active_per_claimant": 1
       },
       "authorization_mode": "registry_claim",
       "integration_owner_id": "pi-02e-renew-work-unit-custody",
-      "status": "ready",
-      "record_version": 2,
+      "status": "accepted",
+      "record_version": 3,
       "created_at": "2026-08-23T05:04:00Z",
-      "updated_at": "2026-08-23T05:10:52Z"
+      "updated_at": "2026-08-23T05:26:16Z"
     },
     {
       "schema_version": "1.0",
@@ -750,27 +751,29 @@
       "id": "pi-02e-renew-work-unit-custody",
       "initiative_id": "agentic-engineering",
       "goal_id": "planning-integrity-loop",
-      "design_revision": "plan-125-course-correction-7@2026-08-23",
-      "spec_revision": "plan-125-successor-outcome-custody-v4",
+      "design_revision": "plan-125-course-correction-9@2026-08-23",
+      "spec_revision": "plan-125-successor-outcome-custody-v5",
       "title": "Renew selected-outcome custody for post-provider work units",
       "class": "integration",
-      "objective": "Use a restricted v6 input-bootstrap phase, the accepted runtime plan-binding control, and the existing disposition, allocation, and selection owners to move Plan 125 from the closed PI-02C claim to one exact successor claim that can execute PI-02D without bypassing configured source admission.",
+      "objective": "Use a restricted v8 input-bootstrap phase and a qualified safe-path-only successor claim to prove the accepted bootstrap-identity repair and immutable runtime plan binding through the public deny/select/allow path without implying cross-claim transfer.",
       "profile": "small",
       "execution_class": "independently_executable",
-      "claimability": "blocked_dependencies",
+      "claimability": "ready_for_execution",
       "scope": {
         "included": [
-          "Restricted v6 transition-input bootstrap before the normal successor claim",
-          "Plan 125 documentation-scoped v6 outcome scenario revision",
-          "Exact disposition of the active claim-bound v5 allocation",
-          "Exact v6 maintenance allocation and selection on the successor claim",
+          "Restricted v8 transition-input bootstrap before the normal successor claim",
+          "Plan 125 safe-path-only v8 outcome scenario revision",
+          "Exact disposition of the active claim-bound v7 allocation",
+          "Exact v8 maintenance allocation and selection on the successor claim",
           "Revision-bound claim upgrade through the canonical graph and tracker",
-          "Durable transition evidence for PI-02D readiness"
+          "Public preselection deny and post-selection allow on the identical target",
+          "Durable evidence that PI-02D needs separate custody"
         ],
         "excluded": [
           "Outcome-admission code changes",
           "Automatic allocation or cross-claim transfer machinery",
           "Operator documentation content",
+          "Documentation-scoped claim authority",
           "AES mutation"
         ]
       },
@@ -782,16 +785,22 @@
         },
         {
           "kind": "work_unit_output",
-          "id": "pi-02c-active-v5-selection",
-          "revision": "pi-02c-bind-runtime-plan@accepted"
+          "id": "pi-02f-active-v7-selection",
+          "revision": "sha256:a24ee2a28aa6553c07f5ad9df8c511eb33a960d1a9eeec1d6e5813a727ba916a"
+        },
+        {
+          "kind": "provider_commit",
+          "id": "pi-02f-restrict-bootstrap-identity",
+          "revision": "acb8d7f6c53c3155f7567e8dd141000b6031b580"
         }
       ],
       "outputs": [
-        "Committed v6 scenario, allocation, and exact v5 disposition inputs",
-        "Parked v5 allocation bound to the closed PI-02C claim",
-        "Active v6 allocation and selection bound to the exact successor claim",
+        "Committed v8 scenario, allocation, and exact v7 disposition inputs",
+        "Parked v7 allocation bound to the closed PI-02F claim",
+        "Active v8 allocation and selection bound to the exact successor claim",
         "Healthy revision-bound PI-02E claim and tracker",
-        "Machine-checkable readiness evidence for PI-02D"
+        "Authentic safe-path-only preselection denial and post-selection allow",
+        "Machine-checkable evidence that PI-02D requires its own selection"
       ],
       "dependencies": [
         {
@@ -863,46 +872,44 @@
       "acceptance": [
         {
           "id": "PI02E-A1",
-          "criterion": "A restricted bootstrap first commits exact v6 transition inputs; then the exact active v5 allocation is parked and one v6 allocation is selected on the same live successor claim that retains the canonical Plan 125 work-unit revision and passes the accepted runtime plan-binding control.",
+          "criterion": "A restricted bootstrap first commits exact v8 transition inputs; then the exact active v7 allocation is parked and one v8 allocation is selected on the same qualified safe-path-only successor claim that retains the canonical Plan 125 work-unit revision and passes the accepted runtime plan-binding control.",
           "evidence_required": [
-            "Committed v6 transition-input digests",
-            "Disposition receipt with the exact v5 allocation digest",
+            "Committed v8 transition-input digests",
+            "Disposition receipt with the exact v7 allocation digest",
             "Allocation and selection receipts naming the successor claim",
             "Claim, tracker, worktree HEAD, and graph revision equality",
             "Post-selection heartbeat and in-scope prewrite allow"
           ],
-          "negative_control": "The cleaned failed PI-02D claim, a selection-pending activation, or an unplanned documentation claim cannot supply selected authority; an out-of-scope prewrite remains denied."
+          "negative_control": "The qualified claim's identical safe-path target returns outcome_selection_required before v8 selection and cannot inherit bootstrap authority from path shape."
         },
         {
           "id": "PI02E-A2",
-          "criterion": "The v6 outcome contract permits only the Plan 125 transition artifacts and the two PI-02D documentation surfaces needed by the successor lane.",
+          "criterion": "The v8 outcome contract permits only the three Plan 125 transition artifacts and does not claim or imply PI-02D documentation authority.",
           "evidence_required": [
             "Exact scenario and contract digests",
             "Out-of-scope target denial"
           ],
-          "negative_control": "Provider source, tests, AES, and unrelated plan paths remain outside the successor contract."
+          "negative_control": "Provider source, tests, documentation, AES, and unrelated plan paths remain outside the successor contract."
         }
       ],
       "readiness": {
-        "status": "blocked",
+        "status": "ready",
         "required_approval_types": [],
         "approvals": [],
-        "failed_guards": [
-          "pi-02f-restrict-bootstrap-identity is not accepted"
-        ]
+        "failed_guards": []
       },
       "claim_policy": {
-        "eligibility_rule": "PI-02C and PI-02F are accepted, the v5 allocation remains the exact active maintenance allocation bound to its closed claim, and no claim owns the v6 transition-input or documentation surfaces; begin with the sanctioned restricted v6 bootstrap before opening the normal exact successor claim.",
+        "eligibility_rule": "PI-02C and PI-02F are accepted, the v7 allocation remains the exact active maintenance allocation bound to its closed claim, and no claim owns the v8 transition inputs; begin with the sanctioned restricted v8 bootstrap before opening the normal safe-path-only successor claim.",
         "lease_policy": "renewable",
         "lease_duration_minutes": 240,
         "max_active_per_claimant": 1
       },
       "authorization_mode": "registry_claim",
       "integration_owner_id": "pi-02d-sync-operator-guide",
-      "status": "blocked",
-      "record_version": 7,
+      "status": "ready",
+      "record_version": 8,
       "created_at": "2026-08-23T01:16:19Z",
-      "updated_at": "2026-08-23T05:04:00Z"
+      "updated_at": "2026-08-23T05:26:16Z"
     },
     {
       "schema_version": "1.0",
@@ -910,22 +917,26 @@
       "id": "pi-02d-sync-operator-guide",
       "initiative_id": "agentic-engineering",
       "goal_id": "planning-integrity-loop",
-      "design_revision": "plan-125-course-correction-1@2026-08-22",
-      "spec_revision": "plan-125-operator-doc-sync-v1",
+      "design_revision": "plan-125-course-correction-9@2026-08-23",
+      "spec_revision": "plan-125-operator-doc-sync-v2",
       "title": "Sync the canonical operator entrypoint after provider acceptance",
       "class": "documentation",
-      "objective": "Document exact-revision Planning Integrity at the real worktree/direct-claim entrypoint and installed first-success path, then satisfy the focused coupling check before AES consumes the provider.",
+      "objective": "Use a separate documentation-scoped allocation and selection on the exact PI-02D claim, then document exact-revision Planning Integrity at the real worktree/direct-claim entrypoint and installed first-success path before AES consumes the provider.",
       "profile": "small",
       "execution_class": "independently_executable",
       "claimability": "blocked_dependencies",
       "scope": {
         "included": [
+          "Restricted PI-02D transition-input bootstrap",
+          "Exact disposition of the closed PI-02E allocation",
+          "Documentation-scoped allocation and selection on the PI-02D claim",
           "docs/guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md",
           "GETTING_STARTED.md",
           "Focused documentation-coupling validation"
         ],
         "excluded": [
           "Provider source changes",
+          "Cross-claim outcome-selection transfer",
           "AES mutation",
           "Fleet documentation reconciliation"
         ]
@@ -943,6 +954,7 @@
         }
       ],
       "outputs": [
+        "Active documentation-scoped selection bound to the exact PI-02D claim",
         "Accurate worktree, direct-claim, and installed first-success Planning Integrity guidance",
         "Passing focused documentation-coupling check"
       ],
@@ -963,10 +975,37 @@
             "type": "unit_status",
             "required_status": "accepted"
           },
-          "rationale": "The separately scoped documentation lane cannot start under source selected-outcome enforcement until its exact successor claim owns an active selected allocation."
+          "rationale": "PI-02E must first prove the merged successor controls; its closed selection is evidence for PI-02D, not transferable authority."
         }
       ],
       "conflict_surfaces": [
+        {
+          "kind": "repository_path",
+          "target": "examples/owner-real-outcome-admission/plan125-planning-integrity-scenario.json",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "planning-integrity-operator-doc-custody"
+        },
+        {
+          "kind": "repository_path",
+          "target": "examples/owner-real-outcome-admission/plan125-planning-integrity-allocation.json",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "planning-integrity-operator-doc-custody"
+        },
+        {
+          "kind": "repository_path",
+          "target": "examples/owner-real-outcome-admission/plan125-planning-integrity-disposition.json",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "planning-integrity-operator-doc-custody"
+        },
+        {
+          "kind": "data",
+          "target": "outcome-portfolio-allocations-v1",
+          "access": "exclusive",
+          "coordination_key": "planning-integrity-operator-doc-custody"
+        },
         {
           "kind": "repository_path",
           "target": "docs/guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md",
@@ -985,7 +1024,7 @@
       "acceptance": [
         {
           "id": "PI02D-A1",
-          "criterion": "The canonical guide and installed first-success path say that configured plan integrity reads exact plan/config bytes from the selected Git start revision before graph query or coordination mutation.",
+          "criterion": "After an exact documentation-scoped selection is bound to PI-02D, the canonical guide and installed first-success path say that configured plan integrity reads exact plan/config bytes from the selected Git start revision before graph query or coordination mutation.",
           "evidence_required": [
             "Operator-guide and GETTING_STARTED diffs",
             "Focused doc-coupling pass"
@@ -1002,7 +1041,7 @@
         ]
       },
       "claim_policy": {
-        "eligibility_rule": "PI-02 and PI-02E are accepted, the exact successor claim retains active selected-outcome custody, and no other claim owns either documentation surface.",
+        "eligibility_rule": "PI-02 and PI-02E are accepted, the closed PI-02E allocation remains exact for disposition, and no claim owns the transition inputs or either documentation surface; begin with a restricted input bootstrap before opening the exact PI-02D claim.",
         "lease_policy": "renewable",
         "lease_duration_minutes": 240,
         "max_active_per_claimant": 1
@@ -1010,9 +1049,9 @@
       "authorization_mode": "registry_claim",
       "integration_owner_id": "pi-03-aes-installed-dogfood",
       "status": "blocked",
-      "record_version": 3,
+      "record_version": 4,
       "created_at": "2026-08-22T23:23:45Z",
-      "updated_at": "2026-08-23T01:16:19Z"
+      "updated_at": "2026-08-23T05:26:16Z"
     },
     {
       "schema_version": "1.0",

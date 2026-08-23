@@ -136,7 +136,28 @@ def test_generate_hook_wiring_writes_files_and_merges_settings(tmp_path: Path) -
     )
     assert [hook["command"] for hook in mailbox_posttool["hooks"]] == [
         "bash .claude/hooks/notify-coordination-messages.sh",
+        "bash .claude/hooks/reconcile-canonical-locks.sh",
     ]
+
+    # The canonical-checkout lock rides the same lifecycle events as the
+    # mailbox hook so it fires without anyone opting in. Session start is the
+    # stale-lock repair; the tool events print the escape hatch when a lock
+    # blocks a write.
+    canonical_lock_events = {
+        event: [
+            hook["command"]
+            for block in blocks
+            for hook in block["hooks"]
+            if hook["command"] == "bash .claude/hooks/reconcile-canonical-locks.sh"
+        ]
+        for event, blocks in settings["hooks"].items()
+    }
+    assert canonical_lock_events["SessionStart"]
+    assert canonical_lock_events["PreToolUse"]
+    assert canonical_lock_events["PostToolUse"]
+    assert not canonical_lock_events.get("Stop")
+    assert (tmp_path / ".claude" / "hooks" / "reconcile-canonical-locks.sh").exists()
+    assert (tmp_path / "scripts" / "meta" / "canonical_lock.py").exists()
 
     assert (tmp_path / ".claude" / "hooks" / "gate-edit.sh").exists()
     assert (tmp_path / ".claude" / "hooks" / "track-reads.sh").exists()

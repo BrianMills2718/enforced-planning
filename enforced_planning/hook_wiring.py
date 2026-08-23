@@ -60,6 +60,20 @@ MAILBOX_HOOK_FILES: dict[str, str] = {
     ".codex/hooks/notify-coordination-messages.sh": "hooks/codex/notify-coordination-messages.sh",
 }
 
+# Canonical-checkout lock. The hook itself only explains a denial and repairs a
+# stale lock at session start; the enforcement is the checkout's permission
+# bits, so a repo that has not installed this is still protected by any other
+# repo's session start -- reconcile is estate-wide, not repo-local.
+CANONICAL_LOCK_HOOK_FILES: dict[str, str] = {
+    ".claude/hooks/reconcile-canonical-locks.sh": (
+        "hooks/claude/worktree-coordination/reconcile-canonical-locks.sh"
+    ),
+}
+
+CANONICAL_LOCK_SUPPORT_FILES: dict[str, str] = {
+    "scripts/meta/canonical_lock.py": "scripts/worktree-coordination/canonical_lock.py",
+}
+
 # Support Python scripts sourced from this canonical framework.
 SUPPORT_FILES: dict[str, str] = {
     "scripts/check_required_reading.py": "scripts/check_required_reading.py",
@@ -107,6 +121,17 @@ MAILBOX_HOOK = {
     "type": "command",
     "command": "bash .claude/hooks/notify-coordination-messages.sh",
     "timeout": 3000,
+}
+
+# Session start is the stale-lock repair; the tool events supply the escape
+# hatch when a lock blocks something. UserPromptSubmit and Stop carry no path
+# information, so wiring them would only add cost.
+CANONICAL_LOCK_EVENTS = frozenset({"SessionStart", "PreToolUse", "PostToolUse"})
+
+CANONICAL_LOCK_HOOK = {
+    "type": "command",
+    "command": "bash .claude/hooks/reconcile-canonical-locks.sh",
+    "timeout": 10000,
 }
 
 CODEX_MAILBOX_HOOK = {
@@ -569,6 +594,8 @@ def plan_generation(
         source_files.update(ARTIFACT_CREATION_SUPPORT_FILES)
     if include_coordination_messages:
         source_files.update(MAILBOX_HOOK_FILES)
+        source_files.update(CANONICAL_LOCK_HOOK_FILES)
+        source_files.update(CANONICAL_LOCK_SUPPORT_FILES)
         source_files.update(MAILBOX_SUPPORT_FILES)
     source_files = drop_vendored_package_files(source_files, target.root)
     for target_relpath, source_relpath in source_files.items():
@@ -614,6 +641,10 @@ def plan_generation(
                 matcher=matcher,
             )
             if _ensure_hook_command(mailbox_hooks, MAILBOX_HOOK):
+                changed = True
+            if event_name in CANONICAL_LOCK_EVENTS and _ensure_hook_command(
+                mailbox_hooks, CANONICAL_LOCK_HOOK
+            ):
                 changed = True
     if _ensure_hook_command(
         edit_hooks,
@@ -665,7 +696,11 @@ def plan_coordination_message_generation(
 
     actions: list[str] = []
     file_writes: dict[Path, str] = {}
-    for target_relpath, source_relpath in MAILBOX_HOOK_FILES.items():
+    for target_relpath, source_relpath in {
+        **MAILBOX_HOOK_FILES,
+        **CANONICAL_LOCK_HOOK_FILES,
+        **CANONICAL_LOCK_SUPPORT_FILES,
+    }.items():
         source_path = FRAMEWORK_ROOT / source_relpath
         target_path = target.root / target_relpath
         content = source_path.read_text(encoding="utf-8")
@@ -685,6 +720,8 @@ def plan_coordination_message_generation(
     ):
         hooks = _ensure_matcher_block(settings, event_name=event_name, matcher=matcher)
         if _ensure_hook_command(hooks, MAILBOX_HOOK):
+            changed = True
+        if event_name in CANONICAL_LOCK_EVENTS and _ensure_hook_command(hooks, CANONICAL_LOCK_HOOK):
             changed = True
     rendered_settings = _render_settings(settings)
     current_settings = (

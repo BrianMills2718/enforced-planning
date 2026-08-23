@@ -985,6 +985,95 @@ Current bounded scope:
 - `resolution_mode: generated` means the surface should be regenerated instead
   of carrying durable manual debt
 
+## Canonical Checkout Lock
+
+While any lane claim is live against a repository, that repository's canonical
+checkout is made physically read-only. This is not advice and not a hook: the
+tracked files and the directories containing them lose their write bits, so
+every writer is blocked identically -- `Edit`/`Write`, `sed -i`, a heredoc, a
+Python script, `cp`, `mv`, `git checkout`, or a compiled binary.
+
+The reason it is permission bits rather than a gate is coverage. Every
+write-governing Claude Code hook in this estate is wired to `Edit|Write` and
+none to `Bash`, while agents under bypass-permissions mode are told to edit with
+`sed` and heredocs. Those never reach a gate. Permission bits are not a route
+that can be missed.
+
+Locking the files alone would not have worked, and this was measured rather than
+assumed: `sed -i`, `mv -f`, and `cp -f` write a new inode and rename over the
+old one, which needs write permission on the **directory**, not the file. A
+file-only lock lets all three through. The directory half is the part that
+actually enforces.
+
+### What still works under a lock
+
+- Everything inside `<repo>/worktrees/<branch>/`. Lane checkouts are untouched,
+  which is what makes this safe to run while other sessions are working.
+- `git worktree add`, `git commit` from a lane, ref and reflog updates, and
+  `git fetch`. `.git/` is never locked.
+- Every read in the canonical checkout, including `git status` and `git log`.
+- Python imports; CPython silently skips `__pycache__` in a read-only directory.
+
+`git checkout`, `git pull`, and `git merge` **in the canonical checkout** fail
+while a lane is live. That is the collision being prevented. The lane-close path
+unlocks first, so `finish_pr.py` can still rebase the canonical checkout after a
+merge.
+
+### What triggers it
+
+Nobody runs a command for any of this.
+
+| Trigger | Effect |
+| --- | --- |
+| `create_worktree.py` succeeds | Locks the canonical checkout of the new lane's repo |
+| `SessionStart` hook | Reconciles every repository: locks those with a live lane, releases locks no live lane justifies |
+| `safe_worktree_remove.py` succeeds | Releases the lock if no other lane is still live |
+| `PreToolUse` / `PostToolUse` hook | Prints the recovery instructions when a lock blocks a write |
+
+Reconcile is estate-wide, not repository-local: a session start in any repo that
+has the hook installed reconciles every repository with a live lane claim.
+
+### When it blocks you
+
+The recovery is printed at the moment of blocking, by the hook, with the exact
+command. Nothing needs to be looked up. If you are reading this instead, the
+command is:
+
+```bash
+python3 scripts/worktree-coordination/canonical_lock.py --reconcile
+```
+
+That releases any lock whose lane claim is gone and leaves the rest alone. To
+inspect rather than change anything, use `--status <repo>`.
+
+### Stale locks
+
+A session that dies without closing leaves its checkout read-only. `--reconcile`
+repairs that, and it runs on session start, so the repair fires on the same
+event as the next attempt to use the repository: whoever the stale lock would
+inconvenience is by definition starting a session, and it is cleared before
+their first tool call.
+
+### It fails closed
+
+If the claim registry is missing, or any claim file in it will not parse,
+reconcile **keeps every existing lock** and exits non-zero with the offending
+file named. An empty read of a registry that cannot be trusted must never be
+mistaken for "no lane is live" -- that is the fail-open defect this estate
+already has elsewhere.
+
+### Proving it
+
+```bash
+python3 scripts/worktree-coordination/canonical_lock.py --self-test            # exits 0
+python3 scripts/worktree-coordination/canonical_lock.py --self-test-unlocked   # exits 5
+```
+
+The second arm runs the identical probe with no lock in place. It must report
+that every write route landed; if it reported anything blocked, the probe is
+measuring nothing and it says so rather than passing. Only the first arm can
+ever report `boundary_verified`.
+
 ## Session Safety
 
 Some agent runtimes keep a persistent shell working directory. In those

@@ -589,17 +589,128 @@
     {
       "schema_version": "1.0",
       "record_type": "work_unit",
+      "id": "pi-02f-restrict-bootstrap-identity",
+      "initiative_id": "agentic-engineering",
+      "goal_id": "planning-integrity-loop",
+      "design_revision": "plan-125-course-correction-7@2026-08-23",
+      "spec_revision": "plan-125-bootstrap-identity-v1",
+      "title": "Require explicit unplanned identity for bootstrap prewrite",
+      "class": "implementation",
+      "objective": "Prevent a qualified planned claim whose complete write set happens to match Plan-numbered bootstrap paths from bypassing selected-outcome admission, while preserving the sanctioned explicit unplanned bootstrap.",
+      "profile": "small",
+      "execution_class": "independently_executable",
+      "claimability": "ready_for_execution",
+      "scope": {
+        "included": [
+          "Bootstrap claim identity classification",
+          "Qualified-plan negative control",
+          "Explicit unplanned-bootstrap compatibility control",
+          "Public prewrite enforcement regression"
+        ],
+        "excluded": [
+          "Claim schema changes",
+          "Bootstrap path-set changes",
+          "Outcome selection changes",
+          "Automatic allocation or transfer machinery",
+          "AES mutation"
+        ]
+      },
+      "inputs": [
+        {
+          "kind": "reproduced_failure",
+          "id": "oadm-de41b5ad5e6d4327ae08354299f86ee2",
+          "revision": "566526ccfd4e805fef1742810b342b5710ea9707"
+        },
+        {
+          "kind": "existing_capability",
+          "id": "evaluate_claim_bootstrap_admission",
+          "revision": "566526ccfd4e805fef1742810b342b5710ea9707"
+        }
+      ],
+      "outputs": [
+        "Bootstrap admission gated by exact UNPLANNED claim identity",
+        "Qualified planned safe-path claim routed to selected admission",
+        "Focused public-entrypoint both-sign evidence"
+      ],
+      "dependencies": [
+        {
+          "unit_id": "pi-02c-bind-runtime-plan",
+          "type": "hard",
+          "gate": {
+            "type": "unit_status",
+            "required_status": "accepted"
+          },
+          "rationale": "The regression was exposed by the first post-PI-02C authentic successor selection attempt."
+        }
+      ],
+      "conflict_surfaces": [
+        {
+          "kind": "repository_path",
+          "target": "enforced_planning/outcome_admission.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "outcome-bootstrap-identity"
+        },
+        {
+          "kind": "repository_path",
+          "target": "tests/test_outcome_admission.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "outcome-bootstrap-identity"
+        }
+      ],
+      "acceptance": [
+        {
+          "id": "PI02F-A1",
+          "criterion": "A claim receives the path-scoped bootstrap exception only when its canonical plan_ref is exactly UNPLANNED; a qualified planned claim with the identical safe path set returns to selected-outcome admission.",
+          "evidence_required": [
+            "Pure classifier both-sign test",
+            "Public prewrite planned-claim denial"
+          ],
+          "negative_control": "Changing only plan_ref from UNPLANNED to enforced-planning#125 changes bootstrap allow to outcome_selection_required without changing ordinary claim authority."
+        },
+        {
+          "id": "PI02F-A2",
+          "criterion": "The sanctioned explicit outcome-bootstrap path remains admitted without a claim schema or bootstrap allowlist change.",
+          "evidence_required": [
+            "Explicit unplanned-bootstrap compatibility test"
+          ],
+          "negative_control": "Mixed, foreign, empty, and unclaimed targets retain their existing denial behavior."
+        }
+      ],
+      "readiness": {
+        "status": "ready",
+        "required_approval_types": [],
+        "approvals": [],
+        "failed_guards": []
+      },
+      "claim_policy": {
+        "eligibility_rule": "PI-02C is accepted, the authentic PI-02E receipt reproduces the bypass, and no claim owns outcome admission classification or its focused tests.",
+        "lease_policy": "renewable",
+        "lease_duration_minutes": 240,
+        "max_active_per_claimant": 1
+      },
+      "authorization_mode": "registry_claim",
+      "integration_owner_id": "pi-02e-renew-work-unit-custody",
+      "status": "ready",
+      "record_version": 1,
+      "created_at": "2026-08-23T05:04:00Z",
+      "updated_at": "2026-08-23T05:04:00Z"
+    },
+    {
+      "schema_version": "1.0",
+      "record_type": "work_unit",
       "id": "pi-02e-renew-work-unit-custody",
       "initiative_id": "agentic-engineering",
       "goal_id": "planning-integrity-loop",
-      "design_revision": "plan-125-course-correction-6@2026-08-23",
-      "spec_revision": "plan-125-successor-outcome-custody-v3",
+      "design_revision": "plan-125-course-correction-7@2026-08-23",
+      "spec_revision": "plan-125-successor-outcome-custody-v4",
       "title": "Renew selected-outcome custody for post-provider work units",
       "class": "integration",
       "objective": "Use a restricted v6 input-bootstrap phase, the accepted runtime plan-binding control, and the existing disposition, allocation, and selection owners to move Plan 125 from the closed PI-02C claim to one exact successor claim that can execute PI-02D without bypassing configured source admission.",
       "profile": "small",
       "execution_class": "independently_executable",
-      "claimability": "ready_for_execution",
+      "claimability": "blocked_dependencies",
       "scope": {
         "included": [
           "Restricted v6 transition-input bootstrap before the normal successor claim",
@@ -662,6 +773,15 @@
             "required_status": "accepted"
           },
           "rationale": "The authentic successor selection must exercise accepted runtime plan-revision binding rather than create selected state immediately before that control is added."
+        },
+        {
+          "unit_id": "pi-02f-restrict-bootstrap-identity",
+          "type": "hard",
+          "gate": {
+            "type": "unit_status",
+            "required_status": "accepted"
+          },
+          "rationale": "A planned successor claim must not acquire the bootstrap exception merely because all of its transition paths are bootstrap-safe."
         }
       ],
       "conflict_surfaces": [
@@ -717,23 +837,25 @@
         }
       ],
       "readiness": {
-        "status": "ready",
+        "status": "blocked",
         "required_approval_types": [],
         "approvals": [],
-        "failed_guards": []
+        "failed_guards": [
+          "pi-02f-restrict-bootstrap-identity is not accepted"
+        ]
       },
       "claim_policy": {
-        "eligibility_rule": "PI-02C is accepted, the v5 allocation remains the exact active maintenance allocation bound to its closed claim, and no claim owns the v6 transition-input or documentation surfaces; begin with the sanctioned restricted v6 bootstrap before opening the normal exact successor claim.",
+        "eligibility_rule": "PI-02C and PI-02F are accepted, the v5 allocation remains the exact active maintenance allocation bound to its closed claim, and no claim owns the v6 transition-input or documentation surfaces; begin with the sanctioned restricted v6 bootstrap before opening the normal exact successor claim.",
         "lease_policy": "renewable",
         "lease_duration_minutes": 240,
         "max_active_per_claimant": 1
       },
       "authorization_mode": "registry_claim",
       "integration_owner_id": "pi-02d-sync-operator-guide",
-      "status": "ready",
-      "record_version": 6,
+      "status": "blocked",
+      "record_version": 7,
       "created_at": "2026-08-23T01:16:19Z",
-      "updated_at": "2026-08-23T04:55:28Z"
+      "updated_at": "2026-08-23T05:04:00Z"
     },
     {
       "schema_version": "1.0",

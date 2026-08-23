@@ -1,11 +1,11 @@
 {
   "schema_version": "1.0.0",
   "record_type": "outcome_portfolio_disposition_request",
-  "disposition_id": "plan-125-planning-integrity-provider-claim-v3-park",
-  "requested_at": "2026-08-23T01:16:19Z",
+  "disposition_id": "plan-125-planning-integrity-provider-claim-v3-park-for-v5",
+  "requested_at": "2026-08-23T04:24:46Z",
   "allocation_id": "plan-125-planning-integrity-allocation-v3",
   "allocation_sha256": "8a66df2e52ddcb31a85c4ac03acb7dfceaf5dec2dc569738f0eaad0346181064",
   "disposition": "parked",
-  "decision_ref": "enforced-planning#125-successor-work-unit-custody",
-  "reason": "Release the active allocation bound to the closed PI-02 provider claim before selecting the separately scoped post-provider successor lane."
+  "decision_ref": "enforced-planning#125-runtime-plan-binding",
+  "reason": "Release the exact active allocation bound to the closed PI-02 provider claim before selecting the separately scoped PI-02C runtime-binding lane."
 }

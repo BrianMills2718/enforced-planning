@@ -1,15 +1,15 @@
 {
   "schema_version": "1.0.0",
   "record_type": "outcome_portfolio_allocation_request",
-  "allocation_id": "plan-125-planning-integrity-allocation-v4",
-  "requested_at": "2026-08-23T01:16:19Z",
+  "allocation_id": "plan-125-planning-integrity-allocation-v5",
+  "requested_at": "2026-08-23T04:24:46Z",
   "project_id": "enforced-planning",
   "scenario_id": "planning-integrity-semantic-admission",
-  "outcome_contract_sha256": "2a1e2fe732425803fa8b9fc7d64f2f3825fbcbefce5ee4fa8aeca4beb50c9bf8",
+  "outcome_contract_sha256": "c14cd045373819d1c51642a4d28c917b3dd3fde48189f3ab458aff2f372f6466",
   "outcome_id": "planning-integrity-semantic-admission",
   "outcome_lineage_id": "planning-integrity-semantic-admission",
   "portfolio_class": "maintenance",
-  "decision_ref": "enforced-planning#125-successor-work-unit-custody@0a6d9e28840ba15c4bb33920404ebe11ed51e7cd",
-  "purpose": "Preserve Planning Integrity across separately scoped post-provider work by selecting one exact successor claim before operator documentation or AES consumption.",
-  "stopping_condition": "Park the allocation after PI-02 is merged with focused both-sign evidence and PI-03 has an accepted exact provider revision."
+  "decision_ref": "enforced-planning#125-runtime-plan-binding@fd57d1f5e8e6a10e1377d8c826142d86adbba794",
+  "purpose": "Select the exact staged PI-02C claim before source mutation so outcome selection can be bound to the qualified plan at the immutable baseline revision.",
+  "stopping_condition": "Park the allocation after PI-02C is accepted and before the documentation-scoped v6 successor allocation is selected."
 }

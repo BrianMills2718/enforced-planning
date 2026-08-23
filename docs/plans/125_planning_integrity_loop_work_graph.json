@@ -596,12 +596,13 @@
       "spec_revision": "plan-125-successor-outcome-custody-v3",
       "title": "Renew selected-outcome custody for post-provider work units",
       "class": "integration",
-      "objective": "Use the accepted runtime plan-binding control plus the existing disposition, allocation, and selection owners to move Plan 125 from the closed PI-02C claim to one exact successor claim that can execute PI-02D without bypassing configured source admission.",
+      "objective": "Use a restricted v6 input-bootstrap phase, the accepted runtime plan-binding control, and the existing disposition, allocation, and selection owners to move Plan 125 from the closed PI-02C claim to one exact successor claim that can execute PI-02D without bypassing configured source admission.",
       "profile": "small",
       "execution_class": "independently_executable",
       "claimability": "blocked_dependencies",
       "scope": {
         "included": [
+          "Restricted v6 transition-input bootstrap before the normal successor claim",
           "Plan 125 documentation-scoped v6 outcome scenario revision",
           "Exact disposition of the active claim-bound v5 allocation",
           "Exact v6 maintenance allocation and selection on the successor claim",
@@ -628,6 +629,7 @@
         }
       ],
       "outputs": [
+        "Committed v6 scenario, allocation, and exact v5 disposition inputs",
         "Parked v5 allocation bound to the closed PI-02C claim",
         "Active v6 allocation and selection bound to the exact successor claim",
         "Healthy revision-bound PI-02E claim and tracker",
@@ -694,8 +696,9 @@
       "acceptance": [
         {
           "id": "PI02E-A1",
-          "criterion": "The exact active v5 allocation is parked and one v6 allocation is selected on the same live successor claim that retains the canonical Plan 125 work-unit revision and passes the accepted runtime plan-binding control.",
+          "criterion": "A restricted bootstrap first commits exact v6 transition inputs; then the exact active v5 allocation is parked and one v6 allocation is selected on the same live successor claim that retains the canonical Plan 125 work-unit revision and passes the accepted runtime plan-binding control.",
           "evidence_required": [
+            "Committed v6 transition-input digests",
             "Disposition receipt with the exact v5 allocation digest",
             "Allocation and selection receipts naming the successor claim",
             "Claim, tracker, worktree HEAD, and graph revision equality",
@@ -722,7 +725,7 @@
         ]
       },
       "claim_policy": {
-        "eligibility_rule": "PI-02C is accepted, a new exact v6 plan reservation can attach a selection-pending tracker, and the v5 allocation is still the exact active maintenance allocation bound to the closed PI-02C claim.",
+        "eligibility_rule": "PI-02C is accepted, the v5 allocation remains the exact active maintenance allocation bound to its closed claim, and no claim owns the v6 transition-input or documentation surfaces; begin with the sanctioned restricted v6 bootstrap before opening the normal exact successor claim.",
         "lease_policy": "renewable",
         "lease_duration_minutes": 240,
         "max_active_per_claimant": 1
@@ -730,7 +733,7 @@
       "authorization_mode": "registry_claim",
       "integration_owner_id": "pi-02d-sync-operator-guide",
       "status": "blocked",
-      "record_version": 4,
+      "record_version": 5,
       "created_at": "2026-08-23T01:16:19Z",
       "updated_at": "2026-08-23T04:16:00Z"
     },

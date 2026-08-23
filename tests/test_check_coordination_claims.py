@@ -451,6 +451,7 @@ def test_heartbeat_and_release_refresh_prewrite_projection(
         "project-meta",
         "projection-refresh",
         "Verify derived projection refresh",
+        plan_ref="UNPLANNED",
         branch="projection-refresh",
         worktree_path=str(tmp_path / "worktree"),
         session_id="codex:projection-refresh",
@@ -498,6 +499,7 @@ def test_heartbeat_holds_registry_lock_through_projection_refresh(
         "project-meta",
         "locked-heartbeat",
         "Verify heartbeat projection locking",
+        plan_ref="UNPLANNED",
         branch="locked-heartbeat",
         worktree_path=str(tmp_path / "worktree"),
         session_id="codex:locked-heartbeat",
@@ -713,6 +715,7 @@ def test_create_claim_auto_resolves_codex_session_id(
         "project-meta",
         "coordination-v2",
         "Patch claims tool",
+        plan_ref="UNPLANNED",
         claim_type="write",
         write_paths=["scripts/check_coordination_claims.py"],
         branch="plan-62-coordination-v2",
@@ -1673,6 +1676,50 @@ def test_plan_bound_claim_without_session_contract_is_weak(tmp_path: Path) -> No
     ]
 
 
+def test_live_claim_without_plan_ref_is_weak_blocking_and_rejected_for_creation(tmp_path: Path) -> None:
+    """Every live session must name plan, goal, or explicit maintenance authority."""
+
+    module = _load_module()
+    worktree = tmp_path / "demo" / "worktrees" / "bounded-lane"
+    worktree.mkdir(parents=True)
+    common = {
+        "agent": "claude-code",
+        "project": "demo",
+        "scope": "bounded-lane",
+        "intent": "Exercise one bounded lane",
+        "claim_type": "program",
+        "branch": "bounded-lane",
+        "worktree_path": str(worktree),
+        "repo_root": str(tmp_path / "demo"),
+        "session_name": "demo-bounded-outcome",
+        "broader_goal": "Deliver the demo bounded outcome",
+        "tracker_path": str(tmp_path / "tracker.yaml"),
+        "session_id": "claude-code:demo-session",
+        "status": "active",
+    }
+    missing = module.build_candidate_claim(**common)
+
+    assert module.claim_health_issues(missing) == ["missing_plan_ref"]
+    assert module.claim_health_status(missing) == "weak"
+    assert module.claim_enforcement_issues(missing) == [
+        {
+            "code": "live_claim_missing_plan_ref",
+            "severity": "high",
+            "message": (
+                "Live claim demo:bounded-lane has no plan_ref. Resume or recreate the lane "
+                "through a sanctioned plan-, goal-, or UNPLANNED-bound entrypoint, or close "
+                "it with an explicit disposition."
+            ),
+        }
+    ]
+    with pytest.raises(ValueError, match="explicit UNPLANNED"):
+        module._impl.validate_claim_for_creation(missing)
+
+    maintenance = module.build_candidate_claim(plan_ref="UNPLANNED", **common)
+    assert module.claim_health_issues(maintenance) == []
+    assert module.claim_enforcement_issues(maintenance) == []
+
+
 def test_parallel_plan_claims_require_one_root_and_parented_children() -> None:
     """Parallel Plan 0141 lanes should reuse one program root and parent scope."""
 
@@ -1913,6 +1960,7 @@ def test_runtime_session_counts_every_live_unparented_claim_as_root(
         "branch": "root-policy-edit",
         "session_id": "codex:week-long-session",
         "session_name": "workspace-maintenance",
+        "plan_ref": "UNPLANNED",
         "status": existing_status,
     }
     ok, _message = module.create_claim(**existing_kwargs)
@@ -1930,6 +1978,7 @@ def test_runtime_session_counts_every_live_unparented_claim_as_root(
             branch="dagim-meeting-reconcile",
             session_id="codex:week-long-session",
             session_name="workspace-maintenance",
+            plan_ref="UNPLANNED",
         )
 
     ok, _message = module.create_claim(
@@ -1943,6 +1992,7 @@ def test_runtime_session_counts_every_live_unparented_claim_as_root(
         branch="different-runtime-root",
         session_id="codex:different-session",
         session_name="independent-runtime",
+        plan_ref="UNPLANNED",
     )
     assert ok is True
 
@@ -1968,6 +2018,7 @@ def test_runtime_session_can_refresh_same_non_program_root(
         "branch": "root-policy-edit",
         "session_id": "codex:week-long-session",
         "session_name": "workspace-maintenance",
+        "plan_ref": "UNPLANNED",
     }
     ok, _message = module.create_claim(**kwargs)
     assert ok is True
@@ -1996,6 +2047,7 @@ def test_cross_session_refresh_cannot_replace_live_claim_slot(
         "worktree_path": str(tmp_path / "worktrees" / "plan116-first"),
         "branch": "plan116-first",
         "session_name": "owner-first",
+        "plan_ref": "UNPLANNED",
     }
     ok, _message = module.create_claim(session_id="codex:first-runtime", **common)
     assert ok is True
@@ -2037,6 +2089,7 @@ def test_require_new_preserves_occupied_same_session_claim_slot(
         "branch": "owned-slot",
         "session_id": "codex:same-session",
         "session_name": "owned-slot",
+        "plan_ref": "UNPLANNED",
     }
     ok, _message = module.create_claim(**kwargs)
     assert ok
@@ -2243,6 +2296,7 @@ def test_claim_lifecycle_issues_preserve_dirty_work_after_branch_lands(
         scope="landed-but-dirty",
         intent="Preserve pending work",
         claim_type="write",
+        plan_ref="UNPLANNED",
         write_paths=["feature.txt"],
         branch="plan-92-still-dirty",
         worktree_path=str(worktree_path),
@@ -2297,6 +2351,7 @@ def test_claim_lifecycle_issues_fail_closed_when_worktree_status_is_unavailable(
         scope="landed-status-unavailable",
         intent="Fail closed",
         claim_type="write",
+        plan_ref="UNPLANNED",
         write_paths=["feature.txt"],
         branch="plan-92-status-failure",
         worktree_path=str(repo_root),
@@ -2347,6 +2402,7 @@ def test_claim_lifecycle_issues_treat_ignored_only_worktree_as_clean(tmp_path: P
         scope="landed-with-ignored-artifact",
         intent="Close landed work",
         claim_type="write",
+        plan_ref="UNPLANNED",
         write_paths=["feature.txt"],
         branch="plan-92-ignored",
         worktree_path=str(worktree_path),
@@ -2461,6 +2517,7 @@ def test_check_json_fails_high_when_active_claim_branch_is_merged(
             "scope": "landed",
             "intent": "merged work",
             "claim_type": "write",
+            "plan_ref": "UNPLANNED",
             "write_paths": ["feature.txt"],
             "branch": "plan-107-landed",
             "worktree_path": str(repo_root),
@@ -3300,6 +3357,7 @@ def test_check_json_outputs_claims_and_candidate_conflict_classification(
             "scope": "coordination-v2",
             "intent": "Patch claims tool",
             "claim_type": "write",
+            "plan_ref": "UNPLANNED",
             "write_paths": ["scripts"],
             "status": "active",
         },
@@ -3319,6 +3377,8 @@ def test_check_json_outputs_claims_and_candidate_conflict_classification(
             "Generate active-work registry",
             "--claim-type",
             "write",
+            "--plan",
+            "UNPLANNED",
             "--write-path",
             "scripts/generate_active_work_registry.py",
         ]
@@ -3361,6 +3421,7 @@ def test_check_json_outputs_stale_session_liveness_issue(
             "scope": "stale-session",
             "intent": "Test stale session",
             "claim_type": "write",
+            "plan_ref": "UNPLANNED",
             "write_paths": ["README.md"],
             "branch": "plan-95-stale-session",
             "worktree_path": str(tmp_path / "project-meta_worktrees" / "plan-95-stale-session"),
@@ -3898,6 +3959,7 @@ def test_progress_classifier_has_frozen_boundaries_and_stale_precedence(
         scope="progress-lane",
         intent="Classify progress",
         claim_type="program",
+        plan_ref="UNPLANNED",
         worktree_path=str(repo_root),
         repo_root=str(repo_root),
         branch="main",
@@ -3984,11 +4046,14 @@ def test_heartbeat_file_dirt_and_stalled_prune_preserve_progress_and_ownership(
         "scope": "stalled-lane",
         "intent": "Preserve stalled work",
         "claim_type": "program",
+        "plan_ref": "UNPLANNED",
         "write_paths": ["src/progress.py"],
         "worktree_path": str(repo_root),
         "repo_root": str(repo_root),
         "branch": "main",
         "session_name": "stalled-lane",
+        "broader_goal": "Preserve stalled lane custody",
+        "tracker_path": str(tmp_path / "tracker.yaml"),
         "session_id": "codex:owner",
         "heartbeat_at": datetime.now(timezone.utc).isoformat(),
         "status": "active",

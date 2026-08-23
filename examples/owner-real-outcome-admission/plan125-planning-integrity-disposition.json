@@ -1,11 +1,11 @@
 {
   "schema_version": "1.0.0",
   "record_type": "outcome_portfolio_disposition_request",
-  "disposition_id": "plan-125-planning-integrity-bootstrap-identity-v7-park-for-v8",
-  "requested_at": "2026-08-23T05:26:16Z",
-  "allocation_id": "plan-125-planning-integrity-allocation-v7",
-  "allocation_sha256": "a24ee2a28aa6553c07f5ad9df8c511eb33a960d1a9eeec1d6e5813a727ba916a",
+  "disposition_id": "plan-125-planning-integrity-successor-v8-park-for-v9",
+  "requested_at": "2026-08-23T05:36:23Z",
+  "allocation_id": "plan-125-planning-integrity-allocation-v8",
+  "allocation_sha256": "87f6af9082c6bbad994789bb0811188a4df28c44a90c2eaa059999ca6e40963f",
   "disposition": "parked",
-  "decision_ref": "enforced-planning#125-successor-custody",
-  "reason": "Release the exact active allocation bound to the closed PI-02F bootstrap-identity claim before selecting the qualified safe-path-only PI-02E successor lane."
+  "decision_ref": "enforced-planning#125-operator-doc-custody",
+  "reason": "Release the exact active allocation bound to the closed PI-02E successor-proof claim before selecting the separately authorized PI-02D documentation lane."
 }

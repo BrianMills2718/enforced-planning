@@ -1,15 +1,15 @@
 {
   "schema_version": "1.0.0",
   "record_type": "outcome_portfolio_allocation_request",
-  "allocation_id": "plan-125-planning-integrity-allocation-v8",
-  "requested_at": "2026-08-23T05:26:16Z",
+  "allocation_id": "plan-125-planning-integrity-allocation-v9",
+  "requested_at": "2026-08-23T05:36:23Z",
   "project_id": "enforced-planning",
   "scenario_id": "planning-integrity-semantic-admission",
-  "outcome_contract_sha256": "50c0f9f9089b2da508ec8c840d5f13d12bf1d21057a4fe0ceb02473b827eda85",
+  "outcome_contract_sha256": "c2b435a260af90ea5e61d839ffb8c6a242066bb5f8c12e5d89f84e197ad5a3f1",
   "outcome_id": "planning-integrity-semantic-admission",
   "outcome_lineage_id": "planning-integrity-semantic-admission",
   "portfolio_class": "maintenance",
-  "decision_ref": "enforced-planning#125-successor-custody@acb8d7f6c53c3155f7567e8dd141000b6031b580",
-  "purpose": "Select the exact qualified safe-path-only PI-02E successor claim to prove immutable Plan 125 binding and the merged bootstrap-identity repair through the public deny/select/allow path.",
-  "stopping_condition": "Park the allocation after PI-02E is accepted and before the separate documentation-scoped PI-02D allocation is selected."
+  "decision_ref": "enforced-planning#125-operator-doc-custody@f31dada73b1f4eb8122961f0cca2dd1cffca72e3",
+  "purpose": "Select the exact qualified documentation-scoped PI-02D claim before either coupled documentation surface is mutated.",
+  "stopping_condition": "Park the allocation after PI-02D is accepted and before installed AES planning-integrity dogfood is selected."
 }

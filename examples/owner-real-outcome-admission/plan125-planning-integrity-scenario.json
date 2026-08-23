@@ -14,29 +14,31 @@
     "intended_consumer": "Brian and coding agents starting consequential Agentic Engineering work",
     "outcome": "A selected repository rejects a structurally incomplete new plan before coordination mutation, binds continuation to the accepted plan revision, and never grants a planned claim bootstrap authority merely from path shape.",
     "canonical_journey": {
-      "starting_state": "PI-02F is accepted on main, the exact v7 maintenance allocation remains active on its closed claim, and PI-02E is ready for the first authentic safe-path-only successor selection through the merged runtime controls.",
-      "input": "The exact active v7 allocation, one qualified revision-bound PI-02E claim and selection-pending tracker, the accepted Plan 125 graph, and a v8 contract limited to the three Plan 125 transition artifacts.",
-      "action": "Prove the qualified safe-path-only claim cannot write before selection, park v7, allocate and select v8 on that exact claim through immutable Plan 125 validation, then replay the same prewrite target.",
-      "observable_result": "The planned claim returns outcome_selection_required before v8 selection and outcome_admission_active afterward; claim, tracker, worktree, graph, allocation, selection, and baseline revision agree.",
-      "failure_signal": "The qualified claim receives bootstrap authority from path shape; preselection write succeeds; v7 remains active while v8 allocates; baseline validation is bypassed; allocation or selection binds another claim; or post-selection admission fails."
+      "starting_state": "PI-02E is accepted, the exact v8 maintenance allocation remains active on its closed proof claim, and PI-02D is ready for a separate documentation-scoped selection.",
+      "input": "The exact active v8 allocation, one qualified revision-bound PI-02D claim and selection-pending tracker, the accepted Plan 125 graph, and a v9 contract limited to the transition artifacts plus the two coupled documentation surfaces.",
+      "action": "Prove the documentation claim cannot write before selection, park v8, allocate and select v9 on that exact claim, then update and verify the operator guide and installed first-success documentation.",
+      "observable_result": "The PI-02D claim and tracker bind active v9 custody before documentation mutation; both documentation surfaces are accurate and the focused relationship/coupling check passes.",
+      "failure_signal": "Documentation changes before v9 selection; PI-02D inherits the closed PI-02E selection; v8 remains active while v9 allocates; allocation or selection binds another claim; either documentation surface remains stale; or the coupling check fails."
     },
-    "baseline_revision": "acb8d7f6c53c3155f7567e8dd141000b6031b580",
+    "baseline_revision": "f31dada73b1f4eb8122961f0cca2dd1cffca72e3",
     "allowed_scope": [
       "examples/owner-real-outcome-admission/plan125-planning-integrity-scenario.json",
       "examples/owner-real-outcome-admission/plan125-planning-integrity-allocation.json",
-      "examples/owner-real-outcome-admission/plan125-planning-integrity-disposition.json"
+      "examples/owner-real-outcome-admission/plan125-planning-integrity-disposition.json",
+      "docs/guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md",
+      "GETTING_STARTED.md"
     ],
     "progress_dimensions": [
-      "safe-path planned-claim admission",
-      "immutable baseline selection",
-      "successor custody continuity"
+      "documentation-scoped custody",
+      "operator entrypoint accuracy",
+      "installed first-success accuracy"
     ]
   },
   "receipts": [],
   "request": {
     "schema_version": "1.0.0",
     "operation": "product_write",
-    "target_path": "examples/owner-real-outcome-admission/plan125-planning-integrity-scenario.json",
+    "target_path": "docs/guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md",
     "ordinary_approval": true,
     "approval_text": "I approve",
     "cost_telemetry_usd": "0",

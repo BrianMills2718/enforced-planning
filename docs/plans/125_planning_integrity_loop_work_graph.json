@@ -751,14 +751,14 @@
       "id": "pi-02e-renew-work-unit-custody",
       "initiative_id": "agentic-engineering",
       "goal_id": "planning-integrity-loop",
-      "design_revision": "plan-125-course-correction-9@2026-08-23",
-      "spec_revision": "plan-125-successor-outcome-custody-v5",
+      "design_revision": "plan-125-course-correction-10@2026-08-23",
+      "spec_revision": "plan-125-successor-outcome-custody-v6",
       "title": "Renew selected-outcome custody for post-provider work units",
       "class": "integration",
       "objective": "Use a restricted v8 input-bootstrap phase and a qualified safe-path-only successor claim to prove the accepted bootstrap-identity repair and immutable runtime plan binding through the public deny/select/allow path without implying cross-claim transfer.",
       "profile": "small",
       "execution_class": "independently_executable",
-      "claimability": "ready_for_execution",
+      "claimability": "not_applicable",
       "scope": {
         "included": [
           "Restricted v8 transition-input bootstrap before the normal successor claim",
@@ -797,9 +797,9 @@
       "outputs": [
         "Committed v8 scenario, allocation, and exact v7 disposition inputs",
         "Parked v7 allocation bound to the closed PI-02F claim",
-        "Active v8 allocation and selection bound to the exact successor claim",
+        "Active v8 allocation 87f6af9082c6bbad994789bb0811188a4df28c44a90c2eaa059999ca6e40963f and selection binding 24690cb6ccec6b4c3c12a43f8ccd2262678dd7d12eccae02df13d7a044b02c0e bound to the exact successor claim",
         "Healthy revision-bound PI-02E claim and tracker",
-        "Authentic safe-path-only preselection denial and post-selection allow",
+        "Authentic safe-path-only preselection denial oadm-aa269e06f3fb45e1a347e541ad1723ed and post-selection allow oadm-fae237b666ac498fa95da8076b7d79dd",
         "Machine-checkable evidence that PI-02D requires its own selection"
       ],
       "dependencies": [
@@ -899,17 +899,17 @@
         "failed_guards": []
       },
       "claim_policy": {
-        "eligibility_rule": "PI-02C and PI-02F are accepted, the v7 allocation remains the exact active maintenance allocation bound to its closed claim, and no claim owns the v8 transition inputs; begin with the sanctioned restricted v8 bootstrap before opening the normal safe-path-only successor claim.",
+        "eligibility_rule": "Accepted with exact v8 allocation 87f6af9082c6bbad994789bb0811188a4df28c44a90c2eaa059999ca6e40963f, exact selection binding 24690cb6ccec6b4c3c12a43f8ccd2262678dd7d12eccae02df13d7a044b02c0e, and authentic deny/select/allow receipts; no further PI-02E claim is eligible.",
         "lease_policy": "renewable",
         "lease_duration_minutes": 240,
         "max_active_per_claimant": 1
       },
       "authorization_mode": "registry_claim",
       "integration_owner_id": "pi-02d-sync-operator-guide",
-      "status": "ready",
-      "record_version": 8,
+      "status": "accepted",
+      "record_version": 9,
       "created_at": "2026-08-23T01:16:19Z",
-      "updated_at": "2026-08-23T05:26:16Z"
+      "updated_at": "2026-08-23T05:36:23Z"
     },
     {
       "schema_version": "1.0",
@@ -917,19 +917,19 @@
       "id": "pi-02d-sync-operator-guide",
       "initiative_id": "agentic-engineering",
       "goal_id": "planning-integrity-loop",
-      "design_revision": "plan-125-course-correction-9@2026-08-23",
-      "spec_revision": "plan-125-operator-doc-sync-v2",
+      "design_revision": "plan-125-course-correction-10@2026-08-23",
+      "spec_revision": "plan-125-operator-doc-sync-v3",
       "title": "Sync the canonical operator entrypoint after provider acceptance",
       "class": "documentation",
       "objective": "Use a separate documentation-scoped allocation and selection on the exact PI-02D claim, then document exact-revision Planning Integrity at the real worktree/direct-claim entrypoint and installed first-success path before AES consumes the provider.",
       "profile": "small",
       "execution_class": "independently_executable",
-      "claimability": "blocked_dependencies",
+      "claimability": "ready_for_execution",
       "scope": {
         "included": [
-          "Restricted PI-02D transition-input bootstrap",
-          "Exact disposition of the closed PI-02E allocation",
-          "Documentation-scoped allocation and selection on the PI-02D claim",
+          "Restricted v9 PI-02D transition-input bootstrap",
+          "Exact v8 disposition and v9 allocation inputs",
+          "Documentation-scoped v9 allocation and selection on the PI-02D claim",
           "docs/guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md",
           "GETTING_STARTED.md",
           "Focused documentation-coupling validation"
@@ -951,10 +951,21 @@
           "kind": "reassessment_trigger",
           "id": "pre-commit-doc-coupling",
           "revision": "2026-08-22T23:22:48Z"
+        },
+        {
+          "kind": "work_unit_output",
+          "id": "pi-02e-v8-successor-selection",
+          "revision": "sha256:24690cb6ccec6b4c3c12a43f8ccd2262678dd7d12eccae02df13d7a044b02c0e"
+        },
+        {
+          "kind": "work_unit_output",
+          "id": "pi-02e-v8-active-allocation",
+          "revision": "sha256:87f6af9082c6bbad994789bb0811188a4df28c44a90c2eaa059999ca6e40963f"
         }
       ],
       "outputs": [
-        "Active documentation-scoped selection bound to the exact PI-02D claim",
+        "Committed v9 scenario, allocation, and exact v8 disposition inputs",
+        "Active v9 documentation-scoped selection bound to the exact PI-02D claim",
         "Accurate worktree, direct-claim, and installed first-success Planning Integrity guidance",
         "Passing focused documentation-coupling check"
       ],
@@ -1024,8 +1035,10 @@
       "acceptance": [
         {
           "id": "PI02D-A1",
-          "criterion": "After an exact documentation-scoped selection is bound to PI-02D, the canonical guide and installed first-success path say that configured plan integrity reads exact plan/config bytes from the selected Git start revision before graph query or coordination mutation.",
+          "criterion": "After the exact v8 allocation is parked and an exact v9 documentation-scoped selection is bound to PI-02D, the canonical guide and installed first-success path say that configured plan integrity reads exact plan/config bytes from the selected Git start revision before graph query or coordination mutation.",
           "evidence_required": [
+            "Exact v8 disposition, v9 allocation, and v9 selection receipts",
+            "Preselection documentation-path denial and post-selection documentation-path allow",
             "Operator-guide and GETTING_STARTED diffs",
             "Focused doc-coupling pass"
           ],
@@ -1033,25 +1046,23 @@
         }
       ],
       "readiness": {
-        "status": "blocked",
+        "status": "ready",
         "required_approval_types": [],
         "approvals": [],
-        "failed_guards": [
-          "pi-02e-renew-work-unit-custody is not accepted"
-        ]
+        "failed_guards": []
       },
       "claim_policy": {
-        "eligibility_rule": "PI-02 and PI-02E are accepted, the closed PI-02E allocation remains exact for disposition, and no claim owns the transition inputs or either documentation surface; begin with a restricted input bootstrap before opening the exact PI-02D claim.",
+        "eligibility_rule": "PI-02 and PI-02E are accepted, exact v8 allocation 87f6af9082c6bbad994789bb0811188a4df28c44a90c2eaa059999ca6e40963f remains active on the closed proof claim for disposition, and no claim owns the v9 transition inputs or either documentation surface; begin with the restricted v9 bootstrap before opening the exact PI-02D claim.",
         "lease_policy": "renewable",
         "lease_duration_minutes": 240,
         "max_active_per_claimant": 1
       },
       "authorization_mode": "registry_claim",
       "integration_owner_id": "pi-03-aes-installed-dogfood",
-      "status": "blocked",
-      "record_version": 4,
+      "status": "ready",
+      "record_version": 5,
       "created_at": "2026-08-22T23:23:45Z",
-      "updated_at": "2026-08-23T05:26:16Z"
+      "updated_at": "2026-08-23T05:36:23Z"
     },
     {
       "schema_version": "1.0",

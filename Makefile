@@ -264,7 +264,7 @@ endif
 		$(foreach path,$(SESSION_READ_PATHS),--read-path "$(path)") \
 		$(if $(SESSION_WORK_GRAPH),--work-graph "$(SESSION_WORK_GRAPH)",) \
 		$(if $(SESSION_WORK_UNIT_ID),--work-unit-id "$(SESSION_WORK_UNIT_ID)",) \
-		$(if $(PLAN),--plan "$(PLAN_PROJECT)#$(PLAN)",)
+		$(if $(PLAN),--plan "$(PLAN_PROJECT)#$(PLAN)",$(if $(ALLOW_UNPLANNED),--plan UNPLANNED,))
 	@mkdir -p "$(WORKTREE_DIR)"
 	@creation_receipt=$$(mktemp "$(WORKTREE_DIR)/.worktree-create.XXXXXX.json"); \
 	trap 'rm -f "$$creation_receipt"' EXIT HUP INT TERM; \

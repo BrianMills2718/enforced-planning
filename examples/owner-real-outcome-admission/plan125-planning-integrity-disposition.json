@@ -4,7 +4,7 @@
   "disposition_id": "plan-125-planning-integrity-v12-complete",
   "requested_at": "2026-08-23T12:07:43Z",
   "allocation_id": "plan-125-planning-integrity-allocation-v12",
-  "allocation_sha256": "9bb9ef68b6016b8f60dbcbfc15c34bc57c77122ba5b5f1c0865b00df2fe274c5",
+  "allocation_sha256": "babdc0a628b5590352750d1ee3639a0f895bfb3a6cc47465694272d2812a0661",
   "disposition": "complete",
   "decision_ref": "enforced-planning#125-pi03-accepted-and-complete",
   "reason": "Release the final Planning Integrity allocation after the synchronized PI-03 acceptance and Plan 125 closeout merge."

@@ -1,6 +1,6 @@
 # Plan #125: Planning Integrity Loop
 
-**Status:** In Progress — installed AES dogfood is proven; one terminal queue-ownership transition remains
+**Status:** Complete — PI-01 through PI-03 are accepted; the external rewrite anchor owns the next vertical
 **Type:** cross-repository shared-contract implementation
 **Priority:** Critical
 **phase_ref:** "Agentic Engineering first external consumer"
@@ -557,7 +557,7 @@ that exact evidence; PI-03 is the next ready unit. Future coordinated units
 must assign completion/status-transition ownership before they are called
 executable.
 
-### Consumer evidence and course correction — terminal queue ownership
+### Acceptance receipt — installed AES consumer and synchronized closeout
 
 AES PR #4 merged the installed-consumer vertical at
 `db22cab50a9cf4c9f94ed3fa2c574168a192887c`. AES pins Enforced Planning
@@ -588,8 +588,16 @@ The terminal verification then found that v11 still omitted
 complete in the plan, graph, and roadmap alone would therefore recreate the
 same split-brain that completion ownership was intended to prevent. V11 is
 parked without recording acceptance. PI-03 now explicitly owns the queue path,
-and v12 must select one exact claim that updates the plan, graph, roadmap, and
-queue together. No provider or AES product behavior is added by that repair.
+and v12 selected one exact claim that updates the plan, graph, roadmap, and
+queue together. Preselection queue-path receipt
+`oadm-d4823485b6014af1be358c2affc00df4` denied; v12 allocation
+`babdc0a628b5590352750d1ee3639a0f895bfb3a6cc47465694272d2812a0661`
+and binding
+`edc7ce30bb5f0fb594580da1e2ff3c1b5b02d70c10a575397dd88cbb14c0e71e`
+bind the exact terminal claim; and identical queue-path receipt
+`oadm-b391a250deb54197b6537b31a95029c9` then allowed. All four canonical
+status entrypoints now record PI-03 and Plan 125 complete from one transition.
+No provider or AES product behavior was added by the repair.
 
 The authentic consumer also exposed a bounded provider defect: the parsed
 reassessment stopping rule can overcapture later level-three receipt sections.
@@ -685,11 +693,11 @@ revision-bound human-readable planning state through installed AES.
    selection to the exact PI-02D claim. Then document exact-revision Planning
    Integrity at the canonical worktree/claim entrypoint and installed first-
    success path and pass the focused coupling check.
-8. **PI-03 — AES installed integration and terminal acceptance.** A pinned
-   installed Enforced Planning distribution produced an immutable exact result
-   that AES retained and projected through its existing topic without granting
-   generated authority. One v12 terminal transition must update every canonical
-   Plan 125 status entrypoint together before the unit is accepted.
+8. **PI-03 — accepted AES installed integration.** A pinned installed Enforced
+   Planning distribution produced an immutable exact result that AES retained
+   and projected through its existing topic without granting generated
+   authority. The v12 terminal transition updates every canonical Plan 125
+   status entrypoint together.
 9. Stop framework expansion. In parallel once a project-local plan is ready,
    the selected anchor repository owns its exploratory lineage/value probe and
    useful product vertical. Observed governance failures return as focused

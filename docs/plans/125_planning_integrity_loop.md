@@ -1,6 +1,6 @@
 # Plan #125: Planning Integrity Loop
 
-**Status:** In Progress — PI-02 accepted; PI-02C runtime binding and PI-02D operator documentation ready
+**Status:** In Progress — PI-02 accepted with source-activation confidence narrowed; PI-02B repair ready; PI-02C/PI-02E/PI-02D blocked on the repaired path
 **Type:** cross-repository shared-contract implementation
 **Priority:** Critical
 **phase_ref:** "Agentic Engineering first external consumer"
@@ -338,6 +338,38 @@ lifecycle and `GETTING_STARTED.md` for the installed first-success path. Both
 remain in the separately claimed PI-02D unit; PI-02 acceptance records the
 exact coupling rather than claiming those docs already changed.
 
+### Course-correction receipt — selected-outcome work-unit transition
+
+The first authentic PI-02D start from source main at
+`0a6d9e28840ba15c4bb33920404ebe11ed51e7cd` passed Planning Integrity and
+created the exact revision-bound claim and worktree, but configured
+selected-outcome admission rejected session activation with
+`outcome_admission_state_invalid`: the deliberately staged claim had no tracker
+from which a selection could be resolved. Rollback removed the new branch,
+worktree, and claim. The prior Plan 125 allocation remains active but is bound
+to the closed PI-02 claim, so it cannot authorize the separately scoped PI-02D
+unit.
+
+This is an execution-graph omission, not evidence for weakening admission or
+calling planned work unplanned. Independent review also proved that the
+restricted bootstrap claim cannot become the successor lane: it is schema v3
+with a tracker but no retained `start_revision`, and the accepted custody guard
+correctly refuses to fabricate historical v4 evidence. The active v3 allocation
+does not become invalid merely because its creating claim closed; its material
+defect for PI-02D is that the immutable contract excludes both documentation
+paths.
+
+PI-02B therefore repairs only the circular activation boundary. An exact new
+schema-v4 reservation may attach its tracker with an explicit
+`selection_pending` result, never a selected `PASS`; heartbeat and prewrite
+remain denied until allocation and selection exist. A narrowly scoped unplanned
+maintenance lane is permitted only because the planned entrypoint itself is the
+reproduced defect. After that repair, PI-02E uses the normal plan-bound path and
+the existing disposition, allocation, and selection owners to park v3 and
+select v4 on the exact live successor claim. PI-02D becomes ready only after
+that transition is durably accepted. No automatic allocation, cross-claim
+transfer engine, or unplanned documentation path is introduced.
+
 ### External AES stress-test inputs and sequencing
 
 Project Meta main retains four reproduced AES findings as
@@ -364,17 +396,26 @@ revision-bound human-readable planning state through installed AES.
    custody across Make/readiness/claim/worktree/session creation, direct-claim
    admission, complete installation propagation, and both-sign mutation-order
    tests.
-3. **PI-02C — runtime plan binding.** At selected outcome admission, require
+3. **PI-02B — staged selected-activation repair.** Allow only an exact new v4
+   plan reservation to attach its tracker as `selection_pending`; keep
+   heartbeat and prewrite denied until the existing allocation and selection
+   owners establish selected state.
+4. **PI-02C — runtime plan binding.** At selected outcome admission, require
    the immutable outcome contract's baseline revision to pass Planning
    Integrity for the claim's qualified plan, so continuation is revision-bound.
-4. **PI-02D — operator documentation sync.** In a separately claimed path,
+5. **PI-02E — successor work-unit custody.** Park the active v3 allocation,
+   allocate and select the revised Plan 125
+   contract on the exact planned successor claim, and prove that the claim
+   can become a healthy revision-bound work-unit lane without bypassing source
+   outcome admission.
+6. **PI-02D — operator documentation sync.** From that selected successor lane,
    document exact-revision Planning Integrity at the canonical worktree/claim
    entrypoint and installed first-success path, then pass the focused coupling
    check.
-5. **PI-03 — AES installed integration.** Consume a pinned Enforced Planning
+7. **PI-03 — AES installed integration.** Consume a pinned Enforced Planning
    candidate, retain an immutable result, and project the planning fields into
    AES's existing topic without new authority.
-6. Stop framework expansion. In parallel once a project-local plan is ready,
+8. Stop framework expansion. In parallel once a project-local plan is ready,
    the selected anchor repository owns its exploratory lineage/value probe and
    useful product vertical. Observed governance failures return as focused
    regressions; they narrow trust in the affected control rather than stopping
@@ -439,6 +480,11 @@ revision-bound human-readable planning state through installed AES.
     with a plan-bound reservation even when the optional
     `--claim-start-revision` caller assertion is omitted; only a fully identified
     exact staged reservation may omit its not-yet-created tracker.
+20. Under configured selected-outcome enforcement, an exact new v4 staged
+    reservation may attach its tracker only as `selection_pending`; corrupting
+    any staged invariant produces no tracker and rolls back invocation-owned
+    branch/worktree/claim state, while heartbeat and prewrite remain denied
+    until exact allocation and selection succeed.
 
 ## Required Tests
 
@@ -459,6 +505,10 @@ revision-bound human-readable planning state through installed AES.
   injected branch-creation race and session-start failure;
 - a legacy v3 claim-with-tracker control proving session refresh cannot invent
   v4 revision custody;
+- an authentic selected-activation A/B proving exact v4 tracker attachment
+  returns only `selection_pending`, any corrupted invariant leaves zero
+  invocation-owned mutation, and heartbeat/prewrite remain denied before
+  selection;
 - observed-failure output control proving findings are visible without denial;
 - duplicate governed-heading/field and absolute/traversing configuration-path
   rejection controls;
@@ -477,6 +527,7 @@ the installer/shared gate boundary changes.
 - `enforced_planning/plan_validation.py`
 - `enforced_planning/plan_readiness.py`
 - `enforced_planning/coordination_claims.py`
+- `enforced_planning/outcome_admission.py`
 - `enforced_planning/session_lifecycle.py`
 - `enforced_planning/session_contracts.py`
 - `scripts/check_plan_readiness.py`
@@ -502,6 +553,7 @@ the installer/shared gate boundary changes.
 - `tests/test_plan_readiness.py`
 - `tests/test_check_coordination_claims.py`
 - `tests/test_install_governed_repo.py`
+- `tests/test_outcome_admission.py`
 - `tests/test_session_cli.py`
 - `tests/test_session_contracts.py`
 - `tests/test_create_worktree.py`
@@ -509,6 +561,9 @@ the installer/shared gate boundary changes.
 - `docs/plans/CLAUDE.md`
 - `docs/plans/125_planning_integrity_loop.md`
 - `docs/plans/125_planning_integrity_loop_work_graph.json`
+- `examples/owner-real-outcome-admission/plan125-planning-integrity-scenario.json`
+- `examples/owner-real-outcome-admission/plan125-planning-integrity-allocation.json`
+- `examples/owner-real-outcome-admission/plan125-planning-integrity-disposition.json`
 
 AES-owned paths are recorded in its own claimed lane after PI-02 is accepted.
 

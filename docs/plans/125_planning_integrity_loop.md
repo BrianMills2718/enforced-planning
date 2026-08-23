@@ -1,6 +1,6 @@
 # Plan #125: Planning Integrity Loop
 
-**Status:** In Progress — PI-02, PI-02B, PI-02C, PI-02F, and PI-02E accepted; PI-02D is ready through its documentation-scoped v9 custody bootstrap
+**Status:** In Progress — PI-02 through PI-02F are accepted; installed AES dogfood (PI-03) is ready
 **Type:** cross-repository shared-contract implementation
 **Priority:** Critical
 **phase_ref:** "Agentic Engineering first external consumer"
@@ -531,6 +531,32 @@ names the exact claim and tracker. Post-selection heartbeat receipt
 `oadm-139f1630d84247d99d83fda49b9d70da` denied `out_of_scope`. The clean
 no-change proof lane closed through the sanctioned merged disposition.
 
+### Course-correction and acceptance receipt — completion ownership
+
+PI-02D correctly owned its v9 transition inputs and both documentation files,
+but its graph omitted the plan, work graph, and roadmap paths needed to record
+its own acceptance. PR #188 merged the documentation at
+`12b8180dda2b8cbe2a0b0d0f664864546eba3944`; the canonical self-test and
+focused documentation-coupling check passed, yet PI-03 remained mechanically
+blocked on `pi-02d-sync-operator-guide is not yet accepted`. This was a second
+coherent-but-unexecutable graph defect, not permission to bypass claim or
+selected-outcome enforcement.
+
+A restricted bootstrap therefore prepared v10 acceptance custody in PR #189
+at `7dd5db77b58637eb464f568f61dc5194f06e5973`. The exact acceptance claim
+denied plan prewrite before selection in receipt
+`oadm-a234aeb91b5e42039f3001636c88c6d2`, parked v9 as
+`f7b317925df0a24372de7ec03ace7d6f1a3c15368d6e113df71ae62e68f487fc`,
+allocated v10 as
+`e271ba8d4536ad4905184ca482b828a92024ba75d276aff56f62a54a7c468875`,
+and bound it as
+`11500e80dcb56100df30c2c3319c845faaf3897c6bcd3f1bff9e69ba90a86342`.
+Post-selection plan prewrite receipt
+`oadm-4c1ca45f89d047429ab90994a77e1efc` allowed. PI-02D is accepted from
+that exact evidence; PI-03 is the next ready unit. Future coordinated units
+must assign completion/status-transition ownership before they are called
+executable.
+
 ### Failure-mode taxonomy reassessment
 
 **Review charter:** The target is Plan 125 after PI-02B; the stage is the first
@@ -703,6 +729,9 @@ revision-bound human-readable planning state through installed AES.
 23. PI-02D receives documentation authority only through its own exact claim,
     active allocation, and selection; a closed PI-02E selection is evidence,
     not transferable write authority.
+24. Every coordinated work unit assigns an explicit claimable owner for the
+    plan, graph, and status surfaces needed to record acceptance and unblock
+    its successor.
 
 ## Required Tests
 

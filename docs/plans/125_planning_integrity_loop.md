@@ -1,6 +1,6 @@
 # Plan #125: Planning Integrity Loop
 
-**Status:** In Progress — PI-02 and PI-02B accepted; PI-02C ready; PI-02E waits for runtime plan binding; PI-02D waits for successor custody
+**Status:** In Progress — PI-02 and PI-02B accepted; PI-02C ready through its declared custody-bootstrap phase; PI-02E waits for runtime plan binding; PI-02D waits for successor custody
 **Type:** cross-repository shared-contract implementation
 **Priority:** Critical
 **phase_ref:** "Agentic Engineering first external consumer"
@@ -404,6 +404,28 @@ prewrite, and out-of-scope denial. PI-02E also waits for PI-02C, so the real
 successor selection exercises runtime plan-revision binding rather than
 creating selected state immediately before that control is added.
 
+### Course-correction receipt — runtime authorization reachability
+
+The first PI-02B acceptance graph made PI-02C structurally ready and made
+PI-02E wait for it. Adversarial reachability review rejected that order as
+operationally incomplete: source `enforce_selected` leaves a new PI-02C claim
+at `selection_pending`, while the prepared v4 contract authorizes the
+transition artifacts and documentation paths but not
+`enforced_planning/outcome_selection.py` or its tests. A direct normal PI-02C
+start therefore could attach its tracker but could not authorize any owned
+write. Graph-schema validity was not execution readiness.
+
+PI-02C now declares the missing two-phase entry sequence instead of adding a
+second planner or using unplanned source maintenance. Its restricted,
+write-free bootstrap phase commits an exact v5 scenario, allocation request,
+and v3 disposition request whose immutable scope includes only the PI-02C
+source/test paths plus its Plan-numbered transition artifacts. The normal
+revision-bound PI-02C claim then attaches as `selection_pending`; the existing
+portfolio owners park v3 and allocate/select v5 on that exact claim before the
+first source mutation. Ordinary claim authority and selected scope must both
+admit the target. PI-02E remains the post-PI-02C reselection owner so its later
+selection exercises the newly accepted runtime plan-binding control.
+
 ### External AES stress-test inputs and sequencing
 
 Project Meta main retains four reproduced AES findings as
@@ -434,14 +456,16 @@ revision-bound human-readable planning state through installed AES.
    plan reservation to attach its tracker as `selection_pending`; keep
    heartbeat and prewrite denied until the existing allocation and selection
    owners establish selected state.
-4. **PI-02C — runtime plan binding.** At selected outcome admission, require
-   the immutable outcome contract's baseline revision to pass Planning
-   Integrity for the claim's qualified plan, so continuation is revision-bound.
-5. **PI-02E — successor work-unit custody.** Park the active v3 allocation,
-   allocate and select the revised Plan 125
-   contract on the exact planned successor claim, and prove that the claim
-   can become a healthy revision-bound work-unit lane without bypassing source
-   outcome admission.
+4. **PI-02C — runtime plan binding.** Through its declared restricted
+   custody-bootstrap phase, prepare and select the exact PI-02C claim before
+   source mutation. Then require selected outcome admission to validate the
+   immutable outcome contract's baseline revision against the claim's
+   qualified plan, so continuation is revision-bound.
+5. **PI-02E — successor work-unit custody.** After PI-02C is accepted, use its
+   newly enforced binding while parking the active v5 allocation, preparing a
+   documentation-scoped v6 contract, and selecting it on the exact planned
+   successor claim. Prove that claim can become a healthy revision-bound
+   work-unit lane without bypassing source outcome admission.
 6. **PI-02D — operator documentation sync.** From that selected successor lane,
    document exact-revision Planning Integrity at the canonical worktree/claim
    entrypoint and installed first-success path, then pass the focused coupling

@@ -428,8 +428,8 @@
       "id": "pi-02c-bind-runtime-plan",
       "initiative_id": "agentic-engineering",
       "goal_id": "planning-integrity-loop",
-      "design_revision": "plan-125-course-correction-2@2026-08-22",
-      "spec_revision": "plan-125-runtime-plan-binding-v1",
+      "design_revision": "plan-125-course-correction-6@2026-08-23",
+      "spec_revision": "plan-125-runtime-plan-binding-v2",
       "title": "Bind selected outcome continuation to the accepted plan revision",
       "class": "implementation",
       "objective": "Require configured selected-outcome admission to revalidate the claim's qualified plan at the immutable outcome contract baseline revision before creating the selection binding.",
@@ -438,6 +438,8 @@
       "claimability": "ready_for_execution",
       "scope": {
         "included": [
+          "Restricted v5 outcome-input bootstrap before the normal source claim",
+          "Exact v3 disposition and v5 allocation/selection on the staged PI-02C claim",
           "Outcome selection Planning Integrity join",
           "Exact baseline-revision and plan-identity validation",
           "Both-sign selection controls",
@@ -446,6 +448,7 @@
         "excluded": [
           "New continuation engine",
           "Claim schema revision",
+          "Unplanned source maintenance",
           "LLM plan-adherence judgment",
           "AES projection"
         ]
@@ -460,9 +463,16 @@
           "kind": "existing_capability",
           "id": "OutcomeContractV1.baseline_revision+OutcomeSelectionBindingV1",
           "revision": "10c4d8c0afe732e025902728b5728dd35270cfcd"
+        },
+        {
+          "kind": "active_allocation",
+          "id": "plan-125-planning-integrity-allocation-v3",
+          "revision": "sha256:8a66df2e52ddcb31a85c4ac03acb7dfceaf5dec2dc569738f0eaad0346181064"
         }
       ],
       "outputs": [
+        "Committed v5 scenario, allocation, and exact v3 disposition inputs",
+        "Active v5 selection bound to the exact revision-bound PI-02C claim",
         "Selection-time exact plan-revision admission",
         "Continuation binding that reuses the immutable outcome-contract digest",
         "Focused stale/incomplete and exact-pass evidence"
@@ -507,17 +517,46 @@
           "repository": "enforced-planning",
           "access": "exclusive",
           "coordination_key": "planning-integrity-runtime-binding"
+        },
+        {
+          "kind": "repository_path",
+          "target": "examples/owner-real-outcome-admission/plan125-planning-integrity-scenario.json",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "planning-integrity-runtime-binding-custody"
+        },
+        {
+          "kind": "repository_path",
+          "target": "examples/owner-real-outcome-admission/plan125-planning-integrity-allocation.json",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "planning-integrity-runtime-binding-custody"
+        },
+        {
+          "kind": "repository_path",
+          "target": "examples/owner-real-outcome-admission/plan125-planning-integrity-disposition.json",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "planning-integrity-runtime-binding-custody"
+        },
+        {
+          "kind": "data",
+          "target": "outcome-portfolio-allocations-v1",
+          "access": "exclusive",
+          "coordination_key": "planning-integrity-runtime-binding-custody"
         }
       ],
       "acceptance": [
         {
           "id": "PI02C-A1",
-          "criterion": "When Planning Integrity enforcement applies, outcome selection validates the qualified claim plan against the immutable outcome contract baseline revision and preserves the existing selection schema.",
+          "criterion": "The restricted bootstrap commits exact v5 inputs, then the staged normal PI-02C claim parks v3 and becomes selected before any source mutation; when Planning Integrity enforcement applies, selection validates the qualified claim plan against the immutable outcome contract baseline revision and preserves the existing selection schema.",
           "evidence_required": [
+            "Exact v3 disposition plus v5 allocation and selection receipts",
+            "Pre-selection source denial and post-selection in-scope source allow",
             "Exact-pass selection test",
             "Unchanged OutcomeSelectionBindingV1 schema assertion"
           ],
-          "negative_control": "An incomplete, missing, ambiguous, or mismatched baseline plan cannot create a selection binding."
+          "negative_control": "A source write before selection, or an incomplete, missing, ambiguous, or mismatched baseline plan, cannot create or use a selection binding."
         },
         {
           "id": "PI02C-A2",
@@ -535,7 +574,7 @@
         "failed_guards": []
       },
       "claim_policy": {
-        "eligibility_rule": "PI-02 is accepted and no claim owns outcome selection.",
+        "eligibility_rule": "PI-02B is accepted, the exact v3 allocation remains active, and no claim owns the runtime-binding source or custody-input surfaces; begin with the sanctioned restricted bootstrap before opening the normal source claim.",
         "lease_policy": "renewable",
         "lease_duration_minutes": 720,
         "max_active_per_claimant": 1
@@ -543,9 +582,9 @@
       "authorization_mode": "registry_claim",
       "integration_owner_id": "pi-03-aes-installed-dogfood",
       "status": "ready",
-      "record_version": 4,
+      "record_version": 5,
       "created_at": "2026-08-22T23:23:45Z",
-      "updated_at": "2026-08-23T04:00:24Z"
+      "updated_at": "2026-08-23T04:16:00Z"
     },
     {
       "schema_version": "1.0",
@@ -553,19 +592,19 @@
       "id": "pi-02e-renew-work-unit-custody",
       "initiative_id": "agentic-engineering",
       "goal_id": "planning-integrity-loop",
-      "design_revision": "plan-125-course-correction-5@2026-08-23",
-      "spec_revision": "plan-125-successor-outcome-custody-v2",
+      "design_revision": "plan-125-course-correction-6@2026-08-23",
+      "spec_revision": "plan-125-successor-outcome-custody-v3",
       "title": "Renew selected-outcome custody for post-provider work units",
       "class": "integration",
-      "objective": "Use the existing disposition, allocation, and selection owners to move Plan 125 from the closed PI-02 claim to one exact successor claim that can execute PI-02D without bypassing configured source admission.",
+      "objective": "Use the accepted runtime plan-binding control plus the existing disposition, allocation, and selection owners to move Plan 125 from the closed PI-02C claim to one exact successor claim that can execute PI-02D without bypassing configured source admission.",
       "profile": "small",
       "execution_class": "independently_executable",
       "claimability": "blocked_dependencies",
       "scope": {
         "included": [
-          "Plan 125 outcome scenario revision",
-          "Exact disposition of the active claim-bound v3 allocation",
-          "Exact v4 maintenance allocation and selection on the successor claim",
+          "Plan 125 documentation-scoped v6 outcome scenario revision",
+          "Exact disposition of the active claim-bound v5 allocation",
+          "Exact v6 maintenance allocation and selection on the successor claim",
           "Revision-bound claim upgrade through the canonical graph and tracker",
           "Durable transition evidence for PI-02D readiness"
         ],
@@ -583,19 +622,14 @@
           "revision": "93c2d236ba24378af8215e88796a63bddaa40613"
         },
         {
-          "kind": "runtime_counterexample",
-          "id": "outcome-admission-receipt:oadm-143bc4f3592a481fb5c8cd64a5c9ed38",
-          "revision": "0a6d9e28840ba15c4bb33920404ebe11ed51e7cd"
-        },
-        {
-          "kind": "active_allocation",
-          "id": "plan-125-planning-integrity-allocation-v3",
-          "revision": "sha256:8a66df2e52ddcb31a85c4ac03acb7dfceaf5dec2dc569738f0eaad0346181064"
+          "kind": "work_unit_output",
+          "id": "pi-02c-active-v5-selection",
+          "revision": "pi-02c-bind-runtime-plan@accepted"
         }
       ],
       "outputs": [
-        "Parked v3 allocation bound to the closed provider claim",
-        "Active v4 allocation and selection bound to the exact successor claim",
+        "Parked v5 allocation bound to the closed PI-02C claim",
+        "Active v6 allocation and selection bound to the exact successor claim",
         "Healthy revision-bound PI-02E claim and tracker",
         "Machine-checkable readiness evidence for PI-02D"
       ],
@@ -660,9 +694,9 @@
       "acceptance": [
         {
           "id": "PI02E-A1",
-          "criterion": "The exact active v3 allocation is parked and one v4 allocation is selected on the same live successor claim that retains the canonical Plan 125 work-unit revision.",
+          "criterion": "The exact active v5 allocation is parked and one v6 allocation is selected on the same live successor claim that retains the canonical Plan 125 work-unit revision and passes the accepted runtime plan-binding control.",
           "evidence_required": [
-            "Disposition receipt with the exact v3 allocation digest",
+            "Disposition receipt with the exact v5 allocation digest",
             "Allocation and selection receipts naming the successor claim",
             "Claim, tracker, worktree HEAD, and graph revision equality",
             "Post-selection heartbeat and in-scope prewrite allow"
@@ -671,7 +705,7 @@
         },
         {
           "id": "PI02E-A2",
-          "criterion": "The revised outcome contract permits only the Plan 125 transition artifacts and the two PI-02D documentation surfaces needed by the successor lane.",
+          "criterion": "The v6 outcome contract permits only the Plan 125 transition artifacts and the two PI-02D documentation surfaces needed by the successor lane.",
           "evidence_required": [
             "Exact scenario and contract digests",
             "Out-of-scope target denial"
@@ -688,7 +722,7 @@
         ]
       },
       "claim_policy": {
-        "eligibility_rule": "PI-02 and PI-02B are accepted, a new exact v4 plan reservation can attach a selection-pending tracker, and the v3 allocation is still the exact active maintenance allocation.",
+        "eligibility_rule": "PI-02C is accepted, a new exact v6 plan reservation can attach a selection-pending tracker, and the v5 allocation is still the exact active maintenance allocation bound to the closed PI-02C claim.",
         "lease_policy": "renewable",
         "lease_duration_minutes": 240,
         "max_active_per_claimant": 1
@@ -696,9 +730,9 @@
       "authorization_mode": "registry_claim",
       "integration_owner_id": "pi-02d-sync-operator-guide",
       "status": "blocked",
-      "record_version": 3,
+      "record_version": 4,
       "created_at": "2026-08-23T01:16:19Z",
-      "updated_at": "2026-08-23T04:00:24Z"
+      "updated_at": "2026-08-23T04:16:00Z"
     },
     {
       "schema_version": "1.0",

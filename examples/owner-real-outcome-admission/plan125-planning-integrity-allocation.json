@@ -1,15 +1,15 @@
 {
   "schema_version": "1.0.0",
   "record_type": "outcome_portfolio_allocation_request",
-  "allocation_id": "plan-125-planning-integrity-allocation-v3",
-  "requested_at": "2026-08-22T23:36:53Z",
+  "allocation_id": "plan-125-planning-integrity-allocation-v4",
+  "requested_at": "2026-08-23T01:16:19Z",
   "project_id": "enforced-planning",
   "scenario_id": "planning-integrity-semantic-admission",
-  "outcome_contract_sha256": "514d58cbc2ea619a68acfd38c6faf108663d0b6d345d18a49d9a0f782793423c",
+  "outcome_contract_sha256": "2a1e2fe732425803fa8b9fc7d64f2f3825fbcbefce5ee4fa8aeca4beb50c9bf8",
   "outcome_id": "planning-integrity-semantic-admission",
   "outcome_lineage_id": "planning-integrity-semantic-admission",
   "portfolio_class": "maintenance",
-  "decision_ref": "enforced-planning#125-scope-revision-v3@10c4d8c0afe732e025902728b5728dd35270cfcd",
-  "purpose": "Make structural planning integrity non-omittable and observable before coordination mutation, retain one full start revision through execution custody, close installed dependency gaps, and prepare one installed AES consumer proof.",
+  "decision_ref": "enforced-planning#125-successor-work-unit-custody@0a6d9e28840ba15c4bb33920404ebe11ed51e7cd",
+  "purpose": "Preserve Planning Integrity across separately scoped post-provider work by selecting one exact successor claim before operator documentation or AES consumption.",
   "stopping_condition": "Park the allocation after PI-02 is merged with focused both-sign evidence and PI-03 has an accepted exact provider revision."
 }

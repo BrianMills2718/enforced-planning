@@ -267,6 +267,151 @@
     {
       "schema_version": "1.0",
       "record_type": "work_unit",
+      "id": "pi-02b-repair-selected-activation",
+      "initiative_id": "agentic-engineering",
+      "goal_id": "planning-integrity-loop",
+      "design_revision": "plan-125-course-correction-4@2026-08-23",
+      "spec_revision": "plan-125-staged-selected-activation-v1",
+      "title": "Repair circular selected-outcome session activation",
+      "class": "implementation",
+      "objective": "Allow only an exact new revision-bound staged reservation to attach its tracker as selection-pending without making a selected-outcome allow claim, while preserving denial before selection at heartbeat and prewrite.",
+      "profile": "standard",
+      "execution_class": "independently_executable",
+      "claimability": "ready_for_execution",
+      "scope": {
+        "included": [
+          "Exact schema-v4 staged-reservation classification",
+          "Selection-pending session activation result",
+          "Session-start rollback on any corrupted staged invariant",
+          "Continued selected-outcome denial at heartbeat and prewrite",
+          "Canonical and installed lifecycle parity",
+          "Authentic Make A/B regression"
+        ],
+        "excluded": [
+          "Allocation or selection automation",
+          "Legacy v3 claim promotion",
+          "Cross-claim outcome transfer",
+          "Operator documentation content",
+          "AES mutation"
+        ]
+      },
+      "inputs": [
+        {
+          "kind": "provider_evidence",
+          "id": "docs/evidence/plan125_planning_integrity.json",
+          "revision": "93c2d236ba24378af8215e88796a63bddaa40613"
+        },
+        {
+          "kind": "runtime_counterexample",
+          "id": "outcome-admission-receipt:oadm-143bc4f3592a481fb5c8cd64a5c9ed38",
+          "revision": "0a6d9e28840ba15c4bb33920404ebe11ed51e7cd"
+        },
+        {
+          "kind": "independent_review",
+          "id": "pi02-adversarial-review:selected-activation",
+          "revision": "2026-08-23T01:16:19Z"
+        }
+      ],
+      "outputs": [
+        "Typed selection-pending activation evidence",
+        "Tracker-bearing exact v4 claim that remains unselected",
+        "Focused zero-mutation negative controls",
+        "Authentic normal-Make activation receipt"
+      ],
+      "dependencies": [
+        {
+          "unit_id": "pi-02-enforce-plan-integrity",
+          "type": "hard",
+          "gate": {
+            "type": "unit_status",
+            "required_status": "accepted"
+          },
+          "rationale": "The repair narrows one newly falsified source-activation claim while retaining PI-02 revision custody and rollback."
+        }
+      ],
+      "conflict_surfaces": [
+        {
+          "kind": "repository_path",
+          "target": "enforced_planning/session_lifecycle.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "staged-selected-activation"
+        },
+        {
+          "kind": "repository_path",
+          "target": "enforced_planning/outcome_admission.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "staged-selected-activation"
+        },
+        {
+          "kind": "repository_path",
+          "target": "tests/test_session_cli.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "staged-selected-activation"
+        },
+        {
+          "kind": "repository_path",
+          "target": "tests/test_outcome_admission.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "staged-selected-activation"
+        }
+      ],
+      "acceptance": [
+        {
+          "id": "PI02B-A1",
+          "criterion": "The authentic source Make path lets one exact new schema-v4 reservation attach its tracker and returns explicit selection-pending activation evidence without recording selected-outcome allow.",
+          "evidence_required": [
+            "Authentic Make receipt",
+            "Claim, tracker, worktree HEAD, and start_revision equality",
+            "Admission receipt whose evidence ceiling is selection_pending"
+          ],
+          "negative_control": "A missing revision, work-unit binding, branch/worktree identity, session identity, or already-activated tracker denies and leaves zero invocation-owned residue."
+        },
+        {
+          "id": "PI02B-A2",
+          "criterion": "Before exact allocation and selection, session heartbeat and native prewrite remain denied; after selection, only ordinary-authorized paths inside the immutable selected scope are admitted.",
+          "evidence_required": [
+            "Pre-selection heartbeat and prewrite denials",
+            "Post-selection in-scope allow",
+            "Post-selection out-of-scope denial"
+          ],
+          "negative_control": "Selection-pending activation cannot renew progress, authorize a write, or masquerade as selected PASS."
+        },
+        {
+          "id": "PI02B-A3",
+          "criterion": "The source and installed session-start owners retain parity and legacy v3 claims still cannot acquire a fabricated start revision.",
+          "evidence_required": [
+            "Source/meta parity assertion",
+            "Legacy v3 regression",
+            "Focused installed entrypoint check"
+          ]
+        }
+      ],
+      "readiness": {
+        "status": "ready",
+        "required_approval_types": [],
+        "approvals": [],
+        "failed_guards": []
+      },
+      "claim_policy": {
+        "eligibility_rule": "PI-02 is accepted, the exact source denial is reproduced, and no claim owns the lifecycle/admission repair surfaces.",
+        "lease_policy": "renewable",
+        "lease_duration_minutes": 480,
+        "max_active_per_claimant": 1
+      },
+      "authorization_mode": "registry_claim",
+      "integration_owner_id": "pi-02e-renew-work-unit-custody",
+      "status": "ready",
+      "record_version": 1,
+      "created_at": "2026-08-23T01:16:19Z",
+      "updated_at": "2026-08-23T01:16:19Z"
+    },
+    {
+      "schema_version": "1.0",
+      "record_type": "work_unit",
       "id": "pi-02c-bind-runtime-plan",
       "initiative_id": "agentic-engineering",
       "goal_id": "planning-integrity-loop",
@@ -277,7 +422,7 @@
       "objective": "Require configured selected-outcome admission to revalidate the claim's qualified plan at the immutable outcome contract baseline revision before creating the selection binding.",
       "profile": "standard",
       "execution_class": "independently_executable",
-      "claimability": "ready_for_execution",
+      "claimability": "blocked_dependencies",
       "scope": {
         "included": [
           "Outcome selection Planning Integrity join",
@@ -318,6 +463,15 @@
             "required_status": "accepted"
           },
           "rationale": "Runtime selection must consume the accepted portable validator contract."
+        },
+        {
+          "unit_id": "pi-02b-repair-selected-activation",
+          "type": "hard",
+          "gate": {
+            "type": "unit_status",
+            "required_status": "accepted"
+          },
+          "rationale": "Selection-time binding cannot be exercised through the source lifecycle until exact staged activation can attach its tracker without bypassing selection."
         }
       ],
       "conflict_surfaces": [
@@ -362,10 +516,12 @@
         }
       ],
       "readiness": {
-        "status": "ready",
+        "status": "blocked",
         "required_approval_types": [],
         "approvals": [],
-        "failed_guards": []
+        "failed_guards": [
+          "pi-02b-repair-selected-activation is not accepted"
+        ]
       },
       "claim_policy": {
         "eligibility_rule": "PI-02 is accepted and no claim owns outcome selection.",
@@ -375,10 +531,153 @@
       },
       "authorization_mode": "registry_claim",
       "integration_owner_id": "pi-03-aes-installed-dogfood",
-      "status": "ready",
-      "record_version": 2,
+      "status": "blocked",
+      "record_version": 3,
       "created_at": "2026-08-22T23:23:45Z",
-      "updated_at": "2026-08-23T00:58:07Z"
+      "updated_at": "2026-08-23T01:16:19Z"
+    },
+    {
+      "schema_version": "1.0",
+      "record_type": "work_unit",
+      "id": "pi-02e-renew-work-unit-custody",
+      "initiative_id": "agentic-engineering",
+      "goal_id": "planning-integrity-loop",
+      "design_revision": "plan-125-course-correction-3@2026-08-23",
+      "spec_revision": "plan-125-successor-outcome-custody-v1",
+      "title": "Renew selected-outcome custody for post-provider work units",
+      "class": "integration",
+      "objective": "Use the existing disposition, allocation, and selection owners to move Plan 125 from the closed PI-02 claim to one exact successor claim that can execute PI-02D without bypassing configured source admission.",
+      "profile": "small",
+      "execution_class": "independently_executable",
+      "claimability": "blocked_dependencies",
+      "scope": {
+        "included": [
+          "Plan 125 outcome scenario revision",
+          "Exact disposition of the active claim-bound v3 allocation",
+          "Exact v4 maintenance allocation and selection on the successor claim",
+          "Revision-bound claim upgrade through the canonical graph and tracker",
+          "Durable transition evidence for PI-02D readiness"
+        ],
+        "excluded": [
+          "Outcome-admission code changes",
+          "Automatic allocation or cross-claim transfer machinery",
+          "Operator documentation content",
+          "AES mutation"
+        ]
+      },
+      "inputs": [
+        {
+          "kind": "provider_evidence",
+          "id": "docs/evidence/plan125_planning_integrity.json",
+          "revision": "93c2d236ba24378af8215e88796a63bddaa40613"
+        },
+        {
+          "kind": "runtime_counterexample",
+          "id": "outcome-admission-receipt:oadm-143bc4f3592a481fb5c8cd64a5c9ed38",
+          "revision": "0a6d9e28840ba15c4bb33920404ebe11ed51e7cd"
+        },
+        {
+          "kind": "active_allocation",
+          "id": "plan-125-planning-integrity-allocation-v3",
+          "revision": "sha256:8a66df2e52ddcb31a85c4ac03acb7dfceaf5dec2dc569738f0eaad0346181064"
+        }
+      ],
+      "outputs": [
+        "Parked v3 allocation bound to the closed provider claim",
+        "Active v4 allocation and selection bound to the exact successor claim",
+        "Healthy revision-bound PI-02E claim and tracker",
+        "Machine-checkable readiness evidence for PI-02D"
+      ],
+      "dependencies": [
+        {
+          "unit_id": "pi-02-enforce-plan-integrity",
+          "type": "hard",
+          "gate": {
+            "type": "unit_status",
+            "required_status": "accepted"
+          },
+          "rationale": "The successor lane must retain the accepted PI-02 revision-custody contract."
+        },
+        {
+          "unit_id": "pi-02b-repair-selected-activation",
+          "type": "hard",
+          "gate": {
+            "type": "unit_status",
+            "required_status": "accepted"
+          },
+          "rationale": "The normal planned successor lane cannot attach a tracker and reach allocation/selection until exact staged activation is repaired."
+        }
+      ],
+      "conflict_surfaces": [
+        {
+          "kind": "repository_path",
+          "target": "examples/owner-real-outcome-admission/plan125-planning-integrity-scenario.json",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-125-successor-outcome-custody"
+        },
+        {
+          "kind": "repository_path",
+          "target": "examples/owner-real-outcome-admission/plan125-planning-integrity-allocation.json",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-125-successor-outcome-custody"
+        },
+        {
+          "kind": "repository_path",
+          "target": "examples/owner-real-outcome-admission/plan125-planning-integrity-disposition.json",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-125-successor-outcome-custody"
+        },
+        {
+          "kind": "data",
+          "target": "outcome-portfolio-allocations-v1",
+          "access": "exclusive",
+          "coordination_key": "plan-125-successor-outcome-custody"
+        }
+      ],
+      "acceptance": [
+        {
+          "id": "PI02E-A1",
+          "criterion": "The exact active v3 allocation is parked and one v4 allocation is selected on the same live successor claim that retains the canonical Plan 125 work-unit revision.",
+          "evidence_required": [
+            "Disposition receipt with the exact v3 allocation digest",
+            "Allocation and selection receipts naming the successor claim",
+            "Claim, tracker, worktree HEAD, and graph revision equality"
+          ],
+          "negative_control": "The cleaned failed PI-02D claim, a selection-pending activation, or an unplanned documentation claim cannot supply selected authority."
+        },
+        {
+          "id": "PI02E-A2",
+          "criterion": "The revised outcome contract permits only the Plan 125 transition artifacts and the two PI-02D documentation surfaces needed by the successor lane.",
+          "evidence_required": [
+            "Exact scenario and contract digests",
+            "Out-of-scope target denial"
+          ],
+          "negative_control": "Provider source, tests, AES, and unrelated plan paths remain outside the successor contract."
+        }
+      ],
+      "readiness": {
+        "status": "blocked",
+        "required_approval_types": [],
+        "approvals": [],
+        "failed_guards": [
+          "pi-02b-repair-selected-activation is not accepted"
+        ]
+      },
+      "claim_policy": {
+        "eligibility_rule": "PI-02 and PI-02B are accepted, a new exact v4 plan reservation can attach a selection-pending tracker, and the v3 allocation is still the exact active maintenance allocation.",
+        "lease_policy": "renewable",
+        "lease_duration_minutes": 240,
+        "max_active_per_claimant": 1
+      },
+      "authorization_mode": "registry_claim",
+      "integration_owner_id": "pi-02d-sync-operator-guide",
+      "status": "blocked",
+      "record_version": 2,
+      "created_at": "2026-08-23T01:16:19Z",
+      "updated_at": "2026-08-23T01:16:19Z"
     },
     {
       "schema_version": "1.0",
@@ -393,7 +692,7 @@
       "objective": "Document exact-revision Planning Integrity at the real worktree/direct-claim entrypoint and installed first-success path, then satisfy the focused coupling check before AES consumes the provider.",
       "profile": "small",
       "execution_class": "independently_executable",
-      "claimability": "ready_for_execution",
+      "claimability": "blocked_dependencies",
       "scope": {
         "included": [
           "docs/guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md",
@@ -431,6 +730,15 @@
             "required_status": "accepted"
           },
           "rationale": "Both operator surfaces document an accepted exact provider revision, not moving implementation bytes."
+        },
+        {
+          "unit_id": "pi-02e-renew-work-unit-custody",
+          "type": "hard",
+          "gate": {
+            "type": "unit_status",
+            "required_status": "accepted"
+          },
+          "rationale": "The separately scoped documentation lane cannot start under source selected-outcome enforcement until its exact successor claim owns an active selected allocation."
         }
       ],
       "conflict_surfaces": [
@@ -461,23 +769,25 @@
         }
       ],
       "readiness": {
-        "status": "ready",
+        "status": "blocked",
         "required_approval_types": [],
         "approvals": [],
-        "failed_guards": []
+        "failed_guards": [
+          "pi-02e-renew-work-unit-custody is not accepted"
+        ]
       },
       "claim_policy": {
-        "eligibility_rule": "PI-02 is accepted and no claim owns either the operator guide or GETTING_STARTED.md.",
+        "eligibility_rule": "PI-02 and PI-02E are accepted, the exact successor claim retains active selected-outcome custody, and no other claim owns either documentation surface.",
         "lease_policy": "renewable",
         "lease_duration_minutes": 240,
         "max_active_per_claimant": 1
       },
       "authorization_mode": "registry_claim",
       "integration_owner_id": "pi-03-aes-installed-dogfood",
-      "status": "ready",
-      "record_version": 2,
+      "status": "blocked",
+      "record_version": 3,
       "created_at": "2026-08-22T23:23:45Z",
-      "updated_at": "2026-08-23T00:58:07Z"
+      "updated_at": "2026-08-23T01:16:19Z"
     },
     {
       "schema_version": "1.0",

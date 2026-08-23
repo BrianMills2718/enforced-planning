@@ -38,6 +38,12 @@ RELATIONSHIP_CONTEXT_ROLLOUT_PATHS = {
 
 MAILBOX_COMMON_ROLLOUT_PATHS = {
     ".claude/hooks/notify-coordination-messages.sh",
+    # The canonical-checkout lock rides the coordination-messages rollout: a
+    # repo that gains coordination also gains the hook that repairs a stale
+    # canonical lock at session start and prints the escape hatch when a lock
+    # blocks a write.
+    ".claude/hooks/reconcile-canonical-locks.sh",
+    "scripts/meta/canonical_lock.py",
     ".claude/settings.json",
     ".codex/hooks.json",
     ".codex/hooks/notify-coordination-messages.sh",

@@ -779,6 +779,52 @@ def _print_human(result: WorktreeCreationResult) -> None:
         print(f"\n{result.import_provenance_warning}", file=sys.stderr)
 
 
+def _lock_canonical_checkout(repo_root: Path, *, as_json: bool) -> None:
+    """Make the canonical checkout read-only now that a lane exists.
+
+    This is the primary trigger for the canonical lock. It fires here because
+    creating a lane is the moment the canonical checkout stops being a safe
+    place to write, and because this wrapper is the sanctioned entry point that
+    agents already use -- nobody has to remember a separate command.
+
+    A failure to lock is reported loudly and does not fail worktree creation:
+    the lane is already usable, and a missing lock is a weaker state, not a
+    corrupt one. It must never be silent, which is why it prints either way.
+    """
+    module_path = Path(__file__).resolve().parent / "canonical_lock.py"
+    if not module_path.exists():
+        print(
+            f"WARNING: canonical lock unavailable ({module_path} missing); canonical checkout stays writable",
+            file=sys.stderr,
+        )
+        return
+    result = subprocess.run(
+        [sys.executable, str(module_path), "--reconcile", "--repo", str(repo_root), "--json"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        # stderr, never stdout: this wrapper's stdout is parsed as JSON by the
+        # installed make/session machinery, and an extra line there breaks the
+        # caller's rollback path.
+        print(
+            "WARNING: canonical checkout could not be locked; it remains writable and a "
+            f"concurrent write there can still destroy this lane's work.\n{result.stdout}{result.stderr}",
+            file=sys.stderr,
+        )
+        return
+    if not as_json:
+        try:
+            payload = json.loads(result.stdout or "{}")
+        except json.JSONDecodeError:
+            payload = {}
+        actions = payload.get("actions") or []
+        locked = [a for a in actions if a.get("action") in {"locked", "already_locked"}]
+        if locked:
+            print(f"canonical checkout is now read-only: {repo_root} (lane work belongs in the worktree above)")
+
+
 def main(argv: list[str] | None = None) -> int:
     """CLI entry point for safe worktree creation."""
     args = parse_args(argv)
@@ -848,6 +894,10 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(asdict(result), indent=2))
     else:
         _print_human(result)
+
+    if result.ok:
+        _lock_canonical_checkout(repo_root, as_json=args.json)
+
     return 0 if result.ok else 1
 
 

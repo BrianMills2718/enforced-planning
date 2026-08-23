@@ -500,6 +500,38 @@ def remove_worktree(worktree_path: str, force: bool = False) -> bool:
         return False
 
 
+def _reconcile_canonical_lock(worktree_path: str) -> None:
+    """Release the canonical lock once the lane that justified it is gone.
+
+    This has to happen here rather than being left to the next session start,
+    because ``finish_pr.py`` runs ``git pull --rebase`` in the canonical
+    checkout immediately after removing the worktree, and that write fails
+    against a locked tree.
+
+    Reconcile is claim-driven, not path-driven: if another lane is still live
+    against the same repository the lock correctly stays in place.
+    """
+    module_path = Path(__file__).resolve().parent / "canonical_lock.py"
+    if not module_path.exists():
+        return
+    result = subprocess.run(
+        [sys.executable, str(module_path), "--reconcile", "--quiet", "--json"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        print(
+            "WARNING: canonical lock state could not be reconciled after removing "
+            f"{worktree_path}. The canonical checkout may still be read-only.\n"
+            f"  Repair with: python3 {module_path} --reconcile\n"
+            f"{result.stdout}{result.stderr}",
+            file=sys.stderr,
+        )
+    elif result.stdout.strip():
+        print(result.stdout.strip(), file=sys.stderr)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Safely remove a git worktree, checking for uncommitted changes first."
@@ -520,6 +552,8 @@ def main() -> None:
         print("⚠️  WARNING: Force mode - uncommitted changes will be LOST!")
 
     success = remove_worktree(args.worktree_path, force=args.force)
+    if success:
+        _reconcile_canonical_lock(args.worktree_path)
     sys.exit(0 if success else 1)
 
 

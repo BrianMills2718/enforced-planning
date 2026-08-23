@@ -66,6 +66,7 @@ class WorktreeCreationResult:
     status: WorktreeStatusSummary | None
     coordination_checked: bool
     coordination_message: str | None
+    import_provenance_warning: str | None = None
 
 
 @dataclass(frozen=True)
@@ -685,6 +686,7 @@ def create_worktree(
             status=summary,
             coordination_checked=coordination_checked,
             coordination_message=coordination_message,
+            import_provenance_warning=_import_provenance_warning(worktree_path),
         )
 
     cleanup_performed = False
@@ -722,6 +724,37 @@ def create_worktree(
     )
 
 
+
+def _import_provenance_warning(worktree_path: Path) -> str | None:
+    """Report, without blocking, when this worktree's packages resolve elsewhere.
+
+    A clean git status says the checkout is isolated. It says nothing about
+    which code Python will import when tests run here. Those are different
+    isolations, and only the second one decides whether a green suite means
+    anything.
+
+    Measured, not Enforced: at creation the worktree has no environment yet, so
+    a hard failure here would deny a lane for a condition that is not yet true.
+    Enforce it where a repository is about to trust a result.
+    """
+    try:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        from import_provenance import (  # noqa: PLC0415
+            ImportProvenanceError,
+            check_import_provenance,
+            render_warning,
+        )
+    except ImportError:
+        return None
+    try:
+        return render_warning(check_import_provenance(worktree_path))
+    except ImportProvenanceError:
+        # The repository ships no discoverable package, so there is nothing this
+        # check can speak to. Silence here is honest; silence on a real leak is
+        # not, which is why check_import_provenance raises instead of passing.
+        return None
+
+
 def _print_human(result: WorktreeCreationResult) -> None:
     """Print a concise operator summary."""
     state = "OK" if result.ok else "FAIL"
@@ -739,6 +772,11 @@ def _print_human(result: WorktreeCreationResult) -> None:
             f"untracked={result.status.untracked_count} "
             f"entries={len(result.status.entries)}"
         )
+    if result.import_provenance_warning:
+        # stdout is block-buffered when piped; without the flush this warning
+        # lands above the lane summary it qualifies.
+        sys.stdout.flush()
+        print(f"\n{result.import_provenance_warning}", file=sys.stderr)
 
 
 def main(argv: list[str] | None = None) -> int:

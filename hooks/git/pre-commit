@@ -42,29 +42,155 @@ cd "$REPO_ROOT"
 # and ALLOW_CANONICAL_CHECKOUT_COMMIT=1 skips only this check while the rest of
 # the suite still runs -- unlike --no-verify, which skips everything.
 #
+# The escape hatch reintroduced the weakness the paragraph above warns about.
+# On 2026-08-23 one session set ALLOW_CANONICAL_CHECKOUT_COMMIT six times
+# across two repositories rather than create one worktree, because the hatch
+# was free: one variable prefixed onto the command already typed, versus a
+# five-blank `make maintenance-worktree`; nothing counted repeat use, so every
+# use looked like the first; and the first one succeeded, so nothing signalled
+# it was the worse path. The hatch is therefore metered per repository per
+# session -- 1st use quiet, 2nd loud, 3rd refused -- and the cost of the
+# correct path was cut to one argument in the same change.
+#
+# The ledger lives in this repository's own Git common directory rather than
+# under $HOME: that keys it by repository for free, is never tracked or
+# committed, is shared by every linked worktree of the clone, and disappears
+# when the clone does. Session identity comes from the agent runtime's session
+# id; with no runtime id it falls back to a per-UTC-day bucket, which
+# over-counts rather than under-counts -- the safe direction for a guard.
+#
 # Detect canonical vs. linked worktree by comparing --git-common-dir (always the
 # main repo's .git) with --git-dir (the same path in the canonical checkout, but
 # .git/worktrees/<name> in a linked worktree); equal means canonical. Both need
 # --path-format=absolute: from a subdirectory, plain --git-common-dir returns a
 # relative path while --git-dir returns absolute, so an unnormalized compare is
 # always unequal and the guard silently never fires.
-if [[ "$HOOK_MODE" != "off" && "${ALLOW_CANONICAL_CHECKOUT_COMMIT:-0}" != "1" ]]; then
+if [[ "$HOOK_MODE" != "off" ]]; then
     GIT_COMMON_DIR_ABS=$(git rev-parse --path-format=absolute --git-common-dir)
     GIT_DIR_ABS=$(git rev-parse --path-format=absolute --git-dir)
     if [[ "$GIT_COMMON_DIR_ABS" == "$GIT_DIR_ABS" ]]; then
-        echo ""
-        echo "ERROR: Commit blocked - this is the CANONICAL checkout, not a worktree."
-        echo "Implementation belongs in a claimed worktree at worktrees/<branch>/."
-        echo ""
-        echo "Fix - prefer the repository entry point, which also registers a claim:"
-        echo "  make worktree BRANCH=<name> TASK=\"...\"    # if this repo has it"
-        echo "  git worktree add worktrees/<name> -b <name>  # otherwise"
-        echo "  cd worktrees/<name>   # re-stage and commit there"
-        echo ""
-        echo "Escape hatch (reversible single-writer maintenance only):"
-        echo "  ALLOW_CANONICAL_CHECKOUT_COMMIT=1 git commit ..."
-        echo ""
-        exit 1
+
+        # The exact command for THIS repository, so the remedy needs no lookup.
+        # Repos that require a scoped write claim reject a bare BRANCH=, so name
+        # SESSION_WRITE_PATHS only where the Makefile actually demands it.
+        if [[ -f "$REPO_ROOT/Makefile" ]] && grep -q '^maintenance-worktree:' "$REPO_ROOT/Makefile"; then
+            WORKTREE_CMD="  make maintenance-worktree BRANCH=<name>"
+            if grep -q -- '--require-write-claim' "$REPO_ROOT/Makefile"; then
+                WORKTREE_CMD="$WORKTREE_CMD SESSION_WRITE_PATHS=\"<paths you will edit>\""
+            fi
+        elif [[ -f "$REPO_ROOT/Makefile" ]] && grep -q '^worktree:' "$REPO_ROOT/Makefile"; then
+            WORKTREE_CMD="  make worktree BRANCH=<name> TASK=\"...\" SESSION_GOAL=\"...\" SESSION_PHASE=\"...\""
+        else
+            WORKTREE_CMD="  git worktree add worktrees/<name> -b <name>"
+        fi
+
+        if [[ "${ALLOW_CANONICAL_CHECKOUT_COMMIT:-0}" != "1" ]]; then
+            echo ""
+            echo "ERROR: Commit blocked - this is the CANONICAL checkout, not a worktree."
+            echo "Implementation belongs in a claimed worktree at worktrees/<branch>/."
+            echo ""
+            echo "Fix - prefer the repository entry point, which also registers a claim:"
+            echo "$WORKTREE_CMD"
+            echo "  cd worktrees/<name>   # re-stage and commit there"
+            echo ""
+            echo "Escape hatch (reversible single-writer maintenance only). It is"
+            echo "metered: 2nd use in this repository this session warns, 3rd is refused."
+            echo "  ALLOW_CANONICAL_CHECKOUT_COMMIT=1 git commit ..."
+            echo ""
+            exit 1
+        fi
+
+        # --- the hatch was taken: meter it ------------------------------------
+        HATCH_SESSION="${CLAUDE_CODE_SESSION_ID:-${CLAUDE_SESSION_ID:-${CODEX_THREAD_ID:-${OPENCLAW_SESSION_ID:-}}}}"
+        if [[ -z "$HATCH_SESSION" ]]; then
+            HATCH_SESSION="nosession-$(date -u +%Y%m%d)"
+        fi
+        HATCH_SESSION="${HATCH_SESSION//[^A-Za-z0-9._-]/_}"
+        HATCH_LEDGER="$GIT_COMMON_DIR_ABS/canonical-checkout-hatch-uses"
+        HATCH_OVERRIDE="${CANONICAL_CHECKOUT_HATCH_OVERRIDE:-}"
+        HATCH_OVERRIDE="${HATCH_OVERRIDE//[$'\t\n']/ }"
+
+        # "Reversible single-writer maintenance" is a precondition an agent can
+        # satisfy by believing it, and the paths most often believed to qualify
+        # are the ones where it is provably false: a directory every session
+        # appends to concurrently is by construction not single-writer, so a
+        # commit touching only such paths cannot be a single-writer commit.
+        # Anchored egrep alternation, empty here because hooks/git/CLAUDE.md
+        # forbids repo-specific assumptions in a portable template. A consuming
+        # repo sets it to its own known shared-append roots -- project-meta uses
+        # '^learnings/entries/'. Keep it to directories with actual evidence of
+        # concurrent writers; this is not a general path-policy surface.
+        HATCH_SHARED_APPEND_DIRS=""
+        HATCH_STAGED=$(git diff --cached --name-only)
+        HATCH_SHARED_APPEND=0
+        if [[ -n "$HATCH_SHARED_APPEND_DIRS" && -n "$HATCH_STAGED" ]] \
+           && ! echo "$HATCH_STAGED" | grep -Eqv "$HATCH_SHARED_APPEND_DIRS"; then
+            HATCH_SHARED_APPEND=1
+        fi
+
+        HATCH_PRIOR=0
+        if [[ -f "$HATCH_LEDGER" ]]; then
+            HATCH_KEY=$'\t'"$HATCH_SESSION"$'\t'
+            HATCH_PRIOR=$(grep -c -F "$HATCH_KEY" "$HATCH_LEDGER" 2>/dev/null || true)
+        fi
+        HATCH_COUNT=$(( ${HATCH_PRIOR:-0} + 1 ))
+
+        HATCH_REFUSE_REASON=""
+        if [[ "$HATCH_SHARED_APPEND" == "1" ]]; then
+            HATCH_REFUSE_REASON="every staged path is under a shared-append directory that many sessions write concurrently, so the hatch's single-writer precondition is false here by construction"
+        elif [[ "$HATCH_COUNT" -ge 3 ]]; then
+            HATCH_REFUSE_REASON="this is hatch use #$HATCH_COUNT for this repository in this session; #2 already warned that #3 would be refused"
+        fi
+
+        if [[ -n "$HATCH_REFUSE_REASON" && -z "$HATCH_OVERRIDE" ]]; then
+            echo ""
+            echo "ERROR: canonical-checkout escape hatch REFUSED."
+            echo "Reason: $HATCH_REFUSE_REASON"
+            echo ""
+            echo "Fix - make the worktree once. It is one command, then commit there:"
+            echo "$WORKTREE_CMD"
+            echo "  cd worktrees/<name>   # re-stage and commit there"
+            echo ""
+            echo "Genuine emergency, recorded with your reason in"
+            echo "$HATCH_LEDGER :"
+            echo "  ALLOW_CANONICAL_CHECKOUT_COMMIT=1 \\"
+            echo "    CANONICAL_CHECKOUT_HATCH_OVERRIDE=\"why a worktree is impossible now\" \\"
+            echo "    git commit ..."
+            echo ""
+            echo "Or disable the whole check suite for one reversible commit:"
+            echo "  ENFORCED_PLANNING_HOOK_MODE=off git commit ..."
+            echo ""
+            exit 1
+        fi
+
+        # Record before allowing, so the next commit sees this one. A ledger that
+        # cannot be written is loud rather than silent: escalation stops counting,
+        # and refusing the commit over an unwritable counter file would be worse.
+        if ! printf '%s\t%s\t%s\t%s\n' \
+                "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+                "$HATCH_SESSION" \
+                "$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo '?')" \
+                "$HATCH_OVERRIDE" >> "$HATCH_LEDGER" 2>/dev/null; then
+            echo "WARNING: could not write $HATCH_LEDGER; this hatch use is NOT counted."
+        fi
+
+        if [[ -n "$HATCH_OVERRIDE" ]]; then
+            echo ""
+            echo "Canonical-checkout hatch OVERRIDE, use #$HATCH_COUNT this session."
+            echo "Recorded reason: $HATCH_OVERRIDE"
+            echo ""
+        elif [[ "$HATCH_COUNT" -ge 2 ]]; then
+            echo ""
+            echo "WARNING: canonical-checkout escape hatch, use #$HATCH_COUNT for this"
+            echo "repository in this session. THE NEXT USE IS REFUSED."
+            echo "The hatch is for one exception; you are using it as a workflow."
+            echo "Make the worktree now - one command, and it registers the claim:"
+            echo "$WORKTREE_CMD"
+            echo "  cd worktrees/<name>   # re-stage and commit there"
+            echo ""
+        else
+            echo "Canonical-checkout guard bypassed (hatch use #1 this session, recorded)."
+        fi
     fi
 fi
 # --- end canonical-checkout guard ---------------------------------------------

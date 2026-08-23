@@ -92,8 +92,28 @@ and refresh the pre-write projection in the same locked mutation.
    `make worktree BRANCH=... TASK="..." [PLAN=N]`; do not create new lanes in
    `~/worktrees/`, `_worktrees/`, `<repo>_worktrees/`, or ad hoc sibling paths.
    For bounded light maintenance without a numbered plan, use
-   `make maintenance-worktree ...`; it creates the initial claim, worktree,
-   tracker, and explicit `UNPLANNED` claim linkage as one sanctioned journey.
+   `make maintenance-worktree BRANCH=<name>`; it creates the initial claim,
+   worktree, tracker, and explicit `UNPLANNED` claim linkage as one sanctioned
+   journey. `BRANCH` is the only required input: `TASK`, `SESSION_GOAL`, and
+   `SESSION_PHASE` default from the branch name, and the agent defaults from the
+   runtime. All of them stay overridable, and a repo that requires a scoped write
+   claim still needs `SESSION_WRITE_PATHS="..."`. `make worktree` (plan-owned
+   lanes) deliberately keeps every input explicit.
+
+   The pre-commit canonical-checkout guard's escape hatch,
+   `ALLOW_CANONICAL_CHECKOUT_COMMIT=1`, is metered per repository per session:
+   the first use is recorded quietly, the second warns, the third is refused.
+   The ledger is `<repo>/.git/canonical-checkout-hatch-uses`. A genuine emergency
+   passes `CANONICAL_CHECKOUT_HATCH_OVERRIDE="<reason>"` alongside it, which is
+   allowed and records the reason; `ENFORCED_PLANNING_HOOK_MODE=off` still
+   disables the whole check suite for one reversible commit. A repository may
+   also set `HATCH_SHARED_APPEND_DIRS` in its installed hook to an anchored
+   egrep alternation of directories many sessions append to concurrently; a
+   commit whose staged paths are all inside one of those is refused outright,
+   because the hatch's "single-writer" precondition is false there by
+   construction. The metering exists because the hatch used to be free: on
+   2026-08-23 one session took it six times across two repositories rather than
+   create a single worktree.
 3. Give each worktree one mission and one plan or one bounded temporary plan
    doc. Do not let a worktree become a second long-lived control plane.
 4. Keep generated proof artifacts inside the worktree until they are

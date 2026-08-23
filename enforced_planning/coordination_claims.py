@@ -1148,7 +1148,7 @@ def validate_claim_for_creation(claim: ClaimRecord) -> None:
         "missing_worktree_path": "--worktree-path",
         "missing_session_id": "--session-id",
         "missing_session_name": "--session-name",
-        "missing_plan_ref": "--plan (or explicit UNPLANNED through the maintenance path)",
+        "missing_plan_ref": "--plan (`--plan UNPLANNED` for unplanned work, as `make maintenance-worktree` passes)",
         "missing_work_unit_id": "--work-unit-id",
         "missing_work_graph_path": "--work-graph",
         "missing_work_graph_sha256": "a validated canonical work-graph binding",

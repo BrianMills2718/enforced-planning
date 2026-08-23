@@ -489,7 +489,16 @@ def verify_scoped_write_claim(
             and Path(claim.worktree_path).expanduser().resolve() == worktree_path.resolve()
             and bool(claim.session_id and claim.session_name and claim.broader_goal)
         )
-        if staged_plan_reservation:
+        staged_unplanned_reservation = (
+            claim.tracker_path is None
+            and isinstance(claim.plan_ref, str)
+            and claim.plan_ref.strip() == "UNPLANNED"
+            and claim.branch == branch
+            and claim.worktree_path is not None
+            and Path(claim.worktree_path).expanduser().resolve() == worktree_path.resolve()
+            and bool(claim.session_id and claim.session_name and claim.broader_goal)
+        )
+        if staged_plan_reservation or staged_unplanned_reservation:
             issues = [issue for issue in issues if issue != "missing_tracker_path"]
         if issues:
             weak_matching_claims.append((claim, issues))

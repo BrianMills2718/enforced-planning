@@ -31,14 +31,20 @@ under confinement and observing what broke, not by inspection:
     Branch ref updates for the lane branch and remote-tracking refs.
 ``<repo>/.git/logs``
     Reflog updates that accompany every ref update.
-``<repo>/.git/config``
-    Only needed by ``git push -u`` / ``git branch --set-upstream-to``.
-    Observed failure without it: the push succeeds but prints ``error: could
-    not lock config file ...: Read-only file system`` and leaves no upstream.
+Deliberately *not* carved out: ``<repo>/.git`` itself, and therefore
+``<repo>/.git/index``, ``<repo>/.git/HEAD``, and ``<repo>/.git/config``. A lane
+cannot switch or dirty the canonical checkout, which is the collision this
+wrapper prevents.
 
-Deliberately *not* carved out: ``<repo>/.git/index``, ``<repo>/.git/HEAD``, and
-the canonical working tree. A lane therefore cannot switch or dirty the
-canonical checkout, which is the collision this wrapper prevents.
+The one known cost of that choice, established by execution: ``git push -u``
+fails to record the upstream. The push itself succeeds; only the config write
+fails, with ``error: could not lock config file ...: Read-only file system``.
+Carving out ``.git/config`` as a file does NOT fix this -- the file becomes
+writable but git creates ``.git/config.lock`` beside it, which needs the
+``.git`` *directory* writable. Use ``git push origin <branch>`` (verified
+working), set the upstream once from outside confinement, or opt in explicitly
+with ``--extra-writable <repo>/.git`` and accept that the canonical index and
+HEAD become writable again.
 
 Everything outside the repository stays writable, which was also verified
 rather than assumed: the coordination claim registry under
@@ -78,7 +84,6 @@ GIT_WRITABLE_SUBPATHS = (
     ".git/objects",
     ".git/refs",
     ".git/logs",
-    ".git/config",
 )
 
 
@@ -208,6 +213,34 @@ def _setenv_args(env: dict[str, str]) -> list[str]:
             continue
         args.extend(["--setenv", f"{key}={env[key]}"])
     return args
+
+
+def redact_command(cmd: list[str]) -> list[str]:
+    """Collapse forwarded environment into a count before reporting a command.
+
+    The forwarded environment routinely contains API tokens and session
+    secrets. Printing the launch command verbatim (``--dry-run``, ``--json``)
+    would write them to the transcript, so reported commands never carry
+    ``--setenv`` values.
+    """
+
+    redacted: list[str] = []
+    forwarded = 0
+    skip_next = False
+    for item in cmd:
+        if skip_next:
+            skip_next = False
+            forwarded += 1
+            continue
+        if item == "--setenv":
+            skip_next = True
+            continue
+        redacted.append(item)
+    if forwarded:
+        index = 1 if redacted and redacted[0] == "systemd-run" else 0
+        redacted.insert(index + 1, f"<{forwarded} forwarded environment variables, values redacted>")
+        redacted.insert(index + 1, "--setenv")
+    return redacted
 
 
 def build_command(
@@ -464,7 +497,7 @@ def main(argv: list[str] | None = None) -> int:
             confined=confined,
             reason=detail,
             confinement=asdict(confinement),
-            command=cmd,
+            command=redact_command(cmd),
             exit_code=None,
         )
         print(json.dumps(asdict(result), indent=2) if args.json else _human(result))
@@ -479,7 +512,7 @@ def main(argv: list[str] | None = None) -> int:
         confined=confined,
         reason=detail,
         confinement=asdict(confinement),
-        command=cmd,
+        command=redact_command(cmd),
         exit_code=proc.returncode,
     )
     if args.json:

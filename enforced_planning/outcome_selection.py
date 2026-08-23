@@ -35,6 +35,10 @@ from enforced_planning.outcome_portfolio import (
     ResolvedOutcomePortfolioAllocationV1,
     require_active_portfolio_allocation,
 )
+from enforced_planning.plan_validation import (
+    PlanningIntegrityError,
+    validate_plan_integrity_at_revision,
+)
 
 HEX_SHA256_PATTERN = r"^[0-9a-f]{64}$"
 UNPLANNED_PLAN_REF = session_contracts.UNPLANNED_PLAN_REF
@@ -602,6 +606,60 @@ def _execution_authority(
             "planned execution authority must exactly equal the canonical claim plan_ref",
         )
     return authority
+
+
+def _validate_planned_outcome_baseline(
+    *,
+    authority: str,
+    claim: coordination_claims.ClaimRecord,
+    scenario: OutcomeContinuationScenarioV1,
+) -> None:
+    """Revalidate a planned selection at its immutable outcome baseline."""
+
+    normalized = coordination_claims.normalize_plan_identity(authority)
+    if normalized is None:
+        return
+    qualified_project, _, raw_plan_number = normalized.rpartition("#")
+    plan_number = int(raw_plan_number)
+    repository_id = claim.primary_project() or ""
+    if qualified_project != "Plan ":
+        expected_project = repository_id.lower().replace("_", "-")
+        if qualified_project != expected_project:
+            raise OutcomeSelectionError(
+                "plan_identity_mismatch",
+                "qualified plan repository does not equal the exact claim project",
+            )
+    if not claim.repo_root:
+        raise OutcomeSelectionError(
+            "plan_integrity_unavailable",
+            "planned selection requires the exact claim repository root",
+        )
+    baseline_revision = scenario.contract.baseline_revision
+    try:
+        integrity = validate_plan_integrity_at_revision(
+            repo_root=claim.repo_root,
+            repository_id=repository_id,
+            plan_number=plan_number,
+            start_point=baseline_revision,
+        )
+    except PlanningIntegrityError as exc:
+        raise OutcomeSelectionError(
+            "plan_integrity_unavailable",
+            f"unable to validate {authority} at outcome baseline {baseline_revision}: {exc}",
+        ) from exc
+    if integrity.mode != "enforce":
+        return
+    if integrity.source_revision != baseline_revision:
+        raise OutcomeSelectionError(
+            "baseline_revision_not_immutable",
+            "enforced planned selection requires one full immutable Git commit baseline",
+        )
+    if integrity.disposition == "fail":
+        finding_codes = ", ".join(item.code for item in integrity.findings)
+        raise OutcomeSelectionError(
+            "plan_integrity_rejected",
+            f"Planning Integrity rejected {authority} at {baseline_revision}: {finding_codes}",
+        )
 
 
 def _portfolio_allocation_for_scenario(
@@ -1211,6 +1269,11 @@ def select_outcome_for_session(
         )
         authority = _execution_authority(
             execution_authority_ref,
+            claim=claim,
+            scenario=scenario,
+        )
+        _validate_planned_outcome_baseline(
+            authority=authority,
             claim=claim,
             scenario=scenario,
         )

@@ -107,6 +107,102 @@ def _scenario(
     )
 
 
+def _with_baseline(
+    scenario: OutcomeContinuationScenarioV1,
+    baseline_revision: str,
+) -> OutcomeContinuationScenarioV1:
+    contract = scenario.contract.model_copy(
+        update={"baseline_revision": baseline_revision}
+    )
+    contract_sha256 = canonical_sha256(contract)
+    receipts = [
+        receipt.model_copy(update={"outcome_contract_sha256": contract_sha256})
+        for receipt in scenario.receipts
+    ]
+    return scenario.model_copy(update={"contract": contract, "receipts": receipts})
+
+
+def _valid_integrity_plan(plan_number: int = 117) -> str:
+    return f"""# Plan #{plan_number}: Exact selection fixture
+
+## User Outcome
+
+An operator can bind one selected outcome to an inspectable complete plan.
+
+## Canonical Behavioral Example
+
+**Starting state:** A committed plan and configuration select enforcement.
+**Action:** The operator selects the governed outcome.
+**Expected result:** Selection returns a revision-bound structural pass.
+**Failure signal:** An incomplete baseline cannot create a binding.
+
+## Capability Adoption
+
+**Disposition:** reuse
+
+Reuse the canonical Planning Integrity validator.
+
+## Plan
+
+**Critical-path classification: vertical.** Prove the selection boundary.
+
+## Acceptance Criteria
+
+1. An incomplete baseline is rejected before tracker mutation.
+
+## Epistemic Planning Frontier
+
+| Area | State | Current contract | Trigger or stopping rule | Downstream update |
+|---|---|---|---|---|
+| Exact selection | fully_specifiable_now | Parse committed plan bytes | Stop after both signs discriminate | Update selection tests |
+| Consumer variance | exploration_required | Inspect one consumer | Stop after one installed run | Update the consumer plan |
+
+## Reassessment Contract
+
+- **Triggers:** A plan assumption fails or the consumer differs.
+- **Autonomous action:** Change reversible implementation tactics.
+- **Plan revision required:** Change the outcome, contract, or declared frontier.
+- **Human decision required:** Cross a scope, authority, irreversible, or spend boundary.
+- **Stopping rule:** Stop after one installed both-sign proof.
+"""
+
+
+def _commit_integrity_baseline(
+    worktree: Path,
+    *,
+    mode: str,
+    minimum_plan_number: int = 1,
+    plans: dict[str, str],
+) -> str:
+    (worktree / "meta-process.yaml").write_text(
+        "meta_process:\n"
+        "  plans:\n"
+        "    plans_dir: docs/plans\n"
+        "    integrity:\n"
+        f'      mode: "{mode}"\n'
+        "      contract_version: 1.0.0\n"
+        f"      minimum_plan_number: {minimum_plan_number}\n",
+        encoding="utf-8",
+    )
+    plans_dir = worktree / "docs" / "plans"
+    plans_dir.mkdir(parents=True, exist_ok=True)
+    for name, content in plans.items():
+        (plans_dir / name).write_text(content, encoding="utf-8")
+    _git(worktree, "add", "meta-process.yaml", "docs/plans")
+    _git(worktree, "commit", "-m", "planning integrity baseline")
+    return _git(worktree, "rev-parse", "HEAD")
+
+
+def _write_scenario_baseline(scenario_path: Path, revision: str) -> None:
+    scenario = OutcomeContinuationScenarioV1.model_validate_json(
+        scenario_path.read_bytes()
+    )
+    scenario_path.write_text(
+        _with_baseline(scenario, revision).model_dump_json(indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+
 def _classed_scenario() -> OutcomeContinuationScenarioV1:
     legacy = _scenario(scenario_id="plan120-classed-selection")
     contract = OutcomeContractV1.model_validate(
@@ -319,7 +415,11 @@ def _fixture(
     }
     claim_path.write_text(yaml.safe_dump(claim_payload, sort_keys=False), encoding="utf-8")
     scenario_path = worktree / "scenarios" / "selected.json"
-    scenario_path.write_text(_scenario().model_dump_json(indent=2) + "\n", encoding="utf-8")
+    baseline_revision = _git(worktree, "rev-parse", "HEAD")
+    scenario_path.write_text(
+        _with_baseline(_scenario(), baseline_revision).model_dump_json(indent=2) + "\n",
+        encoding="utf-8",
+    )
     return repo, worktree, claims_dir, claim_path, scenario_path
 
 
@@ -452,8 +552,15 @@ def test_planned_selection_is_create_once_and_idempotent(
     assert tracker["tracker"]["outcome_selection"]["claim_plan_ref"] == "enforced-planning#117"
 
     different_path = scenario_path.with_name("different.json")
+    selected_scenario = OutcomeContinuationScenarioV1.model_validate_json(
+        scenario_path.read_bytes()
+    )
     different_path.write_text(
-        _scenario(scenario_id="plan117-different").model_dump_json(indent=2) + "\n",
+        _with_baseline(
+            _scenario(scenario_id="plan117-different"),
+            selected_scenario.contract.baseline_revision,
+        ).model_dump_json(indent=2)
+        + "\n",
         encoding="utf-8",
     )
     with pytest.raises(OutcomeSelectionError, match="already selected") as caught:
@@ -467,6 +574,216 @@ def test_planned_selection_is_create_once_and_idempotent(
             claims_dir=claims_dir,
         )
     assert caught.value.code == "selection_conflict"
+
+
+def test_planned_selection_validates_exact_enforced_baseline_without_schema_change(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CODEX_THREAD_ID", "plan117-test")
+    _repo, worktree, claims_dir, _claim_path, scenario_path = _fixture(
+        tmp_path,
+        plan_ref="enforced-planning#117",
+    )
+    baseline = _commit_integrity_baseline(
+        worktree,
+        mode="enforce",
+        plans={"117_exact.md": _valid_integrity_plan()},
+    )
+    _write_scenario_baseline(scenario_path, baseline)
+
+    result = select_outcome_for_session(
+        agent="codex",
+        project="enforced-planning",
+        scope="plan117-test",
+        session_id=SESSION,
+        execution_authority_ref="enforced-planning#117",
+        scenario_path=scenario_path,
+        claims_dir=claims_dir,
+    )
+
+    assert result.status == "selected"
+    assert result.binding.schema_version == "1.0.0"
+    assert "plan_integrity" not in result.binding.model_dump(mode="json")
+
+
+@pytest.mark.parametrize(
+    ("plans", "expected_finding"),
+    [
+        ({}, "missing_plan"),
+        ({"117_incomplete.md": "# Incomplete plan\n"}, "missing_user_outcome"),
+        (
+            {
+                "117_first.md": _valid_integrity_plan(),
+                "0117_duplicate.md": _valid_integrity_plan(),
+            },
+            "ambiguous_plan_identity",
+        ),
+    ],
+)
+def test_planned_selection_rejects_invalid_enforced_baseline_without_tracker_mutation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    plans: dict[str, str],
+    expected_finding: str,
+) -> None:
+    monkeypatch.setenv("CODEX_THREAD_ID", "plan117-test")
+    _repo, worktree, claims_dir, claim_path, scenario_path = _fixture(
+        tmp_path,
+        plan_ref="enforced-planning#117",
+    )
+    baseline = _commit_integrity_baseline(
+        worktree,
+        mode="enforce",
+        plans=plans,
+    )
+    _write_scenario_baseline(scenario_path, baseline)
+    tracker_path = Path(yaml.safe_load(claim_path.read_text(encoding="utf-8"))["tracker_path"])
+    tracker_before = tracker_path.read_bytes()
+
+    with pytest.raises(OutcomeSelectionError) as caught:
+        select_outcome_for_session(
+            agent="codex",
+            project="enforced-planning",
+            scope="plan117-test",
+            session_id=SESSION,
+            execution_authority_ref="enforced-planning#117",
+            scenario_path=scenario_path,
+            claims_dir=claims_dir,
+        )
+
+    assert caught.value.code == "plan_integrity_rejected"
+    assert expected_finding in str(caught.value)
+    assert tracker_path.read_bytes() == tracker_before
+
+
+def test_planned_selection_reads_baseline_not_later_worktree_plan(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CODEX_THREAD_ID", "plan117-test")
+    _repo, worktree, claims_dir, _claim_path, scenario_path = _fixture(
+        tmp_path,
+        plan_ref="enforced-planning#117",
+    )
+    plan_path = worktree / "docs" / "plans" / "117_stale.md"
+    baseline = _commit_integrity_baseline(
+        worktree,
+        mode="enforce",
+        plans={plan_path.name: "# Incomplete committed plan\n"},
+    )
+    _write_scenario_baseline(scenario_path, baseline)
+    plan_path.write_text(_valid_integrity_plan(), encoding="utf-8")
+
+    with pytest.raises(OutcomeSelectionError) as caught:
+        select_outcome_for_session(
+            agent="codex",
+            project="enforced-planning",
+            scope="plan117-test",
+            session_id=SESSION,
+            execution_authority_ref="enforced-planning#117",
+            scenario_path=scenario_path,
+            claims_dir=claims_dir,
+        )
+
+    assert caught.value.code == "plan_integrity_rejected"
+    assert "missing_user_outcome" in str(caught.value)
+
+
+def test_planned_selection_rejects_mismatched_qualified_project(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CODEX_THREAD_ID", "plan117-test")
+    _repo, worktree, claims_dir, _claim_path, scenario_path = _fixture(
+        tmp_path,
+        plan_ref="other-project#117",
+    )
+    baseline = _commit_integrity_baseline(
+        worktree,
+        mode="enforce",
+        plans={"117_exact.md": _valid_integrity_plan()},
+    )
+    _write_scenario_baseline(scenario_path, baseline)
+
+    with pytest.raises(OutcomeSelectionError) as caught:
+        select_outcome_for_session(
+            agent="codex",
+            project="enforced-planning",
+            scope="plan117-test",
+            session_id=SESSION,
+            execution_authority_ref="other-project#117",
+            scenario_path=scenario_path,
+            claims_dir=claims_dir,
+        )
+
+    assert caught.value.code == "plan_identity_mismatch"
+
+
+def test_enforced_selection_rejects_symbolic_baseline_revision(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CODEX_THREAD_ID", "plan117-test")
+    _repo, worktree, claims_dir, _claim_path, scenario_path = _fixture(
+        tmp_path,
+        plan_ref="enforced-planning#117",
+    )
+    _commit_integrity_baseline(
+        worktree,
+        mode="enforce",
+        plans={"117_exact.md": _valid_integrity_plan()},
+    )
+    _write_scenario_baseline(scenario_path, "plan117-test")
+
+    with pytest.raises(OutcomeSelectionError) as caught:
+        select_outcome_for_session(
+            agent="codex",
+            project="enforced-planning",
+            scope="plan117-test",
+            session_id=SESSION,
+            execution_authority_ref="enforced-planning#117",
+            scenario_path=scenario_path,
+            claims_dir=claims_dir,
+        )
+
+    assert caught.value.code == "baseline_revision_not_immutable"
+
+
+@pytest.mark.parametrize(
+    ("mode", "minimum_plan_number"),
+    [("off", 1), ("observe", 1), ("enforce", 118)],
+)
+def test_planned_selection_preserves_nonblocking_integrity_modes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mode: str,
+    minimum_plan_number: int,
+) -> None:
+    monkeypatch.setenv("CODEX_THREAD_ID", "plan117-test")
+    _repo, worktree, claims_dir, _claim_path, scenario_path = _fixture(
+        tmp_path,
+        plan_ref="enforced-planning#117",
+    )
+    baseline = _commit_integrity_baseline(
+        worktree,
+        mode=mode,
+        minimum_plan_number=minimum_plan_number,
+        plans={"117_incomplete.md": "# Incomplete plan\n"},
+    )
+    _write_scenario_baseline(scenario_path, baseline)
+
+    result = select_outcome_for_session(
+        agent="codex",
+        project="enforced-planning",
+        scope="plan117-test",
+        session_id=SESSION,
+        execution_authority_ref="enforced-planning#117",
+        scenario_path=scenario_path,
+        claims_dir=claims_dir,
+    )
+
+    assert result.status == "selected"
 
 
 def test_classed_selection_requires_retains_and_revalidates_active_allocation(

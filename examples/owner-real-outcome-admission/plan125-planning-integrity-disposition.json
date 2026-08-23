@@ -1,11 +1,11 @@
 {
   "schema_version": "1.0.0",
   "record_type": "outcome_portfolio_disposition_request",
-  "disposition_id": "plan-125-planning-integrity-acceptance-v10-park-for-aes",
-  "requested_at": "2026-08-23T11:33:30Z",
-  "allocation_id": "plan-125-planning-integrity-allocation-v10",
-  "allocation_sha256": "e271ba8d4536ad4905184ca482b828a92024ba75d276aff56f62a54a7c468875",
-  "disposition": "parked",
-  "decision_ref": "enforced-planning#125-pi02d-accepted",
-  "reason": "Release the exact active acceptance-transition allocation after PI-02D acceptance merged and before installed AES dogfood begins."
+  "disposition_id": "plan-125-planning-integrity-v11-complete",
+  "requested_at": "2026-08-23T11:59:09Z",
+  "allocation_id": "plan-125-planning-integrity-allocation-v11",
+  "allocation_sha256": "d7d6edbd6c697af75feaf28006e34cf38c62c92065158b96c75c572b0fda3f31",
+  "disposition": "complete",
+  "decision_ref": "enforced-planning#125-pi03-accepted",
+  "reason": "Release the final Planning Integrity allocation after PI-03 acceptance and Plan 125 closeout merge."
 }

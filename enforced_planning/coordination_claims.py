@@ -69,6 +69,7 @@ CREATION_BLOCKING_HEALTH_ISSUES = {
     "missing_worktree_path",
     "missing_session_id",
     "missing_session_name",
+    "missing_plan_ref",
     "missing_work_unit_id",
     "missing_work_graph_path",
     "missing_work_graph_sha256",
@@ -500,6 +501,8 @@ def claim_health_issues(claim: ClaimRecord) -> list[str]:
             issues.append("missing_session_id")
         if not claim.session_name:
             issues.append("missing_session_name")
+        if not claim.plan_ref:
+            issues.append("missing_plan_ref")
         if claim.plan_ref and claim.session_id:
             if not claim.repo_root:
                 issues.append("missing_repo_root")
@@ -1103,19 +1106,32 @@ def claim_enforcement_issues(claim: ClaimRecord) -> list[dict[str, str]]:
     """Return blocking operator findings that require an explicit disposition."""
 
     lifecycle = claim_lifecycle_issues(claim)
-    if "branch_merged_to_default" not in lifecycle:
-        return []
-    return [
-        {
-            "code": "merged_active_claim_requires_disposition",
-            "severity": "high",
-            "message": (
-                f"Active claim {claim.primary_project()}:{claim.scope} owns branch "
-                f"{claim.branch!r}, which is already integrated into the canonical default branch. "
-                "Run sanctioned session-close or record a supported kept-open disposition."
-            ),
-        }
-    ]
+    issues: list[dict[str, str]] = []
+    if "missing_plan_ref" in claim_health_issues(claim):
+        issues.append(
+            {
+                "code": "live_claim_missing_plan_ref",
+                "severity": "high",
+                "message": (
+                    f"Live claim {claim.primary_project()}:{claim.scope} has no plan_ref. "
+                    "Resume or recreate the lane through a sanctioned plan-, goal-, or "
+                    "UNPLANNED-bound entrypoint, or close it with an explicit disposition."
+                ),
+            }
+        )
+    if "branch_merged_to_default" in lifecycle:
+        issues.append(
+            {
+                "code": "merged_active_claim_requires_disposition",
+                "severity": "high",
+                "message": (
+                    f"Active claim {claim.primary_project()}:{claim.scope} owns branch "
+                    f"{claim.branch!r}, which is already integrated into the canonical default branch. "
+                    "Run sanctioned session-close or record a supported kept-open disposition."
+                ),
+            }
+        )
+    return issues
 
 
 def validate_claim_for_creation(claim: ClaimRecord) -> None:
@@ -1132,6 +1148,7 @@ def validate_claim_for_creation(claim: ClaimRecord) -> None:
         "missing_worktree_path": "--worktree-path",
         "missing_session_id": "--session-id",
         "missing_session_name": "--session-name",
+        "missing_plan_ref": "--plan (or explicit UNPLANNED through the maintenance path)",
         "missing_work_unit_id": "--work-unit-id",
         "missing_work_graph_path": "--work-graph",
         "missing_work_graph_sha256": "a validated canonical work-graph binding",

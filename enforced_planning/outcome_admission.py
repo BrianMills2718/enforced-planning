@@ -99,6 +99,9 @@ _BOOTSTRAP_EXAMPLE_RE = re.compile(
 )
 _SHARED_BOOTSTRAP_PATHS = frozenset({"docs/plans/CLAUDE.md", "ROADMAP.md"})
 DEFAULT_OUTCOME_ADMISSION_RECEIPT_PATH = Path.home() / ".claude" / "coordination" / "outcome-admission-v1.jsonl"
+DEFAULT_SELECTION_PENDING_ACTIVATION_RECEIPT_PATH = (
+    Path.home() / ".claude" / "coordination" / "selection-pending-activation-v1.jsonl"
+)
 HEX_SHA256_PATTERN = r"^[0-9a-f]{64}$"
 
 
@@ -272,6 +275,69 @@ class SelectedOutcomeAdmissionEvidenceV1(StrictModel):
             raise ValueError("legacy selected evidence cannot retain portfolio fields")
         if self.selection_schema_version == "1.1.0" and not all(value is not None for value in fields):
             raise ValueError("classed selected evidence requires complete portfolio fields")
+        return self
+
+
+class SelectionPendingActivationEvidenceV1(StrictModel):
+    """Exact v4 reservation allowed to create only its first session tracker."""
+
+    schema_version: Literal["1.0.0"] = "1.0.0"
+    agent: str = Field(min_length=1)
+    project: str = Field(min_length=1)
+    scope: str = Field(min_length=1)
+    session_id: str = Field(min_length=3)
+    claim_source_file: str = Field(min_length=1)
+    claim_reservation_sha256: str = Field(pattern=HEX_SHA256_PATTERN)
+    claim_schema_version: Literal[4] = 4
+    repo_root: str = Field(min_length=1)
+    worktree_path: str = Field(min_length=1)
+    branch: str = Field(min_length=1)
+    work_unit_id: str = Field(min_length=1)
+    work_graph_path: str = Field(min_length=1)
+    work_graph_sha256: str = Field(pattern=HEX_SHA256_PATTERN)
+    start_revision: str = Field(pattern=r"^[0-9a-f]{40}$")
+    sole_health_issue: Literal["missing_tracker_path"] = "missing_tracker_path"
+
+
+class SelectionPendingActivationResultV1(StrictModel):
+    """A separately versioned tracker-attachment result, never selected admission."""
+
+    schema_version: Literal["1.0.0"] = "1.0.0"
+    disposition: Literal["defer", "deny"]
+    reason_code: str = Field(min_length=3)
+    evidence: SelectionPendingActivationEvidenceV1 | None = None
+    resolution_error_code: str | None = None
+    resolution_error_message: str | None = None
+
+    @model_validator(mode="after")
+    def validate_result(self) -> SelectionPendingActivationResultV1:
+        errors = (self.resolution_error_code, self.resolution_error_message)
+        if self.disposition == "defer":
+            if self.reason_code != "selection_pending" or self.evidence is None or any(
+                value is not None for value in errors
+            ):
+                raise ValueError("selection-pending defer requires exact evidence and no resolution error")
+        elif self.evidence is not None or not all(value is not None for value in errors):
+            raise ValueError("selection-pending denial requires a complete error and no evidence")
+        return self
+
+
+class SelectionPendingActivationReceiptV1(StrictModel):
+    """Append-only staged-activation receipt isolated from admission v1 readers."""
+
+    schema_version: Literal["1.0.0"] = "1.0.0"
+    record_type: Literal["selection_pending_activation_receipt"] = "selection_pending_activation_receipt"
+    receipt_id: str = Field(pattern=r"^spact-[0-9a-f]{32}$")
+    observed_at: datetime
+    result_sha256: str = Field(pattern=HEX_SHA256_PATTERN)
+    result: SelectionPendingActivationResultV1
+
+    @model_validator(mode="after")
+    def validate_receipt(self) -> SelectionPendingActivationReceiptV1:
+        if self.observed_at.tzinfo is None or self.observed_at.utcoffset() is None:
+            raise ValueError("observed_at must be timezone-aware")
+        if canonical_sha256(self.result) != self.result_sha256:
+            raise ValueError("result_sha256 does not match the retained result")
         return self
 
 
@@ -765,6 +831,253 @@ def evaluate_selected_claim_admission(
     )
 
 
+def _selection_pending_failure(code: str, message: str) -> SelectionPendingActivationResultV1:
+    """Return one fail-closed staged-activation result."""
+
+    return SelectionPendingActivationResultV1(
+        disposition="deny",
+        reason_code="outcome_admission_state_invalid",
+        resolution_error_code=code,
+        resolution_error_message=message,
+    )
+
+
+def evaluate_selection_pending_session_activation(
+    claim: coordination_claims.ClaimRecord,
+) -> SelectionPendingActivationResultV1:
+    """Validate one exact pre-tracker v4 reservation without selecting an outcome.
+
+    This is intentionally narrower than selected admission. It can justify
+    only the first tracker write at ``session_start``; every later protected
+    boundary continues through the selected-outcome resolver.
+    """
+
+    project = claim.primary_project()
+    required = {
+        "project": project,
+        "session_id": claim.session_id,
+        "repo_root": claim.repo_root,
+        "worktree_path": claim.worktree_path,
+        "branch": claim.branch,
+        "claim_source_file": claim.source_file,
+        "plan_ref": claim.plan_ref,
+        "work_unit_id": claim.work_unit_id,
+        "work_graph_path": claim.work_graph_path,
+        "work_graph_sha256": claim.work_graph_sha256,
+        "start_revision": claim.start_revision,
+    }
+    missing = sorted(name for name, value in required.items() if not value)
+    if missing:
+        return _selection_pending_failure(
+            "selection_pending_identity_incomplete",
+            "staged reservation lacks required identity: " + ", ".join(missing),
+        )
+    if claim.schema_version != 4:
+        return _selection_pending_failure(
+            "selection_pending_claim_version_invalid",
+            "staged session activation requires an exact schema-v4 claim",
+        )
+    if claim.claim_type != "write" or not claim.write_paths:
+        return _selection_pending_failure(
+            "selection_pending_write_scope_missing",
+            "staged session activation requires bounded write ownership",
+        )
+    if claim.tracker_path is not None:
+        return _selection_pending_failure(
+            "selection_pending_tracker_already_linked",
+            "staged session activation is valid only before the first tracker is linked",
+        )
+    if not coordination_claims.requires_work_graph(claim.plan_ref):
+        return _selection_pending_failure(
+            "selection_pending_plan_authority_invalid",
+            "staged session activation requires numbered-plan work-graph authority",
+        )
+    assert claim.start_revision is not None
+    if re.fullmatch(r"[0-9a-f]{40}", claim.start_revision) is None:
+        return _selection_pending_failure(
+            "selection_pending_start_revision_invalid",
+            "staged session activation requires one bare 40-hex Git commit",
+        )
+
+    source_path = Path(str(claim.source_file)).expanduser().resolve()
+    try:
+        payload = yaml.safe_load(source_path.read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError) as exc:
+        return _selection_pending_failure(
+            "selection_pending_claim_source_unavailable",
+            f"unable to resolve exact staged claim source: {exc}",
+        )
+    current = (
+        coordination_claims.normalize_claim(payload, source_file=str(source_path))
+        if isinstance(payload, dict)
+        else None
+    )
+    if current is None or current != claim:
+        return _selection_pending_failure(
+            "selection_pending_claim_source_changed",
+            "staged claim source no longer matches the evaluated reservation",
+        )
+    active_claims = coordination_claims.check_claims(
+        str(project),
+        claims_dir=source_path.parent,
+    )
+    if current not in active_claims:
+        return _selection_pending_failure(
+            "selection_pending_claim_not_live",
+            "staged claim source is not an active live reservation",
+        )
+    health_issues = coordination_claims.coordination_health_issues(
+        current,
+        active_claims=active_claims,
+    )
+    if health_issues != ["missing_tracker_path"]:
+        return _selection_pending_failure(
+            "selection_pending_claim_invariants_invalid",
+            "staged claim must be healthy except for its absent tracker: "
+            + (", ".join(health_issues) if health_issues else "no missing-tracker invariant"),
+        )
+
+    assert claim.repo_root is not None
+    assert claim.work_graph_path is not None
+    assert claim.work_unit_id is not None
+    assert claim.plan_ref is not None
+    try:
+        graph_sha256, approval_revisions, source_revision = (
+            coordination_claims.resolve_canonical_work_unit_binding(
+                repo_root=claim.repo_root,
+                plan_ref=claim.plan_ref,
+                work_graph_path=claim.work_graph_path,
+                work_unit_id=claim.work_unit_id,
+                start_point=claim.start_revision,
+            )
+        )
+        coordination_claims.validate_start_revision_targets(
+            repo_root=claim.repo_root,
+            start_revision=claim.start_revision,
+            branch=claim.branch,
+            worktree_path=claim.worktree_path,
+            require_branch=True,
+            require_worktree=True,
+        )
+    except (OSError, TypeError, ValueError) as exc:
+        return _selection_pending_failure(
+            "selection_pending_binding_unresolvable",
+            f"unable to resolve staged work-unit custody: {exc}",
+        )
+    if (
+        graph_sha256 != claim.work_graph_sha256
+        or approval_revisions != claim.approval_revisions
+        or source_revision != claim.start_revision
+    ):
+        return _selection_pending_failure(
+            "selection_pending_binding_mismatch",
+            "staged work-unit evidence does not match the exact claim binding",
+        )
+
+    evidence = SelectionPendingActivationEvidenceV1(
+        agent=claim.agent,
+        project=str(project),
+        scope=claim.scope,
+        session_id=str(claim.session_id),
+        claim_source_file=str(source_path),
+        claim_reservation_sha256=canonical_sha256(claim.to_dict()),
+        repo_root=str(Path(claim.repo_root).expanduser().resolve()),
+        worktree_path=str(Path(str(claim.worktree_path)).expanduser().resolve()),
+        branch=str(claim.branch),
+        work_unit_id=claim.work_unit_id,
+        work_graph_path=claim.work_graph_path,
+        work_graph_sha256=graph_sha256,
+        start_revision=claim.start_revision,
+    )
+    return SelectionPendingActivationResultV1(
+        disposition="defer",
+        reason_code="selection_pending",
+        evidence=evidence,
+    )
+
+
+def selection_pending_activation_receipt_path(outcome_receipt_path: Path) -> Path:
+    """Route staged activation away from the shared admission-v1 stream."""
+
+    path = outcome_receipt_path.expanduser().resolve()
+    if path == DEFAULT_OUTCOME_ADMISSION_RECEIPT_PATH.expanduser().resolve():
+        return DEFAULT_SELECTION_PENDING_ACTIVATION_RECEIPT_PATH
+    suffix = path.suffix or ".jsonl"
+    return path.with_name(f"{path.stem}-selection-pending-v1{suffix}")
+
+
+def build_selection_pending_activation_receipt(
+    result: SelectionPendingActivationResultV1,
+    *,
+    observed_at: datetime | None = None,
+    receipt_id: str | None = None,
+) -> SelectionPendingActivationReceiptV1:
+    """Build one separately framed staged-activation receipt."""
+
+    return SelectionPendingActivationReceiptV1(
+        receipt_id=receipt_id or f"spact-{uuid.uuid4().hex}",
+        observed_at=observed_at or datetime.now(UTC),
+        result_sha256=canonical_sha256(result),
+        result=result,
+    )
+
+
+def append_selection_pending_activation_receipt(
+    receipt: SelectionPendingActivationReceiptV1,
+    *,
+    receipt_path: Path,
+) -> None:
+    """Append one staged-activation receipt under its own sibling lock."""
+
+    path = receipt_path.expanduser().resolve()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    lock_path = path.with_name(f".{path.name}.lock")
+    serialized = json.dumps(
+        receipt.model_dump(mode="json"),
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    lock_fd = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o600)
+    with os.fdopen(lock_fd, "r+", encoding="utf-8") as lock_handle:
+        fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX)
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(serialized + "\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        fcntl.flock(lock_handle.fileno(), fcntl.LOCK_UN)
+
+
+def record_selection_pending_activation(
+    result: SelectionPendingActivationResultV1,
+    *,
+    outcome_receipt_path: Path = DEFAULT_OUTCOME_ADMISSION_RECEIPT_PATH,
+) -> SelectionPendingActivationReceiptV1:
+    """Record staged activation without contaminating admission-v1 framing."""
+
+    receipt = build_selection_pending_activation_receipt(result)
+    append_selection_pending_activation_receipt(
+        receipt,
+        receipt_path=selection_pending_activation_receipt_path(outcome_receipt_path),
+    )
+    return receipt
+
+
+def load_selection_pending_activation_receipts(
+    path: Path,
+) -> list[SelectionPendingActivationReceiptV1]:
+    """Strictly load the separately versioned staged-activation stream."""
+
+    records: list[SelectionPendingActivationReceiptV1] = []
+    for line_number, line in enumerate(path.expanduser().read_text(encoding="utf-8").splitlines(), 1):
+        if not line.strip():
+            continue
+        try:
+            records.append(SelectionPendingActivationReceiptV1.model_validate_json(line))
+        except ValueError as exc:
+            raise ValueError(f"invalid selection-pending receipt at line {line_number}: {exc}") from exc
+    return records
+
+
 def build_outcome_admission_receipt(
     result: OutcomeAdmissionResultV1,
     *,
@@ -834,6 +1147,7 @@ def load_outcome_admission_receipts(path: Path) -> list[OutcomeAdmissionReceiptV
 
 __all__ = [
     "DEFAULT_OUTCOME_ADMISSION_RECEIPT_PATH",
+    "DEFAULT_SELECTION_PENDING_ACTIVATION_RECEIPT_PATH",
     "RENEWAL_BOUNDARIES",
     "SAFE_BOUNDARIES",
     "AdmissionDisposition",
@@ -849,17 +1163,26 @@ __all__ = [
     "OutcomeAdmissionResultV1",
     "PortfolioState",
     "SelectedOutcomeAdmissionEvidenceV1",
+    "SelectionPendingActivationEvidenceV1",
+    "SelectionPendingActivationReceiptV1",
+    "SelectionPendingActivationResultV1",
     "append_outcome_admission_receipt",
+    "append_selection_pending_activation_receipt",
     "bootstrap_admission_result",
     "build_outcome_admission_receipt",
+    "build_selection_pending_activation_receipt",
     "decide_outcome_admission",
     "evaluate_claim_bootstrap_admission",
     "evaluate_first_consumer_bootstrap",
     "evaluate_selected_claim_admission",
     "evaluate_selected_outcome_admission",
+    "evaluate_selection_pending_session_activation",
     "infer_first_consumer_bootstrap_plan",
     "is_first_consumer_bootstrap_path",
     "load_outcome_admission_mode",
     "load_outcome_admission_receipts",
+    "load_selection_pending_activation_receipts",
     "record_outcome_admission",
+    "record_selection_pending_activation",
+    "selection_pending_activation_receipt_path",
 ]

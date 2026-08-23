@@ -105,6 +105,15 @@ CLAIM_PROJECTION_REFRESH_PATHS = {
 }
 
 
+def test_source_repo_claim_facade_projection_matches_canonical_source() -> None:
+    """The source repo's normal Make entrypoint must not run a stale claim facade."""
+
+    canonical = PROJECT_META_ROOT / "scripts" / "check_coordination_claims.py"
+    installed = PROJECT_META_ROOT / "scripts" / "meta" / "check_coordination_claims.py"
+
+    assert installed.read_bytes() == canonical.read_bytes()
+
+
 def _write_minimal_claude(repo_root: Path) -> None:
     """Write the smallest canonical CLAUDE.md that can generate AGENTS.md."""
     (repo_root / "CLAUDE.md").write_text(

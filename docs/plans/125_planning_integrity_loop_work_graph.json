@@ -13,7 +13,7 @@
       "objective": "Freeze the owner boundaries, contract, acceptance, frontier, and risk-ordered integration path.",
       "profile": "small",
       "execution_class": "independently_executable",
-      "claimability": "ready_for_execution",
+      "claimability": "not_applicable",
       "scope": {
         "included": [
           "Plan 125 design",
@@ -1161,6 +1161,11 @@
           "kind": "work_unit_output",
           "id": "pi-03-v11-selection",
           "revision": "sha256:87228928f8a688ad7e1fdc9c65a69ce51ae08480ec9becb0dbb789129e3fa753"
+        },
+        {
+          "kind": "work_unit_output",
+          "id": "pi-03-v12-terminal-selection",
+          "revision": "sha256:edc7ce30bb5f0fb594580da1e2ff3c1b5b02d70c10a575397dd88cbb14c0e71e"
         }
       ],
       "outputs": [
@@ -1297,10 +1302,10 @@
       },
       "authorization_mode": "registry_claim",
       "integration_owner_id": "pi-03-aes-installed-dogfood",
-      "status": "ready",
-      "record_version": 5,
+      "status": "accepted",
+      "record_version": 6,
       "created_at": "2026-08-22T22:23:19Z",
-      "updated_at": "2026-08-23T12:03:13Z"
+      "updated_at": "2026-08-23T12:10:10Z"
     }
   ]
 }

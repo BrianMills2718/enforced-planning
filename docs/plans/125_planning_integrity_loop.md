@@ -1,6 +1,6 @@
 # Plan #125: Planning Integrity Loop
 
-**Status:** In Progress — PI-02, PI-02B, and PI-02C accepted; PI-02F ready to close a reproduced bootstrap-identity bypass; PI-02E waits for that repair; PI-02D waits for successor custody
+**Status:** In Progress — PI-02, PI-02B, and PI-02C accepted; PI-02F ready through its source-scoped v7 custody-bootstrap phase; PI-02E waits for that repair; PI-02D waits for successor custody
 **Type:** cross-repository shared-contract implementation
 **Priority:** Critical
 **phase_ref:** "Agentic Engineering first external consumer"
@@ -468,6 +468,16 @@ alter ordinary claim authority. PI-02E remains blocked until the public
 prewrite regression and the explicit bootstrap compatibility control both
 pass.
 
+The first PI-02F source claim then supplied a second required negative control.
+Receipt `oadm-470822df5cdc42748e02e0af2382e791` denied its owned source path with
+`outcome_selection_required`: graph readiness and ordinary claim ownership did
+not make the repair executable because v6 deliberately excluded provider
+source and tests. The uncommitted focused patch was preserved before closeout.
+PI-02F therefore adopts the already-proven two-phase route rather than
+bypassing the denial: a restricted bootstrap commits source-scoped v7 inputs,
+then the normal exact claim parks v5 and selects v7 before the patch is
+replayed.
+
 ### Failure-mode taxonomy reassessment
 
 **Review charter:** The target is Plan 125 after PI-02B; the stage is the first
@@ -543,7 +553,8 @@ revision-bound human-readable planning state through installed AES.
 5. **PI-02F — bootstrap identity repair.** Require the path-scoped prewrite
    bootstrap exception to carry exact `UNPLANNED` claim identity. Prove an
    explicit bootstrap remains admitted and a qualified planned claim with the
-   same paths requires selected state.
+   same paths requires selected state. Use a restricted v7 input bootstrap and
+   select the exact source claim before replaying the repair patch.
 6. **PI-02E — successor work-unit custody.** After PI-02C and PI-02F are
    accepted, use the newly enforced binding through a restricted v6
    input-bootstrap phase, then open the normal exact successor claim, park the

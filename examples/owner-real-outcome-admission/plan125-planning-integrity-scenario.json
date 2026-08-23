@@ -12,34 +12,33 @@
       "plan-123-source-outcome-admission-activation"
     ],
     "intended_consumer": "Brian and coding agents starting consequential Agentic Engineering work",
-    "outcome": "A selected repository rejects a structurally incomplete new plan before coordination mutation, carries exact plan-revision custody into successor work units, and exposes the accepted contract through accurate operator documentation.",
+    "outcome": "A selected repository rejects a structurally incomplete new plan before coordination mutation, binds continuation to the accepted plan revision, and never grants a planned claim bootstrap authority merely from path shape.",
     "canonical_journey": {
-      "starting_state": "PI-02C is accepted on main, its exact v5 maintenance allocation remains active on the closed runtime-binding claim, and PI-02E is ready only through a restricted transition-input bootstrap.",
-      "input": "The exact active v5 allocation, one revision-bound PI-02E claim and selection-pending tracker, the accepted Plan 125 graph, and a v6 contract limited to transition artifacts plus the two PI-02D documentation surfaces.",
-      "action": "Park v5, allocate and select v6 on the exact live successor claim through the merged runtime plan-binding control, then prove post-selection heartbeat and both-sign prewrite behavior.",
-      "observable_result": "Claim, tracker, worktree, plan graph, allocation, and selection agree on one revision-bound PI-02E lane; the documentation paths are admitted only after selection while source, tests, AES, and unrelated plan paths remain denied.",
-      "failure_signal": "The closed PI-02C claim supplies current authority; a pending claim writes documentation; v5 remains active while v6 allocates; allocation or selection binds another claim; baseline validation is bypassed; or any out-of-scope path is admitted."
+      "starting_state": "PI-02C is accepted, the exact v5 maintenance allocation remains active on its closed claim, and authentic PI-02E dogfood proved a qualified planned claim can be misclassified as bootstrap when all owned paths match the bootstrap allowlist.",
+      "input": "The exact active v5 allocation, one revision-bound PI-02F claim and selection-pending tracker, the accepted Plan 125 graph, and a v7 contract limited to the bootstrap-identity source, focused tests, and transition artifacts.",
+      "action": "Prove the pending claim cannot write source, park v5, allocate and select v7 on that exact claim through runtime plan binding, then require exact UNPLANNED identity before path-scoped bootstrap admission.",
+      "observable_result": "The explicit unplanned bootstrap remains admitted; the qualified planned safe-path claim routes to selected admission; claim, tracker, worktree, graph, allocation, and selection agree before the source repair is applied.",
+      "failure_signal": "A qualified plan receives bootstrap authority from path shape; the source patch lands before v7 selection; v5 remains active while v7 allocates; allocation or selection binds another claim; or mixed and foreign bootstrap paths are admitted."
     },
-    "baseline_revision": "b692dd9adc57aff76cdf66c2110ac32a8344e3ed",
+    "baseline_revision": "51f7869a3ddfaa30b461a0e989251eb246f9e2c5",
     "allowed_scope": [
       "examples/owner-real-outcome-admission/plan125-planning-integrity-scenario.json",
       "examples/owner-real-outcome-admission/plan125-planning-integrity-allocation.json",
       "examples/owner-real-outcome-admission/plan125-planning-integrity-disposition.json",
-      "docs/guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md",
-      "GETTING_STARTED.md"
+      "enforced_planning/outcome_admission.py",
+      "tests/test_outcome_admission.py"
     ],
     "progress_dimensions": [
-      "successor work-unit custody",
+      "bootstrap claim identity",
       "selected-outcome continuity",
-      "operator documentation accuracy",
-      "installed consumer readiness"
+      "planned-claim negative control"
     ]
   },
   "receipts": [],
   "request": {
     "schema_version": "1.0.0",
     "operation": "product_write",
-    "target_path": "docs/guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md",
+    "target_path": "enforced_planning/outcome_admission.py",
     "ordinary_approval": true,
     "approval_text": "I approve",
     "cost_telemetry_usd": "0",

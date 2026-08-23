@@ -1,6 +1,6 @@
 # Plan #125: Planning Integrity Loop
 
-**Status:** In Progress — PI-02, PI-02B, and PI-02C accepted; PI-02E ready through its declared v6 custody-bootstrap phase; PI-02D waits for successor custody
+**Status:** In Progress — PI-02, PI-02B, and PI-02C accepted; PI-02F ready to close a reproduced bootstrap-identity bypass; PI-02E waits for that repair; PI-02D waits for successor custody
 **Type:** cross-repository shared-contract implementation
 **Priority:** Critical
 **phase_ref:** "Agentic Engineering first external consumer"
@@ -247,7 +247,7 @@ from the typed result rather than parsed downstream.
 | Observe-mode feedback | fully_specifiable_now | Nonblocking observation returns the typed integrity result and findings through the operator-visible start result | Complete when an incomplete observed plan is allowed but its findings are visible in the real CLI output | readiness result and installed CLI |
 | Parser and installation fail-loud edges | fully_specifiable_now | Duplicate governed headings/fields and absolute or traversing plan paths reject; worktree-only install carries the advertised readiness CLI's transitive imports | Complete when the corrupt fixtures reject and a clean worktree-only installed readiness CLI executes | parser, installer and focused boundary tests |
 | Operator documentation coupling | fully_specifiable_now | The config reference describes the contract, while the canonical worktree operator guide must name the new exact-revision prerequisite at the real claim/start entrypoint | Complete when the coupling check sees the guide updated in its separately claimed path | operator guide and relationship coupling |
-| Runtime course-correction join | fully_specifiable_now | Reuse selected outcome continuation; its immutable outcome contract already binds a baseline Git revision, but selection does not yet require that revision's plan/config to pass Planning Integrity | Complete when configured selection revalidates the qualified plan at the immutable baseline revision and both stale/incomplete and exact-pass controls discriminate | outcome selection boundary and focused tests |
+| Runtime course-correction join | fully_specifiable_now | Selection now validates the qualified plan at the immutable outcome baseline; authentic PI-02E dogfood found that the prewrite bootstrap exception still infers lifecycle purpose only from path shape and can admit a qualified planned claim before selection | Complete when an exact `UNPLANNED` bootstrap claim remains admitted, the same safe paths on a qualified planned claim require selection, and the retried PI-02E both-sign proof discriminates | outcome bootstrap identity, prewrite admission, and focused tests |
 | AES four-layer planning projection | fully_specifiable_now | Installed result joins generated current/variance/topic output without becoming normative | Complete when delete/regenerate preserves normative bytes and exact evidence refs | AES topic and proof receipt |
 | First valuable project anchor | exploration_required | Portfolio audit selects by personal value, lineage, learning value, and bounded effort; WhyGame is provisional | Stop after one lineage/value probe can select or reject the candidate | Project Meta anchor decision and target repo plan |
 | Fleet defaults and automatic promotion | deliberately_deferred | No rollout or auto-promotion from one consumer | Resume after a second independent consumer and measured false-block/false-allow evidence | Enforced Planning roadmap and AES release manifest |
@@ -447,6 +447,27 @@ successor selection required to exercise the merged control from main; failure
 returns PI-02C to repair rather than being explained away by the synthetic
 suite.
 
+### Course-correction receipt — bootstrap identity must not come from paths
+
+The first authentic PI-02E retry from merged main created an exact schema-v4
+planned claim at revision `566526ccfd4e805fef1742810b342b5710ea9707` and
+correctly denied heartbeat with `outcome_selection_required`. Its prewrite
+negative control did not deny. Receipt
+`oadm-de41b5ad5e6d4327ae08354299f86ee2` returned
+`admission_bootstrap_allowed` because all three claimed transition paths match
+the Plan-numbered bootstrap allowlist. The classifier never inspected the
+claim's qualified `plan_ref` or work-unit identity.
+
+This is a real authorization bypass, not a documentation discrepancy and not
+evidence for weakening selected-outcome enforcement. PI-02F adds the smallest
+semantic discriminator available in the current claim contract: only an exact
+`UNPLANNED` claim may receive the path-scoped bootstrap exception. A qualified
+planned claim with identical paths must continue through selected admission.
+The repair does not add a claim schema field, change the bootstrap path set, or
+alter ordinary claim authority. PI-02E remains blocked until the public
+prewrite regression and the explicit bootstrap compatibility control both
+pass.
+
 ### Failure-mode taxonomy reassessment
 
 **Review charter:** The target is Plan 125 after PI-02B; the stage is the first
@@ -519,20 +540,25 @@ revision-bound human-readable planning state through installed AES.
    source mutation. Then require selected outcome admission to validate the
    immutable outcome contract's baseline revision against the claim's
    qualified plan, so continuation is revision-bound.
-5. **PI-02E — successor work-unit custody.** After PI-02C is accepted, use its
-   newly enforced binding through a restricted v6 input-bootstrap phase, then
-   open the normal exact successor claim, park the active v5 allocation, and
+5. **PI-02F — bootstrap identity repair.** Require the path-scoped prewrite
+   bootstrap exception to carry exact `UNPLANNED` claim identity. Prove an
+   explicit bootstrap remains admitted and a qualified planned claim with the
+   same paths requires selected state.
+6. **PI-02E — successor work-unit custody.** After PI-02C and PI-02F are
+   accepted, use the newly enforced binding through a restricted v6
+   input-bootstrap phase, then open the normal exact successor claim, park the
+   active v5 allocation, and
    select the documentation-scoped v6 contract. Prove that claim can become a
    healthy revision-bound work-unit lane without bypassing source outcome
    admission.
-6. **PI-02D — operator documentation sync.** From that selected successor lane,
+7. **PI-02D — operator documentation sync.** From that selected successor lane,
    document exact-revision Planning Integrity at the canonical worktree/claim
    entrypoint and installed first-success path, then pass the focused coupling
    check.
-7. **PI-03 — AES installed integration.** Consume a pinned Enforced Planning
+8. **PI-03 — AES installed integration.** Consume a pinned Enforced Planning
    candidate, retain an immutable result, and project the planning fields into
    AES's existing topic without new authority.
-8. Stop framework expansion. In parallel once a project-local plan is ready,
+9. Stop framework expansion. In parallel once a project-local plan is ready,
    the selected anchor repository owns its exploratory lineage/value probe and
    useful product vertical. Observed governance failures return as focused
    regressions; they narrow trust in the affected control rather than stopping
@@ -602,6 +628,10 @@ revision-bound human-readable planning state through installed AES.
     any staged invariant produces no tracker and rolls back invocation-owned
     branch/worktree/claim state, while heartbeat and prewrite remain denied
     until exact allocation and selection succeed.
+21. A prewrite bootstrap exception requires exact `UNPLANNED` claim identity in
+    addition to a complete bootstrap-safe path set; a qualified planned claim
+    using only those paths still returns `outcome_selection_required` until it
+    has an exact selection.
 
 ## Required Tests
 
@@ -626,6 +656,9 @@ revision-bound human-readable planning state through installed AES.
   returns only `selection_pending`, any corrupted invariant leaves zero
   invocation-owned mutation, and heartbeat/prewrite remain denied before
   selection;
+- a bootstrap-identity regression proving the explicit `UNPLANNED` bootstrap
+  path remains allowed while a qualified planned claim with identical safe
+  paths cannot bypass selected admission;
 - observed-failure output control proving findings are visible without denial;
 - duplicate governed-heading/field and absolute/traversing configuration-path
   rejection controls;

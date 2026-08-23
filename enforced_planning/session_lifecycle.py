@@ -919,10 +919,12 @@ def _claim_record_any_status(
 def _resolve_claim_repo_root(claim: coordination_claims.ClaimRecord) -> Path:
     """Return the canonical repo root for one claim."""
 
+    if claim.worktree_path:
+        worktree_repo_root = resolve_canonical_repo_root(Path(claim.worktree_path).expanduser())
+        if (worktree_repo_root / ".git").is_dir():
+            return worktree_repo_root
     if claim.repo_root:
         return resolve_canonical_repo_root(Path(claim.repo_root).expanduser())
-    if claim.worktree_path:
-        return resolve_canonical_repo_root(Path(claim.worktree_path).expanduser())
     raise ValueError(f"Claim {claim.scope} is missing repo_root and worktree_path")
 
 

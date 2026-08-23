@@ -1,6 +1,6 @@
 # Plan #125: Planning Integrity Loop
 
-**Status:** In Progress — PI-02 and PI-02B accepted; PI-02C ready through its declared custody-bootstrap phase; PI-02E waits for runtime plan binding; PI-02D waits for successor custody
+**Status:** In Progress — PI-02, PI-02B, and PI-02C accepted; PI-02E ready through its declared v6 custody-bootstrap phase; PI-02D waits for successor custody
 **Type:** cross-repository shared-contract implementation
 **Priority:** Critical
 **phase_ref:** "Agentic Engineering first external consumer"
@@ -428,6 +428,24 @@ selection exercises the newly accepted runtime plan-binding control. It uses
 the same two-phase shape: a restricted bootstrap commits the v6 transition
 inputs, then the normal exact PI-02E claim attaches pending, parks v5, and
 allocates/selects v6 before heartbeat or documentation prewrite may succeed.
+
+### Acceptance receipt — runtime plan-revision binding
+
+PI-02C landed through provider commit
+`70daaa3b5f26bcd5cfee409c7294f4f31bbb0305` and squash merge
+`b692dd9adc57aff76cdf66c2110ac32a8344e3ed`. The public selection entrypoint
+now validates the qualified plan at the outcome contract's immutable baseline
+before creating a binding or mutating the tracker. A focused run across
+selection, readiness, and plan validation passed 106 tests; Ruff passed the two
+changed files. Real-Git controls distinguish exact, missing, incomplete,
+ambiguous, mismatched-project, and symbolic baselines while preserving off,
+observe, below-floor, and unplanned compatibility.
+
+This is a development checkpoint, not terminal proof. PI-02C was selected
+before the new runtime check existed. PI-02E is therefore the first authentic
+successor selection required to exercise the merged control from main; failure
+returns PI-02C to repair rather than being explained away by the synthetic
+suite.
 
 ### Failure-mode taxonomy reassessment
 

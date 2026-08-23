@@ -110,23 +110,21 @@ if [[ "$HOOK_MODE" != "off" ]]; then
         HATCH_OVERRIDE="${CANONICAL_CHECKOUT_HATCH_OVERRIDE:-}"
         HATCH_OVERRIDE="${HATCH_OVERRIDE//[$'\t\n']/ }"
 
-        # "Reversible single-writer maintenance" is a precondition an agent can
-        # satisfy by believing it, and the paths most often believed to qualify
-        # are the ones where it is provably false: a directory every session
-        # appends to concurrently is by construction not single-writer, so a
-        # commit touching only such paths cannot be a single-writer commit.
-        # Anchored egrep alternation, empty here because hooks/git/CLAUDE.md
-        # forbids repo-specific assumptions in a portable template. A consuming
-        # repo sets it to its own known shared-append roots -- project-meta uses
-        # '^learnings/entries/'. Keep it to directories with actual evidence of
-        # concurrent writers; this is not a general path-policy surface.
-        HATCH_SHARED_APPEND_DIRS=""
-        HATCH_STAGED=$(git diff --cached --name-only)
-        HATCH_SHARED_APPEND=0
-        if [[ -n "$HATCH_SHARED_APPEND_DIRS" && -n "$HATCH_STAGED" ]] \
-           && ! echo "$HATCH_STAGED" | grep -Eqv "$HATCH_SHARED_APPEND_DIRS"; then
-            HATCH_SHARED_APPEND=1
-        fi
+        # Tried and removed 2026-08-23, same day it was added. The idea was to
+        # refuse the hatch when every staged path sits under a directory many
+        # sessions append to (project-meta's learnings/entries/), because
+        # "reversible single-writer maintenance" is a precondition an agent can
+        # satisfy by believing it. It refused the one commit shape that is
+        # actually safe. scripts/_register_commit.py commits register entries
+        # with `git commit -- <one unique new file>`; a pathspec commit builds
+        # its own index from HEAD plus that path, so the hook sees only that
+        # file and the commit provably cannot sweep another writer's staged
+        # work. Verified: with another session's file staged, the hook saw only
+        # the register entry. The rule therefore broke that script's documented
+        # recovery command while protecting nothing, and 14 register entries had
+        # already been lost to stranding once. Rewriting existing entries is
+        # separately blocked by the append-only check. Do not re-add this
+        # without a commit shape that can actually collide.
 
         HATCH_PRIOR=0
         if [[ -f "$HATCH_LEDGER" ]]; then
@@ -136,9 +134,7 @@ if [[ "$HOOK_MODE" != "off" ]]; then
         HATCH_COUNT=$(( ${HATCH_PRIOR:-0} + 1 ))
 
         HATCH_REFUSE_REASON=""
-        if [[ "$HATCH_SHARED_APPEND" == "1" ]]; then
-            HATCH_REFUSE_REASON="every staged path is under a shared-append directory that many sessions write concurrently, so the hatch's single-writer precondition is false here by construction"
-        elif [[ "$HATCH_COUNT" -ge 3 ]]; then
+        if [[ "$HATCH_COUNT" -ge 3 ]]; then
             HATCH_REFUSE_REASON="this is hatch use #$HATCH_COUNT for this repository in this session; #2 already warned that #3 would be refused"
         fi
 

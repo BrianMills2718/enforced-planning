@@ -106,12 +106,7 @@ and refresh the pre-write projection in the same locked mutation.
    The ledger is `<repo>/.git/canonical-checkout-hatch-uses`. A genuine emergency
    passes `CANONICAL_CHECKOUT_HATCH_OVERRIDE="<reason>"` alongside it, which is
    allowed and records the reason; `ENFORCED_PLANNING_HOOK_MODE=off` still
-   disables the whole check suite for one reversible commit. A repository may
-   also set `HATCH_SHARED_APPEND_DIRS` in its installed hook to an anchored
-   egrep alternation of directories many sessions append to concurrently; a
-   commit whose staged paths are all inside one of those is refused outright,
-   because the hatch's "single-writer" precondition is false there by
-   construction. The metering exists because the hatch used to be free: on
+   disables the whole check suite for one reversible commit. The metering exists because the hatch used to be free: on
    2026-08-23 one session took it six times across two repositories rather than
    create a single worktree.
 3. Give each worktree one mission and one plan or one bounded temporary plan

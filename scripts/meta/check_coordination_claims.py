@@ -45,6 +45,7 @@ ClaimCheckResult = _impl.ClaimCheckResult
 _claim_filename = _impl._claim_filename
 _normalize_repo_path = _impl._normalize_repo_path
 _paths_overlap = _impl._paths_overlap
+requires_work_graph = _impl.requires_work_graph
 
 
 def _sync_runtime_config() -> None:
@@ -72,6 +73,12 @@ def evaluate_claim(candidate: ClaimRecord, *, active_claims: list[ClaimRecord] |
 def build_candidate_claim(**kwargs: Any) -> ClaimRecord:
     """Delegate candidate claim construction to the package module."""
     return _impl.build_candidate_claim(**kwargs)
+
+
+def validate_native_session_binding(agent: str, session_id: str | None) -> None:
+    """Expose native runtime/session binding through the legacy facade."""
+
+    _impl.validate_native_session_binding(agent, session_id)
 
 
 def claim_health_issues(claim: ClaimRecord) -> list[str]:
@@ -155,10 +162,10 @@ def prune_expired() -> int:
     return _impl.prune_expired()
 
 
-def prune_stale() -> tuple[int, list[str]]:
+def prune_stale(*args: Any, **kwargs: Any) -> tuple[int, list[str]]:
     """Delegate stale-claim pruning while honoring script-level CLAIMS_DIR overrides."""
     _sync_runtime_config()
-    return _impl.prune_stale()
+    return _impl.prune_stale(*args, **kwargs)
 
 
 def prune_completed() -> tuple[int, list[str]]:

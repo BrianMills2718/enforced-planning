@@ -1,11 +1,11 @@
 {
   "schema_version": "1.0.0",
   "record_type": "outcome_portfolio_disposition_request",
-  "disposition_id": "plan-125-planning-integrity-docs-v9-park-for-v10",
-  "requested_at": "2026-08-23T11:26:23Z",
-  "allocation_id": "plan-125-planning-integrity-allocation-v9",
-  "allocation_sha256": "dcf33596452e26c89ea1d1f3378f8b7a509e6dcbc48678b10615519b1ecbd704",
+  "disposition_id": "plan-125-planning-integrity-acceptance-v10-park-for-aes",
+  "requested_at": "2026-08-23T11:33:30Z",
+  "allocation_id": "plan-125-planning-integrity-allocation-v10",
+  "allocation_sha256": "e271ba8d4536ad4905184ca482b828a92024ba75d276aff56f62a54a7c468875",
   "disposition": "parked",
-  "decision_ref": "enforced-planning#125-pi02d-acceptance",
-  "reason": "Release the exact active allocation bound to the closed PI-02D documentation claim before selecting the separately scoped acceptance transition."
+  "decision_ref": "enforced-planning#125-pi02d-accepted",
+  "reason": "Release the exact active acceptance-transition allocation after PI-02D acceptance merged and before installed AES dogfood begins."
 }

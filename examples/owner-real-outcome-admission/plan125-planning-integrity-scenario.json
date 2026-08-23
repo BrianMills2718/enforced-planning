@@ -12,33 +12,34 @@
       "plan-123-source-outcome-admission-activation"
     ],
     "intended_consumer": "Brian and coding agents starting consequential Agentic Engineering work",
-    "outcome": "A selected repository rejects a structurally incomplete new plan before coordination mutation and later outcome selection remains bound to the qualified plan at the immutable baseline revision.",
+    "outcome": "A selected repository rejects a structurally incomplete new plan before coordination mutation, carries exact plan-revision custody into successor work units, and exposes the accepted contract through accurate operator documentation.",
     "canonical_journey": {
-      "starting_state": "PI-02B is accepted, the exact v3 maintenance allocation remains active on the closed provider claim, and a normal PI-02C reservation can attach only as selection-pending.",
-      "input": "The exact active v3 allocation, one revision-bound PI-02C claim and tracker, the accepted Plan 125 graph, and a v5 contract limited to the runtime plan-binding source and test paths.",
-      "action": "Prove the pending claim cannot write source, park v3, allocate and select v5 on that exact claim, then implement selection-time Planning Integrity validation at the immutable baseline revision.",
-      "observable_result": "Claim, tracker, worktree, plan graph, allocation, and selection agree on one revision-bound PI-02C lane; an in-scope source prewrite is admitted only after selection; incomplete or mismatched baseline plans cannot create a selection binding.",
-      "failure_signal": "A pending claim writes source; v3 remains active while v5 allocates; the allocation or selection binds a different claim; a missing or invalid baseline plan still creates a binding; an out-of-scope path is admitted; or generated evidence is treated as normative authority."
+      "starting_state": "PI-02C is accepted on main, its exact v5 maintenance allocation remains active on the closed runtime-binding claim, and PI-02E is ready only through a restricted transition-input bootstrap.",
+      "input": "The exact active v5 allocation, one revision-bound PI-02E claim and selection-pending tracker, the accepted Plan 125 graph, and a v6 contract limited to transition artifacts plus the two PI-02D documentation surfaces.",
+      "action": "Park v5, allocate and select v6 on the exact live successor claim through the merged runtime plan-binding control, then prove post-selection heartbeat and both-sign prewrite behavior.",
+      "observable_result": "Claim, tracker, worktree, plan graph, allocation, and selection agree on one revision-bound PI-02E lane; the documentation paths are admitted only after selection while source, tests, AES, and unrelated plan paths remain denied.",
+      "failure_signal": "The closed PI-02C claim supplies current authority; a pending claim writes documentation; v5 remains active while v6 allocates; allocation or selection binds another claim; baseline validation is bypassed; or any out-of-scope path is admitted."
     },
-    "baseline_revision": "fd57d1f5e8e6a10e1377d8c826142d86adbba794",
+    "baseline_revision": "b692dd9adc57aff76cdf66c2110ac32a8344e3ed",
     "allowed_scope": [
       "examples/owner-real-outcome-admission/plan125-planning-integrity-scenario.json",
       "examples/owner-real-outcome-admission/plan125-planning-integrity-allocation.json",
       "examples/owner-real-outcome-admission/plan125-planning-integrity-disposition.json",
-      "enforced_planning/outcome_selection.py",
-      "tests/test_outcome_selection.py"
+      "docs/guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md",
+      "GETTING_STARTED.md"
     ],
     "progress_dimensions": [
-      "runtime plan-revision binding",
+      "successor work-unit custody",
       "selected-outcome continuity",
-      "both-sign selection evidence"
+      "operator documentation accuracy",
+      "installed consumer readiness"
     ]
   },
   "receipts": [],
   "request": {
     "schema_version": "1.0.0",
     "operation": "product_write",
-    "target_path": "enforced_planning/outcome_selection.py",
+    "target_path": "docs/guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md",
     "ordinary_approval": true,
     "approval_text": "I approve",
     "cost_telemetry_usd": "0",

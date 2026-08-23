@@ -829,9 +829,13 @@ def _lock_canonical_checkout(repo_root: Path, *, as_json: bool) -> None:
         except json.JSONDecodeError:
             payload = {}
         actions = payload.get("actions") or []
-        locked = [a for a in actions if a.get("action") in {"locked", "already_locked"}]
+        locked = [a for a in actions if a.get("action") in {"locked", "already_locked", "relocked"}]
         if locked:
             print(f"canonical checkout is now read-only: {repo_root} (lane work belongs in the worktree above)")
+        # A repair is the one case the operator most needs to hear about: the
+        # boundary was reported as holding while it had silently stopped.
+        for repaired in (a for a in actions if a.get("action") == "relocked"):
+            print(f"canonical lock had DECAYED and was repaired: {repaired.get('repo_root')} — {repaired.get('reason', 'drift')}")
 
 
 def main(argv: list[str] | None = None) -> int:

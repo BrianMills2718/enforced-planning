@@ -73,6 +73,28 @@ claim registry is missing, or any claim file in it is unparseable, an existing
 lock is *kept* and the command exits non-zero. An empty read of a registry that
 cannot be trusted must never be read as "no lane is live".
 
+Locks decay, so the receipt is not the boundary
+-----------------------------------------------
+A receipt on disk records that a lock was *applied*; it is not evidence that the
+boundary still *holds*. Observed on a live canonical checkout: all 144 recorded
+directories had drifted back to mode ``0755`` while every tracked file was still
+``0444``. Creating a new file succeeded and hard-linking a tracked file
+succeeded -- which is directory write access, so delete and rename were open too
+-- while overwriting a tracked file in place was still correctly blocked. The
+lock had decayed to the file-only sieve the design explicitly rejected, and
+``--status`` still reported ``"locked": true`` because it only checked that the
+receipt file existed.
+
+``verify_lock_integrity`` closes that gap by comparing every path the receipt
+recorded against its current mode, so a lock that reports healthy has actually
+been measured. The verdict is three-valued: ``unlocked`` (no receipt),
+``locked`` (receipt, no recorded path writable), ``degraded`` (receipt, some
+recorded path writable again). ``--verify`` reports and exits non-zero on
+``degraded`` without repairing anything; ``--reconcile`` repairs by re-applying
+the chmod, never rewriting the receipt -- the receipt is the only record of the
+pre-lock modes, so overwriting it during a repair would record the *degraded*
+modes as the originals and make the eventual unlock restore the wrong state.
+
 Recovering from a stale lock
 ----------------------------
 A session that dies without closing leaves the checkout read-only. That is
@@ -107,6 +129,18 @@ SCHEMA_VERSION = 1
 
 # Directory names never locked, and never descended into when collecting modes.
 EXCLUDED_TOP_LEVEL = ("worktrees",)
+
+# Every write bit. Clearing all three is what "locked" means for one path.
+WRITE_BITS = stat.S_IWUSR | stat.S_IWGRP | stat.S_IWOTH
+
+# Three-valued integrity verdict. ``locked`` is measured, not merely recorded.
+VERDICT_LOCKED = "locked"
+VERDICT_DEGRADED = "degraded"
+VERDICT_UNLOCKED = "unlocked"
+
+# Exit code for ``--verify`` when the boundary has decayed. Distinct from 4
+# (registry unreadable) and 5 (unlocked self-test arm).
+EXIT_DEGRADED = 6
 
 
 class RegistryUnreadable(RuntimeError):
@@ -277,13 +311,12 @@ def lock_repo(
     # would leave a locked tree with no record of the original modes.
     receipt_path(repo_root).write_text(receipt.to_json(), encoding="utf-8")
 
-    write_bits = stat.S_IWUSR | stat.S_IWGRP | stat.S_IWOTH
     for path in files:
-        os.chmod(path, stat.S_IMODE(path.lstat().st_mode) & ~write_bits)
+        os.chmod(path, stat.S_IMODE(path.lstat().st_mode) & ~WRITE_BITS)
     # Deepest first, so each directory is still writable while its children are
     # being changed.
     for path in directories:
-        os.chmod(path, stat.S_IMODE(path.lstat().st_mode) & ~write_bits)
+        os.chmod(path, stat.S_IMODE(path.lstat().st_mode) & ~WRITE_BITS)
 
     _index_record(repo_root, locked=True)
     return {
@@ -345,6 +378,145 @@ def unlock_repo(repo_root: Path) -> dict[str, Any]:
         "repo_root": str(repo_root),
         "modes_restored": restored,
         "modes_fallback": fallback,
+    }
+
+
+# --------------------------------------------------------------------------
+# lock integrity
+# --------------------------------------------------------------------------
+
+
+def _expected_locked_mode(recorded_mode: int) -> int:
+    """The mode ``lock_repo`` would have produced for a path recorded as this."""
+    return recorded_mode & ~WRITE_BITS
+
+
+def _receipt_paths_deepest_first(receipt: LockReceipt) -> list[str]:
+    """Recorded relative paths, deepest first with the repository root last."""
+    return sorted(receipt.modes, key=lambda rel: 0 if rel == "." else len(Path(rel).parts), reverse=True)
+
+
+def verify_lock_integrity(repo_root: Path) -> dict[str, Any]:
+    """Measure whether a recorded lock still holds, path by path.
+
+    A receipt proves a lock was applied. It does not prove the boundary is still
+    there: modes can be restored afterwards by a restore, an installer, a
+    ``chmod -R``, or a checkout, and the receipt is unchanged by any of them.
+    This reads the current mode of every recorded path and reports the ones that
+    have write access again, separating files from directories because they fail
+    differently -- a writable directory permits create, delete, and rename even
+    while every file in it is still ``444``.
+
+    Recorded paths that no longer exist are not drift. They are reported under
+    ``missing_paths`` so a deleted-while-locked path is visible without being
+    graded as a breach.
+    """
+    repo_root = repo_root.resolve()
+    receipt = read_receipt(repo_root)
+    if receipt is None:
+        return {
+            "repo_root": str(repo_root),
+            "verdict": VERDICT_UNLOCKED,
+            "receipt_present": False,
+            "paths_recorded": 0,
+            "paths_checked": 0,
+            "writable_files": [],
+            "writable_directories": [],
+            "missing_paths": [],
+        }
+
+    writable_files: list[str] = []
+    writable_directories: list[str] = []
+    missing: list[str] = []
+    checked = 0
+
+    for rel in sorted(receipt.modes):
+        target = repo_root if rel == "." else repo_root / rel
+        try:
+            info = target.lstat()
+        except OSError:
+            missing.append(rel)
+            continue
+        if stat.S_ISLNK(info.st_mode):
+            # Never locked in the first place; its mode says nothing about the
+            # boundary. lock_repo filters symlinks out before recording.
+            continue
+        checked += 1
+        if stat.S_IMODE(info.st_mode) & WRITE_BITS:
+            if stat.S_ISDIR(info.st_mode):
+                writable_directories.append(rel)
+            else:
+                writable_files.append(rel)
+
+    drifted = bool(writable_files or writable_directories)
+    return {
+        "repo_root": str(repo_root),
+        "verdict": VERDICT_DEGRADED if drifted else VERDICT_LOCKED,
+        "receipt_present": True,
+        "locked_at": receipt.locked_at,
+        "justifying_claims": receipt.justifying_claims,
+        "paths_recorded": len(receipt.modes),
+        "paths_checked": checked,
+        "writable_file_count": len(writable_files),
+        "writable_directory_count": len(writable_directories),
+        "writable_files": writable_files,
+        "writable_directories": writable_directories,
+        "missing_paths": missing,
+    }
+
+
+def relock_repo(repo_root: Path) -> dict[str, Any]:
+    """Re-apply the lock's chmod to paths that drifted writable.
+
+    The receipt is deliberately left untouched. It is the only record of the
+    pre-lock modes, so rewriting it here would capture the *degraded* modes as
+    the originals and make the eventual ``unlock_repo`` restore the wrong state
+    -- the failure this repair exists to fix, made permanent.
+    """
+    repo_root = repo_root.resolve()
+    receipt = read_receipt(repo_root)
+    if receipt is None:
+        return {"ok": False, "action": "not_locked", "repo_root": str(repo_root)}
+
+    integrity = verify_lock_integrity(repo_root)
+    drifted = set(integrity["writable_files"]) | set(integrity["writable_directories"])
+    if not drifted:
+        return {
+            "ok": True,
+            "action": "already_intact",
+            "repo_root": str(repo_root),
+            "verdict": integrity["verdict"],
+        }
+
+    files_relocked = 0
+    directories_relocked = 0
+    failures: list[str] = []
+    # Deepest first with the root last, matching lock_repo: a directory stays
+    # writable while its own children are being changed.
+    for rel in _receipt_paths_deepest_first(receipt):
+        if rel not in drifted:
+            continue
+        target = repo_root if rel == "." else repo_root / rel
+        try:
+            is_dir = target.is_dir()
+            os.chmod(target, _expected_locked_mode(receipt.modes[rel]))
+        except OSError as exc:
+            failures.append(f"{rel}: {exc}")
+            continue
+        if is_dir:
+            directories_relocked += 1
+        else:
+            files_relocked += 1
+
+    after = verify_lock_integrity(repo_root)
+    return {
+        "ok": after["verdict"] == VERDICT_LOCKED,
+        "action": "relocked",
+        "repo_root": str(repo_root),
+        "files_relocked": files_relocked,
+        "directories_relocked": directories_relocked,
+        "chmod_failures": failures,
+        "verdict": after["verdict"],
     }
 
 
@@ -471,8 +643,9 @@ def reconcile(
     """Bring lock state into agreement with live lane claims.
 
     Locks a repository that has a live lane and no lock; unlocks one that holds
-    a lock no live lane justifies. Raises ``RegistryUnreadable`` rather than
-    unlocking on a registry it cannot trust.
+    a lock no live lane justifies; re-applies the chmod on a repository whose
+    lock is still justified but has decayed writable. Raises
+    ``RegistryUnreadable`` rather than unlocking on a registry it cannot trust.
     """
     lanes = live_lanes_by_repo(claims_dir)
 
@@ -502,12 +675,94 @@ def reconcile(
                 if dry_run
                 else {**unlock_repo(repo), "reason": "no live lane claim (stale lock)"}
             )
+        elif scopes and locked:
+            # The lock is still justified, but a receipt is not a boundary: the
+            # modes it applied can be undone afterwards without touching it.
+            try:
+                integrity = verify_lock_integrity(repo)
+            except (OSError, ValueError, json.JSONDecodeError) as exc:
+                actions.append(
+                    {
+                        "repo_root": str(repo),
+                        "action": "integrity_unknown",
+                        "reason": f"could not verify lock integrity: {exc}",
+                    }
+                )
+                continue
+            if integrity["verdict"] != VERDICT_DEGRADED:
+                continue
+            reason = (
+                "lock drifted writable: "
+                f"{integrity['writable_file_count']} file(s), "
+                f"{integrity['writable_directory_count']} director(ies)"
+            )
+            actions.append(
+                {
+                    "repo_root": str(repo),
+                    "action": "relock",
+                    "reason": reason,
+                    "writable_file_count": integrity["writable_file_count"],
+                    "writable_directory_count": integrity["writable_directory_count"],
+                }
+                if dry_run
+                else {**relock_repo(repo), "reason": reason}
+            )
     return {"ok": True, "dry_run": dry_run, "repos_considered": len(candidates), "actions": actions}
 
 
 # --------------------------------------------------------------------------
 # recovery message
 # --------------------------------------------------------------------------
+
+
+def sync_repo(repo_root: Path, *, ref_args: list[str] | None = None) -> dict[str, Any]:
+    """Fast-forward a locked canonical checkout, restoring the lock afterwards.
+
+    Git writes through the working tree as an ordinary process, so a POSIX-mode
+    lock cannot tell its writes apart from an agent's. Worse, ``git pull`` under
+    the lock fails *halfway*: it advances the remote-tracking ref and prints
+    "Updating ..." before dying on the first ``unable to unlink old`` error,
+    leaving a partially updated tree. Refusing the pull outright is therefore
+    safer than making the lock permeable, and this is the sanctioned way to
+    take the update: drop the lock, fast-forward, put the lock back.
+
+    The re-lock runs in ``finally``. A crashed or non-fast-forwardable pull must
+    never leave the canonical checkout writable behind a live lane.
+    """
+    repo_root = repo_root.resolve()
+    receipt = read_receipt(repo_root)
+    if receipt is None:
+        return {
+            "ok": False,
+            "action": "sync_skipped",
+            "repo_root": str(repo_root),
+            "reason": "no lock receipt; this checkout is not locked, pull it directly",
+        }
+
+    justifying = list(receipt.justifying_claims)
+    unlock_repo(repo_root)
+    pull: subprocess.CompletedProcess[str] | None = None
+    try:
+        pull = subprocess.run(
+            ["git", "-C", str(repo_root), "pull", "--ff-only", *(ref_args or [])],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    finally:
+        relocked = lock_repo(repo_root, justifying_claims=justifying, session_id="sync")
+
+    ok = bool(pull and pull.returncode == 0)
+    return {
+        "ok": ok,
+        "action": "synced" if ok else "sync_failed",
+        "repo_root": str(repo_root),
+        "returncode": pull.returncode if pull else None,
+        "stdout": (pull.stdout or "").strip() if pull else "",
+        "stderr": (pull.stderr or "").strip() if pull else "",
+        "relock": relocked.get("action"),
+        "justifying_claims": justifying,
+    }
 
 
 def recovery_message(repo_root: Path) -> str:
@@ -526,6 +781,11 @@ def recovery_message(repo_root: Path) -> str:
         f"  destroy the lane's work, which is why they fail.\n"
         f"\n"
         f"  Work in the lane worktree instead:  {repo_root}/worktrees/<branch>/\n"
+        f"\n"
+        f"  If git itself failed here (pull/merge/checkout), that is this lock.\n"
+        f"  Do not retry the raw command: a pull dies partway through, after it\n"
+        f"  has already moved the remote-tracking ref. Take the update with:\n"
+        f"      python3 {script} --sync {repo_root}\n"
         f"\n"
         f"  If the lane is finished and this lock is stale, clear it with:\n"
         f"      python3 {script} --reconcile\n"
@@ -606,7 +866,14 @@ def hook_main(payload: dict[str, Any]) -> dict[str, Any] | None:
             return None
         locked = [a["repo_root"] for a in actions if a.get("action") == "locked"]
         unlocked = [a["repo_root"] for a in actions if a.get("action") == "unlocked"]
+        relocked = [a["repo_root"] for a in actions if a.get("action") == "relocked"]
         lines: list[str] = []
+        if relocked:
+            lines.append(
+                "Repaired canonical lock(s) whose permission bits had drifted writable "
+                f"while a lane claim was still live: {', '.join(relocked)}. The read-only "
+                "boundary has been re-applied; the recorded pre-lock modes were preserved."
+            )
         if locked:
             lines.append(
                 "Canonical checkout(s) made read-only because a lane claim is live "
@@ -855,6 +1122,22 @@ def build_parser() -> argparse.ArgumentParser:
     mode.add_argument("--lock", metavar="REPO_ROOT", help="Lock one canonical checkout")
     mode.add_argument("--unlock", metavar="REPO_ROOT", help="Unlock one canonical checkout")
     mode.add_argument("--status", metavar="REPO_ROOT", help="Report lock state for one checkout")
+    mode.add_argument(
+        "--verify",
+        metavar="REPO_ROOT",
+        help=(
+            "Measure whether a recorded lock still holds. Exits "
+            f"{EXIT_DEGRADED} if it has drifted writable. Repairs nothing."
+        ),
+    )
+    mode.add_argument(
+        "--sync",
+        metavar="REPO_ROOT",
+        help=(
+            "Fast-forward a locked canonical checkout: unlock, git pull --ff-only, "
+            "re-lock. The re-lock always runs, including when the pull fails."
+        ),
+    )
     mode.add_argument("--reconcile", action="store_true", help="Sync lock state with live lane claims")
     mode.add_argument("--explain", metavar="REPO_ROOT", help="Print the recovery message for a locked checkout")
     mode.add_argument("--hook", action="store_true", help="Run as a Claude Code / Codex hook, reading JSON on stdin")
@@ -903,15 +1186,35 @@ def main(argv: list[str] | None = None) -> int:
     if args.status:
         repo = Path(args.status).resolve()
         receipt = read_receipt(repo)
+        integrity = verify_lock_integrity(repo)
         emit(
             {
                 "repo_root": str(repo),
+                # Unchanged meaning for existing callers: a receipt is present.
+                # It says the lock was applied, not that the boundary holds --
+                # read "integrity" for that.
                 "locked": receipt is not None,
+                "integrity": integrity["verdict"],
                 "locked_at": receipt.locked_at if receipt else None,
                 "justifying_claims": receipt.justifying_claims if receipt else [],
+                "paths_recorded": integrity["paths_recorded"],
+                "paths_checked": integrity["paths_checked"],
+                "writable_files": integrity["writable_files"],
+                "writable_directories": integrity["writable_directories"],
+                "missing_paths": integrity["missing_paths"],
             }
         )
         return 0
+
+    if args.verify:
+        integrity = verify_lock_integrity(Path(args.verify))
+        emit(integrity)
+        return EXIT_DEGRADED if integrity["verdict"] == VERDICT_DEGRADED else 0
+
+    if args.sync:
+        result = sync_repo(Path(args.sync))
+        emit(result)
+        return 0 if result["ok"] else 1
 
     if args.explain:
         print(recovery_message(Path(args.explain).resolve()))

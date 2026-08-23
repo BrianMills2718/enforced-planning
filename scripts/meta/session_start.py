@@ -136,9 +136,45 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+UNPLANNED_RECOVERY_HINT = (
+    "Declare the plan binding explicitly: pass a numbered plan with PLAN=<n> through Make "
+    '(or --plan "<project>#<n>" when calling this script directly), or declare the lane '
+    "unplanned with ALLOW_UNPLANNED=1 through Make (or --allow-unplanned when calling this "
+    "script directly). Unplanned work is never allowed by default."
+)
+
+
+def _undeclared_plan_binding_message(args: argparse.Namespace) -> str | None:
+    """Return the operator-facing denial when no plan binding was declared."""
+
+    if (args.plan or "").strip() or args.allow_unplanned:
+        return None
+    if args.outcome_selected or args.outcome_bootstrap_plan is not None:
+        # Outcome admission declares its own binding route and is evaluated first.
+        return None
+    return (
+        "session start requires an explicit plan binding for a live session: "
+        f"no plan was given for {args.project}:{args.scope} and unplanned work was not allowed.\n"
+        + UNPLANNED_RECOVERY_HINT
+    )
+
+
+def _fail(message: str, *, code: str, as_json: bool) -> int:
+    """Emit one loud, actionable failure without a bare traceback."""
+
+    if as_json:
+        print(json.dumps({"ok": False, "error": {"code": code, "message": message}}, indent=2, sort_keys=True))
+    else:
+        print(message, file=sys.stderr)
+    return 2
+
+
 def main(argv: list[str] | None = None) -> int:
     """Start the session and expose its initial mailbox state."""
     args = parse_args(argv)
+    undeclared = _undeclared_plan_binding_message(args)
+    if undeclared is not None:
+        return _fail(undeclared, code="plan_binding_undeclared", as_json=args.json)
     try:
         payload = session_lifecycle.start_session(**_supported_start_kwargs(args))
     except session_lifecycle.OutcomeAdmissionDeniedError as exc:
@@ -159,6 +195,15 @@ def main(argv: list[str] | None = None) -> int:
         else:
             print(str(exc), file=sys.stderr)
         return 2
+    except ValueError as exc:
+        message = str(exc)
+        if "plan_ref is required" in message:
+            return _fail(
+                f"{message}\n{UNPLANNED_RECOVERY_HINT}",
+                code="plan_binding_undeclared",
+                as_json=args.json,
+            )
+        raise
     if args.json:
         print(json.dumps(payload, indent=2, sort_keys=True))
     else:

@@ -1,11 +1,11 @@
 {
   "schema_version": "1.0.0",
   "record_type": "outcome_portfolio_disposition_request",
-  "disposition_id": "plan-125-planning-integrity-v11-complete",
+  "disposition_id": "plan-125-planning-integrity-v11-park-for-terminal-sync",
   "requested_at": "2026-08-23T11:59:09Z",
   "allocation_id": "plan-125-planning-integrity-allocation-v11",
-  "allocation_sha256": "d7d6edbd6c697af75feaf28006e34cf38c62c92065158b96c75c572b0fda3f31",
-  "disposition": "complete",
-  "decision_ref": "enforced-planning#125-pi03-accepted",
-  "reason": "Release the final Planning Integrity allocation after PI-03 acceptance and Plan 125 closeout merge."
+  "allocation_sha256": "855ceb2bd0567ede5121b3640fb38fc47243e822d6649909793e307d46b81c47",
+  "disposition": "parked",
+  "decision_ref": "enforced-planning#125-terminal-queue-ownership-correction",
+  "reason": "V11 omitted the canonical docs/plans/CLAUDE.md queue surface; park it before v12 selects one terminal claim that synchronizes all Plan 125 status entrypoints."
 }

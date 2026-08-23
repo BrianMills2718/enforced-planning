@@ -103,7 +103,7 @@
       "objective": "Implement the versioned semantic plan contract, opt-in migration configuration, start-gate join, installation propagation, and focused controls.",
       "profile": "standard",
       "execution_class": "independently_executable",
-      "claimability": "ready_for_execution",
+      "claimability": "not_applicable",
       "scope": {
         "included": [
           "PlanIntegrityResultV1 and frontier parser",
@@ -259,10 +259,10 @@
       },
       "authorization_mode": "registry_claim",
       "integration_owner_id": "pi-03-aes-installed-dogfood",
-      "status": "ready",
-      "record_version": 4,
+      "status": "accepted",
+      "record_version": 5,
       "created_at": "2026-08-22T22:23:19Z",
-      "updated_at": "2026-08-23T00:21:31Z"
+      "updated_at": "2026-08-23T00:56:44Z"
     },
     {
       "schema_version": "1.0",
@@ -277,7 +277,7 @@
       "objective": "Require configured selected-outcome admission to revalidate the claim's qualified plan at the immutable outcome contract baseline revision before creating the selection binding.",
       "profile": "standard",
       "execution_class": "independently_executable",
-      "claimability": "blocked_dependencies",
+      "claimability": "ready_for_execution",
       "scope": {
         "included": [
           "Outcome selection Planning Integrity join",
@@ -362,12 +362,10 @@
         }
       ],
       "readiness": {
-        "status": "blocked",
+        "status": "ready",
         "required_approval_types": [],
         "approvals": [],
-        "failed_guards": [
-          "pi-02-enforce-plan-integrity is not yet accepted"
-        ]
+        "failed_guards": []
       },
       "claim_policy": {
         "eligibility_rule": "PI-02 is accepted and no claim owns outcome selection.",
@@ -377,10 +375,10 @@
       },
       "authorization_mode": "registry_claim",
       "integration_owner_id": "pi-03-aes-installed-dogfood",
-      "status": "blocked",
-      "record_version": 1,
+      "status": "ready",
+      "record_version": 2,
       "created_at": "2026-08-22T23:23:45Z",
-      "updated_at": "2026-08-22T23:36:53Z"
+      "updated_at": "2026-08-23T00:58:07Z"
     },
     {
       "schema_version": "1.0",
@@ -392,13 +390,14 @@
       "spec_revision": "plan-125-operator-doc-sync-v1",
       "title": "Sync the canonical operator entrypoint after provider acceptance",
       "class": "documentation",
-      "objective": "Document exact-revision Planning Integrity at the real worktree and direct-claim entrypoint, then satisfy the focused coupling check before AES consumes the provider.",
+      "objective": "Document exact-revision Planning Integrity at the real worktree/direct-claim entrypoint and installed first-success path, then satisfy the focused coupling check before AES consumes the provider.",
       "profile": "small",
       "execution_class": "independently_executable",
-      "claimability": "blocked_dependencies",
+      "claimability": "ready_for_execution",
       "scope": {
         "included": [
           "docs/guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md",
+          "GETTING_STARTED.md",
           "Focused documentation-coupling validation"
         ],
         "excluded": [
@@ -411,7 +410,7 @@
         {
           "kind": "provider_evidence",
           "id": "docs/evidence/plan125_planning_integrity.json",
-          "revision": "pending: regenerate after the exact PI-02 provider commit"
+          "revision": "93c2d236ba24378af8215e88796a63bddaa40613"
         },
         {
           "kind": "reassessment_trigger",
@@ -420,7 +419,7 @@
         }
       ],
       "outputs": [
-        "Accurate worktree and direct-claim Planning Integrity operator guidance",
+        "Accurate worktree, direct-claim, and installed first-success Planning Integrity guidance",
         "Passing focused documentation-coupling check"
       ],
       "dependencies": [
@@ -431,7 +430,7 @@
             "type": "unit_status",
             "required_status": "accepted"
           },
-          "rationale": "The guide documents an accepted exact provider revision, not moving implementation bytes."
+          "rationale": "Both operator surfaces document an accepted exact provider revision, not moving implementation bytes."
         }
       ],
       "conflict_surfaces": [
@@ -441,39 +440,44 @@
           "repository": "enforced-planning",
           "access": "exclusive",
           "coordination_key": "planning-integrity-operator-doc"
+        },
+        {
+          "kind": "repository_path",
+          "target": "GETTING_STARTED.md",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "planning-integrity-operator-doc"
         }
       ],
       "acceptance": [
         {
           "id": "PI02D-A1",
-          "criterion": "The canonical guide says that configured plan integrity reads exact plan/config bytes from the selected Git start revision before graph query or coordination mutation.",
+          "criterion": "The canonical guide and installed first-success path say that configured plan integrity reads exact plan/config bytes from the selected Git start revision before graph query or coordination mutation.",
           "evidence_required": [
-            "Operator-guide diff",
+            "Operator-guide and GETTING_STARTED diffs",
             "Focused doc-coupling pass"
           ],
-          "negative_control": "The guide must not present structural PASS as proof of omitted-area coverage or plan optimality."
+          "negative_control": "Neither document may present structural PASS as proof of omitted-area coverage or plan optimality."
         }
       ],
       "readiness": {
-        "status": "blocked",
+        "status": "ready",
         "required_approval_types": [],
         "approvals": [],
-        "failed_guards": [
-          "pi-02-enforce-plan-integrity is not yet accepted"
-        ]
+        "failed_guards": []
       },
       "claim_policy": {
-        "eligibility_rule": "PI-02 is accepted and no claim owns the operator guide.",
+        "eligibility_rule": "PI-02 is accepted and no claim owns either the operator guide or GETTING_STARTED.md.",
         "lease_policy": "renewable",
         "lease_duration_minutes": 240,
         "max_active_per_claimant": 1
       },
       "authorization_mode": "registry_claim",
       "integration_owner_id": "pi-03-aes-installed-dogfood",
-      "status": "blocked",
-      "record_version": 1,
+      "status": "ready",
+      "record_version": 2,
       "created_at": "2026-08-22T23:23:45Z",
-      "updated_at": "2026-08-22T23:36:53Z"
+      "updated_at": "2026-08-23T00:58:07Z"
     },
     {
       "schema_version": "1.0",

@@ -1,15 +1,16 @@
 {
   "schema_version": "1.0.0",
   "record_type": "plan_125_planning_integrity_provider_evidence",
-  "captured_at": "2026-08-22T23:23:45Z",
+  "captured_at": "2026-08-23T00:56:44Z",
   "plan_id": "enforced-planning#125",
-  "decision_scope": "Whether Enforced Planning now provides an opt-in, exact-revision structural planning gate that cannot be bypassed through the installed Make entrypoint or direct plan-bound claim acquisition.",
+  "decision_scope": "Whether Enforced Planning provides an opt-in, exact-revision structural planning gate whose sanctioned Make, direct-claim, worktree-helper, and session activation paths preserve one truthful custody chain.",
+  "supersedes_candidate_revision": "c2e5fcd2732ec2fc9b1ac2a89bfa35d9ff7e848a",
   "candidate": {
-    "revision": "c2e5fcd2732ec2fc9b1ac2a89bfa35d9ff7e848a",
+    "revision": "93c2d236ba24378af8215e88796a63bddaa40613",
     "revision_object_verified": true,
-    "validator_source_sha256": "b9295f491a5208bc904eb79c67327ff230c07b9148e3dc4a91611d21088acfa6",
+    "validator_source_sha256": "c81dd9eea305f4d023bc6f2579c8becac566a993166d09eee0819f9df7211c75",
     "plan_path": "docs/plans/125_planning_integrity_loop.md",
-    "plan_sha256": "4cfca73e0024270ed70ec2487b0715a6e78668f5077d7c26abc31daf47494989",
+    "plan_sha256": "b35a87fa561f91d8dc0a22eb9ede97097eb12063792a3f947e7cdf4a955cb59e",
     "config_sha256": "e7c07451192c405b757c23355ecb8e5912fd4d76d40fda7b942e6e3b2156f0a8",
     "integrity_disposition": "pass",
     "integrity_findings": []
@@ -21,55 +22,64 @@
       "observe",
       "enforce"
     ],
-    "frontier_states": [
-      "fully_specifiable_now",
-      "conditional",
-      "exploration_required",
-      "enabling_work_blocked",
-      "human_decision_required",
-      "deliberately_deferred"
-    ],
     "coverage_nonclaim": "PASS proves the declared planning-integrity structure, not that every material area was named or that the plan is optimal."
   },
   "focused_verification": {
-    "command": "pytest -q --tb=short tests/test_check_coordination_claims.py tests/test_plan_readiness.py tests/test_validate_plan.py tests/test_install_governed_repo.py -k 'not worktree_only_mode_stays_bounded'",
-    "passed": 203,
+    "command": "env -u CODEX_THREAD_ID -u CLAUDE_SESSION_ID -u OPENCLAW_SESSION_ID -u OPENCLAW_RUN_ID pytest -q tests/test_validate_plan.py tests/test_plan_readiness.py tests/test_check_coordination_claims.py tests/test_session_contracts.py tests/test_session_cli.py tests/test_create_worktree.py tests/test_install_governed_repo.py --maxfail=20",
+    "passed": 305,
     "failed": 0,
-    "deselected": 1,
-    "duration_seconds": 16.01,
-    "excluded_test": {
-      "path": "tests/test_install_governed_repo.py::test_install_governed_repo_worktree_only_mode_stays_bounded",
-      "reason": "This pre-existing portable whole-corpus lint assertion reports 152 unrelated installed-corpus findings; it is not a focused discriminator for the Planning Integrity boundary."
+    "duration_seconds": 88.30,
+    "terminal_self_test": {
+      "command": "python scripts/self_test.py",
+      "result": "passed on exact candidate commit"
     },
-    "changed_file_lint": "No changed file increased its Ruff finding count relative to the exact pre-change Git-object baseline.",
-    "compileall": "passed",
-    "git_diff_check": "passed",
-    "terminal_self_test": "passed"
+    "targeted_lint": "ruff E9/F63/F7/F82 passed on every changed Python boundary and test file",
+    "py_compile": "passed",
+    "source_meta_parity": "session_start.py and create_worktree.py canonical/installed mirrors are byte-identical",
+    "git_diff_check": "passed"
   },
   "both_sign_controls": {
     "complete_structure": "pass with retained acceptance, frontier, reassessment, exact plan digest, and executing-validator digest",
     "incomplete_structure": "fail with stable finding codes",
-    "dirty_worktree_override": "denied; committed incomplete bytes remain authoritative",
-    "ambiguous_plan_identity": "denied",
-    "duplicate_yaml_key": "denied",
-    "coerced_config_type": "denied",
-    "unsupported_contract_version": "denied",
-    "warn_only_under_enforcement": "denied",
-    "historical_plan_below_floor": "not_applicable",
-    "observe_mode": "reports fail without denying graph-ready work",
+    "observe_mode": "allows graph-ready work while printing the full typed result and finding codes at the authentic installed Make boundary",
+    "new_non_tip_resume": "denied; --resume is not evidence for a new old-revision claim, even with matching branch/worktree artifacts",
     "direct_claim_bypass": "denied before claim registry mutation",
-    "installed_make_bypass": "denied before claim, branch, or worktree mutation",
-    "unfilled_installed_template": "fail"
+    "direct_helper_revision_omission": "denied; helper-resolved revision is compared with every plan-bound reservation when --claim-start-revision is omitted",
+    "claim_activation_mismatch": "denied when an activated claim names A and its branch/worktree execute B",
+    "legacy_claim_migration": "denied; a running v3 claim without start_revision cannot be relabeled as historical v4 custody",
+    "ownership_race": "session-start rollback preserves a branch created between claim admission and worktree-helper execution",
+    "markdown_ambiguity": "duplicate governed headings reject across supported CommonMark ATX indentation/closing hashes and both supported bold-field forms",
+    "canonical_template_syntax": "the authored **Disposition:** value form passes; the prior inline form remains explicitly compatible",
+    "worktree_only_install": "advertised readiness CLI executes with its transitive dependency closure"
+  },
+  "independent_review": {
+    "reviewer": "pi02_adversarial_review",
+    "verdict": "implementation ACCEPT; prior evidence REVISE until this exact receipt was regenerated",
+    "independent_focused_result": "305 passed",
+    "decisive_regressions": "6 passed",
+    "additional_checks": [
+      "git diff --check",
+      "py_compile",
+      "source/meta wrapper parity"
+    ]
   },
   "installer": {
-    "canonical_config_template": "templates/meta-process.yaml.example",
-    "canonical_plan_template": "templates/plan.md.template",
     "canonical_worktree_template": "templates/Makefile.worktree.block.template",
     "starter_default": "off",
-    "idempotence_test": "passed"
+    "staged_activation": "revision-bound claim reservation without tracker, then exact worktree creation, then tracker-bearing session activation or ownership-receipt rollback"
   },
   "known_followup": {
-    "operator_guide": "The pre-commit coupling check correctly identified that docs/guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md must name the new exact-revision prerequisite. That path was outside the immutable selected outcome scope and is now the explicit pi-02d-sync-operator-guide work unit, required before AES consumer admission."
+    "runtime_binding": "PI-02C will bind selected outcome continuation to the accepted plan revision using the existing immutable outcome-contract baseline.",
+    "operator_documentation": "PI-02D will update docs/guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md and GETTING_STARTED.md, the two exact documentation couplings reported by the provider commit hook."
   },
-  "promotion_boundary": "This evidence accepts the provider candidate for merge and one installed AES consumer. It does not prove planning completeness, plan optimality, fleet readiness, or a stable public 1.0 contract."
+  "consumer_sequencing": {
+    "rule": "An independently valuable project rewrite may advance while affected AES controls remain measured; authentic failures return as focused regressions rather than becoming a platform-completion gate.",
+    "project_meta_learning_ids": [
+      "lrn-20260822T233333074816Z-3383b7e6b7",
+      "lrn-20260822T233333139399Z-35b111d53f",
+      "lrn-20260822T233817822769Z-8170697c3a",
+      "lrn-20260822T234607126109Z-3b260bf667"
+    ]
+  },
+  "promotion_boundary": "This receipt accepts PI-02's exact provider candidate only. PI-02C runtime binding, PI-02D operator documentation, installed AES consumption, fleet enforcement, planning optimality, and stable public 1.0 guarantees remain unproved."
 }

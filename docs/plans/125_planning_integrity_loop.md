@@ -1,6 +1,6 @@
 # Plan #125: Planning Integrity Loop
 
-**Status:** In Progress — PI-02 candidate under revision after adversarial boundary review
+**Status:** In Progress — PI-02 accepted; PI-02C runtime binding and PI-02D operator documentation ready
 **Type:** cross-repository shared-contract implementation
 **Priority:** Critical
 **phase_ref:** "Agentic Engineering first external consumer"
@@ -331,6 +331,13 @@ admission creates a revision-bound reservation without a tracker; worktree
 creation accepts only that narrow staged omission; session activation supplies
 the tracker or rolls the invocation-owned state back.
 
+The provider commit hook then named two coupled operator surfaces rather than
+silently treating code tests as documentation adoption:
+`docs/guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md` for the claim/worktree
+lifecycle and `GETTING_STARTED.md` for the installed first-success path. Both
+remain in the separately claimed PI-02D unit; PI-02 acceptance records the
+exact coupling rather than claiming those docs already changed.
+
 ### External AES stress-test inputs and sequencing
 
 Project Meta main retains four reproduced AES findings as
@@ -362,7 +369,8 @@ revision-bound human-readable planning state through installed AES.
    Integrity for the claim's qualified plan, so continuation is revision-bound.
 4. **PI-02D — operator documentation sync.** In a separately claimed path,
    document exact-revision Planning Integrity at the canonical worktree/claim
-   entrypoint and pass the focused coupling check.
+   entrypoint and installed first-success path, then pass the focused coupling
+   check.
 5. **PI-03 — AES installed integration.** Consume a pinned Enforced Planning
    candidate, retain an immutable result, and project the planning fields into
    AES's existing topic without new authority.
@@ -489,6 +497,7 @@ the installer/shared gate boundary changes.
 - `docs/reference/CONFIG_REFERENCE.md`
 - `CLAUDE.md`
 - `docs/guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md` (PI-02D only)
+- `GETTING_STARTED.md` (PI-02D only)
 - `tests/test_validate_plan.py`
 - `tests/test_plan_readiness.py`
 - `tests/test_check_coordination_claims.py`

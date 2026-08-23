@@ -281,7 +281,9 @@ def _prepare_selection_pending_reservation(
         worktree_path=str(worktree),
         branch="staged-lane",
         session_id="codex:staged-owner",
-        session_name="prove-staged-activation",
+        # The claim CLI receives the human-readable goal from the canonical
+        # Make path; session start omits --session-name and derives the slug.
+        session_name="Prove Staged Activation",
         broader_goal="Prove Staged Activation",
         work_graph_path="docs/plans/1_staged_work_graph.json",
         work_unit_id="staged-lane",
@@ -334,6 +336,9 @@ def test_configured_session_start_defers_only_tracker_creation_until_selection(
     assert not receipt_path.exists()
     tracker_path = Path(started["tracker_path"])
     assert tracker_path.is_file()
+    assert yaml.safe_load(claim_path.read_text(encoding="utf-8"))["session_name"] == (
+        "prove-staged-activation"
+    )
     claim_after_start = claim_path.read_bytes()
     tracker_after_start = tracker_path.read_bytes()
 

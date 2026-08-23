@@ -270,14 +270,14 @@
       "id": "pi-02b-repair-selected-activation",
       "initiative_id": "agentic-engineering",
       "goal_id": "planning-integrity-loop",
-      "design_revision": "plan-125-course-correction-4@2026-08-23",
-      "spec_revision": "plan-125-staged-selected-activation-v1",
+      "design_revision": "plan-125-course-correction-5@2026-08-23",
+      "spec_revision": "plan-125-staged-selected-activation-v2",
       "title": "Repair circular selected-outcome session activation",
       "class": "implementation",
       "objective": "Allow only an exact new revision-bound staged reservation to attach its tracker as selection-pending without making a selected-outcome allow claim, while preserving denial before selection at heartbeat and prewrite.",
       "profile": "standard",
       "execution_class": "independently_executable",
-      "claimability": "ready_for_execution",
+      "claimability": "not_applicable",
       "scope": {
         "included": [
           "Exact schema-v4 staged-reservation classification",
@@ -310,6 +310,21 @@
           "kind": "independent_review",
           "id": "pi02-adversarial-review:selected-activation",
           "revision": "2026-08-23T01:16:19Z"
+        },
+        {
+          "kind": "implementation_evidence",
+          "id": "pi02b-provider-and-normalization-merges",
+          "revision": "a05b9ede580d398fe178354fa027ebb5c96600f2"
+        },
+        {
+          "kind": "runtime_evidence",
+          "id": "selection-pending-activation:spact-33c0ac9a81d2440cb146813896eed2a6",
+          "revision": "a05b9ede580d398fe178354fa027ebb5c96600f2"
+        },
+        {
+          "kind": "runtime_negative_control",
+          "id": "outcome-admission-receipt:oadm-0dae756525014219a25fe8516815ed43",
+          "revision": "a05b9ede580d398fe178354fa027ebb5c96600f2"
         }
       ],
       "outputs": [
@@ -372,11 +387,9 @@
         },
         {
           "id": "PI02B-A2",
-          "criterion": "Before exact allocation and selection, session heartbeat and native prewrite remain denied; after selection, only ordinary-authorized paths inside the immutable selected scope are admitted.",
+          "criterion": "Before exact allocation and selection, session heartbeat and native prewrite remain denied.",
           "evidence_required": [
-            "Pre-selection heartbeat and prewrite denials",
-            "Post-selection in-scope allow",
-            "Post-selection out-of-scope denial"
+            "Pre-selection heartbeat and prewrite denials"
           ],
           "negative_control": "Selection-pending activation cannot renew progress, authorize a write, or masquerade as selected PASS."
         },
@@ -404,10 +417,10 @@
       },
       "authorization_mode": "registry_claim",
       "integration_owner_id": "pi-02e-renew-work-unit-custody",
-      "status": "ready",
-      "record_version": 1,
+      "status": "accepted",
+      "record_version": 2,
       "created_at": "2026-08-23T01:16:19Z",
-      "updated_at": "2026-08-23T01:16:19Z"
+      "updated_at": "2026-08-23T04:00:24Z"
     },
     {
       "schema_version": "1.0",
@@ -422,7 +435,7 @@
       "objective": "Require configured selected-outcome admission to revalidate the claim's qualified plan at the immutable outcome contract baseline revision before creating the selection binding.",
       "profile": "standard",
       "execution_class": "independently_executable",
-      "claimability": "blocked_dependencies",
+      "claimability": "ready_for_execution",
       "scope": {
         "included": [
           "Outcome selection Planning Integrity join",
@@ -516,12 +529,10 @@
         }
       ],
       "readiness": {
-        "status": "blocked",
+        "status": "ready",
         "required_approval_types": [],
         "approvals": [],
-        "failed_guards": [
-          "pi-02b-repair-selected-activation is not accepted"
-        ]
+        "failed_guards": []
       },
       "claim_policy": {
         "eligibility_rule": "PI-02 is accepted and no claim owns outcome selection.",
@@ -531,10 +542,10 @@
       },
       "authorization_mode": "registry_claim",
       "integration_owner_id": "pi-03-aes-installed-dogfood",
-      "status": "blocked",
-      "record_version": 3,
+      "status": "ready",
+      "record_version": 4,
       "created_at": "2026-08-22T23:23:45Z",
-      "updated_at": "2026-08-23T01:16:19Z"
+      "updated_at": "2026-08-23T04:00:24Z"
     },
     {
       "schema_version": "1.0",
@@ -542,8 +553,8 @@
       "id": "pi-02e-renew-work-unit-custody",
       "initiative_id": "agentic-engineering",
       "goal_id": "planning-integrity-loop",
-      "design_revision": "plan-125-course-correction-3@2026-08-23",
-      "spec_revision": "plan-125-successor-outcome-custody-v1",
+      "design_revision": "plan-125-course-correction-5@2026-08-23",
+      "spec_revision": "plan-125-successor-outcome-custody-v2",
       "title": "Renew selected-outcome custody for post-provider work units",
       "class": "integration",
       "objective": "Use the existing disposition, allocation, and selection owners to move Plan 125 from the closed PI-02 claim to one exact successor claim that can execute PI-02D without bypassing configured source admission.",
@@ -606,6 +617,15 @@
             "required_status": "accepted"
           },
           "rationale": "The normal planned successor lane cannot attach a tracker and reach allocation/selection until exact staged activation is repaired."
+        },
+        {
+          "unit_id": "pi-02c-bind-runtime-plan",
+          "type": "hard",
+          "gate": {
+            "type": "unit_status",
+            "required_status": "accepted"
+          },
+          "rationale": "The authentic successor selection must exercise accepted runtime plan-revision binding rather than create selected state immediately before that control is added."
         }
       ],
       "conflict_surfaces": [
@@ -644,9 +664,10 @@
           "evidence_required": [
             "Disposition receipt with the exact v3 allocation digest",
             "Allocation and selection receipts naming the successor claim",
-            "Claim, tracker, worktree HEAD, and graph revision equality"
+            "Claim, tracker, worktree HEAD, and graph revision equality",
+            "Post-selection heartbeat and in-scope prewrite allow"
           ],
-          "negative_control": "The cleaned failed PI-02D claim, a selection-pending activation, or an unplanned documentation claim cannot supply selected authority."
+          "negative_control": "The cleaned failed PI-02D claim, a selection-pending activation, or an unplanned documentation claim cannot supply selected authority; an out-of-scope prewrite remains denied."
         },
         {
           "id": "PI02E-A2",
@@ -663,7 +684,7 @@
         "required_approval_types": [],
         "approvals": [],
         "failed_guards": [
-          "pi-02b-repair-selected-activation is not accepted"
+          "pi-02c-bind-runtime-plan is not accepted"
         ]
       },
       "claim_policy": {
@@ -675,9 +696,9 @@
       "authorization_mode": "registry_claim",
       "integration_owner_id": "pi-02d-sync-operator-guide",
       "status": "blocked",
-      "record_version": 2,
+      "record_version": 3,
       "created_at": "2026-08-23T01:16:19Z",
-      "updated_at": "2026-08-23T01:16:19Z"
+      "updated_at": "2026-08-23T04:00:24Z"
     },
     {
       "schema_version": "1.0",

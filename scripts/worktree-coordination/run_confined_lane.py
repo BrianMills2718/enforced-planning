@@ -57,6 +57,13 @@ boundary that silently degrades to no boundary is the exact defect this
 addresses -- four existing hooks already fail open silently on a shell payload.
 Pass ``--allow-unconfined`` to run anyway; it is loud, explicit, and recorded in
 the JSON result.
+
+``--self-test`` proves the boundary in a throwaway repository.
+``--self-test-unconfined`` runs the identical probe with no boundary to show the
+probe is not rigged to report BLOCKED. Only the first can ever report
+``boundary_verified``; the second mutates the throwaway canonical file by design
+and always exits non-zero. No single field or exit code from either arm can be
+read as "confinement verified" -- see :func:`grade_probe`.
 """
 
 from __future__ import annotations
@@ -76,6 +83,7 @@ from typing import Any
 EXIT_USAGE = 2
 EXIT_NO_CONFINEMENT = 3
 EXIT_SELF_TEST_FAILED = 4
+EXIT_BOUNDARY_ABSENT = 5
 
 # Carve-outs relative to the repository root. See module docstring for the
 # observed failure each one prevents.
@@ -303,6 +311,9 @@ else
 fi
 """
 
+NEGATIVE_CONTROLS = ("neg_redirect", "neg_sed", "neg_python")
+PRISTINE_CANONICAL = "original\n"
+
 EXPECTED_CONFINED = {
     "neg_redirect": "BLOCKED",
     "neg_sed": "BLOCKED",
@@ -341,13 +352,62 @@ def _build_probe_repo(root: Path) -> tuple[Path, Path]:
     return canon, lane
 
 
-def run_self_test(confined: bool, coordination_dir: Path) -> dict[str, Any]:
-    """Execute the four controls against a throwaway repository.
+def grade_probe(confined: bool, observed: dict[str, str], canonical_content: str) -> dict[str, Any]:
+    """Grade one probe run. Pure, so the invariant below is testable without systemd.
 
-    ``confined=False`` is the discriminator: the identical probe runs with no
-    read-only boundary, and the negative controls are then expected to be
-    ALLOWED. A check that cannot fail proves nothing, so the self-test asserts
-    the *expected* outcome for the mode it was asked to run.
+    One invariant holds in EVERY mode: ``ok`` and ``boundary_verified`` are
+    never true when the canonical file was mutated.
+
+    An unconfined run is graded against a relaxed expectation set in which the
+    negative controls are ALLOWED. That is a sensitivity check and nothing
+    more: it proves the probe is not rigged to report BLOCKED unconditionally.
+    Meeting it is reported as ``probe_sensitive``, never as ``ok``. An earlier
+    version of this function let the relaxed set produce ``ok: true`` and exit
+    0 on a run that had just mutated the canonical checkout -- the same
+    fail-open-silently shape this wrapper exists to eliminate.
+    """
+
+    expected = dict(EXPECTED_CONFINED)
+    if not confined:
+        expected.update({name: "ALLOWED" for name in NEGATIVE_CONTROLS})
+
+    controls = []
+    for name, want in expected.items():
+        got = observed.get(name, "MISSING")
+        controls.append({"control": name, "expected": want, "observed": got, "ok": got == want})
+
+    controls_met = all(c["ok"] for c in controls)
+    canonical_intact = canonical_content == PRISTINE_CANONICAL
+    probe_sensitive = None if confined else all(observed.get(n) == "ALLOWED" for n in NEGATIVE_CONTROLS)
+
+    ok = controls_met
+    boundary_verified = confined and controls_met
+
+    # The invariant, applied last and to both fields so no expectation set can
+    # route around it.
+    if not canonical_intact:
+        ok = False
+        boundary_verified = False
+
+    return {
+        "mode": "confined" if confined else "unconfined-discriminator",
+        "expectation_set": "confined" if confined else "unconfined-sensitivity",
+        "ok": ok,
+        "boundary_verified": boundary_verified,
+        "probe_sensitive": probe_sensitive,
+        "expectations_met": controls_met,
+        "canonical_file_intact": canonical_intact,
+        "canonical_file_after": canonical_content,
+        "controls": controls,
+    }
+
+
+def run_self_test(confined: bool, coordination_dir: Path) -> dict[str, Any]:
+    """Execute the controls against a throwaway repository, then grade them.
+
+    ``confined=False`` runs the identical probe with no read-only boundary. It
+    mutates the throwaway canonical file by design and therefore can never
+    report ``ok`` or ``boundary_verified``; see :func:`grade_probe`.
     """
 
     coordination_dir.mkdir(parents=True, exist_ok=True)
@@ -373,26 +433,7 @@ def run_self_test(confined: bool, coordination_dir: Path) -> dict[str, Any]:
                 observed[name.strip()] = verdict.strip()
         canonical_content = (canon / "tracked.txt").read_text()
 
-    if confined:
-        expected = dict(EXPECTED_CONFINED)
-    else:
-        expected = dict(EXPECTED_CONFINED)
-        expected.update({"neg_redirect": "ALLOWED", "neg_sed": "ALLOWED", "neg_python": "ALLOWED"})
-
-    controls = []
-    for name, want in expected.items():
-        got = observed.get(name, "MISSING")
-        controls.append({"control": name, "expected": want, "observed": got, "ok": got == want})
-    canonical_intact = canonical_content == "original\n"
-    ok = all(c["ok"] for c in controls) and (canonical_intact if confined else True)
-    return {
-        "mode": "confined" if confined else "unconfined-discriminator",
-        "ok": ok,
-        "controls": controls,
-        "canonical_file_after": canonical_content,
-        "canonical_file_intact": canonical_intact,
-        "stderr": proc.stderr.strip()[-2000:],
-    }
+    return {**grade_probe(confined, observed, canonical_content), "stderr": proc.stderr.strip()[-2000:]}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -424,7 +465,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--self-test-unconfined",
         action="store_true",
-        help="Discriminator: run the same controls with no boundary; negative controls must be ALLOWED.",
+        help=(
+            "Sensitivity check: run the same controls with NO boundary. Proves the probe is not "
+            "rigged to report BLOCKED. It mutates the throwaway canonical file by design, so it "
+            "always exits non-zero and never reports boundary_verified."
+        ),
     )
     parser.add_argument(
         "--coordination-dir",
@@ -443,7 +488,12 @@ def main(argv: list[str] | None = None) -> int:
     if args.self_test or args.self_test_unconfined:
         available, detail = systemd_run_available()
         if args.self_test and not available:
-            payload = {"ok": False, "reason": detail, "systemd_run_available": False}
+            payload = {
+                "ok": False,
+                "boundary_verified": False,
+                "reason": detail,
+                "systemd_run_available": False,
+            }
             print(json.dumps(payload, indent=2) if args.json else f"REFUSED: {detail}", file=sys.stderr)
             return EXIT_NO_CONFINEMENT
         results = []
@@ -451,18 +501,7 @@ def main(argv: list[str] | None = None) -> int:
             results.append(run_self_test(True, args.coordination_dir))
         if args.self_test_unconfined:
             results.append(run_self_test(False, args.coordination_dir))
-        ok = all(r["ok"] for r in results)
-        payload = {"ok": ok, "systemd_run_available": available, "results": results}
-        if args.json:
-            print(json.dumps(payload, indent=2))
-        else:
-            for result in results:
-                print(f"[{result['mode']}] {'PASS' if result['ok'] else 'FAIL'}")
-                for control in result["controls"]:
-                    mark = "ok " if control["ok"] else "FAIL"
-                    print(f"  {mark} {control['control']}: expected {control['expected']}, observed {control['observed']}")
-                print(f"  canonical file after probe: {result['canonical_file_after']!r}")
-        return 0 if ok else EXIT_SELF_TEST_FAILED
+        return report_self_test(results, available, args.json)
 
     if args.repo_root is None:
         parser.error("--repo-root is required unless --self-test/--self-test-unconfined is used")
@@ -518,6 +557,71 @@ def main(argv: list[str] | None = None) -> int:
     if args.json:
         print(json.dumps(asdict(result), indent=2))
     return proc.returncode
+
+
+def report_self_test(results: list[dict[str, Any]], available: bool, as_json: bool) -> int:
+    """Render self-test results so no single field reads as "confinement verified".
+
+    ``boundary_verified`` is true only when a confined arm ran and passed with
+    the canonical file intact. ``canonical_mutated_in_any_arm`` is reported
+    alongside it, and any arm that mutated the canonical file forces a non-zero
+    exit -- including the sensitivity arm, whose whole purpose is to mutate it.
+    """
+
+    confined_arms = [r for r in results if r["mode"] == "confined"]
+    boundary_verified = bool(confined_arms) and all(r["boundary_verified"] for r in confined_arms)
+    canonical_mutated = any(not r["canonical_file_intact"] for r in results)
+    expectations_met = all(r["expectations_met"] for r in results)
+    ok = expectations_met and not canonical_mutated
+
+    if confined_arms and not all(r["ok"] for r in confined_arms):
+        exit_code = EXIT_SELF_TEST_FAILED
+    elif not ok:
+        exit_code = EXIT_BOUNDARY_ABSENT
+    else:
+        exit_code = 0
+
+    payload = {
+        "ok": ok,
+        "boundary_verified": boundary_verified,
+        "canonical_mutated_in_any_arm": canonical_mutated,
+        "expectations_met": expectations_met,
+        "exit_code": exit_code,
+        "systemd_run_available": available,
+        "results": results,
+    }
+    if as_json:
+        print(json.dumps(payload, indent=2))
+        return exit_code
+
+    for result in results:
+        if result["boundary_verified"]:
+            headline = "BOUNDARY VERIFIED"
+        elif result["mode"] == "confined":
+            headline = "BOUNDARY FAILED"
+        else:
+            headline = "BOUNDARY ABSENT by design - this arm proves nothing about confinement"
+        print(f"[{result['mode']}] {headline}")
+        for control in result["controls"]:
+            mark = "ok " if control["ok"] else "FAIL"
+            print(f"  {mark} {control['control']}: expected {control['expected']}, observed {control['observed']}")
+        print(
+            f"  canonical file after probe: {result['canonical_file_after']!r} "
+            f"(intact={result['canonical_file_intact']})"
+        )
+        if result["probe_sensitive"] is not None:
+            verdict = "CONFIRMED" if result["probe_sensitive"] else "NOT CONFIRMED"
+            print(
+                f"  probe sensitivity: {verdict} - with no boundary the negative routes got "
+                "through, so the probe is not rigged to report BLOCKED"
+            )
+        if not result["canonical_file_intact"]:
+            print("  the canonical checkout WAS mutated in this arm; that is not evidence of a boundary")
+    print(
+        f"boundary_verified={boundary_verified} "
+        f"canonical_mutated_in_any_arm={canonical_mutated} exit={exit_code}"
+    )
+    return exit_code
 
 
 def _human(result: LaunchResult) -> str:

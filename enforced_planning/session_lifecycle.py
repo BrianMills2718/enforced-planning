@@ -441,6 +441,7 @@ def _upsert_session_claim(
     start_revision: str | None = None,
     ttl_hours: float = coordination_claims.DEFAULT_TTL_HOURS,
     allow_parallel: bool = False,
+    staged_reservation: coordination_claims.ClaimRecord | None = None,
 ) -> str:
     """Create or update the compact claim-side session contract metadata."""
 
@@ -488,6 +489,15 @@ def _upsert_session_claim(
         )
         if existing is None:
             raise ValueError(f"Existing claim at {path} is invalid")
+        if staged_reservation is not None:
+            if existing != staged_reservation:
+                raise ValueError(
+                    f"Claim at {path} changed after selection-pending validation; refusing tracker attachment"
+                )
+            if existing.tracker_path is not None:
+                raise ValueError(
+                    f"Claim at {path} already links a tracker; selection-pending activation is no longer valid"
+                )
         if existing.agent != agent:
             raise ValueError(f"Claim at {path} belongs to {existing.agent}, not {agent}")
         if existing.session_id and existing.session_id != session_id:
@@ -703,6 +713,130 @@ def _record_required_outcome_admission(
             f"Outcome admission denied ({result.decision.reason_code}); receipt {receipt.receipt_id}{detail}"
         )
     return receipt.model_dump(mode="json")
+
+
+def _record_selection_pending_activation(
+    result: outcome_admission.SelectionPendingActivationResultV1,
+    *,
+    receipt_path: Path,
+) -> dict[str, Any]:
+    """Record the narrow pre-selection tracker bootstrap without calling it allow."""
+
+    receipt = outcome_admission.record_selection_pending_activation(
+        result,
+        outcome_receipt_path=receipt_path,
+    )
+    if (
+        result.disposition != "defer"
+        or result.reason_code != "selection_pending"
+        or result.evidence is None
+    ):
+        detail = f": {result.resolution_error_message}" if result.resolution_error_message is not None else ""
+        raise OutcomeAdmissionDeniedError(
+            f"Outcome admission denied ({result.reason_code}); receipt {receipt.receipt_id}{detail}"
+        )
+    return receipt.model_dump(mode="json")
+
+
+def _require_staged_activation_arguments_match(
+    claim: coordination_claims.ClaimRecord,
+    *,
+    agent: str,
+    project: str,
+    scope: str,
+    intent: str,
+    plan_ref: str | None,
+    repo_root: str,
+    worktree_path: str,
+    branch: str,
+    session_id: str,
+    session_name: str | None,
+    broader_goal: str,
+    claim_type: str | None,
+    write_paths: list[str] | None,
+    read_paths: list[str] | None,
+    parent_scope: str | None,
+    work_graph_path: str | None,
+    work_unit_id: str | None,
+    start_revision: str | None,
+    allow_parallel: bool,
+) -> None:
+    """Reject any attempt to turn tracker attachment into claim replacement."""
+
+    requested = session_contracts.SessionContract.build(
+        agent=agent,
+        project=project,
+        scope=scope,
+        intent=intent,
+        plan_ref=plan_ref,
+        repo_root=repo_root,
+        worktree_path=worktree_path,
+        branch=branch,
+        session_id=session_id,
+        broader_goal=broader_goal,
+        session_name=session_name,
+        start_revision=start_revision or claim.start_revision,
+    )
+    requested_write_paths = (
+        claim.write_paths
+        if write_paths is None
+        else [coordination_claims._normalize_repo_path(path) for path in write_paths]
+    )
+    requested_read_paths = (
+        claim.read_paths
+        if read_paths is None
+        else [coordination_claims._normalize_repo_path(path) for path in read_paths]
+    )
+    requested_fields: dict[str, object] = {
+        "agent": requested.agent,
+        "project": requested.project,
+        "scope": requested.scope,
+        "intent": requested.intent,
+        "plan_ref": requested.plan_ref,
+        "repo_root": requested.repo_root,
+        "worktree_path": requested.worktree_path,
+        "branch": requested.branch,
+        "session_id": requested.session_id,
+        "session_name": requested.session_name,
+        "broader_goal": requested.broader_goal,
+        "claim_type": claim_type or claim.claim_type,
+        "write_paths": requested_write_paths,
+        "read_paths": requested_read_paths,
+        "parent_scope": claim.parent_scope if parent_scope is None else parent_scope,
+        "work_graph_path": claim.work_graph_path if work_graph_path is None else work_graph_path,
+        "work_unit_id": claim.work_unit_id if work_unit_id is None else work_unit_id,
+        "start_revision": requested.start_revision,
+        "parallel_root_authorized": allow_parallel or claim.parallel_root_authorized,
+    }
+    existing_fields: dict[str, object] = {
+        "agent": claim.agent,
+        "project": claim.primary_project(),
+        "scope": claim.scope,
+        "intent": claim.intent,
+        "plan_ref": claim.plan_ref,
+        "repo_root": claim.repo_root,
+        "worktree_path": claim.worktree_path,
+        "branch": claim.branch,
+        "session_id": claim.session_id,
+        "session_name": claim.session_name,
+        "broader_goal": claim.broader_goal,
+        "claim_type": claim.claim_type,
+        "write_paths": claim.write_paths,
+        "read_paths": claim.read_paths,
+        "parent_scope": claim.parent_scope,
+        "work_graph_path": claim.work_graph_path,
+        "work_unit_id": claim.work_unit_id,
+        "start_revision": claim.start_revision,
+        "parallel_root_authorized": claim.parallel_root_authorized,
+    }
+    mismatches = sorted(
+        name for name, value in requested_fields.items() if existing_fields[name] != value
+    )
+    if mismatches:
+        raise ValueError(
+            "selection-pending activation may attach only a tracker; caller changed: "
+            + ", ".join(mismatches)
+        )
 
 
 def _claim_status(claim: coordination_claims.ClaimRecord) -> str:
@@ -1167,6 +1301,7 @@ def start_session(
     if outcome_selected and outcome_bootstrap_plan is not None:
         raise ValueError("session start cannot combine selected outcome admission with allocation bootstrap")
     outcome_admission_receipts: list[dict[str, Any]] = []
+    staged_reservation: coordination_claims.ClaimRecord | None = None
     if outcome_bootstrap_plan is not None:
         bootstrap = outcome_admission.bootstrap_admission_result(
             outcome_admission.OutcomeAdmissionBootstrapV1(
@@ -1198,12 +1333,62 @@ def start_session(
             ordinary_allowed=True,
             renewal=True,
         )
-        outcome_admission_receipts.append(
-            _record_required_outcome_admission(
-                selected,
-                receipt_path=outcome_admission_receipt_path,
+        if selected.resolution_error_code == "claim_not_healthy":
+            staged = outcome_admission.evaluate_selection_pending_session_activation(
+                selected_claim,
             )
-        )
+            if staged.reason_code == "selection_pending":
+                if session_name is None:
+                    session_name = selected_claim.session_name
+                _require_staged_activation_arguments_match(
+                    selected_claim,
+                    agent=agent,
+                    project=project,
+                    scope=scope,
+                    intent=intent,
+                    plan_ref=plan_ref,
+                    repo_root=repo_root,
+                    worktree_path=worktree_path,
+                    branch=branch,
+                    session_id=resolved_session_id,
+                    session_name=session_name,
+                    broader_goal=broader_goal,
+                    claim_type=claim_type,
+                    write_paths=write_paths,
+                    read_paths=read_paths,
+                    parent_scope=parent_scope,
+                    work_graph_path=work_graph_path,
+                    work_unit_id=work_unit_id,
+                    start_revision=start_revision,
+                    allow_parallel=allow_parallel,
+                )
+                staged_reservation = selected_claim
+                outcome_admission_receipts.append(
+                    _record_selection_pending_activation(
+                        staged,
+                        receipt_path=outcome_admission_receipt_path,
+                    )
+                )
+            else:
+                receipt = outcome_admission.record_selection_pending_activation(
+                    staged,
+                    outcome_receipt_path=outcome_admission_receipt_path,
+                )
+                detail = (
+                    f": {staged.resolution_error_message}"
+                    if staged.resolution_error_message is not None
+                    else ""
+                )
+                raise OutcomeAdmissionDeniedError(
+                    f"Outcome admission denied ({staged.reason_code}); receipt {receipt.receipt_id}{detail}"
+                )
+        else:
+            outcome_admission_receipts.append(
+                _record_required_outcome_admission(
+                    selected,
+                    receipt_path=outcome_admission_receipt_path,
+                )
+            )
 
     exact_existing_claims = _iter_matching_live_claims(agent=agent, project=project, scope=scope)
     if len(exact_existing_claims) > 1:
@@ -1284,6 +1469,7 @@ def start_session(
             work_unit_id=work_unit_id,
             start_revision=contract.start_revision,
             allow_parallel=allow_parallel,
+            staged_reservation=staged_reservation,
         )
     except Exception as claim_error:
         try:

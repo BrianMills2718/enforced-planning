@@ -169,6 +169,32 @@ def _missing_selected_result() -> OutcomeAdmissionResultV1:
     )
 
 
+def test_frozen_historical_admission_v1_receipt_still_loads(tmp_path: Path) -> None:
+    """Staged activation must not change the shared admission-v1 framing."""
+
+    path = tmp_path / "historical-admission-v1.jsonl"
+    result = _missing_selected_result().model_dump(mode="json")
+    path.write_text(
+        json.dumps(
+            {
+                "schema_version": "1.0.0",
+                "record_type": "outcome_admission_receipt",
+                "receipt_id": "oadm-00000000000000000000000000000000",
+                "observed_at": "2026-08-21T00:00:00Z",
+                "result_sha256": "325231b73f077e70909838d0dcaac6c89e8a28ee16185417c39e18124ea1e3c8",
+                "result": result,
+            },
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    [receipt] = load_outcome_admission_receipts(path)
+
+    assert receipt.result == _missing_selected_result()
+
+
 def test_production_decision_reproduces_every_frozen_plan121_case() -> None:
     mismatches: list[str] = []
     for case in _frozen_suite().cases:

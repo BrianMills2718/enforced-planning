@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import json
 import importlib.util
+import json
 import subprocess
 import sys
 import time
@@ -19,6 +19,7 @@ from enforced_planning import (
     claim_mutation_receipts,
     coordination_claims,
     coordination_messages,
+    outcome_admission,
     prewrite_claim_projection,
     session_contracts,
     session_lifecycle,
@@ -210,6 +211,346 @@ def test_session_start_preserves_existing_revision_custody_and_rolls_back_mismat
 
     assert claim_path.read_bytes() == claim_before
     assert tracker_path.read_bytes() == tracker_before
+
+
+def _prepare_selection_pending_reservation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> tuple[Path, Path, Path, Path, str]:
+    """Create one exact v4 claim whose only health gap is its first tracker."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    repo_root = tmp_path / "repo"
+    worktree = repo_root / "worktrees" / "staged-lane"
+    repo_root.mkdir()
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    monkeypatch.setattr(
+        coordination_claims,
+        "validate_native_session_binding",
+        lambda _agent, _session_id: None,
+    )
+    _git(repo_root, "init", "-b", "main")
+    _git(repo_root, "config", "user.email", "tests@example.com")
+    _git(repo_root, "config", "user.name", "Test User")
+    (repo_root / "docs/plans").mkdir(parents=True)
+    (repo_root / "meta-process.yaml").write_text(
+        """meta_process:
+  plans:
+    integrity:
+      mode: "off"
+  claims:
+    outcome_admission_mode: enforce_selected
+""",
+        encoding="utf-8",
+    )
+    graph_path = repo_root / "docs/plans/1_staged_work_graph.json"
+    graph_path.write_text(
+        json.dumps(
+            {
+                "units": [
+                    {
+                        "id": "staged-lane",
+                        "status": "ready",
+                        "readiness": {
+                            "status": "ready",
+                            "required_approval_types": [],
+                            "approvals": [],
+                            "failed_guards": [],
+                        },
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    _git(repo_root, "add", ".")
+    _git(repo_root, "commit", "-m", "staged reservation")
+    revision = _git(repo_root, "rev-parse", "HEAD")
+    _git(repo_root, "worktree", "add", "-b", "staged-lane", str(worktree), revision)
+
+    created, _message = coordination_claims.create_claim(
+        agent="codex",
+        project="demo",
+        scope="staged-lane",
+        intent="activate one exact staged reservation",
+        plan_ref="demo#1",
+        claim_type="write",
+        write_paths=["src/feature.py"],
+        repo_root=str(repo_root),
+        worktree_path=str(worktree),
+        branch="staged-lane",
+        session_id="codex:staged-owner",
+        session_name="prove-staged-activation",
+        broader_goal="Prove Staged Activation",
+        work_graph_path="docs/plans/1_staged_work_graph.json",
+        work_unit_id="staged-lane",
+        start_point=revision,
+    )
+    assert created
+    claim_path = claims_dir / "codex_demo_staged-lane.yaml"
+    return repo_root, worktree, claim_path, trackers_dir, revision
+
+
+def test_configured_session_start_defers_only_tracker_creation_until_selection(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A valid v4 reservation gets a tracker, but no selected-outcome allow."""
+
+    repo_root, worktree, claim_path, trackers_dir, revision = _prepare_selection_pending_reservation(
+        tmp_path,
+        monkeypatch,
+    )
+    receipt_path = tmp_path / "outcome-admission.jsonl"
+    started = session_lifecycle.start_session(
+        agent="codex",
+        project="demo",
+        scope="staged-lane",
+        intent="activate one exact staged reservation",
+        repo_root=str(repo_root),
+        worktree_path=str(worktree),
+        branch="staged-lane",
+        broader_goal="Prove Staged Activation",
+        current_phase="selection pending",
+        plan_ref="demo#1",
+        session_id="codex:staged-owner",
+        claim_type="write",
+        write_paths=["src/feature.py"],
+        work_graph_path="docs/plans/1_staged_work_graph.json",
+        work_unit_id="staged-lane",
+        start_revision=revision,
+        tracker_dir=trackers_dir,
+        outcome_admission_receipt_path=receipt_path,
+    )
+
+    pending_receipt_path = outcome_admission.selection_pending_activation_receipt_path(receipt_path)
+    [activation_receipt] = outcome_admission.load_selection_pending_activation_receipts(
+        pending_receipt_path
+    )
+    assert activation_receipt.result.disposition == "defer"
+    assert activation_receipt.result.reason_code == "selection_pending"
+    assert activation_receipt.result.evidence is not None
+    assert not receipt_path.exists()
+    tracker_path = Path(started["tracker_path"])
+    assert tracker_path.is_file()
+    claim_after_start = claim_path.read_bytes()
+    tracker_after_start = tracker_path.read_bytes()
+
+    selected_prewrite = subprocess.run(
+        [
+            sys.executable,
+            str(Path(__file__).resolve().parents[1] / "scripts" / "outcome_admission.py"),
+            "selected",
+            "--agent",
+            "codex",
+            "--project",
+            "demo",
+            "--scope",
+            "staged-lane",
+            "--session-id",
+            "codex:staged-owner",
+            "--boundary",
+            "prewrite",
+            "--target-path",
+            "src/feature.py",
+            "--claims-dir",
+            str(claim_path.parent),
+            "--receipt-path",
+            str(receipt_path),
+        ],
+        cwd=Path(__file__).resolve().parents[1],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert selected_prewrite.returncode == 2
+    prewrite_payload = json.loads(selected_prewrite.stdout)
+    assert prewrite_payload["decision"]["reason_code"] == "outcome_selection_required"
+    assert prewrite_payload["resolution_error_code"] == "selection_missing"
+
+    with pytest.raises(PermissionError, match="outcome_selection_required"):
+        session_lifecycle.heartbeat_session(
+            agent="codex",
+            project="demo",
+            scope="staged-lane",
+            branch="staged-lane",
+            session_id="codex:staged-owner",
+            tracker_dir=trackers_dir,
+            outcome_admission_receipt_path=receipt_path,
+        )
+
+    assert claim_path.read_bytes() == claim_after_start
+    assert tracker_path.read_bytes() == tracker_after_start
+    receipts = outcome_admission.load_outcome_admission_receipts(receipt_path)
+    assert receipts[-1].result.resolution_error_code == "selection_missing"
+
+
+@pytest.mark.parametrize(
+    ("corruption", "expected_error"),
+    [
+        ("self_attested_graph_digest", "selection_pending_binding_mismatch"),
+        ("sha256_shaped_git_revision", "selection_pending_start_revision_invalid"),
+        ("trackerless_schema_v3", "selection_pending_claim_version_invalid"),
+    ],
+)
+def test_selection_pending_corruption_leaves_zero_tracker_or_claim_mutation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    corruption: str,
+    expected_error: str,
+) -> None:
+    """Staged activation must prove its injected defect reached the real gate."""
+
+    repo_root, worktree, claim_path, trackers_dir, revision = _prepare_selection_pending_reservation(
+        tmp_path,
+        monkeypatch,
+    )
+    claim_payload = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    if corruption == "self_attested_graph_digest":
+        claim_payload["work_graph_sha256"] = "f" * 64
+    elif corruption == "sha256_shaped_git_revision":
+        claim_payload["start_revision"] = "e" * 64
+    else:
+        claim_payload["schema_version"] = 3
+    claim_path.write_text(yaml.safe_dump(claim_payload, sort_keys=False), encoding="utf-8")
+    claim_before = claim_path.read_bytes()
+    receipt_path = tmp_path / "outcome-admission.jsonl"
+
+    with pytest.raises(PermissionError, match="outcome_admission_state_invalid"):
+        session_lifecycle.start_session(
+            agent="codex",
+            project="demo",
+            scope="staged-lane",
+            intent="activate one exact staged reservation",
+            repo_root=str(repo_root),
+            worktree_path=str(worktree),
+            branch="staged-lane",
+            broader_goal="Prove Staged Activation",
+            current_phase="selection pending",
+            plan_ref="demo#1",
+            session_id="codex:staged-owner",
+            claim_type="write",
+            write_paths=["src/feature.py"],
+            work_graph_path="docs/plans/1_staged_work_graph.json",
+            work_unit_id="staged-lane",
+            start_revision=revision,
+            tracker_dir=trackers_dir,
+            outcome_admission_receipt_path=receipt_path,
+        )
+
+    assert claim_path.read_bytes() == claim_before
+    assert not trackers_dir.exists()
+    pending_receipt_path = outcome_admission.selection_pending_activation_receipt_path(receipt_path)
+    [receipt] = outcome_admission.load_selection_pending_activation_receipts(pending_receipt_path)
+    assert receipt.result.resolution_error_code == expected_error
+
+
+def test_selection_pending_rejects_caller_scope_smuggling_before_tracker_creation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The tracker handoff cannot replace claim scope and acquire bootstrap authority."""
+
+    repo_root, worktree, claim_path, trackers_dir, revision = _prepare_selection_pending_reservation(
+        tmp_path,
+        monkeypatch,
+    )
+    claim_before = claim_path.read_bytes()
+    receipt_path = tmp_path / "outcome-admission.jsonl"
+
+    with pytest.raises(ValueError, match="caller changed: write_paths"):
+        session_lifecycle.start_session(
+            agent="codex",
+            project="demo",
+            scope="staged-lane",
+            intent="activate one exact staged reservation",
+            repo_root=str(repo_root),
+            worktree_path=str(worktree),
+            branch="staged-lane",
+            broader_goal="Prove Staged Activation",
+            current_phase="selection pending",
+            plan_ref="demo#1",
+            session_id="codex:staged-owner",
+            claim_type="write",
+            write_paths=["docs/plans/999_unrelated.md"],
+            work_graph_path="docs/plans/1_staged_work_graph.json",
+            work_unit_id="staged-lane",
+            start_revision=revision,
+            tracker_dir=trackers_dir,
+            outcome_admission_receipt_path=receipt_path,
+        )
+
+    assert claim_path.read_bytes() == claim_before
+    assert not trackers_dir.exists()
+    assert not receipt_path.exists()
+    assert not outcome_admission.selection_pending_activation_receipt_path(receipt_path).exists()
+    claim_payload = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    claim = coordination_claims.normalize_claim(claim_payload, source_file=str(claim_path))
+    assert claim is not None
+    assert (
+        outcome_admission.evaluate_claim_bootstrap_admission(
+            claim,
+            target_path="docs/plans/999_unrelated.md",
+        )
+        is None
+    )
+
+
+def test_selection_pending_compare_and_swap_rejects_claim_change_before_link(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A claim change after evaluation cannot inherit the staged receipt."""
+
+    repo_root, worktree, claim_path, trackers_dir, revision = _prepare_selection_pending_reservation(
+        tmp_path,
+        monkeypatch,
+    )
+    original_write_tracker = session_lifecycle.session_contracts.write_session_tracker
+
+    def write_tracker_then_change_claim(*args: object, **kwargs: object) -> Path:
+        tracker_path = original_write_tracker(*args, **kwargs)
+        claim_payload = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+        claim_payload["intent"] = "injected concurrent claim change"
+        claim_path.write_text(yaml.safe_dump(claim_payload, sort_keys=False), encoding="utf-8")
+        assert yaml.safe_load(claim_path.read_text(encoding="utf-8"))["intent"] == (
+            "injected concurrent claim change"
+        )
+        return tracker_path
+
+    monkeypatch.setattr(
+        session_lifecycle.session_contracts,
+        "write_session_tracker",
+        write_tracker_then_change_claim,
+    )
+    receipt_path = tmp_path / "outcome-admission.jsonl"
+
+    with pytest.raises(ValueError, match="changed after selection-pending validation"):
+        session_lifecycle.start_session(
+            agent="codex",
+            project="demo",
+            scope="staged-lane",
+            intent="activate one exact staged reservation",
+            repo_root=str(repo_root),
+            worktree_path=str(worktree),
+            branch="staged-lane",
+            broader_goal="Prove Staged Activation",
+            current_phase="selection pending",
+            plan_ref="demo#1",
+            session_id="codex:staged-owner",
+            claim_type="write",
+            write_paths=["src/feature.py"],
+            work_graph_path="docs/plans/1_staged_work_graph.json",
+            work_unit_id="staged-lane",
+            start_revision=revision,
+            tracker_dir=trackers_dir,
+            outcome_admission_receipt_path=receipt_path,
+        )
+
+    assert not list(trackers_dir.glob("*.yaml"))
+    changed_claim = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    assert changed_claim["intent"] == "injected concurrent claim change"
 
 
 def test_session_start_does_not_invent_revision_custody_for_running_legacy_claim(

@@ -14,31 +14,32 @@
     "intended_consumer": "Brian and coding agents starting consequential Agentic Engineering work",
     "outcome": "A selected repository rejects a structurally incomplete new plan before coordination mutation, binds continuation to the accepted plan revision, and never grants a planned claim bootstrap authority merely from path shape.",
     "canonical_journey": {
-      "starting_state": "PI-02E is accepted, the exact v8 maintenance allocation remains active on its closed proof claim, and PI-02D is ready for a separate documentation-scoped selection.",
-      "input": "The exact active v8 allocation, one qualified revision-bound PI-02D claim and selection-pending tracker, the accepted Plan 125 graph, and a v9 contract limited to the transition artifacts plus the two coupled documentation surfaces.",
-      "action": "Prove the documentation claim cannot write before selection, park v8, allocate and select v9 on that exact claim, then update and verify the operator guide and installed first-success documentation.",
-      "observable_result": "The PI-02D claim and tracker bind active v9 custody before documentation mutation; both documentation surfaces are accurate and the focused relationship/coupling check passes.",
-      "failure_signal": "Documentation changes before v9 selection; PI-02D inherits the closed PI-02E selection; v8 remains active while v9 allocates; allocation or selection binds another claim; either documentation surface remains stale; or the coupling check fails."
+      "starting_state": "PI-02D documentation is merged and verified, its exact v9 maintenance allocation remains active on the closed documentation claim, and PI-03 remains mechanically blocked because the accepted result is not yet recorded in the Plan 125 authority surfaces.",
+      "input": "The exact active v9 allocation, the merged PI-02D receipts and commit, one qualified revision-bound PI-02D acceptance claim, and a v10 contract limited to the transition artifacts plus the Plan 125 plan, work graph, and roadmap row.",
+      "action": "Park v9, allocate and select v10 on the exact acceptance claim, record the merged evidence and PI-02D acceptance, and make PI-03 ready without changing provider behavior.",
+      "observable_result": "The work graph records PI-02D accepted from exact merged evidence, PI-03 becomes ready, and the plan and roadmap name installed AES dogfood as the next bounded unit.",
+      "failure_signal": "Acceptance is recorded before v10 selection; v9 remains active while v10 allocates; allocation or selection binds another claim; the graph claims acceptance without the merged receipts and checks; or PI-03 remains blocked."
     },
-    "baseline_revision": "f31dada73b1f4eb8122961f0cca2dd1cffca72e3",
+    "baseline_revision": "12b8180dda2b8cbe2a0b0d0f664864546eba3944",
     "allowed_scope": [
       "examples/owner-real-outcome-admission/plan125-planning-integrity-scenario.json",
       "examples/owner-real-outcome-admission/plan125-planning-integrity-allocation.json",
       "examples/owner-real-outcome-admission/plan125-planning-integrity-disposition.json",
-      "docs/guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md",
-      "GETTING_STARTED.md"
+      "docs/plans/125_planning_integrity_loop.md",
+      "docs/plans/125_planning_integrity_loop_work_graph.json",
+      "ROADMAP.md"
     ],
     "progress_dimensions": [
-      "documentation-scoped custody",
-      "operator entrypoint accuracy",
-      "installed first-success accuracy"
+      "acceptance-transition custody",
+      "exact merged documentation evidence",
+      "installed-consumer readiness"
     ]
   },
   "receipts": [],
   "request": {
     "schema_version": "1.0.0",
     "operation": "product_write",
-    "target_path": "docs/guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md",
+    "target_path": "docs/plans/125_planning_integrity_loop.md",
     "ordinary_approval": true,
     "approval_text": "I approve",
     "cost_telemetry_usd": "0",

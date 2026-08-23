@@ -26,6 +26,10 @@ if str(ROOT) not in sys.path:
 from enforced_planning.file_context import collect_context
 from enforced_planning.file_context import load_relationships
 from enforced_planning.plan_validation import PATH_CLEAN_RE
+from enforced_planning.plan_validation import PLANNING_INTEGRITY_COVERAGE_NONCLAIM
+from enforced_planning.plan_validation import PlanIntegrityResultV1
+from enforced_planning.plan_validation import PlanningIntegrityConfigV1
+from enforced_planning.plan_validation import PlanningIntegrityError
 from enforced_planning.plan_validation import REQUIRED_PLAN_SECTIONS
 from enforced_planning.plan_validation import ValidationResult
 from enforced_planning.plan_validation import collect_plan_requirements
@@ -50,6 +54,21 @@ from enforced_planning.plan_validation import print_summary
 from enforced_planning.plan_validation import read_text
 from enforced_planning.plan_validation import split_lines
 from enforced_planning.plan_validation import validate_plan
+from enforced_planning.plan_validation import evaluate_plan_integrity_bytes
+from enforced_planning.plan_validation import parse_planning_integrity_config_bytes
+from enforced_planning.plan_validation import validate_plan_integrity_at_revision
+from enforced_planning.plan_validation import validate_plan_integrity_from_path
+
+__all__ = (
+    "PLANNING_INTEGRITY_COVERAGE_NONCLAIM",
+    "PlanIntegrityResultV1",
+    "PlanningIntegrityConfigV1",
+    "PlanningIntegrityError",
+    "evaluate_plan_integrity_bytes",
+    "parse_planning_integrity_config_bytes",
+    "validate_plan_integrity_at_revision",
+    "validate_plan_integrity_from_path",
+)
 
 
 def get_current_plan_number() -> int | None:

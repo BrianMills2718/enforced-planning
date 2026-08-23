@@ -22,8 +22,28 @@ couplings:
       silently undocumented config surface.
     sources:
       - "meta-process.yaml"
+      - "templates/meta-process.yaml.example"
+      - "templates/meta-process.future.yaml.example"
     docs:
       - "docs/reference/CONFIG_REFERENCE.md"
+
+  - description: >-
+      Planning Integrity's parser, pre-mutation admission, direct claim seam,
+      and installed plan/worktree templates implement Plan 125. Contract or
+      template changes must keep the normative design, config reference, and
+      operator entrypoint documentation aligned.
+    sources:
+      - "enforced_planning/plan_validation.py"
+      - "enforced_planning/plan_readiness.py"
+      - "enforced_planning/coordination_claims.py"
+      - "scripts/check_plan_readiness.py"
+      - "scripts/check_coordination_claims.py"
+      - "templates/Makefile.worktree.block.template"
+      - "templates/plan.md.template"
+    docs:
+      - "docs/plans/125_planning_integrity_loop.md"
+      - "docs/reference/CONFIG_REFERENCE.md"
+      - "docs/guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md"
 
   - description: >-
       The canonical installer/upgrader for consumer repos. GETTING_STARTED.md

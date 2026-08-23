@@ -134,6 +134,7 @@ SURFACE_RUNTIME_SCRIPT := scripts/surface_runtime.py
 WORKTREE_DIR ?= $(shell $(PYTHON) "$(WORKTREE_CREATE_SCRIPT)" --repo-root . --print-default-worktree-dir)
 WORKTREE_REPO_ROOT ?= $(shell git rev-parse --path-format=absolute --git-common-dir 2>/dev/null | sed 's|/\.git$$||')
 WORKTREE_START_POINT ?= HEAD
+WORKTREE_START_REVISION := $(shell git -C "$(WORKTREE_REPO_ROOT)" rev-parse --verify "$(WORKTREE_START_POINT)^{commit}" 2>/dev/null)
 WORKTREE_PROJECT ?= $(shell $(PYTHON) "$(WORKTREE_CREATE_SCRIPT)" --repo-root . --print-canonical-project)
 WORKTREE_AGENT ?= $(shell if [ -n "$$CODEX_THREAD_ID" ]; then printf codex; elif [ -n "$$CLAUDE_SESSION_ID" ] || [ -n "$$CLAUDE_CODE_SSE_PORT" ]; then printf claude-code; elif [ -n "$$OPENCLAW_SESSION_ID" ] || [ -n "$$OPENCLAW_RUN_ID" ]; then printf openclaw; fi)
 SESSION_GOAL ?=
@@ -224,9 +225,15 @@ endif
 		echo "Install or sync the sanctioned session lifecycle module before using make worktree."; \
 		exit 1; \
 	fi
+	@test -n "$(WORKTREE_START_REVISION)" || { \
+		echo "Unable to resolve one full Git start revision from $(WORKTREE_START_POINT)"; \
+		exit 1; \
+	}
 	@$(PYTHON) "$(WORKTREE_PLAN_READINESS_SCRIPT)" \
 		$(if $(PLAN),--qualified-plan-id "$(PLAN_PROJECT)#$(PLAN)",) \
 		--execution-profile "$(WORKTREE_EXECUTION_PROFILE)" \
+		--repo-root "$(WORKTREE_REPO_ROOT)" \
+		--start-point "$(WORKTREE_START_REVISION)" \
 		$(if $(PLAN_READINESS_COMMAND),--query-command "$(PLAN_READINESS_COMMAND)",) \
 		--repository "$(WORKTREE_PROJECT)" \
 		--lane-id "$(BRANCH)" \
@@ -246,7 +253,11 @@ endif
 		--repo-root "$(WORKTREE_REPO_ROOT)" \
 		--branch "$(BRANCH)" \
 		--worktree-path "$(WORKTREE_DIR)/$(BRANCH)" \
+		--start-point "$(WORKTREE_START_REVISION)" \
+		--require-new \
+		$(if $(PLAN_RESUME),--resume,) \
 		--session-name "$(SESSION_GOAL)" \
+		--broader-goal "$(SESSION_GOAL)" \
 		$(if $(SESSION_PARENT_SCOPE),--parent-scope "$(SESSION_PARENT_SCOPE)",) \
 		$(if $(filter 1 true yes,$(SESSION_ALLOW_PARALLEL)),--allow-parallel,) \
 		$(foreach path,$(SESSION_WRITE_PATHS),--write-path "$(path)") \
@@ -255,11 +266,44 @@ endif
 		$(if $(SESSION_WORK_UNIT_ID),--work-unit-id "$(SESSION_WORK_UNIT_ID)",) \
 		$(if $(PLAN),--plan "$(PLAN_PROJECT)#$(PLAN)",)
 	@mkdir -p "$(WORKTREE_DIR)"
-	@if ! $(PYTHON) "$(WORKTREE_CREATE_SCRIPT)" --repo-root . --path "$(WORKTREE_DIR)/$(BRANCH)" --branch "$(BRANCH)" --start-point "$(WORKTREE_START_POINT)"; then \
-		$(PYTHON) "$(WORKTREE_CLAIMS_SCRIPT)" --release --agent "$(WORKTREE_AGENT)" --project "$(WORKTREE_PROJECT)" --scope "$(BRANCH)" >/dev/null 2>&1 || true; \
+	@creation_receipt=$$(mktemp "$(WORKTREE_DIR)/.worktree-create.XXXXXX.json"); \
+	trap 'rm -f "$$creation_receipt"' EXIT HUP INT TERM; \
+	if ! $(PYTHON) "$(WORKTREE_CREATE_SCRIPT)" \
+		--repo-root "$(WORKTREE_REPO_ROOT)" \
+		--path "$(WORKTREE_DIR)/$(BRANCH)" \
+		--branch "$(BRANCH)" \
+		--start-point "$(WORKTREE_START_REVISION)" \
+		--require-write-claim \
+		--claim-agent "$(WORKTREE_AGENT)" \
+		--claim-project "$(WORKTREE_PROJECT)" \
+		$(foreach path,$(SESSION_WRITE_PATHS),--claim-write-path "$(path)") \
+		$(if $(PLAN),--claim-start-revision "$(WORKTREE_START_REVISION)",) \
+		--json > "$$creation_receipt"; then \
+		if ! $(PYTHON) -c 'import json, sys; payload=json.load(open(sys.argv[1], encoding="utf-8")); print("Worktree creation failed: " + payload["message"], file=sys.stderr)' "$$creation_receipt"; then \
+			echo "Worktree creation failed and its receipt was unreadable." >&2; \
+		fi; \
+		if ! created_branch=$$($(PYTHON) -c 'import json, sys; print(1 if json.load(open(sys.argv[1], encoding="utf-8"))["created_branch"] else 0)' "$$creation_receipt"); then \
+			echo "Worktree creation failed without a readable ownership receipt; claim retained."; \
+			exit 1; \
+		fi; \
+		unsafe_residue=0; \
+		if [ -e "$(WORKTREE_DIR)/$(BRANCH)" ]; then unsafe_residue=1; fi; \
+		if [ "$$created_branch" -eq 1 ] && git -C "$(WORKTREE_REPO_ROOT)" show-ref --verify --quiet "refs/heads/$(BRANCH)"; then unsafe_residue=1; fi; \
+		if [ "$$unsafe_residue" -eq 0 ]; then \
+			$(PYTHON) "$(WORKTREE_CLAIMS_SCRIPT)" --release \
+				--agent "$(WORKTREE_AGENT)" --project "$(WORKTREE_PROJECT)" --scope "$(BRANCH)" \
+				--require-current-session \
+				$(if $(PLAN),--expected-start-revision "$(WORKTREE_START_REVISION)",) || exit 1; \
+		else \
+			echo "Worktree creation failed with recoverable branch/worktree residue; claim retained."; \
+		fi; \
 		exit 1; \
-	fi
-	@if ! $(PYTHON) "$(WORKTREE_SESSION_START_SCRIPT)" \
+	fi; \
+	if ! created_branch=$$($(PYTHON) -c 'import json, sys; print(1 if json.load(open(sys.argv[1], encoding="utf-8"))["created_branch"] else 0)' "$$creation_receipt"); then \
+		echo "Worktree was created without a readable ownership receipt; claim retained."; \
+		exit 1; \
+	fi; \
+	if ! $(PYTHON) "$(WORKTREE_SESSION_START_SCRIPT)" \
 		--agent "$(WORKTREE_AGENT)" \
 		--project "$(WORKTREE_PROJECT)" \
 		--scope "$(BRANCH)" \
@@ -277,6 +321,7 @@ endif
 		$(if $(SESSION_WORK_GRAPH),--work-graph "$(SESSION_WORK_GRAPH)",) \
 		$(if $(SESSION_WORK_UNIT_ID),--work-unit-id "$(SESSION_WORK_UNIT_ID)",) \
 		$(if $(PLAN),--plan "$(PLAN_PROJECT)#$(PLAN)",) \
+		$(if $(PLAN),--start-revision "$(WORKTREE_START_REVISION)",) \
 		$(if $(ALLOW_UNPLANNED),--allow-unplanned,) \
 		$(if $(SESSION_NEXT),--next-phase "$(SESSION_NEXT)",) \
 		$(if $(SESSION_DEPENDS),--depends-on "$(SESSION_DEPENDS)",) \
@@ -285,11 +330,23 @@ endif
 		$(if $(filter 1 true yes,$(OUTCOME_ADMISSION_SELECTED)),--outcome-selected,) \
 		$(if $(OUTCOME_ADMISSION_BOOTSTRAP_PLAN),--outcome-bootstrap-plan "$(OUTCOME_ADMISSION_BOOTSTRAP_PLAN)",) \
 		$(if $(OUTCOME_ADMISSION_RECEIPT_PATH),--outcome-admission-receipt-path "$(OUTCOME_ADMISSION_RECEIPT_PATH)",); then \
-		git worktree remove --force "$(WORKTREE_DIR)/$(BRANCH)" >/dev/null 2>&1 || true; \
-		git branch -D "$(BRANCH)" >/dev/null 2>&1 || true; \
-		$(PYTHON) "$(WORKTREE_CLAIMS_SCRIPT)" --release --agent "$(WORKTREE_AGENT)" --project "$(WORKTREE_PROJECT)" --scope "$(BRANCH)" >/dev/null 2>&1 || true; \
+		cleanup_ok=1; \
+		git -C "$(WORKTREE_REPO_ROOT)" worktree remove --force "$(WORKTREE_DIR)/$(BRANCH)" || cleanup_ok=0; \
+		if [ "$$created_branch" -eq 1 ]; then \
+			git -C "$(WORKTREE_REPO_ROOT)" branch -D "$(BRANCH)" || cleanup_ok=0; \
+		fi; \
+		if [ "$$cleanup_ok" -eq 1 ]; then \
+			$(PYTHON) "$(WORKTREE_CLAIMS_SCRIPT)" --release \
+				--agent "$(WORKTREE_AGENT)" --project "$(WORKTREE_PROJECT)" --scope "$(BRANCH)" \
+				--require-current-session \
+				$(if $(PLAN),--expected-start-revision "$(WORKTREE_START_REVISION)",) || exit 1; \
+		else \
+			echo "Session start failed and exact cleanup was incomplete; claim retained."; \
+		fi; \
 		exit 1; \
-	fi
+	fi; \
+	rm -f "$$creation_receipt"; \
+	trap - EXIT HUP INT TERM
 	@echo ""
 	@echo "Worktree created at $(WORKTREE_DIR)/$(BRANCH)"
 	@echo "Claim created for branch $(BRANCH)"

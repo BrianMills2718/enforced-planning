@@ -1,6 +1,6 @@
 # Plan #125: Planning Integrity Loop
 
-**Status:** In Progress — design accepted; semantic admission implementation ready
+**Status:** In Progress — PI-02 accepted; PI-02C runtime binding and PI-02D operator documentation ready
 **Type:** cross-repository shared-contract implementation
 **Priority:** Critical
 **phase_ref:** "Agentic Engineering first external consumer"
@@ -11,7 +11,7 @@
 **Execution profile:** pilot
 **Planning integrity contract:** 1.0.0
 **Blocked By:** #123
-**Blocks:** substantive first-anchor implementation under Agentic Engineering Gate 2
+**Blocks:** no consumer-project work; supplies one measured control to AES and project rewrites
 
 ---
 
@@ -29,10 +29,12 @@ Planning owns the portable typed contract and mechanical admission. AES owns
 consumer-facing observation, evidence joining, variance, and policy feedback.
 Project Meta continues to own portfolio ordering and project identity.
 
-The first consumer will be AES itself through an installed-package proof. The
-first valuable project reboot then uses the same contract; current portfolio
-selection makes WhyGame provisional and does not authorize product work in this
-plan.
+The first provider proof is the authentic installed Make lifecycle in this
+repository. AES then consumes the result through a pinned installed-package
+proof. A valuable project reboot may begin in parallel and expose new control
+defects; it does not wait for AES or Plan 125 to become a complete platform.
+Current portfolio selection makes WhyGame provisional and does not authorize
+product work in this plan.
 
 ## Gap
 
@@ -45,6 +47,9 @@ runtime surfaces are disconnected:
 - user outcome, canonical behavior, critical-path class, and capability
   adoption remain warnings;
 - the plan-start gate checks graph readiness but not semantic plan integrity;
+- the installer derives consumer configuration, plan scaffolds, and worktree
+  entrypoints from canonical templates, so root-only changes would create a
+  false installed-consumer proof;
 - outcome continuation can enforce selected progress, but a selected outcome
   is not proof that the owning plan classified uncertainty or defined when to
   revise itself; and
@@ -152,21 +157,54 @@ admission controls; isolated parser tests prove only implementation.
 4. **Exact evidence.** A result binds repository-relative plan identity,
    content digest, contract version, validator revision, mode, findings, and
    frontier summary. Changed bytes invalidate the receipt.
-5. **Fail loud.** Missing, malformed, unreadable, unsupported-version, or
+5. **Bounded completeness claim.** A structural `PASS` proves that every
+   declared frontier row is classified and executable; it does not prove that
+   an author named every material area or chose an optimal plan. The typed
+   result and AES projection carry this non-claim explicitly.
+6. **Fail loud.** Missing, malformed, unreadable, unsupported-version, or
    checker-failure states never become `PASS`.
-6. **Admission before mutation.** In enforcement mode, coordinated and release
-   lane creation validates the exact plan before claim, branch, worktree, or
-   tracker mutation. Explicitly unplanned light work retains its current
-   bounded exception.
-7. **Incremental adoption.** Repository configuration declares
+7. **Admission before mutation.** In enforcement mode, coordinated and release
+   lane creation resolves the canonical default-integration tip to one full Git
+   commit once, validates plan,
+   configuration, work graph, and approval bytes at that commit, retains it in
+   the claim, and passes the
+   same immutable revision through claim, branch, worktree, and session
+   creation. Existing branch or worktree identities must match it. Direct
+   plan-bound claim acquisition reuses the same custody checks, so omitting
+   Make or supplying an older passing commit is not a bypass. A retained
+   non-tip revision is allowed only for an already-retained lane through the
+   session-resume/recovery lifecycle; `--resume` alone never authorizes a new
+   non-tip claim. Explicitly unplanned light work retains its current bounded
+   exception.
+8. **Incremental adoption.** Repository configuration declares
    `off | observe | enforce`, contract version, and the first plan number to
    which enforcement applies. Historical lower-numbered plans remain visible
    and non-claimable as proof for the new contract.
-8. **Adaptive execution.** Existing outcome continuation remains the runtime
+9. **Adaptive execution.** Existing outcome continuation remains the runtime
    decision owner. Planning Integrity supplies revision and reassessment
    obligations; it does not duplicate continuation state.
-9. **One human surface.** AES projects authoritative plan fields plus generated
+10. **One human surface.** AES projects authoritative plan fields plus generated
    current evidence and variance; generated output remains disposable.
+11. **Observation is evidence.** `observe` preserves nonblocking behavior but
+   exposes the complete typed Planning Integrity result and findings through
+   the start boundary; a silent allow is not observation or feedback.
+12. **Unambiguous parsing and installation.** Duplicate governed headings or
+   governed fields reject across supported CommonMark ATX heading and bold-field
+   dialects, the canonical plan-template field form must parse, configuration
+   paths must be portable
+   repository-relative paths, and every installed profile includes the full
+   import dependency closure for its advertised entrypoint.
+13. **Ownership-aware rollback.** The start transaction never overwrites a
+   pre-existing claim slot and deletes only the worktree, branch, claim, and
+   tracker artifacts created by that invocation. Branch ownership comes from
+   the worktree helper's creation receipt, not a pre-creation probe. A failed
+   retry or intervening branch creator cannot lose prior state.
+14. **Truthful staged activation and migration.** A pre-worktree claim is an
+   exact revision-bound reservation and intentionally has no tracker. Worktree
+   creation may tolerate only that missing activation field; session start must
+   then validate the execution identity and add the tracker. An already-running
+   legacy claim with no recorded start revision remains readable but cannot be
+   auto-promoted to schema v4 by inventing historical custody.
 
 ## Boundaries And Contracts
 
@@ -187,9 +225,15 @@ admission controls; isolated parser tests prove only implementation.
 - plan SHA-256 and validator source revision;
 - configured mode and adoption floor;
 - typed blocking findings and nonblocking warnings;
-- parsed frontier rows; and
+- parsed frontier rows and authored acceptance criteria; and
 - the exact user outcome, canonical example, critical-path class, capability
-  disposition, and reassessment summary needed by AES projection.
+  disposition, reassessment summary, and structural-coverage non-claim needed
+  by AES projection.
+
+`PASS` means **declared planning-integrity structure passes**. It is not a
+claim that the plan is globally optimal or that an omitted material area was
+mechanically detected. Human/agent authorship review and subsequent observed
+variance remain responsible for challenging frontier coverage.
 
 Unknown fields reject at the enforcement boundary. Human Markdown is rendered
 from the typed result rather than parsed downstream.
@@ -198,9 +242,12 @@ from the typed result rather than parsed downstream.
 
 | Area | State | Current contract | Trigger or stopping rule | Downstream update |
 |---|---|---|---|---|
-| Planning-integrity schema and parser | fully_specifiable_now | Deterministic Markdown contract, Pydantic result, exact digest and findings | Complete when positive and malformed fixtures discriminate | `plan_validation.py`, config reference, installed wrapper |
-| Start-gate integration | fully_specifiable_now | Configured coordinated/release start must consume a passing exact result before mutation | Complete when an incomplete plan leaves no claim, branch, worktree, or tracker | plan readiness and Make/install surfaces |
-| Runtime course-correction join | conditional | Reuse selected outcome continuation; add only the plan revision/reassessment evidence it demonstrably lacks | Extend only if focused integration shows the current receipt cannot carry the required reference | Plan 125 design or existing outcome contract owner |
+| Planning-integrity schema and parser | fully_specifiable_now | Deterministic Markdown contract, Pydantic result, exact-byte and validator-source digests, findings, and an explicit structural-coverage non-claim | Complete when positive, malformed, unfilled-template, and byte-distinct fixtures discriminate | `plan_validation.py`, config reference, installed wrapper |
+| Start-gate integration and revision custody | fully_specifiable_now | Configured coordinated/release start resolves one full commit once, validates plan/config there, retains it in the claim, and passes it through claim, worktree, and session creation; direct claims and pre-existing branch/worktree identities use the same rule | Complete when dirty bytes, an older passing caller-supplied commit, an existing mismatched branch/worktree, and symbolic-HEAD movement all fail without claiming or executing the wrong revision | plan readiness, claim acquisition, session lifecycle, Make/install surfaces |
+| Observe-mode feedback | fully_specifiable_now | Nonblocking observation returns the typed integrity result and findings through the operator-visible start result | Complete when an incomplete observed plan is allowed but its findings are visible in the real CLI output | readiness result and installed CLI |
+| Parser and installation fail-loud edges | fully_specifiable_now | Duplicate governed headings/fields and absolute or traversing plan paths reject; worktree-only install carries the advertised readiness CLI's transitive imports | Complete when the corrupt fixtures reject and a clean worktree-only installed readiness CLI executes | parser, installer and focused boundary tests |
+| Operator documentation coupling | fully_specifiable_now | The config reference describes the contract, while the canonical worktree operator guide must name the new exact-revision prerequisite at the real claim/start entrypoint | Complete when the coupling check sees the guide updated in its separately claimed path | operator guide and relationship coupling |
+| Runtime course-correction join | fully_specifiable_now | Reuse selected outcome continuation; its immutable outcome contract already binds a baseline Git revision, but selection does not yet require that revision's plan/config to pass Planning Integrity | Complete when configured selection revalidates the qualified plan at the immutable baseline revision and both stale/incomplete and exact-pass controls discriminate | outcome selection boundary and focused tests |
 | AES four-layer planning projection | fully_specifiable_now | Installed result joins generated current/variance/topic output without becoming normative | Complete when delete/regenerate preserves normative bytes and exact evidence refs | AES topic and proof receipt |
 | First valuable project anchor | exploration_required | Portfolio audit selects by personal value, lineage, learning value, and bounded effort; WhyGame is provisional | Stop after one lineage/value probe can select or reject the candidate | Project Meta anchor decision and target repo plan |
 | Fleet defaults and automatic promotion | deliberately_deferred | No rollout or auto-promotion from one consumer | Resume after a second independent consumer and measured false-block/false-allow evidence | Enforced Planning roadmap and AES release manifest |
@@ -222,6 +269,88 @@ from the typed result rather than parsed downstream.
   consumer prove the exact seam, stop framework expansion and proceed to the
   selected project anchor.
 
+### Course-correction receipt — operator documentation coupling
+
+The PI-02 commit hook reported that changing
+`enforced_planning/coordination_claims.py` requires an aligned update to
+`docs/guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md`. The selected outcome's
+immutable allowed scope did not include that guide. Acknowledging the warning
+would leave the operator path stale, while expanding the existing claim would
+invalidate its exact outcome-selection binding. Plan 125 therefore adds the
+bounded `pi-02d-sync-operator-guide` work unit and makes AES depend on it. This
+is a plan revision caused by an observed write-scope and dependency-graph
+change, exactly as the reassessment contract requires.
+
+### Course-correction receipt — runtime plan-revision binding
+
+The PI-02 start gate proves only that a lane began from a conforming revision.
+A direct probe of `OutcomeSelectionBindingV1` and `OutcomeContractV1` found that
+continuation already immutably binds `claim_plan_ref`, the outcome-contract
+digest, and `baseline_revision`, but does not require the qualified plan at that
+baseline revision to pass Planning Integrity. Therefore start admission alone
+cannot support the broader claim that later continuation remains attached to
+the accepted plan revision. Plan 125 adds `pi-02c-bind-runtime-plan`: selection
+will reuse the existing contract digest and exact baseline revision, revalidate
+Planning Integrity there, and deny stale or incomplete baselines. No new
+planner, receipt lineage, or continuation engine is introduced.
+
+### Course-correction receipt — adversarial revision-custody review
+
+Independent boundary review rejected the first PI-02 candidate. It proved that
+a caller could validate an older passing `start_point` while claiming a
+different current branch/worktree, because the accepted revision was neither
+retained in the claim nor threaded through session upsert. The same review
+found a worktree-only install whose advertised readiness CLI lacked transitive
+imports, duplicate governed headings that silently selected the first section,
+an absolute `plans_dir` silently reinterpreted as repository-relative, and an
+`observe` path that allowed without reporting findings. These are not deferred
+hardening: each breaks the exact admission or feedback claim. PI-02 therefore
+returns to `ready`, expands its selected write scope to the lifecycle owner and
+focused tests, and requires an authentic installed entrypoint plus both-sign
+revision-custody controls before acceptance.
+
+The review also proved that the start transaction's unconditional cleanup can
+delete a pre-existing branch after session-upsert failure, while direct claim
+retry can update an existing claim and later rollback can unlink that prior
+state. PI-02 therefore makes claim creation explicitly new-slot-only for this
+entrypoint and makes rollback conditional on artifacts owned by the exact
+invocation.
+
+A second adversarial pass found two subtler custody failures. First, cleanup
+decided branch ownership from a pre-creation probe even though the worktree
+helper later returned the authoritative `created_branch` fact; a branch
+appearing between those events could be deleted. Second, a running schema-v3
+claim with a tracker but no retained revision could be rewritten as schema v4
+using the caller's current revision, fabricating historical evidence. PI-02 now
+drives rollback from the helper receipt and refuses that legacy promotion.
+
+The authentic installed Make vertical then reproduced the maintenance bootstrap
+failure directly: the pre-worktree reservation was classified weak for lacking
+the tracker that session start creates. The lifecycle is now explicit. Claim
+admission creates a revision-bound reservation without a tracker; worktree
+creation accepts only that narrow staged omission; session activation supplies
+the tracker or rolls the invocation-owned state back.
+
+The provider commit hook then named two coupled operator surfaces rather than
+silently treating code tests as documentation adoption:
+`docs/guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md` for the claim/worktree
+lifecycle and `GETTING_STARTED.md` for the installed first-success path. Both
+remain in the separately claimed PI-02D unit; PI-02 acceptance records the
+exact coupling rather than claiming those docs already changed.
+
+### External AES stress-test inputs and sequencing
+
+Project Meta main retains four reproduced AES findings as
+`lrn-20260822T233333074816Z-3383b7e6b7`,
+`lrn-20260822T233333139399Z-35b111d53f`,
+`lrn-20260822T233817822769Z-8170697c3a`, and
+`lrn-20260822T234607126109Z-3b260bf667`. They establish that missing checkers
+must not project `PASS`, self-attested prerequisites must not admit policy,
+Git revisions and `sha256:` content digests have distinct typed semantics, and
+authentic rewrites are the preferred stress-test mechanism. Those defects keep
+the affected AES controls measured/nonblocking. They do not broaden Enforced
+Planning ownership or pause an independently valuable consumer vertical.
+
 ## Plan
 
 **Critical-path classification: vertical.** The visible vertical is an agent
@@ -231,13 +360,25 @@ revision-bound human-readable planning state through installed AES.
 1. **PI-01 — accepted design and graph.** Freeze this contract, its work graph,
    current roadmap boundary, and focused checks.
 2. **PI-02 — Enforced Planning semantic admission.** Implement the typed
-   contract, config, parser, strict results, Make/start admission, installation
-   propagation, and both-sign mutation-order tests.
-3. **PI-03 — AES installed integration.** Consume a pinned Enforced Planning
+   contract, unambiguous config/parser, visible observe result, one-revision
+   custody across Make/readiness/claim/worktree/session creation, direct-claim
+   admission, complete installation propagation, and both-sign mutation-order
+   tests.
+3. **PI-02C — runtime plan binding.** At selected outcome admission, require
+   the immutable outcome contract's baseline revision to pass Planning
+   Integrity for the claim's qualified plan, so continuation is revision-bound.
+4. **PI-02D — operator documentation sync.** In a separately claimed path,
+   document exact-revision Planning Integrity at the canonical worktree/claim
+   entrypoint and installed first-success path, then pass the focused coupling
+   check.
+5. **PI-03 — AES installed integration.** Consume a pinned Enforced Planning
    candidate, retain an immutable result, and project the planning fields into
    AES's existing topic without new authority.
-4. Stop. The selected anchor repository owns its own exploratory lineage/value
-   plan and subsequent useful product vertical.
+6. Stop framework expansion. In parallel once a project-local plan is ready,
+   the selected anchor repository owns its exploratory lineage/value probe and
+   useful product vertical. Observed governance failures return as focused
+   regressions; they narrow trust in the affected control rather than stopping
+   unrelated consumer progress.
 
 ## Acceptance Criteria
 
@@ -258,9 +399,46 @@ revision-bound human-readable planning state through installed AES.
    its existing generated documentation projection and preserves normative
    bytes across delete/regenerate.
 7. Source and installed wrappers use the same implementation; the installer is
-   idempotent for the changed files.
+   idempotent for the changed files, and consumer configuration, plan, and
+   worktree behavior comes from the actual canonical template owners.
 8. The implementation does not modify Company Planning, Project Meta portfolio
    authority, WhyGame product source, fleet defaults, or external systems.
+9. Every passing result and AES readout says that structural conformance does
+   not establish omitted-area coverage or plan optimality.
+10. Dirty complete bytes cannot admit an incomplete Git start revision, and a
+    direct plan-bound claim cannot bypass configured enforcement.
+11. The resolved full start revision is stored in the claim and is identical
+    across plan and graph readiness, claim, worktree creation, and session
+    upsert; an older
+    passing caller-supplied revision, a pre-existing mismatched branch or
+    worktree, and symbolic-HEAD movement cannot switch the executed revision.
+12. Observe mode visibly returns the typed findings without blocking, while
+    duplicate governed sections/fields and non-portable `plans_dir` values fail
+    loudly.
+13. A clean worktree-only installation can execute the advertised
+    `scripts/meta/check_plan_readiness.py` entrypoint without source-path
+    imports or missing transitive dependencies.
+14. Injected session-start failure after attaching a matching pre-existing
+    branch preserves that branch and its ref; an occupied claim slot is rejected
+    before mutation, and rollback releases only the exact claim created by the
+    current start transaction.
+15. A branch created between admission and the worktree helper remains intact
+    when the helper reports it did not create the branch, and a running legacy
+    v3 claim cannot acquire a fabricated v4 `start_revision` during session
+    refresh.
+16. The authentic installed Make path visibly prints the complete observe-mode
+    result, creates one exact reservation/worktree/tracker chain, and closes the
+    bootstrap loop without weakening ordinary claim-health reporting.
+17. `--resume` plus an old passing commit cannot create a new claim even when
+    matching branch/worktree artifacts exist; retained non-tip recovery routes
+    through the existing session-resume lifecycle.
+18. A governed heading with optional CommonMark closing hashes or indentation
+    participates in duplicate detection, and a plan authored with the canonical
+    template's `**Disposition:** value` form passes when its value is supported.
+19. The sanctioned worktree helper always compares its resolved start revision
+    with a plan-bound reservation even when the optional
+    `--claim-start-revision` caller assertion is omitted; only a fully identified
+    exact staged reservation may omit its not-yet-created tracker.
 
 ## Required Tests
 
@@ -270,9 +448,24 @@ revision-bound human-readable planning state through installed AES.
   adoption-floor compatibility;
 - start-gate mutation-order test proving semantic denial precedes claim and
   worktree creation;
+- direct-claim and dirty-working-tree negative controls proving the configured
+  gate cannot be omitted and binds the exact start revision;
+- revision-custody controls for an older passing caller-supplied commit,
+  existing branch/worktree mismatch, and symbolic-HEAD movement between
+  readiness and mutation;
+- a split-revision control proving plan and work-graph/approval bytes always
+  come from the same retained commit;
+- transaction-ownership controls for pre-existing claim and branch state plus
+  injected branch-creation race and session-start failure;
+- a legacy v3 claim-with-tracker control proving session refresh cannot invent
+  v4 revision custody;
+- observed-failure output control proving findings are visible without denial;
+- duplicate governed-heading/field and absolute/traversing configuration-path
+  rejection controls;
 - regression tests for unplanned light work, historical plan compatibility,
   and existing outcome admission;
-- installer idempotence and installed-wrapper parity for changed files; and
+- installer idempotence, installed-wrapper parity, and a clean worktree-only
+  readiness-CLI execution proving import dependency closure; and
 - one AES installed-consumer proof with delete/regenerate comparison.
 
 Do not run a fleet suite or comparative benchmark before the installed AES
@@ -283,15 +476,35 @@ the installer/shared gate boundary changes.
 
 - `enforced_planning/plan_validation.py`
 - `enforced_planning/plan_readiness.py`
+- `enforced_planning/coordination_claims.py`
+- `enforced_planning/session_lifecycle.py`
+- `enforced_planning/session_contracts.py`
 - `scripts/check_plan_readiness.py`
+- `scripts/check_coordination_claims.py`
 - `scripts/validate_plan.py`
 - `scripts/install_governed_repo.py`
+- `scripts/session_start.py`
+- `scripts/meta/session_start.py`
+- `scripts/worktree-coordination/create_worktree.py`
+- `scripts/meta/worktree-coordination/create_worktree.py`
 - `Makefile`
 - `meta-process.yaml`
+- `templates/Makefile.worktree.block.template`
+- `templates/meta-process.yaml.example`
+- `templates/meta-process.future.yaml.example`
+- `templates/plan.md.template`
+- `scripts/relationships.yaml`
 - `docs/reference/CONFIG_REFERENCE.md`
+- `CLAUDE.md`
+- `docs/guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md` (PI-02D only)
+- `GETTING_STARTED.md` (PI-02D only)
 - `tests/test_validate_plan.py`
 - `tests/test_plan_readiness.py`
+- `tests/test_check_coordination_claims.py`
 - `tests/test_install_governed_repo.py`
+- `tests/test_session_cli.py`
+- `tests/test_session_contracts.py`
+- `tests/test_create_worktree.py`
 - `ROADMAP.md`
 - `docs/plans/CLAUDE.md`
 - `docs/plans/125_planning_integrity_loop.md`
@@ -314,6 +527,7 @@ AES-owned paths are recorded in its own claimed lane after PI-02 is accepted.
 - `docs/plans/124_qualitative_coding_outcome_admission_pilot.md`
 - `docs/reference/CONFIG_REFERENCE.md`
 - `docs/reference/DOC_AUTHORITY_SCHEMA.md`
+- `docs/guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md`
 - `scripts/relationships.yaml`
 - `Makefile`
 - `../agentic-engineering-system/ROADMAP.md`
@@ -345,4 +559,6 @@ and start gate. Receipts remain evidence and never grant authority.
 
 Completion proves one portable planning-integrity vertical and AES self-use. It
 does not prove plan optimality, fleet adoption, automatic semantic judgment,
-WhyGame value, or stable `1.0` guarantees.
+WhyGame value, or stable `1.0` guarantees. A project rewrite may use the controls
+that have passed while treating the remaining controls as observations; this
+plan is not a platform-completion gate for that rewrite.

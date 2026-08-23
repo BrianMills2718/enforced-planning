@@ -6,11 +6,13 @@ import json
 import re
 import shlex
 import subprocess
+from pathlib import Path
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from enforced_planning import coordination_claims
+from enforced_planning.plan_validation import PlanIntegrityResultV1, validate_plan_integrity_at_revision
 
 ExecutionProfile = Literal["light", "coordinated", "release"]
 ReadinessErrorCode = Literal[
@@ -43,7 +45,7 @@ class PlanReadinessDecisionV1(StrictContract):
 
 
 class PlanLaneIdentityV1(StrictContract):
-    """Identity of one plan-owned implementation lane at creation time."""
+    """Backward-compatible Plan 74 lane identity payload."""
 
     schema_version: Literal["1.0.0"]
     qualified_plan_id: str
@@ -59,12 +61,40 @@ class PlanLaneIdentityV1(StrictContract):
 
 
 class PlanStartGateResultV1(StrictContract):
-    """Result produced before any claim, branch, worktree, or tracker mutation."""
+    """Backward-compatible Plan 74 start-gate payload."""
 
     schema_version: Literal["1.0.0"] = "1.0.0"
     allowed: bool
     readiness: PlanReadinessDecisionV1 | None
     lane: PlanLaneIdentityV1 | None
+    reason: str
+
+
+class PlanLaneIdentityV2(StrictContract):
+    """Identity and distinct source/graph revisions for one planned lane."""
+
+    schema_version: Literal["2.0.0"] = "2.0.0"
+    qualified_plan_id: str
+    lane_id: str
+    parent_lane_id: str | None
+    repository: str
+    branch: str
+    worktree_path: str
+    claim_identity: str
+    session_identity: str
+    start_revision: str = Field(pattern=r"^(?:[0-9a-f]{40}|[0-9a-f]{64})$")
+    graph_revision: str = Field(pattern=r"^[0-9a-f]{64}$")
+    execution_profile: ExecutionProfile
+
+
+class PlanStartGateResultV2(StrictContract):
+    """Result produced before mutation, including visible integrity evidence."""
+
+    schema_version: Literal["2.0.0"] = "2.0.0"
+    allowed: bool
+    planning_integrity: PlanIntegrityResultV1 | None
+    readiness: PlanReadinessDecisionV1 | None
+    lane: PlanLaneIdentityV2 | None
     reason: str
 
 
@@ -86,10 +116,7 @@ def _live_matching_claim_scopes(*, repository: str, qualified_plan_id: str) -> l
         repository,
         include_inactive=True,
     ):
-        if (
-            claim.status not in coordination_claims.CLOSEABLE_STATUSES
-            or claim.primary_project() != repository
-        ):
+        if claim.status not in coordination_claims.CLOSEABLE_STATUSES or claim.primary_project() != repository:
             continue
         if _plan_number(claim.plan_ref) == plan_number:
             scopes.append(claim.scope)
@@ -107,10 +134,12 @@ def check_plan_start_readiness(
     worktree_path: str,
     claim_identity: str,
     session_identity: str,
+    repo_root: Path | str | None = None,
+    start_point: str = "HEAD",
     parent_lane_id: str | None = None,
     allow_unplanned: bool = False,
     resume_requested: bool = False,
-) -> PlanStartGateResultV1:
+) -> PlanStartGateResultV2:
     """Validate static readiness and the non-owning precondition for a resume.
 
     A successful resume remains provisional: the canonical claim registry's
@@ -118,19 +147,47 @@ def check_plan_start_readiness(
     can be created.
     """
     if execution_profile == "light" and qualified_plan_id is None and allow_unplanned:
-        return PlanStartGateResultV1(
+        return PlanStartGateResultV2(
             allowed=True,
+            planning_integrity=None,
             readiness=None,
             lane=None,
             reason="Explicitly unplanned light work does not require plan-graph readiness.",
         )
     if not qualified_plan_id:
         raise ValueError(f"{execution_profile} work requires a qualified plan identity")
+    plan_number = _plan_number(qualified_plan_id)
+    if plan_number is None:
+        raise ValueError(f"invalid qualified plan identity: {qualified_plan_id}")
+    if "#" in qualified_plan_id:
+        plan_repository = qualified_plan_id.rsplit("#", 1)[0].strip()
+        if plan_repository and plan_repository != repository:
+            raise ValueError(
+                f"qualified plan repository mismatch: requested {plan_repository!r}, lane repository is {repository!r}"
+            )
+    if repo_root is None:
+        raise ValueError(f"{execution_profile} work requires --repo-root for exact plan integrity")
     if not query_command or not query_command.strip():
-        raise ValueError(
-            f"{execution_profile} work requires a configured plan-readiness query command"
-        )
-
+        raise ValueError(f"{execution_profile} work requires a configured plan-readiness query command")
+    integrity = validate_plan_integrity_at_revision(
+        repo_root=repo_root,
+        repository_id=repository,
+        plan_number=plan_number,
+        start_point=start_point,
+    )
+    if integrity.mode == "enforce" and integrity.disposition == "fail":
+        codes = ", ".join(item.code for item in integrity.findings)
+        raise ValueError(f"planning integrity rejected {qualified_plan_id} at {integrity.source_revision}: {codes}")
+    if not integrity.source_revision:
+        raise ValueError("planning integrity did not resolve one full Git start revision")
+    if not resume_requested:
+        default_revision = coordination_claims.resolve_default_integration_revision(Path(repo_root))
+        if integrity.source_revision != default_revision:
+            raise ValueError(
+                f"new lane start revision {integrity.source_revision} is not the canonical "
+                f"default-integration tip {default_revision}; use explicit resume/recovery custody "
+                "for a retained non-tip lane"
+            )
     command = [*shlex.split(query_command), "check-ready", qualified_plan_id, "--json"]
     completed = subprocess.run(command, capture_output=True, text=True, check=False)
     try:
@@ -159,8 +216,7 @@ def check_plan_start_readiness(
     if readiness.decision == "already_active":
         if not resume_requested:
             raise ValueError(
-                f"plan readiness rejected {qualified_plan_id}: already_active "
-                "requires an explicit resume request"
+                f"plan readiness rejected {qualified_plan_id}: already_active requires an explicit resume request"
             )
         live_scopes = _live_matching_claim_scopes(
             repository=repository,
@@ -168,8 +224,7 @@ def check_plan_start_readiness(
         )
         if live_scopes:
             raise ValueError(
-                f"plan resume rejected {qualified_plan_id}: live claim(s) already own it: "
-                + ", ".join(live_scopes)
+                f"plan resume rejected {qualified_plan_id}: live claim(s) already own it: " + ", ".join(live_scopes)
             )
     elif readiness.decision != "ready":
         raise ValueError(
@@ -177,8 +232,7 @@ def check_plan_start_readiness(
             f"{readiness.decision} ({readiness.error_code or readiness.reason})"
         )
 
-    lane = PlanLaneIdentityV1(
-        schema_version="1.0.0",
+    lane = PlanLaneIdentityV2(
         qualified_plan_id=qualified_plan_id,
         lane_id=lane_id,
         parent_lane_id=parent_lane_id,
@@ -187,14 +241,16 @@ def check_plan_start_readiness(
         worktree_path=worktree_path,
         claim_identity=claim_identity,
         session_identity=session_identity,
-        creation_revision=readiness.graph_revision,
+        start_revision=integrity.source_revision,
+        graph_revision=readiness.graph_revision,
         execution_profile=execution_profile,
     )
     reason = readiness.reason
     if readiness.decision == "already_active":
         reason = f"{reason} Explicit resume is provisionally allowed; claim acquisition remains atomic."
-    return PlanStartGateResultV1(
+    return PlanStartGateResultV2(
         allowed=True,
+        planning_integrity=integrity,
         readiness=readiness,
         lane=lane,
         reason=reason,

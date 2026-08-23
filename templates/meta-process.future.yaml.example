@@ -35,7 +35,8 @@ meta_process:
   planning:
     # Investigate before coding
     question_driven_planning: advisory  # disabled | advisory | required
-    # Preserve open questions across sessions
+    # Authoring-only legacy guidance. Live structural admission belongs to
+    # meta_process.plans.integrity in meta-process.yaml.
     uncertainty_tracking: advisory  # disabled | advisory | required
     # How blocked dependency probes affect planning/freeze gates
     dependency_probe_policy: strict  # strict | warn | ignore

@@ -110,6 +110,8 @@ def test_write_session_tracker_persists_nested_claim_and_tracker_sections(tmp_pa
     ]
     assert payload["tracker"]["depends_on_repos"] == ["project-meta"]
     assert payload["timestamps"]["created_at"] == "2026-04-05T18:00:00+00:00"
+    assert payload["schema_version"] == 1
+    assert "start_revision" not in payload["claim"]
     assert stat.S_IMODE(path.stat().st_mode) == 0o600
     assert not list(path.parent.glob(f".{path.name}.*.tmp"))
 
@@ -176,6 +178,7 @@ def test_tracker_refresh_preserves_selection_and_rejects_identity_change(tmp_pat
         branch="plan-117",
         session_id="codex:plan117",
         broader_goal="Bind One Exact Outcome",
+        start_revision="a" * 40,
     )
     first = session_contracts.build_session_tracker(
         contract=contract,
@@ -208,6 +211,8 @@ def test_tracker_refresh_preserves_selection_and_rejects_identity_change(tmp_pat
     )
     session_contracts.write_session_tracker(refreshed, tracker_dir=tmp_path)
     payload = session_contracts.read_session_tracker(path)
+    assert payload["schema_version"] == 2
+    assert payload["claim"]["start_revision"] == "a" * 40
     assert payload["tracker"]["current_phase"] == "observe outcome"
     for field, value in custody.items():
         assert payload["tracker"][field] == value
@@ -219,6 +224,14 @@ def test_tracker_refresh_preserves_selection_and_rejects_identity_change(tmp_pat
     )
     with pytest.raises(ValueError, match="cannot change exact claim identity"):
         session_contracts.write_session_tracker(changed, tracker_dir=tmp_path)
+    assert session_contracts.read_session_tracker(path) == payload
+
+    changed_revision = session_contracts.build_session_tracker(
+        contract=replace(contract, start_revision="b" * 40),
+        current_phase="replace retained revision",
+    )
+    with pytest.raises(ValueError, match="cannot change exact claim identity"):
+        session_contracts.write_session_tracker(changed_revision, tracker_dir=tmp_path)
     assert session_contracts.read_session_tracker(path) == payload
 
 

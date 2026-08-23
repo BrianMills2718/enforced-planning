@@ -7,7 +7,7 @@
       "initiative_id": "agentic-engineering",
       "goal_id": "planning-integrity-loop",
       "design_revision": "user-approved:codex-session-01a02a1b-a798-78c0-a0ba-b0270bb028d9:2026-08-22",
-      "spec_revision": "plan-125-bootstrap-v1",
+      "spec_revision": "plan-125-bootstrap-v2",
       "title": "Adopt the planning-integrity design and graph",
       "class": "documentation",
       "objective": "Freeze the owner boundaries, contract, acceptance, frontier, and risk-ordered integration path.",
@@ -97,19 +97,29 @@
       "initiative_id": "agentic-engineering",
       "goal_id": "planning-integrity-loop",
       "design_revision": "user-approved:codex-session-01a02a1b-a798-78c0-a0ba-b0270bb028d9:2026-08-22",
-      "spec_revision": "plan-125-bootstrap-v1",
+      "spec_revision": "plan-125-pi02-revision-custody-v4",
       "title": "Enforce revision-bound plan integrity before lane mutation",
       "class": "implementation",
       "objective": "Implement the versioned semantic plan contract, opt-in migration configuration, start-gate join, installation propagation, and focused controls.",
       "profile": "standard",
       "execution_class": "independently_executable",
-      "claimability": "ready_for_execution",
+      "claimability": "not_applicable",
       "scope": {
         "included": [
           "PlanIntegrityResultV1 and frontier parser",
           "Repository opt-in mode and adoption floor",
           "Coordinated and release plan-start admission before mutation",
+          "Direct plan-bound claim admission against the exact Git start revision",
+          "One full start-revision custody across readiness, claim, worktree creation, and session upsert",
+          "Visible typed findings in observe mode",
+          "Unambiguous governed-section and portable path parsing",
+          "Worktree-only installed readiness dependency closure",
+          "Ownership-aware start rollback for claims, branches, worktrees, and trackers",
+          "Staged pre-worktree reservation and session activation semantics",
+          "Legacy claim migration truthfulness",
           "Source and installed CLI parity",
+          "Canonical installer configuration, plan, worktree, and advisory-config templates",
+          "Documentation relationship linkage for the live contract",
           "Focused positive, negative, compatibility, and mutation-order tests",
           "Configuration and changed-boundary documentation"
         ],
@@ -117,7 +127,7 @@
           "Company Planning changes",
           "LLM semantic blocker",
           "Fleet activation",
-          "New continuation or feedback engine",
+          "New continuation, receipt, or feedback engine",
           "Consumer-project product work"
         ]
       },
@@ -136,6 +146,9 @@
       "outputs": [
         "Typed Planning Integrity result",
         "Pre-mutation semantic plan admission",
+        "Non-omittable direct-claim enforcement",
+        "Schema-versioned claim and tracker start-revision custody",
+        "Operator-visible observe findings",
         "Installed wrapper and config support",
         "Focused both-sign evidence"
       ],
@@ -177,6 +190,13 @@
           "repository": "enforced-planning",
           "access": "exclusive",
           "coordination_key": "planning-integrity-v1"
+        },
+        {
+          "kind": "repository_path",
+          "target": "templates",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "planning-integrity-v1"
         }
       ],
       "acceptance": [
@@ -191,19 +211,37 @@
         },
         {
           "id": "PI02-A2",
-          "criterion": "Configured coordinated or release work is denied before claim, branch, worktree, or tracker mutation when exact plan integrity fails.",
+          "criterion": "Configured coordinated or release work resolves one full Git commit once, reads plan, config, graph, and approvals from that revision, retains it in claim/tracker custody, and passes only that revision through readiness, claim, branch, worktree, and session creation; direct acquisition and existing branch/worktree identities cannot substitute another revision.",
           "evidence_required": [
-            "Mutation-order integration test",
-            "No-side-effect assertions"
+            "Installed Make vertical with symbolic HEAD movement",
+            "Claim, tracker, and worktree HEAD equality assertion",
+            "Dirty-working-tree and old-good-revision direct-claim bypass controls",
+            "Existing branch/worktree mismatch controls",
+            "Split-revision plan/graph control",
+            "Pre-existing claim/branch rollback ownership controls",
+            "Injected branch-creation race using the helper ownership receipt",
+            "Legacy v3 claim-with-tracker rejection without fabricated v4 custody"
           ],
           "negative_control": "Explicitly unplanned light work and below-floor historical plans retain documented compatibility."
         },
         {
           "id": "PI02-A3",
-          "criterion": "Source and installed commands use the same implementation and installer rerun is idempotent.",
+          "criterion": "Source and installed commands use the same implementation, worktree-only install includes the readiness entrypoint's transitive import closure, and installer rerun is idempotent.",
           "evidence_required": [
             "Installed consumer test",
-            "Installer second-run no-op result"
+            "Installer second-run no-op result",
+            "Canonical template propagation assertions",
+            "Relationship-coupling assertion",
+            "Clean worktree-only installed readiness CLI execution"
+          ]
+        },
+        {
+          "id": "PI02-A4",
+          "criterion": "Observe mode exposes typed integrity findings without denial, while duplicate governed headings or fields and absolute or traversing configured plan paths fail visibly.",
+          "evidence_required": [
+            "Observed-failure CLI output control",
+            "Duplicate heading/field controls",
+            "Non-portable path controls"
           ]
         }
       ],
@@ -221,10 +259,225 @@
       },
       "authorization_mode": "registry_claim",
       "integration_owner_id": "pi-03-aes-installed-dogfood",
-      "status": "ready",
-      "record_version": 1,
+      "status": "accepted",
+      "record_version": 5,
       "created_at": "2026-08-22T22:23:19Z",
-      "updated_at": "2026-08-22T22:23:19Z"
+      "updated_at": "2026-08-23T00:56:44Z"
+    },
+    {
+      "schema_version": "1.0",
+      "record_type": "work_unit",
+      "id": "pi-02c-bind-runtime-plan",
+      "initiative_id": "agentic-engineering",
+      "goal_id": "planning-integrity-loop",
+      "design_revision": "plan-125-course-correction-2@2026-08-22",
+      "spec_revision": "plan-125-runtime-plan-binding-v1",
+      "title": "Bind selected outcome continuation to the accepted plan revision",
+      "class": "implementation",
+      "objective": "Require configured selected-outcome admission to revalidate the claim's qualified plan at the immutable outcome contract baseline revision before creating the selection binding.",
+      "profile": "standard",
+      "execution_class": "independently_executable",
+      "claimability": "ready_for_execution",
+      "scope": {
+        "included": [
+          "Outcome selection Planning Integrity join",
+          "Exact baseline-revision and plan-identity validation",
+          "Both-sign selection controls",
+          "Installed propagation for changed selection sources"
+        ],
+        "excluded": [
+          "New continuation engine",
+          "Claim schema revision",
+          "LLM plan-adherence judgment",
+          "AES projection"
+        ]
+      },
+      "inputs": [
+        {
+          "kind": "provider_contract",
+          "id": "PlanIntegrityResultV1",
+          "revision": "1.0.0"
+        },
+        {
+          "kind": "existing_capability",
+          "id": "OutcomeContractV1.baseline_revision+OutcomeSelectionBindingV1",
+          "revision": "10c4d8c0afe732e025902728b5728dd35270cfcd"
+        }
+      ],
+      "outputs": [
+        "Selection-time exact plan-revision admission",
+        "Continuation binding that reuses the immutable outcome-contract digest",
+        "Focused stale/incomplete and exact-pass evidence"
+      ],
+      "dependencies": [
+        {
+          "unit_id": "pi-02-enforce-plan-integrity",
+          "type": "hard",
+          "gate": {
+            "type": "unit_status",
+            "required_status": "accepted"
+          },
+          "rationale": "Runtime selection must consume the accepted portable validator contract."
+        }
+      ],
+      "conflict_surfaces": [
+        {
+          "kind": "contract",
+          "target": "OutcomeSelectionBindingV1",
+          "access": "read",
+          "coordination_key": "planning-integrity-runtime-binding"
+        },
+        {
+          "kind": "repository_path",
+          "target": "enforced_planning/outcome_selection.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "planning-integrity-runtime-binding"
+        },
+        {
+          "kind": "repository_path",
+          "target": "tests/test_outcome_selection.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "planning-integrity-runtime-binding"
+        }
+      ],
+      "acceptance": [
+        {
+          "id": "PI02C-A1",
+          "criterion": "When Planning Integrity enforcement applies, outcome selection validates the qualified claim plan against the immutable outcome contract baseline revision and preserves the existing selection schema.",
+          "evidence_required": [
+            "Exact-pass selection test",
+            "Unchanged OutcomeSelectionBindingV1 schema assertion"
+          ],
+          "negative_control": "An incomplete, missing, ambiguous, or mismatched baseline plan cannot create a selection binding."
+        },
+        {
+          "id": "PI02C-A2",
+          "criterion": "Off, observe, below-floor, and explicitly unplanned compatibility retain their documented behavior without weakening configured enforcement.",
+          "evidence_required": [
+            "Compatibility controls",
+            "Installer propagation assertion"
+          ]
+        }
+      ],
+      "readiness": {
+        "status": "ready",
+        "required_approval_types": [],
+        "approvals": [],
+        "failed_guards": []
+      },
+      "claim_policy": {
+        "eligibility_rule": "PI-02 is accepted and no claim owns outcome selection.",
+        "lease_policy": "renewable",
+        "lease_duration_minutes": 720,
+        "max_active_per_claimant": 1
+      },
+      "authorization_mode": "registry_claim",
+      "integration_owner_id": "pi-03-aes-installed-dogfood",
+      "status": "ready",
+      "record_version": 2,
+      "created_at": "2026-08-22T23:23:45Z",
+      "updated_at": "2026-08-23T00:58:07Z"
+    },
+    {
+      "schema_version": "1.0",
+      "record_type": "work_unit",
+      "id": "pi-02d-sync-operator-guide",
+      "initiative_id": "agentic-engineering",
+      "goal_id": "planning-integrity-loop",
+      "design_revision": "plan-125-course-correction-1@2026-08-22",
+      "spec_revision": "plan-125-operator-doc-sync-v1",
+      "title": "Sync the canonical operator entrypoint after provider acceptance",
+      "class": "documentation",
+      "objective": "Document exact-revision Planning Integrity at the real worktree/direct-claim entrypoint and installed first-success path, then satisfy the focused coupling check before AES consumes the provider.",
+      "profile": "small",
+      "execution_class": "independently_executable",
+      "claimability": "ready_for_execution",
+      "scope": {
+        "included": [
+          "docs/guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md",
+          "GETTING_STARTED.md",
+          "Focused documentation-coupling validation"
+        ],
+        "excluded": [
+          "Provider source changes",
+          "AES mutation",
+          "Fleet documentation reconciliation"
+        ]
+      },
+      "inputs": [
+        {
+          "kind": "provider_evidence",
+          "id": "docs/evidence/plan125_planning_integrity.json",
+          "revision": "93c2d236ba24378af8215e88796a63bddaa40613"
+        },
+        {
+          "kind": "reassessment_trigger",
+          "id": "pre-commit-doc-coupling",
+          "revision": "2026-08-22T23:22:48Z"
+        }
+      ],
+      "outputs": [
+        "Accurate worktree, direct-claim, and installed first-success Planning Integrity guidance",
+        "Passing focused documentation-coupling check"
+      ],
+      "dependencies": [
+        {
+          "unit_id": "pi-02-enforce-plan-integrity",
+          "type": "hard",
+          "gate": {
+            "type": "unit_status",
+            "required_status": "accepted"
+          },
+          "rationale": "Both operator surfaces document an accepted exact provider revision, not moving implementation bytes."
+        }
+      ],
+      "conflict_surfaces": [
+        {
+          "kind": "repository_path",
+          "target": "docs/guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "planning-integrity-operator-doc"
+        },
+        {
+          "kind": "repository_path",
+          "target": "GETTING_STARTED.md",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "planning-integrity-operator-doc"
+        }
+      ],
+      "acceptance": [
+        {
+          "id": "PI02D-A1",
+          "criterion": "The canonical guide and installed first-success path say that configured plan integrity reads exact plan/config bytes from the selected Git start revision before graph query or coordination mutation.",
+          "evidence_required": [
+            "Operator-guide and GETTING_STARTED diffs",
+            "Focused doc-coupling pass"
+          ],
+          "negative_control": "Neither document may present structural PASS as proof of omitted-area coverage or plan optimality."
+        }
+      ],
+      "readiness": {
+        "status": "ready",
+        "required_approval_types": [],
+        "approvals": [],
+        "failed_guards": []
+      },
+      "claim_policy": {
+        "eligibility_rule": "PI-02 is accepted and no claim owns either the operator guide or GETTING_STARTED.md.",
+        "lease_policy": "renewable",
+        "lease_duration_minutes": 240,
+        "max_active_per_claimant": 1
+      },
+      "authorization_mode": "registry_claim",
+      "integration_owner_id": "pi-03-aes-installed-dogfood",
+      "status": "ready",
+      "record_version": 2,
+      "created_at": "2026-08-22T23:23:45Z",
+      "updated_at": "2026-08-23T00:58:07Z"
     },
     {
       "schema_version": "1.0",
@@ -233,7 +486,7 @@
       "initiative_id": "agentic-engineering",
       "goal_id": "planning-integrity-loop",
       "design_revision": "user-approved:codex-session-01a02a1b-a798-78c0-a0ba-b0270bb028d9:2026-08-22",
-      "spec_revision": "plan-125-bootstrap-v1",
+      "spec_revision": "plan-125-bootstrap-v2",
       "title": "Join installed Planning Integrity evidence into AES",
       "class": "integration",
       "objective": "Prove an installed AES consumer can retain and render exact planning-integrity evidence through its existing four-layer projection.",
@@ -274,13 +527,22 @@
       ],
       "dependencies": [
         {
-          "unit_id": "pi-02-enforce-plan-integrity",
+          "unit_id": "pi-02c-bind-runtime-plan",
           "type": "hard",
           "gate": {
             "type": "unit_status",
             "required_status": "accepted"
           },
-          "rationale": "AES must consume an accepted exact provider revision rather than a moving worktree."
+          "rationale": "AES must consume continuation state that is immutably bound to the accepted plan revision."
+        },
+        {
+          "unit_id": "pi-02d-sync-operator-guide",
+          "type": "hard",
+          "gate": {
+            "type": "unit_status",
+            "required_status": "accepted"
+          },
+          "rationale": "AES must consume an accepted exact provider revision whose canonical operator entrypoint is also accurate."
         }
       ],
       "conflict_surfaces": [
@@ -337,15 +599,16 @@
         "required_approval_types": [],
         "approvals": [],
         "failed_guards": [
-          "pi-02-enforce-plan-integrity is not yet accepted"
+          "pi-02c-bind-runtime-plan is not yet accepted",
+          "pi-02d-sync-operator-guide is not yet accepted"
         ]
       },
       "authorization_mode": "registry_claim",
       "integration_owner_id": "pi-03-aes-installed-dogfood",
       "status": "blocked",
-      "record_version": 1,
+      "record_version": 2,
       "created_at": "2026-08-22T22:23:19Z",
-      "updated_at": "2026-08-22T22:23:19Z"
+      "updated_at": "2026-08-22T23:23:45Z"
     }
   ]
 }

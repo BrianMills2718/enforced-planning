@@ -438,6 +438,7 @@ def _upsert_session_claim(
     parent_scope: str | None = None,
     work_graph_path: str | None = None,
     work_unit_id: str | None = None,
+    start_revision: str | None = None,
     ttl_hours: float = coordination_claims.DEFAULT_TTL_HOURS,
     allow_parallel: bool = False,
 ) -> str:
@@ -467,6 +468,7 @@ def _upsert_session_claim(
             parent_scope=parent_scope,
             work_graph_path=work_graph_path,
             work_unit_id=work_unit_id,
+            start_point=start_revision or "HEAD",
             ttl_hours=ttl_hours,
             allow_parallel=allow_parallel,
             require_native_session_binding=True,
@@ -497,17 +499,42 @@ def _upsert_session_claim(
         effective_parent_scope = existing.parent_scope if parent_scope is None else parent_scope
         effective_work_graph_path = existing.work_graph_path if work_graph_path is None else work_graph_path
         effective_work_unit_id = existing.work_unit_id if work_unit_id is None else work_unit_id
+        if start_revision is not None and existing.start_revision not in {None, start_revision}:
+            raise ValueError(f"Claim at {path} retains start revision {existing.start_revision}, not {start_revision}")
+        effective_start_revision = existing.start_revision or start_revision
         work_graph_sha256 = existing.work_graph_sha256
         approval_revisions = existing.approval_revisions
         if effective_write_paths and coordination_claims.requires_work_graph(plan_ref):
+            if existing.start_revision is None and existing.tracker_path is not None:
+                raise ValueError(
+                    f"Legacy plan-bound claim at {path} already has a session tracker but no "
+                    "start revision; refusing to invent historical revision custody. Close and "
+                    "recreate the lane from a verified revision, or use an explicit recovery "
+                    "migration that preserves the original evidence."
+                )
             if not effective_work_graph_path or not effective_work_unit_id:
                 raise ValueError("Plan-bound write ownership requires --work-graph and --work-unit-id")
-            work_graph_sha256, approval_revisions = coordination_claims.resolve_canonical_work_unit_binding(
-                repo_root=repo_root,
-                plan_ref=plan_ref,
-                work_graph_path=effective_work_graph_path,
-                work_unit_id=effective_work_unit_id,
+            work_graph_sha256, approval_revisions, resolved_start_revision = (
+                coordination_claims.resolve_canonical_work_unit_binding(
+                    repo_root=repo_root,
+                    plan_ref=plan_ref,
+                    work_graph_path=effective_work_graph_path,
+                    work_unit_id=effective_work_unit_id,
+                    start_point=effective_start_revision or "HEAD",
+                )
             )
+            if effective_start_revision is not None and resolved_start_revision != effective_start_revision:
+                raise ValueError("session upsert resolved a different start revision than the existing claim")
+            effective_start_revision = resolved_start_revision
+            if existing.tracker_path is None:
+                coordination_claims.validate_start_revision_targets(
+                    repo_root=repo_root,
+                    start_revision=effective_start_revision,
+                    branch=branch,
+                    worktree_path=worktree_path,
+                    require_branch=True,
+                    require_worktree=True,
+                )
         candidate = coordination_claims.build_candidate_claim(
             agent=agent,
             project=project,
@@ -529,6 +556,7 @@ def _upsert_session_claim(
             work_unit_id=effective_work_unit_id,
             work_graph_sha256=work_graph_sha256,
             approval_revisions=approval_revisions,
+            start_revision=effective_start_revision,
             parallel_root_authorized=(allow_parallel or existing.parallel_root_authorized),
         )
         coordination_claims.validate_claim_hierarchy_for_creation(
@@ -593,9 +621,14 @@ def _upsert_session_claim(
             "work_unit_id": effective_work_unit_id,
             "work_graph_sha256": work_graph_sha256,
             "approval_revisions": list(approval_revisions),
+            "schema_version": candidate.schema_version,
             "parallel_root_authorized": candidate.parallel_root_authorized,
             **progress_payload,
         }
+        if effective_start_revision is not None:
+            payload["start_revision"] = effective_start_revision
+        else:
+            payload.pop("start_revision", None)
         _write_claim_payload(path, payload)
         _projection_path, projection_digest_after = coordination_claims.refresh_prewrite_authority_projection(
             coordination_claims.CLAIMS_DIR
@@ -1107,6 +1140,7 @@ def start_session(
     parent_scope: str | None = None,
     work_graph_path: str | None = None,
     work_unit_id: str | None = None,
+    start_revision: str | None = None,
     tracker_dir: Path = session_contracts.DEFAULT_SESSION_TRACKERS_DIR,
     allow_unplanned: bool = False,
     allow_parallel: bool = False,
@@ -1124,10 +1158,7 @@ def start_session(
     coordination_claims.validate_native_session_binding(agent, resolved_session_id)
     configured_outcome_mode = outcome_admission.load_outcome_admission_mode(Path(worktree_path))
     explicit_unplanned_maintenance = (
-        allow_unplanned
-        and not plan_ref
-        and outcome_bootstrap_plan is None
-        and not outcome_selected
+        allow_unplanned and not plan_ref and outcome_bootstrap_plan is None and not outcome_selected
     )
     selected_admission_required = outcome_selected or (
         configured_outcome_mode == "enforce_selected" and not explicit_unplanned_maintenance
@@ -1174,6 +1205,20 @@ def start_session(
             )
         )
 
+    exact_existing_claims = _iter_matching_live_claims(agent=agent, project=project, scope=scope)
+    if len(exact_existing_claims) > 1:
+        raise ValueError(f"Multiple live claims found for {agent} → {project}:{scope}")
+    existing_claim = exact_existing_claims[0] if exact_existing_claims else None
+    if start_revision is None and existing_claim is not None:
+        start_revision = existing_claim.start_revision
+    if (
+        write_paths
+        and coordination_claims.requires_work_graph(plan_ref)
+        and existing_claim is None
+        and start_revision is None
+    ):
+        raise ValueError("new plan-bound session start requires one full --start-revision")
+
     contract = session_contracts.SessionContract.build(
         agent=agent,
         project=project,
@@ -1187,6 +1232,7 @@ def start_session(
         broader_goal=broader_goal,
         session_name=session_name,
         allow_unplanned=allow_unplanned,
+        start_revision=start_revision,
     )
     matching_lane_claims = [
         claim
@@ -1236,6 +1282,7 @@ def start_session(
             parent_scope=parent_scope,
             work_graph_path=work_graph_path,
             work_unit_id=work_unit_id,
+            start_revision=contract.start_revision,
             allow_parallel=allow_parallel,
         )
     except Exception as claim_error:
@@ -1276,6 +1323,7 @@ def start_session(
         "plan_ref": contract.plan_ref,
         "claim_type": persisted_claim.claim_type,
         "parent_scope": persisted_claim.parent_scope,
+        "start_revision": persisted_claim.start_revision,
         "outcome_admission_receipts": outcome_admission_receipts,
         "coordination_mailbox": _poll_mailbox(
             agent=agent,

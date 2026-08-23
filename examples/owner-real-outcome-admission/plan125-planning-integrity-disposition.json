@@ -1,0 +1,11 @@
+{
+  "schema_version": "1.0.0",
+  "record_type": "outcome_portfolio_disposition_request",
+  "disposition_id": "plan-125-planning-integrity-scope-revision-v2-park",
+  "requested_at": "2026-08-22T23:36:38Z",
+  "allocation_id": "plan-125-planning-integrity-allocation-v2",
+  "allocation_sha256": "938f46e3dca849d5fd53236ed82afd484c78460f81627edfadc7ff7173a770f9",
+  "disposition": "parked",
+  "decision_ref": "enforced-planning#125-scope-revision-v3",
+  "reason": "Release the second maintenance allocation before revising the selected scope to retain one exact start revision through readiness, claim creation, worktree creation, and session upsert."
+}

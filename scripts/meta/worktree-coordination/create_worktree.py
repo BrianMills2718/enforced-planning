@@ -9,7 +9,9 @@ status, classifies stronger split-brain-like symptoms, and optionally cleans up
 the failed worktree instead of leaving an ambiguous checkout in circulation.
 
 When strict coordination enforcement is enabled, the wrapper also requires an
-active scoped write claim before the worktree is created.
+active scoped claim with explicit write authority before the worktree is
+created. Narrow ``write`` claims and bounded ``program`` claims with exact
+``write_paths`` both carry that authority.
 """
 
 from __future__ import annotations
@@ -17,11 +19,16 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
+import re
 import subprocess
 import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
+
+
+DEFAULT_WORKTREE_EXCLUDE = "/worktrees/"
+WRITE_AUTHORIZING_CLAIM_TYPES = frozenset({"write", "program"})
 
 
 @dataclass(frozen=True)
@@ -116,6 +123,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Repo-relative write path required by the scoped claim. Repeat as needed.",
     )
     parser.add_argument(
+        "--claim-start-revision",
+        help="Full Git revision the matching plan-bound claim must retain.",
+    )
+    parser.add_argument(
         "--claims-dir",
         help="Override the coordination claims directory instead of ~/.claude/coordination/claims/.",
     )
@@ -162,8 +173,7 @@ def resolve_main_repo_root(repo_root: Path) -> Path:
     )
     if result.returncode != 0:
         raise RuntimeError(
-            "Unable to resolve canonical repo root from git common dir:\n"
-            f"{result.stderr or result.stdout}".strip()
+            f"Unable to resolve canonical repo root from git common dir:\n{result.stderr or result.stdout}".strip()
         )
     git_common_dir = Path(result.stdout.strip())
     return git_common_dir.parent
@@ -179,6 +189,46 @@ def get_canonical_project_name(repo_root: Path) -> str:
     """Return a stable project name from root or linked-worktree context."""
 
     return resolve_main_repo_root(repo_root.resolve()).name
+
+
+def ensure_default_worktree_container_excluded(
+    repo_root: Path,
+    worktree_path: Path,
+) -> bool:
+    """Keep the required nested worktree container out of canonical status.
+
+    The workspace contract places governed worktrees below ``<repo>/worktrees``.
+    Git otherwise reports that container and every linked checkout below it as
+    untracked content in the canonical checkout.  Record the exclusion in the
+    repository-local Git info file rather than changing a portable ``.gitignore``.
+    """
+
+    main_repo_root = resolve_main_repo_root(repo_root.resolve())
+    default_dir = get_default_worktree_dir(main_repo_root)
+    try:
+        worktree_path.resolve().relative_to(default_dir)
+    except ValueError:
+        return False
+
+    exclude_result = run_git(
+        ["rev-parse", "--path-format=absolute", "--git-path", "info/exclude"],
+        cwd=main_repo_root,
+    )
+    if exclude_result.returncode != 0:
+        raise RuntimeError(
+            "Unable to resolve repository-local Git excludes file:\n"
+            f"{exclude_result.stderr or exclude_result.stdout}".strip()
+        )
+    exclude_path = Path(exclude_result.stdout.strip())
+    exclude_path.parent.mkdir(parents=True, exist_ok=True)
+    existing = exclude_path.read_text(encoding="utf-8") if exclude_path.is_file() else ""
+    if DEFAULT_WORKTREE_EXCLUDE in {line.strip() for line in existing.splitlines()}:
+        return True
+
+    separator = "" if not existing or existing.endswith("\n") else "\n"
+    with exclude_path.open("a", encoding="utf-8") as handle:
+        handle.write(f"{separator}{DEFAULT_WORKTREE_EXCLUDE}\n")
+    return True
 
 
 def _load_claims_module() -> Any:
@@ -221,9 +271,7 @@ def parse_status_porcelain(
                 deleted_count += 1
         entries.append(StatusEntry(code=code, path=path))
 
-    split_brain_like = (
-        deleted_count >= split_brain_threshold and untracked_count >= split_brain_threshold
-    )
+    split_brain_like = deleted_count >= split_brain_threshold and untracked_count >= split_brain_threshold
     return WorktreeStatusSummary(
         branch_line=branch_line,
         entries=entries,
@@ -245,10 +293,7 @@ def inspect_worktree_state(
         cwd=worktree_path,
     )
     if result.returncode != 0:
-        raise RuntimeError(
-            "Unable to inspect fresh worktree status:\n"
-            f"{result.stderr or result.stdout}".strip()
-        )
+        raise RuntimeError(f"Unable to inspect fresh worktree status:\n{result.stderr or result.stdout}".strip())
     return parse_status_porcelain(
         result.stdout,
         split_brain_threshold=split_brain_threshold,
@@ -272,10 +317,7 @@ def inspect_checkout_state(checkout_path: Path) -> CheckoutStateSummary:
         cwd=checkout_path,
     )
     if result.returncode != 0:
-        raise RuntimeError(
-            "Unable to inspect checkout status:\n"
-            f"{result.stderr or result.stdout}".strip()
-        )
+        raise RuntimeError(f"Unable to inspect checkout status:\n{result.stderr or result.stdout}".strip())
 
     entries: list[StatusEntry] = []
     modified_count = 0
@@ -315,9 +357,7 @@ def verify_clean_main_root(repo_root: Path) -> tuple[bool, str]:
         return True, f"Canonical main checkout is clean: {main_repo_root}"
 
     classification = "main-root-unmerged" if summary.unmerged else "main-root-dirty"
-    sample_entries = ", ".join(
-        f"{entry.code} {entry.path}" for entry in summary.entries[:8]
-    )
+    sample_entries = ", ".join(f"{entry.code} {entry.path}" for entry in summary.entries[:8])
     return (
         False,
         "Publish worktree creation blocked: canonical main checkout is not clean. "
@@ -354,9 +394,7 @@ def ensure_safe_target_path(worktree_path: Path) -> None:
         return
     if worktree_path.is_dir() and not any(worktree_path.iterdir()):
         return
-    raise ValueError(
-        f"Target worktree path already exists and is not empty: {worktree_path}"
-    )
+    raise ValueError(f"Target worktree path already exists and is not empty: {worktree_path}")
 
 
 def _claim_project(repo_root: Path, explicit_project: str | None) -> str:
@@ -383,8 +421,9 @@ def verify_scoped_write_claim(
     claim_project: str | None,
     claim_write_paths: list[str],
     claims_dir: Path | None,
+    expected_start_revision: str | None = None,
 ) -> tuple[bool, str]:
-    """Require a matching active write claim and reject conflicting claims."""
+    """Require matching explicit write authority and reject conflicting claims."""
     if not claim_agent:
         return False, "Scoped write-claim enforcement requires --claim-agent."
     if not claim_write_paths:
@@ -412,7 +451,7 @@ def verify_scoped_write_claim(
         claim
         for claim in active_claims
         if claim.agent == claim_agent
-        and claim.claim_type == "write"
+        and claim.claim_type in WRITE_AUTHORIZING_CLAIM_TYPES
         and project_name in claim.projects
         and _write_paths_are_covered(
             claims_module=claims_module,
@@ -420,6 +459,11 @@ def verify_scoped_write_claim(
             claim_paths=claim.write_paths,
         )
         and (claim.branch in (None, branch))
+        and (
+            expected_start_revision is None
+            or not claims_module.requires_work_graph(claim.plan_ref)
+            or claim.start_revision == expected_start_revision
+        )
     ]
     if not matching_claims:
         joined_paths = ", ".join(normalized_paths)
@@ -427,14 +471,28 @@ def verify_scoped_write_claim(
             False,
             "Scoped write-claim enforcement failed: no active matching write claim for "
             f"agent={claim_agent}, project={project_name}, branch={branch}, "
-            f"write_paths=[{joined_paths}]. Create the narrow write claim first.",
+            f"write_paths=[{joined_paths}], "
+            f"start_revision={expected_start_revision or 'not-required'}. "
+            "Create the narrow revision-bound write claim first.",
         )
 
-    weak_matching_claims = [
-        (claim, claims_module.claim_health_issues(claim))
-        for claim in matching_claims
-        if claims_module.claim_health_issues(claim)
-    ]
+    weak_matching_claims = []
+    for claim in matching_claims:
+        issues = claims_module.claim_health_issues(claim)
+        staged_plan_reservation = (
+            claim.tracker_path is None
+            and claims_module.requires_work_graph(claim.plan_ref)
+            and claim.schema_version >= 4
+            and claim.start_revision == expected_start_revision
+            and claim.branch == branch
+            and claim.worktree_path is not None
+            and Path(claim.worktree_path).expanduser().resolve() == worktree_path.resolve()
+            and bool(claim.session_id and claim.session_name and claim.broader_goal)
+        )
+        if staged_plan_reservation:
+            issues = [issue for issue in issues if issue != "missing_tracker_path"]
+        if issues:
+            weak_matching_claims.append((claim, issues))
     if weak_matching_claims:
         claim, issues = weak_matching_claims[0]
         return (
@@ -444,7 +502,11 @@ def verify_scoped_write_claim(
             f"issues=[{', '.join(issues)}]. Refresh the claim with explicit live ownership metadata first.",
         )
 
-    check_result = claims_module.evaluate_claim(candidate, active_claims=active_claims)
+    matched_claim = matching_claims[0]
+    check_result = claims_module.evaluate_claim(
+        candidate,
+        active_claims=[claim for claim in active_claims if claim is not matched_claim],
+    )
     hard_conflicts = check_result.hard_conflicts
     if hard_conflicts:
         formatted = "; ".join(
@@ -453,12 +515,14 @@ def verify_scoped_write_claim(
         )
         return (
             False,
-            "Scoped write-claim enforcement failed: conflicting active write claim(s) detected — "
-            f"{formatted}",
+            f"Scoped write-claim enforcement failed: conflicting active write claim(s) detected — {formatted}",
         )
 
-    matched_scope = matching_claims[0].scope
-    return True, f"Scoped write claim verified via {claim_agent}:{project_name}:{matched_scope}."
+    message = (
+        f"Scoped write claim verified via {claim_agent}:{project_name}:{matched_claim.scope} "
+        f"({matched_claim.claim_type} claim)."
+    )
+    return True, message
 
 
 def create_worktree(
@@ -475,10 +539,23 @@ def create_worktree(
     claim_write_paths: list[str] | None = None,
     claims_dir: Path | None = None,
     require_clean_main_root: bool = False,
+    claim_start_revision: str | None = None,
 ) -> WorktreeCreationResult:
     """Create a worktree, inspect it immediately, and fail loud on unsafe state."""
     repo_root = repo_root.resolve()
     worktree_path = worktree_path.resolve()
+    resolved_start = run_git(
+        ["rev-parse", "--verify", f"{start_point}^{{commit}}"],
+        cwd=repo_root,
+    )
+    start_revision = resolved_start.stdout.strip()
+    if resolved_start.returncode != 0 or re.fullmatch(r"(?:[0-9a-f]{40}|[0-9a-f]{64})", start_revision) is None:
+        raise ValueError(f"Unable to resolve one full Git start revision from {start_point!r}")
+    if claim_start_revision is not None and claim_start_revision != start_revision:
+        raise ValueError(
+            "Requested claim custody does not match the resolved worktree start revision: "
+            f"claim={claim_start_revision}, worktree={start_revision}"
+        )
     coordination_checked = require_write_claim
     coordination_message: str | None = None
 
@@ -491,6 +568,7 @@ def create_worktree(
             claim_project=claim_project,
             claim_write_paths=claim_write_paths or [],
             claims_dir=claims_dir,
+            expected_start_revision=start_revision,
         )
         if not claim_ok:
             return WorktreeCreationResult(
@@ -525,21 +603,24 @@ def create_worktree(
             )
 
     ensure_safe_target_path(worktree_path)
+    ensure_default_worktree_container_excluded(repo_root, worktree_path)
     worktree_path.parent.mkdir(parents=True, exist_ok=True)
 
     branch_already_exists = branch_exists(repo_root, branch)
-    if branch_already_exists and start_point != "HEAD":
-        raise ValueError(
-            "Cannot combine --start-point with an existing branch; "
-            f"branch already exists: {branch}"
+    if branch_already_exists:
+        branch_revision = run_git(
+            ["rev-parse", "--verify", f"refs/heads/{branch}^{{commit}}"],
+            cwd=repo_root,
         )
+        if branch_revision.returncode != 0 or branch_revision.stdout.strip() != start_revision:
+            raise ValueError(f"Existing branch {branch!r} does not match requested start revision {start_revision}")
 
     add_args = ["worktree", "add", str(worktree_path)]
     if branch_already_exists:
         add_args.append(branch)
         created_branch = False
     else:
-        add_args.extend(["-b", branch, start_point])
+        add_args.extend(["-b", branch, start_revision])
         created_branch = True
 
     add_result = run_git(add_args, cwd=repo_root)
@@ -553,6 +634,34 @@ def create_worktree(
             classification="git-error",
             cleanup_performed=False,
             message=(add_result.stderr or add_result.stdout).strip(),
+            status=None,
+            coordination_checked=coordination_checked,
+            coordination_message=coordination_message,
+        )
+
+    created_revision = run_git(
+        ["rev-parse", "--verify", "HEAD^{commit}"],
+        cwd=worktree_path,
+    )
+    if created_revision.returncode != 0 or created_revision.stdout.strip() != start_revision:
+        cleanup_performed = False
+        cleanup_note = "failed worktree retained by operator request"
+        if not keep_failed_worktree:
+            cleanup_performed, cleanup_note = cleanup_failed_worktree(
+                repo_root,
+                worktree_path,
+                branch=branch,
+                created_branch=created_branch,
+            )
+        return WorktreeCreationResult(
+            ok=False,
+            repo_root=str(repo_root),
+            worktree_path=str(worktree_path),
+            branch=branch,
+            created_branch=created_branch,
+            classification="revision-mismatch",
+            cleanup_performed=cleanup_performed,
+            message=(f"Created worktree did not retain start revision {start_revision}. Cleanup: {cleanup_note}"),
             status=None,
             coordination_checked=coordination_checked,
             coordination_message=coordination_message,
@@ -591,9 +700,7 @@ def create_worktree(
         if not cleanup_ok and worktree_path.exists():
             cleanup_note = f" Cleanup failed: {cleanup_note}"
 
-    sample_entries = ", ".join(
-        f"{entry.code} {entry.path}" for entry in summary.entries[:8]
-    )
+    sample_entries = ", ".join(f"{entry.code} {entry.path}" for entry in summary.entries[:8])
     return WorktreeCreationResult(
         ok=False,
         repo_root=str(repo_root),
@@ -677,6 +784,7 @@ def main(argv: list[str] | None = None) -> int:
             claim_write_paths=args.claim_write_path,
             claims_dir=claims_dir,
             require_clean_main_root=args.require_clean_main_root,
+            claim_start_revision=args.claim_start_revision,
         )
     except (RuntimeError, ValueError) as exc:
         error_result = WorktreeCreationResult(

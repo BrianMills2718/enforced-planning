@@ -219,10 +219,13 @@ def test_valid_progress_remains_additive_for_implicit_v2_plan_write(tmp_path: Pa
     assert legacy.schema_version == instrumented.schema_version == 2
     assert claims_impl.claim_health_issues(legacy) == []
     assert claims_impl.claim_health_issues(instrumented) == []
-    assert claims_impl.claim_progress_issues(
-        instrumented,
-        now=datetime.fromisoformat("2026-08-21T10:00:00+00:00"),
-    ) == []
+    assert (
+        claims_impl.claim_progress_issues(
+            instrumented,
+            now=datetime.fromisoformat("2026-08-21T10:00:00+00:00"),
+        )
+        == []
+    )
 
 
 def test_evaluate_claim_detects_parent_child_write_overlap_as_hard_conflict(
@@ -790,6 +793,73 @@ def test_plan_bound_write_claim_rejects_blocked_canonical_work_unit(
     assert not claims_dir.exists()
 
 
+def test_direct_plan_bound_claim_cannot_bypass_enforced_integrity(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The canonical claim seam must deny before registry mutation, even without Make."""
+
+    module = _load_module()
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
+    repo_root = tmp_path / "demo"
+    _init_git_repo(repo_root)
+    graph = _commit_work_graph(
+        repo_root,
+        plan=106,
+        unit={
+            "id": "integrity-unit",
+            "status": "ready",
+            "readiness": {
+                "status": "ready",
+                "required_approval_types": [],
+                "approvals": [],
+                "failed_guards": [],
+            },
+        },
+    )
+    (repo_root / "meta-process.yaml").write_text(
+        "meta_process:\n  plans:\n    integrity:\n      mode: enforce\n      contract_version: 1.0.0\n      minimum_plan_number: 106\n",
+        encoding="utf-8",
+    )
+    plan_path = repo_root / "docs/plans/106_incomplete.md"
+    plan_path.write_text("# Incomplete enforced plan\n", encoding="utf-8")
+    subprocess.run(
+        ["git", "-C", str(repo_root), "add", "meta-process.yaml", str(plan_path.relative_to(repo_root))],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(repo_root), "commit", "-m", "enforce incomplete plan"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    with pytest.raises(ValueError, match="missing_epistemic_frontier"):
+        module.create_claim(
+            agent="codex",
+            project="demo",
+            scope="integrity-unit",
+            intent="attempt direct claim bypass",
+            plan_ref="demo#106",
+            claim_type="write",
+            write_paths=["src/feature.py"],
+            repo_root=str(repo_root),
+            worktree_path=str(repo_root / "worktrees" / "integrity-unit"),
+            branch="integrity-unit",
+            session_id="codex:test",
+            session_name="integrity-unit",
+            broader_goal="prove direct claim admission",
+            tracker_path=str(tmp_path / "tracker.yaml"),
+            work_graph_path=graph,
+            work_unit_id="integrity-unit",
+        )
+
+    assert not claims_dir.exists()
+
+
 def test_plan_bound_review_cannot_bypass_write_readiness_binding(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -915,7 +985,6 @@ def test_plan_bound_write_claim_persists_exact_canonical_binding(
         session_id="codex:test",
         session_name="mailbox",
         broader_goal="mailbox",
-        tracker_path=str(tmp_path / "tracker.yaml"),
         work_graph_path=graph,
         work_unit_id="mf03b",
     )
@@ -926,6 +995,317 @@ def test_plan_bound_write_claim_persists_exact_canonical_binding(
     assert payload["work_graph_path"] == graph
     assert len(payload["work_graph_sha256"]) == 64
     assert payload["approval_revisions"] == [f"readiness={digest}"]
+    assert payload["schema_version"] == 4
+    assert (
+        payload["start_revision"]
+        == subprocess.run(
+            ["git", "-C", str(repo_root), "rev-parse", "HEAD"],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+    )
+
+
+def test_activated_plan_claim_rejects_branch_and_worktree_at_different_revision(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A tracker marks activation, so a claim for A cannot bless execution at B."""
+
+    module = _load_module()
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
+    repo_root = tmp_path / "demo"
+    _init_git_repo(repo_root)
+    graph = _commit_work_graph(
+        repo_root,
+        plan=106,
+        unit={
+            "id": "revision-custody",
+            "status": "ready",
+            "readiness": {
+                "status": "ready",
+                "required_approval_types": [],
+                "approvals": [],
+                "failed_guards": [],
+            },
+        },
+    )
+    revision_a = subprocess.run(
+        ["git", "-C", str(repo_root), "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    (repo_root / "README.md").write_text("advanced after A\n", encoding="utf-8")
+    subprocess.run(
+        ["git", "-C", str(repo_root), "commit", "-am", "advance to B"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    revision_b = subprocess.run(
+        ["git", "-C", str(repo_root), "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    assert revision_b != revision_a
+    worktree = repo_root / "worktrees" / "revision-custody"
+    subprocess.run(
+        [
+            "git",
+            "-C",
+            str(repo_root),
+            "worktree",
+            "add",
+            "-b",
+            "revision-custody",
+            str(worktree),
+            revision_a,
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    with pytest.raises(ValueError, match="does not match retained start revision"):
+        module.create_claim(
+            agent="codex",
+            project="demo",
+            scope="revision-custody",
+            intent="attempt false activation evidence",
+            plan_ref="demo#106",
+            claim_type="write",
+            write_paths=["src/feature.py"],
+            repo_root=str(repo_root),
+            worktree_path=str(worktree),
+            branch="revision-custody",
+            session_id="codex:test",
+            session_name="revision-custody",
+            broader_goal="Preserve Revision Custody",
+            tracker_path=str(tmp_path / "fake-tracker.yaml"),
+            work_graph_path=graph,
+            work_unit_id="revision-custody",
+            start_point=revision_b,
+        )
+
+    assert not claims_dir.exists()
+
+
+def test_work_unit_binding_reads_graph_from_same_exact_plan_revision(tmp_path: Path) -> None:
+    """A later graph edit cannot alter a binding validated against an older exact commit."""
+
+    repo_root = tmp_path / "demo"
+    _init_git_repo(repo_root)
+    graph = _commit_work_graph(
+        repo_root,
+        plan=106,
+        unit={
+            "id": "same-revision",
+            "status": "ready",
+            "readiness": {
+                "status": "ready",
+                "required_approval_types": [],
+                "approvals": [],
+                "failed_guards": [],
+            },
+        },
+    )
+    revision_a = subprocess.run(
+        ["git", "-C", str(repo_root), "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    (repo_root / graph).write_text(
+        json.dumps(
+            {
+                "units": [
+                    {
+                        "id": "same-revision",
+                        "status": "blocked",
+                        "readiness": {
+                            "status": "blocked",
+                            "approvals": [],
+                            "failed_guards": ["later blocker"],
+                        },
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    subprocess.run(
+        ["git", "-C", str(repo_root), "add", graph],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(repo_root), "commit", "-m", "block later graph"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    _graph_sha, approvals, source_revision = claims_impl.resolve_canonical_work_unit_binding(
+        repo_root=str(repo_root),
+        plan_ref="demo#106",
+        work_graph_path=graph,
+        work_unit_id="same-revision",
+        start_point=revision_a,
+    )
+
+    assert approvals == ()
+    assert source_revision == revision_a
+
+
+def test_new_plan_bound_claim_rejects_non_tip_revision_even_with_resume_flag(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An older permissive commit cannot open a new lane after the default tip advances."""
+
+    module = _load_module()
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
+    repo_root = tmp_path / "demo"
+    _init_git_repo(repo_root)
+    graph = _commit_work_graph(
+        repo_root,
+        plan=106,
+        unit={
+            "id": "old-ready",
+            "status": "ready",
+            "readiness": {
+                "status": "ready",
+                "required_approval_types": [],
+                "approvals": [],
+                "failed_guards": [],
+            },
+        },
+    )
+    revision_a = subprocess.run(
+        ["git", "-C", str(repo_root), "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    (repo_root / "README.md").write_text("new default tip\n", encoding="utf-8")
+    subprocess.run(
+        ["git", "-C", str(repo_root), "commit", "-am", "advance default"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    with pytest.raises(ValueError, match="--resume is not recovery evidence"):
+        module.create_claim(
+            agent="codex",
+            project="demo",
+            scope="old-ready",
+            intent="attempt old-policy lane",
+            plan_ref="demo#106",
+            claim_type="write",
+            write_paths=["src/feature.py"],
+            repo_root=str(repo_root),
+            worktree_path=str(repo_root / "worktrees" / "old-ready"),
+            branch="old-ready",
+            session_id="codex:test",
+            session_name="old-ready",
+            broader_goal="reject old policy",
+            tracker_path=str(tmp_path / "tracker.yaml"),
+            work_graph_path=graph,
+            work_unit_id="old-ready",
+            start_point=revision_a,
+            resume_requested=True,
+        )
+
+    assert not claims_dir.exists()
+
+
+def test_new_non_tip_claim_routes_exact_retained_artifacts_to_session_resume(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Even matching old artifacts do not turn new-claim bootstrap into recovery."""
+
+    module = _load_module()
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
+    repo_root = tmp_path / "demo"
+    _init_git_repo(repo_root)
+    graph = _commit_work_graph(
+        repo_root,
+        plan=106,
+        unit={
+            "id": "retained-old-lane",
+            "status": "ready",
+            "readiness": {
+                "status": "ready",
+                "required_approval_types": [],
+                "approvals": [],
+                "failed_guards": [],
+            },
+        },
+    )
+    revision_a = subprocess.run(
+        ["git", "-C", str(repo_root), "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    (repo_root / "README.md").write_text("new default tip\n", encoding="utf-8")
+    subprocess.run(
+        ["git", "-C", str(repo_root), "commit", "-am", "advance default"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    worktree = repo_root / "worktrees" / "retained-old-lane"
+    subprocess.run(
+        [
+            "git",
+            "-C",
+            str(repo_root),
+            "worktree",
+            "add",
+            "-b",
+            "retained-old-lane",
+            str(worktree),
+            revision_a,
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    with pytest.raises(ValueError, match="session-resume"):
+        module.create_claim(
+            agent="codex",
+            project="demo",
+            scope="retained-old-lane",
+            intent="attempt new-claim recovery",
+            plan_ref="demo#106",
+            claim_type="write",
+            write_paths=["src/feature.py"],
+            repo_root=str(repo_root),
+            worktree_path=str(worktree),
+            branch="retained-old-lane",
+            session_id="codex:test",
+            session_name="retained-old-lane",
+            broader_goal="Resume Existing Custody",
+            tracker_path=str(tmp_path / "tracker.yaml"),
+            work_graph_path=graph,
+            work_unit_id="retained-old-lane",
+            start_point=revision_a,
+            resume_requested=True,
+            require_new=True,
+        )
+
+    assert not claims_dir.exists()
 
 
 def test_goal_bound_write_claim_preserves_authority_without_work_graph(
@@ -1634,6 +2014,89 @@ def test_cross_session_refresh_cannot_replace_live_claim_slot(
 
     assert claim_path.read_bytes() == claim_before
     assert projection_path.read_bytes() == projection_before
+
+
+def test_require_new_preserves_occupied_same_session_claim_slot(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """New-lane bootstrap cannot refresh and later roll back a pre-existing claim."""
+
+    module = _load_module()
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
+    kwargs = {
+        "agent": "codex",
+        "project": "demo",
+        "scope": "owned-slot",
+        "intent": "retain exact owner",
+        "claim_type": "write",
+        "write_paths": ["src/owned.py"],
+        "repo_root": str(tmp_path / "demo"),
+        "worktree_path": str(tmp_path / "demo" / "worktrees" / "owned-slot"),
+        "branch": "owned-slot",
+        "session_id": "codex:same-session",
+        "session_name": "owned-slot",
+    }
+    ok, _message = module.create_claim(**kwargs)
+    assert ok
+    claim_path = claims_dir / "codex_demo_owned-slot.yaml"
+    before = claim_path.read_bytes()
+
+    with pytest.raises(ValueError, match="already exists"):
+        module.create_claim(**kwargs, require_new=True)
+
+    assert claim_path.read_bytes() == before
+
+
+def test_guarded_release_preserves_claim_when_revision_or_session_changes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Rollback cleanup releases only the exact claim custody it created."""
+
+    module = _load_module()
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
+    _write_claim(
+        claims_dir,
+        "codex_demo_guarded.yaml",
+        {
+            "schema_version": 4,
+            "agent": "codex",
+            "projects": ["demo"],
+            "scope": "guarded",
+            "intent": "retain custody",
+            "claim_type": "program",
+            "branch": "guarded",
+            "worktree_path": str(tmp_path / "worktrees" / "guarded"),
+            "session_id": "codex:owner",
+            "session_name": "guarded",
+            "status": "active",
+            "start_revision": "a" * 40,
+        },
+    )
+    claim_path = claims_dir / "codex_demo_guarded.yaml"
+    before = claim_path.read_bytes()
+
+    with pytest.raises(ValueError, match="session custody changed"):
+        module.release_claim(
+            "codex",
+            "demo",
+            "guarded",
+            expected_session_id="codex:other",
+            expected_start_revision="a" * 40,
+        )
+    with pytest.raises(ValueError, match="start-revision custody changed"):
+        module.release_claim(
+            "codex",
+            "demo",
+            "guarded",
+            expected_session_id="codex:owner",
+            expected_start_revision="b" * 40,
+        )
+
+    assert claim_path.read_bytes() == before
 
 
 def test_same_client_different_sessions_conflict_on_program_write_ownership(
@@ -2565,9 +3028,7 @@ def test_completed_claim_archive_append_does_not_rescan_whole_ledger(
     )
 
     validations = 0
-    real_validate = (
-        claim_mutation_receipts.CompletedClaimArchiveReceiptV1.model_validate_json
-    )
+    real_validate = claim_mutation_receipts.CompletedClaimArchiveReceiptV1.model_validate_json
 
     def _counting_validate(*args: object, **kwargs: object):
         nonlocal validations
@@ -2634,12 +3095,10 @@ def test_completed_claim_archive_append_still_detects_conflict_in_large_ledger(
         "transaction_id": None,
         "mutation_event_id": "different-event",
     }
-    conflicting_payload["receipt_sha256"] = (
-        claim_mutation_receipts.completed_claim_archive_receipt_sha256(conflicting_payload)
-    )
-    conflicting = claim_mutation_receipts.CompletedClaimArchiveReceiptV1.model_validate(
+    conflicting_payload["receipt_sha256"] = claim_mutation_receipts.completed_claim_archive_receipt_sha256(
         conflicting_payload
     )
+    conflicting = claim_mutation_receipts.CompletedClaimArchiveReceiptV1.model_validate(conflicting_payload)
 
     with pytest.raises(ValueError, match="conflicting completed-claim archive"):
         claim_mutation_receipts.append_completed_claim_archive_receipt(conflicting)
@@ -3055,10 +3514,7 @@ def test_no_legacy_alias_is_offered_without_a_port(monkeypatch, tmp_path):
 def test_explicit_identity_still_wins(monkeypatch, tmp_path):
     """Lifecycle hooks and recovery tools pass an explicit id and must keep control."""
     monkeypatch.setattr(coordination_claims, "CLAUDE_SESSION_REGISTRY", _registry_with_self(tmp_path, "uuid-mine"))
-    assert (
-        coordination_claims.resolve_session_id("claude-code", "claude-code:explicit")
-        == "claude-code:explicit"
-    )
+    assert coordination_claims.resolve_session_id("claude-code", "claude-code:explicit") == "claude-code:explicit"
 
 
 def test_codex_identity_is_untouched(monkeypatch):
@@ -3423,7 +3879,9 @@ def test_progress_cli_reports_applied_mutation_when_receipt_append_fails(
     persisted = yaml.safe_load((claims_dir / "owner.yaml").read_text(encoding="utf-8"))
     assert persisted["progress_kind"] == "new_diagnostic"
     assert persisted["evidence_ref"] == "trace:audit"
-    assert json.loads(projection_path_for(claims_dir).read_text(encoding="utf-8"))["registry_digest"] == registry_digest(claims_dir)
+    assert json.loads(projection_path_for(claims_dir).read_text(encoding="utf-8"))[
+        "registry_digest"
+    ] == registry_digest(claims_dir)
 
 
 def test_progress_classifier_has_frozen_boundaries_and_stale_precedence(
@@ -3466,10 +3924,13 @@ def test_progress_classifier_has_frozen_boundaries_and_stale_precedence(
         expected_quiet_until="2026-08-21T10:15:00+00:00",
         quiet_reason="bounded repository suite",
     )
-    assert claims_impl.claim_progress_issues(
-        quiet,
-        now=datetime.fromisoformat("2026-08-21T10:14:59+00:00"),
-    ) == []
+    assert (
+        claims_impl.claim_progress_issues(
+            quiet,
+            now=datetime.fromisoformat("2026-08-21T10:14:59+00:00"),
+        )
+        == []
+    )
     assert claims_impl.claim_progress_issues(
         quiet,
         now=datetime.fromisoformat("2026-08-21T10:15:00+00:00"),
@@ -3499,9 +3960,7 @@ def test_progress_classifier_has_frozen_boundaries_and_stale_precedence(
     stale = replace(base, heartbeat_at="2026-08-21T07:00:00+00:00")
     assert claims_impl.claim_runtime_status(stale, now=boundary) == "stale"
     missing_heartbeat = replace(base, heartbeat_at=None)
-    assert claims_impl.claim_progress_issues(missing_heartbeat, now=boundary) == [
-        "stalled_progress_lease"
-    ]
+    assert claims_impl.claim_progress_issues(missing_heartbeat, now=boundary) == ["stalled_progress_lease"]
     assert claims_impl.claim_runtime_status(missing_heartbeat, now=boundary) == "weak"
     monkeypatch.setenv("COORDINATION_PROGRESS_STALE_MINUTES", "not-a-number")
     with pytest.raises(ValueError, match="must be a positive number"):

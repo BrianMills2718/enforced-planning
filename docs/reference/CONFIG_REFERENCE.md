@@ -26,6 +26,22 @@ pretending it is mechanically enforced today.
 | `plans.trivial_threshold_lines` | int | `20` | **Not read by any script** 📋 | Reference only; Pattern 15 uses this as the canonical threshold definition |
 | `plans.trivial_block_src` | bool | `true` | **Not read by any script** 📋 | No effect |
 | `plans.plans_dir` | string | `"docs/plans"` | `check_plan_tests.py` (CLI arg), `complete_plan.py` (CLI arg) | `docs/plans` |
+| `plans.integrity.mode` | enum `off \| observe \| enforce` | `off` | plan validator, plan-start readiness, canonical plan-bound claim binding | No structural admission; `observe` reports without blocking; `enforce` rejects before coordination mutation |
+| `plans.integrity.contract_version` | string | `"1.0.0"` | plan validator and admission boundaries | `1.0.0`; an explicitly unsupported version fails structurally |
+| `plans.integrity.minimum_plan_number` | positive int | `1` | plan validator and admission boundaries | Plans below the floor are `not_applicable`; plans at/above it use the configured mode |
+
+Planning Integrity 1.0.0 validates exact Git-object plan/config bytes when a
+lane or plan-bound claim starts. It requires an authored user outcome,
+four-field canonical example, explicit critical-path and capability-adoption
+declarations, a classified epistemic-frontier table, and a reassessment
+contract. Duplicate YAML keys, placeholders, ambiguous numeric plan files, and
+unreadable or unsupported inputs fail visibly. `--warn-only` can downgrade
+legacy documentation-coupling gaps, but never an `enforce` integrity failure.
+
+A structural `PASS` means the declared Planning Integrity fields conform. It
+does not establish that the author named every material area or selected an
+optimal plan; the typed result and downstream AES projection retain that
+non-claim verbatim.
 
 ## claims
 
@@ -125,7 +141,7 @@ worktree targets.
 | Key | Type | Default | Read By | Default When Absent |
 |-----|------|---------|---------|---------------------|
 | `planning.question_driven_planning` | enum | `"advisory"` | **Not read by any script** 📋 | No effect |
-| `planning.uncertainty_tracking` | enum | `"advisory"` | **Not read by any script** 📋 | No effect |
+| `planning.uncertainty_tracking` | enum | `"advisory"` | **Not read by any script** 📋 | Authoring-only legacy guidance; live structural uncertainty admission is `plans.integrity` |
 | `planning.dependency_probe_policy` | enum | `"strict"` | **Not read by any script** 📋 | No effect |
 
 ## capability_ownership

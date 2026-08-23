@@ -1,15 +1,15 @@
 {
   "schema_version": "1.0.0",
   "record_type": "outcome_portfolio_allocation_request",
-  "allocation_id": "plan-125-planning-integrity-allocation-v11",
-  "requested_at": "2026-08-23T11:59:09Z",
+  "allocation_id": "plan-125-planning-integrity-allocation-v12",
+  "requested_at": "2026-08-23T12:07:43Z",
   "project_id": "enforced-planning",
   "scenario_id": "planning-integrity-semantic-admission",
-  "outcome_contract_sha256": "4676f54aaa01b74283b3647a6651a5489f0faa703704871e14d9b2e9e4b223b6",
+  "outcome_contract_sha256": "d2fed7457fba2c9430d18906009eb20a19bcba1db36ff6850b80a5f23dc0fbb9",
   "outcome_id": "planning-integrity-semantic-admission",
   "outcome_lineage_id": "planning-integrity-semantic-admission",
   "portfolio_class": "maintenance",
-  "decision_ref": "agentic-engineering-system#4@db22cab50a9cf4c9f94ed3fa2c574168a192887c",
-  "purpose": "Select the exact qualified PI-03 acceptance claim before Plan 125 records the installed AES consumer proof as accepted.",
-  "stopping_condition": "Complete the allocation after PI-03 acceptance and Plan 125 closeout are merged."
+  "decision_ref": "enforced-planning#125-terminal-sync@75715224d36f45a83b720321da39a3117fe9b527",
+  "purpose": "Select the exact qualified PI-03 terminal claim before synchronizing every canonical Plan 125 status entrypoint.",
+  "stopping_condition": "Complete the allocation after the synchronized PI-03 acceptance and Plan 125 closeout are merged."
 }

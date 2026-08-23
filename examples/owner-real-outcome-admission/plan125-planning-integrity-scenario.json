@@ -14,25 +14,26 @@
     "intended_consumer": "Brian and coding agents starting consequential Agentic Engineering work",
     "outcome": "A selected repository rejects a structurally incomplete new plan before coordination mutation, binds continuation to the accepted plan revision, and never grants a planned claim bootstrap authority merely from path shape.",
     "canonical_journey": {
-      "starting_state": "AES PR 4 is merged at db22cab50a9cf4c9f94ed3fa2c574168a192887c with an exact installed PlanningIntegrityResultV1 receipt, but the Enforced Planning Plan 125 authority surfaces still label PI-03 ready rather than accepted.",
-      "input": "The merged AES PR 4 revision, evidence/runs/2026-08-23-planning-integrity-installed.json with SHA-256 02807161a5d72cb1eedc1f710104d3a0fb902506db21db7f85e49daae1d7e4fa, the final 62-test consumer suite, one qualified revision-bound PI-03 acceptance claim, and a v11 contract limited to the transition artifacts plus the Plan 125 plan, work graph, and roadmap row.",
-      "action": "Allocate and select v11 on the exact acceptance claim, record the installed-consumer evidence, accept PI-03, and close Plan 125 without adding provider behavior.",
-      "observable_result": "The work graph records PI-03 accepted from exact merged evidence, the plan and roadmap record Plan 125 complete, and the active allocation is completed after the acceptance merge.",
-      "failure_signal": "Acceptance is recorded before v11 selection; allocation or selection binds another claim; the graph claims acceptance without the exact AES merge, receipt hash, and tests; Plan 125 remains active; or another framework increment starts before the external rewrite anchor."
+      "starting_state": "AES PR 4 is merged and its exact installed-consumer evidence is recorded in Plan 125, but v11 correctly parked after terminal verification found that docs/plans/CLAUDE.md was outside the claimed and selected completion scope.",
+      "input": "The merged v11 course-correction revision 75715224d36f45a83b720321da39a3117fe9b527, the exact AES PR 4 evidence already recorded there, one qualified revision-bound PI-03 terminal claim, and a v12 contract that owns the transition artifacts plus every canonical Plan 125 status entrypoint: plan, work graph, roadmap, and plan queue.",
+      "action": "Allocate and select v12 on the exact terminal claim, synchronize all four canonical status surfaces, accept PI-03, close Plan 125, merge the transition, and complete the allocation.",
+      "observable_result": "The plan, work graph, roadmap, and docs/plans/CLAUDE.md queue all agree that PI-03 and Plan 125 are complete from the same merged transition, with no provider or AES product behavior added.",
+      "failure_signal": "Any status surface is outside the claim or selected scope; any canonical entrypoint remains stale; acceptance precedes v12 selection; allocation or selection binds another claim; or framework expansion continues before the external rewrite anchor."
     },
-    "baseline_revision": "b47bd9c74e7c2d0f4a9246c18977bc93baaa4dba",
+    "baseline_revision": "75715224d36f45a83b720321da39a3117fe9b527",
     "allowed_scope": [
       "examples/owner-real-outcome-admission/plan125-planning-integrity-scenario.json",
       "examples/owner-real-outcome-admission/plan125-planning-integrity-allocation.json",
       "examples/owner-real-outcome-admission/plan125-planning-integrity-disposition.json",
       "docs/plans/125_planning_integrity_loop.md",
       "docs/plans/125_planning_integrity_loop_work_graph.json",
-      "ROADMAP.md"
+      "ROADMAP.md",
+      "docs/plans/CLAUDE.md"
     ],
     "progress_dimensions": [
       "exact installed-consumer evidence",
-      "PI-03 acceptance ownership",
-      "Plan 125 terminal closeout"
+      "complete canonical status ownership",
+      "synchronized PI-03 and Plan 125 closeout"
     ]
   },
   "receipts": [],

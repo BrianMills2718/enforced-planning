@@ -787,6 +787,10 @@ def _require_staged_activation_arguments_match(
         if read_paths is None
         else [coordination_claims._normalize_repo_path(path) for path in read_paths]
     )
+    existing_session_name = session_contracts.validate_session_name(
+        session_name=claim.session_name or "",
+        broader_goal=claim.broader_goal or "",
+    )
     requested_fields: dict[str, object] = {
         "agent": requested.agent,
         "project": requested.project,
@@ -818,7 +822,7 @@ def _require_staged_activation_arguments_match(
         "worktree_path": claim.worktree_path,
         "branch": claim.branch,
         "session_id": claim.session_id,
-        "session_name": claim.session_name,
+        "session_name": existing_session_name,
         "broader_goal": claim.broader_goal,
         "claim_type": claim.claim_type,
         "write_paths": claim.write_paths,
@@ -1338,8 +1342,6 @@ def start_session(
                 selected_claim,
             )
             if staged.reason_code == "selection_pending":
-                if session_name is None:
-                    session_name = selected_claim.session_name
                 _require_staged_activation_arguments_match(
                     selected_claim,
                     agent=agent,

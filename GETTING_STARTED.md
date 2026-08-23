@@ -83,6 +83,12 @@ The installed `make worktree` target also accepts `SESSION_WORK_GRAPH` and
 `SESSION_WORK_UNIT_ID` so a numbered plan lane can bind its claim and session
 to the exact ready work unit at creation time.
 
+If the target opts into Planning Integrity, the same entrypoint validates the
+plan and repository configuration from one resolved Git start revision before
+it queries graph readiness or creates a claim, branch, worktree, or tracker.
+The operator must supply the repository's canonical plan-graph query command;
+the portable installer cannot guess where that owner is installed.
+
 ## What Gets Installed
 
 After a successful minimum install, your repo should have:
@@ -166,6 +172,11 @@ meta_process:
     enabled: true
     require_tests: true
     plans_dir: "docs/plans"
+    integrity:
+      # off | observe | enforce
+      mode: "enforce"
+      contract_version: "1.0.0"
+      minimum_plan_number: 1
 
   commits:
     require_prefix: true
@@ -216,7 +227,8 @@ make worktree BRANCH=plan-1-my-feature \
   TASK="implement my feature" \
   SESSION_GOAL="broader objective" \
   SESSION_PHASE="first implementation slice" \
-  PLAN=1
+  PLAN=1 \
+  PLAN_READINESS_COMMAND="/path/to/plan-graph-python /path/to/plan_graph.py"
 
 make session-heartbeat BRANCH=plan-1-my-feature SESSION_PHASE="verification"
 make session-status
@@ -225,6 +237,23 @@ make worktree-remove BRANCH=plan-1-my-feature
 
 The same Make targets work for Codex and Claude Code. The runtime adapter
 chooses the `session_id`; the tracker and claim structure stay identical.
+
+With Planning Integrity configured, `make worktree` first resolves the
+canonical default-integration tip to one full commit. It reads the plan,
+`meta-process.yaml`, work graph, and approvals from that commit—not from later
+worktree bytes—and retains the same revision in the claim, worktree, and
+session tracker. An incomplete or malformed plan fails before coordination
+mutation. A structural `pass` proves only that the plan's declared frontier and
+required fields conform; it does not prove that every material area was named
+or that the plan is optimal.
+
+For an already-in-progress numbered plan with no live lane, add
+`PLAN_RESUME=1`; the readiness provider must return `already_active`, and the
+claim registry still performs the final no-live-owner check. In a repository
+that also enforces selected outcomes, a staged planned lane that will own
+specific files must use `SESSION_CLAIM_TYPE=write` plus explicit
+`SESSION_WRITE_PATHS`. The broader default `program` claim is intentionally
+insufficient for selection-pending write activation.
 
 ## Optional And Legacy Installer Modes
 

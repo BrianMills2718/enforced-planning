@@ -167,10 +167,14 @@ Before opening an unrelated root, close or transfer the existing root; use
 intentional part of the adopted plan graph. The claim check runs before branch
 or worktree creation and counts `active`, `blocked`, and `handoff` roots.
 
-For the sanctioned repo-local `make worktree` flow, the default claim is a v2
-**program** claim with real `branch`, `worktree_path`, and `session_id`
+For the sanctioned repo-local `make worktree` flow, the default claim is a
+healthy **program** claim with real `branch`, `worktree_path`, and `session_id`
 metadata. That keeps lane tracking healthy without inventing a fake broad
-write-path claim for the whole repo.
+write-path claim for the whole repo. A repository that requires
+selected-outcome activation is stricter: a plan-bound staged lane with explicit
+file ownership uses `SESSION_CLAIM_TYPE=write` and complete
+`SESSION_WRITE_PATHS`. A broad program claim cannot attach as
+selection-pending write authority.
 
 If any of `branch`, `worktree_path`, `session_id`, `session_name`, or required write ownership
 is missing for a live write/program/research claim, the claim is weak and the
@@ -596,6 +600,74 @@ future hard consumer must preserve ordinary-authority precedence, passive
 inspection/replay/preservation/closeout, a write-free allocation bootstrap,
 active-child reuse, bounded recovery, legacy cutover until renewal, and visible
 denial for missing, inactive, mismatched, stalled, or terminal outcome state.
+
+### Planning Integrity at the worktree and direct-claim boundary
+
+Planning Integrity is an opt-in, versioned admission prerequisite configured in
+the consumer repository:
+
+```yaml
+meta_process:
+  plans:
+    plans_dir: docs/plans
+    integrity:
+      mode: enforce       # off | observe | enforce
+      contract_version: 1.0.0
+      minimum_plan_number: 125
+```
+
+For an applicable coordinated or release lane, the sanctioned entrypoint does
+this in order:
+
+1. resolve the requested start point and canonical default-integration tip to
+   full Git commits;
+2. read the plan, `meta-process.yaml`, work graph, and approval bytes from that
+   one immutable start revision;
+3. validate Planning Integrity at those committed bytes;
+4. query the configured plan-graph owner; and
+5. only after both authorities admit the lane, create a revision-bound claim,
+   branch/worktree, and session tracker that all retain the same start commit.
+
+Dirty corrected bytes cannot rescue an incomplete start revision. Moving
+symbolic `HEAD`, supplying an older passing commit for a new lane, or omitting
+the Make wrapper from a direct plan-bound claim does not change the accepted
+revision. A retained non-tip revision resumes only through the existing
+session-resume/recovery lifecycle.
+
+The first-success Make shape is:
+
+```bash
+make worktree \
+  BRANCH=plan-125-bounded-unit \
+  TASK="Execute the ready Plan 125 unit" \
+  PLAN=125 \
+  PLAN_READINESS_COMMAND="/path/to/plan-graph-python /path/to/plan_graph.py" \
+  SESSION_CLAIM_TYPE=write \
+  SESSION_GOAL="Deliver the broader accepted outcome" \
+  SESSION_PHASE="Execute the selected bounded unit" \
+  SESSION_WRITE_PATHS="docs/owned-surface.md" \
+  SESSION_WORK_GRAPH="docs/plans/125_work_graph.json" \
+  SESSION_WORK_UNIT_ID="ready-unit-id"
+```
+
+Use `PLAN_RESUME=1` only when the graph truthfully reports the plan already in
+progress and no live claim owns it. The readiness command is explicit because
+the portable framework does not own or discover a personal plan-graph
+installation. Repositories without selected-outcome enforcement may retain the
+default program claim; `SESSION_CLAIM_TYPE=write` is required when staged
+selection must confer bounded file authority.
+
+Direct plan-bound claim acquisition is not a bypass. Supply `--repo-root`, an
+exact `--start-point`, `--plan`, `--work-graph`, and `--work-unit-id` to the
+canonical `check_coordination_claims.py --claim` entrypoint. It reuses the same
+committed Planning Integrity check and rejects a non-tip new claim, an occupied
+slot, mismatched graph/unit scope, or incomplete plan before mutation.
+
+`observe` mode preserves the nonblocking lane result but must expose the full
+typed findings. `enforce` rejects missing, malformed, unsupported, unreadable,
+or failing inputs. In either mode, `pass` means the declared structural
+frontier conforms. It does **not** establish omitted-area coverage, semantic
+correctness, usefulness, or plan optimality.
 
 ### First-consumer hard outcome admission (explicit source pilot)
 

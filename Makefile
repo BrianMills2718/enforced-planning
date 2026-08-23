@@ -136,7 +136,7 @@ WORKTREE_REPO_ROOT ?= $(shell git rev-parse --path-format=absolute --git-common-
 WORKTREE_START_POINT ?= HEAD
 WORKTREE_START_REVISION := $(shell git -C "$(WORKTREE_REPO_ROOT)" rev-parse --verify "$(WORKTREE_START_POINT)^{commit}" 2>/dev/null)
 WORKTREE_PROJECT ?= $(shell $(PYTHON) "$(WORKTREE_CREATE_SCRIPT)" --repo-root . --print-canonical-project)
-WORKTREE_AGENT ?= $(shell if [ -n "$$CODEX_THREAD_ID" ]; then printf codex; elif [ -n "$$CLAUDE_SESSION_ID" ] || [ -n "$$CLAUDE_CODE_SSE_PORT" ]; then printf claude-code; elif [ -n "$$OPENCLAW_SESSION_ID" ] || [ -n "$$OPENCLAW_RUN_ID" ]; then printf openclaw; fi)
+WORKTREE_AGENT ?= $(shell if [ -n "$$CODEX_THREAD_ID" ]; then printf codex; elif [ -n "$$CLAUDE_CODE_SESSION_ID" ] || [ -n "$$CLAUDE_SESSION_ID" ] || [ -n "$$CLAUDE_CODE_SSE_PORT" ]; then printf claude-code; elif [ -n "$$OPENCLAW_SESSION_ID" ] || [ -n "$$OPENCLAW_RUN_ID" ]; then printf openclaw; fi)
 SESSION_GOAL ?=
 SESSION_PHASE ?=
 SESSION_NEXT ?=
@@ -352,11 +352,33 @@ endif
 	@echo "Claim created for branch $(BRANCH)"
 	@echo "Session contract started for $(SESSION_GOAL)"
 
-maintenance-worktree:  ## Create a claimed light maintenance worktree without a numbered plan
-	@$(MAKE) worktree BRANCH="$(BRANCH)" TASK="$(TASK)" SESSION_GOAL="$(SESSION_GOAL)" \
-		SESSION_PHASE="$(SESSION_PHASE)" AGENT="$(WORKTREE_AGENT)" \
+
+# Defaults that make `make maintenance-worktree BRANCH=<name>` sufficient.
+# The escape hatch this competes with (ALLOW_CANONICAL_CHECKOUT_COMMIT=1) is one
+# variable with zero blanks to fill. Requiring five blanks here is why one
+# session on 2026-08-23 took the hatch six times across two repositories rather
+# than create a single worktree. Every default below stays overridable, and
+# `make worktree` (plan-owned lanes) still requires all of them explicitly --
+# a numbered plan lane should not get its goal invented from a branch name.
+MAINTENANCE_LABEL = $(subst -, ,$(BRANCH))
+MAINTENANCE_TASK = $(if $(strip $(TASK)),$(TASK),Unplanned maintenance: $(MAINTENANCE_LABEL))
+MAINTENANCE_SESSION_GOAL = $(if $(strip $(SESSION_GOAL)),$(SESSION_GOAL),Unplanned maintenance: $(MAINTENANCE_LABEL))
+MAINTENANCE_SESSION_PHASE = $(if $(strip $(SESSION_PHASE)),$(SESSION_PHASE),maintenance)
+MAINTENANCE_AGENT = $(if $(strip $(WORKTREE_AGENT)),$(WORKTREE_AGENT),claude-code)
+
+maintenance-worktree:  ## Claimed light maintenance worktree; BRANCH=<name> is enough
+ifndef BRANCH
+	$(error BRANCH is required. Usage: make maintenance-worktree BRANCH=fix-hook-guard)
+endif
+	@$(MAKE) worktree BRANCH="$(BRANCH)" TASK="$(MAINTENANCE_TASK)" \
+		SESSION_GOAL="$(MAINTENANCE_SESSION_GOAL)" \
+		SESSION_PHASE="$(MAINTENANCE_SESSION_PHASE)" \
+		WORKTREE_AGENT="$(MAINTENANCE_AGENT)" \
 		SESSION_WRITE_PATHS="$(SESSION_WRITE_PATHS)" SESSION_READ_PATHS="$(SESSION_READ_PATHS)" \
 		SESSION_NEXT="$(SESSION_NEXT)" SESSION_DEPENDS="$(SESSION_DEPENDS)" \
+		SESSION_STOP_CONDITIONS="$(SESSION_STOP_CONDITIONS)" SESSION_NOTE="$(SESSION_NOTE)" \
+		SESSION_CLAIM_TYPE="$(SESSION_CLAIM_TYPE)" SESSION_PARENT_SCOPE="$(SESSION_PARENT_SCOPE)" \
+		SESSION_ALLOW_PARALLEL="$(SESSION_ALLOW_PARALLEL)" \
 		WORKTREE_EXECUTION_PROFILE=light ALLOW_UNPLANNED=1
 
 session-start:  ## Create or refresh the active session contract for BRANCH=name

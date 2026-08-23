@@ -1,6 +1,6 @@
 # Plan #125: Planning Integrity Loop
 
-**Status:** In Progress — PI-02 and PI-02B accepted; PI-02C ready; PI-02E waits for runtime plan binding; PI-02D waits for successor custody
+**Status:** In Progress — PI-02 and PI-02B accepted; PI-02C ready through its declared custody-bootstrap phase; PI-02E waits for runtime plan binding; PI-02D waits for successor custody
 **Type:** cross-repository shared-contract implementation
 **Priority:** Critical
 **phase_ref:** "Agentic Engineering first external consumer"
@@ -404,6 +404,68 @@ prewrite, and out-of-scope denial. PI-02E also waits for PI-02C, so the real
 successor selection exercises runtime plan-revision binding rather than
 creating selected state immediately before that control is added.
 
+### Course-correction receipt — runtime authorization reachability
+
+The first PI-02B acceptance graph made PI-02C structurally ready and made
+PI-02E wait for it. Adversarial reachability review rejected that order as
+operationally incomplete: source `enforce_selected` leaves a new PI-02C claim
+at `selection_pending`, while the prepared v4 contract authorizes the
+transition artifacts and documentation paths but not
+`enforced_planning/outcome_selection.py` or its tests. A direct normal PI-02C
+start therefore could attach its tracker but could not authorize any owned
+write. Graph-schema validity was not execution readiness.
+
+PI-02C now declares the missing two-phase entry sequence instead of adding a
+second planner or using unplanned source maintenance. Its restricted,
+write-free bootstrap phase commits an exact v5 scenario, allocation request,
+and v3 disposition request whose immutable scope includes only the PI-02C
+source/test paths plus its Plan-numbered transition artifacts. The normal
+revision-bound PI-02C claim then attaches as `selection_pending`; the existing
+portfolio owners park v3 and allocate/select v5 on that exact claim before the
+first source mutation. Ordinary claim authority and selected scope must both
+admit the target. PI-02E remains the post-PI-02C reselection owner so its later
+selection exercises the newly accepted runtime plan-binding control. It uses
+the same two-phase shape: a restricted bootstrap commits the v6 transition
+inputs, then the normal exact PI-02E claim attaches pending, parks v5, and
+allocates/selects v6 before heartbeat or documentation prewrite may succeed.
+
+### Failure-mode taxonomy reassessment
+
+**Review charter:** The target is Plan 125 after PI-02B; the stage is the first
+source pilot; the next decision is whether the plan can authorize an authentic
+PI-02C source increment and still reach an installed AES consumer. Evidence is
+the normal-Make receipts, exact claims/scopes, PRs 176–179, the selected-outcome
+configuration, and the current work graph. The review excludes fleet rollout,
+the portfolio product choice, and generalized planner hardening. It stops once
+the next executable vertical and any decision-blocking correction are clear.
+
+The taxonomy identifies one observed blocker group: **coherent but
+un-executable** design. Graph validation accepted PI-02C even though its
+runtime authorization state admitted none of its write paths; adversarial
+review then found the same missing bootstrap transition in PI-02E. The
+two-phase v5 and v6 contracts above are the cheapest corrections. Their exact
+falsification is an authentic normal claim that remains denied before selection
+and admits one in-scope target only after the declared allocation/selection
+transition.
+
+The reassessment rejects three tempting expansions. A new planner, automatic
+claim transfer, and a generalized runtime-reachability checker do not improve
+the next PI-02C readout and are not added. The missing checker step-down is a
+real later methodology concern, promoted only before the next Company Planning
+release or a second occurrence outside Plan 125. The session-name repair is not
+treated as case-shaped because an independent negative control changed the
+goal and failed before mutation; exact scope, goal, revision, work unit, and
+session identity remain guarded.
+
+Recent work also reaches the reassessment trigger for process capture: two
+consecutive documentation/graph increments followed the authentic PI-02B
+proof. Therefore the next Plan 125 increment must execute the v5 PI-02C
+bootstrap, selection, and source boundary. Another planning-only increment
+requires a newly reproduced blocker. PI-02E remains conditionally planned from
+PI-02C output, and the plan still stops framework expansion after the installed
+AES projection so independently valuable project rewrites continue as the
+primary stress-test mechanism.
+
 ### External AES stress-test inputs and sequencing
 
 Project Meta main retains four reproduced AES findings as
@@ -434,14 +496,17 @@ revision-bound human-readable planning state through installed AES.
    plan reservation to attach its tracker as `selection_pending`; keep
    heartbeat and prewrite denied until the existing allocation and selection
    owners establish selected state.
-4. **PI-02C — runtime plan binding.** At selected outcome admission, require
-   the immutable outcome contract's baseline revision to pass Planning
-   Integrity for the claim's qualified plan, so continuation is revision-bound.
-5. **PI-02E — successor work-unit custody.** Park the active v3 allocation,
-   allocate and select the revised Plan 125
-   contract on the exact planned successor claim, and prove that the claim
-   can become a healthy revision-bound work-unit lane without bypassing source
-   outcome admission.
+4. **PI-02C — runtime plan binding.** Through its declared restricted
+   custody-bootstrap phase, prepare and select the exact PI-02C claim before
+   source mutation. Then require selected outcome admission to validate the
+   immutable outcome contract's baseline revision against the claim's
+   qualified plan, so continuation is revision-bound.
+5. **PI-02E — successor work-unit custody.** After PI-02C is accepted, use its
+   newly enforced binding through a restricted v6 input-bootstrap phase, then
+   open the normal exact successor claim, park the active v5 allocation, and
+   select the documentation-scoped v6 contract. Prove that claim can become a
+   healthy revision-bound work-unit lane without bypassing source outcome
+   admission.
 6. **PI-02D — operator documentation sync.** From that selected successor lane,
    document exact-revision Planning Integrity at the canonical worktree/claim
    entrypoint and installed first-success path, then pass the focused coupling
@@ -639,6 +704,16 @@ bounded integration decision.
   a model change; PI-03 must prefer that path if exact joining remains honest.
 - The portfolio audit may select a project other than WhyGame; this plan does
   not encode that product decision.
+- The unchanged default branch currently reproduces
+  `tests/test_governed_delivery.py::test_prepare_creates_governed_failing_baseline`
+  because `enforced_planning/outcome_continuation.py` trips the personal-sentinel
+  portability check. It does not invalidate PI-02B's focused boundary, but no
+  repo-wide green-suite or release claim may omit it; resolve or explicitly
+  adjudicate it before provider promotion.
+- The pre-commit dead-code detector reports `tool_available: false` because
+  vulture is absent. Do not claim dead-code validation from that warning; make
+  the tool available or disposition the check at a release boundary where its
+  result protects an actual decision.
 
 ## Rollback And Non-Claims
 

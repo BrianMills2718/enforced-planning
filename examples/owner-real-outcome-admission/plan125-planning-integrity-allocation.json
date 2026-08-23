@@ -1,15 +1,15 @@
 {
   "schema_version": "1.0.0",
   "record_type": "outcome_portfolio_allocation_request",
-  "allocation_id": "plan-125-planning-integrity-allocation-v6",
-  "requested_at": "2026-08-23T04:55:28Z",
+  "allocation_id": "plan-125-planning-integrity-allocation-v7",
+  "requested_at": "2026-08-23T05:10:52Z",
   "project_id": "enforced-planning",
   "scenario_id": "planning-integrity-semantic-admission",
-  "outcome_contract_sha256": "65e1b5d74a69af8224993a1156dd24ac1efbeff46fa016443f5a7469ca327c1e",
+  "outcome_contract_sha256": "e5f5afb49139628b54f409be43039de24147304250e278a530fc835bc3663cf8",
   "outcome_id": "planning-integrity-semantic-admission",
   "outcome_lineage_id": "planning-integrity-semantic-admission",
   "portfolio_class": "maintenance",
-  "decision_ref": "enforced-planning#125-successor-work-unit-custody@b692dd9adc57aff76cdf66c2110ac32a8344e3ed",
-  "purpose": "Select the exact staged PI-02E claim through the merged runtime plan-binding control before operator-documentation mutation.",
-  "stopping_condition": "Park the allocation after PI-02D is accepted and before the installed AES integration opens its separately owned lane."
+  "decision_ref": "enforced-planning#125-bootstrap-identity@51f7869a3ddfaa30b461a0e989251eb246f9e2c5",
+  "purpose": "Select the exact staged PI-02F claim before applying the bootstrap-identity authorization repair to source and focused tests.",
+  "stopping_condition": "Park the allocation after PI-02F is accepted and before the corrected documentation-scoped successor allocation is selected."
 }

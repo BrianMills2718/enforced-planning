@@ -19,7 +19,7 @@ from typing import Any, Literal
 import yaml  # type: ignore[import-untyped]
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from enforced_planning import coordination_claims
+from enforced_planning import coordination_claims, session_contracts
 from enforced_planning.outcome_continuation import canonical_sha256, evaluate_scenario
 from enforced_planning.outcome_selection import (
     OutcomeSelectionError,
@@ -536,10 +536,14 @@ def evaluate_claim_bootstrap_admission(
     """Return bootstrap admission only for an exact target in one safe claim.
 
     None means the claim is not a bootstrap claim and the caller must use
-    selected-outcome admission.  This prevents a mixed or ambiguous claim from
-    acquiring bootstrap authority.
+    selected-outcome admission.  The exact unplanned identity is required in
+    addition to the path allowlist so a qualified planned work unit cannot
+    acquire bootstrap authority merely by owning Plan-numbered transition
+    artifacts.
     """
 
+    if claim.plan_ref != session_contracts.UNPLANNED_PLAN_REF:
+        return None
     write_paths = tuple(claim.write_paths)
     plan_number = infer_first_consumer_bootstrap_plan(write_paths)
     if plan_number is None or target_path not in write_paths:

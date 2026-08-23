@@ -152,6 +152,14 @@ adoption.
    type does not exempt a lane from this lifecycle guard. Related work declares
    `parent_scope`; intentional additional roots require explicit parallel
    authorization.
+9. A new plan-bound lane resolves the canonical default-integration tip once
+   and retains that full revision through its pre-worktree claim, branch,
+   worktree, and session tracker. Only an already-retained lane can resume from
+   a non-tip through session-resume; a `--resume` flag is not provenance for a
+   new claim. The pre-worktree claim intentionally lacks a tracker;
+   session activation must add it or rollback only artifacts named as created
+   by the worktree helper's receipt. Never infer historical revision custody for
+   a running legacy claim.
 
 ## Notes
 

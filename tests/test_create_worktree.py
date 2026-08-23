@@ -11,12 +11,7 @@ import pytest
 import yaml  # type: ignore[import-untyped]
 
 
-MODULE_PATH = (
-    Path(__file__).resolve().parents[1]
-    / "scripts"
-    / "worktree-coordination"
-    / "create_worktree.py"
-)
+MODULE_PATH = Path(__file__).resolve().parents[1] / "scripts" / "worktree-coordination" / "create_worktree.py"
 
 
 def _load_module():
@@ -53,12 +48,10 @@ def _init_temp_repo(repo_root: Path) -> None:
     assert commit_result.returncode == 0, commit_result.stdout + commit_result.stderr
 
 
-
 def _write_claim(claims_dir: Path, name: str, payload: dict) -> None:
     """Write one YAML claim fixture for worktree-enforcement tests."""
     claims_dir.mkdir(parents=True, exist_ok=True)
     (claims_dir / name).write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
-
 
 
 def test_parse_status_porcelain_classifies_split_brain_like() -> None:
@@ -89,7 +82,6 @@ def test_parse_status_porcelain_classifies_split_brain_like() -> None:
     assert module.classify_summary(summary) == "split-brain-like"
 
 
-
 def test_create_worktree_creates_clean_temp_repo_worktree(tmp_path: Path) -> None:
     """The wrapper should create a clean worktree in a temp git repo."""
     module = _load_module()
@@ -115,6 +107,106 @@ def test_create_worktree_creates_clean_temp_repo_worktree(tmp_path: Path) -> Non
     assert cleanup_result.returncode == 0, cleanup_result.stdout + cleanup_result.stderr
     delete_branch = _run_git(repo_root, "branch", "-D", "plan-39-test")
     assert delete_branch.returncode == 0, delete_branch.stdout + delete_branch.stderr
+
+
+def test_create_worktree_reuses_only_branch_at_exact_start_revision(tmp_path: Path) -> None:
+    """A pre-existing branch is recoverable only when it already retains the requested commit."""
+
+    module = _load_module()
+    repo_root = tmp_path / "repo"
+    worktree_path = tmp_path / "repo-worktrees" / "retained-branch"
+    _init_temp_repo(repo_root)
+    revision_a = _run_git(repo_root, "rev-parse", "HEAD").stdout.strip()
+    assert _run_git(repo_root, "branch", "retained-branch", revision_a).returncode == 0
+
+    matched = module.create_worktree(
+        repo_root=repo_root,
+        worktree_path=worktree_path,
+        branch="retained-branch",
+        start_point=revision_a,
+        split_brain_threshold=5,
+        keep_failed_worktree=False,
+    )
+    assert matched.ok
+    assert matched.created_branch is False
+    assert _run_git(worktree_path, "rev-parse", "HEAD").stdout.strip() == revision_a
+    assert _run_git(repo_root, "worktree", "remove", "--force", str(worktree_path)).returncode == 0
+
+    (repo_root / "README.md").write_text("later\n", encoding="utf-8")
+    assert _run_git(repo_root, "commit", "-am", "advance").returncode == 0
+    revision_b = _run_git(repo_root, "rev-parse", "HEAD").stdout.strip()
+    with pytest.raises(ValueError, match="does not match requested start revision"):
+        module.create_worktree(
+            repo_root=repo_root,
+            worktree_path=worktree_path,
+            branch="retained-branch",
+            start_point=revision_b,
+            split_brain_threshold=5,
+            keep_failed_worktree=False,
+        )
+
+    assert not worktree_path.exists()
+    assert _run_git(repo_root, "rev-parse", "retained-branch").stdout.strip() == revision_a
+
+
+def test_plan_bound_claim_for_old_revision_cannot_authorize_new_worktree_without_cli_assertion(
+    tmp_path: Path,
+) -> None:
+    """The helper-resolved revision enforces custody even when the optional assertion is omitted."""
+
+    module = _load_module()
+    repo_root = tmp_path / "repo"
+    worktree_path = tmp_path / "repo-worktrees" / "revision-bound"
+    claims_dir = tmp_path / "claims"
+    _init_temp_repo(repo_root)
+    revision_a = _run_git(repo_root, "rev-parse", "HEAD").stdout.strip()
+    (repo_root / "README.md").write_text("later\n", encoding="utf-8")
+    assert _run_git(repo_root, "commit", "-am", "advance").returncode == 0
+    revision_b = _run_git(repo_root, "rev-parse", "HEAD").stdout.strip()
+    _write_claim(
+        claims_dir,
+        "codex.yaml",
+        {
+            "schema_version": 4,
+            "agent": "codex",
+            "claimed_at": "2026-04-02T08:00:00+00:00",
+            "expires_at": "2099-04-02T09:00:00+00:00",
+            "projects": ["repo"],
+            "scope": "revision-bound",
+            "intent": "Patch docs",
+            "claim_type": "write",
+            "write_paths": ["docs/ops"],
+            "branch": "revision-bound",
+            "worktree_path": str(worktree_path),
+            "session_id": "codex:session",
+            "session_name": "revision-bound",
+            "plan_ref": "repo#1",
+            "work_unit_id": "revision-bound",
+            "work_graph_path": "docs/plans/1_graph.json",
+            "work_graph_sha256": "c" * 64,
+            "start_revision": revision_a,
+            "status": "active",
+        },
+    )
+
+    result = module.create_worktree(
+        repo_root=repo_root,
+        worktree_path=worktree_path,
+        branch="revision-bound",
+        start_point=revision_b,
+        split_brain_threshold=5,
+        keep_failed_worktree=False,
+        require_write_claim=True,
+        claim_agent="codex",
+        claim_project="repo",
+        claim_write_paths=["docs/ops/INDEX.md"],
+        claims_dir=claims_dir,
+    )
+
+    assert not result.ok
+    assert result.classification == "coordination-error"
+    assert f"start_revision={revision_b}" in result.message
+    assert not worktree_path.exists()
 
 
 def test_create_worktree_excludes_required_nested_container_from_canonical_status(
@@ -150,7 +242,6 @@ def test_create_worktree_excludes_required_nested_container_from_canonical_statu
     assert cleanup_result.returncode == 0, cleanup_result.stdout + cleanup_result.stderr
     delete_branch = _run_git(repo_root, "branch", "-D", "plan-39-nested")
     assert delete_branch.returncode == 0, delete_branch.stdout + delete_branch.stderr
-
 
 
 def test_create_worktree_cleans_up_detected_dirty_initial_state(
@@ -193,7 +284,6 @@ def test_create_worktree_cleans_up_detected_dirty_initial_state(
     assert branch_check.returncode != 0
 
 
-
 def test_get_default_worktree_dir_uses_canonical_repo_root_from_worktree(
     tmp_path: Path,
 ) -> None:
@@ -217,7 +307,6 @@ def test_get_default_worktree_dir_uses_canonical_repo_root_from_worktree(
     assert cleanup_result.returncode == 0, cleanup_result.stdout + cleanup_result.stderr
     delete_branch = _run_git(repo_root, "branch", "-D", "plan-42-proof")
     assert delete_branch.returncode == 0, delete_branch.stdout + delete_branch.stderr
-
 
 
 def test_create_worktree_requires_scoped_write_claim_when_enabled(tmp_path: Path) -> None:
@@ -246,7 +335,6 @@ def test_create_worktree_requires_scoped_write_claim_when_enabled(tmp_path: Path
     assert result.classification == "coordination-error"
     assert "no active matching write claim" in result.message
     assert not worktree_path.exists()
-
 
 
 @pytest.mark.parametrize("authorizing_claim_type", ["write", "program"])
@@ -358,7 +446,6 @@ def test_create_worktree_blocks_dirty_main_root_when_required(tmp_path: Path) ->
     assert result.classification == "main-root-dirty"
     assert "canonical main checkout is not clean" in result.message
     assert not worktree_path.exists()
-
 
 
 def test_create_worktree_allows_matching_scoped_write_claim(tmp_path: Path) -> None:

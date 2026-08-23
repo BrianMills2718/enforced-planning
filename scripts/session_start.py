@@ -29,6 +29,7 @@ def _bootstrap_package() -> None:
             bootstrap_upstream_package(current)
             return
     import importlib.util
+
     if importlib.util.find_spec("enforced_planning") is not None:
         return
     raise RuntimeError("Unable to locate local or upstream enforced_planning support")
@@ -63,6 +64,7 @@ def _supported_start_kwargs(args: argparse.Namespace) -> dict[str, Any]:
         "read_paths": args.read_path or None,
         "work_graph_path": args.work_graph,
         "work_unit_id": args.work_unit_id,
+        "start_revision": args.start_revision,
         "intended_next_phases": args.next_phase,
         "depends_on_repos": args.depends_on,
         "requires_shared_infra_changes": args.requires_shared_infra_changes,
@@ -74,6 +76,11 @@ def _supported_start_kwargs(args: argparse.Namespace) -> dict[str, Any]:
     if args.outcome_admission_receipt_path is not None:
         kwargs["outcome_admission_receipt_path"] = args.outcome_admission_receipt_path
     supported = inspect.signature(session_lifecycle.start_session).parameters
+    if args.start_revision is not None and "start_revision" not in supported:
+        raise RuntimeError(
+            "Installed session lifecycle does not support revision custody; "
+            "synchronize enforced-planning support before starting this lane."
+        )
     return {name: value for name, value in kwargs.items() if name in supported}
 
 
@@ -100,6 +107,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--read-path", action="append", default=[])
     parser.add_argument("--work-graph")
     parser.add_argument("--work-unit-id")
+    parser.add_argument(
+        "--start-revision",
+        help="Full immutable Git object ID retained by the plan-bound claim and tracker.",
+    )
     parser.add_argument("--next-phase", action="append", default=[])
     parser.add_argument("--depends-on", action="append", default=[])
     parser.add_argument("--stop-condition", action="append", default=[])

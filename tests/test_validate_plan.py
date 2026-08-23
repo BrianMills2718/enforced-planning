@@ -101,7 +101,9 @@ An operator can start one governed lane from an inspectable complete plan.
 
 ## Capability Adoption
 
-**Disposition: reuse.** Reuse the canonical plan admission seam.
+**Disposition:** reuse
+
+Reuse the canonical plan admission seam.
 
 ## Plan
 
@@ -290,10 +292,7 @@ def test_validate_plan_cli_emits_json_payload(tmp_path: Path) -> None:
     assert payload["required_docs"]["soft"] == ["docs/coupled_soft.md"]
     assert payload["missing_adrs"] == []
     assert payload["landscape"] == {"disposition": None, "references": []}
-    assert any(
-        warning["code"] == "missing_landscape_disposition"
-        for warning in payload["warnings"]
-    )
+    assert any(warning["code"] == "missing_landscape_disposition" for warning in payload["warnings"])
 
 
 def test_validate_plan_module_uses_repo_root_not_scripts_dir() -> None:
@@ -402,15 +401,9 @@ def test_validate_plan_warns_when_prior_session_provenance_lacks_citations(tmp_p
         relationships=module.load_relationships(config_path=config_file),
     )
 
-    assert any(
-        warning["code"] == "missing_research_citations"
-        for warning in result.warnings
-    )
+    assert any(warning["code"] == "missing_research_citations" for warning in result.warnings)
     payload = result.to_payload()
-    assert any(
-        warning["code"] == "missing_research_citations"
-        for warning in payload["warnings"]
-    )
+    assert any(warning["code"] == "missing_research_citations" for warning in payload["warnings"])
 
 
 def test_validate_plan_reports_missing_outcome_first_contract(tmp_path: Path) -> None:
@@ -549,25 +542,28 @@ def test_validate_plan_exempts_design_plan_from_behavioral_contract(tmp_path: Pa
 
 def _landscape_plan(disposition: str, section: str) -> str:
     """Build a structurally valid plan around one landscape test case."""
-    return "\n".join(
-        [
-            "# Landscape Plan",
-            "**Status:** Draft",
-            f"**Landscape disposition:** {disposition}",
-            "",
-            "## Gap",
-            "Current: landscape is implicit. Target: landscape is explicit.",
-            "",
-            "## References Reviewed",
-            "- CLAUDE.md",
-            "",
-            "## Landscape And Prior Art",
-            section,
-            "",
-            "## Acceptance Criteria",
-            "- [ ] Landscape disposition is visible",
-        ]
-    ) + "\n"
+    return (
+        "\n".join(
+            [
+                "# Landscape Plan",
+                "**Status:** Draft",
+                f"**Landscape disposition:** {disposition}",
+                "",
+                "## Gap",
+                "Current: landscape is implicit. Target: landscape is explicit.",
+                "",
+                "## References Reviewed",
+                "- CLAUDE.md",
+                "",
+                "## Landscape And Prior Art",
+                section,
+                "",
+                "## Acceptance Criteria",
+                "- [ ] Landscape disposition is visible",
+            ]
+        )
+        + "\n"
+    )
 
 
 def _validate_landscape(tmp_path: Path, disposition: str, section: str):
@@ -605,9 +601,7 @@ def test_validate_plan_accepts_linked_landscape_and_projects_it_to_json(tmp_path
         "- https://example.com/runtime-prior-art - external comparison",
     )
     assert url_result.landscape_references == ["https://example.com/runtime-prior-art"]
-    assert not [
-        warning for warning in url_result.warnings if "landscape" in warning["code"]
-    ]
+    assert not [warning for warning in url_result.warnings if "landscape" in warning["code"]]
 
 
 def test_validate_plan_warns_when_linked_landscape_has_no_reference(tmp_path: Path) -> None:
@@ -617,10 +611,7 @@ def test_validate_plan_warns_when_linked_landscape_has_no_reference(tmp_path: Pa
         "We discussed the available choices but did not retain a source.",
     )
 
-    assert any(
-        warning["code"] == "missing_landscape_reference"
-        for warning in result.warnings
-    )
+    assert any(warning["code"] == "missing_landscape_reference" for warning in result.warnings)
 
 
 def test_validate_plan_accepts_complete_inline_landscape(tmp_path: Path) -> None:
@@ -641,10 +632,7 @@ def test_validate_plan_warns_when_inline_landscape_omits_implications(tmp_path: 
         "**Alternatives:** adopt, extend, or build.",
     )
 
-    assert any(
-        warning["code"] == "incomplete_inline_landscape"
-        for warning in result.warnings
-    )
+    assert any(warning["code"] == "incomplete_inline_landscape" for warning in result.warnings)
 
 
 def test_validate_plan_accepts_reasoned_trivial_exemption(tmp_path: Path) -> None:
@@ -660,24 +648,15 @@ def test_validate_plan_accepts_reasoned_trivial_exemption(tmp_path: Path) -> Non
 def test_validate_plan_warns_on_bare_trivial_exemption(tmp_path: Path) -> None:
     result = _validate_landscape(tmp_path, "exempt-trivial", "Not needed.")
 
-    assert any(
-        warning["code"] == "weak_landscape_exemption"
-        for warning in result.warnings
-    )
+    assert any(warning["code"] == "weak_landscape_exemption" for warning in result.warnings)
 
 
 def test_validate_plan_warns_on_missing_or_invalid_landscape_disposition(tmp_path: Path) -> None:
     missing = _validate_landscape(tmp_path, "", "**Reason:** no declaration")
     invalid = _validate_landscape(tmp_path, "complete", "**Reason:** unknown state")
 
-    assert any(
-        warning["code"] == "missing_landscape_disposition"
-        for warning in missing.warnings
-    )
-    assert any(
-        warning["code"] == "invalid_landscape_disposition"
-        for warning in invalid.warnings
-    )
+    assert any(warning["code"] == "missing_landscape_disposition" for warning in missing.warnings)
+    assert any(warning["code"] == "invalid_landscape_disposition" for warning in invalid.warnings)
 
 
 def test_file_context_includes_required_reading_defaults(tmp_path: Path) -> None:
@@ -803,7 +782,12 @@ def test_validate_plan_requires_doc_spine_closure_for_managed_surface(tmp_path: 
         authority_config_path=authority_file,
     )
 
-    assert {"docs/plans/55_test.md", "docs/overview/GAP_SUMMARY.md", "EXECUTION_BRIEF.md", "docs/overview/CURRENT_STATE.md"}.issubset(result.missing_strict)
+    assert {
+        "docs/plans/55_test.md",
+        "docs/overview/GAP_SUMMARY.md",
+        "EXECUTION_BRIEF.md",
+        "docs/overview/CURRENT_STATE.md",
+    }.issubset(result.missing_strict)
 
 
 def test_validate_plan_accepts_plan_when_doc_spine_closure_is_cited(tmp_path: Path) -> None:
@@ -890,9 +874,7 @@ def test_planning_integrity_complete_declared_structure_passes() -> None:
         "fully_specifiable_now",
         "exploration_required",
     ]
-    assert result.acceptance_criteria == [
-        "The incomplete plan is rejected before coordination mutation."
-    ]
+    assert result.acceptance_criteria == ["The incomplete plan is rejected before coordination mutation."]
     assert result.coverage_nonclaim == module.PLANNING_INTEGRITY_COVERAGE_NONCLAIM
     assert result.plan_sha256 == hashlib.sha256(plan_bytes).hexdigest()
 
@@ -918,8 +900,7 @@ def test_planning_integrity_complete_declared_structure_passes() -> None:
         ),
         (
             _valid_integrity_plan().replace(
-                "## Acceptance Criteria\n\n"
-                "1. The incomplete plan is rejected before coordination mutation.\n\n",
+                "## Acceptance Criteria\n\n1. The incomplete plan is rejected before coordination mutation.\n\n",
                 "",
             ),
             "missing_acceptance_criteria",
@@ -942,6 +923,68 @@ def test_planning_integrity_malformed_contracts_discriminate(
 
     assert result.disposition == "fail"
     assert expected_code in {item.code for item in result.findings}
+
+
+@pytest.mark.parametrize(
+    ("mutated", "expected_code"),
+    [
+        (
+            _valid_integrity_plan() + "\n## User Outcome\n\nA conflicting later outcome silently replaces nothing.\n",
+            "duplicate_governed_heading",
+        ),
+        (
+            _valid_integrity_plan()
+            + "\n   ## User Outcome ##\n\nA closing-hash heading is still the same governed section.\n",
+            "duplicate_governed_heading",
+        ),
+        (
+            _valid_integrity_plan().replace(
+                "**Failure signal:** Any missing declared field is named before mutation.",
+                "**Failure signal:** Any missing declared field is named before mutation.\n"
+                "**Failure signal:** A second declaration must not be silently accepted.",
+            ),
+            "duplicate_governed_field",
+        ),
+    ],
+)
+def test_planning_integrity_rejects_ambiguous_governed_structure(
+    mutated: str,
+    expected_code: str,
+) -> None:
+    module = _load_module()
+    result = module.evaluate_plan_integrity_bytes(
+        plan_bytes=mutated.encode("utf-8"),
+        plan_path="docs/plans/1_fixture.md",
+        plan_number=1,
+        repository_id="fixture",
+        config=module.PlanningIntegrityConfigV1(mode="enforce"),
+        config_sha256="b" * 64,
+    )
+
+    assert result.disposition == "fail"
+    assert expected_code in {item.code for item in result.findings}
+
+
+def test_planning_integrity_retains_legacy_inline_disposition_compatibility() -> None:
+    """Existing plans may retain the old inline-bold value while templates use the canonical field form."""
+
+    module = _load_module()
+    plan = _valid_integrity_plan().replace(
+        "**Disposition:** reuse\n\nReuse the canonical plan admission seam.",
+        "**Disposition: reuse.** Reuse the canonical plan admission seam.",
+    )
+
+    result = module.evaluate_plan_integrity_bytes(
+        plan_bytes=plan.encode("utf-8"),
+        plan_path="docs/plans/1_fixture.md",
+        plan_number=1,
+        repository_id="fixture",
+        config=module.PlanningIntegrityConfigV1(mode="enforce"),
+        config_sha256="b" * 64,
+    )
+
+    assert result.disposition == "pass"
+    assert result.capability_disposition == "reuse"
 
 
 def test_unfilled_canonical_plan_template_cannot_pass_integrity() -> None:
@@ -994,6 +1037,23 @@ def test_planning_integrity_rejects_coerced_config_types() -> None:
 """
 
     with pytest.raises(module.PlanningIntegrityError, match="minimum_plan_number"):
+        module.parse_planning_integrity_config_bytes(config)
+
+
+@pytest.mark.parametrize("plans_dir", ["/tmp/plans", "../plans", "docs/../../plans", "C:/plans"])
+def test_planning_integrity_rejects_nonportable_plan_directories(plans_dir: str) -> None:
+    module = _load_module()
+    config = (
+        "meta_process:\n"
+        "  plans:\n"
+        f"    plans_dir: {plans_dir}\n"
+        "    integrity:\n"
+        "      mode: enforce\n"
+        "      contract_version: 1.0.0\n"
+        "      minimum_plan_number: 1\n"
+    ).encode()
+
+    with pytest.raises(module.PlanningIntegrityError, match="repository-relative"):
         module.parse_planning_integrity_config_bytes(config)
 
 

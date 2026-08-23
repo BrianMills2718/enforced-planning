@@ -97,7 +97,7 @@
       "initiative_id": "agentic-engineering",
       "goal_id": "planning-integrity-loop",
       "design_revision": "user-approved:codex-session-01a02a1b-a798-78c0-a0ba-b0270bb028d9:2026-08-22",
-      "spec_revision": "plan-125-pi02-revision-custody-v3",
+      "spec_revision": "plan-125-pi02-revision-custody-v4",
       "title": "Enforce revision-bound plan integrity before lane mutation",
       "class": "implementation",
       "objective": "Implement the versioned semantic plan contract, opt-in migration configuration, start-gate join, installation propagation, and focused controls.",
@@ -114,6 +114,9 @@
           "Visible typed findings in observe mode",
           "Unambiguous governed-section and portable path parsing",
           "Worktree-only installed readiness dependency closure",
+          "Ownership-aware start rollback for claims, branches, worktrees, and trackers",
+          "Staged pre-worktree reservation and session activation semantics",
+          "Legacy claim migration truthfulness",
           "Source and installed CLI parity",
           "Canonical installer configuration, plan, worktree, and advisory-config templates",
           "Documentation relationship linkage for the live contract",
@@ -214,7 +217,10 @@
             "Claim, tracker, and worktree HEAD equality assertion",
             "Dirty-working-tree and old-good-revision direct-claim bypass controls",
             "Existing branch/worktree mismatch controls",
-            "Split-revision plan/graph control"
+            "Split-revision plan/graph control",
+            "Pre-existing claim/branch rollback ownership controls",
+            "Injected branch-creation race using the helper ownership receipt",
+            "Legacy v3 claim-with-tracker rejection without fabricated v4 custody"
           ],
           "negative_control": "Explicitly unplanned light work and below-floor historical plans retain documented compatibility."
         },
@@ -254,9 +260,9 @@
       "authorization_mode": "registry_claim",
       "integration_owner_id": "pi-03-aes-installed-dogfood",
       "status": "ready",
-      "record_version": 3,
+      "record_version": 4,
       "created_at": "2026-08-22T22:23:19Z",
-      "updated_at": "2026-08-22T23:36:53Z"
+      "updated_at": "2026-08-23T00:21:31Z"
     },
     {
       "schema_version": "1.0",
@@ -405,7 +411,7 @@
         {
           "kind": "provider_evidence",
           "id": "docs/evidence/plan125_planning_integrity.json",
-          "revision": "c2e5fcd2732ec2fc9b1ac2a89bfa35d9ff7e848a"
+          "revision": "pending: regenerate after the exact PI-02 provider commit"
         },
         {
           "kind": "reassessment_trigger",

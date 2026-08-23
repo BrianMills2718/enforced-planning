@@ -961,13 +961,7 @@ def test_installed_make_denies_incomplete_plan_before_lane_mutation(tmp_path: Pa
 
     scope = f"pi02-denied-{tmp_path.name}"
     worktree_dir = tmp_path / "worktrees"
-    claim_path = (
-        Path.home()
-        / ".claude"
-        / "coordination"
-        / "claims"
-        / f"codex_fixture_{scope}.yaml"
-    )
+    claim_path = Path.home() / ".claude" / "coordination" / "claims" / f"codex_fixture_{scope}.yaml"
     assert not claim_path.exists()
     environment = os.environ.copy()
     environment["CODEX_THREAD_ID"] = f"pi02-installed-{tmp_path.name}"
@@ -984,6 +978,7 @@ def test_installed_make_denies_incomplete_plan_before_lane_mutation(tmp_path: Pa
             "WORKTREE_PROJECT=fixture",
             "PLAN_PROJECT=fixture",
             "PLAN=1",
+            "PLAN_READINESS_COMMAND=python not-reached.py",
             f"WORKTREE_DIR={worktree_dir}",
             "SESSION_WRITE_PATHS=src/feature.py",
         ],
@@ -1006,6 +1001,270 @@ def test_installed_make_denies_incomplete_plan_before_lane_mutation(tmp_path: Pa
         text=True,
     )
     assert branches.stdout.strip() == ""
+
+
+def _installed_planning_make_fixture(tmp_path: Path) -> tuple[dict[str, str], str]:
+    """Install and commit one observed plan lane that can exercise the real Make entrypoint."""
+
+    _write_minimal_claude(tmp_path)
+    installed = _run(
+        "--repo-root",
+        str(tmp_path),
+        "--write",
+        "--strict-governed",
+        "--json",
+        cwd=PROJECT_META_ROOT,
+    )
+    assert installed.returncode == 0, installed.stdout + installed.stderr
+    config_path = tmp_path / "meta-process.yaml"
+    config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    config["meta_process"]["plans"]["integrity"] = {
+        "mode": "observe",
+        "contract_version": "1.0.0",
+        "minimum_plan_number": 1,
+    }
+    config_path.write_text(yaml.safe_dump(config, sort_keys=False), encoding="utf-8")
+    (tmp_path / "docs/plans/1_observed.md").write_text(
+        "# Incomplete observed consumer plan\n",
+        encoding="utf-8",
+    )
+    graph_path = tmp_path / "docs/plans/1_observed_work_graph.json"
+    graph_path.write_text(
+        json.dumps(
+            {
+                "units": [
+                    {
+                        "id": "pi02-installed",
+                        "status": "ready",
+                        "readiness": {
+                            "status": "ready",
+                            "required_approval_types": [],
+                            "approvals": [],
+                            "failed_guards": [],
+                        },
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    query_path = tmp_path / "plan_graph_fixture.py"
+    query_path.write_text(
+        "import json\n"
+        "print(json.dumps({"
+        "'schema_version': '1.0.0', "
+        "'qualified_plan_id': 'fixture#1', "
+        f"'graph_revision': '{'a' * 64}', "
+        "'decision': 'ready', 'blocker_ids': [], 'evidence_refs': ['fixture'], "
+        "'reason': 'installed fixture ready', 'error_code': None}))\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "fail_session.py").write_text(
+        "raise SystemExit('injected session-start failure')\n",
+        encoding="utf-8",
+    )
+    subprocess.run(["git", "init", "-b", "main"], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "Test User"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "add", "."], cwd=tmp_path, check=True)
+    subprocess.run(
+        ["git", "commit", "-m", "installed planning fixture"],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+    )
+    revision = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    isolated_home = tmp_path / "operator-home"
+    isolated_home.mkdir()
+    environment = os.environ.copy()
+    environment["HOME"] = str(isolated_home)
+    environment["PYTHON"] = sys.executable
+    environment["PYTHONPATH"] = os.pathsep.join(path for path in sys.path if path and "site-packages" in path)
+    environment["CODEX_THREAD_ID"] = f"installed-{tmp_path.name}"
+    environment.pop("CLAUDE_SESSION_ID", None)
+    environment.pop("OPENCLAW_SESSION_ID", None)
+    environment.pop("OPENCLAW_RUN_ID", None)
+    return environment, revision
+
+
+def _installed_worktree_make_args(tmp_path: Path, *, scope: str) -> list[str]:
+    """Return the exact installed Make invocation for the revision-custody vertical."""
+
+    return [
+        "make",
+        "worktree",
+        f"PYTHON={sys.executable}",
+        f"BRANCH={scope}",
+        "TASK=Exercise installed revision custody",
+        "SESSION_GOAL=Prove Installed Revision Custody",
+        "SESSION_PHASE=Open exact governed lane",
+        "WORKTREE_AGENT=codex",
+        "WORKTREE_PROJECT=fixture",
+        "PLAN_PROJECT=fixture",
+        "PLAN=1",
+        f"WORKTREE_DIR={tmp_path / 'worktrees'}",
+        "SESSION_WRITE_PATHS=src/feature.py",
+        "SESSION_WORK_GRAPH=docs/plans/1_observed_work_graph.json",
+        "SESSION_WORK_UNIT_ID=pi02-installed",
+        f"PLAN_READINESS_COMMAND={sys.executable} {tmp_path / 'plan_graph_fixture.py'}",
+    ]
+
+
+def test_installed_make_retains_one_revision_across_claim_worktree_and_tracker(
+    tmp_path: Path,
+) -> None:
+    """The authentic installed entrypoint must retain exactly one start commit end to end."""
+
+    environment, revision = _installed_planning_make_fixture(tmp_path)
+    scope = f"pi02-success-{tmp_path.name}"
+    created = subprocess.run(
+        _installed_worktree_make_args(tmp_path, scope=scope),
+        cwd=tmp_path,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert created.returncode == 0, created.stdout + created.stderr
+    assert '"planning_integrity"' in created.stdout
+    assert "missing_epistemic_frontier" in created.stdout
+    claim_path = Path(environment["HOME"]) / ".claude/coordination/claims" / f"codex_fixture_{scope}.yaml"
+    claim = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    tracker_paths = list((Path(environment["HOME"]) / ".claude/coordination/sessions/fixture").glob("*.yaml"))
+    assert len(tracker_paths) == 1
+    tracker = yaml.safe_load(tracker_paths[0].read_text(encoding="utf-8"))
+    worktree = tmp_path / "worktrees" / scope
+    worktree_revision = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=worktree,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    assert claim["schema_version"] == 4
+    assert claim["start_revision"] == revision
+    assert tracker["schema_version"] == 2
+    assert tracker["claim"]["start_revision"] == revision
+    assert worktree_revision == revision
+
+    subprocess.run(
+        ["git", "worktree", "remove", "--force", str(worktree)],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "branch", "-D", scope],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+    )
+    released = subprocess.run(
+        [
+            sys.executable,
+            str(tmp_path / "scripts/meta/check_coordination_claims.py"),
+            "--release",
+            "--agent",
+            "codex",
+            "--project",
+            "fixture",
+            "--scope",
+            scope,
+            "--require-current-session",
+            "--expected-start-revision",
+            revision,
+        ],
+        cwd=tmp_path,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert released.returncode == 0, released.stdout + released.stderr
+
+
+def test_installed_make_session_failure_preserves_preexisting_branch(
+    tmp_path: Path,
+) -> None:
+    """Rollback removes only state this invocation created and releases exact claim custody."""
+
+    environment, revision = _installed_planning_make_fixture(tmp_path)
+    scope = f"pi02-existing-{tmp_path.name}"
+    subprocess.run(["git", "branch", scope, revision], cwd=tmp_path, check=True)
+    failed = subprocess.run(
+        [
+            *_installed_worktree_make_args(tmp_path, scope=scope),
+            f"WORKTREE_SESSION_START_SCRIPT={tmp_path / 'fail_session.py'}",
+        ],
+        cwd=tmp_path,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert failed.returncode != 0
+    branch_revision = subprocess.run(
+        ["git", "rev-parse", scope],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    claim_path = Path(environment["HOME"]) / ".claude/coordination/claims" / f"codex_fixture_{scope}.yaml"
+    assert branch_revision == revision
+    assert not (tmp_path / "worktrees" / scope).exists()
+    assert not claim_path.exists()
+
+
+def test_installed_make_session_failure_preserves_branch_created_during_helper_race(
+    tmp_path: Path,
+) -> None:
+    """Rollback trusts the helper receipt when a branch appears after claim admission."""
+
+    environment, revision = _installed_planning_make_fixture(tmp_path)
+    scope = f"pi02-raced-{tmp_path.name}"
+    wrapper = tmp_path / "race_then_create_worktree.py"
+    wrapper.write_text(
+        "import os, subprocess, sys\n"
+        "args = sys.argv[1:]\n"
+        "def value(flag): return args[args.index(flag) + 1]\n"
+        "subprocess.run(['git', '-C', value('--repo-root'), 'branch', value('--branch'), "
+        "value('--start-point')], check=True)\n"
+        "raise SystemExit(subprocess.call([sys.executable, os.environ['REAL_WORKTREE_CREATE'], "
+        "*args]))\n",
+        encoding="utf-8",
+    )
+    environment["REAL_WORKTREE_CREATE"] = str(tmp_path / "scripts/meta/worktree-coordination/create_worktree.py")
+    failed = subprocess.run(
+        [
+            *_installed_worktree_make_args(tmp_path, scope=scope),
+            f"WORKTREE_CREATE_SCRIPT={wrapper}",
+            f"WORKTREE_SESSION_START_SCRIPT={tmp_path / 'fail_session.py'}",
+        ],
+        cwd=tmp_path,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert failed.returncode != 0
+    branch_revision = subprocess.run(
+        ["git", "rev-parse", scope],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    claim_path = Path(environment["HOME"]) / ".claude/coordination/claims" / f"codex_fixture_{scope}.yaml"
+    assert branch_revision == revision
+    assert not (tmp_path / "worktrees" / scope).exists()
+    assert not claim_path.exists()
 
 
 def test_installed_make_gate_rejects_stale_agents_projection(tmp_path: Path) -> None:
@@ -1365,7 +1624,11 @@ def test_install_governed_repo_syncs_worktree_block_into_existing_meta_makefile(
     assert "PLAN_RESUME ?=" in makefile_text
     assert '--qualified-plan-id "$(PLAN_PROJECT)#$(PLAN)"' in makefile_text
     assert '--repo-root "$(WORKTREE_REPO_ROOT)"' in makefile_text
-    assert '--start-point "$(WORKTREE_START_POINT)"' in makefile_text
+    assert '--start-point "$(WORKTREE_START_REVISION)"' in makefile_text
+    assert "WORKTREE_START_REVISION :=" in makefile_text
+    assert "--require-new" in makefile_text
+    assert "--claim-start-revision" in makefile_text
+    assert "--require-current-session" in makefile_text
     assert "$(if $(PLAN_RESUME),--resume,)" in makefile_text
     assert makefile_text.index('"$(WORKTREE_PLAN_READINESS_SCRIPT)"') < makefile_text.index(
         '"$(WORKTREE_CLAIMS_SCRIPT)" --claim'
@@ -1417,6 +1680,9 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
             "install:enforced_planning/plan_readiness.py",
             "install:enforced_planning/plan_close.py",
             "install:enforced_planning/doc_authority.py",
+            "install:enforced_planning/file_context.py",
+            "install:enforced_planning/notebook_registry_validation.py",
+            "install:enforced_planning/plan_validation.py",
             "install:enforced_planning/push_safety.py",
             "install:enforced_planning/repository_status.py",
             "install:enforced_planning/session_contracts.py",
@@ -1470,6 +1736,14 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
     assert installed_readiness_cli.read_text(encoding="utf-8") == (
         PROJECT_META_ROOT / "scripts" / "check_plan_readiness.py"
     ).read_text(encoding="utf-8")
+    readiness_help = subprocess.run(
+        [sys.executable, str(installed_readiness_cli), "--help"],
+        cwd=str(tmp_path),
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert readiness_help.returncode == 0, readiness_help.stdout + readiness_help.stderr
     assert "PLAN_RESUME ?=" in (tmp_path / "Makefile").read_text(encoding="utf-8")
     assert (tmp_path / "hooks" / "pre-push").exists()
     assert os.access(tmp_path / "hooks" / "pre-push", os.X_OK)
@@ -1625,7 +1899,7 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
             "check",
             str(tmp_path / "enforced_planning"),
             str(tmp_path / "scripts" / "meta"),
-            "--ignore=F401",
+            "--select=E9,F63,F7,F82",
         ],
         cwd=str(PROJECT_META_ROOT),
         capture_output=True,
@@ -1681,9 +1955,7 @@ def test_worktree_rollout_accepts_equivalent_absolute_git_hook_path(
     payload = json.loads(result.stdout)
     assert payload["blockers"] == []
     assert "configure:git.core.hooksPath=hooks" not in payload["applied_actions"]
-    assert _git(tmp_path, "config", "--local", "--get", "core.hooksPath") == str(
-        tmp_path / "hooks"
-    )
+    assert _git(tmp_path, "config", "--local", "--get", "core.hooksPath") == str(tmp_path / "hooks")
     assert os.access(tmp_path / "hooks" / "pre-push", os.X_OK)
 
 
@@ -1934,17 +2206,10 @@ def _write_consumer(root: Path, *, declares_framework: bool) -> None:
     """Create a minimal consumer, with or without a declared framework dependency."""
 
     dependency = (
-        '  "enforced-planning @ git+https://example.invalid/enforced-planning.git@abc",\n'
-        if declares_framework
-        else ""
+        '  "enforced-planning @ git+https://example.invalid/enforced-planning.git@abc",\n' if declares_framework else ""
     )
     (root / "pyproject.toml").write_text(
-        "[project]\n"
-        'name = "consumer"\n'
-        'version = "0.1.0"\n'
-        "dependencies = [\n"
-        f"{dependency}"
-        "]\n",
+        f'[project]\nname = "consumer"\nversion = "0.1.0"\ndependencies = [\n{dependency}]\n',
         encoding="utf-8",
     )
 
@@ -1994,7 +2259,7 @@ def test_declaration_detection_handles_real_requirement_forms(tmp_path: Path) ->
         'version = "0.1.0"\n'
         "dependencies = []\n"
         "[project.optional-dependencies]\n"
-        'dev = ["Enforced_Planning[extra] >=1.0 ; python_version >= \'3.11\'"]\n',
+        "dev = [\"Enforced_Planning[extra] >=1.0 ; python_version >= '3.11'\"]\n",
         encoding="utf-8",
     )
     assert declares_installed_framework(tmp_path) is True

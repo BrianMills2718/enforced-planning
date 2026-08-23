@@ -9,9 +9,44 @@ from types import SimpleNamespace
 import pytest
 
 from enforced_planning import plan_readiness
+from enforced_planning.plan_validation import PlanIntegrityFindingV1, PlanIntegrityResultV1
 
 PLAN_ID = "project-meta#234"
 GRAPH_REVISION = "a" * 64
+START_REVISION = "b" * 40
+
+
+def _integrity_result(
+    *,
+    mode: str = "off",
+    disposition: str = "not_applicable",
+    source_revision: str = START_REVISION,
+    finding_codes: tuple[str, ...] = (),
+) -> PlanIntegrityResultV1:
+    """Build one typed integrity result so nested gate serialization is exercised."""
+
+    return PlanIntegrityResultV1(
+        contract_version="1.0.0",
+        disposition=disposition,
+        repository_id="project-meta",
+        plan_number=234,
+        plan_path="docs/plans/234_fixture.md",
+        plan_sha256="c" * 64,
+        config_sha256="d" * 64,
+        source_revision=source_revision,
+        validator_source_sha256="e" * 64,
+        mode=mode,
+        minimum_plan_number=1,
+        findings=[PlanIntegrityFindingV1(code=code, message=f"fixture {code}") for code in finding_codes],
+        warnings=[],
+        frontier=[],
+        user_outcome=None,
+        canonical_example=None,
+        critical_path_classifications=[],
+        capability_disposition=None,
+        acceptance_criteria=[],
+        reassessment=None,
+    )
 
 
 @pytest.fixture(autouse=True)
@@ -19,12 +54,12 @@ def _default_integrity_off(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         plan_readiness,
         "validate_plan_integrity_at_revision",
-        lambda **_kwargs: SimpleNamespace(
-            mode="off",
-            disposition="not_applicable",
-            source_revision=GRAPH_REVISION,
-            findings=[],
-        ),
+        lambda **_kwargs: _integrity_result(),
+    )
+    monkeypatch.setattr(
+        plan_readiness.coordination_claims,
+        "resolve_default_integration_revision",
+        lambda _root: START_REVISION,
     )
 
 
@@ -253,11 +288,10 @@ def test_enforced_integrity_denies_before_graph_query(monkeypatch: pytest.Monkey
     monkeypatch.setattr(
         plan_readiness,
         "validate_plan_integrity_at_revision",
-        lambda **_kwargs: SimpleNamespace(
+        lambda **_kwargs: _integrity_result(
             mode="enforce",
             disposition="fail",
-            source_revision="b" * 40,
-            findings=[SimpleNamespace(code="missing_epistemic_frontier")],
+            finding_codes=("missing_epistemic_frontier",),
         ),
     )
     monkeypatch.setattr(
@@ -275,11 +309,10 @@ def test_observed_integrity_reports_without_denial(monkeypatch: pytest.MonkeyPat
     monkeypatch.setattr(
         plan_readiness,
         "validate_plan_integrity_at_revision",
-        lambda **_kwargs: SimpleNamespace(
+        lambda **_kwargs: _integrity_result(
             mode="observe",
             disposition="fail",
-            source_revision="b" * 40,
-            findings=[SimpleNamespace(code="missing_epistemic_frontier")],
+            finding_codes=("missing_epistemic_frontier",),
         ),
     )
 
@@ -287,6 +320,9 @@ def test_observed_integrity_reports_without_denial(monkeypatch: pytest.MonkeyPat
 
     assert result.readiness is not None
     assert result.readiness.decision == "ready"
+    assert result.planning_integrity is not None
+    assert result.planning_integrity.disposition == "fail"
+    assert result.planning_integrity.findings[0].code == "missing_epistemic_frontier"
 
 
 def test_qualified_plan_repository_mismatch_fails_before_integrity(

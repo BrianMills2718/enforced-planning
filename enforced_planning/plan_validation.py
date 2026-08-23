@@ -12,7 +12,7 @@ import subprocess
 from collections.abc import Sequence
 from dataclasses import dataclass
 from io import StringIO
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Literal
 from urllib.parse import urlparse
 
@@ -98,6 +98,14 @@ TEMPLATE_ACCEPTANCE_CRITERIA = frozenset(
         "evidence reuse, if any, matches the declared reuse key",
         "docs updated",
     }
+)
+PLANNING_INTEGRITY_GOVERNED_HEADINGS = (
+    "User Outcome",
+    "Canonical Behavioral Example",
+    "Capability Adoption",
+    "Acceptance Criteria",
+    "Epistemic Planning Frontier",
+    "Reassessment Contract",
 )
 
 
@@ -270,9 +278,7 @@ def _numbered_plan_paths_at_revision(
         text=True,
     )
     if completed.returncode != 0:
-        raise PlanningIntegrityError(
-            f"unable to inspect plans at {revision}: {completed.stderr.strip()}"
-        )
+        raise PlanningIntegrityError(f"unable to inspect plans at {revision}: {completed.stderr.strip()}")
     matches: list[str] = []
     for raw_path in completed.stdout.splitlines():
         name = Path(raw_path).name
@@ -294,9 +300,7 @@ def validate_plan_integrity_at_revision(
     root = Path(repo_root).expanduser().resolve()
     resolved = _git_output(root, ["rev-parse", "--verify", f"{start_point}^{{commit}}"], text=True)
     if resolved.returncode != 0:
-        raise PlanningIntegrityError(
-            f"unable to resolve Git start point {start_point!r}: {resolved.stderr.strip()}"
-        )
+        raise PlanningIntegrityError(f"unable to resolve Git start point {start_point!r}: {resolved.stderr.strip()}")
     source_revision = resolved.stdout.strip()
     config_bytes = _git_object_bytes(root, source_revision, "meta-process.yaml")
     config, plans_dir, config_sha256 = parse_planning_integrity_config_bytes(config_bytes)
@@ -425,9 +429,12 @@ def parse_planning_integrity_config_bytes(
     plans_dir = plans.get("plans_dir", "docs/plans")
     if not isinstance(plans_dir, str) or not plans_dir.strip():
         raise PlanningIntegrityError("meta-process.yaml plans.plans_dir must be a non-empty string")
-    normalized_dir = normalize(plans_dir).strip("/")
-    if Path(normalized_dir).is_absolute() or normalized_dir in {"", ".", ".."} or normalized_dir.startswith("../"):
+    portable_dir = normalize(plans_dir).strip()
+    drive_absolute = re.match(r"^[A-Za-z]:/", portable_dir) is not None
+    parts = PurePosixPath(portable_dir).parts
+    if portable_dir.startswith("/") or drive_absolute or portable_dir in {"", ".", ".."} or ".." in parts:
         raise PlanningIntegrityError("meta-process.yaml plans.plans_dir must be repository-relative")
+    normalized_dir = PurePosixPath(portable_dir).as_posix().rstrip("/")
     raw_integrity = plans.get("integrity")
     if raw_integrity is None:
         config = PlanningIntegrityConfigV1()
@@ -467,10 +474,67 @@ def _bold_fields(section: str) -> dict[str, str]:
     for index, match in enumerate(matches):
         key = re.sub(r"[^a-z0-9]+", "_", match.group(1).strip().lower()).strip("_")
         end = matches[index + 1].start() if index + 1 < len(matches) else len(section)
-        continuation = section[match.end():end].strip()
+        continuation = section[match.end() : end].strip()
         value = "\n".join(part for part in (match.group(2).strip(), continuation) if part).strip()
         fields[key] = value
     return fields
+
+
+def _duplicate_bold_field_keys(section: str) -> list[str]:
+    """Return normalized bold-field keys declared more than once."""
+
+    patterns = (
+        re.compile(r"^\s*(?:[-*]\s+)?\*\*([^*:\n]+):\*\*", re.MULTILINE),
+        re.compile(r"^\s*(?:[-*]\s+)?\*\*([^*:\n]+):\s+[^*\n]+\*\*", re.MULTILINE),
+    )
+    declarations: list[tuple[int, str]] = []
+    for pattern in patterns:
+        for match in pattern.finditer(section):
+            key = re.sub(r"[^a-z0-9]+", "_", match.group(1).strip().lower()).strip("_")
+            declarations.append((match.start(), key))
+    seen: set[str] = set()
+    duplicates: set[str] = set()
+    for _position, key in sorted(declarations):
+        if key in seen:
+            duplicates.add(key)
+        seen.add(key)
+    return sorted(duplicates)
+
+
+def _second_level_heading_pattern(heading: str) -> str:
+    """Return one CommonMark-compatible ATX level-two heading pattern."""
+
+    return rf"^[ \t]{{0,3}}##(?!#)[ \t]+{re.escape(heading)}(?:[ \t]+#+)?[ \t]*(?=\r?$)"
+
+
+def _ambiguous_governed_structure_findings(content: str) -> list[PlanIntegrityFindingV1]:
+    """Reject duplicate governed headings or field declarations."""
+
+    findings: list[PlanIntegrityFindingV1] = []
+    for heading in PLANNING_INTEGRITY_GOVERNED_HEADINGS:
+        matches = re.findall(
+            _second_level_heading_pattern(heading),
+            content,
+            flags=re.IGNORECASE | re.MULTILINE,
+        )
+        if len(matches) > 1:
+            findings.append(
+                PlanIntegrityFindingV1(
+                    code="duplicate_governed_heading",
+                    message=f"Governed heading {heading!r} is declared {len(matches)} times.",
+                )
+            )
+            continue
+        section = extract_section(content, heading)
+        duplicate_fields = _duplicate_bold_field_keys(section)
+        if duplicate_fields:
+            findings.append(
+                PlanIntegrityFindingV1(
+                    code="duplicate_governed_field",
+                    message=(f"Governed section {heading!r} repeats field(s): " + ", ".join(duplicate_fields) + "."),
+                )
+            )
+    return findings
 
 
 def _canonical_example(section: str) -> str | None:
@@ -504,7 +568,14 @@ def _explicit_critical_path_classes(content: str) -> list[str]:
 
 def _explicit_capability_disposition(content: str) -> str | None:
     section = extract_section(content, "Capability Adoption")
-    match = re.search(r"^\*\*Disposition:\s*`?([a-z_-]+)", section, re.IGNORECASE | re.MULTILINE)
+    canonical_value = _bold_fields(section).get("disposition", "")
+    match = re.match(r"`?([a-z_-]+)", canonical_value, re.IGNORECASE)
+    if not match:
+        match = re.search(
+            r"^\s*(?:[-*]\s+)?\*\*Disposition:\s*`?([a-z_-]+)",
+            section,
+            re.IGNORECASE | re.MULTILINE,
+        )
     if not match:
         return None
     value = match.group(1).lower().replace("-", "_")
@@ -520,10 +591,7 @@ def _parse_acceptance_criteria(content: str) -> list[str]:
 
     def retain_current() -> None:
         value = " ".join(current).strip()
-        if (
-            _meaningful(value)
-            and value.casefold() not in TEMPLATE_ACCEPTANCE_CRITERIA
-        ):
+        if _meaningful(value) and value.casefold() not in TEMPLATE_ACCEPTANCE_CRITERIA:
             criteria.append(value)
 
     for raw_line in section.splitlines():
@@ -555,29 +623,52 @@ def _parse_frontier(content: str) -> tuple[list[PlanningFrontierEntryV1], list[P
     section = extract_section(content, "Epistemic Planning Frontier")
     findings: list[PlanIntegrityFindingV1] = []
     if not section:
-        return [], [PlanIntegrityFindingV1(code="missing_epistemic_frontier", message="Epistemic Planning Frontier is required.")]
+        return [], [
+            PlanIntegrityFindingV1(
+                code="missing_epistemic_frontier", message="Epistemic Planning Frontier is required."
+            )
+        ]
     headers, rows = _markdown_table(section)
     normalized = [re.sub(r"[^a-z0-9]+", "_", item.lower()).strip("_") for item in headers]
     expected = ["area", "state", "current_contract", "trigger_or_stopping_rule", "downstream_update"]
     if normalized != expected:
-        return [], [PlanIntegrityFindingV1(code="invalid_frontier_headers", message="Frontier headers must be Area, State, Current contract, Trigger or stopping rule, Downstream update.")]
+        return [], [
+            PlanIntegrityFindingV1(
+                code="invalid_frontier_headers",
+                message="Frontier headers must be Area, State, Current contract, Trigger or stopping rule, Downstream update.",
+            )
+        ]
     if not rows:
-        return [], [PlanIntegrityFindingV1(code="missing_frontier_rows", message="Frontier requires at least one authored row.")]
+        return [], [
+            PlanIntegrityFindingV1(code="missing_frontier_rows", message="Frontier requires at least one authored row.")
+        ]
     entries: list[PlanningFrontierEntryV1] = []
     seen: set[str] = set()
     for index, cells in enumerate(rows, start=1):
         if len(cells) != 5 or any(not _meaningful(cell) for cell in cells):
-            findings.append(PlanIntegrityFindingV1(code="invalid_frontier_row", message=f"Frontier row {index} is incomplete or contains a placeholder."))
+            findings.append(
+                PlanIntegrityFindingV1(
+                    code="invalid_frontier_row",
+                    message=f"Frontier row {index} is incomplete or contains a placeholder.",
+                )
+            )
             continue
         area, state, current_contract, trigger, downstream = cells
         normalized_state = state.strip("` ")
         area_key = area.strip().casefold()
         if area_key in seen:
-            findings.append(PlanIntegrityFindingV1(code="duplicate_frontier_area", message=f"Frontier area {area!r} is duplicated."))
+            findings.append(
+                PlanIntegrityFindingV1(code="duplicate_frontier_area", message=f"Frontier area {area!r} is duplicated.")
+            )
             continue
         seen.add(area_key)
         if normalized_state not in PLANNING_FRONTIER_STATES:
-            findings.append(PlanIntegrityFindingV1(code="invalid_frontier_state", message=f"Frontier row {index} has unsupported state {normalized_state!r}."))
+            findings.append(
+                PlanIntegrityFindingV1(
+                    code="invalid_frontier_state",
+                    message=f"Frontier row {index} has unsupported state {normalized_state!r}.",
+                )
+            )
             continue
         entries.append(
             PlanningFrontierEntryV1(
@@ -594,7 +685,9 @@ def _parse_frontier(content: str) -> tuple[list[PlanningFrontierEntryV1], list[P
 def _parse_reassessment(content: str) -> tuple[ReassessmentSummaryV1 | None, list[PlanIntegrityFindingV1]]:
     section = extract_section(content, "Reassessment Contract")
     if not section:
-        return None, [PlanIntegrityFindingV1(code="missing_reassessment_contract", message="Reassessment Contract is required.")]
+        return None, [
+            PlanIntegrityFindingV1(code="missing_reassessment_contract", message="Reassessment Contract is required.")
+        ]
     fields = _bold_fields(section)
     required = {
         "triggers": "triggers",
@@ -605,7 +698,12 @@ def _parse_reassessment(content: str) -> tuple[ReassessmentSummaryV1 | None, lis
     }
     missing = [label for label, key in required.items() if not _meaningful(fields.get(key, ""))]
     if missing:
-        return None, [PlanIntegrityFindingV1(code="invalid_reassessment_contract", message="Reassessment Contract is missing authored fields: " + ", ".join(missing))]
+        return None, [
+            PlanIntegrityFindingV1(
+                code="invalid_reassessment_contract",
+                message="Reassessment Contract is missing authored fields: " + ", ".join(missing),
+            )
+        ]
     return ReassessmentSummaryV1(**{label: fields[key] for label, key in required.items()}), []
 
 
@@ -650,34 +748,72 @@ def evaluate_plan_integrity_bytes(
         )
     findings: list[PlanIntegrityFindingV1] = []
     if config.contract_version != PLANNING_INTEGRITY_CONTRACT_VERSION:
-        findings.append(PlanIntegrityFindingV1(code="unsupported_contract_version", message=f"Unsupported Planning Integrity contract {config.contract_version!r}."))
+        findings.append(
+            PlanIntegrityFindingV1(
+                code="unsupported_contract_version",
+                message=f"Unsupported Planning Integrity contract {config.contract_version!r}.",
+            )
+        )
     if plan_number is None:
-        findings.append(PlanIntegrityFindingV1(code="missing_plan_number", message="Planning Integrity requires a numbered plan identity."))
+        findings.append(
+            PlanIntegrityFindingV1(
+                code="missing_plan_number", message="Planning Integrity requires a numbered plan identity."
+            )
+        )
     if plan_bytes is None or plan_path is None:
-        findings.append(PlanIntegrityFindingV1(code="missing_plan", message="The exact numbered plan is unavailable at the selected revision."))
+        findings.append(
+            PlanIntegrityFindingV1(
+                code="missing_plan", message="The exact numbered plan is unavailable at the selected revision."
+            )
+        )
         content = ""
     else:
         try:
             content = plan_bytes.decode("utf-8")
         except UnicodeDecodeError as exc:
-            findings.append(PlanIntegrityFindingV1(code="invalid_plan_encoding", message=f"Plan is not valid UTF-8: {exc}."))
+            findings.append(
+                PlanIntegrityFindingV1(code="invalid_plan_encoding", message=f"Plan is not valid UTF-8: {exc}.")
+            )
             content = ""
 
+    findings.extend(_ambiguous_governed_structure_findings(content))
     user_outcome = _authored_section(extract_section(content, "User Outcome"))
     if user_outcome is None:
-        findings.append(PlanIntegrityFindingV1(code="missing_user_outcome", message="An authored User Outcome is required."))
+        findings.append(
+            PlanIntegrityFindingV1(code="missing_user_outcome", message="An authored User Outcome is required.")
+        )
     canonical_example = _canonical_example(extract_section(content, "Canonical Behavioral Example"))
     if canonical_example is None:
-        findings.append(PlanIntegrityFindingV1(code="invalid_canonical_behavioral_example", message="Canonical Behavioral Example requires authored starting state, action, expected result, and failure signal."))
+        findings.append(
+            PlanIntegrityFindingV1(
+                code="invalid_canonical_behavioral_example",
+                message="Canonical Behavioral Example requires authored starting state, action, expected result, and failure signal.",
+            )
+        )
     critical_classes = _explicit_critical_path_classes(content)
     if not critical_classes:
-        findings.append(PlanIntegrityFindingV1(code="missing_critical_path_classification", message="Declare one explicit Critical-path classification."))
+        findings.append(
+            PlanIntegrityFindingV1(
+                code="missing_critical_path_classification",
+                message="Declare one explicit Critical-path classification.",
+            )
+        )
     capability_disposition = _explicit_capability_disposition(content)
     if capability_disposition is None:
-        findings.append(PlanIntegrityFindingV1(code="missing_capability_adoption_disposition", message="Capability Adoption requires an explicit supported Disposition."))
+        findings.append(
+            PlanIntegrityFindingV1(
+                code="missing_capability_adoption_disposition",
+                message="Capability Adoption requires an explicit supported Disposition.",
+            )
+        )
     acceptance_criteria = _parse_acceptance_criteria(content)
     if not acceptance_criteria:
-        findings.append(PlanIntegrityFindingV1(code="missing_acceptance_criteria", message="At least one authored Acceptance Criteria item is required."))
+        findings.append(
+            PlanIntegrityFindingV1(
+                code="missing_acceptance_criteria",
+                message="At least one authored Acceptance Criteria item is required.",
+            )
+        )
     frontier, frontier_findings = _parse_frontier(content)
     findings.extend(frontier_findings)
     reassessment, reassessment_findings = _parse_reassessment(content)
@@ -700,7 +836,8 @@ def evaluate_plan_integrity_bytes(
 def extract_section(content: str, heading: str) -> str:
     """Extract one second-level markdown section body by heading name."""
     pattern = re.compile(
-        rf"^##\s*{re.escape(heading)}\s*\n(.*?)(?=^##\s|\Z)",
+        rf"{_second_level_heading_pattern(heading)}\r?\n"
+        rf"(.*?)(?=^[ \t]{{0,3}}##(?!#)[ \t]+|\Z)",
         re.IGNORECASE | re.MULTILINE | re.DOTALL,
     )
     match = pattern.search(content)
@@ -843,12 +980,14 @@ def parse_data_flow(content: str) -> list[dict[str, str]]:
 
         parts = [p.strip() for p in line.split("|")]
         if len(parts) >= 6:
-            flows.append({
-                "producer": parts[2].strip("`"),
-                "producer_schema": parts[3].strip("`"),
-                "consumer": parts[4].strip("`"),
-                "consumer_schema": parts[5].strip("`"),
-            })
+            flows.append(
+                {
+                    "producer": parts[2].strip("`"),
+                    "producer_schema": parts[3].strip("`"),
+                    "consumer": parts[4].strip("`"),
+                    "consumer_schema": parts[5].strip("`"),
+                }
+            )
     return flows
 
 
@@ -904,18 +1043,22 @@ def _parse_research_citations(content: str) -> tuple[list[str], list[dict[str, s
     try:
         loaded = yaml.safe_load(raw_value)
     except yaml.YAMLError:
-        return [], [{
-            "code": "invalid_research_citations",
-            "message": "`research_citations` must parse as a YAML/JSON list of strings.",
-        }]
+        return [], [
+            {
+                "code": "invalid_research_citations",
+                "message": "`research_citations` must parse as a YAML/JSON list of strings.",
+            }
+        ]
 
     if loaded in (None, ""):
         return [], []
     if not isinstance(loaded, list):
-        return [], [{
-            "code": "invalid_research_citations",
-            "message": "`research_citations` must be a list of `agent_memory:<entry_id>` strings.",
-        }]
+        return [], [
+            {
+                "code": "invalid_research_citations",
+                "message": "`research_citations` must be a list of `agent_memory:<entry_id>` strings.",
+            }
+        ]
 
     warnings: list[dict[str, str]] = []
     citations: list[str] = []
@@ -925,10 +1068,12 @@ def _parse_research_citations(content: str) -> tuple[list[str], list[dict[str, s
     for item in loaded:
         value = str(item).strip()
         if not value:
-            warnings.append({
-                "code": "invalid_research_citations",
-                "message": "`research_citations` contains an empty value.",
-            })
+            warnings.append(
+                {
+                    "code": "invalid_research_citations",
+                    "message": "`research_citations` contains an empty value.",
+                }
+            )
             continue
         citations.append(value)
         if value in seen:
@@ -936,19 +1081,20 @@ def _parse_research_citations(content: str) -> tuple[list[str], list[dict[str, s
         else:
             seen.add(value)
         if not RESEARCH_CITATION_RE.match(value):
-            warnings.append({
-                "code": "invalid_research_citation_entry",
-                "message": (
-                    f"`research_citations` entry `{value}` must match "
-                    "`agent_memory:<entry_id>`."
-                ),
-            })
+            warnings.append(
+                {
+                    "code": "invalid_research_citation_entry",
+                    "message": (f"`research_citations` entry `{value}` must match `agent_memory:<entry_id>`."),
+                }
+            )
 
     for duplicate in sorted(duplicates):
-        warnings.append({
-            "code": "duplicate_research_citation",
-            "message": f"`research_citations` contains duplicate entry `{duplicate}`.",
-        })
+        warnings.append(
+            {
+                "code": "duplicate_research_citation",
+                "message": f"`research_citations` contains duplicate entry `{duplicate}`.",
+            }
+        )
 
     return citations, warnings
 
@@ -970,57 +1116,65 @@ def _parse_landscape_contract(
 
     warnings: list[dict[str, str]] = []
     if disposition is None:
-        warnings.append({
-            "code": "missing_landscape_disposition",
-            "message": (
-                "Declare `Landscape disposition` as `linked`, `inline`, or "
-                "`exempt-trivial`; this is report-only during rollout."
-            ),
-        })
+        warnings.append(
+            {
+                "code": "missing_landscape_disposition",
+                "message": (
+                    "Declare `Landscape disposition` as `linked`, `inline`, or "
+                    "`exempt-trivial`; this is report-only during rollout."
+                ),
+            }
+        )
         return None, references, warnings
 
     if disposition not in LANDSCAPE_DISPOSITIONS:
-        warnings.append({
-            "code": "invalid_landscape_disposition",
-            "message": (
-                f"Unknown landscape disposition `{raw_disposition}`; expected "
-                "`linked`, `inline`, or `exempt-trivial`."
-            ),
-        })
+        warnings.append(
+            {
+                "code": "invalid_landscape_disposition",
+                "message": (
+                    f"Unknown landscape disposition `{raw_disposition}`; expected "
+                    "`linked`, `inline`, or `exempt-trivial`."
+                ),
+            }
+        )
         return disposition, references, warnings
 
     if not section:
-        warnings.append({
-            "code": "missing_landscape_section",
-            "message": "The declared landscape disposition requires a `Landscape And Prior Art` section.",
-        })
+        warnings.append(
+            {
+                "code": "missing_landscape_section",
+                "message": "The declared landscape disposition requires a `Landscape And Prior Art` section.",
+            }
+        )
         return disposition, references, warnings
 
     lowered_section = section.lower()
     if disposition == "linked" and not references:
-        warnings.append({
-            "code": "missing_landscape_reference",
-            "message": "A `linked` landscape must retain at least one repo-relative path or HTTP(S) source.",
-        })
+        warnings.append(
+            {
+                "code": "missing_landscape_reference",
+                "message": "A `linked` landscape must retain at least one repo-relative path or HTTP(S) source.",
+            }
+        )
     elif disposition == "inline":
-        missing_labels = [
-            label
-            for label in ("alternatives", "project implications")
-            if label not in lowered_section
-        ]
+        missing_labels = [label for label in ("alternatives", "project implications") if label not in lowered_section]
         if missing_labels:
-            warnings.append({
-                "code": "incomplete_inline_landscape",
-                "message": (
-                    "An `inline` landscape must include explicit `Alternatives` and "
-                    f"`Project implications`; missing: {', '.join(missing_labels)}."
-                ),
-            })
+            warnings.append(
+                {
+                    "code": "incomplete_inline_landscape",
+                    "message": (
+                        "An `inline` landscape must include explicit `Alternatives` and "
+                        f"`Project implications`; missing: {', '.join(missing_labels)}."
+                    ),
+                }
+            )
     elif disposition == "exempt-trivial" and "reason" not in lowered_section:
-        warnings.append({
-            "code": "weak_landscape_exemption",
-            "message": "An `exempt-trivial` landscape must include an explicit `Reason`.",
-        })
+        warnings.append(
+            {
+                "code": "weak_landscape_exemption",
+                "message": "An `exempt-trivial` landscape must include an explicit `Reason`.",
+            }
+        )
 
     return disposition, references, warnings
 
@@ -1086,12 +1240,7 @@ def collect_plan_requirements(
             repo_root=repo_root,
             authority_config_path=authority_config_path,
         )
-        if (
-            not ctx.governance
-            and not ctx.current_arch_docs
-            and not ctx.coupled_docs
-            and not ctx.doc_spine_reads
-        ):
+        if not ctx.governance and not ctx.current_arch_docs and not ctx.coupled_docs and not ctx.doc_spine_reads:
             continue
 
         for adr in ctx.governance:
@@ -1178,26 +1327,15 @@ class ValidationResult:
                 "missing_strict": sorted(self.missing_strict),
                 "missing_soft": sorted(self.missing_soft),
             },
-            "governance": [
-                {"source": source, "adr": adr, "title": title}
-                for source, adr, title in self.governance
-            ],
-            "missing_adrs": [
-                {"adr": adr, "title": title}
-                for adr, title in self.missing_adrs
-            ],
+            "governance": [{"source": source, "adr": adr, "title": title} for source, adr, title in self.governance],
+            "missing_adrs": [{"adr": adr, "title": title} for adr, title in self.missing_adrs],
             "data_flow": self.data_flow,
             "contracts_used": self.contracts_used,
             "tools_used": self.tools_used,
-            "missing_sections": [
-                {"section": name, "reason": reason}
-                for name, reason in self.missing_sections
-            ],
+            "missing_sections": [{"section": name, "reason": reason} for name, reason in self.missing_sections],
             "warnings": self.warnings,
             "plan_integrity": (
-                self.plan_integrity.model_dump(mode="json")
-                if self.plan_integrity is not None
-                else None
+                self.plan_integrity.model_dump(mode="json") if self.plan_integrity is not None else None
             ),
         }
 
@@ -1220,66 +1358,74 @@ def validate_plan(
 
     references = parse_references_reviewed(content)
     research_citations, warnings = _parse_research_citations(content)
-    landscape_disposition, landscape_references, landscape_warnings = (
-        _parse_landscape_contract(content)
-    )
+    landscape_disposition, landscape_references, landscape_warnings = _parse_landscape_contract(content)
     warnings.extend(landscape_warnings)
     plan_type = (_extract_metadata_value(content, "Type") or "implementation").lower()
     if plan_type.startswith("implementation") and landscape_disposition != "exempt-trivial":
         user_outcome = extract_section(content, "User Outcome")
         if len(user_outcome.strip()) < 10:
-            warnings.append({
-                "code": "missing_user_outcome",
-                "message": (
-                    "Non-trivial implementation plans should preserve a plain-language "
-                    "`User Outcome`; supporting infrastructure is not the outcome."
-                ),
-            })
+            warnings.append(
+                {
+                    "code": "missing_user_outcome",
+                    "message": (
+                        "Non-trivial implementation plans should preserve a plain-language "
+                        "`User Outcome`; supporting infrastructure is not the outcome."
+                    ),
+                }
+            )
 
         canonical_example = extract_section(content, "Canonical Behavioral Example")
         if len(canonical_example.strip()) < 10:
-            warnings.append({
-                "code": "missing_canonical_behavioral_example",
-                "message": (
-                    "Non-trivial implementation plans should preserve the smallest "
-                    "representative input, action, and observable result."
-                ),
-            })
+            warnings.append(
+                {
+                    "code": "missing_canonical_behavioral_example",
+                    "message": (
+                        "Non-trivial implementation plans should preserve the smallest "
+                        "representative input, action, and observable result."
+                    ),
+                }
+            )
 
         plan_section = extract_section(content, "Plan").lower()
         if not any(re.search(rf"\b{re.escape(name)}\b", plan_section) for name in CRITICAL_PATH_CLASSES):
-            warnings.append({
-                "code": "missing_critical_path_classification",
-                "message": (
-                    "Classify planned increments as `vertical`, `direct_blocker`, "
-                    "`enabler`, or `hardening` so substrate work cannot silently "
-                    "advance product status."
-                ),
-            })
+            warnings.append(
+                {
+                    "code": "missing_critical_path_classification",
+                    "message": (
+                        "Classify planned increments as `vertical`, `direct_blocker`, "
+                        "`enabler`, or `hardening` so substrate work cannot silently "
+                        "advance product status."
+                    ),
+                }
+            )
 
         capability_adoption = extract_section(content, "Capability Adoption")
         if len(capability_adoption.strip()) < 10:
-            warnings.append({
-                "code": "missing_capability_adoption",
-                "message": (
-                    "Declare whether the change reuses, extends, supersedes, or explicitly "
-                    "excepts an existing capability, or state that no existing capability "
-                    "owns the concern. Implemented substrate is not proof of consumer adoption."
-                ),
-            })
+            warnings.append(
+                {
+                    "code": "missing_capability_adoption",
+                    "message": (
+                        "Declare whether the change reuses, extends, supersedes, or explicitly "
+                        "excepts an existing capability, or state that no existing capability "
+                        "owns the concern. Implemented substrate is not proof of consumer adoption."
+                    ),
+                }
+            )
         else:
             normalized_adoption = capability_adoption.lower().replace("`", "")
             if not any(
                 re.search(rf"\b{re.escape(disposition)}\b", normalized_adoption)
                 for disposition in CAPABILITY_ADOPTION_DISPOSITIONS
             ):
-                warnings.append({
-                    "code": "missing_capability_adoption_disposition",
-                    "message": (
-                        "Capability Adoption must declare one disposition: none, reuse, "
-                        "extend, supersede, or explicit_exception."
-                    ),
-                })
+                warnings.append(
+                    {
+                        "code": "missing_capability_adoption_disposition",
+                        "message": (
+                            "Capability Adoption must declare one disposition: none, reuse, "
+                            "extend, supersede, or explicit_exception."
+                        ),
+                    }
+                )
     uncertainties = parse_uncertainty_register(content)
     covered = {normalize(p) for p in set(affected) | set(references)}
     try:
@@ -1297,9 +1443,7 @@ def validate_plan(
     required_soft_norm = {normalize(p) for p in required_soft}
 
     mentioned_adrs = parse_mentioned_adrs(content)
-    adrs_meta: dict[int, dict[str, Any]] = {
-        int(k): v for k, v in relationships.get("adrs", {}).items()
-    }
+    adrs_meta: dict[int, dict[str, Any]] = {int(k): v for k, v in relationships.get("adrs", {}).items()}
 
     missing_adrs: list[tuple[int, str]] = []
     for adr_num in sorted(adr_nums):
@@ -1331,13 +1475,15 @@ def validate_plan(
             missing_sections.append((section_name, reason))
 
     if not research_citations and _research_provenance_hint_present(content):
-        warnings.append({
-            "code": "missing_research_citations",
-            "message": (
-                "Plan text suggests prior agent-session findings informed this slice, "
-                "but `research_citations` is empty."
-            ),
-        })
+        warnings.append(
+            {
+                "code": "missing_research_citations",
+                "message": (
+                    "Plan text suggests prior agent-session findings informed this slice, "
+                    "but `research_citations` is empty."
+                ),
+            }
+        )
 
     return ValidationResult(
         plan_number=plan_number,
@@ -1440,10 +1586,7 @@ def print_summary(result: ValidationResult) -> None:
     if result.data_flow:
         print(f"\nDATA FLOW DECLARATIONS ({len(result.data_flow)} boundary crossings):")
         for flow in result.data_flow:
-            print(
-                f"  {flow['producer']} ({flow['producer_schema']}) → "
-                f"{flow['consumer']} ({flow['consumer_schema']})"
-            )
+            print(f"  {flow['producer']} ({flow['producer_schema']}) → {flow['consumer']} ({flow['consumer_schema']})")
 
     if result.missing_sections:
         print("\nMISSING PLAN SECTIONS (design sequence enforcement):")
@@ -1512,8 +1655,7 @@ def _apply_acknowledgments(
             result.missing_strict.discard(missing_path)
             continue
         if any(
-            fnmatch.fnmatch(ack_path_glob, missing_path)
-            or fnmatch.fnmatch(missing_path, ack_path_glob)
+            fnmatch.fnmatch(ack_path_glob, missing_path) or fnmatch.fnmatch(missing_path, ack_path_glob)
             for ack_path_glob in acknowledgments
         ):
             acknowledged.add(missing_path)
@@ -1560,9 +1702,7 @@ def main(
     base_repo_root = repo_root or ROOT
     base_plans_dir = plans_dir or (base_repo_root / "docs" / "plans")
 
-    parser = argparse.ArgumentParser(
-        description="Validate a plan against the documentation relationship graph"
-    )
+    parser = argparse.ArgumentParser(description="Validate a plan against the documentation relationship graph")
     parser.add_argument(
         "--repo-root",
         default=str(base_repo_root),

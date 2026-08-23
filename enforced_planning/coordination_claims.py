@@ -72,6 +72,8 @@ CREATION_BLOCKING_HEALTH_ISSUES = {
     "missing_work_unit_id",
     "missing_work_graph_path",
     "missing_work_graph_sha256",
+    "missing_start_revision",
+    "invalid_start_revision",
 }
 DEFAULT_HEARTBEAT_STALE_MINUTES = 120
 DEFAULT_PROGRESS_STALE_MINUTES = 60
@@ -115,6 +117,7 @@ STRICT_NATIVE_SESSION_ENV_KEYS = {
     "openclaw": "OPENCLAW_SESSION_ID",
 }
 GOAL_AUTHORITY_PATTERN = re.compile(r"^goal:[A-Za-z0-9][A-Za-z0-9._:-]*$")
+START_REVISION_PATTERN = re.compile(r"^(?:[0-9a-f]{40}|[0-9a-f]{64})$")
 
 
 class ProgressEventV1(BaseModel):
@@ -150,9 +153,7 @@ class ProgressEventV1(BaseModel):
     @model_validator(mode="after")
     def _validate_quiet_interval(self) -> ProgressEventV1:
         quiet_values = (self.expected_quiet_until, self.quiet_reason)
-        if any(value is not None for value in quiet_values) and not all(
-            value is not None for value in quiet_values
-        ):
+        if any(value is not None for value in quiet_values) and not all(value is not None for value in quiet_values):
             raise ValueError("expected_quiet_until and quiet_reason must be supplied together")
         if self.expected_quiet_until is not None and self.expected_quiet_until <= self.recorded_at:
             raise ValueError("expected_quiet_until must be later than recorded_at")
@@ -329,7 +330,7 @@ def record_claim_mutation(
 
 @dataclass(frozen=True)
 class ClaimRecord:
-    """Normalized coordination claim record used across v1 and v2 schemas."""
+    """Normalized coordination claim record used across readable schema versions."""
 
     agent: str
     claimed_at: str | None
@@ -355,6 +356,7 @@ class ClaimRecord:
     plan_ref: str | None
     source_file: str | None
     schema_version: int
+    start_revision: str | None = None
     work_unit_id: str | None = None
     work_graph_path: str | None = None
     work_graph_sha256: str | None = None
@@ -505,17 +507,18 @@ def claim_health_issues(claim: ClaimRecord) -> list[str]:
                 issues.append("missing_broader_goal")
             if not claim.tracker_path:
                 issues.append("missing_tracker_path")
-        if (
-            claim.schema_version >= 3
-            and claim.write_paths
-            and requires_work_graph(claim.plan_ref)
-        ):
+        if claim.schema_version >= 3 and claim.write_paths and requires_work_graph(claim.plan_ref):
             if not claim.work_unit_id:
                 issues.append("missing_work_unit_id")
             if not claim.work_graph_path:
                 issues.append("missing_work_graph_path")
             if not claim.work_graph_sha256:
                 issues.append("missing_work_graph_sha256")
+        if claim.schema_version >= 4 and claim.write_paths and requires_work_graph(claim.plan_ref):
+            if not claim.start_revision:
+                issues.append("missing_start_revision")
+            elif START_REVISION_PATTERN.fullmatch(claim.start_revision) is None:
+                issues.append("invalid_start_revision")
     return issues
 
 
@@ -804,6 +807,79 @@ def _default_integration_ref(repo_root: Path, default_branch: str) -> str:
     return remote_ref if remote_check.returncode == 0 else f"refs/heads/{default_branch}"
 
 
+def resolve_default_integration_revision(repo_root: Path | str) -> str:
+    """Resolve one full immutable commit for the canonical integration tip."""
+
+    root = Path(repo_root).expanduser().resolve()
+    default_branch = _resolve_default_branch(root)
+    if not default_branch:
+        raise ValueError("Unable to resolve canonical default branch")
+    source_ref = _default_integration_ref(root, default_branch)
+    resolved = _run_git(root, ["rev-parse", "--verify", f"{source_ref}^{{commit}}"])
+    revision = resolved.stdout.strip()
+    if resolved.returncode != 0 or START_REVISION_PATTERN.fullmatch(revision) is None:
+        raise ValueError(f"Unable to resolve full canonical integration revision from {source_ref}")
+    return revision
+
+
+def validate_start_revision_targets(
+    *,
+    repo_root: Path | str,
+    start_revision: str,
+    branch: str | None,
+    worktree_path: str | None,
+    require_branch: bool = False,
+    require_worktree: bool = False,
+) -> None:
+    """Require any existing execution identities to retain one start commit."""
+
+    if START_REVISION_PATTERN.fullmatch(start_revision) is None:
+        raise ValueError("start_revision must be one full lowercase Git object ID")
+    root = Path(repo_root).expanduser().resolve()
+    if branch:
+        branch_format = _run_git(root, ["check-ref-format", "--branch", branch])
+        if branch_format.returncode != 0:
+            raise ValueError(f"invalid claimed branch identity {branch!r}")
+        branch_ref = f"refs/heads/{branch}"
+        branch_check = _run_git(
+            root,
+            ["rev-parse", "--verify", "--quiet", f"{branch_ref}^{{commit}}"],
+        )
+        if branch_check.returncode == 0:
+            if branch_check.stdout.strip() != start_revision:
+                raise ValueError(f"existing branch {branch!r} does not match retained start revision {start_revision}")
+        elif branch_check.returncode != 1:
+            raise ValueError(f"unable to inspect existing branch {branch!r}: {branch_check.stderr.strip()}")
+        elif require_branch:
+            raise ValueError(f"required branch {branch!r} does not exist")
+    elif require_branch:
+        raise ValueError("branch is required for start-revision custody")
+
+    if worktree_path:
+        worktree = Path(worktree_path).expanduser()
+        if worktree.exists():
+            root_common = _run_git(root, ["rev-parse", "--path-format=absolute", "--git-common-dir"])
+            worktree_common = _run_git(worktree, ["rev-parse", "--path-format=absolute", "--git-common-dir"])
+            worktree_revision = _run_git(worktree, ["rev-parse", "--verify", "HEAD^{commit}"])
+            worktree_branch = _run_git(worktree, ["symbolic-ref", "--quiet", "--short", "HEAD"])
+            if (
+                root_common.returncode != 0
+                or worktree_common.returncode != 0
+                or Path(root_common.stdout.strip()).resolve() != Path(worktree_common.stdout.strip()).resolve()
+            ):
+                raise ValueError(f"existing worktree path {worktree} is not attached to the claimed repository")
+            if worktree_revision.returncode != 0 or worktree_revision.stdout.strip() != start_revision:
+                raise ValueError(
+                    f"existing worktree {worktree} does not match retained start revision {start_revision}"
+                )
+            if branch and (worktree_branch.returncode != 0 or worktree_branch.stdout.strip() != branch):
+                raise ValueError(f"existing worktree {worktree} is not attached to claimed branch {branch!r}")
+        elif require_worktree:
+            raise ValueError(f"required worktree path {worktree} does not exist")
+    elif require_worktree:
+        raise ValueError("worktree_path is required for start-revision custody")
+
+
 def _claimed_worktree_has_pending_changes(worktree_path: Path | None) -> bool:
     """Return whether pending tracked or untracked work is positively proven.
 
@@ -1059,6 +1135,8 @@ def validate_claim_for_creation(claim: ClaimRecord) -> None:
         "missing_work_unit_id": "--work-unit-id",
         "missing_work_graph_path": "--work-graph",
         "missing_work_graph_sha256": "a validated canonical work-graph binding",
+        "missing_start_revision": "a validated full --start-point revision",
+        "invalid_start_revision": "a valid full --start-point revision",
     }
     required_flags = [flag_map[item] for item in issues if item in flag_map]
     required_text = ", ".join(required_flags)
@@ -1084,8 +1162,8 @@ def resolve_canonical_work_unit_binding(
     work_graph_path: str,
     work_unit_id: str,
     start_point: str = "HEAD",
-) -> tuple[str, tuple[str, ...]]:
-    """Validate one work unit from the canonical default ref and return its binding."""
+) -> tuple[str, tuple[str, ...], str]:
+    """Validate plan and work unit from one exact commit and return its binding."""
 
     root = Path(repo_root).expanduser().resolve()
     normalized_path = _normalize_repo_path(work_graph_path)
@@ -1106,19 +1184,15 @@ def resolve_canonical_work_unit_binding(
     )
     if integrity.mode == "enforce" and integrity.disposition == "fail":
         finding_codes = ", ".join(item.code for item in integrity.findings)
-        raise ValueError(
-            f"Planning integrity rejected {plan_ref} at {integrity.source_revision}: "
-            f"{finding_codes}"
-        )
+        raise ValueError(f"Planning integrity rejected {plan_ref} at {integrity.source_revision}: {finding_codes}")
+    source_revision = integrity.source_revision
+    if not source_revision or START_REVISION_PATTERN.fullmatch(source_revision) is None:
+        raise ValueError("Planning integrity did not resolve one full Git start revision")
     if not Path(normalized_path).name.startswith(f"{plan_number}_"):
         raise ValueError(f"Work graph {normalized_path!r} does not match {plan_ref}; expected a {plan_number}_ prefix")
-    default_branch = _resolve_default_branch(root)
-    if not default_branch:
-        raise ValueError("Unable to resolve canonical default branch for work-unit validation")
-    source_ref = _default_integration_ref(root, default_branch)
-    rendered = _run_git(root, ["show", f"{source_ref}:{normalized_path}"])
+    rendered = _run_git(root, ["show", f"{source_revision}:{normalized_path}"])
     if rendered.returncode != 0:
-        raise ValueError(f"Canonical work graph {normalized_path!r} is unavailable at {source_ref}")
+        raise ValueError(f"Canonical work graph {normalized_path!r} is unavailable at {source_revision}")
     try:
         payload = json.loads(rendered.stdout)
     except json.JSONDecodeError as exc:
@@ -1179,7 +1253,7 @@ def resolve_canonical_work_unit_binding(
             )
         approval_revisions.append(f"{approval_type}={matching[0]['approved_revision'].strip()}")
     graph_sha256 = hashlib.sha256(rendered.stdout.encode("utf-8")).hexdigest()
-    return graph_sha256, tuple(sorted(approval_revisions))
+    return graph_sha256, tuple(sorted(approval_revisions)), source_revision
 
 
 #: Claude Code registers each live session here as ``<pid>.json`` carrying the
@@ -1438,8 +1512,10 @@ def normalize_claim(data: dict[str, Any], *, source_file: str | None = None) -> 
     raw_status = data.get("status")
     status = raw_status if isinstance(raw_status, str) and raw_status.strip() else "active"
     raw_schema_version = data.get("schema_version")
-    if isinstance(raw_schema_version, int) and raw_schema_version in {1, 2, 3}:
+    if isinstance(raw_schema_version, int) and raw_schema_version in {1, 2, 3, 4}:
         schema_version = raw_schema_version
+    elif "start_revision" in data:
+        schema_version = 4
     elif any(
         key in data
         for key in (
@@ -1501,6 +1577,11 @@ def normalize_claim(data: dict[str, Any], *, source_file: str | None = None) -> 
         plan_ref=data.get("plan_ref") if isinstance(data.get("plan_ref"), str) else None,
         source_file=source_file,
         schema_version=schema_version,
+        start_revision=(
+            data.get("start_revision")
+            if isinstance(data.get("start_revision"), str)
+            else ("" if "start_revision" in data else None)
+        ),
         work_unit_id=data.get("work_unit_id") if isinstance(data.get("work_unit_id"), str) else None,
         work_graph_path=(data.get("work_graph_path") if isinstance(data.get("work_graph_path"), str) else None),
         work_graph_sha256=(data.get("work_graph_sha256") if isinstance(data.get("work_graph_sha256"), str) else None),
@@ -1602,11 +1683,7 @@ def evaluate_claim(candidate: ClaimRecord, *, active_claims: list[ClaimRecord] |
     claims = active_claims if active_claims is not None else check_claims()
     interactions: list[ClaimInteraction] = []
     for other in claims:
-        if (
-            other.agent == candidate.agent
-            and candidate.session_id
-            and other.session_id == candidate.session_id
-        ):
+        if other.agent == candidate.agent and candidate.session_id and other.session_id == candidate.session_id:
             continue
         if not _projects_overlap(candidate, other):
             continue
@@ -1714,6 +1791,7 @@ def build_candidate_claim(
     claimed_at: str | None = None,
     expires_at: str | None = None,
     updated_at: str | None = None,
+    start_revision: str | None = None,
     work_unit_id: str | None = None,
     work_graph_path: str | None = None,
     work_graph_sha256: str | None = None,
@@ -1759,7 +1837,8 @@ def build_candidate_claim(
         notes=notes,
         plan_ref=plan_ref,
         source_file=None,
-        schema_version=3,
+        schema_version=4 if start_revision is not None else 3,
+        start_revision=start_revision,
         work_unit_id=work_unit_id,
         work_graph_path=work_graph_path,
         work_graph_sha256=work_graph_sha256,
@@ -1797,6 +1876,8 @@ def create_claim(
     work_graph_path: str | None = None,
     work_unit_id: str | None = None,
     start_point: str = "HEAD",
+    resume_requested: bool = False,
+    require_new: bool = False,
     allow_parallel: bool = False,
     require_native_session_binding: bool = False,
 ) -> tuple[bool, str]:
@@ -1813,17 +1894,33 @@ def create_claim(
     resolved_claim_type = claim_type or ("write" if write_paths else "program")
     work_graph_sha256: str | None = None
     approval_revisions: tuple[str, ...] = ()
+    start_revision: str | None = None
     if write_paths and requires_work_graph(plan_ref):
         if not repo_root:
             raise ValueError("Plan-bound write ownership requires --repo-root for canonical work-unit validation")
         if not work_graph_path or not work_unit_id:
             raise ValueError("Plan-bound write ownership requires --work-graph and --work-unit-id")
-        work_graph_sha256, approval_revisions = resolve_canonical_work_unit_binding(
+        work_graph_sha256, approval_revisions, start_revision = resolve_canonical_work_unit_binding(
             repo_root=repo_root,
             plan_ref=plan_ref,
             work_graph_path=work_graph_path,
             work_unit_id=work_unit_id,
             start_point=start_point,
+        )
+        default_revision = resolve_default_integration_revision(repo_root)
+        if start_revision != default_revision:
+            raise ValueError(
+                f"new plan-bound claim start revision {start_revision} is not canonical "
+                f"default-integration tip {default_revision}; --resume is not recovery evidence. "
+                "Resume an existing retained lane through session-resume instead."
+            )
+        validate_start_revision_targets(
+            repo_root=repo_root,
+            start_revision=start_revision,
+            branch=branch,
+            worktree_path=worktree_path,
+            require_branch=tracker_path is not None,
+            require_worktree=tracker_path is not None,
         )
     candidate = build_candidate_claim(
         agent=agent,
@@ -1853,6 +1950,7 @@ def create_claim(
         claimed_at=now.isoformat(),
         expires_at=(now + timedelta(hours=ttl_hours)).isoformat(),
         updated_at=now.isoformat(),
+        start_revision=start_revision,
         **_progress_event_payload(initial_progress),
     )
     validate_claim_for_creation(candidate)
@@ -1861,6 +1959,10 @@ def create_claim(
         registry_digest_before = _registry_digest(CLAIMS_DIR)
         claim_path = CLAIMS_DIR / _claim_filename(agent, project, scope)
         if claim_path.exists():
+            if require_new:
+                raise ValueError(
+                    f"Claim slot {project}:{scope} already exists; new-lane creation will not overwrite it"
+                )
             raw_existing = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
             existing = (
                 normalize_claim(raw_existing, source_file=str(claim_path)) if isinstance(raw_existing, dict) else None
@@ -1870,8 +1972,10 @@ def create_claim(
                     "Existing claim is session_ended; use session-resume/takeover "
                     "or sanctioned closeout instead of overwriting it."
                 )
-            if existing and existing.is_live() and (
-                not candidate.session_id or existing.session_id != candidate.session_id
+            if (
+                existing
+                and existing.is_live()
+                and (not candidate.session_id or existing.session_id != candidate.session_id)
             ):
                 owner = existing.session_id or "<missing-session-id>"
                 raise ValueError(
@@ -1899,10 +2003,22 @@ def create_claim(
                 "obligation before deferring the overlapping authority surface."
             )
 
+        if start_revision is not None:
+            validate_start_revision_targets(
+                repo_root=repo_root or "",
+                start_revision=start_revision,
+                branch=branch,
+                worktree_path=worktree_path,
+                require_branch=tracker_path is not None,
+                require_worktree=tracker_path is not None,
+            )
+
         CLAIMS_DIR.mkdir(parents=True, exist_ok=True)
         claim_payload = candidate.to_dict()
         claim_payload.pop("source_file", None)
         claim_payload.pop("project", None)
+        if candidate.start_revision is None:
+            claim_payload.pop("start_revision", None)
         _atomic_write_claim(claim_path, claim_payload)
         _projection_path, projection_digest_after = refresh_prewrite_authority_projection(CLAIMS_DIR)
         record_claim_mutation(
@@ -2119,9 +2235,7 @@ def record_progress_claims(
         claim_file, data, claim = matches[0]
         previous_progress_at = _parse_aware_iso_datetime(claim.progress_at)
         if previous_progress_at is not None and event.recorded_at <= previous_progress_at:
-            raise ValueError(
-                "Progress event timestamp must advance beyond the claim's current progress_at"
-            )
+            raise ValueError("Progress event timestamp must advance beyond the claim's current progress_at")
         expires_at = _parse_aware_iso_datetime(claim.expires_at)
         if expires_at is not None and event.recorded_at > expires_at:
             raise ValueError("Cannot record progress after the claim expiry")
@@ -2137,9 +2251,7 @@ def record_progress_claims(
         data.update(_progress_event_payload(event))
         data["updated_at"] = event.recorded_at.isoformat()
         _atomic_write_claim(claim_file, data)
-        _projection_path, projection_digest_after = refresh_prewrite_authority_projection(
-            resolved_claims_dir
-        )
+        _projection_path, projection_digest_after = refresh_prewrite_authority_projection(resolved_claims_dir)
         record_claim_mutation(
             # `session_upsert` is the backward-compatible typed ledger class for
             # additive claim/session state. Adding a new closed Literal would
@@ -2220,8 +2332,15 @@ def end_session_claims(
     return len(ended_labels), sorted(ended_labels), resolved_session_id, ended_at
 
 
-def release_claim(agent: str, project: str, scope: str) -> tuple[bool, str]:
-    """Release an existing claim."""
+def release_claim(
+    agent: str,
+    project: str,
+    scope: str,
+    *,
+    expected_session_id: str | None = None,
+    expected_start_revision: str | None = None,
+) -> tuple[bool, str]:
+    """Release an existing claim, optionally guarded by exact custody."""
     filename = _claim_filename(agent, project, scope)
     path = CLAIMS_DIR / filename
     with claim_registry_lock(CLAIMS_DIR):
@@ -2229,6 +2348,12 @@ def release_claim(agent: str, project: str, scope: str) -> tuple[bool, str]:
             registry_digest_before = _registry_digest(CLAIMS_DIR)
             raw = yaml.safe_load(path.read_text(encoding="utf-8"))
             claim = normalize_claim(raw, source_file=str(path)) if isinstance(raw, dict) else None
+            if expected_session_id is not None and (claim is None or claim.session_id != expected_session_id):
+                raise ValueError(f"Refusing to release {project}:{scope}: session custody changed")
+            if expected_start_revision is not None and (
+                claim is None or claim.start_revision != expected_start_revision
+            ):
+                raise ValueError(f"Refusing to release {project}:{scope}: start-revision custody changed")
             path.unlink()
             _projection_path, projection_digest_after = refresh_prewrite_authority_projection(CLAIMS_DIR)
             record_claim_mutation(
@@ -2629,6 +2754,28 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default="HEAD",
         help="Exact Git start point whose committed plan/config bytes must pass admission.",
     )
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help=(
+            "Mark a plan-state resume attempt; this does not authorize a new non-tip claim. "
+            "Use session-resume for an existing retained lane."
+        ),
+    )
+    parser.add_argument(
+        "--require-new",
+        action="store_true",
+        help="Reject an occupied claim slot instead of refreshing it.",
+    )
+    parser.add_argument(
+        "--expected-start-revision",
+        help="Guard release on the exact retained Git start revision.",
+    )
+    parser.add_argument(
+        "--require-current-session",
+        action="store_true",
+        help="Guard release on the native session identity of the current agent runtime.",
+    )
     parser.add_argument("--session-id", help="Session identifier")
     parser.add_argument("--progress-kind", choices=sorted(PROGRESS_KINDS), help="Durable progress kind")
     parser.add_argument("--evidence-ref", help="Non-empty durable evidence reference")
@@ -2638,6 +2785,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--session-name",
         help="Human-readable broader-goal session name; required for live program/write/research claims",
+    )
+    parser.add_argument(
+        "--broader-goal",
+        help="Human-readable outcome that the claimed session advances.",
     )
     parser.add_argument("--status", default="active", help="Claim status (default: active)")
     parser.add_argument("--parent-scope", help="Parent/broad-scope identifier")
@@ -2772,6 +2923,7 @@ def main(argv: list[str] | None = None) -> int:
                 repo_root=args.repo_root,
                 branch=args.branch,
                 session_name=args.session_name,
+                broader_goal=args.broader_goal,
                 session_id=args.session_id,
                 status=args.status,
                 parent_scope=args.parent_scope,
@@ -2841,8 +2993,7 @@ def main(argv: list[str] | None = None) -> int:
             ]
         ):
             raise SystemExit(
-                "--progress requires --agent, --project, --scope, --progress-kind, "
-                "--evidence-ref, and --next-action"
+                "--progress requires --agent, --project, --scope, --progress-kind, --evidence-ref, and --next-action"
             )
         try:
             claim, event = record_progress_claims(
@@ -2899,6 +3050,7 @@ def main(argv: list[str] | None = None) -> int:
                 repo_root=args.repo_root,
                 branch=args.branch,
                 session_name=args.session_name,
+                broader_goal=args.broader_goal,
                 session_id=args.session_id,
                 status=args.status,
                 parent_scope=args.parent_scope,
@@ -2906,6 +3058,8 @@ def main(argv: list[str] | None = None) -> int:
                 work_graph_path=args.work_graph,
                 work_unit_id=args.work_unit_id,
                 start_point=args.start_point,
+                resume_requested=args.resume,
+                require_new=args.require_new,
                 allow_parallel=args.allow_parallel,
                 require_native_session_binding=True,
             )
@@ -2927,9 +3081,31 @@ def main(argv: list[str] | None = None) -> int:
         if not all([args.agent, args.project, args.scope]):
             raise SystemExit("--release requires --agent, --project, --scope")
         try:
-            ok, msg = release_claim(args.agent, args.project, args.scope)
+            expected_session_id = args.session_id
+            if args.require_current_session:
+                expected_session_id = resolve_session_id(args.agent, args.session_id)
+                if not expected_session_id:
+                    raise ValueError("Unable to resolve current native session identity for guarded release")
+                validate_native_session_binding(
+                    args.agent,
+                    expected_session_id,
+                    require_native_marker=True,
+                )
+            ok, msg = release_claim(
+                args.agent,
+                args.project,
+                args.scope,
+                expected_session_id=expected_session_id,
+                expected_start_revision=args.expected_start_revision,
+            )
         except MutationAuditError as exc:
             return _render_mutation_audit_failure(exc, as_json=args.json)
+        except ValueError as exc:
+            if args.json:
+                print(json.dumps({"ok": False, "message": str(exc)}, indent=2))
+            else:
+                print(str(exc))
+            return 1
         if args.json:
             print(json.dumps({"ok": ok, "message": msg}, indent=2))
         else:

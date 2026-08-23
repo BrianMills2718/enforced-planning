@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import json
+import importlib.util
 import subprocess
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 import yaml
@@ -46,6 +48,263 @@ def _git(cwd: Path, *args: str) -> str:
     )
     assert result.returncode == 0, result.stderr or result.stdout
     return result.stdout.strip()
+
+
+def test_session_start_wrapper_rejects_stale_lifecycle_revision_contract(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A new wrapper must not silently discard custody when installed support is stale."""
+
+    module_path = Path(__file__).resolve().parents[1] / "scripts" / "session_start.py"
+    spec = importlib.util.spec_from_file_location("session_start_revision_contract_test", module_path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    args = module.parse_args(
+        [
+            "--agent",
+            "codex",
+            "--project",
+            "demo",
+            "--scope",
+            "lane",
+            "--intent",
+            "test stale support",
+            "--repo-root",
+            "/tmp/demo",
+            "--worktree-path",
+            "/tmp/demo/worktrees/lane",
+            "--branch",
+            "lane",
+            "--broader-goal",
+            "Test stale support",
+            "--current-phase",
+            "fixture",
+            "--start-revision",
+            "a" * 40,
+        ]
+    )
+    monkeypatch.setattr(module.inspect, "signature", lambda _callable: SimpleNamespace(parameters={}))
+
+    with pytest.raises(RuntimeError, match="does not support revision custody"):
+        module._supported_start_kwargs(args)
+
+
+def test_session_start_preserves_existing_revision_custody_and_rolls_back_mismatch(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The claim-to-tracker handoff retains A and cannot be refreshed to caller-supplied B."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    repo_root = tmp_path / "repo"
+    worktree = repo_root / "worktrees" / "revision-lane"
+    repo_root.mkdir()
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    monkeypatch.delenv("CODEX_THREAD_ID", raising=False)
+    _git(repo_root, "init", "-b", "main")
+    _git(repo_root, "config", "user.email", "tests@example.com")
+    _git(repo_root, "config", "user.name", "Test User")
+    (repo_root / "docs/plans").mkdir(parents=True)
+    (repo_root / "meta-process.yaml").write_text(
+        'meta_process:\n  plans:\n    integrity:\n      mode: "off"\n',
+        encoding="utf-8",
+    )
+    graph_path = repo_root / "docs/plans/1_revision_work_graph.json"
+    graph_path.write_text(
+        json.dumps(
+            {
+                "units": [
+                    {
+                        "id": "revision-lane",
+                        "status": "ready",
+                        "readiness": {
+                            "status": "ready",
+                            "required_approval_types": [],
+                            "approvals": [],
+                            "failed_guards": [],
+                        },
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    _git(repo_root, "add", ".")
+    _git(repo_root, "commit", "-m", "revision-bound plan")
+    revision_a = _git(repo_root, "rev-parse", "HEAD")
+    _git(repo_root, "worktree", "add", "-b", "revision-lane", str(worktree), revision_a)
+
+    created, _message = coordination_claims.create_claim(
+        agent="codex",
+        project="demo",
+        scope="revision-lane",
+        intent="retain one exact lane revision",
+        plan_ref="demo#1",
+        claim_type="write",
+        write_paths=["src/feature.py"],
+        repo_root=str(repo_root),
+        worktree_path=str(worktree),
+        branch="revision-lane",
+        session_id="codex:revision-owner",
+        session_name="retain-one-revision",
+        broader_goal="Retain One Revision",
+        work_graph_path="docs/plans/1_revision_work_graph.json",
+        work_unit_id="revision-lane",
+        start_point=revision_a,
+    )
+    assert created
+
+    started = session_lifecycle.start_session(
+        agent="codex",
+        project="demo",
+        scope="revision-lane",
+        intent="retain one exact lane revision",
+        repo_root=str(repo_root),
+        worktree_path=str(worktree),
+        branch="revision-lane",
+        broader_goal="Retain One Revision",
+        current_phase="bind tracker",
+        plan_ref="demo#1",
+        session_id="codex:revision-owner",
+        claim_type="write",
+        write_paths=["src/feature.py"],
+        work_graph_path="docs/plans/1_revision_work_graph.json",
+        work_unit_id="revision-lane",
+        start_revision=revision_a,
+        tracker_dir=trackers_dir,
+    )
+    claim_path = claims_dir / "codex_demo_revision-lane.yaml"
+    tracker_path = Path(started["tracker_path"])
+    claim_payload = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    tracker_payload = yaml.safe_load(tracker_path.read_text(encoding="utf-8"))
+    assert claim_payload["schema_version"] == 4
+    assert claim_payload["start_revision"] == revision_a
+    assert tracker_payload["schema_version"] == 2
+    assert tracker_payload["claim"]["start_revision"] == revision_a
+    claim_before = claim_path.read_bytes()
+    tracker_before = tracker_path.read_bytes()
+
+    with pytest.raises(ValueError, match="retains start revision"):
+        session_lifecycle.start_session(
+            agent="codex",
+            project="demo",
+            scope="revision-lane",
+            intent="attempt revision drift",
+            repo_root=str(repo_root),
+            worktree_path=str(worktree),
+            branch="revision-lane",
+            broader_goal="Retain One Revision",
+            current_phase="attempt drift",
+            plan_ref="demo#1",
+            session_id="codex:revision-owner",
+            claim_type="write",
+            write_paths=["src/feature.py"],
+            work_graph_path="docs/plans/1_revision_work_graph.json",
+            work_unit_id="revision-lane",
+            start_revision="b" * 40,
+            tracker_dir=trackers_dir,
+        )
+
+    assert claim_path.read_bytes() == claim_before
+    assert tracker_path.read_bytes() == tracker_before
+
+
+def test_session_start_does_not_invent_revision_custody_for_running_legacy_claim(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A v3 claim with a tracker is historical evidence, not an upgradeable reservation."""
+
+    claims_dir = tmp_path / "claims"
+    repo_root = tmp_path / "repo"
+    worktree = repo_root / "worktrees" / "legacy-running-lane"
+    repo_root.mkdir()
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    monkeypatch.delenv("CODEX_THREAD_ID", raising=False)
+    _git(repo_root, "init", "-b", "main")
+    _git(repo_root, "config", "user.email", "tests@example.com")
+    _git(repo_root, "config", "user.name", "Test User")
+    (repo_root / "docs/plans").mkdir(parents=True)
+    (repo_root / "meta-process.yaml").write_text(
+        'meta_process:\n  plans:\n    integrity:\n      mode: "off"\n',
+        encoding="utf-8",
+    )
+    (repo_root / "docs/plans/1_revision_work_graph.json").write_text(
+        json.dumps(
+            {
+                "units": [
+                    {
+                        "id": "legacy-running-lane",
+                        "status": "ready",
+                        "readiness": {
+                            "status": "ready",
+                            "required_approval_types": [],
+                            "approvals": [],
+                            "failed_guards": [],
+                        },
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    _git(repo_root, "add", ".")
+    _git(repo_root, "commit", "-m", "legacy revision-bound plan")
+    revision = _git(repo_root, "rev-parse", "HEAD")
+    _git(repo_root, "worktree", "add", "-b", "legacy-running-lane", str(worktree), revision)
+
+    created, _message = coordination_claims.create_claim(
+        agent="codex",
+        project="demo",
+        scope="legacy-running-lane",
+        intent="represent an already-running legacy lane",
+        plan_ref="demo#1",
+        claim_type="write",
+        write_paths=["src/feature.py"],
+        repo_root=str(repo_root),
+        worktree_path=str(worktree),
+        branch="legacy-running-lane",
+        session_id="codex:legacy-owner",
+        session_name="legacy-running-lane",
+        broader_goal="Preserve Historical Claim Truth",
+        tracker_path=str(tmp_path / "sessions" / "legacy.yaml"),
+        work_graph_path="docs/plans/1_revision_work_graph.json",
+        work_unit_id="legacy-running-lane",
+        start_point=revision,
+    )
+    assert created
+    claim_path = claims_dir / "codex_demo_legacy-running-lane.yaml"
+    legacy_payload = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    legacy_payload["schema_version"] = 3
+    legacy_payload.pop("start_revision")
+    claim_path.write_text(yaml.safe_dump(legacy_payload, sort_keys=False), encoding="utf-8")
+    claim_before = claim_path.read_bytes()
+
+    with pytest.raises(ValueError, match="refusing to invent historical revision custody"):
+        session_lifecycle._upsert_session_claim(
+            agent="codex",
+            project="demo",
+            scope="legacy-running-lane",
+            intent="attempt an unsupported historical upgrade",
+            plan_ref="demo#1",
+            repo_root=str(repo_root),
+            worktree_path=str(worktree),
+            branch="legacy-running-lane",
+            session_id="codex:legacy-owner",
+            broader_goal="Preserve Historical Claim Truth",
+            session_name="legacy-running-lane",
+            tracker_path=str(tmp_path / "sessions" / "legacy.yaml"),
+            claim_type="write",
+            write_paths=["src/feature.py"],
+            work_graph_path="docs/plans/1_revision_work_graph.json",
+            work_unit_id="legacy-running-lane",
+            start_revision=revision,
+        )
+
+    assert claim_path.read_bytes() == claim_before
 
 
 def _real_repo_with_worktree(
@@ -602,7 +861,17 @@ def test_start_session_creates_parented_child_and_rejects_second_root(
     monkeypatch.setattr(
         coordination_claims,
         "resolve_canonical_work_unit_binding",
-        lambda **_kwargs: ("a" * 64, ()),
+        lambda **_kwargs: ("a" * 64, (), "b" * 40),
+    )
+    monkeypatch.setattr(
+        coordination_claims,
+        "resolve_default_integration_revision",
+        lambda _root: "b" * 40,
+    )
+    monkeypatch.setattr(
+        coordination_claims,
+        "validate_start_revision_targets",
+        lambda **_kwargs: None,
     )
     common = {
         "project": "onto-canon6",
@@ -638,6 +907,7 @@ def test_start_session_creates_parented_child_and_rejects_second_root(
         parent_scope="plan0141-root",
         work_graph_path="docs/plans/141_fixture_work_graph.json",
         work_unit_id="plan0141-review",
+        start_revision="b" * 40,
         **common,
     )
 
@@ -2245,9 +2515,7 @@ def test_handoff_session_marks_lane_for_resume(
     )
     claim_path = claims_dir / "codex_enforced-planning_plan-37-session-recovery.yaml"
     before_handoff = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
-    progress_before = {
-        field: before_handoff.get(field) for field in coordination_claims.PROGRESS_FIELD_NAMES
-    }
+    progress_before = {field: before_handoff.get(field) for field in coordination_claims.PROGRESS_FIELD_NAMES}
 
     payload = session_lifecycle.handoff_session(
         agent="codex",

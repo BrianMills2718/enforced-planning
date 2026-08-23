@@ -21,7 +21,7 @@ from typing import Any
 import yaml  # type: ignore[import-untyped]
 
 DEFAULT_SESSION_TRACKERS_DIR = Path.home() / ".claude" / "coordination" / "sessions"
-SESSION_TRACKER_SCHEMA_VERSION = 1
+SESSION_TRACKER_SCHEMA_VERSION = 2
 UNPLANNED_PLAN_REF = "UNPLANNED"
 
 CLAIM_FIELD_NAMES = (
@@ -37,6 +37,7 @@ CLAIM_FIELD_NAMES = (
     "session_name",
     "broader_goal",
     "tracker_path",
+    "start_revision",
 )
 
 TRACKER_ONLY_FIELD_NAMES = (
@@ -128,6 +129,7 @@ class SessionContract:
     session_name: str
     broader_goal: str
     tracker_path: str | None = None
+    start_revision: str | None = None
 
     @classmethod
     def build(
@@ -145,6 +147,7 @@ class SessionContract:
         plan_ref: str | None = None,
         session_name: str | None = None,
         tracker_path: str | None = None,
+        start_revision: str | None = None,
         allow_unplanned: bool = False,
     ) -> SessionContract:
         """Build a validated session contract from bootstrap inputs."""
@@ -159,6 +162,9 @@ class SessionContract:
                 broader_goal=broader_goal_text,
             )
 
+        if start_revision is not None and re.fullmatch(r"(?:[0-9a-f]{40}|[0-9a-f]{64})", start_revision) is None:
+            raise ValueError("start_revision must be one full lowercase Git object ID")
+
         return cls(
             agent=_require_text(agent, field_name="agent"),
             project=_require_text(project, field_name="project"),
@@ -172,6 +178,7 @@ class SessionContract:
             session_name=session_name_text,
             broader_goal=broader_goal_text,
             tracker_path=tracker_path.strip() if isinstance(tracker_path, str) and tracker_path.strip() else None,
+            start_revision=start_revision,
         )
 
     def with_tracker_path(self, tracker_path: str) -> SessionContract:
@@ -182,7 +189,7 @@ class SessionContract:
     def claim_fields(self) -> dict[str, str]:
         """Return only the claim-critical contract fields."""
 
-        return {
+        fields = {
             "agent": self.agent,
             "project": self.project,
             "scope": self.scope,
@@ -196,6 +203,9 @@ class SessionContract:
             "broader_goal": self.broader_goal,
             "tracker_path": self.tracker_path or "",
         }
+        if self.start_revision is not None:
+            fields["start_revision"] = self.start_revision
+        return fields
 
 
 @dataclass(frozen=True)
@@ -272,6 +282,7 @@ def build_session_tracker(
         notes=notes.strip() if isinstance(notes, str) and notes.strip() else None,
         created_at=timestamp,
         updated_at=timestamp,
+        schema_version=SESSION_TRACKER_SCHEMA_VERSION if contract.start_revision is not None else 1,
     )
 
 
@@ -355,9 +366,7 @@ def write_session_tracker(
                     raise TypeError(f"Session tracker at {path} has invalid {field} metadata")
                 custody[field] = value
             if custody and "outcome_selection" not in custody:
-                raise TypeError(
-                    f"Session tracker at {path} has outcome custody history without outcome_selection"
-                )
+                raise TypeError(f"Session tracker at {path} has outcome custody history without outcome_selection")
             if custody:
                 current_claim = current_payload.get("claim")
                 next_claim = next_payload.get("claim")
@@ -373,6 +382,7 @@ def write_session_tracker(
                     "branch",
                     "session_id",
                     "tracker_path",
+                    "start_revision",
                 )
                 path_identity_fields = {"repo_root", "worktree_path", "tracker_path"}
 

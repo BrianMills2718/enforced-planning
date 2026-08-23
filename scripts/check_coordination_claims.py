@@ -45,6 +45,7 @@ ClaimCheckResult = _impl.ClaimCheckResult
 _claim_filename = _impl._claim_filename
 _normalize_repo_path = _impl._normalize_repo_path
 _paths_overlap = _impl._paths_overlap
+requires_work_graph = _impl.requires_work_graph
 
 
 def _sync_runtime_config() -> None:

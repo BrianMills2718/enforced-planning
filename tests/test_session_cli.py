@@ -2252,6 +2252,47 @@ def test_close_session_keeps_canonical_root_after_worktree_removal(
     assert repo_root.exists()
 
 
+def test_close_session_recovers_from_stale_repo_root_using_recorded_worktree(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A retry must use the worktree's Git lineage after stale root metadata."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    repo_root, worktree, branch = _real_repo_with_worktree(tmp_path)
+    claim_file = _start_real_closeout_claim(
+        repo_root=repo_root,
+        worktree=worktree,
+        branch=branch,
+        claims_dir=claims_dir,
+        trackers_dir=trackers_dir,
+    )
+    _git(repo_root, "merge", "--no-ff", branch, "-m", "merge feature")
+
+    stale_repo_root = tmp_path / "unrelated-repo"
+    stale_repo_root.mkdir()
+    _git(stale_repo_root, "init", "-b", "main")
+    claim_payload = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
+    claim_payload["repo_root"] = str(stale_repo_root)
+    claim_payload["status"] = "closing"
+    claim_file.write_text(yaml.safe_dump(claim_payload, sort_keys=False), encoding="utf-8")
+
+    payload = session_lifecycle.close_session(
+        agent="codex",
+        project="enforced-planning",
+        scope=branch,
+    )
+
+    assert payload["action"] == "closed"
+    assert payload["worktree_action"] == "removed"
+    assert payload["branch_action"] == "deleted"
+    completed_claim = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
+    assert completed_claim["status"] == "completed"
+    assert completed_claim["repo_root"] == str(repo_root)
+
+
 def test_close_session_rejects_inside_worktree_cwd_before_lifecycle_mutation(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

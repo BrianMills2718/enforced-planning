@@ -1,6 +1,6 @@
 # Plan #125: Planning Integrity Loop
 
-**Status:** In Progress — PI-02, PI-02B, PI-02C, and PI-02F accepted; PI-02E is ready through its safe-path-only v8 custody bootstrap; PI-02D requires its own later documentation-scoped selection
+**Status:** In Progress — PI-02, PI-02B, PI-02C, PI-02F, and PI-02E accepted; PI-02D is ready through its documentation-scoped v9 custody bootstrap
 **Type:** cross-repository shared-contract implementation
 **Priority:** Critical
 **phase_ref:** "Agentic Engineering first external consumer"
@@ -246,8 +246,8 @@ from the typed result rather than parsed downstream.
 | Start-gate integration and revision custody | fully_specifiable_now | Configured coordinated/release start resolves one full commit once, validates plan/config there, retains it in the claim, and passes it through claim, worktree, and session creation; direct claims and pre-existing branch/worktree identities use the same rule | Complete when dirty bytes, an older passing caller-supplied commit, an existing mismatched branch/worktree, and symbolic-HEAD movement all fail without claiming or executing the wrong revision | plan readiness, claim acquisition, session lifecycle, Make/install surfaces |
 | Observe-mode feedback | fully_specifiable_now | Nonblocking observation returns the typed integrity result and findings through the operator-visible start result | Complete when an incomplete observed plan is allowed but its findings are visible in the real CLI output | readiness result and installed CLI |
 | Parser and installation fail-loud edges | fully_specifiable_now | Duplicate governed headings/fields and absolute or traversing plan paths reject; worktree-only install carries the advertised readiness CLI's transitive imports | Complete when the corrupt fixtures reject and a clean worktree-only installed readiness CLI executes | parser, installer and focused boundary tests |
-| Operator documentation coupling | fully_specifiable_now | The config reference describes the contract, while the canonical worktree operator guide must name the new exact-revision prerequisite at the real claim/start entrypoint | Complete when the coupling check sees the guide updated in its separately claimed path | operator guide and relationship coupling |
-| Runtime course-correction join | fully_specifiable_now | Selection validates the qualified plan at the immutable outcome baseline, and PI-02F now requires exact `UNPLANNED` identity for the path-scoped bootstrap exception | Complete when the safe-path-only PI-02E v8 claim denies before selection and admits the same path only after exact allocation and selection | outcome selection, claim identity, and retained admission receipts |
+| Operator documentation coupling | fully_specifiable_now | PI-02D has a separate v9 contract and work unit for the canonical guide and installed first-success path; it does not inherit PI-02E custody | Complete when the exact PI-02D claim denies before v9 selection, admits both documentation surfaces afterward, and the coupling check passes | operator guide, GETTING_STARTED, and relationship coupling |
+| Runtime course-correction join | fully_specifiable_now | PI-02E proved selection validates the qualified plan at the immutable outcome baseline and PI-02F prevents a planned safe-path claim from acquiring bootstrap authority | Complete: the authentic v8 claim denied before selection and allowed the identical target afterward | retained selection and admission receipts |
 | AES four-layer planning projection | fully_specifiable_now | Installed result joins generated current/variance/topic output without becoming normative | Complete when delete/regenerate preserves normative bytes and exact evidence refs | AES topic and proof receipt |
 | First valuable project anchor | exploration_required | Portfolio audit selects by personal value, lineage, learning value, and bounded effort; WhyGame is provisional | Stop after one lineage/value probe can select or reject the candidate | Project Meta anchor decision and target repo plan |
 | Fleet defaults and automatic promotion | deliberately_deferred | No rollout or auto-promotion from one consumer | Resume after a second independent consumer and measured false-block/false-allow evidence | Enforced Planning roadmap and AES release manifest |
@@ -511,6 +511,26 @@ and worktree. This lane uses the truthful narrower broader goal “Prove
 Revision-Bound Successor Custody”; generalized tracker rollover remains a
 separate continuity concern and is not added to Plan 125's critical path.
 
+### Acceptance receipt — authentic successor custody
+
+The qualified PI-02E claim started at exact revision
+`f31dada73b1f4eb8122961f0cca2dd1cffca72e3` with a complete write set of only
+the three Plan 125 transition artifacts. Before selection, public prewrite
+receipt `oadm-aa269e06f3fb45e1a347e541ad1723ed` denied the scenario path with
+`outcome_selection_required`; ordinary ownership remained allowed. The lane
+then parked exact v7 allocation
+`a24ee2a28aa6553c07f5ad9df8c511eb33a960d1a9eeec1d6e5813a727ba916a`,
+allocated v8 as
+`87f6af9082c6bbad994789bb0811188a4df28c44a90c2eaa059999ca6e40963f`,
+and selected through immutable Plan 125 baseline
+`acb8d7f6c53c3155f7567e8dd141000b6031b580`. Binding
+`24690cb6ccec6b4c3c12a43f8ccd2262678dd7d12eccae02df13d7a044b02c0e`
+names the exact claim and tracker. Post-selection heartbeat receipt
+`oadm-4796a29981624c25b71cfe22df69aa22` and identical-path prewrite receipt
+`oadm-fae237b666ac498fa95da8076b7d79dd` allowed; documentation-path receipt
+`oadm-139f1630d84247d99d83fda49b9d70da` denied `out_of_scope`. The clean
+no-change proof lane closed through the sanctioned merged disposition.
+
 ### Failure-mode taxonomy reassessment
 
 **Review charter:** The target is Plan 125 after PI-02B; the stage is the first
@@ -588,17 +608,17 @@ revision-bound human-readable planning state through installed AES.
    explicit bootstrap remains admitted and a qualified planned claim with the
    same paths requires selected state. Use a restricted v7 input bootstrap and
    select the exact source claim before replaying the repair patch.
-6. **PI-02E — successor work-unit custody.** Use a restricted v8 input
+6. **PI-02E — accepted successor work-unit custody.** Use a restricted v8 input
    bootstrap, then open a qualified successor claim whose complete write set
    is exactly the three bootstrap-safe transition paths. Prove it remains
    denied before selection, park v7, select v8 through immutable Plan 125
    validation, and admit the same in-scope path afterward. Close the no-change
    proof without implying that its selection transfers.
-7. **PI-02D — operator documentation sync.** After PI-02E is accepted, prepare
-   a separate documentation-scoped allocation and selection on the exact
-   PI-02D claim. Then document exact-revision Planning Integrity at the
-   canonical worktree/claim entrypoint and installed first-success path and
-   pass the focused coupling check.
+7. **PI-02D — operator documentation sync.** Use the prepared v9 transition
+   inputs to park v8 and bind a separate documentation-scoped allocation and
+   selection to the exact PI-02D claim. Then document exact-revision Planning
+   Integrity at the canonical worktree/claim entrypoint and installed first-
+   success path and pass the focused coupling check.
 8. **PI-03 — AES installed integration.** Consume a pinned Enforced Planning
    candidate, retain an immutable result, and project the planning fields into
    AES's existing topic without new authority.

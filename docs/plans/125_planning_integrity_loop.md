@@ -1,6 +1,6 @@
 # Plan #125: Planning Integrity Loop
 
-**Status:** In Progress — PI-02 accepted with source-activation confidence narrowed; PI-02B repair ready; PI-02C/PI-02E/PI-02D blocked on the repaired path
+**Status:** In Progress — PI-02 and PI-02B accepted; PI-02C ready; PI-02E waits for runtime plan binding; PI-02D waits for successor custody
 **Type:** cross-repository shared-contract implementation
 **Priority:** Critical
 **phase_ref:** "Agentic Engineering first external consumer"
@@ -369,6 +369,40 @@ the existing disposition, allocation, and selection owners to park v3 and
 select v4 on the exact live successor claim. PI-02D becomes ready only after
 that transition is durably accepted. No automatic allocation, cross-claim
 transfer engine, or unplanned documentation path is introduced.
+
+### Acceptance receipt — staged selected activation
+
+PI-02B landed through provider commit
+`a79a9c09b436542c69e5b52c64aff85c43ed5c37` and merge
+`daffdb123da4edbfd24286eb89d8278cec6bd1ac`; the authentic normal Make path
+then exposed one remaining defaulting defect. The reservation stored the
+human-readable session goal while session start derived its canonical slug.
+The attach-only guard correctly stopped mutation, but treated those equivalent
+representations as different. Follow-up commit
+`e19f245f977e492c14d661f9ea47327f4b01ead7` and merge
+`a05b9ede580d398fe178354fa027ebb5c96600f2` canonicalized that comparison
+without weakening exact broader-goal, scope, work-unit, revision, or session
+identity checks. Independent negative review changed the reserved name to a
+different goal and observed denial before receipt, tracker, or claim mutation.
+
+The repeated normal Make path created one schema-v4 claim whose retained start
+revision and worktree HEAD both equal
+`a05b9ede580d398fe178354fa027ebb5c96600f2`. Selection-pending receipt
+`spact-33c0ac9a81d2440cb146813896eed2a6` records `defer`, the exact graph
+digest, and `missing_tracker_path` as the sole staged health issue. After
+tracker attachment, heartbeat receipt
+`oadm-3fbfcfe2379f4901914febe7160b12b0` and prewrite receipt
+`oadm-0dae756525014219a25fe8516815ed43` both deny with
+`outcome_selection_required`; the prewrite resolution is `selection_missing`.
+The no-change proof lane then closed through the sanctioned lifecycle.
+
+The exercise also exposed a circular acceptance sentence: PI-02B required a
+post-selection allow even though PI-02E, the owner of allocation and selection,
+could not start until PI-02B was accepted. PI-02B now owns the pre-selection
+denials it implements. PI-02E owns the post-selection heartbeat, in-scope
+prewrite, and out-of-scope denial. PI-02E also waits for PI-02C, so the real
+successor selection exercises runtime plan-revision binding rather than
+creating selected state immediately before that control is added.
 
 ### External AES stress-test inputs and sequencing
 

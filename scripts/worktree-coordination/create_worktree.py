@@ -112,6 +112,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Require the canonical main checkout to be clean before creating the worktree.",
     )
+    parser.add_argument(
+        "--allow-stale-start-point",
+        action="store_true",
+        help=(
+            "Skip the default check that --start-point is not behind its configured upstream. "
+            "Without this, branching from a stale start point fails loud instead of silently "
+            "producing a branch that cannot fast-forward push later."
+        ),
+    )
     parser.add_argument("--claim-agent", help="Agent name expected on the scoped write claim.")
     parser.add_argument(
         "--claim-project",
@@ -164,6 +173,44 @@ def branch_exists(repo_root: Path, branch: str) -> bool:
     """Return whether a local branch already exists in the target repo."""
     result = run_git(["show-ref", "--verify", f"refs/heads/{branch}"], cwd=repo_root)
     return result.returncode == 0
+
+
+def check_start_point_freshness(*, repo_root: Path, start_point: str) -> str | None:
+    """Return a fail-loud message if start_point is behind its configured upstream.
+
+    Branching a new worktree from a start point that is behind its upstream
+    silently produces a branch that cannot fast-forward push once real work is
+    committed on top of it -- the push failure surfaces late, disconnected from
+    its actual cause. This has no effect when start_point has no configured
+    upstream (detached ref, no tracking branch, or a bare commit-ish): there is
+    nothing to compare against, so nothing is flagged.
+    """
+    upstream = run_git(
+        ["rev-parse", "--abbrev-ref", "--symbolic-full-name", f"{start_point}@{{upstream}}"],
+        cwd=repo_root,
+    )
+    if upstream.returncode != 0:
+        return None
+    upstream_ref = upstream.stdout.strip()
+    remote_name = upstream_ref.split("/", 1)[0] if "/" in upstream_ref else None
+    if remote_name:
+        # Read-only: updates remote-tracking refs only, never local branches or the working tree.
+        run_git(["fetch", remote_name], cwd=repo_root)
+    behind = run_git(["rev-list", "--count", f"{start_point}..{upstream_ref}"], cwd=repo_root)
+    if behind.returncode != 0 or not behind.stdout.strip().isdigit():
+        return None
+    behind_count = int(behind.stdout.strip())
+    if behind_count <= 0:
+        return None
+    return (
+        f"Start point {start_point!r} is {behind_count} commit(s) behind its upstream "
+        f"{upstream_ref!r}. Creating a worktree from a stale start point produces a branch "
+        "that will fail to push (non-fast-forward) once work is committed on it, with the "
+        "failure surfacing far from this cause. Update the start point first "
+        f"(e.g. `git fetch && git merge --ff-only {upstream_ref}` in {repo_root}), or pass an "
+        "explicit --start-point that is already current, or opt out with "
+        "--allow-stale-start-point if branching from a stale point is intentional."
+    )
 
 
 def resolve_main_repo_root(repo_root: Path) -> Path:
@@ -550,6 +597,7 @@ def create_worktree(
     claims_dir: Path | None = None,
     require_clean_main_root: bool = False,
     claim_start_revision: str | None = None,
+    allow_stale_start_point: bool = False,
 ) -> WorktreeCreationResult:
     """Create a worktree, inspect it immediately, and fail loud on unsafe state."""
     repo_root = repo_root.resolve()
@@ -561,6 +609,10 @@ def create_worktree(
     start_revision = resolved_start.stdout.strip()
     if resolved_start.returncode != 0 or re.fullmatch(r"(?:[0-9a-f]{40}|[0-9a-f]{64})", start_revision) is None:
         raise ValueError(f"Unable to resolve one full Git start revision from {start_point!r}")
+    if not allow_stale_start_point:
+        freshness_issue = check_start_point_freshness(repo_root=repo_root, start_point=start_point)
+        if freshness_issue is not None:
+            raise ValueError(freshness_issue)
     if claim_start_revision is not None and claim_start_revision != start_revision:
         raise ValueError(
             "Requested claim custody does not match the resolved worktree start revision: "
@@ -882,6 +934,7 @@ def main(argv: list[str] | None = None) -> int:
             claims_dir=claims_dir,
             require_clean_main_root=args.require_clean_main_root,
             claim_start_revision=args.claim_start_revision,
+            allow_stale_start_point=args.allow_stale_start_point,
         )
     except (RuntimeError, ValueError) as exc:
         error_result = WorktreeCreationResult(

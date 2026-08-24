@@ -21,6 +21,7 @@ import yaml  # type: ignore[import-untyped]
 
 from enforced_planning import claim_mutation_receipts
 from enforced_planning import coordination_claims as claims_impl
+from enforced_planning import prewrite_claim_projection
 from enforced_planning.prewrite_claim_fast import projection_path_for, registry_digest
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / "scripts" / "check_coordination_claims.py"
@@ -2890,6 +2891,117 @@ def test_prune_completed_archives_exact_bytes_before_unlink(
     assert len(matching) == 1
     assert matching[0].operation == "prune"
     assert matching[0].result == "applied_projection_current"
+
+
+def _drain_completed_claims(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    completed: int,
+) -> tuple[list, int, Path]:
+    """Prune ``completed`` claims beside two live ones and report registry re-reads."""
+
+    module = _load_module()
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
+    monkeypatch.setattr(module._impl, "CLAIMS_DIR", claims_dir)
+    for index in range(2):
+        _write_claim(
+            claims_dir,
+            f"live-{index}.yaml",
+            {
+                "agent": "codex",
+                "claimed_at": "2026-04-05T12:00:00+00:00",
+                "expires_at": "2099-04-05T13:00:00+00:00",
+                "projects": ["demo"],
+                "scope": f"live-scope-{index}",
+                "intent": "Live lane that must survive the drain",
+                "claim_type": "write",
+                "session_id": f"codex:live-{index}",
+                "repo_root": str(tmp_path / f"repo-{index}"),
+                "worktree_path": str(tmp_path / f"repo-{index}" / "worktrees" / f"live-{index}"),
+                "branch": f"live-{index}",
+                "write_paths": [f"src/live_{index}.py"],
+                "status": "active",
+            },
+        )
+    for index in range(completed):
+        _write_claim(
+            claims_dir,
+            f"done-{index}.yaml",
+            _completed_claim_payload(
+                scope=f"done-scope-{index}",
+                session_id=f"codex:done-{index}",
+            ),
+        )
+
+    projection_reads = 0
+    original_loader = prewrite_claim_projection._load_projection_claims
+
+    def counting_loader(claims_dir_arg: Path):
+        nonlocal projection_reads
+        projection_reads += 1
+        return original_loader(claims_dir_arg)
+
+    monkeypatch.setattr(prewrite_claim_projection, "_load_projection_claims", counting_loader)
+
+    pruned, _labels = module.prune_completed()
+    assert pruned == completed
+
+    receipts = [
+        event for event in claim_mutation_receipts.load_receipts() if event.operation == "prune"
+    ]
+    return receipts, projection_reads, claims_dir
+
+
+def test_prune_completed_binds_every_receipt_without_rebuilding_per_claim(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A drain must keep each receipt's projection digest exact at constant rebuild cost.
+
+    Rebuilding the projection from disk after every unlink made a drain
+    quadratic in claim count. The receipt contract still requires a non-null
+    ``projection_digest_after`` equal to ``registry_digest_after`` on every
+    applied mutation, so this asserts both halves at once: the per-claim digest
+    chain stays exact, and the number of whole-registry re-reads does not grow
+    with the number of claims pruned.
+    """
+
+    small_receipts, small_reads, small_dir = _drain_completed_claims(
+        tmp_path / "small", monkeypatch, completed=3
+    )
+    large_receipts, large_reads, large_dir = _drain_completed_claims(
+        tmp_path / "large", monkeypatch, completed=9
+    )
+
+    assert len(small_receipts) == 3
+    assert len(large_receipts) == 12  # the ledger is shared across both drains
+    assert small_reads == large_reads
+
+    drained = large_receipts[3:]
+    for receipt in drained:
+        assert receipt.result == "applied_projection_current"
+        assert receipt.projection_current_after is True
+        assert receipt.projection_digest_after
+        assert receipt.projection_digest_after == receipt.registry_digest_after
+    for earlier, later in zip(drained, drained[1:]):
+        assert earlier.registry_digest_after == later.registry_digest_before
+    assert drained[-1].registry_digest_after == registry_digest(large_dir)
+
+    for claims_dir in (small_dir, large_dir):
+        assert sorted(path.name for path in claims_dir.glob("*.yaml")) == [
+            "live-0.yaml",
+            "live-1.yaml",
+        ]
+        assert prewrite_claim_projection.projection_is_current(claims_dir=claims_dir)
+        projection = prewrite_claim_projection.PreWriteAuthorityProjectionV1.model_validate_json(
+            projection_path_for(claims_dir).read_text(encoding="utf-8")
+        )
+        assert sorted(claim.scope for claim in projection.claims) == [
+            "live-scope-0",
+            "live-scope-1",
+        ]
 
 
 def test_prune_completed_archive_failure_leaves_every_claim_byte_unchanged(

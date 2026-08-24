@@ -265,6 +265,44 @@ def _registry_digest(claims_dir: Path) -> str:
     return registry_digest(claims_dir.expanduser().resolve())
 
 
+def _registry_snapshot(claims_dir: Path) -> dict[str, bytes]:
+    """Read every YAML authority record once, keyed by the digest's own key."""
+
+    return {
+        path.name: path.read_bytes()
+        for path in sorted(claims_dir.expanduser().resolve().glob("*.yaml"))
+    }
+
+
+def _registry_digest_from_snapshot(snapshot: dict[str, bytes]) -> str:
+    """Reproduce ``prewrite_claim_fast.registry_digest`` from an in-memory snapshot.
+
+    Byte-for-byte equivalent to the on-disk computation: the same name/content
+    fields, the same NUL separators, and the same ordering. ``registry_digest``
+    sorts ``Path`` objects that all share one parent, which orders them by file
+    name exactly as sorting the names does.
+    """
+
+    digest = hashlib.sha256()
+    for name in sorted(snapshot):
+        digest.update(name.encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(snapshot[name])
+        digest.update(b"\0")
+    return digest.hexdigest()
+
+
+class PruneRegistryDivergenceError(RuntimeError):
+    """The registry moved underneath an in-progress prune, after a mutation applied.
+
+    Unlike ``CompletedClaimArchiveError`` this is not a pre-mutation refusal:
+    reaching it means claim files were already unlinked and receipts already
+    recorded. It exists so a drain that loses agreement with its own authority
+    stops immediately and visibly instead of writing further receipts whose
+    digests no longer describe the registry.
+    """
+
+
 def record_claim_mutation(
     *,
     operation: "claim_mutation_receipts.MutationOperation",
@@ -2623,6 +2661,44 @@ def prune_completed() -> tuple[int, list[str]]:
                     cause=changed_source,
                 ) from changed_source
 
+        if not archive_candidates:
+            return 0, []
+
+        from enforced_planning.prewrite_claim_fast import projection_path_for
+        from enforced_planning.prewrite_claim_projection import (
+            build_projection,
+            rebind_projection_digest,
+            write_projection_document,
+        )
+
+        # The prune loop used to rebuild the projection from disk after every
+        # unlink, which re-read and re-parsed the whole registry once per claim
+        # and made a drain quadratic: a 542-claim drain held the global registry
+        # lock for 887.9s. Two facts make that unnecessary. The projection only
+        # carries live claims, and COMPLETED_STATUSES is disjoint from
+        # LIVE_STATUSES, so removing a completed claim cannot change which
+        # claims the projection carries or their static issues. And the registry
+        # digest is a pure function of the YAML bytes, which are already read
+        # here under the lock. So the claim set is built once and the digest is
+        # advanced in memory, while each receipt still observes a projection
+        # that is genuinely current on disk at the moment it is written.
+        resolved_claims_dir = CLAIMS_DIR.expanduser().resolve()
+        registry_snapshot = _registry_snapshot(resolved_claims_dir)
+        running_digest = _registry_digest_from_snapshot(registry_snapshot)
+        observed_digest = _registry_digest(CLAIMS_DIR)
+        if running_digest != observed_digest:
+            snapshot_mismatch = ValueError(
+                "in-memory registry snapshot does not reproduce the on-disk registry digest: "
+                f"snapshot={running_digest} disk={observed_digest}"
+            )
+            raise CompletedClaimArchiveError(
+                error_code="registry_snapshot_digest_mismatch",
+                source_path=str(resolved_claims_dir),
+                cause=snapshot_mismatch,
+            ) from snapshot_mismatch
+        projection_path = projection_path_for(resolved_claims_dir)
+        live_projection = build_projection(claims_dir=resolved_claims_dir)
+
         for claim_file, source_bytes, claim, archive_receipt in archive_candidates:
             try:
                 if claim_file.read_bytes() != source_bytes:
@@ -2633,10 +2709,26 @@ def prune_completed() -> tuple[int, list[str]]:
                     source_path=str(claim_file),
                     cause=exc,
                 ) from exc
-            registry_digest_before = _registry_digest(CLAIMS_DIR)
+            if registry_snapshot.pop(claim_file.name, None) != source_bytes:
+                untracked = ValueError(
+                    "claim is absent from the registry snapshot taken for this prune"
+                )
+                raise PruneRegistryDivergenceError(
+                    f"{claim_file}: {untracked}"
+                ) from untracked
+            registry_digest_before = running_digest
             claim_file.unlink()
-            _projection_path, projection_digest_after = refresh_prewrite_authority_projection(CLAIMS_DIR)
-            record_claim_mutation(
+            running_digest = _registry_digest_from_snapshot(registry_snapshot)
+            projection_digest_after = running_digest
+            write_projection_document(
+                claims_dir=resolved_claims_dir,
+                projection=rebind_projection_digest(
+                    live_projection,
+                    registry_digest_value=projection_digest_after,
+                ),
+                projection_path=projection_path,
+            )
+            receipt = record_claim_mutation(
                 operation="prune",
                 claims_dir=CLAIMS_DIR,
                 registry_digest_before=registry_digest_before,
@@ -2647,7 +2739,33 @@ def prune_completed() -> tuple[int, list[str]]:
                 projection_digest_after=projection_digest_after,
                 archive_transaction_id=archive_receipt.prune_binding.transaction_id,
             )
+            # record_claim_mutation recomputes the digest from disk anyway, so
+            # this cross-checks the in-memory advance against real authority on
+            # every single claim at no extra I/O cost.
+            if receipt.registry_digest_after != projection_digest_after:
+                raise PruneRegistryDivergenceError(
+                    f"{claim_file}: registry digest diverged from the in-memory prune snapshot: "
+                    f"snapshot={projection_digest_after} disk={receipt.registry_digest_after}"
+                )
             removed_claims.append((claim_file, claim))
+
+        # Terminal equivalence check: rebuild from disk exactly as the
+        # per-unlink path used to, and require that the incrementally
+        # maintained state is what a full rebuild produces.
+        rebuilt = build_projection(claims_dir=resolved_claims_dir)
+        if rebuilt.registry_digest != running_digest:
+            raise PruneRegistryDivergenceError(
+                "rebuilt projection digest does not match the pruned registry snapshot: "
+                f"snapshot={running_digest} rebuilt={rebuilt.registry_digest}"
+            )
+        if rebuilt.claims != live_projection.claims:
+            raise PruneRegistryDivergenceError(
+                "pruning completed claims changed the projected live claim set, "
+                "which the incremental prune projection assumes cannot happen"
+            )
+        # Leave the on-disk projection written by the canonical refresh path,
+        # still inside this critical section.
+        refresh_prewrite_authority_projection(CLAIMS_DIR)
     removed_labels = [f"{claim.primary_project()}:{claim.scope}" for _path, claim in removed_claims]
     return len(removed_labels), sorted(removed_labels)
 

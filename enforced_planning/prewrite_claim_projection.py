@@ -155,18 +155,41 @@ def build_projection(*, claims_dir: Path) -> PreWriteAuthorityProjectionV1:
     )
 
 
-def write_projection(
+def rebind_projection_digest(
+    projection: PreWriteAuthorityProjectionV1,
+    *,
+    registry_digest_value: str,
+) -> PreWriteAuthorityProjectionV1:
+    """Re-validate the same projected claim set against a new registry digest.
+
+    A batched registry mutation that provably cannot change which claims the
+    projection carries -- pruning completed claims, which are never live --
+    still moves the digest that binds the projection to YAML authority. This
+    rebuilds the bound document without re-reading or re-parsing the registry.
+    The claim tuple is revalidated by the model constructor rather than copied
+    through ``model_copy``, so the result cannot be looser than a fresh build.
+    """
+
+    return PreWriteAuthorityProjectionV1(
+        generated_at=datetime.now(timezone.utc),
+        claims_dir=projection.claims_dir,
+        registry_digest=registry_digest_value,
+        claims=projection.claims,
+    )
+
+
+def write_projection_document(
     *,
     claims_dir: Path,
+    projection: PreWriteAuthorityProjectionV1,
     projection_path: Path | None = None,
 ) -> PreWriteAuthorityProjectionV1:
-    """Atomically replace one derived projection after full validation."""
+    """Atomically replace the derived projection file with one built projection."""
 
     resolved_claims = claims_dir.expanduser().resolve()
     resolved_projection = (
         projection_path or projection_path_for(resolved_claims)
     ).expanduser().resolve()
-    projection = build_projection(claims_dir=resolved_claims)
     resolved_projection.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     temp_path: Path | None = None
     try:
@@ -189,6 +212,21 @@ def write_projection(
         if temp_path is not None and temp_path.exists():
             temp_path.unlink()
     return projection
+
+
+def write_projection(
+    *,
+    claims_dir: Path,
+    projection_path: Path | None = None,
+) -> PreWriteAuthorityProjectionV1:
+    """Atomically replace one derived projection after full validation."""
+
+    resolved_claims = claims_dir.expanduser().resolve()
+    return write_projection_document(
+        claims_dir=resolved_claims,
+        projection=build_projection(claims_dir=resolved_claims),
+        projection_path=projection_path,
+    )
 
 
 def projection_is_current(*, claims_dir: Path, projection_path: Path | None = None) -> bool:
@@ -216,5 +254,7 @@ __all__ = [
     "ProjectionBuildError",
     "build_projection",
     "projection_is_current",
+    "rebind_projection_digest",
     "write_projection",
+    "write_projection_document",
 ]

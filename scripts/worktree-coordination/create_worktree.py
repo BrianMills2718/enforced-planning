@@ -475,7 +475,13 @@ def verify_scoped_write_claim(
     if not claim_agent:
         return False, "Scoped write-claim enforcement requires --claim-agent."
     if not claim_write_paths:
-        return False, "Scoped write-claim enforcement requires at least one --claim-write-path."
+        return False, (
+            "Scoped write-claim enforcement requires at least one --claim-write-path, "
+            "so this lane cannot be created without a declared write boundary.\n"
+            '  Through Make:  SESSION_WRITE_PATHS="path/one path/two"\n'
+            "  Use the narrowest set of paths this lane will actually write; "
+            '"." claims the whole repository and is rarely what you want.'
+        )
 
     claims_module = _load_claims_module()
     if claims_dir is not None:

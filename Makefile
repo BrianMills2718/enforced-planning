@@ -366,7 +366,7 @@ MAINTENANCE_SESSION_GOAL = $(if $(strip $(SESSION_GOAL)),$(SESSION_GOAL),Unplann
 MAINTENANCE_SESSION_PHASE = $(if $(strip $(SESSION_PHASE)),$(SESSION_PHASE),maintenance)
 MAINTENANCE_AGENT = $(if $(strip $(WORKTREE_AGENT)),$(WORKTREE_AGENT),claude-code)
 
-maintenance-worktree:  ## Claimed light maintenance worktree; BRANCH=<name> is enough
+maintenance-worktree:  ## Claimed light maintenance worktree; needs BRANCH, TASK, SESSION_GOAL, SESSION_PHASE, SESSION_WRITE_PATHS
 ifndef BRANCH
 	$(error BRANCH is required. Usage: make maintenance-worktree BRANCH=fix-hook-guard)
 endif

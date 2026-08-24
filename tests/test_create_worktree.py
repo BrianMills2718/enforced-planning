@@ -109,6 +109,64 @@ def test_create_worktree_creates_clean_temp_repo_worktree(tmp_path: Path) -> Non
     assert delete_branch.returncode == 0, delete_branch.stdout + delete_branch.stderr
 
 
+def _init_repo_with_stale_origin(tmp_path: Path) -> Path:
+    """Build a repo whose local main is behind its origin/main, for staleness tests."""
+    origin_root = tmp_path / "origin"
+    _init_temp_repo(origin_root)
+
+    repo_root = tmp_path / "repo"
+    clone_result = _run_git(tmp_path, "clone", str(origin_root), str(repo_root))
+    assert clone_result.returncode == 0, clone_result.stdout + clone_result.stderr
+    _run_git(repo_root, "config", "user.name", "Test User")
+    _run_git(repo_root, "config", "user.email", "test@example.com")
+
+    # A commit lands on origin after the clone, so the local checkout falls behind.
+    (origin_root / "README.md").write_text("hello again\n", encoding="utf-8")
+    _run_git(origin_root, "add", "README.md")
+    commit_result = _run_git(origin_root, "commit", "-m", "advance origin past the clone")
+    assert commit_result.returncode == 0, commit_result.stdout + commit_result.stderr
+
+    return repo_root
+
+
+def test_create_worktree_fails_loud_when_start_point_is_stale(tmp_path: Path) -> None:
+    """Branching from a start point behind its upstream should fail loud by default."""
+    module = _load_module()
+    repo_root = _init_repo_with_stale_origin(tmp_path)
+    worktree_path = tmp_path / "repo-worktrees" / "stale-test"
+
+    with pytest.raises(ValueError, match="behind its upstream"):
+        module.create_worktree(
+            repo_root=repo_root,
+            worktree_path=worktree_path,
+            branch="stale-test",
+            start_point="HEAD",
+            split_brain_threshold=5,
+            keep_failed_worktree=False,
+        )
+    assert not worktree_path.exists()
+
+
+def test_create_worktree_allows_stale_start_point_when_opted_out(tmp_path: Path) -> None:
+    """The staleness check should not fire when explicitly opted out."""
+    module = _load_module()
+    repo_root = _init_repo_with_stale_origin(tmp_path)
+    worktree_path = tmp_path / "repo-worktrees" / "stale-allowed-test"
+
+    result = module.create_worktree(
+        repo_root=repo_root,
+        worktree_path=worktree_path,
+        branch="stale-allowed-test",
+        start_point="HEAD",
+        split_brain_threshold=5,
+        keep_failed_worktree=False,
+        allow_stale_start_point=True,
+    )
+
+    assert result.ok, result.message
+    assert worktree_path.exists()
+
+
 def test_create_worktree_reuses_only_branch_at_exact_start_revision(tmp_path: Path) -> None:
     """A pre-existing branch is recoverable only when it already retains the requested commit."""
 

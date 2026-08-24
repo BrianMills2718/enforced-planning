@@ -207,14 +207,75 @@ find_script() {
     fi
 }
 
+# Per-check mode, falling back to the global HOOK_MODE.
+#
+# One global switch meant a repo could not make a check that works blocking
+# while a check that is merely unavailable stays advisory. Measured here on
+# 2026-08-24: doc-coupling correctly detected a staged source change whose
+# coupled document was untouched, named the exact documents, and exited 1 --
+# and the commit landed anyway, because the dead-code check needs `vulture`
+# which is not installed, so nobody could turn the global switch to block.
+# A repo declares blocking checks in meta-process.yaml:
+#
+#   quality:
+#     hook_modes:
+#       doc-coupling check: block
+#
+# The key is the check name passed to handle_failure.
+check_mode() {
+    local check_name="$1"
+    local declared
+    declared=$(python - "$REPO_ROOT" "$check_name" <<'PYEOF' 2>/dev/null || true
+import sys
+try:
+    import yaml
+except Exception:
+    raise SystemExit(0)
+from pathlib import Path
+root, name = Path(sys.argv[1]), sys.argv[2]
+cfg = root / "meta-process.yaml"
+if not cfg.exists():
+    raise SystemExit(0)
+try:
+    data = yaml.safe_load(cfg.read_text()) or {}
+except Exception:
+    raise SystemExit(0)
+# Governed repos nest config under `meta_process:`; some do not. Accept both
+# rather than silently reading an empty dict, which would make every declared
+# blocking check quietly advisory -- the exact failure this option exists to fix.
+root_map = data.get("meta_process") if isinstance(data.get("meta_process"), dict) else data
+modes = ((root_map.get("quality") or {}).get("hook_modes") or {})
+value = modes.get(name)
+if isinstance(value, str) and value in {"off", "warn", "block"}:
+    print(value)
+PYEOF
+)
+    if [[ -n "$declared" ]]; then
+        echo "$declared"
+    else
+        echo "$HOOK_MODE"
+    fi
+}
+
+WARNED_CHECKS=()
+
 handle_failure() {
     local check_name="$1"
-    if [[ "$HOOK_MODE" == "block" ]]; then
-        echo "ERROR: $check_name failed in explicit block mode."
+    local mode
+    mode=$(check_mode "$check_name")
+    if [[ "$mode" == "block" ]]; then
+        if [[ "$mode" != "$HOOK_MODE" ]]; then
+            echo "ERROR: $check_name failed, and this repository declares it blocking"
+            echo "       in meta-process.yaml (quality.hook_modes)."
+        else
+            echo "ERROR: $check_name failed in explicit block mode."
+        fi
         return 1
     fi
+    WARNED_CHECKS+=("$check_name")
     echo "WARNING: $check_name failed; commit continues in warn mode."
-    echo "Set ENFORCED_PLANNING_HOOK_MODE=block for a strict pilot/release candidate."
+    echo "Set ENFORCED_PLANNING_HOOK_MODE=block for a strict pilot/release candidate,"
+    echo "or declare this one check blocking under quality.hook_modes in meta-process.yaml."
     return 0
 }
 
@@ -428,4 +489,8 @@ if [[ -n "$TOPIC_VIEWS" ]] && [[ -f "$REPO_ROOT/docs/topics/registry.yaml" ]]; t
     fi
 fi
 
-echo "Pre-commit checks passed!"
+if [[ ${#WARNED_CHECKS[@]} -gt 0 ]]; then
+    echo "Pre-commit checks completed with ${#WARNED_CHECKS[@]} warned (not passed): ${WARNED_CHECKS[*]}"
+else
+    echo "Pre-commit checks passed!"
+fi

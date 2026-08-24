@@ -15,8 +15,8 @@ from pydantic import ValidationError
 
 from enforced_planning import coordination_claims
 from enforced_planning.coordination_messages import (
-    AcknowledgeMessageRequest,
     AcknowledgementResult,
+    AcknowledgeMessageRequest,
     AmbiguousRecipientError,
     ClaimRecipientSelector,
     CoordinationMessage,
@@ -28,15 +28,14 @@ from enforced_planning.coordination_messages import (
     MessageReceipt,
     MessageStatusRequest,
     MessageStatusView,
-    PollMessagesRequest,
     PersistedMessageResult,
+    PollMessagesRequest,
     RecordCollisionError,
     SendMessageRequest,
     SessionInboxNotice,
     UnknownSessionError,
     WrongRecipientError,
 )
-
 
 NOW = datetime(2026, 7, 15, 20, 0, tzinfo=UTC)
 CODEX_SESSION = "codex:thread-123"
@@ -1503,3 +1502,149 @@ def test_codex_lifecycle_hook_rejects_malformed_input_without_receipt(
     status = store.status(MessageStatusRequest(message_id=persisted.message.message_id))
     assert status.state == "persisted"
     assert status.receipt_paths == ()
+
+
+def _initialize_git_repository(path: Path) -> None:
+    """Create one clean repository for native closeout-hook tests."""
+
+    path.mkdir(parents=True)
+    subprocess.run(["git", "init", "-q", str(path)], check=True)
+    subprocess.run(["git", "-C", str(path), "config", "user.name", "Test Agent"], check=True)
+    subprocess.run(
+        ["git", "-C", str(path), "config", "user.email", "agent@example.test"],
+        check=True,
+    )
+    (path / "tracked.txt").write_text("baseline\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(path), "add", "tracked.txt"], check=True)
+    subprocess.run(["git", "-C", str(path), "commit", "-qm", "baseline"], check=True)
+
+
+def _run_repository_closeout_hook(
+    *,
+    workspace: Path,
+    claims_dir: Path,
+    message_root: Path,
+    ledger_dir: Path,
+    event_name: str,
+    event_id: str,
+) -> subprocess.CompletedProcess[str]:
+    """Run one native-shaped lifecycle event through repository closeout."""
+
+    payload: dict[str, object] = {
+        "session_id": "repository-closeout-test",
+        "cwd": str(workspace),
+        "hook_event_name": event_name,
+        "event_id": event_id,
+    }
+    if event_name == "PreToolUse":
+        payload.update({"tool_name": "Bash", "tool_input": {"command": "true"}})
+    return subprocess.run(
+        [
+            "python",
+            "scripts/coordination_hook.py",
+            "--claims-dir",
+            str(claims_dir),
+            "--root",
+            str(message_root),
+            "--closeout-ledger-dir",
+            str(ledger_dir),
+        ],
+        input=json.dumps(payload),
+        cwd=Path(__file__).resolve().parents[1],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def test_stop_blocks_dirty_sibling_then_passes_after_cleanup(tmp_path: Path) -> None:
+    """A shared-root session must close every repository state it changed."""
+
+    workspace = tmp_path / "workspace"
+    first = workspace / "first"
+    sibling = workspace / "sibling"
+    _initialize_git_repository(first)
+    _initialize_git_repository(sibling)
+    claims_dir = tmp_path / "coordination" / "claims"
+    message_root = tmp_path / "coordination" / "messages-v1"
+    ledger_dir = tmp_path / "coordination" / "repository-closeout-ledgers"
+
+    started = _run_repository_closeout_hook(
+        workspace=workspace,
+        claims_dir=claims_dir,
+        message_root=message_root,
+        ledger_dir=ledger_dir,
+        event_name="SessionStart",
+        event_id="closeout-start",
+    )
+    assert started.returncode == 0, started.stderr or started.stdout
+    assert started.stdout == ""
+
+    (sibling / "stranded.txt").write_text("uncommitted\n", encoding="utf-8")
+    blocked = _run_repository_closeout_hook(
+        workspace=workspace,
+        claims_dir=claims_dir,
+        message_root=message_root,
+        ledger_dir=ledger_dir,
+        event_name="Stop",
+        event_id="closeout-stop-dirty",
+    )
+    assert blocked.returncode == 0, blocked.stderr or blocked.stdout
+    denial = json.loads(blocked.stdout)
+    assert denial["decision"] == "block"
+    assert str(sibling) in denial["reason"]
+    assert "1 change" in denial["reason"]
+
+    (sibling / "stranded.txt").unlink()
+    clean = _run_repository_closeout_hook(
+        workspace=workspace,
+        claims_dir=claims_dir,
+        message_root=message_root,
+        ledger_dir=ledger_dir,
+        event_name="Stop",
+        event_id="closeout-stop-clean",
+    )
+    assert clean.returncode == 0, clean.stderr or clean.stdout
+    assert clean.stdout == ""
+
+
+def test_stop_ignores_unchanged_preexisting_dirt_but_blocks_session_delta(tmp_path: Path) -> None:
+    """Closeout owns session deltas without adopting another writer's baseline dirt."""
+
+    workspace = tmp_path / "workspace"
+    repository = workspace / "preexisting"
+    _initialize_git_repository(repository)
+    dirty_path = repository / "preexisting.txt"
+    dirty_path.write_text("other writer\n", encoding="utf-8")
+    claims_dir = tmp_path / "coordination" / "claims"
+    message_root = tmp_path / "coordination" / "messages-v1"
+    ledger_dir = tmp_path / "coordination" / "repository-closeout-ledgers"
+
+    _run_repository_closeout_hook(
+        workspace=workspace,
+        claims_dir=claims_dir,
+        message_root=message_root,
+        ledger_dir=ledger_dir,
+        event_name="PreToolUse",
+        event_id="preexisting-baseline",
+    )
+    unchanged = _run_repository_closeout_hook(
+        workspace=workspace,
+        claims_dir=claims_dir,
+        message_root=message_root,
+        ledger_dir=ledger_dir,
+        event_name="Stop",
+        event_id="preexisting-unchanged",
+    )
+    assert unchanged.stdout == ""
+
+    dirty_path.write_text("session changed it\n", encoding="utf-8")
+    changed = _run_repository_closeout_hook(
+        workspace=workspace,
+        claims_dir=claims_dir,
+        message_root=message_root,
+        ledger_dir=ledger_dir,
+        event_name="Stop",
+        event_id="preexisting-changed",
+    )
+    assert json.loads(changed.stdout)["decision"] == "block"

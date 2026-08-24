@@ -1119,6 +1119,22 @@ manual steps.
 The sanctioned closeout flow is idempotent for already-missing worktree or
 branch state so partial cleanup can be rerun safely.
 
+Native lifecycle wiring also protects unclaimed and cross-repository work. At
+`SessionStart` (or the first mutation boundary), the coordination hook records
+status fingerprints for the Git repositories under the session's starting
+scope. At `Stop`, it rescans that same scope and blocks the final response when
+the session changed a repository's status and left it dirty. This catches a
+generator that writes into sibling canonical checkouts even when the agent's
+current directory is not itself a Git repository. Pre-existing unchanged dirt
+does not become the current session's ownership merely because it was visible
+at startup. Linked `worktrees/`, dependency environments, and package caches
+are excluded from the fleet scan.
+
+The native Stop gate is not a substitute for claimed-lane closeout. Commit and
+push coherent work, restore the recorded baseline, or use the sanctioned
+session-close dirty-handoff path; a final prose note alone does not clear the
+gate.
+
 Mailbox messages are a separate closeout precondition. `session-close` refuses
 to close a lane while actionable messages remain addressed to its exact session.
 The recipient must read and explicitly acknowledge them first. When the work

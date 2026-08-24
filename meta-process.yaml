@@ -59,6 +59,19 @@ meta_process:
   # =============================================================================
 
   quality:
+    # Which checks refuse a commit rather than warn. Keyed by the check name the
+    # pre-commit hook passes to handle_failure. Anything not listed follows the
+    # global ENFORCED_PLANNING_HOOK_MODE, which defaults to warn.
+    #
+    # doc-coupling is blocking here because it works. Measured 2026-08-24: it
+    # correctly caught a staged change to coordination_claims.py whose coupled
+    # operator guide was untouched, named the exact documents, and exited 1 --
+    # and the commit landed anyway. The global switch could not be used, because
+    # the dead-code check needs `vulture`, which is not installed. One
+    # unavailable check was holding every working check advisory.
+    hook_modes:
+      "doc-coupling check": block
+
     doc_coupling:
       enabled: true
       # Mapping file location

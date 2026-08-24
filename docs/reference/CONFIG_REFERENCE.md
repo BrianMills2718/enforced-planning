@@ -157,6 +157,7 @@ worktree targets.
 |-----|------|---------|---------|---------------------|
 | `quality.doc_coupling.enabled` | bool | `false` | the coupling checker when explicitly installed or invoked | Doc coupling is opt-in |
 | `ENFORCED_PLANNING_HOOK_MODE` | `off \| warn \| block` | `warn` | `hooks/git/pre-commit` | Findings remain visible but do not block; an immutable terminal-verification freeze still blocks |
+| `quality.hook_modes.<check name>` | `off \| warn \| block` | unset | `hooks/git/pre-commit` | That check follows `ENFORCED_PLANNING_HOOK_MODE` |
 | `quality.doc_coupling.config_file` | string | `"scripts/relationships.yaml"` | `check_doc_coupling.py` | `scripts/relationships.yaml` |
 | `quality.mock_policy.enabled` | bool | `true` | Not enforced by script | No effect |
 | `quality.mock_policy.require_mock_ok_comment` | bool | `true` | Not enforced by script | No effect |
@@ -178,6 +179,40 @@ worktree targets.
 | `quality.reachability.baseline` | string | `"reachability_baseline.json"` | `check_reachability.py` | `reachability_baseline.json` |
 | `product_share` (baseline key, not a config key) | float | absent | `check_reachability.py` | Written by `--write-baseline`. When present, `--check` fails on a regression below it; when absent, the product-path ratchet stays silent so baselines predating the key keep passing |
 | `REACHABILITY_RATCHET` | `on \| off` | `on` (env var, not a config key) | `hooks/git/pre-commit` | Ratchet enforced; `off` is a named, logged bypass for the first tuning pass on a repo (see `ACCRETION_DETECTOR_ROLLOUT_BRIEF.md` §10a in `project-meta`) |
+
+
+### `quality.hook_modes` — making one check blocking
+
+`ENFORCED_PLANNING_HOOK_MODE` is global: every pre-commit check warns, or every
+one blocks. That is the wrong granularity when checks differ in whether they
+can run at all.
+
+Measured in this repository on 2026-08-24: the doc-coupling check correctly
+detected a staged change to `enforced_planning/coordination_claims.py` whose
+coupled operator guide was untouched, printed the exact documents to update,
+and exited 1 — and the commit landed, because the mode was `warn`. It could not
+be switched to `block`, because the dead-code check needs `vulture`, which is
+not installed, so a global `block` would have refused every commit in the repo.
+**One unavailable check was holding every working check advisory.**
+
+`quality.hook_modes` declares the mode for individual checks, keyed by the check
+name the hook prints:
+
+```yaml
+quality:
+  hook_modes:
+    "doc-coupling check": block
+```
+
+Anything not listed follows the global mode. A check listed here is blocking
+even when the global mode is `warn`, and the failure message says so, naming the
+config rather than the environment variable — the escape hatch belongs where the
+block happens.
+
+A run in which any check warned now reports `Pre-commit checks completed with N
+warned (not passed)` and names them, rather than `Pre-commit checks passed!`. A
+summary that says everything passed when a check failed is the thing that let
+this drift go unnoticed.
 
 ## acceptance_gates
 

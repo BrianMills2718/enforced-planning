@@ -20,7 +20,8 @@ an agent:
 ## Core Principles
 
 1. **Modality diagnosis before design.** Before planning a non-trivial slice,
-   classify each part as deductive/plan-first, exploratory/ladder, or hybrid.
+   classify each part as deductive/plan-first, exploratory/ladder, or hybrid,
+   and classify its acceptance as checked, judged, or mixed.
    Use plan-first contracts where consequences are predictable; use instruments
    and readouts where behavior is emergent or parameter values would be guesses.
 2. **Question-driven before planning.** Unknowns are surfaced and investigated
@@ -408,6 +409,11 @@ These are hard ordering rules:
 - No design, cross-project, or externally-informed plan without a declared
   research basis for the slice or explicit research skip.
 - No implementation without declared required tests and acceptance criteria.
+- No non-trivial plan without an acceptance-mode diagnosis: checked, judged, or
+  mixed with an explicit partition.
+- No judged-acceptance plan without a named unit of accepted output and a
+  declared apparatus ceiling. A judged plan that reports only artifacts
+  produced is reporting its own cost as its progress.
 - No exploratory slice without a declared instrument, readout, and step-down path
   to concrete cases. The readout is the exploratory analog of an acceptance
   criterion: it defines what signal will end or redirect the exploration.
@@ -455,6 +461,54 @@ This does not weaken the plan requirement. It prevents fake precision. A plan
 for exploratory work still states what will be built and how progress will be
 read, but it does not pretend to know a threshold or schema that only the
 running system can reveal.
+
+### Acceptance-Mode-Aware Planning
+
+Execution profiles classify **exposure** — who is affected and what obligations
+follow. Modality classifies **predictability** — whether the shape can be known
+before building. Neither says what makes the work *correct*, and for some
+projects that is the fact which changes the plan most.
+
+| Mode | Use when | What a plan owes |
+|------|----------|------------------|
+| Checked | A machine can decide whether the work is right: tests, contracts, schemas, thresholds, readouts. | The existing bundle. Acceptance criteria are statable in advance and decomposition into independently verifiable units is meaningful. |
+| Judged | Acceptance is a qualified person's reaction, and no check substitutes for it: a book, a report, a research finding, a design, a strategy or policy document. | One named unit of accepted output, a declared apparatus ceiling, a smallest complete specimen before any process scaling, and traceability from every claim to a frozen source. |
+| Mixed | An artifact judged as a whole is produced by machinery that is itself checkable. | Partition. The machinery is checked; the artifact is judged; do not let the machinery's green state stand in for the artifact's acceptance. |
+
+**The controlling asymmetry: in checked work apparatus is value, and in judged
+work apparatus is cost.** Tests, instruments, coverage and readouts are part of
+what a system is worth. For a judged artifact they compete with it for the same
+hours and produce nothing a reader receives. This is why the same operating
+model, applied unchanged, gives actively harmful advice on judged work — every
+control it adds is progress by its own measure and overhead by the artifact's.
+
+The failure is measurable and it has a signature. One project in this ecosystem
+abandoned an attempt whose apparatus-to-prose ratio reached 11:1, diagnosed it
+in a written post-mortem, and reached 28:1 on the replacement before anyone
+measured again. Every individual artifact was defensible. Nobody was tracking
+the ratio, because no profile asked for it.
+
+Judged-acceptance plans therefore record:
+
+- **the unit of accepted output**, which starts at zero and is reported at every
+  checkpoint — not tasks completed, not artifacts produced, not coverage
+- **an apparatus ceiling**: supporting material may not outgrow accepted output
+  beyond a declared multiple. Breaching it is a stop condition, not a note
+- **one smallest complete specimen** of the real deliverable, judged by its real
+  reviewer, before any process is generalised across the work
+- **provisional decisions with reopen triggers**, so exploration stays
+  reversible without a decision record per turn
+
+And they normally defer, because these controls have no denominator until an
+artifact exists: decomposition into independent units, dependency graphs,
+coverage audits, reachability ratchets, and test-relationship reporting.
+
+A judged plan still declares an execution profile, because exposure is a
+separate question — a report published externally carries external obligations
+whatever grades it. And a judged slice does not escape verification: the
+artifact's own domain gate, where one exists, is the check, and it must actually
+run. A gate the documentation claims and nothing executes is worse than no gate,
+because the claim is load-bearing and false.
 
 ### LLM System Design: Pattern-First Sizing
 

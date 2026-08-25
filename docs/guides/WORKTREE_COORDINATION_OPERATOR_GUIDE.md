@@ -147,6 +147,32 @@ and refresh the pre-write projection in the same locked mutation.
    non-live, retain its completed audit record, remove the worktree, and safely
    delete the local branch.
 
+### Append-only stores do not create contention
+
+Two lanes declaring the same write path normally conflict, and the second lane
+cannot be created. That is correct for any path where one lane's write can
+destroy another's.
+
+It is wrong for an append-only store, where every write creates a new
+immutable file under a unique id through an atomic exclusive open. Two lanes
+appending there produce different filenames, rewrite nothing, and merge
+cleanly. Blocking the second lane prevents no loss and stops the work.
+
+`APPEND_ONLY_WRITE_PREFIXES` in `enforced_planning/coordination_claims.py`
+names those stores. `_compute_overlapping_write_paths` drops a pair when
+**both** sides are append-only; one such path in a claim does not exempt the
+rest of it.
+
+The exemption covers a listed store and anything beneath it, and nothing else.
+A parent that also reaches mutable siblings stays exclusive: claiming
+`learnings` still conflicts, because it reaches `learnings.md`, which lanes
+rewrite. Matching is on path segments, so a differently-named neighbour such
+as `learnings/entries-archive` is unaffected.
+
+Add a prefix only when writes to it are append-only all the way down — its
+writer creates new files and never modifies, renames, or deletes an existing
+one. Anything else belongs in an ordinary exclusive claim.
+
 The default disposition for completed desired work is `merged`. Every finished,
 stale, or out-of-policy lane must have one disposition before cleanup:
 

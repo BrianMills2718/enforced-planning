@@ -62,6 +62,20 @@ SESSION_ENDED_STATUS = "session_ended"
 CLOSEABLE_STATUSES = LIVE_STATUSES | {SESSION_ENDED_STATUS}
 CLAIM_TYPES = {"program", "write", "review", "research"}
 STRICT_LIVE_METADATA_CLAIM_TYPES = {"program", "write", "review", "research"}
+
+# Directories whose contents are immutable, uniquely-named artifacts created by
+# an atomic exclusive open. Two lanes appending to one of these cannot collide:
+# different filenames, no shared file rewritten, and a clean git merge. Treating
+# such a directory as an exclusive write surface blocks concurrent recording for
+# no safety gain, which is how learnings capture kept dying on a claim conflict.
+#
+# A path is exempt only when writes to it are append-only ALL the way down. Add
+# a prefix here solely when its writer creates new files and never modifies,
+# renames, or deletes an existing one.
+APPEND_ONLY_WRITE_PREFIXES = (
+    "learnings/entries",
+    "learnings/invalid_entries",
+)
 CREATION_BLOCKING_HEALTH_ISSUES = {
     "missing_project",
     "missing_write_paths",
@@ -1488,13 +1502,35 @@ def _paths_overlap(left: str, right: str) -> bool:
     return left_norm == right_norm or left_norm.startswith(f"{right_norm}/") or right_norm.startswith(f"{left_norm}/")
 
 
+def _is_append_only_path(path: str) -> bool:
+    """Return whether a declared write path lands only in an append-only store.
+
+    True for the store itself and for anything beneath it. False for a parent
+    that also covers mutable siblings: claiming ``learnings`` reaches
+    ``learnings.md``, which lanes do rewrite, so it stays exclusive.
+    """
+
+    normalized = _normalize_repo_path(path)
+    return any(
+        normalized == prefix or normalized.startswith(f"{prefix}/")
+        for prefix in APPEND_ONLY_WRITE_PREFIXES
+    )
+
+
 def _compute_overlapping_write_paths(candidate: ClaimRecord, other: ClaimRecord) -> list[str]:
-    """Return normalized write-path overlaps between two claims."""
+    """Return normalized write-path overlaps between two claims.
+
+    Append-only stores are excluded: concurrent lanes each create their own
+    immutable file there, so a shared declaration is not contention.
+    """
     overlaps: list[str] = []
     for left in candidate.write_paths:
         for right in other.write_paths:
-            if _paths_overlap(left, right):
-                overlaps.append(f"{_normalize_repo_path(left)} <-> {_normalize_repo_path(right)}")
+            if not _paths_overlap(left, right):
+                continue
+            if _is_append_only_path(left) and _is_append_only_path(right):
+                continue
+            overlaps.append(f"{_normalize_repo_path(left)} <-> {_normalize_repo_path(right)}")
     return sorted(set(overlaps))
 
 

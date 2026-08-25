@@ -1,6 +1,6 @@
 ## enforced-planning — framework for enforced planning, context gating, doc-code alignment
 
-.PHONY: help test test-quick check lint dead-code dead-code-audit dead-code-validate push-check infer check-deps check-caps migrate-rels verify-couplings review-surfaces promote plan-registry ecosystem-status docstring-wiki docstring-wiki-check test-relationships status reachability reachability-check reachability-baseline repo-stats fleet-drift fleet-drift-json
+.PHONY: help test test-quick check lint dead-code dead-code-audit dead-code-validate push-check infer check-deps check-caps apparatus-ratio migrate-rels verify-couplings review-surfaces promote plan-registry ecosystem-status docstring-wiki docstring-wiki-check test-relationships status reachability reachability-check reachability-baseline repo-stats fleet-drift fleet-drift-json
 
 PYTHON ?= $(if $(wildcard .venv/bin/python),.venv/bin/python,python3)
 PROJECT_STATUS_PYTHON ?= $(PYTHON)
@@ -66,6 +66,9 @@ infer:  ## Infer dependency graph for a repo (REPO=path)
 
 check-deps:  ## Validate plan dependency references (REPO=path to plans dir)
 	python scripts/check_plan_deps.py $(REPO)/docs/plans/ --scan-dir $(SCAN_DIR)
+
+apparatus-ratio:  ## Fail if a judged-acceptance repo's apparatus outgrew its accepted output (REPO=path)
+	python scripts/check_apparatus_ratio.py $(REPO)
 
 check-caps:  ## Validate plan Capabilities sections (REPO=path to plans dir)
 	python scripts/check_plan_capabilities.py $(REPO)/docs/plans/

@@ -263,6 +263,40 @@ def _write_closeout_baseline(
     temporary.replace(ledger_path)
 
 
+def _repositories_with_foreign_live_claims(session_id: str) -> set[str]:
+    """Repository roots a DIFFERENT live session currently holds a claim on.
+
+    The closeout check compares a whole-repository fingerprint against a
+    baseline taken at session start, so any concurrent writer's uncommitted
+    edit is attributed to whichever session closes out first. That session
+    cannot commit the change (not its work), cannot discard it (destructive),
+    and has no way to disclaim it - so it is blocked by someone else's work
+    with no available remedy.
+
+    A live claim owned by another session is exactly the evidence that a repo
+    has a second writer. Returning those roots lets closeout skip them. This
+    narrows the check rather than weakening it: a repository with no other
+    live writer is still fully enforced, which is the case the check is for.
+    """
+
+    try:
+        from enforced_planning import coordination_claims
+    except ImportError:  # pragma: no cover - claim surface optional in some installs
+        return set()
+    roots: set[str] = set()
+    try:
+        claims = coordination_claims.list_claims()
+    except Exception:  # noqa: BLE001 - an unreadable claim registry must not block closeout
+        return set()
+    for claim in claims:
+        if getattr(claim, "session_id", None) == session_id:
+            continue
+        repo_root = getattr(claim, "repo_root", None)
+        if repo_root:
+            roots.add(str(Path(str(repo_root)).expanduser().resolve()))
+    return roots
+
+
 def _repository_closeout_failure(
     *,
     agent: str,
@@ -287,9 +321,14 @@ def _repository_closeout_failure(
     scan_root = Path(str(payload.get("scan_root", ""))).expanduser().resolve()
     baseline = payload["repositories"]
     current = _repository_snapshot(scan_root)
+    foreign = _repositories_with_foreign_live_claims(session_id)
     dirty_changes: list[tuple[str, int]] = []
     for repository, status in current.items():
         prior = baseline.get(repository)
+        if str(Path(repository).expanduser().resolve()) in foreign:
+            # Another live session is writing here; its uncommitted work is not
+            # this session's to commit, discard, or answer for.
+            continue
         if status["dirty"] and (
             not isinstance(prior, dict) or prior.get("fingerprint") != status["fingerprint"]
         ):

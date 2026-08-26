@@ -382,12 +382,41 @@ class MessageStatusView(StrictContract):
     message_path: str = Field(min_length=1, description="Evidence path to the canonical stored message.")
 
 
+UNREACHABLE_BACKLOG_SECONDS = 300.0
+"""How stale an unobserved message must be before it implies a deaf recipient."""
+
+
+def _looks_unreachable(backlog: int, oldest_age_seconds: float | None) -> bool:
+    """Treat an aged, never-observed backlog as evidence the recipient cannot read."""
+
+    if backlog <= 0 or oldest_age_seconds is None:
+        return False
+    return oldest_age_seconds >= UNREACHABLE_BACKLOG_SECONDS
+
+
 class PersistedMessageResult(StrictContract):
     """Result of one successful or idempotently replayed send operation."""
 
     message: CoordinationMessage = Field(description="Canonical persisted message.")
     message_path: str = Field(min_length=1, description="Evidence path to the canonical message record.")
     idempotent_replay: bool = Field(description="Whether an identical existing message satisfied this request.")
+    recipient_unobserved_backlog: int = Field(
+        default=0,
+        ge=0,
+        description="Earlier active messages the recipient has never observed.",
+    )
+    recipient_oldest_unobserved_seconds: float | None = Field(
+        default=None,
+        ge=0,
+        description="Age of the recipient's oldest never-observed active message at send time.",
+    )
+    recipient_may_be_unreachable: bool = Field(
+        default=False,
+        description=(
+            "Whether the recipient looks unable to receive: it has an earlier active message "
+            "it never observed. Storing a message is persistence, never delivery."
+        ),
+    )
 
 
 class MessagePollResult(StrictContract):
@@ -755,6 +784,40 @@ class CoordinationMessageStore:
         matching = [receipt for receipt in receipts if receipt.message_id == message_id]
         return sorted(matching, key=lambda receipt: (receipt.recorded_at, receipt.receipt_id))
 
+    def assess_recipient_reachability(
+        self,
+        recipient_session_id: str,
+        *,
+        now: datetime,
+        before: datetime | None = None,
+    ) -> tuple[int, float | None]:
+        """Count active messages the recipient has never once observed.
+
+        A message is stored durably whether or not its recipient can read it.
+        A session running without the mailbox hook accumulates never-observed
+        messages while every send reports success, so an existing backlog is
+        the cheapest evidence that the next send will not be read either.
+        """
+
+        cutoff = before or now
+        backlog = 0
+        oldest: datetime | None = None
+        for message, _path in self._all_messages():
+            if message.recipient_session_id != recipient_session_id:
+                continue
+            if message.created_at >= cutoff or message.expires_at <= now:
+                continue
+            if any(
+                receipt.event in {"observed", "acknowledged"}
+                for receipt in self._receipts_for(message.message_id)
+            ):
+                continue
+            backlog += 1
+            if oldest is None or message.created_at < oldest:
+                oldest = message.created_at
+        age = (now - oldest).total_seconds() if oldest is not None else None
+        return backlog, age
+
     def send(
         self,
         request: SendMessageRequest,
@@ -786,10 +849,18 @@ class CoordinationMessageStore:
                 existing = self._read_message_path(existing_path)
                 if existing.request_sha256 != request_sha256:
                     raise RecordCollisionError(f"Message ID {message_id} already contains different content")
+                backlog, age = self.assess_recipient_reachability(
+                    existing.recipient_session_id,
+                    now=now or _utc_now(),
+                    before=existing.created_at,
+                )
                 return PersistedMessageResult(
                     message=existing,
                     message_path=str(existing_path),
                     idempotent_replay=True,
+                    recipient_unobserved_backlog=backlog,
+                    recipient_oldest_unobserved_seconds=age,
+                    recipient_may_be_unreachable=_looks_unreachable(backlog, age),
                 )
         recipient_session_id = self.resolve_recipient(request.recipient)
         created_at = now or _utc_now()
@@ -813,10 +884,20 @@ class CoordinationMessageStore:
             claim_ref=request.claim_ref,
             reply_to_message_id=request.reply_to_message_id,
         )
+        backlog, age = self.assess_recipient_reachability(
+            recipient_session_id, now=created_at, before=created_at
+        )
         path, idempotent = self._store_message(message)
         if idempotent:
             message = self._read_message_path(path)
-        return PersistedMessageResult(message=message, message_path=str(path), idempotent_replay=idempotent)
+        return PersistedMessageResult(
+            message=message,
+            message_path=str(path),
+            idempotent_replay=idempotent,
+            recipient_unobserved_backlog=backlog,
+            recipient_oldest_unobserved_seconds=age,
+            recipient_may_be_unreachable=_looks_unreachable(backlog, age),
+        )
 
     def _append_observation(self, message: CoordinationMessage, *, now: datetime) -> tuple[MessageReceipt, Path]:
         """Append or reuse one observation receipt for the exact recipient."""
@@ -1246,6 +1327,17 @@ def main(argv: list[str] | None = None) -> int:
     except (ValidationError, CoordinationMessageError, ValueError) as exc:
         print(json.dumps({"ok": False, "error_type": type(exc).__name__, "error": str(exc)}, sort_keys=True))
         return 2
+    if isinstance(result, PersistedMessageResult) and result.recipient_may_be_unreachable:
+        age_minutes = int((result.recipient_oldest_unobserved_seconds or 0) // 60)
+        print(
+            "WARNING: this message is stored but probably will not be read. "
+            f"{result.message.recipient_session_id} has {result.recipient_unobserved_backlog} earlier "
+            f"message(s) it has never once observed, the oldest sent {age_minutes} minute(s) ago. "
+            "A session running without the mailbox hook loaded accumulates exactly this backlog while "
+            "every send still reports success. Check "
+            "scripts/verify_mailbox_hook_activation.py before waiting on a reply.",
+            file=sys.stderr,
+        )
     print(result.model_dump_json(indent=2))
     return 0
 

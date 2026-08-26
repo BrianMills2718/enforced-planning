@@ -4217,3 +4217,57 @@ def test_heartbeat_file_dirt_and_stalled_prune_preserve_progress_and_ownership(
     assert (removed, scopes) == (0, [])
     assert path.read_bytes() == after_dirt
     assert path.exists()
+
+
+def test_session_liveness_reads_the_clients_own_transcript(tmp_path: Path) -> None:
+    """A claim's heartbeat lags; the client's transcript is written every turn."""
+
+    codex_root = tmp_path / "codex-sessions"
+    day = codex_root / "2026" / "08" / "25"
+    day.mkdir(parents=True)
+    transcript = day / "rollout-2026-08-25T07-20-07-01a0394a-ee7e-7b22-bedc-82ddb2a253f2.jsonl"
+    transcript.write_text("{}\n", encoding="utf-8")
+    written_at = datetime(2026, 8, 26, 18, 18, 37, tzinfo=timezone.utc)
+    os.utime(transcript, (written_at.timestamp(), written_at.timestamp()))
+
+    found = claims_impl.session_last_active_at(
+        "codex:01a0394a-ee7e-7b22-bedc-82ddb2a253f2", codex_root=codex_root
+    )
+
+    assert found == written_at
+
+
+def test_session_liveness_reports_unknown_rather_than_idle(tmp_path: Path) -> None:
+    """Absence of a transcript is not evidence that a session ended."""
+
+    for session_id in (
+        "codex:no-such-session",
+        "claude-code:no-such-session",
+        "openclaw:whatever",
+        "malformed",
+        None,
+    ):
+        assert (
+            claims_impl.session_last_active_at(
+                session_id, codex_root=tmp_path / "codex", claude_root=tmp_path / "claude"
+            )
+            is None
+        )
+
+
+def test_session_activity_is_described_without_licensing_a_takeover() -> None:
+    """An operator reading a conflict sees liveness, never permission."""
+
+    now = datetime(2026, 8, 26, 18, 30, tzinfo=timezone.utc)
+    describe = claims_impl.describe_session_activity
+
+    assert describe(None, now=now) == "liveness unknown"
+    assert describe(datetime(2026, 8, 26, 18, 29, 30, tzinfo=timezone.utc), now=now) == (
+        "active seconds ago"
+    )
+    assert describe(datetime(2026, 8, 26, 18, 11, tzinfo=timezone.utc), now=now) == (
+        "last active 19 min ago"
+    )
+    quiet = describe(datetime(2026, 8, 25, 15, 11, tzinfo=timezone.utc), now=now)
+    assert quiet.startswith("last active 27h ago")
+    assert "likely ended without releasing" in quiet

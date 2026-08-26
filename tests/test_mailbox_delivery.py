@@ -900,3 +900,112 @@ def test_malformed_host_config_fails_loud_before_a_plan(tmp_path: Path, filename
         audit_host_installation(request)
     with pytest.raises(MailboxInstallationError, match="invalid"):
         plan_host_installation(HostInstallationPlanRequestV1(**request.model_dump()))
+
+
+def test_no_op_config_rewrite_does_not_mark_live_processes_stale(tmp_path: Path) -> None:
+    """A rewrite that leaves the hooks identical must not declare live clients unreachable."""
+
+    proc_root = tmp_path / "proc"
+    proc_root.mkdir()
+    boot_epoch = 1_700_000_000
+    clock_ticks = 100
+    proc_root.joinpath("stat").write_text(f"btime {boot_epoch}\n", encoding="utf-8")
+    hooks = (
+        'model = "gpt-5"\n\n'
+        "[[hooks.Stop]]\n"
+        'matcher = ""\n\n'
+        "[[hooks.Stop.hooks]]\n"
+        'command = "python3 coordination_hook.py --agent codex"\n'
+        'type = "command"\n'
+    )
+    config = tmp_path / "config.toml"
+    config.write_text(hooks, encoding="utf-8")
+    installed_at = datetime.fromtimestamp(boot_epoch + 60, tz=UTC)
+    os.utime(config, (installed_at.timestamp(), installed_at.timestamp()))
+    state_path = tmp_path / "hook-state.json"
+
+    def check() -> object:
+        return check_mailbox_hook_activation(
+            codex_config_path=str(config),
+            proc_root=proc_root,
+            clock_ticks=clock_ticks,
+            mailbox_root=tmp_path / "mailbox",
+            claims_dir=tmp_path / "claims",
+            observed_at=datetime.fromtimestamp(boot_epoch + 600, tz=UTC),
+            hook_state_path=state_path,
+        )
+
+    # First observation records the hooks digest against the install time.
+    assert check().codex_hooks_changed_at == installed_at
+
+    # A client starts after the hooks were installed, so it has them loaded.
+    _write_fake_proc(
+        proc_root,
+        pid=301,
+        started_at=datetime.fromtimestamp(boot_epoch + 120, tz=UTC),
+        boot_epoch=boot_epoch,
+        clock_ticks=clock_ticks,
+    )
+    assert check().restart_required is False
+
+    # An installer rewrites identical bytes; only the mtime moves.
+    config.write_text(hooks, encoding="utf-8")
+    touched_at = datetime.fromtimestamp(boot_epoch + 300, tz=UTC)
+    os.utime(config, (touched_at.timestamp(), touched_at.timestamp()))
+
+    receipt = check()
+    assert receipt.codex_config_modified_at == touched_at
+    assert receipt.codex_hooks_changed_at == installed_at
+    assert receipt.restart_required is False, "a no-op rewrite must not require a restart"
+    assert receipt.stale_codex_processes == ()
+
+
+def test_real_hook_change_still_requires_restart(tmp_path: Path) -> None:
+    """Changing the hooks themselves must still mark older processes stale."""
+
+    proc_root = tmp_path / "proc"
+    proc_root.mkdir()
+    boot_epoch = 1_700_000_000
+    clock_ticks = 100
+    proc_root.joinpath("stat").write_text(f"btime {boot_epoch}\n", encoding="utf-8")
+    config = tmp_path / "config.toml"
+    config.write_text(
+        "[[hooks.Stop]]\nmatcher = \"\"\n\n[[hooks.Stop.hooks]]\ncommand = \"old\"\ntype = \"command\"\n",
+        encoding="utf-8",
+    )
+    installed_at = datetime.fromtimestamp(boot_epoch + 60, tz=UTC)
+    os.utime(config, (installed_at.timestamp(), installed_at.timestamp()))
+    state_path = tmp_path / "hook-state.json"
+
+    def check() -> object:
+        return check_mailbox_hook_activation(
+            codex_config_path=str(config),
+            proc_root=proc_root,
+            clock_ticks=clock_ticks,
+            mailbox_root=tmp_path / "mailbox",
+            claims_dir=tmp_path / "claims",
+            observed_at=datetime.fromtimestamp(boot_epoch + 600, tz=UTC),
+            hook_state_path=state_path,
+        )
+
+    check()
+    _write_fake_proc(
+        proc_root,
+        pid=302,
+        started_at=datetime.fromtimestamp(boot_epoch + 120, tz=UTC),
+        boot_epoch=boot_epoch,
+        clock_ticks=clock_ticks,
+    )
+    assert check().restart_required is False
+
+    config.write_text(
+        "[[hooks.Stop]]\nmatcher = \"\"\n\n[[hooks.Stop.hooks]]\ncommand = \"new\"\ntype = \"command\"\n",
+        encoding="utf-8",
+    )
+    changed_at = datetime.fromtimestamp(boot_epoch + 300, tz=UTC)
+    os.utime(config, (changed_at.timestamp(), changed_at.timestamp()))
+
+    receipt = check()
+    assert receipt.codex_hooks_changed_at == changed_at
+    assert receipt.restart_required is True
+    assert [process.pid for process in receipt.stale_codex_processes] == [302]

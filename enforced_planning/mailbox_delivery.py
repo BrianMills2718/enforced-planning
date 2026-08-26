@@ -244,6 +244,8 @@ class MailboxHookActivationReceiptV1(StrictContract):
     codex_config_path: str = Field(min_length=1)
     codex_config_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     codex_config_modified_at: datetime
+    codex_hooks_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    codex_hooks_changed_at: datetime
     active_codex_processes: tuple[CodexProcessV1, ...]
     stale_codex_processes: tuple[CodexProcessV1, ...]
     restart_required: bool
@@ -398,6 +400,54 @@ def discover_codex_processes(
     return tuple(sorted(processes, key=lambda item: (item.started_at, item.pid)))
 
 
+HOOK_STATE_FILENAME = "mailbox-hook-state-v1.json"
+
+
+def _hooks_fingerprint(config_bytes: bytes) -> str:
+    """Digest only the hooks table, so unrelated config edits do not count."""
+
+    parsed = tomllib.loads(config_bytes.decode("utf-8"))
+    hooks = parsed.get("hooks", {})
+    canonical = json.dumps(hooks, sort_keys=True, separators=(",", ":"))
+    return _sha256_bytes(canonical.encode("utf-8"))
+
+
+def _resolve_hooks_changed_at(
+    *,
+    state_path: Path,
+    hooks_sha256: str,
+    config_modified_at: datetime,
+) -> datetime:
+    """Return when the hooks table last actually changed, not when the file was touched.
+
+    A process can only be missing the hooks if it started before the hooks
+    themselves changed. Keying staleness to the config file's mtime instead
+    made every no-op rewrite declare every live client unreachable.
+    """
+
+    if state_path.is_file():
+        try:
+            stored = json.loads(state_path.read_text(encoding="utf-8"))
+            stored_sha = stored["hooks_sha256"]
+            stored_changed_at = datetime.fromisoformat(stored["changed_at"])
+        except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
+            raise MailboxInstallationError(
+                f"corrupt mailbox hook state at {state_path}: {exc}"
+            ) from exc
+        if stored_sha == hooks_sha256:
+            return stored_changed_at
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(
+        json.dumps(
+            {"hooks_sha256": hooks_sha256, "changed_at": config_modified_at.isoformat()},
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return config_modified_at
+
+
 def check_mailbox_hook_activation(
     *,
     codex_config_path: str = "~/.codex/config.toml",
@@ -407,6 +457,7 @@ def check_mailbox_hook_activation(
     mailbox_root: Path = Path("~/.claude/coordination/messages-v1"),
     claims_dir: Path = Path("~/.claude/coordination/claims"),
     observed_at: datetime | None = None,
+    hook_state_path: Path | None = None,
 ) -> MailboxHookActivationReceiptV1:
     """Require fresh Codex processes plus one acknowledged exact-session canary."""
 
@@ -417,8 +468,19 @@ def check_mailbox_hook_activation(
     config_bytes = config_path.read_bytes()
     _parse_config_bytes("codex", config_bytes, label="Codex host config")
     config_modified_at = datetime.fromtimestamp(config_path.stat().st_mtime, tz=UTC)
+    hooks_sha256 = _hooks_fingerprint(config_bytes)
+    state_path = (
+        hook_state_path.expanduser()
+        if hook_state_path is not None
+        else claims_dir.expanduser().parent / HOOK_STATE_FILENAME
+    )
+    hooks_changed_at = _resolve_hooks_changed_at(
+        state_path=state_path,
+        hooks_sha256=hooks_sha256,
+        config_modified_at=config_modified_at,
+    )
     active_processes = discover_codex_processes(proc_root=proc_root, clock_ticks=clock_ticks)
-    stale_processes = tuple(process for process in active_processes if process.started_at < config_modified_at)
+    stale_processes = tuple(process for process in active_processes if process.started_at < hooks_changed_at)
 
     canary_state: MessageState | None = None
     canary_observed = False
@@ -436,7 +498,7 @@ def check_mailbox_hook_activation(
             ) from exc
         canary_state = status.state
         post_config_receipts = tuple(
-            receipt for receipt in status.receipts if receipt.recorded_at >= config_modified_at
+            receipt for receipt in status.receipts if receipt.recorded_at >= hooks_changed_at
         )
         canary_observed = any(
             receipt.event in {"observed", "acknowledged"} for receipt in post_config_receipts
@@ -458,6 +520,8 @@ def check_mailbox_hook_activation(
         codex_config_path=_portable_text(str(config_path)),
         codex_config_sha256=_sha256_bytes(config_bytes),
         codex_config_modified_at=config_modified_at,
+        codex_hooks_sha256=hooks_sha256,
+        codex_hooks_changed_at=hooks_changed_at,
         active_codex_processes=active_processes,
         stale_codex_processes=stale_processes,
         restart_required=restart_required,

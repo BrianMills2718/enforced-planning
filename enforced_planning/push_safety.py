@@ -197,13 +197,25 @@ def _claim_overlap_for_paths(
     changed_paths: list[str],
     claim: coordination_claims.ClaimRecord,
 ) -> list[str]:
-    """Return normalized changed-path overlaps against one active claim."""
+    """Return normalized changed-path overlaps against one active claim.
+
+    Append-only stores are excluded on both sides, exactly as claim-vs-claim
+    evaluation excludes them. Each lane creates its own immutable file there,
+    so publishing one is not contention with a lane that declared the store.
+    Without this the exemption existed at claim creation and vanished at push,
+    which let a lane be created and then refused publication of its own entry.
+    """
 
     overlaps: list[str] = []
     for changed_path in changed_paths:
         for write_path in claim.write_paths:
-            if coordination_claims._paths_overlap(changed_path, write_path):
-                overlaps.append(f"{changed_path} <-> {write_path}")
+            if not coordination_claims._paths_overlap(changed_path, write_path):
+                continue
+            if coordination_claims._is_append_only_path(
+                changed_path
+            ) and coordination_claims._is_append_only_path(write_path):
+                continue
+            overlaps.append(f"{changed_path} <-> {write_path}")
     return sorted(set(overlaps))
 
 

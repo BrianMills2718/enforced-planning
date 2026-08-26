@@ -745,3 +745,51 @@ def test_load_active_decisions_ignores_prefix_noise(monkeypatch: pytest.MonkeyPa
     records = push_safety.load_active_decisions("demo")
 
     assert records == [{"content": "test"}]
+
+
+def test_publishing_an_append_only_entry_is_not_claim_contention() -> None:
+    """A lane must be able to publish the entry the append-only exemption let it create."""
+
+    claim = coordination_claims.normalize_claim(
+        {
+            "agent": "codex",
+            "projects": ["project-meta"],
+            "scope": "another-learning-lane",
+            "claim_type": "program",
+            "intent": "record another learning",
+            "write_paths": ["learnings/entries"],
+        },
+        source_file="/tmp/other.yaml",
+    )
+    assert claim is not None
+
+    overlaps = push_safety._claim_overlap_for_paths(
+        ["learnings/entries/lrn-20260826T191238509799Z-ff032639cf.json"], claim
+    )
+
+    assert overlaps == []
+
+
+def test_a_real_shared_path_still_blocks_publication() -> None:
+    """The exemption is scoped to append-only stores, not to claims generally."""
+
+    claim = coordination_claims.normalize_claim(
+        {
+            "agent": "codex",
+            "projects": ["project-meta"],
+            "scope": "docs-lane",
+            "claim_type": "program",
+            "intent": "edit ops docs",
+            "write_paths": ["docs/ops", "learnings"],
+        },
+        source_file="/tmp/other.yaml",
+    )
+    assert claim is not None
+
+    assert push_safety._claim_overlap_for_paths(["docs/ops/POLICY.md"], claim) == [
+        "docs/ops/POLICY.md <-> docs/ops"
+    ]
+    # `learnings` also reaches learnings.md, which lanes rewrite, so it stays exclusive.
+    assert push_safety._claim_overlap_for_paths(["learnings/entries/lrn-x.json"], claim) == [
+        "learnings/entries/lrn-x.json <-> learnings"
+    ]

@@ -449,6 +449,8 @@ class ClaimInteraction:
     projects: list[str]
     overlapping_write_paths: list[str]
     other_source_file: str | None
+    other_session_id: str | None = None
+    other_session_last_active_at: datetime | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-safe interaction summary."""
@@ -1502,6 +1504,84 @@ def _paths_overlap(left: str, right: str) -> bool:
     return left_norm == right_norm or left_norm.startswith(f"{right_norm}/") or right_norm.startswith(f"{left_norm}/")
 
 
+CODEX_SESSION_ROOT = Path("~/.codex/sessions")
+CLAUDE_SESSION_ROOT = Path("~/.claude/projects")
+
+
+def session_transcript_path(
+    session_id: str | None,
+    *,
+    codex_root: Path | None = None,
+    claude_root: Path | None = None,
+) -> Path | None:
+    """Locate the runtime transcript one session is actually writing to.
+
+    A claim's ``heartbeat_at`` only advances when the claim itself is touched,
+    so a working session looks idle and an abandoned one looks alive. The
+    client's own transcript is written on every model turn, which makes it the
+    honest liveness signal.
+    """
+
+    if not session_id or ":" not in session_id:
+        return None
+    agent, _, runtime_id = session_id.partition(":")
+    if not runtime_id:
+        return None
+    if agent == "codex":
+        root = (codex_root or CODEX_SESSION_ROOT).expanduser()
+        pattern = f"*/*/*/rollout-*-{runtime_id}.jsonl"
+    elif agent == "claude-code":
+        root = (claude_root or CLAUDE_SESSION_ROOT).expanduser()
+        pattern = f"*/{runtime_id}.jsonl"
+    else:
+        return None
+    if not root.is_dir():
+        return None
+    matches = sorted(root.glob(pattern))
+    return matches[-1] if matches else None
+
+
+def session_last_active_at(
+    session_id: str | None,
+    *,
+    codex_root: Path | None = None,
+    claude_root: Path | None = None,
+) -> datetime | None:
+    """Return when a session's own client last wrote, or None when unknowable.
+
+    None means unknown, never idle. Report it as unknown rather than treating
+    absence of a transcript as evidence the session ended.
+    """
+
+    path = session_transcript_path(session_id, codex_root=codex_root, claude_root=claude_root)
+    if path is None:
+        return None
+    try:
+        return datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)
+    except OSError:
+        return None
+
+
+def describe_session_activity(last_active_at: datetime | None, *, now: datetime | None = None) -> str:
+    """Render one claim owner's liveness for an operator reading a conflict.
+
+    Absence of a transcript is reported as unknown. A session that has not
+    written for a long time is still only quiet: say so, and never let a
+    reader infer permission to take its claim.
+    """
+
+    if last_active_at is None:
+        return "liveness unknown"
+    moment = now or datetime.now(timezone.utc)
+    minutes = max(0, int((moment - last_active_at).total_seconds() // 60))
+    if minutes < 2:
+        return "active seconds ago"
+    if minutes < 60:
+        return f"last active {minutes} min ago"
+    hours = minutes // 60
+    return f"last active {hours}h ago — likely ended without releasing"
+
+
 def _is_append_only_path(path: str) -> bool:
     """Return whether a declared write path lands only in an append-only store.
 
@@ -1791,6 +1871,8 @@ def evaluate_claim(candidate: ClaimRecord, *, active_claims: list[ClaimRecord] |
                     projects=sorted(set(candidate.projects) & set(other.projects)),
                     overlapping_write_paths=overlapping_write_paths,
                     other_source_file=other.source_file,
+                    other_session_id=other.session_id,
+                    other_session_last_active_at=session_last_active_at(other.session_id),
                 )
             )
             continue
@@ -1809,6 +1891,8 @@ def evaluate_claim(candidate: ClaimRecord, *, active_claims: list[ClaimRecord] |
                     projects=sorted(set(candidate.projects) & set(other.projects)),
                     overlapping_write_paths=overlapping_write_paths,
                     other_source_file=other.source_file,
+                    other_session_id=other.session_id,
+                    other_session_last_active_at=session_last_active_at(other.session_id),
                 )
             )
             continue
@@ -1824,6 +1908,8 @@ def evaluate_claim(candidate: ClaimRecord, *, active_claims: list[ClaimRecord] |
                     projects=sorted(set(candidate.projects) & set(other.projects)),
                     overlapping_write_paths=overlapping_write_paths,
                     other_source_file=other.source_file,
+                    other_session_id=other.session_id,
+                    other_session_last_active_at=session_last_active_at(other.session_id),
                 )
             )
             continue
@@ -1839,6 +1925,8 @@ def evaluate_claim(candidate: ClaimRecord, *, active_claims: list[ClaimRecord] |
                     projects=sorted(set(candidate.projects) & set(other.projects)),
                     overlapping_write_paths=overlapping_write_paths,
                     other_source_file=other.source_file,
+                    other_session_id=other.session_id,
+                    other_session_last_active_at=session_last_active_at(other.session_id),
                 )
             )
             continue
@@ -1853,6 +1941,8 @@ def evaluate_claim(candidate: ClaimRecord, *, active_claims: list[ClaimRecord] |
                 projects=sorted(set(candidate.projects) & set(other.projects)),
                 overlapping_write_paths=[],
                 other_source_file=other.source_file,
+                other_session_id=other.session_id,
+                other_session_last_active_at=session_last_active_at(other.session_id),
             )
         )
     return ClaimCheckResult(candidate=candidate, interactions=interactions)
@@ -2084,7 +2174,8 @@ def create_claim(
         check_result = evaluate_claim(candidate, active_claims=active_claims)
         if check_result.hard_conflicts:
             formatted = "; ".join(
-                f"{item.other_agent} ({item.other_scope}: {', '.join(item.overlapping_write_paths)})"
+                f"{item.other_agent} ({item.other_scope}: {', '.join(item.overlapping_write_paths)}"
+                f"; owner {describe_session_activity(item.other_session_last_active_at)})"
                 for item in check_result.hard_conflicts
             )
             return False, (

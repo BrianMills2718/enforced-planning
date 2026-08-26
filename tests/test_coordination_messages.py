@@ -1648,3 +1648,64 @@ def test_stop_ignores_unchanged_preexisting_dirt_but_blocks_session_delta(tmp_pa
         event_id="preexisting-changed",
     )
     assert json.loads(changed.stdout)["decision"] == "block"
+
+
+def test_send_flags_a_recipient_that_never_observes_its_mail(
+    mailbox: tuple[CoordinationMessageStore, Path, Path],
+) -> None:
+    """An aged, never-observed backlog means the next send will not be read either."""
+
+    store, _claims_dir, _root = mailbox
+    first_sent_at = datetime(2026, 8, 26, 18, 0, tzinfo=UTC)
+    store.send(_send_request(idempotency_key="backlog-1"), now=first_sent_at)
+
+    # Ten minutes later nobody has looked at it, which is the deaf-recipient signature.
+    second = store.send(
+        _send_request(idempotency_key="backlog-2", subject="Second attempt"),
+        now=first_sent_at + timedelta(minutes=10),
+    )
+
+    assert second.recipient_unobserved_backlog == 1
+    assert second.recipient_oldest_unobserved_seconds == 600.0
+    assert second.recipient_may_be_unreachable is True
+
+
+def test_send_stays_quiet_when_the_recipient_is_reading(
+    mailbox: tuple[CoordinationMessageStore, Path, Path],
+) -> None:
+    """A recipient that polls its inbox must not be reported as unreachable."""
+
+    store, _claims_dir, _root = mailbox
+    first_sent_at = datetime(2026, 8, 26, 18, 0, tzinfo=UTC)
+    store.send(_send_request(idempotency_key="read-1"), now=first_sent_at)
+    store.poll(
+        PollMessagesRequest(current_session_id=CLAUDE_SESSION, observe=True),
+        now=first_sent_at + timedelta(minutes=1),
+    )
+
+    second = store.send(
+        _send_request(idempotency_key="read-2", subject="Second attempt"),
+        now=first_sent_at + timedelta(minutes=10),
+    )
+
+    assert second.recipient_unobserved_backlog == 0
+    assert second.recipient_oldest_unobserved_seconds is None
+    assert second.recipient_may_be_unreachable is False
+
+
+def test_a_fresh_unobserved_message_is_not_yet_evidence(
+    mailbox: tuple[CoordinationMessageStore, Path, Path],
+) -> None:
+    """A recipient gets a grace window before an unread message counts against it."""
+
+    store, _claims_dir, _root = mailbox
+    first_sent_at = datetime(2026, 8, 26, 18, 0, tzinfo=UTC)
+    store.send(_send_request(idempotency_key="fresh-1"), now=first_sent_at)
+
+    second = store.send(
+        _send_request(idempotency_key="fresh-2", subject="Second attempt"),
+        now=first_sent_at + timedelta(minutes=1),
+    )
+
+    assert second.recipient_unobserved_backlog == 1
+    assert second.recipient_may_be_unreachable is False

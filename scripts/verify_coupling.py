@@ -35,15 +35,25 @@ except ImportError:
 DIFF_MAX_CHARS = 8_000   # ~200 lines at 40 chars/line
 DOC_MAX_CHARS = 20_000   # ~500 lines at 40 chars/line
 
-DEFAULT_MODEL = "gemini/gemini-2.5-flash"
-# Why Gemini instead of Claude for the default?
-# 1. Cost: gemini-2.5-flash is ~10x cheaper per token than claude-sonnet.
-#    verify_coupling fires once per locked coupling per commit — potentially
-#    dozens of calls in a busy repo. Cost adds up fast.
-# 2. Latency: faster first-token matters in a pre-commit loop where the
-#    developer is waiting.
-# review_truth_surfaces.py uses Claude because semantic doc review requires
-# stronger prose reasoning and happens much less frequently (not per-commit).
+# Resolve the model from llm_client's task profile rather than pinning one here.
+# This was `gemini/gemini-2.5-flash` until 2026-08-27. Pinning a provider in each
+# script put Gemini defaults in eight repos that all drew on ONE 20-request-per-day
+# Google free-tier quota, so any one of them could exhaust it for all the others
+# and the failure surfaced in whichever tool ran next
+# (project-meta lrn-20260827T131612546191Z-7fb691dc0c).
+#
+# `judging` keeps the original requirements — cheap and fast enough for a
+# pre-commit loop — while leaving the model choice in one shared place. It also
+# resolves to llm_client's only DEFAULT_MODEL_ID, so no per-call
+# model_justification is required.
+DEFAULT_MODEL_TASK = "judging"
+
+
+def _default_model() -> str:
+    """Model for coupling verification, from the shared task profile."""
+    from llm_client.core.models import get_model  # local: keep import optional
+
+    return get_model(DEFAULT_MODEL_TASK, use_performance=False)
 # Override at runtime: VERIFY_COUPLING_MODEL env var or --model flag.
 DEFAULT_MAX_BUDGET = 0.05  # USD per coupling verification
 
@@ -168,7 +178,7 @@ def verify_coupling(
 
     Args:
         request: Context package for the coupling check.
-        model: Model override. Defaults to DEFAULT_MODEL or VERIFY_COUPLING_MODEL env var.
+        model: Model override. Defaults to VERIFY_COUPLING_MODEL env var, else the `judging` task profile.
         max_budget: Cost ceiling in USD. Defaults to DEFAULT_MAX_BUDGET.
         trace_id: Optional trace ID for llm_client observability.
 
@@ -183,7 +193,7 @@ def verify_coupling(
     if call_llm_structured is None:
         raise RuntimeError("llm_client not installed. pip install -e ~/projects/llm_client")
 
-    effective_model = model or os.getenv("VERIFY_COUPLING_MODEL") or DEFAULT_MODEL
+    effective_model = model or os.getenv("VERIFY_COUPLING_MODEL") or _default_model()
     user_content = build_context_package(request)
 
     judgment, _llm_result = call_llm_structured(
@@ -235,7 +245,13 @@ def main() -> int:
     parser.add_argument("--description", required=True, help="Coupling description from relationships.yaml")
     parser.add_argument("--diff-file", type=Path, required=True, help="Path to git diff file")
     parser.add_argument("--doc-path", type=Path, required=True, help="Path to coupled doc")
-    parser.add_argument("--model", help=f"LLM model (default: {DEFAULT_MODEL})")
+    parser.add_argument(
+        "--model",
+        help=(
+            "LLM model. Defaults to the VERIFY_COUPLING_MODEL env var, else "
+            f"whatever llm_client's `{DEFAULT_MODEL_TASK}` task profile resolves to."
+        ),
+    )
     parser.add_argument("--max-budget", type=float, default=DEFAULT_MAX_BUDGET, help="Cost ceiling USD")
     parser.add_argument("--trace-id", help="Trace ID for observability")
     args = parser.parse_args()

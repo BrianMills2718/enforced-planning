@@ -34,6 +34,20 @@ def resolve_config_path(repo_root: Path, explicit_config: str | None) -> Path:
     return (repo_root / "scripts" / "truth_surface_drift.yaml").resolve()
 
 
+
+def _default_review_model() -> str:
+    """Model for semantic truth-surface review, from the shared task profile.
+
+    Was pinned to `gemini/gemini-2.5-flash` until 2026-08-27. Per-script provider
+    pins put Gemini defaults across eight repos sharing one 20-request-per-day
+    free-tier quota; see project-meta lrn-20260827T131612546191Z-7fb691dc0c.
+    `deep_review` matches this workload and resolves centrally.
+    """
+    from llm_client.core.models import get_model
+
+    return get_model("deep_review", use_performance=False)
+
+
 def main() -> int:
     """Run the compatibility wrapper and print a deprecation notice."""
     parser = argparse.ArgumentParser(description=__doc__)
@@ -52,7 +66,7 @@ def main() -> int:
         default=DEFAULT_HISTORY_JSON,
         help="Append-only semantic-review history path",
     )
-    parser.add_argument("--model", default="gemini/gemini-2.5-flash")
+    parser.add_argument("--model", default=None)
     parser.add_argument("--max-budget", type=float, default=0.50)
     parser.add_argument(
         "--trace-id",
@@ -87,7 +101,7 @@ def main() -> int:
 
     review, payload = review_truth_surface_semantic(
         config_path,
-        model=args.model,
+        model=args.model or _default_review_model(),
         max_budget=args.max_budget,
         trace_id=args.trace_id,
     )

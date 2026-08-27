@@ -249,13 +249,27 @@ def append_semantic_review_history(path: Path, payload: dict[str, Any]) -> None:
     path.write_text(json.dumps(history, indent=2, sort_keys=True) + "\n")
 
 
+
+def _default_review_model() -> str:
+    """Model for semantic truth-surface review, from the shared task profile.
+
+    Was pinned to `gemini/gemini-2.5-flash` until 2026-08-27. Per-script provider
+    pins put Gemini defaults across eight repos sharing one 20-request-per-day
+    free-tier quota; see project-meta lrn-20260827T131612546191Z-7fb691dc0c.
+    `deep_review` matches this workload and resolves centrally.
+    """
+    from llm_client.core.models import get_model
+
+    return get_model("deep_review", use_performance=False)
+
+
 def main() -> int:
     """CLI entrypoint for semantic truth-surface review."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", required=True, help="Path to a truth_surface_drift.yaml config")
     parser.add_argument(
         "--model",
-        default="gemini/gemini-2.5-flash",
+        default=None,
         help="Reviewer model identifier",
     )
     parser.add_argument(
@@ -289,7 +303,7 @@ def main() -> int:
 
     review, payload = review_truth_surface_semantic(
         Path(args.config),
-        model=args.model,
+        model=args.model or _default_review_model(),
         max_budget=args.max_budget,
         trace_id=args.trace_id,
         max_evidence_chars=args.max_evidence_chars,

@@ -1359,6 +1359,20 @@ but cannot truthfully assert mailbox debt or manufacture a block. The agent must
 not cross a boundary when a live-agent decision may be pending until canonical
 polling is restored.
 
+`session-resume` is the one lifecycle call that may legitimately run with no
+live claim: the preserved-lane check refuses a new claim and names resume as the
+recovery, so a fresh runtime arrives holding nothing and the poll cannot resolve
+its session. That case degrades rather than raising, because crashing there
+manufactures exactly the block this rule forbids -- and it left closing the lane
+as the only named route that worked, making the documented recovery circular.
+The degraded notice reports `polled: false` with
+`degraded_reason: no_live_claim_owns_session`, and its summary says `NOT POLLED`
+rather than `no active messages`: a poll that could not run must stay
+distinguishable from a poll that found an empty inbox. Every other mailbox fault
+still propagates. Resuming under a degraded poll does not clear the rule above —
+a live-agent decision may still be pending, so do not cross a coordination
+boundary until a claim is held and polling is restored.
+
 ## What Coordination Does And Does Not Do
 
 What it does:

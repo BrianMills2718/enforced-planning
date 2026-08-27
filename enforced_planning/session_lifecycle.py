@@ -48,15 +48,47 @@ class OutcomeAdmissionDeniedError(PermissionError):
 
 
 def _poll_mailbox(*, agent: str, project: str, session_id: str) -> dict[str, Any]:
-    """Inject canonical mailbox state into a shared lifecycle response."""
+    """Inject canonical mailbox state into a shared lifecycle response.
 
-    notice = coordination_messages.poll_session_inbox(
-        agent=agent,
-        project=project,
-        session_id=session_id,
-        observe=True,
-    )
-    return notice.model_dump(mode="json")
+    A poll needs a live claim to resolve the session, and `session-resume` is
+    the one caller that may legitimately run without one: the preserved-lane
+    check refuses a new claim and names resume as the recovery, so a fresh
+    runtime arrives holding nothing. Letting `UnknownSessionError` escape turned
+    that recovery into an unhandled traceback and left closing the lane as the
+    only route the refusal named that actually worked.
+
+    The operator guide governs the fallback: an adapter failure "emits a visible
+    warning but cannot truthfully assert mailbox debt or manufacture a block".
+    Crashing manufactures the block, and reporting an empty inbox would fabricate
+    the opposite. Record the limitation instead, and say a live-agent decision
+    may still be pending.
+    """
+
+    try:
+        notice = coordination_messages.poll_session_inbox(
+            agent=agent,
+            project=project,
+            session_id=session_id,
+            observe=True,
+        )
+    except coordination_messages.UnknownSessionError as exc:
+        return {
+            "session_id": session_id,
+            "project": project,
+            "active_count": 0,
+            "message_ids": [],
+            "acknowledgement_count": 0,
+            "acknowledgement_message_ids": [],
+            "polled": False,
+            "degraded_reason": "no_live_claim_owns_session",
+            "summary": (
+                "coordination mailbox: NOT POLLED -- no live claim owns session "
+                f"{session_id!r} ({exc}). This is not an empty inbox; a "
+                "live-agent decision may be pending. Do not cross a coordination "
+                "boundary until a claim is held and polling is restored."
+            ),
+        }
+    return {**notice.model_dump(mode="json"), "polled": True, "degraded_reason": None}
 
 
 def _load_worktree_lifecycle_policy(path: Path) -> tuple[str, frozenset[str], frozenset[str], frozenset[str]]:

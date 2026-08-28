@@ -113,6 +113,19 @@ def test_raw_bash_grammar_accepts_only_canonical_single_command(tmp_path: Path) 
     assert request.intent == "Brian's claim"
 
 
+def test_shell_operators_inside_single_quoted_json_are_inert_data(tmp_path: Path) -> None:
+    script = tmp_path / "scripts" / "claim_bootstrap.py"
+    raw_json = json.dumps(
+        _start_payload(intent="inspect && verify; preserve | literal > text"),
+        separators=(",", ":"),
+    )
+    command = f"/usr/bin/python3 {script} --request-json '{raw_json}'"
+
+    request = claim_bootstrap.parse_raw_bash_command(command, script_path=script)
+
+    assert request.intent == "inspect && verify; preserve | literal > text"
+
+
 @pytest.mark.parametrize(
     "command",
     [
@@ -225,3 +238,15 @@ def test_unknown_operation_and_extra_fields_fail_closed() -> None:
     ):
         with pytest.raises(claim_bootstrap.ClaimBootstrapError):
             claim_bootstrap.parse_request_json(json.dumps(payload))
+
+
+@pytest.mark.parametrize(
+    "raw_json",
+    [
+        '{"schema_version":"1.0","operation":"heartbeat","project":"a","project":"b","scope":"x"}',
+        '{"schema_version":"1.0","operation":"heartbeat","project":"a","scope":"x","nested":{"a":1,"a":2}}',
+    ],
+)
+def test_duplicate_json_object_keys_fail_closed_at_every_depth(raw_json: str) -> None:
+    with pytest.raises(claim_bootstrap.ClaimBootstrapError, match="duplicate object key"):
+        claim_bootstrap.parse_request_json(raw_json)

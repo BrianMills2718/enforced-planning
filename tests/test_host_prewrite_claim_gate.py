@@ -276,6 +276,9 @@ def test_cli_bootstrap_classifier_delegates_to_claim_bootstrap_parser(
         "git branch new-name",
         "git show HEAD > snapshot.txt",
         "rg --pre 'touch marker' needle .",
+        "/tmp/ls",
+        "./git status",
+        "/opt/tools/rg needle .",
     ],
 )
 def test_ambiguous_or_mutating_bash_fails_closed_without_claim(tmp_path: Path, command: str) -> None:

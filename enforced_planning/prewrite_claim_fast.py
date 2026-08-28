@@ -219,7 +219,10 @@ def classify_bash_command(
     argv = _shell_tokens(command)
     if argv is None:
         return "claim_required"
-    executable = Path(argv[0]).name
+    executable_token = argv[0]
+    if Path(executable_token).name != executable_token:
+        return "claim_required"
+    executable = executable_token
     if executable in _SIMPLE_READ_ONLY_COMMANDS:
         if executable == "rg" and any(token == "--pre" or token.startswith("--pre=") for token in argv[1:]):
             return "claim_required"

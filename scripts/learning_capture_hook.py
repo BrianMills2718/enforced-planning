@@ -24,6 +24,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+try:
+    from hook_receipts import DEFAULT_RECEIPT_ROOT, HookInvocation, start_hook_invocation
+except ModuleNotFoundError:  # package-style tests import scripts.learning_capture_hook
+    from scripts.hook_receipts import DEFAULT_RECEIPT_ROOT, HookInvocation, start_hook_invocation
+
 DEFAULT_STATE_DIR = Path("~/.claude/coordination/learning-capture-v1")
 DEFAULT_CODEX_CONFIG = Path("~/.codex/config.toml")
 DEFAULT_CLAUDE_SETTINGS = Path("~/.claude/settings.json")
@@ -37,6 +42,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--agent", choices=SUPPORTED_AGENTS)
     parser.add_argument("--state-dir", type=Path, default=DEFAULT_STATE_DIR)
+    parser.add_argument("--hook-receipt-dir", type=Path, default=DEFAULT_RECEIPT_ROOT)
     parser.add_argument(
         "--emit-result",
         action="store_true",
@@ -276,6 +282,29 @@ def write_receipt(
     return receipt_path
 
 
+def prior_recorded_receipt(
+    *, state_dir: Path, agent: str, session_id: str
+) -> Path | None:
+    """Resolve an earlier accepted Recorded disposition for this exact session."""
+
+    state_root = state_dir.expanduser().resolve()
+    session_digest = hashlib.sha256(f"{agent}\0{session_id}".encode()).hexdigest()[:32]
+    session_dir = state_root / session_digest
+    if not session_dir.is_dir():
+        return None
+    for path in sorted(session_dir.glob("*.json"), reverse=True):
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            continue
+        if (
+            payload.get("agent") == agent
+            and payload.get("decision") in {"recorded", "recorded_prior_receipt"}
+        ):
+            return path
+    return None
+
+
 def main(argv: list[str] | None = None) -> int:
     """Block an incomplete learning disposition and record the observed result."""
     args = parse_args(argv)
@@ -293,10 +322,34 @@ def main(argv: list[str] | None = None) -> int:
         return 0 if result["live"] else 1
     if args.agent is None:
         raise SystemExit("--agent is required unless --check-install is used")
+    invocation: HookInvocation | None = None
+    telemetry_decision = "block"
+    telemetry_reason = "hook_unavailable"
     try:
         payload = read_event()
+        invocation = start_hook_invocation(
+            hook_name="learning-capture",
+            hook_version="2",
+            script_path=Path(__file__).resolve(),
+            payload=payload,
+            receipt_root=args.hook_receipt_dir,
+        )
         report = payload["last_assistant_message"]
         decision, detail = classify_report(report)
+        disposition = report_field(report, "Learnings") or ""
+        if decision == "block_invalid" and re.match(
+            r"^already\s+recorded\b", disposition.strip().strip("*_` "), re.IGNORECASE
+        ):
+            prior = prior_recorded_receipt(
+                state_dir=args.state_dir,
+                agent=args.agent,
+                session_id=payload["session_id"],
+            )
+            if prior is not None:
+                decision = "recorded_prior_receipt"
+                detail = f"Verified by earlier learning-capture receipt {prior.name}."
+        telemetry_decision = "block" if decision.startswith("block_") else "allow"
+        telemetry_reason = decision
         if decision != "not_completed_work":
             write_receipt(
                 state_dir=args.state_dir,
@@ -307,7 +360,14 @@ def main(argv: list[str] | None = None) -> int:
                 detail=detail,
             )
         if decision.startswith("block_"):
-            print(json.dumps({"decision": "block", "reason": detail}))
+            print(
+                json.dumps(
+                    {
+                        "decision": "block",
+                        "reason": f"{detail} Receipt: {invocation.receipt_id}.",
+                    }
+                )
+            )
         elif args.emit_result:
             print(
                 json.dumps(
@@ -322,6 +382,9 @@ def main(argv: list[str] | None = None) -> int:
     except (json.JSONDecodeError, OSError, TypeError, ValueError) as exc:
         reason = f"learning-capture gate unavailable: {type(exc).__name__}: {exc}"
         print(json.dumps({"decision": "block", "reason": reason}))
+    finally:
+        if invocation is not None:
+            invocation.complete(decision=telemetry_decision, reason_code=telemetry_reason)
     return 0
 
 

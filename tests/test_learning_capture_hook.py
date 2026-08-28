@@ -13,7 +13,16 @@ SCRIPT = REPO_ROOT / "scripts" / "learning_capture_hook.py"
 def run_hook(tmp_path: Path, report: str, *, agent: str = "codex") -> subprocess.CompletedProcess[str]:
     """Run one native-shaped Stop event through the hook."""
     return subprocess.run(
-        ["python3", str(SCRIPT), "--agent", agent, "--state-dir", str(tmp_path)],
+        [
+            "python3",
+            str(SCRIPT),
+            "--agent",
+            agent,
+            "--state-dir",
+            str(tmp_path),
+            "--hook-receipt-dir",
+            str(tmp_path / "hook-receipts"),
+        ],
         input=json.dumps(
             {
                 "session_id": "session-123",
@@ -48,6 +57,7 @@ def test_completed_work_without_learning_disposition_is_blocked(tmp_path: Path) 
     payload = json.loads(result.stdout)
     assert payload["decision"] == "block"
     assert "Learnings disposition" in payload["reason"]
+    assert "Receipt:" in payload["reason"]
     assert receipts(tmp_path)[0]["decision"] == "block_missing"
 
 
@@ -78,6 +88,33 @@ def test_recorded_learning_is_accepted_and_receipted(tmp_path: Path) -> None:
     assert receipt["decision"] == "recorded"
     assert receipt["agent"] == "claude-code"
     assert "last_assistant_message" not in receipt
+
+
+def test_already_recorded_reuses_an_exact_session_receipt(tmp_path: Path) -> None:
+    first = run_hook(
+        tmp_path,
+        "- **Done** — Implemented.\n"
+        "- **Learnings** — Recorded — project-meta/learnings.md at commit abc1234.",
+    )
+    assert first.stdout == ""
+
+    repeated = run_hook(
+        tmp_path,
+        "- **Done** — Explanation complete.\n- **Learnings** — Already recorded.",
+    )
+
+    assert repeated.returncode == 0
+    assert repeated.stdout == ""
+    assert "recorded_prior_receipt" in {receipt["decision"] for receipt in receipts(tmp_path)}
+
+
+def test_already_recorded_without_prior_receipt_still_blocks(tmp_path: Path) -> None:
+    result = run_hook(
+        tmp_path,
+        "- **Done** — Explanation complete.\n- **Learnings** — Already recorded.",
+    )
+
+    assert json.loads(result.stdout)["decision"] == "block"
 
 
 def test_openclaw_adapter_can_request_explicit_allow_result(tmp_path: Path) -> None:

@@ -11,8 +11,14 @@ import shlex
 import subprocess
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, Literal
+
+try:
+    from hook_receipts import DEFAULT_RECEIPT_ROOT, HookInvocation, start_hook_invocation
+except ModuleNotFoundError:  # package-style tests import scripts.coordination_hook
+    from scripts.hook_receipts import DEFAULT_RECEIPT_ROOT, HookInvocation, start_hook_invocation
 
 
 def _bootstrap_package() -> None:
@@ -45,7 +51,7 @@ def _bootstrap_package() -> None:
 
 _bootstrap_package()
 
-from enforced_planning import coordination_claims, coordination_messages  # noqa: E402
+from enforced_planning import coordination_claims, coordination_messages
 
 SUPPORTED_EVENTS = {"SessionStart", "UserPromptSubmit", "PostToolUse", "PreToolUse", "Stop"}
 MUTATION_TOOL_NAMES = frozenset({"bash", "apply_patch", "edit", "write"})
@@ -53,6 +59,7 @@ REPOSITORY_SCAN_SKIP_DIRS = frozenset(
     {".git", ".venv", "node_modules", "worktrees", ".recovery-worktrees"}
 )
 REPOSITORY_SCAN_MAX_DEPTH = 5
+REPOSITORY_SCAN_MAX_WORKERS = 16
 
 
 class RepositoryCloseoutError(RuntimeError):
@@ -66,6 +73,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--claims-dir", type=Path)
     parser.add_argument("--root", type=Path)
     parser.add_argument("--closeout-ledger-dir", type=Path)
+    parser.add_argument("--hook-receipt-dir", type=Path, default=DEFAULT_RECEIPT_ROOT)
     parser.add_argument("--agent", choices=("codex", "claude-code"), default="codex")
     parser.add_argument("--project", help="Canonical project override supplied by a repository compatibility hook.")
     return parser.parse_args(argv)
@@ -213,13 +221,28 @@ def _repository_status(repository: Path) -> dict[str, Any]:
     }
 
 
-def _repository_snapshot(scan_root: Path) -> dict[str, dict[str, Any]]:
+def _repository_snapshot(
+    scan_root: Path,
+    *,
+    excluded_repositories: set[str] | None = None,
+) -> dict[str, dict[str, Any]]:
     """Capture status fingerprints for every canonical repository in scope."""
 
-    return {
-        str(repository): _repository_status(repository)
+    excluded = excluded_repositories or set()
+    repositories = tuple(
+        repository
         for repository in _discover_repositories(scan_root)
-    }
+        if str(repository) not in excluded
+    )
+    if not repositories:
+        return {}
+    worker_count = min(REPOSITORY_SCAN_MAX_WORKERS, len(repositories))
+    with ThreadPoolExecutor(max_workers=worker_count, thread_name_prefix="repo-closeout") as executor:
+        statuses = executor.map(_repository_status, repositories)
+        return {
+            str(repository): status
+            for repository, status in zip(repositories, statuses, strict=True)
+        }
 
 
 def _closeout_ledger_path(
@@ -320,8 +343,8 @@ def _repository_closeout_failure(
         raise RepositoryCloseoutError(f"invalid repository closeout ledger: {ledger_path}")
     scan_root = Path(str(payload.get("scan_root", ""))).expanduser().resolve()
     baseline = payload["repositories"]
-    current = _repository_snapshot(scan_root)
     foreign = _repositories_with_foreign_live_claims(session_id)
+    current = _repository_snapshot(scan_root, excluded_repositories=foreign)
     dirty_changes: list[tuple[str, int]] = []
     for repository, status in current.items():
         prior = baseline.get(repository)
@@ -505,8 +528,20 @@ def main(argv: list[str] | None = None) -> int:
     """Refresh matching claim state and expose requests to the native session."""
 
     args = parse_args(argv)
+    invocation: HookInvocation | None = None
+    telemetry_decision = "warn"
+    telemetry_reason = "hook_unavailable"
     try:
         payload = _read_hook_input(project_supplied=args.project is not None)
+        invocation = start_hook_invocation(
+            hook_name="coordination-lifecycle",
+            hook_version="2",
+            script_path=Path(__file__).resolve(),
+            payload=payload,
+            receipt_root=args.hook_receipt_dir,
+        )
+        telemetry_decision = "allow"
+        telemetry_reason = "no_active_boundary"
         session_id = _session_id(args.agent, payload["session_id"])
         closeout_ledger_dir = args.closeout_ledger_dir or (
             (args.claims_dir or coordination_claims.CLAIMS_DIR).expanduser().resolve().parent
@@ -585,7 +620,12 @@ def main(argv: list[str] | None = None) -> int:
                     delivery_event_id=delivery_event_id,
                     tool_name=tool_name if isinstance(tool_name, str) else None,
                 )
+            telemetry_decision = "block"
+            telemetry_reason = (
+                "repository_closeout_dirty" if closeout_failure else "active_mailbox_request"
+            )
             denial_parts = [part for part in (notice.summary, closeout_failure) if part]
+            denial_parts.append(f"Hook receipt: {invocation.receipt_id}.")
             print(json.dumps(_render_boundary_denial(boundary_event, "\n\n".join(denial_parts))))
             return 0
         if notice.active_count or notice.acknowledgement_count:
@@ -607,6 +647,12 @@ def main(argv: list[str] | None = None) -> int:
             else "coordination mailbox unavailable"
         )
         warning = f"{prefix}: {type(exc).__name__}: {exc}"
+        telemetry_decision = "block" if isinstance(exc, RepositoryCloseoutError) else "warn"
+        telemetry_reason = (
+            "repository_closeout_unavailable"
+            if isinstance(exc, RepositoryCloseoutError)
+            else "coordination_mailbox_unavailable"
+        )
         if (
             isinstance(exc, RepositoryCloseoutError)
             and "payload" in locals()
@@ -615,6 +661,9 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(_render_boundary_denial("Stop", warning)))
         else:
             print(json.dumps({"systemMessage": warning}))
+    finally:
+        if invocation is not None:
+            invocation.complete(decision=telemetry_decision, reason_code=telemetry_reason)
     return 0
 
 

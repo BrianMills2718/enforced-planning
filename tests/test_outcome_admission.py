@@ -360,6 +360,15 @@ def test_outcome_admission_mode_is_strict_and_absent_off(
     assert load_outcome_admission_mode(tmp_path) == expected
 
 
+def test_outcome_admission_mode_accepts_documented_unquoted_off(tmp_path: Path) -> None:
+    (tmp_path / "meta-process.yaml").write_text(
+        "meta_process:\n  claims:\n    outcome_admission_mode: off\n",
+        encoding="utf-8",
+    )
+
+    assert load_outcome_admission_mode(tmp_path) == "off"
+
+
 @pytest.mark.parametrize(
     "configured",
     [

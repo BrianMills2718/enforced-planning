@@ -145,6 +145,15 @@ def _run_cli(
     return code, json.loads(captured.out)
 
 
+def test_repo_prewrite_mode_accepts_documented_unquoted_off(tmp_path: Path) -> None:
+    (tmp_path / "meta-process.yaml").write_text(
+        "meta_process:\n  claims:\n    prewrite_mode: off\n",
+        encoding="utf-8",
+    )
+
+    assert prewrite_claim_gate._load_mode(tmp_path) == "off"
+
+
 @pytest.mark.parametrize(
     ("tool", "path_field", "suffix"),
     [

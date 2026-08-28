@@ -140,6 +140,11 @@ def load_outcome_admission_mode(repo_root: Path) -> OutcomeAdmissionMode:
     claims_value = meta_process["claims"]
     claims = _mapping(claims_value, field_name="meta-process.yaml claims")
     mode = claims.get("outcome_admission_mode", "off")
+    # PyYAML uses YAML 1.1 booleans, so the documented unquoted scalar ``off``
+    # arrives here as False.  Normalize only that exact value; malformed
+    # strings and every other type still fail closed below.
+    if mode is False:
+        mode = "off"
     if mode not in {"off", "enforce_selected"}:
         raise ValueError("claims.outcome_admission_mode must be one of: off, enforce_selected")
     return mode

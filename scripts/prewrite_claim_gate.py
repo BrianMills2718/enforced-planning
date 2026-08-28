@@ -99,6 +99,12 @@ def _load_mode(repo_root: Path) -> str:
     if not isinstance(claims, dict):
         raise FastPreWriteError("meta-process.yaml claims must be a mapping")
     mode = claims.get("prewrite_mode", "off")
+    # PyYAML follows YAML 1.1 scalar rules, where an unquoted ``off`` is
+    # loaded as Boolean false.  The public configuration vocabulary explicitly
+    # names ``off`` as a valid mode, so preserve that spelling's intended
+    # meaning while continuing to reject every other non-string value.
+    if mode is False:
+        mode = "off"
     if mode not in {"off", "observe", "enforce"}:
         raise FastPreWriteError("claims.prewrite_mode must be one of: off, observe, enforce")
     return str(mode)

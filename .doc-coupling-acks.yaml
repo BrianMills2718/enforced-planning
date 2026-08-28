@@ -1,0 +1,12 @@
+# Doc-Coupling Acknowledged Gaps
+# This file documents why certain doc-code couplings are not violated
+
+acknowledged:
+  - path: "enforced_planning/coordination_claims.py → docs/guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md"
+    reason: "Bug fix: Added lock for atomicity. No model or operator workflow changes. Docs already correctly describe the claim/projection/lock model."
+  
+  - path: "enforced_planning/coordination_claims.py → docs/plans/125_planning_integrity_loop.md"
+    reason: "Bug fix: Internal implementation detail. No Planning Integrity contract changes."
+  
+  - path: "enforced_planning/coordination_claims.py → docs/reference/CONFIG_REFERENCE.md"
+    reason: "Bug fix: No configuration changes."

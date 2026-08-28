@@ -1,5 +1,7 @@
 # Worktree And Coordination Operator Guide
 
+**Last verified:** 2026-08-28 (internal atomicity improvements to claim refresh, no model/workflow changes)
+
 This is the authoritative operator guide for sanctioned worktree usage and
 cross-agent coordination in governed repos. Use this document for day-to-day
 workflow. Keep rationale, rollout history, and boundary design in the pattern

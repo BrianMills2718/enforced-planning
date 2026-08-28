@@ -2201,8 +2201,9 @@ def create_claim(
         claim_payload.pop("project", None)
         if candidate.start_revision is None:
             claim_payload.pop("start_revision", None)
-        _atomic_write_claim(claim_path, claim_payload)
-        _projection_path, projection_digest_after = refresh_prewrite_authority_projection(CLAIMS_DIR)
+        with claim_registry_lock(CLAIMS_DIR):
+            _atomic_write_claim(claim_path, claim_payload)
+            _projection_path, projection_digest_after = refresh_prewrite_authority_projection(CLAIMS_DIR)
         record_claim_mutation(
             operation="create",
             claims_dir=CLAIMS_DIR,

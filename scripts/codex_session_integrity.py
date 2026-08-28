@@ -213,15 +213,28 @@ def create_recovery_bundle(
     """Preserve a corrupt rollout and derive safe create-once artifacts."""
 
     resolved = session_file.expanduser().resolve()
-    source_sha256 = _sha256(resolved)
-    bundle = recovery_root.expanduser().resolve() / session_id / f"auto-{source_sha256[:12]}"
+    live_report = inspect_session_jsonl(resolved)
+    if live_report.is_clean:
+        raise ValueError("recovery bundle requires at least one malformed record")
+    first_issue = live_report.issues[0]
+    incident_material = "\0".join(
+        (
+            session_id,
+            str(first_issue.line),
+            str(first_issue.byte_offset),
+            first_issue.kind,
+        )
+    )
+    incident_id = hashlib.sha256(incident_material.encode("utf-8")).hexdigest()[:12]
+    bundle = recovery_root.expanduser().resolve() / session_id / f"auto-{incident_id}"
     bundle.mkdir(parents=True, exist_ok=True)
 
     snapshot = bundle / "original-snapshot.jsonl"
     if not snapshot.exists():
+        live_source_sha256 = _sha256(resolved)
         temporary = bundle / f".original-snapshot.{os.getpid()}.tmp"
         shutil.copyfile(resolved, temporary)
-        if _sha256(temporary) != source_sha256:
+        if _sha256(temporary) != live_source_sha256:
             temporary.unlink(missing_ok=True)
             raise OSError("session rollout changed while the recovery snapshot was being created")
         try:
@@ -230,8 +243,10 @@ def create_recovery_bundle(
             pass
         finally:
             temporary.unlink(missing_ok=True)
-    if _sha256(snapshot) != source_sha256:
-        raise FileExistsError(f"recovery snapshot digest mismatch: {snapshot}")
+    # The first snapshot is immutable incident evidence. A growing host rollout
+    # for the same malformed physical record reuses it instead of copying each
+    # successively larger file into a new bundle.
+    source_sha256 = _sha256(snapshot)
 
     report = inspect_session_jsonl(snapshot)
     if report.is_clean:
@@ -258,6 +273,7 @@ def create_recovery_bundle(
         {
             "created_at": datetime.now(timezone.utc).isoformat(),
             "session_id": session_id,
+            "incident_id": incident_id,
             "source_sha256": source_sha256,
             "sanitized_records": len(sanitized_records),
         }

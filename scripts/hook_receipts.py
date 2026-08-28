@@ -16,6 +16,10 @@ from typing import Any
 DEFAULT_RECEIPT_ROOT = Path("~/.claude/coordination/hook-invocations-v1")
 
 
+class HookReceiptError(ValueError):
+    """Raised when persisted hook evidence is incomplete or malformed."""
+
+
 def _digest(value: str) -> str:
     return hashlib.sha256(value.encode()).hexdigest()
 
@@ -116,3 +120,85 @@ def start_hook_invocation(
     }
     _atomic_write(receipt_dir / "started.json", started)
     return HookInvocation(receipt_dir=receipt_dir, base_payload=base, started_ns=started_ns)
+
+
+def load_completed_receipts(receipt_root: Path = DEFAULT_RECEIPT_ROOT) -> tuple[dict[str, Any], ...]:
+    """Load strict content-free completion receipts in stable evidence order."""
+
+    root = receipt_root.expanduser().resolve()
+    if not root.exists():
+        return ()
+    required = {
+        "schema_version": int,
+        "record_type": str,
+        "receipt_id": str,
+        "hook_name": str,
+        "hook_version": str,
+        "phase": str,
+        "decision": str,
+        "reason_code": str,
+        "event_name": str,
+        "observed_at": str,
+    }
+    loaded: list[dict[str, Any]] = []
+    for path in sorted(root.rglob("completed.json")):
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise HookReceiptError(f"cannot read completed hook receipt {path}: {exc}") from exc
+        if not isinstance(payload, dict):
+            raise HookReceiptError(f"completed hook receipt must be an object: {path}")
+        for field, expected_type in required.items():
+            value = payload.get(field)
+            if not isinstance(value, expected_type) or (isinstance(value, str) and not value.strip()):
+                raise HookReceiptError(f"completed hook receipt has invalid {field!r}: {path}")
+        if payload["record_type"] != "hook_invocation_receipt" or payload["phase"] != "completed":
+            raise HookReceiptError(f"completed hook receipt has invalid contract identity: {path}")
+        if path.parent.name != payload["receipt_id"]:
+            raise HookReceiptError(f"completed hook receipt path/identity mismatch: {path}")
+        loaded.append(payload)
+    return tuple(loaded)
+
+
+def group_hook_recurrences(
+    receipts: tuple[dict[str, Any], ...],
+    *,
+    threshold: int = 2,
+) -> dict[str, Any]:
+    """Group content-free episodes and retain exact receipt step-down evidence."""
+
+    if threshold < 1:
+        raise ValueError("recurrence threshold must be at least 1")
+    grouped: dict[tuple[str, str, str, str, str], list[str]] = {}
+    for receipt in receipts:
+        key = (
+            str(receipt["hook_name"]),
+            str(receipt["hook_version"]),
+            str(receipt["event_name"]),
+            str(receipt["decision"]),
+            str(receipt["reason_code"]),
+        )
+        grouped.setdefault(key, []).append(str(receipt["receipt_id"]))
+    groups = []
+    for key, receipt_ids in sorted(grouped.items()):
+        hook_name, hook_version, event_name, decision, reason_code = key
+        groups.append(
+            {
+                "hook_name": hook_name,
+                "hook_version": hook_version,
+                "event_name": event_name,
+                "decision": decision,
+                "reason_code": reason_code,
+                "count": len(receipt_ids),
+                "recurrent": len(receipt_ids) >= threshold,
+                "receipt_ids": sorted(receipt_ids),
+                "disposition_command": "make ecosystem-feedback ARGS='record ...'",
+            }
+        )
+    return {
+        "schema_version": 1,
+        "record_type": "hook_feedback_recurrence_report",
+        "threshold": threshold,
+        "receipt_count": len(receipts),
+        "groups": groups,
+    }

@@ -1,10 +1,24 @@
 # Plan #126: Atomic Projection Refresh on Claim Mutations
 
-**Status:** Planned  
+**Status:** Complete — superseded without implementation
 **Type:** framework architecture fix  
 **Priority:** Critical (blocks stop-hook, causes recurring projection staleness)  
-**Blocks:** session closeout when active claims exist  
-**Gap:** Projection refresh is manual, not automatic on claim write/release
+**Blocks:** None; Plan #127 owns the surviving reader-side crash window
+**Gap:** The adopted design incorrectly inferred that claim creation wrote outside the registry lock.
+
+## Final Disposition
+
+Source inspection at the implementation boundary showed that `create_claim()`
+already enters `claim_registry_lock()` before reading authority and retains that
+outer critical section through `_atomic_write_claim()` and
+`refresh_prewrite_authority_projection()`. The branch-only candidate at `c6b3109`
+would acquire the same exclusive lock again inside that transaction. It is therefore
+rejected rather than integrated.
+
+The real reproduced failure is a replaceable projection left behind after an
+interrupted process or legacy/out-of-band mutation. Plan #127 supersedes this design
+with a bounded, lock-owning repair for ordinary turn end while keeping pre-write and
+`session-close` digest checks strict.
 
 ---
 
@@ -86,4 +100,4 @@ Make projection refresh **atomic with claim mutations:**
 
 ---
 
-**Ready to execute after approval.** This fixes the root cause, not a symptom.
+**Superseded by Plan #127 after source-level falsification of the writer-gap premise.**

@@ -1527,12 +1527,13 @@ def _run_repository_closeout_hook(
     ledger_dir: Path,
     event_name: str,
     event_id: str,
+    event_cwd: Path | None = None,
 ) -> subprocess.CompletedProcess[str]:
     """Run one native-shaped lifecycle event through repository closeout."""
 
     payload: dict[str, object] = {
         "session_id": "repository-closeout-test",
-        "cwd": str(workspace),
+        "cwd": str(event_cwd or workspace),
         "hook_event_name": event_name,
         "event_id": event_id,
     }
@@ -1579,6 +1580,17 @@ def test_stop_blocks_dirty_sibling_then_passes_after_cleanup(tmp_path: Path) -> 
     )
     assert started.returncode == 0, started.stderr or started.stdout
     assert started.stdout == ""
+
+    touched = _run_repository_closeout_hook(
+        workspace=workspace,
+        claims_dir=claims_dir,
+        message_root=message_root,
+        ledger_dir=ledger_dir,
+        event_name="PreToolUse",
+        event_id="closeout-touch-sibling",
+        event_cwd=sibling,
+    )
+    assert touched.returncode == 0, touched.stderr or touched.stdout
 
     (sibling / "stranded.txt").write_text("uncommitted\n", encoding="utf-8")
     blocked = _run_repository_closeout_hook(
@@ -1627,6 +1639,7 @@ def test_stop_ignores_unchanged_preexisting_dirt_but_blocks_session_delta(tmp_pa
         ledger_dir=ledger_dir,
         event_name="PreToolUse",
         event_id="preexisting-baseline",
+        event_cwd=repository,
     )
     unchanged = _run_repository_closeout_hook(
         workspace=workspace,
@@ -1648,6 +1661,42 @@ def test_stop_ignores_unchanged_preexisting_dirt_but_blocks_session_delta(tmp_pa
         event_id="preexisting-changed",
     )
     assert json.loads(changed.stdout)["decision"] == "block"
+
+
+def test_stop_does_not_adopt_an_unobserved_sibling_change(tmp_path: Path) -> None:
+    """A workspace fingerprint cannot attribute an unclaimed sibling writer."""
+
+    workspace = tmp_path / "workspace"
+    owned = workspace / "owned"
+    sibling = workspace / "sibling"
+    _initialize_git_repository(owned)
+    _initialize_git_repository(sibling)
+    claims_dir = tmp_path / "coordination" / "claims"
+    message_root = tmp_path / "coordination" / "messages-v1"
+    ledger_dir = tmp_path / "coordination" / "repository-closeout-ledgers"
+
+    started = _run_repository_closeout_hook(
+        workspace=workspace,
+        claims_dir=claims_dir,
+        message_root=message_root,
+        ledger_dir=ledger_dir,
+        event_name="SessionStart",
+        event_id="unobserved-start",
+    )
+    assert started.stdout == ""
+
+    (sibling / "other-writer.txt").write_text("not this session\n", encoding="utf-8")
+    stopped = _run_repository_closeout_hook(
+        workspace=workspace,
+        claims_dir=claims_dir,
+        message_root=message_root,
+        ledger_dir=ledger_dir,
+        event_name="Stop",
+        event_id="unobserved-stop",
+    )
+
+    assert stopped.returncode == 0
+    assert stopped.stdout == ""
 
 
 def test_send_flags_a_recipient_that_never_observes_its_mail(

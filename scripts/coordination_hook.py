@@ -12,6 +12,7 @@ import subprocess
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
 
@@ -51,14 +52,15 @@ def _bootstrap_package() -> None:
 
 _bootstrap_package()
 
-from enforced_planning import coordination_claims, coordination_messages
+from enforced_planning import (
+    coordination_claims,
+    coordination_messages,
+    prewrite_claim_fast,
+    prewrite_claim_projection,
+)
 
 SUPPORTED_EVENTS = {"SessionStart", "UserPromptSubmit", "PostToolUse", "PreToolUse", "Stop"}
 MUTATION_TOOL_NAMES = frozenset({"bash", "apply_patch", "edit", "write"})
-REPOSITORY_SCAN_SKIP_DIRS = frozenset(
-    {".git", ".venv", "node_modules", "worktrees", ".recovery-worktrees"}
-)
-REPOSITORY_SCAN_MAX_DEPTH = 5
 REPOSITORY_SCAN_MAX_WORKERS = 16
 
 
@@ -139,28 +141,6 @@ def _repository_scan_root(cwd: str) -> Path:
     return resolved
 
 
-def _discover_repositories(scan_root: Path) -> tuple[Path, ...]:
-    """Discover canonical repositories without descending into linked worktrees."""
-
-    if not scan_root.is_dir():
-        raise RepositoryCloseoutError(f"repository scan root is not a directory: {scan_root}")
-    repositories: set[Path] = set()
-    for current, directory_names, file_names in os.walk(scan_root):
-        current_path = Path(current)
-        depth = len(current_path.relative_to(scan_root).parts)
-        if ".git" in directory_names or (
-            current_path == scan_root and ".git" in file_names
-        ):
-            repositories.add(current_path.resolve())
-        if depth >= REPOSITORY_SCAN_MAX_DEPTH:
-            directory_names[:] = []
-            continue
-        directory_names[:] = [
-            name for name in directory_names if name not in REPOSITORY_SCAN_SKIP_DIRS
-        ]
-    return tuple(sorted(repositories))
-
-
 def _repository_status(repository: Path) -> dict[str, Any]:
     """Return a stable fingerprint of one repository's complete working-tree state."""
 
@@ -221,19 +201,11 @@ def _repository_status(repository: Path) -> dict[str, Any]:
     }
 
 
-def _repository_snapshot(
-    scan_root: Path,
-    *,
-    excluded_repositories: set[str] | None = None,
+def _repository_statuses(
+    repositories: tuple[Path, ...],
 ) -> dict[str, dict[str, Any]]:
-    """Capture status fingerprints for every canonical repository in scope."""
+    """Capture status fingerprints concurrently for exact attributed repositories."""
 
-    excluded = excluded_repositories or set()
-    repositories = tuple(
-        repository
-        for repository in _discover_repositories(scan_root)
-        if str(repository) not in excluded
-    )
     if not repositories:
         return {}
     worker_count = min(REPOSITORY_SCAN_MAX_WORKERS, len(repositories))
@@ -278,7 +250,8 @@ def _write_closeout_baseline(
         "agent": agent,
         "session_id": session_id,
         "scan_root": str(scan_root),
-        "repositories": _repository_snapshot(scan_root),
+        "repositories": {},
+        "touched_repositories": [],
     }
     ledger_path.parent.mkdir(parents=True, exist_ok=True)
     temporary = ledger_path.with_suffix(".tmp")
@@ -286,7 +259,118 @@ def _write_closeout_baseline(
     temporary.replace(ledger_path)
 
 
-def _repositories_with_foreign_live_claims(session_id: str) -> set[str]:
+def _active_claims(claims_dir: Path | None) -> tuple[Any, ...]:
+    """Load the digest-bound active projection instead of reparsing the YAML fleet."""
+
+    resolved = (claims_dir or coordination_claims.CLAIMS_DIR).expanduser().resolve()
+    projection_path = prewrite_claim_fast.projection_path_for(resolved)
+    if projection_path.is_file():
+        try:
+            projection = prewrite_claim_projection.PreWriteAuthorityProjectionV1.model_validate_json(
+                projection_path.read_text(encoding="utf-8")
+            )
+        except (OSError, ValueError) as exc:
+            raise RepositoryCloseoutError(
+                f"cannot read active-claim projection {projection_path}: {exc}"
+            ) from exc
+        if projection.claims_dir != str(resolved):
+            raise RepositoryCloseoutError(
+                f"active-claim projection targets {projection.claims_dir}, expected {resolved}"
+            )
+        registry_digest = prewrite_claim_fast.registry_digest(resolved)
+        if projection.registry_digest != registry_digest:
+            raise RepositoryCloseoutError(
+                "active-claim projection is stale relative to the canonical claim registry"
+            )
+        now = datetime.now(UTC)
+        return tuple(
+            claim
+            for claim in projection.claims
+            if claim.status in coordination_claims.LIVE_STATUSES
+            and (
+                claim.expires_at is None
+                or datetime.fromisoformat(claim.expires_at) >= now
+            )
+        )
+    if resolved == coordination_claims.CLAIMS_DIR.expanduser().resolve():
+        raise RepositoryCloseoutError(
+            f"active-claim projection is missing: {projection_path}"
+        )
+    return tuple(coordination_claims.check_claims(claims_dir=resolved))
+
+
+def _canonical_repository_root(cwd: str) -> Path | None:
+    """Resolve a linked worktree cwd to the canonical repository checkout."""
+
+    result = subprocess.run(
+        ["git", "-C", cwd, "rev-parse", "--path-format=absolute", "--git-common-dir"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode == 128:
+        return None
+    if result.returncode:
+        raise RepositoryCloseoutError(
+            f"cannot resolve canonical repository for {cwd}: {result.stderr.strip()}"
+        )
+    common_dir = Path(result.stdout.strip()).resolve()
+    return common_dir.parent if common_dir.name == ".git" else common_dir
+
+
+def _record_touched_repositories(
+    *,
+    payload: dict[str, Any],
+    agent: str,
+    session_id: str,
+    ledger_dir: Path,
+    active_claims: tuple[Any, ...],
+) -> None:
+    """Persist only repositories this exact session had evidence of touching."""
+
+    ledger_path = _closeout_ledger_path(
+        ledger_dir=ledger_dir,
+        agent=agent,
+        session_id=session_id,
+    )
+    if not ledger_path.is_file():
+        return
+    try:
+        ledger = json.loads(ledger_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as exc:
+        raise RepositoryCloseoutError(f"cannot read repository closeout ledger {ledger_path}: {exc}") from exc
+    prior_touched = {
+        str(Path(path).expanduser().resolve())
+        for path in ledger.get("touched_repositories", [])
+        if isinstance(path, str) and path.strip()
+    }
+    touched = set(prior_touched)
+    cwd = payload.get("cwd")
+    if isinstance(cwd, str) and cwd.strip():
+        repository = _canonical_repository_root(cwd)
+        if repository is not None:
+            touched.add(str(repository))
+    for claim in active_claims:
+        if claim.agent == agent and claim.session_id == session_id and claim.repo_root:
+            touched.add(str(Path(claim.repo_root).expanduser().resolve()))
+    baselines = ledger.get("repositories")
+    if not isinstance(baselines, dict):
+        raise RepositoryCloseoutError(f"invalid repository closeout ledger: {ledger_path}")
+    for repository in sorted(touched - prior_touched):
+        repository_path = Path(repository)
+        if repository_path.is_dir():
+            baselines[repository] = _repository_status(repository_path)
+    ledger["touched_repositories"] = sorted(touched)
+    temporary = ledger_path.with_suffix(".tmp")
+    temporary.write_text(json.dumps(ledger, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    temporary.replace(ledger_path)
+
+
+def _repositories_with_foreign_live_claims(
+    session_id: str,
+    *,
+    active_claims: tuple[Any, ...],
+) -> set[str]:
     """Repository roots a DIFFERENT live session currently holds a claim on.
 
     The closeout check compares a whole-repository fingerprint against a
@@ -302,16 +386,8 @@ def _repositories_with_foreign_live_claims(session_id: str) -> set[str]:
     live writer is still fully enforced, which is the case the check is for.
     """
 
-    try:
-        from enforced_planning import coordination_claims
-    except ImportError:  # pragma: no cover - claim surface optional in some installs
-        return set()
     roots: set[str] = set()
-    try:
-        claims = coordination_claims.list_claims()
-    except Exception:  # noqa: BLE001 - an unreadable claim registry must not block closeout
-        return set()
-    for claim in claims:
+    for claim in active_claims:
         if getattr(claim, "session_id", None) == session_id:
             continue
         repo_root = getattr(claim, "repo_root", None)
@@ -325,6 +401,7 @@ def _repository_closeout_failure(
     agent: str,
     session_id: str,
     ledger_dir: Path,
+    active_claims: tuple[Any, ...],
 ) -> str | None:
     """Explain session-created dirty repositories, or return a clean closeout."""
 
@@ -341,10 +418,30 @@ def _repository_closeout_failure(
         raise RepositoryCloseoutError(f"cannot read repository closeout ledger {ledger_path}: {exc}") from exc
     if not isinstance(payload, dict) or not isinstance(payload.get("repositories"), dict):
         raise RepositoryCloseoutError(f"invalid repository closeout ledger: {ledger_path}")
-    scan_root = Path(str(payload.get("scan_root", ""))).expanduser().resolve()
     baseline = payload["repositories"]
-    foreign = _repositories_with_foreign_live_claims(session_id)
-    current = _repository_snapshot(scan_root, excluded_repositories=foreign)
+    foreign = _repositories_with_foreign_live_claims(
+        session_id,
+        active_claims=active_claims,
+    )
+    touched = {
+        str(Path(path).expanduser().resolve())
+        for path in payload.get("touched_repositories", [])
+        if isinstance(path, str) and path.strip()
+    }
+    touched.update(
+        str(Path(claim.repo_root).expanduser().resolve())
+        for claim in active_claims
+        if claim.session_id == session_id and claim.repo_root
+    )
+    repositories = tuple(
+        Path(repository)
+        for repository in sorted(touched)
+        if repository not in foreign and Path(repository).is_dir()
+    )
+    if repositories:
+        current = _repository_statuses(repositories)
+    else:
+        current = {}
     dirty_changes: list[tuple[str, int]] = []
     for repository, status in current.items():
         prior = baseline.get(repository)
@@ -371,15 +468,16 @@ def _repository_closeout_failure(
     )
 
 
-def _claimed_projects(*, agent: str, session_id: str, claims_dir: Path | None) -> tuple[str, ...]:
+def _claimed_projects(
+    *, agent: str, session_id: str, active_claims: tuple[Any, ...]
+) -> tuple[str, ...]:
     """Return exact-session live claim projects without adopting another lane."""
 
-    claims = coordination_claims.check_claims(claims_dir=claims_dir)
     return tuple(
         sorted(
             {
                 project
-                for claim in claims
+                for claim in active_claims
                 if claim.agent == agent and claim.session_id == session_id
                 for project in claim.projects
             }
@@ -543,6 +641,7 @@ def main(argv: list[str] | None = None) -> int:
         telemetry_decision = "allow"
         telemetry_reason = "no_active_boundary"
         session_id = _session_id(args.agent, payload["session_id"])
+        active_claims = _active_claims(args.claims_dir)
         closeout_ledger_dir = args.closeout_ledger_dir or (
             (args.claims_dir or coordination_claims.CLAIMS_DIR).expanduser().resolve().parent
             / "repository-closeout-ledgers"
@@ -556,12 +655,24 @@ def main(argv: list[str] | None = None) -> int:
                 session_id=session_id,
                 ledger_dir=closeout_ledger_dir,
             )
+        if payload["hook_event_name"] == "PreToolUse" and _is_mutation_boundary(payload):
+            _record_touched_repositories(
+                payload=payload,
+                agent=args.agent,
+                session_id=session_id,
+                ledger_dir=closeout_ledger_dir,
+                active_claims=active_claims,
+            )
         delivery_event_id = _delivery_event_id(payload, agent=args.agent, session_id=session_id)
         project = args.project or _canonical_project(payload["cwd"])
-        heartbeat_projects = (project,) if project is not None else _claimed_projects(
-            agent=args.agent,
-            session_id=session_id,
-            claims_dir=args.claims_dir,
+        heartbeat_projects = () if payload["hook_event_name"] == "Stop" else (
+            (project,)
+            if project is not None
+            else _claimed_projects(
+                agent=args.agent,
+                session_id=session_id,
+                active_claims=active_claims,
+            )
         )
         for heartbeat_project in heartbeat_projects:
             coordination_claims.heartbeat_claims(
@@ -591,6 +702,7 @@ def main(argv: list[str] | None = None) -> int:
                 agent=args.agent,
                 session_id=session_id,
                 ledger_dir=closeout_ledger_dir,
+                active_claims=active_claims,
             )
         boundary_event: Literal["PreToolUse", "Stop"] | None = None
         if (notice.active_count or closeout_failure) and payload["hook_event_name"] == "Stop":

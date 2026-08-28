@@ -279,9 +279,15 @@ def _active_claims(claims_dir: Path | None) -> tuple[Any, ...]:
             )
         registry_digest = prewrite_claim_fast.registry_digest(resolved)
         if projection.registry_digest != registry_digest:
-            raise RepositoryCloseoutError(
-                "active-claim projection is stale relative to the canonical claim registry"
+            # Projection is stale. Fall back to direct claims load instead of crashing.
+            # This allows sessions to close even when projection is out of sync.
+            import sys
+            print(
+                f"WARNING: coordination projection stale (digest mismatch); "
+                f"using direct claim registry load (slower)",
+                file=sys.stderr,
             )
+            return tuple(coordination_claims.check_claims(claims_dir=resolved))
         now = datetime.now(UTC)
         return tuple(
             claim

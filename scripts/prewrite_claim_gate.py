@@ -23,6 +23,10 @@ from enforced_planning.prewrite_claim_fast import (
 )
 
 
+class NonGitWorkingDirectory(FastPreWriteError):
+    """The native hook cwd is outside a Git checkout."""
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--client", required=True, choices=("codex", "claude-code"))
@@ -68,7 +72,10 @@ def _git_root(cwd: str) -> Path:
         check=False,
     )
     if completed.returncode != 0:
-        raise FastPreWriteError(completed.stderr.strip() or "unable to resolve Git worktree")
+        detail = completed.stderr.strip() or "unable to resolve Git worktree"
+        if "not a git repository" in detail.lower():
+            raise NonGitWorkingDirectory(detail)
+        raise FastPreWriteError(detail)
     return Path(completed.stdout.strip()).resolve()
 
 
@@ -115,6 +122,17 @@ def _configured_outcome_mode(payload: dict[str, Any]) -> str:
     if not isinstance(cwd, str) or not cwd.strip():
         cwd = str(Path.cwd())
     return load_outcome_admission_mode(_git_root(cwd))
+
+
+def _resolved_outcome_mode(payload: dict[str, Any], *, explicit_mode: str | None) -> str:
+    """Use repo outcome policy when present, or explicit host mode outside Git."""
+
+    try:
+        return _configured_outcome_mode(payload)
+    except NonGitWorkingDirectory:
+        if explicit_mode is not None:
+            return "off"
+        raise
 
 
 def _native_notice(message: str) -> str:
@@ -316,12 +334,15 @@ def main(argv: list[str] | None = None) -> int:
         payload = json.loads(sys.stdin.read())
         if not isinstance(payload, dict):
             raise FastPreWriteError("PreToolUse payload must be a JSON object")
+        mode = _mode(payload, args.mode)
         try:
-            outcome_mode = _configured_outcome_mode(payload)
+            outcome_mode = _resolved_outcome_mode(
+                payload,
+                explicit_mode=args.mode,
+            )
         except (FastPreWriteError, OSError, TypeError, ValueError):
             outcome_config_invalid = True
             raise
-        mode = _mode(payload, args.mode)
         projection_path = args.projection_path
         if projection_path is None and args.cache_dir is not None:
             projection_path = args.cache_dir / "authority-projection-v1.json"

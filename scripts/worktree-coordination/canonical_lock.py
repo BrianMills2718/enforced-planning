@@ -270,6 +270,67 @@ def _ensure_worktrees_dir(repo_root: Path) -> None:
         worktrees.mkdir(parents=True, exist_ok=True)
 
 
+def _control_paths(repo_root: Path) -> tuple[Path, ...]:
+    """Return excluded control paths that must stay user-writable.
+
+    Git object files are intentionally omitted: immutable loose/packed objects
+    are commonly read-only.  Everything else under ``.git`` is mutable Git
+    administration, while only the top-level ``worktrees/`` container is ours
+    to repair; linked worktree contents remain owned by their lane.
+    """
+
+    git_dir = repo_root / ".git"
+    paths: list[Path] = []
+    if git_dir.is_dir():
+        for current, dirnames, filenames in os.walk(git_dir):
+            current_path = Path(current)
+            if current_path == git_dir:
+                dirnames[:] = [name for name in dirnames if name != "objects"]
+            paths.append(current_path)
+            paths.extend(current_path / name for name in dirnames)
+            paths.extend(current_path / name for name in filenames)
+    paths.append(repo_root / "worktrees")
+    return tuple(dict.fromkeys(paths))
+
+
+def _control_path_issues(repo_root: Path) -> list[str]:
+    """Report excluded control paths that cannot support sanctioned Git work."""
+
+    issues: list[str] = []
+    for path in _control_paths(repo_root):
+        relative = str(path.relative_to(repo_root))
+        try:
+            info = path.lstat()
+        except OSError:
+            issues.append(f"{relative}: missing or unreadable")
+            continue
+        if path.is_symlink():
+            continue
+        if not stat.S_IMODE(info.st_mode) & stat.S_IWUSR:
+            issues.append(f"{relative}: not user-writable")
+    return issues
+
+
+def _restore_control_path_write_access(repo_root: Path) -> dict[str, Any]:
+    """Repair only excluded control paths, never canonical or lane contents."""
+
+    _ensure_worktrees_dir(repo_root)
+    restored: list[str] = []
+    failures: list[str] = []
+    for path in _control_paths(repo_root):
+        relative = str(path.relative_to(repo_root))
+        try:
+            if path.is_symlink():
+                continue
+            mode = stat.S_IMODE(path.lstat().st_mode)
+            if not mode & stat.S_IWUSR:
+                os.chmod(path, mode | stat.S_IWUSR)
+                restored.append(relative)
+        except OSError as exc:
+            failures.append(f"{relative}: {exc}")
+    return {"restored": restored, "failures": failures}
+
+
 def lock_repo(
     repo_root: Path,
     *,
@@ -278,6 +339,9 @@ def lock_repo(
 ) -> dict[str, Any]:
     """Make the canonical working tree read-only. Idempotent."""
     repo_root = repo_root.resolve()
+    control_repair = _restore_control_path_write_access(repo_root)
+    if control_repair["failures"]:
+        raise OSError("control-path repair failed: " + "; ".join(control_repair["failures"]))
     existing = read_receipt(repo_root)
     if existing is not None:
         return {
@@ -332,9 +396,17 @@ def lock_repo(
 def unlock_repo(repo_root: Path) -> dict[str, Any]:
     """Restore recorded modes and drop the receipt. Idempotent."""
     repo_root = repo_root.resolve()
+    control_repair = _restore_control_path_write_access(repo_root)
+    if control_repair["failures"]:
+        raise OSError("control-path repair failed: " + "; ".join(control_repair["failures"]))
     receipt = read_receipt(repo_root)
     if receipt is None:
-        return {"ok": True, "action": "not_locked", "repo_root": str(repo_root)}
+        return {
+            "ok": True,
+            "action": "not_locked",
+            "repo_root": str(repo_root),
+            "control_paths_restored": control_repair["restored"],
+        }
 
     restored = 0
     fallback = 0
@@ -378,6 +450,7 @@ def unlock_repo(repo_root: Path) -> dict[str, Any]:
         "repo_root": str(repo_root),
         "modes_restored": restored,
         "modes_fallback": fallback,
+        "control_paths_restored": control_repair["restored"],
     }
 
 
@@ -414,6 +487,7 @@ def verify_lock_integrity(repo_root: Path) -> dict[str, Any]:
     repo_root = repo_root.resolve()
     receipt = read_receipt(repo_root)
     if receipt is None:
+        control_path_issues = _control_path_issues(repo_root)
         return {
             "repo_root": str(repo_root),
             "verdict": VERDICT_UNLOCKED,
@@ -423,6 +497,7 @@ def verify_lock_integrity(repo_root: Path) -> dict[str, Any]:
             "writable_files": [],
             "writable_directories": [],
             "missing_paths": [],
+            "control_path_issues": control_path_issues,
         }
 
     writable_files: list[str] = []
@@ -448,7 +523,8 @@ def verify_lock_integrity(repo_root: Path) -> dict[str, Any]:
             else:
                 writable_files.append(rel)
 
-    drifted = bool(writable_files or writable_directories)
+    control_path_issues = _control_path_issues(repo_root)
+    drifted = bool(writable_files or writable_directories or control_path_issues)
     return {
         "repo_root": str(repo_root),
         "verdict": VERDICT_DEGRADED if drifted else VERDICT_LOCKED,
@@ -462,6 +538,7 @@ def verify_lock_integrity(repo_root: Path) -> dict[str, Any]:
         "writable_files": writable_files,
         "writable_directories": writable_directories,
         "missing_paths": missing,
+        "control_path_issues": control_path_issues,
     }
 
 
@@ -480,7 +557,8 @@ def relock_repo(repo_root: Path) -> dict[str, Any]:
 
     integrity = verify_lock_integrity(repo_root)
     drifted = set(integrity["writable_files"]) | set(integrity["writable_directories"])
-    if not drifted:
+    control_path_issues = list(integrity["control_path_issues"])
+    if not drifted and not control_path_issues:
         return {
             "ok": True,
             "action": "already_intact",
@@ -491,6 +569,8 @@ def relock_repo(repo_root: Path) -> dict[str, Any]:
     files_relocked = 0
     directories_relocked = 0
     failures: list[str] = []
+    control_repair = _restore_control_path_write_access(repo_root)
+    failures.extend(control_repair["failures"])
     # Deepest first with the root last, matching lock_repo: a directory stays
     # writable while its own children are being changed.
     for rel in _receipt_paths_deepest_first(receipt):
@@ -515,6 +595,7 @@ def relock_repo(repo_root: Path) -> dict[str, Any]:
         "repo_root": str(repo_root),
         "files_relocked": files_relocked,
         "directories_relocked": directories_relocked,
+        "control_paths_restored": control_repair["restored"],
         "chmod_failures": failures,
         "verdict": after["verdict"],
     }
@@ -1202,6 +1283,7 @@ def main(argv: list[str] | None = None) -> int:
                 "writable_files": integrity["writable_files"],
                 "writable_directories": integrity["writable_directories"],
                 "missing_paths": integrity["missing_paths"],
+                "control_path_issues": integrity["control_path_issues"],
             }
         )
         return 0

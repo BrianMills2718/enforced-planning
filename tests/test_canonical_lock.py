@@ -192,6 +192,46 @@ def test_unlock_without_a_receipt_is_a_noop(repo: Path) -> None:
     assert canonical_lock.unlock_repo(repo)["action"] == "not_locked"
 
 
+def test_unlock_repairs_excluded_git_and_worktree_control_paths(repo: Path) -> None:
+    canonical_lock.lock_repo(repo, justifying_claims=["lane-a"])
+    git_worktrees = repo / ".git" / "worktrees"
+    git_worktrees.mkdir(exist_ok=True)
+    mutable_admin = git_worktrees / "COMMIT_EDITMSG"
+    mutable_admin.write_text("message\n", encoding="utf-8")
+    for path in (mutable_admin, git_worktrees, repo / ".git", repo / "worktrees"):
+        os.chmod(path, stat.S_IMODE(path.lstat().st_mode) & ~stat.S_IWUSR)
+
+    result = canonical_lock.unlock_repo(repo)
+
+    assert result["action"] == "unlocked"
+    assert not canonical_lock.receipt_path(repo).exists()
+    for path in (mutable_admin, git_worktrees, repo / ".git", repo / "worktrees"):
+        assert stat.S_IMODE(path.lstat().st_mode) & stat.S_IWUSR
+
+
+def test_verify_and_reconcile_repair_excluded_control_path_drift(repo: Path, tmp_path: Path) -> None:
+    canonical_lock.lock_repo(repo, justifying_claims=["lane-a"])
+    git_worktrees = repo / ".git" / "worktrees"
+    git_worktrees.mkdir(exist_ok=True)
+    for path in (git_worktrees, repo / "worktrees"):
+        os.chmod(path, stat.S_IMODE(path.lstat().st_mode) & ~stat.S_IWUSR)
+
+    degraded = canonical_lock.verify_lock_integrity(repo)
+
+    assert degraded["verdict"] == canonical_lock.VERDICT_DEGRADED
+    assert any(".git/worktrees" in issue for issue in degraded["control_path_issues"])
+    assert any(issue.startswith("worktrees:") for issue in degraded["control_path_issues"])
+
+    report = canonical_lock.reconcile(
+        repos=[repo],
+        claims_dir=_claims_dir(tmp_path, _lane_claim(repo)),
+    )
+
+    assert [action["action"] for action in report["actions"]] == ["relocked"]
+    assert canonical_lock.verify_lock_integrity(repo)["verdict"] == canonical_lock.VERDICT_LOCKED
+    assert not stat.S_IMODE((repo / "src" / "module.py").lstat().st_mode) & stat.S_IWUSR
+
+
 # ------------------------------------------------------------------ reconcile
 
 

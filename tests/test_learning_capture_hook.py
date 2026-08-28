@@ -322,7 +322,38 @@ def test_the_refusal_says_reformatting_is_a_complete_response(tmp_path: Path) ->
     assert payload["decision"] == "block"
     reason = payload["reason"].lower()
     assert "none" in reason, "the reformat-and-stop route must be named"
-    assert "new work" in reason, (
-        "the refusal must say that starting new work to satisfy it is not the "
-        "expected response; without that an agent treats a format check as a task"
+    assert "complete response" in reason, (
+        "the refusal must say that fixing the line is a complete response; "
+        "without that an agent treats a format check as a task"
+    )
+    assert "do not start work to clear this gate" in reason, (
+        "and it must name the one case where stopping is right, so that "
+        "'satisfy the gate' never means 'go mutate shared state'"
+    )
+
+
+def test_the_refusal_does_not_read_as_never_record(tmp_path: Path) -> None:
+    """The escape route must not swallow the register it protects.
+
+    The first version of this guidance said: if recording would need "a
+    worktree, a claim, a push, a skill invocation", write `None -- deferred` and
+    stop. But a worktree, a claim and a push are the *only* way to record
+    anything here, so read literally it said never record -- and within two
+    turns the agent that wrote it had declined twice on those grounds, including
+    for a finding the user then asked why it had not written down.
+
+    The narrow case it was for is real: an agent at Stop, nominally waiting on
+    the user, mutating shared state to clear a check on formatting. The
+    condition is being blocked on someone else, not the ordinary cost of
+    recording.
+    """
+    result = run_hook(tmp_path, _report("Worth recording: something I have not written up."))
+    reason = json.loads(result.stdout)["reason"].lower()
+
+    assert "waiting on the user" in reason or "blocked" in reason, (
+        "the deferral must be conditioned on being blocked, not on recording's normal cost"
+    )
+    assert "worktree, a claim, a push" not in reason, (
+        "naming the ordinary recording procedure as a reason to defer tells the "
+        "agent to never record; that is the register's whole purpose"
     )

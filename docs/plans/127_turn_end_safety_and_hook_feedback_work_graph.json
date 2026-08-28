@@ -1,0 +1,92 @@
+{
+  "units": [
+    {
+      "schema_version": "1.0",
+      "record_type": "work_unit",
+      "id": "te-01-repair-hook-lifecycle",
+      "initiative_id": "agentic-engineering",
+      "goal_id": "empirical-ecosystem-improvement",
+      "design_revision": "user-authorized:codex-session-01a049f2-679a-7973-a104-acf55e7cc8fa:2026-08-28",
+      "spec_revision": "plan-127-adopted-v1",
+      "title": "Repair session startup, turn-end projection handling, and hook recurrence evidence",
+      "class": "implementation",
+      "objective": "Keep corrupt sessions fail-safe, make fresh startup fast, prevent stale derived state from permanently blocking ordinary turn end, and aggregate existing content-free receipts without weakening mutation or lane-close gates.",
+      "profile": "standard",
+      "execution_class": "independently_executable",
+      "claimability": "ready_for_execution",
+      "scope": {
+        "included": [
+          "Stable corrupt-session recovery incident reuse",
+          "Read-only bounded SessionStart behavior",
+          "Bounded stale-projection repair or safe degradation at ordinary turn end",
+          "Content-free hook recurrence reporting through the existing receipt and Plan 111 feedback seams",
+          "Focused regression and authentic startup evidence"
+        ],
+        "excluded": [
+          "session_lifecycle.py cursor-transfer receipt work owned by the coordinated sibling lane",
+          "Installed-consumer or fleet rollout",
+          "Weakening pre-write mutation or actual lane-close gates",
+          "A second ecosystem-feedback store"
+        ]
+      },
+      "inputs": [
+        {
+          "kind": "user_decision",
+          "id": "plan-127-repair-outcome",
+          "revision": "codex-session-01a049f2-679a-7973-a104-acf55e7cc8fa@2026-08-28"
+        },
+        {
+          "kind": "existing_capability",
+          "id": "plan-126-atomic-projection-refresh+plan-111-ecosystem-feedback",
+          "revision": "8027b6df30117f8a70bc52b15c7828e103905a4c"
+        }
+      ],
+      "outputs": [
+        "Stable recovery incident bundle",
+        "Fast advisory SessionStart path",
+        "Turn-end stale-projection repair or degradation receipt",
+        "Exact-receipt recurrence report and lifecycle vocabulary",
+        "Focused both-sign and authentic startup evidence"
+      ],
+      "dependencies": [],
+      "conflict_surfaces": [
+        {"kind": "repository_path", "target": "scripts/codex_session_integrity.py", "repository": "enforced-planning", "access": "exclusive"},
+        {"kind": "repository_path", "target": "scripts/codex_session_integrity_hook.py", "repository": "enforced-planning", "access": "exclusive"},
+        {"kind": "repository_path", "target": "scripts/coordination_hook.py", "repository": "enforced-planning", "access": "exclusive"},
+        {"kind": "repository_path", "target": "scripts/hook_receipts.py", "repository": "enforced-planning", "access": "exclusive"},
+        {"kind": "repository_path", "target": "scripts/hook_feedback_report.py", "repository": "enforced-planning", "access": "exclusive"},
+        {"kind": "repository_path", "target": "tests/test_codex_session_integrity.py", "repository": "enforced-planning", "access": "exclusive"},
+        {"kind": "repository_path", "target": "tests/test_coordination_hook.py", "repository": "enforced-planning", "access": "exclusive"},
+        {"kind": "repository_path", "target": "tests/test_hook_receipts.py", "repository": "enforced-planning", "access": "exclusive"},
+        {"kind": "repository_path", "target": "docs/guides/HOOK_LIFECYCLE_AND_FEEDBACK.md", "repository": "enforced-planning", "access": "exclusive"},
+        {"kind": "repository_path", "target": "docs/plans/127_turn_end_safety_and_hook_feedback.md", "repository": "enforced-planning", "access": "exclusive"}
+      ],
+      "acceptance": [
+        {
+          "id": "TE01-A1",
+          "criterion": "Corrupt-session recovery is stable across rollout growth while a fresh session remains accepted.",
+          "evidence_required": ["Focused integrity tests", "Authentic old/fresh SessionStart replay"],
+          "negative_control": "Malformed current history never becomes an allowed resume."
+        },
+        {
+          "id": "TE01-A2",
+          "criterion": "A completed-claim-heavy registry cannot force an unbounded heartbeat/projection rebuild on SessionStart, and interrupted derived state cannot permanently block ordinary turn end.",
+          "evidence_required": ["Large-registry timing control", "Interrupted claim/projection regression", "Native-shaped startup and Stop replay"],
+          "negative_control": "Pre-write and session-close retain fail-closed behavior."
+        },
+        {
+          "id": "TE01-A3",
+          "criterion": "Existing content-free receipts produce recurrence groups with exact receipt IDs and explicit Plan 111 disposition guidance.",
+          "evidence_required": ["Focused recurrence report tests", "Operator guide"],
+          "negative_control": "No prompt/response content or duplicate feedback store is introduced."
+        }
+      ],
+      "readiness": {"status": "ready", "required_approval_types": [], "approvals": [], "failed_guards": []},
+      "authorization_mode": "registry_claim",
+      "status": "ready",
+      "record_version": 1,
+      "created_at": "2026-08-28T20:04:00Z",
+      "updated_at": "2026-08-28T20:04:00Z"
+    }
+  ]
+}

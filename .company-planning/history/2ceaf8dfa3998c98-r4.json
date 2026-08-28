@@ -1,0 +1,92 @@
+{
+  "active_slice": {
+    "description": "Repair session startup, turn-end projection handling, and hook recurrence evidence",
+    "next_action": null,
+    "requires_external_action": false,
+    "requires_spend": false,
+    "slice_id": "te-01-repair-hook-lifecycle",
+    "status": "accepted",
+    "target_revision": "4eca52c9c9544533432fd208d17f3bca4d8e1716"
+  },
+  "authority": {
+    "external_action_authorized": false,
+    "human_decision": null,
+    "human_decision_required": false,
+    "implementation_authorized": true,
+    "spend_cap_usd": 0.0,
+    "spend_used_usd": 0.0
+  },
+  "circuit_breakers": {
+    "context_integrity_valid": true,
+    "max_same_boundary_failures": 3,
+    "runtime_integrity_valid": true
+  },
+  "completion": {
+    "evidence_revision": "4eca52c9c9544533432fd208d17f3bca4d8e1716",
+    "receipt_ref": "hook-receipt:f203367db9284296b6edd82d018e9f5e",
+    "remaining_ready_work": 0,
+    "requested": true,
+    "verifier_outcome": "pass"
+  },
+  "cursor_id": "enforced-planning-plan-127-hook-lifecycle-repair",
+  "cursor_revision": 4,
+  "failure_state": {
+    "boundary": null,
+    "last_failure_ref": null,
+    "same_boundary_failures": 0
+  },
+  "goal_ref": "empirical-ecosystem-improvement",
+  "lease": {
+    "heartbeat_at": "2026-08-28T21:02:23Z",
+    "lease_revision": 4,
+    "owner_session_id": "codex:01a049cc-ff77-73c0-9f91-8727cac46f7c",
+    "status": "active"
+  },
+  "lifecycle_state": "complete",
+  "observations": [
+    {
+      "boundary": "strict-lifecycle-controls",
+      "evidence_ref": "git:32b88dd3af48250a41506f7bb8c4efaf39219f71 pytest:174-passed self-test:pass",
+      "kind": "authentic_result",
+      "observation_id": "obs-required-boundary-suite",
+      "outcome": "pass"
+    },
+    {
+      "boundary": "native-shaped-stop",
+      "evidence_ref": "tests/test_coordination_hook.py::test_native_shaped_stop_repairs_interrupted_projection_and_allows_turn",
+      "kind": "authentic_result",
+      "observation_id": "obs-native-stop-repair",
+      "outcome": "pass"
+    },
+    {
+      "boundary": "configured-registry-session-start",
+      "evidence_ref": "hook-receipt:4189687a1dcf4aa3be7de97100d4b5c4 elapsed=12.035ms wall=0.21s",
+      "kind": "authentic_result",
+      "observation_id": "obs-authentic-startup",
+      "outcome": "pass"
+    },
+    {
+      "boundary": "canonical-default",
+      "evidence_ref": "git:4eca52c9c9544533432fd208d17f3bca4d8e1716 PR:225 follow-up-to-PR:224",
+      "kind": "authentic_result",
+      "observation_id": "obs-source-merged",
+      "outcome": "pass"
+    },
+    {
+      "boundary": "installed-hook-consumer",
+      "evidence_ref": "hook-receipt:f203367db9284296b6edd82d018e9f5e focused-installed:7-passed repeated-isolation:pass self-test:pass dirty-files:hash-preserved",
+      "kind": "authentic_result",
+      "observation_id": "obs-installed-hook-verified",
+      "outcome": "pass"
+    }
+  ],
+  "plan_revision": "enforced-planning#127@b8f712f8d8c082fb0f55295ec9923c63e93b31ba",
+  "ready_alternatives": [],
+  "record_type": "plan_execution_cursor",
+  "schema_version": "1.0",
+  "target": {
+    "branch": "plan-127-hook-lifecycle-repair",
+    "repository": "BrianMills2718/enforced-planning",
+    "worktree": "/home/brian/code/active/enforced-planning/worktrees/plan-127-hook-lifecycle-repair"
+  }
+}

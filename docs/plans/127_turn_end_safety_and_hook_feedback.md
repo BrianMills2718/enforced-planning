@@ -1,7 +1,7 @@
 # Plan #127: Turn-End Safety and Hook Feedback Recurrence
 
-**Status:** In Progress
-**Status ID:** in_progress
+**Status:** Complete
+**Status ID:** complete
 **Type:** implementation
 **Priority:** Critical
 **phase_ref:** "Phase 9: Fleet Adoption and Framework Maintenance"
@@ -288,7 +288,7 @@ interrupted derived projection cannot trap ordinary response yield.
   and lists exact receipt IDs without copying prompt or response content.
 - [x] The guide defines turn end, checkpoint, agent rotation/handoff, lane closure,
   goal completion, and the feedback disposition route.
-- [x] Focused tests (173 passed), `python scripts/self_test.py`, and the authentic
+- [x] Focused tests (174 passed), `python scripts/self_test.py`, and the authentic
   isolated replay pass.
 
 ## Open Questions
@@ -300,6 +300,15 @@ interrupted derived projection cannot trap ordinary response yield.
   feedback disposition.
 
 ## Notes
+
+Completed on 2026-08-28. Source repairs landed through PR #224 at
+`ca06f509dfd34ac55eef562a3ec4a3fffe334b5a`; the fixture-local receipt follow-up
+landed through PR #225 at `4eca52c9c9544533432fd208d17f3bca4d8e1716`.
+The configured canonical hook then passed the focused installed-path checks and
+framework self-test. Its authentic Stop replay reached the real dirty-work guard,
+not projection-unavailable enforcement, under content-free hook receipt
+`f203367db9284296b6edd82d018e9f5e`. The completed execution cursor is retained at
+`.company-planning/history/2ceaf8dfa3998c98-r4.json`.
 
 This plan changes no user data, deployment, credential, external publication, or
 downstream repository. Broader installed-repo propagation is separately triggered only

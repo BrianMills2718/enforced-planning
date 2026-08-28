@@ -146,50 +146,57 @@ def test_raw_bash_grammar_rejects_compound_or_raw_lifecycle_commands(
         claim_bootstrap.parse_raw_bash_command(command, script_path=script)
 
 
-def test_release_is_guarded_by_derived_exact_session(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("CODEX_THREAD_ID", "native-123")
-    observed: dict[str, object] = {}
-
-    def fake_release(agent: str, project: str, scope: str, **kwargs: object) -> tuple[bool, str]:
-        observed.update(agent=agent, project=project, scope=scope, **kwargs)
-        return True, "released"
-
-    monkeypatch.setattr(claim_bootstrap.coordination_claims, "release_claim", fake_release)
-    monkeypatch.setattr(
-        claim_bootstrap.coordination_claims,
-        "check_claims",
-        lambda _project: [
-            claim_bootstrap.coordination_claims.build_candidate_claim(
-                agent="codex",
-                project="demo",
-                scope="self-owned-scope",
-                intent="owned",
-                session_id="codex:native-123",
-                plan_ref="UNPLANNED",
-                claim_type="program",
-                repo_root="/tmp/demo",
-                worktree_path="/tmp/demo/worktrees/self-owned-scope",
-                branch="self-owned-scope",
-                session_name="self-owned-scope",
-                broader_goal="Self owned scope",
+def test_release_self_is_rejected_by_the_bootstrap_surface() -> None:
+    with pytest.raises(claim_bootstrap.ClaimBootstrapError, match="release_self"):
+        claim_bootstrap.parse_request_json(
+            json.dumps(
+                {
+                    "schema_version": "1.0",
+                    "operation": "release_self",
+                    "agent": "codex",
+                    "project": "demo",
+                    "scope": "self-owned-scope",
+                }
             )
-        ],
-    )
-    request = claim_bootstrap.parse_request_json(
-        json.dumps(
+        )
+
+
+@pytest.mark.parametrize(
+    ("payload", "expected_operation"),
+    [
+        (_start_payload(), "session_start_or_update"),
+        (
             {
                 "schema_version": "1.0",
-                "operation": "release_self",
+                "operation": "heartbeat",
                 "agent": "codex",
                 "project": "demo",
                 "scope": "self-owned-scope",
-            }
-        )
-    )
+            },
+            "heartbeat",
+        ),
+        (
+            {
+                "schema_version": "1.0",
+                "operation": "progress",
+                "agent": "codex",
+                "project": "demo",
+                "scope": "self-owned-scope",
+                "progress_kind": "new_diagnostic",
+                "evidence_ref": "tests/test_claim_bootstrap.py",
+                "next_action": "continue bounded repair",
+            },
+            "progress",
+        ),
+    ],
+)
+def test_remaining_self_service_operations_are_accepted(
+    payload: dict[str, object],
+    expected_operation: str,
+) -> None:
+    request = claim_bootstrap.parse_request_json(json.dumps(payload))
 
-    claim_bootstrap.execute_request(request)
-
-    assert observed["expected_session_id"] == "codex:native-123"
+    assert request.operation == expected_operation
 
 
 def test_ownerless_existing_slot_cannot_be_bootstrapped_as_self(

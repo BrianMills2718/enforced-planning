@@ -16,6 +16,36 @@ pretending it is mechanically enforced today.
 
 ---
 
+## Governance Defaults: Opt-Out Model
+
+As of this version, the framework defaults to **governance enabled** (opt-out):
+
+- **`claims.enabled: true`** — Coordination claims tracked by default. To disable
+  for a specific repository, set to `false`.
+- **`plans.integrity.mode: enforce`** — Structural plan integrity enforced by
+  default. To disable, set to `off`.
+
+These controls are enabled by default because the framework assumes repositories
+benefit from coordinated planning and claim tracking. Repositories that do not
+need coordination can explicitly opt-out by setting these values to their
+disabled states (`false` and `off` respectively).
+
+### Deprecation Path for Opt-In Configs
+
+Legacy configurations that relied on opt-in (enabled only when explicitly set)
+are deprecated:
+
+| Old Pattern | New Pattern | Migration |
+|---|---|---|
+| `claims.enabled: false` (opt-in) | `claims.enabled: true` (opt-out) | Set to `false` to disable |
+| `plans.integrity.mode: off` (opt-in) | `plans.integrity.mode: enforce` (opt-out) | Set to `off` to disable |
+
+Existing repositories with old-style opt-in configs will continue to work with
+explicitly disabled settings, but new installations ship with governance enabled
+by default.
+
+---
+
 ## plans
 
 | Key | Type | Default | Read By | Default When Absent |
@@ -26,7 +56,7 @@ pretending it is mechanically enforced today.
 | `plans.trivial_threshold_lines` | int | `20` | **Not read by any script** 📋 | Reference only; Pattern 15 uses this as the canonical threshold definition |
 | `plans.trivial_block_src` | bool | `true` | **Not read by any script** 📋 | No effect |
 | `plans.plans_dir` | string | `"docs/plans"` | `check_plan_tests.py` (CLI arg), `complete_plan.py` (CLI arg) | `docs/plans` |
-| `plans.integrity.mode` | enum `off \| observe \| enforce` | `off` | plan validator, plan-start readiness, canonical plan-bound claim binding | No structural admission; `observe` reports without blocking; `enforce` rejects before coordination mutation |
+| `plans.integrity.mode` | enum `off \| observe \| enforce` | `enforce` | plan validator, plan-start readiness, canonical plan-bound claim binding | Structural plan admission enforced; to disable set to `off` |
 | `plans.integrity.contract_version` | string | `"1.0.0"` | plan validator and admission boundaries | `1.0.0`; an explicitly unsupported version fails structurally |
 | `plans.integrity.minimum_plan_number` | positive int | `1` | plan validator and admission boundaries | Plans below the floor are `not_applicable`; plans at/above it use the configured mode |
 
@@ -47,7 +77,7 @@ non-claim verbatim.
 
 | Key | Type | Default | Read By | Default When Absent |
 |-----|------|---------|---------|---------------------|
-| `claims.enabled` | bool | `false` | `audit_governed_repo.py` (mechanical worktree opt-in requirement) | Audit treats missing flag as not opted in |
+| `claims.enabled` | bool | `true` | `audit_governed_repo.py` (mechanical worktree opt-in requirement) | Coordination claims enabled; to disable set to `false` |
 | `claims.enforce_exclusivity` | bool | `true` | Not enforced by script | No effect |
 | `claims.require_for_worktree` | bool | `false` | `audit_governed_repo.py` (mechanical sanctioned-entrypoint expectation) | Audit does not expect sanctioned entrypoints unless another worktree signal requires them |
 | `claims.prewrite_mode` | enum `off \| observe \| enforce` | `off` | native pre-write adapters, hook generator, governed-repo audit | No pre-write wiring or lookup; `observe` records without blocking; `enforce` denies unauthorized supported native writes |

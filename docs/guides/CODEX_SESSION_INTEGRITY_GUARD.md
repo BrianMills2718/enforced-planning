@@ -1,6 +1,6 @@
 # Codex Session Integrity Guard
 
-`scripts/codex_session_integrity_hook.py` is a portable, non-blocking
+`scripts/codex_session_integrity_hook.py` is a portable, fail-closed
 SessionStart-compatible diagnostic and recovery-bundle generator for malformed
 Codex JSONL session records. It is containment, not host-persistence repair:
 the guard never rewrites, truncates, moves, or deletes a live session log.
@@ -13,7 +13,10 @@ malformed session gets one content-addressed bundle under
 `~/.codex/recovery/<session-id>/auto-<digest>/` containing the untouched
 snapshot, sanitized JSONL archive, readable user/assistant transcript,
 metadata-only integrity report, and fresh-thread handoff. Repeated starts reuse
-the same bundle instead of copying the log again.
+the same bundle instead of copying the log again. On corruption, the hook
+returns Codex's supported `continue: false` SessionStart result, surfaces the
+warning in the UI, and ends the current turn before more model work can proceed
+against untrustworthy resumed history.
 
 For a one-off metadata-only report:
 
@@ -39,5 +42,6 @@ statusMessage = "Checking Codex session integrity"
 ```
 
 On a warning, start a fresh session from the generated handoff. The guard cannot
-make Codex reload skipped history; it makes corruption visible and produces a
+make Codex reload skipped history or prevent an interrupted host write; it makes
+corruption visible, stops the damaged thread from continuing, and produces a
 safe continuation surface automatically.

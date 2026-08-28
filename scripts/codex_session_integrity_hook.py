@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Non-blocking SessionStart warning for malformed Codex session JSONL logs."""
+"""Fail-closed SessionStart guard for malformed Codex session JSONL logs."""
 
 from __future__ import annotations
 
@@ -51,7 +51,8 @@ def warning_context(session_file: Path, report: Any, recovery_bundle: Path | Non
         "CODEX SESSION INTEGRITY WARNING: "
         f"{display_path(session_file)} line {first.line}, byte offset {first.byte_offset}: {first.kind} ({first.detail}){suffix}. "
         "This guard did not modify the session log and cannot repair Codex host persistence. "
-        "Do not trust resumed history after this point: preserve the original file and start a fresh session. "
+        "The current turn was stopped because resumed history after this point is not trustworthy. "
+        "Preserve the original file and start a fresh session. "
         f"{bundle_context}"
         "For a metadata-only diagnostic, run scripts/codex_session_integrity_hook.py --session-file <path> --report <path>."
     )
@@ -81,6 +82,9 @@ def main(argv: list[str] | None = None) -> int:
         print(
             json.dumps(
                 {
+                    "continue": False,
+                    "stopReason": "Malformed Codex session history; continue in a fresh thread from the generated recovery handoff.",
+                    "systemMessage": warning_context(session_file, report, recovery_bundle),
                     "hookSpecificOutput": {
                         "hookEventName": "SessionStart",
                         "additionalContext": warning_context(session_file, report, recovery_bundle),

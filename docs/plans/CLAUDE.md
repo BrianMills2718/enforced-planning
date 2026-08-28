@@ -105,6 +105,7 @@ See `ROADMAP.md` for the full phase map and recommended priority order.
 | 125 | Planning Integrity Loop (`125_planning_integrity_loop.md`) | Critical | ✅ Complete — PI-01 through PI-03 accepted, including authentic installed AES dogfood and synchronized terminal status | stop framework expansion; use the external rewrite anchor as the next vertical |
 | 126 | Atomic Projection Refresh on Claim Mutations (`126_atomic_projection_refresh.md`) | Critical | ✅ Superseded without implementation — source inspection proved claim creation already retains the outer registry lock through projection refresh; nested-lock candidate `c6b3109` rejected | Plan #127 owns the surviving interrupted-derived-state repair |
 | 127 | Turn-End Safety and Hook Feedback Recurrence (`127_turn_end_safety_and_hook_feedback.md`) | Critical | ✅ Complete — source and fixture-isolation follow-up merged; configured installed hook and strict controls verified | no remaining Plan #127 work |
+| 128 | Stale Branch Resolution (`128_stale_branch_resolution.md`) | Medium | 📋 Planned | — |
 
 ## Status Key
 

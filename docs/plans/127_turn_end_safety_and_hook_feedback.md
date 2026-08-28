@@ -75,7 +75,11 @@ and permits the turn without “closeout” language. The report marks the repea
 as recurrent and lists its exact receipt IDs. A separate dirty-repository control still
 blocks, and a stale pre-write claim gate plus unsafe `session-close` still fail closed.
 
-**Behavioral evidence:** Unobserved
+**Behavioral evidence:** Observed in a subprocess native-shaped Stop replay with a
+claim written after projection generation; the hook repaired under the registry lock,
+emitted no denial, and a strict digest-bound reload returned the new claim. A real
+SessionStart against the completed-claim-heavy canonical registry completed in 0.21s
+(hook receipt elapsed 12.035ms) without heartbeat or projection mutation.
 
 **Substrate/process evidence:** Focused both-sign tests plus one native-shaped hook
 replay against an isolated claim registry and receipt directory.
@@ -268,23 +272,24 @@ interrupted derived projection cannot trap ordinary response yield.
 
 ## Acceptance Criteria
 
-- [ ] A stale projection cannot produce a repeated ordinary Stop denial when the
+- [x] A stale projection cannot produce a repeated ordinary Stop denial when the
   canonical registry is readable.
-- [ ] A corrupt current session fails safely, a genuinely fresh session passes, and
+- [x] A corrupt current session fails safely, a genuinely fresh session passes, and
   repeated corrupt-session starts reuse one stable recovery incident after rollout growth.
-- [ ] `SessionStart` performs no synchronous heartbeat/projection rebuild and remains
+- [x] `SessionStart` performs no synchronous heartbeat/projection rebuild and remains
   comfortably below its timeout with approximately 1,500 completed claims.
-- [ ] Interruption after a canonical claim write but before projection refresh cannot
+- [x] Interruption after a canonical claim write but before projection refresh cannot
   permanently block ordinary turn end; mutation and lane-close gates remain fail closed.
-- [ ] Projection-only unavailability after bounded repair warns and writes a receipt;
+- [x] Projection-only unavailability after bounded repair warns and writes a receipt;
   it does not call ordinary response yield “closeout.”
-- [ ] Known dirty work and active mailbox requests still deny Stop.
-- [ ] Pre-write claim checks and `session-close` retain fail-closed behavior.
-- [ ] One report groups content-free receipts by stable dimensions, flags recurrence,
+- [x] Known dirty work and active mailbox requests still deny Stop.
+- [x] Pre-write claim checks and `session-close` retain fail-closed behavior.
+- [x] One report groups content-free receipts by stable dimensions, flags recurrence,
   and lists exact receipt IDs without copying prompt or response content.
-- [ ] The guide defines turn end, checkpoint, agent rotation/handoff, lane closure,
+- [x] The guide defines turn end, checkpoint, agent rotation/handoff, lane closure,
   goal completion, and the feedback disposition route.
-- [ ] Focused tests, `python scripts/self_test.py`, and the authentic isolated replay pass.
+- [x] Focused tests (173 passed), `python scripts/self_test.py`, and the authentic
+  isolated replay pass.
 
 ## Open Questions
 

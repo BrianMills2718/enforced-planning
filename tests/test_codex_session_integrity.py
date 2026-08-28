@@ -132,3 +132,32 @@ def test_recovery_bundle_preserves_source_and_omits_only_bad_records(tmp_path: P
 
     repeated = create_recovery_bundle(session, session_id="session-abc", recovery_root=tmp_path / "recovery")
     assert repeated == bundle
+
+
+def test_recovery_bundle_reuses_stable_incident_after_rollout_growth(tmp_path: Path) -> None:
+    session = tmp_path / "rollout-session-abc.jsonl"
+    original = b'{"type":"session_meta"}\n\0\0\n'
+    session.write_bytes(original)
+    first = create_recovery_bundle(session, session_id="session-abc", recovery_root=tmp_path / "recovery")
+
+    session.write_bytes(original + b'{"type":"response_item","payload":{}}\n')
+    repeated = create_recovery_bundle(session, session_id="session-abc", recovery_root=tmp_path / "recovery")
+
+    assert repeated == first
+    assert (first / "original-snapshot.jsonl").read_bytes() == original
+    assert len(list((tmp_path / "recovery" / "session-abc").glob("auto-*"))) == 1
+
+
+def test_recovery_bundle_discovers_legacy_digest_named_incident(tmp_path: Path) -> None:
+    session = tmp_path / "rollout-session-abc.jsonl"
+    original = b'{"type":"session_meta"}\n\0\0\n'
+    session.write_bytes(original)
+    first = create_recovery_bundle(session, session_id="session-abc", recovery_root=tmp_path / "recovery")
+    legacy = first.with_name("auto-legacydigest")
+    first.rename(legacy)
+    session.write_bytes(original + b'{"type":"response_item","payload":{}}\n')
+
+    repeated = create_recovery_bundle(session, session_id="session-abc", recovery_root=tmp_path / "recovery")
+
+    assert repeated == legacy
+    assert len(list(legacy.parent.glob("auto-*"))) == 1

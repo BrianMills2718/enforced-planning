@@ -204,6 +204,38 @@ def _render_transcript(session_id: str, sanitized_records: list[dict[str, object
     return "\n".join(lines)
 
 
+def _matching_existing_bundle(
+    *,
+    session_root: Path,
+    issue: SessionIntegrityIssue,
+) -> Path | None:
+    """Find a complete legacy digest-named bundle for the same corruption incident."""
+
+    required_artifacts = {
+        "original-snapshot.jsonl",
+        "sanitized-archive.jsonl",
+        "transcript.md",
+        "integrity-report.json",
+        "HANDOFF.md",
+    }
+    for report_path in sorted(session_root.glob("auto-*/integrity-report.json")):
+        try:
+            payload = json.loads(report_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        issues = payload.get("issues") if isinstance(payload, dict) else None
+        first = issues[0] if isinstance(issues, list) and issues else None
+        if not isinstance(first, dict):
+            continue
+        identity = (first.get("line"), first.get("byte_offset"), first.get("kind"))
+        if identity != (issue.line, issue.byte_offset, issue.kind):
+            continue
+        bundle = report_path.parent
+        if all((bundle / artifact).is_file() for artifact in required_artifacts):
+            return bundle
+    return None
+
+
 def create_recovery_bundle(
     session_file: Path,
     *,
@@ -213,15 +245,32 @@ def create_recovery_bundle(
     """Preserve a corrupt rollout and derive safe create-once artifacts."""
 
     resolved = session_file.expanduser().resolve()
-    source_sha256 = _sha256(resolved)
-    bundle = recovery_root.expanduser().resolve() / session_id / f"auto-{source_sha256[:12]}"
+    live_report = inspect_session_jsonl(resolved)
+    if live_report.is_clean:
+        raise ValueError("recovery bundle requires at least one malformed record")
+    first_issue = live_report.issues[0]
+    session_root = recovery_root.expanduser().resolve() / session_id
+    existing = _matching_existing_bundle(session_root=session_root, issue=first_issue)
+    if existing is not None:
+        return existing
+    incident_material = "\0".join(
+        (
+            session_id,
+            str(first_issue.line),
+            str(first_issue.byte_offset),
+            first_issue.kind,
+        )
+    )
+    incident_id = hashlib.sha256(incident_material.encode("utf-8")).hexdigest()[:12]
+    bundle = session_root / f"auto-{incident_id}"
     bundle.mkdir(parents=True, exist_ok=True)
 
     snapshot = bundle / "original-snapshot.jsonl"
     if not snapshot.exists():
+        live_source_sha256 = _sha256(resolved)
         temporary = bundle / f".original-snapshot.{os.getpid()}.tmp"
         shutil.copyfile(resolved, temporary)
-        if _sha256(temporary) != source_sha256:
+        if _sha256(temporary) != live_source_sha256:
             temporary.unlink(missing_ok=True)
             raise OSError("session rollout changed while the recovery snapshot was being created")
         try:
@@ -230,8 +279,10 @@ def create_recovery_bundle(
             pass
         finally:
             temporary.unlink(missing_ok=True)
-    if _sha256(snapshot) != source_sha256:
-        raise FileExistsError(f"recovery snapshot digest mismatch: {snapshot}")
+    # The first snapshot is immutable incident evidence. A growing host rollout
+    # for the same malformed physical record reuses it instead of copying each
+    # successively larger file into a new bundle.
+    source_sha256 = _sha256(snapshot)
 
     report = inspect_session_jsonl(snapshot)
     if report.is_clean:
@@ -258,6 +309,7 @@ def create_recovery_bundle(
         {
             "created_at": datetime.now(timezone.utc).isoformat(),
             "session_id": session_id,
+            "incident_id": incident_id,
             "source_sha256": source_sha256,
             "sanitized_records": len(sanitized_records),
         }

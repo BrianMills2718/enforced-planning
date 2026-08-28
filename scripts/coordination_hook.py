@@ -62,10 +62,15 @@ from enforced_planning import (
 SUPPORTED_EVENTS = {"SessionStart", "UserPromptSubmit", "PostToolUse", "PreToolUse", "Stop"}
 MUTATION_TOOL_NAMES = frozenset({"bash", "apply_patch", "edit", "write"})
 REPOSITORY_SCAN_MAX_WORKERS = 16
+TURN_END_PROJECTION_REPAIR_TIMEOUT_SECONDS = 1.5
 
 
 class RepositoryCloseoutError(RuntimeError):
-    """Raised when repository closeout evidence cannot be collected safely."""
+    """Compatibility name for unavailable turn-end repository safety evidence."""
+
+
+class TurnEndProjectionError(RepositoryCloseoutError):
+    """Raised when derived claim state cannot be repaired within the Stop budget."""
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -78,6 +83,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--hook-receipt-dir", type=Path, default=DEFAULT_RECEIPT_ROOT)
     parser.add_argument("--agent", choices=("codex", "claude-code"), default="codex")
     parser.add_argument("--project", help="Canonical project override supplied by a repository compatibility hook.")
+    parser.add_argument("--repair-projection-only", action="store_true", help=argparse.SUPPRESS)
     return parser.parse_args(argv)
 
 
@@ -259,29 +265,91 @@ def _write_closeout_baseline(
     temporary.replace(ledger_path)
 
 
-def _active_claims(claims_dir: Path | None) -> tuple[Any, ...]:
-    """Load the digest-bound active projection instead of reparsing the YAML fleet."""
+def _projection_has_registry_change(projection_path: Path, claims_dir: Path) -> bool:
+    """Cheaply detect atomic writes, additions, or deletions since projection."""
+
+    try:
+        projection_mtime = projection_path.stat().st_mtime_ns
+        if not claims_dir.exists():
+            return False
+        if claims_dir.stat().st_mtime_ns > projection_mtime:
+            return True
+        return any(path.stat().st_mtime_ns > projection_mtime for path in claims_dir.glob("*.yaml"))
+    except OSError as exc:
+        raise TurnEndProjectionError(f"cannot inspect derived claim state: {exc}") from exc
+
+
+def _repair_turn_end_projection(claims_dir: Path) -> None:
+    """Run the lock-owning projection repair in a killable, bounded subprocess."""
+
+    command = [
+        sys.executable,
+        str(Path(__file__).resolve()),
+        "--claims-dir",
+        str(claims_dir),
+        "--repair-projection-only",
+    ]
+    try:
+        completed = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=TURN_END_PROJECTION_REPAIR_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise TurnEndProjectionError(
+            f"claim projection repair exceeded {TURN_END_PROJECTION_REPAIR_TIMEOUT_SECONDS:g}s"
+        ) from exc
+    if completed.returncode:
+        detail = completed.stderr.strip() or completed.stdout.strip() or "repair process failed"
+        raise TurnEndProjectionError(detail)
+
+
+def _repair_projection_under_lock(claims_dir: Path) -> None:
+    """Own the canonical claim lock while rebuilding its replaceable projection."""
+
+    with coordination_claims.claim_registry_lock(claims_dir):
+        coordination_claims.refresh_prewrite_authority_projection(claims_dir)
+
+
+def _active_claims(claims_dir: Path | None, *, turn_end: bool = False) -> tuple[Any, ...]:
+    """Load active claims strictly, or repair derived state for ordinary turn end."""
 
     resolved = (claims_dir or coordination_claims.CLAIMS_DIR).expanduser().resolve()
     projection_path = prewrite_claim_fast.projection_path_for(resolved)
-    if projection_path.is_file():
+    def load_projection() -> Any:
         try:
             projection = prewrite_claim_projection.PreWriteAuthorityProjectionV1.model_validate_json(
                 projection_path.read_text(encoding="utf-8")
             )
         except (OSError, ValueError) as exc:
-            raise RepositoryCloseoutError(
-                f"cannot read active-claim projection {projection_path}: {exc}"
-            ) from exc
+            error_type = TurnEndProjectionError if turn_end else RepositoryCloseoutError
+            raise error_type(f"cannot read active-claim projection {projection_path}: {exc}") from exc
         if projection.claims_dir != str(resolved):
-            raise RepositoryCloseoutError(
-                f"active-claim projection targets {projection.claims_dir}, expected {resolved}"
-            )
-        registry_digest = prewrite_claim_fast.registry_digest(resolved)
-        if projection.registry_digest != registry_digest:
-            raise RepositoryCloseoutError(
-                "active-claim projection is stale relative to the canonical claim registry"
-            )
+            error_type = TurnEndProjectionError if turn_end else RepositoryCloseoutError
+            raise error_type(f"active-claim projection targets {projection.claims_dir}, expected {resolved}")
+        return projection
+
+    repaired = False
+    if turn_end and (not projection_path.is_file() or _projection_has_registry_change(projection_path, resolved)):
+        _repair_turn_end_projection(resolved)
+        repaired = True
+    if projection_path.is_file():
+        try:
+            projection = load_projection()
+        except TurnEndProjectionError:
+            if not turn_end or repaired:
+                raise
+            _repair_turn_end_projection(resolved)
+            repaired = True
+            projection = load_projection()
+        if not turn_end:
+            registry_digest = prewrite_claim_fast.registry_digest(resolved)
+            if projection.registry_digest != registry_digest:
+                raise RepositoryCloseoutError(
+                    "active-claim projection is stale relative to the canonical claim registry"
+                )
         now = datetime.now(UTC)
         return tuple(
             claim
@@ -293,7 +361,8 @@ def _active_claims(claims_dir: Path | None) -> tuple[Any, ...]:
             )
         )
     if resolved == coordination_claims.CLAIMS_DIR.expanduser().resolve():
-        raise RepositoryCloseoutError(
+        error_type = TurnEndProjectionError if turn_end else RepositoryCloseoutError
+        raise error_type(
             f"active-claim projection is missing: {projection_path}"
         )
     return tuple(coordination_claims.check_claims(claims_dir=resolved))
@@ -462,7 +531,7 @@ def _repository_closeout_failure(
     if len(dirty_changes) > 10:
         rendered += f", and {len(dirty_changes) - 10} more"
     return (
-        "Repository closeout blocked: this session changed repository state and left it dirty: "
+        "Turn end blocked: this session changed repository state and left it dirty: "
         f"{rendered}. Commit and push the coherent work, restore it to the recorded baseline, "
         "or use the sanctioned session-close dirty-handoff path before sending a final response."
     )
@@ -516,7 +585,9 @@ def _delivery_event_id(payload: dict[str, Any], *, agent: str, session_id: str) 
         # payloads likewise omit an event ID, but do provide the exact final
         # assistant message; its digest is a duplicate-safe boundary identity.
         if payload["hook_event_name"] == "SessionStart":
-            token = f"sessionstart-bucket:{int(time.time() // 30)}"
+            # Five minutes is still bounded while avoiding a duplicate pair
+            # straddling a short 30-second wall-clock bucket boundary.
+            token = f"sessionstart-bucket:{int(time.time() // 300)}"
         elif payload["hook_event_name"] == "Stop" and isinstance(
             payload.get("last_assistant_message"), str
         ):
@@ -626,6 +697,9 @@ def main(argv: list[str] | None = None) -> int:
     """Refresh matching claim state and expose requests to the native session."""
 
     args = parse_args(argv)
+    if args.repair_projection_only:
+        _repair_projection_under_lock((args.claims_dir or coordination_claims.CLAIMS_DIR).expanduser().resolve())
+        return 0
     invocation: HookInvocation | None = None
     telemetry_decision = "warn"
     telemetry_reason = "hook_unavailable"
@@ -641,7 +715,20 @@ def main(argv: list[str] | None = None) -> int:
         telemetry_decision = "allow"
         telemetry_reason = "no_active_boundary"
         session_id = _session_id(args.agent, payload["session_id"])
-        active_claims = _active_claims(args.claims_dir)
+        event_name = payload["hook_event_name"]
+        projection_warning: str | None = None
+        if event_name == "SessionStart":
+            # Startup is advisory. It must not synchronously scan, heartbeat,
+            # or rebuild a completed-claim-heavy registry.
+            active_claims = ()
+        elif event_name == "Stop":
+            try:
+                active_claims = _active_claims(args.claims_dir, turn_end=True)
+            except TurnEndProjectionError as exc:
+                active_claims = ()
+                projection_warning = f"turn-end claim projection unavailable after bounded repair: {exc}"
+        else:
+            active_claims = _active_claims(args.claims_dir)
         closeout_ledger_dir = args.closeout_ledger_dir or (
             (args.claims_dir or coordination_claims.CLAIMS_DIR).expanduser().resolve().parent
             / "repository-closeout-ledgers"
@@ -665,7 +752,7 @@ def main(argv: list[str] | None = None) -> int:
             )
         delivery_event_id = _delivery_event_id(payload, agent=args.agent, session_id=session_id)
         project = args.project or _canonical_project(payload["cwd"])
-        heartbeat_projects = () if payload["hook_event_name"] == "Stop" else (
+        heartbeat_projects = () if payload["hook_event_name"] in {"SessionStart", "Stop"} else (
             (project,)
             if project is not None
             else _claimed_projects(
@@ -734,17 +821,24 @@ def main(argv: list[str] | None = None) -> int:
                 )
             telemetry_decision = "block"
             telemetry_reason = (
-                "repository_closeout_dirty" if closeout_failure else "active_mailbox_request"
+                "turn_end_repository_dirty" if closeout_failure else "active_mailbox_request"
             )
             denial_parts = [part for part in (notice.summary, closeout_failure) if part]
             denial_parts.append(f"Hook receipt: {invocation.receipt_id}.")
             print(json.dumps(_render_boundary_denial(boundary_event, "\n\n".join(denial_parts))))
             return 0
-        if notice.active_count or notice.acknowledgement_count:
+        if projection_warning:
+            telemetry_decision = "warn"
+            telemetry_reason = "turn_end_projection_unavailable"
+        summaries = [notice.summary] if notice.active_count or notice.acknowledgement_count else []
+        if projection_warning:
+            summaries.append(projection_warning)
+        if summaries:
+            summary = "\n\n".join(summaries)
             if args.agent == "codex":
-                print(json.dumps(_render_codex_result(payload["hook_event_name"], notice.summary)))
+                print(json.dumps(_render_codex_result(payload["hook_event_name"], summary)))
             else:
-                print(notice.summary)
+                print(summary)
     except (
         RepositoryCloseoutError,
         coordination_messages.CoordinationMessageError,
@@ -754,14 +848,14 @@ def main(argv: list[str] | None = None) -> int:
         ValueError,
     ) as exc:
         prefix = (
-            "repository closeout unavailable"
+            "turn-end repository safety unavailable"
             if isinstance(exc, RepositoryCloseoutError)
             else "coordination mailbox unavailable"
         )
         warning = f"{prefix}: {type(exc).__name__}: {exc}"
         telemetry_decision = "block" if isinstance(exc, RepositoryCloseoutError) else "warn"
         telemetry_reason = (
-            "repository_closeout_unavailable"
+            "turn_end_repository_safety_unavailable"
             if isinstance(exc, RepositoryCloseoutError)
             else "coordination_mailbox_unavailable"
         )

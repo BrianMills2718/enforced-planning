@@ -791,7 +791,9 @@ def test_codex_lifecycle_hook_observes_repeats_until_ack_then_hides(
     refreshed_claim = yaml.safe_load(
         (claims_dir / "codex_enforced-planning_sender-lane.yaml").read_text(encoding="utf-8")
     )
-    assert refreshed_claim["heartbeat_at"] != NOW.isoformat()
+    # SessionStart is advisory and read-only with respect to claim authority;
+    # the first real prompt/tool lifecycle event owns heartbeat refresh.
+    assert refreshed_claim["heartbeat_at"] == NOW.isoformat()
 
     duplicate = subprocess.run(
         command,

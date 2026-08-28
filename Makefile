@@ -170,7 +170,10 @@ REVIEW_SCOPE ?=
 REVIEW_NOTES ?=
 RECIPIENT ?=
 
-.PHONY: outcome-bootstrap worktree maintenance-worktree worktree-list worktree-remove session-start session-heartbeat session-status session-end session-finish session-close review-claim raise-concern verification-batch-freeze verification-batch-check verification-batch-thaw surface-up surface-preview surface-status surface-down surface-audit
+.PHONY: outcome-bootstrap worktree maintenance-worktree worktree-list worktree-remove session-start session-heartbeat session-status session-end session-finish session-close review-claim raise-concern hook-feedback-report verification-batch-freeze verification-batch-check verification-batch-thaw surface-up surface-preview surface-status surface-down surface-audit
+
+hook-feedback-report:  ## Group content-free hook receipts; pass ARGS="--threshold 3"
+	$(PYTHON) scripts/hook_feedback_report.py $(ARGS)
 
 verification-batch-freeze:  ## Freeze clean HEAD for DECISION="..." VERIFY_COMMAND="..."
 	@test -n "$(DECISION)" || (echo "DECISION is required" && exit 1)

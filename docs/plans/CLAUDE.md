@@ -103,8 +103,8 @@ See `ROADMAP.md` for the full phase map and recommended priority order.
 | 123 | Source Outcome-Admission Activation (`123_source_outcome_admission_activation.md`) | Critical | ✅ Complete — automatic source bootstrap/lifecycle/pre-write accepted | separately designed normal-project pilot; installer and fleet remain excluded |
 | 124 | Qualitative Coding Outcome-Admission Pilot (`124_qualitative_coding_outcome_admission_pilot.md`) | Critical | 🚧 In Progress — exact Project Graph compatibility accepted; source merge/park precedes QC | one isolated QC-local pilot; installer defaults and fleet remain excluded |
 | 125 | Planning Integrity Loop (`125_planning_integrity_loop.md`) | Critical | ✅ Complete — PI-01 through PI-03 accepted, including authentic installed AES dogfood and synchronized terminal status | stop framework expansion; use the external rewrite anchor as the next vertical |
-| 126 | Atomic Projection Refresh on Claim Mutations (`126_atomic_projection_refresh.md`) | Critical | 📋 Planned — adopted design at `8027b6d`; mutation source candidate remains branch-only at `c6b3109` | Plan #127 must integrate or supersede the writer change before accepting turn-end read repair and terminology |
-| 127 | Turn-End Safety and Hook Feedback Recurrence (`127_turn_end_safety_and_hook_feedback.md`) | Critical | 🚧 In Progress | quiet truthful turn endings, fast fresh startup, stable corruption recovery, and recurrence-backed hook improvement |
+| 126 | Atomic Projection Refresh on Claim Mutations (`126_atomic_projection_refresh.md`) | Critical | ✅ Superseded without implementation — source inspection proved claim creation already retains the outer registry lock through projection refresh; nested-lock candidate `c6b3109` rejected | Plan #127 owns the surviving interrupted-derived-state repair |
+| 127 | Turn-End Safety and Hook Feedback Recurrence (`127_turn_end_safety_and_hook_feedback.md`) | Critical | 🚧 Implemented and verifying — focused strict-boundary suite and native-shaped replays pass | final source merge and installed-hook verification |
 
 ## Status Key
 

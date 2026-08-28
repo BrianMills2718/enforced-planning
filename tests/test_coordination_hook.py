@@ -223,6 +223,24 @@ def test_session_start_does_not_load_claim_projection(monkeypatch, tmp_path: Pat
     assert coordination_hook.main(["--claims-dir", str(tmp_path / "claims"), "--hook-receipt-dir", str(tmp_path / "receipts")]) == 0
 
 
+def test_root_override_derives_fixture_local_hook_receipts(monkeypatch, tmp_path: Path) -> None:
+    root = tmp_path / "coordination" / "messages-v1"
+    monkeypatch.setattr(coordination_hook, "_write_closeout_baseline", lambda **_kwargs: None)
+    monkeypatch.setattr(coordination_hook, "_canonical_project", lambda _cwd: "demo")
+    monkeypatch.setattr(
+        coordination_hook.coordination_messages,
+        "poll_session_inbox",
+        lambda **_kwargs: type("Notice", (), {"active_count": 0, "acknowledgement_count": 0, "summary": "", "message_ids": ()})(),
+    )
+    monkeypatch.setattr(
+        "sys.stdin",
+        type("Input", (), {"read": lambda _self: '{"session_id":"local","cwd":"/tmp","hook_event_name":"SessionStart"}'})(),
+    )
+
+    assert coordination_hook.main(["--claims-dir", str(tmp_path / "claims"), "--root", str(root)]) == 0
+    assert len(list((root.parent / "hook-invocations-v1").rglob("completed.json"))) == 1
+
+
 def test_session_start_skips_heartbeat_with_large_completed_registry(monkeypatch, tmp_path: Path) -> None:
     claims_dir = tmp_path / "claims"
     claims_dir.mkdir()

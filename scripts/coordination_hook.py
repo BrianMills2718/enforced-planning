@@ -80,7 +80,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--claims-dir", type=Path)
     parser.add_argument("--root", type=Path)
     parser.add_argument("--closeout-ledger-dir", type=Path)
-    parser.add_argument("--hook-receipt-dir", type=Path, default=DEFAULT_RECEIPT_ROOT)
+    parser.add_argument("--hook-receipt-dir", type=Path)
     parser.add_argument("--agent", choices=("codex", "claude-code"), default="codex")
     parser.add_argument("--project", help="Canonical project override supplied by a repository compatibility hook.")
     parser.add_argument("--repair-projection-only", action="store_true", help=argparse.SUPPRESS)
@@ -705,12 +705,17 @@ def main(argv: list[str] | None = None) -> int:
     telemetry_reason = "hook_unavailable"
     try:
         payload = _read_hook_input(project_supplied=args.project is not None)
+        hook_receipt_dir = args.hook_receipt_dir or (
+            args.root.expanduser().resolve().parent / "hook-invocations-v1"
+            if args.root is not None
+            else DEFAULT_RECEIPT_ROOT
+        )
         invocation = start_hook_invocation(
             hook_name="coordination-lifecycle",
             hook_version="2",
             script_path=Path(__file__).resolve(),
             payload=payload,
-            receipt_root=args.hook_receipt_dir,
+            receipt_root=hook_receipt_dir,
         )
         telemetry_decision = "allow"
         telemetry_reason = "no_active_boundary"

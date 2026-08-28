@@ -8,6 +8,7 @@ inventing a second coordination registry.
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import re
 import subprocess
@@ -373,6 +374,60 @@ def _atomic_restore_bytes(path: Path, content: bytes) -> None:
     finally:
         if temp_path is not None and temp_path.exists():
             temp_path.unlink()
+
+
+def _persist_claim_session_transfer_receipt(
+    *,
+    claim: coordination_claims.ClaimRecord,
+    project: str,
+    scope: str,
+    worktree_path: str,
+    branch: str,
+    successor_session_id: str,
+    transferred_at: str,
+    prior_claim_bytes: bytes,
+    successor_claim_bytes: bytes,
+) -> dict[str, Any]:
+    """Persist one immutable, digest-bound receipt for cross-session claim custody."""
+
+    prior_session_id = claim.session_id
+    if not prior_session_id or prior_session_id == successor_session_id:
+        raise ValueError("Claim custody transfer requires distinct predecessor and successor sessions")
+    if not claim.repo_root:
+        raise ValueError("Claim custody transfer requires the canonical repository root")
+    payload = {
+        "schema_version": "1.0",
+        "record_type": "claim_session_custody_transfer",
+        "action": "session_resume",
+        "project": project,
+        "scope": scope,
+        "repo_root": str(Path(claim.repo_root).expanduser().resolve()),
+        "worktree_path": str(Path(worktree_path).expanduser().resolve()),
+        "branch": branch,
+        "prior_session_id": prior_session_id,
+        "successor_session_id": successor_session_id,
+        "transferred_at": transferred_at,
+        "prior_claim_sha256": hashlib.sha256(prior_claim_bytes).hexdigest(),
+        "successor_claim_sha256": hashlib.sha256(successor_claim_bytes).hexdigest(),
+    }
+    canonical = (json.dumps(payload, indent=2, sort_keys=True) + "\n").encode("utf-8")
+    receipt_sha256 = hashlib.sha256(canonical).hexdigest()
+    receipt_root = (
+        coordination_claims.CLAIMS_DIR.expanduser().resolve().parent
+        / "session-custody-transfers-v1"
+    )
+    receipt_path = receipt_root / f"{receipt_sha256[:32]}.json"
+    if receipt_path.exists():
+        if receipt_path.read_bytes() != canonical:
+            raise ValueError(f"Claim custody receipt collision at {receipt_path}")
+    else:
+        _atomic_restore_bytes(receipt_path, canonical)
+        os.chmod(receipt_path, 0o600)
+    return {
+        "receipt": payload,
+        "receipt_path": str(receipt_path),
+        "receipt_sha256": receipt_sha256,
+    }
 
 
 def _rollback_outcome_session_transfer(
@@ -2147,13 +2202,13 @@ def resume_session(
     claim_bytes_before: bytes | None = None
     tracker_bytes_before: bytes | None = None
     if not same_runtime:
+        claim_bytes_before = claim_file.read_bytes()
         transfer_preflight = outcome_selection.prepare_outcome_session_transfer(
             claim=claim,
             successor_session_id=resolved_session_id,
             transferred_at=datetime.fromisoformat(updated_at),
         )
         if transfer_preflight is not None:
-            claim_bytes_before = claim_file.read_bytes()
             tracker_bytes_before = transfer_preflight.tracker_path.read_bytes()
 
     expected_fields = (
@@ -2239,6 +2294,30 @@ def resume_session(
             ) from transfer_error
         raise
 
+    claim_session_transfer: dict[str, Any] | None = None
+    if not same_runtime:
+        if claim_bytes_before is None:
+            raise SessionTransferIncompleteError(
+                "claim custody changed without retained predecessor bytes"
+            )
+        try:
+            claim_session_transfer = _persist_claim_session_transfer_receipt(
+                claim=claim,
+                project=project,
+                scope=scope,
+                worktree_path=worktree_path,
+                branch=branch,
+                successor_session_id=resolved_session_id,
+                transferred_at=updated_at,
+                prior_claim_bytes=claim_bytes_before,
+                successor_claim_bytes=claim_file.read_bytes(),
+            )
+        except Exception as receipt_error:
+            raise SessionTransferIncompleteError(
+                "claim custody changed but its immutable transfer receipt could not be persisted: "
+                f"{receipt_error}"
+            ) from receipt_error
+
     return {
         "action": "resumed",
         "session_id": resolved_session_id,
@@ -2247,6 +2326,7 @@ def resume_session(
         "outcome_session_transfer": (
             transfer_receipt.model_dump(mode="json") if transfer_receipt is not None else None
         ),
+        "claim_session_transfer": claim_session_transfer,
         "coordination_mailbox": _poll_mailbox(
             agent=agent,
             project=project,

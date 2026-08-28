@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import subprocess
@@ -2976,6 +2977,20 @@ def test_resume_session_rebinds_stale_or_handoff_lane(
 
     assert payload["action"] == "resumed"
     assert payload["session_id"] == "codex:new-session"
+    custody = payload["claim_session_transfer"]
+    assert custody is not None
+    custody_path = Path(custody["receipt_path"])
+    assert custody_path.is_file()
+    assert custody["receipt_sha256"] == hashlib.sha256(custody_path.read_bytes()).hexdigest()
+    custody_payload = json.loads(custody_path.read_text(encoding="utf-8"))
+    assert custody_payload["record_type"] == "claim_session_custody_transfer"
+    assert custody_payload["action"] == "session_resume"
+    assert custody_payload["prior_session_id"] == "codex:old-session"
+    assert custody_payload["successor_session_id"] == "codex:new-session"
+    assert custody_payload["repo_root"] == str(Path("~/projects/enforced-planning").expanduser().resolve())
+    assert custody_payload["worktree_path"] == str(worktree.resolve())
+    assert custody_payload["branch"] == "plan-37-session-recovery"
+    assert custody_payload["prior_claim_sha256"] != custody_payload["successor_claim_sha256"]
     assert status_payload["sessions"][0]["claim_status"] == "active"
     assert status_payload["sessions"][0]["recovery_action"] == "continue"
     assert tracker_payload["tracker"]["current_phase"] == "fresh runtime resumed"

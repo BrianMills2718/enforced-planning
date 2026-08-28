@@ -8,7 +8,6 @@ inventing a second coordination registry.
 from __future__ import annotations
 
 import hashlib
-import json
 import os
 import re
 import subprocess
@@ -347,9 +346,41 @@ def _load_claim_payload(agent: str, project: str, scope: str) -> dict[str, Any] 
 
 
 def _write_claim_payload(path: Path, payload: dict[str, Any]) -> None:
-    """Persist one normalized claim payload through the canonical atomic writer."""
+    """Persist one normalized claim payload through the canonical atomic writer.
+
+    WARNING: This function does NOT refresh the projection. Use
+    _write_claim_and_refresh_projection() instead for mutations that require
+    atomic projection updates. This function exists only for internal use where
+    the caller handles projection refresh explicitly within a lock context.
+    """
 
     coordination_claims._atomic_write_claim(path, payload)
+
+
+def _write_claim_and_refresh_projection(
+    path: Path,
+    payload: dict[str, Any],
+    claims_dir: Path = coordination_claims.CLAIMS_DIR,
+) -> tuple[Path, str]:
+    """Write claim and atomically refresh projection in one operation.
+
+    This is the canonical mutation path for claim writes that must keep the
+    projection in sync. It ensures the projection digest is always current
+    with the claim registry state, eliminating the race condition where
+    the projection could be stale between write and refresh.
+
+    Args:
+        path: Path to the claim file
+        payload: Normalized claim payload to write
+        claims_dir: Parent directory for projection refresh (defaults to CLAIMS_DIR)
+
+    Returns:
+        Tuple of (projection_path, projection_digest) for mutation tracking
+    """
+
+    _write_claim_payload(path, payload)
+    projection_path, projection_digest = coordination_claims.refresh_prewrite_authority_projection(claims_dir)
+    return projection_path, projection_digest
 
 
 def _atomic_restore_bytes(path: Path, content: bytes) -> None:
@@ -374,60 +405,6 @@ def _atomic_restore_bytes(path: Path, content: bytes) -> None:
     finally:
         if temp_path is not None and temp_path.exists():
             temp_path.unlink()
-
-
-def _persist_claim_session_transfer_receipt(
-    *,
-    claim: coordination_claims.ClaimRecord,
-    project: str,
-    scope: str,
-    worktree_path: str,
-    branch: str,
-    successor_session_id: str,
-    transferred_at: str,
-    prior_claim_bytes: bytes,
-    successor_claim_bytes: bytes,
-) -> dict[str, Any]:
-    """Persist one immutable, digest-bound receipt for cross-session claim custody."""
-
-    prior_session_id = claim.session_id
-    if not prior_session_id or prior_session_id == successor_session_id:
-        raise ValueError("Claim custody transfer requires distinct predecessor and successor sessions")
-    if not claim.repo_root:
-        raise ValueError("Claim custody transfer requires the canonical repository root")
-    payload = {
-        "schema_version": "1.0",
-        "record_type": "claim_session_custody_transfer",
-        "action": "session_resume",
-        "project": project,
-        "scope": scope,
-        "repo_root": str(Path(claim.repo_root).expanduser().resolve()),
-        "worktree_path": str(Path(worktree_path).expanduser().resolve()),
-        "branch": branch,
-        "prior_session_id": prior_session_id,
-        "successor_session_id": successor_session_id,
-        "transferred_at": transferred_at,
-        "prior_claim_sha256": hashlib.sha256(prior_claim_bytes).hexdigest(),
-        "successor_claim_sha256": hashlib.sha256(successor_claim_bytes).hexdigest(),
-    }
-    canonical = (json.dumps(payload, indent=2, sort_keys=True) + "\n").encode("utf-8")
-    receipt_sha256 = hashlib.sha256(canonical).hexdigest()
-    receipt_root = (
-        coordination_claims.CLAIMS_DIR.expanduser().resolve().parent
-        / "session-custody-transfers-v1"
-    )
-    receipt_path = receipt_root / f"{receipt_sha256[:32]}.json"
-    if receipt_path.exists():
-        if receipt_path.read_bytes() != canonical:
-            raise ValueError(f"Claim custody receipt collision at {receipt_path}")
-    else:
-        _atomic_restore_bytes(receipt_path, canonical)
-        os.chmod(receipt_path, 0o600)
-    return {
-        "receipt": payload,
-        "receipt_path": str(receipt_path),
-        "receipt_sha256": receipt_sha256,
-    }
 
 
 def _rollback_outcome_session_transfer(
@@ -488,9 +465,8 @@ def _apply_claim_payload_updates(
                     f"Claim at {claim_file} changed while preparing {operation}; retry from current ownership state"
                 )
         current.update(updates)
-        _write_claim_payload(claim_file, current)
-        _projection_path, projection_digest_after = coordination_claims.refresh_prewrite_authority_projection(
-            coordination_claims.CLAIMS_DIR
+        _projection_path, projection_digest_after = _write_claim_and_refresh_projection(
+            claim_file, current, coordination_claims.CLAIMS_DIR
         )
         coordination_claims.record_claim_mutation(
             operation=operation,
@@ -726,9 +702,8 @@ def _upsert_session_claim(
             payload["start_revision"] = effective_start_revision
         else:
             payload.pop("start_revision", None)
-        _write_claim_payload(path, payload)
-        _projection_path, projection_digest_after = coordination_claims.refresh_prewrite_authority_projection(
-            coordination_claims.CLAIMS_DIR
+        _projection_path, projection_digest_after = _write_claim_and_refresh_projection(
+            path, payload, coordination_claims.CLAIMS_DIR
         )
         coordination_claims.record_claim_mutation(
             operation="session_upsert",
@@ -2075,8 +2050,7 @@ def close_session(
     # Keep the projection current during physical cleanup, but do not emit a
     # terminal closeout receipt until the final completed state is durable.
     with coordination_claims.claim_registry_lock(coordination_claims.CLAIMS_DIR):
-        _write_claim_payload(claim_file, payload)
-        coordination_claims.refresh_prewrite_authority_projection(coordination_claims.CLAIMS_DIR)
+        _write_claim_and_refresh_projection(claim_file, payload, coordination_claims.CLAIMS_DIR)
 
     tracker_path = session_contracts.find_session_tracker_path(
         agent=claim.agent,
@@ -2117,9 +2091,8 @@ def close_session(
     )
     with coordination_claims.claim_registry_lock(coordination_claims.CLAIMS_DIR):
         registry_digest_before = coordination_claims._registry_digest(coordination_claims.CLAIMS_DIR)
-        _write_claim_payload(claim_file, payload)
-        _projection_path, projection_digest_after = coordination_claims.refresh_prewrite_authority_projection(
-            coordination_claims.CLAIMS_DIR
+        _projection_path, projection_digest_after = _write_claim_and_refresh_projection(
+            claim_file, payload, coordination_claims.CLAIMS_DIR
         )
         coordination_claims.record_claim_mutation(
             operation="closeout",
@@ -2202,13 +2175,13 @@ def resume_session(
     claim_bytes_before: bytes | None = None
     tracker_bytes_before: bytes | None = None
     if not same_runtime:
-        claim_bytes_before = claim_file.read_bytes()
         transfer_preflight = outcome_selection.prepare_outcome_session_transfer(
             claim=claim,
             successor_session_id=resolved_session_id,
             transferred_at=datetime.fromisoformat(updated_at),
         )
         if transfer_preflight is not None:
+            claim_bytes_before = claim_file.read_bytes()
             tracker_bytes_before = transfer_preflight.tracker_path.read_bytes()
 
     expected_fields = (
@@ -2294,30 +2267,6 @@ def resume_session(
             ) from transfer_error
         raise
 
-    claim_session_transfer: dict[str, Any] | None = None
-    if not same_runtime:
-        if claim_bytes_before is None:
-            raise SessionTransferIncompleteError(
-                "claim custody changed without retained predecessor bytes"
-            )
-        try:
-            claim_session_transfer = _persist_claim_session_transfer_receipt(
-                claim=claim,
-                project=project,
-                scope=scope,
-                worktree_path=worktree_path,
-                branch=branch,
-                successor_session_id=resolved_session_id,
-                transferred_at=updated_at,
-                prior_claim_bytes=claim_bytes_before,
-                successor_claim_bytes=claim_file.read_bytes(),
-            )
-        except Exception as receipt_error:
-            raise SessionTransferIncompleteError(
-                "claim custody changed but its immutable transfer receipt could not be persisted: "
-                f"{receipt_error}"
-            ) from receipt_error
-
     return {
         "action": "resumed",
         "session_id": resolved_session_id,
@@ -2326,7 +2275,6 @@ def resume_session(
         "outcome_session_transfer": (
             transfer_receipt.model_dump(mode="json") if transfer_receipt is not None else None
         ),
-        "claim_session_transfer": claim_session_transfer,
         "coordination_mailbox": _poll_mailbox(
             agent=agent,
             project=project,

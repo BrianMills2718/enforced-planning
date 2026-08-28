@@ -128,12 +128,8 @@ class ProgressRequest(_StrictRequest):
     quiet_reason: str | None = None
 
 
-class ReleaseSelfRequest(_StrictRequest):
-    operation: Literal["release_self"]
-
-
 ClaimBootstrapRequest = Annotated[
-    SessionStartOrUpdateRequest | HeartbeatRequest | ProgressRequest | ReleaseSelfRequest,
+    SessionStartOrUpdateRequest | HeartbeatRequest | ProgressRequest,
     Field(discriminator="operation"),
 ]
 _REQUEST_ADAPTER = TypeAdapter(ClaimBootstrapRequest)
@@ -337,23 +333,8 @@ def execute_request(request: ClaimBootstrapRequest) -> dict[str, Any]:
             "scope": claim.scope,
             "progress_event": event.model_dump(mode="json"),
         }
-    else:
-        _require_self_owned_slot(
-            agent=agent,
-            session_id=session_id,
-            project=request.project,
-            scope=request.scope,
-            allow_absent=False,
-        )
-        released, message = coordination_claims.release_claim(
-            agent,
-            request.project,
-            request.scope,
-            expected_session_id=session_id,
-        )
-        if not released:
-            raise ClaimBootstrapError(message)
-        payload = {"action": "claim_released", "message": message}
+    else:  # pragma: no cover - the discriminated request union is exhaustive
+        raise ClaimBootstrapError("unsupported claim bootstrap operation")
 
     return {
         "ok": True,
@@ -372,7 +353,6 @@ __all__ = [
     "ClaimBootstrapRequest",
     "HeartbeatRequest",
     "ProgressRequest",
-    "ReleaseSelfRequest",
     "SessionStartOrUpdateRequest",
     "canonical_script_path",
     "execute_request",

@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from codex_session_integrity import find_session_file, inspect_session_jsonl
+from codex_session_integrity import create_recovery_bundle, find_session_file, inspect_session_jsonl
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -17,6 +17,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--sessions-root", type=Path, default=Path("~/.codex/sessions"))
     parser.add_argument("--session-file", type=Path, help="Explicit file for a one-off diagnostic or focused test.")
     parser.add_argument("--report", type=Path, help="Write a metadata-only report; never writes the session log.")
+    parser.add_argument("--recovery-root", type=Path, default=Path("~/.codex/recovery"))
+    parser.add_argument("--no-recovery-bundle", action="store_true")
     return parser.parse_args(argv)
 
 
@@ -41,14 +43,16 @@ def display_path(path: Path) -> str:
         return str(resolved)
 
 
-def warning_context(session_file: Path, report: Any) -> str:
+def warning_context(session_file: Path, report: Any, recovery_bundle: Path | None) -> str:
     first = report.issues[0]
     suffix = "" if len(report.issues) == 1 else f"; {len(report.issues) - 1} additional malformed record(s) found"
+    bundle_context = f"Recovery bundle: {display_path(recovery_bundle)}. " if recovery_bundle else ""
     return (
         "CODEX SESSION INTEGRITY WARNING: "
         f"{display_path(session_file)} line {first.line}, byte offset {first.byte_offset}: {first.kind} ({first.detail}){suffix}. "
         "This guard did not modify the session log and cannot repair Codex host persistence. "
         "Do not trust resumed history after this point: preserve the original file and start a fresh session. "
+        f"{bundle_context}"
         "For a metadata-only diagnostic, run scripts/codex_session_integrity_hook.py --session-file <path> --report <path>."
     )
 
@@ -67,7 +71,23 @@ def main(argv: list[str] | None = None) -> int:
             report_path.write_text(json.dumps(report.as_dict(), indent=2, sort_keys=True) + "\n", encoding="utf-8")
         if report.is_clean:
             return 0
-        print(json.dumps({"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": warning_context(session_file, report)}}))
+        recovery_bundle = None
+        if not args.no_recovery_bundle:
+            recovery_bundle = create_recovery_bundle(
+                session_file,
+                session_id=payload["session_id"],
+                recovery_root=args.recovery_root,
+            )
+        print(
+            json.dumps(
+                {
+                    "hookSpecificOutput": {
+                        "hookEventName": "SessionStart",
+                        "additionalContext": warning_context(session_file, report, recovery_bundle),
+                    }
+                }
+            )
+        )
         return 0
     except (OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
         # A warning must not prevent Codex from starting, but it must be visible.

@@ -1,0 +1,85 @@
+{
+  "active_slice": {
+    "description": "Repair terminal-state classification, add structured hook receipts, and bound Stop repository scanning across the coordinated agent-skills and enforced-planning lanes.",
+    "next_action": null,
+    "requires_external_action": false,
+    "requires_spend": false,
+    "slice_id": "implement-hook-observability",
+    "status": "accepted",
+    "target_revision": "76a0c75dc70022af36e955304af027464f29a4b7"
+  },
+  "authority": {
+    "external_action_authorized": false,
+    "human_decision": null,
+    "human_decision_required": false,
+    "implementation_authorized": true,
+    "spend_cap_usd": 0,
+    "spend_used_usd": 0
+  },
+  "circuit_breakers": {
+    "context_integrity_valid": true,
+    "max_same_boundary_failures": 3,
+    "runtime_integrity_valid": true
+  },
+  "completion": {
+    "evidence_revision": "agent-skills:f9955ed0b32ccfda7c897ae07a376aba008ba302;enforced-planning:76a0c75dc70022af36e955304af027464f29a4b7",
+    "receipt_ref": "github:BrianMills2718/agent-skills/pull/136;github:BrianMills2718/enforced-planning/pull/217",
+    "remaining_ready_work": 0,
+    "requested": true,
+    "verifier_outcome": "pass"
+  },
+  "cursor_id": "hook-observability-20260828",
+  "cursor_revision": 3,
+  "failure_state": {
+    "boundary": null,
+    "last_failure_ref": null,
+    "same_boundary_failures": 0
+  },
+  "goal_ref": "user:make-stop-hook-improvements",
+  "lease": {
+    "heartbeat_at": "2026-08-28T17:55:34Z",
+    "lease_revision": 3,
+    "owner_session_id": "01a04950-1df3-79d2-a88f-40f5c2cdb5e5",
+    "status": "active"
+  },
+  "lifecycle_state": "complete",
+  "observations": [
+    {
+      "boundary": "hook classification and lifecycle adapters",
+      "evidence_ref": "agent-skills:22-tests;enforced-planning:64-tests",
+      "kind": "authentic_result",
+      "observation_id": "focused-tests",
+      "outcome": "pass"
+    },
+    {
+      "boundary": "154-repository closeout fingerprint scan",
+      "evidence_ref": "local-runtime:154-repositories:1.97-seconds",
+      "kind": "authentic_result",
+      "observation_id": "workspace-scan",
+      "outcome": "pass"
+    },
+    {
+      "boundary": "exact terminal and already-recorded closeouts",
+      "evidence_ref": "local-runtime:terminal-allow-and-prior-receipt-allow",
+      "kind": "authentic_result",
+      "observation_id": "reported-failures",
+      "outcome": "pass"
+    },
+    {
+      "boundary": "canonical default branches and installed learning hook",
+      "evidence_ref": "github:agent-skills-pr-136;github:enforced-planning-pr-217;install-check:live",
+      "kind": "authentic_result",
+      "observation_id": "default-branch-integration",
+      "outcome": "pass"
+    }
+  ],
+  "plan_revision": "chat:2026-08-28T17:39:00Z",
+  "ready_alternatives": [],
+  "record_type": "plan_execution_cursor",
+  "schema_version": "1.0",
+  "target": {
+    "branch": "hook-observability-framework",
+    "repository": "/home/brian/code/active/enforced-planning",
+    "worktree": "/home/brian/code/active/enforced-planning/worktrees/hook-observability-framework"
+  }
+}

@@ -105,12 +105,20 @@ def _load_mode(repo_root: Path) -> str:
 
 
 def _mode(payload: dict[str, Any], explicit: str | None) -> str:
-    if explicit is not None:
+    if explicit is not None and explicit != "enforce":
         return explicit
     cwd = payload.get("cwd")
     if not isinstance(cwd, str) or not cwd.strip():
         cwd = str(Path.cwd())
-    return _load_mode(_git_root(cwd))
+    try:
+        return _load_mode(_git_root(cwd))
+    except NonGitWorkingDirectory:
+        # Outside a git repo: cannot validate claims to governed repos.
+        # If enforce was requested, downgrade to observe (prevents bootstrap trap).
+        # If no mode was requested, default to off (allow).
+        if explicit == "enforce":
+            return "observe"
+        return explicit or "off"
 
 
 def _configured_outcome_mode(payload: dict[str, Any]) -> str:
@@ -121,7 +129,11 @@ def _configured_outcome_mode(payload: dict[str, Any]) -> str:
     cwd = payload.get("cwd")
     if not isinstance(cwd, str) or not cwd.strip():
         cwd = str(Path.cwd())
-    return load_outcome_admission_mode(_git_root(cwd))
+    try:
+        return load_outcome_admission_mode(_git_root(cwd))
+    except NonGitWorkingDirectory:
+        # Outside git repos: no repo-local outcome mode to load.
+        return "off"
 
 
 def _resolved_outcome_mode(payload: dict[str, Any], *, explicit_mode: str | None) -> str:

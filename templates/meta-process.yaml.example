@@ -25,14 +25,17 @@ meta_process:
     # Max lines for [Trivial] commits (no plan required)
     plans_dir: "docs/plans"
     integrity:
-      # Structural plan admission is explicitly adopted per repository.
+      # Structural plan admission is enabled by default (opt-out governance).
+      # To disable: set to "off" and remove/comment this section
       # off | observe | enforce
-      mode: "off"
+      mode: "enforce"
       contract_version: "1.0.0"
       minimum_plan_number: 1
 
   claims:
-    enabled: false
+    # Coordination claims are enabled by default (opt-out governance).
+    # To disable: set to false and set prewrite_mode to "off"
+    enabled: true
     require_for_worktree: false
     # off | observe | enforce; promote only after measured observe-mode calibration
     prewrite_mode: "off"

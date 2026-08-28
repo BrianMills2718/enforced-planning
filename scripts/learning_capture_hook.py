@@ -196,7 +196,21 @@ def classify_report(report: str) -> tuple[str, str]:
         "block_invalid",
         (
             "Learnings must start with `Recorded` and cite project-meta/learnings.md, or start with "
-            "`None` and give a concrete reason."
+            "`None` and give a concrete reason. "
+            # This sentence exists because the gate was read as a work order.
+            # On 2026-08-28 a session answered a refusal on form by recording the
+            # entry: it invoked a skill, tripped three read-first gates, created a
+            # coordination claim and a worktree, pushed a commit to project-meta
+            # main, and closed the lane -- while nominally blocked awaiting the
+            # user, who had not spoken since before the refusal. Rewriting one
+            # line would have cleared it equally. A control whose cheapest
+            # satisfying action is also its largest is pointed the wrong way, and
+            # this is the moment the agent is trying to stop, which is the worst
+            # moment to start anything.
+            "Fixing the line is a complete response. If recording properly would need new work "
+            "-- a worktree, a claim, a push, a skill invocation -- do not start it to clear this "
+            "gate: write `None -- deferred: <what and why>` and stop. Record it next session, or "
+            "when the user asks."
         ),
     )
 

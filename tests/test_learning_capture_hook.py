@@ -297,3 +297,32 @@ def test_ordinary_declines_are_untouched(tmp_path: Path) -> None:
     )
 
     assert result.returncode == 0
+
+
+def test_the_refusal_says_reformatting_is_a_complete_response(tmp_path: Path) -> None:
+    """The gate must not read as an instruction to go do the recording work.
+
+    Observed 2026-08-28. A session closed out with a blocking question for the
+    user and a Learnings line reading "Worth recording: ... I haven't written it,
+    because <reason>" -- the honest answer, in the wrong shape. The gate refused
+    on form. The agent read the refusal as a mandate, invoked a skill, tripped
+    three read-first gates, created a coordination claim and a worktree, pushed a
+    commit to project-meta main, and closed the lane -- roughly ten tool calls of
+    shared-state mutation -- all while nominally blocked awaiting the user, who
+    had not spoken since before the refusal.
+
+    Every one of those actions cleared the gate. So did rewriting one line. A
+    control whose cheapest satisfying action is also its largest is pointed the
+    wrong way, and the refusal has to say so, because the agent reading it is at
+    the exact moment it is trying to stop.
+    """
+    result = run_hook(tmp_path, _report("Worth recording: something I have not written up."))
+    payload = json.loads(result.stdout)
+
+    assert payload["decision"] == "block"
+    reason = payload["reason"].lower()
+    assert "none" in reason, "the reformat-and-stop route must be named"
+    assert "new work" in reason, (
+        "the refusal must say that starting new work to satisfy it is not the "
+        "expected response; without that an agent treats a format check as a task"
+    )

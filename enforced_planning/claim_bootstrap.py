@@ -140,11 +140,24 @@ _REQUEST_ADAPTER = TypeAdapter(ClaimBootstrapRequest)
 SESSION_TRACKERS_DIR = session_contracts.DEFAULT_SESSION_TRACKERS_DIR
 
 
+def _reject_duplicate_object_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    """Build one JSON object while rejecting ambiguity at every nesting level."""
+
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ClaimBootstrapError(f"request-json contains duplicate object key {key!r}")
+        result[key] = value
+    return result
+
+
 def parse_request_json(raw_json: str) -> ClaimBootstrapRequest:
     """Parse one strict v1 request; unknown fields, including session_id, fail."""
 
     try:
-        payload = json.loads(raw_json)
+        payload = json.loads(raw_json, object_pairs_hook=_reject_duplicate_object_keys)
+    except ClaimBootstrapError:
+        raise
     except json.JSONDecodeError as exc:
         raise ClaimBootstrapError(f"request-json is not valid JSON: {exc.msg}") from exc
     if not isinstance(payload, dict):

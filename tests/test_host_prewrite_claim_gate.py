@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 from datetime import datetime, timedelta, timezone
+from io import StringIO
 from pathlib import Path
 from types import ModuleType
 
@@ -108,6 +110,39 @@ def _evaluate(
         receipt_path=tmp_path / "receipts.jsonl",
         claim_bootstrap_classifier=bootstrap_classifier,
     )
+
+
+def _run_cli(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    payload: dict[str, object],
+    *,
+    claims_dir: Path | None = None,
+    projection_path: Path | None = None,
+    mode: str = "enforce",
+) -> tuple[int, dict[str, object]]:
+    monkeypatch.setattr(sys, "stdin", StringIO(json.dumps(payload)))
+    code = prewrite_claim_gate.main(
+        [
+            "--client",
+            "claude-code",
+            "--mode",
+            mode,
+            "--claims-dir",
+            str(claims_dir or tmp_path / "missing-claims"),
+            "--projection-path",
+            str(projection_path or tmp_path / "missing-projection.json"),
+            "--receipt-path",
+            str(tmp_path / "receipts.jsonl"),
+            "--outcome-receipt-path",
+            str(tmp_path / "outcome-receipts.jsonl"),
+            "--json",
+        ]
+    )
+    captured = capsys.readouterr()
+    assert not captured.err
+    return code, json.loads(captured.out)
 
 
 @pytest.mark.parametrize(
@@ -263,6 +298,156 @@ def test_cli_bootstrap_classifier_delegates_to_claim_bootstrap_parser(
         "raw": "exact bootstrap",
         "script_path": (prewrite_claim_gate.REPO_ROOT / "scripts" / "claim_bootstrap.py").resolve(),
     }
+
+
+def test_explicit_host_mode_allows_read_only_bash_from_workspace_root(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    payload = _payload(cwd=tmp_path, tool="Bash", tool_input={"command": "pwd"})
+
+    code, decision = _run_cli(monkeypatch, capsys, tmp_path, payload)
+
+    assert code == 0
+    assert decision["decision"] == "allow"
+    assert decision["reason_code"] == "bash_read_only"
+
+
+def test_explicit_host_mode_admits_strict_claim_bootstrap_from_workspace_root(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    request = json.dumps(
+        {
+            "schema_version": "1.0",
+            "operation": "heartbeat",
+            "agent": "claude-code",
+            "project": "host-gate-test",
+            "scope": "host-gate-lane",
+        },
+        separators=(",", ":"),
+    )
+    command = (
+        f"/usr/bin/python3 {prewrite_claim_gate.REPO_ROOT / 'scripts' / 'claim_bootstrap.py'} "
+        f"--request-json '{request}'"
+    )
+    payload = _payload(cwd=tmp_path, tool="Bash", tool_input={"command": command})
+
+    code, decision = _run_cli(monkeypatch, capsys, tmp_path, payload)
+
+    assert code == 0
+    assert decision["decision"] == "allow"
+    assert decision["reason_code"] == "claim_bootstrap_command"
+
+
+def test_explicit_host_mode_resolves_nested_edit_target_before_claim_evaluation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    workspace, _repo, worktree, claims_dir, _claim_path = _fixture(tmp_path)
+    payload = _payload(
+        cwd=workspace,
+        tool="Edit",
+        tool_input={"file_path": str(worktree / "src" / "allowed.py")},
+    )
+
+    code, decision = _run_cli(
+        monkeypatch,
+        capsys,
+        tmp_path,
+        payload,
+        claims_dir=claims_dir,
+        projection_path=tmp_path / "projection.json",
+    )
+
+    assert code == 0
+    assert decision["decision"] == "allow", decision
+    assert decision["reason_code"] == "exact_live_claim"
+
+
+def test_explicit_host_mode_denies_unclaimed_mutating_bash_from_workspace_root(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    payload = _payload(cwd=tmp_path, tool="Bash", tool_input={"command": "touch marker"})
+    monkeypatch.setattr(sys, "stdin", StringIO(json.dumps(payload)))
+
+    code = prewrite_claim_gate.main(
+        [
+            "--client",
+            "claude-code",
+            "--mode",
+            "enforce",
+            "--claims-dir",
+            str(tmp_path / "missing-claims"),
+            "--projection-path",
+            str(tmp_path / "missing-projection.json"),
+            "--receipt-path",
+            str(tmp_path / "receipts.jsonl"),
+        ]
+    )
+    captured = capsys.readouterr()
+
+    assert code == 2
+    assert not captured.out
+    assert "Pre-write claim denied (repository_identity_unavailable)" in captured.err
+
+
+@pytest.mark.parametrize(
+    ("mode", "expected_decision"),
+    [("off", "allow"), ("observe", "observe_violation")],
+)
+def test_explicit_host_mode_preserves_off_and_observe_semantics(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    mode: str,
+    expected_decision: str,
+) -> None:
+    payload = _payload(cwd=tmp_path, tool="Bash", tool_input={"command": "touch marker"})
+
+    code, decision = _run_cli(monkeypatch, capsys, tmp_path, payload, mode=mode)
+
+    assert code == 0
+    assert decision["mode"] == mode
+    assert decision["decision"] == expected_decision
+    assert decision["reason_code"] == "repository_identity_unavailable"
+
+
+def test_explicit_mode_preserves_repo_local_enforce_selected(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _workspace, _repo, worktree, _claims_dir, _claim_path = _fixture(tmp_path)
+    (worktree / "meta-process.yaml").write_text(
+        "meta_process:\n  claims:\n    outcome_admission_mode: enforce_selected\n",
+        encoding="utf-8",
+    )
+    payload = _payload(cwd=worktree, tool="Bash", tool_input={"command": "pwd"})
+    ordinary = {"decision": "allow", "reason_code": "bash_read_only", "receipt_id": "ordinary"}
+    observed: dict[str, object] = {}
+
+    monkeypatch.setattr(prewrite_claim_gate, "evaluate_prewrite_fast", lambda *_args, **_kwargs: ordinary)
+
+    def enforce_selected(
+        decision: dict[str, object], *, receipt_path: Path, allow_bootstrap: bool
+    ) -> dict[str, object]:
+        observed.update(decision=decision, receipt_path=receipt_path, allow_bootstrap=allow_bootstrap)
+        return {"result": {"decision": {"disposition": "allow", "reason_code": "selected_outcome"}}}
+
+    monkeypatch.setattr(prewrite_claim_gate, "_enforce_selected_outcome", enforce_selected)
+
+    code, result = _run_cli(monkeypatch, capsys, tmp_path, payload)
+
+    assert code == 0
+    assert result["outcome_admission"]["result"]["decision"]["disposition"] == "allow"  # type: ignore[index]
+    assert observed["decision"] is ordinary
+    assert observed["allow_bootstrap"] is True
 
 
 @pytest.mark.parametrize(

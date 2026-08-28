@@ -207,10 +207,19 @@ def classify_report(report: str) -> tuple[str, str]:
             # satisfying action is also its largest is pointed the wrong way, and
             # this is the moment the agent is trying to stop, which is the worst
             # moment to start anything.
-            "Fixing the line is a complete response. If recording properly would need new work "
-            "-- a worktree, a claim, a push, a skill invocation -- do not start it to clear this "
-            "gate: write `None -- deferred: <what and why>` and stop. Record it next session, or "
-            "when the user asks."
+            #
+            # The first fix overcorrected. It told the agent to defer whenever
+            # recording "would need a worktree, a claim, a push" -- which is the
+            # only way to record anything, so it read as never record. Within two
+            # turns the agent that wrote it had declined twice on those grounds,
+            # once for a finding the user then asked why it had not written down.
+            # The condition is being blocked on someone else, not the ordinary
+            # cost of the register.
+            "Fixing the line is a complete response. Recording costs a lane and a push; that is "
+            "the ordinary price of the register and not a reason to skip it -- if you learned "
+            "something, write it down. The one case to defer is being blocked: if you are waiting "
+            "on the user and they have not answered, do not start work to clear this gate. Write "
+            "`None -- not recorded because <reason>` and stop."
         ),
     )
 

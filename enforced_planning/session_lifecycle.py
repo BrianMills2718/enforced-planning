@@ -346,9 +346,41 @@ def _load_claim_payload(agent: str, project: str, scope: str) -> dict[str, Any] 
 
 
 def _write_claim_payload(path: Path, payload: dict[str, Any]) -> None:
-    """Persist one normalized claim payload through the canonical atomic writer."""
+    """Persist one normalized claim payload through the canonical atomic writer.
+
+    WARNING: This function does NOT refresh the projection. Use
+    _write_claim_and_refresh_projection() instead for mutations that require
+    atomic projection updates. This function exists only for internal use where
+    the caller handles projection refresh explicitly within a lock context.
+    """
 
     coordination_claims._atomic_write_claim(path, payload)
+
+
+def _write_claim_and_refresh_projection(
+    path: Path,
+    payload: dict[str, Any],
+    claims_dir: Path = coordination_claims.CLAIMS_DIR,
+) -> tuple[Path, str]:
+    """Write claim and atomically refresh projection in one operation.
+
+    This is the canonical mutation path for claim writes that must keep the
+    projection in sync. It ensures the projection digest is always current
+    with the claim registry state, eliminating the race condition where
+    the projection could be stale between write and refresh.
+
+    Args:
+        path: Path to the claim file
+        payload: Normalized claim payload to write
+        claims_dir: Parent directory for projection refresh (defaults to CLAIMS_DIR)
+
+    Returns:
+        Tuple of (projection_path, projection_digest) for mutation tracking
+    """
+
+    _write_claim_payload(path, payload)
+    projection_path, projection_digest = coordination_claims.refresh_prewrite_authority_projection(claims_dir)
+    return projection_path, projection_digest
 
 
 def _atomic_restore_bytes(path: Path, content: bytes) -> None:
@@ -433,9 +465,8 @@ def _apply_claim_payload_updates(
                     f"Claim at {claim_file} changed while preparing {operation}; retry from current ownership state"
                 )
         current.update(updates)
-        _write_claim_payload(claim_file, current)
-        _projection_path, projection_digest_after = coordination_claims.refresh_prewrite_authority_projection(
-            coordination_claims.CLAIMS_DIR
+        _projection_path, projection_digest_after = _write_claim_and_refresh_projection(
+            claim_file, current, coordination_claims.CLAIMS_DIR
         )
         coordination_claims.record_claim_mutation(
             operation=operation,
@@ -671,9 +702,8 @@ def _upsert_session_claim(
             payload["start_revision"] = effective_start_revision
         else:
             payload.pop("start_revision", None)
-        _write_claim_payload(path, payload)
-        _projection_path, projection_digest_after = coordination_claims.refresh_prewrite_authority_projection(
-            coordination_claims.CLAIMS_DIR
+        _projection_path, projection_digest_after = _write_claim_and_refresh_projection(
+            path, payload, coordination_claims.CLAIMS_DIR
         )
         coordination_claims.record_claim_mutation(
             operation="session_upsert",
@@ -2020,8 +2050,7 @@ def close_session(
     # Keep the projection current during physical cleanup, but do not emit a
     # terminal closeout receipt until the final completed state is durable.
     with coordination_claims.claim_registry_lock(coordination_claims.CLAIMS_DIR):
-        _write_claim_payload(claim_file, payload)
-        coordination_claims.refresh_prewrite_authority_projection(coordination_claims.CLAIMS_DIR)
+        _write_claim_and_refresh_projection(claim_file, payload, coordination_claims.CLAIMS_DIR)
 
     tracker_path = session_contracts.find_session_tracker_path(
         agent=claim.agent,
@@ -2062,9 +2091,8 @@ def close_session(
     )
     with coordination_claims.claim_registry_lock(coordination_claims.CLAIMS_DIR):
         registry_digest_before = coordination_claims._registry_digest(coordination_claims.CLAIMS_DIR)
-        _write_claim_payload(claim_file, payload)
-        _projection_path, projection_digest_after = coordination_claims.refresh_prewrite_authority_projection(
-            coordination_claims.CLAIMS_DIR
+        _projection_path, projection_digest_after = _write_claim_and_refresh_projection(
+            claim_file, payload, coordination_claims.CLAIMS_DIR
         )
         coordination_claims.record_claim_mutation(
             operation="closeout",

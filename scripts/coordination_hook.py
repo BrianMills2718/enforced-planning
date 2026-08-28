@@ -62,7 +62,7 @@ from enforced_planning import (
 SUPPORTED_EVENTS = {"SessionStart", "UserPromptSubmit", "PostToolUse", "PreToolUse", "Stop"}
 MUTATION_TOOL_NAMES = frozenset({"bash", "apply_patch", "edit", "write"})
 REPOSITORY_SCAN_MAX_WORKERS = 16
-TURN_END_PROJECTION_REPAIR_TIMEOUT_SECONDS = 5.0
+TURN_END_PROJECTION_REPAIR_TIMEOUT_SECONDS = 1.5
 
 
 class RepositoryCloseoutError(RuntimeError):
@@ -265,11 +265,15 @@ def _write_closeout_baseline(
     temporary.replace(ledger_path)
 
 
-def _projection_has_newer_claim(projection_path: Path, claims_dir: Path) -> bool:
-    """Cheaply detect the sanctioned crash window without hashing the YAML fleet."""
+def _projection_has_registry_change(projection_path: Path, claims_dir: Path) -> bool:
+    """Cheaply detect atomic writes, additions, or deletions since projection."""
 
     try:
         projection_mtime = projection_path.stat().st_mtime_ns
+        if not claims_dir.exists():
+            return False
+        if claims_dir.stat().st_mtime_ns > projection_mtime:
+            return True
         return any(path.stat().st_mtime_ns > projection_mtime for path in claims_dir.glob("*.yaml"))
     except OSError as exc:
         raise TurnEndProjectionError(f"cannot inspect derived claim state: {exc}") from exc
@@ -314,42 +318,32 @@ def _active_claims(claims_dir: Path | None, *, turn_end: bool = False) -> tuple[
 
     resolved = (claims_dir or coordination_claims.CLAIMS_DIR).expanduser().resolve()
     projection_path = prewrite_claim_fast.projection_path_for(resolved)
-    repaired = False
-    if turn_end and (not projection_path.is_file() or _projection_has_newer_claim(projection_path, resolved)):
-        _repair_turn_end_projection(resolved)
-        repaired = True
-    if projection_path.is_file():
+    def load_projection() -> Any:
         try:
             projection = prewrite_claim_projection.PreWriteAuthorityProjectionV1.model_validate_json(
                 projection_path.read_text(encoding="utf-8")
             )
         except (OSError, ValueError) as exc:
-            if not turn_end or repaired:
-                error_type = TurnEndProjectionError if turn_end else RepositoryCloseoutError
-                raise error_type(f"cannot read active-claim projection {projection_path}: {exc}") from exc
-            _repair_turn_end_projection(resolved)
-            repaired = True
-            try:
-                projection = prewrite_claim_projection.PreWriteAuthorityProjectionV1.model_validate_json(
-                    projection_path.read_text(encoding="utf-8")
-                )
-            except (OSError, ValueError) as repair_exc:
-                raise TurnEndProjectionError(
-                    f"cannot read repaired active-claim projection {projection_path}: {repair_exc}"
-                ) from repair_exc
+            error_type = TurnEndProjectionError if turn_end else RepositoryCloseoutError
+            raise error_type(f"cannot read active-claim projection {projection_path}: {exc}") from exc
         if projection.claims_dir != str(resolved):
+            error_type = TurnEndProjectionError if turn_end else RepositoryCloseoutError
+            raise error_type(f"active-claim projection targets {projection.claims_dir}, expected {resolved}")
+        return projection
+
+    repaired = False
+    if turn_end and (not projection_path.is_file() or _projection_has_registry_change(projection_path, resolved)):
+        _repair_turn_end_projection(resolved)
+        repaired = True
+    if projection_path.is_file():
+        try:
+            projection = load_projection()
+        except TurnEndProjectionError:
             if not turn_end or repaired:
-                error_type = TurnEndProjectionError if turn_end else RepositoryCloseoutError
-                raise error_type(f"active-claim projection targets {projection.claims_dir}, expected {resolved}")
+                raise
             _repair_turn_end_projection(resolved)
             repaired = True
-            projection = prewrite_claim_projection.PreWriteAuthorityProjectionV1.model_validate_json(
-                projection_path.read_text(encoding="utf-8")
-            )
-            if projection.claims_dir != str(resolved):
-                raise TurnEndProjectionError(
-                    f"repaired active-claim projection targets {projection.claims_dir}, expected {resolved}"
-                )
+            projection = load_projection()
         if not turn_end:
             registry_digest = prewrite_claim_fast.registry_digest(resolved)
             if projection.registry_digest != registry_digest:

@@ -4,7 +4,8 @@ Native lifecycle events describe different boundaries. Treating them as synonyms
 creates false denials and hides unfinished work.
 
 - **Turn end** (`Stop`) is an ordinary response-yield check. Derived claim state is
-  repaired within a bounded attempt; projection-only unavailability warns and allows
+  repaired within a 1.5-second internal attempt, leaving margin inside the native
+  hook timeout; projection-only unavailability warns and allows
   the response. Known dirty state and active mailbox requests still deny the turn.
 - **Progress checkpoint** records durable advancement while the same lane continues.
 - **Agent rotation / handoff** transfers or preserves custody for another runtime.

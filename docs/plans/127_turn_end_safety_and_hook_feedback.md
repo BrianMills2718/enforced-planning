@@ -288,7 +288,7 @@ interrupted derived projection cannot trap ordinary response yield.
   and lists exact receipt IDs without copying prompt or response content.
 - [x] The guide defines turn end, checkpoint, agent rotation/handoff, lane closure,
   goal completion, and the feedback disposition route.
-- [x] Focused tests (170 passed), `python scripts/self_test.py`, and the authentic
+- [x] Focused tests (173 passed), `python scripts/self_test.py`, and the authentic
   isolated replay pass.
 
 ## Open Questions

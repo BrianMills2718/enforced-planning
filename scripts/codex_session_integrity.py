@@ -204,6 +204,38 @@ def _render_transcript(session_id: str, sanitized_records: list[dict[str, object
     return "\n".join(lines)
 
 
+def _matching_existing_bundle(
+    *,
+    session_root: Path,
+    issue: SessionIntegrityIssue,
+) -> Path | None:
+    """Find a complete legacy digest-named bundle for the same corruption incident."""
+
+    required_artifacts = {
+        "original-snapshot.jsonl",
+        "sanitized-archive.jsonl",
+        "transcript.md",
+        "integrity-report.json",
+        "HANDOFF.md",
+    }
+    for report_path in sorted(session_root.glob("auto-*/integrity-report.json")):
+        try:
+            payload = json.loads(report_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        issues = payload.get("issues") if isinstance(payload, dict) else None
+        first = issues[0] if isinstance(issues, list) and issues else None
+        if not isinstance(first, dict):
+            continue
+        identity = (first.get("line"), first.get("byte_offset"), first.get("kind"))
+        if identity != (issue.line, issue.byte_offset, issue.kind):
+            continue
+        bundle = report_path.parent
+        if all((bundle / artifact).is_file() for artifact in required_artifacts):
+            return bundle
+    return None
+
+
 def create_recovery_bundle(
     session_file: Path,
     *,
@@ -217,6 +249,10 @@ def create_recovery_bundle(
     if live_report.is_clean:
         raise ValueError("recovery bundle requires at least one malformed record")
     first_issue = live_report.issues[0]
+    session_root = recovery_root.expanduser().resolve() / session_id
+    existing = _matching_existing_bundle(session_root=session_root, issue=first_issue)
+    if existing is not None:
+        return existing
     incident_material = "\0".join(
         (
             session_id,
@@ -226,7 +262,7 @@ def create_recovery_bundle(
         )
     )
     incident_id = hashlib.sha256(incident_material.encode("utf-8")).hexdigest()[:12]
-    bundle = recovery_root.expanduser().resolve() / session_id / f"auto-{incident_id}"
+    bundle = session_root / f"auto-{incident_id}"
     bundle.mkdir(parents=True, exist_ok=True)
 
     snapshot = bundle / "original-snapshot.jsonl"

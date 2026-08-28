@@ -134,6 +134,19 @@ def test_stop_repairs_malformed_projection_before_turn_end_check(tmp_path: Path)
     assert [claim.scope for claim in claims] == ["malformed-stop"]
 
 
+def test_stop_repairs_projection_after_claim_deletion(tmp_path: Path) -> None:
+    claims_dir = tmp_path / "claims"
+    claims_dir.mkdir()
+    claim_path = _write_live_claim(claims_dir, scope="deleted-stop")
+    coordination_hook.coordination_claims.refresh_prewrite_authority_projection(claims_dir)
+    time.sleep(0.002)
+    claim_path.unlink()
+
+    claims = coordination_hook._active_claims(claims_dir, turn_end=True)
+
+    assert claims == ()
+
+
 def test_stop_warns_when_projection_repair_remains_unavailable(monkeypatch, tmp_path: Path) -> None:
     claims_dir = tmp_path / "claims"
     claims_dir.mkdir()
@@ -208,6 +221,38 @@ def test_session_start_does_not_load_claim_projection(monkeypatch, tmp_path: Pat
     )
 
     assert coordination_hook.main(["--claims-dir", str(tmp_path / "claims"), "--hook-receipt-dir", str(tmp_path / "receipts")]) == 0
+
+
+def test_session_start_skips_heartbeat_with_large_completed_registry(monkeypatch, tmp_path: Path) -> None:
+    claims_dir = tmp_path / "claims"
+    claims_dir.mkdir()
+    for index in range(1_500):
+        (claims_dir / f"completed-{index:04d}.yaml").write_text("status: completed\n", encoding="utf-8")
+    monkeypatch.setattr(
+        coordination_hook,
+        "_active_claims",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("startup scanned claims")),
+    )
+    monkeypatch.setattr(
+        coordination_hook.coordination_claims,
+        "heartbeat_claims",
+        lambda **_kwargs: (_ for _ in ()).throw(AssertionError("startup heartbeated claims")),
+    )
+    monkeypatch.setattr(coordination_hook, "_write_closeout_baseline", lambda **_kwargs: None)
+    monkeypatch.setattr(coordination_hook, "_canonical_project", lambda _cwd: "demo")
+    monkeypatch.setattr(
+        coordination_hook.coordination_messages,
+        "poll_session_inbox",
+        lambda **_kwargs: type("Notice", (), {"active_count": 0, "acknowledgement_count": 0, "summary": "", "message_ids": ()})(),
+    )
+    monkeypatch.setattr(
+        "sys.stdin",
+        type("Input", (), {"read": lambda _self: '{"session_id":"large","cwd":"/tmp","hook_event_name":"SessionStart"}'})(),
+    )
+
+    started = time.monotonic()
+    assert coordination_hook.main(["--claims-dir", str(claims_dir), "--hook-receipt-dir", str(tmp_path / "receipts")]) == 0
+    assert time.monotonic() - started < 1.0
 
 
 def test_native_shaped_stop_repairs_interrupted_projection_and_allows_turn(tmp_path: Path) -> None:

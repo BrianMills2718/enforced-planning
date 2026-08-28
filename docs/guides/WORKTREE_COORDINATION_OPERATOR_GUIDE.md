@@ -54,6 +54,16 @@ only by its exact owning session. A different session must use sanctioned
 handoff/session-end plus session-resume, or close the lane; claim creation fails
 without changing the claim or its derived projection.
 
+A successful cross-session `session-resume` also writes one immutable
+`claim_session_custody_transfer` receipt under the coordination root and returns
+its exact path and SHA-256. The receipt binds the project, scope, repository,
+worktree, branch, predecessor and successor sessions, transfer time, and exact
+pre/post claim bytes. Downstream execution cursors may consume that receipt to
+move their own lease without treating prose or a session ID alone as transfer
+authority. Same-runtime resume returns no custody-transfer receipt. If receipt
+persistence fails after claim custody changes, resume fails visibly as an
+incomplete transfer instead of claiming a fully evidenced handoff.
+
 The legacy `~/.claude/coordination/active-work-registry.yaml` and tracked
 `generated/runtime/active_work_registry.*` files may survive as compatibility,
 historical, or explicitly regenerated snapshot surfaces. They are not live

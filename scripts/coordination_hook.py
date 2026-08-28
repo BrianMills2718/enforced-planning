@@ -721,8 +721,8 @@ def main(argv: list[str] | None = None) -> int:
         if boundary_event is not None:
             if notice.message_ids:
                 store = coordination_messages.CoordinationMessageStore(
-                    root=args.root or coordination_messages.default_message_root(args.claims_dir),
-                    claims_dir=args.claims_dir,
+                    root=args.root or coordination_messages.default_message_root(args.claims_dir or coordination_claims.CLAIMS_DIR),
+                    claims_dir=args.claims_dir or coordination_claims.CLAIMS_DIR,
                 )
                 tool_name = payload.get("tool_name") if boundary_event == "PreToolUse" else None
                 store.record_boundary_block(

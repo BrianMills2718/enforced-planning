@@ -121,6 +121,21 @@ def _native_notice(message: str) -> str:
     return json.dumps({"systemMessage": message}, sort_keys=True)
 
 
+def _is_claim_bootstrap_command(command: str) -> bool:
+    """Delegate the sole unclaimed mutation escape hatch to its strict parser."""
+
+    try:
+        from enforced_planning.claim_bootstrap import parse_raw_bash_command
+
+        parse_raw_bash_command(
+            command,
+            script_path=(REPO_ROOT / "scripts" / "claim_bootstrap.py").resolve(),
+        )
+    except Exception:  # noqa: BLE001 -- any ambiguity must require a live claim
+        return False
+    return True
+
+
 def _observe_outcome(
     decision: dict[str, Any],
     *,
@@ -319,6 +334,7 @@ def main(argv: list[str] | None = None) -> int:
             claims_dir=args.claims_dir,
             projection_path=projection_path,
             receipt_path=args.receipt_path,
+            claim_bootstrap_classifier=_is_claim_bootstrap_command,
         )
     except (json.JSONDecodeError, FastPreWriteError, OSError, TypeError, ValueError) as exc:
         try:

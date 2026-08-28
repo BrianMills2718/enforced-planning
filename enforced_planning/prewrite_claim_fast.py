@@ -12,9 +12,11 @@ import hashlib
 import json
 import os
 import re
+import shlex
 import subprocess
 import time
 import uuid
+from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -56,6 +58,37 @@ CLAIM_FIELDS = {
 _CUSTOM_PATCH_PATH = re.compile(r"^\*\*\* (?:Add|Update|Delete) File: (.+)$")
 _CUSTOM_MOVE_PATH = re.compile(r"^\*\*\* Move to: (.+)$")
 _UNIFIED_PATCH_PATH = re.compile(r"^(?:---|\+\+\+) (.+)$")
+_SHELL_CONTROL = frozenset({";", "&", "&&", "|", "||", ">", ">>", "<", "<<", "<<<", "2>", "2>>"})
+_SIMPLE_READ_ONLY_COMMANDS = frozenset(
+    {
+        "grep",
+        "head",
+        "ls",
+        "pwd",
+        "readlink",
+        "realpath",
+        "rg",
+        "stat",
+        "tail",
+        "test",
+        "wc",
+        "which",
+    }
+)
+_READ_ONLY_GIT_SUBCOMMANDS = frozenset(
+    {
+        "cat-file",
+        "diff",
+        "log",
+        "ls-files",
+        "ls-tree",
+        "rev-parse",
+        "show",
+        "status",
+    }
+)
+
+BashBootstrapClassifier = Callable[[str], bool]
 
 
 class FastPreWriteError(ValueError):
@@ -110,7 +143,119 @@ def _patch_paths(command: str) -> tuple[str, ...]:
     return tuple(dict.fromkeys(path for path in paths if path))
 
 
-def adapt_native_payload(payload: dict[str, Any], *, client: str) -> dict[str, Any]:
+def _shell_tokens(command: str) -> tuple[str, ...] | None:
+    """Return one simple shell argv, or ``None`` for compound/ambiguous input."""
+
+    if not command.strip() or "\n" in command or "\r" in command:
+        return None
+    if "`" in command or "$(" in command or "${" in command:
+        return None
+    try:
+        lexer = shlex.shlex(command, posix=True, punctuation_chars=";&|<>")
+        lexer.whitespace_split = True
+        tokens = tuple(lexer)
+    except ValueError:
+        return None
+    if not tokens or any(token in _SHELL_CONTROL or set(token) <= set(";&|<>") for token in tokens):
+        return None
+    if "=" in tokens[0] and not tokens[0].startswith(("/", "./")):
+        return None
+    return tokens
+
+
+def _git_command_is_read_only(argv: tuple[str, ...]) -> bool:
+    index = 1
+    while index < len(argv):
+        token = argv[index]
+        if token == "-C":
+            index += 2
+            continue
+        if token in {"--no-pager", "--paginate", "-P", "-p"}:
+            index += 1
+            continue
+        break
+    if index >= len(argv):
+        return False
+    subcommand = argv[index]
+    tail = argv[index + 1 :]
+    if subcommand in _READ_ONLY_GIT_SUBCOMMANDS:
+        return not any(
+            token in {"--output", "--output-indicator-new", "--output-indicator-old"} or token.startswith("--output=")
+            for token in tail
+        )
+    if subcommand == "branch":
+        return not tail or all(
+            token in {"--show-current", "--list", "--all", "-a", "-r", "--remotes"} for token in tail
+        )
+    if subcommand == "remote":
+        return not tail or tail[0] in {"-v", "show", "get-url"}
+    if subcommand == "worktree":
+        return bool(tail) and tail[0] == "list"
+    if subcommand == "tag":
+        return not tail or tail[0] in {"--list", "-l"}
+    if subcommand == "config":
+        return bool(tail) and tail[0] in {"--get", "--get-all", "--get-regexp", "--list", "-l"}
+    return False
+
+
+def classify_bash_command(
+    command: str,
+    *,
+    claim_bootstrap_classifier: BashBootstrapClassifier | None = None,
+) -> str:
+    """Classify Bash without executing it.
+
+    Only a single provably read-only command and the separately validated claim
+    bootstrap escape hatch bypass ordinary claim admission.  Everything else,
+    including compound read-only shell, requires an exact live claim.
+    """
+
+    if claim_bootstrap_classifier is not None:
+        try:
+            if claim_bootstrap_classifier(command):
+                return "claim_bootstrap"
+        except Exception:  # noqa: BLE001 -- classifier failure must fail closed
+            return "claim_required"
+    argv = _shell_tokens(command)
+    if argv is None:
+        return "claim_required"
+    executable_token = argv[0]
+    if Path(executable_token).name != executable_token:
+        return "claim_required"
+    executable = executable_token
+    if executable in _SIMPLE_READ_ONLY_COMMANDS:
+        if executable == "rg" and any(token == "--pre" or token.startswith("--pre=") for token in argv[1:]):
+            return "claim_required"
+        return "read_only"
+    if executable == "sed":
+        tail = argv[1:]
+        if len(tail) < 2 or tail[0] not in {"-n", "--quiet", "--silent"}:
+            return "claim_required"
+        return "read_only" if re.fullmatch(r"\d+(?:,\d+)?p", tail[1]) else "claim_required"
+    if executable == "find":
+        mutating = {
+            "-delete",
+            "-exec",
+            "-execdir",
+            "-fls",
+            "-fprint",
+            "-fprint0",
+            "-fprintf",
+            "-ok",
+            "-okdir",
+        }
+        return "claim_required" if any(token in mutating for token in argv[1:]) else "read_only"
+    if executable == "git" and _git_command_is_read_only(argv):
+        return "read_only"
+    return "claim_required"
+
+
+def adapt_native_payload(
+    payload: dict[str, Any],
+    *,
+    client: str,
+    claim_bootstrap_classifier: BashBootstrapClassifier | None = None,
+) -> dict[str, Any]:
     """Normalize one supported native event without retaining write contents."""
 
     if not isinstance(payload, dict):
@@ -125,7 +270,17 @@ def adapt_native_payload(payload: dict[str, Any], *, client: str) -> dict[str, A
     if not isinstance(tool_input, dict):
         raise FastPreWriteError("PreToolUse payload requires object field 'tool_input'")
 
-    if client == "codex":
+    bash_classification: str | None = None
+    if tool_name == "Bash":
+        command = tool_input.get("command")
+        if not isinstance(command, str) or not command.strip():
+            raise FastPreWriteError("Bash requires non-empty string tool_input.command")
+        target_paths = ()
+        bash_classification = classify_bash_command(
+            command,
+            claim_bootstrap_classifier=claim_bootstrap_classifier,
+        )
+    elif client == "codex":
         if tool_name != "apply_patch":
             raise FastPreWriteError(f"Unsupported Codex pre-write tool: {tool_name!r}")
         command = tool_input.get("command")
@@ -135,11 +290,12 @@ def adapt_native_payload(payload: dict[str, Any], *, client: str) -> dict[str, A
         if not target_paths:
             raise FastPreWriteError("Codex apply_patch payload contains no provable target paths")
     else:
-        if tool_name not in {"Edit", "Write"}:
+        if tool_name not in {"Edit", "Write", "NotebookEdit"}:
             raise FastPreWriteError(f"Unsupported Claude pre-write tool: {tool_name!r}")
-        file_path = tool_input.get("file_path")
+        path_field = "notebook_path" if tool_name == "NotebookEdit" else "file_path"
+        file_path = tool_input.get(path_field)
         if not isinstance(file_path, str) or not file_path.strip():
-            raise FastPreWriteError(f"Claude {tool_name} requires string tool_input.file_path")
+            raise FastPreWriteError(f"Claude {tool_name} requires string tool_input.{path_field}")
         target_paths = (file_path.strip(),)
 
     raw_session = _nonempty(payload, "session_id")
@@ -151,6 +307,7 @@ def adapt_native_payload(payload: dict[str, Any], *, client: str) -> dict[str, A
         "session_id": session_id,
         "cwd": _nonempty(payload, "cwd"),
         "target_paths": target_paths,
+        "bash_classification": bash_classification,
     }
 
 
@@ -169,10 +326,16 @@ def _git(path: Path, *args: str, allow_failure: bool = False) -> str | None:
     raise FastPreWriteError(f"git {' '.join(args)} failed: {detail}")
 
 
-def _repository_context(request: dict[str, Any]) -> dict[str, Any]:
-    cwd = Path(str(request["cwd"])).expanduser().resolve()
+def _existing_probe(path: Path) -> Path:
+    probe = path
+    while not probe.exists() and probe != probe.parent:
+        probe = probe.parent
+    return probe if probe.is_dir() else probe.parent
+
+
+def _git_identity(path: Path) -> tuple[Path, Path, str]:
     identity = _git(
-        cwd,
+        _existing_probe(path),
         "rev-parse",
         "--show-toplevel",
         "--path-format=absolute",
@@ -193,20 +356,41 @@ def _repository_context(request: dict[str, Any]) -> dict[str, Any]:
     if not branch:
         raise FastPreWriteError("Pre-write enforcement requires a named Git branch")
 
-    normalized: list[str] = []
-    for raw_path in request["target_paths"]:
-        candidate = Path(raw_path).expanduser()
-        if not candidate.is_absolute():
-            candidate = worktree / candidate
-        resolved = candidate.resolve(strict=False)
-        try:
-            relative = resolved.relative_to(worktree)
-        except ValueError as exc:
-            raise FastPreWriteError(f"target path escapes active worktree: {raw_path}") from exc
-        value = relative.as_posix()
-        if value in {"", "."}:
-            raise FastPreWriteError("target path must identify a file below the worktree root")
-        normalized.append(value)
+    return worktree, repo_root, branch
+
+
+def _repository_context(request: dict[str, Any]) -> dict[str, Any]:
+    cwd = Path(str(request["cwd"])).expanduser().resolve()
+    raw_targets = tuple(request["target_paths"])
+    if request.get("tool_name") == "Bash":
+        worktree, repo_root, branch = _git_identity(cwd)
+        normalized: list[str] = []
+    else:
+        if not raw_targets:
+            raise FastPreWriteError("pre-write request contains no target paths")
+        normalized = []
+        worktree = repo_root = None
+        branch = ""
+        for raw_path in raw_targets:
+            candidate = Path(raw_path).expanduser()
+            if not candidate.is_absolute():
+                candidate = cwd / candidate
+            resolved = candidate.resolve(strict=False)
+            target_worktree, target_repo, target_branch = _git_identity(resolved)
+            if worktree is None:
+                worktree, repo_root, branch = target_worktree, target_repo, target_branch
+            elif (target_worktree, target_repo, target_branch) != (worktree, repo_root, branch):
+                raise FastPreWriteError("all target paths must resolve to the same Git worktree and branch")
+            assert worktree is not None
+            try:
+                relative = resolved.relative_to(worktree)
+            except ValueError as exc:
+                raise FastPreWriteError(f"target path escapes active worktree: {raw_path}") from exc
+            value = relative.as_posix()
+            if value in {"", "."}:
+                raise FastPreWriteError("target path must identify a file below the worktree root")
+            normalized.append(value)
+        assert worktree is not None and repo_root is not None
     return {
         "worktree_path": str(worktree),
         "repo_root": str(repo_root),
@@ -452,6 +636,18 @@ def evaluate_request_fast(
     if mode not in {"off", "observe", "enforce"}:
         raise FastPreWriteError("mode must be one of: off, observe, enforce")
     started = time.perf_counter()
+    bash_classification = request.get("bash_classification")
+    if bash_classification in {"read_only", "claim_bootstrap"}:
+        result = _decision(
+            started=started,
+            request=request,
+            mode=mode,
+            decision="allow",
+            reason_code=("bash_read_only" if bash_classification == "read_only" else "claim_bootstrap_command"),
+            context=None,
+        )
+        _record_receipt(receipt_path, result)
+        return result
     try:
         context = _repository_context(request)
     except FastPreWriteError as exc:
@@ -531,6 +727,8 @@ def evaluate_request_fast(
             reason_code = "claim_not_healthy"
             details = health_issues
             recovery = "Repair or resume the claim through the sanctioned session workflow."
+        elif request.get("tool_name") == "Bash":
+            authorized = True
         else:
             outside = tuple(
                 target
@@ -568,10 +766,15 @@ def evaluate_prewrite_fast(
     claims_dir: Path = DEFAULT_CLAIMS_DIR,
     projection_path: Path | None = None,
     receipt_path: Path = DEFAULT_RECEIPT_PATH,
+    claim_bootstrap_classifier: BashBootstrapClassifier | None = None,
 ) -> dict[str, Any]:
     """Normalize and evaluate one native hook payload."""
 
-    request = adapt_native_payload(payload, client=client)
+    request = adapt_native_payload(
+        payload,
+        client=client,
+        claim_bootstrap_classifier=claim_bootstrap_classifier,
+    )
     return evaluate_request_fast(
         request,
         mode=mode,
@@ -587,6 +790,7 @@ __all__ = [
     "DEFAULT_RECEIPT_PATH",
     "FastPreWriteError",
     "adapt_native_payload",
+    "classify_bash_command",
     "evaluate_prewrite_fast",
     "evaluate_request_fast",
     "projection_path_for",

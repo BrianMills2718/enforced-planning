@@ -35,6 +35,20 @@ def test_nul_only_record_reports_exact_line_and_offset(tmp_path: Path) -> None:
     assert report.records_scanned == 3
 
 
+def test_interrupted_json_record_does_not_hide_later_valid_records(tmp_path: Path) -> None:
+    session = tmp_path / "interrupted.jsonl"
+    first = b'{"type":"session_meta"}\n'
+    interrupted = b'{"type":"event_msg","payload":{"type":"item_completed","item":{"type":"CommandExecution","output":"cut off\n'
+    final = b'{"type":"response_item","payload":{"type":"message"}}\n'
+    session.write_bytes(first + interrupted + final)
+
+    report = inspect_session_jsonl(session)
+
+    assert [issue.kind for issue in report.issues] == ["invalid_json"]
+    assert report.issues[0].line == 2
+    assert report.records_scanned == 3
+
+
 def test_hook_emits_context_and_metadata_only_report_for_corruption(tmp_path: Path) -> None:
     session = tmp_path / "rollout-session-abc.jsonl"
     session.write_bytes(b'{"type":"session_meta"}\n\0\0\n')
@@ -59,10 +73,14 @@ def test_hook_emits_context_and_metadata_only_report_for_corruption(tmp_path: Pa
 
     payload = json.loads(completed.stdout)
     context = payload["hookSpecificOutput"]["additionalContext"]
+    assert payload["continue"] is False
+    assert payload["stopReason"].startswith("Malformed Codex session history")
+    assert payload["systemMessage"] == context
     assert payload["hookSpecificOutput"]["hookEventName"] == "SessionStart"
     assert "line 2, byte offset" in context
     assert "nul_only_record" in context
     assert "did not modify" in context
+    assert "current turn was stopped" in context
     assert "Recovery bundle:" in context
     assert session.read_bytes() == b'{"type":"session_meta"}\n\0\0\n'
     assert json.loads(report.read_text(encoding="utf-8"))["issues"][0]["kind"] == "nul_only_record"

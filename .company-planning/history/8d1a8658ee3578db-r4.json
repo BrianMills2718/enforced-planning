@@ -1,0 +1,99 @@
+{
+  "active_slice": {
+    "description": "Remove repeated YAML claim-registry parsing from Stop and verify the complete native hook under five seconds.",
+    "next_action": null,
+    "requires_external_action": false,
+    "requires_spend": false,
+    "slice_id": "repair-full-stop-hot-path",
+    "status": "accepted",
+    "target_revision": "6cf216ff62825bb144e547856b2fa38824d2eb0d"
+  },
+  "authority": {
+    "external_action_authorized": false,
+    "human_decision": null,
+    "human_decision_required": false,
+    "implementation_authorized": true,
+    "spend_cap_usd": 0,
+    "spend_used_usd": 0
+  },
+  "circuit_breakers": {
+    "context_integrity_valid": true,
+    "max_same_boundary_failures": 3,
+    "runtime_integrity_valid": true
+  },
+  "completion": {
+    "evidence_revision": "6cf216ff62825bb144e547856b2fa38824d2eb0d",
+    "receipt_ref": "github-pr:BrianMills2718/enforced-planning#219;installed-stop:0.42s",
+    "remaining_ready_work": 0,
+    "requested": true,
+    "verifier_outcome": "pass"
+  },
+  "cursor_id": "hook-observability-hot-path-20260828",
+  "cursor_revision": 4,
+  "failure_state": {
+    "boundary": null,
+    "last_failure_ref": null,
+    "same_boundary_failures": 0
+  },
+  "goal_ref": "user:make-stop-hook-improvements",
+  "lease": {
+    "heartbeat_at": "2026-08-28T18:43:50Z",
+    "lease_revision": 4,
+    "owner_session_id": "01a04950-1df3-79d2-a88f-40f5c2cdb5e5",
+    "status": "active"
+  },
+  "lifecycle_state": "complete",
+  "observations": [
+    {
+      "boundary": "complete native Stop hook",
+      "evidence_ref": "local-runtime:8.72-seconds",
+      "kind": "verification_failure",
+      "observation_id": "failed-native-probe",
+      "outcome": "fail"
+    },
+    {
+      "boundary": "Stop hook cumulative profile",
+      "evidence_ref": "pstats:two-yaml-registry-loads:16.273-seconds-profiled",
+      "kind": "authentic_result",
+      "observation_id": "profile",
+      "outcome": "pass"
+    },
+    {
+      "boundary": "complete native Stop hook with active claim projection",
+      "evidence_ref": "local-runtime:0.28-seconds",
+      "kind": "authentic_result",
+      "observation_id": "repaired-current-session-stop",
+      "outcome": "pass"
+    },
+    {
+      "boundary": "SessionStart, attributed PreToolUse, and Stop lifecycle",
+      "evidence_ref": "local-runtime:start-0.41s:touch-0.36s:stop-0.37s",
+      "kind": "authentic_result",
+      "observation_id": "fresh-lifecycle-probe",
+      "outcome": "pass"
+    },
+    {
+      "boundary": "full focused coordination-hook tests",
+      "evidence_ref": "pytest:tests/test_coordination_hook.py+tests/test_coordination_messages.py:49-passed:9.21s",
+      "kind": "authentic_result",
+      "observation_id": "focused-suite-pass",
+      "outcome": "pass"
+    },
+    {
+      "boundary": "installed Codex coordination Stop command at merged main",
+      "evidence_ref": "installed-command:/home/brian/code/active/enforced-planning/scripts/coordination_hook.py:merge-6cf216ff:0.42s",
+      "kind": "authentic_result",
+      "observation_id": "installed-stop-pass",
+      "outcome": "pass"
+    }
+  ],
+  "plan_revision": "runtime-probe:2026-08-28T17:57:00Z",
+  "ready_alternatives": [],
+  "record_type": "plan_execution_cursor",
+  "schema_version": "1.0",
+  "target": {
+    "branch": "hook-observability-framework-v2",
+    "repository": "/home/brian/code/active/enforced-planning",
+    "worktree": "/home/brian/code/active/enforced-planning/worktrees/hook-observability-framework-v2"
+  }
+}

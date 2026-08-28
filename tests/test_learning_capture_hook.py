@@ -394,3 +394,27 @@ def test_the_refusal_does_not_read_as_never_record(tmp_path: Path) -> None:
         "naming the ordinary recording procedure as a reason to defer tells the "
         "agent to never record; that is the register's whole purpose"
     )
+
+
+def test_stop_hook_active_ends_the_turn(monkeypatch, tmp_path: Path) -> None:
+    """A re-fired Stop must not refuse the same report again.
+
+    The agent has already been told what its report is missing; refusing it a
+    second time cannot change the report and only deadlocks the session.
+    """
+    import io
+    import json
+    import sys
+
+    from scripts import learning_capture_hook
+
+    payload = {
+        "hook_event_name": "Stop",
+        "session_id": "s",
+        "stop_hook_active": True,
+        "last_assistant_message": "a report with no Learnings line at all",
+    }
+    monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps(payload)))
+    assert learning_capture_hook.main(
+        ["--agent", "claude-code", "--hook-receipt-dir", str(tmp_path)]
+    ) == 0

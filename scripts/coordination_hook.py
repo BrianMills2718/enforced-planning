@@ -797,7 +797,16 @@ def main(argv: list[str] | None = None) -> int:
                 active_claims=active_claims,
             )
         boundary_event: Literal["PreToolUse", "Stop"] | None = None
-        if (notice.active_count or closeout_failure) and payload["hook_event_name"] == "Stop":
+        if (
+            (notice.active_count or closeout_failure)
+            and payload["hook_event_name"] == "Stop"
+            and not payload.get("stop_hook_active")
+        ):
+            # The harness re-fires Stop after a block. Refusing again cannot
+            # change the condition, so a second refusal only deadlocks the
+            # session: on 2026-08-28 this gate blocked one session ~20
+            # consecutive times on 11 files written by sessions that had
+            # already ended. Block once; the bookkeeping above still runs.
             boundary_event = "Stop"
         elif (
             notice.active_count

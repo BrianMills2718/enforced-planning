@@ -5,10 +5,11 @@ A portable framework for coordinating AI coding assistants on shared codebases.
 > **Tool support:** `enforced-planning` uses a four-tier support matrix:
 > `native-interactive`, `portable-governed`, `legacy-compatible`, and
 > `unsupported`.
-> Claude Code is the current `native-interactive` tool because read-gating is
-> enforced through `.claude/hooks/`. Other tools default to
-> `portable-governed` only when they can consume generated `AGENTS.md`, plan
-> docs, and deterministic validators through the normal repo interface. See
+> Claude Code and Codex are current `native-interactive` tools for the hook
+> surfaces certified for each client, including read-first context and
+> prewrite claim enforcement. Generic terminal/CLI agents remain
+> `portable-governed` when they consume generated `AGENTS.md`, plan docs, and
+> deterministic validators through the normal repo interface. See
 > [docs/designs/PHASE8_TOOL_SUPPORT_MATRIX.md](docs/designs/PHASE8_TOOL_SUPPORT_MATRIX.md).
 
 The coordination model is claim-first and lane-readable:

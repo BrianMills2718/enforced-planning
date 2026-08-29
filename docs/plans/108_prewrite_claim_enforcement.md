@@ -1,6 +1,6 @@
 # Plan #108: Low-Friction Pre-Write Claim Enforcement
 
-**Status:** In Progress — PW-01/PW-02A/PW-02/PW-02B0/PW-02B1/PW-02B2/PW-02C/PW-02D/PW-02B/PW-03 accepted; PW-04 manifest is frozen and per-repository rollout remains
+**Status:** In Progress — PW-01/PW-02A/PW-02/PW-02B0/PW-02B1/PW-02B2/PW-02C/PW-02D/PW-02B/PW-03 accepted; PW-04 manifest is frozen and per-repository rollout remains; PW-05 read-target separation is the next low-friction slice
 **Type:** implementation
 **Priority:** Critical
 **Design Revision:** `plan-108-v4`
@@ -9,6 +9,9 @@
 **adrs_referenced:** []
 **research_citations:** []
 **Landscape disposition:** linked
+**Capability adoption:** Extend the existing exact-session target resolver with
+a non-authorizing read/context selection; do not replace claim authority or
+introduce another mutation evaluator.
 **Blocked By:** None
 **Blocks:** truthful cross-client write ownership
 
@@ -26,7 +29,8 @@ hooks currently deliver mailbox notices but do not authorize writes.
 governed repository is checked before mutation against the exact live session,
 repository, worktree, branch, and claimed path. Valid writes proceed quietly;
 invalid writes are denied before the file changes and leave a typed audit
-receipt.
+receipt. A workspace-root session may separately select one repository for
+read/context work without creating or receiving mutation authority.
 
 **Why:** A claim registry is not reliable ownership enforcement if agents can
 write first and discover the violation only at commit or push time.
@@ -250,6 +254,9 @@ YAML; it has no independent history or deletion requirement.
   because they use Bash.
 - Rollback is repository mode `enforce -> observe -> off`; it preserves
   receipts and does not alter claims.
+- A read/context target is never an authorization input. It may affect
+  instruction loading and read routing, but only an exact healthy claim may
+  authorize mutation.
 - No bypass silently grants authority. Any emergency override must be an
   explicit configured policy action with a reason-bearing receipt; it is not
   part of the first slice.
@@ -266,6 +273,12 @@ YAML; it has no independent history or deletion requirement.
 
 ## Capabilities
 
+**Capability adoption:** PW-05 extends the existing exact-session target
+resolver with a non-authorizing context selector. It does not replace claim
+authority, add a second mutation evaluator, or supersede an existing
+repository-context capability. Agent Skills read-first and instruction-context
+hooks are the intended consumers.
+
 | Capability | Input Schema | Output Schema | Producer | Consumer(s) | Cost Tier |
 |---|---|---|---|---|---|
 | `evaluate_prewrite(request)` | `PreWriteRequestV1` | `PreWriteDecisionV1` | `enforced_planning.prewrite_claim_gate` | Codex and Claude pre-tool adapters in governed repositories | free/local |
@@ -273,6 +286,9 @@ YAML; it has no independent history or deletion requirement.
 
 ### Capability Validation
 
+- [x] PW-05 extends the existing exact-session target capability with a
+  non-authorizing context selector; it does not create a second claim or
+  mutation evaluator.
 - [ ] Input/output/receipt schemas are strict Pydantic models with described
   fields and rejected unknowns.
 - [ ] The CLI is the single adapter boundary; shell hooks do not duplicate
@@ -286,6 +302,12 @@ YAML; it has no independent history or deletion requirement.
 
 ## Files Affected
 
+- `README.md` (modify in PW-05)
+- `docs/designs/PHASE8_TOOL_SUPPORT_MATRIX.md` (modify in PW-05)
+- `docs/plans/125_planning_integrity_loop.md` (modify in PW-05)
+- `enforced_planning/read_target.py` (create in PW-05)
+- `scripts/session_read_target.py` (create in PW-05)
+- `tests/test_read_target.py` (create in PW-05)
 - `enforced_planning/prewrite_claim_gate.py` (create)
 - `enforced_planning/prewrite_claim_fast.py` (create)
 - `enforced_planning/prewrite_claim_projection.py` (create)
@@ -576,6 +598,32 @@ only pre-write runtime and native hook entries, preventing the rollout from
 using the broad installer to overwrite unrelated stale framework surfaces.
 Its contract and focused regression evidence are retained in
 `docs/evidence/plan108_pw04_bounded_prewrite_profile.json`.
+
+#### PW-05 — workspace-root read target separated from write authority
+
+The workspace-root Project Manager model requires repository context before a
+write lane exists. Add one explicit, native-session-bound read target that can
+select an active repository through a configured repository-registry adapter.
+The portable mechanism validates stable project identity, canonical absolute
+Git root, registry provenance, and native session identity; operator-specific
+ownership rules remain in the configured adapter rather than this framework.
+
+Instruction-context and read-first consumers may use the read target when no
+healthy exact-session claim exists. A healthy exact claim supersedes it for
+worktree-local context. The prewrite evaluator must never consume the read
+target: mutation without one exact healthy claim remains denied, and multiple
+claims remain ambiguous. Subagents receive their own read target and never
+inherit a parent's context or mutation authority.
+
+Acceptance requires Codex and Claude fixtures proving: select and replace a
+read target from a non-Git workspace root; load the selected repository's
+instructions without creating a claim; deny mutation with only that read
+target; prefer a healthy claimed worktree for context; preserve explicit file
+target behavior; reject stale, missing, relative, unregistered, or
+session-mismatched selections; and clear the selection without touching claims.
+The authentic probe starts at `/home/brian/code`, selects `active/agent-skills`,
+loads its instructions, confirms no claim exists, and observes a typed mutation
+denial.
 
 ### PW-01 Evidence
 

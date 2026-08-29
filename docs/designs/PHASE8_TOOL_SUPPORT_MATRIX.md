@@ -22,7 +22,8 @@ Define one support-tier vocabulary for `enforced-planning` so "portable" and
 | Tool / Surface Class | Tier | Notes |
 |----------------------|------|-------|
 | Claude Code | `native-interactive` | Canonical read-gating and read-boundary mailbox polling via `.claude/hooks/`; no arbitrary-turn interruption claim |
-| Codex and terminal/CLI agents that can read repo files and run scripts | `portable-governed` | Use `AGENTS.md`, plan docs, deterministic validators, and lifecycle-polled mailbox commands |
+| Codex | `native-interactive` | Native PreToolUse/PostToolUse adapters enforce read-first context and prewrite claim ownership; lifecycle mailbox delivery remains polled rather than arbitrary-turn interruption |
+| Terminal/CLI agents that can read repo files and run scripts | `portable-governed` | Use `AGENTS.md`, plan docs, deterministic validators, and lifecycle-polled mailbox commands |
 | Generated `AGENTS.md` consumers without hook parity | `portable-governed` | Governance is portable, but interactive read-gating is not |
 | `install.sh --full` / `install.sh --pre-commit` rollout | `legacy-compatible` | Compatibility surfaces, not canonical sync authority |
 | Tools without documented integration evidence | `unsupported` | Do not claim support until evidence is committed |

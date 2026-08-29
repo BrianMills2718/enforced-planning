@@ -20,6 +20,15 @@ pretending it is mechanically enforced today.
 
 As of this version, the framework defaults to **governance enabled** (opt-out):
 
+- **`governance.enabled: true`** — master switch, defaulting to true when absent.
+  Set false for disposable experimentation. This forces governed controls and
+  derived-wiki checks effectively off without deleting installed files or
+  rewriting configured modes; setting true restores those modes.
+- **`knowledge_navigation.enabled: true`** — deterministic derived navigation is
+  available by default. `knowledge_navigation.freshness_mode` accepts
+  `off | observe | enforce` and defaults to `observe`. Generated pages are
+  navigation, never authority.
+
 - **`claims.enabled: true`** — Coordination claims tracked by default. To disable
   for a specific repository, set to `false`.
 - **`plans.integrity.mode: enforce`** — Structural plan integrity enforced by

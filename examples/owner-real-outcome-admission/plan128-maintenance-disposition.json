@@ -1,0 +1,11 @@
+{
+  "schema_version": "1.0.0",
+  "record_type": "outcome_portfolio_disposition_request",
+  "disposition_id": "plan-128-effective-profile-vertical-parked",
+  "requested_at": "2026-08-29T07:05:00Z",
+  "allocation_id": "plan-128-portable-governance-wiki-allocation",
+  "allocation_sha256": "d18b3b3055a6a70c331f443fb9b7f77d2625d7cb8b276684db6b5c2c9a30f797",
+  "disposition": "parked",
+  "decision_ref": "enforced-planning#128@ed7a5ba",
+  "reason": "The typed resolver and disposable wiki journey are evidenced; park before revising the immutable contract for runtime-reader adoption."
+}

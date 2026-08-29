@@ -1,6 +1,6 @@
 # Plan #128: Portable Governance And Wiki Profile
 
-**Status:** In Progress — contract bootstrap
+**Status:** In Progress — effective-profile resolver implemented; runtime consumers next
 **Type:** portable framework implementation
 **Priority:** Critical
 **phase_ref:** "Phase 9: Fleet Adoption and Framework Maintenance"
@@ -161,9 +161,18 @@ first-dogfood decisions.
 
 ## Verification
 
-Pending implementation.
+- `pytest -q tests/test_effective_project_profile.py tests/test_install_governed_repo.py::test_install_governed_repo_write_bootstraps_minimum_repo_and_passes_audit` — 5 passed.
+- Source audit resolved master governance and derived navigation enabled.
+- Disposable installed-consumer journey passed: default on, master off, re-enable,
+  stale wiki detection, regeneration, and fresh check.
+- The broader installer file passed 42 tests and exposed three pre-existing
+  dependency-closure failures; they are not evidence for or against this resolver.
+- Runtime hook readers do not yet consume the master switch, so whole-stack runtime
+  disablement is not yet claimed.
 
 ## Progress
 
 - 2026-08-28: Project Meta dogfood merged as PR 977.
 - 2026-08-28: restricted Plan 128 bootstrap created and existing owners confirmed.
+- 2026-08-29: typed resolver, installed CLI, audit field, starter configuration,
+  and default/off/re-enable focused tests implemented.

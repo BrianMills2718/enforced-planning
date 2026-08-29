@@ -18,17 +18,32 @@ def _repo(path: Path, name: str = "alpha") -> Path:
     return repo
 
 
-def _proposal(root: Path, proposal_id: str, *, scope: str, status: str = "pending") -> None:
-    (root / f"{proposal_id}.yaml").write_text(
-        yaml.safe_dump(
+def _proposal(
+    root: Path,
+    proposal_id: str,
+    *,
+    scope: str,
+    status: str = "pending",
+    applicability: dict | None = None,
+    priority: str = "normal",
+) -> None:
+    payload = {
+        "id": proposal_id,
+        "date": "2026-08-01",
+        "status": status,
+        "scope": scope,
+        "priority": priority,
+    }
+    if applicability is not None:
+        payload.update(
             {
-                "id": proposal_id,
-                "date": "2026-08-01",
-                "status": status,
-                "scope": scope,
-                "priority": "normal",
+                "schema_version": 2,
+                "applicability": applicability,
+                "decision": {"owner": "brian", "priority": priority, "review_after": None},
             }
-        ),
+        )
+    (root / f"{proposal_id}.yaml").write_text(
+        yaml.safe_dump(payload),
         encoding="utf-8",
     )
 
@@ -103,6 +118,57 @@ def test_digest_cools_down_but_new_relevant_policy_wakes_it(tmp_path, monkeypatc
     _proposal(proposals, "second", scope="alpha")
     changed = _invoke(monkeypatch, capsys, cwd=repo, proposals=proposals, state=state, now=1_200)[1]
     assert "second" in changed
+
+
+def test_v2_digest_routes_only_from_structured_applicability(tmp_path, monkeypatch, capsys) -> None:
+    repo = _repo(tmp_path)
+    proposals = tmp_path / "proposals"
+    proposals.mkdir()
+    empty_dimensions = {"capabilities": [], "events": []}
+    _proposal(
+        proposals,
+        "alpha-structured",
+        scope="legacy text does not mention alpha",
+        applicability={"kind": "projects", "projects": ["alpha"], **empty_dimensions},
+    )
+    _proposal(
+        proposals,
+        "global-structured",
+        scope="narrow-looking legacy text",
+        applicability={"kind": "global", "projects": [], **empty_dimensions},
+    )
+    _proposal(
+        proposals,
+        "unclassified",
+        scope="all projects",
+        applicability={
+            "kind": "needs-classification",
+            "projects": [],
+            "classification_note": "Human review required.",
+            **empty_dimensions,
+        },
+    )
+    _proposal(
+        proposals,
+        "beta-structured",
+        scope="alpha appears here but must not be guessed",
+        applicability={"kind": "projects", "projects": ["beta"], **empty_dimensions},
+    )
+
+    code, output = _invoke(
+        monkeypatch,
+        capsys,
+        cwd=repo,
+        proposals=proposals,
+        state=tmp_path / "state",
+        now=1_000,
+    )
+
+    assert code == 0
+    message = json.loads(output)["hookSpecificOutput"]["additionalContext"]
+    assert "2 pending proposal(s) relevant to alpha" in message
+    assert "alpha-structured" in message and "global-structured" in message
+    assert "unclassified" not in message and "beta-structured" not in message
 
 
 def test_non_session_event_is_silent(tmp_path, monkeypatch, capsys) -> None:

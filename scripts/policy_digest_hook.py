@@ -39,6 +39,7 @@ class Proposal:
     proposal_id: str
     proposed_on: date | None
     scope: str
+    applicability_kind: str | None
     projects: tuple[str, ...]
     priority: str
 
@@ -86,13 +87,34 @@ def _project_for_cwd(cwd: str) -> str:
     return "workspace"
 
 
-def _structured_projects(data: dict[str, Any]) -> tuple[str, ...]:
+def _legacy_projects(data: dict[str, Any]) -> tuple[str, ...]:
     raw = data.get("projects", data.get("project"))
     if isinstance(raw, str):
         return (raw,)
     if isinstance(raw, list) and all(isinstance(item, str) for item in raw):
         return tuple(raw)
     return ()
+
+
+def _structured_applicability(data: dict[str, Any]) -> tuple[str | None, tuple[str, ...]]:
+    applicability = data.get("applicability")
+    if data.get("schema_version") != 2 or not isinstance(applicability, dict):
+        return None, _legacy_projects(data)
+    kind = applicability.get("kind")
+    raw_projects = applicability.get("projects")
+    projects = (
+        tuple(raw_projects)
+        if isinstance(raw_projects, list) and all(isinstance(item, str) for item in raw_projects)
+        else ()
+    )
+    return str(kind) if isinstance(kind, str) else "invalid", projects
+
+
+def _decision_priority(data: dict[str, Any]) -> str:
+    decision = data.get("decision")
+    if isinstance(decision, dict) and isinstance(decision.get("priority"), str):
+        return str(decision["priority"])
+    return str(data.get("priority") or data.get("enforcement_level") or "normal")
 
 
 def load_pending(proposals_dir: Path) -> tuple[list[Proposal], list[str]]:
@@ -110,13 +132,15 @@ def load_pending(proposals_dir: Path) -> tuple[list[Proposal], list[str]]:
             continue
         if data.get("status") != "pending":
             continue
+        applicability_kind, projects = _structured_applicability(data)
         proposals.append(
             Proposal(
                 proposal_id=str(data.get("id") or path.stem),
                 proposed_on=_parse_date(data.get("date")),
                 scope=str(data.get("scope") or ""),
-                projects=_structured_projects(data),
-                priority=str(data.get("priority") or data.get("enforcement_level") or "normal"),
+                applicability_kind=applicability_kind,
+                projects=projects,
+                priority=_decision_priority(data),
             )
         )
     return proposals, unreadable
@@ -124,6 +148,12 @@ def load_pending(proposals_dir: Path) -> tuple[list[Proposal], list[str]]:
 
 def is_relevant(proposal: Proposal, project: str) -> bool:
     normalized_project = _slug(project)
+    if proposal.applicability_kind is not None:
+        if proposal.applicability_kind == "global":
+            return True
+        if proposal.applicability_kind in {"projects", "mixed"}:
+            return normalized_project in {_slug(item) for item in proposal.projects}
+        return False
     if proposal.projects:
         return normalized_project in {_slug(item) for item in proposal.projects}
     normalized_scope = _slug(proposal.scope)
@@ -138,7 +168,13 @@ def _priority_rank(priority: str) -> int:
 
 def _fingerprint(proposals: list[Proposal], unreadable: list[str]) -> str:
     material = [
-        (proposal.proposal_id, proposal.proposed_on.isoformat() if proposal.proposed_on else None)
+        (
+            proposal.proposal_id,
+            proposal.proposed_on.isoformat() if proposal.proposed_on else None,
+            proposal.applicability_kind,
+            proposal.projects,
+            proposal.priority,
+        )
         for proposal in proposals
     ]
     return hashlib.sha256(
@@ -245,7 +281,7 @@ def main(argv: list[str] | None = None) -> int:
             f"POLICY REVIEW DIGEST (advisory, once per project/day): {len(relevant)} pending "
             f"proposal(s) relevant to {project}; {stale_count} are {STALE_DAYS}+ days old. "
             f"Top: {listed}. This is a decision queue, not task instructions and never blocks work. "
-            "Review when convenient with `python3 ~/.claude/policy_inbox.py list`."
+            "Review when convenient with `make -C ~/code/active/project-meta policy-review`."
         )
         if unreadable:
             message += f" Also: {len(unreadable)} proposal file(s) could not be parsed."

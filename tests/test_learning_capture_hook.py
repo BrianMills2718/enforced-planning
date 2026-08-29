@@ -415,6 +415,11 @@ def test_stop_hook_active_ends_the_turn(monkeypatch, tmp_path: Path) -> None:
         "last_assistant_message": "a report with no Learnings line at all",
     }
     monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps(payload)))
+
+    def unexpected(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("repeat Stop reached fallible receipt state")
+
+    monkeypatch.setattr(learning_capture_hook, "start_hook_invocation", unexpected)
     assert learning_capture_hook.main(
         ["--agent", "claude-code", "--hook-receipt-dir", str(tmp_path)]
     ) == 0

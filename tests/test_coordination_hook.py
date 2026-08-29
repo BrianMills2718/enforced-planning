@@ -16,6 +16,28 @@ from enforced_planning import prewrite_claim_fast, prewrite_claim_projection
 from scripts import coordination_hook
 
 
+def test_stop_refire_returns_before_receipts_or_projection(monkeypatch, tmp_path: Path) -> None:
+    payload = {
+        "hook_event_name": "Stop",
+        "session_id": "repeat-stop",
+        "cwd": str(tmp_path),
+        "stop_hook_active": True,
+    }
+    monkeypatch.setattr(
+        coordination_hook,
+        "_read_hook_input",
+        lambda **_kwargs: payload,
+    )
+
+    def unexpected(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("repeat Stop reached fallible hook state")
+
+    monkeypatch.setattr(coordination_hook, "start_hook_invocation", unexpected)
+    monkeypatch.setattr(coordination_hook, "_active_claims", unexpected)
+
+    assert coordination_hook.main(["--hook-receipt-dir", str(tmp_path / "receipts")]) == 0
+
+
 def test_repository_statuses_are_collected_concurrently(monkeypatch, tmp_path: Path) -> None:
     repositories = tuple(tmp_path / f"repo-{index}" for index in range(8))
     active = 0

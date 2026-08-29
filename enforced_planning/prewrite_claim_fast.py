@@ -96,7 +96,7 @@ _READ_ONLY_GIT_SUBCOMMANDS = frozenset(
     }
 )
 
-BashBootstrapClassifier = Callable[[str], bool]
+BashBootstrapClassifier = Callable[[str], bool | str]
 
 
 class FastPreWriteError(ValueError):
@@ -229,6 +229,30 @@ def _git_command_is_read_only(argv: tuple[str, ...]) -> bool:
     return False
 
 
+def _sort_command_is_read_only(argv: tuple[str, ...]) -> bool:
+    """Allow formatting-only sort calls while rejecting file-writing options."""
+
+    unsafe_long_options = (
+        "--output",
+        "--temporary-directory",
+        "--compress-program",
+    )
+    for token in argv[1:]:
+        if token.startswith("--"):
+            option = token.split("=", 1)[0]
+            # GNU long options accept unambiguous abbreviations, so reject a
+            # prefix such as ``--out=...`` as well as the full spelling.
+            if any(unsafe.startswith(option) for unsafe in unsafe_long_options):
+                return False
+        elif token.startswith("-") and token != "-":
+            # Short options may be clustered (for example ``-uo result``).
+            # Conservatively reject any option token containing output (-o)
+            # or temp-directory (-T), even if it also contains safe flags.
+            if any(option in token[1:] for option in ("o", "T")):
+                return False
+    return True
+
+
 def classify_bash_command(
     command: str,
     *,
@@ -243,8 +267,11 @@ def classify_bash_command(
 
     if claim_bootstrap_classifier is not None:
         try:
-            if claim_bootstrap_classifier(command):
+            special = claim_bootstrap_classifier(command)
+            if special is True:
                 return "claim_bootstrap"
+            if special in {"claim_bootstrap", "projection_recovery"}:
+                return str(special)
         except Exception:  # noqa: BLE001 -- classifier failure must fail closed
             return "claim_required"
     commands = _shell_commands(command)
@@ -254,6 +281,66 @@ def classify_bash_command(
     if all(_argv_is_read_only(argv) for argv in commands):
         return "read_only"
     return "claim_required"
+
+
+def _bash_declared_paths(command: str) -> tuple[str, ...]:
+    """Extract explicit path operands that could redirect a shell mutation.
+
+    Hook payloads do not expose the shell tool's per-command workdir.  A claim
+    can therefore authorize ordinary pathless commands in its worktree, but an
+    explicit absolute or traversal operand must be proved to remain inside the
+    selected worktree.  This intentionally recognizes only path-shaped tokens;
+    ambiguity never creates authority outside the selected worktree.
+    """
+
+    try:
+        lexer = shlex.shlex(command, posix=True, punctuation_chars=";&|<>")
+        lexer.whitespace_split = True
+        tokens = tuple(lexer)
+    except ValueError:
+        return ()
+    paths: list[str] = []
+    command_start = True
+    for token in tokens:
+        if token in _SHELL_CONTROL or set(token) <= set(";&|<>"):
+            command_start = token in {";", "&&", "||", "|", "&"}
+            continue
+        if command_start:
+            command_start = False
+            if token.startswith(("/usr/bin/", "/bin/")):
+                continue
+        candidate = token.split("=", 1)[1] if token.startswith("-") and "=" in token else token
+        if "://" in candidate or candidate in {"-", "."}:
+            continue
+        if "=" in candidate and not candidate.startswith(("/", "~", ".")):
+            candidate = candidate.split("=", 1)[1]
+        if candidate.startswith(("/", "~", "./", "../")) or "/" in candidate:
+            paths.append(candidate)
+    return tuple(dict.fromkeys(paths))
+
+
+def _bash_target_is_unprovable(command: str) -> bool:
+    """Reject expansions that can conceal a target path from the hook."""
+
+    return any(marker in command for marker in ("$", "`", "*", "?", "[", ">(", "<("))
+
+
+def _bash_is_explicitly_bound(command: str, worktree: Path) -> bool:
+    """Require a literal runtime cwd when the native payload omits workdir."""
+
+    if _bash_target_is_unprovable(command) or any(marker in command for marker in (";", "&&", "||", "|", ">", "<")):
+        return False
+    try:
+        argv = shlex.split(command)
+    except ValueError:
+        return False
+    target = str(worktree)
+    if len(argv) >= 4 and argv[:2] == ["/usr/bin/env", "-C"]:
+        return Path(argv[2]).expanduser().resolve() == worktree
+    executable = Path(argv[0]).name if argv else ""
+    if executable in {"git", "make"} and len(argv) >= 3 and argv[1] == "-C":
+        return Path(argv[2]).expanduser().resolve() == worktree
+    return False
 
 
 def _argv_is_read_only(argv: tuple[str, ...]) -> bool:
@@ -273,6 +360,20 @@ def _argv_is_read_only(argv: tuple[str, ...]) -> bool:
         )
     if executable == "sed":
         tail = argv[1:]
+        if any(
+            (
+                token.startswith("--")
+                and len(token.partition("=")[0]) > 2
+                and "--in-place".startswith(token.partition("=")[0])
+            )
+            or (
+                token.startswith("-")
+                and not token.startswith("--")
+                and "i" in token[1:]
+            )
+            for token in tail
+        ):
+            return False
         if len(tail) < 2 or tail[0] not in {"-n", "--quiet", "--silent"}:
             return False
         return re.fullmatch(r"\d+(?:,\d+)?p", tail[1]) is not None
@@ -289,6 +390,8 @@ def _argv_is_read_only(argv: tuple[str, ...]) -> bool:
             "-okdir",
         }
         return not any(token in mutating for token in argv[1:])
+    if executable == "sort":
+        return _sort_command_is_read_only(argv)
     return executable == "git" and _git_command_is_read_only(argv)
 
 
@@ -340,8 +443,9 @@ def adapt_native_payload(
             raise FastPreWriteError(f"Claude {tool_name} requires string tool_input.{path_field}")
         target_paths = (file_path.strip(),)
 
-    raw_session = _nonempty(payload, "session_id")
-    session_id = raw_session if raw_session.startswith(f"{client}:") else f"{client}:{raw_session}"
+    from enforced_planning.session_target import effective_session_id
+
+    session_id = effective_session_id(payload, client)
     return {
         "client": client,
         "hook_event_name": "PreToolUse",
@@ -350,6 +454,12 @@ def adapt_native_payload(
         "cwd": _nonempty(payload, "cwd"),
         "target_paths": target_paths,
         "bash_classification": bash_classification,
+        "bash_declared_paths": _bash_declared_paths(command) if tool_name == "Bash" else (),
+        "bash_target_unprovable": _bash_target_is_unprovable(command) if tool_name == "Bash" else False,
+        "bash_command": command if tool_name == "Bash" else None,
+        "session_target_error_code": payload.get("_session_target_error_code"),
+        "session_target_error": payload.get("_session_target_error"),
+        "session_target_rebound": bool(payload.get("_session_target_worktree")),
     }
 
 
@@ -407,6 +517,16 @@ def _repository_context(request: dict[str, Any]) -> dict[str, Any]:
     if request.get("tool_name") == "Bash":
         worktree, repo_root, branch = _git_identity(cwd)
         normalized: list[str] = []
+        outside: list[str] = []
+        for raw_path in request.get("bash_declared_paths", ()):
+            candidate = Path(raw_path).expanduser()
+            if not candidate.is_absolute():
+                candidate = cwd / candidate
+            resolved = candidate.resolve(strict=False)
+            try:
+                resolved.relative_to(worktree)
+            except ValueError:
+                outside.append(str(resolved))
     else:
         if not raw_targets:
             raise FastPreWriteError("pre-write request contains no target paths")
@@ -438,6 +558,7 @@ def _repository_context(request: dict[str, Any]) -> dict[str, Any]:
         "repo_root": str(repo_root),
         "branch": branch,
         "normalized_target_paths": tuple(dict.fromkeys(normalized)),
+        "bash_paths_outside_worktree": tuple(dict.fromkeys(outside)) if request.get("tool_name") == "Bash" else (),
     }
 
 
@@ -672,6 +793,7 @@ def evaluate_request_fast(
     projection_path: Path | None = None,
     receipt_path: Path = DEFAULT_RECEIPT_PATH,
     cache_hit: bool = True,
+    projection_recovery_command: str | None = None,
 ) -> dict[str, Any]:
     """Evaluate one normalized request and append its durable receipt."""
 
@@ -679,14 +801,41 @@ def evaluate_request_fast(
         raise FastPreWriteError("mode must be one of: off, observe, enforce")
     started = time.perf_counter()
     bash_classification = request.get("bash_classification")
-    if bash_classification in {"read_only", "claim_bootstrap"}:
+    if bash_classification in {
+        "read_only",
+        "claim_bootstrap",
+        "projection_recovery",
+    }:
+        reason_by_classification = {
+            "read_only": "bash_read_only",
+            "claim_bootstrap": "claim_bootstrap_command",
+            "projection_recovery": "projection_recovery_command",
+        }
         result = _decision(
             started=started,
             request=request,
             mode=mode,
             decision="allow",
-            reason_code=("bash_read_only" if bash_classification == "read_only" else "claim_bootstrap_command"),
+            reason_code=reason_by_classification[bash_classification],
             context=None,
+        )
+        _record_receipt(receipt_path, result)
+        return result
+    target_error_code = request.get("session_target_error_code")
+    target_error = request.get("session_target_error")
+    if isinstance(target_error_code, str) and target_error_code:
+        result = _decision(
+            started=started,
+            request=request,
+            mode=mode,
+            decision="allow" if mode == "off" else ("observe_violation" if mode == "observe" else "deny"),
+            reason_code=target_error_code,
+            context=None,
+            details=(str(target_error),) if target_error else (),
+            recovery=(
+                "Create one healthy claim for this native session with the exact typed maintenance_worktree "
+                "claim-bootstrap transaction, or close duplicate claims before mutating."
+            ),
         )
         _record_receipt(receipt_path, result)
         return result
@@ -734,9 +883,59 @@ def evaluate_request_fast(
             context=context,
             details=(projection_error or "projection unavailable",),
             recovery=(
-                "Run python scripts/refresh_prewrite_claim_projection.py "
-                f"--claims-dir {resolved_claims} --projection-path {resolved_projection}"
+                projection_recovery_command
+                or "Refresh the claim authority projection through the installed exact recovery command."
             ),
+        )
+        _record_receipt(receipt_path, result)
+        return result
+
+    outside_bash_paths = tuple(context.get("bash_paths_outside_worktree", ()))
+    if request.get("tool_name") == "Bash" and request.get("session_target_rebound"):
+        raw_command = request.get("bash_command")
+        if not isinstance(raw_command, str) or not _bash_is_explicitly_bound(
+            raw_command,
+            Path(context["worktree_path"]),
+        ):
+            result = _decision(
+                started=started,
+                request=request,
+                mode=mode,
+                decision="observe_violation" if mode == "observe" else "deny",
+                reason_code="bash_runtime_workdir_unattested",
+                context=context,
+                recovery=(
+                    "The native hook omitted the shell workdir. Re-run one literal command through "
+                    f"/usr/bin/env -C {context['worktree_path']} <command>, or use git/make -C with that exact worktree."
+                ),
+            )
+            _record_receipt(receipt_path, result)
+            return result
+    if request.get("session_target_rebound") and request.get("bash_target_unprovable"):
+        result = _decision(
+            started=started,
+            request=request,
+            mode=mode,
+            decision="observe_violation" if mode == "observe" else "deny",
+            reason_code="bash_target_unprovable",
+            context=context,
+            recovery=(
+                "Use literal paths inside the exact claimed worktree; variable, wildcard, and command "
+                "expansions cannot establish mutation authority from a workspace-root hook payload."
+            ),
+        )
+        _record_receipt(receipt_path, result)
+        return result
+    if outside_bash_paths:
+        result = _decision(
+            started=started,
+            request=request,
+            mode=mode,
+            decision="observe_violation" if mode == "observe" else "deny",
+            reason_code="bash_path_outside_worktree",
+            context=context,
+            details=outside_bash_paths,
+            recovery="Run the mutation inside the exact claimed worktree or create a separate claimed lane.",
         )
         _record_receipt(receipt_path, result)
         return result
@@ -809,6 +1008,7 @@ def evaluate_prewrite_fast(
     projection_path: Path | None = None,
     receipt_path: Path = DEFAULT_RECEIPT_PATH,
     claim_bootstrap_classifier: BashBootstrapClassifier | None = None,
+    projection_recovery_command: str | None = None,
 ) -> dict[str, Any]:
     """Normalize and evaluate one native hook payload."""
 
@@ -823,6 +1023,7 @@ def evaluate_prewrite_fast(
         claims_dir=claims_dir,
         projection_path=projection_path,
         receipt_path=receipt_path,
+        projection_recovery_command=projection_recovery_command,
     )
 
 

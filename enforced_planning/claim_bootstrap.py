@@ -1,15 +1,17 @@
 """Narrow self-service claim mutations for a natively identified agent session.
 
-This module is intentionally not a general lifecycle command proxy.  It accepts
+This module is intentionally not a general lifecycle command proxy. It accepts
 only typed claim-registry operations, derives the caller's session identity from
-the native runtime, and never creates branches, worktrees, commits, or project
-files.
+the native runtime, and exposes one transactional maintenance-worktree bootstrap.
+It never executes caller-supplied shell fragments or edits project files.
 """
 
 from __future__ import annotations
 
 import json
 import os
+import re
+import subprocess
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
@@ -119,6 +121,33 @@ class HeartbeatRequest(_StrictRequest):
     current_phase: str | None = None
 
 
+class MaintenanceWorktreeRequest(_StrictRequest):
+    operation: Literal["maintenance_worktree"]
+    agent: AgentName
+    repo_root: str = Field(min_length=1)
+    branch: str = Field(min_length=1)
+    claim_type: Literal["program"]
+
+    @model_validator(mode="after")
+    def _validate_target(self) -> MaintenanceWorktreeRequest:
+        repo = Path(self.repo_root).expanduser()
+        if not repo.is_absolute() or ".." in repo.parts or str(repo.resolve()) != self.repo_root:
+            raise ValueError("repo_root must be one canonical absolute path without traversal")
+        if self.project != repo.name:
+            raise ValueError("project must exactly match the canonical repository directory name")
+        if self.scope != self.branch:
+            raise ValueError("scope must exactly match branch")
+        if (
+            re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._/-]*", self.branch) is None
+            or self.branch.startswith(("-", "/"))
+            or self.branch.endswith(("/", "."))
+            or ".." in self.branch
+            or "//" in self.branch
+        ):
+            raise ValueError("branch is not a safe literal Git branch")
+        return self
+
+
 class ProgressRequest(_StrictRequest):
     operation: Literal["progress"]
     progress_kind: ProgressKind
@@ -129,7 +158,7 @@ class ProgressRequest(_StrictRequest):
 
 
 ClaimBootstrapRequest = Annotated[
-    SessionStartOrUpdateRequest | HeartbeatRequest | ProgressRequest,
+    SessionStartOrUpdateRequest | HeartbeatRequest | ProgressRequest | MaintenanceWorktreeRequest,
     Field(discriminator="operation"),
 ]
 _REQUEST_ADAPTER = TypeAdapter(ClaimBootstrapRequest)
@@ -197,6 +226,39 @@ def parse_raw_bash_command(
     return parse_request_json(raw_json)
 
 
+def projection_recovery_command(
+    *,
+    script_path: Path,
+    claims_dir: Path,
+    projection_path: Path,
+) -> str:
+    """Render the exact projection refresh command advertised by the gate."""
+
+    return (
+        f"/usr/bin/python3 {script_path.expanduser().resolve()} "
+        f"--claims-dir {claims_dir.expanduser().resolve()} "
+        f"--projection-path {projection_path.expanduser().resolve()}"
+    )
+
+
+def parse_projection_recovery_command(
+    raw_command: str,
+    *,
+    script_path: Path,
+    claims_dir: Path,
+    projection_path: Path,
+) -> None:
+    """Accept only the exact installed refresh operation and destinations."""
+
+    expected = projection_recovery_command(
+        script_path=script_path,
+        claims_dir=claims_dir,
+        projection_path=projection_path,
+    )
+    if raw_command != expected:
+        raise ClaimBootstrapError("projection recovery command does not match the exact installed authority paths")
+
+
 def _native_agent(requested: AgentName | None) -> tuple[AgentName, str]:
     """Resolve one current native runtime and reject borrowed agent identity."""
 
@@ -214,7 +276,7 @@ def _native_agent(requested: AgentName | None) -> tuple[AgentName, str]:
         agent = requested
     session_id = coordination_claims.resolve_session_id(agent)
     if not session_id:
-        raise ClaimBootstrapError(f"unable to derive native session identity for {agent}")
+        raise ClaimBootstrapError(f"unable to derive identity from the native {agent} runtime")
     try:
         coordination_claims.validate_native_session_binding(
             agent,
@@ -258,7 +320,9 @@ def execute_request(request: ClaimBootstrapRequest) -> dict[str, Any]:
 
     agent, session_id = _native_agent(request.agent)
 
-    if isinstance(request, SessionStartOrUpdateRequest):
+    if isinstance(request, MaintenanceWorktreeRequest):
+        payload = _execute_maintenance_worktree(request, agent=agent, session_id=session_id)
+    elif isinstance(request, SessionStartOrUpdateRequest):
         _require_self_owned_slot(
             agent=agent,
             session_id=session_id,
@@ -348,14 +412,443 @@ def execute_request(request: ClaimBootstrapRequest) -> dict[str, Any]:
     }
 
 
+def _rollback_created_worktree(
+    *,
+    repo: Path,
+    worktree: Path,
+    branch: str,
+    expected_head: str,
+    branch_created: bool,
+    created_dirs: list[Path],
+) -> list[str]:
+    """Remove only the exact, untouched no-checkout lane created by bootstrap."""
+
+    errors: list[str] = []
+    listing = subprocess.run(
+        ["git", "-C", str(repo), "worktree", "list", "--porcelain"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    target_blocks = [
+        block.splitlines()
+        for block in listing.stdout.split("\n\n")
+        if listing.returncode == 0
+        and f"worktree {worktree}" in block.splitlines()
+    ]
+    registered = len(target_blocks) == 1
+    target_branch_matches = registered and f"branch refs/heads/{branch}" in target_blocks[0]
+    branch_worktrees: list[Path] = []
+    for block in listing.stdout.split("\n\n") if listing.returncode == 0 else []:
+        lines = block.splitlines()
+        path_line = next((line for line in lines if line.startswith("worktree ")), None)
+        if path_line and f"branch refs/heads/{branch}" in lines:
+            branch_worktrees.append(Path(path_line.removeprefix("worktree ")).resolve())
+    foreign_checkouts = [path for path in branch_worktrees if path != worktree]
+    branch_head = subprocess.run(
+        ["git", "-C", str(repo), "rev-parse", "--verify", f"refs/heads/{branch}"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    branch_unchanged = branch_head.returncode == 0 and branch_head.stdout.strip() == expected_head
+    safe_to_delete_branch = listing.returncode == 0 and not registered and not os.path.lexists(worktree)
+    if listing.returncode != 0:
+        errors.append(listing.stderr.strip() or "worktree registry inspection failed")
+    if foreign_checkouts:
+        errors.append(
+            "branch is checked out by another worktree; preserving it: "
+            + ", ".join(str(path) for path in foreign_checkouts)
+        )
+        safe_to_delete_branch = False
+    if registered:
+        worktree_head = subprocess.run(
+            ["git", "-C", str(worktree), "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        status = subprocess.run(
+            ["git", "-C", str(worktree), "status", "--porcelain=v1", "-z", "--untracked-files=all"],
+            capture_output=True,
+            check=False,
+        )
+        head_paths = subprocess.run(
+            ["git", "-C", str(worktree), "ls-tree", "-r", "--name-only", "-z", expected_head],
+            capture_output=True,
+            check=False,
+        )
+        status_entries = [entry for entry in status.stdout.split(b"\0") if entry]
+        tracked_paths = [path for path in head_paths.stdout.split(b"\0") if path]
+        pristine_no_checkout = (
+            status.returncode == 0
+            and head_paths.returncode == 0
+            and sorted(status_entries) == sorted(b"D  " + path for path in tracked_paths)
+        )
+        if (
+            not branch_created
+            or not branch_unchanged
+            or not target_branch_matches
+            or worktree_head.returncode != 0
+            or worktree_head.stdout.strip() != expected_head
+            or not pristine_no_checkout
+        ):
+            errors.append("worktree identity changed; refusing unsafe cleanup")
+            safe_to_delete_branch = False
+        else:
+            removed = subprocess.run(
+                [
+                    "git", "-c", "core.hooksPath=/dev/null", "-C", str(repo),
+                    "worktree", "remove", "--force", str(worktree),
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if removed.returncode != 0:
+                errors.append(removed.stderr.strip() or "worktree cleanup failed")
+                safe_to_delete_branch = False
+            else:
+                safe_to_delete_branch = not foreign_checkouts
+    elif os.path.lexists(worktree):
+        errors.append(f"unregistered worktree residue requires inspection: {worktree}")
+        safe_to_delete_branch = False
+
+    if branch_created and safe_to_delete_branch:
+        deleted = subprocess.run(
+            [
+                "git", "-c", "core.hooksPath=/dev/null", "-C", str(repo),
+                "update-ref", "-d", f"refs/heads/{branch}", expected_head,
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if deleted.returncode != 0:
+            errors.append(deleted.stderr.strip() or "branch compare-and-delete cleanup failed")
+        elif subprocess.run(
+            ["git", "-C", str(repo), "show-ref", "--verify", f"refs/heads/{branch}"],
+            capture_output=True,
+            check=False,
+        ).returncode == 0:
+            errors.append("branch changed during cleanup; compare-and-delete preserved it")
+
+    for candidate in reversed(created_dirs):
+        try:
+            candidate.rmdir()
+        except OSError:
+            continue
+    return errors
+
+
+def _preserve_partial_session_claim_as_blocked(
+    *,
+    agent: AgentName,
+    project: str,
+    scope: str,
+    session_id: str,
+    branch: str,
+    worktree: Path,
+    failure: Exception,
+) -> bool:
+    """Preserve and block an exact claim that survived a bootstrap failure."""
+
+    candidates = [
+        claim
+        for claim in coordination_claims.check_claims(project)
+        if claim.scope == scope
+    ]
+    if not candidates:
+        return False
+    if len(candidates) != 1:
+        return True
+    claim = candidates[0]
+    expected = {
+        "agent": agent,
+        "session_id": session_id,
+        "branch": branch,
+        "worktree_path": str(worktree),
+    }
+    if any(getattr(claim, key) != value for key, value in expected.items()):
+        return True
+    claim_file = Path(claim.source_file) if claim.source_file else session_lifecycle._claim_path(agent, project, scope)
+    session_lifecycle._apply_claim_payload_updates(
+        claim=claim,
+        claim_file=claim_file,
+        updates={
+            "status": "blocked",
+            "current_phase": "maintenance-bootstrap-blocked",
+            "progress_summary": f"Bootstrap failed after claim persistence: {failure}",
+        },
+        expected_fields=expected,
+    )
+    return True
+
+
+def _execute_maintenance_worktree(
+    request: MaintenanceWorktreeRequest,
+    *,
+    agent: AgentName,
+    session_id: str,
+) -> dict[str, Any]:
+    """Create one unplanned worktree and exact claim as a typed transaction."""
+
+    repo = Path(request.repo_root).resolve()
+    governed_markers = (
+        repo / ".git",
+        repo / "CLAUDE.md",
+        repo / "meta-process.yaml",
+        repo / "docs" / "plans" / "CLAUDE.md",
+    )
+    if not all(path.exists() for path in governed_markers):
+        raise ClaimBootstrapError("maintenance target is not a governed Git repository")
+    identity = subprocess.run(
+        ["git", "-C", str(repo), "rev-parse", "--show-toplevel"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if identity.returncode != 0 or Path(identity.stdout.strip()).resolve() != repo:
+        raise ClaimBootstrapError("repo_root is not the canonical Git worktree root")
+    starting_head_result = subprocess.run(
+        ["git", "-C", str(repo), "rev-parse", "HEAD"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if starting_head_result.returncode != 0 or not starting_head_result.stdout.strip():
+        raise ClaimBootstrapError("maintenance repository has no valid starting revision")
+    starting_head = starting_head_result.stdout.strip()
+    checked = subprocess.run(
+        ["git", "check-ref-format", "--branch", request.branch],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if checked.returncode != 0:
+        raise ClaimBootstrapError("branch is not accepted by git check-ref-format")
+    base = repo / "worktrees"
+    worktree = base / request.branch
+    if os.path.lexists(worktree):
+        raise ClaimBootstrapError(f"maintenance worktree already exists: {worktree}")
+    branch_exists = subprocess.run(
+        ["git", "-C", str(repo), "show-ref", "--verify", f"refs/heads/{request.branch}"],
+        capture_output=True,
+        check=False,
+    ).returncode == 0
+    if branch_exists:
+        raise ClaimBootstrapError(f"maintenance branch already exists: {request.branch}")
+    existing_claims = [
+        claim
+        for claim in coordination_claims.check_claims(request.project)
+        if claim.scope == request.scope and claim.is_live()
+    ]
+    if existing_claims:
+        owners = ", ".join(sorted(f"{claim.agent}:{claim.session_id or '<missing>'}" for claim in existing_claims))
+        raise ClaimBootstrapError(
+            f"maintenance claim slot already exists for {request.project}:{request.scope}: {owners}"
+        )
+    existing_roots = [
+        claim
+        for claim in coordination_claims.check_claims()
+        if claim.is_live() and claim.session_id == session_id and not claim.parent_scope
+    ]
+    if existing_roots:
+        labels = ", ".join(sorted(f"{claim.primary_project()}:{claim.scope}" for claim in existing_roots))
+        raise ClaimBootstrapError(
+            "maintenance bootstrap requires the native session to own zero existing claim roots; "
+            f"close or transfer first: {labels}"
+        )
+
+    goal = f"Unplanned maintenance: {request.branch.replace('-', ' ').replace('/', ' ')}"
+    session_name = session_contracts.derive_session_name(goal)
+    contract = session_contracts.SessionContract.build(
+        agent=agent,
+        project=request.project,
+        scope=request.scope,
+        intent=goal,
+        repo_root=str(repo),
+        worktree_path=str(worktree),
+        branch=request.branch,
+        session_id=session_id,
+        broader_goal=goal,
+        session_name=session_name,
+        allow_unplanned=True,
+    )
+    tracker_path = session_contracts.session_tracker_path(contract, tracker_dir=SESSION_TRACKERS_DIR)
+    if tracker_path.exists():
+        raise ClaimBootstrapError(f"maintenance session tracker already exists: {tracker_path}")
+
+    created_dirs: list[Path] = []
+    directory = base
+    prefix_directories = [base]
+    for part in Path(request.branch).parts[:-1]:
+        directory = directory / part
+        prefix_directories.append(directory)
+    for candidate in prefix_directories:
+        if os.path.lexists(candidate):
+            if candidate.is_symlink() or not candidate.is_dir():
+                raise ClaimBootstrapError(
+                    f"maintenance worktree parent must be a real directory, not a link or file: {candidate}"
+                )
+            continue
+        candidate.mkdir()
+        created_dirs.append(candidate)
+    if not worktree.resolve().is_relative_to(base.resolve()):
+        raise ClaimBootstrapError("maintenance worktree path escapes the governed repository")
+
+    created_branch = subprocess.run(
+        [
+            "git",
+            "-c",
+            "core.hooksPath=/dev/null",
+            "-C",
+            str(repo),
+            "update-ref",
+            f"refs/heads/{request.branch}",
+            starting_head,
+            "0" * len(starting_head),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if created_branch.returncode != 0:
+        for candidate in reversed(created_dirs):
+            try:
+                candidate.rmdir()
+            except OSError:
+                pass
+        raise ClaimBootstrapError(created_branch.stderr.strip() or "atomic maintenance branch creation failed")
+    created = subprocess.run(
+        [
+            "git", "-c", "core.hooksPath=/dev/null", "-C", str(repo),
+            "worktree", "add", "--no-checkout", str(worktree), request.branch,
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if created.returncode != 0:
+        cleanup_errors = _rollback_created_worktree(
+            repo=repo,
+            worktree=worktree,
+            branch=request.branch,
+            expected_head=starting_head,
+            branch_created=True,
+            created_dirs=created_dirs,
+        )
+        detail = f"; {'; '.join(cleanup_errors)}" if cleanup_errors else ""
+        raise ClaimBootstrapError((created.stderr.strip() or "git worktree creation failed") + detail)
+    try:
+        payload = session_lifecycle.start_session(
+            agent=agent,
+            project=request.project,
+            scope=request.scope,
+            intent=goal,
+            repo_root=str(repo),
+            worktree_path=str(worktree),
+            branch=request.branch,
+            broader_goal=goal,
+            current_phase="maintenance",
+            plan_ref=None,
+            session_id=session_id,
+            session_name=session_name,
+            claim_type="program",
+            write_paths=["."],
+            read_paths=[],
+            tracker_dir=SESSION_TRACKERS_DIR,
+            allow_unplanned=True,
+        )
+        populated = subprocess.run(
+            [
+                "git", "-c", "core.hooksPath=/dev/null", "-C", str(worktree),
+                "checkout", "--force", request.branch,
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if populated.returncode != 0:
+            raise ClaimBootstrapError(
+                populated.stderr.strip() or "maintenance worktree population failed after claim creation"
+            )
+        return payload
+    except Exception as exc:
+        cleanup_errors: list[str] = []
+        try:
+            preserved_claim = _preserve_partial_session_claim_as_blocked(
+                agent=agent,
+                project=request.project,
+                scope=request.scope,
+                session_id=session_id,
+                branch=request.branch,
+                worktree=worktree,
+                failure=exc,
+            )
+        except Exception as cleanup_exc:  # noqa: BLE001 - preserve ambiguous residue
+            preserved_claim = True
+            cleanup_errors.append(f"claim preservation failed: {cleanup_exc}")
+        if preserved_claim:
+            detail = f"; {'; '.join(cleanup_errors)}" if cleanup_errors else ""
+            raise ClaimBootstrapError(
+                "maintenance session creation failed after claim persistence; "
+                f"lane preserved for inspection: {exc}{detail}"
+            ) from exc
+        try:
+            coordination_claims.release_claim(
+                agent,
+                request.project,
+                request.scope,
+                expected_session_id=session_id,
+            )
+        except Exception as cleanup_exc:  # noqa: BLE001 - retain recoverable residue details
+            cleanup_errors.append(f"claim cleanup failed: {cleanup_exc}")
+        try:
+            with session_contracts.session_tracker_lock(tracker_path):
+                if tracker_path.is_file():
+                    tracker = session_contracts.read_session_tracker(tracker_path)
+                    tracker_claim = tracker.get("claim")
+                    expected_identity = {
+                        "agent": agent,
+                        "project": request.project,
+                        "scope": request.scope,
+                        "session_id": session_id,
+                        "branch": request.branch,
+                        "worktree_path": str(worktree),
+                    }
+                    if not isinstance(tracker_claim, dict) or any(
+                        tracker_claim.get(key) != value for key, value in expected_identity.items()
+                    ):
+                        raise ValueError("tracker identity changed; refusing unsafe cleanup")
+                    tracker_path.unlink()
+        except Exception as cleanup_exc:  # noqa: BLE001 - retain recoverable residue details
+            cleanup_errors.append(f"tracker cleanup failed: {cleanup_exc}")
+        cleanup_errors.extend(
+            _rollback_created_worktree(
+                repo=repo,
+                worktree=worktree,
+                branch=request.branch,
+                expected_head=starting_head,
+                branch_created=True,
+                created_dirs=created_dirs,
+            )
+        )
+        detail = f"; {'; '.join(cleanup_errors)}" if cleanup_errors else ""
+        raise ClaimBootstrapError(f"maintenance session creation failed: {exc}{detail}") from exc
+
+
 __all__ = [
     "ClaimBootstrapError",
     "ClaimBootstrapRequest",
     "HeartbeatRequest",
+    "MaintenanceWorktreeRequest",
     "ProgressRequest",
     "SessionStartOrUpdateRequest",
     "canonical_script_path",
     "execute_request",
     "parse_raw_bash_command",
+    "parse_projection_recovery_command",
     "parse_request_json",
+    "projection_recovery_command",
 ]

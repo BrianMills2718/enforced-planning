@@ -124,9 +124,14 @@ repository through
 `meta_process.claims.outcome_admission_mode: enforce_selected`. Session
 start/heartbeat and supported native pre-write now derive the exact selected
 claim state without an outcome flag and deny before mutation or success.
-`make outcome-bootstrap PLAN=N ...` is the only sanctioned new-lane path: its
-entire claim must resolve to one Plan-numbered bootstrap surface before it may
-create the restricted worktree/session. After the graph is canonical, bind,
+`make outcome-bootstrap PLAN=N ...` is the only sanctioned **planned** new-lane
+path: its entire claim must resolve to one Plan-numbered bootstrap surface
+before it may create the restricted worktree/session. The sole unplanned
+exception is the strictly parsed maintenance-worktree bootstrap documented in
+the operator guide. It is limited to a native top-level client, a canonical
+governed repository, a safe literal branch, and `claim_type: program`; it does
+not admit composed shell, unknown JSON fields, borrowed subagent identity, or
+ordinary unclaimed mutations. After the graph is canonical, bind,
 allocate, select, and only then expand that same claim. The canonical
 `scripts/session_start.py` and `scripts/session_heartbeat.py` own source Make
 execution; their `scripts/meta/` mirrors must remain byte-identical through the

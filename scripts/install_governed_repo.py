@@ -58,6 +58,7 @@ SYNC_SUPPORT_FILES: dict[str, str] = {
     "enforced_planning/agents_rendering.py": "enforced_planning/agents_rendering.py",
     "enforced_planning/concern_routing.py": "enforced_planning/concern_routing.py",
     "enforced_planning/claim_mutation_receipts.py": "enforced_planning/claim_mutation_receipts.py",
+    "enforced_planning/claim_bootstrap.py": "enforced_planning/claim_bootstrap.py",
     "enforced_planning/client_session_metadata.py": "enforced_planning/client_session_metadata.py",
     "enforced_planning/coordination_claims.py": "enforced_planning/coordination_claims.py",
     "enforced_planning/coordination_messages.py": "enforced_planning/coordination_messages.py",
@@ -66,6 +67,7 @@ SYNC_SUPPORT_FILES: dict[str, str] = {
     "enforced_planning/outcome_portfolio.py": "enforced_planning/outcome_portfolio.py",
     "enforced_planning/outcome_selection.py": "enforced_planning/outcome_selection.py",
     "enforced_planning/prewrite_claim_fast.py": "enforced_planning/prewrite_claim_fast.py",
+    "enforced_planning/session_target.py": "enforced_planning/session_target.py",
     "enforced_planning/prewrite_claim_projection.py": "enforced_planning/prewrite_claim_projection.py",
     "enforced_planning/artifact_creation.py": "enforced_planning/artifact_creation.py",
     "enforced_planning/plan_readiness.py": "enforced_planning/plan_readiness.py",
@@ -157,6 +159,7 @@ WORKTREE_ONLY_SYNC_SUPPORT_FILES: dict[str, str] = {
     "enforced_planning/outcome_portfolio.py": "enforced_planning/outcome_portfolio.py",
     "enforced_planning/outcome_selection.py": "enforced_planning/outcome_selection.py",
     "enforced_planning/prewrite_claim_fast.py": "enforced_planning/prewrite_claim_fast.py",
+    "enforced_planning/session_target.py": "enforced_planning/session_target.py",
     "enforced_planning/prewrite_claim_projection.py": "enforced_planning/prewrite_claim_projection.py",
     "enforced_planning/artifact_creation.py": "enforced_planning/artifact_creation.py",
     "enforced_planning/file_context.py": "enforced_planning/file_context.py",
@@ -218,6 +221,7 @@ RELATIONSHIP_CONTEXT_SYNC_SUPPORT_FILES: dict[str, str] = {
 }
 
 COORDINATION_MESSAGES_SHARED_FILES: dict[str, str] = {
+    "scripts/hook_receipts.py": "scripts/hook_receipts.py",
     "scripts/coordination_inbox.py": "scripts/coordination_inbox.py",
     "scripts/coordination_hook.py": "scripts/coordination_hook.py",
     "scripts/coordination_messages.py": "scripts/coordination_messages.py",
@@ -242,6 +246,7 @@ COORDINATION_MESSAGES_LOCAL_PACKAGE_FILES: dict[str, str] = {
     "enforced_planning/outcome_portfolio.py": "enforced_planning/outcome_portfolio.py",
     "enforced_planning/outcome_selection.py": "enforced_planning/outcome_selection.py",
     "enforced_planning/prewrite_claim_fast.py": "enforced_planning/prewrite_claim_fast.py",
+    "enforced_planning/session_target.py": "enforced_planning/session_target.py",
     "enforced_planning/prewrite_claim_projection.py": "enforced_planning/prewrite_claim_projection.py",
     "enforced_planning/doc_authority.py": "enforced_planning/doc_authority.py",
     "enforced_planning/push_safety.py": "enforced_planning/push_safety.py",

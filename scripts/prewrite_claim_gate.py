@@ -34,11 +34,16 @@ _DENIAL_SUMMARIES = {
     "bash_path_outside_worktree": "The command names a mutation path outside the claimed worktree.",
     "bash_runtime_workdir_unattested": "The shell command does not prove it will run in the claimed worktree.",
     "bash_target_unprovable": "The command uses a target that cannot be resolved safely from the hook payload.",
+    "claim_git_identity_mismatch": "The claimed worktree no longer matches its recorded Git identity.",
     "claim_not_healthy": "The matching claim is stale, incomplete, or otherwise unhealthy.",
+    "client_identity_mismatch": "The event identity belongs to a different native client.",
     "no_exact_claim": "This session has no exact live claim for the target worktree.",
+    "no_exact_session_target": "This workspace-root session has no healthy claim selecting a target worktree.",
     "path_outside_claim": "The mutation target is outside the claim's declared write paths.",
     "projection_unavailable_or_stale": "The claim authority projection is unavailable or stale.",
     "repository_identity_unavailable": "The target repository could not be resolved from this event.",
+    "session_identity_unavailable": "The event does not identify the native session that would own the mutation.",
+    "unsupported_client": "The event names a client that this hook cannot authenticate.",
 }
 
 

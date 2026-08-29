@@ -53,7 +53,7 @@ def test_launcher_preserves_stdin_and_the_refire_escape() -> None:
     assert repeated.stderr == ""
 
 
-def test_launcher_fails_open_for_a_published_hook_without_the_refire_guard(
+def test_launcher_itself_guards_repeats_when_published_hook_has_no_guard(
     tmp_path: Path,
 ) -> None:
     repo = tmp_path / "repo"
@@ -67,7 +67,7 @@ def test_launcher_fails_open_for_a_published_hook_without_the_refire_guard(
     subprocess.run(["git", "-C", str(repo), "add", "."], check=True)
     subprocess.run(["git", "-C", str(repo), "commit", "-qm", "unsafe hook"], check=True)
 
-    result = subprocess.run(
+    first = subprocess.run(
         ["bash", str(LAUNCHER), "--agent", "claude-code"],
         input=_payload(stop_hook_active=False),
         capture_output=True,
@@ -79,6 +79,19 @@ def test_launcher_fails_open_for_a_published_hook_without_the_refire_guard(
         },
     )
 
-    assert result.returncode == 0
-    assert result.stdout == ""
-    assert result.stderr == ""
+    repeated = subprocess.run(
+        ["bash", str(LAUNCHER), "--agent", "claude-code"],
+        input=_payload(stop_hook_active=True),
+        capture_output=True,
+        text=True,
+        env={
+            **os.environ,
+            "EVIDENCE_SAMPLE_REPO": str(repo),
+            "EVIDENCE_SAMPLE_REF": "HEAD",
+        },
+    )
+
+    assert first.returncode == 2
+    assert repeated.returncode == 0
+    assert repeated.stdout == ""
+    assert repeated.stderr == ""

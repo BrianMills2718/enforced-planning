@@ -281,17 +281,10 @@ def _enforce_selected_outcome(
         )
     else:
         targets = decision.get("normalized_target_paths")
-        if (
-            not isinstance(targets, list)
-            or len(targets) != 1
-            or not isinstance(targets[0], str)
-            or not targets[0].strip()
+        if not isinstance(targets, list) or any(
+            not isinstance(target, str) or not target.strip() for target in targets
         ):
-            raise FastPreWriteError(
-                "hard selected outcome admission requires exactly one "
-                "normalized_target_paths entry in the ordinary allow decision"
-            )
-        target = targets[0]
+            raise FastPreWriteError("ordinary allow decision has invalid normalized_target_paths")
         source_value = decision.get("claim_source_file")
         if not isinstance(source_value, str) or not source_value.strip():
             raise FastPreWriteError("ordinary allow decision lacks exact claim_source_file for outcome admission")
@@ -305,25 +298,33 @@ def _enforce_selected_outcome(
         claim = coordination_claims.normalize_claim(payload, source_file=str(source))
         if claim is None:
             raise FastPreWriteError("exact outcome claim source cannot be normalized")
-        bootstrap_result = (
-            evaluate_claim_bootstrap_admission(
-                claim,
-                target_path=target,
-                ordinary_allowed=True,
+        # Bash authority is intentionally worktree-scoped, so its ordinary
+        # decision has no normalized file target. Selected admission supports
+        # that shape with ``target_path=None``. File tools may carry multiple
+        # targets; every target must remain inside the selected outcome scope.
+        target_paths: list[str | None] = targets or [None]
+        result = None
+        for target in target_paths:
+            bootstrap_result = (
+                evaluate_claim_bootstrap_admission(
+                    claim,
+                    target_path=target,
+                    ordinary_allowed=True,
+                )
+                if allow_bootstrap and target is not None
+                else None
             )
-            if allow_bootstrap
-            else None
-        )
-        if bootstrap_result is None:
-            result = evaluate_selected_claim_admission(
+            candidate = bootstrap_result or evaluate_selected_claim_admission(
                 claim,
                 boundary="prewrite",
                 ordinary_allowed=True,
                 renewal=False,
                 target_path=target,
             )
-        else:
-            result = bootstrap_result
+            result = candidate
+            if candidate.decision.disposition != "allow":
+                break
+        assert result is not None
     receipt = record_outcome_admission(
         result,
         receipt_path=receipt_path or DEFAULT_OUTCOME_ADMISSION_RECEIPT_PATH,
@@ -402,6 +403,16 @@ def main(argv: list[str] | None = None) -> int:
 
     outcome_admission_receipt = None
     enforce_selected_outcome = args.outcome_enforce_selected or outcome_mode == "enforce_selected"
+    # Outcome admission governs mutations. Provably read-only shell calls have
+    # already been admitted without repository identity, and the strict claim
+    # bootstrap command enforces its own bootstrap contract. Applying selected
+    # admission to either recreates the bootstrap trap this adapter exists to
+    # prevent.
+    outcome_exempt = decision.get("reason_code") in {
+        "bash_read_only",
+        "claim_bootstrap_command",
+    }
+    enforce_selected_outcome = enforce_selected_outcome and not outcome_exempt
     if enforce_selected_outcome:
         if mode != "enforce":
             message = "hard selected outcome admission requires ordinary --mode enforce"
@@ -454,7 +465,7 @@ def main(argv: list[str] | None = None) -> int:
         if outcome_admission_receipt is not None:
             admission = outcome_admission_receipt["result"]["decision"]
             return 0 if admission["disposition"] == "allow" else 2
-        return 0
+        return 2 if decision["decision"] == "deny" else 0
     outcome_notice = _outcome_notice(outcome_observation) if outcome_observation is not None else None
     if decision["decision"] == "deny":
         if outcome_notice is not None:

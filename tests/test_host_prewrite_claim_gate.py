@@ -232,27 +232,26 @@ def test_simple_read_only_bash_does_not_require_repository_or_claim(
     assert decision["reason_code"] == "bash_read_only"
 
 
-def test_compound_bash_requires_claim_even_when_each_command_is_read_only(tmp_path: Path) -> None:
-    _workspace, _repo, worktree, claims_dir, _claim_path = _fixture(tmp_path)
+def test_compound_bash_does_not_require_claim_when_every_command_is_read_only(tmp_path: Path) -> None:
     payload = _payload(
-        cwd=worktree,
+        cwd=tmp_path,
         tool="Bash",
         tool_input={"command": "git status --short && pwd"},
         session="wrong-session",
     )
 
-    decision = _evaluate(tmp_path, payload, claims_dir)
+    decision = _evaluate(tmp_path, payload, tmp_path / "missing-claims")
 
-    assert decision["decision"] == "deny"
-    assert decision["reason_code"] == "no_exact_claim"
+    assert decision["decision"] == "allow"
+    assert decision["reason_code"] == "bash_read_only"
 
 
-def test_compound_bash_is_allowed_with_exact_healthy_claim(tmp_path: Path) -> None:
+def test_compound_bash_with_a_mutation_requires_an_exact_healthy_claim(tmp_path: Path) -> None:
     _workspace, _repo, worktree, claims_dir, _claim_path = _fixture(tmp_path)
     payload = _payload(
         cwd=worktree,
         tool="Bash",
-        tool_input={"command": "git status --short && pwd"},
+        tool_input={"command": "git status --short && touch marker"},
     )
 
     decision = _evaluate(tmp_path, payload, claims_dir)
@@ -406,6 +405,20 @@ def test_explicit_host_mode_denies_unclaimed_mutating_bash_from_workspace_root(
     assert "Pre-write claim denied (repository_identity_unavailable)" in captured.err
 
 
+def test_json_mode_preserves_deny_exit_for_unclaimed_workspace_mutation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    payload = _payload(cwd=tmp_path, tool="Bash", tool_input={"command": "touch marker"})
+
+    code, decision = _run_cli(monkeypatch, capsys, tmp_path, payload)
+
+    assert code == 2
+    assert decision["decision"] == "deny"
+    assert decision["reason_code"] == "repository_identity_unavailable"
+
+
 @pytest.mark.parametrize(
     ("mode", "expected_decision"),
     [("off", "allow"), ("observe", "observe_violation")],
@@ -427,7 +440,7 @@ def test_explicit_host_mode_preserves_off_and_observe_semantics(
     assert decision["reason_code"] == "repository_identity_unavailable"
 
 
-def test_explicit_mode_preserves_repo_local_enforce_selected(
+def test_explicit_mode_applies_repo_local_enforce_selected_to_claimed_mutation(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -437,8 +450,13 @@ def test_explicit_mode_preserves_repo_local_enforce_selected(
         "meta_process:\n  claims:\n    outcome_admission_mode: enforce_selected\n",
         encoding="utf-8",
     )
-    payload = _payload(cwd=worktree, tool="Bash", tool_input={"command": "pwd"})
-    ordinary = {"decision": "allow", "reason_code": "bash_read_only", "receipt_id": "ordinary"}
+    payload = _payload(cwd=worktree, tool="Bash", tool_input={"command": "touch marker"})
+    ordinary = {
+        "decision": "allow",
+        "reason_code": "exact_live_claim",
+        "receipt_id": "ordinary",
+        "normalized_target_paths": [],
+    }
     observed: dict[str, object] = {}
 
     monkeypatch.setattr(prewrite_claim_gate, "evaluate_prewrite_fast", lambda *_args, **_kwargs: ordinary)
@@ -457,6 +475,35 @@ def test_explicit_mode_preserves_repo_local_enforce_selected(
     assert result["outcome_admission"]["result"]["decision"]["disposition"] == "allow"  # type: ignore[index]
     assert observed["decision"] is ordinary
     assert observed["allow_bootstrap"] is True
+
+
+def test_explicit_mode_exempts_read_only_bash_from_repo_local_enforce_selected(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _workspace, _repo, worktree, _claims_dir, _claim_path = _fixture(tmp_path)
+    (worktree / "meta-process.yaml").write_text(
+        "meta_process:\n  claims:\n    outcome_admission_mode: enforce_selected\n",
+        encoding="utf-8",
+    )
+    payload = _payload(
+        cwd=worktree,
+        tool="Bash",
+        tool_input={"command": "git status --short && pwd"},
+    )
+
+    def unexpected(*_args: object, **_kwargs: object) -> dict[str, object]:
+        raise AssertionError("read-only work must not enter outcome admission")
+
+    monkeypatch.setattr(prewrite_claim_gate, "_enforce_selected_outcome", unexpected)
+
+    code, result = _run_cli(monkeypatch, capsys, tmp_path, payload)
+
+    assert code == 0
+    assert result["decision"] == "allow"
+    assert result["reason_code"] == "bash_read_only"
+    assert "outcome_admission" not in result
 
 
 @pytest.mark.parametrize(

@@ -5,6 +5,17 @@
 
 set -e
 
+if [[ -n "${PYTHON_BIN:-}" ]]; then
+    :
+elif command -v python3 >/dev/null 2>&1; then
+    PYTHON_BIN=python3
+elif command -v python >/dev/null 2>&1; then
+    PYTHON_BIN=python
+else
+    echo "ERROR: pre-commit checks require Python 3, but no interpreter was found."
+    exit 1
+fi
+
 HOOK_MODE="${ENFORCED_PLANNING_HOOK_MODE:-warn}"
 case "$HOOK_MODE" in
     off|warn|block) ;;
@@ -225,7 +236,7 @@ find_script() {
 check_mode() {
     local check_name="$1"
     local declared
-    declared=$(python - "$REPO_ROOT" "$check_name" <<'PYEOF' 2>/dev/null || true
+    declared=$("$PYTHON_BIN" - "$REPO_ROOT" "$check_name" <<'PYEOF' 2>/dev/null || true
 import sys
 try:
     import yaml
@@ -283,7 +294,7 @@ handle_failure() {
 VERIFICATION_BATCH=$(find_script "verification_batch.py")
 if [[ -n "$VERIFICATION_BATCH" ]]; then
     echo "Checking verification batch freeze..."
-    if ! python "$VERIFICATION_BATCH" --repo-root "$REPO_ROOT" check; then
+    if ! "$PYTHON_BIN" "$VERIFICATION_BATCH" --repo-root "$REPO_ROOT" check; then
         echo ""
         echo "ERROR: This branch is frozen for exact terminal verification."
         echo "Queue unrelated work in the next batch. For a blocker in the frozen"
@@ -302,7 +313,7 @@ fi
 ARTIFACT_CREATION=$(find_script "artifact_creation.py")
 if [[ -n "$ARTIFACT_CREATION" ]]; then
     echo "Checking newly staged artifact creation policy..."
-    if ! python "$ARTIFACT_CREATION" check --repo-root "$REPO_ROOT"; then
+    if ! "$PYTHON_BIN" "$ARTIFACT_CREATION" check --repo-root "$REPO_ROOT"; then
         echo ""
         echo "New tracked artifact violates the configured directory or intent policy."
         echo "Run 'python $ARTIFACT_CREATION check --repo-root $REPO_ROOT --json' for details."
@@ -315,7 +326,7 @@ fi
 LOCKED_COUPLINGS=$(find_script "check_locked_couplings.py")
 if [[ -n "$LOCKED_COUPLINGS" ]]; then
     echo "Checking locked couplings..."
-    if ! python "$LOCKED_COUPLINGS" --strict; then
+    if ! "$PYTHON_BIN" "$LOCKED_COUPLINGS" --strict; then
         echo ""
         echo "Locked coupling finding: update a coupled document only when its"
         echo "named decision or contract actually changed."
@@ -333,7 +344,7 @@ if [[ -n "$DOC_COUPLING" ]]; then
     if [[ -f "$REPO_ROOT/.doc-coupling-acks" ]]; then
         DOC_COUPLING_ARGS+=(--ack-file "$REPO_ROOT/.doc-coupling-acks")
     fi
-    if ! python "$DOC_COUPLING" "${DOC_COUPLING_ARGS[@]}"; then
+    if ! "$PYTHON_BIN" "$DOC_COUPLING" "${DOC_COUPLING_ARGS[@]}"; then
         echo ""
         echo "Doc-coupling finding detected."
         echo "Run 'python $DOC_COUPLING --suggest' to see which docs to update."
@@ -349,7 +360,7 @@ fi
 REACHABILITY=$(find_script "check_reachability.py")
 if [[ -n "$REACHABILITY" ]] && [[ "${REACHABILITY_RATCHET:-on}" != "off" ]]; then
     echo "Checking module reachability..."
-    if ! python "$REACHABILITY" --project-root "$REPO_ROOT" --check; then
+    if ! "$PYTHON_BIN" "$REACHABILITY" --project-root "$REPO_ROOT" --check; then
         echo ""
         echo "Reachability regression: a module became unreachable from every"
         echo "declared entrypoint since the baseline."
@@ -368,7 +379,7 @@ fi
 STAGED_SRC=$(echo "$STAGED_PY" | grep '^src/' || true)
 if [[ -n "$STAGED_SRC" ]] && command -v mypy >/dev/null 2>&1; then
     echo "Running mypy on changed files..."
-    if ! python -m mypy --strict --ignore-missing-imports --follow-imports=silent $STAGED_SRC; then
+    if ! "$PYTHON_BIN" -m mypy --strict --ignore-missing-imports --follow-imports=silent $STAGED_SRC; then
         echo ""
         echo "Mypy type check failed."
         echo ""
@@ -382,7 +393,7 @@ if [[ -n "$CHECK_CAPS" ]]; then
     STAGED_PLAN_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep '^docs/plans/.*\.md$' || true)
     if [[ -n "$STAGED_PLAN_FILES" ]]; then
         echo "Checking plan Capabilities sections..."
-        if ! python "$CHECK_CAPS" $STAGED_PLAN_FILES --strict 2>/dev/null; then
+        if ! "$PYTHON_BIN" "$CHECK_CAPS" $STAGED_PLAN_FILES --strict 2>/dev/null; then
             echo ""
             echo "ERROR: Cross-project plan missing Capabilities section!"
             echo "Run 'python $CHECK_CAPS docs/plans/' to see all warnings."
@@ -398,7 +409,7 @@ if [[ -n "$SYNC_STATUS" ]]; then
     STAGED_PLANS=$(git diff --cached --name-only --diff-filter=ACM | grep '^docs/plans/' || true)
     if [[ -n "$STAGED_PLANS" ]]; then
         echo "Checking plan status consistency..."
-        if ! python "$SYNC_STATUS" --check 2>/dev/null; then
+        if ! "$PYTHON_BIN" "$SYNC_STATUS" --check 2>/dev/null; then
             echo ""
             echo "ERROR: Plan status inconsistency detected!"
             echo "Run 'python $SYNC_STATUS --check' to see details"
@@ -412,7 +423,7 @@ fi
 DEAD_CODE=$(find_script "check_dead_code.py")
 if [[ -n "$DEAD_CODE" ]] && [[ -n "$STAGED_PY" ]]; then
     echo "Checking for dead code..."
-    if ! python "$DEAD_CODE"; then
+    if ! "$PYTHON_BIN" "$DEAD_CODE"; then
         echo ""
         echo "Dead code check failed."
         echo "Run 'python $DEAD_CODE' to see details."
@@ -452,7 +463,7 @@ if [[ -n "$TERM_LINTER" ]] && [[ -f "$VOCAB_PACK" ]]; then
     STAGED_MD=$(git diff --cached --name-only --diff-filter=ACM | grep '\.md$' | grep -v '^vision/archive/' | grep -v '^docs/ops/archive/' | grep -v '^tests/fixtures/' || true)
     if [[ -n "$STAGED_MD" ]]; then
         echo "Checking terminology in staged markdown files..."
-        if ! python "$TERM_LINTER" --files $STAGED_MD 2>/dev/null; then
+        if ! "$PYTHON_BIN" "$TERM_LINTER" --files $STAGED_MD 2>/dev/null; then
             echo ""
             echo "ERROR: Deprecated terminology found in staged files!"
             echo "Run 'python $TERM_LINTER --files <file>' to see violations."

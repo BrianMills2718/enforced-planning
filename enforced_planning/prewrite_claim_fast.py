@@ -59,11 +59,17 @@ _CUSTOM_PATCH_PATH = re.compile(r"^\*\*\* (?:Add|Update|Delete) File: (.+)$")
 _CUSTOM_MOVE_PATH = re.compile(r"^\*\*\* Move to: (.+)$")
 _UNIFIED_PATCH_PATH = re.compile(r"^(?:---|\+\+\+) (.+)$")
 _SHELL_CONTROL = frozenset({";", "&", "&&", "|", "||", ">", ">>", "<", "<<", "<<<", "2>", "2>>"})
+_READ_ONLY_SEPARATORS = frozenset({";", "&&", "||", "|"})
 _SIMPLE_READ_ONLY_COMMANDS = frozenset(
     {
+        ":",
+        "cd",
+        "echo",
+        "false",
         "grep",
         "head",
         "ls",
+        "printf",
         "pwd",
         "readlink",
         "realpath",
@@ -71,6 +77,8 @@ _SIMPLE_READ_ONLY_COMMANDS = frozenset(
         "stat",
         "tail",
         "test",
+        "true",
+        "type",
         "wc",
         "which",
     }
@@ -143,8 +151,16 @@ def _patch_paths(command: str) -> tuple[str, ...]:
     return tuple(dict.fromkeys(path for path in paths if path))
 
 
-def _shell_tokens(command: str) -> tuple[str, ...] | None:
-    """Return one simple shell argv, or ``None`` for compound/ambiguous input."""
+def _shell_commands(command: str) -> tuple[tuple[str, ...], ...] | None:
+    """Return safely separated shell argv groups, or ``None`` when ambiguous.
+
+    Read-only inspection commonly chains commands or pipes output.  Treating
+    every control operator as a possible write made ``pwd && ls`` require a
+    repository claim, including at a non-repository workspace root.  We accept
+    only separators whose every component can be proved read-only; background
+    execution, redirection, substitutions, and malformed groups still fail
+    closed.
+    """
 
     if not command.strip() or "\n" in command or "\r" in command:
         return None
@@ -156,11 +172,26 @@ def _shell_tokens(command: str) -> tuple[str, ...] | None:
         tokens = tuple(lexer)
     except ValueError:
         return None
-    if not tokens or any(token in _SHELL_CONTROL or set(token) <= set(";&|<>") for token in tokens):
+    if not tokens:
         return None
-    if "=" in tokens[0] and not tokens[0].startswith(("/", "./")):
+    commands: list[tuple[str, ...]] = []
+    current: list[str] = []
+    for token in tokens:
+        if token in _READ_ONLY_SEPARATORS:
+            if not current:
+                return None
+            commands.append(tuple(current))
+            current = []
+            continue
+        if token in _SHELL_CONTROL or set(token) <= set(";&|<>"):
+            return None
+        current.append(token)
+    if not current:
         return None
-    return tokens
+    commands.append(tuple(current))
+    if any("=" in argv[0] and not argv[0].startswith(("/", "./")) for argv in commands):
+        return None
+    return tuple(commands)
 
 
 def _git_command_is_read_only(argv: tuple[str, ...]) -> bool:
@@ -205,9 +236,9 @@ def classify_bash_command(
 ) -> str:
     """Classify Bash without executing it.
 
-    Only a single provably read-only command and the separately validated claim
-    bootstrap escape hatch bypass ordinary claim admission.  Everything else,
-    including compound read-only shell, requires an exact live claim.
+    A command bypasses ordinary claim admission only when every shell component
+    is provably read-only, or when the separately validated claim bootstrap
+    escape hatch accepts it.
     """
 
     if claim_bootstrap_classifier is not None:
@@ -216,22 +247,35 @@ def classify_bash_command(
                 return "claim_bootstrap"
         except Exception:  # noqa: BLE001 -- classifier failure must fail closed
             return "claim_required"
-    argv = _shell_tokens(command)
-    if argv is None:
+    commands = _shell_commands(command)
+    if commands is None:
         return "claim_required"
+
+    if all(_argv_is_read_only(argv) for argv in commands):
+        return "read_only"
+    return "claim_required"
+
+
+def _argv_is_read_only(argv: tuple[str, ...]) -> bool:
+    """Return whether one already-tokenized shell component is read-only."""
+
     executable_token = argv[0]
     if Path(executable_token).name != executable_token:
-        return "claim_required"
+        return False
     executable = executable_token
     if executable in _SIMPLE_READ_ONLY_COMMANDS:
-        if executable == "rg" and any(token == "--pre" or token.startswith("--pre=") for token in argv[1:]):
-            return "claim_required"
-        return "read_only"
+        return not (
+            executable == "rg"
+            and any(
+                token == "--pre" or token.startswith("--pre=")
+                for token in argv[1:]
+            )
+        )
     if executable == "sed":
         tail = argv[1:]
         if len(tail) < 2 or tail[0] not in {"-n", "--quiet", "--silent"}:
-            return "claim_required"
-        return "read_only" if re.fullmatch(r"\d+(?:,\d+)?p", tail[1]) else "claim_required"
+            return False
+        return re.fullmatch(r"\d+(?:,\d+)?p", tail[1]) is not None
     if executable == "find":
         mutating = {
             "-delete",
@@ -244,10 +288,8 @@ def classify_bash_command(
             "-ok",
             "-okdir",
         }
-        return "claim_required" if any(token in mutating for token in argv[1:]) else "read_only"
-    if executable == "git" and _git_command_is_read_only(argv):
-        return "read_only"
-    return "claim_required"
+        return not any(token in mutating for token in argv[1:])
+    return executable == "git" and _git_command_is_read_only(argv)
 
 
 def adapt_native_payload(

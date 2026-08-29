@@ -1,0 +1,60 @@
+{
+  "schema_version": "1.0.0",
+  "scenario_id": "portable-governance-runtime-consumers",
+  "contract": {
+    "schema_version": "1.1.0",
+    "outcome_id": "portable-governance-runtime-consumers",
+    "owner_class": "brian",
+    "project_id": "enforced-planning",
+    "lineage_id": "portable-governance-wiki-profile",
+    "portfolio_class": "maintenance",
+    "predecessor_lineage_ids": ["planning-integrity-semantic-admission"],
+    "intended_consumer": "Agents and developers using installed Enforced Planning native hooks",
+    "outcome": "The default-on governance profile controls actual native enforcement, while one master false value suppresses governance blocks without deleting installed state or losing configured modes.",
+    "canonical_journey": {
+      "starting_state": "A disposable governed repository is installed with native hook consumers and configured enforce modes.",
+      "input": "The effective project profile, native prewrite and artifact gates, hook generation, plan validation, pre-commit behavior, and the master governance switch.",
+      "action": "Run native both-sign checks with the master absent, false, and restored true; also exercise stale-projection and restricted-bootstrap recovery.",
+      "observable_result": "Absent or true preserves configured enforcement, false makes every governed consumer non-blocking while preserving configuration, and recovery feedback names an admissible executable action.",
+      "failure_signal": "Any native consumer ignores master false, defaults the master off, rewrites configured modes, or recommends a recovery command that the same gate blocks."
+    },
+    "baseline_revision": "5b5b8c094d3dccc3c58ff745f0d411e58b80543c",
+    "allowed_scope": [
+      "examples/owner-real-outcome-admission/plan128-runtime-scenario.json",
+      "examples/owner-real-outcome-admission/plan128-runtime-allocation.json",
+      "examples/owner-real-outcome-admission/plan128-runtime-disposition.json",
+      "enforced_planning/effective_project_profile.py",
+      "enforced_planning/artifact_creation.py",
+      "enforced_planning/plan_validation.py",
+      "enforced_planning/hook_wiring.py",
+      "scripts/prewrite_claim_gate.py",
+      "hooks/git/pre-commit",
+      "tests/test_host_prewrite_claim_gate.py",
+      "tests/test_artifact_creation.py",
+      "tests/test_generate_hook_wiring.py",
+      "tests/test_pre_commit_hook.py",
+      "tests/test_effective_project_profile.py",
+      "tests/test_install_governed_repo.py",
+      "docs/reference/CONFIG_REFERENCE.md",
+      "GETTING_STARTED.md",
+      "docs/plans/128_portable_governance_and_wiki_profile.md",
+      "docs/plans/128_portable_governance_and_wiki_profile_work_graph.json"
+    ],
+    "progress_dimensions": [
+      "native consumer adoption",
+      "master-off both-sign behavior",
+      "actionable bootstrap recovery",
+      "disposable installed-project proof"
+    ]
+  },
+  "receipts": [],
+  "request": {
+    "schema_version": "1.0.0",
+    "operation": "product_write",
+    "target_path": "scripts/prewrite_claim_gate.py",
+    "ordinary_approval": true,
+    "approval_text": "User authorized Plan 128 runtime consumer implementation",
+    "cost_telemetry_usd": "0",
+    "elapsed_telemetry_seconds": 0
+  }
+}

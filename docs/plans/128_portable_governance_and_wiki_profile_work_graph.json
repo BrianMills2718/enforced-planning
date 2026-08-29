@@ -67,6 +67,9 @@
       "outputs": ["Runtime consumer bindings", "Focused both-sign tests", "Disposable native-hook receipt", "Actionable recovery messages"],
       "dependencies": ["pgw-01-effective-profile-vertical"],
       "conflict_surfaces": [
+        {"kind": "repository_path", "target": "examples/owner-real-outcome-admission/plan128-runtime-scenario.json", "repository": "enforced-planning", "access": "exclusive"},
+        {"kind": "repository_path", "target": "examples/owner-real-outcome-admission/plan128-runtime-allocation.json", "repository": "enforced-planning", "access": "exclusive"},
+        {"kind": "repository_path", "target": "examples/owner-real-outcome-admission/plan128-runtime-disposition.json", "repository": "enforced-planning", "access": "exclusive"},
         {"kind": "repository_path", "target": "scripts/prewrite_claim_gate.py", "repository": "enforced-planning", "access": "exclusive"},
         {"kind": "repository_path", "target": "enforced_planning/artifact_creation.py", "repository": "enforced-planning", "access": "exclusive"},
         {"kind": "repository_path", "target": "enforced_planning/plan_validation.py", "repository": "enforced-planning", "access": "exclusive"},

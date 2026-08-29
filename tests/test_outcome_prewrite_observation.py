@@ -854,7 +854,7 @@ def test_native_ordinary_deny_and_observation_error_keep_original_exit_authority
     )
 
     assert denied.returncode == 2
-    assert "Pre-write claim denied (path_outside_claim)" in denied.stderr
+    assert "BLOCKED [prewrite/path_outside_claim]" in denied.stderr
     assert "would_allow" in denied.stdout
     records = load_observation_records(tmp_path / "outcome-cli.jsonl")
     assert len(records) == 1

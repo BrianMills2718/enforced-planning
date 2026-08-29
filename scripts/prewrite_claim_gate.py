@@ -28,6 +28,46 @@ class NonGitWorkingDirectory(FastPreWriteError):
     """The native hook cwd is outside a Git checkout."""
 
 
+_DENIAL_SUMMARIES = {
+    "ambiguous_exact_claim": "More than one claim matches this repository lane.",
+    "ambiguous_exact_session_target": "More than one healthy claim could select the session target.",
+    "bash_path_outside_worktree": "The command names a mutation path outside the claimed worktree.",
+    "bash_runtime_workdir_unattested": "The shell command does not prove it will run in the claimed worktree.",
+    "bash_target_unprovable": "The command uses a target that cannot be resolved safely from the hook payload.",
+    "claim_not_healthy": "The matching claim is stale, incomplete, or otherwise unhealthy.",
+    "no_exact_claim": "This session has no exact live claim for the target worktree.",
+    "path_outside_claim": "The mutation target is outside the claim's declared write paths.",
+    "projection_unavailable_or_stale": "The claim authority projection is unavailable or stale.",
+    "repository_identity_unavailable": "The target repository could not be resolved from this event.",
+}
+
+
+def _compact_detail(value: object, *, limit: int = 240) -> str:
+    compact = " ".join(str(value).split())
+    return compact if len(compact) <= limit else compact[: limit - 1].rstrip() + "…"
+
+
+def _native_denial_message(decision: dict[str, Any]) -> str:
+    """Render one compact actionable denial; full diagnostics stay in receipts/JSON."""
+
+    reason = str(decision.get("reason_code") or "unknown")
+    summary = _DENIAL_SUMMARIES.get(reason, "The requested mutation lacks verified authority.")
+    lines = [f"BLOCKED [prewrite/{reason}]", f"Why: {summary}"]
+    details = decision.get("details")
+    if isinstance(details, list) and details and reason not in {
+        "projection_unavailable_or_stale",
+        "repository_identity_unavailable",
+    }:
+        rendered = "; ".join(_compact_detail(item) for item in details[:2])
+        if len(details) > 2:
+            rendered += f"; +{len(details) - 2} more"
+        lines.append(f"Details: {rendered}")
+    recovery = decision.get("recovery")
+    if recovery:
+        lines.append(f"Next: {_compact_detail(recovery, limit=600)}")
+    return "\n".join(lines)
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--client", required=True, choices=("codex", "claude-code"))
@@ -647,13 +687,7 @@ def main(argv: list[str] | None = None) -> int:
     if decision["decision"] == "deny":
         if outcome_notice is not None:
             print(_native_notice(outcome_notice))
-        detail = ", ".join(decision["details"])
-        message = f"Pre-write claim denied ({decision['reason_code']})"
-        if detail:
-            message += f": {detail}"
-        if decision["recovery"]:
-            message += f". {decision['recovery']}"
-        print(message, file=sys.stderr)
+        print(_native_denial_message(decision), file=sys.stderr)
         return 2
     if decision["decision"] == "observe_violation":
         message = f"OBSERVE ONLY: pre-write claim violation ({decision['reason_code']})."

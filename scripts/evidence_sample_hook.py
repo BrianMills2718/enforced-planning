@@ -217,6 +217,11 @@ def main(argv: list[str] | None = None) -> int:
         # Fail open on a malformed payload: this gate must never strand a session.
         print(f"evidence-sample gate skipped: {exc}", file=sys.stderr)
         return 0
+    if payload.get("stop_hook_active"):
+        # Claude re-fires Stop after a hook blocks. Repeating the same refusal
+        # cannot produce the missing sample and strands the session in a loop;
+        # teach once, then let the re-fired Stop end the turn.
+        return 0
     decision, detail = classify_report(payload["last_assistant_message"])
     if decision == "block_count_without_sample":
         print(detail, file=sys.stderr)

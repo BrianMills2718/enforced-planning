@@ -14,11 +14,12 @@ from pathlib import Path
 HOOK = Path(__file__).resolve().parents[1] / "scripts" / "evidence_sample_hook.py"
 
 
-def _run(report: str) -> subprocess.CompletedProcess:
+def _run(report: str, *, stop_hook_active: bool = False) -> subprocess.CompletedProcess:
     payload = {
         "hook_event_name": "Stop",
         "session_id": "test",
         "last_assistant_message": report,
+        "stop_hook_active": stop_hook_active,
     }
     return subprocess.run(
         [sys.executable, str(HOOK), "--agent", "claude-code"],
@@ -52,6 +53,20 @@ def test_it_allows_the_same_report_once_a_sample_is_shown():
         "- **Next** — the comparator is grading free text."
     )
     assert result.returncode == 0, result.stderr
+
+
+def test_a_refired_stop_is_never_blocked_again():
+    report = (
+        "- **Done** — measured it.\n"
+        "- **Concerns** — 20 mismatches remain without a sample."
+    )
+
+    first = _run(report)
+    repeated = _run(report, stop_hook_active=True)
+
+    assert first.returncode == 2
+    assert repeated.returncode == 0
+    assert repeated.stderr == ""
 
 
 def test_a_malformed_payload_fails_open():

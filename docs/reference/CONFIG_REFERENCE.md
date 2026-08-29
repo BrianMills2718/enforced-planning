@@ -108,6 +108,25 @@ stale, which is visible in `observe` and correctly denied in `enforce`.
 The current adapters cover Claude `Edit|Write` and Codex `apply_patch`; they do
 not provide OS-level protection or infer arbitrary shell write targets.
 
+### Host repository-authority provider
+
+Workspace-root mutation bootstrap uses a host-level provider configuration at
+`~/.config/enforced-planning/repository-authority-provider-v1.json`; it is not a
+`meta-process.yaml` key. The strict v1 object contains only:
+
+```json
+{"schema_version":"1.0","provider_path":"/absolute/executable","provider_sha256":"<64 lowercase hex>"}
+```
+
+The config and executable must not be group/world writable, and the executable
+must match the pinned digest. Enforced Planning supplies the inspected canonical
+Git root, GitHub owner/repository identity, and exact remote URL. The provider
+returns one allow decision with a stable project id and default branch, bound to
+the same identity and URL. Missing, malformed, ambiguous, timed-out, unbound, or
+digest-mismatched providers fail closed before a branch, claim, directory, or
+worktree is created. The provider owns personal or organizational eligibility
+policy; the portable framework owns only this protocol and its safety checks.
+
 `outcome_admission_mode: enforce_selected` is a separate, stricter source
 continuation gate. It requires ordinary `prewrite_mode: enforce`, derives the
 exact selected outcome from the claim-linked tracker, and records admission

@@ -13,7 +13,6 @@ import os
 import re
 import secrets
 import subprocess
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated, Any, Literal
 from urllib.parse import urlparse
@@ -21,6 +20,11 @@ from urllib.parse import urlparse
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, field_validator, model_validator
 
 from enforced_planning import coordination_claims, session_contracts, session_lifecycle
+from enforced_planning.repository_authority import (
+    RepositoryAuthority,
+    RepositoryAuthorityError,
+    resolve_repository_authority,
+)
 
 AgentName = Literal["codex", "claude-code", "openclaw"]
 ClaimType = Literal["program", "write", "review", "research"]
@@ -164,19 +168,6 @@ ClaimBootstrapRequest = Annotated[
 ]
 _REQUEST_ADAPTER = TypeAdapter(ClaimBootstrapRequest)
 SESSION_TRACKERS_DIR = session_contracts.DEFAULT_SESSION_TRACKERS_DIR
-DEFAULT_PROJECT_GRAPH_PATH = Path.home() / "code" / "active" / "project-meta" / "PROJECT_GRAPH.json"
-
-
-@dataclass(frozen=True)
-class ProjectGraphRepositoryAuthority:
-    """Exact Project Graph authority for one local repository target."""
-
-    project_id: str
-    github_repo: str
-    default_branch: str
-    remote_url: str
-
-
 def _git(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         ["git", "-c", "core.hooksPath=/dev/null", "-C", str(repo), *args],
@@ -243,12 +234,8 @@ def _resolved_ssh_hostname(host: str) -> str:
     return hostnames[0]
 
 
-def _project_graph_authority(
-    repo: Path,
-    *,
-    project_graph_path: Path = DEFAULT_PROJECT_GRAPH_PATH,
-) -> ProjectGraphRepositoryAuthority:
-    """Authorize an exact Git root from one active Brian-owned graph record."""
+def _repository_authority(repo: Path) -> RepositoryAuthority:
+    """Inspect repository identity, then delegate policy to the installed adapter."""
 
     identity = _git(repo, "rev-parse", "--show-toplevel")
     if identity.returncode != 0 or Path(identity.stdout.strip()).resolve() != repo:
@@ -259,56 +246,18 @@ def _project_graph_authority(
     remote_url = remote.stdout.strip()
     github_repo = _github_repo_from_remote(remote_url)
     try:
-        records = json.loads(project_graph_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        raise ClaimBootstrapError(f"Project Graph is unavailable or invalid: {exc}") from exc
-    if not isinstance(records, list):
-        raise ClaimBootstrapError("Project Graph root must be a list")
-    matches = [
-        record
-        for record in records
-        if isinstance(record, dict)
-        and record.get("record_kind") == "repository"
-        and record.get("status") == "active"
-        and str(record.get("github_repo", "")).casefold() == github_repo.casefold()
-    ]
-    if len(matches) != 1:
-        raise ClaimBootstrapError(
-            f"origin {github_repo} must match exactly one Project Graph repository record; found {len(matches)}"
+        return resolve_repository_authority(
+            repo_root=repo,
+            repository_identity=github_repo,
+            remote_url=remote_url,
         )
-    record = matches[0]
-    governance = record.get("repository_governance")
-    if not isinstance(governance, dict):
-        raise ClaimBootstrapError("Project Graph record lacks repository governance")
-    approved = governance.get("approved_remote_owners")
-    remote_owner = github_repo.split("/", 1)[0]
-    if (
-        governance.get("owner_class") not in {"brian", "personal"}
-        or not isinstance(approved, list)
-        or remote_owner.casefold() not in {str(owner).casefold() for owner in approved}
-        or governance.get("mutation_authority") != "normal_push"
-    ):
-        raise ClaimBootstrapError("Project Graph record does not grant Brian-owned mutation authority")
-    project_id = record.get("id")
-    default_branch = record.get("default_branch")
-    if not isinstance(project_id, str) or not project_id.strip():
-        raise ClaimBootstrapError("Project Graph record has no stable project id")
-    if not isinstance(default_branch, str) or not default_branch.strip():
-        raise ClaimBootstrapError("Project Graph record has no default branch")
-    checked = subprocess.run(
-        ["git", "check-ref-format", "--branch", default_branch],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if checked.returncode != 0:
-        raise ClaimBootstrapError("Project Graph default branch is invalid")
-    return ProjectGraphRepositoryAuthority(project_id, github_repo, default_branch, remote_url)
+    except RepositoryAuthorityError as exc:
+        raise ClaimBootstrapError(str(exc)) from exc
 
 
 def _fresh_remote_default_revision(
     repo: Path,
-    authority: ProjectGraphRepositoryAuthority,
+    authority: RepositoryAuthority,
 ) -> str:
     """Fetch and resolve the graph-declared remote default before lane creation."""
 
@@ -783,10 +732,10 @@ def _execute_maintenance_worktree(
     """Create one unplanned worktree and exact claim as a typed transaction."""
 
     repo = Path(request.repo_root).resolve()
-    authority = _project_graph_authority(repo)
+    authority = _repository_authority(repo)
     if request.project != authority.project_id:
         raise ClaimBootstrapError(
-            f"project must match Project Graph id {authority.project_id!r} for origin {authority.github_repo}"
+            f"project must match provider id {authority.project_id!r} for origin {authority.repository_identity}"
         )
     checked = subprocess.run(
         ["git", "check-ref-format", "--branch", request.branch],
@@ -949,7 +898,7 @@ def _execute_maintenance_worktree(
         return {
             **payload,
             "project_graph_id": authority.project_id,
-            "github_repo": authority.github_repo,
+                "github_repo": authority.repository_identity,
             "default_branch": authority.default_branch,
             "start_revision": starting_head,
         }
@@ -1023,7 +972,7 @@ __all__ = [
     "HeartbeatRequest",
     "MaintenanceWorktreeRequest",
     "ProgressRequest",
-    "ProjectGraphRepositoryAuthority",
+    "RepositoryAuthority",
     "SessionStartOrUpdateRequest",
     "canonical_script_path",
     "execute_request",

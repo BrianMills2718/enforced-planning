@@ -14,18 +14,12 @@ import time
 from pathlib import Path
 from typing import Any
 
-
-DEFAULT_INTERVAL_SECONDS = 15 * 60
+DEFAULT_INTERVAL_SECONDS = 45 * 60
 MESSAGE = (
-    "GOAL-EQUIVALENCE PULSE (non-blocking): Re-read the accepted user outcome and canonical example. "
-    "Check: (1) is the artifact now being built the same kind, scope, count, and depth; (2) what "
-    "user-visible result changed since the last pulse; (3) is current work outcome-bearing, a demonstrated "
-    "direct blocker, an enabler, or hardening; and (4) what single next action closes the largest remaining "
-    "gap? If deliverable equivalence is no or unclear, or two increments were non-outcome work, create and "
-    "validate ExecutionProgressCheckpointV1 now. Preserve the accepted outcome and switch reversible "
-    "in-scope tactics autonomously. Restart context only when that validated checkpoint requires a capsule "
-    "or the phase changed. Do not create an artifact, plan, audit, checklist, approval pause, or context "
-    "reset solely because of this pulse."
+    "COURSE CHECK (advisory, non-blocking): What user-visible result changed in the last 45 minutes, "
+    "and what single next action best advances the accepted outcome? If the current work is deliberate "
+    "maintenance, diagnosis, or waiting, continue without ceremony. Otherwise, change reversible tactics "
+    "when the honest answer is 'none'. Do not create a plan, report, or approval pause solely for this check."
 )
 SUPPORTED_EVENTS = {"SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop"}
 
@@ -50,7 +44,7 @@ def read_event() -> dict[str, Any]:
 
     payload = json.loads(sys.stdin.read())
     if not isinstance(payload, dict):
-        raise ValueError("hook input must be a JSON object")
+        raise TypeError("hook input must be a JSON object")
     for field in ("session_id", "hook_event_name"):
         if not isinstance(payload.get(field), str) or not payload[field].strip():
             raise ValueError(f"hook input requires non-empty {field!r}")
@@ -161,7 +155,7 @@ def main(argv: list[str] | None = None) -> int:
             now_epoch=args.now_epoch if args.now_epoch is not None else time.time(),
         ):
             print(render(args.agent, event_name, MESSAGE))
-    except (json.JSONDecodeError, OSError, ValueError) as exc:
+    except (json.JSONDecodeError, OSError, TypeError, ValueError) as exc:
         warning = f"juice checkpoint unavailable: {type(exc).__name__}: {exc}"
         print(render(args.agent, event_name, warning))
     return 0

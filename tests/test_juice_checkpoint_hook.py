@@ -5,7 +5,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "juice_checkpoint_hook.py"
 
@@ -44,7 +43,7 @@ def invoke(
     )
 
 
-def test_codex_injects_once_per_15_minutes_at_post_tool_boundary(tmp_path: Path) -> None:
+def test_codex_injects_once_per_45_minutes_at_post_tool_boundary(tmp_path: Path) -> None:
     """The timer stays silent before the interval and suppresses immediate repeats."""
 
     state_dir = tmp_path / "state"
@@ -52,31 +51,28 @@ def test_codex_injects_once_per_15_minutes_at_post_tool_boundary(tmp_path: Path)
         agent="codex", state_dir=state_dir, session_id="codex-one", event_name="PostToolUse", now_epoch=1_000
     )
     early = invoke(
-        agent="codex", state_dir=state_dir, session_id="codex-one", event_name="PostToolUse", now_epoch=1_899
+        agent="codex", state_dir=state_dir, session_id="codex-one", event_name="PostToolUse", now_epoch=3_699
     )
     due = invoke(
-        agent="codex", state_dir=state_dir, session_id="codex-one", event_name="PostToolUse", now_epoch=1_900
+        agent="codex", state_dir=state_dir, session_id="codex-one", event_name="PostToolUse", now_epoch=3_700
     )
     repeat = invoke(
-        agent="codex", state_dir=state_dir, session_id="codex-one", event_name="PostToolUse", now_epoch=1_901
+        agent="codex", state_dir=state_dir, session_id="codex-one", event_name="PostToolUse", now_epoch=3_701
     )
     due_again = invoke(
-        agent="codex", state_dir=state_dir, session_id="codex-one", event_name="PostToolUse", now_epoch=2_800
+        agent="codex", state_dir=state_dir, session_id="codex-one", event_name="PostToolUse", now_epoch=6_400
     )
 
     assert first.returncode == 0 and first.stdout == ""
     assert early.returncode == 0 and early.stdout == ""
     message = json.loads(due.stdout)["systemMessage"]
-    assert "GOAL-EQUIVALENCE PULSE (non-blocking)" in message
-    assert "accepted user outcome and canonical example" in message
-    assert "same kind, scope, count, and depth" in message
+    assert "COURSE CHECK (advisory, non-blocking)" in message
     assert "user-visible result changed" in message
-    assert "current work outcome-bearing" in message
-    assert "single next action closes the largest remaining gap" in message
-    assert "ExecutionProgressCheckpointV1" in message
-    assert "Restart context only when" in message
+    assert "single next action best advances the accepted outcome" in message
+    assert "maintenance, diagnosis, or waiting" in message
+    assert "Do not create a plan, report, or approval pause" in message
     assert repeat.returncode == 0 and repeat.stdout == ""
-    assert "GOAL-EQUIVALENCE PULSE (non-blocking)" in json.loads(due_again.stdout)["systemMessage"]
+    assert "COURSE CHECK (advisory, non-blocking)" in json.loads(due_again.stdout)["systemMessage"]
 
 
 def test_session_start_resets_timer_and_claude_uses_additional_context(tmp_path: Path) -> None:
@@ -95,18 +91,18 @@ def test_session_start_resets_timer_and_claude_uses_additional_context(tmp_path:
         state_dir=state_dir,
         session_id="claude-one",
         event_name="PostToolUse",
-        now_epoch=1_899,
+        now_epoch=3_699,
     ).stdout == ""
     due = invoke(
         agent="claude-code",
         state_dir=state_dir,
         session_id="claude-one",
         event_name="PostToolUse",
-        now_epoch=1_900,
+        now_epoch=3_700,
     )
     payload = json.loads(due.stdout)
     assert payload["hookSpecificOutput"]["hookEventName"] == "PostToolUse"
-    assert "GOAL-EQUIVALENCE PULSE (non-blocking)" in payload["hookSpecificOutput"]["additionalContext"]
+    assert "COURSE CHECK (advisory, non-blocking)" in payload["hookSpecificOutput"]["additionalContext"]
 
 
 def test_non_checkpoint_events_are_silent_and_malformed_input_warns_without_failing(tmp_path: Path) -> None:

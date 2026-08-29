@@ -344,10 +344,16 @@ def _active_claims(claims_dir: Path | None, *, turn_end: bool = False) -> tuple[
             _repair_turn_end_projection(resolved)
             repaired = True
             projection = load_projection()
-        if not turn_end:
-            registry_digest = prewrite_claim_fast.registry_digest(resolved)
+        registry_digest = prewrite_claim_fast.registry_digest(resolved)
+        if projection.registry_digest != registry_digest:
+            if turn_end and not repaired:
+                _repair_turn_end_projection(resolved)
+                repaired = True
+                projection = load_projection()
+                registry_digest = prewrite_claim_fast.registry_digest(resolved)
             if projection.registry_digest != registry_digest:
-                raise RepositoryCloseoutError(
+                error_type = TurnEndProjectionError if turn_end else RepositoryCloseoutError
+                raise error_type(
                     "active-claim projection is stale relative to the canonical claim registry"
                 )
         now = datetime.now(UTC)

@@ -47,6 +47,60 @@ Important rule: **claims are canonical, lanes are derived**. Do not invent a
 second mutable lane registry by hand. Update claims; regenerate readable lane
 surfaces from them.
 
+The user-facing role is **Project Manager**: it prepares context, defines
+acceptance criteria, delegates bounded lanes, and verifies results. The
+internal mechanism that dispatches and coordinates agents is the
+**orchestrator**. “Orchestrator” names an implementation mechanism, not the
+human-facing role or a source of broad mutation authority.
+
+Hook targeting keeps three identities separate:
+
+- the **launch directory** is navigation context and may be a non-Git workspace
+  root such as `~/code`;
+- the **session target** is one exact repository/worktree selected by a fresh,
+  digest-bound, healthy claim for the native session identity;
+- **mutation authority** comes from that live claim and its declared paths, not
+  from the launch directory or from the Project Manager/orchestrator role.
+
+Codex subagent events use their non-empty `agent_id` as the effective session
+identity; top-level events use `session_id`. A subagent never inherits its
+parent's claim or read-first state and must receive its own explicit target and
+claim. From a non-Git launch directory, zero or multiple healthy target claims
+fail closed for mutations. File tools continue to resolve their explicit target
+paths, independent of the shell launch directory.
+
+When no claim exists and the immutable launch directory is a non-Git workspace
+root, the only mutation exception is one typed maintenance transaction executed
+by the canonical framework script. Its exact shell grammar is:
+
+```text
+/usr/bin/python3 <absolute-canonical-framework>/scripts/claim_bootstrap.py --request-json '<JSON>'
+```
+
+`<JSON>` must be one strict object with exactly these fields (field order is not
+authority):
+
+```json
+{"schema_version":"1.0","operation":"maintenance_worktree","agent":"codex","project":"repo-name","scope":"fix/safe-branch","repo_root":"/absolute/repo","branch":"fix/safe-branch","claim_type":"program"}
+```
+
+`agent` must match the native top-level client (`codex` or `claude-code`),
+`project` must equal the repository directory name, `scope` must equal `branch`,
+and `repo_root` must be a canonical absolute governed-repository root. Unknown
+fields, relative or traversing paths, shell composition, unsafe branches,
+subagent events, existing branches/worktrees/claim slots, and client mismatch
+are denied. The typed operation creates the linked worktree, exact native-session
+claim, tracker, and claim projection as one transaction; failure rolls back only
+the exact artifacts it created. Its unclaimed Git plumbing disables repository
+hooks and creates the worktree without checkout; only after the exact claim is
+durable does it populate tracked files. Repository-configured checkout filters
+may therefore run only inside the already-claimed lane, never as part of the
+unclaimed authority exception. The previously proposed raw
+`/usr/bin/make -C ... maintenance-worktree ...` workspace-root escape is not an
+authority surface because environment and Makefile behavior are too broad to
+bind safely. Once already inside a governed repository, its ordinary sanctioned
+Make targets remain available under the normal claim rules.
+
 `agent` identifies the client class; `session_id` identifies the runtime that
 owns a live claim. Two Codex windows are therefore two writers even though both
 claims say `agent: codex`. A live `agent + project + scope` slot may be refreshed
@@ -203,7 +257,9 @@ duplicate, or overlapping configuration fails at import rather than silently
 changing closeout semantics.
 
 Mandatory rule: no live session without `plan_ref`. Bounded light maintenance
-may use the explicit `UNPLANNED` marker through `make maintenance-worktree`;
+may use the explicit `UNPLANNED` marker through the typed workspace-root
+maintenance transaction above or, from an already governed repository, through
+`make maintenance-worktree`;
 it is not an absent plan reference and does not require a manufactured work
 graph. Exact `goal:<outcome-id>` is a real sequential
 outcome authority, not an alias for `UNPLANNED`. If work resumes in a new

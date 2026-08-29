@@ -19,6 +19,7 @@ from enforced_planning.prewrite_claim_fast import (
     DEFAULT_PROJECTION_PATH,
     DEFAULT_RECEIPT_PATH,
     FastPreWriteError,
+    classify_bash_command,
     evaluate_prewrite_fast,
 )
 
@@ -141,12 +142,138 @@ def _resolved_outcome_mode(payload: dict[str, Any], *, explicit_mode: str | None
         raise
 
 
+def _session_bound_payload(
+    payload: dict[str, Any],
+    *,
+    client: str,
+    claims_dir: Path,
+    projection_path: Path,
+) -> dict[str, Any]:
+    """Resolve non-Git Bash events through one exact native-session claim.
+
+    Native hook ``cwd`` is the immutable session launch directory.  A client
+    can execute an individual shell call in another directory without that
+    target appearing in the hook payload.  When the launch directory is not a
+    Git checkout, one healthy exact-session claim is therefore the only
+    structured target authority available to the hook.
+
+    Zero or multiple matching claims deliberately preserve the original
+    payload so ordinary admission fails closed with no guessed target.
+    """
+
+    tool_name = payload.get("tool_name")
+    tool_input = payload.get("tool_input")
+    if not isinstance(tool_input, dict):
+        return payload
+    needs_rebind = tool_name == "Bash"
+    explicit_paths: tuple[str, ...] = ()
+    if tool_name == "apply_patch":
+        from enforced_planning.prewrite_claim_fast import _patch_paths
+
+        command = tool_input.get("command")
+        paths = _patch_paths(command) if isinstance(command, str) else ()
+        explicit_paths = paths
+        needs_rebind = bool(paths) and any(not Path(path).expanduser().is_absolute() for path in paths)
+    elif tool_name in {"Edit", "Write", "NotebookEdit"}:
+        field = "notebook_path" if tool_name == "NotebookEdit" else "file_path"
+        value = tool_input.get(field)
+        explicit_paths = (value,) if isinstance(value, str) else ()
+        needs_rebind = isinstance(value, str) and not Path(value).expanduser().is_absolute()
+    if not needs_rebind:
+        absolute = [Path(path).expanduser() for path in explicit_paths if Path(path).expanduser().is_absolute()]
+        if absolute and len(absolute) == len(explicit_paths):
+            roots: list[Path] = []
+            try:
+                for path in absolute:
+                    probe = path
+                    while not probe.exists() and probe != probe.parent:
+                        probe = probe.parent
+                    if probe.is_file():
+                        probe = probe.parent
+                    roots.append(_git_root(str(probe)))
+            except NonGitWorkingDirectory:
+                return payload
+            if roots and all(root == roots[0] for root in roots):
+                targeted = dict(payload)
+                targeted["cwd"] = str(roots[0])
+                targeted["_explicit_target_worktree"] = str(roots[0])
+                return targeted
+        return payload
+    cwd = payload.get("cwd")
+    if not isinstance(cwd, str) or not cwd.strip():
+        return payload
+    try:
+        _git_root(cwd)
+        return payload
+    except NonGitWorkingDirectory:
+        pass
+
+    from enforced_planning.session_target import (
+        SessionTargetError,
+        resolve_exact_session_target,
+    )
+
+    try:
+        resolution = resolve_exact_session_target(
+            payload,
+            client=client,
+            claims_dir=claims_dir,
+            projection_path=projection_path,
+        )
+    except SessionTargetError as exc:
+        unresolved = dict(payload)
+        unresolved["_session_target_error_code"] = exc.reason_code
+        unresolved["_session_target_error"] = str(exc)
+        return unresolved
+    rebound = dict(payload)
+    rebound["cwd"] = str(resolution.worktree_path)
+    rebound["_session_target_worktree"] = str(resolution.worktree_path)
+    return rebound
+
+
 def _native_notice(message: str) -> str:
     return json.dumps({"systemMessage": message}, sort_keys=True)
 
 
+def _special_unclaimed_command(
+    command: str,
+    *,
+    client: str,
+    claims_dir: Path,
+    projection_path: Path,
+    subagent_event: bool,
+) -> bool | str:
+    """Classify one exact typed bootstrap or projection recovery operation."""
+
+    try:
+        from enforced_planning.claim_bootstrap import parse_projection_recovery_command
+
+        parse_projection_recovery_command(
+            command,
+            script_path=(REPO_ROOT / "scripts" / "refresh_prewrite_claim_projection.py").resolve(),
+            claims_dir=claims_dir,
+            projection_path=projection_path,
+        )
+        return "projection_recovery"
+    except Exception:  # noqa: BLE001 -- try the typed bootstrap grammar
+        pass
+
+    if subagent_event:
+        return False
+    try:
+        from enforced_planning.claim_bootstrap import parse_raw_bash_command
+
+        parse_raw_bash_command(
+            command,
+            script_path=(REPO_ROOT / "scripts" / "claim_bootstrap.py").resolve(),
+        )
+        return "claim_bootstrap"
+    except Exception:  # noqa: BLE001 -- any ambiguity must require a live claim
+        return False
+
+
 def _is_claim_bootstrap_command(command: str) -> bool:
-    """Delegate the sole unclaimed mutation escape hatch to its strict parser."""
+    """Compatibility helper for callers testing the legacy typed bootstrap."""
 
     try:
         from enforced_planning.claim_bootstrap import parse_raw_bash_command
@@ -155,7 +282,7 @@ def _is_claim_bootstrap_command(command: str) -> bool:
             command,
             script_path=(REPO_ROOT / "scripts" / "claim_bootstrap.py").resolve(),
         )
-    except Exception:  # noqa: BLE001 -- any ambiguity must require a live claim
+    except Exception:  # noqa: BLE001 -- ambiguity requires ordinary admission
         return False
     return True
 
@@ -341,20 +468,57 @@ def main(argv: list[str] | None = None) -> int:
         payload = json.loads(sys.stdin.read())
         if not isinstance(payload, dict):
             raise FastPreWriteError("PreToolUse payload must be a JSON object")
-        mode = _mode(payload, args.mode)
-        try:
-            outcome_mode = _resolved_outcome_mode(
-                payload,
-                explicit_mode=args.mode,
-            )
-        except (FastPreWriteError, OSError, TypeError, ValueError):
-            outcome_config_invalid = True
-            raise
         projection_path = args.projection_path
         if projection_path is None and args.cache_dir is not None:
             projection_path = args.cache_dir / "authority-projection-v1.json"
         if projection_path is None:
             projection_path = DEFAULT_PROJECTION_PATH
+        payload = _session_bound_payload(
+            payload,
+            client=args.client,
+            claims_dir=args.claims_dir,
+            projection_path=projection_path,
+        )
+        mode = _mode(payload, args.mode)
+        from enforced_planning.claim_bootstrap import projection_recovery_command
+
+        recovery_command = projection_recovery_command(
+            script_path=(REPO_ROOT / "scripts" / "refresh_prewrite_claim_projection.py").resolve(),
+            claims_dir=args.claims_dir,
+            projection_path=projection_path,
+        )
+        special_classifier = lambda command: _special_unclaimed_command(
+            command,
+            client=args.client,
+            claims_dir=args.claims_dir,
+            projection_path=projection_path,
+            subagent_event=isinstance(payload.get("agent_id"), str)
+            and bool(payload["agent_id"].strip()),
+        )
+        early_bash_classification = None
+        tool_input = payload.get("tool_input")
+        if payload.get("tool_name") == "Bash" and isinstance(tool_input, dict):
+            command = tool_input.get("command")
+            if isinstance(command, str):
+                early_bash_classification = classify_bash_command(
+                    command,
+                    claim_bootstrap_classifier=special_classifier,
+                )
+        if early_bash_classification in {
+            "read_only",
+            "claim_bootstrap",
+            "projection_recovery",
+        }:
+            outcome_mode = "off"
+        else:
+            try:
+                outcome_mode = _resolved_outcome_mode(
+                    payload,
+                    explicit_mode=args.mode,
+                )
+            except (FastPreWriteError, OSError, TypeError, ValueError):
+                outcome_config_invalid = True
+                raise
         decision = evaluate_prewrite_fast(
             payload,
             client=args.client,
@@ -362,7 +526,8 @@ def main(argv: list[str] | None = None) -> int:
             claims_dir=args.claims_dir,
             projection_path=projection_path,
             receipt_path=args.receipt_path,
-            claim_bootstrap_classifier=_is_claim_bootstrap_command,
+            claim_bootstrap_classifier=special_classifier,
+            projection_recovery_command=recovery_command,
         )
     except (json.JSONDecodeError, FastPreWriteError, OSError, TypeError, ValueError) as exc:
         try:
@@ -405,12 +570,14 @@ def main(argv: list[str] | None = None) -> int:
     enforce_selected_outcome = args.outcome_enforce_selected or outcome_mode == "enforce_selected"
     # Outcome admission governs mutations. Provably read-only shell calls have
     # already been admitted without repository identity, and the strict claim
-    # bootstrap command enforces its own bootstrap contract. Applying selected
-    # admission to either recreates the bootstrap trap this adapter exists to
-    # prevent.
+    # bootstrap commands enforce their own narrow contracts. Projection repair
+    # only rebuilds a replaceable digest-bound cache. Applying selected
+    # admission to any of these recreates the bootstrap trap this adapter
+    # exists to prevent.
     outcome_exempt = decision.get("reason_code") in {
         "bash_read_only",
         "claim_bootstrap_command",
+        "projection_recovery_command",
     }
     enforce_selected_outcome = enforce_selected_outcome and not outcome_exempt
     if enforce_selected_outcome:

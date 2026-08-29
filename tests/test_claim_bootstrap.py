@@ -1,12 +1,18 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
-from enforced_planning import claim_bootstrap
+from enforced_planning import (
+    claim_bootstrap,
+    prewrite_claim_fast,
+    prewrite_claim_projection,
+    session_target,
+)
 
 
 def _start_payload(**updates: object) -> dict[str, object]:
@@ -28,6 +34,21 @@ def _start_payload(**updates: object) -> dict[str, object]:
         "read_paths": [],
         "current_phase": "bootstrap",
         "next_action": "begin bounded work",
+    }
+    payload.update(updates)
+    return payload
+
+
+def _maintenance_payload(repo: Path, **updates: object) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "schema_version": "1.0",
+        "operation": "maintenance_worktree",
+        "agent": "codex",
+        "project": repo.name,
+        "scope": "fix/safe-lane",
+        "repo_root": str(repo),
+        "branch": "fix/safe-lane",
+        "claim_type": "program",
     }
     payload.update(updates)
     return payload
@@ -111,6 +132,500 @@ def test_raw_bash_grammar_accepts_only_canonical_single_command(tmp_path: Path) 
 
     assert request.operation == "session_start_or_update"
     assert request.intent == "Brian's claim"
+
+
+def _governed_repo(tmp_path: Path) -> Path:
+    repo = tmp_path / "governed-repo"
+    (repo / "docs" / "plans").mkdir(parents=True)
+    subprocess.run(["git", "init", "-b", "main", str(repo)], check=True, capture_output=True)
+    (repo / "meta-process.yaml").write_text("meta_process: {}\n", encoding="utf-8")
+    (repo / "CLAUDE.md").write_text("# Governed repository\n", encoding="utf-8")
+    (repo / "docs" / "plans" / "CLAUDE.md").write_text("# Plans\n", encoding="utf-8")
+    (repo / ".gitignore").write_text("/worktrees/\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(repo), "add", "."], check=True, capture_output=True)
+    subprocess.run(
+        [
+            "git",
+            "-C",
+            str(repo),
+            "-c",
+            "user.name=Test User",
+            "-c",
+            "user.email=test@example.invalid",
+            "commit",
+            "-m",
+            "governed fixture",
+        ],
+        check=True,
+        capture_output=True,
+    )
+    return repo.resolve()
+
+
+def _configure_maintenance_runtime(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> tuple[Path, Path]:
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "trackers"
+    monkeypatch.setenv("CODEX_THREAD_ID", "native-123")
+    monkeypatch.delenv("CLAUDE_CODE_SESSION_ID", raising=False)
+    monkeypatch.setattr(claim_bootstrap.coordination_claims, "CLAIMS_DIR", claims_dir)
+    monkeypatch.setattr(claim_bootstrap, "SESSION_TRACKERS_DIR", trackers_dir)
+    monkeypatch.setattr(
+        claim_bootstrap.coordination_claims.claim_mutation_receipts,
+        "append_receipt",
+        lambda _receipt: None,
+    )
+    monkeypatch.setattr(
+        claim_bootstrap.session_lifecycle,
+        "_poll_mailbox",
+        lambda **_kwargs: {"polled": True, "active_count": 0},
+    )
+    return claims_dir, trackers_dir
+
+
+def test_typed_maintenance_worktree_transaction_creates_claim_tracker_and_projection(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = _governed_repo(tmp_path)
+    claims_dir, trackers_dir = _configure_maintenance_runtime(tmp_path, monkeypatch)
+    request = claim_bootstrap.parse_request_json(
+        json.dumps(_maintenance_payload(repo), separators=(",", ":"))
+    )
+
+    receipt = claim_bootstrap.execute_request(request)
+
+    worktree = repo / "worktrees" / "fix" / "safe-lane"
+    assert receipt["ok"] is True
+    assert receipt["session_id"] == "codex:native-123"
+    assert worktree.is_dir()
+    assert subprocess.run(
+        ["git", "-C", str(worktree), "branch", "--show-current"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip() == "fix/safe-lane"
+    claims = claim_bootstrap.coordination_claims.check_claims(repo.name)
+    assert len(claims) == 1
+    assert claims[0].session_id == "codex:native-123"
+    assert claims[0].worktree_path == str(worktree)
+    assert claims[0].claim_type == "program"
+    assert claims[0].write_paths == ["."]
+    assert len(list(trackers_dir.rglob("*.yaml"))) == 1
+    projection_path = prewrite_claim_fast.projection_path_for(claims_dir)
+    assert prewrite_claim_projection.projection_is_current(
+        claims_dir=claims_dir,
+        projection_path=projection_path,
+    )
+    resolved = session_target.resolve_exact_session_target(
+        {"session_id": "native-123"},
+        client="codex",
+        claims_dir=claims_dir,
+        projection_path=projection_path,
+    )
+    assert resolved.worktree_path == worktree
+    inside = prewrite_claim_fast.evaluate_prewrite_fast(
+        {
+            "session_id": "native-123",
+            "hook_event_name": "PreToolUse",
+            "cwd": str(worktree),
+            "tool_name": "apply_patch",
+            "tool_input": {
+                "command": f"*** Begin Patch\n*** Update File: {worktree / 'CLAUDE.md'}\n@@\n-old\n+new\n*** End Patch"
+            },
+        },
+        client="codex",
+        mode="enforce",
+        claims_dir=claims_dir,
+        projection_path=projection_path,
+        receipt_path=tmp_path / "inside-receipts.jsonl",
+    )
+    outside = prewrite_claim_fast.evaluate_prewrite_fast(
+        {
+            "session_id": "native-123",
+            "hook_event_name": "PreToolUse",
+            "cwd": str(repo),
+            "tool_name": "apply_patch",
+            "tool_input": {
+                "command": f"*** Begin Patch\n*** Update File: {repo / 'CLAUDE.md'}\n@@\n-old\n+new\n*** End Patch"
+            },
+        },
+        client="codex",
+        mode="enforce",
+        claims_dir=claims_dir,
+        projection_path=projection_path,
+        receipt_path=tmp_path / "outside-receipts.jsonl",
+    )
+    assert inside["decision"] == "allow"
+    assert outside["decision"] == "deny"
+
+
+@pytest.mark.parametrize("extra", [{"extra": "nope"}, {"agent": "claude-code"}])
+def test_typed_maintenance_rejects_extra_fields_and_native_client_mismatch(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    extra: dict[str, object],
+) -> None:
+    repo = _governed_repo(tmp_path)
+    _configure_maintenance_runtime(tmp_path, monkeypatch)
+    if "extra" in extra:
+        with pytest.raises(claim_bootstrap.ClaimBootstrapError, match="extra"):
+            claim_bootstrap.parse_request_json(json.dumps(_maintenance_payload(repo, **extra)))
+    else:
+        request = claim_bootstrap.parse_request_json(json.dumps(_maintenance_payload(repo, **extra)))
+        with pytest.raises(claim_bootstrap.ClaimBootstrapError, match="native claude-code runtime"):
+            claim_bootstrap.execute_request(request)
+
+
+@pytest.mark.parametrize("branch", ["../escape", "fix/../escape", "foo$(id)", "foo;id", "foo|id"])
+def test_typed_maintenance_rejects_traversal_and_shell_branches(tmp_path: Path, branch: str) -> None:
+    repo = _governed_repo(tmp_path)
+    with pytest.raises(claim_bootstrap.ClaimBootstrapError):
+        claim_bootstrap.parse_request_json(
+            json.dumps(_maintenance_payload(repo, branch=branch, scope=branch))
+        )
+
+
+def test_typed_maintenance_rejects_non_governed_repo(tmp_path: Path) -> None:
+    repo = _governed_repo(tmp_path)
+    (repo / "docs" / "plans" / "CLAUDE.md").unlink()
+    request = claim_bootstrap.parse_request_json(json.dumps(_maintenance_payload(repo)))
+    with pytest.raises(claim_bootstrap.ClaimBootstrapError, match="not a governed"):
+        claim_bootstrap._execute_maintenance_worktree(
+            request,
+            agent="codex",
+            session_id="codex:native-123",
+        )
+
+
+@pytest.mark.parametrize("preexisting", ["branch", "worktree"])
+def test_typed_maintenance_rejects_existing_branch_or_worktree(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    preexisting: str,
+) -> None:
+    repo = _governed_repo(tmp_path)
+    _configure_maintenance_runtime(tmp_path, monkeypatch)
+    if preexisting == "branch":
+        subprocess.run(["git", "-C", str(repo), "branch", "fix/safe-lane"], check=True)
+    else:
+        (repo / "worktrees" / "fix" / "safe-lane").mkdir(parents=True)
+    request = claim_bootstrap.parse_request_json(json.dumps(_maintenance_payload(repo)))
+    with pytest.raises(claim_bootstrap.ClaimBootstrapError, match=f"{preexisting} already exists"):
+        claim_bootstrap.execute_request(request)
+
+
+def test_typed_maintenance_reports_worktree_add_failure_without_residue(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = _governed_repo(tmp_path)
+    _configure_maintenance_runtime(tmp_path, monkeypatch)
+    real_run = claim_bootstrap.subprocess.run
+
+    def fail_add(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        if "worktree" in argv and "add" in argv:
+            return subprocess.CompletedProcess(argv, 1, "", "simulated add failure")
+        return real_run(argv, **kwargs)
+
+    monkeypatch.setattr(claim_bootstrap.subprocess, "run", fail_add)
+    request = claim_bootstrap.parse_request_json(json.dumps(_maintenance_payload(repo)))
+    with pytest.raises(claim_bootstrap.ClaimBootstrapError, match="simulated add failure"):
+        claim_bootstrap.execute_request(request)
+    assert not (repo / "worktrees" / "fix" / "safe-lane").exists()
+    assert real_run(
+        ["git", "-C", str(repo), "show-ref", "--verify", "refs/heads/fix/safe-lane"],
+        capture_output=True,
+    ).returncode != 0
+
+
+def test_typed_maintenance_rolls_back_its_atomic_branch_after_failed_git_add(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = _governed_repo(tmp_path)
+    _configure_maintenance_runtime(tmp_path, monkeypatch)
+    real_run = claim_bootstrap.subprocess.run
+
+    def partially_fail_add(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        if "worktree" in argv and "add" in argv:
+            return subprocess.CompletedProcess(argv, 1, "", "simulated partial add failure")
+        return real_run(argv, **kwargs)
+
+    monkeypatch.setattr(claim_bootstrap.subprocess, "run", partially_fail_add)
+    request = claim_bootstrap.parse_request_json(json.dumps(_maintenance_payload(repo)))
+    with pytest.raises(claim_bootstrap.ClaimBootstrapError, match="simulated partial add failure"):
+        claim_bootstrap.execute_request(request)
+    assert real_run(
+        ["git", "-C", str(repo), "show-ref", "--verify", "refs/heads/fix/safe-lane"],
+        capture_output=True,
+    ).returncode != 0
+    assert not (repo / "worktrees").exists()
+
+
+def test_typed_maintenance_preserves_foreign_branch_that_wins_atomic_ref_race(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = _governed_repo(tmp_path)
+    _configure_maintenance_runtime(tmp_path, monkeypatch)
+    real_run = claim_bootstrap.subprocess.run
+    injected = False
+
+    def race_ref(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        nonlocal injected
+        if "update-ref" in argv and "refs/heads/fix/safe-lane" in argv and not injected:
+            injected = True
+            real_run(
+                ["git", "-C", str(repo), "update-ref", "refs/heads/fix/safe-lane", "HEAD"],
+                check=True,
+                capture_output=True,
+            )
+        return real_run(argv, **kwargs)
+
+    monkeypatch.setattr(claim_bootstrap.subprocess, "run", race_ref)
+    request = claim_bootstrap.parse_request_json(json.dumps(_maintenance_payload(repo)))
+    with pytest.raises(claim_bootstrap.ClaimBootstrapError, match="atomic maintenance branch creation failed|cannot lock ref"):
+        claim_bootstrap.execute_request(request)
+    assert real_run(
+        ["git", "-C", str(repo), "show-ref", "--verify", "refs/heads/fix/safe-lane"],
+        capture_output=True,
+    ).returncode == 0
+    assert not (repo / "worktrees").exists()
+
+
+def test_typed_maintenance_rejects_symlinked_worktree_parent(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = _governed_repo(tmp_path)
+    _configure_maintenance_runtime(tmp_path, monkeypatch)
+    escaped = tmp_path / "escaped"
+    escaped.mkdir()
+    (repo / "worktrees").mkdir()
+    (repo / "worktrees" / "fix").symlink_to(escaped, target_is_directory=True)
+    request = claim_bootstrap.parse_request_json(json.dumps(_maintenance_payload(repo)))
+
+    with pytest.raises(claim_bootstrap.ClaimBootstrapError, match="real directory"):
+        claim_bootstrap.execute_request(request)
+
+    assert not (escaped / "safe-lane").exists()
+    assert subprocess.run(
+        ["git", "-C", str(repo), "show-ref", "--verify", "refs/heads/fix/safe-lane"],
+        capture_output=True,
+    ).returncode != 0
+
+
+def test_typed_maintenance_suppresses_unclaimed_git_hooks(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = _governed_repo(tmp_path)
+    _configure_maintenance_runtime(tmp_path, monkeypatch)
+    sentinel = tmp_path / "hook-executed"
+    hooks = repo / ".git" / "hooks"
+    for name in ("reference-transaction", "post-checkout"):
+        hook = hooks / name
+        hook.write_text(
+            f"#!/bin/sh\nprintf executed > {sentinel}\n",
+            encoding="utf-8",
+        )
+        hook.chmod(0o755)
+    request = claim_bootstrap.parse_request_json(json.dumps(_maintenance_payload(repo)))
+
+    receipt = claim_bootstrap.execute_request(request)
+
+    assert receipt["ok"] is True
+    assert not sentinel.exists()
+
+
+def test_typed_maintenance_rejects_session_with_existing_root_without_residue(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = _governed_repo(tmp_path)
+    _claims_dir, trackers_dir = _configure_maintenance_runtime(tmp_path, monkeypatch)
+    existing = claim_bootstrap.parse_request_json(
+        json.dumps(
+            _start_payload(
+                project="other-project",
+                scope="existing-root",
+                intent="existing root",
+                claim_type="program",
+                repo_root=str(repo),
+                worktree_path=str(repo),
+                branch="main",
+                session_name="existing-root",
+                broader_goal="Existing root",
+                write_paths=[],
+            )
+        )
+    )
+    claim_bootstrap.execute_request(existing)
+    tracker_paths_before = set(trackers_dir.rglob("*.yaml"))
+    request = claim_bootstrap.parse_request_json(json.dumps(_maintenance_payload(repo)))
+
+    with pytest.raises(claim_bootstrap.ClaimBootstrapError, match="zero existing claim roots"):
+        claim_bootstrap.execute_request(request)
+
+    assert not (repo / "worktrees" / "fix" / "safe-lane").exists()
+    assert subprocess.run(
+        ["git", "-C", str(repo), "show-ref", "--verify", "refs/heads/fix/safe-lane"],
+        capture_output=True,
+    ).returncode != 0
+    assert set(trackers_dir.rglob("*.yaml")) == tracker_paths_before
+
+
+def test_typed_maintenance_preserves_and_blocks_partial_session_start(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = _governed_repo(tmp_path)
+    _claims_dir, trackers_dir = _configure_maintenance_runtime(tmp_path, monkeypatch)
+    real_start = claim_bootstrap.session_lifecycle.start_session
+
+    def persist_then_fail(**kwargs: object) -> dict[str, object]:
+        real_start(**kwargs)
+        raise RuntimeError("simulated post-persist failure")
+
+    monkeypatch.setattr(claim_bootstrap.session_lifecycle, "start_session", persist_then_fail)
+    request = claim_bootstrap.parse_request_json(json.dumps(_maintenance_payload(repo)))
+    with pytest.raises(claim_bootstrap.ClaimBootstrapError, match="simulated post-persist failure"):
+        claim_bootstrap.execute_request(request)
+
+    worktree = repo / "worktrees" / "fix" / "safe-lane"
+    assert worktree.is_dir()
+    claims = claim_bootstrap.coordination_claims.check_claims(repo.name)
+    assert len(claims) == 1
+    assert claims[0].status == "blocked"
+    assert list(trackers_dir.rglob("*.yaml"))
+    assert subprocess.run(
+        ["git", "-C", str(repo), "show-ref", "--verify", "refs/heads/fix/safe-lane"],
+        capture_output=True,
+    ).returncode == 0
+
+
+def test_typed_maintenance_preserves_detached_same_head_worktree_on_rollback(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = _governed_repo(tmp_path)
+    _configure_maintenance_runtime(tmp_path, monkeypatch)
+    worktree = repo / "worktrees" / "fix" / "safe-lane"
+
+    def detach_then_fail(**_kwargs: object) -> dict[str, object]:
+        subprocess.run(
+            ["git", "-c", "core.hooksPath=/dev/null", "-C", str(worktree), "checkout", "--detach", "--force"],
+            check=True,
+            capture_output=True,
+        )
+        raise RuntimeError("simulated session failure after detach")
+
+    monkeypatch.setattr(claim_bootstrap.session_lifecycle, "start_session", detach_then_fail)
+    request = claim_bootstrap.parse_request_json(json.dumps(_maintenance_payload(repo)))
+
+    with pytest.raises(claim_bootstrap.ClaimBootstrapError, match="refusing unsafe cleanup"):
+        claim_bootstrap.execute_request(request)
+
+    assert worktree.is_dir()
+    listing = subprocess.run(
+        ["git", "-C", str(repo), "worktree", "list", "--porcelain"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    target_block = next(block for block in listing.split("\n\n") if f"worktree {worktree}" in block)
+    assert "detached" in target_block
+
+
+def test_typed_maintenance_preserves_untracked_content_on_rollback(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = _governed_repo(tmp_path)
+    _configure_maintenance_runtime(tmp_path, monkeypatch)
+    worktree = repo / "worktrees" / "fix" / "safe-lane"
+    sentinel = worktree / "preserve-me.txt"
+
+    def add_sentinel_then_fail(**_kwargs: object) -> dict[str, object]:
+        sentinel.write_text("valuable concurrent state\n", encoding="utf-8")
+        raise RuntimeError("simulated session failure after concurrent write")
+
+    monkeypatch.setattr(claim_bootstrap.session_lifecycle, "start_session", add_sentinel_then_fail)
+    request = claim_bootstrap.parse_request_json(json.dumps(_maintenance_payload(repo)))
+
+    with pytest.raises(claim_bootstrap.ClaimBootstrapError, match="refusing unsafe cleanup"):
+        claim_bootstrap.execute_request(request)
+
+    assert sentinel.read_text(encoding="utf-8") == "valuable concurrent state\n"
+    assert subprocess.run(
+        ["git", "-C", str(repo), "show-ref", "--verify", "refs/heads/fix/safe-lane"],
+        capture_output=True,
+    ).returncode == 0
+
+
+def test_typed_maintenance_preserves_branch_when_worktree_cleanup_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = _governed_repo(tmp_path)
+    _configure_maintenance_runtime(tmp_path, monkeypatch)
+    real_run = claim_bootstrap.subprocess.run
+
+    def fail_remove(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        if "worktree" in argv and "remove" in argv:
+            return subprocess.CompletedProcess(argv, 1, "", "simulated remove failure")
+        return real_run(argv, **kwargs)
+
+    monkeypatch.setattr(claim_bootstrap.subprocess, "run", fail_remove)
+    monkeypatch.setattr(
+        claim_bootstrap.session_lifecycle,
+        "start_session",
+        lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("simulated session failure")),
+    )
+    request = claim_bootstrap.parse_request_json(json.dumps(_maintenance_payload(repo)))
+    with pytest.raises(claim_bootstrap.ClaimBootstrapError, match="simulated remove failure"):
+        claim_bootstrap.execute_request(request)
+
+    worktree = repo / "worktrees" / "fix" / "safe-lane"
+    assert worktree.is_dir()
+    assert real_run(
+        ["git", "-C", str(repo), "show-ref", "--verify", "refs/heads/fix/safe-lane"],
+        capture_output=True,
+    ).returncode == 0
+    listing = real_run(
+        ["git", "-C", str(repo), "worktree", "list", "--porcelain"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    assert f"worktree {worktree}" in listing
+
+
+def test_projection_recovery_parser_accepts_only_exact_paths(tmp_path: Path) -> None:
+    script = tmp_path / "refresh.py"
+    claims = tmp_path / "claims"
+    projection = tmp_path / "projection.json"
+    command = claim_bootstrap.projection_recovery_command(
+        script_path=script,
+        claims_dir=claims,
+        projection_path=projection,
+    )
+    assert claim_bootstrap.parse_projection_recovery_command(
+        command,
+        script_path=script,
+        claims_dir=claims,
+        projection_path=projection,
+    ) is None
+    with pytest.raises(claim_bootstrap.ClaimBootstrapError):
+        claim_bootstrap.parse_projection_recovery_command(
+            command + " --extra",
+            script_path=script,
+            claims_dir=claims,
+            projection_path=projection,
+        )
 
 
 def test_shell_operators_inside_single_quoted_json_are_inert_data(tmp_path: Path) -> None:

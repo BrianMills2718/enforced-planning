@@ -11,9 +11,12 @@ from __future__ import annotations
 import json
 import os
 import re
+import secrets
 import subprocess
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated, Any, Literal
+from urllib.parse import urlparse
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, field_validator, model_validator
 
@@ -133,8 +136,6 @@ class MaintenanceWorktreeRequest(_StrictRequest):
         repo = Path(self.repo_root).expanduser()
         if not repo.is_absolute() or ".." in repo.parts or str(repo.resolve()) != self.repo_root:
             raise ValueError("repo_root must be one canonical absolute path without traversal")
-        if self.project != repo.name:
-            raise ValueError("project must exactly match the canonical repository directory name")
         if self.scope != self.branch:
             raise ValueError("scope must exactly match branch")
         if (
@@ -163,6 +164,194 @@ ClaimBootstrapRequest = Annotated[
 ]
 _REQUEST_ADAPTER = TypeAdapter(ClaimBootstrapRequest)
 SESSION_TRACKERS_DIR = session_contracts.DEFAULT_SESSION_TRACKERS_DIR
+DEFAULT_PROJECT_GRAPH_PATH = Path.home() / "code" / "active" / "project-meta" / "PROJECT_GRAPH.json"
+
+
+@dataclass(frozen=True)
+class ProjectGraphRepositoryAuthority:
+    """Exact Project Graph authority for one local repository target."""
+
+    project_id: str
+    github_repo: str
+    default_branch: str
+    remote_url: str
+
+
+def _git(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["git", "-c", "core.hooksPath=/dev/null", "-C", str(repo), *args],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def _github_repo_from_remote(remote_url: str) -> str:
+    """Return owner/repository from an HTTPS, SSH, or SSH-host-alias URL."""
+
+    raw = remote_url.strip().rstrip("/")
+    value = ""
+    if raw.startswith("https://"):
+        parsed = urlparse(raw)
+        if (
+            parsed.hostname != "github.com"
+            or parsed.username is not None
+            or parsed.password is not None
+            or parsed.port not in {None, 443}
+        ):
+            raise ClaimBootstrapError("HTTPS origin must use github.com without embedded credentials")
+        value = parsed.path
+    elif raw.startswith("ssh://"):
+        parsed = urlparse(raw)
+        if parsed.username != "git" or not parsed.hostname:
+            raise ClaimBootstrapError("SSH origin must use the git user and a GitHub host")
+        host = _resolved_ssh_hostname(parsed.hostname)
+        if host != "github.com":
+            raise ClaimBootstrapError("SSH origin host must resolve to github.com")
+        value = parsed.path
+    else:
+        match = re.fullmatch(r"git@([^:/]+):(.+)", raw)
+        if match is None:
+            raise ClaimBootstrapError("origin must be an HTTPS or SSH GitHub URL")
+        host, value = match.groups()
+        if _resolved_ssh_hostname(host) != "github.com":
+            raise ClaimBootstrapError("SSH origin host must resolve to github.com")
+    value = value.removesuffix(".git").strip("/")
+    if re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", value) is None:
+        raise ClaimBootstrapError("origin URL does not identify one GitHub owner/repository pair")
+    return value
+
+
+def _resolved_ssh_hostname(host: str) -> str:
+    if host == "github.com":
+        return host
+    configured = subprocess.run(
+        ["ssh", "-G", host],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if configured.returncode != 0:
+        raise ClaimBootstrapError(f"unable to resolve SSH origin host alias {host!r}")
+    hostnames = [
+        line.split(None, 1)[1].strip().casefold()
+        for line in configured.stdout.splitlines()
+        if line.casefold().startswith("hostname ") and len(line.split(None, 1)) == 2
+    ]
+    if len(hostnames) != 1:
+        raise ClaimBootstrapError(f"SSH origin host alias {host!r} has no unique hostname")
+    return hostnames[0]
+
+
+def _project_graph_authority(
+    repo: Path,
+    *,
+    project_graph_path: Path = DEFAULT_PROJECT_GRAPH_PATH,
+) -> ProjectGraphRepositoryAuthority:
+    """Authorize an exact Git root from one active Brian-owned graph record."""
+
+    identity = _git(repo, "rev-parse", "--show-toplevel")
+    if identity.returncode != 0 or Path(identity.stdout.strip()).resolve() != repo:
+        raise ClaimBootstrapError("repo_root is not the canonical Git worktree root")
+    remote = _git(repo, "remote", "get-url", "origin")
+    if remote.returncode != 0:
+        raise ClaimBootstrapError("repository has no readable origin remote")
+    remote_url = remote.stdout.strip()
+    github_repo = _github_repo_from_remote(remote_url)
+    try:
+        records = json.loads(project_graph_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ClaimBootstrapError(f"Project Graph is unavailable or invalid: {exc}") from exc
+    if not isinstance(records, list):
+        raise ClaimBootstrapError("Project Graph root must be a list")
+    matches = [
+        record
+        for record in records
+        if isinstance(record, dict)
+        and str(record.get("github_repo", "")).casefold() == github_repo.casefold()
+    ]
+    if len(matches) != 1:
+        raise ClaimBootstrapError(
+            f"origin {github_repo} must match exactly one Project Graph repository record; found {len(matches)}"
+        )
+    record = matches[0]
+    governance = record.get("repository_governance")
+    if not isinstance(governance, dict):
+        raise ClaimBootstrapError("Project Graph record lacks repository governance")
+    approved = governance.get("approved_remote_owners")
+    remote_owner = github_repo.split("/", 1)[0]
+    if (
+        record.get("record_kind") != "repository"
+        or record.get("status") != "active"
+        or governance.get("owner_class") not in {"brian", "personal"}
+        or not isinstance(approved, list)
+        or remote_owner.casefold() not in {str(owner).casefold() for owner in approved}
+        or governance.get("mutation_authority") != "normal_push"
+    ):
+        raise ClaimBootstrapError("Project Graph record does not grant Brian-owned mutation authority")
+    project_id = record.get("id")
+    default_branch = record.get("default_branch")
+    if not isinstance(project_id, str) or not project_id.strip():
+        raise ClaimBootstrapError("Project Graph record has no stable project id")
+    if not isinstance(default_branch, str) or not default_branch.strip():
+        raise ClaimBootstrapError("Project Graph record has no default branch")
+    checked = subprocess.run(
+        ["git", "check-ref-format", "--branch", default_branch],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if checked.returncode != 0:
+        raise ClaimBootstrapError("Project Graph default branch is invalid")
+    return ProjectGraphRepositoryAuthority(project_id, github_repo, default_branch, remote_url)
+
+
+def _fresh_remote_default_revision(
+    repo: Path,
+    authority: ProjectGraphRepositoryAuthority,
+) -> str:
+    """Fetch and resolve the graph-declared remote default before lane creation."""
+
+    advertised = _git(repo, "ls-remote", "--symref", authority.remote_url, "HEAD")
+    if advertised.returncode != 0:
+        raise ClaimBootstrapError(
+            advertised.stderr.strip() or "remote default branch lookup failed before maintenance bootstrap"
+        )
+    default_lines = [
+        line for line in advertised.stdout.splitlines()
+        if line.startswith("ref: refs/heads/") and line.endswith("\tHEAD")
+    ]
+    if len(default_lines) != 1:
+        raise ClaimBootstrapError("origin must advertise exactly one symbolic default branch")
+    remote_default = default_lines[0].split("\t", 1)[0].removeprefix("ref: refs/heads/")
+    if remote_default != authority.default_branch:
+        raise ClaimBootstrapError(
+            "Project Graph default branch does not match the fresh origin default: "
+            f"{authority.default_branch!r} != {remote_default!r}"
+        )
+    fetched_ref = f"refs/enforced-planning/bootstrap/{os.getpid()}-{secrets.token_hex(12)}"
+    fetched = _git(
+        repo,
+        "fetch",
+        "--no-tags",
+        "--no-write-fetch-head",
+        "--atomic",
+        authority.remote_url,
+        f"+refs/heads/{remote_default}:{fetched_ref}",
+    )
+    if fetched.returncode != 0:
+        raise ClaimBootstrapError(
+            fetched.stderr.strip() or "fresh remote default fetch failed before maintenance bootstrap"
+        )
+    resolved = _git(repo, "rev-parse", "--verify", f"{fetched_ref}^{{commit}}")
+    revision = resolved.stdout.strip()
+    if resolved.returncode != 0 or re.fullmatch(r"[0-9a-f]{40,64}", revision) is None:
+        _git(repo, "update-ref", "-d", fetched_ref)
+        raise ClaimBootstrapError("fresh remote default did not resolve to one full commit id")
+    removed = _git(repo, "update-ref", "-d", fetched_ref, revision)
+    if removed.returncode != 0 or _git(repo, "show-ref", "--verify", fetched_ref).returncode == 0:
+        raise ClaimBootstrapError("private fetched revision changed concurrently; bootstrap refused")
+    return revision
 
 
 def _reject_duplicate_object_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -594,31 +783,11 @@ def _execute_maintenance_worktree(
     """Create one unplanned worktree and exact claim as a typed transaction."""
 
     repo = Path(request.repo_root).resolve()
-    governed_markers = (
-        repo / ".git",
-        repo / "CLAUDE.md",
-        repo / "meta-process.yaml",
-        repo / "docs" / "plans" / "CLAUDE.md",
-    )
-    if not all(path.exists() for path in governed_markers):
-        raise ClaimBootstrapError("maintenance target is not a governed Git repository")
-    identity = subprocess.run(
-        ["git", "-C", str(repo), "rev-parse", "--show-toplevel"],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if identity.returncode != 0 or Path(identity.stdout.strip()).resolve() != repo:
-        raise ClaimBootstrapError("repo_root is not the canonical Git worktree root")
-    starting_head_result = subprocess.run(
-        ["git", "-C", str(repo), "rev-parse", "HEAD"],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if starting_head_result.returncode != 0 or not starting_head_result.stdout.strip():
-        raise ClaimBootstrapError("maintenance repository has no valid starting revision")
-    starting_head = starting_head_result.stdout.strip()
+    authority = _project_graph_authority(repo)
+    if request.project != authority.project_id:
+        raise ClaimBootstrapError(
+            f"project must match Project Graph id {authority.project_id!r} for origin {authority.github_repo}"
+        )
     checked = subprocess.run(
         ["git", "check-ref-format", "--branch", request.branch],
         capture_output=True,
@@ -678,6 +847,10 @@ def _execute_maintenance_worktree(
     tracker_path = session_contracts.session_tracker_path(contract, tracker_dir=SESSION_TRACKERS_DIR)
     if tracker_path.exists():
         raise ClaimBootstrapError(f"maintenance session tracker already exists: {tracker_path}")
+
+    # The network and remote-default freshness boundary precedes every lane
+    # artifact. A stale primary checkout must never determine the new branch.
+    starting_head = _fresh_remote_default_revision(repo, authority)
 
     created_dirs: list[Path] = []
     directory = base
@@ -773,7 +946,13 @@ def _execute_maintenance_worktree(
             raise ClaimBootstrapError(
                 populated.stderr.strip() or "maintenance worktree population failed after claim creation"
             )
-        return payload
+        return {
+            **payload,
+            "project_graph_id": authority.project_id,
+            "github_repo": authority.github_repo,
+            "default_branch": authority.default_branch,
+            "start_revision": starting_head,
+        }
     except Exception as exc:
         cleanup_errors: list[str] = []
         try:
@@ -844,11 +1023,12 @@ __all__ = [
     "HeartbeatRequest",
     "MaintenanceWorktreeRequest",
     "ProgressRequest",
+    "ProjectGraphRepositoryAuthority",
     "SessionStartOrUpdateRequest",
     "canonical_script_path",
     "execute_request",
-    "parse_raw_bash_command",
     "parse_projection_recovery_command",
+    "parse_raw_bash_command",
     "parse_request_json",
     "projection_recovery_command",
 ]

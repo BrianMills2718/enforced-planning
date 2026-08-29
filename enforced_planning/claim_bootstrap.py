@@ -268,6 +268,8 @@ def _project_graph_authority(
         record
         for record in records
         if isinstance(record, dict)
+        and record.get("record_kind") == "repository"
+        and record.get("status") == "active"
         and str(record.get("github_repo", "")).casefold() == github_repo.casefold()
     ]
     if len(matches) != 1:
@@ -281,9 +283,7 @@ def _project_graph_authority(
     approved = governance.get("approved_remote_owners")
     remote_owner = github_repo.split("/", 1)[0]
     if (
-        record.get("record_kind") != "repository"
-        or record.get("status") != "active"
-        or governance.get("owner_class") not in {"brian", "personal"}
+        governance.get("owner_class") not in {"brian", "personal"}
         or not isinstance(approved, list)
         or remote_owner.casefold() not in {str(owner).casefold() for owner in approved}
         or governance.get("mutation_authority") != "normal_push"

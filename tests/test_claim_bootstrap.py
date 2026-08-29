@@ -300,6 +300,25 @@ def test_project_graph_authorizes_registered_brian_repo_without_governed_markers
     assert not (repo / "meta-process.yaml").exists()
 
 
+def test_project_graph_ignores_lineage_pointer_sharing_repository_url(tmp_path: Path) -> None:
+    repo, graph, _stale_head, _fresh_head = _project_graph_fixture(tmp_path)
+    records = json.loads(graph.read_text(encoding="utf-8"))
+    records.append(
+        {
+            "id": "agent-skills-archived-overlay",
+            "record_kind": "pointer",
+            "status": "merged",
+            "github_repo": "Brian/agent-skills",
+            "superseded_by": "agent-skills",
+        }
+    )
+    graph.write_text(json.dumps(records) + "\n", encoding="utf-8")
+
+    authority = claim_bootstrap._project_graph_authority(repo, project_graph_path=graph)
+
+    assert authority.project_id == "agent-skills"
+
+
 @pytest.mark.parametrize(
     "remote",
     [

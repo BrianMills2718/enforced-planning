@@ -802,7 +802,26 @@ def test_explicit_host_mode_denies_unclaimed_mutating_bash_from_workspace_root(
 
     assert code == 2
     assert not captured.out
-    assert "Pre-write claim denied (projection_unavailable_or_stale)" in captured.err
+    assert "BLOCKED [prewrite/projection_unavailable_or_stale]" in captured.err
+    assert "Why: The claim authority projection is unavailable or stale." in captured.err
+    assert "Next:" in captured.err
+
+
+def test_native_denial_keeps_raw_repository_failure_in_receipt_not_prompt() -> None:
+    message = prewrite_claim_gate._native_denial_message(
+        {
+            "reason_code": "repository_identity_unavailable",
+            "details": ["fatal: not a git repository\n" + "internal diagnostic " * 100],
+            "recovery": "Create one exact claimed target, then retry.",
+        }
+    )
+
+    assert message == (
+        "BLOCKED [prewrite/repository_identity_unavailable]\n"
+        "Why: The target repository could not be resolved from this event.\n"
+        "Next: Create one exact claimed target, then retry."
+    )
+    assert "fatal:" not in message
 
 
 def test_json_mode_preserves_deny_exit_for_unclaimed_workspace_mutation(

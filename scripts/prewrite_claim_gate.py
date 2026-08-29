@@ -203,10 +203,9 @@ def _session_bound_payload(
     if not isinstance(cwd, str) or not cwd.strip():
         return payload
     try:
-        _git_root(cwd)
-        return payload
+        launch_root = _git_root(cwd)
     except NonGitWorkingDirectory:
-        pass
+        launch_root = None
 
     from enforced_planning.session_target import (
         SessionTargetError,
@@ -221,10 +220,21 @@ def _session_bound_payload(
             projection_path=projection_path,
         )
     except SessionTargetError as exc:
+        # A Git launch directory remains a valid local fallback only when this
+        # native session has no claimed target at all.  Ambiguous, unhealthy,
+        # or stale claim authority must not be hidden merely because the
+        # immutable launch cwd happens to be another repository.
+        if exc.reason_code == "no_exact_session_target" and launch_root is not None:
+            return payload
         unresolved = dict(payload)
         unresolved["_session_target_error_code"] = exc.reason_code
         unresolved["_session_target_error"] = str(exc)
         return unresolved
+    if launch_root == resolution.worktree_path:
+        # The launch directory is already inside the exact claimed worktree;
+        # no synthetic rebound (and therefore no extra runtime -C attestation)
+        # is necessary.
+        return payload
     rebound = dict(payload)
     rebound["cwd"] = str(resolution.worktree_path)
     rebound["_session_target_worktree"] = str(resolution.worktree_path)

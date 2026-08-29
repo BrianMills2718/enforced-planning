@@ -565,12 +565,190 @@ def test_explicit_host_mode_resolves_bash_through_one_exact_session_claim(
     assert decision["worktree_path"] == str(worktree)
 
 
+def test_git_launch_cwd_resolves_bash_through_different_exact_session_claim(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _workspace, repo, worktree, claims_dir, _claim_path = _fixture(tmp_path)
+    payload = _payload(
+        cwd=repo,
+        tool="Bash",
+        tool_input={"command": f"/usr/bin/env -C {worktree} touch generated.py"},
+    )
+
+    code, decision = _run_cli(
+        monkeypatch,
+        capsys,
+        tmp_path,
+        payload,
+        claims_dir=claims_dir,
+        projection_path=tmp_path / "projection.json",
+    )
+
+    assert code == 0
+    assert decision["decision"] == "allow", decision
+    assert decision["reason_code"] == "exact_live_claim"
+    assert decision["worktree_path"] == str(worktree)
+
+
+@pytest.mark.parametrize("command", ["touch generated.py", "{launch_bound}"])
+def test_git_launch_cwd_requires_runtime_binding_to_different_claimed_worktree(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    command: str,
+) -> None:
+    _workspace, repo, _worktree, claims_dir, _claim_path = _fixture(tmp_path)
+    rendered = command.format(launch_bound=f"/usr/bin/env -C {repo} touch generated.py")
+
+    code, decision = _run_cli(
+        monkeypatch,
+        capsys,
+        tmp_path,
+        _payload(cwd=repo, tool="Bash", tool_input={"command": rendered}),
+        claims_dir=claims_dir,
+        projection_path=tmp_path / "projection.json",
+    )
+
+    assert code == 2
+    assert decision["decision"] == "deny"
+    assert decision["reason_code"] == "bash_runtime_workdir_unattested"
+
+
+def test_git_launch_inside_exact_claim_does_not_require_synthetic_runtime_binding(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _workspace, _repo, worktree, claims_dir, _claim_path = _fixture(tmp_path)
+
+    code, decision = _run_cli(
+        monkeypatch,
+        capsys,
+        tmp_path,
+        _payload(cwd=worktree, tool="Bash", tool_input={"command": "touch generated.py"}),
+        claims_dir=claims_dir,
+        projection_path=tmp_path / "projection.json",
+    )
+
+    assert code == 0
+    assert decision["decision"] == "allow", decision
+    assert decision["reason_code"] == "exact_live_claim"
+    assert decision["worktree_path"] == str(worktree)
+
+
+def test_git_launch_cwd_relative_apply_patch_uses_different_claimed_worktree(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _workspace, repo, worktree, claims_dir, claim_path = _fixture(tmp_path)
+    claim = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    claim["agent"] = "codex"
+    claim["session_id"] = "codex:host-gate-test"
+    claim_path.write_text(yaml.safe_dump(claim, sort_keys=False), encoding="utf-8")
+    write_projection(claims_dir=claims_dir, projection_path=tmp_path / "projection.json")
+    patch = "*** Begin Patch\n*** Update File: src/allowed.py\n@@\n-VALUE = 1\n+VALUE = 2\n*** End Patch"
+
+    code, decision = _run_cli(
+        monkeypatch,
+        capsys,
+        tmp_path,
+        _payload(cwd=repo, tool="apply_patch", tool_input={"command": patch}),
+        claims_dir=claims_dir,
+        projection_path=tmp_path / "projection.json",
+        client="codex",
+    )
+
+    assert code == 0, decision
+    assert decision["worktree_path"] == str(worktree)
+    assert decision["normalized_target_paths"] == ["src/allowed.py"]
+
+
+def test_git_launch_cwd_does_not_hide_stale_session_target_projection(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _workspace, repo, worktree, claims_dir, _claim_path = _fixture(tmp_path)
+    (claims_dir / "projection-stale.yaml").write_text("changed\n", encoding="utf-8")
+
+    code, decision = _run_cli(
+        monkeypatch,
+        capsys,
+        tmp_path,
+        _payload(
+            cwd=repo,
+            tool="Bash",
+            tool_input={"command": f"/usr/bin/env -C {worktree} touch generated.py"},
+        ),
+        claims_dir=claims_dir,
+        projection_path=tmp_path / "projection.json",
+    )
+
+    assert code == 2
+    assert decision["decision"] == "deny"
+    assert decision["reason_code"] == "projection_unavailable_or_stale"
+
+
+def test_git_launch_cwd_stale_projection_still_allows_provably_read_only_bash(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _workspace, repo, _worktree, claims_dir, _claim_path = _fixture(tmp_path)
+    (claims_dir / "projection-stale.yaml").write_text("changed\n", encoding="utf-8")
+
+    code, decision = _run_cli(
+        monkeypatch,
+        capsys,
+        tmp_path,
+        _payload(cwd=repo, tool="Bash", tool_input={"command": "git status --short"}),
+        claims_dir=claims_dir,
+        projection_path=tmp_path / "projection.json",
+    )
+
+    assert code == 0
+    assert decision["decision"] == "allow"
+    assert decision["reason_code"] == "bash_read_only"
+
+
+def test_git_launch_cwd_uses_claimed_repo_outcome_policy(
+    tmp_path: Path,
+) -> None:
+    _workspace, repo, worktree, claims_dir, _claim_path = _fixture(tmp_path)
+    (repo / "meta-process.yaml").write_text(
+        "meta_process:\n  claims:\n    outcome_admission_mode: off\n",
+        encoding="utf-8",
+    )
+    (worktree / "meta-process.yaml").write_text(
+        "meta_process:\n  claims:\n    outcome_admission_mode: enforce_selected\n",
+        encoding="utf-8",
+    )
+    payload = _payload(
+        cwd=repo,
+        tool="Bash",
+        tool_input={"command": f"/usr/bin/env -C {worktree} touch generated.py"},
+    )
+
+    targeted = prewrite_claim_gate._session_bound_payload(
+        payload,
+        client="claude-code",
+        claims_dir=claims_dir,
+        projection_path=tmp_path / "projection.json",
+    )
+
+    assert targeted["cwd"] == str(worktree)
+    assert prewrite_claim_gate._resolved_outcome_mode(targeted, explicit_mode="enforce") == "enforce_selected"
+
+
 def test_explicit_host_mode_does_not_guess_between_two_session_claims(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    workspace, _repo, _worktree, claims_dir, claim_path = _fixture(tmp_path)
+    workspace, repo, _worktree, claims_dir, claim_path = _fixture(tmp_path)
     second = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
     second["scope"] = "second-lane"
     second_worktree = workspace / "project" / "worktrees" / "second-lane"
@@ -582,20 +760,20 @@ def test_explicit_host_mode_does_not_guess_between_two_session_claims(
         encoding="utf-8",
     )
     write_projection(claims_dir=claims_dir, projection_path=tmp_path / "projection.json")
-    payload = _payload(cwd=workspace, tool="Bash", tool_input={"command": "touch marker"})
+    for launch_cwd in (workspace, repo):
+        payload = _payload(cwd=launch_cwd, tool="Bash", tool_input={"command": "touch marker"})
+        code, decision = _run_cli(
+            monkeypatch,
+            capsys,
+            tmp_path,
+            payload,
+            claims_dir=claims_dir,
+            projection_path=tmp_path / "projection.json",
+        )
 
-    code, decision = _run_cli(
-        monkeypatch,
-        capsys,
-        tmp_path,
-        payload,
-        claims_dir=claims_dir,
-        projection_path=tmp_path / "projection.json",
-    )
-
-    assert code == 2
-    assert decision["decision"] == "deny"
-    assert decision["reason_code"] == "ambiguous_exact_session_target"
+        assert code == 2
+        assert decision["decision"] == "deny"
+        assert decision["reason_code"] == "ambiguous_exact_session_target"
 
 
 def test_explicit_host_mode_denies_unclaimed_mutating_bash_from_workspace_root(

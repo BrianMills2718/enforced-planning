@@ -1,0 +1,15 @@
+{
+  "schema_version": "1.0.0",
+  "record_type": "outcome_portfolio_allocation_request",
+  "allocation_id": "plan-128-runtime-consumer-allocation",
+  "requested_at": "2026-08-29T07:44:00Z",
+  "project_id": "enforced-planning",
+  "scenario_id": "portable-governance-runtime-consumers",
+  "outcome_contract_sha256": "1d886cb417d7da10c9d934fa08cc40721017820d5d66ca7fc8964deeca99ab88",
+  "outcome_id": "portable-governance-runtime-consumers",
+  "outcome_lineage_id": "portable-governance-wiki-profile",
+  "portfolio_class": "maintenance",
+  "decision_ref": "enforced-planning#128@5b5b8c094d3dccc3c58ff745f0d411e58b80543c",
+  "purpose": "Bind the master governance profile into native runtime consumers and prove actionable bootstrap recovery.",
+  "stopping_condition": "Complete after focused native-consumer tests and the disposable default-on, master-off, and re-enabled journey pass."
+}

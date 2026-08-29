@@ -122,6 +122,8 @@ language, wiki format, feedback store, or authority source.
   `enforced_planning/plan_validation.py`, `enforced_planning/hook_wiring.py`, and
   `hooks/git/pre-commit` (bind native consumers to the effective profile)
 - focused prewrite, artifact-creation, hook-wiring, and pre-commit tests (test)
+- `examples/owner-real-outcome-admission/plan128-runtime-{scenario,allocation,disposition}.json`
+  (runtime allocation lifecycle)
 - this plan, work graph, plan index, and roadmap (modify)
 
 ## Plan

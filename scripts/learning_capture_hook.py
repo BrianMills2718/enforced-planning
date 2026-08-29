@@ -327,6 +327,10 @@ def main(argv: list[str] | None = None) -> int:
     telemetry_reason = "hook_unavailable"
     try:
         payload = read_event()
+        if payload.get("stop_hook_active"):
+            # A re-fired Stop must not depend on receipt or state availability.
+            # The first refusal already delivered the recovery instruction.
+            return 0
         invocation = start_hook_invocation(
             hook_name="learning-capture",
             hook_version="2",
@@ -334,12 +338,6 @@ def main(argv: list[str] | None = None) -> int:
             payload=payload,
             receipt_root=args.hook_receipt_dir,
         )
-        if payload.get("stop_hook_active"):
-            # The harness re-fires Stop after a block. The agent has already
-            # been told what the report is missing; refusing the same report
-            # again only deadlocks the session. Block once, then allow.
-            invocation.complete(decision="allow", reason_code="stop_hook_refire")
-            return 0
         report = payload["last_assistant_message"]
         decision, detail = classify_report(report)
         disposition = report_field(report, "Learnings") or ""

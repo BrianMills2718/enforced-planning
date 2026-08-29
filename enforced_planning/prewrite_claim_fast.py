@@ -229,6 +229,30 @@ def _git_command_is_read_only(argv: tuple[str, ...]) -> bool:
     return False
 
 
+def _sort_command_is_read_only(argv: tuple[str, ...]) -> bool:
+    """Allow formatting-only sort calls while rejecting file-writing options."""
+
+    unsafe_long_options = (
+        "--output",
+        "--temporary-directory",
+        "--compress-program",
+    )
+    for token in argv[1:]:
+        if token.startswith("--"):
+            option = token.split("=", 1)[0]
+            # GNU long options accept unambiguous abbreviations, so reject a
+            # prefix such as ``--out=...`` as well as the full spelling.
+            if any(unsafe.startswith(option) for unsafe in unsafe_long_options):
+                return False
+        elif token.startswith("-") and token != "-":
+            # Short options may be clustered (for example ``-uo result``).
+            # Conservatively reject any option token containing output (-o)
+            # or temp-directory (-T), even if it also contains safe flags.
+            if any(option in token[1:] for option in ("o", "T")):
+                return False
+    return True
+
+
 def classify_bash_command(
     command: str,
     *,
@@ -289,6 +313,8 @@ def _argv_is_read_only(argv: tuple[str, ...]) -> bool:
             "-okdir",
         }
         return not any(token in mutating for token in argv[1:])
+    if executable == "sort":
+        return _sort_command_is_read_only(argv)
     return executable == "git" and _git_command_is_read_only(argv)
 
 

@@ -705,6 +705,12 @@ def main(argv: list[str] | None = None) -> int:
     telemetry_reason = "hook_unavailable"
     try:
         payload = _read_hook_input(project_supplied=args.project is not None)
+        if payload["hook_event_name"] == "Stop" and payload.get("stop_hook_active"):
+            # A re-fired Stop must be infallibly allowed. Run this before
+            # receipts, projections, mailbox access, or repository closeout so
+            # no stale or unavailable state can recreate the refusal loop.
+            print("{}")
+            return 0
         hook_receipt_dir = args.hook_receipt_dir or (
             args.root.expanduser().resolve().parent / "hook-invocations-v1"
             if args.root is not None

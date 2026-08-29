@@ -218,7 +218,17 @@ def test_relative_nested_target_is_resolved_from_root_cwd(tmp_path: Path) -> Non
     assert decision["normalized_target_paths"] == ["src/allowed.py"]
 
 
-@pytest.mark.parametrize("command", ["pwd", "ls -la", "rg needle .", "git status --short", "sed -n 1,20p README.md"])
+@pytest.mark.parametrize(
+    "command",
+    [
+        "pwd",
+        "ls -la",
+        "rg needle .",
+        "git status --short",
+        "sed -n 1,20p README.md",
+        "sort names.txt",
+    ],
+)
 def test_simple_read_only_bash_does_not_require_repository_or_claim(
     tmp_path: Path,
     command: str,
@@ -239,6 +249,16 @@ def test_compound_bash_does_not_require_claim_when_every_command_is_read_only(tm
         tool_input={"command": "git status --short && pwd"},
         session="wrong-session",
     )
+
+    decision = _evaluate(tmp_path, payload, tmp_path / "missing-claims")
+
+    assert decision["decision"] == "allow"
+    assert decision["reason_code"] == "bash_read_only"
+
+
+def test_workspace_inventory_can_pipe_through_safe_sort(tmp_path: Path) -> None:
+    command = "find /home/brian/code -maxdepth 2 -type d -iname '*levin*' | sort"
+    payload = _payload(cwd=tmp_path, tool="Bash", tool_input={"command": command})
 
     decision = _evaluate(tmp_path, payload, tmp_path / "missing-claims")
 
@@ -517,6 +537,12 @@ def test_explicit_mode_exempts_read_only_bash_from_repo_local_enforce_selected(
         "git branch new-name",
         "git show HEAD > snapshot.txt",
         "rg --pre 'touch marker' needle .",
+        "sort names.txt -o sorted.txt",
+        "sort names.txt -uo sorted.txt",
+        "sort names.txt --output=sorted.txt",
+        "sort names.txt --out=sorted.txt",
+        "sort names.txt -T .",
+        "sort names.txt --compress-program='touch marker'",
         "/tmp/ls",
         "./git status",
         "/opt/tools/rg needle .",

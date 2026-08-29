@@ -19,6 +19,7 @@ non-functional.
 
 from __future__ import annotations
 
+from enforced_planning.effective_project_profile import load_effective_project_profile
 from enforced_planning.installed_framework import drop_vendored_package_files
 
 import argparse
@@ -30,9 +31,6 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
-
-import yaml  # type: ignore[import-untyped]
-
 
 FRAMEWORK_ROOT = Path(__file__).resolve().parents[1]
 
@@ -91,12 +89,14 @@ PREWRITE_SUPPORT_FILES: dict[str, str] = {
     "enforced_planning/coordination_claims.py": "enforced_planning/coordination_claims.py",
     "enforced_planning/claim_mutation_receipts.py": "enforced_planning/claim_mutation_receipts.py",
     "enforced_planning/worktree_paths.py": "enforced_planning/worktree_paths.py",
+    "enforced_planning/effective_project_profile.py": "enforced_planning/effective_project_profile.py",
 }
 
 ARTIFACT_CREATION_SUPPORT_FILES: dict[str, str] = {
     "scripts/artifact_creation.py": "scripts/artifact_creation.py",
     "enforced_planning/artifact_creation.py": "enforced_planning/artifact_creation.py",
     "enforced_planning/prewrite_claim_fast.py": "enforced_planning/prewrite_claim_fast.py",
+    "enforced_planning/effective_project_profile.py": "enforced_planning/effective_project_profile.py",
 }
 
 MAILBOX_SUPPORT_FILES: dict[str, str] = {
@@ -429,44 +429,20 @@ def _render_settings(settings: dict[str, Any]) -> str:
 
 
 def _configured_prewrite_mode(repo_root: Path) -> str:
-    """Return the explicit portable mode without enabling absent configuration."""
+    """Return the pre-write mode effective after the project master switch."""
 
-    path = repo_root / "meta-process.yaml"
-    if not path.is_file():
-        return "off"
-    payload = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    if not isinstance(payload, dict):
-        raise ValueError("meta-process.yaml must be a mapping")
-    meta_process = payload.get("meta_process", payload)
-    if not isinstance(meta_process, dict):
-        raise ValueError("meta-process.yaml meta_process must be a mapping")
-    claims = meta_process.get("claims", {}) or {}
-    if not isinstance(claims, dict):
-        raise ValueError("meta-process.yaml claims must be a mapping")
-    mode = claims.get("prewrite_mode", "off")
-    if mode not in {"off", "observe", "enforce"}:
-        raise ValueError("claims.prewrite_mode must be off, observe, or enforce")
+    mode = load_effective_project_profile(repo_root).controls[
+        "claims.prewrite_mode"
+    ].effective
     return str(mode)
 
 
 def _configured_artifact_creation_mode(repo_root: Path) -> str:
-    """Return the explicit artifact-creation mode without enabling it implicitly."""
+    """Return the artifact mode effective after the project master switch."""
 
-    path = repo_root / "meta-process.yaml"
-    if not path.is_file():
-        return "off"
-    payload = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    if not isinstance(payload, dict):
-        raise ValueError("meta-process.yaml must be a mapping")
-    meta_process = payload.get("meta_process", payload)
-    if not isinstance(meta_process, dict):
-        raise ValueError("meta-process.yaml meta_process must be a mapping")
-    settings = meta_process.get("artifact_creation", {}) or {}
-    if not isinstance(settings, dict):
-        raise ValueError("meta-process.yaml artifact_creation must be a mapping")
-    mode = settings.get("mode", "off")
-    if mode not in {"off", "observe", "enforce"}:
-        raise ValueError("artifact_creation.mode must be off, observe, or enforce")
+    mode = load_effective_project_profile(repo_root).controls[
+        "artifact_creation.mode"
+    ].effective
     return str(mode)
 
 

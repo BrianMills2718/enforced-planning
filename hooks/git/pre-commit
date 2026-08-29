@@ -30,6 +30,38 @@ echo "Running pre-commit checks (mode: $HOOK_MODE)..."
 REPO_ROOT=$(git rev-parse --show-toplevel)
 cd "$REPO_ROOT"
 
+# The installed effective-profile CLI is the single owner of the project-wide
+# master switch. Legacy consumers without that runtime retain their existing
+# hook behavior; installed consumers fail loudly on an invalid profile.
+PROFILE_SCRIPT=""
+if [[ -f "$REPO_ROOT/scripts/effective_project_profile.py" ]]; then
+    PROFILE_SCRIPT="$REPO_ROOT/scripts/effective_project_profile.py"
+elif [[ -f "$REPO_ROOT/scripts/meta/effective_project_profile.py" ]]; then
+    PROFILE_SCRIPT="$REPO_ROOT/scripts/meta/effective_project_profile.py"
+fi
+if [[ -n "$PROFILE_SCRIPT" ]]; then
+    if ! PROFILE_JSON=$("$PYTHON_BIN" "$PROFILE_SCRIPT" --repo-root "$REPO_ROOT"); then
+        echo "ERROR: unable to resolve the effective governance profile."
+        exit 2
+    fi
+    if ! MASTER_ENABLED=$(printf '%s' "$PROFILE_JSON" | "$PYTHON_BIN" -c '
+import json
+import sys
+
+value = json.load(sys.stdin).get("master_enabled")
+if not isinstance(value, bool):
+    raise SystemExit(2)
+print("true" if value else "false")
+'); then
+        echo "ERROR: effective governance profile did not contain a boolean master_enabled."
+        exit 2
+    fi
+    if [[ "$MASTER_ENABLED" == "false" ]]; then
+        echo "Governance checks disabled by meta_process.governance.enabled: false."
+        exit 0
+    fi
+fi
+
 # --- Canonical-checkout guard -------------------------------------------------
 # Implementation belongs in a claimed worktree at <repo>/worktrees/<branch>/,
 # never the canonical checkout. Only two of 88 active governed repositories

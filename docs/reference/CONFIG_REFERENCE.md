@@ -53,6 +53,11 @@ Existing repositories with old-style opt-in configs will continue to work with
 explicitly disabled settings, but new installations ship with governance enabled
 by default.
 
+Native artifact creation, plan validation, generated pre-write/artifact hook
+wiring, and the portable Git pre-commit hook consume this effective profile.
+With the master false they allow or skip governed checks while retaining each
+configured mode; after re-enable the same modes take effect again.
+
 ---
 
 ## plans

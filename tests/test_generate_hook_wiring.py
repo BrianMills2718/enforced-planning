@@ -412,6 +412,51 @@ def test_generate_hook_wiring_installs_artifact_creation_gate_only_when_opted_in
     assert second_payload["changed_files"] == []
 
 
+def test_generate_hook_wiring_uses_effective_modes_across_master_toggle(
+    tmp_path: Path,
+) -> None:
+    """Configured hook modes remain stored while the master controls wiring effects."""
+
+    _scaffold_target_repo(tmp_path)
+    config_path = tmp_path / "meta-process.yaml"
+    config_path.write_text(
+        "meta_process:\n"
+        "  governance:\n"
+        "    enabled: false\n"
+        "  claims:\n"
+        "    prewrite_mode: enforce\n"
+        "  artifact_creation:\n"
+        "    mode: enforce\n",
+        encoding="utf-8",
+    )
+    disabled = subprocess.run(
+        [sys.executable, str(SCRIPT), "--repo-root", str(tmp_path), "--write", "--json"],
+        cwd=str(PROJECT_META_ROOT),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert disabled.returncode == 0, disabled.stderr
+    assert not (tmp_path / ".claude" / "hooks" / "prewrite-claim-gate.sh").exists()
+    assert not (tmp_path / ".claude" / "hooks" / "artifact-creation-gate.sh").exists()
+
+    config_path.write_text(
+        config_path.read_text(encoding="utf-8").replace("enabled: false", "enabled: true"),
+        encoding="utf-8",
+    )
+    restored = subprocess.run(
+        [sys.executable, str(SCRIPT), "--repo-root", str(tmp_path), "--write", "--json"],
+        cwd=str(PROJECT_META_ROOT),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert restored.returncode == 0, restored.stderr
+    assert (tmp_path / ".claude" / "hooks" / "prewrite-claim-gate.sh").exists()
+    assert (tmp_path / ".claude" / "hooks" / "artifact-creation-gate.sh").exists()
+    assert (tmp_path / "enforced_planning" / "effective_project_profile.py").exists()
+
+
 def test_artifact_creation_profile_has_no_read_gate_dependency_or_side_effect(
     tmp_path: Path,
 ) -> None:

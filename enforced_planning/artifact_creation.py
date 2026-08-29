@@ -23,6 +23,7 @@ import uuid
 import yaml  # type: ignore[import-untyped]
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
+from enforced_planning.effective_project_profile import resolve_effective_project_profile
 from enforced_planning.prewrite_claim_fast import FastPreWriteError, adapt_native_payload
 
 
@@ -168,7 +169,7 @@ def _is_tracked(repo_root: Path, relative_path: str) -> bool:
 
 
 def load_artifact_settings(repo_root: Path) -> dict[str, Any]:
-    """Load the explicit artifact-creation settings from meta-process.yaml."""
+    """Load artifact settings after applying the project-wide master switch."""
 
     config_path = repo_root / "meta-process.yaml"
     if not config_path.is_file():
@@ -180,9 +181,11 @@ def load_artifact_settings(repo_root: Path) -> dict[str, Any]:
     settings = meta_process.get("artifact_creation", {}) or {}
     if not isinstance(settings, dict):
         raise ArtifactCreationError("meta-process.yaml artifact_creation must be a mapping")
-    mode = settings.get("mode", "off")
-    if mode not in {"off", "observe", "enforce"}:
-        raise ArtifactCreationError("artifact_creation.mode must be off, observe, or enforce")
+    try:
+        profile = resolve_effective_project_profile(payload)
+    except ValueError as exc:
+        raise ArtifactCreationError(str(exc)) from exc
+    mode = profile.controls["artifact_creation.mode"].effective
     return {
         "mode": mode,
         "policy_file": str(settings.get("policy_file", "scripts/artifact_directory_policy.yaml")),

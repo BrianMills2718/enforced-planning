@@ -19,6 +19,8 @@ from urllib.parse import urlparse
 import yaml  # type: ignore[import-untyped]
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from enforced_planning.effective_project_profile import resolve_effective_project_profile
+
 from enforced_planning.file_context import collect_context, load_relationships
 from enforced_planning.notebook_registry_validation import (
     load_notebook_registry,
@@ -445,6 +447,13 @@ def parse_planning_integrity_config_bytes(
             config = PlanningIntegrityConfigV1.model_validate(raw_integrity)
         except ValidationError as exc:
             raise PlanningIntegrityError(f"invalid plans.integrity configuration: {exc}") from exc
+    try:
+        profile = resolve_effective_project_profile(payload)
+    except ValueError as exc:
+        raise PlanningIntegrityError(str(exc)) from exc
+    config = config.model_copy(
+        update={"mode": profile.controls["plans.integrity.mode"].effective}
+    )
     return config, normalized_dir, _sha256(content)
 
 

@@ -25,6 +25,28 @@ def _hook_repo(tmp_path: Path) -> tuple[Path, Path]:
     return repo_root, hook_copy
 
 
+def _install_effective_profile_runtime(repo_root: Path) -> None:
+    """Copy the installed-consumer profile entrypoint and its package owner."""
+
+    package = repo_root / "enforced_planning"
+    package.mkdir()
+    (package / "__init__.py").write_text("", encoding="utf-8")
+    (package / "effective_project_profile.py").write_text(
+        (PROJECT_META_ROOT / "enforced_planning" / "effective_project_profile.py").read_text(
+            encoding="utf-8"
+        ),
+        encoding="utf-8",
+    )
+    scripts_meta = repo_root / "scripts" / "meta"
+    scripts_meta.mkdir(parents=True)
+    (scripts_meta / "effective_project_profile.py").write_text(
+        (PROJECT_META_ROOT / "scripts" / "effective_project_profile.py").read_text(
+            encoding="utf-8"
+        ),
+        encoding="utf-8",
+    )
+
+
 def test_pre_commit_hook_invokes_doc_coupling_in_staged_mode(tmp_path: Path) -> None:
     """The hook should inspect the staged slice, not the whole branch history."""
 
@@ -155,6 +177,57 @@ def test_pre_commit_hook_blocks_when_explicitly_requested(tmp_path: Path) -> Non
 
     assert result.returncode == 1
     assert "failed in explicit block mode" in result.stdout
+
+
+def test_pre_commit_master_off_skips_blocks_and_reenable_restores_them(
+    tmp_path: Path,
+) -> None:
+    """The native hook must consume the same reversible master profile."""
+
+    repo_root, hook_copy = _hook_repo(tmp_path)
+    _install_effective_profile_runtime(repo_root)
+    marker = repo_root / "doc-coupling-called"
+    (repo_root / "scripts" / "meta" / "check_doc_coupling.py").write_text(
+        f"from pathlib import Path\nPath({str(marker)!r}).write_text('called')\nraise SystemExit(1)\n",
+        encoding="utf-8",
+    )
+    config_path = repo_root / "meta-process.yaml"
+    config_path.write_text(
+        "meta_process:\n  governance:\n    enabled: false\n",
+        encoding="utf-8",
+    )
+    environment = {
+        **os.environ,
+        "ENFORCED_PLANNING_HOOK_MODE": "block",
+        "ALLOW_CANONICAL_CHECKOUT_COMMIT": "1",
+        "CANONICAL_CHECKOUT_HATCH_OVERRIDE": "fixture repository",
+    }
+    disabled = subprocess.run(
+        ["bash", str(hook_copy)],
+        cwd=repo_root,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert disabled.returncode == 0
+    assert "Governance checks disabled by meta_process.governance.enabled: false" in disabled.stdout
+    assert not marker.exists()
+
+    config_path.write_text(
+        config_path.read_text(encoding="utf-8").replace("enabled: false", "enabled: true"),
+        encoding="utf-8",
+    )
+    restored = subprocess.run(
+        ["bash", str(hook_copy)],
+        cwd=repo_root,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert restored.returncode == 1
+    assert marker.read_text(encoding="utf-8") == "called"
 
 
 def test_pre_commit_hook_rejects_unknown_mode(tmp_path: Path) -> None:

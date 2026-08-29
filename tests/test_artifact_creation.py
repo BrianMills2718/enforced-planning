@@ -30,7 +30,12 @@ def _write_yaml(path: Path, payload: object) -> None:
     path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
 
 
-def _repo(tmp_path: Path, *, mode: str = "enforce") -> Path:
+def _repo(
+    tmp_path: Path,
+    *,
+    mode: str = "enforce",
+    governance_enabled: bool | None = None,
+) -> Path:
     """Create one minimal repository with Markdown directory rules."""
 
     repo = tmp_path / "repo"
@@ -38,17 +43,18 @@ def _repo(tmp_path: Path, *, mode: str = "enforce") -> Path:
     _git(repo, "init")
     _git(repo, "config", "user.email", "fixture@example.com")
     _git(repo, "config", "user.name", "Fixture")
+    meta_process: dict[str, object] = {
+        "artifact_creation": {
+            "mode": mode,
+            "policy_file": "scripts/artifact_directory_policy.yaml",
+            "registry_file": "scripts/relationships.yaml",
+        }
+    }
+    if governance_enabled is not None:
+        meta_process["governance"] = {"enabled": governance_enabled}
     _write_yaml(
         repo / "meta-process.yaml",
-        {
-            "meta_process": {
-                "artifact_creation": {
-                    "mode": mode,
-                    "policy_file": "scripts/artifact_directory_policy.yaml",
-                    "registry_file": "scripts/relationships.yaml",
-                }
-            }
-        },
+        {"meta_process": meta_process},
     )
     _write_yaml(
         repo / "scripts" / "artifact_directory_policy.yaml",
@@ -163,6 +169,39 @@ def test_missing_intent_is_denied_in_enforce_and_observed_in_observe(tmp_path: P
     assert enforced.decision == "deny"
     assert observed.decision == "observe_violation"
     assert enforced.target_decisions[0].reason_code == observed.target_decisions[0].reason_code == "intent_missing"
+
+
+def test_master_off_allows_artifact_creation_and_reenable_restores_enforcement(
+    tmp_path: Path,
+) -> None:
+    """The master switch must suppress effects without rewriting the configured mode."""
+
+    repo = _repo(tmp_path, mode="enforce", governance_enabled=False)
+    disabled = evaluate_paths(
+        repo_root=repo,
+        target_paths=("docs/new.md",),
+        client="test",
+        tool_name="create",
+        write_receipt=False,
+    )
+    assert disabled.mode == "off"
+    assert disabled.decision == "allow"
+    assert disabled.target_decisions[0].reason_code == "gate_off"
+
+    config_path = repo / "meta-process.yaml"
+    config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    assert config["meta_process"]["artifact_creation"]["mode"] == "enforce"
+    config["meta_process"]["governance"]["enabled"] = True
+    _write_yaml(config_path, config)
+    restored = evaluate_paths(
+        repo_root=repo,
+        target_paths=("docs/new.md",),
+        client="test",
+        tool_name="create",
+        write_receipt=False,
+    )
+    assert restored.mode == "enforce"
+    assert restored.decision == "deny"
 
 
 def test_duplicate_canonical_concern_is_denied(tmp_path: Path) -> None:

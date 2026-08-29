@@ -867,16 +867,100 @@ def test_default_off_reenable_and_wiki_freshness_journey(tmp_path: Path) -> None
 
     config_path = tmp_path / "meta-process.yaml"
     config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    config["meta_process"]["artifact_creation"] = {
+        "mode": "enforce",
+        "policy_file": "scripts/artifact_directory_policy.yaml",
+        "registry_file": "scripts/runtime-proof-relationships.yaml",
+    }
+    config_path.write_text(yaml.safe_dump(config, sort_keys=False), encoding="utf-8")
+    (tmp_path / "scripts" / "artifact_directory_policy.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "schema_version": 1,
+                "controlled_globs": ["docs/runtime-proof.md"],
+                "directory_rules": [
+                    {
+                        "id": "runtime-proof",
+                        "path_globs": ["docs/runtime-proof.md"],
+                        "allowed_kinds": ["documentation"],
+                        "allowed_authorities": ["canonical"],
+                    }
+                ],
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+    artifact_registry_path = tmp_path / "scripts" / "runtime-proof-relationships.yaml"
+    artifact_registry_path.write_text(
+        yaml.safe_dump({"schema_version": 2, "artifacts": []}, sort_keys=False),
+        encoding="utf-8",
+    )
+    relationships_path = tmp_path / "scripts" / "relationships.yaml"
+    artifact_path = tmp_path / "docs" / "runtime-proof.md"
+    artifact_path.write_text("# Missing registered intent\n", encoding="utf-8")
+    plan_path = tmp_path / "docs" / "plans" / "999_runtime-proof.md"
+    plan_path.write_text("# Structurally incomplete plan\n", encoding="utf-8")
+    subprocess.run(
+        ["git", "-C", str(tmp_path), "add", str(artifact_path), str(plan_path)],
+        check=True,
+    )
+    artifact_command = [
+        sys.executable,
+        str(tmp_path / "scripts" / "artifact_creation.py"),
+        "check",
+        "--repo-root",
+        str(tmp_path),
+        "--receipt-path",
+        str(tmp_path / "artifact-receipts.jsonl"),
+        "--json",
+    ]
+    plan_command = [
+        sys.executable,
+        str(tmp_path / "scripts" / "meta" / "validate_plan.py"),
+        "--repo-root",
+        str(tmp_path),
+        "--plan-file",
+        str(plan_path),
+        "--plan",
+        "999",
+        "--config",
+        str(relationships_path),
+        "--warn-only",
+        "--json",
+    ]
+    default_artifact = subprocess.run(artifact_command, capture_output=True, text=True)
+    default_plan = subprocess.run(plan_command, capture_output=True, text=True)
+    assert default_artifact.returncode == 2, default_artifact.stdout + default_artifact.stderr
+    assert json.loads(default_artifact.stdout)["decision"] == "deny"
+    assert default_plan.returncode == 1, default_plan.stdout + default_plan.stderr
+    assert json.loads(default_plan.stdout)["plan_integrity"]["mode"] == "enforce"
+
     config["meta_process"]["governance"]["enabled"] = False
     config_path.write_text(yaml.safe_dump(config, sort_keys=False), encoding="utf-8")
     disabled = json.loads(subprocess.run(profile_command, check=True, capture_output=True, text=True).stdout)
     assert disabled["controls"]["plans.integrity.mode"]["effective"] == "off"
+    assert disabled["controls"]["artifact_creation.mode"]["configured"] == "enforce"
+    assert disabled["controls"]["artifact_creation.mode"]["effective"] == "off"
     assert disabled["controls"]["knowledge_navigation.enabled"]["effective"] is False
+    disabled_artifact = subprocess.run(artifact_command, capture_output=True, text=True)
+    disabled_plan = subprocess.run(plan_command, capture_output=True, text=True)
+    assert disabled_artifact.returncode == 0, disabled_artifact.stdout + disabled_artifact.stderr
+    assert json.loads(disabled_artifact.stdout)["mode"] == "off"
+    assert disabled_plan.returncode == 0, disabled_plan.stdout + disabled_plan.stderr
+    assert json.loads(disabled_plan.stdout)["plan_integrity"]["mode"] == "off"
 
     config["meta_process"]["governance"]["enabled"] = True
     config_path.write_text(yaml.safe_dump(config, sort_keys=False), encoding="utf-8")
     restored = json.loads(subprocess.run(profile_command, check=True, capture_output=True, text=True).stdout)
     assert restored["controls"]["plans.integrity.mode"]["effective"] == "enforce"
+    assert restored["controls"]["artifact_creation.mode"]["effective"] == "enforce"
+    restored_artifact = subprocess.run(artifact_command, capture_output=True, text=True)
+    restored_plan = subprocess.run(plan_command, capture_output=True, text=True)
+    assert restored_artifact.returncode == 2, restored_artifact.stdout + restored_artifact.stderr
+    assert json.loads(restored_artifact.stdout)["decision"] == "deny"
+    assert restored_plan.returncode == 1, restored_plan.stdout + restored_plan.stderr
+    assert json.loads(restored_plan.stdout)["plan_integrity"]["mode"] == "enforce"
 
     wiki = [sys.executable, str(tmp_path / "scripts/meta/docstring_wiki.py"), "--repo-root", str(tmp_path)]
     assert subprocess.run([*wiki, "--write"], capture_output=True, text=True).returncode == 0

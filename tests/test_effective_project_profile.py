@@ -7,6 +7,7 @@ import pytest
 from enforced_planning.effective_project_profile import load_effective_project_profile
 from enforced_planning.effective_project_profile import resolve_effective_project_profile
 from enforced_planning.governed_repo_audit import audit_repo
+from enforced_planning.plan_validation import parse_planning_integrity_config_bytes
 
 
 def test_absent_configuration_is_default_on() -> None:
@@ -52,3 +53,24 @@ def test_master_off_makes_missing_governance_nonblocking_in_audit(tmp_path: Path
     assert report["classification"] == "disabled"
     assert report["missing_required"] == []
     assert report["suppressed_missing_required"]
+
+
+def test_plan_validation_consumes_default_off_and_reenabled_effective_modes() -> None:
+    configured = b"""meta_process:
+  governance:
+    enabled: false
+  plans:
+    integrity:
+      mode: enforce
+      contract_version: 1.0.0
+      minimum_plan_number: 1
+"""
+    disabled, _, _ = parse_planning_integrity_config_bytes(configured)
+    assert disabled.mode == "off"
+
+    restored, _, _ = parse_planning_integrity_config_bytes(
+        configured.replace(b"enabled: false", b"enabled: true")
+    )
+    assert restored.mode == "enforce"
+    defaulted, _, _ = parse_planning_integrity_config_bytes(None)
+    assert defaulted.mode == "off"

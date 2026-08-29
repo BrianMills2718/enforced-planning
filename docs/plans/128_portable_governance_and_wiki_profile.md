@@ -163,6 +163,8 @@ first-dogfood decisions.
 
 - `pytest -q tests/test_effective_project_profile.py tests/test_install_governed_repo.py::test_install_governed_repo_write_bootstraps_minimum_repo_and_passes_audit` — 5 passed.
 - Source audit resolved master governance and derived navigation enabled.
+- Disposable installed-consumer journey passed: default on, master off, re-enable,
+  stale wiki detection, regeneration, and fresh check.
 - The broader installer file passed 42 tests and exposed three pre-existing
   dependency-closure failures; they are not evidence for or against this resolver.
 - Runtime hook readers do not yet consume the master switch, so whole-stack runtime

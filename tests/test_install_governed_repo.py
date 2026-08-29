@@ -843,6 +843,50 @@ def test_install_governed_repo_write_bootstraps_minimum_repo_and_passes_audit(
     assert "worktree-remove:" in makefile_text
     assert "session-start:" in makefile_text
     assert "session-heartbeat:" in makefile_text
+
+
+def test_default_off_reenable_and_wiki_freshness_journey(tmp_path: Path) -> None:
+    """One disposable consumer must exercise the Plan 128 stable example."""
+
+    _write_minimal_claude(tmp_path)
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    source = tmp_path / "example.py"
+    source.write_text('"""Initial documented module."""\n', encoding="utf-8")
+    installed = _run("--repo-root", str(tmp_path), "--write", "--json", cwd=PROJECT_META_ROOT)
+    assert installed.returncode == 0, installed.stdout + installed.stderr
+    subprocess.run(["git", "-C", str(tmp_path), "add", "-A"], check=True)
+    subprocess.run(
+        ["git", "-C", str(tmp_path), "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-qm", "baseline"],
+        check=True,
+    )
+
+    profile_command = [sys.executable, str(tmp_path / "scripts/meta/effective_project_profile.py"), "--repo-root", str(tmp_path)]
+    default_profile = json.loads(subprocess.run(profile_command, check=True, capture_output=True, text=True).stdout)
+    assert default_profile["master_enabled"] is True
+    assert default_profile["controls"]["knowledge_navigation.enabled"]["effective"] is True
+
+    config_path = tmp_path / "meta-process.yaml"
+    config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    config["meta_process"]["governance"]["enabled"] = False
+    config_path.write_text(yaml.safe_dump(config, sort_keys=False), encoding="utf-8")
+    disabled = json.loads(subprocess.run(profile_command, check=True, capture_output=True, text=True).stdout)
+    assert disabled["controls"]["plans.integrity.mode"]["effective"] == "off"
+    assert disabled["controls"]["knowledge_navigation.enabled"]["effective"] is False
+
+    config["meta_process"]["governance"]["enabled"] = True
+    config_path.write_text(yaml.safe_dump(config, sort_keys=False), encoding="utf-8")
+    restored = json.loads(subprocess.run(profile_command, check=True, capture_output=True, text=True).stdout)
+    assert restored["controls"]["plans.integrity.mode"]["effective"] == "enforce"
+
+    wiki = [sys.executable, str(tmp_path / "scripts/meta/docstring_wiki.py"), "--repo-root", str(tmp_path)]
+    assert subprocess.run([*wiki, "--write"], capture_output=True, text=True).returncode == 0
+    source.write_text('"""Changed documented module."""\n', encoding="utf-8")
+    stale = subprocess.run([*wiki, "--check"], capture_output=True, text=True)
+    assert stale.returncode != 0
+    assert "stale" in stale.stdout + stale.stderr
+    assert subprocess.run([*wiki, "--write"], capture_output=True, text=True).returncode == 0
+    assert subprocess.run([*wiki, "--check"], capture_output=True, text=True).returncode == 0
+    makefile_text = (tmp_path / "Makefile").read_text(encoding="utf-8")
     assert "session-status:" in makefile_text
     assert "PROJECT_STATUS_SCRIPT ?= scripts/meta/project_status.py" in makefile_text
     assert "$(PROJECT_STATUS_SCRIPT) --repo-root ." in makefile_text

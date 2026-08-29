@@ -8,9 +8,13 @@ import json
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
+for candidate in Path(__file__).resolve().parents:
+    if (candidate / "enforced_planning").is_dir():
+        if str(candidate) not in sys.path:
+            sys.path.insert(0, str(candidate))
+        break
+else:
+    raise RuntimeError("unable to locate repository root containing enforced_planning")
 
 from enforced_planning.effective_project_profile import load_effective_project_profile
 

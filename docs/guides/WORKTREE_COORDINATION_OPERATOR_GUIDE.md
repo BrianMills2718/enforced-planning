@@ -65,9 +65,15 @@ Hook targeting keeps three identities separate:
 Codex subagent events use their non-empty `agent_id` as the effective session
 identity; top-level events use `session_id`. A subagent never inherits its
 parent's claim or read-first state and must receive its own explicit target and
-claim. From a non-Git launch directory, zero or multiple healthy target claims
-fail closed for mutations. File tools continue to resolve their explicit target
-paths, independent of the shell launch directory.
+claim. One healthy exact-session claim selects the session target even when the
+immutable launch directory happens to be another Git repository. A Git launch
+directory is a local fallback only when no exact-session claim exists; an
+ambiguous, unhealthy, or stale claim state never falls back to it for mutation.
+When launch and claim already name the same worktree, ordinary repo-local
+commands remain directly admissible. When they differ, mutating Bash must attest
+the claimed runtime directory with the exact supported `-C` form. File tools
+continue to resolve their explicit absolute target paths independently, while
+relative targets use the exact claimed worktree.
 
 When no claim exists and the immutable launch directory is a non-Git workspace
 root, the only mutation exception is one typed maintenance transaction executed

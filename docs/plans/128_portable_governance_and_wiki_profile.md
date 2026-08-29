@@ -1,6 +1,6 @@
 # Plan #128: Portable Governance And Wiki Profile
 
-**Status:** In Progress — effective-profile resolver implemented; runtime consumers next
+**Status:** In Progress — effective-profile resolver implemented; native runtime consumer binding active
 **Type:** portable framework implementation
 **Priority:** Critical
 **phase_ref:** "Phase 9: Fleet Adoption and Framework Maintenance"
@@ -118,12 +118,18 @@ language, wiki format, feedback store, or authority source.
 - `templates/meta-process.yaml.example`, `docs/reference/CONFIG_REFERENCE.md` (modify)
 - `GETTING_STARTED.md` (modify)
 - `tests/test_effective_project_profile.py`, `tests/test_install_governed_repo.py` (test)
+- `scripts/prewrite_claim_gate.py`, `enforced_planning/artifact_creation.py`,
+  `enforced_planning/plan_validation.py`, `enforced_planning/hook_wiring.py`, and
+  `hooks/git/pre-commit` (bind native consumers to the effective profile)
+- focused prewrite, artifact-creation, hook-wiring, and pre-commit tests (test)
 - this plan, work graph, plan index, and roadmap (modify)
 
 ## Plan
 
 1. Define the typed resolver. 2. Join installer and audit. 3. Preserve modes while
-forcing effective off. 4. Run the disposable wiki journey. 5. Record exact evidence.
+forcing effective off. 4. Run the disposable wiki journey. 5. Bind the effective
+profile into native enforcement consumers. 6. Prove default-on, master-off, and
+re-enabled behavior through an installed disposable project. 7. Record exact evidence.
 
 ## Critical Path Classification
 
@@ -135,6 +141,8 @@ off, re-enable, stale detection, and refresh.
 - `pytest -q tests/test_effective_project_profile.py tests/test_install_governed_repo.py`
 - `python scripts/self_test.py`
 - one temporary installed-consumer journey using canonical CLI entrypoints
+- focused native-consumer checks for prewrite, artifact creation, hook generation,
+  plan validation, and pre-commit behavior
 
 ## Acceptance Criteria
 
@@ -144,6 +152,8 @@ off, re-enable, stale detection, and refresh.
 4. Installer and audit expose matching machine-readable profile fields.
 5. Disposable consumer detects stale derived wiki and passes after refresh.
 6. Documentation keeps generated wiki non-authoritative.
+7. A fresh restricted bootstrap and stale-projection recovery command are admissible;
+   denials name the exact executable recovery action instead of creating a circular gate.
 
 ## Documentation Updates
 
@@ -169,6 +179,10 @@ first-dogfood decisions.
   dependency-closure failures; they are not evidence for or against this resolver.
 - Runtime hook readers do not yet consume the master switch, so whole-stack runtime
   disablement is not yet claimed.
+- A fresh Codex Plan 128 session reproduced two prewrite bootstrap failures: stale
+  projection recovery blocked its own refresh command, and restricted Plan-only
+  bootstrap was outcome-gated before it could define the selectable work unit. These
+  observations are acceptance inputs for `pgw-02-runtime-consumer-binding`.
 
 ## Progress
 

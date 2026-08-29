@@ -934,7 +934,7 @@ def test_mailbox_obligation_gate_blocks_mutation_allows_exact_ack_then_passes(
 def test_mailbox_obligation_gate_blocks_stop_until_acknowledged(
     mailbox: tuple[CoordinationMessageStore, Path, Path],
 ) -> None:
-    """Final-response delivery cannot pass while a displayed message remains active."""
+    """An active message blocks once, then a re-fired Stop must be allowed."""
 
     store, claims_dir, root = mailbox
     persisted = store.send(
@@ -973,7 +973,9 @@ def test_mailbox_obligation_gate_blocks_stop_until_acknowledged(
     )
 
     assert json.loads(first.stdout)["decision"] == "block"
-    assert json.loads(repeated.stdout)["decision"] == "block"
+    repeated_payload = json.loads(repeated.stdout)
+    assert "decision" not in repeated_payload
+    assert repeated.returncode == 0
     boundary_records = store.boundary_blocks(persisted.message.message_id)
     assert len(boundary_records) == 1
     assert boundary_records[0].hook_event_name == "Stop"

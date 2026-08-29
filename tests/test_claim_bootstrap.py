@@ -182,7 +182,250 @@ def _configure_maintenance_runtime(
         "_poll_mailbox",
         lambda **_kwargs: {"polled": True, "active_count": 0},
     )
+    monkeypatch.setattr(
+        claim_bootstrap,
+        "_project_graph_authority",
+        lambda repo: claim_bootstrap.ProjectGraphRepositoryAuthority(
+            repo.name, f"Brian/{repo.name}", "main", "origin"
+        ),
+    )
+    monkeypatch.setattr(
+        claim_bootstrap,
+        "_fresh_remote_default_revision",
+        lambda repo, _authority: subprocess.run(
+            ["git", "-C", str(repo), "rev-parse", "HEAD"],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip(),
+    )
     return claims_dir, trackers_dir
+
+
+def _project_graph_fixture(
+    tmp_path: Path,
+    *,
+    project_id: str = "agent-skills",
+) -> tuple[Path, Path, str, str]:
+    remote = tmp_path / "agent-skills.git"
+    repo = tmp_path / "agent-skills"
+    subprocess.run(["git", "init", "--bare", str(remote)], check=True, capture_output=True)
+    subprocess.run(["git", "init", "-b", "main", str(repo)], check=True, capture_output=True)
+    subprocess.run(
+        ["git", "-C", str(repo), "remote", "add", "origin", str(remote)],
+        check=True,
+        capture_output=True,
+    )
+    (repo / "CLAUDE.md").write_text("# Agent Skills instructions\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(repo), "add", "CLAUDE.md"], check=True, capture_output=True)
+    subprocess.run(
+        [
+            "git", "-C", str(repo), "-c", "user.name=Test User", "-c",
+            "user.email=test@example.invalid", "commit", "-m", "initial",
+        ],
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(["git", "-C", str(repo), "push", "-u", "origin", "main"], check=True, capture_output=True)
+    subprocess.run(
+        ["git", "--git-dir", str(remote), "symbolic-ref", "HEAD", "refs/heads/main"],
+        check=True,
+        capture_output=True,
+    )
+    stale_head = subprocess.run(
+        ["git", "-C", str(repo), "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    publisher = tmp_path / "publisher"
+    subprocess.run(["git", "clone", "-b", "main", str(remote), str(publisher)], check=True, capture_output=True)
+    (publisher / "fresh.txt").write_text("fresh remote content\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(publisher), "add", "fresh.txt"], check=True, capture_output=True)
+    subprocess.run(
+        [
+            "git", "-C", str(publisher), "-c", "user.name=Test User", "-c",
+            "user.email=test@example.invalid", "commit", "-m", "remote advance",
+        ],
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(["git", "-C", str(publisher), "push", "origin", "main"], check=True, capture_output=True)
+    fresh_head = subprocess.run(
+        ["git", "-C", str(publisher), "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    graph = tmp_path / "PROJECT_GRAPH.json"
+    graph.write_text(
+        json.dumps(
+            [
+                {
+                    "id": project_id,
+                    "record_kind": "repository",
+                    "status": "active",
+                    "github_repo": "Brian/agent-skills",
+                    "default_branch": "main",
+                    "repository_governance": {
+                        "owner_class": "brian",
+                        "approved_remote_owners": ["Brian"],
+                        "mutation_authority": "normal_push",
+                        "publication_authority": "recoverable_git",
+                    },
+                }
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    subprocess.run(
+        ["git", "-C", str(repo), "remote", "set-url", "origin", "git@github.com:Brian/agent-skills.git"],
+        check=True,
+        capture_output=True,
+    )
+    return repo.resolve(), graph, stale_head, fresh_head
+
+
+def test_project_graph_authorizes_registered_brian_repo_without_governed_markers(
+    tmp_path: Path,
+) -> None:
+    repo, graph, _stale_head, _fresh_head = _project_graph_fixture(tmp_path)
+
+    authority = claim_bootstrap._project_graph_authority(repo, project_graph_path=graph)
+
+    assert authority == claim_bootstrap.ProjectGraphRepositoryAuthority(
+        "agent-skills", "Brian/agent-skills", "main", "git@github.com:Brian/agent-skills.git"
+    )
+    assert not (repo / "meta-process.yaml").exists()
+
+
+@pytest.mark.parametrize(
+    "remote",
+    [
+        "https://evil.example/Brian/agent-skills.git",
+        "git@evil.example:Brian/agent-skills.git",
+        "/tmp/Brian/agent-skills.git",
+        "file:///tmp/Brian/agent-skills.git",
+    ],
+)
+def test_project_graph_rejects_non_github_origin_even_when_owner_repo_matches(
+    tmp_path: Path,
+    remote: str,
+) -> None:
+    repo, graph, _stale_head, _fresh_head = _project_graph_fixture(tmp_path)
+    subprocess.run(["git", "-C", str(repo), "remote", "set-url", "origin", remote], check=True, capture_output=True)
+
+    with pytest.raises(claim_bootstrap.ClaimBootstrapError, match="GitHub|github.com"):
+        claim_bootstrap._project_graph_authority(repo, project_graph_path=graph)
+
+
+def test_project_graph_accepts_ssh_alias_only_when_it_resolves_to_github(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo, graph, _stale_head, _fresh_head = _project_graph_fixture(tmp_path)
+    subprocess.run(
+        ["git", "-C", str(repo), "remote", "set-url", "origin", "git@github-personal:Brian/agent-skills.git"],
+        check=True,
+        capture_output=True,
+    )
+    real_run = claim_bootstrap.subprocess.run
+
+    def resolve_alias(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        if argv == ["ssh", "-G", "github-personal"]:
+            return subprocess.CompletedProcess(argv, 0, "hostname github.com\nuser git\n", "")
+        return real_run(argv, **kwargs)
+
+    monkeypatch.setattr(claim_bootstrap.subprocess, "run", resolve_alias)
+
+    authority = claim_bootstrap._project_graph_authority(repo, project_graph_path=graph)
+
+    assert authority.github_repo == "Brian/agent-skills"
+
+
+@pytest.mark.parametrize("authority", ["normal_psuh", "read_only", False, {}])
+def test_project_graph_rejects_unknown_or_unwritable_mutation_authority(
+    tmp_path: Path,
+    authority: object,
+) -> None:
+    repo, graph, _stale_head, _fresh_head = _project_graph_fixture(tmp_path)
+    records = json.loads(graph.read_text(encoding="utf-8"))
+    records[0]["repository_governance"]["mutation_authority"] = authority
+    graph.write_text(json.dumps(records) + "\n", encoding="utf-8")
+
+    with pytest.raises(claim_bootstrap.ClaimBootstrapError, match="mutation authority"):
+        claim_bootstrap._project_graph_authority(repo, project_graph_path=graph)
+
+
+def test_typed_maintenance_bootstraps_from_fresh_remote_not_stale_primary(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo, graph, stale_head, fresh_head = _project_graph_fixture(tmp_path)
+    authority = claim_bootstrap._project_graph_authority(repo, project_graph_path=graph)
+    authority = replace(authority, remote_url=str(tmp_path / "agent-skills.git"))
+    subprocess.run(
+        ["git", "-C", str(repo), "remote", "set-url", "origin", str(tmp_path / "redirected-evil.git")],
+        check=True,
+        capture_output=True,
+    )
+    real_fresh = claim_bootstrap._fresh_remote_default_revision
+    _configure_maintenance_runtime(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        claim_bootstrap,
+        "_project_graph_authority",
+        lambda _target: authority,
+    )
+    monkeypatch.setattr(claim_bootstrap, "_fresh_remote_default_revision", real_fresh)
+    request = claim_bootstrap.parse_request_json(json.dumps(_maintenance_payload(repo)))
+
+    receipt = claim_bootstrap.execute_request(request)
+
+    worktree = repo / "worktrees" / "fix" / "safe-lane"
+    lane_head = subprocess.run(
+        ["git", "-C", str(worktree), "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    assert stale_head != fresh_head
+    assert lane_head == fresh_head
+    assert receipt["result"]["start_revision"] == fresh_head
+    assert (worktree / "fresh.txt").read_text(encoding="utf-8") == "fresh remote content\n"
+
+
+def test_remote_fetch_failure_leaves_no_lane_artifacts(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo, graph, _stale_head, _fresh_head = _project_graph_fixture(tmp_path)
+    authority = claim_bootstrap._project_graph_authority(repo, project_graph_path=graph)
+    authority = replace(authority, remote_url=str(tmp_path / "missing.git"))
+    subprocess.run(
+        ["git", "-C", str(repo), "remote", "set-url", "origin", str(tmp_path / "missing.git")],
+        check=True,
+        capture_output=True,
+    )
+    real_fresh = claim_bootstrap._fresh_remote_default_revision
+    _configure_maintenance_runtime(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        claim_bootstrap,
+        "_project_graph_authority",
+        lambda _target: authority,
+    )
+    monkeypatch.setattr(claim_bootstrap, "_fresh_remote_default_revision", real_fresh)
+    request = claim_bootstrap.parse_request_json(json.dumps(_maintenance_payload(repo)))
+
+    with pytest.raises(claim_bootstrap.ClaimBootstrapError, match="does not appear to be a git repository"):
+        claim_bootstrap.execute_request(request)
+
+    assert not (repo / "worktrees").exists()
+    assert subprocess.run(
+        ["git", "-C", str(repo), "show-ref", "--verify", "refs/heads/fix/safe-lane"],
+        capture_output=True,
+        check=False,
+    ).returncode != 0
 
 
 def test_typed_maintenance_worktree_transaction_creates_claim_tracker_and_projection(
@@ -288,16 +531,17 @@ def test_typed_maintenance_rejects_traversal_and_shell_branches(tmp_path: Path, 
         )
 
 
-def test_typed_maintenance_rejects_non_governed_repo(tmp_path: Path) -> None:
+def test_typed_maintenance_rejects_unregistered_project_graph_repo(tmp_path: Path) -> None:
     repo = _governed_repo(tmp_path)
-    (repo / "docs" / "plans" / "CLAUDE.md").unlink()
-    request = claim_bootstrap.parse_request_json(json.dumps(_maintenance_payload(repo)))
-    with pytest.raises(claim_bootstrap.ClaimBootstrapError, match="not a governed"):
-        claim_bootstrap._execute_maintenance_worktree(
-            request,
-            agent="codex",
-            session_id="codex:native-123",
-        )
+    subprocess.run(
+        ["git", "-C", str(repo), "remote", "add", "origin", "git@github.com:Brian/unregistered.git"],
+        check=True,
+    )
+    graph = tmp_path / "PROJECT_GRAPH.json"
+    graph.write_text("[]\n", encoding="utf-8")
+
+    with pytest.raises(claim_bootstrap.ClaimBootstrapError, match="exactly one Project Graph"):
+        claim_bootstrap._project_graph_authority(repo, project_graph_path=graph)
 
 
 @pytest.mark.parametrize("preexisting", ["branch", "worktree"])
@@ -338,6 +582,7 @@ def test_typed_maintenance_reports_worktree_add_failure_without_residue(
     assert real_run(
         ["git", "-C", str(repo), "show-ref", "--verify", "refs/heads/fix/safe-lane"],
         capture_output=True,
+        check=False,
     ).returncode != 0
 
 
@@ -361,6 +606,7 @@ def test_typed_maintenance_rolls_back_its_atomic_branch_after_failed_git_add(
     assert real_run(
         ["git", "-C", str(repo), "show-ref", "--verify", "refs/heads/fix/safe-lane"],
         capture_output=True,
+        check=False,
     ).returncode != 0
     assert not (repo / "worktrees").exists()
 
@@ -392,6 +638,7 @@ def test_typed_maintenance_preserves_foreign_branch_that_wins_atomic_ref_race(
     assert real_run(
         ["git", "-C", str(repo), "show-ref", "--verify", "refs/heads/fix/safe-lane"],
         capture_output=True,
+        check=False,
     ).returncode == 0
     assert not (repo / "worktrees").exists()
 
@@ -415,6 +662,7 @@ def test_typed_maintenance_rejects_symlinked_worktree_parent(
     assert subprocess.run(
         ["git", "-C", str(repo), "show-ref", "--verify", "refs/heads/fix/safe-lane"],
         capture_output=True,
+        check=False,
     ).returncode != 0
 
 
@@ -474,6 +722,7 @@ def test_typed_maintenance_rejects_session_with_existing_root_without_residue(
     assert subprocess.run(
         ["git", "-C", str(repo), "show-ref", "--verify", "refs/heads/fix/safe-lane"],
         capture_output=True,
+        check=False,
     ).returncode != 0
     assert set(trackers_dir.rglob("*.yaml")) == tracker_paths_before
 
@@ -504,6 +753,7 @@ def test_typed_maintenance_preserves_and_blocks_partial_session_start(
     assert subprocess.run(
         ["git", "-C", str(repo), "show-ref", "--verify", "refs/heads/fix/safe-lane"],
         capture_output=True,
+        check=False,
     ).returncode == 0
 
 
@@ -563,6 +813,7 @@ def test_typed_maintenance_preserves_untracked_content_on_rollback(
     assert subprocess.run(
         ["git", "-C", str(repo), "show-ref", "--verify", "refs/heads/fix/safe-lane"],
         capture_output=True,
+        check=False,
     ).returncode == 0
 
 

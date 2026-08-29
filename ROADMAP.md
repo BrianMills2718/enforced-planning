@@ -1,5 +1,9 @@
 # Enforced Planning Framework — Roadmap
 
+Plan #128 is the current portable-profile vertical: extend the existing installer,
+audit, and Plan #63 wiki owner with default-on governance, one master off switch,
+and a disposable installed-consumer proof. Generated wiki pages remain navigation.
+
 **Updated:** 2026-08-21
 **Canonical methodology:** `PLANNING_OPERATING_MODEL.md`
 

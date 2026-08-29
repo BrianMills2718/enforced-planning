@@ -758,12 +758,20 @@ def test_install_governed_repo_write_bootstraps_minimum_repo_and_passes_audit(
     assert (tmp_path / "meta-process.yaml").exists()
     starter = yaml.safe_load((tmp_path / "meta-process.yaml").read_text(encoding="utf-8"))["meta_process"]
     assert starter["plans"]["integrity"] == {
-        "mode": "off",
+        "mode": "enforce",
         "contract_version": "1.0.0",
         "minimum_plan_number": 1,
     }
+    assert starter["governance"] == {"enabled": True}
+    assert starter["knowledge_navigation"] == {
+        "enabled": True,
+        "freshness_mode": "observe",
+    }
+    assert (tmp_path / "enforced_planning" / "effective_project_profile.py").exists()
+    assert (tmp_path / "scripts" / "meta" / "effective_project_profile.py").exists()
+    assert payload["post_audit"]["effective_project_profile"]["master_enabled"] is True
     assert starter["claims"] == {
-        "enabled": False,
+        "enabled": True,
         "require_for_worktree": False,
         "prewrite_mode": "off",
     }

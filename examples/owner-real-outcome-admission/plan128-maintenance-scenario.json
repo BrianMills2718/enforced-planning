@@ -1,0 +1,52 @@
+{
+  "schema_version": "1.0.0",
+  "scenario_id": "portable-governance-wiki-profile",
+  "contract": {
+    "schema_version": "1.1.0",
+    "outcome_id": "portable-governance-wiki-profile",
+    "owner_class": "brian",
+    "project_id": "enforced-planning",
+    "lineage_id": "portable-governance-wiki-profile",
+    "portfolio_class": "maintenance",
+    "predecessor_lineage_ids": ["planning-integrity-semantic-admission"],
+    "intended_consumer": "Brian and agents installing the portable governed-repository framework",
+    "outcome": "A governed repository gets a default-on derived navigation wiki and one master off switch that disables governed controls without deleting installed state or losing per-control modes.",
+    "canonical_journey": {
+      "starting_state": "Plan 128 is merged and one exact plan-bound implementation claim is selection-pending.",
+      "input": "The canonical installer, governed-repo audit, configuration template, existing Plan 63 docstring wiki, and a disposable Git consumer.",
+      "action": "Implement the typed effective profile, install it into the consumer, exercise default-on, master-off, re-enable, stale wiki detection, and refresh.",
+      "observable_result": "Installer and audit agree on effective state; master-off blocks nothing and removes nothing; re-enable restores modes; wiki freshness fails then passes after regeneration.",
+      "failure_signal": "Absent config resolves off, disabled controls block, modes are rewritten, wiki is called authority, or the consumer journey is not reproducible."
+    },
+    "baseline_revision": "b10725434b11cfb7771a347c88a575a9fe3b8d46",
+    "allowed_scope": [
+      "examples/owner-real-outcome-admission/plan128-maintenance-scenario.json",
+      "examples/owner-real-outcome-admission/plan128-maintenance-allocation.json",
+      "examples/owner-real-outcome-admission/plan128-maintenance-disposition.json",
+      "enforced_planning/effective_project_profile.py",
+      "enforced_planning/governed_repo_audit.py",
+      "scripts/effective_project_profile.py",
+      "scripts/install_governed_repo.py",
+      "templates/meta-process.yaml.example",
+      "docs/reference/CONFIG_REFERENCE.md",
+      "GETTING_STARTED.md",
+      "tests/test_effective_project_profile.py",
+      "tests/test_install_governed_repo.py",
+      "docs/plans/128_portable_governance_and_wiki_profile.md",
+      "docs/plans/128_portable_governance_and_wiki_profile_work_graph.json",
+      "docs/plans/CLAUDE.md",
+      "ROADMAP.md"
+    ],
+    "progress_dimensions": ["typed profile resolution", "installer and audit adoption", "disposable wiki journey"]
+  },
+  "receipts": [],
+  "request": {
+    "schema_version": "1.0.0",
+    "operation": "product_write",
+    "target_path": "enforced_planning/effective_project_profile.py",
+    "ordinary_approval": true,
+    "approval_text": "User authorized Plan 128 implementation",
+    "cost_telemetry_usd": "0",
+    "elapsed_telemetry_seconds": 0
+  }
+}

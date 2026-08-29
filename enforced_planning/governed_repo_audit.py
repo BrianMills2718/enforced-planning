@@ -34,6 +34,7 @@ if str(FRAMEWORK_ROOT) not in sys.path:
     sys.path.insert(0, str(FRAMEWORK_ROOT))
 
 from enforced_planning.agents_rendering import build_renderer  # noqa: E402
+from enforced_planning.effective_project_profile import load_effective_project_profile
 from enforced_planning.worktree_paths import resolve_canonical_repo_root  # noqa: E402
 
 _FRAMEWORK_RENDERER = build_renderer(FRAMEWORK_ROOT / "scripts" / "render_agents_md.py")
@@ -803,6 +804,10 @@ def audit_repo(
     relationships_state = _analyze_relationships_linkage(
         repo_root, relationships_file=relationships_file
     )
+    try:
+        effective_profile: dict[str, Any] = load_effective_project_profile(repo_root).model_dump(mode="json")
+    except ValueError as exc:
+        effective_profile = {"schema_version": "1.0.0", "error": str(exc)}
     checks: dict[str, Any] = {
         "claude_md": {
             "present": (repo_root / claude_file).exists(),
@@ -914,20 +919,28 @@ def audit_repo(
         if not all(worktree_entrypoints["scripts_present"].values()):
             missing_required.append("sanctioned worktree coordination scripts")
 
-    classification = "governed" if not missing_required else "partial"
+    master_disabled = effective_profile.get("master_enabled") is False
+    suppressed_missing_required = list(missing_required) if master_disabled else []
+    if master_disabled:
+        missing_required = []
+        classification = "disabled"
+    else:
+        classification = "governed" if not missing_required else "partial"
     if relationships_state["status"] == "minimal":
         checks["relationships_yaml"]["warnings"] = [
             "relationships.yaml currently defines only bootstrap defaults",
             "edit-gating still works, but coupling/linkage enforcement is shallow",
         ]
 
-    status = "PASS" if classification == "governed" else "FAIL"
+    status = "PASS" if classification in {"governed", "disabled"} else "FAIL"
 
     return {
         "scope": "mechanical-governed-repo-audit",
         "repo_root": str(repo_root),
         "status": status,
         "classification": classification,
+        "effective_project_profile": effective_profile,
+        "suppressed_missing_required": suppressed_missing_required,
         "checks": checks,
         "validators": validators,
         "optional_signals": optional,

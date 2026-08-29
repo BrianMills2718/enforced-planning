@@ -1,5 +1,11 @@
 # Getting Started with Enforced Planning
 
+Governance and derived knowledge navigation default on. For a disposable
+repository, set `meta_process.governance.enabled: false`; this preserves the
+installed framework and per-control settings while making them effectively off.
+Run `python scripts/meta/effective_project_profile.py --repo-root .` to inspect
+the resolved state. Generated wiki pages are navigation, not authority.
+
 This guide is the shortest truthful path from a normal git repo to a
 mechanically governed repo.
 

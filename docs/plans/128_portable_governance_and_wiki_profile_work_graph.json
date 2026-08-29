@@ -1,1 +1,93 @@
-{"units":[{"schema_version":"1.0","record_type":"work_unit","id":"pgw-01-effective-profile-vertical","initiative_id":"agentic-engineering","goal_id":"portable-governed-project-wikis","design_revision":"user-authorized:codex-session-01a04c1b-6a77-7482-a98e-87d2cac1c542:2026-08-28","spec_revision":"plan-128-adopted-v1","title":"Resolve and prove the portable governance and derived-wiki profile","class":"implementation","objective":"Provide a default-on typed profile, one whole-stack off switch, preserved modes, and a disposable wiki proof.","profile":"standard","execution_class":"independently_executable","claimability":"ready_for_execution","scope":{"included":["Typed profile","Installer/audit consumption","Default/off/re-enable tests","Disposable wiki proof"],"excluded":["Fleet rollout","Hard wiki enforcement","Second generator","Publication"]},"inputs":[{"kind":"user_decision","id":"portable-governance-wiki-defaults","revision":"codex-session-01a04c1b-6a77-7482-a98e-87d2cac1c542@2026-08-28"},{"kind":"existing_capability","id":"plan-63-docstring-wiki-and-installer","revision":"df0c6cd8439e84238a3cef53bac63954c2c46b5a"}],"outputs":["Effective profile","Installer/audit receipt","Disposable consumer proof"],"dependencies":[],"conflict_surfaces":[{"kind":"repository_path","target":"enforced_planning/effective_project_profile.py","repository":"enforced-planning","access":"exclusive"},{"kind":"repository_path","target":"enforced_planning/governed_repo_audit.py","repository":"enforced-planning","access":"exclusive"},{"kind":"repository_path","target":"scripts/install_governed_repo.py","repository":"enforced-planning","access":"exclusive"},{"kind":"repository_path","target":"tests/test_effective_project_profile.py","repository":"enforced-planning","access":"exclusive"}],"acceptance":[{"id":"PGW01-A1","criterion":"Absent/true enables and false forces effective off.","evidence_required":["Resolver tests"],"negative_control":"False never blocks or becomes true."},{"id":"PGW01-A2","criterion":"Configured modes survive off/re-enable.","evidence_required":["Round-trip tests"],"negative_control":"Source config is not rewritten."},{"id":"PGW01-A3","criterion":"Disposable consumer proves wiki stale detection and refresh.","evidence_required":["Executed receipt"],"negative_control":"Wiki is never canonical authority."}],"readiness":{"status":"ready","required_approval_types":[],"approvals":[],"failed_guards":[]},"authorization_mode":"registry_claim","status":"ready","record_version":1,"created_at":"2026-08-29T06:48:00Z","updated_at":"2026-08-29T06:48:00Z"}]}
+{
+  "units": [
+    {
+      "schema_version": "1.0",
+      "record_type": "work_unit",
+      "id": "pgw-01-effective-profile-vertical",
+      "initiative_id": "agentic-engineering",
+      "goal_id": "portable-governed-project-wikis",
+      "design_revision": "user-authorized:codex-session-01a04c1b-6a77-7482-a98e-87d2cac1c542:2026-08-28",
+      "spec_revision": "plan-128-adopted-v1",
+      "title": "Resolve and prove the portable governance and derived-wiki profile",
+      "class": "implementation",
+      "objective": "Provide a default-on typed profile, one whole-stack off switch, preserved modes, and a disposable wiki proof.",
+      "profile": "standard",
+      "execution_class": "independently_executable",
+      "claimability": "ready_for_execution",
+      "scope": {
+        "included": ["Typed profile", "Installer/audit consumption", "Default/off/re-enable tests", "Disposable wiki proof"],
+        "excluded": ["Fleet rollout", "Hard wiki enforcement", "Second generator", "Publication"]
+      },
+      "inputs": [
+        {"kind": "user_decision", "id": "portable-governance-wiki-defaults", "revision": "codex-session-01a04c1b-6a77-7482-a98e-87d2cac1c542@2026-08-28"},
+        {"kind": "existing_capability", "id": "plan-63-docstring-wiki-and-installer", "revision": "df0c6cd8439e84238a3cef53bac63954c2c46b5a"}
+      ],
+      "outputs": ["Effective profile", "Installer/audit receipt", "Disposable consumer proof"],
+      "dependencies": [],
+      "conflict_surfaces": [
+        {"kind": "repository_path", "target": "enforced_planning/effective_project_profile.py", "repository": "enforced-planning", "access": "exclusive"},
+        {"kind": "repository_path", "target": "enforced_planning/governed_repo_audit.py", "repository": "enforced-planning", "access": "exclusive"},
+        {"kind": "repository_path", "target": "scripts/install_governed_repo.py", "repository": "enforced-planning", "access": "exclusive"},
+        {"kind": "repository_path", "target": "tests/test_effective_project_profile.py", "repository": "enforced-planning", "access": "exclusive"}
+      ],
+      "acceptance": [
+        {"id": "PGW01-A1", "criterion": "Absent/true enables and false forces effective off.", "evidence_required": ["Resolver tests"], "negative_control": "False never blocks or becomes true."},
+        {"id": "PGW01-A2", "criterion": "Configured modes survive off/re-enable.", "evidence_required": ["Round-trip tests"], "negative_control": "Source config is not rewritten."},
+        {"id": "PGW01-A3", "criterion": "Disposable consumer proves wiki stale detection and refresh.", "evidence_required": ["Executed receipt"], "negative_control": "Wiki is never canonical authority."}
+      ],
+      "readiness": {"status": "ready", "required_approval_types": [], "approvals": [], "failed_guards": []},
+      "authorization_mode": "registry_claim",
+      "status": "ready",
+      "record_version": 1,
+      "created_at": "2026-08-29T06:48:00Z",
+      "updated_at": "2026-08-29T06:48:00Z"
+    },
+    {
+      "schema_version": "1.0",
+      "record_type": "work_unit",
+      "id": "pgw-02-runtime-consumer-binding",
+      "initiative_id": "agentic-engineering",
+      "goal_id": "portable-governed-project-wikis",
+      "design_revision": "plan-128-runtime-scope:2026-08-29",
+      "spec_revision": "plan-128-adopted-v2",
+      "title": "Bind the master governance switch into native runtime consumers",
+      "class": "implementation",
+      "objective": "Make the configured master switch authoritative for effective native hook and validation behavior, including actionable bootstrap recovery feedback.",
+      "profile": "standard",
+      "execution_class": "independently_executable",
+      "claimability": "ready_for_execution",
+      "scope": {
+        "included": ["Prewrite admission", "Artifact-creation gate", "Plan validation", "Generated hook wiring", "Native pre-commit", "Bootstrap recovery feedback", "Disposable runtime proof"],
+        "excluded": ["Fleet rollout", "Second real-project adoption", "Wiki publication", "New policy language"]
+      },
+      "inputs": [
+        {"kind": "work_unit", "id": "pgw-01-effective-profile-vertical", "revision": "01e209b42ac1545ceb16580d6d7accbd40c8221b"},
+        {"kind": "runtime_observation", "id": "fresh-session-bootstrap-circularity", "revision": "codex-session-01a04c6c-5336-71e1-af44-adbf9046cdaf@2026-08-29"}
+      ],
+      "outputs": ["Runtime consumer bindings", "Focused both-sign tests", "Disposable native-hook receipt", "Actionable recovery messages"],
+      "dependencies": ["pgw-01-effective-profile-vertical"],
+      "conflict_surfaces": [
+        {"kind": "repository_path", "target": "scripts/prewrite_claim_gate.py", "repository": "enforced-planning", "access": "exclusive"},
+        {"kind": "repository_path", "target": "enforced_planning/artifact_creation.py", "repository": "enforced-planning", "access": "exclusive"},
+        {"kind": "repository_path", "target": "enforced_planning/plan_validation.py", "repository": "enforced-planning", "access": "exclusive"},
+        {"kind": "repository_path", "target": "enforced_planning/hook_wiring.py", "repository": "enforced-planning", "access": "exclusive"},
+        {"kind": "repository_path", "target": "hooks/git/pre-commit", "repository": "enforced-planning", "access": "exclusive"},
+        {"kind": "repository_path", "target": "tests/test_host_prewrite_claim_gate.py", "repository": "enforced-planning", "access": "exclusive"},
+        {"kind": "repository_path", "target": "tests/test_artifact_creation.py", "repository": "enforced-planning", "access": "exclusive"},
+        {"kind": "repository_path", "target": "tests/test_generate_hook_wiring.py", "repository": "enforced-planning", "access": "exclusive"},
+        {"kind": "repository_path", "target": "tests/test_pre_commit_hook.py", "repository": "enforced-planning", "access": "exclusive"}
+      ],
+      "acceptance": [
+        {"id": "PGW02-A1", "criterion": "Master false suppresses effective native governance blocks without rewriting configured modes.", "evidence_required": ["Focused consumer tests", "Disposable installed-project proof"], "negative_control": "Configured enforce modes remain observable and return after re-enable."},
+        {"id": "PGW02-A2", "criterion": "Missing or true master preserves current configured native enforcement.", "evidence_required": ["Default-on and re-enabled both-sign tests"], "negative_control": "No consumer silently defaults the master off."},
+        {"id": "PGW02-A3", "criterion": "A blocked bootstrap names an executable recovery action and that action is itself admissible.", "evidence_required": ["Regression tests for stale projection and restricted bootstrap"], "negative_control": "The recovery command cannot be blocked by the condition it repairs."}
+      ],
+      "readiness": {"status": "ready", "required_approval_types": [], "approvals": [], "failed_guards": []},
+      "authorization_mode": "registry_claim",
+      "status": "ready",
+      "record_version": 1,
+      "created_at": "2026-08-29T07:37:00Z",
+      "updated_at": "2026-08-29T07:37:00Z"
+    }
+  ]
+}

@@ -824,6 +824,47 @@ def test_native_denial_keeps_raw_repository_failure_in_receipt_not_prompt() -> N
     assert "fatal:" not in message
 
 
+@pytest.mark.parametrize(
+    ("reason_code", "summary"),
+    [
+        (
+            "no_exact_session_target",
+            "This workspace-root session has no healthy claim selecting a target worktree.",
+        ),
+        (
+            "client_identity_mismatch",
+            "The event identity belongs to a different native client.",
+        ),
+        (
+            "session_identity_unavailable",
+            "The event does not identify the native session that would own the mutation.",
+        ),
+        (
+            "claim_git_identity_mismatch",
+            "The claimed worktree no longer matches its recorded Git identity.",
+        ),
+        (
+            "unsupported_client",
+            "The event names a client that this hook cannot authenticate.",
+        ),
+    ],
+)
+def test_native_denial_explains_session_target_failures(
+    reason_code: str,
+    summary: str,
+) -> None:
+    message = prewrite_claim_gate._native_denial_message(
+        {
+            "reason_code": reason_code,
+            "details": ["resolver diagnostic"],
+            "recovery": "Repair the exact session identity or claim, then retry.",
+        }
+    )
+
+    assert message.startswith(f"BLOCKED [prewrite/{reason_code}]\nWhy: {summary}\n")
+    assert "The requested mutation lacks verified authority." not in message
+
+
 def test_json_mode_preserves_deny_exit_for_unclaimed_workspace_mutation(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

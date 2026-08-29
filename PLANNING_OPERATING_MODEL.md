@@ -345,7 +345,7 @@ provided it records a durable architectural choice.
 | Investigation memos | What did we learn when we looked? | ADR or plan | Dated, question-specific, usually immutable |
 | Topic research syntheses | What reusable conclusions already exist on this topic? | ADR, capability doc, or plan | Living topic memory; links investigations, prior art, and freshness triggers |
 | Landscape / prior-art decision | What already exists, what has failed, and what should we adopt, extend, build, buy, defer, or reject? | Stable requirements, boundaries, or architecture for non-trivial work | May be a linked dated artifact or a compact inline comparison. Include sources, observations, project implications, recommendation, uncertainty, and a refresh trigger. |
-| Current-state assessment | What exists now? | Gap analysis | Critical for legacy repos. Must include agent-memory recall for repos with prior session history (ADR-0010). |
+| Current-state assessment | What exists now? | Gap analysis | Critical for legacy repos. Inspect current code/docs and applicable curated learnings; legacy Agent Memory recall is optional and explicit (ADR-0011). |
 | Gap analysis | What delta matters now? | Roadmap or plan | Can be repeated throughout project life |
 | Capabilities / boundary docs / PRD surfaces | What enduring capability or contract are we shaping? | Roadmap | Cross-project work should define this early |
 | Roadmap / phases | What major gates and sequence matter? | Plan | Can be lightweight in small repos |
@@ -418,15 +418,15 @@ These are hard ordering rules:
   to concrete cases. The readout is the exploratory analog of an acceptance
   criterion: it defines what signal will end or redirect the exploration.
 - No closeout without verification evidence.
-- **No current-state assessment without a memory recall step.** For any project
-  with prior session history, run `agent-memory recall '{topic}' --project
-  {project}` (or equivalent MCP call) before writing the assessment. Undiscovered
-  operational findings from prior sessions are a correctness risk, not a
-  convenience. (ADR-0010)
-- When prior agent-session findings materially inform a bounded plan, record
-  the specific cited memory entry IDs in the plan header as
-  `research_citations: ["agent_memory:<entry_id>"]` so provenance is visible to
-  validators and reviewers.
+- **No current-state assessment without direct current evidence.** Inspect the
+  current code, documentation, plans, active coordination claims, and applicable
+  curated learning/v2 entries. Query the preserved Agent Memory archive only when
+  historical episodic context is specifically relevant; it is never an automatic
+  prerequisite. (ADR-0011)
+- When a curated cross-session finding materially informs a bounded plan, cite its
+  immutable `project-meta/learnings/entries/<learning-entry-id>.json` artifact in
+  References Reviewed. Historical `agent_memory:<entry_id>` research citations remain
+  supported for compatibility.
 
 ### Recommended sequencing
 
@@ -546,9 +546,9 @@ The right pattern usually needs 50–200 lines of code, not a framework.
 
 For a new system or major new subsystem, use this order:
 
-1. Define the north star. **For any project with prior session history, run
-   `agent-memory recall '{topic}' --project {project}` first** — operational
-   findings from prior sessions are source material, not noise. (ADR-0010)
+1. Define the north star after inspecting the current repository and applicable
+   curated learnings. Query legacy Agent Memory only when historical episodic
+   context is specifically relevant. (ADR-0011)
 2. Diagnose the modality of each major part: deductive, exploratory, or hybrid.
 3. List and investigate critical questions.
 4. Write the investigation memo(s) that answer those questions.
@@ -567,12 +567,11 @@ For a new system or major new subsystem, use this order:
 
 For an existing repo, bootstrap in this order:
 
-1. Investigate the current implementation and documentation. **Run `agent-memory
-   recall '{topic}' --project {project}` first** — prior session findings are
-   source material, not noise.
+1. Investigate the current implementation, documentation, active claims, and
+   applicable curated learnings. Query legacy Agent Memory only for a deliberate
+   historical lookup.
 2. Write the investigation memo(s) that preserve what was learned.
-3. Write a current-state assessment (requires memory recall — see Strict
-   Dependencies).
+3. Write a current-state assessment from the direct evidence above.
 4. Define the north-star or intended target model.
 5. Diagnose the modality of each meaningful gap before deciding whether it needs
    plan-first specification or exploratory instrumentation.
@@ -759,11 +758,9 @@ work whose seams are already made concrete by typed fixtures and tests.
   operating model.
 - `templates/plan.md.template` is the bounded-plan scaffold derived from this
   operating model.
-- `adr/0010-agent-memory-as-planning-input.md` (ADR-0010) defines the required
-  agent-memory recall step inside Current-State Assessment and New System
-  Initialization. The strict dependency added in this document ("No
-  current-state assessment without a memory recall step") is governed by
-  ADR-0010.
+- `adr/0011-curated-learning-register-and-on-demand-legacy-memory.md` (ADR-0011)
+  makes curated learning the forward-writing authority and legacy Agent Memory
+  an explicit, optional historical source. It supersedes ADR-0010 sections 1–3.
 
 ## Non-Goals
 

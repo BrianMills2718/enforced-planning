@@ -74,14 +74,14 @@ existing capability owns this bounded concern.]
 
 ## References Reviewed
 
-> **REQUIRED:** Cite specific code/docs reviewed before planning.
-> For any project with prior session history, run memory recall first:
-> `agent-memory recall '{topic}' --project {project}` (ADR-0010)
+> **REQUIRED:** Cite specific code/docs reviewed before planning. Review applicable
+> curated learning/v2 entries. Query legacy Agent Memory only when historical
+> episodic context is specifically relevant (ADR-0011).
 
 - `src/example.py:45-89` - existing implementation
 - `docs/architecture/current/example.md` - current design
 - `CLAUDE.md` - project conventions
-- Memory context: `agent-memory recall '{topic}' --project {project}` — N findings
+- `project-meta/learnings/entries/lrn-....json` — curated reusable finding
 
 ---
 

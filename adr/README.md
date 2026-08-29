@@ -38,6 +38,7 @@ They do NOT cover:
 | [0008](0008-adr-research-linkage.md) | ADRs Must Link to the Research That Informed Them | Accepted |
 | [0009](0009-doc-authority-governance-and-enforcement.md) | Governed Repos Must Declare Documentation Authority and Enforce It | Proposed |
 | [0010](0010-agent-memory-as-planning-input.md) | Agent Operational Memory Is a Required Planning Input | Accepted |
+| [0011](0011-curated-learning-register-and-on-demand-legacy-memory.md) | Curated Learning Register and On-Demand Legacy Memory | Accepted |
 
 ## Format
 

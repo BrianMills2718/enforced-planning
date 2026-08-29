@@ -14,7 +14,7 @@ and project-meta docs; do not treat them as competing operator handbooks.
   `python scripts/meta/check_coordination_claims.py --list --json`
 - Claims/worktrees/projection consistency audit:
   `python scripts/check_coordination_consistency.py --repo PROJECT=/absolute/repo/path --verify-prewrite-projection --json`
-- Repo-local in-flight architectural decisions: `agent-memory recall 'active decisions' --project {project}` (ADR-0010: `agent_memory` is the canonical store; `KNOWLEDGE.md ## Active Decisions` is deprecated)
+- Live ownership and overlap state: `~/.claude/coordination/claims/` plus the generated active-work registry. Use Agent Memory only for an intentional historical lookup (ADR-0011); it is not a live coordination dependency.
 - Repo opt-in switch: `meta-process.yaml`
 - Sanctioned repo-local worktree interface: `make worktree`,
   `make worktree-list`, `make worktree-remove`, `make review-claim`,
@@ -1446,7 +1446,7 @@ What it does:
 - records who claimed what scope
 - exposes a readable current-work registry, including derived active lanes
 - lets repos block conflicting or unsafe worktree flows
-- makes in-flight architectural decisions visible through `agent_memory` (query: `agent-memory recall 'active decisions' --project {project}`)
+- makes in-flight ownership and overlap state visible through claims and the generated active-work registry; legacy Agent Memory remains an explicit historical source
 - persists immutable cross-client messages and append-only observation and
   acknowledgement receipts beside the canonical claim registry
 - injects mailbox notices at native session start, user prompt, and post-tool

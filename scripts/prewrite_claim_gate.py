@@ -298,7 +298,7 @@ def _special_unclaimed_command(
     projection_path: Path,
     subagent_event: bool,
 ) -> bool | str:
-    """Classify one exact typed bootstrap or projection recovery operation."""
+    """Classify one exact typed bootstrap, read-target, or recovery operation."""
 
     try:
         from enforced_planning.claim_bootstrap import parse_projection_recovery_command
@@ -315,6 +315,18 @@ def _special_unclaimed_command(
 
     if subagent_event:
         return False
+    try:
+        from enforced_planning.read_target import parse_raw_bash_command as parse_read_target_command
+
+        request = parse_read_target_command(
+            command,
+            script_path=(REPO_ROOT / "scripts" / "session_read_target.py").resolve(),
+        )
+        if request.get("client") != client:
+            return False
+        return "read_target_selection"
+    except Exception:  # noqa: BLE001 -- try the typed claim bootstrap grammar
+        pass
     try:
         from enforced_planning.claim_bootstrap import parse_raw_bash_command
 
@@ -562,6 +574,7 @@ def main(argv: list[str] | None = None) -> int:
         if early_bash_classification in {
             "read_only",
             "claim_bootstrap",
+            "read_target_selection",
             "projection_recovery",
         }:
             outcome_mode = "off"
@@ -632,6 +645,7 @@ def main(argv: list[str] | None = None) -> int:
     outcome_exempt = decision.get("reason_code") in {
         "bash_read_only",
         "claim_bootstrap_command",
+        "read_target_selection_command",
         "projection_recovery_command",
     }
     enforce_selected_outcome = enforce_selected_outcome and not outcome_exempt

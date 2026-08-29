@@ -36,6 +36,13 @@ defects; it does not wait for AES or Plan 125 to become a complete platform.
 Current portfolio selection makes WhyGame provisional and does not authorize
 product work in this plan.
 
+Post-completion provider repairs remain bounded by the same stop-expansion
+decision. A reproduced defect that prevents the external workspace-root
+Project Manager path may be repaired through its owning plan, but it must not
+introduce a new planner, portfolio authority, or product program. Plan #108
+PW-05 qualifies only as that narrow repair: it separates read-only repository
+context from existing claim authority and returns immediately to consumer proof.
+
 ## Gap
 
 The canonical operating model already requires outcome-first planning,

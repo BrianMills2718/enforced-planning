@@ -270,7 +270,7 @@ def classify_bash_command(
             special = claim_bootstrap_classifier(command)
             if special is True:
                 return "claim_bootstrap"
-            if special in {"claim_bootstrap", "projection_recovery"}:
+            if special in {"claim_bootstrap", "read_target_selection", "projection_recovery"}:
                 return str(special)
         except Exception:  # noqa: BLE001 -- classifier failure must fail closed
             return "claim_required"
@@ -804,11 +804,13 @@ def evaluate_request_fast(
     if bash_classification in {
         "read_only",
         "claim_bootstrap",
+        "read_target_selection",
         "projection_recovery",
     }:
         reason_by_classification = {
             "read_only": "bash_read_only",
             "claim_bootstrap": "claim_bootstrap_command",
+            "read_target_selection": "read_target_selection_command",
             "projection_recovery": "projection_recovery_command",
         }
         result = _decision(

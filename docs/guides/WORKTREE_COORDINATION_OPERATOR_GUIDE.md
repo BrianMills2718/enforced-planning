@@ -48,24 +48,37 @@ second mutable lane registry by hand. Update claims; regenerate readable lane
 surfaces from them.
 
 The user-facing role is **Project Manager**: it prepares context, defines
-acceptance criteria, delegates bounded lanes, and verifies results. The
-internal mechanism that dispatches and coordinates agents is the
-**orchestrator**. “Orchestrator” names an implementation mechanism, not the
-human-facing role or a source of broad mutation authority.
+acceptance criteria, may implement bounded single-writer work, delegates when
+delegation is useful, and verifies results. The internal mechanism that
+dispatches and coordinates agents is the **orchestrator**. “Orchestrator” names
+an implementation mechanism, not the human-facing role or a source of broad
+mutation authority. A Project Manager becomes delegation-only only when the
+operator explicitly selects **coordinator-only** mode; that temporary role
+marker does not follow merely from launching at a workspace root.
 
-Hook targeting keeps three identities separate:
+Hook targeting keeps four identities separate:
 
 - the **launch directory** is navigation context and may be a non-Git workspace
   root such as `~/code`;
-- the **session target** is one exact repository/worktree selected by a fresh,
+- the **read target** is one explicit repository selected for instruction
+  loading, navigation, and inspection; it grants no mutation authority;
+- the **write target** is one exact repository/worktree selected by a fresh,
   digest-bound, healthy claim for the native session identity;
 - **mutation authority** comes from that live claim and its declared paths, not
-  from the launch directory or from the Project Manager/orchestrator role.
+  from the launch directory, read target, or Project Manager/orchestrator role.
+
+Read-target selection and write authority are deliberately different state
+machines. Selecting a read target may load that repository's instructions and
+route read-only tools there, but the prewrite gate must ignore it. The first
+mutation requires an exact claimed worktree; successful claim creation may
+supersede the read target for context while the claim is healthy. Releasing the
+claim removes write authority without converting the prior read target into a
+grant. Zero or multiple eligible write claims still fail closed for mutation.
 
 Codex subagent events use their non-empty `agent_id` as the effective session
 identity; top-level events use `session_id`. A subagent never inherits its
 parent's claim or read-first state and must receive its own explicit target and
-claim. One healthy exact-session claim selects the session target even when the
+claim. One healthy exact-session claim selects the write target even when the
 immutable launch directory happens to be another Git repository. A Git launch
 directory is a local fallback only when no exact-session claim exists; an
 ambiguous, unhealthy, or stale claim state never falls back to it for mutation.
@@ -91,14 +104,17 @@ authority):
 ```
 
 `agent` must match the native top-level client (`codex` or `claude-code`),
-`project` must equal the unique active Project Graph record id, `scope` must
+`project` must equal the unique active repository-registry record id, `scope` must
 equal `branch`, and `repo_root` must be that record's canonical absolute Git
-root. Authorization is based on the exact `origin` owner/repository identity and
-Brian-owned mutation authority in Project Graph, not membership in the governed
-fleet; a registered repository such as `agent-skills` is therefore a valid
-target. Unknown fields, relative or traversing paths, shell composition, unsafe
-branches, subagent events, unregistered or read-only repositories, existing
-branches/worktrees/claim slots, and client mismatch are denied.
+root. The portable bootstrap consumes a generic repository-authority decision;
+it does not define who the operator is or which owners are trusted. Brian's
+installation supplies that decision through its Project Graph policy adapter,
+which currently requires exact `origin` identity and reviewed personal mutation
+authority. Membership in the governed fleet is not itself authority, so a
+personally authorized registered repository such as `agent-skills` remains a
+valid target. Unknown fields, relative or traversing paths, shell composition,
+unsafe branches, subagent events, unregistered or read-only repositories,
+existing branches/worktrees/claim slots, and client mismatch are denied.
 
 Before creating a directory, branch, claim, tracker, or worktree, the typed
 operation asks `origin` for its current symbolic default branch, requires it to

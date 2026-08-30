@@ -152,9 +152,11 @@ and refresh the pre-write projection in the same locked mutation.
    worktree, tracker, and explicit `UNPLANNED` claim linkage as one sanctioned
    journey. `BRANCH` is the only required input: `TASK`, `SESSION_GOAL`, and
    `SESSION_PHASE` default from the branch name, and the agent defaults from the
-   runtime. All of them stay overridable, and a repo that requires a scoped write
-   claim still needs `SESSION_WRITE_PATHS="..."`. `make worktree` (plan-owned
-   lanes) deliberately keeps every input explicit.
+   runtime. The maintenance transaction supplies the one temporary program
+   write scope itself (`.`): it is bounded by the named repository, branch,
+   worktree, and native session, then must be narrowed before scoped
+   implementation begins. `make worktree` (plan-owned lanes) deliberately
+   keeps every input explicit, including `SESSION_WRITE_PATHS="..."`.
 
    The pre-commit canonical-checkout guard's escape hatch,
    `ALLOW_CANONICAL_CHECKOUT_COMMIT=1`, is metered per repository per session:

@@ -371,8 +371,14 @@ MAINTENANCE_TASK = $(if $(strip $(TASK)),$(TASK),Unplanned maintenance: $(MAINTE
 MAINTENANCE_SESSION_GOAL = $(if $(strip $(SESSION_GOAL)),$(SESSION_GOAL),Unplanned maintenance: $(MAINTENANCE_LABEL))
 MAINTENANCE_SESSION_PHASE = $(if $(strip $(SESSION_PHASE)),$(SESSION_PHASE),maintenance)
 MAINTENANCE_AGENT = $(if $(strip $(WORKTREE_AGENT)),$(WORKTREE_AGENT),claude-code)
+# This is the one deliberately broad bootstrap claim.  A maintenance lane has
+# no declared implementation surface yet, so requiring a caller-supplied path
+# makes the sanctioned entrypoint impossible to use.  The surrounding command
+# still binds it to one repository, branch, worktree, and native session; the
+# lane must narrow its authority before it begins scoped implementation work.
+MAINTENANCE_BOOTSTRAP_WRITE_PATHS = .
 
-maintenance-worktree:  ## Claimed light maintenance worktree; needs BRANCH, TASK, SESSION_GOAL, SESSION_PHASE, SESSION_WRITE_PATHS
+maintenance-worktree:  ## Claimed light maintenance worktree; needs BRANCH (other maintenance metadata has safe defaults)
 ifndef BRANCH
 	$(error BRANCH is required. Usage: make maintenance-worktree BRANCH=fix-hook-guard)
 endif
@@ -380,7 +386,7 @@ endif
 		SESSION_GOAL="$(MAINTENANCE_SESSION_GOAL)" \
 		SESSION_PHASE="$(MAINTENANCE_SESSION_PHASE)" \
 		WORKTREE_AGENT="$(MAINTENANCE_AGENT)" \
-		SESSION_WRITE_PATHS="$(SESSION_WRITE_PATHS)" SESSION_READ_PATHS="$(SESSION_READ_PATHS)" \
+		SESSION_WRITE_PATHS="$(MAINTENANCE_BOOTSTRAP_WRITE_PATHS)" SESSION_READ_PATHS="$(SESSION_READ_PATHS)" \
 		SESSION_NEXT="$(SESSION_NEXT)" SESSION_DEPENDS="$(SESSION_DEPENDS)" \
 		SESSION_STOP_CONDITIONS="$(SESSION_STOP_CONDITIONS)" SESSION_NOTE="$(SESSION_NOTE)" \
 		SESSION_CLAIM_TYPE="$(SESSION_CLAIM_TYPE)" SESSION_PARENT_SCOPE="$(SESSION_PARENT_SCOPE)" \

@@ -60,10 +60,16 @@ def test_maintenance_worktree_claim_declares_unplanned_ownership() -> None:
     Without this the claim is created planless, and the planless-claim guard
     rejects the very entrypoint it is meant to govern.
     """
-    invocation = _claim_invocation(_dry_run_make("maintenance-worktree", "BRANCH=probe-unplanned"))
+    invocation = _claim_invocation(
+        _dry_run_make("maintenance-worktree", "BRANCH=probe-unplanned")
+    )
 
     assert "--plan UNPLANNED" in invocation
     assert "#" not in invocation.split("--plan")[1]
+    assert '--write-path "."' in invocation
+    # _dry_run_make supplies SESSION_WRITE_PATHS=README.md for ordinary lanes;
+    # maintenance must not let that hidden caller value choose bootstrap scope.
+    assert "README.md" not in invocation
 
 
 def test_plan_bound_worktree_claim_keeps_its_real_plan_reference() -> None:

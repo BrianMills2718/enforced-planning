@@ -128,6 +128,12 @@ documents:
       anchored_to: PLANNING_OPERATING_MODEL.md
       reason: Owns the current day-to-day coordination and worktree operator contract.
     lifecycle_source: document_status
+  - path: docs/guides/CONTINUOUS_EXECUTION_CONTRACT.md
+    role: execution
+    justification:
+      anchored_to: PLANNING_OPERATING_MODEL.md
+      reason: Owns the portable continuous-execution profiles, stopping conditions, and lifecycle discipline summarized by repository instructions.
+    lifecycle_source: document_status
   - path: docs/overview/CURRENT_STATE.md
     role: navigation
     justification:

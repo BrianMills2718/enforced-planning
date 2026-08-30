@@ -80,6 +80,24 @@ architecture: []
 adrs: {}
 
 documents:
+  - path: PLANNING_OPERATING_MODEL.md
+    role: authority
+    justification:
+      anchored_to: README.md
+      reason: Defines the canonical planning hierarchy and resolves conflicts with compressed planning patterns and adoption guides.
+    lifecycle_source: document_status
+  - path: CLAUDE.md
+    role: authority
+    justification:
+      anchored_to: PLANNING_OPERATING_MODEL.md
+      reason: Owns repository-specific operating instructions and the required-read entrypoint for framework work.
+    lifecycle_source: document_status
+  - path: docs/reference/CONFIG_REFERENCE.md
+    role: authority
+    justification:
+      anchored_to: meta-process.yaml
+      reason: Owns the authoritative mapping from live configuration keys to their script consumers and effective behavior.
+    lifecycle_source: document_status
   - path: README.md
     role: navigation
     justification:

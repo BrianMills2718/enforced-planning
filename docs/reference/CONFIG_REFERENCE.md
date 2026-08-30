@@ -1,5 +1,7 @@
 # Configuration Reference — meta-process.yaml
 
+Status: active
+
 Complete table of every key in `meta-process.yaml`, which script reads it, and
 the default behavior when absent.
 

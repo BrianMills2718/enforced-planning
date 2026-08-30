@@ -122,6 +122,18 @@ documents:
       anchored_to: PLANNING_OPERATING_MODEL.md
       reason: Owns the current day-to-day coordination and worktree operator contract.
     lifecycle_source: document_status
+  - path: docs/overview/CURRENT_STATE.md
+    role: navigation
+    justification:
+      anchored_to: ROADMAP.md
+      reason: Retained only as a concise compatibility pointer for historical inbound links; ROADMAP.md owns current state.
+    lifecycle_source: document_status
+  - path: docs/overview/GAP_SUMMARY.md
+    role: navigation
+    justification:
+      anchored_to: ROADMAP.md
+      reason: Retained only as a concise compatibility pointer for historical inbound links; ROADMAP.md owns the active gap.
+    lifecycle_source: document_status
 
 # Optional scoped file coverage policy.
 # - managed: files under managed include that are NOT explicitly registered

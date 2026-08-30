@@ -1,0 +1,71 @@
+{
+  "active_slice": {
+    "description": "Make missing branch evidence fail closed for merged disposition and replace the false-green regression expectation",
+    "next_action": null,
+    "requires_external_action": false,
+    "requires_spend": false,
+    "slice_id": "reject-unproved-missing-branch-merge",
+    "status": "accepted",
+    "target_revision": "5b881f46296b8c7f2d16b276febf46f4ba522d8f"
+  },
+  "authority": {
+    "external_action_authorized": true,
+    "human_decision": null,
+    "human_decision_required": false,
+    "implementation_authorized": true,
+    "spend_cap_usd": 0,
+    "spend_used_usd": 0
+  },
+  "circuit_breakers": {
+    "context_integrity_valid": true,
+    "max_same_boundary_failures": 3,
+    "runtime_integrity_valid": true
+  },
+  "completion": {
+    "evidence_revision": "fed335539b0dc54e63f4a50eab477e59f7006500",
+    "receipt_ref": "fed335539b0dc54e63f4a50eab477e59f7006500",
+    "remaining_ready_work": 0,
+    "requested": true,
+    "verifier_outcome": "pass"
+  },
+  "cursor_id": "missing-branch-closeout-repair-20260830",
+  "cursor_revision": 2,
+  "failure_state": {
+    "boundary": null,
+    "last_failure_ref": null,
+    "same_boundary_failures": 0
+  },
+  "goal_ref": "Eliminate false merged closeout records when branch evidence is missing",
+  "lease": {
+    "heartbeat_at": "2026-08-30T06:18:47Z",
+    "lease_revision": 2,
+    "owner_session_id": "codex:01a04c1a-13f2-7062-a96f-91d5476f11cf",
+    "status": "active"
+  },
+  "lifecycle_state": "complete",
+  "observations": [
+    {
+      "boundary": "session closeout merge evidence",
+      "evidence_ref": "tests/test_session_cli.py previously expected disposition merged after both worktree and branch were absent",
+      "kind": "verification_failure",
+      "observation_id": "false-green-test-1",
+      "outcome": "fail"
+    },
+    {
+      "boundary": "session closeout merge evidence",
+      "evidence_ref": "fed335539b0dc54e63f4a50eab477e59f7006500; 30 close_session tests passed and pre-commit coupling/reachability/dead-code checks passed",
+      "kind": "authentic_result",
+      "observation_id": "closeout-repair-verification-1",
+      "outcome": "pass"
+    }
+  ],
+  "plan_revision": "user-approved-2026-08-29",
+  "ready_alternatives": [],
+  "record_type": "plan_execution_cursor",
+  "schema_version": "1.0",
+  "target": {
+    "branch": "codex/fix-missing-branch-closeout",
+    "repository": "/home/brian/code/active/enforced-planning",
+    "worktree": "/home/brian/code/active/enforced-planning/worktrees/codex/fix-missing-branch-closeout"
+  }
+}

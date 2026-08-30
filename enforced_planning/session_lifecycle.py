@@ -1121,6 +1121,13 @@ def _validate_closeout_preflight(
 
     branch_exists = _branch_exists(repo_root, branch)
     if not branch_exists:
+        if normalized_disposition == MERGED_DISPOSITION:
+            raise ValueError(
+                f"Cannot record disposition '{MERGED_DISPOSITION}' because branch '{branch}' "
+                "is missing and its integration into the canonical default branch cannot be proven. "
+                "Restore the branch from durable evidence, or use an explicit non-merge disposition "
+                "with its required recovery or discard authorization."
+            )
         return CloseoutPreflight(
             disposition=normalized_disposition,
             branch_exists=False,

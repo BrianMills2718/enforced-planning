@@ -1248,6 +1248,13 @@ staged, modified, or untracked work. `branch_merged_to_default` may classify the
 branch only after the worktree is clean, so closeout cannot erase changes that
 were never represented by the compared commits.
 
+A missing task branch cannot receive the `merged` disposition: once its tip is
+absent, closeout has no branch evidence to compare with the canonical default.
+Restore the branch from durable evidence before merged closeout, or use an
+explicit supported non-merge disposition with the required recovery reference
+or discard authorization. Missing worktree and branch paths are not themselves
+evidence that integration occurred.
+
 The default closeout path does not merge automatically. Merge and verification
 remain explicit root-anchored control-session actions. `git branch -D` must not
 be used as a substitute for merge/disposition evidence.

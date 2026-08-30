@@ -1,0 +1,64 @@
+{
+  "active_slice": {
+    "description": "Make missing branch evidence fail closed for merged disposition and replace the false-green regression expectation",
+    "next_action": "Patch closeout preflight and run the focused session lifecycle tests",
+    "requires_external_action": false,
+    "requires_spend": false,
+    "slice_id": "reject-unproved-missing-branch-merge",
+    "status": "executing",
+    "target_revision": "5b881f46296b8c7f2d16b276febf46f4ba522d8f"
+  },
+  "authority": {
+    "external_action_authorized": true,
+    "human_decision": null,
+    "human_decision_required": false,
+    "implementation_authorized": true,
+    "spend_cap_usd": 0,
+    "spend_used_usd": 0
+  },
+  "circuit_breakers": {
+    "context_integrity_valid": true,
+    "max_same_boundary_failures": 3,
+    "runtime_integrity_valid": true
+  },
+  "completion": {
+    "evidence_revision": null,
+    "receipt_ref": null,
+    "remaining_ready_work": 1,
+    "requested": false,
+    "verifier_outcome": null
+  },
+  "cursor_id": "missing-branch-closeout-repair-20260830",
+  "cursor_revision": 1,
+  "failure_state": {
+    "boundary": "session closeout merge evidence",
+    "last_failure_ref": "missing branch returns merged preflight with null merge proof",
+    "same_boundary_failures": 1
+  },
+  "goal_ref": "Eliminate false merged closeout records when branch evidence is missing",
+  "lease": {
+    "heartbeat_at": "2026-08-30T06:15:04Z",
+    "lease_revision": 1,
+    "owner_session_id": "codex:01a04c1a-13f2-7062-a96f-91d5476f11cf",
+    "status": "active"
+  },
+  "lifecycle_state": "active",
+  "observations": [
+    {
+      "boundary": "session closeout merge evidence",
+      "evidence_ref": "tests/test_session_cli.py::test_close_session_completes_claim_even_when_worktree_already_missing expects disposition merged after both worktree and branch are absent",
+      "kind": "verification_failure",
+      "observation_id": "false-green-test-1",
+      "outcome": "fail"
+    }
+  ],
+  "plan_revision": "user-approved-2026-08-29",
+  "ready_alternatives": [],
+  "record_type": "plan_execution_cursor",
+  "schema_version": "1.0",
+  "target": {
+    "branch": "codex/fix-missing-branch-closeout",
+    "repository": "/home/brian/code/active/enforced-planning",
+    "worktree": "/home/brian/code/active/enforced-planning/worktrees/codex/fix-missing-branch-closeout"
+  }
+}

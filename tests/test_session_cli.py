@@ -2743,11 +2743,11 @@ def test_close_session_abandons_unique_branch_only_with_explicit_authorization(
     assert claim_payload["disposition"] == "abandoned"
 
 
-def test_close_session_completes_claim_even_when_worktree_already_missing(
+def test_close_session_refuses_merged_disposition_when_worktree_and_branch_are_missing(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Closeout reruns should retain completed history after partial cleanup."""
+    """Missing branch evidence must not create a false merged disposition."""
 
     claims_dir = tmp_path / "claims"
     trackers_dir = tmp_path / "sessions"
@@ -2782,20 +2782,19 @@ def test_close_session_completes_claim_even_when_worktree_already_missing(
 
     monkeypatch.setattr(session_lifecycle.subprocess, "run", _fake_run)
 
-    payload = session_lifecycle.close_session(
-        agent="codex",
-        project="enforced-planning",
-        scope="plan-42-atomic-closeout",
-        worktree_path=str(tmp_path / "missing-worktree"),
-        branch="plan-42-atomic-closeout",
-    )
+    with pytest.raises(ValueError, match="integration.*cannot be proven"):
+        session_lifecycle.close_session(
+            agent="codex",
+            project="enforced-planning",
+            scope="plan-42-atomic-closeout",
+            worktree_path=str(tmp_path / "missing-worktree"),
+            branch="plan-42-atomic-closeout",
+        )
 
-    assert payload["worktree_action"] == "already_missing"
-    assert payload["branch_action"] == "already_missing"
     claim_file = claims_dir / "codex_enforced-planning_plan-42-atomic-closeout.yaml"
     claim_payload = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
-    assert claim_payload["status"] == "completed"
-    assert claim_payload["disposition"] == "merged"
+    assert claim_payload["status"] == "active"
+    assert "disposition" not in claim_payload
 
 
 def test_close_session_recovers_exact_tracker_after_claim_refresh_lost_path(

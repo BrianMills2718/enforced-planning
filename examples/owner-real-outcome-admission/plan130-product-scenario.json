@@ -1,0 +1,60 @@
+{
+  "schema_version": "1.0.0",
+  "scenario_id": "cross-repository-plan-authority-binding",
+  "contract": {
+    "schema_version": "1.1.0",
+    "outcome_id": "cross-repository-plan-authority-binding",
+    "owner_class": "brian",
+    "project_id": "enforced-planning",
+    "lineage_id": "cross-repository-plan-authority",
+    "portfolio_class": "product",
+    "predecessor_lineage_ids": [
+      "planning-integrity-semantic-admission"
+    ],
+    "intended_consumer": "Governed repositories executing work graphs under plans owned by another registered repository",
+    "outcome": "A qualified cross-repository plan validates from its exact authority repository while the work graph and mutation claim remain bound to the exact target repository.",
+    "canonical_journey": {
+      "starting_state": "Project Meta owns complete Plan 249 and AES owns its ready Plan 249 work graph at clean remote-default revisions.",
+      "input": "The qualified plan reference, explicit plan-authority root/revision, AES target root/revision, work graph, work unit, and native session identity.",
+      "action": "Create the AES claimed worktree and session under project-meta#249.",
+      "observable_result": "Plan integrity resolves in Project Meta, work-unit and mutation authority resolve in AES, both revision identities persist, and the AES worktree starts without a proxy plan.",
+      "failure_signal": "The plan is searched for in AES, either authority is guessed or lost, or a denied probe leaves a branch, claim, or worktree."
+    },
+    "baseline_revision": "c01e553873ee72ad9b65c431de9df033939fa3ed",
+    "allowed_scope": [
+      "docs/plans/130_cross_repository_plan_claim_binding.md",
+      "docs/plans/130_cross_repository_plan_claim_binding_work_graph.json",
+      "examples/owner-real-outcome-admission/plan130-product-scenario.json",
+      "examples/owner-real-outcome-admission/plan130-product-allocation.json",
+      "examples/owner-real-outcome-admission/plan130-product-disposition.json",
+      "docs/plans/CLAUDE.md",
+      "ROADMAP.md",
+      "enforced_planning/coordination_claims.py",
+      "enforced_planning/session_lifecycle.py",
+      "scripts/session_start.py",
+      "Makefile",
+      "scripts/install_governed_repo.py",
+      "tests/test_check_coordination_claims.py",
+      "tests/test_session_cli.py",
+      "tests/test_install_governed_repo.py",
+      "docs/guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md",
+      "docs/evidence/plan130_cross_repository_plan_authority.json"
+    ],
+    "progress_dimensions": [
+      "separate plan and target custody",
+      "claim and session persistence",
+      "installed propagation",
+      "authentic AES Plan 249 bootstrap"
+    ]
+  },
+  "receipts": [],
+  "request": {
+    "schema_version": "1.0.0",
+    "operation": "product_write",
+    "target_path": "enforced_planning/coordination_claims.py",
+    "ordinary_approval": true,
+    "approval_text": "Brian authorized the bounded Plan 130 repair after the Plan 249 cross-repository claim defect was reproduced",
+    "cost_telemetry_usd": "0",
+    "elapsed_telemetry_seconds": 0
+  }
+}

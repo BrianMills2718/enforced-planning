@@ -1,0 +1,15 @@
+{
+  "schema_version": "1.0.0",
+  "record_type": "outcome_portfolio_allocation_request",
+  "allocation_id": "plan-130-cross-repository-plan-authority-allocation",
+  "requested_at": "2026-08-30T19:13:50Z",
+  "project_id": "enforced-planning",
+  "scenario_id": "cross-repository-plan-authority-binding",
+  "outcome_contract_sha256": "5fd1138060b693081a2549791cc68c4c22883af9f9688e990ea63423e8ed24a2",
+  "outcome_id": "cross-repository-plan-authority-binding",
+  "outcome_lineage_id": "cross-repository-plan-authority",
+  "portfolio_class": "product",
+  "decision_ref": "enforced-planning#130@c01e553873ee72ad9b65c431de9df033939fa3ed",
+  "purpose": "Remove the reproduced cross-repository claim blocker so Project Meta Plan 249 can start its exact AES worktree without a proxy plan.",
+  "stopping_condition": "Complete after focused and framework suites pass, the installed AES surface is synchronized, and the authentic project-meta#249 to AES worktree starts and closes without residue."
+}

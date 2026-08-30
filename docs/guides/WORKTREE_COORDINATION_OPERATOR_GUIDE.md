@@ -808,6 +808,13 @@ This is explicit authority binding, not automatic repository discovery or an
 expansion of any claim's write paths. See Plan #130 for the AES acceptance
 example and retained verification evidence.
 
+When the consumer declares an installed `enforced-planning` dependency, the
+worktree-only installer updates wrappers and Make targets without vendoring a
+shadow package. Update the consumer's exact dependency pin and runtime through
+its package workflow as well; wrapper installation alone does not upgrade the
+framework implementation. A stale installed lifecycle fails visibly rather
+than dropping the external-authority inputs.
+
 ### First-consumer hard outcome admission (explicit source pilot)
 
 Plan #122 implements that one source consumer, but leaves every new path

@@ -553,6 +553,10 @@ def _plan_static_support(
 
     if worktree_only:
         support_files = WORKTREE_ONLY_SYNC_SUPPORT_FILES
+        reduced = drop_vendored_package_files(support_files, repo_root)
+        if reduced != support_files:
+            support_files = reduced
+            actions.append("mode:installed-package")
     elif relationship_context_only:
         support_files = RELATIONSHIP_CONTEXT_SYNC_SUPPORT_FILES
     elif coordination_messages_only:
@@ -963,7 +967,9 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     if args.strict_governed and final_audit["classification"] != "governed":
         return 1
-    if args.check and (payload["actions"] or payload["blockers"]):
+    # The installed-package marker describes custody, not a pending write.
+    pending_actions = [action for action in payload["actions"] if action != "mode:installed-package"]
+    if args.check and (pending_actions or payload["blockers"]):
         return 1
     return 0
 

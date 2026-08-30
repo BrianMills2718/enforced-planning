@@ -21,9 +21,9 @@
       "tests/test_install_governed_repo.py"
     ],
     "canonical_baseline": {"passed": 304, "failed": 8},
-    "repair_worktree": {"passed": 320, "failed": 8},
+    "repair_worktree": {"passed": 321, "failed": 8},
     "new_failures": 0,
-    "new_passing_cases": 16,
+    "new_passing_cases": 17,
     "unchanged_baseline_failures": [
       "test_live_claim_without_plan_ref_is_weak_blocking_and_rejected_for_creation",
       "test_resume_session_rebinds_stale_or_handoff_lane",
@@ -51,6 +51,12 @@
     "mutation": "none"
   },
   "configuration_changes": [],
+  "installed_dependency_control": {
+    "test": "test_worktree_only_install_preserves_declared_framework_dependency",
+    "red_observation": "Worktree-only installation created an enforced_planning directory despite a declared installed dependency.",
+    "repair": "Reuse existing dependency detection and vendored-file filter in the worktree-only profile; preserve dependency declaration and require separate consumer pin upgrade.",
+    "green_observation": "The regression fixture and installed external-authority fixture pass; a repeated worktree-only check has no drift and succeeds."
+  },
   "overlap_reconciliation": {
     "scope": "fix/session-resume-admission-20260829",
     "observation": "Stale native session; clean retained worktree; one unique empty commit.",

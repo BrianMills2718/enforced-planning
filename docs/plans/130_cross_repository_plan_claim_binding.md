@@ -199,6 +199,7 @@ model, or Project Graph implementation.
 - `docs/reference/CONFIG_REFERENCE.md`
 - `docs/plans/125_planning_integrity_loop.md` (additive external-authority extension)
 - `CLAUDE.md` and its generated `AGENTS.md` mirror
+- `GETTING_STARTED.md` (installed dependency custody during bounded upgrade)
 - Plan 130 plan, work graph, outcome fixtures, index, roadmap, and evidence
 
 ## Operator Contract
@@ -277,13 +278,22 @@ authority.
 ### Verified Source Checkpoint — 2026-08-30
 
 The four initial cross-repository controls failed before implementation. The
-current focused six-file suite reports **320 passed, 8 failed**; the same suite
+current focused six-file suite reports **321 passed, 8 failed**; the same suite
 on untouched canonical `2634cf3` reports **304 passed, the identical 8 failed**.
 Those failures are retained as pre-existing baseline debt, not hidden or changed
 inside this repair. The framework self-test, syntax/undefined-name check, and
 source/mirror byte parity pass. A read-only authentic Project Meta `334846bf` /
 AES `7bf24b9` binding returns the expected Plan 249 digest and independent target
 revision. Installation and actual worktree bootstrap/closeout remain pending.
+
+The first source-entrypoint AES bootstrap subsequently passed with schema-v5
+claim and schema-v3 tracker custody. Before installation, the worktree-only
+preview exposed a related propagation defect: it would vendor framework source
+into AES despite AES's declared pinned dependency. An observed failing fixture
+now covers that case; the limited installer reuses the existing dependency
+detection/filter and leaves package version changes to the consumer's pin.
+The initial recovery lane uses the repaired canonical source entrypoint; a
+separate post-install lane must prove the ordinary installed route.
 
 The required operator-guide update initially overlapped the stale retained
 `fix/session-resume-admission-20260829` lane. Inspection found a clean worktree

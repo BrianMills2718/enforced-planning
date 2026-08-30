@@ -2352,6 +2352,28 @@ def test_installed_dependency_stops_the_installer_re_vendoring(tmp_path: Path) -
     assert reduced == {"scripts/meta/session_start.py": "scripts/session_start.py"}
 
 
+def test_worktree_only_install_preserves_declared_framework_dependency(tmp_path: Path) -> None:
+    """The AES bootstrap upgrade must not shadow its pinned installed package."""
+
+    _write_minimal_claude(tmp_path)
+    _write_consumer(tmp_path, declares_framework=True)
+    (tmp_path / "Makefile").write_text("help:\n\t@echo hello\n", encoding="utf-8")
+    declaration = (tmp_path / "pyproject.toml").read_bytes()
+    result = _run("--repo-root", str(tmp_path), "--write", "--worktree-only", "--json", cwd=PROJECT_META_ROOT)
+    assert result.returncode == 0, result.stdout + result.stderr
+    payload = json.loads(result.stdout)
+    assert not (tmp_path / "enforced_planning").exists()
+    assert "mode:installed-package" in payload["actions"]
+    assert (tmp_path / "pyproject.toml").read_bytes() == declaration
+    assert "PLAN_REPO_ROOT ?=" in (tmp_path / "Makefile").read_text(encoding="utf-8")
+    assert (tmp_path / "scripts/meta/session_start.py").read_bytes() == (
+        PROJECT_META_ROOT / "scripts/session_start.py"
+    ).read_bytes()
+    repeated = _run("--repo-root", str(tmp_path), "--check", "--worktree-only", "--json", cwd=PROJECT_META_ROOT)
+    assert repeated.returncode == 0, repeated.stdout + repeated.stderr
+    assert json.loads(repeated.stdout)["drift_files"] == []
+
+
 def test_vendored_consumer_keeps_receiving_the_package(tmp_path: Path) -> None:
     """A consumer that does not declare the framework keeps the existing behaviour."""
 

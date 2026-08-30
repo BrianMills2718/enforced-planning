@@ -106,7 +106,7 @@ See `ROADMAP.md` for the full phase map and recommended priority order.
 | 126 | Atomic Projection Refresh on Claim Mutations (`126_atomic_projection_refresh.md`) | Critical | ✅ Superseded without implementation — source inspection proved claim creation already retains the outer registry lock through projection refresh; nested-lock candidate `c6b3109` rejected | Plan #127 owns the surviving interrupted-derived-state repair |
 | 127 | Turn-End Safety and Hook Feedback Recurrence (`127_turn_end_safety_and_hook_feedback.md`) | Critical | ✅ Complete — source and fixture-isolation follow-up merged; configured installed hook and strict controls verified | no remaining Plan #127 work |
 | 128 | Portable Governance And Wiki Profile (`128_portable_governance_and_wiki_profile.md`) | Critical | 🚧 In Progress — contract bootstrap | typed default-on/off resolver and disposable installed-consumer proof |
-| 129 | Portable Roadmap Handoff Data-Contract Pilot (`129_data_contract_pilot.md`) | High | 📋 Planned | Company Planning consumer snapshot and explicit portfolio validation |
+| 129 | Portable Roadmap Handoff Data-Contract Pilot (`129_data_contract_pilot.md`) | High | ✅ Complete — producer and consumer snapshots merged; explicit portfolio valid | evidence-backed candidate inventory for any later rollout |
 
 ## Status Key
 

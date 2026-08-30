@@ -139,6 +139,7 @@ registry service, discovery mechanism, or authority source.
 - `contracts/data-contracts.snapshot.json` (create)
 - `tests/test_data_contract_snapshot.py` (create)
 - `docs/plans/129_data_contract_pilot.md` (create/modify)
+- `docs/plans/129_data_contract_pilot_work_graph.json` (create)
 - `docs/plans/CLAUDE.md` (modify)
 
 ## Plan

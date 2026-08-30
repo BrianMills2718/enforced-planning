@@ -28,6 +28,51 @@ class NonGitWorkingDirectory(FastPreWriteError):
     """The native hook cwd is outside a Git checkout."""
 
 
+_DENIAL_SUMMARIES = {
+    "ambiguous_exact_claim": "More than one claim matches this repository lane.",
+    "ambiguous_exact_session_target": "More than one healthy claim could select the session target.",
+    "bash_path_outside_worktree": "The command names a mutation path outside the claimed worktree.",
+    "bash_runtime_workdir_unattested": "The shell command does not prove it will run in the claimed worktree.",
+    "bash_target_unprovable": "The command uses a target that cannot be resolved safely from the hook payload.",
+    "claim_git_identity_mismatch": "The claimed worktree no longer matches its recorded Git identity.",
+    "claim_not_healthy": "The matching claim is stale, incomplete, or otherwise unhealthy.",
+    "client_identity_mismatch": "The event identity belongs to a different native client.",
+    "no_exact_claim": "This session has no exact live claim for the target worktree.",
+    "no_exact_session_target": "This workspace-root session has no healthy claim selecting a target worktree.",
+    "path_outside_claim": "The mutation target is outside the claim's declared write paths.",
+    "projection_unavailable_or_stale": "The claim authority projection is unavailable or stale.",
+    "repository_identity_unavailable": "The target repository could not be resolved from this event.",
+    "session_identity_unavailable": "The event does not identify the native session that would own the mutation.",
+    "unsupported_client": "The event names a client that this hook cannot authenticate.",
+}
+
+
+def _compact_detail(value: object, *, limit: int = 240) -> str:
+    compact = " ".join(str(value).split())
+    return compact if len(compact) <= limit else compact[: limit - 1].rstrip() + "…"
+
+
+def _native_denial_message(decision: dict[str, Any]) -> str:
+    """Render one compact actionable denial; full diagnostics stay in receipts/JSON."""
+
+    reason = str(decision.get("reason_code") or "unknown")
+    summary = _DENIAL_SUMMARIES.get(reason, "The requested mutation lacks verified authority.")
+    lines = [f"BLOCKED [prewrite/{reason}]", f"Why: {summary}"]
+    details = decision.get("details")
+    if isinstance(details, list) and details and reason not in {
+        "projection_unavailable_or_stale",
+        "repository_identity_unavailable",
+    }:
+        rendered = "; ".join(_compact_detail(item) for item in details[:2])
+        if len(details) > 2:
+            rendered += f"; +{len(details) - 2} more"
+        lines.append(f"Details: {rendered}")
+    recovery = decision.get("recovery")
+    if recovery:
+        lines.append(f"Next: {_compact_detail(recovery, limit=600)}")
+    return "\n".join(lines)
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--client", required=True, choices=("codex", "claude-code"))
@@ -253,7 +298,7 @@ def _special_unclaimed_command(
     projection_path: Path,
     subagent_event: bool,
 ) -> bool | str:
-    """Classify one exact typed bootstrap or projection recovery operation."""
+    """Classify one exact typed bootstrap, read-target, or recovery operation."""
 
     try:
         from enforced_planning.claim_bootstrap import parse_projection_recovery_command
@@ -270,6 +315,18 @@ def _special_unclaimed_command(
 
     if subagent_event:
         return False
+    try:
+        from enforced_planning.read_target import parse_raw_bash_command as parse_read_target_command
+
+        request = parse_read_target_command(
+            command,
+            script_path=(REPO_ROOT / "scripts" / "session_read_target.py").resolve(),
+        )
+        if request.get("client") != client:
+            return False
+        return "read_target_selection"
+    except Exception:  # noqa: BLE001 -- try the typed claim bootstrap grammar
+        pass
     try:
         from enforced_planning.claim_bootstrap import parse_raw_bash_command
 
@@ -517,6 +574,7 @@ def main(argv: list[str] | None = None) -> int:
         if early_bash_classification in {
             "read_only",
             "claim_bootstrap",
+            "read_target_selection",
             "projection_recovery",
         }:
             outcome_mode = "off"
@@ -587,6 +645,7 @@ def main(argv: list[str] | None = None) -> int:
     outcome_exempt = decision.get("reason_code") in {
         "bash_read_only",
         "claim_bootstrap_command",
+        "read_target_selection_command",
         "projection_recovery_command",
     }
     enforce_selected_outcome = enforce_selected_outcome and not outcome_exempt
@@ -647,13 +706,7 @@ def main(argv: list[str] | None = None) -> int:
     if decision["decision"] == "deny":
         if outcome_notice is not None:
             print(_native_notice(outcome_notice))
-        detail = ", ".join(decision["details"])
-        message = f"Pre-write claim denied ({decision['reason_code']})"
-        if detail:
-            message += f": {detail}"
-        if decision["recovery"]:
-            message += f". {decision['recovery']}"
-        print(message, file=sys.stderr)
+        print(_native_denial_message(decision), file=sys.stderr)
         return 2
     if decision["decision"] == "observe_violation":
         message = f"OBSERVE ONLY: pre-write claim violation ({decision['reason_code']})."

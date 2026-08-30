@@ -84,6 +84,18 @@ non-claim verbatim.
 
 ## claims
 
+### Host read-target state
+
+Workspace-root clients may select one session-bound repository for instruction
+context without creating a claim. This is host runtime state under
+`~/.claude/coordination/read-targets-v1/`, not a `meta-process.yaml` setting and
+not mutation authority. The selector binds the native session, stable project
+id, canonical Git root, repository identity, registry record digest, and
+selection time. A healthy exact-session claim supersedes it for worktree-local
+context; prewrite admission ignores it completely. Repository-specific
+authorization policy belongs to the configured registry adapter, not to this
+portable state schema.
+
 | Key | Type | Default | Read By | Default When Absent |
 |-----|------|---------|---------|---------------------|
 | `claims.enabled` | bool | `true` | `audit_governed_repo.py` (mechanical worktree opt-in requirement) | Coordination claims enabled; to disable set to `false` |

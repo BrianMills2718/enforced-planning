@@ -363,7 +363,7 @@ def test_read_only_bash_survives_malformed_outcome_configuration(
 
     code, decision = _run_cli(monkeypatch, capsys, tmp_path, payload)
 
-    assert code == 0
+    assert code == 0, (decision["reason_code"], decision["details"], decision)
     assert decision["reason_code"] == "bash_read_only"
 
 
@@ -393,6 +393,73 @@ def test_explicit_host_mode_admits_strict_claim_bootstrap_from_workspace_root(
     assert code == 0
     assert decision["decision"] == "allow"
     assert decision["reason_code"] == "claim_bootstrap_command"
+
+
+def test_workspace_root_admits_exact_read_target_selection_without_claim(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    request = json.dumps(
+        {
+            "schema_version": "1.0",
+            "operation": "select",
+            "client": "codex",
+            "project": "agent-skills",
+            "repo_root": "/home/brian/code/active/agent-skills",
+            "registry_path": "/home/brian/code/active/project-meta/PROJECT_GRAPH.json",
+        },
+        separators=(",", ":"),
+    )
+    command = (
+        f"/usr/bin/python3 {prewrite_claim_gate.REPO_ROOT / 'scripts' / 'session_read_target.py'} "
+        f"--request-json '{request}'"
+    )
+    payload = _payload(cwd=tmp_path, tool="Bash", tool_input={"command": command})
+
+    classification = prewrite_claim_gate._special_unclaimed_command(
+        command,
+        client="codex",
+        claims_dir=tmp_path / "claims",
+        projection_path=tmp_path / "projection.json",
+        subagent_event=False,
+    )
+    assert classification == "read_target_selection"
+
+    code, decision = _run_cli(monkeypatch, capsys, tmp_path, payload, client="codex")
+
+    assert code == 0, (decision["reason_code"], decision["details"], decision)
+    assert decision["decision"] == "allow"
+    assert decision["reason_code"] == "read_target_selection_command"
+
+
+@pytest.mark.parametrize("change", ["subagent", "client"])
+def test_read_target_selection_cannot_borrow_identity(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    change: str,
+) -> None:
+    request = {
+        "schema_version": "1.0",
+        "operation": "select",
+        "client": "claude-code" if change == "client" else "codex",
+        "project": "agent-skills",
+        "repo_root": "/home/brian/code/active/agent-skills",
+        "registry_path": "/home/brian/code/active/project-meta/PROJECT_GRAPH.json",
+    }
+    command = (
+        f"/usr/bin/python3 {prewrite_claim_gate.REPO_ROOT / 'scripts' / 'session_read_target.py'} "
+        f"--request-json '{json.dumps(request, separators=(',', ':'))}'"
+    )
+    payload = _payload(cwd=tmp_path, tool="Bash", tool_input={"command": command})
+    if change == "subagent":
+        payload["agent_id"] = "child-agent"
+
+    code, decision = _run_cli(monkeypatch, capsys, tmp_path, payload, client="codex")
+
+    assert code == 2
+    assert decision["decision"] == "deny"
 
 
 def test_workspace_root_typed_maintenance_bootstrap_is_denied_to_subagent(
@@ -802,7 +869,67 @@ def test_explicit_host_mode_denies_unclaimed_mutating_bash_from_workspace_root(
 
     assert code == 2
     assert not captured.out
-    assert "Pre-write claim denied (projection_unavailable_or_stale)" in captured.err
+    assert "BLOCKED [prewrite/projection_unavailable_or_stale]" in captured.err
+    assert "Why: The claim authority projection is unavailable or stale." in captured.err
+    assert "Next:" in captured.err
+
+
+def test_native_denial_keeps_raw_repository_failure_in_receipt_not_prompt() -> None:
+    message = prewrite_claim_gate._native_denial_message(
+        {
+            "reason_code": "repository_identity_unavailable",
+            "details": ["fatal: not a git repository\n" + "internal diagnostic " * 100],
+            "recovery": "Create one exact claimed target, then retry.",
+        }
+    )
+
+    assert message == (
+        "BLOCKED [prewrite/repository_identity_unavailable]\n"
+        "Why: The target repository could not be resolved from this event.\n"
+        "Next: Create one exact claimed target, then retry."
+    )
+    assert "fatal:" not in message
+
+
+@pytest.mark.parametrize(
+    ("reason_code", "summary"),
+    [
+        (
+            "no_exact_session_target",
+            "This workspace-root session has no healthy claim selecting a target worktree.",
+        ),
+        (
+            "client_identity_mismatch",
+            "The event identity belongs to a different native client.",
+        ),
+        (
+            "session_identity_unavailable",
+            "The event does not identify the native session that would own the mutation.",
+        ),
+        (
+            "claim_git_identity_mismatch",
+            "The claimed worktree no longer matches its recorded Git identity.",
+        ),
+        (
+            "unsupported_client",
+            "The event names a client that this hook cannot authenticate.",
+        ),
+    ],
+)
+def test_native_denial_explains_session_target_failures(
+    reason_code: str,
+    summary: str,
+) -> None:
+    message = prewrite_claim_gate._native_denial_message(
+        {
+            "reason_code": reason_code,
+            "details": ["resolver diagnostic"],
+            "recovery": "Repair the exact session identity or claim, then retry.",
+        }
+    )
+
+    assert message.startswith(f"BLOCKED [prewrite/{reason_code}]\nWhy: {summary}\n")
+    assert "The requested mutation lacks verified authority." not in message
 
 
 def test_json_mode_preserves_deny_exit_for_unclaimed_workspace_mutation(

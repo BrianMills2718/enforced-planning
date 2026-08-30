@@ -86,6 +86,12 @@ documents:
       anchored_to: README.md
       reason: Defines the canonical planning hierarchy and resolves conflicts with compressed planning patterns and adoption guides.
     lifecycle_source: document_status
+  - path: ROADMAP.md
+    role: authority
+    justification:
+      anchored_to: PLANNING_OPERATING_MODEL.md
+      reason: Owns the current control-plane queue, proof frontier, and phase map; retained compatibility pointers route their stale state summaries here.
+    lifecycle_source: document_status
   - path: CLAUDE.md
     role: authority
     justification:

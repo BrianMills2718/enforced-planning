@@ -1,0 +1,75 @@
+{
+  "schema_version": "1.0.0",
+  "record_type": "framework_defect_repair_evidence",
+  "plan_ref": "enforced-planning#130",
+  "observed_date": "2026-08-30",
+  "disposition": "source_verified_installation_pending",
+  "baseline_revision": "2634cf369a31ac70bdf31ca09ec299d1194eb2fd",
+  "source_lane": "plan-130-cross-repository-plan-binding-implementation",
+  "original_red_control": {
+    "command": "pytest tests/test_check_coordination_claims.py -k cross_repository_work_unit_binding -q",
+    "failed": 4,
+    "reason": "The resolver had no external-plan inputs and did not reject an omitted external authority."
+  },
+  "focused_suite": {
+    "files": [
+      "tests/test_check_coordination_claims.py",
+      "tests/test_session_cli.py",
+      "tests/test_session_contracts.py",
+      "tests/test_plan_readiness.py",
+      "tests/test_outcome_admission.py",
+      "tests/test_install_governed_repo.py"
+    ],
+    "canonical_baseline": {"passed": 304, "failed": 8},
+    "repair_worktree": {"passed": 320, "failed": 8},
+    "new_failures": 0,
+    "new_passing_cases": 16,
+    "unchanged_baseline_failures": [
+      "test_live_claim_without_plan_ref_is_weak_blocking_and_rejected_for_creation",
+      "test_resume_session_rebinds_stale_or_handoff_lane",
+      "test_configured_session_start_completes_explicit_unplanned_maintenance_claim",
+      "test_hard_prewrite_rejects_ambiguous_target_cardinality",
+      "test_coordination_messages_only_rollout_is_bounded_runnable_and_idempotent",
+      "test_claim_projection_refresh_only_is_bounded_and_idempotent",
+      "test_coordination_messages_only_supports_upstream_bootstrap_consumers",
+      "test_install_governed_repo_worktree_only_mode_stays_bounded"
+    ]
+  },
+  "framework_self_test": {"command": "python3 scripts/self_test.py", "result": "pass"},
+  "syntax_and_undefined_names": {"command": "ruff check --select F,E9 <changed Python files>", "result": "pass"},
+  "source_mirror_parity": {"source": "scripts/session_start.py", "mirror": "scripts/meta/session_start.py", "result": "byte_identical"},
+  "authentic_read_only_binding": {
+    "target_repository": "/home/brian/code/agentic-engineering-system",
+    "target_revision": "7bf24b9085cc2f40e328ab68f88d41ef05cb9384",
+    "plan_ref": "project-meta#249",
+    "plan_repository": "/home/brian/code/active/project-meta",
+    "plan_revision": "334846bf65d426b3f2d8304ea06244c2794b0b33",
+    "plan_sha256": "d097d15fec4c37f89ff4976d5c11c8074d08c81515510275b6114021effe0b6b",
+    "work_graph_sha256": "947a43607ecf852cd75ddee7486e81af3aecb92e8427d1259b72659ee2a67da6",
+    "work_unit_id": "P249-AES01",
+    "result": "pass",
+    "mutation": "none"
+  },
+  "configuration_changes": [],
+  "overlap_reconciliation": {
+    "scope": "fix/session-resume-admission-20260829",
+    "observation": "Stale native session; clean retained worktree; one unique empty commit.",
+    "preserved_commit": "bb19cbb560795ef9f669a8a266ccd041b86efd83",
+    "operation": "canonical session_abandon.py",
+    "result": "abandoned",
+    "preserved": ["branch", "worktree", "commit", "session tracker"],
+    "non_claim": "The prior session-resume repair is not declared complete."
+  },
+  "authority_notes": [
+    "Structural integrity mode off does not remove the requirement to bind one exact committed external plan.",
+    "New external-plan claims require current target and plan integration tips; retained sessions preserve their original revision custody.",
+    "The selected outcome scenario was restored byte-for-byte after its immutability check correctly rejected an attempted scope edit; no selection or allocation bypass was introduced.",
+    "Implementation-support scope was expanded through the sanctioned session updater and recorded in Plan 130 and its work graph."
+  ],
+  "remaining": [
+    "Commit and push the source rollback point.",
+    "Install the canonical worktree surface into a claimed AES maintenance lane and publish that install.",
+    "Run an authentic workspace-root Project Meta Plan 249 to AES worktree bootstrap and sanctioned closeout.",
+    "Record terminal Plan 130 disposition and resume Project Meta Plan 249."
+  ]
+}

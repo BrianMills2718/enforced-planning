@@ -213,6 +213,21 @@ admission controls; isolated parser tests prove only implementation.
    legacy claim with no recorded start revision remains readable but cannot be
    auto-promoted to schema v4 by inventing historical custody.
 
+### Plan #130 extension — external plan authority
+
+The one-revision contract above and its original acceptance controls describe
+same-repository plans. [Plan #130](130_cross_repository_plan_claim_binding.md)
+extends the existing admission boundary when a qualified plan is owned by a
+different repository: plan/configuration bytes bind an explicit authority root
+and full plan revision, while graph/approval bytes, branch, and worktree bind
+the target root and target start revision. Neither revision may substitute for
+the other. New claims require both current integration tips before mutation;
+retained sessions preserve both original identities. The graph's
+`design_revision` binds `sha256:<exact plan digest>` even when structural plan
+validation is configured off. External claims use schema v5 and trackers v3;
+local claims and trackers retain their existing schemas. This adds custody,
+not discovery, a proxy-plan authority, or a new readiness decision owner.
+
 ## Boundaries And Contracts
 
 | Boundary | Owns | Does not own |

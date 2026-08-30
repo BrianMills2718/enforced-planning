@@ -15,6 +15,7 @@ from contextlib import contextmanager
 from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 import yaml  # type: ignore[import-untyped]
@@ -119,6 +120,17 @@ def _commit_work_graph(repo_root: Path, *, plan: int, unit: dict) -> str:
         ["git", "-C", str(repo_root), "commit", "-m", "work graph"], check=True, capture_output=True, text=True
     )
     return relative
+
+
+def _git_head(repo_root: Path) -> str:
+    """Return the exact committed fixture revision."""
+
+    return subprocess.run(
+        ["git", "-C", str(repo_root), "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
 
 
 def test_normalize_claim_reads_v1_schema_as_program_claim(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1164,6 +1176,409 @@ def test_work_unit_binding_reads_graph_from_same_exact_plan_revision(tmp_path: P
 
     assert approvals == ()
     assert source_revision == revision_a
+
+
+def _patch_cross_repo_plan_integrity(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    plan_revision: str,
+    plan_sha256: str,
+    calls: list[dict] | None = None,
+) -> None:
+    """Install a deterministic exact-plan validation seam for two-repo tests."""
+
+    from enforced_planning import plan_validation
+
+    def _validate(**kwargs):
+        if calls is not None:
+            calls.append(kwargs)
+        return SimpleNamespace(
+            mode="enforce",
+            disposition="pass",
+            findings=[],
+            source_revision=plan_revision,
+            plan_sha256=plan_sha256,
+        )
+
+    monkeypatch.setattr(plan_validation, "validate_plan_integrity_at_revision", _validate)
+
+
+def test_cross_repository_work_unit_binding_separates_target_and_plan_revisions(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A target graph and external plan are frozen and validated independently."""
+
+    target_root = tmp_path / "agentic-engineering-system"
+    plan_root = tmp_path / "project-meta"
+    _init_git_repo(target_root)
+    _init_git_repo(plan_root)
+    plan_revision = _git_head(plan_root)
+    plan_sha256 = "d" * 64
+    graph = _commit_work_graph(
+        target_root,
+        plan=249,
+        unit={
+            "id": "P249-AES01",
+            "design_revision": f"sha256:{plan_sha256}",
+            "status": "ready",
+            "readiness": {
+                "status": "ready",
+                "required_approval_types": [],
+                "approvals": [],
+                "failed_guards": [],
+            },
+        },
+    )
+    target_revision = _git_head(target_root)
+    calls: list[dict] = []
+    _patch_cross_repo_plan_integrity(
+        monkeypatch,
+        plan_revision=plan_revision,
+        plan_sha256=plan_sha256,
+        calls=calls,
+    )
+
+    binding = claims_impl.resolve_canonical_work_unit_binding(
+        repo_root=str(target_root),
+        plan_ref="project-meta#249",
+        work_graph_path=graph,
+        work_unit_id="P249-AES01",
+        start_point=target_revision,
+        plan_repo_root=str(plan_root),
+        plan_start_point=plan_revision,
+    )
+
+    assert binding.start_revision == target_revision
+    assert binding.plan_repo_root == str(plan_root.resolve())
+    assert binding.plan_revision == plan_revision
+    assert binding.plan_sha256 == plan_sha256
+    assert calls == [
+        {
+            "repo_root": plan_root.resolve(),
+            "repository_id": "project-meta",
+            "plan_number": 249,
+            "start_point": plan_revision,
+        }
+    ]
+
+
+def test_cross_repository_work_unit_binding_requires_explicit_plan_root_and_revision(
+    tmp_path: Path,
+) -> None:
+    """A qualified external plan is never guessed from neighboring repositories."""
+
+    target_root = tmp_path / "agentic-engineering-system"
+    _init_git_repo(target_root)
+    graph = _commit_work_graph(
+        target_root,
+        plan=249,
+        unit={
+            "id": "P249-AES01",
+            "design_revision": "sha256:" + "d" * 64,
+            "status": "ready",
+            "readiness": {"status": "ready", "required_approval_types": [], "approvals": []},
+        },
+    )
+
+    with pytest.raises(ValueError, match="explicit --plan-repo-root and --plan-start-point"):
+        claims_impl.resolve_canonical_work_unit_binding(
+            repo_root=str(target_root),
+            plan_ref="project-meta#249",
+            work_graph_path=graph,
+            work_unit_id="P249-AES01",
+            start_point=_git_head(target_root),
+        )
+
+
+def test_cross_repository_binding_retains_plan_bytes_when_integrity_is_off(tmp_path: Path) -> None:
+    """Exact authority custody is required independently of structural enforcement mode."""
+
+    target_root = tmp_path / "aes"
+    plan_root = tmp_path / "project-meta"
+    _init_git_repo(target_root)
+    _init_git_repo(plan_root)
+    plan_bytes = b"# Plan 249\n\nAn exact external authority fixture.\n"
+    plan_path = plan_root / "docs/plans/249_fixture.md"
+    plan_path.parent.mkdir(parents=True)
+    plan_path.write_bytes(plan_bytes)
+    subprocess.run(
+        ["git", "-C", str(plan_root), "add", "docs/plans/249_fixture.md"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(plan_root), "commit", "-m", "exact plan bytes"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    plan_sha256 = hashlib.sha256(plan_bytes).hexdigest()
+    graph = _commit_work_graph(
+        target_root,
+        plan=249,
+        unit={
+            "id": "P249-AES01",
+            "design_revision": f"sha256:{plan_sha256}",
+            "status": "ready",
+            "readiness": {"status": "ready", "required_approval_types": [], "approvals": []},
+        },
+    )
+    binding = claims_impl.resolve_canonical_work_unit_binding(
+        repo_root=str(target_root),
+        plan_ref="project-meta#249",
+        work_graph_path=graph,
+        work_unit_id="P249-AES01",
+        start_point=_git_head(target_root),
+        plan_repo_root=str(plan_root),
+        plan_start_point=_git_head(plan_root),
+    )
+    assert binding.plan_sha256 == plan_sha256
+    assert binding.start_revision == _git_head(target_root)
+    assert binding.plan_revision == _git_head(plan_root)
+
+
+def test_cross_repository_work_unit_binding_rejects_wrong_plan_repo_identity(
+    tmp_path: Path,
+) -> None:
+    """An explicit directory cannot stand in for a differently named plan authority."""
+
+    target_root = tmp_path / "agentic-engineering-system"
+    wrong_plan_root = tmp_path / "not-project-meta"
+    _init_git_repo(target_root)
+    _init_git_repo(wrong_plan_root)
+    graph = _commit_work_graph(
+        target_root,
+        plan=249,
+        unit={
+            "id": "P249-AES01",
+            "design_revision": "sha256:" + "d" * 64,
+            "status": "ready",
+            "readiness": {"status": "ready", "required_approval_types": [], "approvals": []},
+        },
+    )
+
+    with pytest.raises(ValueError, match="does not match qualified plan repository"):
+        claims_impl.resolve_canonical_work_unit_binding(
+            repo_root=str(target_root),
+            plan_ref="project-meta#249",
+            work_graph_path=graph,
+            work_unit_id="P249-AES01",
+            start_point=_git_head(target_root),
+            plan_repo_root=str(wrong_plan_root),
+            plan_start_point=_git_head(wrong_plan_root),
+        )
+
+
+def test_cross_repository_work_unit_binding_rejects_plan_digest_mismatch(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A target work unit cannot silently bind a different external plan version."""
+
+    target_root = tmp_path / "agentic-engineering-system"
+    plan_root = tmp_path / "project-meta"
+    _init_git_repo(target_root)
+    _init_git_repo(plan_root)
+    graph = _commit_work_graph(
+        target_root,
+        plan=249,
+        unit={
+            "id": "P249-AES01",
+            "design_revision": "sha256:" + "a" * 64,
+            "status": "ready",
+            "readiness": {"status": "ready", "required_approval_types": [], "approvals": []},
+        },
+    )
+    _patch_cross_repo_plan_integrity(
+        monkeypatch,
+        plan_revision=_git_head(plan_root),
+        plan_sha256="b" * 64,
+    )
+
+    with pytest.raises(ValueError, match="design_revision does not bind external plan digest"):
+        claims_impl.resolve_canonical_work_unit_binding(
+            repo_root=str(target_root),
+            plan_ref="project-meta#249",
+            work_graph_path=graph,
+            work_unit_id="P249-AES01",
+            start_point=_git_head(target_root),
+            plan_repo_root=str(plan_root),
+            plan_start_point=_git_head(plan_root),
+        )
+
+
+@pytest.mark.parametrize(
+    ("corruption", "expected_error"),
+    [
+        ("relative_root", "absolute repository path"),
+        ("unresolvable_revision", "full plan authority revision"),
+        ("stale_revision", "plan-authority default-integration tip"),
+        ("digest_mismatch", "design_revision does not bind external plan digest"),
+    ],
+)
+def test_cross_repository_claim_denials_leave_no_residue(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    corruption: str,
+    expected_error: str,
+) -> None:
+    """Every external-authority denial precedes registry, branch, and worktree mutation."""
+
+    module = _load_module()
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
+    target_root = tmp_path / "aes"
+    plan_root = tmp_path / "project-meta"
+    _init_git_repo(target_root)
+    _init_git_repo(plan_root)
+    plan_revision = _git_head(plan_root)
+    plan_sha256 = "d" * 64
+    graph = _commit_work_graph(
+        target_root,
+        plan=249,
+        unit={
+            "id": "P249-AES01",
+            "design_revision": "sha256:" + ("a" * 64 if corruption == "digest_mismatch" else plan_sha256),
+            "status": "ready",
+            "readiness": {"status": "ready", "required_approval_types": [], "approvals": []},
+        },
+    )
+    if corruption == "stale_revision":
+        (plan_root / "README.md").write_text("new authority tip\n", encoding="utf-8")
+        subprocess.run(
+            ["git", "-C", str(plan_root), "commit", "-am", "advance authority"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    _patch_cross_repo_plan_integrity(monkeypatch, plan_revision=plan_revision, plan_sha256=plan_sha256)
+    worktree = target_root / "worktrees" / "external-denial"
+    with pytest.raises(ValueError, match=expected_error):
+        module.create_claim(
+            agent="codex",
+            project="aes",
+            scope="external-denial",
+            intent="prove exact external authority denial",
+            plan_ref="project-meta#249",
+            claim_type="write",
+            write_paths=["src/aes"],
+            repo_root=str(target_root),
+            worktree_path=str(worktree),
+            branch="external-denial",
+            session_id="codex:test",
+            session_name="external-denial",
+            broader_goal="Prove External Denial",
+            work_graph_path=graph,
+            work_unit_id="P249-AES01",
+            start_point=_git_head(target_root),
+            plan_repo_root="project-meta" if corruption == "relative_root" else str(plan_root),
+            plan_start_point="f" * 40 if corruption == "unresolvable_revision" else plan_revision,
+        )
+    assert not claims_dir.exists()
+    assert not worktree.exists()
+    assert (
+        subprocess.run(
+            ["git", "-C", str(target_root), "branch", "--list", "external-denial"],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout
+        == ""
+    )
+
+
+def test_local_plan_cannot_substitute_an_independent_plan_revision(tmp_path: Path) -> None:
+    """The new external fields cannot weaken the existing one-repository contract."""
+
+    repo_root = tmp_path / "demo"
+    _init_git_repo(repo_root)
+    old_revision = _git_head(repo_root)
+    graph = _commit_work_graph(
+        repo_root,
+        plan=106,
+        unit={"id": "local", "status": "ready", "readiness": {"status": "ready", "approvals": []}},
+    )
+    with pytest.raises(ValueError, match="Same-repository plan authority must retain"):
+        claims_impl.resolve_canonical_work_unit_binding(
+            repo_root=str(repo_root),
+            plan_ref="demo#106",
+            work_graph_path=graph,
+            work_unit_id="local",
+            start_point=_git_head(repo_root),
+            plan_repo_root=str(repo_root),
+            plan_start_point=old_revision,
+        )
+
+
+def test_cross_repository_claim_persists_external_plan_authority_custody(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A live claim retains enough evidence to revalidate its external plan."""
+
+    module = _load_module()
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
+    target_root = tmp_path / "agentic-engineering-system"
+    plan_root = tmp_path / "project-meta"
+    _init_git_repo(target_root)
+    _init_git_repo(plan_root)
+    plan_revision = _git_head(plan_root)
+    plan_sha256 = "c" * 64
+    graph = _commit_work_graph(
+        target_root,
+        plan=249,
+        unit={
+            "id": "P249-AES01",
+            "design_revision": f"sha256:{plan_sha256}",
+            "status": "ready",
+            "readiness": {
+                "status": "ready",
+                "required_approval_types": [],
+                "approvals": [],
+                "failed_guards": [],
+            },
+        },
+    )
+    _patch_cross_repo_plan_integrity(
+        monkeypatch,
+        plan_revision=plan_revision,
+        plan_sha256=plan_sha256,
+    )
+
+    ok, _message = module.create_claim(
+        agent="codex",
+        project="agentic-engineering-system",
+        scope="plan249-aes01",
+        intent="implement the Plan 249 AES vertical",
+        plan_ref="project-meta#249",
+        claim_type="write",
+        write_paths=["src/aes", "tests"],
+        repo_root=str(target_root),
+        worktree_path=str(target_root / "worktrees" / "plan249-aes01"),
+        branch="plan249-aes01",
+        session_id="codex:test",
+        session_name="Plan 249 AES vertical",
+        broader_goal="Implement contract-coupled derived documentation",
+        work_graph_path=graph,
+        work_unit_id="P249-AES01",
+        start_point=_git_head(target_root),
+        plan_repo_root=str(plan_root),
+        plan_start_point=plan_revision,
+    )
+
+    assert ok is True
+    payload = yaml.safe_load(
+        (claims_dir / "codex_agentic-engineering-system_plan249-aes01.yaml").read_text(encoding="utf-8")
+    )
+    assert payload["schema_version"] == 5
+    assert payload["start_revision"] == _git_head(target_root)
+    assert payload["plan_repo_root"] == str(plan_root.resolve())
+    assert payload["plan_revision"] == plan_revision
+    assert payload["plan_sha256"] == plan_sha256
+    assert module.claim_health_issues(module.normalize_claim(payload)) == ["missing_tracker_path"]
 
 
 def test_new_plan_bound_claim_rejects_non_tip_revision_even_with_resume_flag(
@@ -2948,9 +3363,7 @@ def _drain_completed_claims(
     pruned, _labels = module.prune_completed()
     assert pruned == completed
 
-    receipts = [
-        event for event in claim_mutation_receipts.load_receipts() if event.operation == "prune"
-    ]
+    receipts = [event for event in claim_mutation_receipts.load_receipts() if event.operation == "prune"]
     return receipts, projection_reads, claims_dir
 
 
@@ -2968,12 +3381,8 @@ def test_prune_completed_binds_every_receipt_without_rebuilding_per_claim(
     with the number of claims pruned.
     """
 
-    small_receipts, small_reads, small_dir = _drain_completed_claims(
-        tmp_path / "small", monkeypatch, completed=3
-    )
-    large_receipts, large_reads, large_dir = _drain_completed_claims(
-        tmp_path / "large", monkeypatch, completed=9
-    )
+    small_receipts, small_reads, small_dir = _drain_completed_claims(tmp_path / "small", monkeypatch, completed=3)
+    large_receipts, large_reads, large_dir = _drain_completed_claims(tmp_path / "large", monkeypatch, completed=9)
 
     assert len(small_receipts) == 3
     assert len(large_receipts) == 12  # the ledger is shared across both drains
@@ -4230,9 +4639,7 @@ def test_session_liveness_reads_the_clients_own_transcript(tmp_path: Path) -> No
     written_at = datetime(2026, 8, 26, 18, 18, 37, tzinfo=timezone.utc)
     os.utime(transcript, (written_at.timestamp(), written_at.timestamp()))
 
-    found = claims_impl.session_last_active_at(
-        "codex:01a0394a-ee7e-7b22-bedc-82ddb2a253f2", codex_root=codex_root
-    )
+    found = claims_impl.session_last_active_at("codex:01a0394a-ee7e-7b22-bedc-82ddb2a253f2", codex_root=codex_root)
 
     assert found == written_at
 
@@ -4262,12 +4669,8 @@ def test_session_activity_is_described_without_licensing_a_takeover() -> None:
     describe = claims_impl.describe_session_activity
 
     assert describe(None, now=now) == "liveness unknown"
-    assert describe(datetime(2026, 8, 26, 18, 29, 30, tzinfo=timezone.utc), now=now) == (
-        "active seconds ago"
-    )
-    assert describe(datetime(2026, 8, 26, 18, 11, tzinfo=timezone.utc), now=now) == (
-        "last active 19 min ago"
-    )
+    assert describe(datetime(2026, 8, 26, 18, 29, 30, tzinfo=timezone.utc), now=now) == ("active seconds ago")
+    assert describe(datetime(2026, 8, 26, 18, 11, tzinfo=timezone.utc), now=now) == ("last active 19 min ago")
     quiet = describe(datetime(2026, 8, 25, 15, 11, tzinfo=timezone.utc), now=now)
     assert quiet.startswith("last active 27h ago")
     assert "likely ended without releasing" in quiet

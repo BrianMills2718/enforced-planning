@@ -167,6 +167,12 @@ adoption.
    session activation must add it or rollback only artifacts named as created
    by the worktree helper's receipt. Never infer historical revision custody for
    a running legacy claim.
+   When a qualified plan belongs to another repository, Plan #130 separates
+   that target start revision from the explicit `PLAN_REPO_ROOT` and full
+   `PLAN_START_POINT` of the plan authority. Validate both current integration
+   tips before new-lane mutation; retain both identities and the exact plan
+   digest in the claim/tracker. Never copy a proxy plan into the target. See
+   the operator guide's cross-repository plan-authority contract.
 
 ## Notes
 

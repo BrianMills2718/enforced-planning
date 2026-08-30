@@ -65,6 +65,8 @@ def _supported_start_kwargs(args: argparse.Namespace) -> dict[str, Any]:
         "work_graph_path": args.work_graph,
         "work_unit_id": args.work_unit_id,
         "start_revision": args.start_revision,
+        "plan_repo_root": args.plan_repo_root,
+        "plan_start_point": args.plan_start_point,
         "intended_next_phases": args.next_phase,
         "depends_on_repos": args.depends_on,
         "requires_shared_infra_changes": args.requires_shared_infra_changes,
@@ -79,6 +81,14 @@ def _supported_start_kwargs(args: argparse.Namespace) -> dict[str, Any]:
     if args.start_revision is not None and "start_revision" not in supported:
         raise RuntimeError(
             "Installed session lifecycle does not support revision custody; "
+            "synchronize enforced-planning support before starting this lane."
+        )
+    if (args.plan_repo_root is not None or args.plan_start_point is not None) and not {
+        "plan_repo_root",
+        "plan_start_point",
+    }.issubset(supported):
+        raise RuntimeError(
+            "Installed session lifecycle does not support external plan-authority custody; "
             "synchronize enforced-planning support before starting this lane."
         )
     return {name: value for name, value in kwargs.items() if name in supported}
@@ -110,6 +120,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--start-revision",
         help="Full immutable Git object ID retained by the plan-bound claim and tracker.",
+    )
+    parser.add_argument(
+        "--plan-repo-root",
+        help="Absolute canonical repository root for a qualified external plan authority.",
+    )
+    parser.add_argument(
+        "--plan-start-point",
+        help="Full immutable plan-authority revision retained by the claim and tracker.",
     )
     parser.add_argument("--next-phase", action="append", default=[])
     parser.add_argument("--depends-on", action="append", default=[])

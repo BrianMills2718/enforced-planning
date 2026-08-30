@@ -151,6 +151,8 @@ ALLOW_UNPLANNED ?=
 PLAN_RESUME ?=
 WORKTREE_EXECUTION_PROFILE ?= coordinated
 PLAN_PROJECT ?= $(WORKTREE_PROJECT)
+PLAN_REPO_ROOT ?=
+PLAN_START_POINT ?=
 PLAN_READINESS_COMMAND ?=
 SESSION_CLAIM_TYPE ?= program
 SESSION_PARENT_SCOPE ?=
@@ -240,6 +242,8 @@ endif
 		--execution-profile "$(WORKTREE_EXECUTION_PROFILE)" \
 		--repo-root "$(WORKTREE_REPO_ROOT)" \
 		--start-point "$(WORKTREE_START_REVISION)" \
+		$(if $(PLAN_REPO_ROOT),--plan-repo-root "$(PLAN_REPO_ROOT)",) \
+		$(if $(PLAN_START_POINT),--plan-start-point "$(PLAN_START_POINT)",) \
 		$(if $(PLAN_READINESS_COMMAND),--query-command "$(PLAN_READINESS_COMMAND)",) \
 		--repository "$(WORKTREE_PROJECT)" \
 		--lane-id "$(BRANCH)" \
@@ -260,6 +264,8 @@ endif
 		--branch "$(BRANCH)" \
 		--worktree-path "$(WORKTREE_DIR)/$(BRANCH)" \
 		--start-point "$(WORKTREE_START_REVISION)" \
+		$(if $(PLAN_REPO_ROOT),--plan-repo-root "$(PLAN_REPO_ROOT)",) \
+		$(if $(PLAN_START_POINT),--plan-start-point "$(PLAN_START_POINT)",) \
 		--require-new \
 		$(if $(PLAN_RESUME),--resume,) \
 		--session-name "$(SESSION_GOAL)" \
@@ -328,6 +334,8 @@ endif
 		$(if $(SESSION_WORK_UNIT_ID),--work-unit-id "$(SESSION_WORK_UNIT_ID)",) \
 		$(if $(PLAN),--plan "$(PLAN_PROJECT)#$(PLAN)",) \
 		$(if $(PLAN),--start-revision "$(WORKTREE_START_REVISION)",) \
+		$(if $(PLAN_REPO_ROOT),--plan-repo-root "$(PLAN_REPO_ROOT)",) \
+		$(if $(PLAN_START_POINT),--plan-start-point "$(PLAN_START_POINT)",) \
 		$(if $(ALLOW_UNPLANNED),--allow-unplanned,) \
 		$(if $(SESSION_NEXT),--next-phase "$(SESSION_NEXT)",) \
 		$(if $(SESSION_DEPENDS),--depends-on "$(SESSION_DEPENDS)",) \
@@ -427,6 +435,8 @@ endif
 		$(if $(SESSION_WORK_GRAPH),--work-graph "$(SESSION_WORK_GRAPH)",) \
 		$(if $(SESSION_WORK_UNIT_ID),--work-unit-id "$(SESSION_WORK_UNIT_ID)",) \
 		$(if $(PLAN),--plan "$(PLAN_PROJECT)#$(PLAN)",) \
+		$(if $(PLAN_REPO_ROOT),--plan-repo-root "$(PLAN_REPO_ROOT)",) \
+		$(if $(PLAN_START_POINT),--plan-start-point "$(PLAN_START_POINT)",) \
 		$(if $(ALLOW_UNPLANNED),--allow-unplanned,) \
 		$(if $(SESSION_NEXT),--next-phase "$(SESSION_NEXT)",) \
 		$(if $(SESSION_DEPENDS),--depends-on "$(SESSION_DEPENDS)",) \

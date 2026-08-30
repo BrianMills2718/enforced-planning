@@ -15,7 +15,7 @@
 
 ## Gap
 
-**Current:** Plan readiness accepts a qualified plan such as
+**Current:** The portfolio readiness query resolves a qualified plan such as
 `project-meta#249`, but `resolve_canonical_work_unit_binding()` then validates
 that plan against the target repository and target start revision. The observed
 `/home/brian/code/agentic-engineering-system` probe therefore reported Plan 249
@@ -41,7 +41,7 @@ target-repository mutation controls.
 
 ## Canonical Behavioral Example
 
-**Starting input/state:** Project Meta owns complete Plan 249; AES owns a ready
+**Starting input/state:** Project Meta owns accepted Plan 249; AES owns a ready
 `249_..._work_graph.json`; both repositories are clean at exact remote-default
 revisions; the session targets AES.
 
@@ -71,8 +71,12 @@ repository revision instead of the AES revision.
   `repo_root` and `start_point` still name the target repository.
 - `enforced_planning/session_lifecycle.py` — session activation revalidates the
   work-unit binding and must preserve the additional authority identity.
-- `enforced_planning/plan_readiness.py` — qualified readiness is already a
-  separate precondition and remains unchanged.
+- `enforced_planning/plan_readiness.py` — the local admission wrapper still
+  conflates the qualified plan repository with the target lane repository;
+  both exact roots/revisions must be carried through this precondition too.
+- `enforced_planning/outcome_admission.py` and
+  `enforced_planning/session_contracts.py` — staged activation revalidates the
+  binding and tracker serialization must retain its external authority fields.
 - `scripts/session_start.py`, `Makefile`, and
   `scripts/install_governed_repo.py` — source and installed propagation path.
 - `CLAUDE.md` and `GETTING_STARTED.md` — source workflow and first installed
@@ -81,6 +85,9 @@ repository revision instead of the AES revision.
   contract this repair must preserve.
 - `docs/reference/CONFIG_REFERENCE.md` — current claims/worktree configuration
   surface; no new discovery setting is added.
+- `docs/guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md` — work-unit readiness,
+  Planning Integrity, and hard outcome-admission sections; its cross-repository
+  plan-authority contract owns the operator invocation rules.
 - `tests/test_check_coordination_claims.py`, `tests/test_session_cli.py`, and
   `tests/test_install_governed_repo.py` — current contract and installer
   controls.
@@ -133,9 +140,9 @@ digest, or propagation surface disagreed.
 
 ### Capability Validation
 
-- [ ] Both repository identities and revisions are strict and explicit.
-- [ ] Claim persistence retains target and plan-authority custody.
-- [ ] Source Make/session and installed copies propagate the same fields.
+- [x] Both repository identities and revisions are strict and explicit.
+- [x] Claim persistence retains target and plan-authority custody.
+- [x] Source Make/session and installed fixture copies propagate the same fields.
 - [ ] Authentic AES under Project Meta Plan 249 starts without a proxy plan.
 
 ## Capability Adoption
@@ -157,8 +164,8 @@ model, or Project Graph implementation.
 ## Reassessment Contract
 
 - **Triggers:** the fix requires a proxy plan, guessing a filesystem layout,
-  changing readiness semantics, or touching more than claim/session/installer
-  propagation.
+  changing readiness decision semantics, or touching more than the existing
+  claim/session/admission/readiness/installer propagation seams.
 - **Autonomous action:** keep plan and target custody separate, add exact fields,
   and narrow failing fixtures to the first disagreeing identity.
 - **Plan revision required:** changing claim schema shape, adding a resolver, or
@@ -173,14 +180,54 @@ model, or Project Graph implementation.
 
 - `enforced_planning/coordination_claims.py`
 - `enforced_planning/session_lifecycle.py`
+- `enforced_planning/session_contracts.py`
+- `enforced_planning/outcome_admission.py`
+- `enforced_planning/plan_readiness.py`
 - `scripts/session_start.py`
+- `scripts/meta/session_start.py` (generated parity mirror)
+- `scripts/check_plan_readiness.py`
 - `Makefile`
+- `templates/Makefile.worktree.block.template` (canonical installed Make source)
 - `scripts/install_governed_repo.py`
 - `tests/test_check_coordination_claims.py`
 - `tests/test_session_cli.py`
+- `tests/test_session_contracts.py`
+- `tests/test_outcome_admission.py`
+- `tests/test_plan_readiness.py`
 - `tests/test_install_governed_repo.py`
 - `docs/guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md`
+- `docs/reference/CONFIG_REFERENCE.md`
+- `docs/plans/125_planning_integrity_loop.md` (additive external-authority extension)
+- `CLAUDE.md` and its generated `AGENTS.md` mirror
 - Plan 130 plan, work graph, outcome fixtures, index, roadmap, and evidence
+
+## Operator Contract
+
+For an external plan, keep `WORKTREE_REPO_ROOT`, `WORKTREE_START_POINT`, and
+`WORKTREE_PROJECT` bound to the mutation target. Supply `PLAN_PROJECT` for the
+authority repository, `PLAN_REPO_ROOT` as its explicit absolute canonical root,
+and `PLAN_START_POINT` as its full immutable Git commit. The same fields flow
+through readiness, claim creation, and session activation. Local plans omit the
+two new variables and retain their existing one-repository behavior.
+
+Example authority split for the authentic consumer:
+
+| Input | Value |
+|---|---|
+| mutation repository | `/home/brian/code/agentic-engineering-system` |
+| qualified plan | `project-meta#249` |
+| plan authority root | `/home/brian/code/active/project-meta` |
+| target graph | `docs/plans/249_contract_coupled_derived_documentation_work_graph.json` |
+| work unit | `P249-AES01` |
+
+The external plan digest remains mandatory when the authority repository's
+structural integrity mode is off. This binds committed bytes without enabling a
+new enforcement policy there. New lanes require current integration tips;
+refreshing a retained lane preserves its original exact custody.
+
+The selected outcome scenario remains byte-immutable. Implementation-support
+scope revisions are recorded in this plan, its work graph, and the live claim;
+the existing selected product target remains `coordination_claims.py`.
 
 ## Plan
 
@@ -200,7 +247,8 @@ authority.
 
 1. Retain exact target and plan-authority identity/revision/digest fields.
 2. Validate local and qualified paths with independent Git roots.
-3. Propagate the fields through claim CLI, session lifecycle, Make, and installer.
+3. Propagate the fields through claim CLI, session lifecycle/tracker, staged
+   outcome admission, plan-readiness admission, Make, and installer.
 4. Run focused negative controls, self-test, and installed AES parity.
 5. Start and close the authentic Plan 249 AES lane, then return to Plan 249.
 
@@ -210,10 +258,13 @@ authority.
 
 | Test File | Test Function | What It Verifies |
 |---|---|---|
-| `tests/test_check_coordination_claims.py` | qualified cross-repo binding cases | correct root/revision succeeds; missing, wrong, stale, and digest mismatch deny |
-| same | claim round-trip case | plan authority and target custody survive persistence |
-| `tests/test_session_cli.py` | cross-repo session activation case | session revalidation preserves both identities |
-| `tests/test_install_governed_repo.py` | installed Make propagation case | installed consumer receives exact plan-authority variables and flags |
+| `tests/test_check_coordination_claims.py` | `test_cross_repository_work_unit_binding_separates_target_and_plan_revisions` | correct root/revision succeeds |
+| same | `test_cross_repository_claim_denials_leave_no_residue` | relative, unresolvable, stale, and digest mismatch deny atomically |
+| same | `test_cross_repository_claim_persists_external_plan_authority_custody` | plan authority and target custody survive persistence |
+| same | `test_cross_repository_binding_retains_plan_bytes_when_integrity_is_off` | digest custody does not silently depend on structural enforcement mode |
+| `tests/test_session_cli.py` | `test_cross_repository_session_retains_plan_custody_and_rejects_rebinding` | staged activation, tracker, refresh, and rollback preserve both identities |
+| `tests/test_plan_readiness.py` | `test_external_plan_readiness_keeps_target_lane_revision_separate` | readiness does not substitute plan revision for execution revision |
+| `tests/test_install_governed_repo.py` | `test_installed_worktree_surface_preserves_external_plan_authority` | installed consumer receives exact plan-authority variables and flags |
 
 ### Existing Tests (Must Pass)
 
@@ -222,6 +273,28 @@ authority.
 | focused coordination/session/installer suites | local-plan behavior and compatibility remain unchanged |
 | `python scripts/self_test.py` | framework-wide verification remains green |
 | authentic AES Plan 249 bootstrap | proves the user-visible blocker is removed |
+
+### Verified Source Checkpoint — 2026-08-30
+
+The four initial cross-repository controls failed before implementation. The
+current focused six-file suite reports **320 passed, 8 failed**; the same suite
+on untouched canonical `2634cf3` reports **304 passed, the identical 8 failed**.
+Those failures are retained as pre-existing baseline debt, not hidden or changed
+inside this repair. The framework self-test, syntax/undefined-name check, and
+source/mirror byte parity pass. A read-only authentic Project Meta `334846bf` /
+AES `7bf24b9` binding returns the expected Plan 249 digest and independent target
+revision. Installation and actual worktree bootstrap/closeout remain pending.
+
+The required operator-guide update initially overlapped the stale retained
+`fix/session-resume-admission-20260829` lane. Inspection found a clean worktree
+with one empty unique commit, `bb19cbb560795ef9f669a8a266ccd041b86efd83`.
+The sanctioned session-abandon lifecycle retired that live claim; branch,
+worktree, commit, and tracker were preserved. This does not declare the older
+session-resume repair complete. The current claim now explicitly owns the
+coupled documentation surfaces.
+
+Exact commands, identities, and baseline failure names are retained in
+[the Plan 130 evidence receipt](../evidence/plan130_cross_repository_plan_authority.json).
 
 ## Acceptance Criteria
 

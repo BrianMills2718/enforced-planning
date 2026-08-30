@@ -4,7 +4,7 @@
 <!-- generated_by: scripts/render_agents_md.py -->
 <!-- canonical_claude: CLAUDE.md -->
 <!-- canonical_relationships: scripts/relationships.yaml -->
-<!-- canonical_relationships_sha256: d60d96358eda -->
+<!-- canonical_relationships_sha256: 1cdd82e8ba16 -->
 <!-- sync_check: python scripts/check_agents_sync.py --check -->
 
 This file is a generated Codex-oriented projection of repo governance.
@@ -15,6 +15,8 @@ Canonical governance sources:
 - `scripts/relationships.yaml` — machine-readable ADR, coupling, and required-reading graph
 
 ## Purpose
+
+Status: active
 
 Source repo for the portable planning and governance framework.
 

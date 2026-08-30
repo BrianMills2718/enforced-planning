@@ -39,6 +39,7 @@ _DENIAL_SUMMARIES = {
     "client_identity_mismatch": "The event identity belongs to a different native client.",
     "no_exact_claim": "This session has no exact live claim for the target worktree.",
     "no_exact_session_target": "This workspace-root session has no healthy claim selecting a target worktree.",
+    "target_worktree_not_claimed": "This session has no healthy claim for the explicitly targeted worktree.",
     "path_outside_claim": "The mutation target is outside the claim's declared write paths.",
     "projection_unavailable_or_stale": "The claim authority projection is unavailable or stale.",
     "repository_identity_unavailable": "The target repository could not be resolved from this event.",
@@ -211,8 +212,15 @@ def _session_bound_payload(
     if not isinstance(tool_input, dict):
         return payload
     needs_rebind = tool_name == "Bash"
+    target_worktree: Path | None = None
     explicit_paths: tuple[str, ...] = ()
-    if tool_name == "apply_patch":
+    if tool_name == "Bash":
+        from enforced_planning.prewrite_claim_fast import _bash_explicit_worktree
+
+        command = tool_input.get("command")
+        if isinstance(command, str):
+            target_worktree = _bash_explicit_worktree(command)
+    elif tool_name == "apply_patch":
         from enforced_planning.prewrite_claim_fast import _patch_paths
 
         command = tool_input.get("command")
@@ -263,6 +271,7 @@ def _session_bound_payload(
             client=client,
             claims_dir=claims_dir,
             projection_path=projection_path,
+            target_worktree=target_worktree,
         )
     except SessionTargetError as exc:
         # A Git launch directory remains a valid local fallback only when this

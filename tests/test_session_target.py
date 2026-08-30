@@ -132,7 +132,7 @@ def test_stale_projection_and_branch_mismatch_fail_closed(tmp_path: Path) -> Non
 
 
 def test_two_healthy_claims_are_ambiguous(tmp_path: Path) -> None:
-    repo, _worktree, claims, projection = _authority(tmp_path)
+    repo, first, claims, projection = _authority(tmp_path)
     second = repo / "worktrees" / "lane-two"
     _git(repo, "worktree", "add", "-b", "lane-two", str(second))
     payload = yaml.safe_load((claims / "claim.yaml").read_text(encoding="utf-8"))
@@ -148,3 +148,33 @@ def test_two_healthy_claims_are_ambiguous(tmp_path: Path) -> None:
             projection_path=projection,
         )
     assert ambiguous.value.reason_code == "ambiguous_exact_session_target"
+
+    assert resolve_exact_session_target(
+        {"session_id": "parent"},
+        client="codex",
+        claims_dir=claims,
+        projection_path=projection,
+        target_worktree=first,
+    ).worktree_path == first
+    assert resolve_exact_session_target(
+        {"session_id": "parent"},
+        client="codex",
+        claims_dir=claims,
+        projection_path=projection,
+        target_worktree=second,
+    ).worktree_path == second
+
+
+def test_explicit_unclaimed_worktree_fails_closed(tmp_path: Path) -> None:
+    _repo, _worktree, claims, projection = _authority(tmp_path)
+
+    with pytest.raises(SessionTargetError) as unclaimed:
+        resolve_exact_session_target(
+            {"session_id": "parent"},
+            client="codex",
+            claims_dir=claims,
+            projection_path=projection,
+            target_worktree=tmp_path / "unclaimed",
+        )
+
+    assert unclaimed.value.reason_code == "target_worktree_not_claimed"

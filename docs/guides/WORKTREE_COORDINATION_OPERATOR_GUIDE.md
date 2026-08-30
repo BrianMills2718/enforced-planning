@@ -44,17 +44,25 @@ The Project Manager is delegation-only only when the operator explicitly sets
 | Concept | Meaning | Grants mutation? |
 |---|---|---|
 | Launch directory | Navigation/start location, including non-Git `~/code` | No |
-| Read target | One session-bound repository for instructions and inspection | No |
-| Write target | Exact repository/worktree selected by one healthy native-session claim | Only within the claim |
+| Read target | Any repository whose governing instructions have been loaded | No |
+| Write target | Exact repository/worktree selected by its matching healthy native-session claim | Only within that claim |
 | Mutation authority | The live claim plus its declared paths | Yes, as bounded |
 
-One healthy exact-session claim supersedes the read target for worktree context.
-Zero or multiple claims fail closed for mutation. Releasing a claim removes
-write authority; it never promotes a read target. Subagents use their own
-`agent_id`, target, and claim and inherit none of the parent's authority. File
-tools still resolve explicit absolute paths; relative writes resolve against
-the claimed worktree. Cross-root mutating Bash must use the supported exact
-worktree-attesting form.
+A session may hold healthy claims in multiple repositories. Every explicit
+mutation target resolves independently to the one matching claim; the launch
+directory and previously used repository do not select authority. Releasing a
+claim removes only that write authority and never changes read access.
+
+File tools select a claim from their explicit absolute target. Cross-root
+mutating Bash selects a claim through one literal worktree-attesting form:
+`/usr/bin/env -C <worktree> ...`, `git -C <worktree> ...`, or
+`make -C <worktree> ...`. An unqualified relative mutation is accepted only
+when exactly one healthy claim makes its target unambiguous; with zero or
+multiple healthy claims it fails closed. This is target-aware claim resolution,
+not a second portfolio or lane registry.
+
+Subagents use their own `agent_id`, targets, and claims and inherit none of the
+parent's mutation authority.
 
 ## Workspace-Root Maintenance Bootstrap
 

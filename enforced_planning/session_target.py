@@ -1,10 +1,11 @@
-"""Resolve an immutable hook launch directory to one exact claimed worktree.
+"""Resolve a mutation target to one exact claimed worktree.
 
 Native hook payloads expose the directory in which the client was launched.
 That value is navigation context, not repository authority: per-command shell
-workdirs are intentionally absent from the payload.  This module therefore
-permits rebinding only through the digest-bound claim projection and only when
-one healthy claim belongs to the effective native agent identity.
+workdirs are intentionally absent from the payload. This module therefore
+permits rebinding only through the digest-bound claim projection. An explicit
+worktree target selects the matching healthy claim; without one, exactly one
+healthy claim must belong to the effective native agent identity.
 """
 
 from __future__ import annotations
@@ -78,8 +79,9 @@ def resolve_exact_session_target(
     client: str,
     claims_dir: Path,
     projection_path: Path | None = None,
+    target_worktree: Path | None = None,
 ) -> SessionTarget:
-    """Select exactly one healthy projected claim for the effective identity."""
+    """Select one healthy projected claim for the identity and optional target."""
 
     session_id = effective_session_id(payload, client)
     resolved_claims = claims_dir.expanduser().resolve()
@@ -98,19 +100,26 @@ def resolve_exact_session_target(
         for claim in projection["claims"]
         if claim["agent"] == client and claim["session_id"] == session_id
     ]
-    healthy = [
+    requested_worktree = target_worktree.expanduser().resolve() if target_worktree else None
+    target_matches = [
         claim
         for claim in identity_matches
+        if requested_worktree is None
+        or Path(claim["worktree_path"]).expanduser().resolve() == requested_worktree
+    ]
+    healthy = [
+        claim
+        for claim in target_matches
         if claim["status"] in LIVE_STATUSES
         and not claim["static_issues"]
         and not _dynamic_claim_issues(claim)
     ]
     if not healthy:
-        if identity_matches:
+        if target_matches:
             details = sorted(
                 {
                     issue
-                    for claim in identity_matches
+                    for claim in target_matches
                     for issue in [
                         *(claim["static_issues"] or []),
                         *_dynamic_claim_issues(claim),
@@ -123,6 +132,11 @@ def resolve_exact_session_target(
                 "claim_not_healthy",
                 f"no healthy claim belongs to {session_id}{suffix}",
             )
+        if requested_worktree is not None:
+            raise SessionTargetError(
+                "target_worktree_not_claimed",
+                f"no claim owned by {session_id} targets {requested_worktree}",
+            )
         raise SessionTargetError(
             "no_exact_session_target",
             f"no healthy claim belongs to {session_id}",
@@ -131,7 +145,7 @@ def resolve_exact_session_target(
         lanes = sorted(f"{claim['projects'][0]}:{claim['scope']}" for claim in healthy)
         raise SessionTargetError(
             "ambiguous_exact_session_target",
-            f"multiple healthy claims belong to {session_id}: {', '.join(lanes)}",
+            f"multiple healthy claims match {session_id}: {', '.join(lanes)}",
         )
 
     claim = healthy[0]

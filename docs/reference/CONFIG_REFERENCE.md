@@ -136,6 +136,12 @@ override, carries one strict inline JSON request, and the request's caller and
 sender match the ambient native session. The mailbox itself still resolves the
 recipient against the claims registry and fails closed on invalid authority.
 
+The adapter does not bind a runtime to its launch repository or to a singleton
+claim. A session may own claims in multiple repositories; an absolute file
+target or one supported literal Bash `-C <worktree>` target selects the matching
+healthy claim. Relative mutation with multiple possible claims remains denied
+as ambiguous.
+
 `outcome_admission_mode: enforce_selected` is a separate, stricter source
 continuation gate. It requires ordinary `prewrite_mode: enforce`, derives the
 exact selected outcome from the claim-linked tracker, and records admission

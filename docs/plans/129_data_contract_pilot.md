@@ -103,7 +103,7 @@ consumer incompatibility.
 
 - [x] Output schema is defined by a strict Pydantic model with field descriptions.
 - [x] Capability has an explicit definition-only registry snapshot entry.
-- [ ] Producer and consumer schemas pass the declared portfolio pipeline.
+- [x] Producer and consumer schemas pass the declared portfolio pipeline.
 - [x] Existing handoff fixtures exercise the capability journey.
 
 ## Capability Adoption
@@ -208,5 +208,23 @@ and consistently across projects and proceed autonomously.
 
 - 2026-08-29: `RoadmapGoalHandoff` producer renderer, committed snapshot, and
   current/stale/deterministic/portable both-sign tests implemented; 17 focused
-  snapshot and existing handoff tests pass. Company Planning portfolio
-  validation remains the completion gate.
+  snapshot and existing handoff tests pass.
+- 2026-08-29: Company Planning PR #161 merged its owned bounded-design snapshot;
+  the explicit staged portfolio loaded both projects and validated
+  `enforced-planning.roadmap-goal-handoff → company-planning.bounded-design`
+  with zero violations.
+
+## Verification
+
+- `pytest -q tests/test_data_contract_snapshot.py tests/test_planning_handoff.py`
+  — 17 passed.
+- `python scripts/self_test.py` — all framework checks passed.
+- Changed-file Ruff, strict mypy, and `git diff --check` — clean.
+- Full `pytest -q` reached 1,831 passed / 51 failed / 1 skipped. The failures
+  are confined to pre-existing coordination/governance tests and reproduce on
+  canonical `main`; none imports or references the new snapshot module.
+- Company Planning `pytest -q` — 299 passed; PR #161 merged.
+- Shared `data_contracts` portfolio report — `valid: true`, loaded projects
+  `company-planning` and `enforced-planning`, zero violations.
+- Structural compatibility is not semantic correctness and does not authorize
+  automatic expansion to unrelated project seams.

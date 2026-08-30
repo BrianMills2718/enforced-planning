@@ -13,7 +13,7 @@
       "objective": "Retain and validate exact plan-authority and mutation-target repository/revision identities through claim creation, session activation, installed propagation, and one authentic AES Plan 249 bootstrap.",
       "profile": "standard",
       "execution_class": "independently_executable",
-      "claimability": "ready_for_execution",
+      "claimability": "not_applicable",
       "scope": {
         "included": [
           "Typed cross-repository plan-authority binding",
@@ -87,10 +87,10 @@
         "failed_guards": []
       },
       "authorization_mode": "registry_claim",
-      "status": "ready",
-      "record_version": 2,
+      "status": "accepted",
+      "record_version": 3,
       "created_at": "2026-08-30T19:08:00Z",
-      "updated_at": "2026-08-30T20:39:33Z"
+      "updated_at": "2026-08-30T21:31:09Z"
     }
   ]
 }

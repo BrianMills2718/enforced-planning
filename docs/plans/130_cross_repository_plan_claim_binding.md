@@ -1,6 +1,19 @@
 # Plan #130: Cross-Repository Plan Authority Binding
 
-**Status:** In Progress
+**Status:** ✅ Complete
+
+**Verified:** 2026-08-30T21:31:28Z
+**Verification Evidence:**
+```yaml
+completed_by: scripts/complete_plan.py
+timestamp: 2026-08-30T21:31:28Z
+tests:
+  unit: All required tests pass!
+  e2e_smoke: deferred (focused profile)
+  e2e_real: deferred (focused profile)
+  doc_coupling: deferred (focused profile)
+commit: a312e74
+```
 **Type:** implementation
 **Priority:** Critical
 **phase_ref:** "Phase 9: Fleet Adoption and Framework Maintenance"
@@ -335,8 +348,15 @@ filesystem lock enforcement or a newly launched interactive client follows
 from this root-shell test. No settings or enforcement modes changed; these
 stateless CLI/package consumers do not need a client restart.
 
-The source lane still requires publication and terminal closeout; only then may
-the final plan-status transition and Plan 249 product continuation occur.
+Source PR #264 merged at `a312e749af22775d9a06b2ce52a871d727cc6c54` using a
+merge commit so AES's exact pinned `b670f554` remains reachable. The source
+implementation claim closed as `completed` / `merged` at
+`2026-08-30T21:27:38.752907+00:00`. Its runtime allocation has terminal
+`complete` disposition `ff41e80fed818b1e9499649a112bca0147616c5394739a1068360fbd23cc4ce6`.
+Both AES claims were already terminal. The sanctioned plan-completion dry run
+then passed all 27 declared controls and found no unresolved Plan 130 lane.
+Only this bounded terminal-metadata publication remains; no product authority
+is attached to its restricted bootstrap claim.
 
 1. A qualified cross-repository plan is validated from an explicit matching
    plan-authority repository/revision while its work graph and mutation start

@@ -1,136 +1,87 @@
 # Worktree And Coordination Operator Guide
 
-This is the authoritative operator guide for sanctioned worktree usage and
-cross-agent coordination in governed repos. Use this document for day-to-day
-workflow. Keep rationale, rollout history, and boundary design in the pattern
-and project-meta docs; do not treat them as competing operator handbooks.
+This is the day-to-day authority for claims, worktrees, and cross-agent
+coordination. Other documentation has narrower roles:
+
+| Concern | Authority |
+|---|---|
+| Runtime mechanics and operator workflow | This guide |
+| Host and repository configuration | `docs/reference/CONFIG_REFERENCE.md` |
+| Personal repository eligibility/publication policy | Project Meta policy registry and `docs/ops/GIT_PUBLICATION_AUTHORITY_POLICY.md` |
+| Instruction-hook consumer behavior | Agent Skills `README.md` |
+| Rationale and rollout history | ADRs and plan files; not current operator handbooks |
 
 ## Canonical Truth Surfaces
 
-- Cross-project coordination claims: `~/.claude/coordination/claims/*.yaml`
-- Automatically refreshed hook projection:
-  `~/.claude/coordination/prewrite-authority-v1.json`
-- Human/operator current-work readout:
-  `python scripts/meta/check_coordination_claims.py --list --json`
-- Claims/worktrees/projection consistency audit:
-  `python scripts/check_coordination_consistency.py --repo PROJECT=/absolute/repo/path --verify-prewrite-projection --json`
-- Live ownership and overlap state: `~/.claude/coordination/claims/` plus the generated active-work registry. Use Agent Memory only for an intentional historical lookup (ADR-0011); it is not a live coordination dependency.
-- Repo opt-in switch: `meta-process.yaml`
-- Sanctioned repo-local worktree interface: `make worktree`,
-  `make worktree-list`, `make worktree-remove`, `make review-claim`,
-  `make raise-concern`
-- Canonical installed claim CLI for governed repos:
-  `scripts/meta/check_coordination_claims.py`
-- Canonical push gate for governed repos:
-  `scripts/meta/check_push_safety.py` / `make push-check`
-- Canonical closeout disposition vocabulary:
-  `enforced_planning/worktree_lifecycle.yaml`
+| Truth | Surface |
+|---|---|
+| Live ownership | `~/.claude/coordination/claims/*.yaml` |
+| Hook-optimized projection | `~/.claude/coordination/prewrite-authority-v1.json` |
+| Current-work readout | `python scripts/meta/check_coordination_claims.py --list --json` |
+| Consistency audit | `python scripts/check_coordination_consistency.py --repo PROJECT=/absolute/repo/path --verify-prewrite-projection --json` |
+| Repository policy | `meta-process.yaml` |
+| Worktree lifecycle | `make worktree*`, `scripts/meta/check_coordination_claims.py`, and `enforced_planning/worktree_lifecycle.yaml` |
+| Publication gate | `make push-check` / `scripts/meta/check_push_safety.py` |
 
 The older repo-local `.claude/active-work.yaml` plus legacy
 `scripts/meta/worktree-coordination/check_claims.py` surface may still be
 present in some repos for compatibility. They are not the canonical
 cross-project coordination authority.
 
-## Canonical Terms
+## Core Model
 
-- **claim**: the canonical low-level ownership record. Claims say who is
-  claiming which project/scope/write paths, on which branch/worktree, for what
-  intent.
-- **lane**: a bounded execution slice derived from one or more live claims.
-  In practice a lane is the operator-facing unit of work: one project, one
-  branch/worktree, one plan or bounded sprint, one mission.
-- **worktree**: the git checkout where a lane executes.
-- **plan**: the pre-made execution contract that tells the lane what success,
-  failure, and next actions mean.
+A **claim** is the canonical ownership record; a **lane** is the bounded work
+derived from it; a **worktree** is the lane's checkout; and a **plan** defines
+the outcome when planning is required. Claims are canonical and lanes are
+derived—never maintain a second mutable lane registry.
 
-Important rule: **claims are canonical, lanes are derived**. Do not invent a
-second mutable lane registry by hand. Update claims; regenerate readable lane
-surfaces from them.
+The user-facing **Project Manager** prepares context, defines acceptance
+criteria, may implement bounded single-writer work, delegates when useful, and
+verifies results. **Orchestrator** names only the internal dispatch mechanism.
+The Project Manager is delegation-only only when the operator explicitly sets
+**coordinator-only** mode.
 
-The user-facing role is **Project Manager**: it prepares context, defines
-acceptance criteria, may implement bounded single-writer work, delegates when
-delegation is useful, and verifies results. The internal mechanism that
-dispatches and coordinates agents is the **orchestrator**. “Orchestrator” names
-an implementation mechanism, not the human-facing role or a source of broad
-mutation authority. A Project Manager becomes delegation-only only when the
-operator explicitly selects **coordinator-only** mode; that temporary role
-marker does not follow merely from launching at a workspace root.
+| Concept | Meaning | Grants mutation? |
+|---|---|---|
+| Launch directory | Navigation/start location, including non-Git `~/code` | No |
+| Read target | One session-bound repository for instructions and inspection | No |
+| Write target | Exact repository/worktree selected by one healthy native-session claim | Only within the claim |
+| Mutation authority | The live claim plus its declared paths | Yes, as bounded |
 
-Hook targeting keeps four identities separate:
+One healthy exact-session claim supersedes the read target for worktree context.
+Zero or multiple claims fail closed for mutation. Releasing a claim removes
+write authority; it never promotes a read target. Subagents use their own
+`agent_id`, target, and claim and inherit none of the parent's authority. File
+tools still resolve explicit absolute paths; relative writes resolve against
+the claimed worktree. Cross-root mutating Bash must use the supported exact
+worktree-attesting form.
 
-- the **launch directory** is navigation context and may be a non-Git workspace
-  root such as `~/code`;
-- the **read target** is one explicit repository selected for instruction
-  loading, navigation, and inspection; it grants no mutation authority;
-- the **write target** is one exact repository/worktree selected by a fresh,
-  digest-bound, healthy claim for the native session identity;
-- **mutation authority** comes from that live claim and its declared paths, not
-  from the launch directory, read target, or Project Manager/orchestrator role.
+## Workspace-Root Maintenance Bootstrap
 
-Read-target selection and write authority are deliberately different state
-machines. Selecting a read target may load that repository's instructions and
-route read-only tools there, but the prewrite gate must ignore it. The first
-mutation requires an exact claimed worktree; successful claim creation may
-supersede the read target for context while the claim is healthy. Releasing the
-claim removes write authority without converting the prior read target into a
-grant. Zero or multiple eligible write claims still fail closed for mutation.
-
-Codex subagent events use their non-empty `agent_id` as the effective session
-identity; top-level events use `session_id`. A subagent never inherits its
-parent's claim or read-first state and must receive its own explicit target and
-claim. One healthy exact-session claim selects the write target even when the
-immutable launch directory happens to be another Git repository. A Git launch
-directory is a local fallback only when no exact-session claim exists; an
-ambiguous, unhealthy, or stale claim state never falls back to it for mutation.
-When launch and claim already name the same worktree, ordinary repo-local
-commands remain directly admissible. When they differ, mutating Bash must attest
-the claimed runtime directory with the exact supported `-C` form. File tools
-continue to resolve their explicit absolute target paths independently, while
-relative targets use the exact claimed worktree.
-
-When no claim exists and the immutable launch directory is a non-Git workspace
-root, the only mutation exception is one typed maintenance transaction executed
-by the canonical framework script. Its exact shell grammar is:
+With no claim and a non-Git launch directory, the only mutation exception is
+this typed transaction:
 
 ```text
 /usr/bin/python3 <absolute-canonical-framework>/scripts/claim_bootstrap.py --request-json '<JSON>'
 ```
 
-`<JSON>` must be one strict object with exactly these fields (field order is not
-authority):
+The request is one strict object; field order is irrelevant:
 
 ```json
 {"schema_version":"1.0","operation":"maintenance_worktree","agent":"codex","project":"repo-name","scope":"fix/safe-branch","repo_root":"/absolute/repo","branch":"fix/safe-branch","claim_type":"program"}
 ```
 
-`agent` must match the native top-level client (`codex` or `claude-code`),
-`project` must equal the exact id returned by the installed repository-authority
-provider, `scope` must equal `branch`, and `repo_root` must be the provider-bound
-canonical absolute Git root. Enforced Planning independently inspects the exact
-GitHub `origin` identity, then asks the configured provider for a decision bound
-to that identity and remote URL. Operator-specific eligibility rules belong to
-that adapter, not this portable framework. Brian's installation supplies the
-decision through its Project Graph adapter, which requires reviewed personal
-mutation authority; governed-fleet membership is not itself authority. Unknown
-fields, relative or traversing paths, shell composition, unsafe branches,
-subagent events, unregistered or read-only repositories, existing branches,
-worktrees, or claim slots, and client mismatch are denied.
+The native client, project id, scope/branch, canonical Git root, GitHub origin,
+and provider response must all agree. The provider owns operator-specific
+eligibility; Enforced Planning owns protocol validation. Extra fields, unsafe
+paths or branches, composition, subagents, ambiguous authority, existing lane
+artifacts, and client mismatch are denied.
 
-Before creating a directory, branch, claim, tracker, or worktree, the typed
-operation asks `origin` for its current symbolic default branch, requires it to
-match the provider decision, fetches that exact branch, and resolves one full commit id.
-The new lane starts from that fetched commit rather than the possibly stale
-primary checkout. It then creates the linked worktree, exact native-session
-claim, tracker, and claim projection as one transaction; later failure rolls
-back only the exact artifacts it created. Its unclaimed Git plumbing disables
-repository hooks and creates the worktree without checkout; only after the exact
-claim is durable does it populate tracked files. Repository-configured checkout
-filters may therefore run only inside the already-claimed lane, never as part of
-the unclaimed authority exception. The previously proposed raw
-`/usr/bin/make -C ... maintenance-worktree ...` workspace-root escape is not an
-authority surface because environment and Makefile behavior are too broad to
-bind safely. Once already inside a governed repository, its ordinary sanctioned
-Make targets remain available under the normal claim rules.
+Before creating anything, bootstrap verifies the remote default, fetches its
+exact commit, and uses it as the lane base. It then creates the branch,
+worktree, exact-session claim, tracker, and projection transactionally; failure
+removes only artifacts created by that attempt. Checkout occurs only after the
+claim is durable. Raw Make or shell escape forms are not authority surfaces.
 
 `agent` identifies the client class; `session_id` identifies the runtime that
 owns a live claim. Two Codex windows are therefore two writers even though both

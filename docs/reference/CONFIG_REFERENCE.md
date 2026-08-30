@@ -87,14 +87,9 @@ non-claim verbatim.
 ### Host read-target state
 
 Workspace-root clients may select one session-bound repository for instruction
-context without creating a claim. This is host runtime state under
-`~/.claude/coordination/read-targets-v1/`, not a `meta-process.yaml` setting and
-not mutation authority. The selector binds the native session, stable project
-id, canonical Git root, repository identity, registry record digest, and
-selection time. A healthy exact-session claim supersedes it for worktree-local
-context; prewrite admission ignores it completely. Repository-specific
-authorization policy belongs to the configured registry adapter, not to this
-portable state schema.
+context without a claim. State lives under
+`~/.claude/coordination/read-targets-v1/`; it is not a `meta-process.yaml`
+setting and prewrite admission ignores it. See the operator guide for semantics.
 
 | Key | Type | Default | Read By | Default When Absent |
 |-----|------|---------|---------|---------------------|
@@ -131,13 +126,9 @@ Workspace-root mutation bootstrap uses a host-level provider configuration at
 ```
 
 The config and executable must not be group/world writable, and the executable
-must match the pinned digest. Enforced Planning supplies the inspected canonical
-Git root, GitHub owner/repository identity, and exact remote URL. The provider
-returns one allow decision with a stable project id and default branch, bound to
-the same identity and URL. Missing, malformed, ambiguous, timed-out, unbound, or
-digest-mismatched providers fail closed before a branch, claim, directory, or
-worktree is created. The provider owns personal or organizational eligibility
-policy; the portable framework owns only this protocol and its safety checks.
+must match the pinned digest. Invalid configuration or an unbound provider
+response fails closed before lane creation. Provider policy belongs outside the
+portable framework; see the operator guide for the runtime contract.
 
 `outcome_admission_mode: enforce_selected` is a separate, stricter source
 continuation gate. It requires ordinary `prewrite_mode: enforce`, derives the

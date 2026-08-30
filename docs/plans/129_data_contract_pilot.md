@@ -102,7 +102,7 @@ consumer incompatibility.
 ### Capability Validation
 
 - [x] Output schema is defined by a strict Pydantic model with field descriptions.
-- [ ] Capability has an explicit definition-only registry snapshot entry.
+- [x] Capability has an explicit definition-only registry snapshot entry.
 - [ ] Producer and consumer schemas pass the declared portfolio pipeline.
 - [x] Existing handoff fixtures exercise the capability journey.
 
@@ -203,3 +203,10 @@ No ADR: this is a reversible artifact adapter around an existing authority seam.
 
 Authorized by Brian's 2026-08-29 approval to apply data contracts more broadly
 and consistently across projects and proceed autonomously.
+
+## Progress
+
+- 2026-08-29: `RoadmapGoalHandoff` producer renderer, committed snapshot, and
+  current/stale/deterministic/portable both-sign tests implemented; 17 focused
+  snapshot and existing handoff tests pass. Company Planning portfolio
+  validation remains the completion gate.

@@ -53,8 +53,10 @@ Project Meta, work-unit integrity validates the graph from AES, the resulting
 claim retains both revision identities, and the worktree/session starts at the
 AES revision.
 
-**Behavioral evidence:** Unobserved until the authentic AES Plan 249 bootstrap
-passes after source installation.
+**Behavioral evidence:** On 2026-08-30, the ordinary installed AES entrypoint
+started and closed `plan-249-installed-authority-canary` from `/home/brian/code`
+at AES `4102a8e`, under Project Meta `334846bf` and the exact Plan 249 digest.
+The claim and tracker retained distinct revisions; no proxy plan was created.
 
 **Substrate/process evidence:** Two temporary Git repositories, strict claim
 round-trip tests, installed Make/session propagation tests, and wrong-root,
@@ -143,7 +145,7 @@ digest, or propagation surface disagreed.
 - [x] Both repository identities and revisions are strict and explicit.
 - [x] Claim persistence retains target and plan-authority custody.
 - [x] Source Make/session and installed fixture copies propagate the same fields.
-- [ ] Authentic AES under Project Meta Plan 249 starts without a proxy plan.
+- [x] Authentic AES under Project Meta Plan 249 starts without a proxy plan.
 
 ## Capability Adoption
 
@@ -257,23 +259,29 @@ authority.
 
 ### New Tests (TDD)
 
-| Test File | Test Function | What It Verifies |
-|---|---|---|
-| `tests/test_check_coordination_claims.py` | `test_cross_repository_work_unit_binding_separates_target_and_plan_revisions` | correct root/revision succeeds |
-| same | `test_cross_repository_claim_denials_leave_no_residue` | relative, unresolvable, stale, and digest mismatch deny atomically |
-| same | `test_cross_repository_claim_persists_external_plan_authority_custody` | plan authority and target custody survive persistence |
-| same | `test_cross_repository_binding_retains_plan_bytes_when_integrity_is_off` | digest custody does not silently depend on structural enforcement mode |
-| `tests/test_session_cli.py` | `test_cross_repository_session_retains_plan_custody_and_rejects_rebinding` | staged activation, tracker, refresh, and rollback preserve both identities |
-| `tests/test_plan_readiness.py` | `test_external_plan_readiness_keeps_target_lane_revision_separate` | readiness does not substitute plan revision for execution revision |
-| `tests/test_install_governed_repo.py` | `test_installed_worktree_surface_preserves_external_plan_authority` | installed consumer receives exact plan-authority variables and flags |
+- `tests/test_check_coordination_claims.py::test_cross_repository_work_unit_binding_separates_target_and_plan_revisions` — correct independent identities.
+- `tests/test_check_coordination_claims.py::test_cross_repository_claim_denials_leave_no_residue` — relative, unresolvable, stale, and digest mismatch deny atomically.
+- `tests/test_check_coordination_claims.py::test_cross_repository_claim_persists_external_plan_authority_custody` — persisted custody.
+- `tests/test_check_coordination_claims.py::test_cross_repository_binding_retains_plan_bytes_when_integrity_is_off` — exact digest without policy promotion.
+- `tests/test_check_coordination_claims.py::test_cross_repository_work_unit_binding_requires_explicit_plan_root_and_revision` — omitted input denial.
+- `tests/test_check_coordination_claims.py::test_cross_repository_work_unit_binding_rejects_wrong_plan_repo_identity` — wrong identity denial.
+- `tests/test_check_coordination_claims.py::test_cross_repository_work_unit_binding_rejects_plan_digest_mismatch` — stale design-binding denial.
+- `tests/test_check_coordination_claims.py::test_local_plan_cannot_substitute_an_independent_plan_revision` — local override safety.
+- `tests/test_session_cli.py::test_cross_repository_session_retains_plan_custody_and_rejects_rebinding` — staged activation, tracker, refresh, and rollback.
+- `tests/test_session_cli.py::test_session_start_wrapper_rejects_stale_lifecycle_revision_contract` — stale installed wrapper rejection.
+- `tests/test_plan_readiness.py::test_external_plan_readiness_keeps_target_lane_revision_separate` — readiness revision separation.
+- `tests/test_install_governed_repo.py::test_installed_worktree_surface_preserves_external_plan_authority` — installed input and source parity.
+- `tests/test_install_governed_repo.py::test_worktree_only_install_preserves_declared_framework_dependency` — no shadow package; repeat check without drift.
 
 ### Existing Tests (Must Pass)
 
-| Test Pattern | Why |
-|---|---|
-| focused coordination/session/installer suites | local-plan behavior and compatibility remain unchanged |
-| `python scripts/self_test.py` | framework-wide verification remains green |
-| authentic AES Plan 249 bootstrap | proves the user-visible blocker is removed |
+- `tests/test_session_contracts.py` — existing session contract compatibility.
+- `tests/test_check_coordination_claims.py::test_work_unit_binding_reads_graph_from_same_exact_plan_revision` — local-plan exact revision custody.
+
+Additional required evidence: `python scripts/self_test.py`, the six-file
+baseline comparison below, and the authentic AES bootstrap/closeout. The eight
+named baseline failures are not counted as passing; acceptance requires every
+new control to pass and zero new failures against the frozen baseline.
 
 ### Verified Source Checkpoint — 2026-08-30
 
@@ -284,7 +292,8 @@ Those failures are retained as pre-existing baseline debt, not hidden or changed
 inside this repair. The framework self-test, syntax/undefined-name check, and
 source/mirror byte parity pass. A read-only authentic Project Meta `334846bf` /
 AES `7bf24b9` binding returns the expected Plan 249 digest and independent target
-revision. Installation and actual worktree bootstrap/closeout remain pending.
+revision. The initial source checkpoint did not establish installed adoption;
+the subsequent authentic receipt below does.
 
 The first source-entrypoint AES bootstrap subsequently passed with schema-v5
 claim and schema-v3 tracker custody. Before installation, the worktree-only
@@ -308,6 +317,27 @@ Exact commands, identities, and baseline failure names are retained in
 
 ## Acceptance Criteria
 
+### Authentic installed acceptance — 2026-08-30
+
+AES PR #33 merged at `4102a8e348b50c7deb4a7c0f3254d2fc75309dda`, pinning
+framework source `b670f554b543d8e823e10c4c9b02a6b801bf3664`. The installed
+distribution, wrappers, and Make entrypoint agree; all 210 AES tests pass and
+the repeated installer check has no drift. From `/home/brian/code`, the ordinary
+AES entrypoint created `plan-249-installed-authority-canary` with no source
+script override, at AES `4102a8e` and Project Meta `334846bf`. Claim v5 and
+tracker v3 retain both identities and the exact Plan 249 digest. The installation
+lane and clean empty canary both have terminal `completed` / `merged` receipts.
+
+Limitations remain explicit: the credentialed GitHub job cannot run without its
+pre-existing missing deploy-key secret (the mandated-route job passed), and the
+bootstrap warned that the canonical-lock helper path is absent. No claim of
+filesystem lock enforcement or a newly launched interactive client follows
+from this root-shell test. No settings or enforcement modes changed; these
+stateless CLI/package consumers do not need a client restart.
+
+The source lane still requires publication and terminal closeout; only then may
+the final plan-status transition and Plan 249 product continuation occur.
+
 1. A qualified cross-repository plan is validated from an explicit matching
    plan-authority repository/revision while its work graph and mutation start
    remain bound to the target repository/revision.
@@ -319,7 +349,9 @@ Exact commands, identities, and baseline failure names are retained in
 4. Local same-repository plan claims remain compatible.
 5. Source Make, session CLI/lifecycle, installer output, and installed AES use
    one contract; generated copies are not edited independently.
-6. Focused suites, framework self-test, and the authentic AES bootstrap pass.
+6. All plan-declared controls, framework self-test, and the authentic AES
+   bootstrap pass; the broader focused suite has no new failures against the
+   frozen canonical baseline, with its eight existing failures retained.
 7. Enforced Planning and AES finish with named remote commits, clean owned
    worktrees, and terminal claims before Plan 249 product implementation resumes.
 

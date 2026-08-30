@@ -3,7 +3,7 @@
   "record_type": "framework_defect_repair_evidence",
   "plan_ref": "enforced-planning#130",
   "observed_date": "2026-08-30",
-  "disposition": "source_verified_installation_pending",
+  "disposition": "authentic_installed_acceptance_passed_source_closeout_pending",
   "baseline_revision": "2634cf369a31ac70bdf31ca09ec299d1194eb2fd",
   "source_lane": "plan-130-cross-repository-plan-binding-implementation",
   "original_red_control": {
@@ -36,6 +36,7 @@
     ]
   },
   "framework_self_test": {"command": "python3 scripts/self_test.py", "result": "pass"},
+  "plan_declared_controls": {"command": "python3 scripts/check_plan_tests.py --plan 130", "passed": 27, "failed": 0, "missing": 0},
   "syntax_and_undefined_names": {"command": "ruff check --select F,E9 <changed Python files>", "result": "pass"},
   "source_mirror_parity": {"source": "scripts/session_start.py", "mirror": "scripts/meta/session_start.py", "result": "byte_identical"},
   "authentic_read_only_binding": {
@@ -51,6 +52,48 @@
     "mutation": "none"
   },
   "configuration_changes": [],
+  "installed_consumer": {
+    "repository": "agentic-engineering-system",
+    "source_revision": "b670f554b543d8e823e10c4c9b02a6b801bf3664",
+    "pull_request": "https://github.com/BrianMills2718/agentic-engineering-system/pull/33",
+    "commit": "dcba87bc814a2c2532746248cc3ae37c4c379675",
+    "merge_revision": "4102a8e348b50c7deb4a7c0f3254d2fc75309dda",
+    "package_custody": "Exact pyproject.toml/uv.lock dependency, verified installed distribution commit; no vendored package.",
+    "provider_free_tests": {"passed": 210, "failed": 0, "skipped": 0},
+    "self_application": "6/6 pass",
+    "couplings": "19 resolved, 135 paths checked",
+    "installer_recheck": "pass; no drift or blockers",
+    "ci": {
+      "mandated_route": "pass",
+      "credentialed_controls": "not run: existing ENFORCED_PLANNING_DEPLOY_KEY secret absent",
+      "run": "https://github.com/BrianMills2718/agentic-engineering-system/actions/runs/33335688713"
+    },
+    "installation_lane": {"scope": "plan-249-framework-authority-install", "status": "completed", "disposition": "merged", "closed_at": "2026-08-30T21:13:00.678808+00:00"}
+  },
+  "authentic_installed_bootstrap": {
+    "navigation_root": "/home/brian/code",
+    "entrypoint": "/usr/bin/make -C /home/brian/code/agentic-engineering-system worktree",
+    "source_script_overrides": [],
+    "scope": "plan-249-installed-authority-canary",
+    "session_id": "codex:01a04ab2-99c5-7f12-b6fe-6c0ed99c2b50",
+    "target_revision": "4102a8e348b50c7deb4a7c0f3254d2fc75309dda",
+    "plan_revision": "334846bf65d426b3f2d8304ea06244c2794b0b33",
+    "plan_sha256": "d097d15fec4c37f89ff4976d5c11c8074d08c81515510275b6114021effe0b6b",
+    "work_unit_id": "P249-AES01",
+    "work_graph_sha256": "947a43607ecf852cd75ddee7486e81af3aecb92e8427d1259b72659ee2a67da6",
+    "claim_schema": 5,
+    "tracker_schema": 3,
+    "result": "pass",
+    "canary_worktree": "clean, empty, exact current target tip",
+    "closeout": {"entrypoint": "installed scripts/meta/session_close.py", "status": "completed", "disposition": "merged", "merge_evidence": "branch_ancestor", "worktree_action": "removed", "branch_action": "deleted", "released": true, "closed_at": "2026-08-30T21:15:25.038054+00:00"},
+    "non_claim": "Authentic root-shell Make execution, not a newly launched interactive Codex/Claude client or semantic Plan 249 product acceptance."
+  },
+  "remaining_limitations": [
+    "Eight pre-existing focused-suite failures remain explicitly recorded.",
+    "AES credentialed CI cannot run without its existing missing deploy-key secret; no credentials or CI rules were changed.",
+    "Installed bootstrap warned that scripts/meta/worktree-coordination/canonical_lock.py is absent; canonical checkout stayed writable. This receipt does not claim filesystem lock enforcement.",
+    "No client settings changed and no restart is required for these stateless CLI/package consumers. A fresh interactive-client launch was not tested in this slice."
+  ],
   "installed_dependency_control": {
     "test": "test_worktree_only_install_preserves_declared_framework_dependency",
     "red_observation": "Worktree-only installation created an enforced_planning directory despite a declared installed dependency.",
@@ -73,9 +116,7 @@
     "Implementation-support scope was expanded through the sanctioned session updater and recorded in Plan 130 and its work graph."
   ],
   "remaining": [
-    "Commit and push the source rollback point.",
-    "Install the canonical worktree surface into a claimed AES maintenance lane and publish that install.",
-    "Run an authentic workspace-root Project Meta Plan 249 to AES worktree bootstrap and sanctioned closeout.",
-    "Record terminal Plan 130 disposition and resume Project Meta Plan 249."
+    "Publish the authentic acceptance receipt, retire the runtime allocation, merge the source lane, and close its claim.",
+    "Complete terminal Plan 130 metadata through the sanctioned completion lifecycle, then resume Project Meta Plan 249."
   ]
 }

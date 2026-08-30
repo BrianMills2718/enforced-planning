@@ -1,5 +1,7 @@
 # Enforced Planning: AI-Assisted Development Framework
 
+Status: active
+
 A portable framework for coordinating AI coding assistants on shared codebases.
 
 > **Tool support:** `enforced-planning` uses a four-tier support matrix:

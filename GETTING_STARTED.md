@@ -1,5 +1,7 @@
 # Getting Started with Enforced Planning
 
+Status: active
+
 Governance and derived knowledge navigation default on. For a disposable
 repository, set `meta_process.governance.enabled: false`; this preserves the
 installed framework and per-control settings while making them effectively off.

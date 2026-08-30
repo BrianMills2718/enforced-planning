@@ -1,5 +1,7 @@
 # New Project Setup Guide
 
+Status: active
+
 Detailed operator guide for adopting the minimum governed-repo contract.
 
 This is the longer companion to [GETTING_STARTED.md](../../GETTING_STARTED.md).

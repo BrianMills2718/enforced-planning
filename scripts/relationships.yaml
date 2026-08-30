@@ -79,6 +79,32 @@ couplings:
 architecture: []
 adrs: {}
 
+documents:
+  - path: README.md
+    role: navigation
+    justification:
+      anchored_to: PLANNING_OPERATING_MODEL.md
+      reason: Routes framework readers to the canonical operating model and the installed-consumer onboarding path.
+    lifecycle_source: document_status
+  - path: GETTING_STARTED.md
+    role: authority
+    justification:
+      anchored_to: PLANNING_OPERATING_MODEL.md
+      reason: Owns the shortest truthful installed-consumer path to a first successful governed-repository setup.
+    lifecycle_source: document_status
+  - path: docs/guides/NEW_PROJECT_SETUP.md
+    role: execution
+    justification:
+      anchored_to: GETTING_STARTED.md
+      reason: Provides the detailed operator procedure that intentionally complements, rather than duplicates, the first-success guide.
+    lifecycle_source: document_status
+  - path: docs/guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md
+    role: authority
+    justification:
+      anchored_to: PLANNING_OPERATING_MODEL.md
+      reason: Owns the current day-to-day coordination and worktree operator contract.
+    lifecycle_source: document_status
+
 # Optional scoped file coverage policy.
 # - managed: files under managed include that are NOT explicitly registered
 #   in governance/couplings/architecture will trigger policy actions.

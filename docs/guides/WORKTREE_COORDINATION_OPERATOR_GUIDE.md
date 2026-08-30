@@ -1,5 +1,7 @@
 # Worktree And Coordination Operator Guide
 
+Status: active
+
 This is the day-to-day authority for claims, worktrees, and cross-agent
 coordination. Other documentation has narrower roles:
 

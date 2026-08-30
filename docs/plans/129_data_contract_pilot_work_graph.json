@@ -1,0 +1,109 @@
+{
+  "units": [
+    {
+      "schema_version": "1.0",
+      "record_type": "work_unit",
+      "id": "dc129-01-producer-snapshot",
+      "initiative_id": "agentic-engineering",
+      "goal_id": "portable-cross-project-contracts",
+      "design_revision": "bcbf15cdc120b1eca8e4fae2c6559393c31692e2",
+      "spec_revision": "plan-129-adopted-v1",
+      "title": "Export and verify the RoadmapGoalHandoff producer snapshot",
+      "class": "implementation",
+      "objective": "Commit a deterministic contract-snapshot-v1 artifact derived from the authoritative RoadmapGoalHandoff model and fail loud when it drifts.",
+      "profile": "standard",
+      "execution_class": "independently_executable",
+      "claimability": "ready_for_execution",
+      "scope": {
+        "included": [
+          "Dependency-free deterministic snapshot renderer",
+          "Committed RoadmapGoalHandoff producer snapshot",
+          "Both-sign current, stale, deterministic, and portable tests",
+          "Plan verification evidence"
+        ],
+        "excluded": [
+          "RoadmapGoalHandoff wire changes",
+          "Private package dependency",
+          "Implicit repository discovery",
+          "Company Planning file changes",
+          "Broader portfolio rollout"
+        ]
+      },
+      "inputs": [
+        {
+          "kind": "bounded_plan",
+          "id": "docs/plans/129_data_contract_pilot.md",
+          "revision": "bcbf15cdc120b1eca8e4fae2c6559393c31692e2"
+        },
+        {
+          "kind": "existing_contract",
+          "id": "enforced_planning.planning_handoff.RoadmapGoalHandoff",
+          "revision": "bcbf15cdc120b1eca8e4fae2c6559393c31692e2"
+        }
+      ],
+      "outputs": [
+        "Deterministic producer snapshot",
+        "Snapshot write/check command",
+        "Focused both-sign tests"
+      ],
+      "dependencies": [],
+      "conflict_surfaces": [
+        {
+          "kind": "repository_path",
+          "target": "enforced_planning/data_contract_snapshot.py",
+          "repository": "enforced-planning",
+          "access": "exclusive"
+        },
+        {
+          "kind": "repository_path",
+          "target": "contracts/data-contracts.snapshot.json",
+          "repository": "enforced-planning",
+          "access": "exclusive"
+        },
+        {
+          "kind": "repository_path",
+          "target": "tests/test_data_contract_snapshot.py",
+          "repository": "enforced-planning",
+          "access": "exclusive"
+        },
+        {
+          "kind": "repository_path",
+          "target": "docs/plans/129_data_contract_pilot.md",
+          "repository": "enforced-planning",
+          "access": "exclusive"
+        }
+      ],
+      "acceptance": [
+        {
+          "id": "DC129-A1",
+          "criterion": "The committed snapshot exactly matches the current RoadmapGoalHandoff JSON Schema and repeated renders are byte-identical.",
+          "evidence_required": [
+            "Focused current-artifact test",
+            "Repeat-render equality test"
+          ],
+          "negative_control": "A stale snapshot exits nonzero and names the artifact path."
+        },
+        {
+          "id": "DC129-A2",
+          "criterion": "The artifact contains definition fields only and is loadable by shared contract portfolio validation.",
+          "evidence_required": [
+            "Portable-field negative assertions",
+            "Downstream explicit portfolio result"
+          ],
+          "negative_control": "No timestamp, runtime counter, error count, or absolute checkout path is serialized."
+        }
+      ],
+      "readiness": {
+        "status": "ready",
+        "required_approval_types": [],
+        "approvals": [],
+        "failed_guards": []
+      },
+      "authorization_mode": "registry_claim",
+      "status": "ready",
+      "record_version": 1,
+      "created_at": "2026-08-30T00:50:00Z",
+      "updated_at": "2026-08-30T00:50:00Z"
+    }
+  ]
+}

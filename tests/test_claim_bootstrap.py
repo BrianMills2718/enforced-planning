@@ -426,6 +426,13 @@ def test_typed_maintenance_worktree_transaction_creates_claim_tracker_and_projec
     assert receipt["ok"] is True
     assert receipt["session_id"] == "codex:native-123"
     assert worktree.is_dir()
+    assert (worktree / "CLAUDE.md").is_file()
+    assert subprocess.run(
+        ["git", "-C", str(worktree), "status", "--porcelain=v1"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout == ""
     assert subprocess.run(
         ["git", "-C", str(worktree), "branch", "--show-current"],
         check=True,

@@ -1,0 +1,91 @@
+{
+  "units": [
+    {
+      "schema_version": "1.0",
+      "record_type": "work_unit",
+      "id": "crp130-01-exact-authority-binding",
+      "initiative_id": "agentic-engineering",
+      "goal_id": "cross-repository-plan-authority",
+      "design_revision": "user-authorized:codex-session-01a04ab2-99c5-7f12-b6fe-6c0ed99c2b50:2026-08-30",
+      "spec_revision": "plan-130-adopted-v1",
+      "title": "Bind qualified plan authority separately from the mutation target",
+      "class": "implementation",
+      "objective": "Retain and validate exact plan-authority and mutation-target repository/revision identities through claim creation, session activation, installed propagation, and one authentic AES Plan 249 bootstrap.",
+      "profile": "standard",
+      "execution_class": "independently_executable",
+      "claimability": "ready_for_execution",
+      "scope": {
+        "included": [
+          "Typed cross-repository plan-authority binding",
+          "Claim/session/Make/installer propagation",
+          "Two-repository both-sign fixtures",
+          "Installed AES parity and authentic Plan 249 bootstrap"
+        ],
+        "excluded": [
+          "Proxy plans",
+          "Filesystem-layout inference",
+          "Project Graph or readiness-query changes",
+          "Fleet rollout",
+          "Plan 249 product implementation"
+        ]
+      },
+      "inputs": [
+        {
+          "kind": "runtime_reproduction",
+          "id": "project-meta#249-to-agentic-engineering-system",
+          "revision": "project-meta@334846bf65d426b3f2d8304ea06244c2794b0b33+agentic-engineering-system@7bf24b9085cc2f40e328ab68f88d41ef05cb9384"
+        },
+        {
+          "kind": "user_authority",
+          "id": "plan249-framework-defect-exception",
+          "revision": "codex-session-01a04ab2-99c5-7f12-b6fe-6c0ed99c2b50@2026-08-30"
+        }
+      ],
+      "outputs": [
+        "Exact cross-repository binding record",
+        "Source and installed propagation",
+        "Focused both-sign controls",
+        "Authentic AES Plan 249 worktree receipt"
+      ],
+      "dependencies": [],
+      "conflict_surfaces": [
+        {"kind": "repository_path", "target": "enforced_planning/coordination_claims.py", "repository": "enforced-planning", "access": "exclusive"},
+        {"kind": "repository_path", "target": "enforced_planning/session_lifecycle.py", "repository": "enforced-planning", "access": "exclusive"},
+        {"kind": "repository_path", "target": "scripts/session_start.py", "repository": "enforced-planning", "access": "exclusive"},
+        {"kind": "repository_path", "target": "scripts/install_governed_repo.py", "repository": "enforced-planning", "access": "exclusive"},
+        {"kind": "repository_path", "target": "Makefile", "repository": "enforced-planning", "access": "exclusive"}
+      ],
+      "acceptance": [
+        {
+          "id": "CRP130-A1",
+          "criterion": "Qualified plan integrity and target work-unit integrity resolve from separate exact repositories and revisions.",
+          "evidence_required": ["Two-repository positive fixture", "Persisted claim round-trip"],
+          "negative_control": "Missing/wrong plan root, stale plan revision, plan-digest mismatch, and target-revision mismatch deny before residue."
+        },
+        {
+          "id": "CRP130-A2",
+          "criterion": "Claim, session, Make, and installer surfaces preserve the same binding while local plans remain compatible.",
+          "evidence_required": ["Focused session and installer suites", "Framework self-test"],
+          "negative_control": "An installed consumer that drops the authority fields cannot pass parity."
+        },
+        {
+          "id": "CRP130-A3",
+          "criterion": "The authentic AES lane starts under project-meta#249 without a local proxy plan.",
+          "evidence_required": ["Clean root-start claim/worktree/session receipt"],
+          "negative_control": "No branch, claim, or empty worktree remains after a denied probe."
+        }
+      ],
+      "readiness": {
+        "status": "ready",
+        "required_approval_types": [],
+        "approvals": [],
+        "failed_guards": []
+      },
+      "authorization_mode": "registry_claim",
+      "status": "ready",
+      "record_version": 1,
+      "created_at": "2026-08-30T19:08:00Z",
+      "updated_at": "2026-08-30T19:08:00Z"
+    }
+  ]
+}

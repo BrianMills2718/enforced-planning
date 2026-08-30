@@ -318,8 +318,10 @@ class SelectionPendingActivationResultV1(StrictModel):
     def validate_result(self) -> SelectionPendingActivationResultV1:
         errors = (self.resolution_error_code, self.resolution_error_message)
         if self.disposition == "defer":
-            if self.reason_code != "selection_pending" or self.evidence is None or any(
-                value is not None for value in errors
+            if (
+                self.reason_code != "selection_pending"
+                or self.evidence is None
+                or any(value is not None for value in errors)
             ):
                 raise ValueError("selection-pending defer requires exact evidence and no resolution error")
         elif self.evidence is not None or not all(value is not None for value in errors):
@@ -738,9 +740,7 @@ def evaluate_selected_outcome_admission(
                 reason_code="out_of_scope",
             ),
             resolution_error_code="selection_target_mismatch",
-            resolution_error_message=(
-                "ordinary pre-write target is outside the selected outcome allowed_scope"
-            ),
+            resolution_error_message=("ordinary pre-write target is outside the selected outcome allowed_scope"),
         )
 
     try:
@@ -854,7 +854,7 @@ def _selection_pending_failure(code: str, message: str) -> SelectionPendingActiv
 def evaluate_selection_pending_session_activation(
     claim: coordination_claims.ClaimRecord,
 ) -> SelectionPendingActivationResultV1:
-    """Validate one exact pre-tracker v4 reservation without selecting an outcome.
+    """Validate one exact pre-tracker v4/v5 reservation without selecting an outcome.
 
     This is intentionally narrower than selected admission. It can justify
     only the first tracker write at ``session_start``; every later protected
@@ -881,10 +881,10 @@ def evaluate_selection_pending_session_activation(
             "selection_pending_identity_incomplete",
             "staged reservation lacks required identity: " + ", ".join(missing),
         )
-    if claim.schema_version != 4:
+    if claim.schema_version not in {4, 5}:
         return _selection_pending_failure(
             "selection_pending_claim_version_invalid",
-            "staged session activation requires an exact schema-v4 claim",
+            "staged session activation requires an exact schema-v4 or schema-v5 claim",
         )
     if claim.claim_type != "write" or not claim.write_paths:
         return _selection_pending_failure(
@@ -951,13 +951,16 @@ def evaluate_selection_pending_session_activation(
     assert claim.work_unit_id is not None
     assert claim.plan_ref is not None
     try:
-        graph_sha256, approval_revisions, source_revision = (
+        binding = coordination_claims.coerce_canonical_work_unit_binding(
             coordination_claims.resolve_canonical_work_unit_binding(
                 repo_root=claim.repo_root,
                 plan_ref=claim.plan_ref,
                 work_graph_path=claim.work_graph_path,
                 work_unit_id=claim.work_unit_id,
                 start_point=claim.start_revision,
+                plan_repo_root=claim.plan_repo_root,
+                plan_start_point=claim.plan_revision,
+                target_repository_id=str(project),
             )
         )
         coordination_claims.validate_start_revision_targets(
@@ -974,9 +977,12 @@ def evaluate_selection_pending_session_activation(
             f"unable to resolve staged work-unit custody: {exc}",
         )
     if (
-        graph_sha256 != claim.work_graph_sha256
-        or approval_revisions != claim.approval_revisions
-        or source_revision != claim.start_revision
+        binding.work_graph_sha256 != claim.work_graph_sha256
+        or binding.approval_revisions != claim.approval_revisions
+        or binding.start_revision != claim.start_revision
+        or binding.plan_repo_root != claim.plan_repo_root
+        or binding.plan_revision != claim.plan_revision
+        or binding.plan_sha256 != claim.plan_sha256
     ):
         return _selection_pending_failure(
             "selection_pending_binding_mismatch",
@@ -995,7 +1001,7 @@ def evaluate_selection_pending_session_activation(
         branch=str(claim.branch),
         work_unit_id=claim.work_unit_id,
         work_graph_path=claim.work_graph_path,
-        work_graph_sha256=graph_sha256,
+        work_graph_sha256=binding.work_graph_sha256,
         start_revision=claim.start_revision,
     )
     return SelectionPendingActivationResultV1(

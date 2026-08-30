@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import json
 import subprocess
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
-from enforced_planning import plan_readiness
+from enforced_planning import plan_readiness, plan_validation
 from enforced_planning.plan_validation import PlanIntegrityFindingV1, PlanIntegrityResultV1
 
 PLAN_ID = "project-meta#234"
@@ -51,6 +52,12 @@ def _integrity_result(
 
 @pytest.fixture(autouse=True)
 def _default_integrity_off(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        plan_readiness.coordination_claims,
+        "_resolve_commit",
+        lambda _root, point, **_kwargs: START_REVISION if point == "HEAD" else point,
+    )
+    monkeypatch.setattr(plan_validation, "detect_repository_id", lambda root: Path(root).name)
     monkeypatch.setattr(
         plan_readiness,
         "validate_plan_integrity_at_revision",
@@ -334,7 +341,7 @@ def test_qualified_plan_repository_mismatch_fails_before_integrity(
         lambda **_kwargs: pytest.fail("mismatched repository must fail before validation"),
     )
 
-    with pytest.raises(ValueError, match="repository mismatch"):
+    with pytest.raises(ValueError, match="explicit --plan-repo-root and --plan-start-point"):
         plan_readiness.check_plan_start_readiness(
             qualified_plan_id="other-repo#234",
             execution_profile="coordinated",
@@ -347,3 +354,54 @@ def test_qualified_plan_repository_mismatch_fails_before_integrity(
             session_identity="codex:test",
             repo_root="/tmp/project-meta",
         )
+
+
+def test_external_plan_readiness_keeps_target_lane_revision_separate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The plan decision belongs to Project Meta while execution remains in AES."""
+
+    plan_revision = "f" * 40
+    calls: list[dict] = []
+    monkeypatch.setattr(
+        plan_readiness.coordination_claims,
+        "resolve_default_integration_revision",
+        lambda root: plan_revision if Path(root).name == "project-meta" else START_REVISION,
+    )
+
+    def _validate(**kwargs):
+        calls.append(kwargs)
+        return _integrity_result(source_revision=plan_revision)
+
+    monkeypatch.setattr(plan_readiness, "validate_plan_integrity_at_revision", _validate)
+    _patch_graph(monkeypatch, decision="ready")
+    result = plan_readiness.check_plan_start_readiness(
+        qualified_plan_id=PLAN_ID,
+        execution_profile="coordinated",
+        query_command="plan-graph",
+        repository="aes",
+        lane_id="external-plan",
+        branch="external-plan",
+        worktree_path="/tmp/aes/worktrees/external-plan",
+        claim_identity="codex:aes:external-plan",
+        session_identity="codex:test",
+        repo_root="/tmp/aes",
+        start_point=START_REVISION,
+        plan_repo_root="/tmp/project-meta",
+        plan_start_point=plan_revision,
+    )
+
+    assert result.allowed is True
+    assert result.lane is not None
+    assert result.lane.repository == "aes"
+    assert result.lane.start_revision == START_REVISION
+    assert result.planning_integrity is not None
+    assert result.planning_integrity.source_revision == plan_revision
+    assert calls == [
+        {
+            "repo_root": Path("/tmp/project-meta"),
+            "repository_id": "project-meta",
+            "plan_number": 234,
+            "start_point": plan_revision,
+        }
+    ]

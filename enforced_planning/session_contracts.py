@@ -21,7 +21,7 @@ from typing import Any
 import yaml  # type: ignore[import-untyped]
 
 DEFAULT_SESSION_TRACKERS_DIR = Path.home() / ".claude" / "coordination" / "sessions"
-SESSION_TRACKER_SCHEMA_VERSION = 2
+SESSION_TRACKER_SCHEMA_VERSION = 3
 UNPLANNED_PLAN_REF = "UNPLANNED"
 
 CLAIM_FIELD_NAMES = (
@@ -38,6 +38,9 @@ CLAIM_FIELD_NAMES = (
     "broader_goal",
     "tracker_path",
     "start_revision",
+    "plan_repo_root",
+    "plan_revision",
+    "plan_sha256",
 )
 
 TRACKER_ONLY_FIELD_NAMES = (
@@ -130,6 +133,9 @@ class SessionContract:
     broader_goal: str
     tracker_path: str | None = None
     start_revision: str | None = None
+    plan_repo_root: str | None = None
+    plan_revision: str | None = None
+    plan_sha256: str | None = None
 
     @classmethod
     def build(
@@ -148,6 +154,9 @@ class SessionContract:
         session_name: str | None = None,
         tracker_path: str | None = None,
         start_revision: str | None = None,
+        plan_repo_root: str | None = None,
+        plan_revision: str | None = None,
+        plan_sha256: str | None = None,
         allow_unplanned: bool = False,
     ) -> SessionContract:
         """Build a validated session contract from bootstrap inputs."""
@@ -164,6 +173,15 @@ class SessionContract:
 
         if start_revision is not None and re.fullmatch(r"(?:[0-9a-f]{40}|[0-9a-f]{64})", start_revision) is None:
             raise ValueError("start_revision must be one full lowercase Git object ID")
+        plan_binding = (plan_repo_root, plan_revision, plan_sha256)
+        if any(value is not None for value in plan_binding) and not all(
+            isinstance(value, str) and value.strip() for value in plan_binding
+        ):
+            raise ValueError("external plan custody requires plan_repo_root, plan_revision, and plan_sha256 together")
+        if plan_revision is not None and re.fullmatch(r"(?:[0-9a-f]{40}|[0-9a-f]{64})", plan_revision) is None:
+            raise ValueError("plan_revision must be one full lowercase Git object ID")
+        if plan_sha256 is not None and re.fullmatch(r"[0-9a-f]{64}", plan_sha256) is None:
+            raise ValueError("plan_sha256 must be one lowercase SHA-256 digest")
 
         return cls(
             agent=_require_text(agent, field_name="agent"),
@@ -179,6 +197,9 @@ class SessionContract:
             broader_goal=broader_goal_text,
             tracker_path=tracker_path.strip() if isinstance(tracker_path, str) and tracker_path.strip() else None,
             start_revision=start_revision,
+            plan_repo_root=(str(Path(plan_repo_root).expanduser().resolve()) if plan_repo_root is not None else None),
+            plan_revision=plan_revision,
+            plan_sha256=plan_sha256,
         )
 
     def with_tracker_path(self, tracker_path: str) -> SessionContract:
@@ -205,6 +226,10 @@ class SessionContract:
         }
         if self.start_revision is not None:
             fields["start_revision"] = self.start_revision
+        if self.plan_repo_root is not None:
+            fields["plan_repo_root"] = self.plan_repo_root
+            fields["plan_revision"] = self.plan_revision or ""
+            fields["plan_sha256"] = self.plan_sha256 or ""
         return fields
 
 
@@ -282,7 +307,11 @@ def build_session_tracker(
         notes=notes.strip() if isinstance(notes, str) and notes.strip() else None,
         created_at=timestamp,
         updated_at=timestamp,
-        schema_version=SESSION_TRACKER_SCHEMA_VERSION if contract.start_revision is not None else 1,
+        schema_version=(
+            SESSION_TRACKER_SCHEMA_VERSION
+            if contract.plan_repo_root is not None
+            else (2 if contract.start_revision is not None else 1)
+        ),
     )
 
 
@@ -383,8 +412,11 @@ def write_session_tracker(
                     "session_id",
                     "tracker_path",
                     "start_revision",
+                    "plan_repo_root",
+                    "plan_revision",
+                    "plan_sha256",
                 )
-                path_identity_fields = {"repo_root", "worktree_path", "tracker_path"}
+                path_identity_fields = {"repo_root", "worktree_path", "tracker_path", "plan_repo_root"}
 
                 def identity_value(claim: dict[str, Any], field: str) -> object:
                     value = claim.get(field)

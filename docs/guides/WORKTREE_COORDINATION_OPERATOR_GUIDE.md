@@ -704,8 +704,9 @@ denial for missing, inactive, mismatched, stalled, or terminal outcome state.
 
 ### Planning Integrity at the worktree and direct-claim boundary
 
-Planning Integrity is an opt-in, versioned admission prerequisite configured in
-the consumer repository:
+Planning Integrity is a versioned admission prerequisite configured in the
+plan-authority repository; the current framework defaults to `enforce` unless
+explicitly disabled. Same-repository consumers configure it locally:
 
 ```yaml
 meta_process:
@@ -732,7 +733,8 @@ this in order:
 Dirty corrected bytes cannot rescue an incomplete start revision. Moving
 symbolic `HEAD`, supplying an older passing commit for a new lane, or omitting
 the Make wrapper from a direct plan-bound claim does not change the accepted
-revision. A retained non-tip revision resumes only through the existing
+revision. These one-revision rules describe same-repository plans; the external
+authority extension below preserves two independent revisions. A retained non-tip revision resumes only through the existing
 session-resume/recovery lifecycle.
 
 The first-success Make shape is:
@@ -769,6 +771,49 @@ typed findings. `enforce` rejects missing, malformed, unsupported, unreadable,
 or failing inputs. In either mode, `pass` means the declared structural
 frontier conforms. It does **not** establish omitted-area coverage, semantic
 correctness, usefulness, or plan optimality.
+
+#### Cross-repository plan-authority contract
+
+A qualified plan such as `project-meta#249` may govern an AES implementation
+without a proxy copy of that plan in AES. Keep these inputs distinct:
+
+| Custody | Make inputs | Committed bytes validated |
+|---|---|---|
+| Mutation target | `WORKTREE_REPO_ROOT`, `WORKTREE_PROJECT`, `WORKTREE_START_POINT` | target work graph, work-unit readiness, approvals, branch/worktree start |
+| Plan authority | `PLAN_PROJECT`, `PLAN_REPO_ROOT`, `PLAN_START_POINT` | numbered plan and its integrity configuration |
+| Bounded execution | `SESSION_WORK_GRAPH`, `SESSION_WORK_UNIT_ID`, native session and claimed paths | the selected target unit and that session's mutation ownership |
+
+`PLAN_REPO_ROOT` must be an explicit absolute canonical repository matching the
+qualified plan identity. `PLAN_START_POINT` must be a full immutable commit.
+Both authority and target must resolve to their current default-integration
+tips for a new lane. The target unit's `design_revision` must equal
+`sha256:<exact committed plan digest>`. Missing, wrong, stale, or mismatched
+inputs deny before claim/branch/worktree mutation; a launch directory supplies
+neither identity nor authority. The same CLI inputs are `--plan-repo-root` and
+`--plan-start-point` on readiness, claim, and session-start entrypoints.
+
+External claims retain `plan_repo_root`, `plan_revision`, and `plan_sha256`
+alongside the target `start_revision` and graph digest (claim schema v5,
+tracker schema v3). Session activation and later refresh revalidate those exact
+identities; omission during refresh preserves them, and explicit rebinding is
+denied. A retained lane may keep its original revisions through the recovery
+lifecycle; it cannot turn a stale revision into authority for a new lane.
+
+Structural integrity mode `off` does not remove exact external plan custody:
+one committed numbered plan and its digest are still required, without
+changing that repository's policy. Local plans omit the two authority inputs
+and retain their existing single-repository behavior and schema versions.
+Supplying local overrides cannot substitute another repository or revision.
+This is explicit authority binding, not automatic repository discovery or an
+expansion of any claim's write paths. See Plan #130 for the AES acceptance
+example and retained verification evidence.
+
+When the consumer declares an installed `enforced-planning` dependency, the
+worktree-only installer updates wrappers and Make targets without vendoring a
+shadow package. Update the consumer's exact dependency pin and runtime through
+its package workflow as well; wrapper installation alone does not upgrade the
+framework implementation. A stale installed lifecycle fails visibly rather
+than dropping the external-authority inputs.
 
 ### First-consumer hard outcome admission (explicit source pilot)
 

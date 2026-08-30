@@ -52,8 +52,21 @@ def _git(cwd: Path, *args: str) -> str:
     return result.stdout.strip()
 
 
+@pytest.mark.parametrize(
+    ("binding_arguments", "expected_error"),
+    [
+        (["--start-revision", "a" * 40], "does not support revision custody"),
+        (
+            ["--plan-repo-root", "/tmp/project-meta", "--plan-start-point", "b" * 40],
+            "does not support external plan-authority custody",
+        ),
+        (["--plan-start-point", "b" * 40], "does not support external plan-authority custody"),
+    ],
+)
 def test_session_start_wrapper_rejects_stale_lifecycle_revision_contract(
     monkeypatch: pytest.MonkeyPatch,
+    binding_arguments: list[str],
+    expected_error: str,
 ) -> None:
     """A new wrapper must not silently discard custody when installed support is stale."""
 
@@ -83,14 +96,143 @@ def test_session_start_wrapper_rejects_stale_lifecycle_revision_contract(
             "Test stale support",
             "--current-phase",
             "fixture",
-            "--start-revision",
-            "a" * 40,
+            *binding_arguments,
         ]
     )
     monkeypatch.setattr(module.inspect, "signature", lambda _callable: SimpleNamespace(parameters={}))
 
-    with pytest.raises(RuntimeError, match="does not support revision custody"):
+    with pytest.raises(RuntimeError, match=expected_error):
         module._supported_start_kwargs(args)
+
+
+def test_cross_repository_session_retains_plan_custody_and_rejects_rebinding(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Activation and refresh preserve the external plan independently of the target."""
+
+    from enforced_planning import plan_validation
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    target_root = tmp_path / "aes"
+    plan_root = tmp_path / "project-meta"
+    target_root.mkdir()
+    plan_root.mkdir()
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    monkeypatch.delenv("CODEX_THREAD_ID", raising=False)
+    for root in (target_root, plan_root):
+        _git(root, "init", "-b", "main")
+        _git(root, "config", "user.email", "tests@example.com")
+        _git(root, "config", "user.name", "Test User")
+        (root / "README.md").write_text("seed\n", encoding="utf-8")
+        _git(root, "add", ".")
+        _git(root, "commit", "-m", "seed")
+    plan_revision = _git(plan_root, "rev-parse", "HEAD")
+    plan_sha256 = "d" * 64
+    graph_path = "docs/plans/249_cross_repository_work_graph.json"
+    (target_root / graph_path).parent.mkdir(parents=True)
+    (target_root / graph_path).write_text(
+        json.dumps(
+            {
+                "units": [
+                    {
+                        "id": "P249-AES01",
+                        "design_revision": f"sha256:{plan_sha256}",
+                        "status": "ready",
+                        "readiness": {"status": "ready", "required_approval_types": [], "approvals": []},
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    _git(target_root, "add", ".")
+    _git(target_root, "commit", "-m", "target graph")
+    target_revision = _git(target_root, "rev-parse", "HEAD")
+    worktree = target_root / "worktrees" / "plan249-aes01"
+    _git(target_root, "worktree", "add", "-b", "plan249-aes01", str(worktree), target_revision)
+
+    def _validate(**kwargs):
+        assert kwargs["repo_root"] == plan_root.resolve()
+        return SimpleNamespace(
+            mode="enforce",
+            disposition="pass",
+            findings=[],
+            source_revision=kwargs["start_point"],
+            plan_sha256=plan_sha256,
+        )
+
+    monkeypatch.setattr(plan_validation, "validate_plan_integrity_at_revision", _validate)
+    claim_kwargs = {
+        "agent": "codex",
+        "project": "aes",
+        "scope": "plan249-aes01",
+        "intent": "implement the external plan vertical",
+        "repo_root": str(target_root),
+        "worktree_path": str(worktree),
+        "branch": "plan249-aes01",
+        "broader_goal": "Implement External Plan Vertical",
+        "plan_ref": "project-meta#249",
+        "session_id": "codex:cross-repo-owner",
+        "claim_type": "write",
+        "write_paths": ["src/aes"],
+        "work_graph_path": graph_path,
+        "work_unit_id": "P249-AES01",
+    }
+    created, _message = coordination_claims.create_claim(
+        **claim_kwargs,
+        session_name="implement-external-plan-vertical",
+        start_point=target_revision,
+        plan_repo_root=str(plan_root),
+        plan_start_point=plan_revision,
+    )
+    assert created
+    claim_path = claims_dir / "codex_aes_plan249-aes01.yaml"
+    reservation = coordination_claims.normalize_claim(
+        yaml.safe_load(claim_path.read_text(encoding="utf-8")),
+        source_file=str(claim_path),
+    )
+    assert reservation is not None
+    pending = outcome_admission.evaluate_selection_pending_session_activation(reservation)
+    assert pending.disposition == "defer"
+    assert pending.reason_code == "selection_pending"
+    started = session_lifecycle.start_session(
+        **claim_kwargs,
+        current_phase="activate exact external authority",
+        start_revision=target_revision,
+        plan_repo_root=str(plan_root),
+        plan_start_point=plan_revision,
+        tracker_dir=trackers_dir,
+    )
+    tracker_path = Path(started["tracker_path"])
+    tracker = yaml.safe_load(tracker_path.read_text(encoding="utf-8"))
+    assert tracker["schema_version"] == 3
+    assert tracker["claim"]["start_revision"] == target_revision
+    assert tracker["claim"]["plan_repo_root"] == str(plan_root.resolve())
+    assert tracker["claim"]["plan_revision"] == plan_revision
+    assert tracker["claim"]["plan_sha256"] == plan_sha256
+
+    session_lifecycle.start_session(
+        **claim_kwargs,
+        current_phase="refresh without repeating retained authority",
+        tracker_dir=trackers_dir,
+    )
+    claim_path = claims_dir / "codex_aes_plan249-aes01.yaml"
+    before_claim = claim_path.read_bytes()
+    before_tracker = tracker_path.read_bytes()
+    (plan_root / "README.md").write_text("later plan repository revision\n", encoding="utf-8")
+    _git(plan_root, "commit", "-am", "later authority revision")
+    with pytest.raises(ValueError, match="different plan revision"):
+        session_lifecycle.start_session(
+            **claim_kwargs,
+            current_phase="attempt authority rebinding",
+            plan_repo_root=str(plan_root),
+            plan_start_point=_git(plan_root, "rev-parse", "HEAD"),
+            tracker_dir=trackers_dir,
+        )
+    assert claim_path.read_bytes() == before_claim
+    assert tracker_path.read_bytes() == before_tracker
 
 
 def test_session_start_preserves_existing_revision_custody_and_rolls_back_mismatch(
@@ -328,18 +470,14 @@ def test_configured_session_start_defers_only_tracker_creation_until_selection(
     )
 
     pending_receipt_path = outcome_admission.selection_pending_activation_receipt_path(receipt_path)
-    [activation_receipt] = outcome_admission.load_selection_pending_activation_receipts(
-        pending_receipt_path
-    )
+    [activation_receipt] = outcome_admission.load_selection_pending_activation_receipts(pending_receipt_path)
     assert activation_receipt.result.disposition == "defer"
     assert activation_receipt.result.reason_code == "selection_pending"
     assert activation_receipt.result.evidence is not None
     assert not receipt_path.exists()
     tracker_path = Path(started["tracker_path"])
     assert tracker_path.is_file()
-    assert yaml.safe_load(claim_path.read_text(encoding="utf-8"))["session_name"] == (
-        "prove-staged-activation"
-    )
+    assert yaml.safe_load(claim_path.read_text(encoding="utf-8"))["session_name"] == ("prove-staged-activation")
     claim_after_start = claim_path.read_bytes()
     tracker_after_start = tracker_path.read_bytes()
 
@@ -520,9 +658,7 @@ def test_selection_pending_compare_and_swap_rejects_claim_change_before_link(
         claim_payload = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
         claim_payload["intent"] = "injected concurrent claim change"
         claim_path.write_text(yaml.safe_dump(claim_payload, sort_keys=False), encoding="utf-8")
-        assert yaml.safe_load(claim_path.read_text(encoding="utf-8"))["intent"] == (
-            "injected concurrent claim change"
-        )
+        assert yaml.safe_load(claim_path.read_text(encoding="utf-8"))["intent"] == ("injected concurrent claim change")
         return tracker_path
 
     monkeypatch.setattr(

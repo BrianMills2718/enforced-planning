@@ -16,6 +16,7 @@ def _add_repo_root_to_path() -> None:
             sys.path.insert(0, str(parent))
             return
     import importlib.util
+
     if importlib.util.find_spec("enforced_planning") is not None:
         return
     raise RuntimeError("Unable to locate repository root containing enforced_planning/")
@@ -35,6 +36,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--query-command")
     parser.add_argument("--repo-root", required=True)
     parser.add_argument("--start-point", default="HEAD")
+    parser.add_argument("--plan-repo-root")
+    parser.add_argument("--plan-start-point")
     parser.add_argument("--repository", required=True)
     parser.add_argument("--lane-id", required=True)
     parser.add_argument("--parent-lane-id")
@@ -44,7 +47,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--scope", required=True)
     parser.add_argument("--session-id")
     parser.add_argument("--allow-unplanned", action="store_true")
-    parser.add_argument("--resume", action="store_true", help="Explicitly resume an in-progress plan with no live lane.")
+    parser.add_argument(
+        "--resume", action="store_true", help="Explicitly resume an in-progress plan with no live lane."
+    )
     return parser.parse_args(argv)
 
 
@@ -69,6 +74,8 @@ def main(argv: list[str] | None = None) -> int:
             session_identity=session_id,
             repo_root=args.repo_root,
             start_point=args.start_point,
+            plan_repo_root=args.plan_repo_root,
+            plan_start_point=args.plan_start_point,
             allow_unplanned=args.allow_unplanned,
             resume_requested=args.resume,
         )

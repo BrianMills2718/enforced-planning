@@ -502,6 +502,8 @@ def _upsert_session_claim(
     work_graph_path: str | None = None,
     work_unit_id: str | None = None,
     start_revision: str | None = None,
+    plan_repo_root: str | None = None,
+    plan_start_point: str | None = None,
     ttl_hours: float = coordination_claims.DEFAULT_TTL_HOURS,
     allow_parallel: bool = False,
     staged_reservation: coordination_claims.ClaimRecord | None = None,
@@ -533,6 +535,8 @@ def _upsert_session_claim(
             work_graph_path=work_graph_path,
             work_unit_id=work_unit_id,
             start_point=start_revision or "HEAD",
+            plan_repo_root=plan_repo_root,
+            plan_start_point=plan_start_point,
             ttl_hours=ttl_hours,
             allow_parallel=allow_parallel,
             require_native_session_binding=True,
@@ -572,11 +576,14 @@ def _upsert_session_claim(
         effective_parent_scope = existing.parent_scope if parent_scope is None else parent_scope
         effective_work_graph_path = existing.work_graph_path if work_graph_path is None else work_graph_path
         effective_work_unit_id = existing.work_unit_id if work_unit_id is None else work_unit_id
+        effective_plan_repo_root = existing.plan_repo_root if plan_repo_root is None else plan_repo_root
+        effective_plan_start_point = existing.plan_revision if plan_start_point is None else plan_start_point
         if start_revision is not None and existing.start_revision not in {None, start_revision}:
             raise ValueError(f"Claim at {path} retains start revision {existing.start_revision}, not {start_revision}")
         effective_start_revision = existing.start_revision or start_revision
         work_graph_sha256 = existing.work_graph_sha256
         approval_revisions = existing.approval_revisions
+        plan_sha256 = existing.plan_sha256
         if effective_write_paths and coordination_claims.requires_work_graph(plan_ref):
             if existing.start_revision is None and existing.tracker_path is not None:
                 raise ValueError(
@@ -587,18 +594,33 @@ def _upsert_session_claim(
                 )
             if not effective_work_graph_path or not effective_work_unit_id:
                 raise ValueError("Plan-bound write ownership requires --work-graph and --work-unit-id")
-            work_graph_sha256, approval_revisions, resolved_start_revision = (
+            binding = coordination_claims.coerce_canonical_work_unit_binding(
                 coordination_claims.resolve_canonical_work_unit_binding(
                     repo_root=repo_root,
                     plan_ref=plan_ref,
                     work_graph_path=effective_work_graph_path,
                     work_unit_id=effective_work_unit_id,
                     start_point=effective_start_revision or "HEAD",
+                    plan_repo_root=effective_plan_repo_root,
+                    plan_start_point=effective_plan_start_point,
+                    target_repository_id=project,
                 )
             )
+            work_graph_sha256 = binding.work_graph_sha256
+            approval_revisions = binding.approval_revisions
+            resolved_start_revision = binding.start_revision
             if effective_start_revision is not None and resolved_start_revision != effective_start_revision:
                 raise ValueError("session upsert resolved a different start revision than the existing claim")
             effective_start_revision = resolved_start_revision
+            if existing.plan_repo_root not in {None, binding.plan_repo_root}:
+                raise ValueError("session upsert resolved a different plan repository than the existing claim")
+            if existing.plan_revision not in {None, binding.plan_revision}:
+                raise ValueError("session upsert resolved a different plan revision than the existing claim")
+            if existing.plan_sha256 not in {None, binding.plan_sha256}:
+                raise ValueError("session upsert resolved a different plan digest than the existing claim")
+            effective_plan_repo_root = binding.plan_repo_root
+            effective_plan_start_point = binding.plan_revision
+            plan_sha256 = binding.plan_sha256
             if existing.tracker_path is None:
                 coordination_claims.validate_start_revision_targets(
                     repo_root=repo_root,
@@ -630,6 +652,9 @@ def _upsert_session_claim(
             work_graph_sha256=work_graph_sha256,
             approval_revisions=approval_revisions,
             start_revision=effective_start_revision,
+            plan_repo_root=effective_plan_repo_root,
+            plan_revision=effective_plan_start_point,
+            plan_sha256=plan_sha256 if effective_plan_repo_root is not None else None,
             parallel_root_authorized=(allow_parallel or existing.parallel_root_authorized),
         )
         coordination_claims.validate_claim_hierarchy_for_creation(
@@ -702,6 +727,13 @@ def _upsert_session_claim(
             payload["start_revision"] = effective_start_revision
         else:
             payload.pop("start_revision", None)
+        if effective_plan_repo_root is not None:
+            payload["plan_repo_root"] = effective_plan_repo_root
+            payload["plan_revision"] = effective_plan_start_point
+            payload["plan_sha256"] = plan_sha256
+        else:
+            for field in ("plan_repo_root", "plan_revision", "plan_sha256"):
+                payload.pop(field, None)
         _projection_path, projection_digest_after = _write_claim_and_refresh_projection(
             path, payload, coordination_claims.CLAIMS_DIR
         )
@@ -788,11 +820,7 @@ def _record_selection_pending_activation(
         result,
         outcome_receipt_path=receipt_path,
     )
-    if (
-        result.disposition != "defer"
-        or result.reason_code != "selection_pending"
-        or result.evidence is None
-    ):
+    if result.disposition != "defer" or result.reason_code != "selection_pending" or result.evidence is None:
         detail = f": {result.resolution_error_message}" if result.resolution_error_message is not None else ""
         raise OutcomeAdmissionDeniedError(
             f"Outcome admission denied ({result.reason_code}); receipt {receipt.receipt_id}{detail}"
@@ -821,6 +849,8 @@ def _require_staged_activation_arguments_match(
     work_graph_path: str | None,
     work_unit_id: str | None,
     start_revision: str | None,
+    plan_repo_root: str | None,
+    plan_start_point: str | None,
     allow_parallel: bool,
 ) -> None:
     """Reject any attempt to turn tracker attachment into claim replacement."""
@@ -838,6 +868,9 @@ def _require_staged_activation_arguments_match(
         broader_goal=broader_goal,
         session_name=session_name,
         start_revision=start_revision or claim.start_revision,
+        plan_repo_root=claim.plan_repo_root,
+        plan_revision=claim.plan_revision,
+        plan_sha256=claim.plan_sha256,
     )
     requested_write_paths = (
         claim.write_paths
@@ -872,6 +905,11 @@ def _require_staged_activation_arguments_match(
         "work_graph_path": claim.work_graph_path if work_graph_path is None else work_graph_path,
         "work_unit_id": claim.work_unit_id if work_unit_id is None else work_unit_id,
         "start_revision": requested.start_revision,
+        "plan_repo_root": claim.plan_repo_root
+        if plan_repo_root is None
+        else str(Path(plan_repo_root).expanduser().resolve()),
+        "plan_revision": claim.plan_revision if plan_start_point is None else plan_start_point,
+        "plan_sha256": claim.plan_sha256,
         "parallel_root_authorized": allow_parallel or claim.parallel_root_authorized,
     }
     existing_fields: dict[str, object] = {
@@ -893,15 +931,15 @@ def _require_staged_activation_arguments_match(
         "work_graph_path": claim.work_graph_path,
         "work_unit_id": claim.work_unit_id,
         "start_revision": claim.start_revision,
+        "plan_repo_root": claim.plan_repo_root,
+        "plan_revision": claim.plan_revision,
+        "plan_sha256": claim.plan_sha256,
         "parallel_root_authorized": claim.parallel_root_authorized,
     }
-    mismatches = sorted(
-        name for name, value in requested_fields.items() if existing_fields[name] != value
-    )
+    mismatches = sorted(name for name, value in requested_fields.items() if existing_fields[name] != value)
     if mismatches:
         raise ValueError(
-            "selection-pending activation may attach only a tracker; caller changed: "
-            + ", ".join(mismatches)
+            "selection-pending activation may attach only a tracker; caller changed: " + ", ".join(mismatches)
         )
 
 
@@ -1350,6 +1388,8 @@ def start_session(
     work_graph_path: str | None = None,
     work_unit_id: str | None = None,
     start_revision: str | None = None,
+    plan_repo_root: str | None = None,
+    plan_start_point: str | None = None,
     tracker_dir: Path = session_contracts.DEFAULT_SESSION_TRACKERS_DIR,
     allow_unplanned: bool = False,
     allow_parallel: bool = False,
@@ -1433,6 +1473,8 @@ def start_session(
                     work_graph_path=work_graph_path,
                     work_unit_id=work_unit_id,
                     start_revision=start_revision,
+                    plan_repo_root=plan_repo_root,
+                    plan_start_point=plan_start_point,
                     allow_parallel=allow_parallel,
                 )
                 staged_reservation = selected_claim
@@ -1447,11 +1489,7 @@ def start_session(
                     staged,
                     outcome_receipt_path=outcome_admission_receipt_path,
                 )
-                detail = (
-                    f": {staged.resolution_error_message}"
-                    if staged.resolution_error_message is not None
-                    else ""
-                )
+                detail = f": {staged.resolution_error_message}" if staged.resolution_error_message is not None else ""
                 raise OutcomeAdmissionDeniedError(
                     f"Outcome admission denied ({staged.reason_code}); receipt {receipt.receipt_id}{detail}"
                 )
@@ -1477,6 +1515,33 @@ def start_session(
     ):
         raise ValueError("new plan-bound session start requires one full --start-revision")
 
+    contract_plan_repo_root = existing_claim.plan_repo_root if existing_claim is not None else None
+    contract_plan_revision = existing_claim.plan_revision if existing_claim is not None else None
+    contract_plan_sha256 = existing_claim.plan_sha256 if existing_claim is not None else None
+    if (
+        existing_claim is None
+        and write_paths
+        and coordination_claims.requires_work_graph(plan_ref)
+        and plan_repo_root is not None
+    ):
+        if not work_graph_path or not work_unit_id:
+            raise ValueError("Plan-bound write ownership requires --work-graph and --work-unit-id")
+        binding = coordination_claims.coerce_canonical_work_unit_binding(
+            coordination_claims.resolve_canonical_work_unit_binding(
+                repo_root=repo_root,
+                plan_ref=plan_ref or "",
+                work_graph_path=work_graph_path,
+                work_unit_id=work_unit_id,
+                start_point=start_revision or "HEAD",
+                plan_repo_root=plan_repo_root,
+                plan_start_point=plan_start_point,
+                target_repository_id=project,
+            )
+        )
+        contract_plan_repo_root = binding.plan_repo_root
+        contract_plan_revision = binding.plan_revision
+        contract_plan_sha256 = binding.plan_sha256
+
     contract = session_contracts.SessionContract.build(
         agent=agent,
         project=project,
@@ -1491,6 +1556,9 @@ def start_session(
         session_name=session_name,
         allow_unplanned=allow_unplanned,
         start_revision=start_revision,
+        plan_repo_root=contract_plan_repo_root,
+        plan_revision=contract_plan_revision,
+        plan_sha256=contract_plan_sha256,
     )
     matching_lane_claims = [
         claim
@@ -1541,6 +1609,8 @@ def start_session(
             work_graph_path=work_graph_path,
             work_unit_id=work_unit_id,
             start_revision=contract.start_revision,
+            plan_repo_root=plan_repo_root,
+            plan_start_point=plan_start_point,
             allow_parallel=allow_parallel,
             staged_reservation=staged_reservation,
         )

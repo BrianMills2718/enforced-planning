@@ -267,6 +267,15 @@ insufficient for selection-pending write activation.
 
 The canonical minimum installer does not yet ship every framework module.
 
+For a bounded worktree-runtime upgrade, use the canonical installer with
+`--worktree-only`. If the consumer declares an installed `enforced-planning`
+dependency, this syncs wrappers and Make targets without copying a competing
+package into the repository. Update the consumer's exact dependency pin and
+installed environment separately through its package workflow. An unchanged
+`mode:installed-package` receipt is informational, not installer drift.
+For external plan ownership, the upgraded runtime and wrappers must both
+support the operator guide's explicit plan-authority root/revision inputs.
+
 - `./install.sh /path/to/your/project --worktree-only`
   - canonical bounded sync for sanctioned worktree entrypoints only
 - `./install.sh /path/to/your/project --full`

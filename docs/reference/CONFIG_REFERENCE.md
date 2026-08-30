@@ -84,6 +84,16 @@ does not establish that the author named every material area or selected an
 optimal plan; the typed result and downstream AES projection retain that
 non-claim verbatim.
 
+For a qualified plan owned by another repository, Plan #130 reads that plan
+and its integrity configuration from an explicit plan-authority root/revision;
+the work graph and execution start remain in the target repository. The
+invocation inputs `PLAN_REPO_ROOT` / `PLAN_START_POINT` (CLI
+`--plan-repo-root` / `--plan-start-point`) are **not configuration keys** and
+do not enable discovery or change either repository's enforcement mode.
+Even when the authority's structural integrity mode is `off`, the claim must
+bind exactly one committed plan and its digest. See the operator guide's
+cross-repository plan-authority contract for the complete invocation rules.
+
 ## claims
 
 ### Host read-target state

@@ -7,7 +7,7 @@
       "initiative_id": "agentic-engineering",
       "goal_id": "cross-repository-plan-authority",
       "design_revision": "user-authorized:codex-session-01a04ab2-99c5-7f12-b6fe-6c0ed99c2b50:2026-08-30",
-      "spec_revision": "plan-130-adopted-v1",
+      "spec_revision": "plan-130-adopted-v2",
       "title": "Bind qualified plan authority separately from the mutation target",
       "class": "implementation",
       "objective": "Retain and validate exact plan-authority and mutation-target repository/revision identities through claim creation, session activation, installed propagation, and one authentic AES Plan 249 bootstrap.",
@@ -17,14 +17,14 @@
       "scope": {
         "included": [
           "Typed cross-repository plan-authority binding",
-          "Claim/session/Make/installer propagation",
+          "Claim/session/tracker/admission/readiness/Make/installer propagation",
           "Two-repository both-sign fixtures",
           "Installed AES parity and authentic Plan 249 bootstrap"
         ],
         "excluded": [
           "Proxy plans",
           "Filesystem-layout inference",
-          "Project Graph or readiness-query changes",
+          "Project Graph or readiness-decision semantics changes",
           "Fleet rollout",
           "Plan 249 product implementation"
         ]
@@ -51,8 +51,13 @@
       "conflict_surfaces": [
         {"kind": "repository_path", "target": "enforced_planning/coordination_claims.py", "repository": "enforced-planning", "access": "exclusive"},
         {"kind": "repository_path", "target": "enforced_planning/session_lifecycle.py", "repository": "enforced-planning", "access": "exclusive"},
+        {"kind": "repository_path", "target": "enforced_planning/session_contracts.py", "repository": "enforced-planning", "access": "exclusive"},
+        {"kind": "repository_path", "target": "enforced_planning/outcome_admission.py", "repository": "enforced-planning", "access": "exclusive"},
+        {"kind": "repository_path", "target": "enforced_planning/plan_readiness.py", "repository": "enforced-planning", "access": "exclusive"},
         {"kind": "repository_path", "target": "scripts/session_start.py", "repository": "enforced-planning", "access": "exclusive"},
+        {"kind": "repository_path", "target": "scripts/check_plan_readiness.py", "repository": "enforced-planning", "access": "exclusive"},
         {"kind": "repository_path", "target": "scripts/install_governed_repo.py", "repository": "enforced-planning", "access": "exclusive"},
+        {"kind": "repository_path", "target": "templates/Makefile.worktree.block.template", "repository": "enforced-planning", "access": "exclusive"},
         {"kind": "repository_path", "target": "Makefile", "repository": "enforced-planning", "access": "exclusive"}
       ],
       "acceptance": [
@@ -83,9 +88,9 @@
       },
       "authorization_mode": "registry_claim",
       "status": "ready",
-      "record_version": 1,
+      "record_version": 2,
       "created_at": "2026-08-30T19:08:00Z",
-      "updated_at": "2026-08-30T19:08:00Z"
+      "updated_at": "2026-08-30T20:39:33Z"
     }
   ]
 }

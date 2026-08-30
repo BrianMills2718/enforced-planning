@@ -856,11 +856,27 @@ def test_default_off_reenable_and_wiki_freshness_journey(tmp_path: Path) -> None
     assert installed.returncode == 0, installed.stdout + installed.stderr
     subprocess.run(["git", "-C", str(tmp_path), "add", "-A"], check=True)
     subprocess.run(
-        ["git", "-C", str(tmp_path), "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-qm", "baseline"],
+        [
+            "git",
+            "-C",
+            str(tmp_path),
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.com",
+            "commit",
+            "-qm",
+            "baseline",
+        ],
         check=True,
     )
 
-    profile_command = [sys.executable, str(tmp_path / "scripts/meta/effective_project_profile.py"), "--repo-root", str(tmp_path)]
+    profile_command = [
+        sys.executable,
+        str(tmp_path / "scripts/meta/effective_project_profile.py"),
+        "--repo-root",
+        str(tmp_path),
+    ]
     default_profile = json.loads(subprocess.run(profile_command, check=True, capture_output=True, text=True).stdout)
     assert default_profile["master_enabled"] is True
     assert default_profile["controls"]["knowledge_navigation.enabled"]["effective"] is True
@@ -1710,6 +1726,41 @@ def test_install_governed_repo_syncs_worktree_block_into_existing_meta_makefile(
     assert "test:  ## Run pytest" in makefile_text
 
 
+def test_installed_worktree_surface_preserves_external_plan_authority(tmp_path: Path) -> None:
+    """Every installed bootstrap consumer receives the same two-repository contract."""
+
+    _write_minimal_claude(tmp_path)
+    (tmp_path / "Makefile").write_text("help:\n\t@echo hello\n", encoding="utf-8")
+    result = _run("--repo-root", str(tmp_path), "--write", "--worktree-only", "--json", cwd=PROJECT_META_ROOT)
+    assert result.returncode == 0, result.stdout + result.stderr
+    makefile = (tmp_path / "Makefile").read_text(encoding="utf-8")
+    assert "PLAN_REPO_ROOT ?=" in makefile
+    assert "PLAN_START_POINT ?=" in makefile
+    assert makefile.count('--plan-repo-root "$(PLAN_REPO_ROOT)"') == 4
+    assert makefile.count('--plan-start-point "$(PLAN_START_POINT)"') == 4
+    for relative in (
+        "enforced_planning/coordination_claims.py",
+        "enforced_planning/plan_readiness.py",
+        "enforced_planning/outcome_admission.py",
+        "enforced_planning/session_contracts.py",
+        "enforced_planning/session_lifecycle.py",
+    ):
+        assert (tmp_path / relative).read_bytes() == (PROJECT_META_ROOT / relative).read_bytes()
+    for name in ("session_start.py", "check_plan_readiness.py"):
+        installed = tmp_path / "scripts/meta" / name
+        assert installed.read_bytes() == (PROJECT_META_ROOT / "scripts" / name).read_bytes()
+        help_result = subprocess.run(
+            [sys.executable, str(installed), "--help"],
+            cwd=tmp_path,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert help_result.returncode == 0, help_result.stderr
+        assert "--plan-repo-root" in help_result.stdout
+        assert "--plan-start-point" in help_result.stdout
+
+
 def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) -> None:
     """Worktree-only mode should sync only the sanctioned worktree surface."""
     _write_minimal_claude(tmp_path)
@@ -2299,6 +2350,28 @@ def test_installed_dependency_stops_the_installer_re_vendoring(tmp_path: Path) -
     _write_consumer(tmp_path, declares_framework=True)
     reduced = drop_vendored_package_files(files, tmp_path)
     assert reduced == {"scripts/meta/session_start.py": "scripts/session_start.py"}
+
+
+def test_worktree_only_install_preserves_declared_framework_dependency(tmp_path: Path) -> None:
+    """The AES bootstrap upgrade must not shadow its pinned installed package."""
+
+    _write_minimal_claude(tmp_path)
+    _write_consumer(tmp_path, declares_framework=True)
+    (tmp_path / "Makefile").write_text("help:\n\t@echo hello\n", encoding="utf-8")
+    declaration = (tmp_path / "pyproject.toml").read_bytes()
+    result = _run("--repo-root", str(tmp_path), "--write", "--worktree-only", "--json", cwd=PROJECT_META_ROOT)
+    assert result.returncode == 0, result.stdout + result.stderr
+    payload = json.loads(result.stdout)
+    assert not (tmp_path / "enforced_planning").exists()
+    assert "mode:installed-package" in payload["actions"]
+    assert (tmp_path / "pyproject.toml").read_bytes() == declaration
+    assert "PLAN_REPO_ROOT ?=" in (tmp_path / "Makefile").read_text(encoding="utf-8")
+    assert (tmp_path / "scripts/meta/session_start.py").read_bytes() == (
+        PROJECT_META_ROOT / "scripts/session_start.py"
+    ).read_bytes()
+    repeated = _run("--repo-root", str(tmp_path), "--check", "--worktree-only", "--json", cwd=PROJECT_META_ROOT)
+    assert repeated.returncode == 0, repeated.stdout + repeated.stderr
+    assert json.loads(repeated.stdout)["drift_files"] == []
 
 
 def test_vendored_consumer_keeps_receiving_the_package(tmp_path: Path) -> None:

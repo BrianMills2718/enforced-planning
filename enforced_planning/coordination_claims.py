@@ -89,6 +89,12 @@ CREATION_BLOCKING_HEALTH_ISSUES = {
     "missing_work_graph_sha256",
     "missing_start_revision",
     "invalid_start_revision",
+    "missing_plan_repo_root",
+    "invalid_plan_repo_root",
+    "missing_plan_revision",
+    "invalid_plan_revision",
+    "missing_plan_sha256",
+    "invalid_plan_sha256",
 }
 DEFAULT_HEARTBEAT_STALE_MINUTES = 120
 DEFAULT_PROGRESS_STALE_MINUTES = 60
@@ -282,10 +288,7 @@ def _registry_digest(claims_dir: Path) -> str:
 def _registry_snapshot(claims_dir: Path) -> dict[str, bytes]:
     """Read every YAML authority record once, keyed by the digest's own key."""
 
-    return {
-        path.name: path.read_bytes()
-        for path in sorted(claims_dir.expanduser().resolve().glob("*.yaml"))
-    }
+    return {path.name: path.read_bytes() for path in sorted(claims_dir.expanduser().resolve().glob("*.yaml"))}
 
 
 def _registry_digest_from_snapshot(snapshot: dict[str, bytes]) -> str:
@@ -382,6 +385,48 @@ def record_claim_mutation(
 
 
 @dataclass(frozen=True)
+class PlanAuthorityBinding:
+    """Resolved navigation-independent target and numbered-plan identities."""
+
+    target_root: Path
+    target_revision: str
+    plan_root: Path
+    plan_revision: str
+    plan_repository_id: str
+    external: bool
+
+
+@dataclass(frozen=True)
+class CanonicalWorkUnitBinding:
+    """Exact target-graph and optional external-plan authority custody."""
+
+    work_graph_sha256: str
+    approval_revisions: tuple[str, ...]
+    start_revision: str
+    plan_repo_root: str | None = None
+    plan_revision: str | None = None
+    plan_sha256: str | None = None
+
+    def __iter__(self) -> Iterator[object]:
+        """Retain the historical three-value unpacking API for local consumers."""
+
+        yield self.work_graph_sha256
+        yield self.approval_revisions
+        yield self.start_revision
+
+
+def coerce_canonical_work_unit_binding(
+    binding: CanonicalWorkUnitBinding | tuple[str, tuple[str, ...], str],
+) -> CanonicalWorkUnitBinding:
+    """Adapt legacy test/consumer triples while callers migrate to typed custody."""
+
+    if isinstance(binding, CanonicalWorkUnitBinding):
+        return binding
+    graph_sha256, approvals, start_revision = binding
+    return CanonicalWorkUnitBinding(graph_sha256, approvals, start_revision)
+
+
+@dataclass(frozen=True)
 class ClaimRecord:
     """Normalized coordination claim record used across readable schema versions."""
 
@@ -410,6 +455,9 @@ class ClaimRecord:
     source_file: str | None
     schema_version: int
     start_revision: str | None = None
+    plan_repo_root: str | None = None
+    plan_revision: str | None = None
+    plan_sha256: str | None = None
     work_unit_id: str | None = None
     work_graph_path: str | None = None
     work_graph_sha256: str | None = None
@@ -539,6 +587,29 @@ def requires_work_graph(plan_ref: str | None) -> bool:
     )
 
 
+def _normalized_repository_id(value: str) -> str:
+    """Normalize repository identity spellings used by qualified plan refs."""
+
+    return value.strip().lower().replace("_", "-")
+
+
+def _qualified_plan_repository(plan_ref: str | None) -> str | None:
+    """Return the explicit authority repository from ``repository#number``."""
+
+    if not isinstance(plan_ref, str):
+        return None
+    match = re.fullmatch(r"\s*([A-Za-z0-9_.-]+)#0*\d+\s*", plan_ref)
+    return _normalized_repository_id(match.group(1)) if match else None
+
+
+def _claim_uses_external_plan_authority(claim: ClaimRecord) -> bool:
+    """Return whether a claim's qualified plan belongs to another project."""
+
+    plan_repository = _qualified_plan_repository(claim.plan_ref)
+    target_project = claim.primary_project()
+    return bool(plan_repository and target_project and plan_repository != _normalized_repository_id(target_project))
+
+
 def claim_health_issues(claim: ClaimRecord) -> list[str]:
     """Return machine-readable health issues for one normalized claim."""
     issues: list[str] = []
@@ -576,6 +647,19 @@ def claim_health_issues(claim: ClaimRecord) -> list[str]:
                 issues.append("missing_start_revision")
             elif START_REVISION_PATTERN.fullmatch(claim.start_revision) is None:
                 issues.append("invalid_start_revision")
+        if claim.write_paths and _claim_uses_external_plan_authority(claim):
+            if not claim.plan_repo_root:
+                issues.append("missing_plan_repo_root")
+            elif not Path(claim.plan_repo_root).is_absolute():
+                issues.append("invalid_plan_repo_root")
+            if not claim.plan_revision:
+                issues.append("missing_plan_revision")
+            elif START_REVISION_PATTERN.fullmatch(claim.plan_revision) is None:
+                issues.append("invalid_plan_revision")
+            if not claim.plan_sha256:
+                issues.append("missing_plan_sha256")
+            elif re.fullmatch(r"[0-9a-f]{64}", claim.plan_sha256) is None:
+                issues.append("invalid_plan_sha256")
     return issues
 
 
@@ -1208,6 +1292,12 @@ def validate_claim_for_creation(claim: ClaimRecord) -> None:
         "missing_work_graph_sha256": "a validated canonical work-graph binding",
         "missing_start_revision": "a validated full --start-point revision",
         "invalid_start_revision": "a valid full --start-point revision",
+        "missing_plan_repo_root": "an explicit --plan-repo-root",
+        "invalid_plan_repo_root": "an absolute --plan-repo-root",
+        "missing_plan_revision": "an exact --plan-start-point",
+        "invalid_plan_revision": "a valid full --plan-start-point revision",
+        "missing_plan_sha256": "a validated external plan digest",
+        "invalid_plan_sha256": "a valid external plan SHA-256 digest",
     }
     required_flags = [flag_map[item] for item in issues if item in flag_map]
     required_text = ", ".join(required_flags)
@@ -1226,6 +1316,101 @@ def _plan_number(plan_ref: str | None) -> int | None:
     return int(match.group(1)) if match else None
 
 
+def _resolve_commit(repo_root: Path, start_point: str, *, label: str) -> str:
+    """Resolve one commit-ish to a full immutable object ID."""
+
+    resolved = _run_git(repo_root, ["rev-parse", "--verify", f"{start_point}^{{commit}}"])
+    revision = resolved.stdout.strip()
+    if resolved.returncode != 0 or START_REVISION_PATTERN.fullmatch(revision) is None:
+        raise ValueError(f"Unable to resolve one full {label} revision from {start_point!r}")
+    return revision
+
+
+def _numbered_plan_digest(repo_root: Path, revision: str, plan_number: int) -> str:
+    """Bind exact plan bytes even when structural integrity enforcement is off."""
+
+    from enforced_planning.plan_validation import (
+        _git_object_bytes,
+        _numbered_plan_paths_at_revision,
+        parse_planning_integrity_config_bytes,
+    )
+
+    config_bytes = _git_object_bytes(repo_root, revision, "meta-process.yaml")
+    _config, plans_dir, _config_sha256 = parse_planning_integrity_config_bytes(config_bytes)
+    matches = _numbered_plan_paths_at_revision(
+        repo_root, revision=revision, plans_dir=plans_dir, plan_number=plan_number
+    )
+    if len(matches) != 1:
+        raise ValueError(
+            f"External plan authority requires exactly one plan #{plan_number} at {revision}; found {len(matches)}"
+        )
+    plan_bytes = _git_object_bytes(repo_root, revision, matches[0])
+    if plan_bytes is None:
+        raise ValueError(f"External plan bytes are unavailable at {revision}:{matches[0]}")
+    return hashlib.sha256(plan_bytes).hexdigest()
+
+
+def resolve_plan_authority_binding(
+    *,
+    repo_root: str,
+    plan_ref: str,
+    start_point: str = "HEAD",
+    plan_repo_root: str | None = None,
+    plan_start_point: str | None = None,
+    target_repository_id: str | None = None,
+) -> PlanAuthorityBinding:
+    """Resolve explicit plan authority separately from exact mutation-target custody."""
+
+    root = Path(repo_root).expanduser().resolve()
+    target_revision = _resolve_commit(root, start_point, label="target start")
+    plan_number = _plan_number(plan_ref)
+    if plan_number is None:
+        raise ValueError(f"Unable to resolve numbered plan identity from {plan_ref!r}")
+    qualified_match = re.fullmatch(r"([a-zA-Z0-9_.-]+)#0*(\d+)", plan_ref.strip())
+    from enforced_planning.plan_validation import detect_repository_id
+
+    resolved_target_repository_id = _normalized_repository_id(target_repository_id or detect_repository_id(root))
+    repository_id = (
+        _normalized_repository_id(qualified_match.group(1)) if qualified_match else resolved_target_repository_id
+    )
+    cross_repository = qualified_match is not None and repository_id != resolved_target_repository_id
+    if (plan_repo_root is None) != (plan_start_point is None):
+        raise ValueError("--plan-repo-root and --plan-start-point must be provided together")
+    if cross_repository and (plan_repo_root is None or plan_start_point is None):
+        raise ValueError(
+            "Cross-repository plan binding requires explicit --plan-repo-root and --plan-start-point; "
+            "the plan authority is never guessed from neighboring repositories"
+        )
+    if plan_repo_root is not None:
+        supplied_plan_root = Path(plan_repo_root).expanduser()
+        if not supplied_plan_root.is_absolute():
+            raise ValueError("--plan-repo-root must be an absolute repository path")
+        authority_root = supplied_plan_root.resolve()
+        actual_plan_repository_id = _normalized_repository_id(detect_repository_id(authority_root))
+        if actual_plan_repository_id != repository_id:
+            raise ValueError(
+                f"Plan repository {actual_plan_repository_id!r} does not match qualified plan "
+                f"repository {repository_id!r}"
+            )
+        assert plan_start_point is not None
+        if START_REVISION_PATTERN.fullmatch(plan_start_point) is None:
+            raise ValueError("--plan-start-point must be one full lowercase Git object ID")
+        authority_revision = _resolve_commit(authority_root, plan_start_point, label="plan authority")
+    else:
+        authority_root = root
+        authority_revision = target_revision
+    if not cross_repository and (authority_root != root or authority_revision != target_revision):
+        raise ValueError("Same-repository plan authority must retain the target repository and revision")
+    return PlanAuthorityBinding(
+        target_root=root,
+        target_revision=target_revision,
+        plan_root=authority_root,
+        plan_revision=authority_revision,
+        plan_repository_id=repository_id,
+        external=cross_repository,
+    )
+
+
 def resolve_canonical_work_unit_binding(
     *,
     repo_root: str,
@@ -1233,25 +1418,39 @@ def resolve_canonical_work_unit_binding(
     work_graph_path: str,
     work_unit_id: str,
     start_point: str = "HEAD",
-) -> tuple[str, tuple[str, ...], str]:
-    """Validate plan and work unit from one exact commit and return its binding."""
+    plan_repo_root: str | None = None,
+    plan_start_point: str | None = None,
+    target_repository_id: str | None = None,
+) -> CanonicalWorkUnitBinding:
+    """Validate a target graph and its plan authority at independent commits."""
 
-    root = Path(repo_root).expanduser().resolve()
+    from enforced_planning.plan_validation import validate_plan_integrity_at_revision
+
+    authority = resolve_plan_authority_binding(
+        repo_root=repo_root,
+        plan_ref=plan_ref,
+        start_point=start_point,
+        plan_repo_root=plan_repo_root,
+        plan_start_point=plan_start_point,
+        target_repository_id=target_repository_id,
+    )
+    root = authority.target_root
+    target_revision = authority.target_revision
+    authority_root = authority.plan_root
+    authority_revision = authority.plan_revision
+    repository_id = authority.plan_repository_id
+    cross_repository = authority.external
+    plan_number = _plan_number(plan_ref)
+    assert plan_number is not None
     normalized_path = _normalize_repo_path(work_graph_path)
     if Path(normalized_path).is_absolute() or normalized_path == ".." or normalized_path.startswith("../"):
         raise ValueError("--work-graph must be a repository-relative path")
-    plan_number = _plan_number(plan_ref)
-    if plan_number is None:
-        raise ValueError(f"Unable to resolve numbered plan identity from {plan_ref!r}")
-    qualified_match = re.fullmatch(r"([a-zA-Z0-9_-]+)#0*(\d+)", plan_ref.strip())
-    repository_id = qualified_match.group(1) if qualified_match else root.name
-    from enforced_planning.plan_validation import validate_plan_integrity_at_revision
 
     integrity = validate_plan_integrity_at_revision(
-        repo_root=root,
+        repo_root=authority_root,
         repository_id=repository_id,
         plan_number=plan_number,
-        start_point=start_point,
+        start_point=authority_revision,
     )
     if integrity.mode == "enforce" and integrity.disposition == "fail":
         finding_codes = ", ".join(item.code for item in integrity.findings)
@@ -1259,11 +1458,13 @@ def resolve_canonical_work_unit_binding(
     source_revision = integrity.source_revision
     if not source_revision or START_REVISION_PATTERN.fullmatch(source_revision) is None:
         raise ValueError("Planning integrity did not resolve one full Git start revision")
+    if source_revision != authority_revision:
+        raise ValueError("Planning integrity resolved a different revision than the retained plan authority")
     if not Path(normalized_path).name.startswith(f"{plan_number}_"):
         raise ValueError(f"Work graph {normalized_path!r} does not match {plan_ref}; expected a {plan_number}_ prefix")
-    rendered = _run_git(root, ["show", f"{source_revision}:{normalized_path}"])
+    rendered = _run_git(root, ["show", f"{target_revision}:{normalized_path}"])
     if rendered.returncode != 0:
-        raise ValueError(f"Canonical work graph {normalized_path!r} is unavailable at {source_revision}")
+        raise ValueError(f"Canonical work graph {normalized_path!r} is unavailable at {target_revision}")
     try:
         payload = json.loads(rendered.stdout)
     except json.JSONDecodeError as exc:
@@ -1277,6 +1478,13 @@ def resolve_canonical_work_unit_binding(
             f"Canonical work graph must contain exactly one work unit {work_unit_id!r}; found {len(matches)}"
         )
     unit = matches[0]
+    plan_sha256: str | None = None
+    if cross_repository:
+        plan_sha256 = integrity.plan_sha256 or _numbered_plan_digest(authority_root, authority_revision, plan_number)
+        if unit.get("design_revision") != f"sha256:{plan_sha256}":
+            raise ValueError(
+                f"Work unit {work_unit_id!r} design_revision does not bind external plan digest sha256:{plan_sha256}"
+            )
     readiness = unit.get("readiness")
     readiness_status = readiness.get("status") if isinstance(readiness, dict) else None
     unit_status = unit.get("status")
@@ -1324,7 +1532,14 @@ def resolve_canonical_work_unit_binding(
             )
         approval_revisions.append(f"{approval_type}={matching[0]['approved_revision'].strip()}")
     graph_sha256 = hashlib.sha256(rendered.stdout.encode("utf-8")).hexdigest()
-    return graph_sha256, tuple(sorted(approval_revisions)), source_revision
+    return CanonicalWorkUnitBinding(
+        work_graph_sha256=graph_sha256,
+        approval_revisions=tuple(sorted(approval_revisions)),
+        start_revision=target_revision,
+        plan_repo_root=str(authority_root) if cross_repository else None,
+        plan_revision=authority_revision if cross_repository else None,
+        plan_sha256=plan_sha256,
+    )
 
 
 #: Claude Code registers each live session here as ``<pid>.json`` carrying the
@@ -1591,10 +1806,7 @@ def _is_append_only_path(path: str) -> bool:
     """
 
     normalized = _normalize_repo_path(path)
-    return any(
-        normalized == prefix or normalized.startswith(f"{prefix}/")
-        for prefix in APPEND_ONLY_WRITE_PREFIXES
-    )
+    return any(normalized == prefix or normalized.startswith(f"{prefix}/") for prefix in APPEND_ONLY_WRITE_PREFIXES)
 
 
 def _compute_overlapping_write_paths(candidate: ClaimRecord, other: ClaimRecord) -> list[str]:
@@ -1683,8 +1895,10 @@ def normalize_claim(data: dict[str, Any], *, source_file: str | None = None) -> 
     raw_status = data.get("status")
     status = raw_status if isinstance(raw_status, str) and raw_status.strip() else "active"
     raw_schema_version = data.get("schema_version")
-    if isinstance(raw_schema_version, int) and raw_schema_version in {1, 2, 3, 4}:
+    if isinstance(raw_schema_version, int) and raw_schema_version in {1, 2, 3, 4, 5}:
         schema_version = raw_schema_version
+    elif any(key in data for key in ("plan_repo_root", "plan_revision", "plan_sha256")):
+        schema_version = 5
     elif "start_revision" in data:
         schema_version = 4
     elif any(
@@ -1753,6 +1967,9 @@ def normalize_claim(data: dict[str, Any], *, source_file: str | None = None) -> 
             if isinstance(data.get("start_revision"), str)
             else ("" if "start_revision" in data else None)
         ),
+        plan_repo_root=(data.get("plan_repo_root") if isinstance(data.get("plan_repo_root"), str) else None),
+        plan_revision=data.get("plan_revision") if isinstance(data.get("plan_revision"), str) else None,
+        plan_sha256=data.get("plan_sha256") if isinstance(data.get("plan_sha256"), str) else None,
         work_unit_id=data.get("work_unit_id") if isinstance(data.get("work_unit_id"), str) else None,
         work_graph_path=(data.get("work_graph_path") if isinstance(data.get("work_graph_path"), str) else None),
         work_graph_sha256=(data.get("work_graph_sha256") if isinstance(data.get("work_graph_sha256"), str) else None),
@@ -1973,6 +2190,9 @@ def build_candidate_claim(
     expires_at: str | None = None,
     updated_at: str | None = None,
     start_revision: str | None = None,
+    plan_repo_root: str | None = None,
+    plan_revision: str | None = None,
+    plan_sha256: str | None = None,
     work_unit_id: str | None = None,
     work_graph_path: str | None = None,
     work_graph_sha256: str | None = None,
@@ -2018,8 +2238,13 @@ def build_candidate_claim(
         notes=notes,
         plan_ref=plan_ref,
         source_file=None,
-        schema_version=4 if start_revision is not None else 3,
+        schema_version=5
+        if any((plan_repo_root, plan_revision, plan_sha256))
+        else (4 if start_revision is not None else 3),
         start_revision=start_revision,
+        plan_repo_root=plan_repo_root,
+        plan_revision=plan_revision,
+        plan_sha256=plan_sha256,
         work_unit_id=work_unit_id,
         work_graph_path=work_graph_path,
         work_graph_sha256=work_graph_sha256,
@@ -2057,6 +2282,8 @@ def create_claim(
     work_graph_path: str | None = None,
     work_unit_id: str | None = None,
     start_point: str = "HEAD",
+    plan_repo_root: str | None = None,
+    plan_start_point: str | None = None,
     resume_requested: bool = False,
     require_new: bool = False,
     allow_parallel: bool = False,
@@ -2076,18 +2303,40 @@ def create_claim(
     work_graph_sha256: str | None = None
     approval_revisions: tuple[str, ...] = ()
     start_revision: str | None = None
+    retained_plan_repo_root: str | None = None
+    plan_revision: str | None = None
+    plan_sha256: str | None = None
     if write_paths and requires_work_graph(plan_ref):
         if not repo_root:
             raise ValueError("Plan-bound write ownership requires --repo-root for canonical work-unit validation")
         if not work_graph_path or not work_unit_id:
             raise ValueError("Plan-bound write ownership requires --work-graph and --work-unit-id")
-        work_graph_sha256, approval_revisions, start_revision = resolve_canonical_work_unit_binding(
-            repo_root=repo_root,
-            plan_ref=plan_ref,
-            work_graph_path=work_graph_path,
-            work_unit_id=work_unit_id,
-            start_point=start_point,
+        binding = coerce_canonical_work_unit_binding(
+            resolve_canonical_work_unit_binding(
+                repo_root=repo_root,
+                plan_ref=plan_ref,
+                work_graph_path=work_graph_path,
+                work_unit_id=work_unit_id,
+                start_point=start_point,
+                plan_repo_root=plan_repo_root,
+                plan_start_point=plan_start_point,
+                target_repository_id=project,
+            )
         )
+        work_graph_sha256 = binding.work_graph_sha256
+        approval_revisions = binding.approval_revisions
+        start_revision = binding.start_revision
+        retained_plan_repo_root = binding.plan_repo_root
+        plan_revision = binding.plan_revision
+        plan_sha256 = binding.plan_sha256
+        if retained_plan_repo_root is not None:
+            plan_default_revision = resolve_default_integration_revision(retained_plan_repo_root)
+            if plan_revision != plan_default_revision:
+                raise ValueError(
+                    f"new cross-repository claim plan revision {plan_revision} is not the canonical "
+                    f"plan-authority default-integration tip {plan_default_revision}; "
+                    "retain the existing lane or refresh the target work graph against current authority"
+                )
         default_revision = resolve_default_integration_revision(repo_root)
         if start_revision != default_revision:
             raise ValueError(
@@ -2132,6 +2381,9 @@ def create_claim(
         expires_at=(now + timedelta(hours=ttl_hours)).isoformat(),
         updated_at=now.isoformat(),
         start_revision=start_revision,
+        plan_repo_root=retained_plan_repo_root,
+        plan_revision=plan_revision,
+        plan_sha256=plan_sha256,
         **_progress_event_payload(initial_progress),
     )
     validate_claim_for_creation(candidate)
@@ -2837,12 +3089,8 @@ def prune_completed() -> tuple[int, list[str]]:
                     cause=exc,
                 ) from exc
             if registry_snapshot.pop(claim_file.name, None) != source_bytes:
-                untracked = ValueError(
-                    "claim is absent from the registry snapshot taken for this prune"
-                )
-                raise PruneRegistryDivergenceError(
-                    f"{claim_file}: {untracked}"
-                ) from untracked
+                untracked = ValueError("claim is absent from the registry snapshot taken for this prune")
+                raise PruneRegistryDivergenceError(f"{claim_file}: {untracked}") from untracked
             registry_digest_before = running_digest
             claim_file.unlink()
             running_digest = _registry_digest_from_snapshot(registry_snapshot)
@@ -3015,6 +3263,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--start-point",
         default="HEAD",
         help="Exact Git start point whose committed plan/config bytes must pass admission.",
+    )
+    parser.add_argument(
+        "--plan-repo-root",
+        help="Absolute canonical repository root for a qualified external plan authority.",
+    )
+    parser.add_argument(
+        "--plan-start-point",
+        help="Full immutable plan-authority revision for a qualified external plan.",
     )
     parser.add_argument(
         "--resume",
@@ -3320,6 +3576,8 @@ def main(argv: list[str] | None = None) -> int:
                 work_graph_path=args.work_graph,
                 work_unit_id=args.work_unit_id,
                 start_point=args.start_point,
+                plan_repo_root=args.plan_repo_root,
+                plan_start_point=args.plan_start_point,
                 resume_requested=args.resume,
                 require_new=args.require_new,
                 allow_parallel=args.allow_parallel,

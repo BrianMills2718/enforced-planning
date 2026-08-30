@@ -136,6 +136,8 @@ def check_plan_start_readiness(
     session_identity: str,
     repo_root: Path | str | None = None,
     start_point: str = "HEAD",
+    plan_repo_root: Path | str | None = None,
+    plan_start_point: str | None = None,
     parent_lane_id: str | None = None,
     allow_unplanned: bool = False,
     resume_requested: bool = False,
@@ -159,35 +161,46 @@ def check_plan_start_readiness(
     plan_number = _plan_number(qualified_plan_id)
     if plan_number is None:
         raise ValueError(f"invalid qualified plan identity: {qualified_plan_id}")
-    if "#" in qualified_plan_id:
-        plan_repository = qualified_plan_id.rsplit("#", 1)[0].strip()
-        if plan_repository and plan_repository != repository:
-            raise ValueError(
-                f"qualified plan repository mismatch: requested {plan_repository!r}, lane repository is {repository!r}"
-            )
     if repo_root is None:
         raise ValueError(f"{execution_profile} work requires --repo-root for exact plan integrity")
     if not query_command or not query_command.strip():
         raise ValueError(f"{execution_profile} work requires a configured plan-readiness query command")
-    integrity = validate_plan_integrity_at_revision(
-        repo_root=repo_root,
-        repository_id=repository,
-        plan_number=plan_number,
+    authority = coordination_claims.resolve_plan_authority_binding(
+        repo_root=str(repo_root),
+        plan_ref=qualified_plan_id,
         start_point=start_point,
+        plan_repo_root=str(plan_repo_root) if plan_repo_root is not None else None,
+        plan_start_point=plan_start_point,
+        target_repository_id=repository,
+    )
+    integrity = validate_plan_integrity_at_revision(
+        repo_root=authority.plan_root,
+        repository_id=authority.plan_repository_id,
+        plan_number=plan_number,
+        start_point=authority.plan_revision,
     )
     if integrity.mode == "enforce" and integrity.disposition == "fail":
         codes = ", ".join(item.code for item in integrity.findings)
         raise ValueError(f"planning integrity rejected {qualified_plan_id} at {integrity.source_revision}: {codes}")
     if not integrity.source_revision:
         raise ValueError("planning integrity did not resolve one full Git start revision")
+    if integrity.source_revision != authority.plan_revision:
+        raise ValueError("planning integrity resolved a different revision than the retained plan authority")
     if not resume_requested:
         default_revision = coordination_claims.resolve_default_integration_revision(Path(repo_root))
-        if integrity.source_revision != default_revision:
+        if authority.target_revision != default_revision:
             raise ValueError(
-                f"new lane start revision {integrity.source_revision} is not the canonical "
+                f"new lane start revision {authority.target_revision} is not the canonical "
                 f"default-integration tip {default_revision}; use explicit resume/recovery custody "
                 "for a retained non-tip lane"
             )
+        if authority.external:
+            plan_default_revision = coordination_claims.resolve_default_integration_revision(authority.plan_root)
+            if authority.plan_revision != plan_default_revision:
+                raise ValueError(
+                    f"new lane plan revision {authority.plan_revision} is not the canonical "
+                    f"plan-authority default-integration tip {plan_default_revision}"
+                )
     command = [*shlex.split(query_command), "check-ready", qualified_plan_id, "--json"]
     completed = subprocess.run(command, capture_output=True, text=True, check=False)
     try:
@@ -241,7 +254,7 @@ def check_plan_start_readiness(
         worktree_path=worktree_path,
         claim_identity=claim_identity,
         session_identity=session_identity,
-        start_revision=integrity.source_revision,
+        start_revision=authority.target_revision,
         graph_revision=readiness.graph_revision,
         execution_profile=execution_profile,
     )

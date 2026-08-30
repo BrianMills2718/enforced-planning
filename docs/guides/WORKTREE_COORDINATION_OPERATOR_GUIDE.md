@@ -316,10 +316,10 @@ name its exact canonical work unit:
 python scripts/meta/check_coordination_claims.py --claim \
   --agent codex --project example --scope unit-a --intent "Implement unit A" \
   --plan example#42 --claim-type write --write-path src/unit_a.py \
-  --repo-root ~/projects/example \
+  --repo-root /absolute/example-repo \
   --work-graph docs/plans/42_example_work_graph.json \
   --work-unit-id unit-a \
-  --branch plan-42-unit-a --worktree-path ~/projects/example/worktrees/plan-42-unit-a \
+  --branch plan-42-unit-a --worktree-path /absolute/example-repo/worktrees/plan-42-unit-a \
   --session-id codex:<thread-id> --session-name example-plan-42
 ```
 
@@ -992,7 +992,7 @@ repo-local default through their own canonical configuration.
 The source-owned adapter is:
 
 ```bash
-python ~/projects/enforced-planning/scripts/session_end.py \
+python /absolute/canonical-enforced-planning/scripts/session_end.py \
   --agent codex --hook
 ```
 
@@ -1019,7 +1019,7 @@ creates avoidable process cost, record concrete evidence in Project Meta's
 canonical feedback register:
 
 ```bash
-make -C ~/projects/project-meta policy-friction \
+make -C /absolute/project-meta policy-friction \
   POLICY=policy-session-bound-lane-lifecycle \
   FRICTION="<observed failure and command>" \
   RECOMMENDATION="<smallest corrective change>"
@@ -1491,7 +1491,7 @@ entrypoints and local scripts, that is contract drift and should be fixed.
 Maintenance commands:
 
 - `python scripts/audit_governed_repo.py --repo-root <repo> --json`
-- `python scripts/scan_coordination_mirrors.py --workspace-root ~/projects --fail-on-copied`
+- `python scripts/scan_coordination_mirrors.py --workspace-root <configured-projects-root> --fail-on-copied`
 
 ## Startup Surface Ownership Policy
 

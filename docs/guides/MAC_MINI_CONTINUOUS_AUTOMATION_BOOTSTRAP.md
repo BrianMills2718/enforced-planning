@@ -26,13 +26,16 @@ Before using this guide, the framework source repo should already have:
 
 ## Phase 1: Bootstrap the Source Repo on the Mac Mini
 
-1. Create the projects root and clone the framework:
+1. Resolve the workspace root from the host configuration or its Project Graph
+   record, then clone the framework. `~/projects` is one possible host layout;
+   it is not a framework requirement. Use absolute paths for the selected host:
 
 ```bash
-mkdir -p ~/projects
-cd ~/projects
-git clone <framework-remote> enforced-planning
-cd enforced-planning
+WORKSPACE_ROOT=/absolute/path/to/registered-workspace
+FRAMEWORK_ROOT="$WORKSPACE_ROOT/enforced-planning"
+mkdir -p "$WORKSPACE_ROOT"
+git clone <framework-remote> "$FRAMEWORK_ROOT"
+cd "$FRAMEWORK_ROOT"
 ```
 
 2. Create the local environment and install the repo:
@@ -73,23 +76,25 @@ framework main checkout and not from the target repo's main branch.
 Example shape:
 
 ```bash
-cd ~/projects/enforced-planning
+cd "$FRAMEWORK_ROOT"
 python scripts/worktree-coordination/create_worktree.py \
-  --repo-root ~/projects/enforced-planning \
+  --repo-root "$FRAMEWORK_ROOT" \
   --branch mac-mini-pilot-install \
-  --path ~/projects/enforced-planning_worktrees/mac-mini-pilot-install
-cd ~/projects/enforced-planning_worktrees/mac-mini-pilot-install
+  --path "$FRAMEWORK_ROOT/worktrees/mac-mini-pilot-install"
+cd "$FRAMEWORK_ROOT/worktrees/mac-mini-pilot-install"
 ```
 
 That worktree is the operator lane for the install/audit cycle.
 
 ## Phase 4: Install the Governed Contract Into the Pilot Repo
 
-From the worktree lane:
+From the worktree lane, set the pilot repository to its resolved absolute path;
+do not infer it from the framework workspace layout:
 
 ```bash
-python scripts/install_governed_repo.py --repo-root ~/projects/<pilot-repo> --write
-python scripts/audit_governed_repo.py --repo-root ~/projects/<pilot-repo> --strict-governed
+PILOT_REPO_ROOT=/absolute/path/to/registered-pilot-repo
+python scripts/install_governed_repo.py --repo-root "$PILOT_REPO_ROOT" --write
+python scripts/audit_governed_repo.py --repo-root "$PILOT_REPO_ROOT" --strict-governed
 ```
 
 If the strict audit fails:
@@ -105,7 +110,7 @@ Do not paper over the failure by weakening the audit.
 Move into the target repo and check the installed surfaces directly:
 
 ```bash
-cd ~/projects/<pilot-repo>
+cd "$PILOT_REPO_ROOT"
 python scripts/meta/check_agents_sync.py --repo-root . --check
 python scripts/meta/file_context.py --json CLAUDE.md
 git status --short --branch
@@ -172,8 +177,8 @@ python scripts/self_test.py
 pytest -q tests/test_install_governed_repo.py tests/test_audit_governed_repo.py
 
 # Governed-repo rollout
-python scripts/install_governed_repo.py --repo-root ~/projects/<pilot-repo> --write
-python scripts/audit_governed_repo.py --repo-root ~/projects/<pilot-repo> --strict-governed
+python scripts/install_governed_repo.py --repo-root "$PILOT_REPO_ROOT" --write
+python scripts/audit_governed_repo.py --repo-root "$PILOT_REPO_ROOT" --strict-governed
 
 # Installed repo verification
 python scripts/meta/check_agents_sync.py --repo-root . --check

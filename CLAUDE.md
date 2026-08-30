@@ -1,5 +1,7 @@
 # Enforced Planning
 
+Status: active
+
 Source repo for the portable planning and governance framework.
 
 ## Continuous Execution Contract

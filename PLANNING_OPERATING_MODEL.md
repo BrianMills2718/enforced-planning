@@ -1,5 +1,7 @@
 # Planning Operating Model
 
+Status: active
+
 > **Canonical source.** This document defines the authoritative planning hierarchy
 > for the enforced-planning framework. Pattern 42 (planning-hierarchy) and Pattern 15
 > (plan-workflow) are compressed views of this document. GETTING_STARTED.md is the

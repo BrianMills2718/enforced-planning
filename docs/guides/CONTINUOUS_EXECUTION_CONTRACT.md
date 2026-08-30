@@ -1,5 +1,7 @@
 # Continuous Execution Contract
 
+**Status:** Active
+
 This is the canonical portable pattern for continuous or overnight autonomous
 execution in governed repos. When a repo's CLAUDE.md references this doc, the
 rules here are authoritative. Local CLAUDE.md sections may summarize; this doc

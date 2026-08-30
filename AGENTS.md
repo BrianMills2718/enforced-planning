@@ -4,7 +4,7 @@
 <!-- generated_by: scripts/render_agents_md.py -->
 <!-- canonical_claude: CLAUDE.md -->
 <!-- canonical_relationships: scripts/relationships.yaml -->
-<!-- canonical_relationships_sha256: eeb1e86208e8 -->
+<!-- canonical_relationships_sha256: d60d96358eda -->
 <!-- sync_check: python scripts/check_agents_sync.py --check -->
 
 This file is a generated Codex-oriented projection of repo governance.
@@ -41,9 +41,11 @@ python scripts/check_plan_capabilities.py docs/plans/
 python scripts/render_agents_md.py --stdout
 python scripts/sync_plan_status.py
 python scripts/complete_plan.py --plan N
+python scripts/outcome_admission.py --help
 python scripts/session_start.py --help
 python scripts/session_heartbeat.py --help
 python scripts/session_status.py --help
+python scripts/prewrite_claim_gate.py --help
 python scripts/check_coordination_claims.py --progress --help
 python scripts/session_end.py --help
 python scripts/session_finish.py --help
@@ -53,6 +55,27 @@ python scripts/session_close.py --help
 pytest -q
 make test
 ```
+
+Plan #123 activates hard selected-outcome admission only in this source
+repository through
+`meta_process.claims.outcome_admission_mode: enforce_selected`. Session
+start/heartbeat and supported native pre-write now derive the exact selected
+claim state without an outcome flag and deny before mutation or success.
+`make outcome-bootstrap PLAN=N ...` is the only sanctioned **planned** new-lane
+path: its entire claim must resolve to one Plan-numbered bootstrap surface
+before it may create the restricted worktree/session. The sole unplanned
+exception is the strictly parsed maintenance-worktree bootstrap documented in
+the operator guide. It is limited to a native top-level client, a canonical
+governed repository, a safe literal branch, and `claim_type: program`; it does
+not admit composed shell, unknown JSON fields, borrowed subagent identity, or
+ordinary unclaimed mutations. After the graph is canonical, bind,
+allocate, select, and only then expand that same claim. The canonical
+`scripts/session_start.py` and `scripts/session_heartbeat.py` own source Make
+execution; their `scripts/meta/` mirrors must remain byte-identical through the
+installer-declared lineage. Setting the mode to `off` or reverting the
+activation commit is the recoverable rollback. This source activation does not
+configure a downstream repo, execute an installer target, or establish fleet
+adoption.
 
 ## Operating Rules
 

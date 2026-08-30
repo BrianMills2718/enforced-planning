@@ -1,0 +1,11 @@
+{
+  "schema_version": "1.0.0",
+  "record_type": "outcome_portfolio_disposition_request",
+  "disposition_id": "plan-130-bootstrap-allocation-parked",
+  "requested_at": "2026-08-30T19:16:30Z",
+  "allocation_id": "plan-130-cross-repository-plan-authority-allocation",
+  "allocation_sha256": "1a5eb13c59ce6a0966fcdd0008005d0050e42702f1cca3a6af65cdee2cdb09bd",
+  "disposition": "parked",
+  "decision_ref": "enforced-planning#130@22f28cf",
+  "reason": "The restricted outcome-bootstrap claim is intentionally UNPLANNED and cannot be selected as enforced-planning#130. Park this probe allocation, merge the canonical plan and graph, then allocate the prepared runtime request against the plan-bound staged reservation."
+}

@@ -184,8 +184,8 @@ def _configure_maintenance_runtime(
     )
     monkeypatch.setattr(
         claim_bootstrap,
-        "_project_graph_authority",
-        lambda repo: claim_bootstrap.ProjectGraphRepositoryAuthority(
+        "_repository_authority",
+        lambda repo: claim_bootstrap.RepositoryAuthority(
             repo.name, f"Brian/{repo.name}", "main", "origin"
         ),
     )
@@ -287,38 +287,6 @@ def _project_graph_fixture(
     return repo.resolve(), graph, stale_head, fresh_head
 
 
-def test_project_graph_authorizes_registered_brian_repo_without_governed_markers(
-    tmp_path: Path,
-) -> None:
-    repo, graph, _stale_head, _fresh_head = _project_graph_fixture(tmp_path)
-
-    authority = claim_bootstrap._project_graph_authority(repo, project_graph_path=graph)
-
-    assert authority == claim_bootstrap.ProjectGraphRepositoryAuthority(
-        "agent-skills", "Brian/agent-skills", "main", "git@github.com:Brian/agent-skills.git"
-    )
-    assert not (repo / "meta-process.yaml").exists()
-
-
-def test_project_graph_ignores_lineage_pointer_sharing_repository_url(tmp_path: Path) -> None:
-    repo, graph, _stale_head, _fresh_head = _project_graph_fixture(tmp_path)
-    records = json.loads(graph.read_text(encoding="utf-8"))
-    records.append(
-        {
-            "id": "agent-skills-archived-overlay",
-            "record_kind": "pointer",
-            "status": "merged",
-            "github_repo": "Brian/agent-skills",
-            "superseded_by": "agent-skills",
-        }
-    )
-    graph.write_text(json.dumps(records) + "\n", encoding="utf-8")
-
-    authority = claim_bootstrap._project_graph_authority(repo, project_graph_path=graph)
-
-    assert authority.project_id == "agent-skills"
-
-
 @pytest.mark.parametrize(
     "remote",
     [
@@ -332,18 +300,18 @@ def test_project_graph_rejects_non_github_origin_even_when_owner_repo_matches(
     tmp_path: Path,
     remote: str,
 ) -> None:
-    repo, graph, _stale_head, _fresh_head = _project_graph_fixture(tmp_path)
+    repo, _graph, _stale_head, _fresh_head = _project_graph_fixture(tmp_path)
     subprocess.run(["git", "-C", str(repo), "remote", "set-url", "origin", remote], check=True, capture_output=True)
 
     with pytest.raises(claim_bootstrap.ClaimBootstrapError, match="GitHub|github.com"):
-        claim_bootstrap._project_graph_authority(repo, project_graph_path=graph)
+        claim_bootstrap._repository_authority(repo)
 
 
 def test_project_graph_accepts_ssh_alias_only_when_it_resolves_to_github(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    repo, graph, _stale_head, _fresh_head = _project_graph_fixture(tmp_path)
+    repo, _graph, _stale_head, _fresh_head = _project_graph_fixture(tmp_path)
     subprocess.run(
         ["git", "-C", str(repo), "remote", "set-url", "origin", "git@github-personal:Brian/agent-skills.git"],
         check=True,
@@ -358,32 +326,26 @@ def test_project_graph_accepts_ssh_alias_only_when_it_resolves_to_github(
 
     monkeypatch.setattr(claim_bootstrap.subprocess, "run", resolve_alias)
 
-    authority = claim_bootstrap._project_graph_authority(repo, project_graph_path=graph)
+    monkeypatch.setattr(
+        claim_bootstrap,
+        "resolve_repository_authority",
+        lambda **kwargs: claim_bootstrap.RepositoryAuthority(
+            "agent-skills", kwargs["repository_identity"], "main", kwargs["remote_url"]
+        ),
+    )
+    authority = claim_bootstrap._repository_authority(repo)
 
-    assert authority.github_repo == "Brian/agent-skills"
-
-
-@pytest.mark.parametrize("authority", ["normal_psuh", "read_only", False, {}])
-def test_project_graph_rejects_unknown_or_unwritable_mutation_authority(
-    tmp_path: Path,
-    authority: object,
-) -> None:
-    repo, graph, _stale_head, _fresh_head = _project_graph_fixture(tmp_path)
-    records = json.loads(graph.read_text(encoding="utf-8"))
-    records[0]["repository_governance"]["mutation_authority"] = authority
-    graph.write_text(json.dumps(records) + "\n", encoding="utf-8")
-
-    with pytest.raises(claim_bootstrap.ClaimBootstrapError, match="mutation authority"):
-        claim_bootstrap._project_graph_authority(repo, project_graph_path=graph)
+    assert authority.repository_identity == "Brian/agent-skills"
 
 
 def test_typed_maintenance_bootstraps_from_fresh_remote_not_stale_primary(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    repo, graph, stale_head, fresh_head = _project_graph_fixture(tmp_path)
-    authority = claim_bootstrap._project_graph_authority(repo, project_graph_path=graph)
-    authority = replace(authority, remote_url=str(tmp_path / "agent-skills.git"))
+    repo, _graph, stale_head, fresh_head = _project_graph_fixture(tmp_path)
+    authority = claim_bootstrap.RepositoryAuthority(
+        "agent-skills", "Brian/agent-skills", "main", str(tmp_path / "agent-skills.git")
+    )
     subprocess.run(
         ["git", "-C", str(repo), "remote", "set-url", "origin", str(tmp_path / "redirected-evil.git")],
         check=True,
@@ -393,7 +355,7 @@ def test_typed_maintenance_bootstraps_from_fresh_remote_not_stale_primary(
     _configure_maintenance_runtime(tmp_path, monkeypatch)
     monkeypatch.setattr(
         claim_bootstrap,
-        "_project_graph_authority",
+        "_repository_authority",
         lambda _target: authority,
     )
     monkeypatch.setattr(claim_bootstrap, "_fresh_remote_default_revision", real_fresh)
@@ -418,9 +380,10 @@ def test_remote_fetch_failure_leaves_no_lane_artifacts(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    repo, graph, _stale_head, _fresh_head = _project_graph_fixture(tmp_path)
-    authority = claim_bootstrap._project_graph_authority(repo, project_graph_path=graph)
-    authority = replace(authority, remote_url=str(tmp_path / "missing.git"))
+    repo, _graph, _stale_head, _fresh_head = _project_graph_fixture(tmp_path)
+    authority = claim_bootstrap.RepositoryAuthority(
+        "agent-skills", "Brian/agent-skills", "main", str(tmp_path / "missing.git")
+    )
     subprocess.run(
         ["git", "-C", str(repo), "remote", "set-url", "origin", str(tmp_path / "missing.git")],
         check=True,
@@ -430,7 +393,7 @@ def test_remote_fetch_failure_leaves_no_lane_artifacts(
     _configure_maintenance_runtime(tmp_path, monkeypatch)
     monkeypatch.setattr(
         claim_bootstrap,
-        "_project_graph_authority",
+        "_repository_authority",
         lambda _target: authority,
     )
     monkeypatch.setattr(claim_bootstrap, "_fresh_remote_default_revision", real_fresh)
@@ -548,19 +511,6 @@ def test_typed_maintenance_rejects_traversal_and_shell_branches(tmp_path: Path, 
         claim_bootstrap.parse_request_json(
             json.dumps(_maintenance_payload(repo, branch=branch, scope=branch))
         )
-
-
-def test_typed_maintenance_rejects_unregistered_project_graph_repo(tmp_path: Path) -> None:
-    repo = _governed_repo(tmp_path)
-    subprocess.run(
-        ["git", "-C", str(repo), "remote", "add", "origin", "git@github.com:Brian/unregistered.git"],
-        check=True,
-    )
-    graph = tmp_path / "PROJECT_GRAPH.json"
-    graph.write_text("[]\n", encoding="utf-8")
-
-    with pytest.raises(claim_bootstrap.ClaimBootstrapError, match="exactly one Project Graph"):
-        claim_bootstrap._project_graph_authority(repo, project_graph_path=graph)
 
 
 @pytest.mark.parametrize("preexisting", ["branch", "worktree"])

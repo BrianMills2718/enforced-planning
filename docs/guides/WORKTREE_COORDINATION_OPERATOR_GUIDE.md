@@ -104,21 +104,21 @@ authority):
 ```
 
 `agent` must match the native top-level client (`codex` or `claude-code`),
-`project` must equal the unique active repository-registry record id, `scope` must
-equal `branch`, and `repo_root` must be that record's canonical absolute Git
-root. The portable bootstrap consumes a generic repository-authority decision;
-it does not define who the operator is or which owners are trusted. Brian's
-installation supplies that decision through its Project Graph policy adapter,
-which currently requires exact `origin` identity and reviewed personal mutation
-authority. Membership in the governed fleet is not itself authority, so a
-personally authorized registered repository such as `agent-skills` remains a
-valid target. Unknown fields, relative or traversing paths, shell composition,
-unsafe branches, subagent events, unregistered or read-only repositories,
-existing branches/worktrees/claim slots, and client mismatch are denied.
+`project` must equal the exact id returned by the installed repository-authority
+provider, `scope` must equal `branch`, and `repo_root` must be the provider-bound
+canonical absolute Git root. Enforced Planning independently inspects the exact
+GitHub `origin` identity, then asks the configured provider for a decision bound
+to that identity and remote URL. Operator-specific eligibility rules belong to
+that adapter, not this portable framework. Brian's installation supplies the
+decision through its Project Graph adapter, which requires reviewed personal
+mutation authority; governed-fleet membership is not itself authority. Unknown
+fields, relative or traversing paths, shell composition, unsafe branches,
+subagent events, unregistered or read-only repositories, existing branches,
+worktrees, or claim slots, and client mismatch are denied.
 
 Before creating a directory, branch, claim, tracker, or worktree, the typed
 operation asks `origin` for its current symbolic default branch, requires it to
-match Project Graph, fetches that exact branch, and resolves one full commit id.
+match the provider decision, fetches that exact branch, and resolves one full commit id.
 The new lane starts from that fetched commit rather than the possibly stale
 primary checkout. It then creates the linked worktree, exact native-session
 claim, tracker, and claim projection as one transaction; later failure rolls

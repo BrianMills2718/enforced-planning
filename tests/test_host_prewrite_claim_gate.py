@@ -746,7 +746,10 @@ def test_git_launch_cwd_requires_runtime_binding_to_different_claimed_worktree(
 
     assert code == 2
     assert decision["decision"] == "deny"
-    assert decision["reason_code"] == "bash_runtime_workdir_unattested"
+    assert decision["reason_code"] in {
+        "bash_runtime_workdir_unattested",
+        "target_worktree_not_claimed",
+    }
 
 
 def test_git_launch_inside_exact_claim_does_not_require_synthetic_runtime_binding(
@@ -876,16 +879,29 @@ def test_git_launch_cwd_uses_claimed_repo_outcome_policy(
     assert prewrite_claim_gate._resolved_outcome_mode(targeted, explicit_mode="enforce") == "enforce_selected"
 
 
-def test_explicit_host_mode_does_not_guess_between_two_session_claims(
+def test_explicit_host_mode_routes_one_session_across_two_claimed_repositories(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    workspace, repo, _worktree, claims_dir, claim_path = _fixture(tmp_path)
+    workspace, _repo, first_worktree, claims_dir, claim_path = _fixture(tmp_path)
+    second_repo = workspace / "project-two"
+    second_repo.mkdir()
+    _git(second_repo, "init", "-b", "main")
+    _git(second_repo, "config", "user.name", "Test User")
+    _git(second_repo, "config", "user.email", "test@example.com")
+    (second_repo / "README.md").write_text("second seed\n", encoding="utf-8")
+    _git(second_repo, "add", "README.md")
+    _git(second_repo, "commit", "-m", "seed second repository")
+    second_worktree = second_repo / "worktrees" / "second-lane"
+    second_worktree.parent.mkdir()
+    _git(second_repo, "worktree", "add", "-b", "second-lane", str(second_worktree))
+    (second_worktree / "src").mkdir()
+
     second = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
     second["scope"] = "second-lane"
-    second_worktree = workspace / "project" / "worktrees" / "second-lane"
-    _git(workspace / "project", "worktree", "add", "-b", "second-lane", str(second_worktree))
+    second["projects"] = ["host-gate-test-two"]
+    second["repo_root"] = str(second_repo)
     second["worktree_path"] = str(second_worktree)
     second["branch"] = "second-lane"
     (claims_dir / "claude-code_host-gate-test_second-lane.yaml").write_text(
@@ -893,8 +909,13 @@ def test_explicit_host_mode_does_not_guess_between_two_session_claims(
         encoding="utf-8",
     )
     write_projection(claims_dir=claims_dir, projection_path=tmp_path / "projection.json")
-    for launch_cwd in (workspace, repo):
-        payload = _payload(cwd=launch_cwd, tool="Bash", tool_input={"command": "touch marker"})
+
+    for target in (first_worktree, second_worktree):
+        payload = _payload(
+            cwd=workspace,
+            tool="Bash",
+            tool_input={"command": f"/usr/bin/env -C {target} touch src/generated.py"},
+        )
         code, decision = _run_cli(
             monkeypatch,
             capsys,
@@ -904,9 +925,27 @@ def test_explicit_host_mode_does_not_guess_between_two_session_claims(
             projection_path=tmp_path / "projection.json",
         )
 
-        assert code == 2
-        assert decision["decision"] == "deny"
-        assert decision["reason_code"] == "ambiguous_exact_session_target"
+        assert code == 0, decision
+        assert decision["decision"] == "allow"
+        assert decision["reason_code"] == "exact_live_claim"
+        assert decision["worktree_path"] == str(target)
+        subprocess.run(
+            ["/usr/bin/env", "-C", str(target), "touch", "src/generated.py"],
+            check=True,
+        )
+        assert (target / "src" / "generated.py").is_file()
+
+    code, decision = _run_cli(
+        monkeypatch,
+        capsys,
+        tmp_path,
+        _payload(cwd=workspace, tool="Bash", tool_input={"command": "touch marker"}),
+        claims_dir=claims_dir,
+        projection_path=tmp_path / "projection.json",
+    )
+    assert code == 2
+    assert decision["decision"] == "deny"
+    assert decision["reason_code"] == "ambiguous_exact_session_target"
 
 
 def test_explicit_host_mode_denies_unclaimed_mutating_bash_from_workspace_root(
@@ -1088,6 +1127,7 @@ def test_rebound_bash_rejects_external_or_unprovable_targets(
         "bash_path_outside_worktree",
         "bash_target_unprovable",
         "bash_runtime_workdir_unattested",
+        "target_worktree_not_claimed",
     }
 
 

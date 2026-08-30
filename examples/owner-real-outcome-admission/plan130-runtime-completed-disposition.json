@@ -5,7 +5,7 @@
   "requested_at": "2026-08-30T21:19:05Z",
   "allocation_id": "plan-130-runtime-cross-repository-plan-authority-allocation",
   "allocation_sha256": "6eb21b535e620aa64ff1ab5191a2df521fa3f7c997ab9bdf1efff47bfe216a9f",
-  "disposition": "completed",
+  "disposition": "complete",
   "decision_ref": "enforced-planning#130@b670f554b543d8e823e10c4c9b02a6b801bf3664+agentic-engineering-system@4102a8e348b50c7deb4a7c0f3254d2fc75309dda",
   "reason": "The source repair is pushed, its exact pinned AES installation is merged, all 210 AES tests pass, and the fresh installed workspace-root bootstrap and both AES lane closeouts passed. Retire the implementation allocation before merging and closing its source lane; terminal plan metadata is a separate bounded closeout operation."
 }

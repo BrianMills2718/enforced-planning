@@ -290,6 +290,54 @@ def _native_notice(message: str) -> str:
     return json.dumps({"systemMessage": message}, sort_keys=True)
 
 
+def _parse_native_mailbox_command(command: str, *, client: str) -> None:
+    """Validate one exact host mailbox command before claimless admission.
+
+    The mailbox CLI already binds mutating operations to the ambient native
+    session. This outer parser prevents shell composition and path/registry
+    overrides before allowing that narrower authority check to run.
+    """
+
+    from enforced_planning import coordination_claims, coordination_messages
+
+    if "\n" in command or "\r" in command:
+        raise ValueError("mailbox command must be exactly one line")
+    script = (REPO_ROOT / "scripts" / "coordination_messages.py").resolve()
+    prefix = f"/usr/bin/python3 {script} "
+    if not command.startswith(prefix):
+        raise ValueError("mailbox command does not use the canonical host script")
+    remainder = command[len(prefix) :]
+    operation, separator, request_token = remainder.partition(" --request-json '")
+    if separator == "" or operation not in {"send", "poll", "status", "acknowledge"}:
+        raise ValueError("mailbox command has no supported exact operation")
+    if not request_token.endswith("'"):
+        raise ValueError("mailbox request JSON must be one shell single-quoted token")
+    raw_json = request_token[:-1]
+    if "'" in raw_json:
+        raise ValueError("mailbox JSON apostrophes must be encoded as \\u0027")
+
+    model_by_operation = {
+        "send": coordination_messages.SendMessageRequest,
+        "poll": coordination_messages.PollMessagesRequest,
+        "status": coordination_messages.MessageStatusRequest,
+        "acknowledge": coordination_messages.AcknowledgeMessageRequest,
+    }
+    request = model_by_operation[operation].model_validate_json(raw_json)
+    if operation == "status":
+        return
+    session_field = {
+        "send": "caller_session_id",
+        "poll": "current_session_id",
+        "acknowledge": "current_session_id",
+    }[operation]
+    caller = getattr(request, session_field)
+    native_session = coordination_claims.resolve_session_id(client)
+    if native_session is None or caller != native_session:
+        raise ValueError("mailbox caller does not match the ambient native session")
+    if operation == "send" and request.sender_session_id != native_session:
+        raise ValueError("mailbox sender does not match the ambient native session")
+
+
 def _special_unclaimed_command(
     command: str,
     *,
@@ -315,6 +363,11 @@ def _special_unclaimed_command(
 
     if subagent_event:
         return False
+    try:
+        _parse_native_mailbox_command(command, client=client)
+        return "native_mailbox"
+    except Exception:  # noqa: BLE001 -- try the remaining strict control grammars
+        pass
     try:
         from enforced_planning.read_target import parse_raw_bash_command as parse_read_target_command
 
@@ -574,6 +627,7 @@ def main(argv: list[str] | None = None) -> int:
         if early_bash_classification in {
             "read_only",
             "claim_bootstrap",
+            "native_mailbox",
             "read_target_selection",
             "projection_recovery",
         }:
@@ -645,6 +699,7 @@ def main(argv: list[str] | None = None) -> int:
     outcome_exempt = decision.get("reason_code") in {
         "bash_read_only",
         "claim_bootstrap_command",
+        "native_mailbox_command",
         "read_target_selection_command",
         "projection_recovery_command",
     }

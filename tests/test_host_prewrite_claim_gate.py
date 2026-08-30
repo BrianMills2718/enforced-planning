@@ -395,6 +395,72 @@ def test_explicit_host_mode_admits_strict_claim_bootstrap_from_workspace_root(
     assert decision["reason_code"] == "claim_bootstrap_command"
 
 
+def test_host_gate_admits_exact_native_mailbox_send_without_repository_claim(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("CODEX_THREAD_ID", "host-gate-test")
+    native_session = "codex:host-gate-test"
+    request = json.dumps(
+        {
+            "caller_session_id": native_session,
+            "sender_session_id": native_session,
+            "recipient": {"kind": "session", "session_id": "codex:recipient"},
+            "project": "host-gate-test",
+            "kind": "info",
+            "subject": "Maintenance status",
+            "body": "The governance repair is active.",
+        },
+        separators=(",", ":"),
+    )
+    command = (
+        f"/usr/bin/python3 {prewrite_claim_gate.REPO_ROOT / 'scripts' / 'coordination_messages.py'} "
+        f"send --request-json '{request}'"
+    )
+    payload = _payload(cwd=tmp_path, tool="Bash", tool_input={"command": command})
+
+    code, decision = _run_cli(monkeypatch, capsys, tmp_path, payload, client="codex")
+
+    assert code == 0, decision
+    assert decision["decision"] == "allow"
+    assert decision["reason_code"] == "native_mailbox_command"
+
+
+@pytest.mark.parametrize("tamper", ["wrong-session", "composed", "noncanonical-script"])
+def test_host_gate_rejects_tampered_claimless_mailbox_command(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tamper: str,
+) -> None:
+    monkeypatch.setenv("CODEX_THREAD_ID", "host-gate-test")
+    native_session = "codex:other" if tamper == "wrong-session" else "codex:host-gate-test"
+    request = json.dumps(
+        {
+            "current_session_id": native_session,
+            "observe": True,
+        },
+        separators=(",", ":"),
+    )
+    script = prewrite_claim_gate.REPO_ROOT / "scripts" / "coordination_messages.py"
+    if tamper == "noncanonical-script":
+        script = tmp_path / "coordination_messages.py"
+    command = f"/usr/bin/python3 {script} poll --request-json '{request}'"
+    if tamper == "composed":
+        command += " && touch escaped"
+    payload = _payload(cwd=tmp_path, tool="Bash", tool_input={"command": command})
+
+    code, decision = _run_cli(monkeypatch, capsys, tmp_path, payload, client="codex")
+
+    assert code == 2
+    assert decision["decision"] == "deny"
+    assert decision["reason_code"] in {
+        "projection_unavailable_or_stale",
+        "repository_identity_unavailable",
+    }
+
+
 def test_workspace_root_admits_exact_read_target_selection_without_claim(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

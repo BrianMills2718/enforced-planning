@@ -130,6 +130,12 @@ must match the pinned digest. Invalid configuration or an unbound provider
 response fails closed before lane creation. Provider policy belongs outside the
 portable framework; see the operator guide for the runtime contract.
 
+The host pre-write adapter also admits the canonical runtime mailbox CLI without
+a repository claim only when its command is uncomposed, has no root or claims
+override, carries one strict inline JSON request, and the request's caller and
+sender match the ambient native session. The mailbox itself still resolves the
+recipient against the claims registry and fails closed on invalid authority.
+
 `outcome_admission_mode: enforce_selected` is a separate, stricter source
 continuation gate. It requires ordinary `prewrite_mode: enforce`, derives the
 exact selected outcome from the claim-linked tracker, and records admission

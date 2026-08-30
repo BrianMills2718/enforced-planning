@@ -107,7 +107,7 @@ See `ROADMAP.md` for the full phase map and recommended priority order.
 | 127 | Turn-End Safety and Hook Feedback Recurrence (`127_turn_end_safety_and_hook_feedback.md`) | Critical | ✅ Complete — source and fixture-isolation follow-up merged; configured installed hook and strict controls verified | no remaining Plan #127 work |
 | 128 | Portable Governance And Wiki Profile (`128_portable_governance_and_wiki_profile.md`) | Critical | 🚧 In Progress — contract bootstrap | typed default-on/off resolver and disposable installed-consumer proof |
 | 129 | Portable Roadmap Handoff Data-Contract Pilot (`129_data_contract_pilot.md`) | High | ✅ Complete — producer and consumer snapshots merged; explicit portfolio valid | evidence-backed candidate inventory for any later rollout |
-| 130 | Cross-Repository Plan Authority Binding (`130_cross_repository_plan_claim_binding.md`) | Critical | 🚧 In Progress — authentic Plan 249 blocker reproduced; bounded repair authorized | Project Meta Plan #249 AES implementation lane |
+| 130 | Cross-Repository Plan Authority Binding (`130_cross_repository_plan_claim_binding.md`) | Critical | ✅ Complete | Project Meta Plan #249 AES implementation lane |
 
 ## Status Key
 

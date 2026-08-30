@@ -12,6 +12,7 @@ import pytest
 
 from enforced_planning.archive_lifecycle import ArchiveLifecycleError
 from enforced_planning.archive_lifecycle import build_archive_lifecycle_report
+from enforced_planning.archive_lifecycle import document_lifecycle
 
 
 def _write(path: Path, content: str) -> None:
@@ -81,6 +82,14 @@ def _hash_path(path: Path) -> str:
         digest.update(b"\0")
         digest.update(child.read_bytes())
     return digest.hexdigest()
+
+
+def test_accepted_status_is_an_active_lifecycle(tmp_path: Path) -> None:
+    """Accepted ADRs remain current decision authorities unless superseded."""
+    adr = tmp_path / "adr.md"
+    _write(adr, "# ADR\n\n**Status:** Accepted\n")
+
+    assert document_lifecycle(adr) == "active"
 
 
 def test_lineage_only_reaches_semantic_review_without_claiming_eligibility(tmp_path: Path) -> None:

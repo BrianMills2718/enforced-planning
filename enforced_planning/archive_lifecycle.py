@@ -343,7 +343,7 @@ def document_lifecycle(path: Path) -> DocumentLifecycle:
         (("complete", "completed", "done"), "completed"),
         (("blocked", "paused"), "blocked"),
         (("planned", "draft", "proposed"), "draft"),
-        (("active", "in progress", "executing"), "active"),
+        (("active", "accepted", "in progress", "executing"), "active"),
     )
     for candidates, lifecycle in prefixes:
         if any(value == candidate or value.startswith(candidate + " ") or value.startswith(candidate + " (") for candidate in candidates):

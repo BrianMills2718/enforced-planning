@@ -95,6 +95,7 @@ _READ_ONLY_GIT_SUBCOMMANDS = frozenset(
         "status",
     }
 )
+_BASENAME_PATH_COMMANDS = frozenset({"mkdir", "rm", "rmdir", "touch", "truncate", "unlink"})
 
 BashBootstrapClassifier = Callable[[str], bool | str]
 
@@ -344,6 +345,26 @@ def _bash_declared_paths(command: str) -> tuple[str, ...]:
             candidate = candidate.split("=", 1)[1]
         if candidate.startswith(("/", "~", "./", "../")) or "/" in candidate:
             paths.append(candidate)
+    commands = _shell_commands(command)
+    if commands is not None:
+        for argv in commands:
+            executable = Path(argv[0]).name
+            if executable not in _BASENAME_PATH_COMMANDS:
+                continue
+            after_options = False
+            for operand in argv[1:]:
+                if operand == "--":
+                    after_options = True
+                    continue
+                if not after_options and operand.startswith("-"):
+                    continue
+                if (
+                    operand not in {"", ".", "-"}
+                    and "://" not in operand
+                    and "=" not in operand
+                    and not any(marker in operand for marker in ("$", "`", "*", "?", "["))
+                ):
+                    paths.append(operand)
     return tuple(dict.fromkeys(paths))
 
 

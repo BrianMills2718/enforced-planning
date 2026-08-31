@@ -272,7 +272,7 @@ def test_compound_bash_with_a_mutation_requires_an_exact_healthy_claim(tmp_path:
     payload = _payload(
         cwd=worktree,
         tool="Bash",
-        tool_input={"command": "git status --short && touch marker"},
+        tool_input={"command": "git status --short && touch src/marker"},
     )
 
     decision = _evaluate(tmp_path, payload, claims_dir)
@@ -865,7 +865,7 @@ def test_git_launch_inside_exact_claim_does_not_require_synthetic_runtime_bindin
         monkeypatch,
         capsys,
         tmp_path,
-        _payload(cwd=worktree, tool="Bash", tool_input={"command": "touch generated.py"}),
+        _payload(cwd=worktree, tool="Bash", tool_input={"command": "touch src/generated.py"}),
         claims_dir=claims_dir,
         projection_path=tmp_path / "projection.json",
     )

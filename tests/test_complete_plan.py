@@ -4,6 +4,7 @@ import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
 import yaml  # type: ignore[import-untyped]
 
 import scripts.complete_plan as complete_plan_module
@@ -450,10 +451,10 @@ def test_get_git_info_handles_exception(tmp_path: Path) -> None:
     assert branch == "unknown"
 
 
-def test_sync_coordination_closeout_marks_matching_claims_completed_and_refreshes_registry(
+def test_sync_coordination_closeout_rejects_live_managed_lane_bypass(
     tmp_path: Path, monkeypatch
 ) -> None:
-    """Completing a plan should close matching live claims and refresh derived registry outputs."""
+    """Plan completion cannot retire a managed lane independently of session-close."""
     project_root = tmp_path / "project-meta"
     project_root.mkdir()
     claims_dir = tmp_path / "claims"
@@ -505,22 +506,16 @@ def test_sync_coordination_closeout_marks_matching_claims_completed_and_refreshe
         encoding="utf-8",
     )
 
-    closed_count, scopes, payload = sync_coordination_closeout(
-        plan_number=111,
-        project_root=project_root,
-        dry_run=False,
-        verbose=False,
-    )
+    with pytest.raises(ValueError, match="session-close"):
+        sync_coordination_closeout(
+            plan_number=111,
+            project_root=project_root,
+            dry_run=False,
+            verbose=False,
+        )
 
-    assert closed_count == 1
-    assert scopes == ["lifecycle-automation"]
-    updated_matching = yaml.safe_load(matching_claim.read_text(encoding="utf-8"))
-    assert updated_matching["status"] == "completed"
-    assert "closed automatically by scripts/complete_plan.py for Plan #111" in updated_matching["notes"]
-    assert payload is not None
-    assert payload["claim_count"] == 1
-    assert payload["claims"][0]["scope"] == "another-lane"
-    assert (project_root / "generated" / "runtime" / "active_work_registry.json").exists()
+    assert yaml.safe_load(matching_claim.read_text(encoding="utf-8"))["status"] == "active"
+    assert yaml.safe_load(other_claim.read_text(encoding="utf-8"))["status"] == "active"
 
 
 def test_sync_coordination_closeout_dry_run_reports_without_mutating_claims(

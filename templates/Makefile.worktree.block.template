@@ -164,7 +164,7 @@ endif
 		if [ "$$unsafe_residue" -eq 0 ]; then \
 			$(PYTHON) "$(WORKTREE_CLAIMS_SCRIPT)" --release \
 				--agent "$(WORKTREE_AGENT)" --project "$(WORKTREE_PROJECT)" --scope "$(BRANCH)" \
-				--require-current-session \
+				--require-current-session --rollback-managed-lane \
 				$(if $(PLAN),--expected-start-revision "$(WORKTREE_START_REVISION)",) || exit 1; \
 		else \
 			echo "Worktree creation failed with recoverable branch/worktree residue; claim retained."; \
@@ -209,7 +209,7 @@ endif
 		if [ "$$cleanup_ok" -eq 1 ]; then \
 			$(PYTHON) "$(WORKTREE_CLAIMS_SCRIPT)" --release \
 				--agent "$(WORKTREE_AGENT)" --project "$(WORKTREE_PROJECT)" --scope "$(BRANCH)" \
-				--require-current-session \
+				--require-current-session --rollback-managed-lane \
 				$(if $(PLAN),--expected-start-revision "$(WORKTREE_START_REVISION)",) || exit 1; \
 		else \
 			echo "Session start failed and exact cleanup was incomplete; claim retained."; \
@@ -331,7 +331,7 @@ endif
 		--agent "$(WORKTREE_AGENT)" \
 		$(if $(SESSION_NOTE),--reason "$(SESSION_NOTE)",)
 
-session-finish:  ## Finish the session for BRANCH=name; blocks if the worktree is dirty
+session-finish:  ## Record dirty handoff only; clean managed lanes must use session-close
 ifndef BRANCH
 	$(error BRANCH is required. Usage: make session-finish BRANCH=plan-42-feature)
 endif

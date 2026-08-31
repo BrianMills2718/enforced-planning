@@ -108,6 +108,7 @@ See `ROADMAP.md` for the full phase map and recommended priority order.
 | 128 | Portable Governance And Wiki Profile (`128_portable_governance_and_wiki_profile.md`) | Critical | 🚧 In Progress — contract bootstrap | typed default-on/off resolver and disposable installed-consumer proof |
 | 129 | Portable Roadmap Handoff Data-Contract Pilot (`129_data_contract_pilot.md`) | High | ✅ Complete — producer and consumer snapshots merged; explicit portfolio valid | evidence-backed candidate inventory for any later rollout |
 | 130 | Cross-Repository Plan Authority Binding (`130_cross_repository_plan_claim_binding.md`) | Critical | ✅ Complete | Project Meta Plan #249 AES implementation lane |
+| 131 | Terminal Closeout and Hook Hot-Path Repair (`131_terminal_closeout_and_hook_hotpath.md`) | Critical | ✅ Complete | one terminal claimed-lane path and bounded coordination-hook latency |
 
 ## Status Key
 

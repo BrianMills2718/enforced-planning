@@ -635,20 +635,15 @@ def sync_coordination_closeout(
     dry_run: bool = False,
     verbose: bool = True,
 ) -> tuple[int, list[str], dict[str, object] | None]:
-    """Close matching live claims and refresh derived active-work outputs."""
+    """Verify lane closeout completed, then refresh derived active-work outputs."""
 
     canonical_repo_root = resolve_canonical_repo_root(project_root)
     project_name = canonical_repo_root.name
     plan_ref = f"Plan #{plan_number}"
-    note = f"closed automatically by scripts/complete_plan.py for {plan_ref}"
+    live_claims = coordination_claims.check_claims(project_name)
+    matching = sorted(claim.scope for claim in live_claims if claim.plan_ref == plan_ref)
 
     if dry_run:
-        live_claims = coordination_claims.check_claims(project_name)
-        matching = [
-            claim.scope
-            for claim in live_claims
-            if claim.plan_ref == plan_ref
-        ]
         if verbose:
             print(
                 f"\n[5/5] Coordination closeout... DRY RUN "
@@ -656,11 +651,12 @@ def sync_coordination_closeout(
             )
         return len(matching), sorted(matching), None
 
-    completed_count, completed_scopes = coordination_claims.complete_claims_for_plan(
-        project=project_name,
-        plan_ref=plan_ref,
-        note=note,
-    )
+    if matching:
+        raise ValueError(
+            f"Plan {plan_ref} still has live claimed lanes after plan-close: {', '.join(matching)}. "
+            "Do not mark claims completed independently; merge or explicitly disposition each lane "
+            "through session-close so its worktree, branch, claim, and terminal archive close together."
+        )
     payload = active_work_registry.refresh_registry(
         json_output=canonical_repo_root / "generated" / "runtime" / "active_work_registry.json",
         markdown_output=canonical_repo_root / "generated" / "runtime" / "active_work_registry.md",
@@ -668,9 +664,9 @@ def sync_coordination_closeout(
     if verbose:
         print(
             f"\n[5/5] Coordination closeout... "
-            f"{completed_count} claims closed, {payload['claim_count']} live claims remain"
+            f"verified complete, {payload['claim_count']} live claims remain"
         )
-    return completed_count, completed_scopes, payload
+    return 0, [], payload
 
 
 def complete_plan(
@@ -817,12 +813,16 @@ def complete_plan(
             print(f"  - {failure}")
         return False
 
-    closed_count, closed_scopes, payload = sync_coordination_closeout(
-        plan_number=plan_number,
-        project_root=project_root,
-        dry_run=dry_run,
-        verbose=verbose,
-    )
+    try:
+        closed_count, closed_scopes, payload = sync_coordination_closeout(
+            plan_number=plan_number,
+            project_root=project_root,
+            dry_run=dry_run,
+            verbose=verbose,
+        )
+    except ValueError as exc:
+        print(f"\nFAILED: {exc}")
+        return False
 
     if verbose:
         print("\nAll checks passed!")

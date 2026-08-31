@@ -971,10 +971,11 @@ Canonical lifecycle commands:
 - `session-status`: show live sessions derived from claims plus trackers
 - `session-end`: detach a terminating runtime from all of its exact-session
   claims without deleting branches, worktrees, trackers, or Git objects
-- `session-finish`: refuse unsafe closeout and require clean or explicit handoff state
+- `session-finish`: record an explicit dirty handoff; a clean managed lane must
+  use `session-close` and cannot retire ownership here
 - `session-close`: clean up a claimed lane end-to-end by removing the worktree,
-  safely deleting the local branch, and releasing the claim together after
-  merge/disposition preflight
+  safely deleting the local branch, archiving the exact terminal claim, and
+  removing it from the live registry after merge/disposition preflight
 - `create_publish_worktree.py`: create a merge/push control worktree only when
   the canonical main checkout is already clean
 
@@ -1147,8 +1148,9 @@ Current implementation:
   reconciliation debt
 - `scripts/meta/validate_doc_authority.py --list-obligations --json` shows current
   open or resolved debt
-- `session-finish` now fails when the closing lane owns authority surfaces with
-  unresolved reconciliation obligations
+- `session-finish` fails when a dirty handoff lane owns authority surfaces with
+  unresolved reconciliation obligations; clean lanes always proceed through
+  `session-close`
 
 The v0 authority store lives beside claims:
 
@@ -1288,8 +1290,14 @@ cross-session, or retargeted variants are denied.
 
 - use `session-close` for direct CLI closeout
 - use `make worktree-remove BRANCH=...` in governed repos
-- do not run `session-finish --release-claim` and later try to remove the
-  worktree as a second operation
+- `session-finish` cannot mark a clean managed lane completed or release its
+  claim; generic claim release likewise refuses while the managed worktree or
+  branch exists
+
+Terminal claim history is not live coordination input. `session-close`
+immediately moves the exact completed YAML into the append-only completed-claim
+archive and removes it from `claims/`, so hook cost scales with current owned
+work rather than the lifetime number of finished lanes.
 
 The sanctioned closeout flow is idempotent for already-missing worktree or
 branch state so partial cleanup can be rerun safely.

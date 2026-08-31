@@ -105,13 +105,15 @@ def test_each_supported_mutation_emits_one_terminal_receipt(
     coordination_claims.end_session_claims(agent="codex", session_id="codex:receipt-test")
 
     closeout_path = _claim(scope="closeout", claims_dir=claims_dir, plan_ref="Plan #109")
+    closeout_payload = yaml.safe_load(closeout_path.read_text(encoding="utf-8"))
     completed, scopes = coordination_claims.complete_claims_for_plan(
         project="enforced-planning", plan_ref="Plan #109"
     )
     assert completed == 1 and scopes == ["closeout"]
+    assert not closeout_path.exists()
 
     expired_path = claims_dir / "codex_enforced-planning_expired.yaml"
-    expired_payload = yaml.safe_load(closeout_path.read_text(encoding="utf-8"))
+    expired_payload = closeout_payload
     expired_payload.update(
         {
             "scope": "expired",
@@ -131,7 +133,7 @@ def test_each_supported_mutation_emits_one_terminal_receipt(
 
     assert [record.operation for record in by_path[str(release_path)]] == ["create", "heartbeat", "release"]
     assert [record.operation for record in by_path[str(session_end_path)]] == ["create", "session_end"]
-    assert [record.operation for record in by_path[str(closeout_path)]] == ["create", "closeout"]
+    assert [record.operation for record in by_path[str(closeout_path)]] == ["create", "closeout", "prune"]
     assert [record.operation for record in by_path[str(expired_path)]] == ["prune"]
     assert set(_operations(events_path)) == {"create", "heartbeat", "release", "session_end", "closeout", "prune"}
     assert all(record.result == "applied_projection_current" for record in records)

@@ -273,6 +273,7 @@ def classify_bash_command(
             if special in {
                 "claim_bootstrap",
                 "native_mailbox",
+                "native_closeout",
                 "read_target_selection",
                 "projection_recovery",
             }:
@@ -815,6 +816,7 @@ def evaluate_request_fast(
         "read_only",
         "claim_bootstrap",
         "native_mailbox",
+        "native_closeout",
         "read_target_selection",
         "projection_recovery",
     }:
@@ -822,6 +824,7 @@ def evaluate_request_fast(
             "read_only": "bash_read_only",
             "claim_bootstrap": "claim_bootstrap_command",
             "native_mailbox": "native_mailbox_command",
+            "native_closeout": "native_closeout_command",
             "read_target_selection": "read_target_selection_command",
             "projection_recovery": "projection_recovery_command",
         }

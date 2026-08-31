@@ -1190,6 +1190,7 @@ def poll_session_inbox(
         limit=max_messages,
     )
     summary_parts: list[str] = []
+    acknowledgement_script = Path(__file__).resolve().parents[1] / "scripts" / "coordination_messages.py"
     if active:
         displayed = active[:max_messages]
         rendered_messages: list[str] = []
@@ -1213,7 +1214,7 @@ def poll_session_inbox(
                 separators=(",", ":"),
             )
             acknowledgement_commands.append(
-                "python scripts/meta/coordination_messages.py acknowledge "
+                f"/usr/bin/python3 {acknowledgement_script} acknowledge "
                 f"--request-json {shlex.quote(acknowledgement_request)}"
             )
         details = "; ".join(rendered_messages)

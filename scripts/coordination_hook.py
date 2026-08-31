@@ -651,9 +651,10 @@ def _is_exact_acknowledgement_command(
     if len(tokens) != 5:
         return False
     interpreter, script, action, flag, raw_request = tokens
-    if Path(interpreter).name not in {"python", "python3"}:
+    if interpreter != "/usr/bin/python3":
         return False
-    if not script.replace("\\", "/").endswith("scripts/meta/coordination_messages.py"):
+    canonical_script = Path(__file__).resolve().parent / "coordination_messages.py"
+    if Path(script).expanduser().resolve() != canonical_script.resolve():
         return False
     if action != "acknowledge" or flag != "--request-json":
         return False

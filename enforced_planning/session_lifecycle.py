@@ -1296,10 +1296,7 @@ def _remove_worktree_path(repo_root: Path, worktree_path: Path) -> str:
     if not worktree_path.exists():
         return "already_missing"
     if _cwd_inside(worktree_path):
-        raise ValueError(
-            "Cannot close a session from a shell whose cwd is inside the target worktree. "
-            "Run closeout from the canonical repo root session instead."
-        )
+        os.chdir(repo_root)
     result = subprocess.run(
         ["git", "worktree", "remove", str(worktree_path)],
         cwd=str(repo_root),
@@ -1323,11 +1320,6 @@ def _assert_worktree_removal_access(worktree_path: Path) -> None:
 
     if not worktree_path.exists():
         return
-    if _cwd_inside(worktree_path):
-        raise ValueError(
-            "Cannot close a session from a shell whose cwd is inside the target worktree. "
-            "Run closeout from the canonical repo root session instead."
-        )
     directories = [worktree_path.parent]
     directories.extend(Path(root) for root, _dirs, _files in os.walk(worktree_path))
     blocked = sorted(str(path) for path in directories if not os.access(path, os.W_OK | os.X_OK))

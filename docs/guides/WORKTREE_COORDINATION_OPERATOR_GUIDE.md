@@ -1233,10 +1233,16 @@ Some agent runtimes keep a persistent shell working directory. In those
 environments, deleting a worktree from a session whose shell CWD still points
 inside that worktree breaks subsequent shell commands.
 
-Practical rule:
+The canonical `session_close.py` control path now re-anchors its own process to
+the repository root before removing the claimed worktree. This makes exact
+owner closeout safe even when a native pre-write adapter has rebound the
+command into that worktree. It does not change the caller's persistent shell
+CWD.
+
+Practical rule for manual or non-canonical removal:
 
 - keep one control session anchored at the canonical repo root
-- run merge / finish / closeout from that root-anchored session
+- run merge / finish / non-canonical cleanup from that root-anchored session
 - do not delete a worktree from a session whose shell CWD is inside it
 
 The `block-cd-worktree.sh`, `warn-worktree-cwd.sh`, and
@@ -1248,6 +1254,13 @@ cleanup must happen from a safe control session.
 
 Claim release and claimed-worktree cleanup must not be split into separate
 manual steps.
+
+After a task branch is merged, ordinary repository writes remain denied until
+the claim is dispositioned. Two strict control paths remain available through
+the installed runtime: the absolute mailbox command printed in the hook notice,
+and the exact `session_close.py` command whose agent, project, scope, branch,
+worktree, and ambient native session resolve to one live claim. Shell-composed,
+cross-session, or retargeted variants are denied.
 
 - use `session-close` for direct CLI closeout
 - use `make worktree-remove BRANCH=...` in governed repos

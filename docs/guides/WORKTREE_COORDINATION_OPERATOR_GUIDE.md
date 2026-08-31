@@ -119,8 +119,22 @@ This transaction creates a local `main` branch with only `/worktrees/` ignored,
 then creates the requested linked worktree, exact-session claim, tracker, and
 projection. It configures no remote, performs no network request, and grants no
 publication authority. Continue all project edits in
-`<repo>/worktrees/<branch>/`. After merging the task branch into local `main`,
-the ordinary session-close path can prove local integration and close the lane.
+`<repo>/worktrees/<branch>/`. The live claim makes the canonical checkout
+physically read-only, so do not run `git merge` there directly. After committing
+the lane, use the same exact native command surface for the controlled local
+integration:
+
+```json
+{"schema_version":"1.0","operation":"local_repository_integrate","agent":"codex","project":"weekly-plans","scope":"codex/initial-setup","repo_root":"/absolute/workspace/weekly-plans","branch":"codex/initial-setup","default_branch":"main"}
+```
+
+The integration transaction accepts only the current native owner of the
+repository's sole live claim, a clean local-only canonical checkout on `main`,
+a clean exact claimed worktree, a healthy canonical lock justified by that
+claim, and an exact fast-forward. It unlocks only for that merge and restores
+the same lock in `finally`, including when Git fails. Direct canonical-checkout
+mutation remains forbidden. After integration, the ordinary session-close path
+can prove local integration and close the lane.
 Registration in Project Graph and remote publication remain separate authority
 decisions.
 

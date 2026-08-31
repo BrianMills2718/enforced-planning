@@ -69,6 +69,21 @@ def _local_repository_payload(repo: Path, **updates: object) -> dict[str, object
     return payload
 
 
+def _local_integration_payload(repo: Path, **updates: object) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "schema_version": "1.0",
+        "operation": "local_repository_integrate",
+        "agent": "codex",
+        "project": repo.name,
+        "scope": "codex/initial-setup",
+        "repo_root": str(repo),
+        "branch": "codex/initial-setup",
+        "default_branch": "main",
+    }
+    payload.update(updates)
+    return payload
+
+
 def test_unclaimed_native_session_can_start_its_own_claim(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -147,6 +162,18 @@ def test_raw_bash_grammar_accepts_only_canonical_single_command(tmp_path: Path) 
 
     assert request.operation == "session_start_or_update"
     assert request.intent == "Brian's claim"
+
+
+def test_raw_bash_grammar_accepts_typed_local_integration(tmp_path: Path) -> None:
+    script = tmp_path / "scripts" / "claim_bootstrap.py"
+    repo = (tmp_path / "weekly-plans").resolve()
+    raw_json = json.dumps(_local_integration_payload(repo), separators=(",", ":"))
+    command = f"/usr/bin/python3 {script} --request-json '{raw_json}'"
+
+    request = claim_bootstrap.parse_raw_bash_command(command, script_path=script)
+
+    assert request.operation == "local_repository_integrate"
+    assert request.repo_root == str(repo)
 
 
 def _governed_repo(tmp_path: Path) -> Path:
@@ -265,11 +292,34 @@ def test_typed_local_repository_bootstrap_creates_local_repo_claim_and_worktree(
         check=True,
         capture_output=True,
     )
-    subprocess.run(
+    canonical_lock = claim_bootstrap._canonical_lock_module()
+    monkeypatch.setattr(canonical_lock, "LOCK_INDEX", tmp_path / "locks.json")
+    monkeypatch.setattr(claim_bootstrap, "_canonical_lock_module", lambda: canonical_lock)
+    canonical_lock.lock_repo(
+        repo,
+        justifying_claims=["codex/initial-setup"],
+        session_id="codex:native-123",
+    )
+    blocked = subprocess.run(
         ["git", "-C", str(repo), "merge", "--ff-only", "codex/initial-setup"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert blocked.returncode != 0
+
+    integrated = claim_bootstrap.execute_request(
+        claim_bootstrap.parse_request_json(json.dumps(_local_integration_payload(repo)))
+    )
+
+    assert integrated["result"]["action"] == "integrated"
+    assert integrated["result"]["integrated_revision"] == subprocess.run(
+        ["git", "-C", str(worktree), "rev-parse", "HEAD"],
         check=True,
         capture_output=True,
-    )
+        text=True,
+    ).stdout.strip()
+    assert canonical_lock.verify_lock_integrity(repo)["verdict"] == canonical_lock.VERDICT_LOCKED
     closed = claim_bootstrap.session_lifecycle.close_session(
         agent="codex",
         project="weekly-plans",
@@ -280,7 +330,55 @@ def test_typed_local_repository_bootstrap_creates_local_repo_claim_and_worktree(
     assert closed["released"] is True
     assert closed["disposition"] == "merged"
     assert not worktree.exists()
+    canonical_lock.unlock_repo(repo)
     assert (repo / "README.md").read_text(encoding="utf-8") == "# Weekly Plans\n"
+
+
+def test_local_integration_relocks_after_git_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _configure_maintenance_runtime(tmp_path, monkeypatch)
+    monkeypatch.chdir(tmp_path)
+    repo = (tmp_path / "weekly-plans").resolve()
+    claim_bootstrap.execute_request(
+        claim_bootstrap.parse_request_json(json.dumps(_local_repository_payload(repo)))
+    )
+    worktree = repo / "worktrees" / "codex" / "initial-setup"
+    (worktree / "README.md").write_text("# Weekly Plans\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(worktree), "add", "README.md"], check=True)
+    subprocess.run(
+        [
+            "git", "-c", "user.name=Test User", "-c", "user.email=test@example.invalid",
+            "-C", str(worktree), "commit", "-m", "Add weekly plan",
+        ],
+        check=True,
+        capture_output=True,
+    )
+    canonical_lock = claim_bootstrap._canonical_lock_module()
+    monkeypatch.setattr(canonical_lock, "LOCK_INDEX", tmp_path / "locks.json")
+    monkeypatch.setattr(claim_bootstrap, "_canonical_lock_module", lambda: canonical_lock)
+    canonical_lock.lock_repo(
+        repo,
+        justifying_claims=["codex/initial-setup"],
+        session_id="codex:native-123",
+    )
+    original_git = claim_bootstrap._git
+
+    def fail_merge(target: Path, *args: str) -> subprocess.CompletedProcess[str]:
+        if args[:2] == ("merge", "--ff-only"):
+            return subprocess.CompletedProcess([], 1, "", "simulated merge failure")
+        return original_git(target, *args)
+
+    monkeypatch.setattr(claim_bootstrap, "_git", fail_merge)
+
+    with pytest.raises(claim_bootstrap.ClaimBootstrapError, match="simulated merge failure"):
+        claim_bootstrap.execute_request(
+            claim_bootstrap.parse_request_json(json.dumps(_local_integration_payload(repo)))
+        )
+
+    assert canonical_lock.verify_lock_integrity(repo)["verdict"] == canonical_lock.VERDICT_LOCKED
+    canonical_lock.unlock_repo(repo)
 
 
 @pytest.mark.parametrize("target_kind", ["directory", "file", "symlink"])

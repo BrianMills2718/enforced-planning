@@ -628,6 +628,50 @@ def test_workspace_root_typed_maintenance_bootstrap_is_denied_to_subagent(
     }
 
 
+def test_workspace_root_admits_exact_typed_local_integration(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("CODEX_THREAD_ID", "native-123")
+    repo = (tmp_path / "weekly-plans").resolve()
+    request = json.dumps(
+        {
+            "schema_version": "1.0",
+            "operation": "local_repository_integrate",
+            "agent": "codex",
+            "project": "weekly-plans",
+            "scope": "codex/initial-setup",
+            "repo_root": str(repo),
+            "branch": "codex/initial-setup",
+            "default_branch": "main",
+        },
+        separators=(",", ":"),
+    )
+    command = (
+        f"/usr/bin/python3 {prewrite_claim_gate.REPO_ROOT / 'scripts' / 'claim_bootstrap.py'} "
+        f"--request-json '{request}'"
+    )
+    payload = _payload(
+        cwd=tmp_path,
+        tool="Bash",
+        tool_input={"command": command},
+        session="native-123",
+    )
+
+    code, decision = _run_cli(
+        monkeypatch,
+        capsys,
+        tmp_path,
+        payload,
+        client="codex",
+    )
+
+    assert code == 0, decision
+    assert decision["decision"] == "allow"
+    assert decision["reason_code"] == "claim_bootstrap_command"
+
+
 def test_explicit_host_mode_resolves_nested_edit_target_before_claim_evaluation(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

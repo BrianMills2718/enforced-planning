@@ -516,17 +516,18 @@ def _merge_codex_mailbox_hooks(
             changed = True
     if include_prewrite:
         prewrite_command = cast(str, CODEX_PREWRITE_HOOK["command"])
-        if _remove_hook_command_from_matcher(
-            settings,
-            event_name="PreToolUse",
-            matcher="Edit|Write",
-            command=prewrite_command,
-        ):
-            changed = True
+        for legacy_matcher in ("Edit|Write", "apply_patch"):
+            if _remove_hook_command_from_matcher(
+                settings,
+                event_name="PreToolUse",
+                matcher=legacy_matcher,
+                command=prewrite_command,
+            ):
+                changed = True
         hooks = _ensure_matcher_block(
             settings,
             event_name="PreToolUse",
-            matcher="apply_patch",
+            matcher="Bash|apply_patch",
         )
         if _ensure_hook_command(hooks, CODEX_PREWRITE_HOOK):
             changed = True
@@ -579,12 +580,23 @@ def _plan_codex_artifact_creation_settings(
 
 
 def _plan_codex_prewrite_settings(target: TargetRepo) -> tuple[list[str], dict[Path, str]]:
-    """Plan only Codex's native apply-patch pre-write gate."""
+    """Plan only Codex's native shell and apply-patch pre-write gate."""
 
     path = target.root / ".codex" / "hooks.json"
     settings = _read_json_file(path)
-    hooks = _ensure_matcher_block(settings, event_name="PreToolUse", matcher="apply_patch")
-    changed = _ensure_hook_command(hooks, CODEX_PREWRITE_HOOK)
+    changed = False
+    prewrite_command = cast(str, CODEX_PREWRITE_HOOK["command"])
+    for legacy_matcher in ("Edit|Write", "apply_patch"):
+        if _remove_hook_command_from_matcher(
+            settings,
+            event_name="PreToolUse",
+            matcher=legacy_matcher,
+            command=prewrite_command,
+        ):
+            changed = True
+    hooks = _ensure_matcher_block(settings, event_name="PreToolUse", matcher="Bash|apply_patch")
+    if _ensure_hook_command(hooks, CODEX_PREWRITE_HOOK):
+        changed = True
     rendered = _render_settings(settings)
     current = path.read_text(encoding="utf-8") if path.exists() else None
     if current != rendered or changed:

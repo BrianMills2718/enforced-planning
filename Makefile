@@ -137,7 +137,7 @@ SURFACE_RUNTIME_SCRIPT := scripts/surface_runtime.py
 WORKTREE_DIR ?= $(shell $(PYTHON) "$(WORKTREE_CREATE_SCRIPT)" --repo-root . --print-default-worktree-dir)
 WORKTREE_REPO_ROOT ?= $(shell git rev-parse --path-format=absolute --git-common-dir 2>/dev/null | sed 's|/\.git$$||')
 WORKTREE_START_POINT ?= HEAD
-WORKTREE_START_REVISION := $(shell git -C "$(WORKTREE_REPO_ROOT)" rev-parse --verify "$(WORKTREE_START_POINT)^{commit}" 2>/dev/null)
+WORKTREE_START_REVISION := $(shell $(PYTHON) "$(WORKTREE_CREATE_SCRIPT)" --repo-root "$(WORKTREE_REPO_ROOT)" --start-point "$(WORKTREE_START_POINT)" --print-fresh-start-revision 2>/dev/null)
 WORKTREE_PROJECT ?= $(shell $(PYTHON) "$(WORKTREE_CREATE_SCRIPT)" --repo-root . --print-canonical-project)
 WORKTREE_AGENT ?= $(shell if [ -n "$$CODEX_THREAD_ID" ]; then printf codex; elif [ -n "$$CLAUDE_CODE_SESSION_ID" ] || [ -n "$$CLAUDE_SESSION_ID" ] || [ -n "$$CLAUDE_CODE_SSE_PORT" ]; then printf claude-code; elif [ -n "$$OPENCLAW_SESSION_ID" ] || [ -n "$$OPENCLAW_RUN_ID" ]; then printf openclaw; fi)
 SESSION_GOAL ?=
@@ -212,6 +212,10 @@ endif
 ifndef WORKTREE_AGENT
 	$(error Unable to infer agent runtime. Set AGENT via WORKTREE_AGENT=codex|claude-code|openclaw)
 endif
+	@test -n "$(WORKTREE_START_REVISION)" || { \
+		echo "Unable to refresh and resolve one full Git start revision from $(WORKTREE_START_POINT)"; \
+		exit 1; \
+	}
 	@if [ -n "$(OUTCOME_ADMISSION_BOOTSTRAP_PLAN)" ]; then \
 		$(PYTHON) scripts/outcome_admission.py bootstrap \
 			--plan "$(OUTCOME_ADMISSION_BOOTSTRAP_PLAN)" \
@@ -233,10 +237,6 @@ endif
 		echo "Install or sync the sanctioned session lifecycle module before using make worktree."; \
 		exit 1; \
 	fi
-	@test -n "$(WORKTREE_START_REVISION)" || { \
-		echo "Unable to resolve one full Git start revision from $(WORKTREE_START_POINT)"; \
-		exit 1; \
-	}
 	@$(PYTHON) "$(WORKTREE_PLAN_READINESS_SCRIPT)" \
 		$(if $(PLAN),--qualified-plan-id "$(PLAN_PROJECT)#$(PLAN)",) \
 		--execution-profile "$(WORKTREE_EXECUTION_PROFILE)" \

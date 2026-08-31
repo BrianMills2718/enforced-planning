@@ -317,8 +317,17 @@ PR #273 added phase telemetry and rechecks the projection after acquiring the
 writer lock; PR #274 closed the multiline read-classification deadlock. The
 follow-up repair makes the generated prewrite runtime a real local package with
 its complete import closure, exercises the actual cross-process writer-lock
-race five consecutive times, and adds a pull-request enforcement-contract job.
-The bounded gate passes 101 tests, including the installed-consumer journey.
+race five consecutive times, and adds a required pull-request
+enforcement-contract job. The coordinated follow-up also makes Codex prewrite
+cover Bash as well as apply-patch, attributes Stop dirt only to the session's
+linked worktree, removes claim heartbeat writes from PreToolUse, and resolves
+the canonical-lock helper in both source and installed layouts. Bash path
+operands are checked against the claim's declared write paths, absolute
+apply-patch targets select their owning linked worktree, and root-start fetches
+the configured upstream before fixing the claim/worktree start revision. The
+bounded gate passes 217 focused tests, including the installed-consumer journey; an authentic
+native-shaped PreToolUse probe over 1,692 completed claims completes in 0.364
+seconds.
 
 Source implementation is complete. Native host activation remains an explicit
 operational verification: install the merged revision, enable the configured

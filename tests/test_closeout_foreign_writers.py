@@ -1,92 +1,125 @@
-"""Closeout must not blame a session for another live writer's uncommitted work.
-
-The check fingerprints a whole repository against a baseline taken at session
-start, so a second session editing that repo mid-run is attributed to whichever
-session closes out first. That session cannot commit the change (not its work),
-cannot discard it (destructive), and had no way to disclaim it.
-"""
+"""Closeout assigns custody only to the session's isolated linked worktrees."""
 
 from __future__ import annotations
 
-import importlib.util
-import sys
+import subprocess
 from pathlib import Path
+from types import SimpleNamespace
 
-import pytest
-
-_ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(_ROOT))
-sys.path.insert(0, str(_ROOT / "scripts"))
-
-_SPEC = importlib.util.spec_from_file_location(
-    "coordination_hook_under_test", _ROOT / "scripts" / "coordination_hook.py"
-)
-assert _SPEC and _SPEC.loader
-hook = importlib.util.module_from_spec(_SPEC)
-_SPEC.loader.exec_module(hook)
+from scripts import coordination_hook as hook
 
 
-class _Claim:
-    def __init__(self, session_id: str | None, repo_root: str | None) -> None:
-        self.session_id = session_id
-        self.repo_root = repo_root
-
-
-def _patch_claims(monkeypatch: pytest.MonkeyPatch, claims: list[_Claim]) -> None:
-    import types
-
-    module = types.SimpleNamespace(list_claims=lambda: claims)
-    monkeypatch.setitem(sys.modules, "enforced_planning.coordination_claims", module)
-    package = types.SimpleNamespace(coordination_claims=module)
-    monkeypatch.setitem(sys.modules, "enforced_planning", package)
-
-
-def test_another_sessions_claim_marks_the_repo_foreign(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    repo = tmp_path / "shared-repo"
-    repo.mkdir()
-    _patch_claims(monkeypatch, [_Claim("codex-other-session", str(repo))])
-    assert str(repo.resolve()) in hook._repositories_with_foreign_live_claims("mine")
-
-
-def test_my_own_claim_does_not_exempt_me(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    """A session must still answer for the repo it claimed itself."""
-    repo = tmp_path / "my-repo"
-    repo.mkdir()
-    _patch_claims(monkeypatch, [_Claim("mine", str(repo))])
-    assert hook._repositories_with_foreign_live_claims("mine") == set()
-
-
-def test_repo_with_no_claim_is_still_enforced(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    """The ordinary single-writer case is unchanged - this is the whole point."""
-    _patch_claims(monkeypatch, [])
-    assert hook._repositories_with_foreign_live_claims("mine") == set()
-
-
-def test_claim_without_repo_root_is_ignored(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    _patch_claims(monkeypatch, [_Claim("other", None)])
-    assert hook._repositories_with_foreign_live_claims("mine") == set()
-
-
-def test_unreadable_claim_registry_never_blocks_closeout(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Fail open here: a broken registry must not strand every session."""
-    import types
-
-    def _boom() -> list[_Claim]:
-        raise RuntimeError("registry unreadable")
-
-    module = types.SimpleNamespace(list_claims=_boom)
-    monkeypatch.setitem(sys.modules, "enforced_planning.coordination_claims", module)
-    monkeypatch.setitem(
-        sys.modules, "enforced_planning", types.SimpleNamespace(coordination_claims=module)
+def _git(repository: Path, *args: str) -> str:
+    completed = subprocess.run(
+        ["git", *args],
+        cwd=repository,
+        check=True,
+        capture_output=True,
+        text=True,
     )
-    assert hook._repositories_with_foreign_live_claims("mine") == set()
+    return completed.stdout.strip()
+
+
+def _repository_with_worktree(tmp_path: Path) -> tuple[Path, Path]:
+    repository = tmp_path / "repository"
+    worktree = tmp_path / "worktree"
+    repository.mkdir()
+    _git(repository, "init", "--initial-branch=main")
+    _git(repository, "config", "user.email", "hooks@example.invalid")
+    _git(repository, "config", "user.name", "Hook Test")
+    (repository / "tracked.txt").write_text("base\n", encoding="utf-8")
+    _git(repository, "add", "tracked.txt")
+    _git(repository, "commit", "-m", "fixture")
+    _git(repository, "worktree", "add", "-b", "task", str(worktree))
+    return repository, worktree
+
+
+def _claim(worktree: Path, *, session_id: str = "codex:current") -> SimpleNamespace:
+    return SimpleNamespace(
+        agent="codex",
+        session_id=session_id,
+        worktree_path=str(worktree),
+    )
+
+
+def test_canonical_checkout_delta_is_not_claimed_as_session_custody(tmp_path: Path) -> None:
+    repository, _worktree = _repository_with_worktree(tmp_path)
+    ledger = tmp_path / "ledgers"
+    hook._write_closeout_baseline(
+        payload={"cwd": str(repository)},
+        agent="codex",
+        session_id="codex:current",
+        ledger_dir=ledger,
+    )
+    hook._record_touched_repositories(
+        payload={"cwd": str(repository)},
+        agent="codex",
+        session_id="codex:current",
+        ledger_dir=ledger,
+        active_claims=(),
+    )
+    (repository / "foreign.txt").write_text("another writer\n", encoding="utf-8")
+
+    assert hook._repository_closeout_failure(
+        agent="codex",
+        session_id="codex:current",
+        ledger_dir=ledger,
+        active_claims=(),
+    ) is None
+
+
+def test_claimed_linked_worktree_delta_blocks_session_closeout(tmp_path: Path) -> None:
+    repository, worktree = _repository_with_worktree(tmp_path)
+    ledger = tmp_path / "ledgers"
+    claim = _claim(worktree)
+    hook._write_closeout_baseline(
+        payload={"cwd": str(repository)},
+        agent="codex",
+        session_id="codex:current",
+        ledger_dir=ledger,
+    )
+    hook._record_touched_repositories(
+        payload={"cwd": str(repository)},
+        agent="codex",
+        session_id="codex:current",
+        ledger_dir=ledger,
+        active_claims=(claim,),
+    )
+    (worktree / "owned.txt").write_text("session work\n", encoding="utf-8")
+
+    failure = hook._repository_closeout_failure(
+        agent="codex",
+        session_id="codex:current",
+        ledger_dir=ledger,
+        active_claims=(claim,),
+    )
+    assert failure is not None
+    assert str(worktree) in failure
+
+
+def test_foreign_claim_cannot_exempt_owned_linked_worktree(tmp_path: Path) -> None:
+    _repository, worktree = _repository_with_worktree(tmp_path)
+    ledger = tmp_path / "ledgers"
+    owned = _claim(worktree)
+    foreign = _claim(worktree, session_id="codex:other")
+    hook._write_closeout_baseline(
+        payload={"cwd": str(worktree)},
+        agent="codex",
+        session_id="codex:current",
+        ledger_dir=ledger,
+    )
+    hook._record_touched_repositories(
+        payload={"cwd": str(worktree)},
+        agent="codex",
+        session_id="codex:current",
+        ledger_dir=ledger,
+        active_claims=(owned, foreign),
+    )
+    (worktree / "owned.txt").write_text("session work\n", encoding="utf-8")
+
+    assert hook._repository_closeout_failure(
+        agent="codex",
+        session_id="codex:current",
+        ledger_dir=ledger,
+        active_claims=(owned, foreign),
+    ) is not None

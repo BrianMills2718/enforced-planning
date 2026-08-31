@@ -393,6 +393,57 @@ def test_session_start_skips_heartbeat_with_large_completed_registry(monkeypatch
     assert time.monotonic() - started < 1.0
 
 
+def test_pretool_gate_never_heartbeats_or_rebuilds_claim_state(monkeypatch, tmp_path: Path) -> None:
+    """The latency-sensitive gate must remain a projection read, not a registry write."""
+
+    monkeypatch.setattr(coordination_hook, "_active_claims", lambda *_args, **_kwargs: ())
+    monkeypatch.setattr(coordination_hook, "_write_closeout_baseline", lambda **_kwargs: None)
+    monkeypatch.setattr(coordination_hook, "_record_touched_repositories", lambda **_kwargs: None)
+    monkeypatch.setattr(coordination_hook, "_canonical_project", lambda _cwd: "demo")
+    monkeypatch.setattr(
+        coordination_hook.coordination_claims,
+        "heartbeat_claims",
+        lambda **_kwargs: (_ for _ in ()).throw(AssertionError("PreToolUse heartbeated claims")),
+    )
+    monkeypatch.setattr(
+        coordination_hook.coordination_messages,
+        "poll_session_inbox",
+        lambda **_kwargs: type(
+            "Notice",
+            (),
+            {"active_count": 0, "acknowledgement_count": 0, "summary": "", "message_ids": ()},
+        )(),
+    )
+    monkeypatch.setattr(
+        "sys.stdin",
+        type(
+            "Input",
+            (),
+            {
+                "read": lambda _self: json.dumps(
+                    {
+                        "session_id": "pretool",
+                        "cwd": str(tmp_path),
+                        "hook_event_name": "PreToolUse",
+                        "tool_name": "apply_patch",
+                        "tool_use_id": "tool-pretool",
+                        "tool_input": {"patch": "*** Begin Patch\n*** End Patch"},
+                    }
+                )
+            },
+        )(),
+    )
+
+    assert coordination_hook.main(
+        [
+            "--claims-dir",
+            str(tmp_path / "claims"),
+            "--hook-receipt-dir",
+            str(tmp_path / "receipts"),
+        ]
+    ) == 0
+
+
 def test_native_shaped_stop_repairs_interrupted_projection_and_allows_turn(tmp_path: Path) -> None:
     claims_dir = tmp_path / "coordination" / "claims"
     claims_dir.mkdir(parents=True)

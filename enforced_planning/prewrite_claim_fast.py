@@ -453,12 +453,14 @@ def adapt_native_payload(
         command = tool_input.get("command")
         if not isinstance(command, str) or not command.strip():
             raise FastPreWriteError("Bash requires non-empty string tool_input.command")
-        target_paths = ()
+        bash_declared_paths = _bash_declared_paths(command)
+        target_paths = bash_declared_paths
         bash_classification = classify_bash_command(
             command,
             claim_bootstrap_classifier=claim_bootstrap_classifier,
         )
     elif client == "codex":
+        bash_declared_paths = ()
         if tool_name != "apply_patch":
             raise FastPreWriteError(f"Unsupported Codex pre-write tool: {tool_name!r}")
         command = tool_input.get("command")
@@ -468,6 +470,7 @@ def adapt_native_payload(
         if not target_paths:
             raise FastPreWriteError("Codex apply_patch payload contains no provable target paths")
     else:
+        bash_declared_paths = ()
         if tool_name not in {"Edit", "Write", "NotebookEdit"}:
             raise FastPreWriteError(f"Unsupported Claude pre-write tool: {tool_name!r}")
         path_field = "notebook_path" if tool_name == "NotebookEdit" else "file_path"
@@ -487,7 +490,7 @@ def adapt_native_payload(
         "cwd": _nonempty(payload, "cwd"),
         "target_paths": target_paths,
         "bash_classification": bash_classification,
-        "bash_declared_paths": _bash_declared_paths(command) if tool_name == "Bash" else (),
+        "bash_declared_paths": bash_declared_paths,
         "bash_target_unprovable": _bash_target_is_unprovable(command) if tool_name == "Bash" else False,
         "bash_command": command if tool_name == "Bash" else None,
         "session_target_error_code": payload.get("_session_target_error_code"),
@@ -557,9 +560,13 @@ def _repository_context(request: dict[str, Any]) -> dict[str, Any]:
                 candidate = cwd / candidate
             resolved = candidate.resolve(strict=False)
             try:
-                resolved.relative_to(worktree)
+                relative = resolved.relative_to(worktree)
             except ValueError:
                 outside.append(str(resolved))
+                continue
+            value = relative.as_posix()
+            if value not in {"", "."}:
+                normalized.append(value)
     else:
         if not raw_targets:
             raise FastPreWriteError("pre-write request contains no target paths")
@@ -1007,8 +1014,6 @@ def evaluate_request_fast(
             reason_code = "claim_not_healthy"
             details = health_issues
             recovery = "Repair or resume the claim through the sanctioned session workflow."
-        elif request.get("tool_name") == "Bash":
-            authorized = True
         else:
             outside = tuple(
                 target

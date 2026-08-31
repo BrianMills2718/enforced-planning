@@ -24,6 +24,10 @@ jobs:
         run: |
           pytest -q \
             tests/test_coordination_hook.py \
+            tests/test_closeout_foreign_writers.py \
             tests/test_prewrite_read_repair_invariant.py \
             tests/test_claim_bootstrap.py \
-            tests/test_generate_hook_wiring.py::test_installed_prewrite_runtime_projects_and_classifies_native_payloads
+            tests/test_create_worktree.py::test_canonical_lock_resolves_source_and_installed_layouts \
+            tests/test_create_worktree.py::test_create_worktree_uses_fetched_upstream_when_local_start_point_is_stale \
+            tests/test_host_prewrite_claim_gate.py \
+            tests/test_generate_hook_wiring.py

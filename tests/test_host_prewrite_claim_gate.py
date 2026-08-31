@@ -291,7 +291,7 @@ def test_mutating_bash_is_allowed_only_by_exact_healthy_worktree_claim(tmp_path:
 
     assert allowed["decision"] == "allow", allowed
     assert allowed["reason_code"] == "exact_live_claim"
-    assert allowed["normalized_target_paths"] == []
+    assert allowed["normalized_target_paths"] == ["src/generated.py"]
     assert denied["decision"] == "deny"
     assert denied["reason_code"] == "no_exact_claim"
 
@@ -888,6 +888,37 @@ def test_git_launch_cwd_relative_apply_patch_uses_different_claimed_worktree(
     claim_path.write_text(yaml.safe_dump(claim, sort_keys=False), encoding="utf-8")
     write_projection(claims_dir=claims_dir, projection_path=tmp_path / "projection.json")
     patch = "*** Begin Patch\n*** Update File: src/allowed.py\n@@\n-VALUE = 1\n+VALUE = 2\n*** End Patch"
+
+    code, decision = _run_cli(
+        monkeypatch,
+        capsys,
+        tmp_path,
+        _payload(cwd=repo, tool="apply_patch", tool_input={"command": patch}),
+        claims_dir=claims_dir,
+        projection_path=tmp_path / "projection.json",
+        client="codex",
+    )
+
+    assert code == 0, decision
+    assert decision["worktree_path"] == str(worktree)
+    assert decision["normalized_target_paths"] == ["src/allowed.py"]
+
+
+def test_git_launch_cwd_absolute_apply_patch_uses_targeted_claimed_worktree(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """An absolute patch target owns routing even when the session launched elsewhere."""
+
+    _workspace, repo, worktree, claims_dir, claim_path = _fixture(tmp_path)
+    claim = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    claim["agent"] = "codex"
+    claim["session_id"] = "codex:host-gate-test"
+    claim_path.write_text(yaml.safe_dump(claim, sort_keys=False), encoding="utf-8")
+    write_projection(claims_dir=claims_dir, projection_path=tmp_path / "projection.json")
+    target = worktree / "src" / "allowed.py"
+    patch = f"*** Begin Patch\n*** Update File: {target}\n@@\n-VALUE = 1\n+VALUE = 2\n*** End Patch"
 
     code, decision = _run_cli(
         monkeypatch,

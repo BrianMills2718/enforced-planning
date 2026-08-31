@@ -447,6 +447,31 @@ def _canonical_repository_root(cwd: str) -> Path | None:
     return common_dir.parent if common_dir.name == ".git" else common_dir
 
 
+def _git_path(repository: Path, option: str) -> Path:
+    """Resolve one Git administrative path or fail closeout loudly."""
+
+    completed = subprocess.run(
+        ["git", "-C", str(repository), "rev-parse", option],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if completed.returncode:
+        raise RepositoryCloseoutError(
+            completed.stderr.strip() or f"cannot resolve {option} for {repository}"
+        )
+    value = Path(completed.stdout.strip())
+    return (value if value.is_absolute() else repository / value).resolve()
+
+
+def _is_linked_worktree(repository: Path) -> bool:
+    """Return whether one checkout has session-attributable Git custody."""
+
+    return _git_path(repository, "--absolute-git-dir") != _git_path(
+        repository, "--git-common-dir"
+    )
+
+
 def _record_touched_repositories(
     *,
     payload: dict[str, Any],
@@ -474,14 +499,16 @@ def _record_touched_repositories(
         if isinstance(path, str) and path.strip()
     }
     touched = set(prior_touched)
+    candidates: set[Path] = set()
     cwd = payload.get("cwd")
     if isinstance(cwd, str) and cwd.strip():
-        repository = _canonical_repository_root(cwd)
-        if repository is not None:
-            touched.add(str(repository))
+        candidates.add(_repository_scan_root(cwd))
     for claim in active_claims:
-        if claim.agent == agent and claim.session_id == session_id and claim.repo_root:
-            touched.add(str(Path(claim.repo_root).expanduser().resolve()))
+        if claim.agent == agent and claim.session_id == session_id and claim.worktree_path:
+            candidates.add(Path(claim.worktree_path).expanduser().resolve())
+    for repository in candidates:
+        if repository.is_dir() and _is_linked_worktree(repository):
+            touched.add(str(repository))
     baselines = ledger.get("repositories")
     if not isinstance(baselines, dict):
         raise RepositoryCloseoutError(f"invalid repository closeout ledger: {ledger_path}")
@@ -493,36 +520,6 @@ def _record_touched_repositories(
     temporary = ledger_path.with_suffix(".tmp")
     temporary.write_text(json.dumps(ledger, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     temporary.replace(ledger_path)
-
-
-def _repositories_with_foreign_live_claims(
-    session_id: str,
-    *,
-    active_claims: tuple[Any, ...],
-) -> set[str]:
-    """Repository roots a DIFFERENT live session currently holds a claim on.
-
-    The closeout check compares a whole-repository fingerprint against a
-    baseline taken at session start, so any concurrent writer's uncommitted
-    edit is attributed to whichever session closes out first. That session
-    cannot commit the change (not its work), cannot discard it (destructive),
-    and has no way to disclaim it - so it is blocked by someone else's work
-    with no available remedy.
-
-    A live claim owned by another session is exactly the evidence that a repo
-    has a second writer. Returning those roots lets closeout skip them. This
-    narrows the check rather than weakening it: a repository with no other
-    live writer is still fully enforced, which is the case the check is for.
-    """
-
-    roots: set[str] = set()
-    for claim in active_claims:
-        if getattr(claim, "session_id", None) == session_id:
-            continue
-        repo_root = getattr(claim, "repo_root", None)
-        if repo_root:
-            roots.add(str(Path(str(repo_root)).expanduser().resolve()))
-    return roots
 
 
 def _repository_closeout_failure(
@@ -548,24 +545,15 @@ def _repository_closeout_failure(
     if not isinstance(payload, dict) or not isinstance(payload.get("repositories"), dict):
         raise RepositoryCloseoutError(f"invalid repository closeout ledger: {ledger_path}")
     baseline = payload["repositories"]
-    foreign = _repositories_with_foreign_live_claims(
-        session_id,
-        active_claims=active_claims,
-    )
     touched = {
         str(Path(path).expanduser().resolve())
         for path in payload.get("touched_repositories", [])
         if isinstance(path, str) and path.strip()
     }
-    touched.update(
-        str(Path(claim.repo_root).expanduser().resolve())
-        for claim in active_claims
-        if claim.session_id == session_id and claim.repo_root
-    )
     repositories = tuple(
         Path(repository)
         for repository in sorted(touched)
-        if repository not in foreign and Path(repository).is_dir()
+        if Path(repository).is_dir()
     )
     if repositories:
         current = _repository_statuses(repositories)
@@ -574,10 +562,6 @@ def _repository_closeout_failure(
     dirty_changes: list[tuple[str, int]] = []
     for repository, status in current.items():
         prior = baseline.get(repository)
-        if str(Path(repository).expanduser().resolve()) in foreign:
-            # Another live session is writing here; its uncommitted work is not
-            # this session's to commit, discard, or answer for.
-            continue
         if status["dirty"] and (
             not isinstance(prior, dict) or prior.get("fingerprint") != status["fingerprint"]
         ):
@@ -827,7 +811,10 @@ def main(argv: list[str] | None = None) -> int:
             )
         delivery_event_id = _delivery_event_id(payload, agent=args.agent, session_id=session_id)
         project = args.project or _canonical_project(payload["cwd"])
-        heartbeat_projects = () if payload["hook_event_name"] in {"SessionStart", "Stop"} else (
+        # PreToolUse is a latency-sensitive decision boundary. Heartbeat writes
+        # take the registry lock and refresh the full projection; lifecycle
+        # events keep leases fresh without putting that work before every tool.
+        heartbeat_projects = () if payload["hook_event_name"] in {"SessionStart", "PreToolUse", "Stop"} else (
             (project,)
             if project is not None
             else _claimed_projects(

@@ -162,13 +162,19 @@ def _shell_commands(command: str) -> tuple[tuple[str, ...], ...] | None:
     closed.
     """
 
-    if not command.strip() or "\n" in command or "\r" in command:
+    if not command.strip() or "\r" in command:
         return None
     if "`" in command or "$(" in command or "${" in command:
         return None
     try:
-        lexer = shlex.shlex(command, posix=True, punctuation_chars=";&|<>")
+        # Keep physical newlines visible to the parser. Native agents commonly
+        # batch independent inspections as one multiline Bash request; treating
+        # the newline as ordinary whitespace would merge adjacent commands,
+        # while rejecting every newline sends harmless observation through the
+        # write-claim path. Quoted newlines remain inside their argument token.
+        lexer = shlex.shlex(command, posix=True, punctuation_chars=";&|<>\n")
         lexer.whitespace_split = True
+        lexer.whitespace = " \t"
         tokens = tuple(lexer)
     except ValueError:
         return None
@@ -177,6 +183,11 @@ def _shell_commands(command: str) -> tuple[tuple[str, ...], ...] | None:
     commands: list[tuple[str, ...]] = []
     current: list[str] = []
     for token in tokens:
+        if token and set(token) == {"\n"}:
+            if current:
+                commands.append(tuple(current))
+                current = []
+            continue
         if token in _READ_ONLY_SEPARATORS:
             if not current:
                 return None
@@ -186,9 +197,10 @@ def _shell_commands(command: str) -> tuple[tuple[str, ...], ...] | None:
         if token in _SHELL_CONTROL or set(token) <= set(";&|<>"):
             return None
         current.append(token)
-    if not current:
+    if current:
+        commands.append(tuple(current))
+    elif not commands:
         return None
-    commands.append(tuple(current))
     if any("=" in argv[0] and not argv[0].startswith(("/", "./")) for argv in commands):
         return None
     return tuple(commands)

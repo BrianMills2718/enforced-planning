@@ -331,6 +331,8 @@ def record_claim_mutation(
     session_id: str | None,
     projection_digest_after: str | None,
     archive_transaction_id: str | None = None,
+    known_registry_digest_after: str | None = None,
+    known_projection_current_after: bool | None = None,
 ) -> "claim_mutation_receipts.ClaimMutationReceiptV1":
     """Persist one terminal receipt after a sanctioned YAML/projection mutation.
 
@@ -339,11 +341,20 @@ def record_claim_mutation(
     produced still matches that authority.
     """
 
-    from enforced_planning.prewrite_claim_projection import projection_is_current
-
     resolved_claims_dir = claims_dir.expanduser().resolve()
-    registry_digest_after = _registry_digest(resolved_claims_dir)
-    projection_current_after = projection_is_current(claims_dir=resolved_claims_dir)
+    known_values = (known_registry_digest_after, known_projection_current_after)
+    if any(value is not None for value in known_values) and not all(value is not None for value in known_values):
+        raise ValueError(
+            "known registry digest and projection-current state must be supplied together"
+        )
+    if known_registry_digest_after is None:
+        from enforced_planning.prewrite_claim_projection import projection_is_current
+
+        registry_digest_after = _registry_digest(resolved_claims_dir)
+        projection_current_after = projection_is_current(claims_dir=resolved_claims_dir)
+    else:
+        registry_digest_after = known_registry_digest_after
+        projection_current_after = bool(known_projection_current_after)
     result: claim_mutation_receipts.MutationResult = (
         "applied_projection_current" if projection_current_after else "applied_projection_stale"
     )
@@ -2775,8 +2786,14 @@ def release_claim(
     *,
     expected_session_id: str | None = None,
     expected_start_revision: str | None = None,
+    allow_managed_lane_rollback: bool = False,
 ) -> tuple[bool, str]:
-    """Release an existing claim, optionally guarded by exact custody."""
+    """Release an existing claim, optionally guarded by exact custody.
+
+    ``allow_managed_lane_rollback`` is reserved for the claim bootstrap's
+    compensating transaction after it has proved that no worktree survived.
+    Ordinary callers must close managed lanes through ``session-close``.
+    """
     filename = _claim_filename(agent, project, scope)
     path = CLAIMS_DIR / filename
     with claim_registry_lock(CLAIMS_DIR):
@@ -2790,6 +2807,30 @@ def release_claim(
                 claim is None or claim.start_revision != expected_start_revision
             ):
                 raise ValueError(f"Refusing to release {project}:{scope}: start-revision custody changed")
+            if claim is not None and claim.worktree_path:
+                worktree_exists = Path(claim.worktree_path).expanduser().exists()
+                branch_exists = False
+                if claim.repo_root and claim.branch:
+                    repo_root = Path(claim.repo_root).expanduser()
+                    if repo_root.exists():
+                        branch_exists = (
+                            _run_git(
+                                repo_root,
+                                ["show-ref", "--verify", f"refs/heads/{claim.branch}"],
+                            ).returncode
+                            == 0
+                        )
+                rollback_is_safe = (
+                    allow_managed_lane_rollback
+                    and expected_session_id is not None
+                    and not worktree_exists
+                )
+                if (worktree_exists or branch_exists) and not rollback_is_safe:
+                    raise ValueError(
+                        "Refusing to release a managed worktree claim independently of its lane. "
+                        "Use session-close so disposition, worktree removal, branch deletion, "
+                        "claim archival, and projection refresh remain one sanctioned operation."
+                    )
             path.unlink()
             _projection_path, projection_digest_after = refresh_prewrite_authority_projection(CLAIMS_DIR)
             record_claim_mutation(
@@ -2806,6 +2847,71 @@ def release_claim(
     return False, f"No claim found for {agent} → {project}:{scope}"
 
 
+def _archive_completed_claim_locked(
+    claim_file: Path,
+    *,
+    claims_dir: Path,
+) -> tuple[ClaimRecord, claim_mutation_receipts.CompletedClaimArchiveReceiptV1]:
+    """Archive and remove one exact completed claim while the registry lock is held."""
+
+    source_bytes = claim_file.read_bytes()
+    try:
+        data = yaml.safe_load(source_bytes.decode("utf-8"))
+    except (UnicodeDecodeError, yaml.YAMLError) as exc:
+        raise CompletedClaimArchiveError(
+            error_code="invalid_completed_claim_source",
+            source_path=str(claim_file),
+            cause=exc,
+        ) from exc
+    claim = normalize_claim(data, source_file=str(claim_file)) if isinstance(data, dict) else None
+    if claim is None or claim.status.strip().lower() not in COMPLETED_STATUSES:
+        cause = ValueError("claim must be a valid completed record before archival")
+        raise CompletedClaimArchiveError(
+            error_code="invalid_completed_claim_source",
+            source_path=str(claim_file),
+            cause=cause,
+        ) from cause
+    archive_receipt = claim_mutation_receipts.build_completed_claim_archive_receipt(
+        source_kind="live_prune",
+        source_path=claim_file,
+        source_bytes=source_bytes,
+        writer=_LOADED_WRITER_IDENTITY,
+    )
+    try:
+        claim_mutation_receipts.append_completed_claim_archive_receipt(archive_receipt)
+    except (OSError, ValueError) as exc:
+        raise CompletedClaimArchiveError(
+            error_code="completed_claim_archive_write_failed",
+            source_path=str(claim_file),
+            cause=exc,
+        ) from exc
+    if claim_file.read_bytes() != source_bytes:
+        cause = ValueError("claim source bytes changed after archive persistence")
+        raise CompletedClaimArchiveError(
+            error_code="completed_claim_source_changed_before_prune",
+            source_path=str(claim_file),
+            cause=cause,
+        ) from cause
+
+    registry_digest_before = _registry_digest(claims_dir)
+    claim_file.unlink()
+    _projection_path, projection_digest_after = refresh_prewrite_authority_projection(claims_dir)
+    record_claim_mutation(
+        operation="prune",
+        claims_dir=claims_dir,
+        registry_digest_before=registry_digest_before,
+        target_project=claim.primary_project(),
+        target_scope=claim.scope,
+        target_claim_path=claim_file,
+        session_id=claim.session_id,
+        projection_digest_after=projection_digest_after,
+        archive_transaction_id=archive_receipt.prune_binding.transaction_id,
+        known_registry_digest_after=projection_digest_after,
+        known_projection_current_after=True,
+    )
+    return claim, archive_receipt
+
+
 def complete_claims_for_plan(
     *,
     project: str,
@@ -2814,9 +2920,10 @@ def complete_claims_for_plan(
 ) -> tuple[int, list[str]]:
     """Mark matching live claims completed and return the affected scopes.
 
-    This is the lifecycle-closeout path for finished lanes: claims stop being
-    active coordination input, but the YAML records remain on disk as audit
-    history with an explicit `completed` status.
+    This is retained for non-worktree coordination records. Managed worktree
+    lanes close through ``session-close``. Every completed YAML record is moved
+    immediately into the exact-byte archive so terminal history cannot grow the
+    synchronous live registry.
     """
 
     now = datetime.now(timezone.utc).isoformat()
@@ -2862,6 +2969,11 @@ def complete_claims_for_plan(
                     target_claim_path=claim_file,
                     session_id=claim.session_id,
                     projection_digest_after=projection_digest_after,
+                )
+            for claim_file, _claim in completed_claims:
+                _archive_completed_claim_locked(
+                    claim_file,
+                    claims_dir=CLAIMS_DIR,
                 )
     completed_scopes = [claim.scope for _path, claim in completed_claims]
     return len(completed_scopes), sorted(completed_scopes)
@@ -3115,10 +3227,12 @@ def prune_completed() -> tuple[int, list[str]]:
                 session_id=claim.session_id,
                 projection_digest_after=projection_digest_after,
                 archive_transaction_id=archive_receipt.prune_binding.transaction_id,
+                known_registry_digest_after=projection_digest_after,
+                known_projection_current_after=True,
             )
-            # record_claim_mutation recomputes the digest from disk anyway, so
-            # this cross-checks the in-memory advance against real authority on
-            # every single claim at no extra I/O cost.
+            # The lock-owned snapshot and just-written projection define the
+            # per-step receipt. A single full rebuild below cross-checks the
+            # batch against real authority without rescanning N files N times.
             if receipt.registry_digest_after != projection_digest_after:
                 raise PruneRegistryDivergenceError(
                     f"{claim_file}: registry digest diverged from the in-memory prune snapshot: "
@@ -3295,6 +3409,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--require-current-session",
         action="store_true",
         help="Guard release on the native session identity of the current agent runtime.",
+    )
+    parser.add_argument(
+        "--rollback-managed-lane",
+        action="store_true",
+        help=argparse.SUPPRESS,
     )
     parser.add_argument("--session-id", help="Session identifier")
     parser.add_argument("--progress-kind", choices=sorted(PROGRESS_KINDS), help="Durable progress kind")
@@ -3619,6 +3738,7 @@ def main(argv: list[str] | None = None) -> int:
                 args.scope,
                 expected_session_id=expected_session_id,
                 expected_start_revision=args.expected_start_revision,
+                allow_managed_lane_rollback=args.rollback_managed_lane,
             )
         except MutationAuditError as exc:
             return _render_mutation_audit_failure(exc, as_json=args.json)

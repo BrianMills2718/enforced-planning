@@ -1225,6 +1225,7 @@ def _execute_maintenance_worktree(
                 request.project,
                 request.scope,
                 expected_session_id=session_id,
+                allow_managed_lane_rollback=True,
             )
         except Exception as cleanup_exc:  # noqa: BLE001 - retain recoverable residue details
             cleanup_errors.append(f"claim cleanup failed: {cleanup_exc}")

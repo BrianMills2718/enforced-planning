@@ -1984,29 +1984,11 @@ def finish_session(
 
     doc_authority.assert_no_unresolved_owned_obligations(claim)
 
-    if release_claim:
-        coordination_claims.release_claim(agent, project, scope)
-        return {
-            "action": "released",
-            "clean": True,
-            "tracker_path": tracker_path_text,
-        }
-
-    _apply_claim_payload_updates(
-        claim=claim,
-        claim_file=claim_file,
-        operation="closeout",
-        updates={
-            "status": "completed",
-            "updated_at": updated_at,
-            "notes": note or "session finished cleanly",
-        },
+    raise ValueError(
+        "A clean claimed worktree cannot be terminally finished independently of its lane. "
+        "Merge or explicitly disposition the branch, then use session-close so worktree, "
+        "local branch, live claim, and terminal audit state close together."
     )
-    return {
-        "action": "completed",
-        "clean": True,
-        "tracker_path": tracker_path_text,
-    }
 
 
 def close_session(
@@ -2173,6 +2155,10 @@ def close_session(
             session_id=claim.session_id,
             projection_digest_after=projection_digest_after,
         )
+        _archived_claim, archive_receipt = coordination_claims._archive_completed_claim_locked(
+            claim_file,
+            claims_dir=coordination_claims.CLAIMS_DIR,
+        )
 
     if tracker_path is not None:
         session_contracts.update_session_tracker(
@@ -2187,6 +2173,7 @@ def close_session(
         "worktree_action": worktree_action,
         "branch_action": branch_action,
         "released": True,
+        "claim_archive_id": archive_receipt.archive_id,
         **preflight.to_dict(),
         "tracker_path": tracker_path_text,
         "missing_worktree_reconciliation": reconciliation_receipt,

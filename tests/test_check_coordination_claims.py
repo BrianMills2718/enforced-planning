@@ -557,6 +557,8 @@ def _assert_maintenance_mutation_holds_lock_through_projection_refresh(
     claims_dir: Path,
     monkeypatch: pytest.MonkeyPatch,
     operation,
+    *,
+    expected_refreshes: int = 1,
 ) -> None:
     """Prove a maintenance mutation holds its lock through the derived refresh."""
 
@@ -573,7 +575,7 @@ def _assert_maintenance_mutation_holds_lock_through_projection_refresh(
 
     def refresh_while_locked(path: Path) -> tuple[str, str]:
         assert path == claims_dir
-        assert phases == ["locked"]
+        assert phases == ["locked", *("refreshed" for _ in range(phases.count("refreshed")))]
         phases.append("refreshed")
         return "projection.json", "d" * 64
 
@@ -582,7 +584,7 @@ def _assert_maintenance_mutation_holds_lock_through_projection_refresh(
 
     operation()
 
-    assert phases == ["locked", "refreshed", "unlocked"]
+    assert phases == ["locked", *("refreshed" for _ in range(expected_refreshes)), "unlocked"]
 
 
 def test_hydration_holds_registry_lock_through_projection_refresh(
@@ -627,13 +629,19 @@ def test_completion_and_every_prune_hold_registry_lock_through_projection_refres
     monkeypatch.setattr(module._impl, "CLAIMS_DIR", claims_dir)
     original_lock = module._impl.claim_registry_lock
 
-    def exercise(name: str, payload: dict, operation) -> None:
+    def exercise(name: str, payload: dict, operation, *, expected_refreshes: int = 1) -> None:
         claims_dir.mkdir(parents=True, exist_ok=True)
         for path in claims_dir.glob("*.yaml"):
             path.unlink()
         _write_claim(claims_dir, f"{name}.yaml", payload)
         monkeypatch.setattr(module._impl, "claim_registry_lock", original_lock)
-        _assert_maintenance_mutation_holds_lock_through_projection_refresh(module, claims_dir, monkeypatch, operation)
+        _assert_maintenance_mutation_holds_lock_through_projection_refresh(
+            module,
+            claims_dir,
+            monkeypatch,
+            operation,
+            expected_refreshes=expected_refreshes,
+        )
 
     active = {
         "agent": "codex",
@@ -650,6 +658,7 @@ def test_completion_and_every_prune_hold_registry_lock_through_projection_refres
         "complete",
         active,
         lambda: module._impl.complete_claims_for_plan(project="demo", plan_ref="Plan #234"),
+        expected_refreshes=2,
     )
     exercise(
         "expired",

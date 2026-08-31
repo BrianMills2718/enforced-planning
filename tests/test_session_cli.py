@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import importlib.util
 import json
@@ -36,6 +37,11 @@ def _isolate_claim_mutation_ledger(tmp_path: Path, monkeypatch: pytest.MonkeyPat
         "DEFAULT_EVENTS_PATH",
         tmp_path / "claim-mutation-events.jsonl",
     )
+    monkeypatch.setattr(
+        claim_mutation_receipts,
+        "DEFAULT_COMPLETED_CLAIM_ARCHIVE_PATH",
+        tmp_path / "completed-claim-archive.jsonl",
+    )
 
 
 def _git(cwd: Path, *args: str) -> str:
@@ -50,6 +56,20 @@ def _git(cwd: Path, *args: str) -> str:
     )
     assert result.returncode == 0, result.stderr or result.stdout
     return result.stdout.strip()
+
+
+def _archived_claim_payload(archive_id: str) -> dict[str, object]:
+    """Return the exact terminal YAML retained outside the live registry."""
+
+    matches = [
+        receipt
+        for receipt in claim_mutation_receipts.load_completed_claim_archive_receipts()
+        if receipt.archive_id == archive_id
+    ]
+    assert len(matches) == 1
+    payload = yaml.safe_load(base64.b64decode(matches[0].source_yaml_bytes))
+    assert isinstance(payload, dict)
+    return payload
 
 
 @pytest.mark.parametrize(
@@ -1774,8 +1794,11 @@ def test_finish_session_dirty_handoff_refreshes_projection(
     assert prewrite_claim_projection.projection_is_current(claims_dir=claims_dir) is True
 
 
-def test_finish_session_releases_clean_claim(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Session finish should release the live claim once the worktree is clean."""
+def test_finish_session_rejects_clean_managed_worktree_bypass(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A clean managed lane must close through disposition-aware session-close."""
 
     claims_dir = tmp_path / "claims"
     trackers_dir = tmp_path / "sessions"
@@ -1808,16 +1831,42 @@ def test_finish_session_releases_clean_claim(tmp_path: Path, monkeypatch: pytest
 
     monkeypatch.setattr(session_lifecycle.subprocess, "run", _fake_run)
 
-    payload = session_lifecycle.finish_session(
-        agent="codex",
-        project="enforced-planning",
-        scope="plan-31-session-cli-enforcement",
-        worktree_path=str(worktree),
-        release_claim=True,
+    with pytest.raises(ValueError, match="use session-close"):
+        session_lifecycle.finish_session(
+            agent="codex",
+            project="enforced-planning",
+            scope="plan-31-session-cli-enforcement",
+            worktree_path=str(worktree),
+            release_claim=True,
+        )
+
+    assert (claims_dir / "codex_enforced-planning_plan-31-session-cli-enforcement.yaml").exists()
+
+
+def test_release_claim_rejects_managed_worktree_bypass(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Generic claim release cannot detach ownership from an existing Git lane."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    repo_root, worktree, branch = _real_repo_with_worktree(tmp_path)
+    claim_file = _start_real_closeout_claim(
+        repo_root=repo_root,
+        worktree=worktree,
+        branch=branch,
+        claims_dir=claims_dir,
+        trackers_dir=trackers_dir,
     )
 
-    assert payload["action"] == "released"
-    assert not (claims_dir / "codex_enforced-planning_plan-31-session-cli-enforcement.yaml").exists()
+    with pytest.raises(ValueError, match="managed worktree claim"):
+        coordination_claims.release_claim("codex", "enforced-planning", branch)
+
+    assert claim_file.exists()
+    assert worktree.exists()
+    assert _git(repo_root, "show-ref", "--verify", f"refs/heads/{branch}")
 
 
 def test_close_session_rejects_clean_unmerged_branch_before_mutation(
@@ -1889,9 +1938,13 @@ def test_close_session_closes_branch_merged_to_default(
         check=False,
     )
     assert branch_check.returncode != 0
-    claim_payload = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
-    assert claim_payload["status"] == "completed"
-    assert claim_payload["disposition"] == "merged"
+    assert not claim_file.exists()
+    archive_records = claim_mutation_receipts.load_completed_claim_archive_receipts()
+    assert len(archive_records) == 1
+    assert archive_records[0].archive_id == payload["claim_archive_id"]
+    archived_payload = yaml.safe_load(base64.b64decode(archive_records[0].source_yaml_bytes))
+    assert archived_payload["status"] == "completed"
+    assert archived_payload["disposition"] == "merged"
     closeout_records = [
         record
         for record in claim_mutation_receipts.load_receipts(events_path=events_path)
@@ -2063,7 +2116,8 @@ def test_close_session_accepts_exact_squash_merge_patch_receipt(
     assert payload["merge_commit"] == merge_commit
     assert payload["merge_evidence"] == "squash_patch_equivalent"
     assert not worktree.exists()
-    claim_payload = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
+    assert not claim_file.exists()
+    claim_payload = _archived_claim_payload(payload["claim_archive_id"])
     assert claim_payload["merge_commit"] == merge_commit
     assert claim_payload["merge_evidence"] == "squash_patch_equivalent"
 
@@ -2141,7 +2195,8 @@ def test_close_session_accepts_squash_patch_after_independent_same_file_change(
     assert payload["action"] == "closed"
     assert payload["merge_evidence"] == "squash_patch_equivalent"
     assert not worktree.exists()
-    claim_payload = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
+    assert not claim_file.exists()
+    claim_payload = _archived_claim_payload(payload["claim_archive_id"])
     assert claim_payload["merge_commit"] == merge_commit
 
 
@@ -2425,7 +2480,8 @@ def test_close_session_recovers_from_stale_repo_root_using_recorded_worktree(
     assert payload["action"] == "closed"
     assert payload["worktree_action"] == "removed"
     assert payload["branch_action"] == "deleted"
-    completed_claim = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
+    assert not claim_file.exists()
+    completed_claim = _archived_claim_payload(payload["claim_archive_id"])
     assert completed_claim["status"] == "completed"
     assert completed_claim["repo_root"] == str(repo_root)
 
@@ -2545,7 +2601,8 @@ def test_close_session_resolves_missing_nested_worktree_repo_root(
     assert payload["disposition"] == "merged"
     assert payload["worktree_action"] == "already_missing"
     assert payload["branch_action"] == "deleted"
-    claim_payload = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
+    assert not claim_file.exists()
+    claim_payload = _archived_claim_payload(payload["claim_archive_id"])
     assert claim_payload["status"] == "completed"
     assert claim_payload["disposition"] == "merged"
 
@@ -2587,7 +2644,8 @@ def test_close_session_records_receipt_after_removing_loaded_runtime_worktree(
 
     assert payload["action"] == "closed"
     assert not worktree.exists()
-    assert yaml.safe_load(claim_file.read_text(encoding="utf-8"))["status"] == "completed"
+    assert not claim_file.exists()
+    assert _archived_claim_payload(payload["claim_archive_id"])["status"] == "completed"
     closeout_receipt = [
         receipt
         for receipt in claim_mutation_receipts.load_receipts(events_path=events_path)
@@ -2650,7 +2708,8 @@ def test_close_session_reconciles_exact_session_ended_missing_worktree(
         "merge_evidence": "branch_ancestor",
         "merge_commit": "none",
     }
-    claim_after = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
+    assert not claim_file.exists()
+    claim_after = _archived_claim_payload(payload["claim_archive_id"])
     assert claim_after["status"] == "completed"
     assert claim_after["missing_worktree_reconciliation"] == receipt
     assert session_contracts.read_session_tracker(tracker)["tracker"]["current_phase"] == "closed"
@@ -2774,7 +2833,8 @@ def test_close_session_archives_unique_branch_with_durable_recovery_ref(
 
     assert payload["disposition"] == "archived"
     assert _git(repo_root, "show-ref", "--verify", recovery_ref)
-    claim_payload = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
+    assert not claim_file.exists()
+    claim_payload = _archived_claim_payload(payload["claim_archive_id"])
     assert claim_payload["status"] == "completed"
     assert claim_payload["recovery_ref"] == recovery_ref
 
@@ -2874,7 +2934,8 @@ def test_close_session_abandons_unique_branch_only_with_explicit_authorization(
         check=False,
     )
     assert branch_check.returncode != 0
-    claim_payload = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
+    assert not claim_file.exists()
+    claim_payload = _archived_claim_payload(payload["claim_archive_id"])
     assert claim_payload["status"] == "completed"
     assert claim_payload["disposition"] == "abandoned"
 

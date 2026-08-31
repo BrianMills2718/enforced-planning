@@ -322,7 +322,7 @@ enforcement-contract job. The coordinated follow-up also makes Codex prewrite
 cover Bash as well as apply-patch, attributes Stop dirt only to the session's
 linked worktree, removes claim heartbeat writes from PreToolUse, and resolves
 the canonical-lock helper in both source and installed layouts. Bash path
-operands are checked against the claim's declared write paths, absolute
+operands, including root-level basename targets, are checked against the claim's declared write paths, absolute
 apply-patch targets select their owning linked worktree, and root-start fetches
 the configured upstream before fixing the claim/worktree start revision. The
 bounded gate passes 217 focused tests, including the installed-consumer journey; an authentic

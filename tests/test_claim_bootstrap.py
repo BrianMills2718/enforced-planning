@@ -185,7 +185,7 @@ def _configure_maintenance_runtime(
     monkeypatch.setattr(
         claim_bootstrap,
         "_repository_authority",
-        lambda repo: claim_bootstrap.RepositoryAuthority(
+        lambda repo, **_kwargs: claim_bootstrap.RepositoryAuthority(
             repo.name, f"Brian/{repo.name}", "main", "origin"
         ),
     )
@@ -200,6 +200,24 @@ def _configure_maintenance_runtime(
         ).stdout.strip(),
     )
     return claims_dir, trackers_dir
+
+
+def test_default_branch_target_is_rejected_before_fetch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    claims_dir, _trackers = _configure_maintenance_runtime(tmp_path, monkeypatch)
+    def must_not_fetch(*_args: object) -> str:
+        pytest.fail("default branch rejection must precede remote fetch")
+    monkeypatch.setattr(claim_bootstrap, "_fresh_remote_default_revision", must_not_fetch)
+    request = claim_bootstrap.parse_request_json(json.dumps(
+        _maintenance_payload(repo, branch="main", scope="main")
+    ))
+    with pytest.raises(claim_bootstrap.ClaimBootstrapError, match="non-default"):
+        claim_bootstrap.execute_request(request)
+    assert not (repo / "worktrees").exists()
+    assert not list(claims_dir.glob("*.yaml"))
 
 
 def _project_graph_fixture(
@@ -356,7 +374,7 @@ def test_typed_maintenance_bootstraps_from_fresh_remote_not_stale_primary(
     monkeypatch.setattr(
         claim_bootstrap,
         "_repository_authority",
-        lambda _target: authority,
+        lambda _target, **_kwargs: authority,
     )
     monkeypatch.setattr(claim_bootstrap, "_fresh_remote_default_revision", real_fresh)
     request = claim_bootstrap.parse_request_json(json.dumps(_maintenance_payload(repo)))
@@ -394,7 +412,7 @@ def test_remote_fetch_failure_leaves_no_lane_artifacts(
     monkeypatch.setattr(
         claim_bootstrap,
         "_repository_authority",
-        lambda _target: authority,
+        lambda _target, **_kwargs: authority,
     )
     monkeypatch.setattr(claim_bootstrap, "_fresh_remote_default_revision", real_fresh)
     request = claim_bootstrap.parse_request_json(json.dumps(_maintenance_payload(repo)))
@@ -990,7 +1008,7 @@ def test_maintenance_rejects_ambiguous_write_paths(tmp_path: Path, paths: list[s
         ))
 
 
-@pytest.mark.parametrize("other_path", ["unrelated.txt", "src/adapter.py"])
+@pytest.mark.parametrize("other_path", ["unrelated.txt", "src/adapter.py", "."])
 def test_narrow_bootstrap_preserves_other_writers(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, other_path: str,
 ) -> None:
@@ -1007,7 +1025,7 @@ def test_narrow_bootstrap_preserves_other_writers(
     request = claim_bootstrap.parse_request_json(json.dumps(
         _maintenance_payload(repo, write_paths=["src/adapter.py"])
     ))
-    if other_path == "src/adapter.py":
+    if other_path != "unrelated.txt":
         with pytest.raises(claim_bootstrap.ClaimBootstrapError, match="CONFLICT"):
             claim_bootstrap.execute_request(request)
     else:
@@ -1015,6 +1033,36 @@ def test_narrow_bootstrap_preserves_other_writers(
     other = [c for c in claim_bootstrap.coordination_claims.check_claims(repo.name)
              if c.scope == "other-lane"]
     assert len(other) == 1 and other[0].write_paths == [other_path]
+
+
+@pytest.mark.parametrize(("left", "right"), [
+    (".", "src/adapter.py"), ("src/adapter.py", "."), ("./", "tests"),
+])
+def test_whole_repository_claim_overlaps_in_both_directions(left: str, right: str) -> None:
+    assert claim_bootstrap.coordination_claims._paths_overlap(left, right)
+
+
+def test_bootstrap_dispatches_to_scoped_resolver_with_exact_branch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = _governed_repo(tmp_path)
+    subprocess.run(["git", "-C", str(repo), "remote", "add", "origin",
+                    "https://github.com/Brian/repo.git"], check=True)
+    calls = []
+    def scoped(**kwargs):
+        calls.append(kwargs)
+        return claim_bootstrap.MaintenanceWorktreeAuthority(
+            repo.name, "Brian/repo", "main", kwargs["remote_url"],
+            str(repo), "maintenance_worktree", kwargs["branch"], "feature_branch_only",
+        )
+    def generic(**kwargs):
+        pytest.fail("maintenance cannot use generic authority")
+    monkeypatch.setattr(claim_bootstrap, "resolve_maintenance_worktree_authority", scoped)
+    monkeypatch.setattr(claim_bootstrap, "resolve_repository_authority", generic)
+    result = claim_bootstrap._repository_authority(repo, branch="codex/example")
+    assert result.branch == "codex/example"
+    assert calls == [dict(repo_root=repo, repository_identity="Brian/repo",
+                          remote_url="https://github.com/Brian/repo.git", branch="codex/example")]
 
 
 def test_unknown_operation_and_extra_fields_fail_closed() -> None:

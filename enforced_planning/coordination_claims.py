@@ -1716,6 +1716,8 @@ def _paths_overlap(left: str, right: str) -> bool:
     """Return whether two normalized repo-relative paths overlap."""
     left_norm = _normalize_repo_path(left)
     right_norm = _normalize_repo_path(right)
+    if left_norm == "." or right_norm == ".":
+        return True
     return left_norm == right_norm or left_norm.startswith(f"{right_norm}/") or right_norm.startswith(f"{left_norm}/")
 
 

@@ -1,19 +1,22 @@
-"""Narrow self-service claim mutations for a natively identified agent session.
+"""Narrow self-service lane controls for a natively identified agent session.
 
 This module is intentionally not a general lifecycle command proxy. It accepts
 only typed claim-registry operations, derives the caller's session identity from
-the native runtime, and exposes transactional maintenance and new-local-repository
-worktree bootstraps. It never executes caller-supplied shell fragments.
+the native runtime, and exposes transactional maintenance, new-local-repository
+bootstrap, and local integration operations. It never executes caller-supplied
+shell fragments.
 """
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import re
 import secrets
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 from typing import Annotated, Any, Literal
 from urllib.parse import urlparse
@@ -25,8 +28,8 @@ from enforced_planning.repository_authority import (
     MaintenanceWorktreeAuthority,
     RepositoryAuthority,
     RepositoryAuthorityError,
-    resolve_repository_authority,
     resolve_maintenance_worktree_authority,
+    resolve_repository_authority,
 )
 
 AgentName = Literal["codex", "claude-code", "openclaw"]
@@ -211,6 +214,35 @@ class LocalRepositoryWorktreeRequest(_StrictRequest):
         return self
 
 
+class LocalRepositoryIntegrateRequest(_StrictRequest):
+    operation: Literal["local_repository_integrate"]
+    agent: AgentName
+    repo_root: str = Field(min_length=1)
+    branch: str = Field(min_length=1)
+    default_branch: Literal["main"] = "main"
+
+    @model_validator(mode="after")
+    def _validate_target(self) -> LocalRepositoryIntegrateRequest:
+        repo = Path(self.repo_root).expanduser()
+        if not repo.is_absolute() or ".." in repo.parts or str(repo.resolve()) != self.repo_root:
+            raise ValueError("repo_root must be one canonical absolute path without traversal")
+        if self.project != repo.name:
+            raise ValueError("project must exactly match the local repository directory name")
+        if self.scope != self.branch:
+            raise ValueError("scope must exactly match branch")
+        if self.branch in {"main", "master"}:
+            raise ValueError("integration source must be a non-default task branch")
+        if (
+            re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._/-]*", self.branch) is None
+            or self.branch.startswith(("-", "/"))
+            or self.branch.endswith(("/", "."))
+            or ".." in self.branch
+            or "//" in self.branch
+        ):
+            raise ValueError("branch is not a safe literal Git branch")
+        return self
+
+
 class ProgressRequest(_StrictRequest):
     operation: Literal["progress"]
     progress_kind: ProgressKind
@@ -225,11 +257,14 @@ ClaimBootstrapRequest = Annotated[
     | HeartbeatRequest
     | ProgressRequest
     | MaintenanceWorktreeRequest
-    | LocalRepositoryWorktreeRequest,
+    | LocalRepositoryWorktreeRequest
+    | LocalRepositoryIntegrateRequest,
     Field(discriminator="operation"),
 ]
 _REQUEST_ADAPTER = TypeAdapter(ClaimBootstrapRequest)
 SESSION_TRACKERS_DIR = session_contracts.DEFAULT_SESSION_TRACKERS_DIR
+
+
 def _git(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         ["git", "-c", "core.hooksPath=/dev/null", "-C", str(repo), *args],
@@ -237,6 +272,30 @@ def _git(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
         text=True,
         check=False,
     )
+
+
+def _canonical_lock_module() -> Any:
+    """Load the shipped canonical-lock owner without creating a second implementation."""
+
+    module_path = (
+        Path(__file__).resolve().parents[1]
+        / "scripts"
+        / "worktree-coordination"
+        / "canonical_lock.py"
+    )
+    if not module_path.is_file():
+        raise ClaimBootstrapError(f"canonical lock control is unavailable: {module_path}")
+    module_name = f"_claim_bootstrap_canonical_lock_{abs(hash(str(module_path)))}"
+    existing = sys.modules.get(module_name)
+    if existing is not None:
+        return existing
+    spec = importlib.util.spec_from_file_location(module_name, module_path)
+    if spec is None or spec.loader is None:
+        raise ClaimBootstrapError(f"canonical lock control cannot be loaded: {module_path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+    return module
 
 
 def _github_repo_from_remote(remote_url: str) -> str:
@@ -527,7 +586,9 @@ def execute_request(request: ClaimBootstrapRequest) -> dict[str, Any]:
 
     agent, session_id = _native_agent(request.agent)
 
-    if isinstance(request, LocalRepositoryWorktreeRequest):
+    if isinstance(request, LocalRepositoryIntegrateRequest):
+        payload = _execute_local_repository_integrate(request, agent=agent, session_id=session_id)
+    elif isinstance(request, LocalRepositoryWorktreeRequest):
         payload = _execute_local_repository_worktree(request, agent=agent, session_id=session_id)
     elif isinstance(request, MaintenanceWorktreeRequest):
         payload = _execute_maintenance_worktree(request, agent=agent, session_id=session_id)
@@ -618,6 +679,137 @@ def execute_request(request: ClaimBootstrapRequest) -> dict[str, Any]:
         "project": request.project,
         "scope": request.scope,
         "result": payload,
+    }
+
+
+def _execute_local_repository_integrate(
+    request: LocalRepositoryIntegrateRequest,
+    *,
+    agent: AgentName,
+    session_id: str,
+) -> dict[str, Any]:
+    """Fast-forward one locked local-only canonical checkout from its sole live lane."""
+
+    repo = Path(request.repo_root).resolve()
+    _require_self_owned_slot(
+        agent=agent,
+        session_id=session_id,
+        project=request.project,
+        scope=request.scope,
+        allow_absent=False,
+    )
+    matches = [
+        claim
+        for claim in coordination_claims.check_claims(request.project)
+        if claim.is_live()
+        and claim.agent == agent
+        and claim.session_id == session_id
+        and claim.scope == request.scope
+    ]
+    if len(matches) != 1:
+        raise ClaimBootstrapError("local integration requires one exact live self-owned claim")
+    claim = matches[0]
+    if Path(claim.repo_root or "").expanduser().resolve() != repo:
+        raise ClaimBootstrapError("local integration repository does not match the exact live claim")
+    if claim.branch != request.branch:
+        raise ClaimBootstrapError("local integration branch does not match the exact live claim")
+    worktree = Path(claim.worktree_path or "").expanduser().resolve()
+    if not worktree.is_dir():
+        raise ClaimBootstrapError("local integration worktree is missing")
+
+    repo_claims = [
+        candidate
+        for candidate in coordination_claims.check_claims()
+        if candidate.is_live()
+        and candidate.repo_root
+        and Path(candidate.repo_root).expanduser().resolve() == repo
+    ]
+    if len(repo_claims) != 1 or repo_claims[0].session_id != session_id or repo_claims[0].scope != request.scope:
+        labels = ", ".join(
+            sorted(f"{candidate.agent}:{candidate.scope}" for candidate in repo_claims)
+        ) or "none"
+        raise ClaimBootstrapError(
+            "local integration requires this lane to be the repository's sole live claim; "
+            f"found: {labels}"
+        )
+
+    remotes = _git(repo, "remote")
+    if remotes.returncode != 0:
+        raise ClaimBootstrapError(remotes.stderr.strip() or "local repository remote check failed")
+    if remotes.stdout.strip():
+        raise ClaimBootstrapError("local integration is restricted to repositories with no remotes")
+    current_branch = _git(repo, "branch", "--show-current")
+    if current_branch.returncode != 0 or current_branch.stdout.strip() != request.default_branch:
+        raise ClaimBootstrapError(
+            f"canonical checkout must be on {request.default_branch!r} before local integration"
+        )
+    status = _git(repo, "status", "--porcelain")
+    if status.returncode != 0 or status.stdout.strip():
+        raise ClaimBootstrapError("canonical checkout must be clean before local integration")
+    lane_branch = _git(worktree, "branch", "--show-current")
+    if lane_branch.returncode != 0 or lane_branch.stdout.strip() != request.branch:
+        raise ClaimBootstrapError("claimed worktree is not on the exact integration branch")
+    lane_status = _git(worktree, "status", "--porcelain")
+    if lane_status.returncode != 0 or lane_status.stdout.strip():
+        raise ClaimBootstrapError("claimed worktree must be clean before local integration")
+
+    before = _git(repo, "rev-parse", request.default_branch)
+    lane_head = _git(repo, "rev-parse", request.branch)
+    if before.returncode != 0 or lane_head.returncode != 0:
+        raise ClaimBootstrapError("local integration revisions could not be resolved")
+    before_sha = before.stdout.strip()
+    lane_sha = lane_head.stdout.strip()
+    if before_sha == lane_sha:
+        return {
+            "action": "already_integrated",
+            "repo_root": str(repo),
+            "default_branch": request.default_branch,
+            "branch": request.branch,
+            "before_revision": before_sha,
+            "integrated_revision": lane_sha,
+            "lock_action": "unchanged",
+        }
+    ancestor = _git(repo, "merge-base", "--is-ancestor", request.default_branch, request.branch)
+    if ancestor.returncode != 0:
+        raise ClaimBootstrapError("local integration must be an exact fast-forward")
+
+    canonical_lock = _canonical_lock_module()
+    receipt = canonical_lock.read_receipt(repo)
+    if receipt is None:
+        raise ClaimBootstrapError("canonical checkout has no live lock receipt")
+    if request.scope not in receipt.justifying_claims:
+        raise ClaimBootstrapError("canonical lock is not justified by the exact live claim")
+    integrity = canonical_lock.verify_lock_integrity(repo)
+    if integrity.get("verdict") != canonical_lock.VERDICT_LOCKED:
+        raise ClaimBootstrapError("canonical checkout lock is degraded before integration")
+
+    canonical_lock.unlock_repo(repo)
+    merge: subprocess.CompletedProcess[str] | None = None
+    relock: dict[str, Any] | None = None
+    try:
+        merge = _git(repo, "merge", "--ff-only", request.branch)
+    finally:
+        relock = canonical_lock.lock_repo(
+            repo,
+            justifying_claims=list(receipt.justifying_claims),
+            session_id=session_id,
+        )
+    if merge is None or merge.returncode != 0:
+        detail = "" if merge is None else (merge.stderr.strip() or merge.stdout.strip())
+        raise ClaimBootstrapError(f"local fast-forward integration failed: {detail or 'unknown Git error'}")
+    after = _git(repo, "rev-parse", request.default_branch)
+    if after.returncode != 0 or after.stdout.strip() != lane_sha:
+        raise ClaimBootstrapError("local integration did not advance canonical main to the lane revision")
+    if canonical_lock.verify_lock_integrity(repo).get("verdict") != canonical_lock.VERDICT_LOCKED:
+        raise ClaimBootstrapError("canonical checkout was not relocked after local integration")
+    return {
+        "action": "integrated",
+        "repo_root": str(repo),
+        "default_branch": request.default_branch,
+        "branch": request.branch,
+        "before_revision": before_sha,
+        "integrated_revision": lane_sha,
+        "lock_action": relock.get("action") if relock else None,
     }
 
 

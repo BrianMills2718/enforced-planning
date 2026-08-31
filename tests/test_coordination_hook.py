@@ -204,6 +204,51 @@ def test_projection_repair_rechecks_under_lock_before_rebuilding(
     assert result["total_ms"] >= result["lock_wait_ms"]
 
 
+def test_stop_repair_waits_for_real_writer_then_uses_its_projection(tmp_path: Path) -> None:
+    """Exercise the real process/lock race that produced the native Stop warning."""
+
+    claims_dir = tmp_path / "claims"
+    claims_dir.mkdir()
+    coordination_hook.coordination_claims.refresh_prewrite_authority_projection(claims_dir)
+    time.sleep(0.002)
+    _write_live_claim(claims_dir, scope="contended-stop")
+    ready_path = tmp_path / "writer-holds-lock"
+    writer = subprocess.Popen(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import sys,time; from pathlib import Path; "
+                "from enforced_planning import coordination_claims; "
+                "claims=Path(sys.argv[1]); ready=Path(sys.argv[2]); "
+                "lock=coordination_claims.claim_registry_lock(claims); lock.__enter__(); "
+                "ready.write_text('locked', encoding='utf-8'); time.sleep(0.35); "
+                "coordination_claims.refresh_prewrite_authority_projection(claims); "
+                "lock.__exit__(None, None, None)"
+            ),
+            str(claims_dir),
+            str(ready_path),
+        ],
+        cwd=Path(__file__).resolve().parents[1],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    deadline = time.monotonic() + 2
+    while not ready_path.is_file() and writer.poll() is None and time.monotonic() < deadline:
+        time.sleep(0.01)
+    assert ready_path.is_file(), writer.communicate(timeout=1)[1]
+
+    started = time.monotonic()
+    claims = coordination_hook._active_claims(claims_dir, turn_end=True)
+    elapsed = time.monotonic() - started
+    stdout, stderr = writer.communicate(timeout=2)
+
+    assert writer.returncode == 0, (stdout, stderr)
+    assert [claim.scope for claim in claims] == ["contended-stop"]
+    assert 0.2 <= elapsed < coordination_hook.TURN_END_PROJECTION_REPAIR_TIMEOUT_SECONDS
+
+
 def test_projection_repair_timeout_names_last_observed_phase(monkeypatch, tmp_path: Path) -> None:
     def timeout(*_args: object, **_kwargs: object) -> object:
         raise subprocess.TimeoutExpired(

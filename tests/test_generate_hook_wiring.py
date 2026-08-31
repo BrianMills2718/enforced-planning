@@ -636,6 +636,7 @@ def test_installed_prewrite_runtime_projects_and_classifies_native_payloads(
         check=False,
     )
     assert install.returncode == 0, install.stderr
+    assert (repo / "enforced_planning" / "__init__.py").is_file()
 
     claims_dir = tmp_path / "claims"
     claims_dir.mkdir()
@@ -659,7 +660,10 @@ def test_installed_prewrite_runtime_projects_and_classifies_native_payloads(
                 "repo_root": str(repo),
                 "branch": "main",
                 "session_name": "installed-test",
+                "broader_goal": "Verify installed prewrite enforcement",
+                "tracker_path": str(tmp_path / "installed-test-session.yaml"),
                 "session_id": "codex:installed-test",
+                "plan_ref": "UNPLANNED",
                 "heartbeat_at": now.isoformat(),
                 "status": "active",
                 "updated_at": now.isoformat(),

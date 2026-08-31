@@ -86,10 +86,35 @@ SUPPORT_FILES: dict[str, str] = {
 PREWRITE_SUPPORT_FILES: dict[str, str] = {
     "scripts/prewrite_claim_gate.py": "scripts/prewrite_claim_gate.py",
     "scripts/refresh_prewrite_claim_projection.py": "scripts/refresh_prewrite_claim_projection.py",
+    # A directory of modules without __init__.py is only a namespace-package
+    # candidate.  An older regular package in site-packages then wins import
+    # resolution and silently supplies stale enforcement code to the installed
+    # hook.  Install the package marker so the consumer-local runtime owns the
+    # import boundary.
+    "enforced_planning/__init__.py": "enforced_planning/__init__.py",
+    "enforced_planning/claim_bootstrap.py": "enforced_planning/claim_bootstrap.py",
     "enforced_planning/prewrite_claim_fast.py": "enforced_planning/prewrite_claim_fast.py",
     "enforced_planning/prewrite_claim_projection.py": "enforced_planning/prewrite_claim_projection.py",
     "enforced_planning/coordination_claims.py": "enforced_planning/coordination_claims.py",
+    "enforced_planning/coordination_messages.py": "enforced_planning/coordination_messages.py",
     "enforced_planning/claim_mutation_receipts.py": "enforced_planning/claim_mutation_receipts.py",
+    "enforced_planning/doc_authority.py": "enforced_planning/doc_authority.py",
+    "enforced_planning/file_context.py": "enforced_planning/file_context.py",
+    "enforced_planning/notebook_registry_validation.py": "enforced_planning/notebook_registry_validation.py",
+    "enforced_planning/outcome_admission.py": "enforced_planning/outcome_admission.py",
+    "enforced_planning/outcome_continuation.py": "enforced_planning/outcome_continuation.py",
+    "enforced_planning/outcome_portfolio.py": "enforced_planning/outcome_portfolio.py",
+    "enforced_planning/outcome_prewrite_observation.py": "enforced_planning/outcome_prewrite_observation.py",
+    "enforced_planning/outcome_selection.py": "enforced_planning/outcome_selection.py",
+    "enforced_planning/plan_validation.py": "enforced_planning/plan_validation.py",
+    "enforced_planning/push_safety.py": "enforced_planning/push_safety.py",
+    "enforced_planning/read_target.py": "enforced_planning/read_target.py",
+    "enforced_planning/repository_authority.py": "enforced_planning/repository_authority.py",
+    "enforced_planning/session_contracts.py": "enforced_planning/session_contracts.py",
+    "enforced_planning/session_lifecycle.py": "enforced_planning/session_lifecycle.py",
+    "enforced_planning/session_target.py": "enforced_planning/session_target.py",
+    "enforced_planning/surface_runtime.py": "enforced_planning/surface_runtime.py",
+    "enforced_planning/worktree_lifecycle.yaml": "enforced_planning/worktree_lifecycle.yaml",
     "enforced_planning/worktree_paths.py": "enforced_planning/worktree_paths.py",
 }
 

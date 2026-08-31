@@ -100,6 +100,30 @@ worktree, exact-session claim, tracker, and projection transactionally; failure
 removes only artifacts created by that attempt. Checkout occurs only after the
 claim is durable. Raw Make or shell escape forms are not authority surfaces.
 
+### Brand-new local repository
+
+The same exact native command surface can initialize a repository that does not
+yet have a remote or Project Graph record:
+
+```json
+{"schema_version":"1.0","operation":"local_repository_worktree","agent":"codex","project":"weekly-plans","scope":"codex/initial-setup","repo_root":"/absolute/workspace/weekly-plans","branch":"codex/initial-setup","claim_type":"program"}
+```
+
+Run it from the repository's intended workspace parent. The target must be an
+absent direct child of that directory, and the workspace parent must not itself
+be inside a Git worktree. The project id must equal the target directory name;
+the scope must equal a safe non-default task branch. Whole-repository ownership
+is fixed to `write_paths: ["."]` for this first lane.
+
+This transaction creates a local `main` branch with only `/worktrees/` ignored,
+then creates the requested linked worktree, exact-session claim, tracker, and
+projection. It configures no remote, performs no network request, and grants no
+publication authority. Continue all project edits in
+`<repo>/worktrees/<branch>/`. After merging the task branch into local `main`,
+the ordinary session-close path can prove local integration and close the lane.
+Registration in Project Graph and remote publication remain separate authority
+decisions.
+
 `agent` identifies the client class; `session_id` identifies the runtime that
 owns a live claim. Two Codex windows are therefore two writers even though both
 claims say `agent: codex`. A live `agent + project + scope` slot may be refreshed

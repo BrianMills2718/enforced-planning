@@ -30,6 +30,20 @@ class RepositoryAuthority:
     remote_url: str
 
 
+@dataclass(frozen=True)
+class MaintenanceWorktreeAuthority:
+    """An exact worktree-creation grant, never general repository-write authority."""
+
+    project_id: str
+    repository_identity: str
+    default_branch: str
+    remote_url: str
+    repo_root: str
+    operation: str
+    branch: str
+    mutation_authority: str
+
+
 def _strict_object(raw: str, *, label: str) -> dict[str, Any]:
     def reject_duplicates(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
         result: dict[str, Any] = {}
@@ -80,22 +94,9 @@ def _load_provider(config_path: Path) -> Path:
     return provider
 
 
-def resolve_repository_authority(
-    *,
-    repo_root: Path,
-    repository_identity: str,
-    remote_url: str,
-    config_path: Path = DEFAULT_PROVIDER_CONFIG,
-) -> RepositoryAuthority:
-    """Ask one installed personal/organization adapter for a bounded decision."""
-
+def _provider_response(request: dict[str, str], config_path: Path) -> dict[str, Any]:
+    """Call the pinned adapter without falling back to broader authority."""
     provider = _load_provider(config_path)
-    request = {
-        "schema_version": "1.0",
-        "repo_root": str(repo_root),
-        "repository_identity": repository_identity,
-        "remote_url": remote_url,
-    }
     try:
         completed = subprocess.run(
             [str(provider)],
@@ -110,7 +111,23 @@ def resolve_repository_authority(
     if completed.returncode != 0:
         detail = completed.stderr.strip() or completed.stdout.strip() or "provider denied the repository"
         raise RepositoryAuthorityError(detail)
-    response = _strict_object(completed.stdout, label="provider response")
+    return _strict_object(completed.stdout, label="provider response")
+
+
+def resolve_repository_authority(
+    *,
+    repo_root: Path,
+    repository_identity: str,
+    remote_url: str,
+    config_path: Path = DEFAULT_PROVIDER_CONFIG,
+) -> RepositoryAuthority:
+    """Resolve legacy v1 general authority; scoped grants cannot satisfy it."""
+    response = _provider_response({
+        "schema_version": "1.0",
+        "repo_root": str(repo_root),
+        "repository_identity": repository_identity,
+        "remote_url": remote_url,
+    }, config_path)
     expected_fields = {
         "schema_version", "allowed", "project_id", "repository_identity", "default_branch", "remote_url"
     }
@@ -135,3 +152,60 @@ def resolve_repository_authority(
     if checked.returncode != 0:
         raise RepositoryAuthorityError("provider default branch is invalid")
     return RepositoryAuthority(project_id.strip(), repository_identity, default_branch, remote_url)
+
+
+def _literal_branch(value: object) -> bool:
+    """Reject Git shorthands whose meaning depends on the caller's checkout."""
+    if not isinstance(value, str) or not value or value != value.strip() or value.startswith("refs/"):
+        return False
+    checked = subprocess.run(
+        ["git", "check-ref-format", "--branch", value],
+        capture_output=True, text=True, check=False,
+    )
+    return checked.returncode == 0 and checked.stdout.strip() == value
+
+
+def resolve_maintenance_worktree_authority(
+    *,
+    repo_root: Path,
+    repository_identity: str,
+    remote_url: str,
+    branch: str,
+    config_path: Path = DEFAULT_PROVIDER_CONFIG,
+) -> MaintenanceWorktreeAuthority:
+    """Require a v2 grant bound to this operation, root, identity, and branch."""
+    if not _literal_branch(branch):
+        raise RepositoryAuthorityError("invalid maintenance branch")
+    request = {
+        "schema_version": "2.0",
+        "repo_root": str(repo_root),
+        "repository_identity": repository_identity,
+        "remote_url": remote_url,
+        "operation": "maintenance_worktree",
+        "branch": branch,
+    }
+    response = _provider_response(request, config_path)
+    if set(response) != set(request) | {
+        "allowed", "project_id", "default_branch", "mutation_authority",
+    }:
+        raise RepositoryAuthorityError("scoped provider response has unknown or missing fields")
+    if response["allowed"] is not True or any(
+        response[key] != value for key, value in request.items()
+    ):
+        raise RepositoryAuthorityError("scoped provider response does not bind the exact request")
+    if not isinstance(response["mutation_authority"], str) or response["mutation_authority"] not in {
+        "normal_push", "feature_branch_only",
+    }:
+        raise RepositoryAuthorityError("unsupported scoped mutation authority")
+    project_id, default = response["project_id"], response["default_branch"]
+    if not isinstance(project_id, str) or not project_id.strip():
+        raise RepositoryAuthorityError("scoped provider response has no project id")
+    if (
+        not _literal_branch(default)
+        or branch == default
+    ):
+        raise RepositoryAuthorityError("maintenance target must be a non-default branch")
+    return MaintenanceWorktreeAuthority(
+        project_id, repository_identity, default, remote_url, str(repo_root),
+        "maintenance_worktree", branch, response["mutation_authority"],
+    )

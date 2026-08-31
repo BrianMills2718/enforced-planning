@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
+import stat
 from dataclasses import replace
 from pathlib import Path
 
@@ -100,6 +102,11 @@ def test_unclaimed_native_session_can_start_its_own_claim(
         claim_bootstrap.coordination_claims.claim_mutation_receipts,
         "append_receipt",
         lambda _receipt: None,
+    )
+    monkeypatch.setattr(
+        claim_bootstrap.coordination_claims.claim_mutation_receipts,
+        "DEFAULT_COMPLETED_CLAIM_ARCHIVE_PATH",
+        tmp_path / "completed-claim-archive-v1.jsonl",
     )
     monkeypatch.setattr(
         claim_bootstrap.session_lifecycle,
@@ -218,6 +225,11 @@ def _configure_maintenance_runtime(
         claim_bootstrap.coordination_claims.claim_mutation_receipts,
         "append_receipt",
         lambda _receipt: None,
+    )
+    monkeypatch.setattr(
+        claim_bootstrap.coordination_claims.claim_mutation_receipts,
+        "DEFAULT_COMPLETED_CLAIM_ARCHIVE_PATH",
+        tmp_path / "completed-claim-archive-v1.jsonl",
     )
     monkeypatch.setattr(
         claim_bootstrap.session_lifecycle,
@@ -377,6 +389,92 @@ def test_local_integration_relocks_after_git_failure(
             claim_bootstrap.parse_request_json(json.dumps(_local_integration_payload(repo)))
         )
 
+    assert canonical_lock.verify_lock_integrity(repo)["verdict"] == canonical_lock.VERDICT_LOCKED
+    canonical_lock.unlock_repo(repo)
+
+
+def test_already_integrated_local_repository_requires_a_healthy_lock(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _configure_maintenance_runtime(tmp_path, monkeypatch)
+    monkeypatch.chdir(tmp_path)
+    repo = (tmp_path / "weekly-plans").resolve()
+    claim_bootstrap.execute_request(
+        claim_bootstrap.parse_request_json(json.dumps(_local_repository_payload(repo)))
+    )
+    worktree = repo / "worktrees" / "codex" / "initial-setup"
+    (worktree / "README.md").write_text("# Weekly Plans\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(worktree), "add", "README.md"], check=True)
+    subprocess.run(
+        [
+            "git", "-c", "user.name=Test User", "-c", "user.email=test@example.invalid",
+            "-C", str(worktree), "commit", "-m", "Add weekly plan",
+        ],
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "-c", "core.hooksPath=/dev/null", "-C", str(repo), "merge", "--ff-only", "codex/initial-setup"],
+        check=True,
+        capture_output=True,
+    )
+
+    with pytest.raises(claim_bootstrap.ClaimBootstrapError, match="no live lock receipt"):
+        claim_bootstrap.execute_request(
+            claim_bootstrap.parse_request_json(json.dumps(_local_integration_payload(repo)))
+        )
+
+
+def test_local_integration_recovers_a_partial_relock_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _configure_maintenance_runtime(tmp_path, monkeypatch)
+    monkeypatch.chdir(tmp_path)
+    repo = (tmp_path / "weekly-plans").resolve()
+    claim_bootstrap.execute_request(
+        claim_bootstrap.parse_request_json(json.dumps(_local_repository_payload(repo)))
+    )
+    worktree = repo / "worktrees" / "codex" / "initial-setup"
+    (worktree / "README.md").write_text("# Weekly Plans\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(worktree), "add", "README.md"], check=True)
+    subprocess.run(
+        [
+            "git", "-c", "user.name=Test User", "-c", "user.email=test@example.invalid",
+            "-C", str(worktree), "commit", "-m", "Add weekly plan",
+        ],
+        check=True,
+        capture_output=True,
+    )
+    canonical_lock = claim_bootstrap._canonical_lock_module()
+    monkeypatch.setattr(canonical_lock, "LOCK_INDEX", tmp_path / "locks.json")
+    monkeypatch.setattr(claim_bootstrap, "_canonical_lock_module", lambda: canonical_lock)
+    canonical_lock.lock_repo(
+        repo,
+        justifying_claims=["codex/initial-setup"],
+        session_id="codex:native-123",
+    )
+    original_lock = canonical_lock.lock_repo
+    failed_once = False
+
+    def partially_fail_lock(*args: object, **kwargs: object) -> dict[str, object]:
+        nonlocal failed_once
+        result = original_lock(*args, **kwargs)
+        if not failed_once:
+            failed_once = True
+            target = repo / "README.md"
+            os.chmod(target, stat.S_IMODE(target.lstat().st_mode) | stat.S_IWUSR)
+            raise OSError("simulated post-receipt lock failure")
+        return result
+
+    monkeypatch.setattr(canonical_lock, "lock_repo", partially_fail_lock)
+
+    integrated = claim_bootstrap.execute_request(
+        claim_bootstrap.parse_request_json(json.dumps(_local_integration_payload(repo)))
+    )
+
+    assert integrated["result"]["action"] == "integrated"
     assert canonical_lock.verify_lock_integrity(repo)["verdict"] == canonical_lock.VERDICT_LOCKED
     canonical_lock.unlock_repo(repo)
 

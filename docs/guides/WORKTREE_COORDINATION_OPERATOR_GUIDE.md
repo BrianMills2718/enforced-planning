@@ -87,6 +87,15 @@ eligibility; Enforced Planning owns protocol validation. Extra fields, unsafe
 paths or branches, composition, subagents, ambiguous authority, existing lane
 artifacts, and client mismatch are denied.
 
+Maintenance creation uses the adapter's v2 operation-scoped protocol: the
+response must echo the exact root, repository identity, remote, operation
+(`maintenance_worktree`), and branch. Reviewed feature-branch-only governance
+may permit this operation without granting general mutation or default-branch
+publication. Both adapter and consumer reject the canonical default branch.
+Legacy v1 general-authority requests remain unchanged and cannot accept these
+scoped grants. An old adapter fails closed; upgrade the adapter before activating
+the v2 consumer. No fallback converts a scoped refusal into broader authority.
+
 Before creating anything, bootstrap verifies the remote default, fetches its
 exact commit, and uses it as the lane base. It then creates the branch,
 worktree, exact-session claim, tracker, and projection transactionally; failure

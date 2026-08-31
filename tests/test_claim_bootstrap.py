@@ -185,7 +185,7 @@ def _configure_maintenance_runtime(
     monkeypatch.setattr(
         claim_bootstrap,
         "_repository_authority",
-        lambda repo: claim_bootstrap.RepositoryAuthority(
+        lambda repo, **_kwargs: claim_bootstrap.RepositoryAuthority(
             repo.name, f"Brian/{repo.name}", "main", "origin"
         ),
     )
@@ -200,6 +200,24 @@ def _configure_maintenance_runtime(
         ).stdout.strip(),
     )
     return claims_dir, trackers_dir
+
+
+def test_default_branch_target_is_rejected_before_fetch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    claims_dir, _trackers = _configure_maintenance_runtime(tmp_path, monkeypatch)
+    def must_not_fetch(*_args: object) -> str:
+        pytest.fail("default branch rejection must precede remote fetch")
+    monkeypatch.setattr(claim_bootstrap, "_fresh_remote_default_revision", must_not_fetch)
+    request = claim_bootstrap.parse_request_json(json.dumps(
+        _maintenance_payload(repo, branch="main", scope="main")
+    ))
+    with pytest.raises(claim_bootstrap.ClaimBootstrapError, match="non-default"):
+        claim_bootstrap.execute_request(request)
+    assert not (repo / "worktrees").exists()
+    assert not list(claims_dir.glob("*.yaml"))
 
 
 def _project_graph_fixture(
@@ -356,7 +374,7 @@ def test_typed_maintenance_bootstraps_from_fresh_remote_not_stale_primary(
     monkeypatch.setattr(
         claim_bootstrap,
         "_repository_authority",
-        lambda _target: authority,
+        lambda _target, **_kwargs: authority,
     )
     monkeypatch.setattr(claim_bootstrap, "_fresh_remote_default_revision", real_fresh)
     request = claim_bootstrap.parse_request_json(json.dumps(_maintenance_payload(repo)))
@@ -394,7 +412,7 @@ def test_remote_fetch_failure_leaves_no_lane_artifacts(
     monkeypatch.setattr(
         claim_bootstrap,
         "_repository_authority",
-        lambda _target: authority,
+        lambda _target, **_kwargs: authority,
     )
     monkeypatch.setattr(claim_bootstrap, "_fresh_remote_default_revision", real_fresh)
     request = claim_bootstrap.parse_request_json(json.dumps(_maintenance_payload(repo)))

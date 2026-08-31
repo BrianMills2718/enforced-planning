@@ -21,9 +21,11 @@ from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, field_validator,
 
 from enforced_planning import coordination_claims, session_contracts, session_lifecycle
 from enforced_planning.repository_authority import (
+    MaintenanceWorktreeAuthority,
     RepositoryAuthority,
     RepositoryAuthorityError,
     resolve_repository_authority,
+    resolve_maintenance_worktree_authority,
 )
 
 AgentName = Literal["codex", "claude-code", "openclaw"]
@@ -234,7 +236,9 @@ def _resolved_ssh_hostname(host: str) -> str:
     return hostnames[0]
 
 
-def _repository_authority(repo: Path) -> RepositoryAuthority:
+def _repository_authority(
+    repo: Path, *, branch: str | None = None,
+) -> RepositoryAuthority | MaintenanceWorktreeAuthority:
     """Inspect repository identity, then delegate policy to the installed adapter."""
 
     identity = _git(repo, "rev-parse", "--show-toplevel")
@@ -246,6 +250,11 @@ def _repository_authority(repo: Path) -> RepositoryAuthority:
     remote_url = remote.stdout.strip()
     github_repo = _github_repo_from_remote(remote_url)
     try:
+        if branch is not None:
+            return resolve_maintenance_worktree_authority(
+                repo_root=repo, repository_identity=github_repo,
+                remote_url=remote_url, branch=branch,
+            )
         return resolve_repository_authority(
             repo_root=repo,
             repository_identity=github_repo,
@@ -257,7 +266,7 @@ def _repository_authority(repo: Path) -> RepositoryAuthority:
 
 def _fresh_remote_default_revision(
     repo: Path,
-    authority: RepositoryAuthority,
+    authority: RepositoryAuthority | MaintenanceWorktreeAuthority,
 ) -> str:
     """Fetch and resolve the graph-declared remote default before lane creation."""
 
@@ -732,7 +741,9 @@ def _execute_maintenance_worktree(
     """Create one unplanned worktree and exact claim as a typed transaction."""
 
     repo = Path(request.repo_root).resolve()
-    authority = _repository_authority(repo)
+    authority = _repository_authority(repo, branch=request.branch)
+    if request.branch == authority.default_branch:
+        raise ClaimBootstrapError("maintenance target must be a non-default branch")
     if request.project != authority.project_id:
         raise ClaimBootstrapError(
             f"project must match provider id {authority.project_id!r} for origin {authority.repository_identity}"
@@ -898,9 +909,14 @@ def _execute_maintenance_worktree(
         return {
             **payload,
             "project_graph_id": authority.project_id,
-                "github_repo": authority.repository_identity,
+            "github_repo": authority.repository_identity,
             "default_branch": authority.default_branch,
             "start_revision": starting_head,
+            "authority_scope": {
+                "operation": "maintenance_worktree",
+                "repo_root": str(repo),
+                "branch": request.branch,
+            },
         }
     except Exception as exc:
         cleanup_errors: list[str] = []

@@ -134,6 +134,24 @@ class MaintenanceWorktreeRequest(_StrictRequest):
     repo_root: str = Field(min_length=1)
     branch: str = Field(min_length=1)
     claim_type: Literal["program"]
+    write_paths: list[str] = Field(default_factory=lambda: ["."])
+
+    @field_validator("write_paths")
+    @classmethod
+    def _validate_write_paths(cls, values: list[str]) -> list[str]:
+        if not values or len(values) != len(set(values)):
+            raise ValueError("write_paths must contain unique literal repository paths")
+        for value in values:
+            path = Path(value)
+            if (
+                not value or value != value.strip() or path.is_absolute()
+                or ".." in path.parts or path.as_posix() != value
+                or any(char in value for char in "\\:*?[]")
+            ):
+                raise ValueError("write_paths must be canonical repository-relative literals")
+        if "." in values and values != ["."]:
+            raise ValueError("whole-repository scope cannot be mixed with narrow paths")
+        return values
 
     @model_validator(mode="after")
     def _validate_target(self) -> MaintenanceWorktreeRequest:
@@ -877,7 +895,7 @@ def _execute_maintenance_worktree(
             session_id=session_id,
             session_name=session_name,
             claim_type="program",
-            write_paths=["."],
+            write_paths=request.write_paths,
             read_paths=[],
             tracker_dir=SESSION_TRACKERS_DIR,
             allow_unplanned=True,

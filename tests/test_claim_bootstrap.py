@@ -410,14 +410,18 @@ def test_remote_fetch_failure_leaves_no_lane_artifacts(
     ).returncode != 0
 
 
+@pytest.mark.parametrize("write_paths", [None, ["src/adapter.py", "tests/test_adapter.py"]])
 def test_typed_maintenance_worktree_transaction_creates_claim_tracker_and_projection(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    write_paths: list[str] | None,
 ) -> None:
     repo = _governed_repo(tmp_path)
     claims_dir, trackers_dir = _configure_maintenance_runtime(tmp_path, monkeypatch)
     request = claim_bootstrap.parse_request_json(
-        json.dumps(_maintenance_payload(repo), separators=(",", ":"))
+        json.dumps(_maintenance_payload(
+            repo, **({"write_paths": write_paths} if write_paths is not None else {})
+        ), separators=(",", ":"))
     )
 
     receipt = claim_bootstrap.execute_request(request)
@@ -444,7 +448,7 @@ def test_typed_maintenance_worktree_transaction_creates_claim_tracker_and_projec
     assert claims[0].session_id == "codex:native-123"
     assert claims[0].worktree_path == str(worktree)
     assert claims[0].claim_type == "program"
-    assert claims[0].write_paths == ["."]
+    assert claims[0].write_paths == (write_paths or ["."])
     assert len(list(trackers_dir.rglob("*.yaml"))) == 1
     projection_path = prewrite_claim_fast.projection_path_for(claims_dir)
     assert prewrite_claim_projection.projection_is_current(
@@ -490,7 +494,8 @@ def test_typed_maintenance_worktree_transaction_creates_claim_tracker_and_projec
         projection_path=projection_path,
         receipt_path=tmp_path / "outside-receipts.jsonl",
     )
-    assert inside["decision"] == "allow"
+    # A narrow lane must not inherit permission to edit the root instruction.
+    assert inside["decision"] == ("allow" if write_paths is None else "deny")
     assert outside["decision"] == "deny"
 
 
@@ -972,6 +977,44 @@ def test_ownerless_existing_slot_cannot_be_bootstrapped_as_self(
 
     with pytest.raises(claim_bootstrap.ClaimBootstrapError, match="<missing>"):
         claim_bootstrap.execute_request(request)
+
+
+@pytest.mark.parametrize("paths", [
+    [], ["../outside"], ["/absolute"], ["src/**"], ["." , "src"],
+    ["src", "src"], ["./src"], ["src//file"], ["src/"], ["C:/outside"],
+])
+def test_maintenance_rejects_ambiguous_write_paths(tmp_path: Path, paths: list[str]) -> None:
+    with pytest.raises(claim_bootstrap.ClaimBootstrapError):
+        claim_bootstrap.parse_request_json(json.dumps(
+            _maintenance_payload(tmp_path, write_paths=paths)
+        ))
+
+
+@pytest.mark.parametrize("other_path", ["unrelated.txt", "src/adapter.py"])
+def test_narrow_bootstrap_preserves_other_writers(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, other_path: str,
+) -> None:
+    repo = _governed_repo(tmp_path)
+    _configure_maintenance_runtime(tmp_path, monkeypatch)
+    ok, message = claim_bootstrap.coordination_claims.create_claim(
+        agent="codex", project=repo.name, scope="other-lane", intent="other work",
+        plan_ref="UNPLANNED", claim_type="write", write_paths=[other_path],
+        repo_root=str(repo), worktree_path=str(repo / "worktrees" / "other-lane"),
+        branch="other-lane", session_id="codex:other-native",
+        session_name="other-work", broader_goal="Other work",
+    )
+    assert ok, message
+    request = claim_bootstrap.parse_request_json(json.dumps(
+        _maintenance_payload(repo, write_paths=["src/adapter.py"])
+    ))
+    if other_path == "src/adapter.py":
+        with pytest.raises(claim_bootstrap.ClaimBootstrapError, match="CONFLICT"):
+            claim_bootstrap.execute_request(request)
+    else:
+        assert claim_bootstrap.execute_request(request)["ok"]
+    other = [c for c in claim_bootstrap.coordination_claims.check_claims(repo.name)
+             if c.scope == "other-lane"]
+    assert len(other) == 1 and other[0].write_paths == [other_path]
 
 
 def test_unknown_operation_and_extra_fields_fail_closed() -> None:

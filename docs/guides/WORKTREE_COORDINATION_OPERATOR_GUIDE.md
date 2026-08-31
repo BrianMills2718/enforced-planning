@@ -87,6 +87,13 @@ eligibility; Enforced Planning owns protocol validation. Extra fields, unsafe
 paths or branches, composition, subagents, ambiguous authority, existing lane
 artifacts, and client mismatch are denied.
 
+The optional `write_paths` array narrows initial ownership to literal
+repository-relative paths, for example `["scripts/adapter.py", "tests/test_adapter.py"]`.
+Omitting it retains the legacy `["."]` scope. Empty lists, duplicates, traversal,
+absolute paths, glob patterns, and mixed broad/narrow declarations are rejected.
+Narrow creation uses the same registry overlap checks: it can coexist with
+unrelated writers but cannot override another writer's overlapping claim.
+
 Before creating anything, bootstrap verifies the remote default, fetches its
 exact commit, and uses it as the lane base. It then creates the branch,
 worktree, exact-session claim, tracker, and projection transactionally; failure

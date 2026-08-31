@@ -310,6 +310,21 @@ not projection-unavailable enforcement, under content-free hook receipt
 `f203367db9284296b6edd82d018e9f5e`. The completed execution cursor is retained at
 `.company-planning/history/2ceaf8dfa3998c98-r4.json`.
 
+The 2026-08-31 recurrence showed that the original completion evidence was too
+narrow: native Stop again reached the 1.5-second projection-repair bound, and
+the installed prewrite consumer could silently import an older site package.
+PR #273 added phase telemetry and rechecks the projection after acquiring the
+writer lock; PR #274 closed the multiline read-classification deadlock. The
+follow-up repair makes the generated prewrite runtime a real local package with
+its complete import closure, exercises the actual cross-process writer-lock
+race five consecutive times, and adds a pull-request enforcement-contract job.
+The bounded gate passes 101 tests, including the installed-consumer journey.
+
+Source implementation is complete. Native host activation remains an explicit
+operational verification: install the merged revision, enable the configured
+coordination/prewrite hook states, restart the client, and retain a fresh Stop
+receipt before claiming host adoption.
+
 This plan changes no user data, deployment, credential, external publication, or
 downstream repository. Broader installed-repo propagation is separately triggered only
 if the canonical source repair proves useful and installer adoption is requested.

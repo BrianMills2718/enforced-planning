@@ -54,6 +54,21 @@ def _maintenance_payload(repo: Path, **updates: object) -> dict[str, object]:
     return payload
 
 
+def _local_repository_payload(repo: Path, **updates: object) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "schema_version": "1.0",
+        "operation": "local_repository_worktree",
+        "agent": "codex",
+        "project": repo.name,
+        "scope": "codex/initial-setup",
+        "repo_root": str(repo),
+        "branch": "codex/initial-setup",
+        "claim_type": "program",
+    }
+    payload.update(updates)
+    return payload
+
+
 def test_unclaimed_native_session_can_start_its_own_claim(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -200,6 +215,138 @@ def _configure_maintenance_runtime(
         ).stdout.strip(),
     )
     return claims_dir, trackers_dir
+
+
+def test_typed_local_repository_bootstrap_creates_local_repo_claim_and_worktree(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    claims_dir, trackers_dir = _configure_maintenance_runtime(tmp_path, monkeypatch)
+    monkeypatch.chdir(tmp_path)
+    repo = (tmp_path / "weekly-plans").resolve()
+    request = claim_bootstrap.parse_request_json(json.dumps(_local_repository_payload(repo)))
+
+    receipt = claim_bootstrap.execute_request(request)
+
+    worktree = repo / "worktrees" / "codex" / "initial-setup"
+    assert receipt["result"]["local_only"] is True
+    assert receipt["result"]["default_branch"] == "main"
+    assert subprocess.run(
+        ["git", "-C", str(repo), "branch", "--show-current"],
+        check=True, capture_output=True, text=True,
+    ).stdout.strip() == "main"
+    assert subprocess.run(
+        ["git", "-C", str(repo), "remote"],
+        check=True, capture_output=True, text=True,
+    ).stdout == ""
+    assert subprocess.run(
+        ["git", "-C", str(worktree), "branch", "--show-current"],
+        check=True, capture_output=True, text=True,
+    ).stdout.strip() == "codex/initial-setup"
+    assert (worktree / ".gitignore").read_text(encoding="utf-8") == "/worktrees/\n"
+    claims = claim_bootstrap.coordination_claims.check_claims("weekly-plans")
+    assert len(claims) == 1
+    assert claims[0].session_id == "codex:native-123"
+    assert claims[0].write_paths == ["."]
+    assert claims[0].worktree_path == str(worktree)
+    assert len(list(trackers_dir.rglob("*.yaml"))) == 1
+    assert prewrite_claim_projection.projection_is_current(
+        claims_dir=claims_dir,
+        projection_path=prewrite_claim_fast.projection_path_for(claims_dir),
+    )
+
+    (worktree / "README.md").write_text("# Weekly Plans\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(worktree), "add", "README.md"], check=True)
+    subprocess.run(
+        [
+            "git", "-c", "user.name=Test User", "-c", "user.email=test@example.invalid",
+            "-C", str(worktree), "commit", "-m", "Add weekly plan",
+        ],
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(repo), "merge", "--ff-only", "codex/initial-setup"],
+        check=True,
+        capture_output=True,
+    )
+    closed = claim_bootstrap.session_lifecycle.close_session(
+        agent="codex",
+        project="weekly-plans",
+        scope="codex/initial-setup",
+        worktree_path=str(worktree),
+        branch="codex/initial-setup",
+    )
+    assert closed["released"] is True
+    assert closed["disposition"] == "merged"
+    assert not worktree.exists()
+    assert (repo / "README.md").read_text(encoding="utf-8") == "# Weekly Plans\n"
+
+
+@pytest.mark.parametrize("target_kind", ["directory", "file", "symlink"])
+def test_typed_local_repository_bootstrap_rejects_every_existing_target(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    target_kind: str,
+) -> None:
+    _configure_maintenance_runtime(tmp_path, monkeypatch)
+    monkeypatch.chdir(tmp_path)
+    repo = (tmp_path / "weekly-plans").resolve()
+    if target_kind == "directory":
+        repo.mkdir()
+    elif target_kind == "file":
+        repo.write_text("preserve\n", encoding="utf-8")
+    else:
+        destination = tmp_path / "elsewhere"
+        destination.mkdir()
+        repo.symlink_to(destination, target_is_directory=True)
+    if target_kind == "symlink":
+        with pytest.raises(claim_bootstrap.ClaimBootstrapError, match="canonical absolute path"):
+            claim_bootstrap.parse_request_json(json.dumps(_local_repository_payload(repo)))
+    else:
+        request = claim_bootstrap.parse_request_json(json.dumps(_local_repository_payload(repo)))
+        with pytest.raises(claim_bootstrap.ClaimBootstrapError, match="already exists"):
+            claim_bootstrap.execute_request(request)
+
+
+def test_typed_local_repository_bootstrap_rejects_nested_or_non_child_target(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _configure_maintenance_runtime(tmp_path, monkeypatch)
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    monkeypatch.chdir(workspace)
+    outside = (tmp_path / "outside").resolve()
+    request = claim_bootstrap.parse_request_json(json.dumps(_local_repository_payload(outside)))
+    with pytest.raises(claim_bootstrap.ClaimBootstrapError, match="direct child"):
+        claim_bootstrap.execute_request(request)
+
+    subprocess.run(["git", "init", "-b", "main", str(workspace)], check=True, capture_output=True)
+    nested = (workspace / "nested").resolve()
+    request = claim_bootstrap.parse_request_json(json.dumps(_local_repository_payload(nested)))
+    with pytest.raises(claim_bootstrap.ClaimBootstrapError, match="inside another Git worktree"):
+        claim_bootstrap.execute_request(request)
+
+
+def test_typed_local_repository_bootstrap_rolls_back_unclaimed_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _configure_maintenance_runtime(tmp_path, monkeypatch)
+    monkeypatch.chdir(tmp_path)
+    repo = (tmp_path / "weekly-plans").resolve()
+    monkeypatch.setattr(
+        claim_bootstrap.session_lifecycle,
+        "start_session",
+        lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("simulated claim failure")),
+    )
+    request = claim_bootstrap.parse_request_json(json.dumps(_local_repository_payload(repo)))
+
+    with pytest.raises(claim_bootstrap.ClaimBootstrapError, match="simulated claim failure"):
+        claim_bootstrap.execute_request(request)
+
+    assert not repo.exists()
 
 
 def test_default_branch_target_is_rejected_before_fetch(

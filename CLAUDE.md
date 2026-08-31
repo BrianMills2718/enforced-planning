@@ -128,12 +128,14 @@ start/heartbeat and supported native pre-write now derive the exact selected
 claim state without an outcome flag and deny before mutation or success.
 `make outcome-bootstrap PLAN=N ...` is the only sanctioned **planned** new-lane
 path: its entire claim must resolve to one Plan-numbered bootstrap surface
-before it may create the restricted worktree/session. The sole unplanned
-exception is the strictly parsed maintenance-worktree bootstrap documented in
-the operator guide. It is limited to a native top-level client, a canonical
-governed repository, a safe literal branch, and `claim_type: program`; it does
-not admit composed shell, unknown JSON fields, borrowed subagent identity, or
-ordinary unclaimed mutations. After the graph is canonical, bind,
+before it may create the restricted worktree/session. The unplanned exceptions
+are the strictly parsed maintenance-worktree and brand-new local-repository
+bootstraps documented in the operator guide. Both require a native top-level
+client, a safe literal branch, and `claim_type: program`; maintenance also
+requires a canonical governed repository, while local initialization is
+restricted to an absent direct child of a non-Git workspace and creates no
+remote. Neither admits composed shell, unknown JSON fields, borrowed subagent
+identity, or ordinary unclaimed mutations. After the graph is canonical, bind,
 allocate, select, and only then expand that same claim. The canonical
 `scripts/session_start.py` and `scripts/session_heartbeat.py` own source Make
 execution; their `scripts/meta/` mirrors must remain byte-identical through the

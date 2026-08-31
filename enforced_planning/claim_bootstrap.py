@@ -2,8 +2,8 @@
 
 This module is intentionally not a general lifecycle command proxy. It accepts
 only typed claim-registry operations, derives the caller's session identity from
-the native runtime, and exposes one transactional maintenance-worktree bootstrap.
-It never executes caller-supplied shell fragments or edits project files.
+the native runtime, and exposes transactional maintenance and new-local-repository
+worktree bootstraps. It never executes caller-supplied shell fragments.
 """
 
 from __future__ import annotations
@@ -12,6 +12,7 @@ import json
 import os
 import re
 import secrets
+import shutil
 import subprocess
 from pathlib import Path
 from typing import Annotated, Any, Literal
@@ -173,6 +174,43 @@ class MaintenanceWorktreeRequest(_StrictRequest):
         return self
 
 
+class LocalRepositoryWorktreeRequest(_StrictRequest):
+    operation: Literal["local_repository_worktree"]
+    agent: AgentName
+    repo_root: str = Field(min_length=1)
+    branch: str = Field(min_length=1)
+    claim_type: Literal["program"]
+    write_paths: list[str] = Field(default_factory=lambda: ["."])
+
+    @field_validator("write_paths")
+    @classmethod
+    def _require_whole_repository_scope(cls, values: list[str]) -> list[str]:
+        if values != ["."]:
+            raise ValueError("local repository bootstrap requires exact whole-repository scope ['.']")
+        return values
+
+    @model_validator(mode="after")
+    def _validate_target(self) -> LocalRepositoryWorktreeRequest:
+        repo = Path(self.repo_root).expanduser()
+        if not repo.is_absolute() or ".." in repo.parts or str(repo.resolve()) != self.repo_root:
+            raise ValueError("repo_root must be one canonical absolute path without traversal")
+        if self.project != repo.name:
+            raise ValueError("project must exactly match the new repository directory name")
+        if self.scope != self.branch:
+            raise ValueError("scope must exactly match branch")
+        if self.branch in {"main", "master"}:
+            raise ValueError("local repository work must start on a non-default task branch")
+        if (
+            re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._/-]*", self.branch) is None
+            or self.branch.startswith(("-", "/"))
+            or self.branch.endswith(("/", "."))
+            or ".." in self.branch
+            or "//" in self.branch
+        ):
+            raise ValueError("branch is not a safe literal Git branch")
+        return self
+
+
 class ProgressRequest(_StrictRequest):
     operation: Literal["progress"]
     progress_kind: ProgressKind
@@ -183,7 +221,11 @@ class ProgressRequest(_StrictRequest):
 
 
 ClaimBootstrapRequest = Annotated[
-    SessionStartOrUpdateRequest | HeartbeatRequest | ProgressRequest | MaintenanceWorktreeRequest,
+    SessionStartOrUpdateRequest
+    | HeartbeatRequest
+    | ProgressRequest
+    | MaintenanceWorktreeRequest
+    | LocalRepositoryWorktreeRequest,
     Field(discriminator="operation"),
 ]
 _REQUEST_ADAPTER = TypeAdapter(ClaimBootstrapRequest)
@@ -485,7 +527,9 @@ def execute_request(request: ClaimBootstrapRequest) -> dict[str, Any]:
 
     agent, session_id = _native_agent(request.agent)
 
-    if isinstance(request, MaintenanceWorktreeRequest):
+    if isinstance(request, LocalRepositoryWorktreeRequest):
+        payload = _execute_local_repository_worktree(request, agent=agent, session_id=session_id)
+    elif isinstance(request, MaintenanceWorktreeRequest):
         payload = _execute_maintenance_worktree(request, agent=agent, session_id=session_id)
     elif isinstance(request, SessionStartOrUpdateRequest):
         _require_self_owned_slot(
@@ -750,6 +794,224 @@ def _preserve_partial_session_claim_as_blocked(
     return True
 
 
+def _remove_pristine_bootstrap_repository(repo: Path, *, expected_head: str | None = None) -> list[str]:
+    """Remove only an exact repository created by this failed transaction."""
+
+    if not os.path.lexists(repo):
+        return []
+    errors: list[str] = []
+    if repo.is_symlink() or not repo.is_dir():
+        return [f"bootstrap target changed identity; preserving it: {repo}"]
+    if expected_head is not None:
+        head = _git(repo, "rev-parse", "HEAD")
+        status = _git(repo, "status", "--porcelain=v1", "--untracked-files=all")
+        if head.returncode != 0 or head.stdout.strip() != expected_head or status.returncode != 0 or status.stdout:
+            return [f"bootstrap repository changed; preserving it: {repo}"]
+    for candidate in sorted((repo / "worktrees").glob("**/*"), reverse=True) if (repo / "worktrees").is_dir() else []:
+        if candidate.is_dir() and not candidate.is_symlink():
+            try:
+                candidate.rmdir()
+            except OSError:
+                break
+    try:
+        (repo / "worktrees").rmdir()
+    except OSError:
+        pass
+    visible = {path.name for path in repo.iterdir() if path.name != ".git"}
+    if visible not in (set(), {".gitignore"}):
+        return [f"bootstrap repository contains unexpected paths; preserving it: {repo}"]
+    try:
+        shutil.rmtree(repo)
+    except OSError as exc:
+        errors.append(f"bootstrap repository cleanup failed: {exc}")
+    return errors
+
+
+def _execute_local_repository_worktree(
+    request: LocalRepositoryWorktreeRequest,
+    *,
+    agent: AgentName,
+    session_id: str,
+) -> dict[str, Any]:
+    """Initialize one local-only repository and its first claimed task worktree."""
+
+    repo = Path(request.repo_root)
+    workspace = Path.cwd().resolve()
+    if repo.parent != workspace:
+        raise ClaimBootstrapError(
+            "new local repository must be one direct child of the command working directory"
+        )
+    enclosing = _git(workspace, "rev-parse", "--show-toplevel")
+    if enclosing.returncode == 0:
+        raise ClaimBootstrapError("refusing to create an independent repository inside another Git worktree")
+    if os.path.lexists(repo):
+        raise ClaimBootstrapError(f"new local repository target already exists: {repo}")
+    checked = subprocess.run(
+        ["git", "check-ref-format", "--branch", request.branch],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if checked.returncode != 0:
+        raise ClaimBootstrapError("branch is not accepted by git check-ref-format")
+    existing_roots = [
+        claim
+        for claim in coordination_claims.check_claims()
+        if claim.is_live() and claim.session_id == session_id and not claim.parent_scope
+    ]
+    if existing_roots:
+        labels = ", ".join(sorted(f"{claim.primary_project()}:{claim.scope}" for claim in existing_roots))
+        raise ClaimBootstrapError(
+            "local repository bootstrap requires the native session to own zero existing claim roots; "
+            f"close or transfer first: {labels}"
+        )
+    occupied = [
+        claim
+        for claim in coordination_claims.check_claims(request.project)
+        if claim.scope == request.scope and claim.is_live()
+    ]
+    if occupied:
+        raise ClaimBootstrapError(
+            f"claim slot already exists for new repository identity {request.project}:{request.scope}"
+        )
+
+    initialized = subprocess.run(
+        ["git", "-c", "core.hooksPath=/dev/null", "init", "-b", "main", str(repo)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if initialized.returncode != 0:
+        cleanup = _remove_pristine_bootstrap_repository(repo)
+        detail = f"; {'; '.join(cleanup)}" if cleanup else ""
+        raise ClaimBootstrapError((initialized.stderr.strip() or "local repository initialization failed") + detail)
+    try:
+        (repo / ".gitignore").write_text("/worktrees/\n", encoding="utf-8")
+        added = _git(repo, "add", ".gitignore")
+        if added.returncode != 0:
+            raise ClaimBootstrapError(added.stderr.strip() or "bootstrap .gitignore staging failed")
+        committed = subprocess.run(
+            [
+                "git", "-c", "core.hooksPath=/dev/null",
+                "-c", "user.name=Repository Bootstrap",
+                "-c", "user.email=repository-bootstrap@localhost",
+                "-C", str(repo), "commit", "-m", "Initialize local repository",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if committed.returncode != 0:
+            raise ClaimBootstrapError(committed.stderr.strip() or "bootstrap commit failed")
+        starting_head_result = _git(repo, "rev-parse", "HEAD")
+        if starting_head_result.returncode != 0:
+            raise ClaimBootstrapError("bootstrap commit did not resolve to a revision")
+        starting_head = starting_head_result.stdout.strip()
+
+        base = repo / "worktrees"
+        worktree = base / request.branch
+        created_dirs: list[Path] = []
+        for candidate in [base, *(base.joinpath(*Path(request.branch).parts[:index])
+                                   for index in range(1, len(Path(request.branch).parts)))]:
+            if os.path.lexists(candidate):
+                if candidate.is_symlink() or not candidate.is_dir():
+                    raise ClaimBootstrapError(f"worktree parent changed identity: {candidate}")
+                continue
+            candidate.mkdir()
+            created_dirs.append(candidate)
+        created = subprocess.run(
+            [
+                "git", "-c", "core.hooksPath=/dev/null", "-C", str(repo),
+                "worktree", "add", "--no-checkout", "-b", request.branch,
+                str(worktree), starting_head,
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if created.returncode != 0:
+            raise ClaimBootstrapError(created.stderr.strip() or "local task worktree creation failed")
+
+        goal = f"Initialize local repository: {request.project}"
+        session_name = session_contracts.derive_session_name(goal)
+        payload = session_lifecycle.start_session(
+            agent=agent,
+            project=request.project,
+            scope=request.scope,
+            intent=goal,
+            repo_root=str(repo),
+            worktree_path=str(worktree),
+            branch=request.branch,
+            broader_goal=goal,
+            current_phase="local-repository-bootstrap",
+            plan_ref=None,
+            session_id=session_id,
+            session_name=session_name,
+            claim_type="program",
+            write_paths=["."],
+            read_paths=[],
+            tracker_dir=SESSION_TRACKERS_DIR,
+            allow_unplanned=True,
+        )
+        populated = subprocess.run(
+            ["git", "-c", "core.hooksPath=/dev/null", "-C", str(worktree),
+             "checkout", "--force", request.branch],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if populated.returncode != 0:
+            raise ClaimBootstrapError(populated.stderr.strip() or "local task worktree population failed")
+        return {
+            **payload,
+            "local_only": True,
+            "default_branch": "main",
+            "start_revision": starting_head,
+            "authority_scope": {
+                "operation": "local_repository_worktree",
+                "workspace_root": str(workspace),
+                "repo_root": str(repo),
+                "branch": request.branch,
+            },
+        }
+    except Exception as exc:
+        worktree = repo / "worktrees" / request.branch
+        starting_head = locals().get("starting_head")
+        cleanup_errors: list[str] = []
+        try:
+            preserved_claim = _preserve_partial_session_claim_as_blocked(
+                agent=agent,
+                project=request.project,
+                scope=request.scope,
+                session_id=session_id,
+                branch=request.branch,
+                worktree=worktree,
+                failure=exc,
+            )
+        except Exception as cleanup_exc:  # noqa: BLE001 - preserve ambiguous residue
+            preserved_claim = True
+            cleanup_errors.append(f"claim preservation failed: {cleanup_exc}")
+        if not preserved_claim and isinstance(starting_head, str):
+            cleanup_errors.extend(_rollback_created_worktree(
+                repo=repo,
+                worktree=worktree,
+                branch=request.branch,
+                expected_head=starting_head,
+                branch_created=True,
+                created_dirs=locals().get("created_dirs", []),
+            ))
+            if not cleanup_errors:
+                cleanup_errors.extend(_remove_pristine_bootstrap_repository(repo, expected_head=starting_head))
+        elif not preserved_claim and starting_head is None:
+            cleanup_errors.extend(_remove_pristine_bootstrap_repository(repo))
+        detail = f"; {'; '.join(cleanup_errors)}" if cleanup_errors else ""
+        if preserved_claim:
+            raise ClaimBootstrapError(
+                f"local repository bootstrap failed after claim persistence; lane preserved for inspection: {exc}{detail}"
+            ) from exc
+        raise ClaimBootstrapError(f"local repository bootstrap failed: {exc}{detail}") from exc
+
+
 def _execute_maintenance_worktree(
     request: MaintenanceWorktreeRequest,
     *,
@@ -1004,6 +1266,7 @@ __all__ = [
     "ClaimBootstrapError",
     "ClaimBootstrapRequest",
     "HeartbeatRequest",
+    "LocalRepositoryWorktreeRequest",
     "MaintenanceWorktreeRequest",
     "ProgressRequest",
     "RepositoryAuthority",

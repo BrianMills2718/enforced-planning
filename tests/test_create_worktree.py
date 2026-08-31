@@ -24,6 +24,21 @@ def _load_module():
     return module
 
 
+def test_canonical_lock_resolves_source_and_installed_layouts(tmp_path: Path) -> None:
+    module = _load_module()
+    source_script = tmp_path / "scripts" / "worktree-coordination" / "create_worktree.py"
+    source_helper = source_script.parent / "canonical_lock.py"
+    source_helper.parent.mkdir(parents=True)
+    source_helper.touch()
+    assert module._canonical_lock_module_path(source_script) == source_helper.resolve()
+
+    installed_script = tmp_path / "installed" / "scripts" / "meta" / "worktree-coordination" / "create_worktree.py"
+    installed_helper = installed_script.parents[1] / "canonical_lock.py"
+    installed_script.parent.mkdir(parents=True)
+    installed_helper.touch()
+    assert module._canonical_lock_module_path(installed_script) == installed_helper.resolve()
+
+
 def _run_git(repo_root: Path, *args: str) -> subprocess.CompletedProcess[str]:
     """Run one git command against a temp repo."""
     return subprocess.run(
@@ -129,22 +144,27 @@ def _init_repo_with_stale_origin(tmp_path: Path) -> Path:
     return repo_root
 
 
-def test_create_worktree_fails_loud_when_start_point_is_stale(tmp_path: Path) -> None:
-    """Branching from a start point behind its upstream should fail loud by default."""
+def test_create_worktree_uses_fetched_upstream_when_local_start_point_is_stale(tmp_path: Path) -> None:
+    """Default root-start branches from freshly fetched upstream, not stale local HEAD."""
     module = _load_module()
     repo_root = _init_repo_with_stale_origin(tmp_path)
     worktree_path = tmp_path / "repo-worktrees" / "stale-test"
 
-    with pytest.raises(ValueError, match="behind its upstream"):
-        module.create_worktree(
-            repo_root=repo_root,
-            worktree_path=worktree_path,
-            branch="stale-test",
-            start_point="HEAD",
-            split_brain_threshold=5,
-            keep_failed_worktree=False,
-        )
-    assert not worktree_path.exists()
+    expected = _run_git(tmp_path / "origin", "rev-parse", "HEAD").stdout.strip()
+    stale_local = _run_git(repo_root, "rev-parse", "HEAD").stdout.strip()
+
+    result = module.create_worktree(
+        repo_root=repo_root,
+        worktree_path=worktree_path,
+        branch="stale-test",
+        start_point="HEAD",
+        split_brain_threshold=5,
+        keep_failed_worktree=False,
+    )
+
+    assert result.ok, result.message
+    assert _run_git(worktree_path, "rev-parse", "HEAD").stdout.strip() == expected
+    assert expected != stale_local
 
 
 def test_create_worktree_allows_stale_start_point_when_opted_out(tmp_path: Path) -> None:

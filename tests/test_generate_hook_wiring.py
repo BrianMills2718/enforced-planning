@@ -14,6 +14,10 @@ import yaml  # type: ignore[import-untyped]
 
 PROJECT_META_ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = PROJECT_META_ROOT / "scripts" / "generate_hook_wiring.py"
+CODEX_MAILBOX_COMMAND = (
+    'bash "$(git rev-parse --show-toplevel)/.codex/hooks/'
+    'notify-coordination-messages.sh"'
+)
 
 
 def _scaffold_target_repo(repo_root: Path) -> None:
@@ -247,7 +251,10 @@ def test_generate_hook_wiring_installs_prewrite_gate_only_when_opted_in(tmp_path
     claude = json.loads((tmp_path / ".claude" / "settings.json").read_text(encoding="utf-8"))
     codex = json.loads((tmp_path / ".codex" / "hooks.json").read_text(encoding="utf-8"))
     claude_pre = next(item for item in claude["hooks"]["PreToolUse"] if item["matcher"] == "Edit|Write")
-    codex_pre = next(item for item in codex["hooks"]["PreToolUse"] if item["matcher"] == "apply_patch")
+    codex_pre = next(
+        item for item in codex["hooks"]["PreToolUse"]
+        if item["matcher"] == "Bash|apply_patch"
+    )
     assert "bash .claude/hooks/prewrite-claim-gate.sh" in [item["command"] for item in claude_pre["hooks"]]
     assert (
         'bash "$(git rev-parse --show-toplevel)/.codex/hooks/prewrite-claim-gate.sh"'
@@ -359,10 +366,12 @@ def test_generate_hook_wiring_migrates_only_its_stale_codex_prewrite_command(
         item for item in codex["hooks"]["PreToolUse"] if item["matcher"] == "Edit|Write"
     )
     active = next(
-        item for item in codex["hooks"]["PreToolUse"] if item["matcher"] == "apply_patch"
+        item for item in codex["hooks"]["PreToolUse"]
+        if item["matcher"] == "Bash|apply_patch"
     )
     assert stale["hooks"] == [custom_hook]
-    assert [item["command"] for item in active["hooks"]] == [stale_command]
+    assert stale_command in [item["command"] for item in active["hooks"]]
+    assert CODEX_MAILBOX_COMMAND in [item["command"] for item in active["hooks"]]
 
 
 def test_generate_hook_wiring_installs_artifact_creation_gate_only_when_opted_in(
@@ -724,8 +733,43 @@ def test_installed_prewrite_runtime_projects_and_classifies_native_payloads(
         assert completed.returncode == 0, completed.stderr
         return json.loads(completed.stdout)
 
+    def invoke_bash(command: str) -> dict[str, object]:
+        payload = {
+            "session_id": "installed-test",
+            "cwd": str(repo),
+            "hook_event_name": "PreToolUse",
+            "tool_name": "Bash",
+            "tool_input": {"command": command},
+        }
+        completed = subprocess.run(
+            [
+                sys.executable,
+                str(repo / "scripts" / "prewrite_claim_gate.py"),
+                "--client",
+                "codex",
+                "--mode",
+                "observe",
+                "--claims-dir",
+                str(claims_dir),
+                "--projection-path",
+                str(projection_path),
+                "--receipt-path",
+                str(receipt_path),
+                "--json",
+            ],
+            cwd=repo,
+            input=json.dumps(payload),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert completed.returncode == 0, completed.stderr
+        return json.loads(completed.stdout)
+
     allowed = invoke("src/allowed.py")
     violation = invoke("src/outside.py")
+    bash_allowed = invoke_bash("touch src/allowed.py")
+    bash_violation = invoke_bash("touch src/outside.py")
 
     assert (allowed["decision"], allowed["reason_code"]) == (
         "allow",
@@ -735,8 +779,18 @@ def test_installed_prewrite_runtime_projects_and_classifies_native_payloads(
         "observe_violation",
         "path_outside_claim",
     )
+    assert (bash_allowed["decision"], bash_allowed["reason_code"]) == (
+        "allow",
+        "exact_live_claim",
+    )
+    assert (bash_violation["decision"], bash_violation["reason_code"]) == (
+        "observe_violation",
+        "path_outside_claim",
+    )
     receipts = [json.loads(line) for line in receipt_path.read_text(encoding="utf-8").splitlines()]
     assert [item["reason_code"] for item in receipts] == [
+        "exact_live_claim",
+        "path_outside_claim",
         "exact_live_claim",
         "path_outside_claim",
     ]

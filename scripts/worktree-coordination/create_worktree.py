@@ -155,6 +155,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Print the canonical main repository directory name and exit.",
     )
+    parser.add_argument(
+        "--print-fresh-start-revision",
+        action="store_true",
+        help="Fetch the configured upstream for --start-point and print the exact fresh revision.",
+    )
     return parser.parse_args(argv)
 
 
@@ -175,8 +180,8 @@ def branch_exists(repo_root: Path, branch: str) -> bool:
     return result.returncode == 0
 
 
-def check_start_point_freshness(*, repo_root: Path, start_point: str) -> str | None:
-    """Return a fail-loud message if start_point is behind its configured upstream.
+def resolve_fresh_start_revision(*, repo_root: Path, start_point: str) -> str:
+    """Resolve a start revision after refreshing its configured upstream.
 
     Branching a new worktree from a start point that is behind its upstream
     silently produces a branch that cannot fast-forward push once real work is
@@ -185,32 +190,31 @@ def check_start_point_freshness(*, repo_root: Path, start_point: str) -> str | N
     upstream (detached ref, no tracking branch, or a bare commit-ish): there is
     nothing to compare against, so nothing is flagged.
     """
+    local = run_git(["rev-parse", "--verify", f"{start_point}^{{commit}}"], cwd=repo_root)
+    local_revision = local.stdout.strip()
+    if local.returncode != 0 or re.fullmatch(r"(?:[0-9a-f]{40}|[0-9a-f]{64})", local_revision) is None:
+        raise ValueError(f"Unable to resolve one full Git start revision from {start_point!r}")
+
     upstream = run_git(
         ["rev-parse", "--abbrev-ref", "--symbolic-full-name", f"{start_point}@{{upstream}}"],
         cwd=repo_root,
     )
     if upstream.returncode != 0:
-        return None
+        return local_revision
     upstream_ref = upstream.stdout.strip()
     remote_name = upstream_ref.split("/", 1)[0] if "/" in upstream_ref else None
     if remote_name:
-        # Read-only: updates remote-tracking refs only, never local branches or the working tree.
-        run_git(["fetch", remote_name], cwd=repo_root)
-    behind = run_git(["rev-list", "--count", f"{start_point}..{upstream_ref}"], cwd=repo_root)
-    if behind.returncode != 0 or not behind.stdout.strip().isdigit():
-        return None
-    behind_count = int(behind.stdout.strip())
-    if behind_count <= 0:
-        return None
-    return (
-        f"Start point {start_point!r} is {behind_count} commit(s) behind its upstream "
-        f"{upstream_ref!r}. Creating a worktree from a stale start point produces a branch "
-        "that will fail to push (non-fast-forward) once work is committed on it, with the "
-        "failure surfacing far from this cause. Update the start point first "
-        f"(e.g. `git fetch && git merge --ff-only {upstream_ref}` in {repo_root}), or pass an "
-        "explicit --start-point that is already current, or opt out with "
-        "--allow-stale-start-point if branching from a stale point is intentional."
-    )
+        # This updates only remote-tracking refs. A failed fetch must not leave
+        # claim bootstrap silently pinned to a cached revision.
+        fetched = run_git(["fetch", remote_name], cwd=repo_root)
+        if fetched.returncode != 0:
+            detail = (fetched.stderr or fetched.stdout).strip()
+            raise ValueError(f"Unable to refresh upstream {upstream_ref!r}: {detail}")
+    fresh = run_git(["rev-parse", "--verify", f"{upstream_ref}^{{commit}}"], cwd=repo_root)
+    fresh_revision = fresh.stdout.strip()
+    if fresh.returncode != 0 or re.fullmatch(r"(?:[0-9a-f]{40}|[0-9a-f]{64})", fresh_revision) is None:
+        raise ValueError(f"Unable to resolve refreshed upstream revision from {upstream_ref!r}")
+    return fresh_revision
 
 
 def resolve_main_repo_root(repo_root: Path) -> Path:
@@ -608,17 +612,15 @@ def create_worktree(
     """Create a worktree, inspect it immediately, and fail loud on unsafe state."""
     repo_root = repo_root.resolve()
     worktree_path = worktree_path.resolve()
-    resolved_start = run_git(
-        ["rev-parse", "--verify", f"{start_point}^{{commit}}"],
-        cwd=repo_root,
-    )
-    start_revision = resolved_start.stdout.strip()
-    if resolved_start.returncode != 0 or re.fullmatch(r"(?:[0-9a-f]{40}|[0-9a-f]{64})", start_revision) is None:
-        raise ValueError(f"Unable to resolve one full Git start revision from {start_point!r}")
-    if not allow_stale_start_point:
-        freshness_issue = check_start_point_freshness(repo_root=repo_root, start_point=start_point)
-        if freshness_issue is not None:
-            raise ValueError(freshness_issue)
+    if allow_stale_start_point:
+        resolved_start = run_git(["rev-parse", "--verify", f"{start_point}^{{commit}}"], cwd=repo_root)
+        start_revision = resolved_start.stdout.strip()
+        if resolved_start.returncode != 0 or re.fullmatch(
+            r"(?:[0-9a-f]{40}|[0-9a-f]{64})", start_revision
+        ) is None:
+            raise ValueError(f"Unable to resolve one full Git start revision from {start_point!r}")
+    else:
+        start_revision = resolve_fresh_start_revision(repo_root=repo_root, start_point=start_point)
     if claim_start_revision is not None and claim_start_revision != start_revision:
         raise ValueError(
             "Requested claim custody does not match the resolved worktree start revision: "
@@ -846,6 +848,17 @@ def _print_human(result: WorktreeCreationResult) -> None:
         print(f"\n{result.import_provenance_warning}", file=sys.stderr)
 
 
+def _canonical_lock_module_path(script_path: Path | None = None) -> Path:
+    """Resolve the helper in both source and installed worktree layouts."""
+
+    current = (script_path or Path(__file__)).resolve()
+    candidates = (
+        current.parent / "canonical_lock.py",
+        current.parents[1] / "canonical_lock.py",
+    )
+    return next((candidate for candidate in candidates if candidate.is_file()), candidates[0])
+
+
 def _lock_canonical_checkout(repo_root: Path, *, as_json: bool) -> None:
     """Make the canonical checkout read-only now that a lane exists.
 
@@ -858,7 +871,7 @@ def _lock_canonical_checkout(repo_root: Path, *, as_json: bool) -> None:
     the lane is already usable, and a missing lock is a weaker state, not a
     corrupt one. It must never be silent, which is why it prints either way.
     """
-    module_path = Path(__file__).resolve().parent / "canonical_lock.py"
+    module_path = _canonical_lock_module_path()
     if not module_path.exists():
         print(
             f"WARNING: canonical lock unavailable ({module_path} missing); canonical checkout stays writable",
@@ -913,6 +926,14 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps({"canonical_project": project_name}, indent=2))
         else:
             print(project_name)
+        return 0
+    if args.print_fresh_start_revision:
+        try:
+            revision = resolve_fresh_start_revision(repo_root=repo_root, start_point=args.start_point)
+        except (RuntimeError, ValueError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        print(revision)
         return 0
 
     if not args.path or not args.branch:

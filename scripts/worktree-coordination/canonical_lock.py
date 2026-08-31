@@ -194,6 +194,47 @@ def read_receipt(repo_root: Path) -> LockReceipt | None:
     return LockReceipt.from_json(path.read_text(encoding="utf-8"))
 
 
+def refresh_lock_justifications(
+    repo_root: Path,
+    *,
+    justifying_claims: list[str],
+    session_id: str | None = None,
+) -> dict[str, Any]:
+    """Atomically refresh claim metadata without changing recorded modes."""
+
+    repo_root = repo_root.resolve()
+    receipt = read_receipt(repo_root)
+    if receipt is None:
+        return {"ok": False, "action": "not_locked", "repo_root": str(repo_root)}
+    scopes = sorted(set(justifying_claims))
+    if receipt.justifying_claims == scopes:
+        return {
+            "ok": True,
+            "action": "justifications_current",
+            "repo_root": str(repo_root),
+            "justifying_claims": scopes,
+        }
+    receipt.justifying_claims = scopes
+    receipt.locked_by_session = session_id
+    target = receipt_path(repo_root)
+    descriptor, temporary_name = tempfile.mkstemp(prefix=f".{RECEIPT_NAME}.", dir=target.parent)
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            handle.write(receipt.to_json())
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, target)
+    finally:
+        temporary.unlink(missing_ok=True)
+    return {
+        "ok": True,
+        "action": "justifications_refreshed",
+        "repo_root": str(repo_root),
+        "justifying_claims": scopes,
+    }
+
+
 def is_locked(repo_root: Path) -> bool:
     try:
         return read_receipt(repo_root) is not None
@@ -757,6 +798,15 @@ def reconcile(
                 else {**unlock_repo(repo), "reason": "no live lane claim (stale lock)"}
             )
         elif scopes and locked:
+            receipt = read_receipt(repo)
+            if receipt is not None and receipt.justifying_claims != sorted(set(scopes)):
+                actions.append(
+                    {**refresh_lock_justifications(
+                        repo,
+                        justifying_claims=scopes,
+                        session_id=session_id,
+                    ), "reason": "live lane claim set changed"}
+                )
             # The lock is still justified, but a receipt is not a boundary: the
             # modes it applied can be undone afterwards without touching it.
             try:

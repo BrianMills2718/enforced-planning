@@ -298,6 +298,50 @@ def _canonical_lock_module() -> Any:
     return module
 
 
+def _finish_canonical_relock(
+    canonical_lock: Any,
+    repo: Path,
+    *,
+    justifying_claims: list[str],
+    session_id: str,
+) -> dict[str, Any]:
+    """Finish a relock after integration, including a partial first attempt."""
+
+    first_error: Exception | None = None
+    try:
+        result = canonical_lock.lock_repo(
+            repo,
+            justifying_claims=justifying_claims,
+            session_id=session_id,
+        )
+    except Exception as exc:  # noqa: BLE001 - a partial lock must be repaired before return
+        first_error = exc
+        result = None
+
+    try:
+        if canonical_lock.read_receipt(repo) is not None:
+            repair = canonical_lock.relock_repo(repo)
+            if result is None:
+                result = repair
+        elif first_error is not None:
+            result = canonical_lock.lock_repo(
+                repo,
+                justifying_claims=justifying_claims,
+                session_id=session_id,
+            )
+    except Exception as exc:
+        detail = f"{first_error}; recovery failed: {exc}" if first_error else str(exc)
+        raise ClaimBootstrapError(f"canonical checkout relock failed: {detail}") from exc
+
+    integrity = canonical_lock.verify_lock_integrity(repo)
+    if integrity.get("verdict") != canonical_lock.VERDICT_LOCKED:
+        detail = f" after initial error: {first_error}" if first_error else ""
+        raise ClaimBootstrapError(f"canonical checkout relock remained degraded{detail}")
+    if result is None:
+        raise ClaimBootstrapError("canonical checkout relock produced no result")
+    return result
+
+
 def _github_repo_from_remote(remote_url: str) -> str:
     """Return owner/repository from an HTTPS, SSH, or SSH-host-alias URL."""
 
@@ -753,6 +797,13 @@ def _execute_local_repository_integrate(
     if lane_status.returncode != 0 or lane_status.stdout.strip():
         raise ClaimBootstrapError("claimed worktree must be clean before local integration")
 
+    canonical_lock = _canonical_lock_module()
+    receipt = canonical_lock.read_receipt(repo)
+    if receipt is None:
+        raise ClaimBootstrapError("canonical checkout has no live lock receipt")
+    if request.scope not in receipt.justifying_claims:
+        raise ClaimBootstrapError("canonical lock is not justified by the exact live claim")
+
     before = _git(repo, "rev-parse", request.default_branch)
     lane_head = _git(repo, "rev-parse", request.branch)
     if before.returncode != 0 or lane_head.returncode != 0:
@@ -760,6 +811,10 @@ def _execute_local_repository_integrate(
     before_sha = before.stdout.strip()
     lane_sha = lane_head.stdout.strip()
     if before_sha == lane_sha:
+        if canonical_lock.verify_lock_integrity(repo).get("verdict") != canonical_lock.VERDICT_LOCKED:
+            canonical_lock.relock_repo(repo)
+        if canonical_lock.verify_lock_integrity(repo).get("verdict") != canonical_lock.VERDICT_LOCKED:
+            raise ClaimBootstrapError("already-integrated canonical checkout lock is degraded")
         return {
             "action": "already_integrated",
             "repo_root": str(repo),
@@ -773,12 +828,6 @@ def _execute_local_repository_integrate(
     if ancestor.returncode != 0:
         raise ClaimBootstrapError("local integration must be an exact fast-forward")
 
-    canonical_lock = _canonical_lock_module()
-    receipt = canonical_lock.read_receipt(repo)
-    if receipt is None:
-        raise ClaimBootstrapError("canonical checkout has no live lock receipt")
-    if request.scope not in receipt.justifying_claims:
-        raise ClaimBootstrapError("canonical lock is not justified by the exact live claim")
     integrity = canonical_lock.verify_lock_integrity(repo)
     if integrity.get("verdict") != canonical_lock.VERDICT_LOCKED:
         raise ClaimBootstrapError("canonical checkout lock is degraded before integration")
@@ -789,7 +838,8 @@ def _execute_local_repository_integrate(
     try:
         merge = _git(repo, "merge", "--ff-only", request.branch)
     finally:
-        relock = canonical_lock.lock_repo(
+        relock = _finish_canonical_relock(
+            canonical_lock,
             repo,
             justifying_claims=list(receipt.justifying_claims),
             session_id=session_id,

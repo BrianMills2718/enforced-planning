@@ -257,8 +257,10 @@ def test_reconcile_releases_a_stale_lock_left_by_a_dead_session(repo: Path, tmp_
 def test_reconcile_keeps_the_lock_while_any_lane_is_still_live(repo: Path, tmp_path: Path) -> None:
     canonical_lock.lock_repo(repo, justifying_claims=["lane-a"])
     claims = _claims_dir(tmp_path, _lane_claim(repo, scope="lane-b"))
-    canonical_lock.reconcile(repos=[repo], claims_dir=claims)
+    report = canonical_lock.reconcile(repos=[repo], claims_dir=claims)
     assert canonical_lock.is_locked(repo), "another live lane still justifies the lock"
+    assert canonical_lock.read_receipt(repo).justifying_claims == ["lane-b"]
+    assert [action["action"] for action in report["actions"]] == ["justifications_refreshed"]
 
 
 def test_reconcile_ignores_an_expired_claim(repo: Path, tmp_path: Path) -> None:

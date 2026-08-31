@@ -171,10 +171,15 @@ def _shell_commands(command: str) -> tuple[tuple[str, ...], ...] | None:
         # batch independent inspections as one multiline Bash request; treating
         # the newline as ordinary whitespace would merge adjacent commands,
         # while rejecting every newline sends harmless observation through the
-        # write-claim path. Quoted newlines remain inside their argument token.
+        # write-claim path. Newlines embedded in any other token remain
+        # ambiguous and fail closed below.
         lexer = shlex.shlex(command, posix=True, punctuation_chars=";&|<>\n")
         lexer.whitespace_split = True
         lexer.whitespace = " \t"
+        # Shell comments terminate at a physical newline.  Letting shlex
+        # consume comments also consumes that boundary and can merge a later
+        # mutating command into the argv of an allowed read command.
+        lexer.commenters = ""
         tokens = tuple(lexer)
     except ValueError:
         return None
@@ -183,7 +188,12 @@ def _shell_commands(command: str) -> tuple[tuple[str, ...], ...] | None:
     commands: list[tuple[str, ...]] = []
     current: list[str] = []
     for token in tokens:
-        if token and set(token) == {"\n"}:
+        if "\n" in token:
+            if set(token) != {"\n"}:
+                # shlex groups adjacent punctuation, for example ``\n>``.
+                # Such a token contains shell behavior beyond a command
+                # boundary and is not provably read-only.
+                return None
             if current:
                 commands.append(tuple(current))
                 current = []

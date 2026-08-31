@@ -32,6 +32,7 @@ def _evaluate(tmp_path: Path, command: str) -> dict[str, object]:
         "sed -n '1,20p' README.md\nrg -n needle README.md",
         "git status --short\ngit log -5 --oneline --decorate\ngit diff --stat",
         "stat -c '%y %s %n' snapshot.json\nsed -n '1,220p' snapshot.json",
+        "echo safe # comment\nrg -n needle README.md",
     ],
 )
 def test_multiline_read_only_inspection_survives_missing_claim_projection(
@@ -50,6 +51,8 @@ def test_multiline_read_only_inspection_survives_missing_claim_projection(
         "git status --short\ntouch marker",
         "sed -n '1,20p' README.md\npython3 repair.py",
         "rg -n needle .\ngit add README.md",
+        "echo safe # comment\ntouch marker",
+        "git status --short\n> marker",
     ],
 )
 def test_multiline_inspection_with_one_unproved_mutation_still_fails_closed(

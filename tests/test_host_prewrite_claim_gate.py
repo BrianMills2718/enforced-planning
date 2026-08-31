@@ -427,6 +427,64 @@ def test_host_gate_admits_exact_native_mailbox_send_without_repository_claim(
     assert decision["reason_code"] == "native_mailbox_command"
 
 
+def test_host_gate_admits_exact_native_closeout_for_merged_claim(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _workspace, repo, worktree, claims_dir, _claim_path = _fixture(tmp_path)
+    monkeypatch.setenv("CLAUDE_SESSION_ID", "host-gate-test")
+    _git(worktree, "add", "src/allowed.py")
+    _git(worktree, "commit", "-m", "lane work")
+    _git(repo, "merge", "--ff-only", "host-gate-lane")
+    command = (
+        f"/usr/bin/python3 {prewrite_claim_gate.REPO_ROOT / 'scripts' / 'session_close.py'} "
+        "--agent claude-code --project host-gate-test --scope host-gate-lane --json"
+    )
+    payload = _payload(cwd=worktree, tool="Bash", tool_input={"command": command})
+
+    code, decision = _run_cli(
+        monkeypatch,
+        capsys,
+        tmp_path,
+        payload,
+        claims_dir=claims_dir,
+        projection_path=tmp_path / "projection.json",
+    )
+
+    assert code == 0, decision
+    assert decision["decision"] == "allow"
+    assert decision["reason_code"] == "native_closeout_command"
+
+
+@pytest.mark.parametrize("tamper", ["wrong-scope", "wrong-agent", "composed"])
+def test_host_gate_rejects_tampered_native_closeout(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    tamper: str,
+) -> None:
+    _workspace, _repo, worktree, claims_dir, _claim_path = _fixture(tmp_path)
+    monkeypatch.setenv("CLAUDE_SESSION_ID", "host-gate-test")
+    agent = "codex" if tamper == "wrong-agent" else "claude-code"
+    scope = "different-lane" if tamper == "wrong-scope" else "host-gate-lane"
+    command = (
+        f"/usr/bin/python3 {prewrite_claim_gate.REPO_ROOT / 'scripts' / 'session_close.py'} "
+        f"--agent {agent} --project host-gate-test --scope {scope} --json"
+    )
+    if tamper == "composed":
+        command += " && touch escaped"
+
+    classification = prewrite_claim_gate._special_unclaimed_command(
+        command,
+        client="claude-code",
+        claims_dir=claims_dir,
+        projection_path=tmp_path / "projection.json",
+        subagent_event=False,
+    )
+
+    assert classification is False
+
+
 @pytest.mark.parametrize("tamper", ["wrong-session", "composed", "noncanonical-script"])
 def test_host_gate_rejects_tampered_claimless_mailbox_command(
     tmp_path: Path,

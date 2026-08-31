@@ -4,7 +4,10 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
+import io
 import json
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -347,6 +350,51 @@ def _parse_native_mailbox_command(command: str, *, client: str) -> None:
         raise ValueError("mailbox sender does not match the ambient native session")
 
 
+def _parse_native_closeout_command(command: str, *, client: str, claims_dir: Path) -> None:
+    """Validate one exact closeout command for the ambient claim owner.
+
+    Closeout is a control-plane mutation, not ordinary repository work.  It is
+    admitted only through the canonical host script and only when every target
+    identity resolves to one live claim owned by the native runtime.
+    """
+
+    from enforced_planning import coordination_claims
+    from scripts import session_close
+
+    if "\n" in command or "\r" in command:
+        raise ValueError("closeout command must be exactly one line")
+    tokens = shlex.split(command)
+    script = (REPO_ROOT / "scripts" / "session_close.py").resolve()
+    if len(tokens) < 8 or tokens[:2] != ["/usr/bin/python3", str(script)]:
+        raise ValueError("closeout command does not use the canonical host script")
+    if any(token in {";", "&", "&&", "|", "||", ">", ">>", "<"} for token in tokens):
+        raise ValueError("closeout command cannot compose shell operations")
+    try:
+        with contextlib.redirect_stderr(io.StringIO()):
+            args = session_close.parse_args(tokens[2:])
+    except SystemExit as exc:
+        raise ValueError("closeout command does not match the canonical CLI grammar") from exc
+    native_session = coordination_claims.resolve_session_id(client)
+    if native_session is None or args.agent != client:
+        raise ValueError("closeout agent does not match the ambient native client")
+    matches = [
+        claim
+        for claim in coordination_claims.check_claims(project=args.project, claims_dir=claims_dir)
+        if claim.agent == args.agent
+        and claim.scope == args.scope
+        and claim.session_id == native_session
+    ]
+    if len(matches) != 1:
+        raise ValueError("closeout target is not the ambient runtime's exact live claim")
+    claim = matches[0]
+    if args.worktree_path and Path(args.worktree_path).expanduser().resolve() != Path(
+        claim.worktree_path or ""
+    ).expanduser().resolve():
+        raise ValueError("closeout worktree does not match the exact live claim")
+    if args.branch and args.branch != claim.branch:
+        raise ValueError("closeout branch does not match the exact live claim")
+
+
 def _special_unclaimed_command(
     command: str,
     *,
@@ -375,6 +423,11 @@ def _special_unclaimed_command(
     try:
         _parse_native_mailbox_command(command, client=client)
         return "native_mailbox"
+    except Exception:  # noqa: BLE001 -- try the remaining strict control grammars
+        pass
+    try:
+        _parse_native_closeout_command(command, client=client, claims_dir=claims_dir)
+        return "native_closeout"
     except Exception:  # noqa: BLE001 -- try the remaining strict control grammars
         pass
     try:
@@ -637,6 +690,7 @@ def main(argv: list[str] | None = None) -> int:
             "read_only",
             "claim_bootstrap",
             "native_mailbox",
+            "native_closeout",
             "read_target_selection",
             "projection_recovery",
         }:
@@ -709,6 +763,7 @@ def main(argv: list[str] | None = None) -> int:
         "bash_read_only",
         "claim_bootstrap_command",
         "native_mailbox_command",
+        "native_closeout_command",
         "read_target_selection_command",
         "projection_recovery_command",
     }

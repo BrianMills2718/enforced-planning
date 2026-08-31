@@ -2,9 +2,22 @@
 
 from __future__ import annotations
 
+import subprocess
+from pathlib import Path
+
 import pytest
 
 from enforced_planning import coordination_messages, session_lifecycle
+
+
+def _git(repo: Path, *args: str) -> str:
+    result = subprocess.run(
+        ["git", "-C", str(repo), *args],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return result.stdout.strip()
 
 
 def test_mailbox_poll_without_a_live_claim_degrades_instead_of_raising() -> None:
@@ -65,3 +78,26 @@ def test_other_mailbox_failures_still_surface() -> None:
             )
     finally:
         coordination_messages.poll_session_inbox = original  # type: ignore[assignment]
+
+
+def test_remove_worktree_reanchors_process_cwd_before_removal(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-b", "main")
+    _git(repo, "config", "user.email", "test@example.com")
+    _git(repo, "config", "user.name", "Test User")
+    (repo / "README.md").write_text("seed\n", encoding="utf-8")
+    _git(repo, "add", "README.md")
+    _git(repo, "commit", "-m", "seed")
+    worktree = tmp_path / "lane"
+    _git(repo, "worktree", "add", "-b", "lane", str(worktree))
+    monkeypatch.chdir(worktree)
+
+    action = session_lifecycle._remove_worktree_path(repo, worktree)
+
+    assert action == "removed"
+    assert Path.cwd() == repo.resolve()
+    assert not worktree.exists()

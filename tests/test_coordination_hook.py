@@ -7,6 +7,7 @@ import subprocess
 import sys
 import threading
 import time
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -167,6 +168,58 @@ def test_stop_repairs_projection_after_claim_deletion(tmp_path: Path) -> None:
     claims = coordination_hook._active_claims(claims_dir, turn_end=True)
 
     assert claims == ()
+
+
+def test_projection_repair_rechecks_under_lock_before_rebuilding(
+    monkeypatch, tmp_path: Path
+) -> None:
+    claims_dir = tmp_path / "claims"
+    claims_dir.mkdir()
+    _write_live_claim(claims_dir, scope="writer-completed")
+    real_refresh = coordination_hook.coordination_claims.refresh_prewrite_authority_projection
+
+    @contextmanager
+    def writer_finishes_before_lock_acquisition(_claims_dir: Path):
+        real_refresh(claims_dir)
+        yield
+
+    monkeypatch.setattr(
+        coordination_hook.coordination_claims,
+        "claim_registry_lock",
+        writer_finishes_before_lock_acquisition,
+    )
+    monkeypatch.setattr(
+        coordination_hook.coordination_claims,
+        "refresh_prewrite_authority_projection",
+        lambda _claims_dir: (_ for _ in ()).throw(
+            AssertionError("repair redundantly rebuilt a current projection")
+        ),
+    )
+
+    result = coordination_hook._repair_projection_under_lock(claims_dir)
+
+    assert result["action"] == "already_current"
+    assert result["last_phase"] == "complete"
+    assert result["lock_wait_ms"] >= 0
+    assert result["total_ms"] >= result["lock_wait_ms"]
+
+
+def test_projection_repair_timeout_names_last_observed_phase(monkeypatch, tmp_path: Path) -> None:
+    def timeout(*_args: object, **_kwargs: object) -> object:
+        raise subprocess.TimeoutExpired(
+            cmd=["repair"],
+            timeout=coordination_hook.TURN_END_PROJECTION_REPAIR_TIMEOUT_SECONDS,
+            stderr="projection_repair_phase=lock_wait\n",
+        )
+
+    monkeypatch.setattr(coordination_hook.subprocess, "run", timeout)
+
+    try:
+        coordination_hook._repair_turn_end_projection(tmp_path / "claims")
+    except coordination_hook.TurnEndProjectionError as exc:
+        assert "last_phase=lock_wait" in str(exc)
+    else:
+        raise AssertionError("timed-out projection repair must remain visible")
 
 
 def test_stop_warns_when_projection_repair_remains_unavailable(monkeypatch, tmp_path: Path) -> None:

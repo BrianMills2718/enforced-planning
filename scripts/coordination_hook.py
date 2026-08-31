@@ -279,7 +279,18 @@ def _projection_has_registry_change(projection_path: Path, claims_dir: Path) -> 
         raise TurnEndProjectionError(f"cannot inspect derived claim state: {exc}") from exc
 
 
-def _repair_turn_end_projection(claims_dir: Path) -> None:
+def _repair_phase(output: str | bytes | None) -> str:
+    """Return the last content-free phase marker emitted by the repair worker."""
+
+    if output is None:
+        return "startup"
+    text = output.decode("utf-8", errors="replace") if isinstance(output, bytes) else output
+    prefix = "projection_repair_phase="
+    phases = [line.removeprefix(prefix) for line in text.splitlines() if line.startswith(prefix)]
+    return phases[-1] if phases else "startup"
+
+
+def _repair_turn_end_projection(claims_dir: Path) -> dict[str, Any]:
     """Run the lock-owning projection repair in a killable, bounded subprocess."""
 
     command = [
@@ -298,19 +309,62 @@ def _repair_turn_end_projection(claims_dir: Path) -> None:
             timeout=TURN_END_PROJECTION_REPAIR_TIMEOUT_SECONDS,
         )
     except subprocess.TimeoutExpired as exc:
+        last_phase = _repair_phase(exc.stderr)
         raise TurnEndProjectionError(
-            f"claim projection repair exceeded {TURN_END_PROJECTION_REPAIR_TIMEOUT_SECONDS:g}s"
+            f"claim projection repair exceeded {TURN_END_PROJECTION_REPAIR_TIMEOUT_SECONDS:g}s "
+            f"(last_phase={last_phase})"
         ) from exc
     if completed.returncode:
         detail = completed.stderr.strip() or completed.stdout.strip() or "repair process failed"
         raise TurnEndProjectionError(detail)
+    try:
+        result = json.loads(completed.stdout)
+    except (json.JSONDecodeError, TypeError) as exc:
+        raise TurnEndProjectionError("projection repair returned invalid timing evidence") from exc
+    if not isinstance(result, dict) or result.get("last_phase") != "complete":
+        raise TurnEndProjectionError("projection repair returned incomplete timing evidence")
+    return result
 
 
-def _repair_projection_under_lock(claims_dir: Path) -> None:
-    """Own the canonical claim lock while rebuilding its replaceable projection."""
+def _projection_is_current(claims_dir: Path) -> bool:
+    """Check the derived projection against one lock-owned registry state."""
+
+    projection_path = prewrite_claim_fast.projection_path_for(claims_dir)
+    try:
+        projection = prewrite_claim_projection.PreWriteAuthorityProjectionV1.model_validate_json(
+            projection_path.read_text(encoding="utf-8")
+        )
+        return (
+            projection.claims_dir == str(claims_dir)
+            and projection.registry_digest == prewrite_claim_fast.registry_digest(claims_dir)
+        )
+    except (OSError, ValueError):
+        return False
+
+
+def _repair_projection_under_lock(claims_dir: Path) -> dict[str, Any]:
+    """Recheck after writer contention and rebuild only genuinely stale state."""
+
+    started = time.monotonic()
+    print("projection_repair_phase=lock_wait", file=sys.stderr, flush=True)
 
     with coordination_claims.claim_registry_lock(claims_dir):
-        coordination_claims.refresh_prewrite_authority_projection(claims_dir)
+        lock_acquired = time.monotonic()
+        print("projection_repair_phase=registry_check", file=sys.stderr, flush=True)
+        if _projection_is_current(claims_dir):
+            action = "already_current"
+        else:
+            print("projection_repair_phase=rebuild", file=sys.stderr, flush=True)
+            coordination_claims.refresh_prewrite_authority_projection(claims_dir)
+            action = "rebuilt"
+    completed = time.monotonic()
+    print("projection_repair_phase=complete", file=sys.stderr, flush=True)
+    return {
+        "action": action,
+        "last_phase": "complete",
+        "lock_wait_ms": round((lock_acquired - started) * 1000, 3),
+        "total_ms": round((completed - started) * 1000, 3),
+    }
 
 
 def _active_claims(claims_dir: Path | None, *, turn_end: bool = False) -> tuple[Any, ...]:
@@ -705,7 +759,10 @@ def main(argv: list[str] | None = None) -> int:
 
     args = parse_args(argv)
     if args.repair_projection_only:
-        _repair_projection_under_lock((args.claims_dir or coordination_claims.CLAIMS_DIR).expanduser().resolve())
+        result = _repair_projection_under_lock(
+            (args.claims_dir or coordination_claims.CLAIMS_DIR).expanduser().resolve()
+        )
+        print(json.dumps(result, sort_keys=True))
         return 0
     invocation: HookInvocation | None = None
     telemetry_decision = "warn"

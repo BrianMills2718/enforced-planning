@@ -15,6 +15,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+import uuid
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from pathlib import Path
@@ -223,12 +224,64 @@ def _is_ancestor(cwd: Path, ancestor: str, descendant: str = "HEAD") -> bool:
     )
 
 
-def _prepare_branch_for_push(cwd: Path, *, branch: str, base: str) -> None:
-    """Update an unpublished branch or validate a published fast-forward push.
+@contextmanager
+def _staged_rebased_history(cwd: Path, *, base: str) -> Iterator[tuple[str, str]]:
+    """Yield a temporary ref containing rebased history without moving the branch."""
+    temporary_ref = f"refs/pr-auto/{uuid.uuid4().hex}"
+    worktree_added = False
+    ref_created = False
+    with tempfile.TemporaryDirectory(prefix="pr-auto-rebase-") as temp_dir:
+        staging_worktree = Path(temp_dir) / "worktree"
+        try:
+            run_cmd(
+                ["git", "worktree", "add", "--detach", str(staging_worktree), "HEAD"],
+                cwd=cwd,
+            )
+            worktree_added = True
+            run_cmd(["git", "rebase", f"origin/{base}"], cwd=staging_worktree)
+            candidate = _git_stdout(["rev-parse", "HEAD"], cwd=staging_worktree)
+            run_cmd(["git", "update-ref", temporary_ref, candidate], cwd=cwd)
+            ref_created = True
+            yield temporary_ref, candidate
+        finally:
+            if worktree_added:
+                run_cmd(
+                    ["git", "worktree", "remove", "--force", str(staging_worktree)],
+                    cwd=cwd,
+                )
+            if ref_created:
+                run_cmd(["git", "update-ref", "-d", temporary_ref], cwd=cwd)
 
-    Rebasing is safe to automate only before the branch has a public history.
-    Once ``origin/<branch>`` exists, this workflow must never rewrite it or
-    force-push it implicitly.
+
+def _publish_unpublished_branch(cwd: Path, *, branch: str, base: str) -> None:
+    """Create a remote branch before advancing its clean local counterpart."""
+    remote_ref = f"refs/heads/{branch}"
+    with _staged_rebased_history(cwd, base=base) as (temporary_ref, candidate):
+        run_cmd(
+            [
+                "git",
+                "push",
+                "--atomic",
+                f"--force-with-lease={remote_ref}:",
+                "origin",
+                f"{temporary_ref}:{remote_ref}",
+            ],
+            cwd=cwd,
+        )
+        run_cmd(
+            ["git", "fetch", "origin", f"+{remote_ref}:refs/remotes/origin/{branch}"],
+            cwd=cwd,
+        )
+        run_cmd(["git", "reset", "--keep", candidate], cwd=cwd)
+        run_cmd(["git", "branch", "--set-upstream-to", f"origin/{branch}", branch], cwd=cwd)
+
+
+def _prepare_branch_for_push(cwd: Path, *, branch: str, base: str) -> bool:
+    """Publish an unpublished branch or validate a published fast-forward push.
+
+    Return True when the unpublished path already performed its create-only
+    push. Once ``origin/<branch>`` exists, this workflow never rebases it and
+    leaves the ordinary fast-forward push to the caller.
     """
     if not _remote_branch_exists(cwd, branch):
         run_cmd(["git", "fetch", "origin"], cwd=cwd)
@@ -238,8 +291,8 @@ def _prepare_branch_for_push(cwd: Path, *, branch: str, base: str) -> None:
                 "No rebase or push was attempted. Rerun pr-auto so the published-branch safety "
                 "checks can evaluate the current remote history.",
             )
-        run_cmd(["git", "rebase", f"origin/{base}"], cwd=cwd)
-        return
+        _publish_unpublished_branch(cwd, branch=branch, base=base)
+        return True
 
     run_cmd(["git", "fetch", "origin"], cwd=cwd)
     remote_branch = f"origin/{branch}"
@@ -258,6 +311,7 @@ def _prepare_branch_for_push(cwd: Path, *, branch: str, base: str) -> None:
             f"'git rebase origin/{base}', review the rewritten commits, then recover with "
             f"'git push --force-with-lease origin HEAD:{branch}' if the rewrite is intentional.",
         )
+    return False
 
 
 def _push_branch(cwd: Path) -> None:
@@ -349,8 +403,9 @@ def main() -> int:
             print("Preflight passed.")
             return 0
 
-        _prepare_branch_for_push(cwd, branch=branch, base=args.base)
-        _push_branch(cwd)
+        branch_published = _prepare_branch_for_push(cwd, branch=branch, base=args.base)
+        if not branch_published:
+            _push_branch(cwd)
 
         pr = _find_open_pr(cwd=cwd, gh_env=isolated_env, branch=branch, base=args.base)
         if pr is None:

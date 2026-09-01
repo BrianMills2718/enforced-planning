@@ -83,8 +83,12 @@ python scripts/worktree-coordination/pr_review_signoff.py \
   --repo-root /absolute/review-worktree \
   --spec /absolute/review-spec.json \
   --receipt /absolute/pr-review-receipt.json \
-  --check-payload /absolute/check-run.json
+  --check-payload /absolute/check-run.json \
+  --gh-bin gh-personal
 ```
+
+Use the repository's recorded account wrapper on multi-account machines. In
+GitHub Actions, the default `gh` route uses the workflow's `GH_TOKEN`.
 
 The receipt exits successfully only for `signed_off`. A signed receipt remains
 `candidate_only`; the check payload is named `agent-review-candidate`, names

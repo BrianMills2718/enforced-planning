@@ -362,10 +362,10 @@ def _assert_frozen_worktree(repo_root: Path, expected_head: str, *, phase: str) 
     return observed_head
 
 
-def _resolve_github_pr_head(repository: str, pull_request: int) -> str:
+def _resolve_github_pr_head(repository: str, pull_request: int, *, gh_bin: str) -> str:
     result = subprocess.run(
         [
-            "gh",
+            gh_bin,
             "api",
             f"repos/{repository}/pulls/{pull_request}",
             "--jq",
@@ -481,13 +481,18 @@ def run_review(
     model: str | None = None,
     effort: str = "high",
     review_timeout_seconds: int = 1800,
+    gh_bin: str = "gh",
     pr_head_resolver: Callable[[str, int], str] | None = None,
 ) -> PRSignoffReceipt:
     if review_timeout_seconds < 1:
         raise ValueError("review timeout must be at least one second")
     root = repo_root.resolve()
     observed_head = _assert_frozen_worktree(root, spec.head_sha, phase="preflight")
-    resolver = pr_head_resolver or _resolve_github_pr_head
+    resolver = pr_head_resolver or (
+        lambda repository, pull_request: _resolve_github_pr_head(
+            repository, pull_request, gh_bin=gh_bin
+        )
+    )
     _assert_live_pr_head(spec, resolver, phase="preflight")
     _git_output(root, "merge-base", "--is-ancestor", spec.base_sha, spec.head_sha)
     checks = run_programmatic_checks(spec, repo_root=root)

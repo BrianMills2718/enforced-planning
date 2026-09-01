@@ -27,6 +27,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--receipt", type=Path, required=True)
     parser.add_argument("--check-payload", type=Path, required=True)
     parser.add_argument("--codex-bin", default="codex")
+    parser.add_argument("--gh-bin", default="gh")
     parser.add_argument(
         "--model",
         help="Explicit Codex model override; omit to use the authenticated route's supported default",
@@ -45,6 +46,7 @@ def main(argv: list[str] | None = None) -> int:
         receipt_path=args.receipt,
         check_payload_path=args.check_payload,
         codex_bin=args.codex_bin,
+        gh_bin=args.gh_bin,
         model=args.model,
         effort=args.effort,
         review_timeout_seconds=args.review_timeout_seconds,

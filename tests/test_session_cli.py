@@ -1229,6 +1229,113 @@ def test_existing_session_upsert_refreshes_projection_and_emits_receipt(
     assert {field: refreshed_claim.get(field) for field in coordination_claims.PROGRESS_FIELD_NAMES} == progress_before
 
 
+def _maintenance_refresh_args(tmp_path: Path, trackers_dir: Path) -> dict[str, object]:
+    branch = "fix/maintenance-provenance-refresh"
+    goal = "Unplanned maintenance: fix maintenance provenance refresh"
+    worktree = tmp_path / "repo" / "worktrees" / branch
+    worktree.mkdir(parents=True)
+    return {
+        "agent": "codex",
+        "project": "enforced-planning",
+        "scope": branch,
+        "intent": goal,
+        "repo_root": str(tmp_path / "repo"),
+        "worktree_path": str(worktree),
+        "branch": branch,
+        "broader_goal": goal,
+        "current_phase": "maintenance-bootstrap",
+        "plan_ref": None,
+        "session_id": "codex:maintenance-owner",
+        "session_name": session_contracts.derive_session_name(goal),
+        "claim_type": "program",
+        "write_paths": ["enforced_planning/session_lifecycle.py", "tests/test_session_cli.py"],
+        "read_paths": [],
+        "tracker_dir": trackers_dir,
+        "allow_unplanned": True,
+    }
+
+
+def test_sanctioned_maintenance_start_refresh_preserves_bootstrap_provenance(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An exact owner refresh may move liveness and phase, never maintenance identity."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    common = _maintenance_refresh_args(tmp_path, trackers_dir)
+    started = session_lifecycle.start_session(**common)
+    claim_path = claims_dir / "codex_enforced-planning_fix_maintenance-provenance-refresh.yaml"
+    tracker_path = Path(started["tracker_path"])
+    claim_before = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    tracker_before = yaml.safe_load(tracker_path.read_text(encoding="utf-8"))
+
+    refreshed = session_lifecycle.start_session(**{**common, "current_phase": "focused regression tests"})
+    claim_after = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    tracker_after = yaml.safe_load(tracker_path.read_text(encoding="utf-8"))
+
+    assert refreshed["action"] == "updated"
+    assert outcome_admission.is_sanctioned_maintenance_claim(
+        session_lifecycle._single_matching_live_claim(
+            agent="codex", project="enforced-planning", scope=str(common["scope"])
+        )
+    )
+    assert tracker_after["claim"] == tracker_before["claim"]
+    assert tracker_after["tracker"]["current_phase"] == "focused regression tests"
+    immutable_claim_fields = set(tracker_before["claim"]) | {
+        "claim_type",
+        "write_paths",
+        "read_paths",
+        "parent_scope",
+        "work_graph_path",
+        "work_unit_id",
+        "start_revision",
+        "plan_repo_root",
+        "plan_revision",
+        "plan_sha256",
+    }
+    assert {field: claim_after.get(field) for field in immutable_claim_fields} == {
+        field: claim_before.get(field) for field in immutable_claim_fields
+    }
+
+
+@pytest.mark.parametrize(
+    "drift",
+    [
+        {"intent": "replace immutable maintenance intent"},
+        {"repo_root": "/tmp/different-repo"},
+        {"worktree_path": "/tmp/different-worktree"},
+        {"branch": "fix/different-branch"},
+        {"broader_goal": "Unplanned maintenance: different goal", "session_name": None},
+        {"claim_type": "write"},
+        {"write_paths": ["different.py"]},
+        {"intended_next_phases": ["newly invented phase"]},
+    ],
+)
+def test_sanctioned_maintenance_start_rejects_provenance_drift_without_mutation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    drift: dict[str, object],
+) -> None:
+    """Identity drift fails before either the claim or tracker bytes change."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    common = _maintenance_refresh_args(tmp_path, trackers_dir)
+    started = session_lifecycle.start_session(**common)
+    claim_path = claims_dir / "codex_enforced-planning_fix_maintenance-provenance-refresh.yaml"
+    tracker_path = Path(started["tracker_path"])
+    claim_before = claim_path.read_bytes()
+    tracker_before = tracker_path.read_bytes()
+
+    with pytest.raises(ValueError, match="sanctioned maintenance refresh cannot change immutable provenance"):
+        session_lifecycle.start_session(**{**common, "current_phase": "drift attempt", **drift})
+
+    assert claim_path.read_bytes() == claim_before
+    assert tracker_path.read_bytes() == tracker_before
+
+
 def test_existing_session_upsert_rejects_new_write_overlap_without_mutation(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

@@ -199,7 +199,11 @@ def evaluate_coordination_approval(
         row for row in statuses
         if isinstance(row, dict) and row.get("context") == APPROVAL_CONTEXT
     ]
-    if matching_statuses:
+    # The owner-created commit-status arm is a migration compatibility path.
+    # Once protection binds this context to a GitHub App, accepting a status
+    # would let any worker holding the owner's ordinary token bypass the App
+    # identity boundary.  In the bound state only the exact App may approve.
+    if matching_statuses and trusted_check_app_id is None:
         latest = matching_statuses[0]
         creator = latest.get("creator")
         creator_login = creator.get("login") if isinstance(creator, dict) else None

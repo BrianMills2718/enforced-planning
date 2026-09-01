@@ -60,6 +60,25 @@ def test_status_context_success_requires_exact_creator_and_target() -> None:
     assert "trusted producer" in reason
 
 
+def test_app_binding_disables_owner_status_compatibility_arm() -> None:
+    status = {
+        "context": "coordination-approval",
+        "state": "success",
+        "creator": {"login": "owner"},
+        "target_url": "https://github.com/owner/repo/pull/304",
+    }
+    module = _load()
+
+    ok, reason = module.evaluate_coordination_approval(
+        statuses=[status], check_runs=[], head_sha=SHA_A,
+        trusted_creator="owner", trusted_check_app_id=99,
+        expected_target_url="https://github.com/owner/repo/pull/304",
+    )
+
+    assert ok is False
+    assert "trusted producer" in reason
+
+
 def test_missing_or_pending_coordination_approval_fails_visibly() -> None:
     module = _load()
     ok, missing = module.evaluate_coordination_approval(

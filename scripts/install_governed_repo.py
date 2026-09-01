@@ -480,6 +480,19 @@ def _sync_makefile_worktree_block(
     if MAKEFILE_WORKTREE_BLOCK_START in normalized:
         start = normalized.index(MAKEFILE_WORKTREE_BLOCK_START)
         end = normalized.index(MAKEFILE_WORKTREE_BLOCK_END) + len(MAKEFILE_WORKTREE_BLOCK_END)
+        outside_block = normalized[:start] + "\n" + normalized[end:]
+        collisions = [
+            target
+            for target in ("merge", "finish")
+            if any(line.startswith(f"{target}:") for line in outside_block.splitlines())
+        ]
+        if collisions:
+            return (
+                current_makefile,
+                None,
+                "legacy PR Make targets outside the generated worktree block conflict with "
+                "sanctioned finish: " + ", ".join(collisions),
+            )
         existing_block = normalized[start:end].rstrip()
         if existing_block == block:
             return normalized + "\n", None, None

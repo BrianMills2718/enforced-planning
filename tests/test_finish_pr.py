@@ -112,7 +112,7 @@ def test_head_change_invalidates_previously_successful_approval(monkeypatch) -> 
 
 def test_prepare_merge_gate_runs_local_review_and_rechecks_head(monkeypatch) -> None:
     module = _load()
-    snapshots = iter([(snapshot(module), None)] * 3)
+    snapshots = iter([(snapshot(module), None)] * 4)
     monkeypatch.setattr(module, "fetch_pr_snapshot", lambda *_args: next(snapshots))
     monkeypatch.setattr(module, "fetch_exact_pr_head", lambda *_args: (True, "OK"))
     monkeypatch.setattr(module, "require_all_required_checks", lambda *_args: (True, "OK"))
@@ -171,6 +171,40 @@ def test_base_change_after_review_invalidates_signoff(monkeypatch) -> None:
         assert "changed after review" in str(exc)
     else:
         raise AssertionError("changed base must invalidate review")
+
+
+def test_head_change_during_final_check_invalidates_signoff(monkeypatch) -> None:
+    module = _load()
+    snapshots = iter([
+        (snapshot(module), None),
+        (snapshot(module), None),
+        (snapshot(module), None),
+        (snapshot(module, SHA_C), None),
+    ])
+    monkeypatch.setattr(module, "fetch_pr_snapshot", lambda *_args: next(snapshots))
+    monkeypatch.setattr(module, "fetch_exact_pr_head", lambda *_args: (True, "OK"))
+    monkeypatch.setattr(module, "require_all_required_checks", lambda *_args: (True, "OK"))
+    monkeypatch.setattr(module, "load_trusted_review_spec", lambda *_args, **_kwargs: object())
+    monkeypatch.setattr(module, "resolve_branch_worktree", lambda _branch: Path("/review"))
+    monkeypatch.setattr(
+        module,
+        "run_local_review_gate",
+        lambda **_kwargs: (object(), Path("/receipt.json")),
+    )
+
+    try:
+        module.prepare_merge_gate(
+            304,
+            "feature",
+            "owner/repo",
+            {},
+            review_spec_path=Path("/tmp/review.json"),
+            review_output_root=Path("/tmp/reviews"),
+        )
+    except RuntimeError as exc:
+        assert "final required checks" in str(exc)
+    else:
+        raise AssertionError("head movement during final checks must invalidate review")
 
 
 def test_merge_uses_match_head_commit_and_never_deletes_branch(monkeypatch) -> None:
@@ -302,6 +336,9 @@ def test_hook_blocks_direct_merge_and_finish_command_variants() -> None:
         "env gh pr merge 42",
         "command gh pr merge 42",
         "sudo gh pr merge 42",
+        "timeout 30 gh pr merge 42",
+        "nice gh pr merge 42",
+        "stdbuf -oL gh pr merge 42",
         "exec gh pr merge 42",
         "exec python scripts/worktree-coordination/finish_pr.py --branch feature --pr 42",
         "env -S \"gh pr merge 42\"",
@@ -314,6 +351,9 @@ def test_hook_blocks_direct_merge_and_finish_command_variants() -> None:
         "make merge PR=42",
         "make -f /tmp/untrusted.mk finish BRANCH=feature PR=42 REVIEW_SPEC=/tmp/spec.json",
         "make finish BRANCH=feature PR=42 REVIEW_SPEC=/tmp/spec.json WORKTREE_FINISH_SCRIPT=/tmp/untrusted.py",
+        "make finish 'BRANCH=x\"; gh pr merge 42; echo \"' PR=42 REVIEW_SPEC=/tmp/spec.json",
+        "make finish BRANCH='$(gh pr merge 42)' PR=42 REVIEW_SPEC=/tmp/spec.json",
+        "make finish BRANCH=feature PR=42 REVIEW_SPEC='$(python scripts/worktree-coordination/finish_pr.py --branch feature --pr 42)'",
         "python -c \"import runpy; runpy.run_path('scripts/worktree-coordination/finish_pr.py', run_name='__main__')\"",
         "true\ngh pr merge 42",
         "MERGER=gh; \"$MERGER\" pr merge 42 --squash",

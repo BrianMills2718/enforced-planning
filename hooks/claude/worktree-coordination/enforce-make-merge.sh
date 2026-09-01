@@ -81,6 +81,27 @@ while queue:
             while words and words[0].startswith("-"):
                 words.pop(0)
             changed = True
+        elif command == "timeout":
+            words.pop(0)
+            while words and words[0].startswith("-"):
+                option = words.pop(0)
+                if option in {"-k", "--kill-after", "-s", "--signal"} and words:
+                    words.pop(0)
+            if words:
+                words.pop(0)
+            changed = True
+        elif command == "nice":
+            words.pop(0)
+            while words and words[0].startswith("-"):
+                option = words.pop(0)
+                if option in {"-n", "--adjustment"} and words:
+                    words.pop(0)
+            changed = True
+        elif command == "stdbuf":
+            words.pop(0)
+            while words and words[0].startswith("-"):
+                words.pop(0)
+            changed = True
         elif command == "env":
             words.pop(0)
             split_string = None
@@ -139,7 +160,18 @@ while queue:
             allowed_assignments = {"BRANCH", "PR", "REVIEW_SPEC", "REVIEW_OUTPUT_ROOT"}
             unsafe = any(word.startswith("-") for word in words[1:])
             for word in words[1:]:
-                if assignment.match(word) and word.split("=", 1)[0] not in allowed_assignments:
+                if not assignment.match(word):
+                    continue
+                name, value = word.split("=", 1)
+                if name not in allowed_assignments:
+                    unsafe = True
+                elif name == "PR" and not re.fullmatch(r"[1-9][0-9]*", value):
+                    unsafe = True
+                elif name == "BRANCH" and not re.fullmatch(r"[A-Za-z0-9._/-]+", value):
+                    unsafe = True
+                elif name in {"REVIEW_SPEC", "REVIEW_OUTPUT_ROOT"} and not re.fullmatch(
+                    r"/[A-Za-z0-9._/+:-]+", value
+                ):
                     unsafe = True
             if unsafe:
                 print("unsafe_finish")

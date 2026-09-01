@@ -357,7 +357,10 @@ def prepare_merge_gate(
     checks_ok, reason = require_all_required_checks(pr_number, repo_slug, gh_env)
     if not checks_ok:
         raise RuntimeError(reason)
-    return final, receipt_path
+    after_checks, _ = fetch_pr_snapshot(pr_number, repo_slug, gh_env)
+    if after_checks != final:
+        raise RuntimeError("PR changed while final required checks ran; signoff is stale")
+    return after_checks, receipt_path
 
 
 def merge_exact_head(

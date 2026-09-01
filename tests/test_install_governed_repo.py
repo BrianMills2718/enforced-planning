@@ -627,6 +627,32 @@ def test_worktree_rollout_rejects_unmarked_legacy_merge_targets(tmp_path: Path) 
     assert makefile.read_text(encoding="utf-8") == original
 
 
+def test_worktree_rollout_rejects_legacy_finish_outside_existing_marker(tmp_path: Path) -> None:
+    """An upgrade must catch a historical recipe trailing a generated block."""
+
+    _write_minimal_claude(tmp_path)
+    generated = (PROJECT_META_ROOT / "templates/Makefile.worktree.block.template").read_text(
+        encoding="utf-8"
+    )
+    makefile = tmp_path / "Makefile"
+    original = generated + "\nfinish:\n\t@gh pr merge $(PR) --squash --delete-branch\n"
+    makefile.write_text(original, encoding="utf-8")
+
+    result = _run(
+        "--repo-root",
+        str(tmp_path),
+        "--worktree-only",
+        "--write",
+        "--json",
+        cwd=PROJECT_META_ROOT,
+    )
+
+    assert result.returncode == 1
+    payload = json.loads(result.stdout)
+    assert any("outside the generated worktree block" in item for item in payload["blockers"])
+    assert makefile.read_text(encoding="utf-8") == original
+
+
 def test_relationship_context_only_rejects_malformed_make_markers(tmp_path: Path) -> None:
     """A partial generated block must block all writes rather than compound corruption."""
 

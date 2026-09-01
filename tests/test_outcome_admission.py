@@ -34,6 +34,7 @@ from enforced_planning.outcome_admission import (
     evaluate_selected_outcome_admission,
     infer_first_consumer_bootstrap_plan,
     is_first_consumer_bootstrap_path,
+    is_sanctioned_maintenance_claim,
     load_outcome_admission_mode,
     load_outcome_admission_receipts,
     record_outcome_admission,
@@ -464,6 +465,127 @@ def test_claim_bootstrap_admission_rejects_qualified_plan_with_only_safe_paths()
         )
         is None
     )
+
+
+def _maintenance_claim(tmp_path: Path) -> coordination_claims.ClaimRecord:
+    branch = "fix/example-maintenance"
+    goal = "Unplanned maintenance: fix example maintenance"
+    tracker_path = tmp_path / "tracker.yaml"
+    claim = coordination_claims.ClaimRecord(
+        agent="codex",
+        claimed_at="2026-09-01T00:00:00+00:00",
+        expires_at="2026-09-01T01:00:00+00:00",
+        projects=["enforced-planning"],
+        scope=branch,
+        intent=goal,
+        claim_type="program",
+        write_paths=["allowed.txt"],
+        read_paths=[],
+        worktree_path=str(tmp_path / "repo" / "worktrees" / branch),
+        repo_root=str(tmp_path / "repo"),
+        branch=branch,
+        session_name=session_contracts.derive_session_name(goal),
+        broader_goal=goal,
+        tracker_path=str(tracker_path),
+        session_id="codex:maintenance-test",
+        heartbeat_at="2026-09-01T00:00:00+00:00",
+        status="active",
+        updated_at="2026-09-01T00:00:00+00:00",
+        parent_scope=None,
+        notes=None,
+        plan_ref="UNPLANNED",
+        source_file=str(tmp_path / "claim.yaml"),
+        schema_version=3,
+    )
+    tracker_path.write_text(
+        yaml.safe_dump(
+            {
+                "schema_version": 1,
+                "claim": {
+                    "agent": claim.agent,
+                    "project": claim.projects[0],
+                    "scope": claim.scope,
+                    "intent": claim.intent,
+                    "plan_ref": claim.plan_ref,
+                    "repo_root": claim.repo_root,
+                    "worktree_path": claim.worktree_path,
+                    "branch": claim.branch,
+                    "session_id": claim.session_id,
+                    "session_name": claim.session_name,
+                    "broader_goal": claim.broader_goal,
+                    "tracker_path": claim.tracker_path,
+                },
+                "tracker": {
+                    "current_phase": "maintenance",
+                    "intended_next_phases": [],
+                    "depends_on_repos": [],
+                    "requires_shared_infra_changes": False,
+                    "stop_conditions": [],
+                    "notes": "",
+                },
+                "timestamps": {
+                    "created_at": "2026-09-01T00:00:00+00:00",
+                    "updated_at": "2026-09-01T00:00:00+00:00",
+                },
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+    return claim
+
+
+def test_sanctioned_maintenance_claim_requires_exact_typed_tracker(tmp_path: Path) -> None:
+    claim = _maintenance_claim(tmp_path)
+
+    assert is_sanctioned_maintenance_claim(claim)
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("plan_ref", "enforced-planning#123"),
+        ("claim_type", "write"),
+        ("intent", "Ordinary unplanned work"),
+        ("parent_scope", "another-root"),
+        ("parallel_root_authorized", True),
+        ("projects", ["enforced-planning", "foreign-project"]),
+        ("source_file", None),
+        ("start_revision", "a" * 40),
+    ],
+)
+def test_sanctioned_maintenance_claim_rejects_nonmaintenance_identity(
+    tmp_path: Path,
+    field: str,
+    value: object,
+) -> None:
+    claim = _maintenance_claim(tmp_path)
+
+    assert not is_sanctioned_maintenance_claim(
+        coordination_claims.ClaimRecord(
+            **{**claim.__dict__, field: value},
+        )
+    )
+
+
+def test_sanctioned_maintenance_claim_rejects_tracker_identity_or_invalid_phase(
+    tmp_path: Path,
+) -> None:
+    claim = _maintenance_claim(tmp_path)
+    tracker_path = Path(claim.tracker_path or "")
+    payload = yaml.safe_load(tracker_path.read_text(encoding="utf-8"))
+    payload["claim"]["session_id"] = "codex:borrowed-session"
+    tracker_path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
+    assert not is_sanctioned_maintenance_claim(claim)
+
+    payload["claim"]["session_id"] = claim.session_id
+    payload["tracker"]["current_phase"] = "implementation"
+    tracker_path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
+    assert is_sanctioned_maintenance_claim(claim)
+
+    payload["tracker"]["current_phase"] = ""
+    tracker_path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
+    assert not is_sanctioned_maintenance_claim(claim)
 
 
 def test_bootstrap_cli_allows_exact_scope(tmp_path: Path) -> None:
@@ -976,6 +1098,7 @@ def test_configured_session_start_completes_explicit_unplanned_maintenance_claim
         branch="maintenance-fixture",
         session_id="codex:maintenance-fixture",
         session_name="repair-maintenance-bootstrap",
+        plan_ref="UNPLANNED",
     )
     assert created
 
@@ -1397,13 +1520,13 @@ def test_configured_prewrite_cannot_be_disabled_by_explicit_ordinary_off(
     assert payload["reason_code"] == "outcome_admission_mode_invalid"
 
 
-def test_hard_prewrite_rejects_ambiguous_target_cardinality(tmp_path: Path) -> None:
+def test_hard_prewrite_rejects_invalid_exact_claim_source(tmp_path: Path) -> None:
     claim_path = tmp_path / "claim.yaml"
     claim_path.write_text("{}\n", encoding="utf-8")
 
     with pytest.raises(
         prewrite_claim_gate_cli.FastPreWriteError,
-        match="exactly one normalized_target_paths entry",
+        match="exact outcome claim source cannot be normalized",
     ):
         prewrite_claim_gate_cli._enforce_selected_outcome(
             {

@@ -564,6 +564,86 @@ def evaluate_claim_bootstrap_admission(
     )
 
 
+def is_sanctioned_maintenance_claim(claim: coordination_claims.ClaimRecord) -> bool:
+    """Return whether an ordinary-authorized claim has typed maintenance provenance.
+
+    ``UNPLANNED`` alone is not an exemption from selected-outcome admission.
+    The claim must retain the exact identity written by the sanctioned
+    ``maintenance_worktree`` transaction and its linked session tracker must
+    retain the same claim identity.  Ordinary prewrite admission remains
+    responsible for proving the live session, repository, branch, worktree,
+    and target path before this narrower policy classifier is consulted.
+    """
+
+    branch = claim.branch
+    if (
+        claim.plan_ref != session_contracts.UNPLANNED_PLAN_REF
+        or claim.claim_type != "program"
+        or not isinstance(branch, str)
+        or not branch.strip()
+        or claim.parent_scope is not None
+        or claim.parallel_root_authorized
+        or not claim.tracker_path
+        or not claim.session_id
+        or not claim.repo_root
+        or not claim.worktree_path
+        or len(claim.projects) != 1
+        or not claim.source_file
+        or claim.start_revision is not None
+        or any(
+            value is not None
+            for value in (
+                claim.plan_repo_root,
+                claim.plan_revision,
+                claim.plan_sha256,
+                claim.work_unit_id,
+                claim.work_graph_path,
+                claim.work_graph_sha256,
+            )
+        )
+        or claim.approval_revisions
+    ):
+        return False
+
+    goal = f"Unplanned maintenance: {branch.replace('-', ' ').replace('/', ' ')}"
+    if (
+        claim.intent != goal
+        or claim.broader_goal != goal
+        or claim.session_name != session_contracts.derive_session_name(goal)
+    ):
+        return False
+
+    tracker_path = Path(claim.tracker_path).expanduser().resolve()
+    try:
+        payload = session_contracts.read_session_tracker(tracker_path)
+    except (OSError, TypeError, ValueError, yaml.YAMLError):
+        return False
+    tracker_claim = payload.get("claim")
+    tracker = payload.get("tracker")
+    if not isinstance(tracker_claim, dict) or not isinstance(tracker, dict):
+        return False
+    expected_identity = {
+        "agent": claim.agent,
+        "project": claim.projects[0],
+        "scope": claim.scope,
+        "intent": claim.intent,
+        "plan_ref": session_contracts.UNPLANNED_PLAN_REF,
+        "repo_root": claim.repo_root,
+        "worktree_path": claim.worktree_path,
+        "branch": branch,
+        "session_id": claim.session_id,
+        "session_name": claim.session_name,
+        "broader_goal": claim.broader_goal,
+        "tracker_path": str(tracker_path),
+    }
+    current_phase = tracker.get("current_phase")
+    return (
+        isinstance(current_phase, str)
+        and bool(current_phase.strip())
+        and all(tracker_claim.get(field) == value for field, value in expected_identity.items())
+    )
+
+
 def evaluate_first_consumer_bootstrap(
     bootstrap: OutcomeAdmissionBootstrapV1,
 ) -> OutcomeAdmissionBootstrapResultV1:
@@ -1194,6 +1274,7 @@ __all__ = [
     "evaluate_selection_pending_session_activation",
     "infer_first_consumer_bootstrap_plan",
     "is_first_consumer_bootstrap_path",
+    "is_sanctioned_maintenance_claim",
     "load_outcome_admission_mode",
     "load_outcome_admission_receipts",
     "load_selection_pending_activation_receipts",

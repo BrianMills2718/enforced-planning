@@ -1,0 +1,125 @@
+{
+  "schema_version": "1.0",
+  "observed_at": "2026-09-01T17:01:38Z",
+  "goal": "Reconcile Enforced Planning's workspace into a clean, recoverable state without losing work or interfering with live owners.",
+  "session_id": "codex:01a05bcf-6f64-7472-820a-e8e6d1983d04",
+  "repository": "/home/brian/code/active/enforced-planning",
+  "cleanup_lane": {
+    "branch": "maintenance/workspace-inventory-cleanup-20260901",
+    "worktree": "/home/brian/code/active/enforced-planning/worktrees/maintenance/workspace-inventory-cleanup-20260901",
+    "start_revision": "6d8e95135e981dec0ad81915b152b15e38d242ec"
+  },
+  "preservation": [
+    {
+      "worktree": "worktrees/accretion-sensors",
+      "head": "af6fc0f88ee9ca12589434abadc4583a98cc4fc0",
+      "disposition": "removed_clean_worktree; exact remote branch already retained"
+    },
+    {
+      "worktree": "worktrees/coupling-coverage",
+      "head": "801aa7cc8b07976db4013c05d7be86e769375cab",
+      "disposition": "removed_clean_worktree; patch-equivalent to main and local branch retained"
+    },
+    {
+      "worktree": "worktrees/fix/prewrite-gate-workspace-root-20260831",
+      "head": "ac428206139457a26515e1567be70ebba04098de",
+      "disposition": "removed_clean_worktree; exact dedicated remote recovery ref retained",
+      "recovery_ref": "refs/heads/recovery/workspace-cleanup-prewrite-gate-ac428206"
+    },
+    {
+      "worktree": "worktrees/fix/session-resume-admission-20260829",
+      "head": "bb19cbb560795ef9f669a8a266ccd041b86efd83",
+      "disposition": "removed_clean_worktree; patch-equivalent to main and local branch retained"
+    },
+    {
+      "worktree": "worktrees/host-claim-gate-targets-20260828",
+      "head": "2eb199b6bf123e800f5379f86811bb94c0f66db9",
+      "disposition": "removed_clean_worktree; exact remote branch already retained"
+    },
+    {
+      "worktree": "worktrees/plan-116-prewrite-outcome-observe",
+      "head": "24863b33c217ae2c9f29227f94d2a477d477fc70",
+      "disposition": "removed_clean_worktree; exact dedicated remote recovery ref retained",
+      "recovery_ref": "refs/heads/recovery/workspace-cleanup-plan-116-24863b33"
+    },
+    {
+      "worktree": "worktrees/plan-126-atomic-projection-refresh",
+      "head": "c6b3109b10bda11db72085e387897a60e4eb8c09",
+      "disposition": "removed_clean_worktree; exact remote branch already retained"
+    },
+    {
+      "worktree": "worktrees/plan-126-push-mailbox-bootstrap",
+      "head": "8e640fa344e87561ed7648ef579e6c8809dc830c",
+      "disposition": "removed_clean_worktree; contained in main and local branch retained"
+    },
+    {
+      "worktree": "worktrees/plan-128-runtime-consumers",
+      "head": "5250fd111e3319ed89f4c480f69601d93abed8a5",
+      "disposition": "removed_clean_worktree; exact remote branch already retained"
+    },
+    {
+      "worktree": "worktrees/fix/bootstrap-control-plane-recovery-20260901",
+      "head": "87e4a3ed83da7d3c4ac6c638f1da6ddcf1e2c1bb",
+      "dirty_tracked_files": 6,
+      "untracked_files": 0,
+      "disposition": "exact working-tree snapshot verified, pushed, then abandoned worktree force-removed through safe_worktree_remove.py",
+      "recovery_ref": "refs/heads/recovery/workspace-cleanup-bootstrap-dirty-b49fd59d",
+      "snapshot_commit": "b49fd59db45d513d75696f9f5c4c99c9173ae12f",
+      "prior_recovery_refs": {
+        "refs/heads/recovery/foreign-session-dirty-20260901": "b7296578f295c33768faf5f86bfe20bf2bf9a1f2",
+        "refs/heads/recovery/plan132-bootstrap-retained-20260901": "87e4a3ed83da7d3c4ac6c638f1da6ddcf1e2c1bb"
+      },
+      "verification": "git diff --exit-code b49fd59db45d513d75696f9f5c4c99c9173ae12f -- returned zero before removal; remote ref resolved to the same object"
+    }
+  ],
+  "registry_reconciliation": {
+    "pruned_registration": "/tmp/enforced-planning-origin-main.wj646v",
+    "reason": "gitdir file pointed to a non-existent location",
+    "post_cleanup_prune_dry_run": "empty"
+  },
+  "remaining_linked_worktrees": [
+    {
+      "scope": "fix/maintenance-provenance-refresh-20260901",
+      "session_id": "codex:01a05dde-df02-7fa2-85ec-c04b68b28fa9",
+      "head": "b9300f86a8f196afb1c092bd9d734a01a3846984",
+      "status": "active_claim; clean"
+    },
+    {
+      "scope": "fix/maintenance-worktree-bootstrap-admission-v2-20260901",
+      "session_id": "codex:01a05b94-d5d8-7d82-8a9a-6c64c6979e96",
+      "head": "30aa4e91ddc4624c3d67d6e24d28d339d99f4301",
+      "status": "active_claim; clean; created concurrently during cleanup and preserved"
+    },
+    {
+      "scope": "fix/sanctioned-installed-runtime-update-20260901",
+      "session_id": "codex:01a05b24-a6f6-7781-b812-558dd75ee0d7",
+      "head": "2f463a7ead43dc9090d3473ce51a53540e9dacec",
+      "status": "active_claim; clean"
+    },
+    {
+      "scope": "maintenance/workspace-inventory-cleanup-20260901",
+      "session_id": "codex:01a05bcf-6f64-7472-820a-e8e6d1983d04",
+      "head": "30aa4e91ddc4624c3d67d6e24d28d339d99f4301",
+      "status": "active_claim; evidence checkpoint pending"
+    }
+  ],
+  "canonical_checkout": {
+    "revision_before": "6d8e95135e981dec0ad81915b152b15e38d242ec",
+    "revision_after": "30aa4e91ddc4624c3d67d6e24d28d339d99f4301",
+    "sync_method": "scripts/worktree-coordination/canonical_lock.py --sync",
+    "status": "clean and intentionally locked",
+    "integrity": "locked",
+    "control_path_issues": [],
+    "missing_paths": [],
+    "writable_directories": [],
+    "writable_files": []
+  },
+  "result": {
+    "removed_stale_clean_worktrees": 9,
+    "removed_abandoned_dirty_worktrees": 1,
+    "pruned_dead_registrations": 1,
+    "remaining_linked_worktrees": 4,
+    "remaining_unclaimed_linked_worktrees": 0,
+    "data_loss_detected": false
+  }
+}

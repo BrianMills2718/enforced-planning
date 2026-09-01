@@ -559,6 +559,28 @@ def test_git_merge_message_file_remains_a_declared_path() -> None:
     )
 
 
+def test_git_rev_list_range_is_an_identifier_not_a_path() -> None:
+    command = "git -C /repo/worktrees/lane rev-list --left-right --count origin/topic...HEAD"
+
+    assert _argv_is_read_only(tuple(command.split()))
+    assert _bash_declared_paths(command) == ("/repo/worktrees/lane",)
+
+
+def test_git_push_origin_branch_is_an_identifier_not_a_path() -> None:
+    command = "git -C /repo/worktrees/lane push origin fix/topic"
+
+    assert _bash_declared_paths(command) == ("/repo/worktrees/lane",)
+
+
+def test_pytest_node_selector_retains_only_its_file_path() -> None:
+    command = (
+        "/usr/bin/env -C /repo/worktrees/lane python3 -m pytest -q "
+        "tests/test_feature.py::test_exact_case"
+    )
+
+    assert _bash_declared_paths(command) == ("tests/test_feature.py",)
+
+
 def test_claimed_env_bound_python_manager_uses_candidate_as_the_write_target(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

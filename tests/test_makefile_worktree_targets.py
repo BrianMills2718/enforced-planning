@@ -63,6 +63,24 @@ def _maintenance_request(make_output: str) -> dict[str, object]:
     return json.loads(tokens[tokens.index("--request-json") + 1])
 
 
+def test_install_codex_runtime_delegates_to_canonical_updater() -> None:
+    revision = "a" * 40
+    result = subprocess.run(
+        ["make", "-n", "install-codex-runtime", f"RUNTIME_REVISION={revision}"],
+        cwd=str(PROJECT_ROOT),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert (
+        f'python3 scripts/update_installed_runtime.py --revision "{revision}" '
+        "--allow-detached-replacement --write"
+    ) in result.stdout
+    assert "git -C" not in result.stdout
+
+
 def test_maintenance_worktree_claim_declares_unplanned_ownership() -> None:
     """The maintenance lane must stamp UNPLANNED on its pre-worktree claim.
 

@@ -108,6 +108,7 @@ starting a session, and that session clears it before their first tool call.
 from __future__ import annotations
 
 import argparse
+import fcntl
 import json
 import os
 import shutil
@@ -861,39 +862,70 @@ def sync_repo(repo_root: Path, *, ref_args: list[str] | None = None) -> dict[str
     never leave the canonical checkout writable behind a live lane.
     """
     repo_root = repo_root.resolve()
-    receipt = read_receipt(repo_root)
-    if receipt is None:
-        return {
-            "ok": False,
-            "action": "sync_skipped",
-            "repo_root": str(repo_root),
-            "reason": "no lock receipt; this checkout is not locked, pull it directly",
-        }
+    sync_lock_path = repo_root / ".git" / "canonical-sync.lock"
+    with sync_lock_path.open("a+", encoding="utf-8") as sync_lock:
+        fcntl.flock(sync_lock.fileno(), fcntl.LOCK_EX)
+        receipt = read_receipt(repo_root)
+        if receipt is None:
+            return {
+                "ok": False,
+                "action": "sync_skipped",
+                "repo_root": str(repo_root),
+                "reason": "no lock receipt; this checkout is not locked, pull it directly",
+            }
 
-    justifying = list(receipt.justifying_claims)
-    unlock_repo(repo_root)
-    pull: subprocess.CompletedProcess[str] | None = None
-    try:
-        pull = subprocess.run(
-            ["git", "-C", str(repo_root), "pull", "--ff-only", *(ref_args or [])],
-            capture_output=True,
-            text=True,
-            check=False,
+        status = _git(repo_root, ["status", "--porcelain"])
+        if status.returncode != 0 or status.stdout.strip():
+            return {
+                "ok": False,
+                "action": "sync_skipped",
+                "repo_root": str(repo_root),
+                "reason": "canonical checkout has uncommitted changes; lock preserved",
+            }
+        branch = _git(repo_root, ["rev-parse", "--abbrev-ref", "HEAD"])
+        upstream = _git(repo_root, ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"])
+        expected_branch = upstream.stdout.strip().removeprefix("origin/")
+        if branch.returncode != 0 or upstream.returncode != 0 or branch.stdout.strip() != expected_branch:
+            return {
+                "ok": False,
+                "action": "sync_skipped",
+                "repo_root": str(repo_root),
+                "reason": "canonical checkout is not on its upstream default branch; lock preserved",
+            }
+
+        justifying = list(receipt.justifying_claims)
+        unlock_repo(repo_root)
+        pull: subprocess.CompletedProcess[str] | None = None
+        relocked: dict[str, Any] = {"action": "not_attempted"}
+        integrity: dict[str, Any] = {"verdict": VERDICT_UNLOCKED}
+        try:
+            pull = subprocess.run(
+                ["git", "-C", str(repo_root), "pull", "--ff-only", *(ref_args or [])],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+        finally:
+            relocked = lock_repo(repo_root, justifying_claims=justifying, session_id="sync")
+            integrity = verify_lock_integrity(repo_root)
+
+        ok = bool(
+            pull
+            and pull.returncode == 0
+            and read_receipt(repo_root) is not None
+            and integrity["verdict"] == VERDICT_LOCKED
         )
-    finally:
-        relocked = lock_repo(repo_root, justifying_claims=justifying, session_id="sync")
-
-    ok = bool(pull and pull.returncode == 0)
-    return {
-        "ok": ok,
-        "action": "synced" if ok else "sync_failed",
-        "repo_root": str(repo_root),
-        "returncode": pull.returncode if pull else None,
-        "stdout": (pull.stdout or "").strip() if pull else "",
-        "stderr": (pull.stderr or "").strip() if pull else "",
-        "relock": relocked.get("action"),
-        "justifying_claims": justifying,
-    }
+        return {
+            "ok": ok,
+            "action": "synced" if ok else "sync_failed",
+            "repo_root": str(repo_root),
+            "returncode": pull.returncode if pull else None,
+            "stdout": (pull.stdout or "").strip() if pull else "",
+            "stderr": (pull.stderr or "").strip() if pull else "",
+            "relock": relocked.get("action"),
+            "lock_integrity": integrity.get("verdict"),
+            "justifying_claims": justifying,
+        }
 
 
 def recovery_message(repo_root: Path) -> str:

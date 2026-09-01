@@ -119,6 +119,26 @@ def test_different_run_prompt_cannot_rotate_active_primary(tmp_path: Path) -> No
     assert secondary_prompt.reason == "different_execution_run"
 
 
+def test_duplicate_session_start_does_not_advance_execution_epoch(tmp_path: Path) -> None:
+    store = PrimaryExecutionBindingStore(tmp_path)
+
+    first = store.classify(
+        session_id="codex:resumed-session",
+        run_id=None,
+        event_name="SessionStart",
+        now=NOW,
+    )
+    duplicate = store.classify(
+        session_id="codex:resumed-session",
+        run_id=None,
+        event_name="SessionStart",
+        now=NOW,
+    )
+
+    assert first.generation == 1
+    assert duplicate.generation == 1
+
+
 def test_pretool_bootstraps_legacy_session_but_posttool_does_not(tmp_path: Path) -> None:
     store = PrimaryExecutionBindingStore(tmp_path)
 

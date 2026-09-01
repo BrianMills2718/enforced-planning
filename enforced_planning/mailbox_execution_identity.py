@@ -151,6 +151,13 @@ class PrimaryExecutionBindingStore:
             if current is not None and current.session_id_sha256 != session_digest:
                 raise ValueError("primary execution binding session digest mismatch")
             if event_name == "SessionStart" and run_digest is None:
+                if current is not None and current.status == "awaiting_primary_run":
+                    return PrimaryExecutionDecisionV1(
+                        role="unbound",
+                        reason="session_start_awaiting_primary_run",
+                        generation=current.generation,
+                        binding_path=str(path),
+                    )
                 generation = 1 if current is None else current.generation + 1
                 self._write(
                     path,

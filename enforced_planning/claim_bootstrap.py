@@ -184,6 +184,67 @@ class MaintenanceWorktreeRequest(_StrictRequest):
         return self
 
 
+class DelegatedMaintenanceWorktreeRequest(MaintenanceWorktreeRequest):
+    """Parent-authorized creation of one narrow child-owned maintenance lane."""
+
+    operation: Literal["delegate_maintenance_worktree"]
+    claim_type: Literal["write"]
+    parent_scope: str = Field(min_length=1)
+    child_agent_id: str = Field(min_length=1, max_length=200)
+
+    @field_validator("parent_scope", "child_agent_id")
+    @classmethod
+    def _validate_delegation_identity(cls, value: str) -> str:
+        if value != value.strip() or re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:/-]*", value) is None:
+            raise ValueError("delegation identities must be canonical non-whitespace literals")
+        return value
+
+    @model_validator(mode="after")
+    def _validate_delegated_target(self) -> DelegatedMaintenanceWorktreeRequest:
+        if self.write_paths == ["."] or "." in self.write_paths:
+            raise ValueError("delegated maintenance requires narrow write_paths; whole-repository scope is forbidden")
+        if self.parent_scope == self.scope:
+            raise ValueError("delegated maintenance cannot name itself as parent")
+        return self
+
+
+class RevokeDelegatedMaintenanceWorktreeRequest(_StrictRequest):
+    """Parent cleanup for one pristine delegated lane that never produced work."""
+
+    operation: Literal["revoke_delegated_maintenance_worktree"]
+    agent: AgentName
+    repo_root: str = Field(min_length=1)
+    branch: str = Field(min_length=1)
+    parent_scope: str = Field(min_length=1)
+    child_agent_id: str = Field(min_length=1, max_length=200)
+
+    @field_validator("parent_scope", "child_agent_id")
+    @classmethod
+    def _validate_delegation_identity(cls, value: str) -> str:
+        if value != value.strip() or re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:/-]*", value) is None:
+            raise ValueError("delegation identities must be canonical non-whitespace literals")
+        return value
+
+    @model_validator(mode="after")
+    def _validate_target(self) -> RevokeDelegatedMaintenanceWorktreeRequest:
+        repo = Path(self.repo_root).expanduser()
+        if not repo.is_absolute() or ".." in repo.parts or str(repo.resolve()) != self.repo_root:
+            raise ValueError("repo_root must be one canonical absolute path without traversal")
+        if self.scope != self.branch:
+            raise ValueError("scope must exactly match branch")
+        if self.parent_scope == self.scope:
+            raise ValueError("delegated maintenance cannot name itself as parent")
+        if (
+            re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._/-]*", self.branch) is None
+            or self.branch.startswith(("-", "/"))
+            or self.branch.endswith(("/", "."))
+            or ".." in self.branch
+            or "//" in self.branch
+        ):
+            raise ValueError("branch is not a safe literal Git branch")
+        return self
+
+
 class LocalRepositoryWorktreeRequest(_StrictRequest):
     operation: Literal["local_repository_worktree"]
     agent: AgentName
@@ -327,6 +388,8 @@ ClaimBootstrapRequest = Annotated[
     SessionStartOrUpdateRequest
     | HeartbeatRequest
     | ProgressRequest
+    | RevokeDelegatedMaintenanceWorktreeRequest
+    | DelegatedMaintenanceWorktreeRequest
     | MaintenanceWorktreeRequest
     | LocalRepositoryWorktreeRequest
     | LocalRepositoryIntegrateRequest
@@ -720,6 +783,67 @@ def _require_self_owned_slot(
         )
 
 
+def _delegated_session_id(
+    *,
+    agent: AgentName,
+    child_agent_id: str,
+    parent_session_id: str,
+) -> str:
+    """Normalize one child identity without letting the request change client."""
+
+    value = child_agent_id.strip()
+    for prefix in ("codex", "claude-code", "openclaw"):
+        marker = f"{prefix}:"
+        if value.startswith(marker):
+            if prefix != agent:
+                raise ClaimBootstrapError(
+                    f"delegated child identity {value!r} does not belong to native {agent} client"
+                )
+            value = value[len(marker):]
+            break
+    if not value or ":" in value:
+        raise ClaimBootstrapError("delegated child identity must contain exactly one native client prefix")
+    delegated = f"{agent}:{value}"
+    if delegated == parent_session_id:
+        raise ClaimBootstrapError("delegated child identity must differ from the parent session")
+    return delegated
+
+
+def _delegating_parent_claim(
+    *,
+    agent: AgentName,
+    project: str,
+    parent_scope: str,
+    parent_session_id: str,
+    repo: Path,
+) -> coordination_claims.ClaimRecord:
+    """Resolve one healthy unparented program claim owned by the caller."""
+
+    active_claims = coordination_claims.check_claims()
+    matches = [
+        claim
+        for claim in active_claims
+        if claim.is_live()
+        and claim.agent == agent
+        and claim.primary_project() == project
+        and claim.scope == parent_scope
+        and claim.session_id == parent_session_id
+    ]
+    if len(matches) != 1:
+        raise ClaimBootstrapError(
+            "delegated maintenance requires one exact live parent claim owned by the native caller"
+        )
+    parent = matches[0]
+    if parent.claim_type != "program" or parent.parent_scope is not None:
+        raise ClaimBootstrapError("delegated maintenance parent must be one unparented program claim")
+    if not parent.repo_root or Path(parent.repo_root).expanduser().resolve() != repo:
+        raise ClaimBootstrapError("delegated maintenance parent must own the exact target repository")
+    status = coordination_claims.claim_runtime_status(parent, active_claims=active_claims)
+    if status != "healthy":
+        raise ClaimBootstrapError(f"delegated maintenance parent claim is not healthy: {status}")
+    return parent
+
+
 def _file_sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
@@ -891,6 +1015,10 @@ def execute_request(request: ClaimBootstrapRequest) -> dict[str, Any]:
         payload = _execute_local_repository_integrate(request, agent=agent, session_id=session_id)
     elif isinstance(request, LocalRepositoryWorktreeRequest):
         payload = _execute_local_repository_worktree(request, agent=agent, session_id=session_id)
+    elif isinstance(request, RevokeDelegatedMaintenanceWorktreeRequest):
+        payload = _execute_revoke_delegated_worktree(request, agent=agent, session_id=session_id)
+    elif isinstance(request, DelegatedMaintenanceWorktreeRequest):
+        payload = _execute_maintenance_worktree(request, agent=agent, session_id=session_id)
     elif isinstance(request, MaintenanceWorktreeRequest):
         payload = _execute_maintenance_worktree(request, agent=agent, session_id=session_id)
     elif isinstance(request, SessionStartOrUpdateRequest):
@@ -1517,8 +1645,118 @@ def _execute_local_repository_worktree(
         raise ClaimBootstrapError(f"local repository bootstrap failed: {exc}{detail}") from exc
 
 
+def _execute_revoke_delegated_worktree(
+    request: RevokeDelegatedMaintenanceWorktreeRequest,
+    *,
+    agent: AgentName,
+    session_id: str,
+) -> dict[str, Any]:
+    """Remove only a pristine child lane through its exact parent authority."""
+
+    repo = Path(request.repo_root).resolve()
+    authority = _repository_authority(repo, branch=request.branch)
+    if request.project != authority.project_id:
+        raise ClaimBootstrapError(
+            f"project must match provider id {authority.project_id!r} for origin {authority.repository_identity}"
+        )
+    _delegating_parent_claim(
+        agent=agent,
+        project=request.project,
+        parent_scope=request.parent_scope,
+        parent_session_id=session_id,
+        repo=repo,
+    )
+    child_session_id = _delegated_session_id(
+        agent=agent,
+        child_agent_id=request.child_agent_id,
+        parent_session_id=session_id,
+    )
+    matches = [
+        claim
+        for claim in coordination_claims.check_claims(request.project)
+        if claim.scope == request.scope and claim.is_live()
+    ]
+    if len(matches) != 1:
+        raise ClaimBootstrapError("delegated revocation requires one exact live child claim")
+    child = matches[0]
+    worktree = repo / "worktrees" / request.branch
+    expected = {
+        "agent": agent,
+        "session_id": child_session_id,
+        "branch": request.branch,
+        "parent_scope": request.parent_scope,
+        "claim_type": "write",
+        "repo_root": str(repo),
+        "worktree_path": str(worktree),
+        "plan_ref": session_contracts.UNPLANNED_PLAN_REF,
+    }
+    if any(getattr(child, field) != value for field, value in expected.items()):
+        raise ClaimBootstrapError("delegated child claim identity changed; refusing parent revocation")
+    if child.write_paths == ["."] or not child.write_paths or child.broad_scope_mode is not None:
+        raise ClaimBootstrapError("delegated child claim is not narrow; refusing parent revocation")
+    if not child.start_revision or re.fullmatch(r"[0-9a-f]{40,64}", child.start_revision) is None:
+        raise ClaimBootstrapError("delegated child claim lacks an exact retained start revision")
+    if not worktree.is_dir() or worktree.is_symlink():
+        raise ClaimBootstrapError("delegated child worktree is unavailable or not a real directory")
+    status = _git(worktree, "status", "--porcelain", "--untracked-files=normal")
+    if status.returncode != 0 or status.stdout.strip():
+        raise ClaimBootstrapError("delegated child worktree is not pristine; parent revocation refused")
+    tip = _git(worktree, "rev-parse", "HEAD")
+    if tip.returncode != 0 or tip.stdout.strip() != child.start_revision:
+        raise ClaimBootstrapError("delegated child produced commits; use normal child closeout or handoff")
+    if not child.tracker_path:
+        raise ClaimBootstrapError("delegated child tracker is unavailable")
+    tracker_path = Path(child.tracker_path).expanduser().resolve()
+    tracker = session_contracts.read_session_tracker(tracker_path)
+    tracker_claim = tracker.get("claim")
+    tracker_expected = {
+        "agent": agent,
+        "project": request.project,
+        "scope": request.scope,
+        "session_id": child_session_id,
+        "branch": request.branch,
+        "worktree_path": str(worktree),
+    }
+    if not isinstance(tracker_claim, dict) or any(
+        tracker_claim.get(field) != value for field, value in tracker_expected.items()
+    ):
+        raise ClaimBootstrapError("delegated child tracker identity changed; refusing parent revocation")
+
+    revoke_delegated = getattr(session_lifecycle, "revoke_delegated_session", None)
+    if revoke_delegated is None:
+        raise ClaimBootstrapError(
+            "delegated lifecycle revocation support is unavailable at this source revision"
+        )
+    result = revoke_delegated(
+        agent=agent,
+        project=request.project,
+        scope=request.scope,
+        repo_root=str(repo),
+        worktree_path=str(worktree),
+        branch=request.branch,
+        parent_scope=request.parent_scope,
+        parent_session_id=session_id,
+        child_session_id=child_session_id,
+        expected_start_revision=child.start_revision,
+        tracker_path=str(tracker_path),
+        note=f"Pristine delegated lane revoked by parent {request.parent_scope}",
+    )
+    lock_reconciliation = _reconcile_canonical_after_claim(
+        repo,
+        session_id=session_id,
+    )
+    return {
+        **result,
+        "action": "pristine_delegated_lane_revoked",
+        "delegated_session_id": child_session_id,
+        "delegated_by_session_id": session_id,
+        "parent_scope": request.parent_scope,
+        "canonical_lock": lock_reconciliation,
+    }
+
+
 def _execute_maintenance_worktree(
-    request: MaintenanceWorktreeRequest,
+    request: MaintenanceWorktreeRequest | DelegatedMaintenanceWorktreeRequest,
     *,
     agent: AgentName,
     session_id: str,
@@ -1562,19 +1800,51 @@ def _execute_maintenance_worktree(
         raise ClaimBootstrapError(
             f"maintenance claim slot already exists for {request.project}:{request.scope}: {owners}"
         )
-    existing_roots = [
-        claim
-        for claim in coordination_claims.check_claims()
-        if claim.is_live() and claim.session_id == session_id and not claim.parent_scope
-    ]
-    if existing_roots:
-        labels = ", ".join(sorted(f"{claim.primary_project()}:{claim.scope}" for claim in existing_roots))
-        raise ClaimBootstrapError(
-            "maintenance bootstrap requires the native session to own zero existing claim roots; "
-            f"close or transfer first: {labels}"
+    delegated = isinstance(request, DelegatedMaintenanceWorktreeRequest)
+    owner_session_id = session_id
+    parent_scope: str | None = None
+    claim_type: ClaimType = "program"
+    if delegated:
+        owner_session_id = _delegated_session_id(
+            agent=agent,
+            child_agent_id=request.child_agent_id,
+            parent_session_id=session_id,
         )
+        parent = _delegating_parent_claim(
+            agent=agent,
+            project=request.project,
+            parent_scope=request.parent_scope,
+            parent_session_id=session_id,
+            repo=repo,
+        )
+        parent_scope = parent.scope
+        claim_type = "write"
+        child_claims = [
+            claim
+            for claim in coordination_claims.check_claims()
+            if claim.is_live() and claim.session_id == owner_session_id
+        ]
+        if child_claims:
+            labels = ", ".join(sorted(f"{claim.primary_project()}:{claim.scope}" for claim in child_claims))
+            raise ClaimBootstrapError(
+                "delegated maintenance requires the child identity to own zero live claims; "
+                f"close or transfer first: {labels}"
+            )
+    else:
+        existing_roots = [
+            claim
+            for claim in coordination_claims.check_claims()
+            if claim.is_live() and claim.session_id == session_id and not claim.parent_scope
+        ]
+        if existing_roots:
+            labels = ", ".join(sorted(f"{claim.primary_project()}:{claim.scope}" for claim in existing_roots))
+            raise ClaimBootstrapError(
+                "maintenance bootstrap requires the native session to own zero existing claim roots; "
+                f"close or transfer first: {labels}"
+            )
 
-    goal = f"Unplanned maintenance: {request.branch.replace('-', ' ').replace('/', ' ')}"
+    goal_prefix = "Delegated maintenance" if delegated else "Unplanned maintenance"
+    goal = f"{goal_prefix}: {request.branch.replace('-', ' ').replace('/', ' ')}"
     session_name = session_contracts.derive_session_name(goal)
     contract = session_contracts.SessionContract.build(
         agent=agent,
@@ -1584,7 +1854,7 @@ def _execute_maintenance_worktree(
         repo_root=str(repo),
         worktree_path=str(worktree),
         branch=request.branch,
-        session_id=session_id,
+        session_id=owner_session_id,
         broader_goal=goal,
         session_name=session_name,
         allow_unplanned=True,
@@ -1617,32 +1887,49 @@ def _execute_maintenance_worktree(
 
     bootstrap_broad = request.write_paths == ["."]
     try:
-        payload = session_lifecycle.start_session(
-            agent=agent,
-            project=request.project,
-            scope=request.scope,
-            intent=goal,
-            repo_root=str(repo),
-            worktree_path=str(worktree),
-            branch=request.branch,
-            broader_goal=goal,
-            current_phase="maintenance-bootstrap",
-            plan_ref=None,
-            session_id=session_id,
-            session_name=session_name,
-            claim_type="program",
-            write_paths=request.write_paths,
-            read_paths=[],
-            tracker_dir=SESSION_TRACKERS_DIR,
-            allow_unplanned=True,
-            broad_scope_mode="bootstrap" if bootstrap_broad else None,
-            broad_scope_reason=(
+        start_kwargs = {
+            "agent": agent,
+            "project": request.project,
+            "scope": request.scope,
+            "intent": goal,
+            "repo_root": str(repo),
+            "worktree_path": str(worktree),
+            "branch": request.branch,
+            "broader_goal": goal,
+            "current_phase": "maintenance-bootstrap",
+            "plan_ref": None,
+            "session_name": session_name,
+            "claim_type": claim_type,
+            "write_paths": request.write_paths,
+            "read_paths": [],
+            "parent_scope": parent_scope,
+            "tracker_dir": SESSION_TRACKERS_DIR,
+            "allow_unplanned": True,
+            "broad_scope_mode": "bootstrap" if bootstrap_broad else None,
+            "broad_scope_reason": (
                 "construct this maintenance lane, then narrow before its first repository write"
                 if bootstrap_broad
                 else None
             ),
-            target_worktree_path=str(worktree) if bootstrap_broad else None,
-        )
+            "target_worktree_path": str(worktree) if bootstrap_broad else None,
+            "start_revision": starting_head if delegated else None,
+        }
+        if delegated:
+            start_delegated = getattr(session_lifecycle, "start_delegated_session", None)
+            if start_delegated is None:
+                raise ClaimBootstrapError(
+                    "delegated lifecycle support is unavailable at this source revision"
+                )
+            payload = start_delegated(
+                **start_kwargs,
+                parent_session_id=session_id,
+                child_session_id=owner_session_id,
+            )
+        else:
+            payload = session_lifecycle.start_session(
+                **start_kwargs,
+                session_id=owner_session_id,
+            )
     except Exception as exc:
         cleanup_errors: list[str] = []
         claim_verified = False
@@ -1659,7 +1946,7 @@ def _execute_maintenance_worktree(
                 effective_target = claim.target_worktree_path or claim.worktree_path
                 if (
                     claim.agent != agent
-                    or claim.session_id != session_id
+                    or claim.session_id != owner_session_id
                     or claim.branch != request.branch
                     or effective_target != str(worktree)
                 ):
@@ -1676,7 +1963,7 @@ def _execute_maintenance_worktree(
                         "agent": agent,
                         "project": request.project,
                         "scope": request.scope,
-                        "session_id": session_id,
+                        "session_id": owner_session_id,
                         "branch": request.branch,
                         "worktree_path": str(worktree),
                     }
@@ -1694,7 +1981,7 @@ def _execute_maintenance_worktree(
                         agent,
                         request.project,
                         request.scope,
-                        expected_session_id=session_id,
+                        expected_session_id=owner_session_id,
                         allow_managed_lane_rollback=True,
                     )
                     if not released:
@@ -1772,10 +2059,13 @@ def _execute_maintenance_worktree(
             "start_revision": starting_head,
             "bootstrap_requires_narrowing": bootstrap_broad,
             "authority_scope": {
-                "operation": "maintenance_worktree",
+                "operation": request.operation,
                 "repo_root": str(repo),
                 "branch": request.branch,
             },
+            "delegated_by_session_id": session_id if delegated else None,
+            "delegated_session_id": owner_session_id if delegated else None,
+            "parent_scope": parent_scope,
         }
     except Exception as exc:
         cleanup_errors = _rollback_created_worktree(
@@ -1796,7 +2086,7 @@ def _execute_maintenance_worktree(
                         "agent": agent,
                         "project": request.project,
                         "scope": request.scope,
-                        "session_id": session_id,
+                        "session_id": owner_session_id,
                         "branch": request.branch,
                         "worktree_path": str(worktree),
                     }
@@ -1813,7 +2103,7 @@ def _execute_maintenance_worktree(
                     agent,
                     request.project,
                     request.scope,
-                    expected_session_id=session_id,
+                    expected_session_id=owner_session_id,
                     allow_managed_lane_rollback=True,
                 )
                 if not released:
@@ -1835,7 +2125,7 @@ def _execute_maintenance_worktree(
                     agent=agent,
                     project=request.project,
                     scope=request.scope,
-                    session_id=session_id,
+                    session_id=owner_session_id,
                     branch=request.branch,
                     worktree=worktree,
                     failure=exc,
@@ -1850,10 +2140,12 @@ def _execute_maintenance_worktree(
 __all__ = [
     "ClaimBootstrapError",
     "ClaimBootstrapRequest",
+    "DelegatedMaintenanceWorktreeRequest",
     "HeartbeatRequest",
     "LocalRepositoryWorktreeRequest",
     "MaintenanceWorktreeRequest",
     "ProgressRequest",
+    "RevokeDelegatedMaintenanceWorktreeRequest",
     "RepositoryAuthority",
     "SessionStartOrUpdateRequest",
     "canonical_script_path",

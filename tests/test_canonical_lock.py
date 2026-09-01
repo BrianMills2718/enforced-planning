@@ -94,6 +94,27 @@ def _lane_claim(repo: Path, scope: str = "lane-a", status: str = "active") -> di
     }
 
 
+def _sync_pair(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, Path]:
+    """Return an upstream and a clone that is one commit behind."""
+    monkeypatch.setattr(canonical_lock, "LOCK_INDEX", tmp_path / "sync-locks.json")
+    upstream = tmp_path / "upstream"
+    upstream.mkdir()
+    assert _git(upstream, "init", "-q", "-b", "main").returncode == 0
+    assert _git(upstream, "config", "user.email", "t@e.invalid").returncode == 0
+    assert _git(upstream, "config", "user.name", "t").returncode == 0
+    (upstream / "fact.txt").write_text("old\n", encoding="utf-8")
+    assert _git(upstream, "add", "-A").returncode == 0
+    assert _git(upstream, "commit", "-qm", "baseline").returncode == 0
+    clone = tmp_path / "clone"
+    assert subprocess.run(
+        ["git", "clone", "-q", str(upstream), str(clone)], capture_output=True, check=False
+    ).returncode == 0
+    (upstream / "fact.txt").write_text("new\n", encoding="utf-8")
+    assert _git(upstream, "add", "-A").returncode == 0
+    assert _git(upstream, "commit", "-qm", "advance").returncode == 0
+    return upstream, clone
+
+
 # ---------------------------------------------------------------- enforcement
 
 
@@ -190,6 +211,43 @@ def test_lock_is_idempotent(repo: Path) -> None:
 
 def test_unlock_without_a_receipt_is_a_noop(repo: Path) -> None:
     assert canonical_lock.unlock_repo(repo)["action"] == "not_locked"
+
+
+def test_sync_advances_a_locked_checkout_and_restores_lock_integrity(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The sanctioned transaction closes the stale-authority failure."""
+    _, clone = _sync_pair(tmp_path, monkeypatch)
+    canonical_lock.lock_repo(clone, justifying_claims=["lane-a"])
+    try:
+        result = canonical_lock.sync_repo(clone)
+
+        assert result["ok"] is True
+        assert result["action"] == "synced"
+        assert result["lock_integrity"] == canonical_lock.VERDICT_LOCKED
+        assert (clone / "fact.txt").read_text(encoding="utf-8") == "new\n"
+        assert canonical_lock.read_receipt(clone).justifying_claims == ["lane-a"]
+    finally:
+        canonical_lock.unlock_repo(clone)
+
+
+def test_sync_refuses_dirty_checkout_without_dropping_the_lock(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Automatic freshness must never consume or overwrite unrelated work."""
+    _, clone = _sync_pair(tmp_path, monkeypatch)
+    (clone / "fact.txt").write_text("local edit\n", encoding="utf-8")
+    canonical_lock.lock_repo(clone, justifying_claims=["lane-a"])
+    try:
+        result = canonical_lock.sync_repo(clone)
+
+        assert result["ok"] is False
+        assert result["action"] == "sync_skipped"
+        assert "uncommitted" in result["reason"]
+        assert canonical_lock.verify_lock_integrity(clone)["verdict"] == canonical_lock.VERDICT_LOCKED
+        assert (clone / "fact.txt").read_text(encoding="utf-8") == "local edit\n"
+    finally:
+        canonical_lock.unlock_repo(clone)
 
 
 def test_unlock_repairs_excluded_git_and_worktree_control_paths(repo: Path) -> None:

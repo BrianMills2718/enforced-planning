@@ -2969,12 +2969,20 @@ def test_require_new_preserves_occupied_same_session_claim_slot(
     ok, _message = module.create_claim(**kwargs)
     assert ok
     claim_path = claims_dir / "codex_demo_owned-slot.yaml"
+    projection_path = projection_path_for(claims_dir)
     before = claim_path.read_bytes()
+    projection_before = projection_path.read_bytes()
+
+    def forbidden_refresh(**_kwargs: object) -> None:
+        raise AssertionError("require_new reached the existing-owner refresh path")
+
+    monkeypatch.setattr(module._impl, "_refresh_exact_owner_claim", forbidden_refresh)
 
     with pytest.raises(ValueError, match="already exists"):
         module.create_claim(**kwargs, require_new=True)
 
     assert claim_path.read_bytes() == before
+    assert projection_path.read_bytes() == projection_before
 
 
 def test_guarded_release_preserves_claim_when_revision_or_session_changes(

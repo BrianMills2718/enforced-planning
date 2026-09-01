@@ -2772,6 +2772,13 @@ def create_claim(
     target_worktree_path: str | None = None,
 ) -> tuple[bool, str]:
     """Create a new claim after checking for hard conflicts."""
+    if require_new:
+        with claim_registry_lock():
+            claim_path = CLAIMS_DIR / _claim_filename(agent, project, scope)
+            if claim_path.exists():
+                raise ValueError(
+                    f"Claim slot {project}:{scope} already exists; new-lane creation will not overwrite it"
+                )
     now = datetime.now(timezone.utc)
     initial_progress = build_progress_event(
         progress_kind="claim_started",

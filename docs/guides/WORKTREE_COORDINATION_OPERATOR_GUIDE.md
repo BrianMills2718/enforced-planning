@@ -1019,8 +1019,11 @@ In that configured source checkout:
 - native pre-write automatically requires selected state after ordinary
   authority, except for an exact restricted bootstrap claim writing one of its
   own bootstrap paths; and
-- omitting an outcome flag, changing approval text, increasing elapsed time or
-  cost, or passing a weaker ordinary mode cannot change the decision.
+- an explicit selected-outcome heartbeat flag gates that renewal through
+  selected outcome admission; omitting it performs owner-bound liveness refresh
+  only and never renews outcome state. Changing approval text, increasing
+  elapsed time or cost, or passing a weaker ordinary mode cannot change an
+  explicit selected-outcome decision.
 
 Malformed mode values, ambiguous or mixed bootstrap claims, source smuggling,
 missing selection, inactive allocation, and stalled or terminal continuation

@@ -14,7 +14,13 @@ from pathlib import Path
 import yaml
 
 from enforced_planning import prewrite_claim_fast, prewrite_claim_projection
-from enforced_planning.coordination_messages import SessionInboxNotice
+from enforced_planning.coordination_messages import (
+    CoordinationMessageStore,
+    ExactSessionSelector,
+    MessageStatusRequest,
+    SendMessageRequest,
+    SessionInboxNotice,
+)
 from scripts import coordination_hook
 
 
@@ -207,6 +213,130 @@ def test_secondary_callback_leaves_obligation_for_root_next_pretool(
     assert "ACKNOWLEDGEMENT REQUIRED" in denial["hookSpecificOutput"][
         "permissionDecisionReason"
     ]
+
+
+def test_real_subprocess_secondary_posttool_preserves_root_pretool_obligation(
+    tmp_path: Path,
+) -> None:
+    """Exercise the native JSON process boundary with one session and two runs."""
+
+    claims_dir = tmp_path / "coordination" / "claims"
+    message_root = tmp_path / "coordination" / "messages-v1"
+    bindings = tmp_path / "coordination" / "primary-runs"
+    claims_dir.mkdir(parents=True)
+    for agent, session_id, scope in (
+        ("codex", "codex:shared-session", "recipient"),
+        ("claude-code", "claude-code:sender", "sender"),
+    ):
+        (claims_dir / f"{agent}_{scope}.yaml").write_text(
+            yaml.safe_dump(
+                {
+                    "schema_version": 2,
+                    "agent": agent,
+                    "projects": ["enforced-planning"],
+                    "scope": scope,
+                    "intent": scope,
+                    "claim_type": "program",
+                    "write_paths": [],
+                    "read_paths": [],
+                    "session_id": session_id,
+                    "status": "active",
+                    "claimed_at": "2026-09-01T19:00:00+00:00",
+                    "expires_at": "2099-09-01T19:00:00+00:00",
+                },
+                sort_keys=False,
+            ),
+            encoding="utf-8",
+        )
+    store = CoordinationMessageStore(root=message_root, claims_dir=claims_dir)
+    command = [
+        sys.executable,
+        "scripts/coordination_hook.py",
+        "--claims-dir",
+        str(claims_dir),
+        "--root",
+        str(message_root),
+        "--execution-binding-dir",
+        str(bindings),
+        "--hook-receipt-dir",
+        str(tmp_path / "hook-receipts"),
+    ]
+    cwd = Path(__file__).resolve().parents[1]
+    initial_boundary = {
+        "session_id": "shared-session",
+        "cwd": str(cwd),
+        "hook_event_name": "PreToolUse",
+        "hook_run_id": "root-run",
+        "tool_use_id": "initial-root-tool",
+        "tool_name": "Bash",
+        "tool_input": {"command": "git status --short"},
+    }
+    initial = subprocess.run(
+        command,
+        input=json.dumps(initial_boundary),
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert initial.returncode == 0, initial.stderr or initial.stdout
+    assert initial.stdout == ""
+    persisted = store.send(
+        SendMessageRequest(
+            caller_session_id="claude-code:sender",
+            sender_session_id="claude-code:sender",
+            recipient=ExactSessionSelector(
+                kind="session", session_id="codex:shared-session"
+            ),
+            project="enforced-planning",
+            kind="coordination_request",
+            subject="Root must see this",
+            body="Do not let a secondary callback consume this obligation.",
+        )
+    )
+    secondary = subprocess.run(
+        command,
+        input=json.dumps(
+            {
+                "session_id": "shared-session",
+                "cwd": str(cwd),
+                "hook_event_name": "PostToolUse",
+                "hook_run_id": "subagent-run",
+                "tool_use_id": "secondary-tool",
+                "tool_name": "Bash",
+            }
+        ),
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert secondary.returncode == 0, secondary.stderr or secondary.stdout
+    assert secondary.stdout == ""
+    assert store.status(
+        MessageStatusRequest(message_id=persisted.message.message_id)
+    ).state == "persisted"
+
+    root_next = subprocess.run(
+        command,
+        input=json.dumps(
+            {
+                **initial_boundary,
+                "tool_use_id": "root-next-tool",
+            }
+        ),
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert root_next.returncode == 0, root_next.stderr or root_next.stdout
+    denial = json.loads(root_next.stdout)["hookSpecificOutput"]
+    assert denial["permissionDecision"] == "deny"
+    assert persisted.message.message_id in denial["permissionDecisionReason"]
+    assert store.status(
+        MessageStatusRequest(message_id=persisted.message.message_id)
+    ).state == "observed"
 
 
 def test_repository_statuses_are_collected_concurrently(monkeypatch, tmp_path: Path) -> None:

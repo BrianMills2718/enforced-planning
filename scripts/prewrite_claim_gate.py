@@ -8,6 +8,7 @@ import contextlib
 import hashlib
 import io
 import json
+import re
 import shlex
 import subprocess
 import sys
@@ -501,6 +502,71 @@ def _parse_hook_feedback_report_command(command: str) -> None:
         raise ValueError("hook feedback arguments do not match the read-only report grammar") from exc
 
 
+def _parse_maintenance_worktree_make_command(command: str, *, client: str) -> None:
+    """Validate the exact self-claiming maintenance Make entrypoint.
+
+    This admission is deliberately narrower than Make's general variable
+    surface. The target remains responsible for executing the typed atomic
+    bootstrap; this parser only lets that target get far enough to create the
+    claim that ordinary pre-write admission requires.
+    """
+
+    if "\n" in command or "\r" in command or any(char in command for char in ";&|<>`$"):
+        raise ValueError("maintenance-worktree command cannot compose shell operations")
+    tokens = shlex.split(command)
+    if len(tokens) < 5 or tokens[0] not in {"make", "/usr/bin/make"} or tokens[1] != "-C":
+        raise ValueError("maintenance-worktree command must use make -C")
+    target = Path(tokens[2]).expanduser()
+    if not target.is_absolute() or target.resolve() != target or tokens[3] != "maintenance-worktree":
+        raise ValueError("maintenance-worktree requires one canonical absolute Make directory")
+    target = target.resolve()
+    canonical_makefile = REPO_ROOT / "Makefile"
+    canonical_bootstrap = REPO_ROOT / "scripts" / "claim_bootstrap.py"
+    if target != REPO_ROOT.resolve() and not (
+        _same_file_digest(target / "Makefile", canonical_makefile)
+        and _same_file_digest(target / "scripts" / "claim_bootstrap.py", canonical_bootstrap)
+    ):
+        raise ValueError("maintenance-worktree target does not match the installed control revision")
+
+    assignments: dict[str, str] = {}
+    for token in tokens[4:]:
+        key, separator, value = token.partition("=")
+        if not separator or key not in {"BRANCH", "SESSION_WRITE_PATHS", "WORKTREE_AGENT"}:
+            raise ValueError("maintenance-worktree accepts only bounded bootstrap assignments")
+        if key in assignments:
+            raise ValueError("maintenance-worktree assignments must be unique")
+        assignments[key] = value
+    branch = assignments.get("BRANCH", "")
+    if (
+        re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._/-]*", branch) is None
+        or branch.startswith(("-", "/"))
+        or branch.endswith(("/", "."))
+        or ".." in branch
+        or "//" in branch
+        or branch in {"main", "master"}
+    ):
+        raise ValueError("maintenance-worktree branch is not a safe literal")
+    asserted_agent = assignments.get("WORKTREE_AGENT")
+    if asserted_agent is not None and asserted_agent != client:
+        raise ValueError("maintenance-worktree agent does not match the native client")
+    raw_paths = assignments.get("SESSION_WRITE_PATHS")
+    if raw_paths is not None:
+        paths = raw_paths.split()
+        if not paths or len(paths) != len(set(paths)):
+            raise ValueError("maintenance-worktree write paths must be unique non-empty literals")
+        for value in paths:
+            path = Path(value)
+            if (
+                path.is_absolute()
+                or ".." in path.parts
+                or path.as_posix() != value
+                or any(char in value for char in "\\:*?[]")
+            ):
+                raise ValueError("maintenance-worktree write path is not a safe repository literal")
+        if "." in paths and paths != ["."]:
+            raise ValueError("whole-repository maintenance scope cannot be mixed with narrow paths")
+
+
 def _parse_native_narrow_command(
     command: str,
     *,
@@ -631,6 +697,11 @@ def _special_unclaimed_command(
 
     if subagent_event:
         return False
+    try:
+        _parse_maintenance_worktree_make_command(command, client=client)
+        return "claim_bootstrap"
+    except Exception as exc:  # noqa: BLE001 -- try the remaining strict control grammars
+        _ = exc
     try:
         _parse_hook_feedback_report_command(command)
         return "hook_feedback_report"

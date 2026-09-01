@@ -519,6 +519,16 @@ That command is intentionally separate from `--prune`, which only removes
 expired claims. Use `--prune-stale` when worktree/branch lifecycle drift has
 left a live claim no longer truthful.
 
+All three prune operations (`--prune`, `--prune-stale`, and
+`--prune-completed`) accept `--agent`, `--project`, and `--scope`. Supplied
+selectors are conjunctive and are applied before any registry mutation. The
+JSON result reports both the count and the exact `project:scope` labels removed.
+Unsupported agents and explicitly blank or whitespace-only project/scope
+selectors fail before the claim registry lock is acquired.
+Omitting every selector is an explicit fleet-wide cleanup and may remove every
+claim eligible for that prune mode; use at least one selector for targeted
+operator cleanup.
+
 To remove claims that are already explicitly closed, use:
 
 ```bash
@@ -527,9 +537,7 @@ python scripts/meta/check_coordination_claims.py --prune-completed --json
 
 That command only removes valid YAML claims whose status is `complete` or
 `completed`. It does not prune active claims, even when their TTL has elapsed.
-Optional `--agent`, `--project`, and `--scope` selectors are conjunctive and
-must be applied before archival or removal; an exact-scope cleanup cannot prune
-unrelated completed claims.
+An exact-scope cleanup cannot prune unrelated completed claims.
 
 To refresh the heartbeat for the current live session, use:
 

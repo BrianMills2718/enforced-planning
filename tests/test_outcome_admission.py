@@ -1180,7 +1180,7 @@ def test_selected_heartbeat_denial_precedes_heartbeat_mutation(
     monkeypatch.setattr(
         session_lifecycle.coordination_claims,
         "validate_native_session_binding",
-        lambda _agent, _session_id: None,
+        lambda _agent, _session_id, **_kwargs: None,
     )
     monkeypatch.setattr(
         session_lifecycle,
@@ -1242,7 +1242,7 @@ def test_configured_heartbeat_without_selected_flag_records_liveness_only(
     monkeypatch.setattr(
         session_lifecycle.coordination_claims,
         "validate_native_session_binding",
-        lambda _agent, _session_id: None,
+        lambda _agent, _session_id, **_kwargs: None,
     )
     monkeypatch.setattr(
         session_lifecycle,

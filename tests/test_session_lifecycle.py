@@ -148,6 +148,7 @@ def test_bounded_broad_heartbeat_preserves_expiry_and_polls_mailbox(
         tmp_path / "claim-mutation-events.jsonl",
     )
     monkeypatch.setattr(session_lifecycle, "_poll_mailbox", poll_mailbox)
+    monkeypatch.setenv("CODEX_THREAD_ID", "heartbeat-test")
 
     result = session_lifecycle.heartbeat_session(
         agent="codex",

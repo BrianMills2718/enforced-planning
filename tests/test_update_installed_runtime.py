@@ -863,7 +863,7 @@ def test_update_refuses_symbolic_recovery_ref_without_mutating_its_target(
         text=True,
     )
 
-    with pytest.raises(RuntimeUpdateError):
+    with pytest.raises(RuntimeUpdateError) as caught:
         update_runtime(
             source_repo=source,
             runtime_repo=runtime,
@@ -872,6 +872,8 @@ def test_update_refuses_symbolic_recovery_ref_without_mutating_its_target(
             now=observed,
         )
 
+    assert caught.value.receipt["recovery_ref_retained"] is None
+    assert caught.value.receipt["receipt_refresh_failed"] is True
     assert _git(runtime, "symbolic-ref", recovery_ref) == symbolic_target
     target_after = subprocess.run(
         ["git", "-C", str(runtime), "rev-parse", "--verify", symbolic_target],
@@ -1139,6 +1141,170 @@ def test_update_operations_share_one_exclusive_runtime_lock(
     assert result[0]["action"] == "would_update"
 
 
+def test_metadata_write_failure_never_creates_recovery_ref(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, runtime, before, after = _repos(tmp_path, monkeypatch)
+    observed = datetime(2026, 9, 1, 18, 27, tzinfo=UTC)
+    recovery_ref = runtime_update._recovery_ref(before, observed)
+    real_run = runtime_update._run
+
+    def fail_metadata_write(
+        repo: Path,
+        *args: str,
+        check: bool = True,
+        mutating: bool = False,
+        network_auth: bool = False,
+    ) -> subprocess.CompletedProcess[str]:
+        if (
+            args[:2] == ("config", "--local")
+            and len(args) >= 3
+            and args[2].startswith(runtime_update.RECOVERY_CONFIG_PREFIX)
+        ):
+            raise RuntimeUpdateError("injected metadata write failure")
+        return real_run(repo, *args, check=check, mutating=mutating, network_auth=network_auth)
+
+    monkeypatch.setattr(runtime_update, "_run", fail_metadata_write)
+    with pytest.raises(RuntimeUpdateError, match="injected metadata write failure") as caught:
+        update_runtime(
+            source_repo=source,
+            runtime_repo=runtime,
+            revision=after,
+            write=True,
+            now=observed,
+        )
+
+    assert caught.value.receipt["stage"] == "record_recovery"
+    assert caught.value.receipt["recovery_ref_retained"] is False
+    assert real_run(runtime, "for-each-ref", recovery_ref).stdout == ""
+    assert runtime_update._recovery_metadata_records(runtime, recovery_ref) == []
+
+
+def test_ref_creation_failure_leaves_consumable_metadata_only_state(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, runtime, before, after = _repos(tmp_path, monkeypatch)
+    observed = datetime(2026, 9, 1, 18, 28, tzinfo=UTC)
+    recovery_ref = runtime_update._recovery_ref(before, observed)
+    real_run = runtime_update._run
+    failed = False
+
+    def fail_ref_create_once(
+        repo: Path,
+        *args: str,
+        check: bool = True,
+        mutating: bool = False,
+        network_auth: bool = False,
+    ) -> subprocess.CompletedProcess[str]:
+        nonlocal failed
+        if not failed and args[:2] == ("update-ref", "--no-deref") and "-d" not in args:
+            failed = True
+            raise RuntimeUpdateError("injected recovery ref creation failure")
+        return real_run(repo, *args, check=check, mutating=mutating, network_auth=network_auth)
+
+    monkeypatch.setattr(runtime_update, "_run", fail_ref_create_once)
+    with pytest.raises(RuntimeUpdateError, match="injected recovery ref creation failure"):
+        update_runtime(
+            source_repo=source,
+            runtime_repo=runtime,
+            revision=after,
+            write=True,
+            now=observed,
+        )
+
+    assert runtime_update._load_recovery_metadata(runtime, recovery_ref)["state"] == "active"
+    assert real_run(runtime, "for-each-ref", recovery_ref).stdout == ""
+    monkeypatch.setattr(runtime_update, "_run", real_run)
+    consumed = rollback_runtime(runtime_repo=runtime, recovery_ref=recovery_ref, write=True)
+    assert consumed["action"] == "already_rolled_back"
+    assert consumed["recovery_record_state"] == "consumed"
+
+
+def test_update_retry_resumes_exact_coherent_metadata_only_state(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, runtime, before, after = _repos(tmp_path, monkeypatch)
+    observed = datetime(2026, 9, 1, 18, 29, tzinfo=UTC)
+    recovery_ref = runtime_update._recovery_ref(before, observed)
+    real_run = runtime_update._run
+    failed = False
+
+    def fail_ref_create_once(
+        repo: Path,
+        *args: str,
+        check: bool = True,
+        mutating: bool = False,
+        network_auth: bool = False,
+    ) -> subprocess.CompletedProcess[str]:
+        nonlocal failed
+        if not failed and args[:2] == ("update-ref", "--no-deref") and "-d" not in args:
+            failed = True
+            raise RuntimeUpdateError("injected recovery ref creation failure")
+        return real_run(repo, *args, check=check, mutating=mutating, network_auth=network_auth)
+
+    monkeypatch.setattr(runtime_update, "_run", fail_ref_create_once)
+    with pytest.raises(RuntimeUpdateError):
+        update_runtime(
+            source_repo=source,
+            runtime_repo=runtime,
+            revision=after,
+            write=True,
+            now=observed,
+        )
+    monkeypatch.setattr(runtime_update, "_run", real_run)
+
+    retried = update_runtime(
+        source_repo=source,
+        runtime_repo=runtime,
+        revision=after,
+        write=True,
+        now=observed,
+    )
+    assert retried["action"] == "updated"
+    assert _git(runtime, "rev-parse", recovery_ref) == before
+    assert _git(runtime, "rev-parse", "HEAD") == after
+
+
+def test_update_rejects_stale_or_duplicate_metadata_without_ref_creation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, runtime, before, after = _repos(tmp_path, monkeypatch)
+    observed = datetime(2026, 9, 1, 18, 30, tzinfo=UTC)
+    recovery_ref = runtime_update._recovery_ref(before, observed)
+    runtime_update._record_recovery_metadata(
+        runtime,
+        recovery_ref=recovery_ref,
+        before=before,
+        target=after,
+        prior_origin=runtime_update.LEGACY_RUNTIME_ORIGIN,
+        checkout_mode="main",
+        checkout_ref="refs/heads/main",
+    )
+
+    with pytest.raises(RuntimeUpdateError, match="stale or mismatched"):
+        update_runtime(
+            source_repo=source,
+            runtime_repo=runtime,
+            revision=after,
+            write=True,
+            now=observed,
+        )
+    assert _git(runtime, "for-each-ref", recovery_ref) == ""
+
+    key = runtime_update._recovery_config_key(recovery_ref, "record")
+    record = _git(runtime, "config", "--local", "--get", key)
+    _git(runtime, "config", "--local", "--add", key, record)
+    with pytest.raises(RuntimeUpdateError, match="duplicate metadata"):
+        update_runtime(
+            source_repo=source,
+            runtime_repo=runtime,
+            revision=after,
+            write=True,
+            now=observed,
+        )
+    assert _git(runtime, "for-each-ref", recovery_ref) == ""
+
+
 def test_partial_failure_receipt_retains_recovery_ref(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1232,7 +1398,7 @@ def test_recovery_ref_collision_is_denied_without_overwrite(
     recovery_ref = runtime_update._recovery_ref(before, observed)
     _git(runtime, "update-ref", recovery_ref, before)
 
-    with pytest.raises(RuntimeUpdateError, match="already exists") as caught:
+    with pytest.raises(RuntimeUpdateError, match="without coherent metadata") as caught:
         update_runtime(
             source_repo=source,
             runtime_repo=runtime,
@@ -1241,9 +1407,9 @@ def test_recovery_ref_collision_is_denied_without_overwrite(
             now=observed,
         )
 
-    assert caught.value.receipt["action"] == "partial_failure"
+    assert caught.value.receipt["action"] == "denied"
     assert caught.value.receipt["stage"] == "create_recovery_ref"
-    assert caught.value.receipt["mutation_started"] is True
+    assert caught.value.receipt["mutation_started"] is False
     assert caught.value.receipt["recovery_ref"] == recovery_ref
     assert caught.value.receipt["recovery_ref_retained"] is True
     assert _git(runtime, "rev-parse", recovery_ref) == before

@@ -251,13 +251,8 @@ def _refresh_failure_state(runtime_repo: Path, receipt: dict[str, Any]) -> None:
     recovery_ref = receipt["recovery_ref"]
     if recovery_ref:
         try:
-            retained = _run(runtime_repo, "rev-parse", recovery_ref, check=False)
-            if retained.returncode == 0 and FULL_SHA_RE.fullmatch(retained.stdout.strip()):
-                receipt["recovery_ref_retained"] = (
-                    retained.stdout.strip() == receipt["before_revision"]
-                )
-            else:
-                receipt["receipt_refresh_failed"] = True
+            retained = _direct_recovery_ref_commit(runtime_repo, recovery_ref)
+            receipt["recovery_ref_retained"] = retained == receipt["before_revision"]
         except (RuntimeUpdateError, OSError, subprocess.SubprocessError):
             receipt["receipt_refresh_failed"] = True
 
@@ -472,7 +467,7 @@ def _record_recovery_metadata(
     _write_recovery_metadata(runtime_repo, payload)
 
 
-def _load_recovery_metadata(runtime_repo: Path, recovery_ref: str) -> dict[str, Any]:
+def _recovery_metadata_records(runtime_repo: Path, recovery_ref: str) -> list[str]:
     records = _run(
         runtime_repo,
         "config",
@@ -481,8 +476,16 @@ def _load_recovery_metadata(runtime_repo: Path, recovery_ref: str) -> dict[str, 
         _recovery_config_key(recovery_ref, "record"),
         check=False,
     )
-    values_raw = records.stdout.splitlines()
-    if records.returncode != 0 or len(values_raw) != 1:
+    if records.returncode == 1:
+        return []
+    if records.returncode != 0:
+        raise RuntimeUpdateError("rollback metadata could not be classified safely")
+    return records.stdout.splitlines()
+
+
+def _load_recovery_metadata(runtime_repo: Path, recovery_ref: str) -> dict[str, Any]:
+    values_raw = _recovery_metadata_records(runtime_repo, recovery_ref)
+    if len(values_raw) != 1:
         raise RuntimeUpdateError("rollback metadata must contain exactly one recovery record")
     raw = values_raw[0]
     try:
@@ -675,7 +678,56 @@ def _update_runtime_under_lock(
             )
             return receipt
 
-        if write and before != revision:
+        recovery_ref = _recovery_ref(before, now or datetime.now(UTC))
+        receipt["stage"] = "create_recovery_ref"
+        receipt["recovery_ref"] = recovery_ref
+        retained = _direct_recovery_ref_commit(runtime_repo, recovery_ref)
+        existing_records = _recovery_metadata_records(runtime_repo, recovery_ref)
+        if len(existing_records) > 1:
+            raise RuntimeUpdateError("recovery identity has duplicate metadata records")
+        expected_metadata = {
+            "schemaVersion": "1.0",
+            "recoveryRef": recovery_ref,
+            "beforeRevision": before,
+            "targetRevision": revision,
+            "priorOrigin": runtime_origin,
+            "checkoutMode": checkout_mode,
+            "checkoutRef": checkout_ref,
+            "state": "active",
+        }
+        if existing_records:
+            recorded_metadata = _load_recovery_metadata(runtime_repo, recovery_ref)
+            observed_payload = {
+                key: value for key, value in recorded_metadata.items() if key != "recordSha256"
+            }
+            if observed_payload != expected_metadata:
+                raise RuntimeUpdateError("recovery identity has stale or mismatched metadata")
+            receipt["recovery_metadata_recorded"] = True
+            receipt["mutation_started"] = True
+        else:
+            if retained is not None:
+                raise RuntimeUpdateError("recovery ref exists without coherent metadata")
+            receipt["stage"] = "record_recovery"
+            receipt["mutation_started"] = True
+            _record_recovery_metadata(
+                runtime_repo,
+                recovery_ref=recovery_ref,
+                before=before,
+                target=revision,
+                prior_origin=runtime_origin,
+                checkout_mode=checkout_mode,
+                checkout_ref=checkout_ref,
+            )
+            recorded_metadata = _load_recovery_metadata(runtime_repo, recovery_ref)
+            observed_payload = {
+                key: value for key, value in recorded_metadata.items() if key != "recordSha256"
+            }
+            if observed_payload != expected_metadata:
+                raise RuntimeUpdateError("recovery record did not enter the exact active state")
+            receipt["recovery_metadata_recorded"] = True
+        if retained not in {None, before}:
+            raise RuntimeUpdateError("recovery ref does not match its coherent metadata")
+        if before != revision:
             receipt["stage"] = "fetch_target"
             receipt["mutation_started"] = True
             _assert_safe_runtime_local_config(runtime_repo)
@@ -693,34 +745,20 @@ def _update_runtime_under_lock(
                 _validate_revision(runtime_repo, revision)
             finally:
                 quarantine.cleanup()
-
-        recovery_ref = _recovery_ref(before, now or datetime.now(UTC))
-        receipt["stage"] = "create_recovery_ref"
-        receipt["recovery_ref"] = recovery_ref
-        if _direct_recovery_ref_commit(runtime_repo, recovery_ref) is not None:
-            raise RuntimeUpdateError("recovery ref already exists")
-        _run(
-            runtime_repo,
-            "update-ref",
-            "--no-deref",
-            recovery_ref,
-            before,
-            ZERO_OID,
-            mutating=True,
-        )
+        if retained is None:
+            receipt["stage"] = "create_recovery_ref"
+            receipt["mutation_started"] = True
+            _run(
+                runtime_repo,
+                "update-ref",
+                "--no-deref",
+                recovery_ref,
+                before,
+                ZERO_OID,
+                mutating=True,
+            )
         if _direct_recovery_ref_commit(runtime_repo, recovery_ref) != before:
             raise RuntimeUpdateError("created recovery ref does not retain the exact prior commit")
-        receipt["mutation_started"] = True
-        _record_recovery_metadata(
-            runtime_repo,
-            recovery_ref=recovery_ref,
-            before=before,
-            target=revision,
-            prior_origin=runtime_origin,
-            checkout_mode=checkout_mode,
-            checkout_ref=checkout_ref,
-        )
-        receipt["recovery_metadata_recorded"] = True
         # The recovery ref deliberately remains and is reported if mutation fails.
         receipt["stage"] = "apply_update"
         if before != revision:
@@ -940,7 +978,7 @@ def _rollback_runtime_under_lock(
         if record_state == "active":
             if current not in {target_revision, prior_revision}:
                 raise RuntimeUpdateError("installed runtime no longer matches the recovery transition")
-            if retained != prior_revision:
+            if retained != prior_revision and not (retained is None and fully_restored):
                 raise RuntimeUpdateError("active recovery ref no longer matches its recorded commit")
             if current_origin not in {CANONICAL_ORIGIN, prior_origin}:
                 raise RuntimeUpdateError("installed runtime origin no longer matches the recovery record")
@@ -974,6 +1012,22 @@ def _rollback_runtime_under_lock(
         initial_record_state = record_state
         if record_state == "consumed" and retained is None:
             receipt.update(action="already_rolled_back", state="succeeded", stage="complete")
+            return receipt
+
+        if record_state == "active" and retained is None and fully_restored:
+            receipt["stage"] = "consume_record"
+            receipt["mutation_started"] = True
+            _mark_recovery_consumed(runtime_repo, metadata)
+            consumed_metadata = _load_recovery_metadata(runtime_repo, recovery_ref)
+            if consumed_metadata["state"] != "consumed":
+                raise RuntimeUpdateError("recovery record did not enter the consumed state")
+            receipt.update(
+                action="already_rolled_back",
+                state="succeeded",
+                stage="complete",
+                recovery_ref_consumed=True,
+                recovery_record_state="consumed",
+            )
             return receipt
 
         if record_state == "active" and current != prior_revision:

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import subprocess
 import sys
 from datetime import UTC, datetime, timedelta
@@ -16,15 +17,38 @@ from enforced_planning.coordination_approval import (
     CoordinationApprovalError,
     LiveApprovalFactsV1,
     PublishedApprovalV1,
+    build_publication_intent,
     build_publication_receipt,
     lease_sha256,
+    validate_candidate_receipt_bytes,
 )
 
 NOW = datetime(2026, 9, 1, 20, 0, tzinfo=UTC)
 OWNER = "codex:owner-session"
 SUCCESSOR = "claude-code:successor-session"
 HEAD = "a" * 40
-CANDIDATE = b'{"review":"accepted"}\n'
+BASE = "e" * 40
+CANDIDATE = (
+    json.dumps(
+        {
+            "schema_version": "1.0",
+            "record_type": "coordination_approval_candidate",
+            "review_id": "pr-321-independent-review",
+            "repository": "BrianMills2718/enforced-planning",
+            "pr_number": 321,
+            "base_sha": BASE,
+            "head_sha": HEAD,
+            "rubric_revision": "fundamentals-v1",
+            "reviewer_sessions": ["codex:independent-reviewer"],
+            "verdict": "signed_off",
+            "authority_state": "evidence_receipt",
+            "source_signoff_sha256": "f" * 64,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode()
+    + b"\n"
+)
 
 
 def target(*, mode: str = "compatibility_status", app_id: int | None = None) -> ApprovalTargetV1:
@@ -33,6 +57,7 @@ def target(*, mode: str = "compatibility_status", app_id: int | None = None) -> 
         pr_number=321,
         pr_url="https://github.com/BrianMills2718/enforced-planning/pull/321",
         base_branch="main",
+        review_base_sha=BASE,
         head_sha=HEAD,
         candidate_receipt_sha256=hashlib.sha256(CANDIDATE).hexdigest(),
         approval_mode=mode,
@@ -40,9 +65,14 @@ def target(*, mode: str = "compatibility_status", app_id: int | None = None) -> 
     )
 
 
+def candidate_receipt():
+    return validate_candidate_receipt_bytes(target(), CANDIDATE)
+
+
 def facts(
     *, context: str = "coordination-approval", head: str = HEAD,
     app_id: int | None = None, observed_at: datetime = NOW,
+    strict: bool = True, enforce_admins: bool = True,
 ) -> LiveApprovalFactsV1:
     return LiveApprovalFactsV1(
         observed_at=observed_at,
@@ -54,6 +84,8 @@ def facts(
         pr_state="OPEN",
         protection_context=context,
         protected_app_id=app_id,
+        strict_required_checks=strict,
+        enforce_admins=enforce_admins,
     )
 
 
@@ -158,6 +190,27 @@ def test_takeover_refuses_healthy_owner_and_succeeds_only_after_expiry(tmp_path)
     assert receipt.prior_lease_sha256 == lease_sha256(initial)
 
 
+def test_expired_owner_cannot_revive_or_transfer(tmp_path) -> None:
+    store = ApprovalLeaseStore(tmp_path)
+    initial = acquire(store)
+    for operation in ("heartbeat", "transfer"):
+        with pytest.raises(CoordinationApprovalError, match="expired"):
+            if operation == "heartbeat":
+                store.heartbeat(
+                    target=target(), owner_session_id=OWNER,
+                    expected_lease_sha256=lease_sha256(initial),
+                    duration=timedelta(minutes=10), now=NOW + timedelta(minutes=10),
+                )
+            else:
+                store.transfer(
+                    target=target(), owner_session_id=OWNER,
+                    successor_session_id=SUCCESSOR,
+                    expected_lease_sha256=lease_sha256(initial),
+                    duration=timedelta(minutes=10), now=NOW + timedelta(minutes=10),
+                    evidence_ref="too late",
+                )
+
+
 def test_release_requires_exact_owner_and_preserves_terminal_receipt(tmp_path) -> None:
     store = ApprovalLeaseStore(tmp_path)
     initial = acquire(store)
@@ -216,6 +269,46 @@ def test_receipt_failure_rolls_back_acquire_replace_and_release(tmp_path, monkey
     assert store.current(target()) == initial
 
 
+def test_process_death_after_state_mutation_recovers_receipt_and_release(tmp_path) -> None:
+    store = ApprovalLeaseStore(tmp_path)
+    initial = acquire(store)
+    initial_receipts = len(list((tmp_path / "receipts").glob("*.json")))
+
+    pid = os.fork()
+    if pid == 0:
+        child = ApprovalLeaseStore(tmp_path)
+        child._persist_receipt = lambda _receipt: os._exit(17)  # type: ignore[method-assign]
+        child.heartbeat(
+            target=target(), owner_session_id=OWNER,
+            expected_lease_sha256=lease_sha256(initial),
+            duration=timedelta(minutes=10), now=NOW + timedelta(minutes=1),
+        )
+        os._exit(99)
+    _pid, status = os.waitpid(pid, 0)
+    assert os.waitstatus_to_exitcode(status) == 17
+    recovered = store.current(target())
+    assert recovered is not None and recovered.revision == 2
+    assert len(list((tmp_path / "receipts").glob("*.json"))) == initial_receipts + 1
+    assert list((tmp_path / "transactions").glob("*.json")) == []
+
+    pid = os.fork()
+    if pid == 0:
+        child = ApprovalLeaseStore(tmp_path)
+        child._persist_receipt = lambda _receipt: os._exit(18)  # type: ignore[method-assign]
+        child.release(
+            target=target(), owner_session_id=OWNER,
+            expected_lease_sha256=lease_sha256(recovered),
+            evidence_ref="process-death release",
+            now=NOW + timedelta(minutes=2),
+        )
+        os._exit(99)
+    _pid, status = os.waitpid(pid, 0)
+    assert os.waitstatus_to_exitcode(status) == 18
+    assert store.current(target()) is None
+    assert len(list((tmp_path / "receipts").glob("*.json"))) == initial_receipts + 2
+    assert list((tmp_path / "transactions").glob("*.json")) == []
+
+
 def test_publishability_rejects_frozen_context_stale_facts_and_head_drift(tmp_path) -> None:
     store = ApprovalLeaseStore(tmp_path)
     lease = acquire(store)
@@ -231,6 +324,12 @@ def test_publishability_rejects_frozen_context_stale_facts_and_head_drift(tmp_pa
             expected_lease_sha256=lease_sha256(lease),
             live_facts=facts(context="coordination-approval-frozen"),
             candidate_receipt_bytes=CANDIDATE, now=NOW,
+        )
+    with pytest.raises(CoordinationApprovalError, match="strict checks"):
+        store.assert_publishable(
+            target=target(), owner_session_id=OWNER,
+            expected_lease_sha256=lease_sha256(lease),
+            live_facts=facts(strict=False), candidate_receipt_bytes=CANDIDATE, now=NOW,
         )
     with pytest.raises(CoordinationApprovalError, match="stale"):
         store.assert_publishable(
@@ -251,7 +350,7 @@ def test_compatibility_receipt_requires_owner_creator_and_exact_pr_url(tmp_path)
     store = ApprovalLeaseStore(tmp_path)
     lease = acquire(store)
     observed = facts()
-    store.assert_publishable(
+    lease, parsed_candidate = store.assert_publishable(
         target=target(), owner_session_id=OWNER,
         expected_lease_sha256=lease_sha256(lease), live_facts=observed, now=NOW,
         candidate_receipt_bytes=CANDIDATE,
@@ -260,22 +359,28 @@ def test_compatibility_receipt_requires_owner_creator_and_exact_pr_url(tmp_path)
         kind="commit_status", context="coordination-approval", head_sha=HEAD,
         state="SUCCESS", creator_login="BrianMills2718",
         target_url=target().pr_url, provider_record_id=123,
+        publication_intent_id="0" * 64, provider_recorded_at=NOW,
     )
-    receipt = build_publication_receipt(
+    intent = build_publication_intent(
         lease=lease, publisher_session_id=OWNER,
-        live_facts_before=observed, published_approval=approval,
-        live_facts_after=observed, repository_owner="BrianMills2718",
-        published_at=NOW,
+        candidate_receipt=parsed_candidate, live_facts_before=observed,
+        prepared_at=NOW,
+    )
+    approval = approval.model_copy(update={"publication_intent_id": intent.intent_id})
+    receipt = build_publication_receipt(
+        publication_intent=intent, published_approval=approval,
+        live_facts_after=observed,
     )
     assert receipt.lease_sha256 == lease_sha256(lease)
     assert len(receipt.receipt_sha256) == 64
 
     with pytest.raises(CoordinationApprovalError, match="publisher"):
         build_publication_receipt(
-            lease=lease, publisher_session_id=SUCCESSOR,
-            live_facts_before=observed, published_approval=approval,
-            live_facts_after=observed, repository_owner="BrianMills2718",
-            published_at=NOW,
+            publication_intent=intent.model_copy(
+                update={"publisher_session_id": SUCCESSOR}
+            ),
+            published_approval=approval,
+            live_facts_after=observed,
         )
 
     for bad in (
@@ -284,10 +389,8 @@ def test_compatibility_receipt_requires_owner_creator_and_exact_pr_url(tmp_path)
     ):
         with pytest.raises(CoordinationApprovalError):
             build_publication_receipt(
-                lease=lease, publisher_session_id=OWNER,
-                live_facts_before=observed, published_approval=bad,
-                live_facts_after=observed, repository_owner="BrianMills2718",
-                published_at=NOW,
+                publication_intent=intent, published_approval=bad,
+                live_facts_after=observed,
             )
 
 
@@ -299,29 +402,31 @@ def test_app_receipt_rejects_wrong_app_and_old_head(tmp_path) -> None:
     good = PublishedApprovalV1(
         kind="check_run", context="coordination-approval", head_sha=HEAD,
         state="SUCCESS", app_id=4242, provider_record_id=456,
+        publication_intent_id="0" * 64, provider_recorded_at=NOW,
     )
-    receipt = build_publication_receipt(
+    app_candidate = candidate_receipt()
+    intent = build_publication_intent(
         lease=lease, publisher_session_id=OWNER,
-        live_facts_before=observed, published_approval=good,
-        live_facts_after=observed, repository_owner="BrianMills2718",
-        published_at=NOW,
+        candidate_receipt=app_candidate, live_facts_before=observed,
+        prepared_at=NOW,
+    )
+    good = good.model_copy(update={"publication_intent_id": intent.intent_id})
+    receipt = build_publication_receipt(
+        publication_intent=intent, published_approval=good,
+        live_facts_after=observed,
     )
     assert receipt.published_approval.app_id == 4242
     with pytest.raises(CoordinationApprovalError, match="wrong GitHub App"):
         build_publication_receipt(
-            lease=lease, publisher_session_id=OWNER,
-            live_facts_before=observed,
+            publication_intent=intent,
             published_approval=good.model_copy(update={"app_id": 99}),
-            live_facts_after=observed, repository_owner="BrianMills2718",
-            published_at=NOW,
+            live_facts_after=observed,
         )
     with pytest.raises(CoordinationApprovalError, match="different head"):
         build_publication_receipt(
-            lease=lease, publisher_session_id=OWNER,
-            live_facts_before=observed,
+            publication_intent=intent,
             published_approval=good.model_copy(update={"head_sha": "d" * 40}),
-            live_facts_after=observed, repository_owner="BrianMills2718",
-            published_at=NOW,
+            live_facts_after=observed,
         )
 
 
@@ -340,21 +445,24 @@ def test_direct_cli_acquire_status_and_release_journey(tmp_path) -> None:
     )
 
     def run(*arguments: str) -> dict:
+        env = dict(os.environ)
+        env["CODEX_THREAD_ID"] = "owner-session"
+        env["ENFORCED_PLANNING_APPROVAL_TESTING"] = "1"
         completed = subprocess.run(
             [sys.executable, str(script), "--state-root", str(state_root), *arguments],
-            check=True, capture_output=True, text=True,
+            check=True, capture_output=True, text=True, env=env,
         )
         return json.loads(completed.stdout)
 
     acquired = run(
-        "acquire", "--target", str(target_path), "--session-id", OWNER,
+        "acquire", "--target", str(target_path), "--agent", "codex",
         "--duration-seconds", "600", "--evidence-ref", "direct CLI test",
     )
     digest = acquired["lease_sha256"]
     status = run("status", "--target", str(target_path))
     assert status["lease_sha256"] == digest
     released = run(
-        "release", "--target", str(target_path), "--session-id", OWNER,
+        "release", "--target", str(target_path), "--agent", "codex",
         "--expected-lease-sha256", digest, "--evidence-ref", "CLI journey complete",
     )
     assert released["mutation_receipt"]["operation"] == "release"

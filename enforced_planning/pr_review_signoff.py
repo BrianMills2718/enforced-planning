@@ -96,7 +96,9 @@ class ProgrammaticCheckResult(StrictModel):
     exit_code: int
     output_sha256: str = Field(pattern=SHA256_PATTERN)
     output_excerpt: str
-    execution_boundary: Literal["systemd-read-only"] = "systemd-read-only"
+    execution_boundary: Literal["systemd-read-only-private-network"] = (
+        "systemd-read-only-private-network"
+    )
 
 
 class CriterionResult(StrictModel):
@@ -140,6 +142,11 @@ class SemanticReviewResult(StrictModel):
 class ReviewerSession(StrictModel):
     review_lane: str = Field(min_length=1)
     session_id: str = Field(min_length=1)
+
+
+class PullRequestRevision(StrictModel):
+    base_sha: str = Field(pattern=SHA_PATTERN)
+    head_sha: str = Field(pattern=SHA_PATTERN)
 
 
 class PRSignoffReceipt(StrictModel):
@@ -312,6 +319,12 @@ def run_programmatic_checks(
             "--collect",
             f"--property=ReadOnlyPaths={repo_root}",
             f"--property=WorkingDirectory={repo_root}",
+            "--property=PrivateNetwork=yes",
+            "--setenv=GH_TOKEN=",
+            "--setenv=GITHUB_TOKEN=",
+            "--setenv=SSH_AUTH_SOCK=",
+            "--setenv=GIT_ASKPASS=/bin/false",
+            "--setenv=GIT_TERMINAL_PROMPT=0",
             "--",
             *check.argv,
         ]
@@ -387,14 +400,16 @@ def _assert_frozen_worktree(repo_root: Path, expected_head: str, *, phase: str) 
     return observed_head
 
 
-def _resolve_github_pr_head(repository: str, pull_request: int, *, gh_bin: str) -> str:
+def _resolve_github_pr_revision(
+    repository: str, pull_request: int, *, gh_bin: str
+) -> PullRequestRevision:
     result = subprocess.run(
         [
             gh_bin,
             "api",
             f"repos/{repository}/pulls/{pull_request}",
             "--jq",
-            ".head.sha",
+            "[.base.sha, .head.sha] | @tsv",
         ],
         capture_output=True,
         text=True,
@@ -402,24 +417,24 @@ def _resolve_github_pr_head(repository: str, pull_request: int, *, gh_bin: str) 
     )
     if result.returncode != 0:
         detail = (result.stderr or result.stdout).strip()
-        raise RuntimeError(f"could not observe live pull-request head: {detail}")
-    head = result.stdout.strip()
-    if not head or len(head) != 40:
-        raise RuntimeError(f"GitHub returned an invalid pull-request head: {head!r}")
-    return head
+        raise RuntimeError(f"could not observe live pull-request revision: {detail}")
+    fields = result.stdout.strip().split("\t")
+    if len(fields) != 2:
+        raise RuntimeError(f"GitHub returned an invalid pull-request revision: {fields!r}")
+    return PullRequestRevision(base_sha=fields[0], head_sha=fields[1])
 
 
-def _assert_live_pr_head(
+def _assert_live_pr_revision(
     spec: PRReviewSpec,
-    resolver: Callable[[str, int], str],
+    resolver: Callable[[str, int], PullRequestRevision],
     *,
     phase: str,
 ) -> None:
-    live_head = resolver(spec.repository, spec.pull_request)
-    if live_head != spec.head_sha:
+    live = resolver(spec.repository, spec.pull_request)
+    if live.base_sha != spec.base_sha or live.head_sha != spec.head_sha:
         raise RuntimeError(
-            f"live pull-request head {live_head} does not match frozen head "
-            f"{spec.head_sha} during {phase}"
+            f"live pull-request revision {live.base_sha}..{live.head_sha} does not "
+            f"match frozen revision {spec.base_sha}..{spec.head_sha} during {phase}"
         )
 
 
@@ -507,18 +522,18 @@ def run_review(
     effort: str = "high",
     review_timeout_seconds: int = 1800,
     gh_bin: str = "gh",
-    pr_head_resolver: Callable[[str, int], str] | None = None,
+    pr_revision_resolver: Callable[[str, int], PullRequestRevision] | None = None,
 ) -> PRSignoffReceipt:
     if review_timeout_seconds < 1:
         raise ValueError("review timeout must be at least one second")
     root = repo_root.resolve()
     observed_head = _assert_frozen_worktree(root, spec.head_sha, phase="preflight")
-    resolver = pr_head_resolver or (
-        lambda repository, pull_request: _resolve_github_pr_head(
+    resolver = pr_revision_resolver or (
+        lambda repository, pull_request: _resolve_github_pr_revision(
             repository, pull_request, gh_bin=gh_bin
         )
     )
-    _assert_live_pr_head(spec, resolver, phase="preflight")
+    _assert_live_pr_revision(spec, resolver, phase="preflight")
     _git_output(root, "merge-base", "--is-ancestor", spec.base_sha, spec.head_sha)
     checks = run_programmatic_checks(spec, repo_root=root)
     _assert_frozen_worktree(root, spec.head_sha, phase="post-check")
@@ -544,7 +559,7 @@ def run_review(
             lane_results = tuple(executor.map(run_lane, spec.review_lanes))
 
     _assert_frozen_worktree(root, spec.head_sha, phase="post-review")
-    _assert_live_pr_head(spec, resolver, phase="post-review")
+    _assert_live_pr_revision(spec, resolver, phase="post-review")
     reviewer_sessions = tuple(result[0] for result in lane_results)
     semantics = tuple(result[1] for result in lane_results)
 

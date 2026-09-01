@@ -12,6 +12,7 @@ from enforced_planning.pr_review_signoff import (
     CriterionResult,
     ProgrammaticCheck,
     ProgrammaticCheckResult,
+    PullRequestRevision,
     ReviewerSession,
     ReviewFinding,
     SemanticCriterion,
@@ -529,9 +530,9 @@ def test_runner_executes_checks_and_fresh_schema_bound_reviewer(tmp_path: Path) 
 
     pr_head_observations: list[tuple[str, int]] = []
 
-    def resolve_pr_head(repository: str, pull_request: int) -> str:
+    def resolve_pr_revision(repository: str, pull_request: int) -> PullRequestRevision:
         pr_head_observations.append((repository, pull_request))
-        return head
+        return PullRequestRevision(base_sha=base, head_sha=head)
 
     receipt = run_review(
         load_review_spec(spec_file),
@@ -540,7 +541,7 @@ def test_runner_executes_checks_and_fresh_schema_bound_reviewer(tmp_path: Path) 
         receipt_path=receipt_path,
         check_payload_path=check_path,
         codex_bin=str(fake_codex),
-        pr_head_resolver=resolve_pr_head,
+        pr_revision_resolver=resolve_pr_revision,
     )
 
     assert receipt.verdict == "signed_off"
@@ -582,6 +583,37 @@ def test_runner_refuses_to_spend_on_a_nonmatching_worktree_head(tmp_path: Path) 
             receipt_path=tmp_path / "receipt.json",
             check_payload_path=tmp_path / "check.json",
             codex_bin=str(tmp_path / "must-not-run"),
+        )
+
+
+def test_runner_refuses_live_pr_base_mismatch_before_checks(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "init", "-q", "-b", "main"], cwd=repo, check=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo, check=True)
+    subprocess.run(["git", "config", "user.name", "Test"], cwd=repo, check=True)
+    (repo / "feature.txt").write_text("base\n", encoding="utf-8")
+    subprocess.run(["git", "add", "feature.txt"], cwd=repo, check=True)
+    subprocess.run(["git", "commit", "-q", "-m", "base"], cwd=repo, check=True)
+    head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo, text=True).strip()
+    spec_file = _write_spec(tmp_path / "spec.json")
+    payload = json.loads(spec_file.read_text())
+    payload["base_sha"] = head
+    payload["head_sha"] = head
+    spec_file.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="live pull-request revision"):
+        run_review(
+            load_review_spec(spec_file),
+            repo_root=repo,
+            output_schema=Path("unused.json"),
+            receipt_path=tmp_path / "receipt.json",
+            check_payload_path=tmp_path / "check.json",
+            codex_bin=str(tmp_path / "must-not-run"),
+            pr_revision_resolver=lambda _repository, _pull_request: PullRequestRevision(
+                base_sha="f" * 40,
+                head_sha=head,
+            ),
         )
 
 
@@ -638,5 +670,37 @@ def test_programmatic_check_cannot_mutate_frozen_worktree(tmp_path: Path) -> Non
     results = run_programmatic_checks(load_review_spec(spec_path), repo_root=repo)
 
     assert results[0].exit_code != 0
-    assert results[0].execution_boundary == "systemd-read-only"
+    assert results[0].execution_boundary == "systemd-read-only-private-network"
     assert not (repo / "mutation.txt").exists()
+
+
+def test_programmatic_check_has_no_external_network(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "init", "-q", "-b", "main"], cwd=repo, check=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo, check=True)
+    subprocess.run(["git", "config", "user.name", "Test"], cwd=repo, check=True)
+    (repo / "feature.txt").write_text("base\n", encoding="utf-8")
+    subprocess.run(["git", "add", "feature.txt"], cwd=repo, check=True)
+    subprocess.run(["git", "commit", "-q", "-m", "base"], cwd=repo, check=True)
+    head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo, text=True).strip()
+    spec_path = _write_spec(tmp_path / "spec.json")
+    payload = json.loads(spec_path.read_text())
+    payload["base_sha"] = head
+    payload["head_sha"] = head
+    payload["programmatic_checks"] = [
+        {
+            "check_id": "network-probe",
+            "argv": [
+                sys.executable,
+                "-c",
+                "import socket; socket.create_connection(('github.com', 443), timeout=2)",
+            ],
+        }
+    ]
+    spec_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    results = run_programmatic_checks(load_review_spec(spec_path), repo_root=repo)
+
+    assert results[0].exit_code != 0
+    assert results[0].execution_boundary == "systemd-read-only-private-network"

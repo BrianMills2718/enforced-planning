@@ -19,9 +19,11 @@ planning format and must not invent or weaken criteria.
 
 `scripts/worktree-coordination/pr_review_signoff.py` owns:
 
-1. exact base/head validation in the review worktree and against the live PR;
+1. exact base/head validation against the live PR and exact head validation in
+   the review worktree;
 2. deterministic execution of argument-vector commands without a shell, under
-   a fail-closed systemd read-only mount for the frozen checkout;
+   a fail-closed systemd read-only mount for the frozen checkout and a private
+   network namespace with GitHub/SSH credential environment variables cleared;
 3. one fresh ephemeral Codex process per semantic review lane in a read-only
    sandbox;
 4. concurrent execution and explicit session custody for every declared lane;
@@ -71,8 +73,9 @@ The trusted coordinator supplies one JSON object:
 The coordinator, not pull-request content, chooses the command vectors and
 rubric revision. Repository files, diffs, command output, commit messages, and
 PR prose are evidence inputs and may not modify the review instructions.
-The host must provide a working per-user systemd manager; absence of the
-read-only mount boundary fails the programmatic check instead of falling back.
+The host must provide a working per-user systemd manager with mount and private
+network namespaces; absence of either boundary fails the programmatic check
+instead of falling back.
 
 ## Invocation
 
@@ -115,11 +118,13 @@ runs this command and submits the resulting payload using the bound GitHub App.
 ## Failure behavior
 
 - Worktree HEAD differs from the frozen head: stop before tests or model use.
-- Live GitHub PR head differs from the frozen head: stop before tests, and
-  recheck after review before emitting a receipt.
+- Live GitHub PR base or head differs from the frozen revision: stop before
+  tests, and recheck after review before emitting a receipt.
 - Worktree has tracked or untracked changes: stop before tests or model use.
 - Programmatic code attempts to change the frozen checkout: the kernel rejects
   the write and the check fails.
+- Programmatic code attempts external network access: the private network
+  namespace blocks it; GitHub and SSH credential variables are also cleared.
 - The reviewer changes HEAD or worktree bytes: fail without a receipt.
 - Base is not an ancestor of head: stop before model use.
 - Programmatic check fails: retain its output digest and reject signoff.

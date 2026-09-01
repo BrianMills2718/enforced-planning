@@ -30,13 +30,31 @@ REPO_ROOT = _framework_root()
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from enforced_planning.pr_review_signoff import (
-    PRReviewSpec,
-    PRSignoffReceipt,
-    PullRequestRevision,
-    load_review_spec,
-    run_review,
-)
+try:
+    from enforced_planning.pr_review_signoff import (
+        PRReviewSpec,
+        PRSignoffReceipt,
+        PullRequestRevision,
+        load_review_spec,
+        run_review,
+    )
+except ModuleNotFoundError as exc:
+    if exc.name not in {"enforced_planning", "enforced_planning.pr_review_signoff"}:
+        raise
+    runtime_path = REPO_ROOT / "scripts" / "meta" / "pr_review_signoff_runtime.py"
+    runtime_spec = importlib.util.spec_from_file_location(
+        "installed_pr_review_signoff_runtime", runtime_path
+    )
+    if runtime_spec is None or runtime_spec.loader is None:
+        raise RuntimeError(f"PR review runtime is unavailable: {runtime_path}")
+    runtime = importlib.util.module_from_spec(runtime_spec)
+    sys.modules[runtime_spec.name] = runtime
+    runtime_spec.loader.exec_module(runtime)
+    PRReviewSpec = runtime.PRReviewSpec
+    PRSignoffReceipt = runtime.PRSignoffReceipt
+    PullRequestRevision = runtime.PullRequestRevision
+    load_review_spec = runtime.load_review_spec
+    run_review = runtime.run_review
 
 FULL_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 
@@ -186,9 +204,13 @@ def load_trusted_review_spec(
     """Load coordinator input only when it is outside PR-controlled repository bytes."""
     if not path.is_absolute():
         raise ValueError("review spec must be an absolute path outside the repository")
+    lexical = path.absolute()
     resolved = path.resolve(strict=True)
     roots = worktree_roots or registered_worktree_roots(canonical_root)
-    if any(resolved.is_relative_to(root.resolve()) for root in roots):
+    if any(
+        lexical.is_relative_to(root.resolve()) or resolved.is_relative_to(root.resolve())
+        for root in roots
+    ):
         raise ValueError("review spec must be outside the repository and its worktrees")
     return load_review_spec(resolved)
 

@@ -420,7 +420,10 @@ closed. It resolves the repository owner through the isolated GitHub-account
 seam, fetches the exact pull-request head, requires GitHub's complete required
 check set, and runs the evidence-bound programmatic plus fresh-agent review from
 the clean linked worktree. Its review specification must be an absolute path
-outside the repository and its worktrees. After review it rechecks the live head
+both lexically and after symlink resolution outside the repository and its
+worktrees. Installed-package consumers receive a standalone copy of the review
+runtime so the finish entrypoint does not depend on a vendored package tree.
+After review it rechecks the live head
 and required checks, then passes that same full commit to
 `gh pr merge --squash --match-head-commit`. A missing, rejected, or stale review
 never reaches merge. The helper does not request branch deletion as part of the

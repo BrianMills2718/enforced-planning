@@ -59,10 +59,14 @@ def test_review_spec_must_be_absolute_and_outside_repository(
     external_worktree.mkdir()
     external_spec = external_worktree / "review.json"
     external_spec.write_text("{}", encoding="utf-8")
+    outside = tmp_path / "review.json"
+    outside.write_text("{}", encoding="utf-8")
+    symlinked_spec = repo / "review-link.json"
+    symlinked_spec.symlink_to(outside)
 
     roots = (repo, external_worktree)
     monkeypatch.setattr(module, "registered_worktree_roots", lambda _root: roots)
-    for candidate in (Path("review.json"), inside, external_spec):
+    for candidate in (Path("review.json"), inside, external_spec, symlinked_spec):
         try:
             module.load_trusted_review_spec(
                 candidate,
@@ -73,8 +77,6 @@ def test_review_spec_must_be_absolute_and_outside_repository(
         else:
             raise AssertionError("PR-controlled review specs must be rejected")
 
-    outside = tmp_path / "review.json"
-    outside.write_text("{}", encoding="utf-8")
     expected = object()
     monkeypatch.setattr(module, "load_review_spec", lambda path: expected)
     assert module.load_trusted_review_spec(
@@ -299,7 +301,11 @@ def test_hook_blocks_direct_merge_and_finish_command_variants() -> None:
         "gh pr --repo owner/repo merge 42 --squash",
         "env gh pr merge 42",
         "command gh pr merge 42",
+        "sudo gh pr merge 42",
         "GH_HOST=github.com gh pr merge 42",
+        "bash -lc 'gh pr merge 42'",
+        "sh -c 'python scripts/worktree-coordination/finish_pr.py --branch feature --pr 42'",
+        "gh api --method PUT repos/owner/repo/pulls/42/merge",
         "env python scripts/worktree-coordination/finish_pr.py --branch feature --pr 42",
         "command python scripts/worktree-coordination/finish_pr.py --branch feature --pr 42",
         "PYTHONPATH=. python scripts/worktree-coordination/finish_pr.py --branch feature --pr 42",

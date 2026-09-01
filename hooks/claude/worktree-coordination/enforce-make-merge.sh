@@ -34,28 +34,31 @@ import re
 import shlex
 import sys
 
-raw = sys.argv[1]
-try:
-    lexer = shlex.shlex(raw, posix=True, punctuation_chars=";&|")
-    lexer.whitespace_split = True
-    tokens = list(lexer)
-except ValueError:
-    tokens = raw.replace(";", " ; ").replace("|", " | ").replace("&", " & ").split()
-
-segments, current = [], []
-for token in tokens:
-    if token and set(token) <= set(";&|"):
-        if current:
-            segments.append(current)
-            current = []
-    else:
-        current.append(token)
-if current:
-    segments.append(current)
-
 assignment = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
 python_name = re.compile(r"^python(?:[0-9]+(?:\.[0-9]+)*)?$")
-for segment in segments:
+
+def split_segments(raw):
+    try:
+        lexer = shlex.shlex(raw, posix=True, punctuation_chars=";&|")
+        lexer.whitespace_split = True
+        tokens = list(lexer)
+    except ValueError:
+        tokens = raw.replace(";", " ; ").replace("|", " | ").replace("&", " & ").split()
+    segments, current = [], []
+    for token in tokens:
+        if token and set(token) <= set(";&|"):
+            if current:
+                segments.append(current)
+                current = []
+        else:
+            current.append(token)
+    if current:
+        segments.append(current)
+    return segments
+
+queue = split_segments(sys.argv[1])
+while queue:
+    segment = queue.pop(0)
     words = list(segment)
     while words and assignment.match(words[0]):
         words.pop(0)
@@ -63,7 +66,7 @@ for segment in segments:
     while words and changed:
         changed = False
         command = os.path.basename(words[0])
-        if command in {"command", "nohup", "setsid", "time"}:
+        if command in {"command", "nohup", "setsid", "sudo", "time"}:
             words.pop(0)
             while words and words[0].startswith("-"):
                 words.pop(0)
@@ -83,7 +86,19 @@ for segment in segments:
     if not words:
         continue
     command = os.path.basename(words[0])
+    if command in {"bash", "dash", "sh", "zsh"}:
+        for index, word in enumerate(words[1:], 1):
+            if word.startswith("-") and "c" in word and index + 1 < len(words):
+                queue[:0] = split_segments(words[index + 1])
+                break
+        continue
     if command == "gh":
+        if "api" in words[1:] and any(
+            re.search(r"(^|/)pulls/[1-9][0-9]*/merge$", word)
+            for word in words[1:]
+        ):
+            print("merge")
+            raise SystemExit
         try:
             pr_index = words.index("pr", 1)
             if "merge" in words[pr_index + 1:]:

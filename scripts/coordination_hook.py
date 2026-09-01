@@ -428,6 +428,59 @@ def _active_claims(claims_dir: Path | None, *, turn_end: bool = False) -> tuple[
     return tuple(coordination_claims.check_claims(claims_dir=resolved))
 
 
+def _startup_claims(claims_dir: Path | None) -> tuple[tuple[Any, ...], str | None]:
+    """Read one current projection without scanning or repairing claim YAML."""
+
+    resolved = (claims_dir or coordination_claims.CLAIMS_DIR).expanduser().resolve()
+    projection_path = prewrite_claim_fast.projection_path_for(resolved)
+    if not projection_path.is_file():
+        return (), None
+    try:
+        if _projection_has_registry_change(projection_path, resolved):
+            return (), "Startup claim context unavailable: canonical projection is stale; no assignment was adopted."
+        projection = prewrite_claim_projection.PreWriteAuthorityProjectionV1.model_validate_json(
+            projection_path.read_text(encoding="utf-8")
+        )
+    except (OSError, ValueError, TurnEndProjectionError) as exc:
+        return (), f"Startup claim context unavailable: {exc}; no assignment was adopted."
+    if projection.claims_dir != str(resolved):
+        return (), "Startup claim context unavailable: projection targets another registry; no assignment was adopted."
+    now = datetime.now(UTC)
+    return (
+        tuple(
+            claim
+            for claim in projection.claims
+            if claim.status in coordination_claims.LIVE_STATUSES
+            and (claim.expires_at is None or datetime.fromisoformat(claim.expires_at) >= now)
+        ),
+        None,
+    )
+
+
+def _startup_claim_summary(
+    *, agent: str, session_id: str, project: str | None, claims: tuple[Any, ...]
+) -> str | None:
+    """Label exact-session ownership separately from other live project claims."""
+
+    owned = [claim for claim in claims if claim.agent == agent and claim.session_id == session_id]
+    global_context = [
+        claim
+        for claim in claims
+        if project is not None
+        and project in claim.projects
+        and not (claim.agent == agent and claim.session_id == session_id)
+    ]
+    lines = [
+        f"Current session ownership: project={','.join(claim.projects)}; scope={claim.scope}; status={claim.status}; session={claim.session_id}"
+        for claim in owned
+    ]
+    lines.extend(
+        f"Global context (not your current work): project={','.join(claim.projects)}; scope={claim.scope}; status={claim.status}; owner={claim.agent}; session={claim.session_id}"
+        for claim in global_context
+    )
+    return "\n".join(lines) or None
+
+
 def _canonical_repository_root(cwd: str) -> Path | None:
     """Resolve a linked worktree cwd to the canonical repository checkout."""
 
@@ -786,10 +839,12 @@ def main(argv: list[str] | None = None) -> int:
         session_id = _session_id(args.agent, payload["session_id"])
         event_name = payload["hook_event_name"]
         projection_warning: str | None = None
-        if event_name in {"SessionStart", "PreToolUse"}:
+        if event_name == "SessionStart":
             # Startup and the latency-sensitive pre-tool boundary are advisory.
             # Neither may synchronously scan, heartbeat, or rebuild a
             # completed-claim-heavy registry.
+            active_claims, projection_warning = _startup_claims(args.claims_dir)
+        elif event_name == "PreToolUse":
             active_claims = ()
         elif event_name == "Stop":
             try:
@@ -822,6 +877,16 @@ def main(argv: list[str] | None = None) -> int:
             )
         delivery_event_id = _delivery_event_id(payload, agent=args.agent, session_id=session_id)
         project = args.project or _canonical_project(payload["cwd"])
+        startup_claim_summary = (
+            _startup_claim_summary(
+                agent=args.agent,
+                session_id=session_id,
+                project=project,
+                claims=active_claims,
+            )
+            if event_name == "SessionStart"
+            else None
+        )
         # PreToolUse is a latency-sensitive decision boundary. Heartbeat writes
         # take the registry lock and refresh the full projection; lifecycle
         # events keep leases fresh without putting that work before every tool.
@@ -913,6 +978,8 @@ def main(argv: list[str] | None = None) -> int:
             telemetry_decision = "warn"
             telemetry_reason = "turn_end_projection_unavailable"
         summaries = [notice.summary] if notice.active_count or notice.acknowledgement_count else []
+        if startup_claim_summary:
+            summaries.append(startup_claim_summary)
         if projection_warning:
             summaries.append(projection_warning)
         if summaries:

@@ -87,21 +87,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--root", type=Path)
     parser.add_argument("--closeout-ledger-dir", type=Path)
     parser.add_argument("--hook-receipt-dir", type=Path)
-    parser.add_argument("--execution-binding-dir", type=Path)
     parser.add_argument("--agent", choices=("codex", "claude-code"), default="codex")
     parser.add_argument("--project", help="Canonical project override supplied by a repository compatibility hook.")
     parser.add_argument("--repair-projection-only", action="store_true", help=argparse.SUPPRESS)
     return parser.parse_args(argv)
-
-
-def _execution_binding_root(args: argparse.Namespace) -> Path:
-    """Keep an overridden mailbox authority and its run bindings isolated."""
-
-    if args.execution_binding_dir is not None:
-        return args.execution_binding_dir
-    if args.root is not None:
-        return args.root.expanduser().resolve().parent / "mailbox-primary-executions-v1"
-    return mailbox_execution_identity.DEFAULT_BINDING_ROOT
 
 
 def _read_hook_input(*, project_supplied: bool) -> dict[str, Any]:
@@ -890,20 +879,13 @@ def main(argv: list[str] | None = None) -> int:
         telemetry_reason = "no_active_boundary"
         session_id = _session_id(args.agent, payload["session_id"])
         event_name = payload["hook_event_name"]
-        execution_decision = mailbox_execution_identity.PrimaryExecutionBindingStore(
-            _execution_binding_root(args)
-        ).classify(
-            session_id=session_id,
-            run_id=mailbox_execution_identity.hook_run_id(payload),
-            event_name=event_name,
+        execution_decision = mailbox_execution_identity.classify_hook_execution(
+            payload,
+            client=args.agent,
         )
         primary_execution = execution_decision.role == "primary"
         if not primary_execution:
-            telemetry_reason = (
-                "secondary_execution_callback"
-                if execution_decision.role == "secondary"
-                else "execution_identity_unbound"
-            )
+            telemetry_reason = "secondary_execution_callback"
         projection_warning: str | None = None
         if event_name == "SessionStart":
             # Startup and the latency-sensitive pre-tool boundary are advisory.

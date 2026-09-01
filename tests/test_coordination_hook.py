@@ -64,22 +64,10 @@ def test_stop_refire_returns_before_receipts_or_projection(monkeypatch, tmp_path
     assert coordination_hook.main(["--hook-receipt-dir", str(tmp_path / "receipts")]) == 0
 
 
-def test_mailbox_override_isolates_primary_run_cache(tmp_path: Path) -> None:
-    first = coordination_hook.parse_args(["--root", str(tmp_path / "one" / "messages-v1")])
-    second = coordination_hook.parse_args(["--root", str(tmp_path / "two" / "messages-v1")])
-
-    assert coordination_hook._execution_binding_root(first) == (
-        tmp_path / "one" / "mailbox-primary-executions-v1"
-    )
-    assert coordination_hook._execution_binding_root(second) == (
-        tmp_path / "two" / "mailbox-primary-executions-v1"
-    )
-
-
-def test_posttool_is_advisory_and_secondary_run_cannot_poll_root_inbox(
+def test_posttool_is_advisory_and_secondary_agent_cannot_poll_root_inbox(
     monkeypatch, tmp_path: Path, capsys
 ) -> None:
-    """Only the bound run polls, and PostTool never creates observation evidence."""
+    """Only the root polls, and PostTool never creates observation evidence."""
 
     payload: dict[str, object] = {}
     calls: list[dict[str, object]] = []
@@ -113,27 +101,29 @@ def test_posttool_is_advisory_and_secondary_run_cannot_poll_root_inbox(
         str(tmp_path / "messages"),
         "--hook-receipt-dir",
         str(tmp_path / "receipts"),
-        "--execution-binding-dir",
-        str(tmp_path / "bindings"),
     ]
 
     payload.update(
         session_id="shared-session",
         cwd="/tmp",
         hook_event_name="UserPromptSubmit",
-        hook_run_id="root-run",
+        hook_run_id="user_prompt_submit:1:/config.toml",
         event_id="prompt-one",
     )
     assert coordination_hook.main(arguments) == 0
     capsys.readouterr()
     payload.update(
         hook_event_name="PostToolUse",
-        hook_run_id="root-run",
+        hook_run_id="post_tool_use:2:/config.toml",
         event_id="root-posttool",
     )
     assert coordination_hook.main(arguments) == 0
     capsys.readouterr()
-    payload.update(hook_run_id="subagent-run", event_id="secondary-posttool")
+    payload.update(
+        agent_id="child-agent",
+        hook_run_id="post_tool_use:3:/config.toml",
+        event_id="secondary-posttool",
+    )
     assert coordination_hook.main(arguments) == 0
     capsys.readouterr()
 
@@ -165,7 +155,7 @@ def test_secondary_callback_leaves_obligation_for_root_next_pretool(
     def poll(**kwargs: object) -> SessionInboxNotice:
         nonlocal poll_count
         poll_count += 1
-        active = poll_count > 1
+        active = poll_count > 2
         return SessionInboxNotice(
             session_id=str(kwargs["session_id"]),
             project="demo",
@@ -190,29 +180,37 @@ def test_secondary_callback_leaves_obligation_for_root_next_pretool(
         str(tmp_path / "messages"),
         "--hook-receipt-dir",
         str(tmp_path / "receipts"),
-        "--execution-binding-dir",
-        str(tmp_path / "bindings"),
     ]
 
     payload.update(
         session_id="shared-session",
         cwd="/tmp",
+        hook_event_name="SessionStart",
+        event_id="session-start",
+    )
+    assert coordination_hook.main(arguments) == 0
+    capsys.readouterr()
+    payload.update(
+        session_id="shared-session",
+        cwd="/tmp",
         hook_event_name="UserPromptSubmit",
-        hook_run_id="root-run",
+        hook_run_id="user_prompt_submit:1:/config.toml",
         event_id="prompt-one",
     )
     assert coordination_hook.main(arguments) == 0
     capsys.readouterr()
     payload.update(
         hook_event_name="PostToolUse",
-        hook_run_id="subagent-run",
+        agent_id="child-agent",
+        hook_run_id="post_tool_use:2:/config.toml",
         event_id="secondary-posttool",
     )
     assert coordination_hook.main(arguments) == 0
     assert capsys.readouterr().out == ""
+    payload.pop("agent_id")
     payload.update(
         hook_event_name="PreToolUse",
-        hook_run_id="root-run",
+        hook_run_id="pre_tool_use:3:/config.toml",
         tool_use_id="root-next-tool",
         tool_name="Bash",
         tool_input={"command": "git status --short"},
@@ -220,7 +218,7 @@ def test_secondary_callback_leaves_obligation_for_root_next_pretool(
     assert coordination_hook.main(arguments) == 0
     denial = json.loads(capsys.readouterr().out)
 
-    assert poll_count == 2
+    assert poll_count == 3
     assert denial["hookSpecificOutput"]["permissionDecision"] == "deny"
     assert "ACKNOWLEDGEMENT REQUIRED" in denial["hookSpecificOutput"][
         "permissionDecisionReason"
@@ -234,7 +232,6 @@ def test_real_subprocess_secondary_posttool_preserves_root_pretool_obligation(
 
     claims_dir = tmp_path / "coordination" / "claims"
     message_root = tmp_path / "coordination" / "messages-v1"
-    bindings = tmp_path / "coordination" / "primary-runs"
     claims_dir.mkdir(parents=True)
     for agent, session_id, scope in (
         ("codex", "codex:shared-session", "recipient"),
@@ -268,8 +265,6 @@ def test_real_subprocess_secondary_posttool_preserves_root_pretool_obligation(
         str(claims_dir),
         "--root",
         str(message_root),
-        "--execution-binding-dir",
-        str(bindings),
         "--hook-receipt-dir",
         str(tmp_path / "hook-receipts"),
     ]
@@ -278,7 +273,7 @@ def test_real_subprocess_secondary_posttool_preserves_root_pretool_obligation(
         "session_id": "shared-session",
         "cwd": str(cwd),
         "hook_event_name": "PreToolUse",
-        "hook_run_id": "root-run",
+        "hook_run_id": "pre_tool_use:1:/config.toml",
         "tool_use_id": "initial-root-tool",
         "tool_name": "Bash",
         "tool_input": {"command": "git status --short"},
@@ -311,9 +306,10 @@ def test_real_subprocess_secondary_posttool_preserves_root_pretool_obligation(
         input=json.dumps(
             {
                 "session_id": "shared-session",
+                "agent_id": "child-agent",
                 "cwd": str(cwd),
                 "hook_event_name": "PostToolUse",
-                "hook_run_id": "subagent-run",
+                "hook_run_id": "post_tool_use:2:/config.toml",
                 "tool_use_id": "secondary-tool",
                 "tool_name": "Bash",
             }
@@ -334,6 +330,7 @@ def test_real_subprocess_secondary_posttool_preserves_root_pretool_obligation(
         input=json.dumps(
             {
                 **initial_boundary,
+                "hook_run_id": "pre_tool_use:3:/config.toml",
                 "tool_use_id": "root-next-tool",
             }
         ),

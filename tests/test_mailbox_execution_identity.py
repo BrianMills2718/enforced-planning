@@ -1,179 +1,92 @@
-"""Tests for exact primary execution ownership of one mailbox inbox."""
+"""Tests for native root/child mailbox execution identity."""
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
-from pathlib import Path
+import pytest
 
-from enforced_planning.mailbox_execution_identity import (
-    PrimaryExecutionBindingStore,
-    PrimaryExecutionBindingV1,
-    hook_run_id,
+from enforced_planning.mailbox_execution_identity import classify_hook_execution
+
+
+@pytest.mark.parametrize(
+    ("hook_event_name", "hook_run_id"),
+    [
+        ("SessionStart", None),
+        ("UserPromptSubmit", "user_prompt_submit:1:/config.toml"),
+        ("PreToolUse", "pre_tool_use:2:/config.toml"),
+        ("PostToolUse", "post_tool_use:3:/config.toml"),
+        ("Stop", "stop:4:/config.toml"),
+    ],
 )
+def test_authentic_per_callback_receipt_ids_do_not_change_root_identity(
+    hook_event_name: str, hook_run_id: str | None
+) -> None:
+    payload: dict[str, object] = {
+        "session_id": "shared-session",
+        "hook_event_name": hook_event_name,
+    }
+    if hook_run_id is not None:
+        payload["hook_run_id"] = hook_run_id
 
-NOW = datetime(2026, 9, 1, 19, 0, tzinfo=UTC)
+    decision = classify_hook_execution(payload, client="codex")
 
-
-def test_advisory_posttool_cannot_claim_an_unbound_inbox(tmp_path: Path) -> None:
-    store = PrimaryExecutionBindingStore(tmp_path)
-
-    decision = store.classify(
-        session_id="codex:shared-session",
-        run_id="secondary-run",
-        event_name="PostToolUse",
-        now=NOW,
-    )
-
-    assert decision.role == "unbound"
-    assert decision.reason == "advisory_event_cannot_bind"
-    assert not Path(decision.binding_path).exists()
+    assert decision.role == "primary"
+    assert decision.reason == "root_agent_id_absent"
 
 
-def test_user_prompt_binds_primary_and_secondary_cannot_take_it(tmp_path: Path) -> None:
-    store = PrimaryExecutionBindingStore(tmp_path)
-    primary = store.classify(
-        session_id="codex:shared-session",
-        run_id="root-run",
-        event_name="UserPromptSubmit",
-        now=NOW,
-    )
-    secondary = store.classify(
-        session_id="codex:shared-session",
-        run_id="subagent-run",
-        event_name="PreToolUse",
-        now=NOW,
-    )
-    root_next = store.classify(
-        session_id="codex:shared-session",
-        run_id="root-run",
-        event_name="PreToolUse",
-        now=NOW,
-    )
-
-    assert primary.role == "primary"
-    assert secondary.role == "secondary"
-    assert secondary.generation == 1
-    assert root_next.role == "primary"
-    binding = PrimaryExecutionBindingV1.model_validate_json(
-        Path(primary.binding_path).read_text(encoding="utf-8")
-    )
-    assert binding.generation == 1
-    assert "root-run" not in Path(primary.binding_path).read_text(encoding="utf-8")
-    assert "shared-session" not in Path(primary.binding_path).read_text(encoding="utf-8")
-
-
-def test_session_start_epoch_rejects_stale_run_until_new_prompt_binds(tmp_path: Path) -> None:
-    store = PrimaryExecutionBindingStore(tmp_path)
-    store.classify(
-        session_id="codex:resumed-session",
-        run_id="old-run",
-        event_name="UserPromptSubmit",
-        now=NOW,
-    )
-
-    reset = store.classify(
-        session_id="codex:resumed-session",
-        run_id=None,
-        event_name="SessionStart",
-        now=NOW,
-    )
-    stale = store.classify(
-        session_id="codex:resumed-session",
-        run_id="old-run",
-        event_name="PostToolUse",
-        now=NOW,
-    )
-    rotated = store.classify(
-        session_id="codex:resumed-session",
-        run_id="new-run",
-        event_name="UserPromptSubmit",
-        now=NOW,
-    )
-
-    assert reset.role == "primary"
-    assert reset.reason == "session_start_awaiting_primary_run"
-    assert stale.role == "unbound"
-    assert stale.reason == "awaiting_primary_run"
-    assert rotated.role == "primary"
-    assert rotated.reason == "authoritative_event_bound"
-    assert rotated.generation == 2
-
-
-def test_different_run_prompt_cannot_rotate_active_primary(tmp_path: Path) -> None:
-    store = PrimaryExecutionBindingStore(tmp_path)
-    store.classify(
-        session_id="codex:shared-session",
-        run_id="root-run",
-        event_name="UserPromptSubmit",
-        now=NOW,
-    )
-
-    secondary_prompt = store.classify(
-        session_id="codex:shared-session",
-        run_id="subagent-run",
-        event_name="UserPromptSubmit",
-        now=NOW,
-    )
-
-    assert secondary_prompt.role == "secondary"
-    assert secondary_prompt.reason == "different_execution_run"
-
-
-def test_duplicate_session_start_does_not_advance_execution_epoch(tmp_path: Path) -> None:
-    store = PrimaryExecutionBindingStore(tmp_path)
-
-    first = store.classify(
-        session_id="codex:resumed-session",
-        run_id=None,
-        event_name="SessionStart",
-        now=NOW,
-    )
-    duplicate = store.classify(
-        session_id="codex:resumed-session",
-        run_id=None,
-        event_name="SessionStart",
-        now=NOW,
-    )
-
-    assert first.generation == 1
-    assert duplicate.generation == 1
-
-
-def test_pretool_bootstraps_legacy_session_but_posttool_does_not(tmp_path: Path) -> None:
-    store = PrimaryExecutionBindingStore(tmp_path)
-
-    advisory = store.classify(
-        session_id="codex:legacy-session",
-        run_id="run-a",
-        event_name="PostToolUse",
-        now=NOW,
-    )
-    boundary = store.classify(
-        session_id="codex:legacy-session",
-        run_id="run-a",
-        event_name="PreToolUse",
-        now=NOW,
-    )
-
-    assert advisory.role == "unbound"
-    assert boundary.role == "primary"
-    assert boundary.reason == "authoritative_event_bound"
-
-
-def test_missing_run_identity_uses_unpersisted_legacy_compatibility(tmp_path: Path) -> None:
-    decision = PrimaryExecutionBindingStore(tmp_path).classify(
-        session_id="codex:shared-session",
-        run_id=None,
-        event_name="PreToolUse",
-        now=NOW,
+def test_repeated_root_agent_id_is_primary() -> None:
+    decision = classify_hook_execution(
+        {
+            "session_id": "shared-session",
+            "agent_id": "shared-session",
+            "hook_run_id": "pre_tool_use:2:/config.toml",
+        },
+        client="codex",
     )
 
     assert decision.role == "primary"
-    assert decision.reason == "legacy_missing_run_identity"
-    assert not Path(decision.binding_path).exists()
+    assert decision.reason == "root_agent_id_matches_session"
 
 
-def test_hook_run_id_accepts_only_native_run_fields() -> None:
-    assert hook_run_id({"hook_run_id": "run-one", "session_id": "session"}) == "run-one"
-    assert hook_run_id({"hookRunId": "run-two", "session_id": "session"}) == "run-two"
-    assert hook_run_id({"session_id": "session", "event_id": "event"}) is None
+@pytest.mark.parametrize("client", ["codex", "claude-code"])
+def test_distinct_native_child_agent_is_secondary(client: str) -> None:
+    decision = classify_hook_execution(
+        {
+            "session_id": "shared-session",
+            "agent_id": "child-agent",
+            "hook_run_id": "post_tool_use:3:/config.toml",
+        },
+        client=client,  # type: ignore[arg-type]
+    )
+
+    assert decision.role == "secondary"
+    assert decision.reason == "child_agent_id"
+
+
+def test_invalid_cross_client_agent_identity_fails_closed() -> None:
+    decision = classify_hook_execution(
+        {
+            "session_id": "shared-session",
+            "agent_id": "claude-code:child-agent",
+        },
+        client="codex",
+    )
+
+    assert decision.role == "secondary"
+    assert decision.reason == "invalid_agent_identity"
+
+
+def test_secondary_callback_cannot_poison_later_root_classification() -> None:
+    secondary = classify_hook_execution(
+        {"session_id": "shared-session", "agent_id": "child-agent"},
+        client="codex",
+    )
+    root_next = classify_hook_execution(
+        {
+            "session_id": "shared-session",
+            "hook_run_id": "pre_tool_use:9:/config.toml",
+        },
+        client="codex",
+    )
+
+    assert secondary.role == "secondary"
+    assert root_next.role == "primary"

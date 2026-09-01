@@ -502,7 +502,8 @@ def _record_touched_repositories(
     candidates: set[Path] = set()
     cwd = payload.get("cwd")
     if isinstance(cwd, str) and cwd.strip():
-        candidates.add(_repository_scan_root(cwd))
+        if _canonical_repository_root(cwd) is not None:
+            candidates.add(_repository_scan_root(cwd))
     for claim in active_claims:
         if claim.agent == agent and claim.session_id == session_id and claim.worktree_path:
             candidates.add(Path(claim.worktree_path).expanduser().resolve())
@@ -550,6 +551,15 @@ def _repository_closeout_failure(
         for path in payload.get("touched_repositories", [])
         if isinstance(path, str) and path.strip()
     }
+    touched.update(
+        str(Path(claim.worktree_path).expanduser().resolve())
+        for claim in active_claims
+        if claim.agent == agent
+        and claim.session_id == session_id
+        and claim.worktree_path
+        and Path(claim.worktree_path).expanduser().resolve().is_dir()
+        and _is_linked_worktree(Path(claim.worktree_path).expanduser().resolve())
+    )
     repositories = tuple(
         Path(repository)
         for repository in sorted(touched)
@@ -776,9 +786,10 @@ def main(argv: list[str] | None = None) -> int:
         session_id = _session_id(args.agent, payload["session_id"])
         event_name = payload["hook_event_name"]
         projection_warning: str | None = None
-        if event_name == "SessionStart":
-            # Startup is advisory. It must not synchronously scan, heartbeat,
-            # or rebuild a completed-claim-heavy registry.
+        if event_name in {"SessionStart", "PreToolUse"}:
+            # Startup and the latency-sensitive pre-tool boundary are advisory.
+            # Neither may synchronously scan, heartbeat, or rebuild a
+            # completed-claim-heavy registry.
             active_claims = ()
         elif event_name == "Stop":
             try:

@@ -770,6 +770,7 @@ def test_installed_prewrite_runtime_projects_and_classifies_native_payloads(
     violation = invoke("src/outside.py")
     bash_allowed = invoke_bash("touch src/allowed.py")
     bash_violation = invoke_bash("touch src/outside.py")
+    bash_basename_violation = invoke_bash("touch README.md")
 
     assert (allowed["decision"], allowed["reason_code"]) == (
         "allow",
@@ -787,11 +788,16 @@ def test_installed_prewrite_runtime_projects_and_classifies_native_payloads(
         "observe_violation",
         "path_outside_claim",
     )
+    assert (bash_basename_violation["decision"], bash_basename_violation["reason_code"]) == (
+        "observe_violation",
+        "path_outside_claim",
+    )
     receipts = [json.loads(line) for line in receipt_path.read_text(encoding="utf-8").splitlines()]
     assert [item["reason_code"] for item in receipts] == [
         "exact_live_claim",
         "path_outside_claim",
         "exact_live_claim",
+        "path_outside_claim",
         "path_outside_claim",
     ]
 

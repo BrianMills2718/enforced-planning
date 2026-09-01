@@ -187,6 +187,28 @@ def test_create_worktree_allows_stale_start_point_when_opted_out(tmp_path: Path)
     assert worktree_path.exists()
 
 
+def test_create_worktree_fetch_failure_leaves_no_branch_or_worktree(tmp_path: Path) -> None:
+    """Fresh-start failure is atomic before branch or worktree creation."""
+
+    module = _load_module()
+    repo_root = _init_repo_with_stale_origin(tmp_path)
+    worktree_path = tmp_path / "repo-worktrees" / "fetch-failure"
+    assert _run_git(repo_root, "remote", "set-url", "origin", str(tmp_path / "missing-origin")).returncode == 0
+
+    with pytest.raises(ValueError, match="Unable to refresh upstream"):
+        module.create_worktree(
+            repo_root=repo_root,
+            worktree_path=worktree_path,
+            branch="fetch-failure",
+            start_point="HEAD",
+            split_brain_threshold=5,
+            keep_failed_worktree=False,
+        )
+
+    assert not worktree_path.exists()
+    assert _run_git(repo_root, "show-ref", "--verify", "refs/heads/fetch-failure").returncode != 0
+
+
 def test_create_worktree_reuses_only_branch_at_exact_start_revision(tmp_path: Path) -> None:
     """A pre-existing branch is recoverable only when it already retains the requested commit."""
 

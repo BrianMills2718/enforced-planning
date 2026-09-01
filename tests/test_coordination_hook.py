@@ -473,6 +473,56 @@ def test_startup_claims_reject_stale_projection_without_adopting_claim(tmp_path:
     assert "no assignment was adopted" in warning
 
 
+def test_startup_claims_wait_for_real_writer_then_use_completed_projection(tmp_path: Path) -> None:
+    """Startup must not observe the sanctioned claim/projection transaction mid-write."""
+
+    claims_dir = tmp_path / "claims"
+    claims_dir.mkdir()
+    coordination_hook.coordination_claims.refresh_prewrite_authority_projection(claims_dir)
+    ready_path = tmp_path / "writer-mutated-claim"
+    writer = subprocess.Popen(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import sys,time; from pathlib import Path; "
+                "from enforced_planning import coordination_claims; "
+                "claims=Path(sys.argv[1]); ready=Path(sys.argv[2]); "
+                "lock=coordination_claims.claim_registry_lock(claims); lock.__enter__(); "
+                "claim=claims/'startup-race.yaml'; "
+                "claim.write_text('agent: codex\\nprojects: [demo]\\nscope: startup-race\\nintent: test\\n' "
+                "+ 'claim_type: write\\nwrite_paths: [src]\\nsession_id: codex:session\\n' "
+                "+ f'repo_root: {claims.parent / \"demo\"}\\n' "
+                "+ f'worktree_path: {claims.parent / \"demo\" / \"worktrees\" / \"startup-race\"}\\n' "
+                "+ 'branch: startup-race\\nstatus: active\\n', encoding='utf-8'); "
+                "ready.write_text('mutated', encoding='utf-8'); time.sleep(0.35); "
+                "coordination_claims.refresh_prewrite_authority_projection(claims); "
+                "lock.__exit__(None, None, None)"
+            ),
+            str(claims_dir),
+            str(ready_path),
+        ],
+        cwd=Path(__file__).resolve().parents[1],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    deadline = time.monotonic() + 2
+    while not ready_path.is_file() and writer.poll() is None and time.monotonic() < deadline:
+        time.sleep(0.01)
+    assert ready_path.is_file(), writer.communicate(timeout=1)[1]
+
+    started = time.monotonic()
+    claims, warning = coordination_hook._startup_claims(claims_dir)
+    elapsed = time.monotonic() - started
+    stdout, stderr = writer.communicate(timeout=2)
+
+    assert writer.returncode == 0, (stdout, stderr)
+    assert warning is None
+    assert [claim.scope for claim in claims] == ["startup-race"]
+    assert 0.2 <= elapsed < coordination_hook.STARTUP_PROJECTION_READ_LOCK_TIMEOUT_SECONDS
+
+
 def test_shared_startup_labels_exact_owner_and_other_session_as_global_context() -> None:
     def claim(agent: str, session_id: str, scope: str) -> object:
         return type(

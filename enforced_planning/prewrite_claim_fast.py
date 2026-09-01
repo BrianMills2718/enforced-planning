@@ -408,6 +408,12 @@ def _bash_declared_paths(command: str) -> tuple[str, ...]:
     ambiguity never creates authority outside the selected worktree.
     """
 
+    commands = _shell_commands(command)
+    if commands is not None and len(commands) == 1:
+        git_merge_paths = _git_merge_declared_paths(commands[0])
+        if git_merge_paths is not None:
+            return git_merge_paths
+
     try:
         lexer = shlex.shlex(command, posix=True, punctuation_chars=";&|<>")
         lexer.whitespace_split = True
@@ -454,7 +460,6 @@ def _bash_declared_paths(command: str) -> tuple[str, ...]:
             candidate = candidate.split("=", 1)[1]
         if candidate.startswith(("/", "~", "./", "../")) or "/" in candidate:
             paths.append(candidate)
-    commands = _shell_commands(command)
     if commands is not None:
         for argv in commands:
             executable = Path(argv[0]).name
@@ -474,6 +479,54 @@ def _bash_declared_paths(command: str) -> tuple[str, ...]:
                     and not any(marker in operand for marker in ("$", "`", "*", "?", "["))
                 ):
                     paths.append(operand)
+    return tuple(dict.fromkeys(paths))
+
+
+def _git_merge_declared_paths(argv: tuple[str, ...]) -> tuple[str, ...] | None:
+    """Return actual path operands for one direct ``git merge`` command.
+
+    A merge's positional operands are revision names, not filesystem paths.
+    Treating ``origin/main`` as a path creates a circular failure at the exact
+    integration boundary the claim is meant to authorize. Execution-directory
+    and merge-message-file operands remain paths and stay subject to the claim.
+    ``None`` means the command is not the narrow shape handled here.
+    """
+
+    if not argv or Path(argv[0]).name != "git":
+        return None
+    paths: list[str] = []
+    index = 1
+    while index < len(argv):
+        token = argv[index]
+        if token == "-C":
+            if index + 1 >= len(argv):
+                return None
+            paths.append(argv[index + 1])
+            index += 2
+            continue
+        if token == "-c":
+            if index + 1 >= len(argv):
+                return None
+            index += 2
+            continue
+        if token in {"--no-pager", "--paginate", "-P", "-p"}:
+            index += 1
+            continue
+        break
+    if index >= len(argv) or argv[index] != "merge":
+        return None
+    index += 1
+    while index < len(argv):
+        token = argv[index]
+        if token in {"-F", "--file"}:
+            if index + 1 >= len(argv):
+                return None
+            paths.append(argv[index + 1])
+            index += 2
+            continue
+        if token.startswith("--file="):
+            paths.append(token.split("=", 1)[1])
+        index += 1
     return tuple(dict.fromkeys(paths))
 
 

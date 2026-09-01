@@ -544,6 +544,21 @@ def test_env_bound_python_script_is_read_input_not_external_mutation_target() ->
     assert _bash_declared_paths(command) == (".company-planning/candidate.json",)
 
 
+def test_git_merge_revision_is_not_misclassified_as_a_path() -> None:
+    command = "git -C /repo/worktrees/lane merge --no-edit origin/main"
+
+    assert _bash_declared_paths(command) == ("/repo/worktrees/lane",)
+
+
+def test_git_merge_message_file_remains_a_declared_path() -> None:
+    command = "git -C /repo/worktrees/lane merge --file=notes/message.txt origin/main"
+
+    assert _bash_declared_paths(command) == (
+        "/repo/worktrees/lane",
+        "notes/message.txt",
+    )
+
+
 def test_claimed_env_bound_python_manager_uses_candidate_as_the_write_target(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

@@ -169,6 +169,12 @@ def _tracker_sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def _claim_sha256(path: Path) -> str:
+    """Return the exact byte digest used to bind legacy-claim reconciliation."""
+
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
 def _exact_tracker_candidates(claim: coordination_claims.ClaimRecord) -> list[Path]:
     """Return trackers matching every preserved claim identity field."""
 
@@ -242,6 +248,108 @@ def _validate_missing_worktree_reconciliation(
         "tracker_path": str(tracker),
         "tracker_sha256": actual_digest,
         "filesystem_action": "not_attempted_absent_recorded_worktree",
+    }
+
+
+def _validate_canonical_root_reconciliation(
+    *,
+    claim: coordination_claims.ClaimRecord,
+    claim_file: Path,
+    repo_root: Path,
+    expected_claim_sha256: str | None,
+    expected_tracker_sha256: str | None,
+) -> dict[str, str]:
+    """Bind a legacy claim to a clean canonical root without removing Git state."""
+
+    if claim.status != coordination_claims.SESSION_ENDED_STATUS:
+        raise ValueError(
+            f"Canonical-root reconciliation requires an exact session_ended claim; found {claim.status!r}."
+        )
+    if not claim.worktree_path:
+        raise ValueError("Canonical-root reconciliation requires a recorded worktree path")
+    recorded_worktree = Path(claim.worktree_path).expanduser().resolve()
+    canonical_root = repo_root.expanduser().resolve()
+    if recorded_worktree != canonical_root or not recorded_worktree.is_dir():
+        raise ValueError(
+            "Canonical-root reconciliation requires the existing recorded worktree path "
+            "to equal the canonical repository root."
+        )
+    expected_claim_digest = (expected_claim_sha256 or "").strip().lower()
+    if not re.fullmatch(r"[0-9a-f]{64}", expected_claim_digest):
+        raise ValueError("Canonical-root reconciliation requires --claim-sha256 as a SHA-256 digest.")
+    actual_claim_digest = _claim_sha256(claim_file)
+    if actual_claim_digest != expected_claim_digest:
+        raise ValueError(
+            "Canonical-root reconciliation claim digest mismatch; preserve the repository and regenerate evidence."
+        )
+    expected_tracker_digest = (expected_tracker_sha256 or "").strip().lower()
+    if not re.fullmatch(r"[0-9a-f]{64}", expected_tracker_digest):
+        raise ValueError("Canonical-root reconciliation requires --tracker-sha256 as a SHA-256 digest.")
+    trackers = _exact_tracker_candidates(claim)
+    if not trackers:
+        raise ValueError("Canonical-root reconciliation requires one exact session tracker")
+    if len(trackers) != 1:
+        rendered = ", ".join(str(path) for path in trackers)
+        raise ValueError("Ambiguous exact session trackers for canonical-root reconciliation: " + rendered)
+    tracker = trackers[0]
+    if claim.tracker_path and Path(claim.tracker_path).expanduser() != tracker:
+        raise ValueError("Claim tracker path does not match the exact reconciliation tracker")
+    actual_tracker_digest = _tracker_sha256(tracker)
+    if actual_tracker_digest != expected_tracker_digest:
+        raise ValueError(
+            "Canonical-root reconciliation tracker digest mismatch; preserve the repository and regenerate evidence."
+        )
+
+    def git_output(*args: str) -> str:
+        result = subprocess.run(
+            ["git", *args],
+            cwd=str(recorded_worktree),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode != 0 or not result.stdout.strip():
+            raise ValueError(
+                "Canonical-root reconciliation could not prove canonical Git identity: "
+                + (result.stderr or result.stdout).strip()
+            )
+        return result.stdout.strip()
+
+    top_level = Path(git_output("rev-parse", "--show-toplevel")).resolve()
+    common_dir_text = git_output("rev-parse", "--git-common-dir")
+    common_dir = Path(common_dir_text)
+    if not common_dir.is_absolute():
+        common_dir = recorded_worktree / common_dir
+    common_dir = common_dir.resolve()
+    if top_level != recorded_worktree or common_dir != (recorded_worktree / ".git").resolve():
+        raise ValueError(
+            "Canonical-root reconciliation rejects linked worktrees and non-canonical Git identities."
+        )
+    if not (recorded_worktree / ".git").is_dir():
+        raise ValueError("Canonical-root reconciliation requires a main-worktree .git directory")
+    clean, dirty_details = _worktree_is_clean(str(recorded_worktree))
+    if not clean:
+        raise ValueError(
+            "Canonical-root reconciliation requires a clean canonical checkout. Uncommitted state:\n"
+            + dirty_details
+        )
+    current_branch = git_output("symbolic-ref", "--quiet", "--short", "HEAD")
+    if not claim.branch or current_branch != claim.branch:
+        raise ValueError(
+            "Canonical-root reconciliation requires the checked-out branch to match the recorded claim branch."
+        )
+    return {
+        "schema_version": "1.0",
+        "claim_status_before": claim.status,
+        "recorded_worktree_path": str(recorded_worktree),
+        "canonical_repo_root": str(canonical_root),
+        "branch": current_branch,
+        "claim_path": str(claim_file),
+        "claim_sha256": actual_claim_digest,
+        "tracker_path": str(tracker),
+        "tracker_sha256": actual_tracker_digest,
+        "filesystem_action": "retained_canonical_root",
+        "branch_action": "retained_canonical_branch",
     }
 
 
@@ -2128,6 +2236,8 @@ def close_session(
     allow_discard_unique: bool = False,
     reconcile_missing_worktree: bool = False,
     expected_tracker_sha256: str | None = None,
+    reconcile_canonical_root: bool = False,
+    expected_claim_sha256: str | None = None,
     mailbox_disposition: str | None = None,
     mailbox_note: str | None = None,
 ) -> dict[str, Any]:
@@ -2139,6 +2249,8 @@ def close_session(
     """
 
     claim, payload, claim_file = _claim_record_any_status(agent=agent, project=project, scope=scope)
+    if reconcile_missing_worktree and reconcile_canonical_root:
+        raise ValueError("Choose only one reconciliation mode per session-close invocation.")
     mailbox_closeout = _resolve_active_mailbox_for_closeout(
         claim=claim,
         mailbox_disposition=mailbox_disposition,
@@ -2155,6 +2267,17 @@ def close_session(
             expected_tracker_sha256=expected_tracker_sha256,
         )
         if reconcile_missing_worktree
+        else None
+    )
+    canonical_root_reconciliation = (
+        _validate_canonical_root_reconciliation(
+            claim=claim,
+            claim_file=claim_file,
+            repo_root=repo_root,
+            expected_claim_sha256=expected_claim_sha256,
+            expected_tracker_sha256=expected_tracker_sha256,
+        )
+        if reconcile_canonical_root
         else None
     )
 
@@ -2187,7 +2310,8 @@ def close_session(
             raise ValueError(
                 f"Worktree is dirty; commit or stash before session-close. Uncommitted state:\n{dirty_details}"
             )
-        _assert_worktree_removal_access(resolved_worktree_path)
+        if canonical_root_reconciliation is None:
+            _assert_worktree_removal_access(resolved_worktree_path)
 
     preflight = _validate_closeout_preflight(
         repo_root=repo_root,
@@ -2217,6 +2341,10 @@ def close_session(
         reconciliation_receipt["merge_evidence"] = preflight.merge_evidence or "none"
         reconciliation_receipt["merge_commit"] = preflight.merge_commit or "none"
         payload["missing_worktree_reconciliation"] = reconciliation_receipt
+    if canonical_root_reconciliation is not None:
+        canonical_root_reconciliation["merge_evidence"] = preflight.merge_evidence or "none"
+        canonical_root_reconciliation["merge_commit"] = preflight.merge_commit or "none"
+        payload["canonical_root_reconciliation"] = canonical_root_reconciliation
     payload["updated_at"] = updated_at
     payload["notes"] = note or "closing claimed lane via canonical session-close flow"
     # Keep the projection current during physical cleanup, but do not emit a
@@ -2244,9 +2372,13 @@ def close_session(
     branch_action = "kept"
     if reconciliation_receipt is not None:
         worktree_action = reconciliation_receipt["filesystem_action"]
+    elif canonical_root_reconciliation is not None:
+        worktree_action = canonical_root_reconciliation["filesystem_action"]
     elif worktree_path or claim.worktree_path:
         worktree_action = _remove_worktree_path(repo_root, resolved_worktree_path)
-    if delete_branch:
+    if canonical_root_reconciliation is not None:
+        branch_action = canonical_root_reconciliation["branch_action"]
+    elif delete_branch:
         branch_action = _delete_branch(
             repo_root,
             resolved_branch,
@@ -2298,6 +2430,7 @@ def close_session(
         **preflight.to_dict(),
         "tracker_path": tracker_path_text,
         "missing_worktree_reconciliation": reconciliation_receipt,
+        "canonical_root_reconciliation": canonical_root_reconciliation,
         **mailbox_closeout,
     }
 

@@ -62,7 +62,7 @@ def test_user_prompt_binds_primary_and_secondary_cannot_take_it(tmp_path: Path) 
     assert "shared-session" not in Path(primary.binding_path).read_text(encoding="utf-8")
 
 
-def test_new_authoritative_prompt_rotates_a_stale_run_binding(tmp_path: Path) -> None:
+def test_session_start_epoch_rejects_stale_run_until_new_prompt_binds(tmp_path: Path) -> None:
     store = PrimaryExecutionBindingStore(tmp_path)
     store.classify(
         session_id="codex:resumed-session",
@@ -71,10 +71,10 @@ def test_new_authoritative_prompt_rotates_a_stale_run_binding(tmp_path: Path) ->
         now=NOW,
     )
 
-    rotated = store.classify(
+    reset = store.classify(
         session_id="codex:resumed-session",
-        run_id="new-run",
-        event_name="UserPromptSubmit",
+        run_id=None,
+        event_name="SessionStart",
         now=NOW,
     )
     stale = store.classify(
@@ -83,12 +83,40 @@ def test_new_authoritative_prompt_rotates_a_stale_run_binding(tmp_path: Path) ->
         event_name="PostToolUse",
         now=NOW,
     )
+    rotated = store.classify(
+        session_id="codex:resumed-session",
+        run_id="new-run",
+        event_name="UserPromptSubmit",
+        now=NOW,
+    )
 
+    assert reset.role == "unbound"
+    assert reset.reason == "session_start_awaiting_primary_run"
+    assert stale.role == "unbound"
+    assert stale.reason == "awaiting_primary_run"
     assert rotated.role == "primary"
-    assert rotated.reason == "authoritative_event_rotated"
+    assert rotated.reason == "authoritative_event_bound"
     assert rotated.generation == 2
-    assert stale.role == "secondary"
-    assert stale.generation == 2
+
+
+def test_different_run_prompt_cannot_rotate_active_primary(tmp_path: Path) -> None:
+    store = PrimaryExecutionBindingStore(tmp_path)
+    store.classify(
+        session_id="codex:shared-session",
+        run_id="root-run",
+        event_name="UserPromptSubmit",
+        now=NOW,
+    )
+
+    secondary_prompt = store.classify(
+        session_id="codex:shared-session",
+        run_id="subagent-run",
+        event_name="UserPromptSubmit",
+        now=NOW,
+    )
+
+    assert secondary_prompt.role == "secondary"
+    assert secondary_prompt.reason == "different_execution_run"
 
 
 def test_pretool_bootstraps_legacy_session_but_posttool_does_not(tmp_path: Path) -> None:

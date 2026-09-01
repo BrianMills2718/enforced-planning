@@ -16,7 +16,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
 
 DEFAULT_BINDING_ROOT = Path("~/.claude/coordination/mailbox-primary-executions-v1")
 BindingRole = Literal["primary", "secondary", "unbound"]
@@ -34,10 +34,17 @@ class PrimaryExecutionBindingV1(StrictContract):
         "mailbox_primary_execution_binding"
     )
     session_id_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
-    primary_run_id_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    status: Literal["active", "awaiting_primary_run"] = "active"
+    primary_run_id_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     generation: int = Field(ge=1)
     bound_at: AwareDatetime
     binding_event: Literal["SessionStart", "UserPromptSubmit", "PreToolUse", "Stop"]
+
+    @model_validator(mode="after")
+    def require_status_identity_consistency(self) -> PrimaryExecutionBindingV1:
+        if (self.status == "active") != (self.primary_run_id_sha256 is not None):
+            raise ValueError("active binding status requires exactly one primary run identity")
+        return self
 
 
 class PrimaryExecutionDecisionV1(StrictContract):
@@ -48,6 +55,8 @@ class PrimaryExecutionDecisionV1(StrictContract):
     reason: Literal[
         "authoritative_event_bound",
         "authoritative_event_rotated",
+        "session_start_awaiting_primary_run",
+        "awaiting_primary_run",
         "matches_primary_binding",
         "different_execution_run",
         "advisory_event_cannot_bind",
@@ -111,15 +120,16 @@ class PrimaryExecutionBindingStore:
     ) -> PrimaryExecutionDecisionV1:
         """Bind at an authoritative boundary or classify against that binding.
 
-        UserPromptSubmit and SessionStart are authoritative root boundaries.
-        PreToolUse and Stop may bootstrap an older already-running session that
-        predates this store.  PostToolUse is advisory and can never win an
-        unbound inbox.
+        SessionStart opens a new root execution epoch. UserPromptSubmit binds
+        only an unbound or newly opened epoch; a different-run prompt cannot
+        steal an active binding. PreToolUse and Stop may bootstrap an older
+        already-running session that predates this store. PostToolUse is
+        advisory and can never win an unbound inbox.
         """
 
         path = self._record_path(session_id)
         normalized_run = run_id.strip() if isinstance(run_id, str) else ""
-        if not normalized_run:
+        if not normalized_run and event_name != "SessionStart":
             return PrimaryExecutionDecisionV1(
                 # Older hook clients do not supply a run identity. Preserve
                 # their behavior without persisting a session-ID fallback as
@@ -128,7 +138,7 @@ class PrimaryExecutionBindingStore:
                 reason="legacy_missing_run_identity",
                 binding_path=str(path),
             )
-        run_digest = _digest(normalized_run)
+        run_digest = _digest(normalized_run) if normalized_run else None
         session_digest = _digest(session_id)
         authoritative = event_name in {"SessionStart", "UserPromptSubmit"}
         compatibility_bootstrap = event_name in {"PreToolUse", "Stop"}
@@ -140,6 +150,48 @@ class PrimaryExecutionBindingStore:
             current = self._read(path)
             if current is not None and current.session_id_sha256 != session_digest:
                 raise ValueError("primary execution binding session digest mismatch")
+            if event_name == "SessionStart" and run_digest is None:
+                generation = 1 if current is None else current.generation + 1
+                self._write(
+                    path,
+                    PrimaryExecutionBindingV1(
+                        session_id_sha256=session_digest,
+                        status="awaiting_primary_run",
+                        primary_run_id_sha256=None,
+                        generation=generation,
+                        bound_at=now or _utc_now(),
+                        binding_event="SessionStart",
+                    ),
+                )
+                return PrimaryExecutionDecisionV1(
+                    role="unbound",
+                    reason="session_start_awaiting_primary_run",
+                    generation=generation,
+                    binding_path=str(path),
+                )
+            if current is not None and current.status == "awaiting_primary_run":
+                if event_name not in {"SessionStart", "UserPromptSubmit"}:
+                    return PrimaryExecutionDecisionV1(
+                        role="unbound",
+                        reason="awaiting_primary_run",
+                        generation=current.generation,
+                        binding_path=str(path),
+                    )
+                binding = PrimaryExecutionBindingV1(
+                    session_id_sha256=session_digest,
+                    status="active",
+                    primary_run_id_sha256=run_digest,
+                    generation=current.generation,
+                    bound_at=now or _utc_now(),
+                    binding_event=event_name,
+                )
+                self._write(path, binding)
+                return PrimaryExecutionDecisionV1(
+                    role="primary",
+                    reason="authoritative_event_bound",
+                    generation=current.generation,
+                    binding_path=str(path),
+                )
             if current is not None and current.primary_run_id_sha256 == run_digest:
                 return PrimaryExecutionDecisionV1(
                     role="primary",
@@ -153,7 +205,7 @@ class PrimaryExecutionBindingStore:
                     reason="advisory_event_cannot_bind",
                     binding_path=str(path),
                 )
-            if current is not None and not authoritative:
+            if current is not None and event_name != "SessionStart":
                 return PrimaryExecutionDecisionV1(
                     role="secondary",
                     reason="different_execution_run",
@@ -163,6 +215,7 @@ class PrimaryExecutionBindingStore:
             generation = 1 if current is None else current.generation + 1
             binding = PrimaryExecutionBindingV1(
                 session_id_sha256=session_digest,
+                status="active",
                 primary_run_id_sha256=run_digest,
                 generation=generation,
                 bound_at=now or _utc_now(),

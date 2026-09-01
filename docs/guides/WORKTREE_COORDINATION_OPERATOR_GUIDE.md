@@ -413,6 +413,16 @@ is already absent. `session-close` itself refuses physical cleanup while any
 other live claim still references the same canonical worktree path and lists
 the sibling scopes that must be disposed or transferred first.
 
+The compatibility `scripts/worktree-coordination/finish_pr.py` merge path also
+fails closed. It resolves the repository owner through the existing isolated
+GitHub-account seam, fetches the exact pull-request head, requires a successful
+`coordination-approval` plus GitHub's complete required-check set on that head,
+rechecks that the head did not move, and passes the same full commit to
+`gh pr merge --squash --match-head-commit`. A missing, pending, failing, or
+stale approval never reaches merge. The helper does not request branch deletion
+as part of the merge; only verified GitHub merge evidence is passed into the
+sanctioned claim/worktree close lifecycle, which owns local branch deletion.
+
 Squash merges require an explicit `--merge-commit <sha>` receipt. Closeout
 accepts it only when that one-parent commit is retained by the canonical
 default ref and its exact binary patch equals the task branch's cumulative

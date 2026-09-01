@@ -109,7 +109,7 @@ def _read_hook_input(*, project_supplied: bool) -> dict[str, Any]:
 
     payload = json.loads(sys.stdin.read())
     if not isinstance(payload, dict):
-        raise ValueError("Lifecycle hook input must be a JSON object")
+        raise TypeError("Lifecycle hook input must be a JSON object")
     required_fields = ("session_id", "hook_event_name") if project_supplied else ("session_id", "cwd", "hook_event_name")
     for field in required_fields:
         if not isinstance(payload.get(field), str) or not payload[field].strip():
@@ -607,9 +607,8 @@ def _record_touched_repositories(
     touched = set(prior_touched)
     candidates: set[Path] = set()
     cwd = payload.get("cwd")
-    if isinstance(cwd, str) and cwd.strip():
-        if _canonical_repository_root(cwd) is not None:
-            candidates.add(_repository_scan_root(cwd))
+    if isinstance(cwd, str) and cwd.strip() and _canonical_repository_root(cwd) is not None:
+        candidates.add(_repository_scan_root(cwd))
     for claim in active_claims:
         if claim.agent == agent and claim.session_id == session_id and claim.worktree_path:
             candidates.add(Path(claim.worktree_path).expanduser().resolve())

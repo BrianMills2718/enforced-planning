@@ -18,6 +18,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Literal
 
+import yaml
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
 
 from enforced_planning import coordination_claims
@@ -105,18 +106,12 @@ def canonical_sha256(value: Any) -> str:
     return hashlib.sha256(payload).hexdigest()
 
 
-def review_spec_sha256(path: Path) -> str:
+def _read_review_spec_identity(path: Path) -> tuple[str, str | None, str | None]:
     try:
         resolved = path.expanduser().resolve(strict=True)
-        return hashlib.sha256(resolved.read_bytes()).hexdigest()
-    except OSError as exc:
-        raise IntegrationAuthorityError(f"cannot read trusted review spec: {exc}") from exc
-
-
-def _review_spec_work_authority(path: Path) -> tuple[str | None, str | None]:
-    try:
-        payload = json.loads(path.expanduser().resolve(strict=True).read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
+        source = resolved.read_bytes()
+        payload = json.loads(source)
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise IntegrationAuthorityError(f"cannot parse trusted review spec: {exc}") from exc
     if not isinstance(payload, dict):
         raise IntegrationAuthorityError("trusted review spec must be a JSON object")
@@ -134,13 +129,18 @@ def _review_spec_work_authority(path: Path) -> tuple[str | None, str | None]:
         raise IntegrationAuthorityError(
             "trusted review spec work-graph and work-unit authority must be paired"
         )
-    return graph, unit
+    return hashlib.sha256(source).hexdigest(), graph, unit
+
+
+def review_spec_sha256(path: Path) -> str:
+    digest, _graph, _unit = _read_review_spec_identity(path)
+    return digest
 
 
 def _validate_review_spec_identity(target: IntegrationTargetV1, path: Path) -> None:
-    if review_spec_sha256(path) != target.review_spec_sha256:
+    digest, graph, unit = _read_review_spec_identity(path)
+    if digest != target.review_spec_sha256:
         raise IntegrationAuthorityError("trusted review spec bytes changed")
-    graph, unit = _review_spec_work_authority(path)
     if (graph, unit) != (
         target.review_work_graph_sha256,
         target.review_work_unit_id,
@@ -257,8 +257,8 @@ def _exact_active_claim(
     claims_dir: Path | None,
     now: datetime,
 ) -> coordination_claims.ClaimRecord:
-    active_claims = coordination_claims.list_claims(
-        target.project, claims_dir=claims_dir, include_inactive=False
+    active_claims = _strict_active_claims(
+        project=target.project, claims_dir=claims_dir, now=now
     )
     matches = [
         claim
@@ -295,6 +295,46 @@ def _exact_active_claim(
         )
     _validate_claimed_git_identity(claim, target=target, repo_root=repo_root)
     return claim
+
+
+def _strict_active_claims(
+    *, project: str, claims_dir: Path | None, now: datetime
+) -> list[coordination_claims.ClaimRecord]:
+    """Load one complete locked registry view or fail on any malformed record."""
+
+    root = (claims_dir or coordination_claims.CLAIMS_DIR).expanduser().resolve()
+    if not root.exists():
+        return []
+    claims: list[coordination_claims.ClaimRecord] = []
+    for claim_file in sorted(root.glob("*.yaml")):
+        try:
+            payload = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, yaml.YAMLError) as exc:
+            raise IntegrationAuthorityError(
+                f"canonical claim registry contains malformed YAML: {claim_file.name}"
+            ) from exc
+        if not isinstance(payload, dict):
+            raise IntegrationAuthorityError(
+                f"canonical claim registry contains a non-mapping record: {claim_file.name}"
+            )
+        try:
+            claim = coordination_claims.normalize_claim(
+                payload, source_file=str(claim_file)
+            )
+        except (TypeError, ValueError) as exc:
+            raise IntegrationAuthorityError(
+                f"canonical claim registry contains an invalid record: {claim_file.name}"
+            ) from exc
+        if claim is None:
+            raise IntegrationAuthorityError(
+                f"canonical claim registry contains an invalid record: {claim_file.name}"
+            )
+        expires_at = _parse_time(claim.expires_at)
+        if expires_at is not None and expires_at < now:
+            continue
+        if claim.is_live() and project in claim.projects:
+            claims.append(claim)
+    return claims
 
 
 def _claim_binding(

@@ -6,11 +6,12 @@ import json
 import os
 import subprocess
 from contextlib import contextmanager
-from dataclasses import replace
+from dataclasses import asdict, replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
+import yaml
 from pydantic import ValidationError
 
 from enforced_planning import coordination_claims
@@ -84,9 +85,9 @@ def claim(tmp_path: Path, **updates) -> coordination_claims.ClaimRecord:
 def arrange(monkeypatch, item: coordination_claims.ClaimRecord, *, status="healthy"):
     monkeypatch.setenv("CODEX_THREAD_ID", "owner-thread")
     monkeypatch.setattr(
-        coordination_claims,
-        "list_claims",
-        lambda *_args, **_kwargs: [item],
+        authority_module,
+        "_strict_active_claims",
+        lambda **_kwargs: [item],
     )
     monkeypatch.setattr(
         coordination_claims,
@@ -98,9 +99,10 @@ def arrange(monkeypatch, item: coordination_claims.ClaimRecord, *, status="healt
         "_validate_claimed_git_identity",
         lambda *_args, **_kwargs: None,
     )
-    monkeypatch.setattr(authority_module, "review_spec_sha256", lambda _path: SPEC_SHA)
     monkeypatch.setattr(
-        authority_module, "_review_spec_work_authority", lambda _path: (None, None)
+        authority_module,
+        "_read_review_spec_identity",
+        lambda _path: (SPEC_SHA, None, None),
     )
 
 
@@ -180,9 +182,9 @@ def test_stale_assertion_and_claim_transfer_both_fail(tmp_path, monkeypatch) -> 
 
     transferred = replace(item, session_id="codex:successor-thread")
     monkeypatch.setattr(
-        coordination_claims,
-        "list_claims",
-        lambda *_args, **_kwargs: [transferred],
+        authority_module,
+        "_strict_active_claims",
+        lambda **_kwargs: [transferred],
     )
     with pytest.raises(IntegrationAuthorityError, match="exactly one active"):
         validate_integration_authority(
@@ -211,9 +213,9 @@ def test_heartbeat_and_progress_churn_preserve_premerge_assertion(
         updated_at=(NOW + timedelta(minutes=1)).isoformat(),
     )
     monkeypatch.setattr(
-        coordination_claims,
-        "list_claims",
-        lambda *_args, **_kwargs: [refreshed],
+        authority_module,
+        "_strict_active_claims",
+        lambda **_kwargs: [refreshed],
     )
     validate_integration_authority(
         assertion,
@@ -234,9 +236,9 @@ def test_stable_claim_authority_change_invalidates_assertion(tmp_path, monkeypat
     )
     changed = replace(item, plan_ref="goal:different-authority")
     monkeypatch.setattr(
-        coordination_claims,
-        "list_claims",
-        lambda *_args, **_kwargs: [changed],
+        authority_module,
+        "_strict_active_claims",
+        lambda **_kwargs: [changed],
     )
     with pytest.raises(IntegrationAuthorityError, match="claim changed"):
         validate_integration_authority(
@@ -356,7 +358,7 @@ def test_review_spec_work_unit_authority_must_match_canonical_claim(
     monkeypatch.setenv("CODEX_THREAD_ID", "owner-thread")
     current = [item]
     monkeypatch.setattr(
-        coordination_claims, "list_claims", lambda *_args, **_kwargs: current
+        authority_module, "_strict_active_claims", lambda **_kwargs: current
     )
     monkeypatch.setattr(
         coordination_claims,
@@ -398,6 +400,55 @@ def test_review_spec_work_unit_authority_must_match_canonical_claim(
             review_spec_path=review_path,
             now=NOW + timedelta(seconds=1),
         )
+
+
+@pytest.mark.parametrize(
+    ("malformed", "message"),
+    [
+        ("{not-valid", "malformed YAML"),
+        ("- not\n- a\n- mapping\n", "non-mapping record"),
+        ("agent: 7\n", "invalid record"),
+    ],
+)
+def test_integration_registry_fails_closed_on_malformed_competing_record(
+    tmp_path, malformed, message
+) -> None:
+    claims_dir = tmp_path / "claims"
+    claims_dir.mkdir()
+    owner = asdict(claim(tmp_path))
+    owner.pop("source_file")
+    (claims_dir / "a-owner.yaml").write_text(
+        yaml.safe_dump(owner, sort_keys=False), encoding="utf-8"
+    )
+    (claims_dir / "z-competing.yaml").write_text(malformed, encoding="utf-8")
+
+    with pytest.raises(IntegrationAuthorityError, match=message):
+        authority_module._strict_active_claims(
+            project="enforced-planning", claims_dir=claims_dir, now=NOW
+        )
+
+
+def test_review_spec_identity_uses_one_exact_byte_snapshot(tmp_path, monkeypatch) -> None:
+    review_path = tmp_path / "review.json"
+    source = json.dumps(
+        {"work_graph_sha256": "e" * 64, "work_unit_id": "wu-one"}
+    ).encode("utf-8")
+    review_path.write_bytes(source)
+    reads = 0
+    original = Path.read_bytes
+
+    def counted_read(path: Path) -> bytes:
+        nonlocal reads
+        reads += 1
+        return original(path)
+
+    monkeypatch.setattr(Path, "read_bytes", counted_read)
+    digest, graph, unit = authority_module._read_review_spec_identity(review_path)
+
+    assert reads == 1
+    assert digest == authority_module.hashlib.sha256(source).hexdigest()
+    assert graph == "e" * 64
+    assert unit == "wu-one"
 
 
 def test_guard_holds_registry_lock_across_caller_operation(tmp_path, monkeypatch) -> None:
@@ -454,7 +505,7 @@ def test_authentic_linked_worktree_identity_and_exact_head_are_required(
     )
     monkeypatch.setenv("CODEX_THREAD_ID", "owner-thread")
     monkeypatch.setattr(
-        coordination_claims, "list_claims", lambda *_args, **_kwargs: [item]
+        authority_module, "_strict_active_claims", lambda **_kwargs: [item]
     )
     monkeypatch.setattr(
         coordination_claims,
@@ -495,9 +546,9 @@ def test_process_death_releases_registry_lock_for_transferred_successor(
     claims_dir = tmp_path / "claims"
     current = [item]
     monkeypatch.setattr(
-        coordination_claims,
-        "list_claims",
-        lambda *_args, **_kwargs: current,
+        authority_module,
+        "_strict_active_claims",
+        lambda **_kwargs: current,
     )
     assertion = assert_integration_authority(
         target=target(), agent="codex", repo_root=Path(item.repo_root),

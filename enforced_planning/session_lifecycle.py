@@ -1638,7 +1638,10 @@ def start_session(
     coordination_claims.validate_native_session_binding(agent, resolved_session_id)
     configured_outcome_mode = outcome_admission.load_outcome_admission_mode(Path(worktree_path))
     explicit_unplanned_maintenance = (
-        allow_unplanned and not plan_ref and outcome_bootstrap_plan is None and not outcome_selected
+        allow_unplanned
+        and plan_ref in {None, session_contracts.UNPLANNED_PLAN_REF}
+        and outcome_bootstrap_plan is None
+        and not outcome_selected
     )
     selected_admission_required = outcome_selected or (
         configured_outcome_mode == "enforce_selected" and not explicit_unplanned_maintenance

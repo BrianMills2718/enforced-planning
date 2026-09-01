@@ -1105,7 +1105,7 @@ def test_configured_session_start_completes_explicit_unplanned_maintenance_claim
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Maintenance bootstrap may enrich its claim before a selected outcome exists."""
+    """Explicit UNPLANNED may enrich its claim before a selected outcome exists."""
 
     repo_root = tmp_path / "repo"
     worktree = repo_root / "worktrees" / "maintenance-fixture"
@@ -1149,6 +1149,7 @@ def test_configured_session_start_completes_explicit_unplanned_maintenance_claim
         branch="maintenance-fixture",
         broader_goal="Repair Maintenance Bootstrap",
         current_phase="bootstrap",
+        plan_ref="UNPLANNED",
         session_id="codex:maintenance-fixture",
         claim_type="write",
         write_paths=["enforced_planning/example.py"],

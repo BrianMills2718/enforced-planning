@@ -21,7 +21,10 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 PORTABLE_ID_RE = re.compile(r"^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$")
 PROJECT_ID_RE = re.compile(r"^[a-z][a-z0-9]*(?:[-_][a-z0-9]+)*$")
-PERSONAL_SENTINELS = ("/home/brian", "BrianMills2718")
+PERSONAL_SENTINELS = (
+    "/".join(("", "home", "brian")),
+    "".join(("Brian", "Mills2718")),
+)
 HEX_SHA256_PATTERN = r"^[0-9a-f]{64}$"
 
 ProgressKind = Literal[

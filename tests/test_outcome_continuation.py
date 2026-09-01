@@ -18,6 +18,7 @@ from enforced_planning.outcome_continuation import (
     OutcomeContractV1,
     OutcomeLeaseV1,
     OutcomeProgressReceiptV1,
+    PERSONAL_SENTINELS,
     RecoveryLeaseV1,
     RestartDeltaV1,
     admit_operation,
@@ -30,6 +31,15 @@ from enforced_planning.outcome_continuation import (
 
 ROOT = Path(__file__).resolve().parents[1]
 PROFILE_SHA256 = "9eeaa7d7a8dc7b9b674db585842ee7cfb90c327e75e222b0c970333cca3aca96"
+
+
+def test_personal_sentinel_detector_does_not_match_its_own_portable_source() -> None:
+    source = (ROOT / "enforced_planning" / "outcome_continuation.py").read_text(
+        encoding="utf-8"
+    )
+
+    assert PERSONAL_SENTINELS == ("/home/brian", "BrianMills2718")
+    assert all(sentinel not in source for sentinel in PERSONAL_SENTINELS)
 
 
 def _contract() -> OutcomeContractV1:

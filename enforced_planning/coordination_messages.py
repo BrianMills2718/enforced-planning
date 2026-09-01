@@ -1460,14 +1460,17 @@ class CoordinationMessageStore:
             before = self.status(MessageStatusRequest(message_id=message.message_id, as_of=as_of))
             if before.expired and not request.include_expired:
                 continue
-            if request.delivery_event_id is not None and not before.acknowledged:
-                if not self._claim_event_delivery(
+            if (
+                request.delivery_event_id is not None
+                and not before.acknowledged
+                and not self._claim_event_delivery(
                     message,
                     delivery_event_id=request.delivery_event_id,
                     now=as_of,
-                ):
-                    suppressed_message_ids.append(message.message_id)
-                    continue
+                )
+            ):
+                suppressed_message_ids.append(message.message_id)
+                continue
             if request.observe and not before.expired and not before.observed:
                 observation, observation_path = self._append_observation(message, now=as_of)
                 observations.append(observation)
@@ -1624,9 +1627,11 @@ def poll_session_inbox(
         suffix = f"; {remainder} more not shown" if remainder else ""
         summary_parts.extend(
             (
-                "ACKNOWLEDGEMENT REQUIRED. DO NOT pass the next natural work "
-                "boundary until every displayed message has a truthful durable "
-                "disposition",
+                (
+                    "ACKNOWLEDGEMENT REQUIRED. DO NOT pass the next natural work "
+                    "boundary until every displayed message has a truthful durable "
+                    "disposition"
+                ),
                 f"{len(active)} active message(s): {details}{suffix}",
                 "Acknowledge each displayed message by replacing the disposition "
                 "and note placeholders in its command: "

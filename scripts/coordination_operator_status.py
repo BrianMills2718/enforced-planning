@@ -26,7 +26,7 @@ REPO_ROOT = _find_repo_root()
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from enforced_planning import client_session_metadata, coordination_claims, coordination_messages  # noqa: E402
+from enforced_planning import client_session_metadata, coordination_claims, coordination_messages
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:

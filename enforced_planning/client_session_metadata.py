@@ -142,7 +142,7 @@ def resolve_client_session_display(
             warnings.append(f"matching_row_missing_updated_at:{line_number}")
             continue
         try:
-            parsed_updated_at = datetime.fromisoformat(updated_at.replace("Z", "+00:00"))
+            parsed_updated_at = datetime.fromisoformat(updated_at)
         except ValueError:
             warnings.append(f"matching_row_invalid_updated_at:{line_number}")
             continue

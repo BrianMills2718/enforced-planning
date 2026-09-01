@@ -272,6 +272,7 @@ def test_send_result_fails_closed_for_untrusted_configured_adapter(
         "exit 0; python3 {adapter} --agent codex",
         "python3 {adapter} --agent claude-code",
         "/usr/bin/env python3 {adapter} --agent codex",
+        "/definitely/missing/python3 {adapter} --agent codex",
     ),
 )
 def test_host_delivery_rejects_composed_wrapped_or_wrong_client_commands(
@@ -295,6 +296,70 @@ def test_host_delivery_rejects_composed_wrapped_or_wrong_client_commands(
         blocks.append(
             f'[[hooks.{event}]]\nmatcher = "{matcher}"\n'
             f'[[hooks.{event}.hooks]]\ntype = "command"\ncommand = "{command}"\n'
+        )
+    config.write_text("\n".join(blocks), encoding="utf-8")
+
+    capability = inspect_host_delivery_capability("codex:recipient", codex_config_path=config)
+
+    assert capability.delivery_mode == "unavailable"
+    assert capability.mutation_enforcement_available is False
+    assert capability.stop_enforcement_available is False
+    assert "adapter_command_invalid" in capability.issues
+
+
+def test_host_delivery_rejects_untrusted_executable_named_python3(tmp_path: Path) -> None:
+    """An executable basename cannot substitute for the interpreter running the classifier."""
+
+    config = tmp_path / "config.toml"
+    adapter = tmp_path / "coordination_hook.py"
+    shutil.copy2(Path(__file__).resolve().parents[1] / "scripts" / adapter.name, adapter)
+    no_op_python = tmp_path / "python3"
+    no_op_python.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    no_op_python.chmod(0o755)
+    command = f"{no_op_python} {adapter} --agent codex"
+    blocks = []
+    for event, matcher in (
+        ("SessionStart", "startup|resume|clear|compact"),
+        ("UserPromptSubmit", ""),
+        ("PostToolUse", "*"),
+        ("PreToolUse", "Bash|apply_patch"),
+        ("Stop", ""),
+    ):
+        blocks.append(
+            f'[[hooks.{event}]]\nmatcher = "{matcher}"\n'
+            f'[[hooks.{event}.hooks]]\ntype = "command"\ncommand = "{command}"\n'
+        )
+    config.write_text("\n".join(blocks), encoding="utf-8")
+
+    capability = inspect_host_delivery_capability("codex:recipient", codex_config_path=config)
+
+    assert capability.delivery_mode == "unavailable"
+    assert capability.mutation_enforcement_available is False
+    assert capability.stop_enforcement_available is False
+    assert "adapter_command_invalid" in capability.issues
+
+
+def test_host_delivery_rejects_non_executable_direct_shell_adapter(tmp_path: Path) -> None:
+    """A direct script command is runnable only when its executable bit is present."""
+
+    config = tmp_path / "config.toml"
+    adapter = tmp_path / "notify-coordination-messages.sh"
+    shutil.copy2(
+        Path(__file__).resolve().parents[1] / "hooks" / "codex" / adapter.name,
+        adapter,
+    )
+    adapter.chmod(0o644)
+    blocks = []
+    for event, matcher in (
+        ("SessionStart", "startup|resume|clear|compact"),
+        ("UserPromptSubmit", ""),
+        ("PostToolUse", "*"),
+        ("PreToolUse", "Bash|apply_patch"),
+        ("Stop", ""),
+    ):
+        blocks.append(
+            f'[[hooks.{event}]]\nmatcher = "{matcher}"\n'
+            f'[[hooks.{event}.hooks]]\ntype = "command"\ncommand = "{adapter}"\n'
         )
     config.write_text("\n".join(blocks), encoding="utf-8")
 

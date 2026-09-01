@@ -18,6 +18,7 @@ import inspect
 import json
 import os
 import shlex
+import shutil
 import sys
 import tempfile
 import tomllib
@@ -484,15 +485,35 @@ def _configured_adapter_issue(client: str, commands: tuple[str, ...]) -> str | N
         except ValueError:
             return "adapter_command_invalid"
         adapter_token: str | None = None
+        interpreter = Path(tokens[0]).expanduser() if tokens else None
+        if interpreter is not None and not interpreter.is_absolute():
+            resolved_interpreter = shutil.which(tokens[0])
+            interpreter = Path(resolved_interpreter) if resolved_interpreter else None
+        try:
+            trusted_interpreter = Path(sys.executable).resolve(strict=True)
+            trusted_bash = Path("/bin/bash").resolve(strict=True)
+            interpreter_is_trusted = bool(
+                interpreter is not None
+                and interpreter.is_file()
+                and os.access(interpreter, os.X_OK)
+                and interpreter.resolve(strict=True) == trusted_interpreter
+            )
+        except OSError:
+            interpreter_is_trusted = False
+            trusted_bash = None
         direct_python_adapter = (
             len(tokens) == 4
-            and Path(tokens[0]).name in {"python", "python3", Path(sys.executable).name}
+            and interpreter_is_trusted
             and Path(tokens[1]).name == "coordination_hook.py"
             and tokens[2:] == ["--agent", client]
         )
         direct_shell_adapter = (
             len(tokens) == 2
-            and Path(tokens[0]).name == "bash"
+            and interpreter is not None
+            and interpreter.is_file()
+            and os.access(interpreter, os.X_OK)
+            and trusted_bash is not None
+            and interpreter.resolve() == trusted_bash
             and Path(tokens[1]).name == "notify-coordination-messages.sh"
         )
         if direct_python_adapter or direct_shell_adapter:
@@ -505,6 +526,8 @@ def _configured_adapter_issue(client: str, commands: tuple[str, ...]) -> str | N
         expected_path = expected_by_name[adapter_path.name]
         if not adapter_path.is_absolute() or not adapter_path.is_file():
             return "adapter_missing"
+        if len(tokens) == 1 and not os.access(adapter_path, os.X_OK):
+            return "adapter_command_invalid"
         if not expected_path.is_file():
             return "canonical_adapter_missing"
         if hashlib.sha256(adapter_path.read_bytes()).digest() != hashlib.sha256(

@@ -2092,7 +2092,7 @@ def _plan_cursor_command_fixture(
     candidate = tmp_path / "candidate.json"
     candidate.write_text("{}\n", encoding="utf-8")
     command = (
-        f"/usr/bin/python3 {manager} --cwd {worktree} "
+        f"/usr/bin/env -C {worktree} /usr/bin/python3 {manager} --cwd {worktree} "
         f"--session-id {SESSION} start {candidate}"
     )
     return command, claims_dir, worktree
@@ -2122,7 +2122,10 @@ def test_exact_plan_cursor_manager_treats_candidate_as_read_only_input(
     assert classification == "claim_bootstrap"
 
 
-@pytest.mark.parametrize("tamper", ["wrong-session", "wrong-worktree", "untrusted", "composed"])
+@pytest.mark.parametrize(
+    "tamper",
+    ["wrong-session", "wrong-worktree", "wrong-runtime-worktree", "untrusted", "composed"],
+)
 def test_plan_cursor_manager_rejects_unbound_or_composed_commands(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -2134,11 +2137,16 @@ def test_plan_cursor_manager_rejects_unbound_or_composed_commands(
     elif tamper == "wrong-worktree":
         other = tmp_path / "other"
         other.mkdir()
-        command = command.replace(str(worktree), str(other))
+        command = command.replace(f"--cwd {worktree}", f"--cwd {other}")
+    elif tamper == "wrong-runtime-worktree":
+        other = tmp_path / "other"
+        other.mkdir()
+        command = command.replace(f"-C {worktree}", f"-C {other}")
     elif tamper == "untrusted":
         untrusted = tmp_path / "manage_plan_execution.py"
         untrusted.write_text("# untrusted fixture\n", encoding="utf-8")
-        command = command.replace(command.split()[1], str(untrusted))
+        manager = next(token for token in command.split() if token.endswith("/manage_plan_execution.py"))
+        command = command.replace(manager, str(untrusted))
     else:
         command += " && touch escaped"
 

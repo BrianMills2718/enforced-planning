@@ -407,6 +407,12 @@ def _parse_plan_execution_cursor_command(
     tokens = shlex.split(command)
     if any(token in {";", "&", "&&", "|", "||", ">", ">>", "<"} for token in tokens):
         raise ValueError("plan execution cursor command cannot compose shell operations")
+    bound_worktree: Path | None = None
+    if len(tokens) >= 4 and tokens[:2] == ["/usr/bin/env", "-C"]:
+        bound_worktree = Path(tokens[2]).expanduser()
+        if not bound_worktree.is_absolute() or bound_worktree.resolve() != bound_worktree:
+            raise ValueError("plan execution cursor runtime cwd must be canonical and absolute")
+        tokens = tokens[3:]
     if len(tokens) < 7 or tokens[0] != "/usr/bin/python3":
         raise ValueError("plan execution cursor command requires the canonical interpreter")
 
@@ -439,6 +445,8 @@ def _parse_plan_execution_cursor_command(
     worktree = Path(tokens[3]).expanduser()
     if not worktree.is_absolute() or worktree.resolve() != worktree:
         raise ValueError("plan execution cursor cwd must be canonical and absolute")
+    if bound_worktree is not None and bound_worktree != worktree:
+        raise ValueError("plan execution cursor runtime cwd does not match --cwd")
     if native_session is None or tokens[5] != native_session:
         raise ValueError("plan execution cursor session does not match the ambient native session")
 

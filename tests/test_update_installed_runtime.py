@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 from scripts import update_installed_runtime as runtime_update
-from scripts.update_installed_runtime import RuntimeUpdateError, update_runtime
+from scripts.update_installed_runtime import RuntimeUpdateError, rollback_runtime, update_runtime
 
 
 def _git(repo: Path, *args: str) -> str:
@@ -299,56 +299,27 @@ def test_main_emits_complete_json_when_hostname_lookup_fails(
     assert payload["error"]["type"] == "RuntimeUpdateError"
 
 
-@pytest.mark.parametrize("separator", [" ", "\r", "\n"])
-def test_malformed_whitespace_url_credentials_are_redacted_from_denial(
-    separator: str,
-) -> None:
-    receipt = runtime_update._base_receipt(
-        source_repo=Path("/source"),
-        runtime_repo=Path("/runtime"),
-        revision="0" * 40,
-        write=False,
-        now=datetime(2026, 9, 1, 17, 0, tzinfo=UTC),
-    )
-    denial = runtime_update._deny(
-        receipt,
-        RuntimeUpdateError(
-            f"failed https://token:super{separator}secret@evil.example/repo.git"
-        ),
-    )
-
-    serialized = json.dumps(denial.receipt, sort_keys=True)
-    assert "token" not in serialized
-    assert "super" not in serialized
-    assert "secret" not in serialized
-    assert "https://<redacted>@evil.example/repo.git" in serialized
-
-
 @pytest.mark.parametrize(
-    ("credentialed_url", "redacted_url"),
+    "raw_error",
     [
-        (
-            "https://token:super@secret@evil.example/repo.git",
-            "https://<redacted>@evil.example/repo.git",
-        ),
-        (
-            "https:/token:super-secret@evil.example/repo.git",
-            "https:/<redacted>@evil.example/repo.git",
-        ),
-        (
-            "https//token:super-secret@evil.example/repo.git",
-            "https//<redacted>@evil.example/repo.git",
-        ),
-        (
-            r"https:\\token:super-secret@evil.example/repo.git",
-            r"https:\\<redacted>@evil.example/repo.git",
-        ),
+        "https://token:super secret@evil.example/repo.git",
+        "https://token:super\rsecret@evil.example/repo.git",
+        "https://token:super\nsecret@evil.example/repo.git",
+        "https://token:super\r\nsecret@evil.example/repo.git",
+        "https://token:super\tsecret@evil.example/repo.git",
+        "https://token:super\fsecret@evil.example/repo.git",
+        "https://token:super\vsecret@evil.example/repo.git",
+        "https://token:super@secret@evil.example/repo.git",
+        "https:/token:super-secret@evil.example/repo.git",
+        "https//token:super-secret@evil.example/repo.git",
+        r"https:\\token:super-secret@evil.example/repo.git",
+        "https::token:super-secret@evil.example/repo.git",
+        "mailto:ops@example.com",
+        "urn:contact:ops@example.com",
+        "label ops@example.com",
     ],
 )
-def test_malformed_url_authorities_are_fully_redacted_from_denial(
-    credentialed_url: str,
-    redacted_url: str,
-) -> None:
+def test_denial_receipt_uses_fixed_safe_error_boundary(raw_error: str) -> None:
     receipt = runtime_update._base_receipt(
         source_repo=Path("/source"),
         runtime_repo=Path("/runtime"),
@@ -358,39 +329,16 @@ def test_malformed_url_authorities_are_fully_redacted_from_denial(
     )
     denial = runtime_update._deny(
         receipt,
-        RuntimeUpdateError(f"failed {credentialed_url}"),
+        RuntimeUpdateError(f"failed {raw_error}"),
     )
 
     serialized = json.dumps(denial.receipt, sort_keys=True)
-    assert "token" not in serialized
-    assert "super" not in serialized
-    assert "secret" not in serialized
-    assert denial.receipt["error"]["message"] == f"failed {redacted_url}"
-
-
-@pytest.mark.parametrize("separator", ["\r", "\n", "\r\n"])
-def test_redaction_does_not_cross_from_benign_url_to_email(separator: str) -> None:
-    message = f"failed https://example.com/repo.git{separator}contact ops@example.com"
-
-    assert runtime_update._redact_sensitive_text(message) == message
-
-
-def test_redaction_preserves_benign_url_before_credentialed_url() -> None:
-    message = (
-        "first https://example.com/a\r\n"
-        "then https://user:secret@evil.example/b"
-    )
-
-    assert runtime_update._redact_sensitive_text(message) == (
-        "first https://example.com/a\r\n"
-        "then https://<redacted>@evil.example/b"
-    )
-
-
-def test_username_only_url_userinfo_is_redacted_without_crossing_lines() -> None:
-    assert runtime_update._redact_sensitive_text(
-        "failed https://token@evil.example/repo.git"
-    ) == "failed https://<redacted>@evil.example/repo.git"
+    assert raw_error not in serialized
+    assert denial.receipt["error"] == {
+        "type": "RuntimeUpdateError",
+        "code": "runtime_update_failed",
+        "message": "Runtime update failed at the recorded stage; raw error details are omitted.",
+    }
 
 
 def test_write_fast_forwards_and_retains_exact_recovery_ref(
@@ -629,6 +577,108 @@ def test_explicit_detached_replacement_retains_divergent_head(
     assert _git(runtime, "rev-parse", result["recovery_ref"]) == divergent
 
 
+def test_forward_update_then_exact_rollback_restores_revision_and_origin(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, runtime, before, after = _repos(tmp_path, monkeypatch)
+    _git(runtime, "checkout", "--detach", before)
+    _git(runtime, "remote", "set-url", "origin", runtime_update.LEGACY_RUNTIME_ORIGIN)
+
+    updated = update_runtime(
+        source_repo=source,
+        runtime_repo=runtime,
+        revision=after,
+        write=True,
+        now=datetime(2026, 9, 1, 18, 0, tzinfo=UTC),
+    )
+    recovery_ref = updated["recovery_ref"]
+    assert _git(runtime, "rev-parse", "HEAD") == after
+    assert _git(runtime, "remote", "get-url", "origin") == runtime_update.CANONICAL_ORIGIN
+
+    checked = rollback_runtime(runtime_repo=runtime, recovery_ref=recovery_ref, write=False)
+    assert checked["action"] == "would_rollback"
+    assert checked["mutation_started"] is False
+    assert _git(runtime, "rev-parse", "HEAD") == after
+
+    rolled_back = rollback_runtime(runtime_repo=runtime, recovery_ref=recovery_ref, write=True)
+    assert rolled_back["action"] == "rolled_back"
+    assert rolled_back["recovery_ref_consumed"] is True
+    assert _git(runtime, "rev-parse", "HEAD") == before
+    assert _git(runtime, "remote", "get-url", "origin") == runtime_update.LEGACY_RUNTIME_ORIGIN
+    assert subprocess.run(
+        ["git", "-C", str(runtime), "rev-parse", "--verify", recovery_ref],
+        check=False,
+        capture_output=True,
+        text=True,
+    ).returncode != 0
+    assert not any(
+        key.startswith(runtime_update.RECOVERY_CONFIG_PREFIX)
+        for key in _git(runtime, "config", "--local", "--name-only", "--list").splitlines()
+    )
+
+
+def test_rollback_denies_mismatched_recovery_ref_without_mutation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, runtime, before, after = _repos(tmp_path, monkeypatch)
+    _git(runtime, "checkout", "--detach", before)
+    updated = update_runtime(
+        source_repo=source,
+        runtime_repo=runtime,
+        revision=after,
+        write=True,
+        now=datetime(2026, 9, 1, 18, 5, tzinfo=UTC),
+    )
+    recovery_ref = updated["recovery_ref"]
+    _git(runtime, "update-ref", recovery_ref, after, before)
+
+    with pytest.raises(RuntimeUpdateError, match="no longer matches") as caught:
+        rollback_runtime(runtime_repo=runtime, recovery_ref=recovery_ref, write=True)
+
+    assert caught.value.receipt["mutation_started"] is False
+    assert _git(runtime, "rev-parse", "HEAD") == after
+
+
+def test_rollback_recovers_partial_update_before_origin_migration(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, runtime, before, after = _repos(tmp_path, monkeypatch)
+    _git(runtime, "checkout", "--detach", before)
+    _git(runtime, "remote", "set-url", "origin", runtime_update.LEGACY_RUNTIME_ORIGIN)
+    real_run = runtime_update._run
+
+    def fail_origin_migration(
+        repo: Path,
+        *args: str,
+        check: bool = True,
+        mutating: bool = False,
+        network_auth: bool = False,
+    ) -> subprocess.CompletedProcess[str]:
+        if args[:3] == ("remote", "set-url", "origin"):
+            raise RuntimeUpdateError("injected origin migration failure")
+        return real_run(repo, *args, check=check, mutating=mutating, network_auth=network_auth)
+
+    monkeypatch.setattr(runtime_update, "_run", fail_origin_migration)
+    with pytest.raises(RuntimeUpdateError, match="injected origin migration failure") as caught:
+        update_runtime(
+            source_repo=source,
+            runtime_repo=runtime,
+            revision=after,
+            write=True,
+            now=datetime(2026, 9, 1, 18, 10, tzinfo=UTC),
+        )
+
+    recovery_ref = caught.value.receipt["recovery_ref"]
+    assert _git(runtime, "rev-parse", "HEAD") == after
+    monkeypatch.setattr(runtime_update, "_run", real_run)
+
+    rolled_back = rollback_runtime(runtime_repo=runtime, recovery_ref=recovery_ref, write=True)
+
+    assert rolled_back["action"] == "rolled_back"
+    assert _git(runtime, "rev-parse", "HEAD") == before
+    assert _git(runtime, "remote", "get-url", "origin") == runtime_update.LEGACY_RUNTIME_ORIGIN
+
+
 def test_partial_failure_receipt_retains_recovery_ref(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -667,7 +717,8 @@ def test_partial_failure_receipt_retains_recovery_ref(
     assert receipt["recovery_ref_retained"] is True
     assert receipt["error"] == {
         "type": "RuntimeUpdateError",
-        "message": "injected merge failure",
+        "code": "runtime_update_failed",
+        "message": "Runtime update failed at the recorded stage; raw error details are omitted.",
     }
     assert real_run(runtime, "rev-parse", receipt["recovery_ref"]).stdout.strip() == before
 
@@ -706,8 +757,9 @@ def test_oserror_after_recovery_ref_emits_structured_partial_failure(
     assert receipt["after_revision"] == before
     assert receipt["recovery_ref_retained"] is True
     assert receipt["error"] == {
-        "type": "OSError",
-        "message": "injected operating-system failure",
+        "type": "RuntimeUpdateError",
+        "code": "runtime_update_failed",
+        "message": "Runtime update failed at the recorded stage; raw error details are omitted.",
     }
     assert real_run(runtime, "rev-parse", receipt["recovery_ref"]).stdout.strip() == before
 

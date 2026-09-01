@@ -494,8 +494,8 @@ def update_runtime(
         recovery_ref = _recovery_ref(before, now or datetime.now(UTC))
         receipt["stage"] = "create_recovery_ref"
         receipt["recovery_ref"] = recovery_ref
-        receipt["mutation_started"] = True
         _run(runtime_repo, "update-ref", recovery_ref, before, ZERO_OID, mutating=True)
+        receipt["mutation_started"] = True
         # The recovery ref deliberately remains and is reported if mutation fails.
         receipt["stage"] = "apply_update"
         if before != revision:

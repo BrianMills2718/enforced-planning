@@ -855,3 +855,43 @@ def test_recovery_ref_collision_is_denied_without_overwrite(
     assert caught.value.receipt["recovery_ref_retained"] is True
     assert _git(runtime, "rev-parse", recovery_ref) == before
     assert _git(runtime, "rev-parse", "HEAD") == before
+
+
+def test_origin_only_recovery_ref_collision_is_denied_without_mutation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, runtime, _before, after = _repos(tmp_path, monkeypatch)
+    _git(runtime, "fetch", "origin", "main")
+    _git(runtime, "merge", "--ff-only", after)
+    _git(runtime, "remote", "set-url", "origin", runtime_update.LEGACY_RUNTIME_ORIGIN)
+    observed = datetime(2026, 9, 1, 16, 50, tzinfo=UTC)
+    recovery_ref = runtime_update._recovery_ref(after, observed)
+    _git(runtime, "update-ref", recovery_ref, after)
+    head_before = _git(runtime, "rev-parse", "HEAD")
+    refs_before = _all_refs(runtime)
+    fetch_head_before = _fetch_head(runtime)
+    index_before = _git_path_bytes(runtime, "index")
+    objects_before = _git(runtime, "count-objects", "-v")
+    origin_before = _git(runtime, "config", "--local", "--get", "remote.origin.url")
+
+    with pytest.raises(RuntimeUpdateError, match=runtime_update.SAFE_FAILURE_MESSAGE) as caught:
+        update_runtime(
+            source_repo=source,
+            runtime_repo=runtime,
+            revision=after,
+            write=True,
+            now=observed,
+        )
+
+    receipt = caught.value.receipt
+    assert receipt["action"] == "denied"
+    assert receipt["stage"] == "create_recovery_ref"
+    assert receipt["mutation_started"] is False
+    assert receipt["recovery_ref"] == recovery_ref
+    assert receipt["recovery_ref_retained"] is True
+    assert _git(runtime, "rev-parse", "HEAD") == head_before
+    assert _all_refs(runtime) == refs_before
+    assert _fetch_head(runtime) == fetch_head_before
+    assert _git_path_bytes(runtime, "index") == index_before
+    assert _git(runtime, "count-objects", "-v") == objects_before
+    assert _git(runtime, "config", "--local", "--get", "remote.origin.url") == origin_before

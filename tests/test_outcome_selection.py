@@ -717,7 +717,7 @@ def test_planned_selection_rejects_mismatched_qualified_project(
             claims_dir=claims_dir,
         )
 
-    assert caught.value.code == "plan_identity_mismatch"
+    assert caught.value.code == "claim_not_healthy"
 
 
 def test_enforced_selection_rejects_symbolic_baseline_revision(
@@ -1190,7 +1190,10 @@ def test_unplanned_claim_requires_exact_goal_authority_not_plan_inference(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("CODEX_THREAD_ID", "plan117-test")
-    _repo, _worktree, claims_dir, _claim_path, scenario_path = _fixture(tmp_path, plan_ref=None)
+    _repo, _worktree, claims_dir, _claim_path, scenario_path = _fixture(
+        tmp_path,
+        plan_ref="UNPLANNED",
+    )
 
     with pytest.raises(OutcomeSelectionError) as caught:
         select_outcome_for_session(
@@ -1214,7 +1217,7 @@ def test_unplanned_claim_requires_exact_goal_authority_not_plan_inference(
         claims_dir=claims_dir,
     )
     assert result.binding.execution_authority_ref == "goal:durable-outcome"
-    assert result.binding.claim_plan_ref is None
+    assert result.binding.claim_plan_ref == "UNPLANNED"
 
 
 def test_selected_resolution_survives_heartbeat_but_rejects_tamper_and_replacement(

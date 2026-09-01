@@ -196,6 +196,21 @@ def test_codex_command_is_ephemeral_read_only_and_schema_bound(tmp_path: Path) -
     assert command[command.index("--output-last-message") + 1].endswith("semantic.json")
 
 
+def test_codex_command_uses_authenticated_route_default_when_model_is_omitted(
+    tmp_path: Path,
+) -> None:
+    command = build_codex_command(
+        codex_bin="codex",
+        repo_root=tmp_path,
+        output_schema=Path("contracts/pr-review-signoff.schema.json"),
+        output_path=tmp_path / "semantic.json",
+        model=None,
+        effort="high",
+    )
+
+    assert "--model" not in command
+
+
 def test_check_payload_is_success_only_for_signed_exact_head() -> None:
     semantic = SemanticReviewResult(
         schema_version="1.0",

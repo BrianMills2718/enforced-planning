@@ -27,7 +27,10 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--receipt", type=Path, required=True)
     parser.add_argument("--check-payload", type=Path, required=True)
     parser.add_argument("--codex-bin", default="codex")
-    parser.add_argument("--model", default="gpt-5.6")
+    parser.add_argument(
+        "--model",
+        help="Explicit Codex model override; omit to use the authenticated route's supported default",
+    )
     parser.add_argument("--effort", default="high")
     return parser
 

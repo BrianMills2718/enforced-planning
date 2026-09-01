@@ -121,19 +121,17 @@ def build_codex_command(
     repo_root: Path,
     output_schema: Path,
     output_path: Path,
-    model: str,
+    model: str | None,
     effort: str,
 ) -> tuple[str, ...]:
     schema_path = output_schema if output_schema.is_absolute() else repo_root / output_schema
-    return (
+    command = [
         codex_bin,
         "exec",
         "--ephemeral",
         "--ignore-user-config",
         "--sandbox",
         "read-only",
-        "--model",
-        model,
         "--config",
         f'model_reasoning_effort="{effort}"',
         "--cd",
@@ -144,7 +142,10 @@ def build_codex_command(
         str(output_path),
         "--json",
         "-",
-    )
+    ]
+    if model:
+        command[6:6] = ["--model", model]
+    return tuple(command)
 
 
 def evaluate_signoff(
@@ -291,7 +292,7 @@ def run_review(
     receipt_path: Path,
     check_payload_path: Path,
     codex_bin: str = "codex",
-    model: str = "gpt-5.6",
+    model: str | None = None,
     effort: str = "high",
 ) -> PRSignoffReceipt:
     root = repo_root.resolve()

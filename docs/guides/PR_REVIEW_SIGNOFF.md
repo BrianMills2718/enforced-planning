@@ -85,6 +85,10 @@ The receipt exits successfully only for `signed_off`. The check payload names
 the frozen `head_sha`, uses the receipt SHA-256 as `external_id`, and reports
 success only when every programmatic and semantic condition passed.
 
+The command omits an explicit model by default so Codex resolves the model
+supported by the authenticated execution route. Use `--model` only after that
+exact CLI/account route has been verified to support the requested model.
+
 The OpenAI Codex GitHub Action can trigger the same review shape on PR events,
 but an ordinary Actions identity is not the coordinator identity. Automatic
 authoritative publication therefore requires a coordinator-owned trigger that

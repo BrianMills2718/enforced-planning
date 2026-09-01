@@ -324,6 +324,75 @@ def test_malformed_whitespace_url_credentials_are_redacted_from_denial(
     assert "https://<redacted>@evil.example/repo.git" in serialized
 
 
+@pytest.mark.parametrize(
+    ("credentialed_url", "redacted_url"),
+    [
+        (
+            "https://token:super@secret@evil.example/repo.git",
+            "https://<redacted>@evil.example/repo.git",
+        ),
+        (
+            "https:/token:super-secret@evil.example/repo.git",
+            "https:/<redacted>@evil.example/repo.git",
+        ),
+        (
+            "https//token:super-secret@evil.example/repo.git",
+            "https//<redacted>@evil.example/repo.git",
+        ),
+        (
+            r"https:\\token:super-secret@evil.example/repo.git",
+            r"https:\\<redacted>@evil.example/repo.git",
+        ),
+    ],
+)
+def test_malformed_url_authorities_are_fully_redacted_from_denial(
+    credentialed_url: str,
+    redacted_url: str,
+) -> None:
+    receipt = runtime_update._base_receipt(
+        source_repo=Path("/source"),
+        runtime_repo=Path("/runtime"),
+        revision="0" * 40,
+        write=False,
+        now=datetime(2026, 9, 1, 17, 0, tzinfo=UTC),
+    )
+    denial = runtime_update._deny(
+        receipt,
+        RuntimeUpdateError(f"failed {credentialed_url}"),
+    )
+
+    serialized = json.dumps(denial.receipt, sort_keys=True)
+    assert "token" not in serialized
+    assert "super" not in serialized
+    assert "secret" not in serialized
+    assert denial.receipt["error"]["message"] == f"failed {redacted_url}"
+
+
+@pytest.mark.parametrize("separator", ["\r", "\n", "\r\n"])
+def test_redaction_does_not_cross_from_benign_url_to_email(separator: str) -> None:
+    message = f"failed https://example.com/repo.git{separator}contact ops@example.com"
+
+    assert runtime_update._redact_sensitive_text(message) == message
+
+
+def test_redaction_preserves_benign_url_before_credentialed_url() -> None:
+    message = (
+        "first https://example.com/a\r\n"
+        "then https://user:secret@evil.example/b"
+    )
+
+    assert runtime_update._redact_sensitive_text(message) == (
+        "first https://example.com/a\r\n"
+        "then https://<redacted>@evil.example/b"
+    )
+
+
+def test_username_only_url_userinfo_is_redacted_without_crossing_lines() -> None:
+    assert runtime_update._redact_sensitive_text(
+        "failed https://token@evil.example/repo.git"
+    ) == "failed https://<redacted>@evil.example/repo.git"
+
+
 def test_write_fast_forwards_and_retains_exact_recovery_ref(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

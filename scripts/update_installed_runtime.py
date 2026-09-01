@@ -24,7 +24,14 @@ from pathlib import Path
 from typing import Any
 
 FULL_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
-URL_USERINFO_RE = re.compile(r"(?P<prefix>[A-Za-z][A-Za-z0-9+.-]*://)[^@]*@")
+URL_USERINFO_WITH_SECRET_RE = re.compile(
+    r"(?P<prefix>[A-Za-z][A-Za-z0-9+.-]*(?::[/\\]{0,2}|[/\\]{1,2}))"
+    r"(?=[^/?#]*:)[^/?#]*@"
+)
+URL_USERNAME_ONLY_RE = re.compile(
+    r"(?P<prefix>[A-Za-z][A-Za-z0-9+.-]*(?::[/\\]{0,2}|[/\\]{1,2}))"
+    r"[^@\r\n/?#\s]+@"
+)
 RECOVERY_NAMESPACE = "refs/codex-runtime-recovery"
 ZERO_OID = "0" * 40
 CANONICAL_ORIGIN = "https://github.com/BrianMills2718/enforced-planning.git"
@@ -159,7 +166,8 @@ def _base_receipt(
 def _redact_sensitive_text(value: str) -> str:
     """Remove URL userinfo before an operational error enters a durable receipt."""
 
-    return URL_USERINFO_RE.sub(r"\g<prefix><redacted>@", value)
+    redacted = URL_USERINFO_WITH_SECRET_RE.sub(r"\g<prefix><redacted>@", value)
+    return URL_USERNAME_ONLY_RE.sub(r"\g<prefix><redacted>@", redacted)
 
 
 def _sanitized_git_env() -> dict[str, str]:

@@ -471,8 +471,10 @@ def _sync_makefile_relationship_block(
     return prefix + block + "\n", "append:Makefile.relationship-context", None
 
 
-def _sync_makefile_worktree_block(current_makefile: str) -> tuple[str, str | None]:
-    """Return synced Makefile text plus the installer action needed, if any."""
+def _sync_makefile_worktree_block(
+    current_makefile: str,
+) -> tuple[str, str | None, str | None]:
+    """Return synced Makefile text, action, and any unsafe target collision."""
     block = _render_makefile_worktree_block("scripts/meta/worktree-coordination").rstrip()
     normalized = current_makefile.rstrip("\n")
     if MAKEFILE_WORKTREE_BLOCK_START in normalized:
@@ -480,7 +482,7 @@ def _sync_makefile_worktree_block(current_makefile: str) -> tuple[str, str | Non
         end = normalized.index(MAKEFILE_WORKTREE_BLOCK_END) + len(MAKEFILE_WORKTREE_BLOCK_END)
         existing_block = normalized[start:end].rstrip()
         if existing_block == block:
-            return normalized + "\n", None
+            return normalized + "\n", None, None
         updated = normalized[:start].rstrip()
         if updated:
             updated += "\n\n"
@@ -488,7 +490,20 @@ def _sync_makefile_worktree_block(current_makefile: str) -> tuple[str, str | Non
         trailing = normalized[end:].strip("\n")
         if trailing:
             updated += "\n\n" + trailing
-        return updated + "\n", "sync:Makefile.worktree"
+        return updated + "\n", "sync:Makefile.worktree", None
+
+    collisions = [
+        target
+        for target in ("merge", "finish")
+        if any(line.startswith(f"{target}:") for line in normalized.splitlines())
+    ]
+    if collisions:
+        return (
+            current_makefile,
+            None,
+            "unmarked legacy PR Make targets conflict with sanctioned finish: "
+            + ", ".join(collisions),
+        )
 
     insertion_index: int | None = None
     for anchor in MAKEFILE_WORKTREE_INSERTION_ANCHORS:
@@ -502,7 +517,7 @@ def _sync_makefile_worktree_block(current_makefile: str) -> tuple[str, str | Non
         if updated:
             updated += "\n\n"
         updated += block
-        return updated + "\n", "append:Makefile.worktree"
+        return updated + "\n", "append:Makefile.worktree", None
 
     before = normalized[:insertion_index].rstrip("\n")
     after = normalized[insertion_index:].lstrip("\n")
@@ -512,7 +527,7 @@ def _sync_makefile_worktree_block(current_makefile: str) -> tuple[str, str | Non
     updated += block
     if after:
         updated += "\n\n" + after
-    return updated + "\n", "append:Makefile.worktree"
+    return updated + "\n", "append:Makefile.worktree", None
 
 
 def _sync_makefile_status_target(
@@ -638,7 +653,9 @@ def _plan_static_support(
             actions.append("scaffold:Makefile")
             scaffolded_files.append("Makefile")
             # Include worktree block so the Makefile is complete on first install.
-            with_worktree, _ = _sync_makefile_worktree_block(makefile_template)
+            with_worktree, _, makefile_blocker = _sync_makefile_worktree_block(makefile_template)
+            if makefile_blocker:
+                blockers.append(makefile_blocker)
             file_writes[makefile_path] = with_worktree
     else:
         current_makefile = makefile_path.read_text(encoding="utf-8")
@@ -654,7 +671,11 @@ def _plan_static_support(
                 blockers.append(status_blocker)
                 synced_makefile, makefile_action = current_makefile, None
             else:
-                synced_makefile, makefile_action = _sync_makefile_worktree_block(status_synced)
+                synced_makefile, makefile_action, makefile_blocker = _sync_makefile_worktree_block(
+                    status_synced
+                )
+                if makefile_blocker:
+                    blockers.append(makefile_blocker)
                 if status_action:
                     actions.append(status_action)
         if makefile_action:

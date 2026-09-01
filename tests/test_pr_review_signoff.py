@@ -675,6 +675,32 @@ def test_programmatic_check_cannot_mutate_frozen_worktree(tmp_path: Path) -> Non
     assert not (repo / "mutation.txt").exists()
 
 
+def test_programmatic_check_cannot_mutate_sibling_checkout(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    sibling = tmp_path / "canonical" / "Makefile"
+    sibling.parent.mkdir()
+    sibling.write_text("protected\n", encoding="utf-8")
+    spec_path = _write_spec(tmp_path / "spec.json")
+    payload = json.loads(spec_path.read_text())
+    payload["programmatic_checks"] = [
+        {
+            "check_id": "sibling-mutation",
+            "argv": [
+                sys.executable,
+                "-c",
+                f"open({str(sibling)!r}, 'w').write('changed')",
+            ],
+        }
+    ]
+    spec_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    results = run_programmatic_checks(load_review_spec(spec_path), repo_root=repo)
+
+    assert results[0].exit_code != 0
+    assert sibling.read_text(encoding="utf-8") == "protected\n"
+
+
 def test_programmatic_check_has_no_external_network(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
     repo.mkdir()

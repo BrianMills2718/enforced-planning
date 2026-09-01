@@ -445,6 +445,8 @@ REVIEW_SPEC=/absolute/review-spec.json`. The expensive review never runs inside
 `PreToolUse`, avoiding hook timeouts. This is operational enforcement on clients
 with the governed hooks installed; GitHub branch protection remains useful for
 repository-wide CI checks but no GitHub App is required for semantic signoff.
+The installer also rejects unmarked legacy `make merge` or `make finish`
+recipes, preventing a later duplicate target from overriding this transaction.
 
 Squash merges require an explicit `--merge-commit <sha>` receipt. Closeout
 accepts it only when that one-parent commit is retained by the canonical

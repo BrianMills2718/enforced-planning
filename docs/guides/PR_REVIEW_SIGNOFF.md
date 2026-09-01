@@ -162,5 +162,11 @@ checkout directory, so pull-request content cannot rewrite its own rubric.
   API: the fast merge guard still routes it to `make finish`.
 - Newline-separated commands and static shell-variable assignments are parsed
   across command segments, so they cannot hide the same direct paths.
+- The retired `make merge` target is blocked. Consumer installation refuses an
+  unmarked legacy `merge` or `finish` target instead of appending a second,
+  weaker recipe whose later definition could win.
+- Programmatic checks run with the host filesystem read-only, one ephemeral
+  cache directory writable, and no external network. PR-controlled checks
+  cannot rewrite the canonical checkout or closeout Makefile.
 - A review-spec path is lexically inside a registered worktree but resolves
   through a symlink to outside it: reject it as PR-controlled input.

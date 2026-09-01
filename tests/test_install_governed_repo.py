@@ -601,6 +601,32 @@ def test_relationship_context_only_rejects_unmarked_make_target(tmp_path: Path) 
     assert makefile.read_text(encoding="utf-8") == original
 
 
+def test_worktree_rollout_rejects_unmarked_legacy_merge_targets(tmp_path: Path) -> None:
+    """An installer must not append a sanctioned finish behind legacy bypasses."""
+
+    _write_minimal_claude(tmp_path)
+    makefile = tmp_path / "Makefile"
+    original = (
+        "merge:\n\t@python scripts/meta/merge_pr.py $(PR)\n\n"
+        "finish:\n\t@gh pr merge $(PR) --squash --delete-branch\n"
+    )
+    makefile.write_text(original, encoding="utf-8")
+
+    result = _run(
+        "--repo-root",
+        str(tmp_path),
+        "--worktree-only",
+        "--write",
+        "--json",
+        cwd=PROJECT_META_ROOT,
+    )
+
+    assert result.returncode == 1
+    payload = json.loads(result.stdout)
+    assert any("legacy PR Make targets" in item for item in payload["blockers"])
+    assert makefile.read_text(encoding="utf-8") == original
+
+
 def test_relationship_context_only_rejects_malformed_make_markers(tmp_path: Path) -> None:
     """A partial generated block must block all writes rather than compound corruption."""
 

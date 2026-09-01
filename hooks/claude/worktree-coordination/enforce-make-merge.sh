@@ -76,13 +76,25 @@ while queue:
     while words and changed:
         changed = False
         command = os.path.basename(words[0])
-        if command in {"command", "nohup", "setsid", "sudo", "time"}:
+        if command in {"command", "exec", "nohup", "setsid", "sudo", "time"}:
             words.pop(0)
             while words and words[0].startswith("-"):
                 words.pop(0)
             changed = True
         elif command == "env":
             words.pop(0)
+            split_string = None
+            for index, option in enumerate(words):
+                if option in {"-S", "--split-string"} and index + 1 < len(words):
+                    split_string = words[index + 1]
+                    break
+                if option.startswith("--split-string="):
+                    split_string = option.split("=", 1)[1]
+                    break
+            if split_string is not None:
+                queue[:0] = split_segments(split_string)
+                words = []
+                continue
             while words and (words[0].startswith("-") or assignment.match(words[0])):
                 option = words.pop(0)
                 if option in {"-u", "--unset", "-C", "--chdir"} and words:
@@ -116,6 +128,9 @@ while queue:
                 raise SystemExit
         except ValueError:
             pass
+    if command in {"make", "gmake"} and "merge" in words[1:]:
+        print("merge")
+        raise SystemExit
     if command == "finish_pr.py" or (
         python_name.fullmatch(command)
         and any(os.path.basename(word) == "finish_pr.py" for word in words[1:])

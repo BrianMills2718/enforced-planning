@@ -38,6 +38,7 @@ assignment = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
 python_name = re.compile(r"^python(?:[0-9]+(?:\.[0-9]+)*)?$")
 
 def split_segments(raw):
+    raw = raw.replace("\r\n", "\n").replace("\r", "\n").replace("\n", " ; ")
     try:
         lexer = shlex.shlex(raw, posix=True, punctuation_chars=";&|")
         lexer.whitespace_split = True
@@ -56,12 +57,21 @@ def split_segments(raw):
         segments.append(current)
     return segments
 
+variables = {}
+
+def expand_variables(word):
+    def replace(match):
+        return variables.get(match.group(1) or match.group(2), match.group(0))
+    return re.sub(r"\$(?:([A-Za-z_][A-Za-z0-9_]*)|\{([A-Za-z_][A-Za-z0-9_]*)\})", replace, word)
+
 queue = split_segments(sys.argv[1])
 while queue:
     segment = queue.pop(0)
-    words = list(segment)
+    words = [expand_variables(word) for word in segment]
     while words and assignment.match(words[0]):
-        words.pop(0)
+        name, value = words.pop(0).split("=", 1)
+        variables[name] = expand_variables(value)
+        words = [expand_variables(word) for word in words]
     changed = True
     while words and changed:
         changed = False

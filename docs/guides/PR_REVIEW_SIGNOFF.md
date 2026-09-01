@@ -160,5 +160,7 @@ checkout directory, so pull-request content cannot rewrite its own rubric.
 - A command uses an absolute interpreter, an installed `scripts/meta` finish
   path, `uv run`, `sudo`, a nested shell, `gh` global flags, or the GitHub merge
   API: the fast merge guard still routes it to `make finish`.
+- Newline-separated commands and static shell-variable assignments are parsed
+  across command segments, so they cannot hide the same direct paths.
 - A review-spec path is lexically inside a registered worktree but resolves
   through a symlink to outside it: reject it as PR-controlled input.

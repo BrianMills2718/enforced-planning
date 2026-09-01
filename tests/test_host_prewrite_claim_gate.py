@@ -1396,6 +1396,49 @@ def test_explicit_mode_applies_repo_local_enforce_selected_to_claimed_mutation(
     assert observed["allow_bootstrap"] is True
 
 
+def test_explicit_mode_exempts_only_classified_sanctioned_maintenance(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _workspace, _repo, worktree, _claims_dir, _claim_path = _fixture(tmp_path)
+    (worktree / "meta-process.yaml").write_text(
+        "meta_process:\n  claims:\n    outcome_admission_mode: enforce_selected\n",
+        encoding="utf-8",
+    )
+    payload = _payload(cwd=worktree, tool="Bash", tool_input={"command": "touch marker"})
+    ordinary = {
+        "decision": "allow",
+        "reason_code": "exact_live_claim",
+        "receipt_id": "ordinary-maintenance",
+        "normalized_target_paths": ["marker"],
+    }
+    exemption = {
+        "reason_code": "sanctioned_unplanned_maintenance",
+        "claim_project": "host-gate-test",
+        "claim_scope": "host-gate-lane",
+        "claim_source_file": str(tmp_path / "claim.yaml"),
+        "tracker_path": str(tmp_path / "tracker.yaml"),
+    }
+    monkeypatch.setattr(prewrite_claim_gate, "evaluate_prewrite_fast", lambda *_args, **_kwargs: ordinary)
+    monkeypatch.setattr(
+        prewrite_claim_gate,
+        "_sanctioned_maintenance_exemption",
+        lambda _decision: exemption,
+    )
+
+    def unexpected(*_args: object, **_kwargs: object) -> dict[str, object]:
+        raise AssertionError("sanctioned maintenance must not require a selected outcome")
+
+    monkeypatch.setattr(prewrite_claim_gate, "_enforce_selected_outcome", unexpected)
+
+    code, result = _run_cli(monkeypatch, capsys, tmp_path, payload)
+
+    assert code == 0
+    assert result["decision"] == "allow"
+    assert result["outcome_admission_exemption"] == exemption
+
+
 def test_explicit_mode_exempts_read_only_bash_from_repo_local_enforce_selected(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

@@ -794,6 +794,15 @@ def _path_is_claimed(target: str, claimed_path: str) -> bool:
     return target == normalized or target.startswith(f"{normalized}/")
 
 
+def _claim_covers_targets(claim: dict[str, Any], targets: tuple[str, ...]) -> bool:
+    """Return whether one claim alone authorizes every normalized target."""
+
+    return all(
+        any(_path_is_claimed(target, claimed) for claimed in claim["write_paths"])
+        for target in targets
+    )
+
+
 def _record_receipt(path: Path, decision: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     receipt = {
@@ -1021,32 +1030,52 @@ def evaluate_request_fast(
     reason_code = "exact_live_claim"
     details: tuple[str, ...] = ()
     recovery: str | None = None
+    authorizing_candidates = [
+        candidate
+        for candidate in candidates
+        if _claim_covers_targets(candidate, context["normalized_target_paths"])
+    ]
     if not candidates:
         reason_code = "no_exact_claim"
         recovery = "Create or resume an exact claimed worktree lane for this session before editing."
-    elif len(candidates) > 1:
+    elif len(authorizing_candidates) > 1:
         reason_code = "ambiguous_exact_claim"
-        details = tuple(sorted(f"{item['projects'][0]}:{item['scope']}" for item in candidates))
-        recovery = "Close or reconcile duplicate live claims before editing."
+        details = tuple(
+            sorted(f"{item['projects'][0]}:{item['scope']}" for item in authorizing_candidates)
+        )
+        recovery = "Close or reconcile overlapping live claims before editing."
+    elif not authorizing_candidates:
+        # Preserve the exact claim on the receipt when only one identity
+        # candidate exists. With parent/child claims, no single claim may
+        # combine disjoint write scopes into authority for one mutation.
+        claim = candidates[0] if len(candidates) == 1 else None
+        if claim is not None:
+            health_issues = tuple(
+                dict.fromkeys([*claim["static_issues"], *_dynamic_claim_issues(claim)])
+            )
+            if health_issues:
+                reason_code = "claim_not_healthy"
+                details = health_issues
+                recovery = "Repair or resume the claim through the sanctioned session workflow."
+            else:
+                reason_code = "path_outside_claim"
+                details = tuple(context["normalized_target_paths"])
+                recovery = "Use a separately claimed lane or update the declared write scope before editing."
+        else:
+            reason_code = "path_outside_claim"
+            details = tuple(context["normalized_target_paths"])
+            recovery = (
+                "Use one claim whose declared write scope covers every target; disjoint claims do not combine authority."
+            )
     else:
-        claim = candidates[0]
+        claim = authorizing_candidates[0]
         health_issues = tuple(dict.fromkeys([*claim["static_issues"], *_dynamic_claim_issues(claim)]))
         if health_issues:
             reason_code = "claim_not_healthy"
             details = health_issues
             recovery = "Repair or resume the claim through the sanctioned session workflow."
         else:
-            outside = tuple(
-                target
-                for target in context["normalized_target_paths"]
-                if not any(_path_is_claimed(target, claimed) for claimed in claim["write_paths"])
-            )
-            if outside:
-                reason_code = "path_outside_claim"
-                details = outside
-                recovery = "Use a separately claimed lane or update the declared write scope before editing."
-            else:
-                authorized = True
+            authorized = True
 
     result = _decision(
         started=started,

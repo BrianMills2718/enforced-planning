@@ -553,6 +553,48 @@ def _outcome_notice(observation: dict[str, Any]) -> str:
     )
 
 
+def _exact_outcome_claim(decision: dict[str, Any]) -> Any:
+    """Load the exact canonical claim named by an ordinary allow decision."""
+
+    import yaml  # type: ignore[import-untyped]
+
+    from enforced_planning import coordination_claims
+
+    source_value = decision.get("claim_source_file")
+    if not isinstance(source_value, str) or not source_value.strip():
+        raise FastPreWriteError("ordinary allow decision lacks exact claim_source_file for outcome admission")
+    source = Path(source_value).expanduser().resolve()
+    try:
+        payload = yaml.safe_load(source.read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError) as exc:
+        raise FastPreWriteError(f"unable to read exact outcome claim source: {exc}") from exc
+    if not isinstance(payload, dict):
+        raise FastPreWriteError("exact outcome claim source must contain a YAML mapping")
+    claim = coordination_claims.normalize_claim(payload, source_file=str(source))
+    if claim is None:
+        raise FastPreWriteError("exact outcome claim source cannot be normalized")
+    return claim
+
+
+def _sanctioned_maintenance_exemption(decision: dict[str, Any]) -> dict[str, Any] | None:
+    """Return bounded exemption evidence only after ordinary exact-claim allow."""
+
+    if decision.get("decision") != "allow" or decision.get("reason_code") != "exact_live_claim":
+        return None
+    from enforced_planning.outcome_admission import is_sanctioned_maintenance_claim
+
+    claim = _exact_outcome_claim(decision)
+    if not is_sanctioned_maintenance_claim(claim):
+        return None
+    return {
+        "reason_code": "sanctioned_unplanned_maintenance",
+        "claim_project": claim.primary_project(),
+        "claim_scope": claim.scope,
+        "claim_source_file": claim.source_file,
+        "tracker_path": claim.tracker_path,
+    }
+
+
 def _enforce_selected_outcome(
     decision: dict[str, Any],
     *,
@@ -561,9 +603,6 @@ def _enforce_selected_outcome(
 ) -> dict[str, Any]:
     """Derive, record, and return hard selected admission for one ordinary receipt."""
 
-    import yaml  # type: ignore[import-untyped]
-
-    from enforced_planning import coordination_claims
     from enforced_planning.outcome_admission import (
         DEFAULT_OUTCOME_ADMISSION_RECEIPT_PATH,
         OutcomeAdmissionRequestV1,
@@ -594,19 +633,7 @@ def _enforce_selected_outcome(
             not isinstance(target, str) or not target.strip() for target in targets
         ):
             raise FastPreWriteError("ordinary allow decision has invalid normalized_target_paths")
-        source_value = decision.get("claim_source_file")
-        if not isinstance(source_value, str) or not source_value.strip():
-            raise FastPreWriteError("ordinary allow decision lacks exact claim_source_file for outcome admission")
-        source = Path(source_value).expanduser().resolve()
-        try:
-            payload = yaml.safe_load(source.read_text(encoding="utf-8"))
-        except (OSError, yaml.YAMLError) as exc:
-            raise FastPreWriteError(f"unable to read exact outcome claim source: {exc}") from exc
-        if not isinstance(payload, dict):
-            raise FastPreWriteError("exact outcome claim source must contain a YAML mapping")
-        claim = coordination_claims.normalize_claim(payload, source_file=str(source))
-        if claim is None:
-            raise FastPreWriteError("exact outcome claim source cannot be normalized")
+        claim = _exact_outcome_claim(decision)
         # Bash authority is intentionally worktree-scoped, so its ordinary
         # decision has no normalized file target. Selected admission supports
         # that shape with ``target_path=None``. File tools may carry multiple
@@ -752,6 +779,7 @@ def main(argv: list[str] | None = None) -> int:
         )
 
     outcome_admission_receipt = None
+    outcome_admission_exemption = None
     enforce_selected_outcome = args.outcome_enforce_selected or outcome_mode == "enforce_selected"
     # Outcome admission governs mutations. Provably read-only shell calls have
     # already been admitted without repository identity, and the strict claim
@@ -768,6 +796,14 @@ def main(argv: list[str] | None = None) -> int:
         "projection_recovery_command",
     }
     enforce_selected_outcome = enforce_selected_outcome and not outcome_exempt
+    if enforce_selected_outcome and decision.get("decision") == "allow":
+        try:
+            outcome_admission_exemption = _sanctioned_maintenance_exemption(decision)
+        except FastPreWriteError:
+            # The ordinary selected-admission path below owns the fail-closed
+            # error report for malformed or missing exact claim state.
+            outcome_admission_exemption = None
+        enforce_selected_outcome = outcome_admission_exemption is None
     if enforce_selected_outcome:
         if mode != "enforce":
             message = "hard selected outcome admission requires ordinary --mode enforce"
@@ -816,6 +852,8 @@ def main(argv: list[str] | None = None) -> int:
             output = {**decision, "outcome_observation": outcome_observation}
         if outcome_admission_receipt is not None:
             output = {**output, "outcome_admission": outcome_admission_receipt}
+        if outcome_admission_exemption is not None:
+            output = {**output, "outcome_admission_exemption": outcome_admission_exemption}
         print(json.dumps(output, indent=2, sort_keys=True))
         if outcome_admission_receipt is not None:
             admission = outcome_admission_receipt["result"]["decision"]

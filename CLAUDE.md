@@ -135,7 +135,12 @@ client, a safe literal branch, and `claim_type: program`; maintenance also
 requires a canonical governed repository, while local initialization is
 restricted to an absent direct child of a non-Git workspace and creates no
 remote. Neither admits composed shell, unknown JSON fields, borrowed subagent
-identity, or ordinary unclaimed mutations. After the graph is canonical, bind,
+identity, or ordinary unclaimed mutations. An exact maintenance claim that
+still matches that typed root-and-tracker contract may pass source-repository
+selected-outcome admission only after the ordinary pre-write gate selects the
+sole claim whose declared write paths cover every target. Generic `UNPLANNED`
+claims, overlapping target authority, and mutations spanning disjoint child
+claims remain denied. After the graph is canonical, bind,
 allocate, select, and only then expand that same claim. The canonical
 `scripts/session_start.py` and `scripts/session_heartbeat.py` own source Make
 execution; their `scripts/meta/` mirrors must remain byte-identical through the

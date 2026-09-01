@@ -201,6 +201,79 @@ def test_duplicate_exact_projection_denies_as_ambiguous(tmp_path: Path) -> None:
     ]
 
 
+@pytest.mark.parametrize(
+    ("target", "expected_scope"),
+    [
+        ("src/allowed.py", "projection-lane"),
+        ("tests/child.py", "projection-lane/child"),
+    ],
+)
+def test_parent_child_exact_claims_select_sole_target_authority(
+    tmp_path: Path,
+    target: str,
+    expected_scope: str,
+) -> None:
+    _repo, worktree, claims_dir, claim_path = _fixture(tmp_path)
+    child = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    child["scope"] = "projection-lane/child"
+    child["write_paths"] = ["tests/child.py"]
+    (claims_dir / "codex_projection-test_projection-lane_child.yaml").write_text(
+        yaml.safe_dump(child, sort_keys=False),
+        encoding="utf-8",
+    )
+    projection_path = tmp_path / "projection.json"
+    write_projection(claims_dir=claims_dir, projection_path=projection_path)
+
+    decision = evaluate_prewrite_fast(
+        _payload(worktree, target),
+        client="codex",
+        mode="enforce",
+        claims_dir=claims_dir,
+        projection_path=projection_path,
+        receipt_path=tmp_path / "receipts.jsonl",
+    )
+
+    assert decision["decision"] == "allow", decision
+    assert decision["reason_code"] == "exact_live_claim"
+    assert decision["claim_scope"] == expected_scope
+
+
+def test_disjoint_exact_claims_do_not_combine_authority(tmp_path: Path) -> None:
+    _repo, worktree, claims_dir, claim_path = _fixture(tmp_path)
+    child = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    child["scope"] = "projection-lane/child"
+    child["write_paths"] = ["tests/child.py"]
+    (claims_dir / "codex_projection-test_projection-lane_child.yaml").write_text(
+        yaml.safe_dump(child, sort_keys=False),
+        encoding="utf-8",
+    )
+    projection_path = tmp_path / "projection.json"
+    write_projection(claims_dir=claims_dir, projection_path=projection_path)
+    payload = _payload(worktree)
+    payload["tool_input"] = {
+        "command": (
+            "*** Begin Patch\n"
+            "*** Update File: src/allowed.py\n"
+            "*** Update File: tests/child.py\n"
+            "*** End Patch"
+        )
+    }
+
+    decision = evaluate_prewrite_fast(
+        payload,
+        client="codex",
+        mode="enforce",
+        claims_dir=claims_dir,
+        projection_path=projection_path,
+        receipt_path=tmp_path / "receipts.jsonl",
+    )
+
+    assert decision["decision"] == "deny"
+    assert decision["reason_code"] == "path_outside_claim"
+    assert decision["claim_scope"] is None
+    assert decision["details"] == ["src/allowed.py", "tests/child.py"]
+
+
 def test_expired_projection_claim_is_not_authorized(tmp_path: Path) -> None:
     _repo, worktree, claims_dir, claim_path = _fixture(tmp_path)
     claim = yaml.safe_load(claim_path.read_text(encoding="utf-8"))

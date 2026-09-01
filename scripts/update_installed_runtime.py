@@ -54,13 +54,15 @@ def _assert_repo(path: Path, label: str) -> None:
         raise RuntimeUpdateError(f"{label} is not a Git worktree: {path}")
 
 
-def _assert_clean_runtime(runtime_repo: Path) -> None:
+def _assert_clean_runtime(runtime_repo: Path) -> str:
     dirty = _output(runtime_repo, "status", "--porcelain", "--untracked-files=all")
     if dirty:
         raise RuntimeUpdateError("installed runtime is dirty; preserve or remove its changes before update")
-    branch = _output(runtime_repo, "symbolic-ref", "--quiet", "--short", "HEAD")
-    if branch != "main":
+    branch_result = _run(runtime_repo, "symbolic-ref", "--quiet", "--short", "HEAD", check=False)
+    branch = branch_result.stdout.strip() if branch_result.returncode == 0 else "detached"
+    if branch not in {"main", "detached"}:
         raise RuntimeUpdateError(f"installed runtime must be on main, found {branch!r}")
+    return branch
 
 
 def _validate_revision(source_repo: Path, revision: str) -> None:
@@ -91,7 +93,7 @@ def update_runtime(
     _assert_repo(source_repo, "source repository")
     _assert_repo(runtime_repo, "installed runtime")
     _validate_revision(source_repo, revision)
-    _assert_clean_runtime(runtime_repo)
+    checkout_mode = _assert_clean_runtime(runtime_repo)
 
     source_origin = _output(source_repo, "remote", "get-url", "origin")
     runtime_origin = _output(runtime_repo, "remote", "get-url", "origin")
@@ -119,6 +121,7 @@ def update_runtime(
         "source_repo": str(source_repo),
         "runtime_repo": str(runtime_repo),
         "origin": runtime_origin,
+        "checkout_mode": checkout_mode,
         "before_revision": before,
         "target_revision": revision,
         "after_revision": before,

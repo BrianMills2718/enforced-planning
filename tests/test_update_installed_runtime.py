@@ -299,7 +299,10 @@ def test_main_emits_complete_json_when_hostname_lookup_fails(
     assert payload["error"]["type"] == "RuntimeUpdateError"
 
 
-def test_malformed_whitespace_url_credentials_are_redacted_from_denial() -> None:
+@pytest.mark.parametrize("separator", [" ", "\r", "\n"])
+def test_malformed_whitespace_url_credentials_are_redacted_from_denial(
+    separator: str,
+) -> None:
     receipt = runtime_update._base_receipt(
         source_repo=Path("/source"),
         runtime_repo=Path("/runtime"),
@@ -309,12 +312,15 @@ def test_malformed_whitespace_url_credentials_are_redacted_from_denial() -> None
     )
     denial = runtime_update._deny(
         receipt,
-        RuntimeUpdateError("failed https://token:super secret@evil.example/repo.git"),
+        RuntimeUpdateError(
+            f"failed https://token:super{separator}secret@evil.example/repo.git"
+        ),
     )
 
     serialized = json.dumps(denial.receipt, sort_keys=True)
     assert "token" not in serialized
-    assert "super secret" not in serialized
+    assert "super" not in serialized
+    assert "secret" not in serialized
     assert "https://<redacted>@evil.example/repo.git" in serialized
 
 

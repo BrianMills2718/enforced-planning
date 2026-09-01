@@ -102,6 +102,28 @@ def test_maintenance_worktree_keeps_an_explicitly_declared_write_scope() -> None
     assert request["write_paths"] == ["Makefile", "docs/plans"]
 
 
+def test_maintenance_worktree_rejects_plan_owned_work() -> None:
+    result = subprocess.run(
+        [
+            "make",
+            "-n",
+            "maintenance-worktree",
+            *_COMMON_MAKE_VARS,
+            "BRANCH=plan-owned-probe",
+            "PLAN=123",
+        ],
+        cwd=str(PROJECT_ROOT),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    assert "maintenance-worktree is only for explicitly unplanned light maintenance" in (
+        result.stdout + result.stderr
+    )
+
+
 def test_plan_bound_worktree_claim_keeps_its_real_plan_reference() -> None:
     """A numbered plan lane must keep its qualified plan id, never UNPLANNED."""
     invocation = _claim_invocation(_dry_run_make("worktree", "BRANCH=plan-42-probe", "PLAN=42"))

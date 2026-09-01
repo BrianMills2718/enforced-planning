@@ -115,6 +115,9 @@ while queue:
                 break
         continue
     if command == "gh":
+        if "api" in words[1:] and any("mergePullRequest" in word for word in words[1:]):
+            print("merge")
+            raise SystemExit
         if "api" in words[1:] and any(
             re.search(r"(^|/)pulls/[1-9][0-9]*/merge$", word)
             for word in words[1:]
@@ -128,12 +131,22 @@ while queue:
                 raise SystemExit
         except ValueError:
             pass
-    if command in {"make", "gmake"} and "merge" in words[1:]:
-        print("merge")
-        raise SystemExit
+    if command in {"make", "gmake"}:
+        if "merge" in words[1:]:
+            print("merge")
+            raise SystemExit
+        if "finish" in words[1:]:
+            allowed_assignments = {"BRANCH", "PR", "REVIEW_SPEC", "REVIEW_OUTPUT_ROOT"}
+            unsafe = any(word.startswith("-") for word in words[1:])
+            for word in words[1:]:
+                if assignment.match(word) and word.split("=", 1)[0] not in allowed_assignments:
+                    unsafe = True
+            if unsafe:
+                print("unsafe_finish")
+                raise SystemExit
     if command == "finish_pr.py" or (
         python_name.fullmatch(command)
-        and any(os.path.basename(word) == "finish_pr.py" for word in words[1:])
+        and any("finish_pr.py" in word for word in words[1:])
     ):
         print("finish")
         raise SystemExit
@@ -180,6 +193,12 @@ if [[ "$BLOCK_KIND" == "finish" ]]; then
     echo "" >&2
     echo "Use the proper command instead:" >&2
     echo "  make finish BRANCH=$BRANCH PR=$PR_NUM REVIEW_SPEC=/absolute/review-spec.json" >&2
+    exit 2
+fi
+
+if [[ "$BLOCK_KIND" == "unsafe_finish" ]]; then
+    echo "BLOCKED: make finish must use the repository's canonical Makefile and finish runtime" >&2
+    echo "Use: make finish BRANCH=<branch> PR=<number> REVIEW_SPEC=/absolute/review-spec.json" >&2
     exit 2
 fi
 

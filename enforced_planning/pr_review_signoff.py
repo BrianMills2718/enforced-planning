@@ -310,6 +310,7 @@ def run_programmatic_checks(
     results: list[ProgrammaticCheckResult] = []
     for check in spec.programmatic_checks:
         with tempfile.TemporaryDirectory(prefix="pr-review-check-cache-") as cache:
+            (Path(cache) / "tmp").mkdir()
             confined_command = [
                 "systemd-run",
                 "--user",
@@ -323,6 +324,9 @@ def run_programmatic_checks(
                 f"--setenv=RUFF_CACHE_DIR={cache}/ruff",
                 f"--setenv=XDG_CACHE_HOME={cache}/xdg",
                 f"--setenv=PYTHONPYCACHEPREFIX={cache}/pycache",
+                f"--setenv=TMPDIR={cache}/tmp",
+                f"--setenv=TEMP={cache}/tmp",
+                f"--setenv=TMP={cache}/tmp",
                 "--setenv=GH_TOKEN=",
                 "--setenv=GITHUB_TOKEN=",
                 "--setenv=SSH_AUTH_SOCK=",

@@ -168,5 +168,8 @@ checkout directory, so pull-request content cannot rewrite its own rubric.
 - Programmatic checks run with the host filesystem read-only, one ephemeral
   cache directory writable, and no external network. PR-controlled checks
   cannot rewrite the canonical checkout or closeout Makefile.
+- `make finish` is allowed only through the repository's canonical Makefile
+  with its canonical runtime variables; `-f` and finish-runtime overrides are
+  blocked. Direct runpy and GitHub GraphQL merge forms are blocked as well.
 - A review-spec path is lexically inside a registered worktree but resolves
   through a symlink to outside it: reject it as PR-controlled input.

@@ -1513,18 +1513,23 @@ def test_codex_lifecycle_hook_rejects_malformed_input_without_receipt(
 
 
 def _initialize_git_repository(path: Path) -> None:
-    """Create one clean repository for native closeout-hook tests."""
+    """Create one clean linked worktree for native closeout-hook tests."""
 
-    path.mkdir(parents=True)
-    subprocess.run(["git", "init", "-q", str(path)], check=True)
-    subprocess.run(["git", "-C", str(path), "config", "user.name", "Test Agent"], check=True)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    canonical = path.with_name(f".{path.name}-canonical")
+    subprocess.run(["git", "init", "-q", str(canonical)], check=True)
+    subprocess.run(["git", "-C", str(canonical), "config", "user.name", "Test Agent"], check=True)
     subprocess.run(
-        ["git", "-C", str(path), "config", "user.email", "agent@example.test"],
+        ["git", "-C", str(canonical), "config", "user.email", "agent@example.test"],
         check=True,
     )
-    (path / "tracked.txt").write_text("baseline\n", encoding="utf-8")
-    subprocess.run(["git", "-C", str(path), "add", "tracked.txt"], check=True)
-    subprocess.run(["git", "-C", str(path), "commit", "-qm", "baseline"], check=True)
+    (canonical / "tracked.txt").write_text("baseline\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(canonical), "add", "tracked.txt"], check=True)
+    subprocess.run(["git", "-C", str(canonical), "commit", "-qm", "baseline"], check=True)
+    subprocess.run(
+        ["git", "-C", str(canonical), "worktree", "add", "-qb", "session-worktree", str(path)],
+        check=True,
+    )
 
 
 def _run_repository_closeout_hook(

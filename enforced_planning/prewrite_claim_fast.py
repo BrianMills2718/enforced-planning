@@ -21,7 +21,6 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-
 DEFAULT_CLAIMS_DIR = Path.home() / ".claude" / "coordination" / "claims"
 DEFAULT_PROJECTION_PATH = (
     Path.home() / ".claude" / "coordination" / "prewrite-authority-v1.json"
@@ -77,6 +76,7 @@ _SIMPLE_READ_ONLY_COMMANDS = frozenset(
         "readlink",
         "realpath",
         "rg",
+        "sha256sum",
         "stat",
         "tail",
         "test",
@@ -408,6 +408,12 @@ def _bash_declared_paths(command: str) -> tuple[str, ...]:
     ambiguity never creates authority outside the selected worktree.
     """
 
+    commands = _shell_commands(command)
+    if commands is not None and len(commands) == 1:
+        git_merge_paths = _git_merge_declared_paths(commands[0])
+        if git_merge_paths is not None:
+            return git_merge_paths
+
     try:
         lexer = shlex.shlex(command, posix=True, punctuation_chars=";&|<>")
         lexer.whitespace_split = True
@@ -416,14 +422,37 @@ def _bash_declared_paths(command: str) -> tuple[str, ...]:
         return ()
     paths: list[str] = []
     command_start = True
+    env_command = False
+    python_script_pending = False
+    skip_env_cwd = False
     for token in tokens:
         if token in _SHELL_CONTROL or set(token) <= set(";&|<>"):
             command_start = token in {";", "&&", "||", "|", "&"}
             continue
         if command_start:
             command_start = False
+            env_command = token == "/usr/bin/env"
             if token.startswith(("/usr/bin/", "/bin/")):
                 continue
+        if env_command:
+            if skip_env_cwd:
+                skip_env_cwd = False
+                continue
+            if token in {"-C", "--chdir"}:
+                skip_env_cwd = True
+                continue
+            if token.startswith("--chdir=") or (
+                "=" in token and not token.startswith(("/", "~", "."))
+            ):
+                continue
+            env_command = False
+            python_script_pending = Path(token).name in {"python", "python3", "python3.12"}
+            continue
+        if python_script_pending:
+            if token.startswith("-"):
+                continue
+            python_script_pending = False
+            continue
         candidate = token.split("=", 1)[1] if token.startswith("-") and "=" in token else token
         if "://" in candidate or candidate in {"-", "."}:
             continue
@@ -431,7 +460,6 @@ def _bash_declared_paths(command: str) -> tuple[str, ...]:
             candidate = candidate.split("=", 1)[1]
         if candidate.startswith(("/", "~", "./", "../")) or "/" in candidate:
             paths.append(candidate)
-    commands = _shell_commands(command)
     if commands is not None:
         for argv in commands:
             executable = Path(argv[0]).name
@@ -454,10 +482,92 @@ def _bash_declared_paths(command: str) -> tuple[str, ...]:
     return tuple(dict.fromkeys(paths))
 
 
+def _git_merge_declared_paths(argv: tuple[str, ...]) -> tuple[str, ...] | None:
+    """Return actual path operands for one direct ``git merge`` command.
+
+    A merge's positional operands are revision names, not filesystem paths.
+    Treating ``origin/main`` as a path creates a circular failure at the exact
+    integration boundary the claim is meant to authorize. Execution-directory
+    and merge-message-file operands remain paths and stay subject to the claim.
+    ``None`` means the command is not the narrow shape handled here.
+    """
+
+    if not argv or Path(argv[0]).name != "git":
+        return None
+    paths: list[str] = []
+    index = 1
+    while index < len(argv):
+        token = argv[index]
+        if token == "-C":
+            if index + 1 >= len(argv):
+                return None
+            paths.append(argv[index + 1])
+            index += 2
+            continue
+        if token == "-c":
+            if index + 1 >= len(argv):
+                return None
+            index += 2
+            continue
+        if token in {"--no-pager", "--paginate", "-P", "-p"}:
+            index += 1
+            continue
+        break
+    if index >= len(argv) or argv[index] != "merge":
+        return None
+    index += 1
+    while index < len(argv):
+        token = argv[index]
+        if token in {"-F", "--file"}:
+            if index + 1 >= len(argv):
+                return None
+            paths.append(argv[index + 1])
+            index += 2
+            continue
+        if token.startswith("--file="):
+            paths.append(token.split("=", 1)[1])
+        index += 1
+    return tuple(dict.fromkeys(paths))
+
+
 def _bash_target_is_unprovable(command: str) -> bool:
     """Reject expansions that can conceal a target path from the hook."""
 
-    return any(marker in command for marker in ("$", "`", "*", "?", "[", ">(", "<("))
+    quote: str | None = None
+    escaped = False
+    index = 0
+    while index < len(command):
+        char = command[index]
+        if escaped:
+            escaped = False
+            index += 1
+            continue
+        if quote == "'":
+            if char == "'":
+                quote = None
+            index += 1
+            continue
+        if char == "\\":
+            escaped = True
+            index += 1
+            continue
+        if char == '"':
+            quote = None if quote == '"' else '"'
+            index += 1
+            continue
+        if quote == '"':
+            if char in {"$", "`"}:
+                return True
+            index += 1
+            continue
+        if char == "'":
+            quote = "'"
+            index += 1
+            continue
+        if char in {"$", "`", "*", "?", "["} or command.startswith((">(", "<("), index):
+            return True
+        index += 1
+    return False
 
 
 def _bash_explicit_worktree(command: str) -> Path | None:
@@ -538,6 +648,8 @@ def _argv_is_read_only(argv: tuple[str, ...]) -> bool:
 
     if _session_status_command_is_read_only(argv):
         return True
+    if _goal_authority_validator_is_read_only(argv):
+        return True
 
     executable_token = argv[0]
     if Path(executable_token).name != executable_token:
@@ -553,6 +665,8 @@ def _argv_is_read_only(argv: tuple[str, ...]) -> bool:
                 for token in argv[1:]
             )
         )
+    if executable == "systemctl":
+        return _systemctl_command_is_read_only(argv)
     if executable == "sed":
         tail = argv[1:]
         if any(
@@ -590,6 +704,59 @@ def _argv_is_read_only(argv: tuple[str, ...]) -> bool:
     if executable == "gh":
         return _gh_command_is_read_only(argv)
     return executable == "git" and _git_command_is_read_only(argv)
+
+
+def _goal_authority_validator_is_read_only(argv: tuple[str, ...]) -> bool:
+    """Admit the exact shared goal validator with one read-only document operand."""
+
+    if len(argv) != 3 or argv[0] != "/usr/bin/python3":
+        return False
+    validator = Path(argv[1]).expanduser()
+    if not validator.is_absolute():
+        return False
+    expected = (
+        Path.home()
+        / ".agents"
+        / "skills"
+        / "authoring-goals"
+        / "scripts"
+        / "validate_goal_authority.py"
+    ).resolve(strict=False)
+    return validator.resolve(strict=False) == expected and bool(argv[2])
+
+
+def _systemctl_command_is_read_only(argv: tuple[str, ...]) -> bool:
+    """Admit only bounded systemd queries; lifecycle verbs remain claim-bound."""
+
+    flags = {
+        "--user",
+        "--system",
+        "--no-pager",
+        "--plain",
+        "--quiet",
+        "--no-legend",
+        "--full",
+        "--all",
+        "--value",
+    }
+    value_prefixes = ("--property=", "--type=", "--state=", "--lines=")
+    index = 1
+    while index < len(argv) and (
+        argv[index] in flags or argv[index].startswith(value_prefixes)
+    ):
+        index += 1
+    if index >= len(argv) or argv[index] not in {"is-active", "show"}:
+        return False
+    verb = argv[index]
+    tail = argv[index + 1 :]
+    if verb == "is-active" and not any(not token.startswith("-") for token in tail):
+        return False
+    return all(
+        not token.startswith("-")
+        or token in flags
+        or token.startswith(value_prefixes)
+        for token in tail
+    )
 
 
 def adapt_native_payload(

@@ -14,7 +14,12 @@ import pytest
 import yaml  # type: ignore[import-untyped]
 
 from enforced_planning import coordination_claims, session_lifecycle
-from enforced_planning.prewrite_claim_fast import _argv_is_read_only, evaluate_prewrite_fast
+from enforced_planning.prewrite_claim_fast import (
+    _argv_is_read_only,
+    _bash_declared_paths,
+    _bash_target_is_unprovable,
+    evaluate_prewrite_fast,
+)
 from enforced_planning.prewrite_claim_projection import write_projection
 from scripts import prewrite_claim_gate
 
@@ -472,6 +477,112 @@ def test_explicit_host_mode_allows_read_only_bash_from_workspace_root(
     assert code == 0, (decision["reason_code"], decision["details"], decision)
     assert decision["decision"] == "allow"
     assert decision["reason_code"] == "bash_read_only"
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "sha256sum image.png",
+        "systemctl --user is-active code-image-ingest.path",
+        "systemctl --user show code-image-ingest.path --property=ActiveState --value",
+    ],
+)
+def test_host_gate_admits_workspace_root_status_and_hash_queries(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    command: str,
+) -> None:
+    payload = _payload(cwd=tmp_path, tool="Bash", tool_input={"command": command})
+
+    code, decision = _run_cli(monkeypatch, capsys, tmp_path, payload)
+
+    assert code == 0, decision
+    assert decision["reason_code"] == "bash_read_only"
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "systemctl --user restart code-image-ingest.path",
+        "systemctl --user enable code-image-ingest.path",
+        "systemctl --user is-active",
+    ],
+)
+def test_systemctl_mutation_or_incomplete_query_is_not_read_only(command: str) -> None:
+    assert not _argv_is_read_only(tuple(command.split()))
+
+
+def test_exact_shared_goal_validator_is_read_only() -> None:
+    validator = (
+        Path.home()
+        / ".agents"
+        / "skills"
+        / "authoring-goals"
+        / "scripts"
+        / "validate_goal_authority.py"
+    )
+    assert _argv_is_read_only(("/usr/bin/python3", str(validator), "/tmp/goal.md"))
+    assert not _argv_is_read_only(("python3", str(validator), "/tmp/goal.md"))
+    assert not _argv_is_read_only(
+        ("/usr/bin/python3", str(validator), "/tmp/goal.md", "--write")
+    )
+
+
+def test_quoted_brackets_do_not_make_literal_commit_message_unprovable() -> None:
+    assert not _bash_target_is_unprovable("git commit -m '[Unplanned] literal message'")
+    assert _bash_target_is_unprovable("touch source[12].txt")
+
+
+def test_env_bound_python_script_is_read_input_not_external_mutation_target() -> None:
+    command = (
+        "/usr/bin/env -C /repo/worktrees/lane python3 "
+        "/home/user/.codex/plugins/cache/company-planning/scripts/manage_plan_execution.py "
+        "start .company-planning/candidate.json"
+    )
+
+    assert _bash_declared_paths(command) == (".company-planning/candidate.json",)
+
+
+def test_git_merge_revision_is_not_misclassified_as_a_path() -> None:
+    command = "git -C /repo/worktrees/lane merge --no-edit origin/main"
+
+    assert _bash_declared_paths(command) == ("/repo/worktrees/lane",)
+
+
+def test_git_merge_message_file_remains_a_declared_path() -> None:
+    command = "git -C /repo/worktrees/lane merge --file=notes/message.txt origin/main"
+
+    assert _bash_declared_paths(command) == (
+        "/repo/worktrees/lane",
+        "notes/message.txt",
+    )
+
+
+def test_claimed_env_bound_python_manager_uses_candidate_as_the_write_target(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    workspace, _repo, worktree, claims_dir, _claim_path = _fixture(tmp_path)
+    command = (
+        f"/usr/bin/env -C {worktree} python3 "
+        "/opt/company-planning/scripts/manage_plan_execution.py "
+        "start src/candidate.json"
+    )
+
+    code, decision = _run_cli(
+        monkeypatch,
+        capsys,
+        tmp_path,
+        _payload(cwd=workspace, tool="Bash", tool_input={"command": command}),
+        claims_dir=claims_dir,
+        projection_path=tmp_path / "projection.json",
+    )
+
+    assert code == 0, decision
+    assert decision["reason_code"] == "exact_live_claim"
+    assert decision["normalized_target_paths"] == ["src/candidate.json"]
 
 
 def test_host_gate_admits_exact_hook_feedback_make_target_without_claim(

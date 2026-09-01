@@ -31,6 +31,7 @@ CANONICAL_ORIGIN_IDENTITY = "github.com/BrianMills2718/enforced-planning"
 LEGACY_RUNTIME_ORIGIN = "git@github-personal:BrianMills2718/enforced-planning.git"
 GIT_EXECUTABLE = Path("/usr/bin/git")
 GH_EXECUTABLE = Path("/usr/bin/gh")
+SAFE_FAILURE_MESSAGE = "Runtime update failed at the recorded stage; raw error details are omitted."
 ALLOWED_RUNTIME_CONFIG_KEYS = {
     "branch.main.merge",
     "branch.main.remote",
@@ -208,17 +209,17 @@ def _canonical_network_git_env() -> dict[str, str]:
     return env
 
 
-def _deny(receipt: dict[str, Any], error: Exception) -> RuntimeUpdateError:
+def _deny(receipt: dict[str, Any], _error: Exception) -> RuntimeUpdateError:
     receipt.update(
         action="partial_failure" if receipt["mutation_started"] else "denied",
         state="failed",
         error={
             "type": "RuntimeUpdateError",
             "code": "runtime_update_failed",
-            "message": "Runtime update failed at the recorded stage; raw error details are omitted.",
+            "message": SAFE_FAILURE_MESSAGE,
         },
     )
-    return RuntimeUpdateError(str(error), receipt=receipt.copy())
+    return RuntimeUpdateError(SAFE_FAILURE_MESSAGE, receipt=receipt.copy())
 
 
 def _refresh_failure_state(runtime_repo: Path, receipt: dict[str, Any]) -> None:
@@ -524,7 +525,7 @@ def update_runtime(
         return receipt
     except (RuntimeUpdateError, OSError, subprocess.SubprocessError) as exc:
         _refresh_failure_state(runtime_repo, receipt)
-        raise _deny(receipt, exc) from exc
+        raise _deny(receipt, exc) from None
 
 
 def _parser() -> argparse.ArgumentParser:

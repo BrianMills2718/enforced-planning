@@ -72,6 +72,25 @@ def test_semantic_result_rejects_a_non_sha_revision() -> None:
         )
 
 
+def test_codex_output_schema_types_every_const_and_enum() -> None:
+    schema_path = Path(__file__).parents[1] / "contracts" / "pr-review-signoff.schema.json"
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    missing: list[str] = []
+
+    def walk(value: object, pointer: str = "") -> None:
+        if isinstance(value, dict):
+            if ("const" in value or "enum" in value) and "type" not in value:
+                missing.append(pointer or "/")
+            for key, child in value.items():
+                walk(child, f"{pointer}/{key}")
+        elif isinstance(value, list):
+            for index, child in enumerate(value):
+                walk(child, f"{pointer}/{index}")
+
+    walk(schema)
+    assert missing == []
+
+
 def test_failed_programmatic_check_cannot_be_signed_off() -> None:
     semantic = SemanticReviewResult(
         schema_version="1.0",

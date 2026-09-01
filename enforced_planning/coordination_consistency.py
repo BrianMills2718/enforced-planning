@@ -126,6 +126,109 @@ def load_repo_worktrees(repo_roots: dict[str, Path]) -> list[WorktreeRecord]:
     return records
 
 
+def _matching_live_claims(
+    worktree: WorktreeRecord,
+    claims: list[coordination_claims.ClaimRecord],
+) -> list[coordination_claims.ClaimRecord]:
+    """Return live claims that still name one linked worktree registration."""
+
+    return [
+        claim
+        for claim in claims
+        if claim.primary_project() == worktree.repo and _worktree_matches_claim(claim, worktree)
+    ]
+
+
+def reconcile_missing_worktree_registrations(
+    *,
+    claims: list[coordination_claims.ClaimRecord],
+    repo_roots: dict[str, Path],
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Prune only provably dead, unclaimed Git worktree registrations.
+
+    ``git worktree prune`` is repository-wide rather than target-specific.  A
+    repository is therefore left entirely unchanged when even one prunable
+    registration still matches a live claim.  Existing worktree directories
+    are never removed by this control, whether clean, dirty, claimed, or
+    unclaimed; the ordinary consistency report remains the disposition surface
+    for those lanes.
+    """
+
+    before = load_repo_worktrees(repo_roots)
+    actions: list[dict[str, Any]] = []
+    for repo, repo_root in sorted(repo_roots.items()):
+        prunable = [
+            record
+            for record in before
+            if record.repo == repo
+            and not record.is_main_worktree
+            and not record.exists_on_disk
+            and record.prunable_reason
+        ]
+        if not prunable:
+            actions.append({"repo": repo, "action": "unchanged", "prunable_count": 0})
+            continue
+
+        protected = [
+            record
+            for record in prunable
+            if _matching_live_claims(record, claims)
+        ]
+        if protected:
+            actions.append(
+                {
+                    "repo": repo,
+                    "action": "blocked_live_claim",
+                    "prunable_count": len(prunable),
+                    "protected_paths": sorted(record.path for record in protected),
+                }
+            )
+            continue
+
+        command = ["git", "worktree", "prune", "--expire", "now", "--verbose"]
+        if dry_run:
+            command.insert(3, "--dry-run")
+        result = subprocess.run(
+            command,
+            cwd=str(repo_root),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"Unable to prune stale worktree registrations for {repo_root}: "
+                f"{(result.stderr or result.stdout).strip()}"
+            )
+        actions.append(
+            {
+                "repo": repo,
+                "action": "would_prune" if dry_run else "pruned",
+                "prunable_count": len(prunable),
+                "paths": sorted(record.path for record in prunable),
+            }
+        )
+
+    after = before if dry_run else load_repo_worktrees(repo_roots)
+    return {
+        "mode": "dry_run" if dry_run else "apply",
+        "actions": actions,
+        "pruned_count": sum(
+            action["prunable_count"]
+            for action in actions
+            if action["action"] == "pruned"
+        ),
+        "remaining_prunable_paths": sorted(
+            record.path
+            for record in after
+            if not record.is_main_worktree
+            and not record.exists_on_disk
+            and record.prunable_reason
+        ),
+    }
+
+
 def _canonicalize_registry_payload(payload: dict[str, Any]) -> dict[str, Any]:
     """Drop volatile fields before comparing two registry payloads."""
     canonical = dict(payload)
@@ -155,9 +258,7 @@ def _worktree_matches_claim(
                 return True
         except FileNotFoundError:
             pass
-    if claim.branch and claim.branch == worktree.branch:
-        return True
-    return False
+    return bool(claim.branch and claim.branch == worktree.branch)
 
 
 def build_consistency_report(
@@ -414,6 +515,19 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Hard-fail when the automatically refreshed digest-bound projection disagrees with canonical claims.",
     )
+    parser.add_argument(
+        "--prune-missing-registrations",
+        action="store_true",
+        help=(
+            "Prune Git registrations only when every prunable path in a repository is "
+            "absent and unmatched by a live claim; never remove an existing worktree directory."
+        ),
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="With --prune-missing-registrations, report eligible registration pruning without applying it.",
+    )
     parser.add_argument("--json", action="store_true", help="Emit structured JSON output.")
     return parser.parse_args(argv)
 
@@ -439,6 +553,15 @@ def main(argv: list[str] | None = None) -> int:
 
     all_claims = coordination_claims.check_claims()
     claims = [claim for claim in all_claims if claim.primary_project() in repo_roots]
+    reconciliation = None
+    if args.dry_run and not args.prune_missing_registrations:
+        raise ValueError("--dry-run requires --prune-missing-registrations")
+    if args.prune_missing_registrations:
+        reconciliation = reconcile_missing_worktree_registrations(
+            claims=claims,
+            repo_roots=repo_roots,
+            dry_run=args.dry_run,
+        )
     projection_current = None
     if args.verify_prewrite_projection:
         projection_current = prewrite_claim_projection.projection_is_current(
@@ -451,6 +574,7 @@ def main(argv: list[str] | None = None) -> int:
         registry_markdown_path=Path(args.registry_markdown).expanduser().resolve() if args.registry_markdown else None,
         projection_current=projection_current,
     )
+    report["reconciliation"] = reconciliation
 
     if args.json:
         print(json.dumps(report, indent=2))
@@ -461,8 +585,10 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Linked worktrees: {report['worktree_count']}")
         print(f"Hard issues: {report['hard_issue_count']}")
         print(f"Warnings: {report['warning_count']}")
+        if reconciliation is not None:
+            print(f"Registrations pruned: {reconciliation['pruned_count']}")
         if report["issues"]:
-            print("")
+            print()
             for issue in report["issues"]:
                 label = "ERROR" if issue["severity"] == "hard" else "WARN"
                 repo = issue["repo"] or "-"

@@ -1,0 +1,37 @@
+{
+  "schema_version": "1.0",
+  "recorded_at": "2026-09-01T18:12:00Z",
+  "control": "conservative_worktree_reconciliation",
+  "start_revision": "dc5ef2a5b7e911bc6bf813edb7dd26bd939c698c",
+  "implementation": {
+    "entrypoint": "scripts/check_coordination_consistency.py --prune-missing-registrations",
+    "automatic_scope": "Git registrations whose worktree paths are absent, Git marks prunable, and no live claim matches any prunable registration in that repository",
+    "preservation_rule": "Existing worktree directories are report-only and are never removed; a live claim matching any prunable registration blocks all pruning for that repository",
+    "branch_preservation": "git worktree prune removes registration metadata only and leaves the task branch intact"
+  },
+  "focused_checks": [
+    {
+      "command": "PYTHONPATH=. pytest -q tests/test_check_coordination_consistency.py",
+      "result": "9 passed"
+    },
+    {
+      "command": "PYTHONPATH=. python -m ruff check enforced_planning/coordination_consistency.py tests/test_check_coordination_consistency.py",
+      "result": "All checks passed"
+    },
+    {
+      "command": "PYTHONPATH=. python scripts/check_coordination_consistency.py --repo enforced-planning=/home/brian/code/active/enforced-planning --claims-dir /home/brian/.claude/coordination/claims --prune-missing-registrations --dry-run --json",
+      "result": {
+        "hard_issue_count": 0,
+        "warning_count": 0,
+        "action": "unchanged",
+        "prunable_count": 0,
+        "remaining_prunable_paths": []
+      }
+    }
+  ],
+  "authentic_adjacent_finding": {
+    "summary": "Sanctioned worktree creation exposed an independent transient canonical-lock TOCTOU failure while traversing a different live worktree's Git admin directory.",
+    "disposition": "Sent to the exact canonical-lock claim owner without overlapping its paths.",
+    "message_id": "msg_aacd5f7489fdf22b83428616da46f27e"
+  }
+}

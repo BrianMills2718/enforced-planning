@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -219,3 +220,163 @@ def test_cli_can_require_current_prewrite_projection(tmp_path: Path, capsys) -> 
     assert exit_code == 1
     assert payload["prewrite_projection_current"] is False
     assert any(issue["code"] == "prewrite-projection-drift" for issue in payload["issues"])
+
+
+def _make_prunable_worktree(repo_root: Path, path: Path, branch: str) -> None:
+    """Create a linked worktree, then simulate an interrupted filesystem removal."""
+
+    _run(["git", "worktree", "add", "-b", branch, str(path)], cwd=repo_root)
+    shutil.rmtree(path)
+
+
+def test_reconciler_prunes_only_missing_unclaimed_registration(tmp_path: Path, capsys) -> None:
+    """A vanished unclaimed path is removed from Git metadata while its branch survives."""
+
+    workspace = tmp_path / "workspace"
+    repo_root = workspace / "project-meta"
+    _init_repo(repo_root)
+    missing = workspace / "project-meta_worktrees" / "interrupted"
+    _make_prunable_worktree(repo_root, missing, "interrupted")
+
+    exit_code = coordination_consistency.main(
+        [
+            "--repo",
+            f"project-meta={repo_root}",
+            "--claims-dir",
+            str(tmp_path / "claims"),
+            "--prune-missing-registrations",
+            "--json",
+        ]
+    )
+
+    payload = json.loads(capsys.readouterr().out)
+    assert exit_code == 0
+    assert payload["reconciliation"]["pruned_count"] == 1
+    assert payload["reconciliation"]["remaining_prunable_paths"] == []
+    listed = subprocess.run(
+        ["git", "worktree", "list", "--porcelain"],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+    assert str(missing) not in listed
+    branch = subprocess.run(
+        ["git", "branch", "--list", "interrupted"],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+    assert "interrupted" in branch
+
+
+def test_reconciler_reports_existing_unclaimed_dirty_lane_without_removing_it(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    """Existing non-live state remains visible and physically untouched."""
+
+    workspace = tmp_path / "workspace"
+    repo_root = workspace / "project-meta"
+    _init_repo(repo_root)
+    linked = workspace / "project-meta_worktrees" / "dirty-unclaimed"
+    _run(["git", "worktree", "add", "-b", "dirty-unclaimed", str(linked)], cwd=repo_root)
+    (linked / "LOCAL.txt").write_text("preserve me\n", encoding="utf-8")
+
+    exit_code = coordination_consistency.main(
+        [
+            "--repo",
+            f"project-meta={repo_root}",
+            "--claims-dir",
+            str(tmp_path / "claims"),
+            "--prune-missing-registrations",
+            "--json",
+        ]
+    )
+
+    payload = json.loads(capsys.readouterr().out)
+    assert exit_code == 0
+    assert payload["reconciliation"]["pruned_count"] == 0
+    assert linked.exists()
+    assert (linked / "LOCAL.txt").read_text(encoding="utf-8") == "preserve me\n"
+    assert any(
+        issue["code"] == "worktree-unclaimed" and issue["worktree_path"] == str(linked)
+        for issue in payload["issues"]
+    )
+
+
+def test_reconciler_blocks_repo_when_missing_registration_has_live_claim(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    """Repository-wide Git pruning cannot cross a live claim, even for an absent path."""
+
+    workspace = tmp_path / "workspace"
+    repo_root = workspace / "project-meta"
+    _init_repo(repo_root)
+    missing = workspace / "project-meta_worktrees" / "claimed-missing"
+    _make_prunable_worktree(repo_root, missing, "claimed-missing")
+    claims_dir = tmp_path / "claims"
+    _write_claim(
+        claims_dir,
+        "claim.yaml",
+        {
+            "agent": "codex",
+            "projects": ["project-meta"],
+            "scope": "claimed-missing",
+            "intent": "Preserve interrupted lane",
+            "claim_type": "write",
+            "write_paths": ["README.md"],
+            "worktree_path": str(missing),
+            "branch": "claimed-missing",
+            "status": "active",
+            "claimed_at": "2026-04-04T08:00:00+00:00",
+            "expires_at": "2099-04-04T09:00:00+00:00",
+        },
+    )
+
+    exit_code = coordination_consistency.main(
+        [
+            "--repo",
+            f"project-meta={repo_root}",
+            "--claims-dir",
+            str(claims_dir),
+            "--prune-missing-registrations",
+            "--json",
+        ]
+    )
+
+    payload = json.loads(capsys.readouterr().out)
+    assert exit_code == 1
+    assert payload["reconciliation"]["actions"][0]["action"] == "blocked_live_claim"
+    assert payload["reconciliation"]["pruned_count"] == 0
+    assert str(missing) in payload["reconciliation"]["remaining_prunable_paths"]
+
+
+def test_reconciler_dry_run_preserves_registration(tmp_path: Path, capsys) -> None:
+    """Dry-run proves eligibility without mutating Git's worktree registry."""
+
+    workspace = tmp_path / "workspace"
+    repo_root = workspace / "project-meta"
+    _init_repo(repo_root)
+    missing = workspace / "project-meta_worktrees" / "dry-run"
+    _make_prunable_worktree(repo_root, missing, "dry-run")
+
+    exit_code = coordination_consistency.main(
+        [
+            "--repo",
+            f"project-meta={repo_root}",
+            "--claims-dir",
+            str(tmp_path / "claims"),
+            "--prune-missing-registrations",
+            "--dry-run",
+            "--json",
+        ]
+    )
+
+    payload = json.loads(capsys.readouterr().out)
+    assert exit_code == 1
+    assert payload["reconciliation"]["actions"][0]["action"] == "would_prune"
+    assert payload["reconciliation"]["pruned_count"] == 0
+    assert str(missing) in payload["reconciliation"]["remaining_prunable_paths"]

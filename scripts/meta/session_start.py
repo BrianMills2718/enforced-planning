@@ -144,10 +144,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--plan-start-point",
         help="Full immutable plan-authority revision retained by the claim and tracker.",
     )
-    parser.add_argument("--next-phase", action="append", default=[])
-    parser.add_argument("--depends-on", action="append", default=[])
-    parser.add_argument("--stop-condition", action="append", default=[])
-    parser.add_argument("--requires-shared-infra-changes", action="store_true")
+    parser.add_argument("--next-phase", action="append")
+    parser.add_argument("--depends-on", action="append")
+    parser.add_argument("--stop-condition", action="append")
+    parser.add_argument("--requires-shared-infra-changes", action="store_true", default=None)
     parser.add_argument("--notes")
     outcome = parser.add_mutually_exclusive_group()
     outcome.add_argument(

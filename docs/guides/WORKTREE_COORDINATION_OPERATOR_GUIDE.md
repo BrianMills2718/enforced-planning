@@ -454,6 +454,9 @@ python scripts/meta/check_coordination_claims.py --prune-completed --json
 
 That command only removes valid YAML claims whose status is `complete` or
 `completed`. It does not prune active claims, even when their TTL has elapsed.
+Optional `--agent`, `--project`, and `--scope` selectors are conjunctive and
+must be applied before archival or removal; an exact-scope cleanup cannot prune
+unrelated completed claims.
 
 To refresh the heartbeat for the current live session, use:
 

@@ -125,6 +125,7 @@ WORKTREE_CREATE_SCRIPT := scripts/meta/worktree-coordination/create_worktree.py
 WORKTREE_REMOVE_SCRIPT := scripts/meta/worktree-coordination/safe_worktree_remove.py
 WORKTREE_CLAIMS_SCRIPT := scripts/meta/worktree-coordination/../check_coordination_claims.py
 WORKTREE_SESSION_START_SCRIPT := $(if $(wildcard scripts/session_start.py),scripts/session_start.py,scripts/meta/worktree-coordination/../session_start.py)
+WORKTREE_SESSION_NARROW_SCRIPT := $(if $(wildcard scripts/session_narrow.py),scripts/session_narrow.py,scripts/meta/worktree-coordination/../session_narrow.py)
 WORKTREE_SESSION_HEARTBEAT_SCRIPT := $(if $(wildcard scripts/session_heartbeat.py),scripts/session_heartbeat.py,scripts/meta/worktree-coordination/../session_heartbeat.py)
 WORKTREE_SESSION_STATUS_SCRIPT := scripts/meta/worktree-coordination/../session_status.py
 WORKTREE_SESSION_END_SCRIPT := scripts/meta/worktree-coordination/../session_end.py
@@ -160,6 +161,9 @@ SESSION_WRITE_PATHS ?=
 SESSION_READ_PATHS ?=
 SESSION_WORK_GRAPH ?=
 SESSION_WORK_UNIT_ID ?=
+SESSION_BROAD_SCOPE_MODE ?=
+SESSION_BROAD_SCOPE_REASON ?=
+SESSION_TARGET_WORKTREE_PATH ?=
 OUTCOME_ADMISSION_BOOTSTRAP_PLAN ?=
 OUTCOME_ADMISSION_SELECTED ?=
 OUTCOME_ADMISSION_RECEIPT_PATH ?=
@@ -172,7 +176,7 @@ REVIEW_SCOPE ?=
 REVIEW_NOTES ?=
 RECIPIENT ?=
 
-.PHONY: outcome-bootstrap worktree maintenance-worktree worktree-list worktree-remove session-start session-heartbeat session-status session-end session-finish session-close review-claim raise-concern hook-feedback-report verification-batch-freeze verification-batch-check verification-batch-thaw surface-up surface-preview surface-status surface-down surface-audit
+.PHONY: outcome-bootstrap worktree maintenance-worktree worktree-list worktree-remove session-start session-narrow session-heartbeat session-status session-end session-finish session-close review-claim raise-concern hook-feedback-report verification-batch-freeze verification-batch-check verification-batch-thaw surface-up surface-preview surface-status surface-down surface-audit
 
 hook-feedback-report:  ## Group content-free hook receipts; pass ARGS="--threshold 3"
 	$(PYTHON) scripts/hook_feedback_report.py $(ARGS)
@@ -264,6 +268,9 @@ endif
 		--repo-root "$(WORKTREE_REPO_ROOT)" \
 		--branch "$(BRANCH)" \
 		--worktree-path "$(WORKTREE_DIR)/$(BRANCH)" \
+		$(if $(SESSION_BROAD_SCOPE_MODE),--broad-scope-mode "$(SESSION_BROAD_SCOPE_MODE)",) \
+		$(if $(SESSION_BROAD_SCOPE_REASON),--broad-scope-reason "$(SESSION_BROAD_SCOPE_REASON)",) \
+		$(if $(SESSION_TARGET_WORKTREE_PATH),--target-worktree-path "$(SESSION_TARGET_WORKTREE_PATH)",) \
 		--start-point "$(WORKTREE_START_REVISION)" \
 		$(if $(PLAN_REPO_ROOT),--plan-repo-root "$(PLAN_REPO_ROOT)",) \
 		$(if $(PLAN_START_POINT),--plan-start-point "$(PLAN_START_POINT)",) \
@@ -327,6 +334,9 @@ endif
 		--broader-goal "$(SESSION_GOAL)" \
 		--current-phase "$(SESSION_PHASE)" \
 		--claim-type "$(SESSION_CLAIM_TYPE)" \
+		$(if $(SESSION_BROAD_SCOPE_MODE),--broad-scope-mode "$(SESSION_BROAD_SCOPE_MODE)",) \
+		$(if $(SESSION_BROAD_SCOPE_REASON),--broad-scope-reason "$(SESSION_BROAD_SCOPE_REASON)",) \
+		$(if $(SESSION_TARGET_WORKTREE_PATH),--target-worktree-path "$(SESSION_TARGET_WORKTREE_PATH)",) \
 		$(if $(SESSION_PARENT_SCOPE),--parent-scope "$(SESSION_PARENT_SCOPE)",) \
 		$(if $(filter 1 true yes,$(SESSION_ALLOW_PARALLEL)),--allow-parallel,) \
 		$(foreach path,$(SESSION_WRITE_PATHS),--write-path "$(path)") \
@@ -399,6 +409,9 @@ endif
 		SESSION_NEXT="$(SESSION_NEXT)" SESSION_DEPENDS="$(SESSION_DEPENDS)" \
 		SESSION_STOP_CONDITIONS="$(SESSION_STOP_CONDITIONS)" SESSION_NOTE="$(SESSION_NOTE)" \
 		SESSION_CLAIM_TYPE="$(SESSION_CLAIM_TYPE)" SESSION_PARENT_SCOPE="$(SESSION_PARENT_SCOPE)" \
+		SESSION_BROAD_SCOPE_MODE=bootstrap \
+		SESSION_BROAD_SCOPE_REASON="construct this maintenance lane, then narrow before its first repository write" \
+		SESSION_TARGET_WORKTREE_PATH="$(WORKTREE_DIR)/$(BRANCH)" \
 		SESSION_ALLOW_PARALLEL="$(SESSION_ALLOW_PARALLEL)" \
 		WORKTREE_EXECUTION_PROFILE=light ALLOW_UNPLANNED=1
 
@@ -429,6 +442,9 @@ endif
 		--broader-goal "$(SESSION_GOAL)" \
 		--current-phase "$(SESSION_PHASE)" \
 		--claim-type "$(SESSION_CLAIM_TYPE)" \
+		$(if $(SESSION_BROAD_SCOPE_MODE),--broad-scope-mode "$(SESSION_BROAD_SCOPE_MODE)",) \
+		$(if $(SESSION_BROAD_SCOPE_REASON),--broad-scope-reason "$(SESSION_BROAD_SCOPE_REASON)",) \
+		$(if $(SESSION_TARGET_WORKTREE_PATH),--target-worktree-path "$(SESSION_TARGET_WORKTREE_PATH)",) \
 		$(if $(SESSION_PARENT_SCOPE),--parent-scope "$(SESSION_PARENT_SCOPE)",) \
 		$(if $(filter 1 true yes,$(SESSION_ALLOW_PARALLEL)),--allow-parallel,) \
 		$(foreach path,$(SESSION_WRITE_PATHS),--write-path "$(path)") \
@@ -446,6 +462,22 @@ endif
 		$(if $(filter 1 true yes,$(OUTCOME_ADMISSION_SELECTED)),--outcome-selected,) \
 		$(if $(OUTCOME_ADMISSION_BOOTSTRAP_PLAN),--outcome-bootstrap-plan "$(OUTCOME_ADMISSION_BOOTSTRAP_PLAN)",) \
 		$(if $(OUTCOME_ADMISSION_RECEIPT_PATH),--outcome-admission-receipt-path "$(OUTCOME_ADMISSION_RECEIPT_PATH)",)
+
+session-narrow:  ## Atomically reduce this native session's claim to SESSION_WRITE_PATHS
+ifndef BRANCH
+	$(error BRANCH is required. Usage: make session-narrow BRANCH=lane SESSION_WRITE_PATHS="path/one path/two")
+endif
+ifndef WORKTREE_AGENT
+	$(error Unable to infer agent runtime. Set WORKTREE_AGENT=codex|claude-code|openclaw)
+endif
+ifndef SESSION_WRITE_PATHS
+	$(error SESSION_WRITE_PATHS is required and must be a non-empty strict subset)
+endif
+	@$(PYTHON) "$(WORKTREE_SESSION_NARROW_SCRIPT)" \
+		--agent "$(WORKTREE_AGENT)" \
+		--project "$(WORKTREE_PROJECT)" \
+		--scope "$(BRANCH)" \
+		$(foreach path,$(SESSION_WRITE_PATHS),--write-path "$(path)")
 
 session-heartbeat:  ## Refresh heartbeat and optional phase for BRANCH=name
 ifndef BRANCH

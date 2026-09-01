@@ -431,7 +431,8 @@ def test_session_start_preserves_existing_revision_custody_and_rolls_back_mismat
     tracker_path = Path(started["tracker_path"])
     claim_payload = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
     tracker_payload = yaml.safe_load(tracker_path.read_text(encoding="utf-8"))
-    assert claim_payload["schema_version"] == 4
+    assert claim_payload["schema_version"] == 6
+    assert "broad_scope_mode" not in claim_payload
     assert claim_payload["start_revision"] == revision_a
     assert tracker_payload["schema_version"] == 2
     assert tracker_payload["claim"]["start_revision"] == revision_a
@@ -2573,11 +2574,11 @@ def test_close_session_recovers_from_stale_repo_root_using_recorded_worktree(
     assert completed_claim["repo_root"] == str(repo_root)
 
 
-def test_close_session_rejects_inside_worktree_cwd_before_lifecycle_mutation(
+def test_close_session_reanchors_inside_worktree_cwd_before_removal(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """An unsafe control cwd must not strand claim or tracker state in closing."""
+    """Closeout moves the process to the canonical root before removing its cwd."""
 
     claims_dir = tmp_path / "claims"
     trackers_dir = tmp_path / "sessions"
@@ -2594,20 +2595,22 @@ def test_close_session_rejects_inside_worktree_cwd_before_lifecycle_mutation(
     _git(repo_root, "merge", "--no-ff", branch, "-m", "merge feature")
     original_claim = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
     tracker_path = Path(original_claim["tracker_path"])
-    original_tracker = yaml.safe_load(tracker_path.read_text(encoding="utf-8"))
     monkeypatch.chdir(worktree)
 
-    with pytest.raises(ValueError, match="cwd is inside the target worktree"):
-        session_lifecycle.close_session(
-            agent="codex",
-            project="enforced-planning",
-            scope=branch,
-        )
+    payload = session_lifecycle.close_session(
+        agent="codex",
+        project="enforced-planning",
+        scope=branch,
+    )
 
-    assert yaml.safe_load(claim_file.read_text(encoding="utf-8")) == original_claim
-    assert yaml.safe_load(tracker_path.read_text(encoding="utf-8")) == original_tracker
-    assert worktree.exists()
-    assert _git(repo_root, "show-ref", "--verify", f"refs/heads/{branch}")
+    assert payload["action"] == "closed"
+    assert payload["worktree_action"] == "removed"
+    assert payload["branch_action"] == "deleted"
+    assert Path.cwd() == repo_root.resolve()
+    assert not claim_file.exists()
+    tracker = yaml.safe_load(tracker_path.read_text(encoding="utf-8"))
+    assert tracker["tracker"]["current_phase"] == "closed"
+    assert not worktree.exists()
 
 
 def test_close_session_fails_before_registry_mutation_when_ignored_directory_is_not_deletable(

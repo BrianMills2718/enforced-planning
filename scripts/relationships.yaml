@@ -69,6 +69,7 @@ couplings:
       entrypoint list for these scripts.
     sources:
       - "scripts/session_start.py"
+      - "scripts/session_narrow.py"
       - "scripts/session_heartbeat.py"
       - "scripts/session_status.py"
       - "scripts/session_end.py"
@@ -76,6 +77,7 @@ couplings:
       - "scripts/session_close.py"
     docs:
       - "CLAUDE.md"
+      - "docs/plans/132_overbroad_claim_narrowing.md"
 architecture: []
 adrs: {}
 

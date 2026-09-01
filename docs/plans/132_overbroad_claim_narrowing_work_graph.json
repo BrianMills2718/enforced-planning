@@ -175,13 +175,6 @@
         },
         {
           "kind": "repository_path",
-          "target": "tests/test_prewrite_claim_fast.py",
-          "repository": "enforced-planning",
-          "access": "exclusive",
-          "coordination_key": "plan-132-claim-narrowing"
-        },
-        {
-          "kind": "repository_path",
           "target": "tests/test_install_governed_repo.py",
           "repository": "enforced-planning",
           "access": "exclusive",
@@ -274,6 +267,34 @@
         {
           "kind": "repository_path",
           "target": "scripts/worktree-coordination/create_worktree.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-132-claim-narrowing"
+        },
+        {
+          "kind": "repository_path",
+          "target": "scripts/meta/worktree-coordination/create_worktree.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-132-claim-narrowing"
+        },
+        {
+          "kind": "repository_path",
+          "target": "scripts/meta/session_start.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-132-claim-narrowing"
+        },
+        {
+          "kind": "repository_path",
+          "target": "scripts/meta/session_close.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-132-claim-narrowing"
+        },
+        {
+          "kind": "repository_path",
+          "target": "scripts/meta/session_narrow.py",
           "repository": "enforced-planning",
           "access": "exclusive",
           "coordination_key": "plan-132-claim-narrowing"

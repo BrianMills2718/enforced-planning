@@ -131,6 +131,42 @@ def test_bootstrap_target_resolves_for_context_without_mutation_authority(tmp_pa
     assert projected["worktree_path"] != projected["target_worktree_path"]
 
 
+def test_bootstrap_target_from_different_git_repository_fails_closed(tmp_path: Path) -> None:
+    """Digest-bound YAML cannot redirect instruction context to another repository."""
+
+    _repo, worktree, claims, projection = _authority(tmp_path)
+    other = tmp_path / "other"
+    other.mkdir()
+    _git(other, "init", "-b", "lane")
+    _git(other, "config", "user.name", "Test")
+    _git(other, "config", "user.email", "test@example.com")
+    (other / "README.md").write_text("other\n", encoding="utf-8")
+    _git(other, "add", "README.md")
+    _git(other, "commit", "-m", "other")
+    claim_path = claims / "claim.yaml"
+    claim = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    claim.update(
+        schema_version=6,
+        write_paths=["."],
+        broad_scope_mode="bootstrap",
+        broad_scope_reason="attempt a wrong-repository redirect",
+        target_worktree_path=str(other),
+        worktree_path=f"{other}.bootstrap-no-mutation-authority",
+    )
+    claim_path.write_text(yaml.safe_dump(claim, sort_keys=False), encoding="utf-8")
+    write_projection(claims_dir=claims, projection_path=projection)
+
+    with pytest.raises(SessionTargetError) as mismatch:
+        resolve_exact_session_target(
+            {"session_id": "parent"},
+            client="codex",
+            claims_dir=claims,
+            projection_path=projection,
+        )
+
+    assert mismatch.value.reason_code == "claim_git_identity_mismatch"
+
+
 def test_stale_projection_and_branch_mismatch_fail_closed(tmp_path: Path) -> None:
     _repo, _worktree, claims, projection = _authority(tmp_path)
     payload = {"session_id": "parent"}

@@ -395,6 +395,73 @@ def _parse_native_closeout_command(command: str, *, client: str, claims_dir: Pat
         raise ValueError("closeout branch does not match the exact live claim")
 
 
+def _parse_native_narrow_command(command: str, *, client: str, claims_dir: Path) -> None:
+    """Admit only the exact owner-bound Make recovery command for claim narrowing."""
+
+    from enforced_planning import coordination_claims
+
+    if "\n" in command or "\r" in command or any(char in command for char in ";&|<>`$"):
+        raise ValueError("session-narrow command cannot compose shell operations")
+    tokens = shlex.split(command)
+    if len(tokens) != 8 or tokens[0:2] != ["/usr/bin/make", "-C"] or tokens[3] != "session-narrow":
+        raise ValueError("session-narrow command does not match the exact Make grammar")
+    target = Path(tokens[2]).expanduser()
+    if not target.is_absolute():
+        raise ValueError("session-narrow target must be one absolute worktree")
+    assignments: dict[str, str] = {}
+    for token in tokens[4:]:
+        key, separator, value = token.partition("=")
+        if not separator or key in assignments:
+            raise ValueError("session-narrow variables must be unique literal assignments")
+        assignments[key] = value
+    required = {"WORKTREE_AGENT", "WORKTREE_PROJECT", "BRANCH", "SESSION_WRITE_PATHS"}
+    if set(assignments) != required:
+        raise ValueError("session-narrow command has missing or extra variables")
+    if assignments["WORKTREE_AGENT"] != client:
+        raise ValueError("session-narrow client does not match the ambient native client")
+    native_session = coordination_claims.resolve_session_id(client)
+    if native_session is None:
+        raise ValueError("session-narrow requires an ambient native session")
+    matches = [
+        claim
+        for claim in coordination_claims.check_claims(
+            project=assignments["WORKTREE_PROJECT"], claims_dir=claims_dir
+        )
+        if claim.agent == client
+        and claim.scope == assignments["BRANCH"]
+        and claim.session_id == native_session
+    ]
+    if len(matches) != 1:
+        raise ValueError("session-narrow target is not the ambient runtime's exact live claim")
+    claim = matches[0]
+    effective_target = claim.target_worktree_path or claim.worktree_path
+    if not effective_target or Path(effective_target).expanduser().resolve() != target.resolve():
+        raise ValueError("session-narrow Make directory does not match the exact claim target")
+    replacements = [
+        coordination_claims._normalize_repo_path(path)
+        for path in assignments["SESSION_WRITE_PATHS"].split()
+    ]
+    if not replacements or len(replacements) != len(set(replacements)):
+        raise ValueError("session-narrow requires unique non-empty replacement paths")
+    if any(
+        Path(path).is_absolute()
+        or path == ".."
+        or path.startswith("../")
+        or any(char in path for char in "*?[]\\")
+        for path in replacements
+    ):
+        raise ValueError("session-narrow replacement paths are not safe repository literals")
+    old_paths = [coordination_claims._normalize_repo_path(path) for path in claim.write_paths]
+    if set(replacements) == set(old_paths) or any(
+        not any(
+            coordination_claims._replacement_is_within_existing_authority(path, old)
+            for old in old_paths
+        )
+        for path in replacements
+    ):
+        raise ValueError("session-narrow replacements are not a strict subset of existing authority")
+
+
 def _special_unclaimed_command(
     command: str,
     *,
@@ -428,6 +495,11 @@ def _special_unclaimed_command(
     try:
         _parse_native_closeout_command(command, client=client, claims_dir=claims_dir)
         return "native_closeout"
+    except Exception:  # noqa: BLE001 -- try the remaining strict control grammars
+        pass
+    try:
+        _parse_native_narrow_command(command, client=client, claims_dir=claims_dir)
+        return "native_session_narrow"
     except Exception:  # noqa: BLE001 -- try the remaining strict control grammars
         pass
     try:
@@ -718,6 +790,7 @@ def main(argv: list[str] | None = None) -> int:
             "claim_bootstrap",
             "native_mailbox",
             "native_closeout",
+            "native_session_narrow",
             "read_target_selection",
             "projection_recovery",
         }:

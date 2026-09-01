@@ -56,6 +56,7 @@ MAILBOX_COMMON_ROLLOUT_PATHS = {
     "scripts/meta/coordination_messages.py",
     "scripts/meta/coordination_operator_status.py",
     "scripts/meta/session_heartbeat.py",
+    "scripts/meta/session_narrow.py",
     "scripts/meta/session_close.py",
     "scripts/meta/session_resume.py",
     "scripts/meta/session_start.py",
@@ -112,10 +113,12 @@ CLAIM_PROJECTION_REFRESH_PATHS = {
     "enforced_planning/worktree_paths.py",
     "scripts/refresh_prewrite_claim_projection.py",
     "scripts/meta/check_coordination_claims.py",
+    "scripts/meta/worktree-coordination/create_worktree.py",
     "scripts/meta/session_close.py",
     "scripts/meta/session_end.py",
     "scripts/meta/session_finish.py",
     "scripts/meta/session_heartbeat.py",
+    "scripts/meta/session_narrow.py",
     "scripts/meta/session_resume.py",
     "scripts/meta/session_start.py",
 }
@@ -128,6 +131,21 @@ def test_source_repo_claim_facade_projection_matches_canonical_source() -> None:
     installed = PROJECT_META_ROOT / "scripts" / "meta" / "check_coordination_claims.py"
 
     assert installed.read_bytes() == canonical.read_bytes()
+
+
+def test_source_repo_narrowing_facades_match_canonical_sources() -> None:
+    """Generated lifecycle/worktree copies are installer outputs, never independent owners."""
+
+    pairs = {
+        "scripts/meta/session_start.py": "scripts/session_start.py",
+        "scripts/meta/session_narrow.py": "scripts/session_narrow.py",
+        "scripts/meta/session_close.py": "scripts/session_close.py",
+        "scripts/meta/worktree-coordination/create_worktree.py": (
+            "scripts/worktree-coordination/create_worktree.py"
+        ),
+    }
+    for generated, canonical in pairs.items():
+        assert (PROJECT_META_ROOT / generated).read_bytes() == (PROJECT_META_ROOT / canonical).read_bytes()
 
 
 def _write_minimal_claude(repo_root: Path) -> None:
@@ -397,7 +415,7 @@ def test_claim_projection_refresh_only_is_bounded_and_idempotent(tmp_path: Path)
         installed_lifecycle.read_bytes()
         == (PROJECT_META_ROOT / "enforced_planning" / "session_lifecycle.py").read_bytes()
     )
-    for wrapper in ("session_start.py", "session_close.py"):
+    for wrapper in ("session_start.py", "session_narrow.py", "session_close.py"):
         help_result = subprocess.run(
             [sys.executable, str(tmp_path / "scripts/meta" / wrapper), "--help"],
             cwd=str(tmp_path),
@@ -1240,7 +1258,8 @@ def test_installed_make_retains_one_revision_across_claim_worktree_and_tracker(
         capture_output=True,
         text=True,
     ).stdout.strip()
-    assert claim["schema_version"] == 4
+    assert claim["schema_version"] == 6
+    assert "broad_scope_mode" not in claim
     assert claim["start_revision"] == revision
     assert tracker["schema_version"] == 2
     assert tracker["claim"]["start_revision"] == revision
@@ -1864,8 +1883,9 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
             "install:scripts/meta/session_close.py",
             "install:scripts/meta/session_end.py",
             "install:scripts/meta/session_finish.py",
-            "install:scripts/meta/session_heartbeat.py",
-            "install:scripts/meta/session_start.py",
+                "install:scripts/meta/session_heartbeat.py",
+                "install:scripts/meta/session_narrow.py",
+                "install:scripts/meta/session_start.py",
             "install:scripts/meta/session_status.py",
             "install:scripts/meta/project_status.py",
             "install:scripts/meta/session_resume.py",
@@ -2458,3 +2478,78 @@ def test_missing_or_unparseable_pyproject_is_not_a_declaration(tmp_path: Path) -
     assert declares_installed_framework(tmp_path) is False
     (tmp_path / "pyproject.toml").write_text("this is not toml [[[", encoding="utf-8")
     assert declares_installed_framework(tmp_path) is False
+
+
+def test_live_v6_broad_claim_blocks_runtime_downgrade(tmp_path: Path) -> None:
+    """An installer cannot remove schema or narrow support beneath a live broad lease."""
+
+    from scripts import install_governed_repo
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    claims_dir = tmp_path / "claims"
+    claims_dir.mkdir()
+    claim_path = claims_dir / "codex_demo_lane.yaml"
+    claim_path.write_text(
+        yaml.safe_dump(
+            {
+                "schema_version": 6,
+                "agent": "codex",
+                "projects": ["demo"],
+                "scope": "lane",
+                "intent": "exercise downgrade protection",
+                "claim_type": "program",
+                "plan_ref": "UNPLANNED",
+                "write_paths": ["."],
+                "repo_root": str(repo),
+                "worktree_path": f"{repo}.bootstrap-no-mutation-authority",
+                "target_worktree_path": str(repo),
+                "branch": "lane",
+                "session_id": "codex:runtime",
+                "session_name": "runtime",
+                "broader_goal": "Keep broad authority fail-closed",
+                "status": "active",
+                "broad_scope_mode": "bootstrap",
+                "broad_scope_reason": "construct and narrow this fixture",
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    compatible = install_governed_repo._claim_runtime_downgrade_blockers(
+        repo,
+        candidate_schema_version=6,
+        session_narrow_available=True,
+        claims_dir=claims_dir,
+    )
+    older = install_governed_repo._claim_runtime_downgrade_blockers(
+        repo,
+        candidate_schema_version=5,
+        session_narrow_available=True,
+        claims_dir=claims_dir,
+    )
+    missing_recovery = install_governed_repo._claim_runtime_downgrade_blockers(
+        repo,
+        candidate_schema_version=6,
+        session_narrow_available=False,
+        claims_dir=claims_dir,
+    )
+
+    assert compatible == []
+    assert len(older) == 1 and "older than required schema 6" in older[0]
+    assert len(missing_recovery) == 1 and "lacks scripts/session_narrow.py" in missing_recovery[0]
+
+
+def test_every_claim_runtime_installer_profile_carries_session_narrow() -> None:
+    """Full and bounded runtime rollouts must install the owner recovery adapter."""
+
+    from scripts import install_governed_repo
+
+    for manifest in (
+        install_governed_repo.SYNC_SUPPORT_FILES,
+        install_governed_repo.WORKTREE_ONLY_SYNC_SUPPORT_FILES,
+        install_governed_repo.COORDINATION_MESSAGES_SHARED_FILES,
+        install_governed_repo.CLAIM_PROJECTION_SHARED_FILES,
+    ):
+        assert manifest["scripts/meta/session_narrow.py"] == "scripts/session_narrow.py"

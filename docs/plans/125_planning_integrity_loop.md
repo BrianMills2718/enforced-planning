@@ -219,6 +219,11 @@ accepted current schema at the tracker-attachment boundary, legacy v1-v5
 records remain readable without eager migration, and unknown future versions
 still fail closed. Bootstrap broad claims additionally separate their readable
 target worktree from mutation authority until an atomic strict-subset narrow.
+The same current runtime keeps housekeeping and observation bounded: completed
+claim pruning applies optional agent/project/scope selectors before archival,
+and claimless Bash admission accepts only fully classified read-only command
+groups (including safe `jq` pipelines), never an arbitrary interpreter help or
+write-capable lookalike.
 
 ### Plan #130 extension — external plan authority
 

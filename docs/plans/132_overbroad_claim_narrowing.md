@@ -281,9 +281,12 @@ existing registry lock and:
    authority-disabled `worktree_path` with `target_worktree_path`;
 7. replaces claim YAML and refreshes the digest-bound projection as one
    rollback-capable locked transition;
-8. appends one `operation: narrow` mutation receipt for the committed
-   transition; a receipt failure reports post-commit audit failure rather than
-   pretending the claim mutation did not occur;
+8. appends one `operation: narrow` receipt to the version-isolated
+   `claim-narrow-events-v1.jsonl` ledger for the committed transition; the
+   existing shared claim-mutation v1 ledger and its closed operation enum stay
+   byte-contract compatible with older readers. A narrow-receipt failure
+   reports post-commit audit failure rather than pretending the claim mutation
+   did not occur;
 9. returns old/new paths, cleared/retained broad mode, projection digest, and
    mailbox observation summary.
 
@@ -326,6 +329,8 @@ request rather than adding another message store.
   ordinary worktree authority merely by ignoring unknown fields.
 - Source implementation and disposable installed consumer land before any real
   Project Meta installation.
+- Narrow receipts never enter the older shared mutation ledger, so installing
+  a pre-v6 reader cannot make historical shared receipts unreadable.
 - Downgrade/reinstall to a pre-v6 runtime fails while any live v6 broad claim
   exists. After narrowing or closing those claims, rollback is the source
   commit revert plus reinstall of the prior accepted version; v6 narrow claims

@@ -62,6 +62,7 @@ SESSION_ENDED_STATUS = "session_ended"
 CLOSEABLE_STATUSES = LIVE_STATUSES | {SESSION_ENDED_STATUS}
 CLAIM_TYPES = {"program", "write", "review", "research"}
 STRICT_LIVE_METADATA_CLAIM_TYPES = {"program", "write", "review", "research"}
+CURRENT_CLAIM_SCHEMA_VERSION = 6
 BROAD_SCOPE_MODES = {"bootstrap", "bounded"}
 BOOTSTRAP_AUTHORITY_DISABLED_SUFFIX = ".bootstrap-no-mutation-authority"
 
@@ -435,6 +436,58 @@ def record_claim_mutation(
     except OSError as exc:
         raise claim_mutation_receipts.MutationAuditError(
             operation=operation,
+            target_project=target_project,
+            target_scope=target_scope,
+            registry_digest_after=registry_digest_after,
+            projection_digest_after=projection_digest_after,
+            projection_current_after=projection_current_after,
+            cause=exc,
+        ) from exc
+    return receipt
+
+
+def record_claim_narrow_mutation(
+    *,
+    claims_dir: Path,
+    registry_digest_before: str,
+    target_project: str,
+    target_scope: str,
+    target_claim_path: Path,
+    session_id: str,
+    projection_digest_after: str,
+) -> "claim_mutation_receipts.NarrowClaimMutationReceiptV1":
+    """Persist one narrow receipt without extending the shared v1 operation enum."""
+
+    resolved_claims_dir = claims_dir.expanduser().resolve()
+    from enforced_planning.prewrite_claim_projection import projection_is_current
+
+    registry_digest_after = _registry_digest(resolved_claims_dir)
+    projection_current_after = projection_is_current(claims_dir=resolved_claims_dir)
+    writer_source_path, writer_source_sha256, writer_repo_root = _LOADED_WRITER_IDENTITY
+    receipt = claim_mutation_receipts.NarrowClaimMutationReceiptV1(
+        result=(
+            "applied_projection_current"
+            if projection_current_after
+            else "applied_projection_stale"
+        ),
+        writer_source_path=writer_source_path,
+        writer_source_sha256=writer_source_sha256,
+        writer_repo_root=writer_repo_root,
+        process_id=os.getpid(),
+        session_id=session_id,
+        target_project=target_project,
+        target_scope=target_scope,
+        target_claim_path=str(target_claim_path),
+        registry_digest_before=registry_digest_before,
+        registry_digest_after=registry_digest_after,
+        projection_digest_after=projection_digest_after,
+        projection_current_after=projection_current_after,
+    )
+    try:
+        claim_mutation_receipts.append_narrow_receipt(receipt)
+    except OSError as exc:
+        raise claim_mutation_receipts.MutationAuditError(
+            operation="narrow",
             target_project=target_project,
             target_scope=target_scope,
             registry_digest_after=registry_digest_after,
@@ -1368,40 +1421,37 @@ def claim_enforcement_issues(claim: ClaimRecord) -> list[dict[str, str]]:
 
 def validate_claim_for_creation(claim: ClaimRecord) -> None:
     """Reject new claims that omit required ownership metadata for live coordination."""
+    issues = [issue for issue in claim_health_issues(claim) if issue in CREATION_BLOCKING_HEALTH_ISSUES]
+    if claim.is_live() and issues:
+        flag_map = {
+            "missing_project": "--project",
+            "missing_write_paths": "--write-path",
+            "missing_branch": "--branch",
+            "missing_worktree_path": "--worktree-path",
+            "missing_session_id": "--session-id",
+            "missing_session_name": "--session-name",
+            "missing_plan_ref": "--plan (or explicit UNPLANNED authority via `--plan UNPLANNED`, as `make maintenance-worktree` passes)",
+            "missing_work_unit_id": "--work-unit-id",
+            "missing_work_graph_path": "--work-graph",
+            "missing_work_graph_sha256": "a validated canonical work-graph binding",
+            "missing_start_revision": "a validated full --start-point revision",
+            "invalid_start_revision": "a valid full --start-point revision",
+            "missing_plan_repo_root": "an explicit --plan-repo-root",
+            "invalid_plan_repo_root": "an absolute --plan-repo-root",
+            "missing_plan_revision": "an exact --plan-start-point",
+            "invalid_plan_revision": "a valid full --plan-start-point revision",
+            "missing_plan_sha256": "a validated external plan digest",
+            "invalid_plan_sha256": "a valid external plan SHA-256 digest",
+        }
+        required_flags = [flag_map[item] for item in issues if item in flag_map]
+        required_text = ", ".join(required_flags)
+        raise ValueError(
+            f"Active {claim.claim_type} claims require {required_text}. "
+            "Legacy claims remain readable, but new live claims must declare real ownership."
+        )
     broad_issues = _broad_scope_contract_issues(claim)
     if claim.is_live() and claim.schema_version >= 6 and broad_issues:
         raise ValueError("; ".join(broad_issues))
-    issues = [issue for issue in claim_health_issues(claim) if issue in CREATION_BLOCKING_HEALTH_ISSUES]
-    if not issues:
-        return
-    if not claim.is_live():
-        return
-    flag_map = {
-        "missing_project": "--project",
-        "missing_write_paths": "--write-path",
-        "missing_branch": "--branch",
-        "missing_worktree_path": "--worktree-path",
-        "missing_session_id": "--session-id",
-        "missing_session_name": "--session-name",
-        "missing_plan_ref": "--plan (or explicit UNPLANNED authority via `--plan UNPLANNED`, as `make maintenance-worktree` passes)",
-        "missing_work_unit_id": "--work-unit-id",
-        "missing_work_graph_path": "--work-graph",
-        "missing_work_graph_sha256": "a validated canonical work-graph binding",
-        "missing_start_revision": "a validated full --start-point revision",
-        "invalid_start_revision": "a valid full --start-point revision",
-        "missing_plan_repo_root": "an explicit --plan-repo-root",
-        "invalid_plan_repo_root": "an absolute --plan-repo-root",
-        "missing_plan_revision": "an exact --plan-start-point",
-        "invalid_plan_revision": "a valid full --plan-start-point revision",
-        "missing_plan_sha256": "a validated external plan digest",
-        "invalid_plan_sha256": "a valid external plan SHA-256 digest",
-    }
-    required_flags = [flag_map[item] for item in issues if item in flag_map]
-    required_text = ", ".join(required_flags)
-    raise ValueError(
-        f"Active {claim.claim_type} claims require {required_text}. "
-        "Legacy claims remain readable, but new live claims must declare real ownership."
-    )
 
 
 def _plan_number(plan_ref: str | None) -> int | None:
@@ -1824,15 +1874,23 @@ def classify_broad_write_paths(repo_root: str | None, write_paths: list[str]) ->
     normalized = list(dict.fromkeys(_normalize_repo_path(path) for path in write_paths))
     if any(Path(path).is_absolute() or path == ".." or path.startswith("../") for path in normalized):
         raise ValueError("write paths must remain repository-relative and cannot traverse outside repo_root")
-    candidates = [path for path in normalized if path == "." or "/" not in path]
-    if not candidates:
-        return {}
     if not repo_root:
         raise ValueError("repo_root is required to classify broad write paths")
     root = Path(repo_root).expanduser()
     if not root.is_absolute():
         raise ValueError("repo_root must be absolute to classify broad write paths")
     resolved_root = root.resolve(strict=False)
+    for path in normalized:
+        if path == ".":
+            continue
+        resolved = (resolved_root / path).resolve(strict=False)
+        try:
+            resolved.relative_to(resolved_root)
+        except ValueError as exc:
+            raise ValueError(f"write path {path!r} escapes repo_root through symlink resolution") from exc
+    candidates = [path for path in normalized if path == "." or "/" not in path]
+    if not candidates:
+        return {}
     broad: dict[str, str] = {}
     for path in candidates:
         if path == ".":
@@ -2006,6 +2064,83 @@ def _compute_overlapping_write_paths(candidate: ClaimRecord, other: ClaimRecord)
                 continue
             overlaps.append(f"{_normalize_repo_path(left)} <-> {_normalize_repo_path(right)}")
     return sorted(set(overlaps))
+
+
+def _overlap_relations(candidate: ClaimRecord, other: ClaimRecord) -> tuple[str, ...]:
+    """Classify every effective overlap from the candidate's perspective."""
+
+    relations: set[str] = set()
+    for left_raw in candidate.write_paths:
+        for right_raw in other.write_paths:
+            if not _paths_overlap(left_raw, right_raw):
+                continue
+            if _is_append_only_path(left_raw) and _is_append_only_path(right_raw):
+                continue
+            left = _normalize_repo_path(left_raw)
+            right = _normalize_repo_path(right_raw)
+            if left == right:
+                relations.add("exact")
+            elif left == "." or right.startswith(f"{left}/"):
+                relations.add("candidate_parent")
+            else:
+                relations.add("owner_parent")
+    return tuple(sorted(relations))
+
+
+def _reservation_kind(other: ClaimRecord, relations: tuple[str, ...]) -> str | None:
+    """Explain a parent reservation without changing conflict severity."""
+
+    if "owner_parent" not in relations:
+        return None
+    if other.broad_scope_mode == "bounded":
+        return "deliberate_bounded_reservation"
+    if other.broad_scope_mode == "bootstrap" or "legacy_broad_scope_unclassified" in _broad_scope_contract_issues(other):
+        return "overbroad_reservation"
+    return None
+
+
+def _current_diff_disjoint(candidate: ClaimRecord, other: ClaimRecord) -> bool | None:
+    """Return advisory Git status disjointness, or unknown when unreadable."""
+
+    if not other.worktree_path:
+        return None
+    worktree = Path(other.worktree_path).expanduser()
+    result = subprocess.run(
+        ["git", "-C", str(worktree), "status", "--porcelain=v1", "--untracked-files=all"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        return None
+    changed: list[str] = []
+    for line in result.stdout.splitlines():
+        if len(line) < 4:
+            continue
+        path = line[3:]
+        if " -> " in path:
+            path = path.rsplit(" -> ", 1)[1]
+        changed.append(_normalize_repo_path(path.strip('"')))
+    return not any(
+        _paths_overlap(changed_path, candidate_path)
+        for changed_path in changed
+        for candidate_path in candidate.write_paths
+    )
+
+
+def _interaction_explanation(candidate: ClaimRecord, other: ClaimRecord) -> dict[str, Any]:
+    """Build shared explanatory fields for one overlap interaction."""
+
+    relations = _overlap_relations(candidate, other)
+    return {
+        "overlap_relations": relations,
+        "reservation_kind": _reservation_kind(other, relations),
+        "other_broad_scope_mode": (
+            other.broad_scope_mode
+            or ("legacy_unclassified" if "legacy_broad_scope_unclassified" in _broad_scope_contract_issues(other) else None)
+        ),
+        "current_diff_disjoint": _current_diff_disjoint(candidate, other),
+    }
 
 
 def _has_write_ownership(claim: ClaimRecord) -> bool:
@@ -2289,6 +2424,7 @@ def evaluate_claim(candidate: ClaimRecord, *, active_claims: list[ClaimRecord] |
                     other_source_file=other.source_file,
                     other_session_id=other.session_id,
                     other_session_last_active_at=session_last_active_at(other.session_id),
+                    **_interaction_explanation(candidate, other),
                 )
             )
             continue
@@ -2309,6 +2445,7 @@ def evaluate_claim(candidate: ClaimRecord, *, active_claims: list[ClaimRecord] |
                     other_source_file=other.source_file,
                     other_session_id=other.session_id,
                     other_session_last_active_at=session_last_active_at(other.session_id),
+                    **_interaction_explanation(candidate, other),
                 )
             )
             continue
@@ -2326,6 +2463,7 @@ def evaluate_claim(candidate: ClaimRecord, *, active_claims: list[ClaimRecord] |
                     other_source_file=other.source_file,
                     other_session_id=other.session_id,
                     other_session_last_active_at=session_last_active_at(other.session_id),
+                    **(_interaction_explanation(candidate, other) if overlapping_write_paths else {}),
                 )
             )
             continue
@@ -2343,6 +2481,7 @@ def evaluate_claim(candidate: ClaimRecord, *, active_claims: list[ClaimRecord] |
                     other_source_file=other.source_file,
                     other_session_id=other.session_id,
                     other_session_last_active_at=session_last_active_at(other.session_id),
+                    **_interaction_explanation(candidate, other),
                 )
             )
             continue
@@ -2774,7 +2913,7 @@ def narrow_claim(
                 f"not {resolved_session_id}"
             )
         old_paths = list(dict.fromkeys(_normalize_repo_path(path) for path in claim.write_paths))
-        if replacements == old_paths:
+        if set(replacements) == set(old_paths):
             raise ValueError("narrowing requires at least one strict reduction")
         outside = [
             path
@@ -2823,8 +2962,7 @@ def narrow_claim(
             payload=payload,
             claims_dir=resolved_claims,
         )
-        receipt = record_claim_mutation(
-            operation="narrow",
+        receipt = record_claim_narrow_mutation(
             claims_dir=resolved_claims,
             registry_digest_before=registry_digest_before,
             target_project=project,
@@ -3429,7 +3567,12 @@ def prune_stale(
     return len(removed_labels), sorted(removed_labels)
 
 
-def prune_completed() -> tuple[int, list[str]]:
+def prune_completed(
+    *,
+    agent: str | None = None,
+    project: str | None = None,
+    scope: str | None = None,
+) -> tuple[int, list[str]]:
     """Remove claims already marked complete/completed.
 
     This is intentionally narrower than ``prune_expired``: it never removes a
@@ -3476,6 +3619,12 @@ def prune_completed() -> tuple[int, list[str]]:
                     cause=invalid_claim,
                 ) from invalid_claim
             if claim.status.strip().lower() not in COMPLETED_STATUSES:
+                continue
+            if agent is not None and claim.agent != agent:
+                continue
+            if project is not None and project not in claim.projects:
+                continue
+            if scope is not None and claim.scope != scope:
                 continue
             try:
                 archive_receipt = claim_mutation_receipts.build_completed_claim_archive_receipt(
@@ -3860,6 +4009,11 @@ def _render_check_output(
                 "liveness_issues": claim_liveness_issues(claim, now=observed_at),
                 "progress_issues": claim_progress_issues(claim, now=observed_at),
                 "enforcement_issues": claim_enforcement_issues(claim),
+                "broad_scope_diagnostic": (
+                    "legacy_unclassified"
+                    if "legacy_broad_scope_unclassified" in _broad_scope_contract_issues(claim)
+                    else None
+                ),
             }
             for claim in claims
         ],
@@ -3951,6 +4105,8 @@ def main(argv: list[str] | None = None) -> int:
             print(f"    expires: {claim.expires_at}")
             if claim.write_paths:
                 print(f"    write_paths: {', '.join(claim.write_paths)}")
+            if "legacy_broad_scope_unclassified" in _broad_scope_contract_issues(claim):
+                print("    broad_scope: legacy_unclassified (narrow or explicitly classify on material upsert)")
             for issue in claim_enforcement_issues(claim):
                 print(
                     f"HIGH: {issue['code']}: {issue['message']}",
@@ -3966,7 +4122,10 @@ def main(argv: list[str] | None = None) -> int:
                     overlaps = ", ".join(item.overlapping_write_paths) or "none"
                     print(
                         f"  - {item.severity}: {item.other_agent} {item.other_scope} "
-                        f"({item.reason}; overlap={overlaps})"
+                        f"({item.reason}; overlap={overlaps}; "
+                        f"relations={','.join(item.overlap_relations) or 'none'}; "
+                        f"reservation={item.reservation_kind or 'none'}; "
+                        f"current_diff_disjoint={item.current_diff_disjoint!r})"
                     )
         return 1 if any(claim_enforcement_issues(claim) for claim in claims) else 0
 
@@ -3989,6 +4148,8 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         for claim in claims:
             print(f"  [{claim.agent}] {claim.primary_project()}:{claim.scope} [{claim.claim_type}] — {claim.intent}")
+            if "legacy_broad_scope_unclassified" in _broad_scope_contract_issues(claim):
+                print("    broad_scope: legacy_unclassified")
         return 0
 
     if args.progress:
@@ -4159,7 +4320,11 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.prune_completed:
         try:
-            removed, removed_scopes = prune_completed()
+            removed, removed_scopes = prune_completed(
+                agent=args.agent,
+                project=args.project,
+                scope=args.scope,
+            )
         except CompletedClaimArchiveError as exc:
             return _render_completed_claim_archive_failure(
                 exc,

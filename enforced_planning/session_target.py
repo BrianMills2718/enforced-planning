@@ -107,91 +107,13 @@ def effective_session_id(payload: dict[str, Any], client: str) -> str:
     return f"{client}:{value}"
 
 
-def resolve_exact_session_target(
-    payload: dict[str, Any],
+def _validate_claimed_git_identity(
+    claim: dict[str, Any],
     *,
-    client: str,
-    claims_dir: Path,
-    projection_path: Path | None = None,
-    target_worktree: Path | None = None,
-) -> SessionTarget:
-    """Select one healthy projected claim for the identity and optional target."""
+    worktree: Path,
+) -> None:
+    """Prove that a projected target is the claim's exact repository and branch."""
 
-    session_id = effective_session_id(payload, client)
-    resolved_claims = claims_dir.expanduser().resolve()
-    resolved_projection = (
-        projection_path or projection_path_for(resolved_claims)
-    ).expanduser().resolve()
-    projection, error = _load_projection(resolved_projection, claims_dir=resolved_claims)
-    if projection is None:
-        raise SessionTargetError(
-            "projection_unavailable_or_stale",
-            error or "claim authority projection is unavailable",
-        )
-
-    identity_matches = [
-        claim
-        for claim in projection["claims"]
-        if claim["agent"] == client and claim["session_id"] == session_id
-    ]
-    requested_worktree = target_worktree.expanduser().resolve() if target_worktree else None
-    effective_matches: list[tuple[dict[str, Any], Path, bool]] = []
-    for claim in identity_matches:
-        bootstrap_target = _bootstrap_target_worktree(claim)
-        effective_worktree = (
-            bootstrap_target
-            if bootstrap_target is not None
-            else Path(claim["worktree_path"]).expanduser().resolve()
-        )
-        if requested_worktree is None or effective_worktree == requested_worktree:
-            effective_matches.append((claim, effective_worktree, bootstrap_target is not None))
-    target_matches = [claim for claim, _worktree, _bootstrap in effective_matches]
-    healthy: list[tuple[dict[str, Any], Path, bool]] = []
-    for claim, effective_worktree, bootstrap in effective_matches:
-        static_issues = set(claim["static_issues"])
-        allowed_static = {"bootstrap_broad_claim_requires_narrowing"} if bootstrap else set()
-        health_view = {**claim, "worktree_path": str(effective_worktree)}
-        if (
-            claim["status"] in LIVE_STATUSES
-            and static_issues <= allowed_static
-            and not _dynamic_claim_issues(health_view)
-        ):
-            healthy.append((claim, effective_worktree, bootstrap))
-    if not healthy:
-        if target_matches:
-            details = sorted(
-                {
-                    issue
-                    for claim in target_matches
-                    for issue in [
-                        *(claim["static_issues"] or []),
-                        *_dynamic_claim_issues(claim),
-                        *([] if claim["status"] in LIVE_STATUSES else ["non_live_status"]),
-                    ]
-                }
-            )
-            suffix = f" ({', '.join(details)})" if details else ""
-            raise SessionTargetError(
-                "claim_not_healthy",
-                f"no healthy claim belongs to {session_id}{suffix}",
-            )
-        if requested_worktree is not None:
-            raise SessionTargetError(
-                "target_worktree_not_claimed",
-                f"no claim owned by {session_id} targets {requested_worktree}",
-            )
-        raise SessionTargetError(
-            "no_exact_session_target",
-            f"no healthy claim belongs to {session_id}",
-        )
-    if len(healthy) != 1:
-        lanes = sorted(f"{claim['projects'][0]}:{claim['scope']}" for claim, _path, _bootstrap in healthy)
-        raise SessionTargetError(
-            "ambiguous_exact_session_target",
-            f"multiple healthy claims match {session_id}: {', '.join(lanes)}",
-        )
-
-    claim, worktree, _bootstrap = healthy[0]
     repo_root = Path(claim["repo_root"]).expanduser().resolve()
     if not (worktree / ".git").exists():
         raise SessionTargetError(
@@ -238,6 +160,104 @@ def resolve_exact_session_target(
             "claim_git_identity_mismatch",
             "claimed worktree, common repository, or branch does not match live Git identity",
         )
+
+
+def resolve_exact_session_target(
+    payload: dict[str, Any],
+    *,
+    client: str,
+    claims_dir: Path,
+    projection_path: Path | None = None,
+    target_worktree: Path | None = None,
+) -> SessionTarget:
+    """Select one healthy projected claim for the identity and optional target."""
+
+    session_id = effective_session_id(payload, client)
+    resolved_claims = claims_dir.expanduser().resolve()
+    resolved_projection = (
+        projection_path or projection_path_for(resolved_claims)
+    ).expanduser().resolve()
+    projection, error = _load_projection(resolved_projection, claims_dir=resolved_claims)
+    if projection is None:
+        raise SessionTargetError(
+            "projection_unavailable_or_stale",
+            error or "claim authority projection is unavailable",
+        )
+
+    identity_matches = [
+        claim
+        for claim in projection["claims"]
+        if claim["agent"] == client and claim["session_id"] == session_id
+    ]
+    requested_worktree = target_worktree.expanduser().resolve() if target_worktree else None
+    effective_matches: list[tuple[dict[str, Any], Path, bool]] = []
+    for claim in identity_matches:
+        bootstrap_target = _bootstrap_target_worktree(claim)
+        effective_worktree = (
+            bootstrap_target
+            if bootstrap_target is not None
+            else Path(claim["worktree_path"]).expanduser().resolve()
+        )
+        if requested_worktree is None or effective_worktree == requested_worktree:
+            effective_matches.append((claim, effective_worktree, bootstrap_target is not None))
+    target_matches = [claim for claim, _worktree, _bootstrap in effective_matches]
+    healthy: list[tuple[dict[str, Any], Path, bool]] = []
+    git_identity_errors: list[SessionTargetError] = []
+    for claim, effective_worktree, bootstrap in effective_matches:
+        static_issues = set(claim["static_issues"])
+        allowed_static = {"bootstrap_broad_claim_requires_narrowing"} if bootstrap else set()
+        health_view = {**claim, "worktree_path": str(effective_worktree)}
+        if claim["status"] in LIVE_STATUSES and static_issues <= allowed_static:
+            try:
+                _validate_claimed_git_identity(claim, worktree=effective_worktree)
+            except SessionTargetError as exc:
+                git_identity_errors.append(exc)
+                continue
+        if (
+            claim["status"] in LIVE_STATUSES
+            and static_issues <= allowed_static
+            and not _dynamic_claim_issues(health_view)
+        ):
+            healthy.append((claim, effective_worktree, bootstrap))
+    if not healthy:
+        if git_identity_errors:
+            raise git_identity_errors[0]
+        if target_matches:
+            details = sorted(
+                {
+                    issue
+                    for claim in target_matches
+                    for issue in [
+                        *(claim["static_issues"] or []),
+                        *_dynamic_claim_issues(claim),
+                        *([] if claim["status"] in LIVE_STATUSES else ["non_live_status"]),
+                    ]
+                }
+            )
+            suffix = f" ({', '.join(details)})" if details else ""
+            raise SessionTargetError(
+                "claim_not_healthy",
+                f"no healthy claim belongs to {session_id}{suffix}",
+            )
+        if requested_worktree is not None:
+            raise SessionTargetError(
+                "target_worktree_not_claimed",
+                f"no claim owned by {session_id} targets {requested_worktree}",
+            )
+        raise SessionTargetError(
+            "no_exact_session_target",
+            f"no healthy claim belongs to {session_id}",
+        )
+    if len(healthy) != 1:
+        lanes = sorted(f"{claim['projects'][0]}:{claim['scope']}" for claim, _path, _bootstrap in healthy)
+        raise SessionTargetError(
+            "ambiguous_exact_session_target",
+            f"multiple healthy claims match {session_id}: {', '.join(lanes)}",
+        )
+
+    claim, worktree, _bootstrap = healthy[0]
+    repo_root = Path(claim["repo_root"]).expanduser().resolve()
+    _validate_claimed_git_identity(claim, worktree=worktree)
     return SessionTarget(
         session_id=session_id,
         repo_root=repo_root,

@@ -10,14 +10,19 @@ Authority comes from the canonical branch claim, not a shared coordinator
 label or a GitHub status. The caller must be the native exact session that owns
 one active, healthy, unexpired claim for the PR branch. The assertion binds the
 repository, PR, base and head revisions, branch, stable claim authority fields,
-owner session, and trusted review-spec digest. Heartbeat and progress timestamps
-remain live checks at the final gate but do not invalidate stable custody.
+owner session, and trusted review-spec digest. The authority layer reads the
+trusted spec again at assertion and final validation, and any declared
+work-graph/work-unit identity must exactly match the canonical claim. Heartbeat
+and progress timestamps remain live checks at the final gate but do not
+invalidate stable custody.
 
-The assertion lasts at most ten minutes and cannot transfer ownership. If the
-process dies, a sanctioned claim transfer or takeover gives the successor a
-new native session; the successor must rerun the review and emit a new
-assertion. A stale assertion, changed claim, changed PR target, changed review
-spec, stalled/weak claim, or wrong session fails closed.
+The assertion lasts at most ten minutes; this limit is enforced both when it is
+created and whenever serialized bytes are deserialized. The assertion cannot
+transfer ownership. If the process dies, a sanctioned claim transfer or
+takeover gives the successor a new native session; the successor must rerun the
+review and emit a new assertion. A stale or overlong assertion, changed claim,
+changed PR target, changed review spec or work-unit provenance, stalled/weak
+claim, or wrong session fails closed.
 
 The assertion does not replace exact-head review, GitHub required CI, branch
 protection, or post-merge verification. It only serializes the small protected

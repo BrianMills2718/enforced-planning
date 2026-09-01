@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 from contextlib import contextmanager
@@ -29,6 +30,7 @@ SESSION = "codex:owner-thread"
 ROOT_SHA = "a" * 40
 HEAD_SHA = "b" * 40
 SPEC_SHA = "c" * 64
+REVIEW_SPEC_PATH = Path("/trusted/review-spec.json")
 
 
 def target() -> IntegrationTargetV1:
@@ -96,20 +98,25 @@ def arrange(monkeypatch, item: coordination_claims.ClaimRecord, *, status="healt
         "_validate_claimed_git_identity",
         lambda *_args, **_kwargs: None,
     )
+    monkeypatch.setattr(authority_module, "review_spec_sha256", lambda _path: SPEC_SHA)
+    monkeypatch.setattr(
+        authority_module, "_review_spec_work_authority", lambda _path: (None, None)
+    )
 
 
 def test_assertion_binds_exact_native_session_claim_and_review_spec(tmp_path, monkeypatch) -> None:
     item = claim(tmp_path)
     arrange(monkeypatch, item)
     assertion = assert_integration_authority(
-        target=target(), agent="codex", repo_root=Path(item.repo_root), now=NOW,
+        target=target(), agent="codex", repo_root=Path(item.repo_root),
+        review_spec_path=REVIEW_SPEC_PATH, now=NOW,
     )
     assert assertion.claim.session_id == SESSION
     assert assertion.claim.scope == item.scope
     assert assertion.target.review_spec_sha256 == SPEC_SHA
     validate_integration_authority(
         assertion, expected_target=target(), agent="codex",
-        repo_root=Path(item.repo_root), now=NOW,
+        repo_root=Path(item.repo_root), review_spec_path=REVIEW_SPEC_PATH, now=NOW,
     )
 
 
@@ -121,7 +128,8 @@ def test_nonhealthy_claim_status_never_grants_integration(
     arrange(monkeypatch, item, status=status)
     with pytest.raises(IntegrationAuthorityError, match=f"status is {status}"):
         assert_integration_authority(
-            target=target(), agent="codex", repo_root=Path(item.repo_root), now=NOW,
+            target=target(), agent="codex", repo_root=Path(item.repo_root),
+            review_spec_path=REVIEW_SPEC_PATH, now=NOW,
         )
 
 
@@ -133,7 +141,8 @@ def test_nonactive_canonical_live_status_never_grants_integration(
     arrange(monkeypatch, item)
     with pytest.raises(IntegrationAuthorityError, match="exactly one active"):
         assert_integration_authority(
-            target=target(), agent="codex", repo_root=Path(item.repo_root), now=NOW,
+            target=target(), agent="codex", repo_root=Path(item.repo_root),
+            review_spec_path=REVIEW_SPEC_PATH, now=NOW,
         )
 
 
@@ -143,7 +152,8 @@ def test_wrong_native_session_cannot_borrow_branch_claim(tmp_path, monkeypatch) 
     monkeypatch.setenv("CODEX_THREAD_ID", "different-thread")
     with pytest.raises(IntegrationAuthorityError, match="exactly one active"):
         assert_integration_authority(
-            target=target(), agent="codex", repo_root=Path(item.repo_root), now=NOW,
+            target=target(), agent="codex", repo_root=Path(item.repo_root),
+            review_spec_path=REVIEW_SPEC_PATH, now=NOW,
         )
 
 
@@ -154,6 +164,7 @@ def test_stale_assertion_and_claim_transfer_both_fail(tmp_path, monkeypatch) -> 
         target=target(),
         agent="codex",
         repo_root=Path(item.repo_root),
+        review_spec_path=REVIEW_SPEC_PATH,
         now=NOW,
         validity=timedelta(seconds=30),
     )
@@ -163,6 +174,7 @@ def test_stale_assertion_and_claim_transfer_both_fail(tmp_path, monkeypatch) -> 
             expected_target=target(),
             agent="codex",
             repo_root=Path(item.repo_root),
+            review_spec_path=REVIEW_SPEC_PATH,
             now=NOW + timedelta(seconds=30),
         )
 
@@ -178,6 +190,7 @@ def test_stale_assertion_and_claim_transfer_both_fail(tmp_path, monkeypatch) -> 
             expected_target=target(),
             agent="codex",
             repo_root=Path(item.repo_root),
+            review_spec_path=REVIEW_SPEC_PATH,
             now=NOW + timedelta(seconds=1),
         )
 
@@ -188,7 +201,8 @@ def test_heartbeat_and_progress_churn_preserve_premerge_assertion(
     item = claim(tmp_path)
     arrange(monkeypatch, item)
     assertion = assert_integration_authority(
-        target=target(), agent="codex", repo_root=Path(item.repo_root), now=NOW,
+        target=target(), agent="codex", repo_root=Path(item.repo_root),
+        review_spec_path=REVIEW_SPEC_PATH, now=NOW,
     )
     refreshed = replace(
         item,
@@ -206,6 +220,7 @@ def test_heartbeat_and_progress_churn_preserve_premerge_assertion(
         expected_target=target(),
         agent="codex",
         repo_root=Path(item.repo_root),
+        review_spec_path=REVIEW_SPEC_PATH,
         now=NOW + timedelta(minutes=1),
     )
 
@@ -214,7 +229,8 @@ def test_stable_claim_authority_change_invalidates_assertion(tmp_path, monkeypat
     item = claim(tmp_path)
     arrange(monkeypatch, item)
     assertion = assert_integration_authority(
-        target=target(), agent="codex", repo_root=Path(item.repo_root), now=NOW,
+        target=target(), agent="codex", repo_root=Path(item.repo_root),
+        review_spec_path=REVIEW_SPEC_PATH, now=NOW,
     )
     changed = replace(item, plan_ref="goal:different-authority")
     monkeypatch.setattr(
@@ -228,6 +244,7 @@ def test_stable_claim_authority_change_invalidates_assertion(tmp_path, monkeypat
             expected_target=target(),
             agent="codex",
             repo_root=Path(item.repo_root),
+            review_spec_path=REVIEW_SPEC_PATH,
             now=NOW + timedelta(seconds=1),
         )
 
@@ -238,7 +255,8 @@ def test_changed_review_spec_digest_invalidates_premerge_assertion(
     item = claim(tmp_path)
     arrange(monkeypatch, item)
     assertion = assert_integration_authority(
-        target=target(), agent="codex", repo_root=Path(item.repo_root), now=NOW,
+        target=target(), agent="codex", repo_root=Path(item.repo_root),
+        review_spec_path=REVIEW_SPEC_PATH, now=NOW,
     )
     changed = target().model_copy(update={"review_spec_sha256": "e" * 64})
     with pytest.raises(IntegrationAuthorityError, match="review spec changed"):
@@ -247,6 +265,7 @@ def test_changed_review_spec_digest_invalidates_premerge_assertion(
             expected_target=changed,
             agent="codex",
             repo_root=Path(item.repo_root),
+            review_spec_path=REVIEW_SPEC_PATH,
             now=NOW + timedelta(seconds=1),
         )
 
@@ -255,7 +274,8 @@ def test_recomputed_assertion_cannot_change_owner(tmp_path, monkeypatch) -> None
     item = claim(tmp_path)
     arrange(monkeypatch, item)
     assertion = assert_integration_authority(
-        target=target(), agent="codex", repo_root=Path(item.repo_root), now=NOW,
+        target=target(), agent="codex", repo_root=Path(item.repo_root),
+        review_spec_path=REVIEW_SPEC_PATH, now=NOW,
     )
     payload = assertion.model_dump(mode="json")
     payload["claim"]["session_id"] = "codex:invented-thread"
@@ -266,7 +286,7 @@ def test_recomputed_assertion_cannot_change_owner(tmp_path, monkeypatch) -> None
     with pytest.raises(IntegrationAuthorityError, match="another native session"):
         validate_integration_authority(
             forged, expected_target=target(), agent="codex",
-            repo_root=Path(item.repo_root), now=NOW,
+            repo_root=Path(item.repo_root), review_spec_path=REVIEW_SPEC_PATH, now=NOW,
         )
 
 
@@ -293,11 +313,99 @@ def test_plain_digest_tamper_is_rejected() -> None:
         IntegrationAuthorityAssertionV1.model_validate(payload)
 
 
+def test_recomputed_overlong_serialized_assertion_is_rejected(
+    tmp_path, monkeypatch
+) -> None:
+    item = claim(tmp_path)
+    arrange(monkeypatch, item)
+    assertion = assert_integration_authority(
+        target=target(),
+        agent="codex",
+        repo_root=Path(item.repo_root),
+        review_spec_path=REVIEW_SPEC_PATH,
+        now=NOW,
+    )
+    payload = assertion.model_dump(mode="json")
+    payload["valid_until"] = (NOW + timedelta(days=1)).isoformat()
+    payload["assertion_sha256"] = canonical_sha256(
+        {key: value for key, value in payload.items() if key != "assertion_sha256"}
+    )
+
+    with pytest.raises(ValidationError, match="exceeds 600 seconds"):
+        IntegrationAuthorityAssertionV1.model_validate(payload)
+
+
+def test_review_spec_work_unit_authority_must_match_canonical_claim(
+    tmp_path, monkeypatch
+) -> None:
+    review_path = tmp_path / "review.json"
+    review_path.write_text(
+        json.dumps(
+            {
+                "work_graph_sha256": "e" * 64,
+                "work_unit_id": "wu-integration",
+            }
+        ),
+        encoding="utf-8",
+    )
+    item = claim(
+        tmp_path,
+        work_graph_sha256="e" * 64,
+        work_unit_id="wu-integration",
+    )
+    monkeypatch.setenv("CODEX_THREAD_ID", "owner-thread")
+    current = [item]
+    monkeypatch.setattr(
+        coordination_claims, "list_claims", lambda *_args, **_kwargs: current
+    )
+    monkeypatch.setattr(
+        coordination_claims,
+        "claim_runtime_status",
+        lambda *_args, **_kwargs: "healthy",
+    )
+    monkeypatch.setattr(
+        authority_module,
+        "_validate_claimed_git_identity",
+        lambda *_args, **_kwargs: None,
+    )
+    exact_target = target().model_copy(
+        update={
+            "review_spec_sha256": authority_module.review_spec_sha256(review_path),
+            "review_work_graph_sha256": "e" * 64,
+            "review_work_unit_id": "wu-integration",
+        }
+    )
+    assertion = assert_integration_authority(
+        target=exact_target,
+        agent="codex",
+        repo_root=Path(item.repo_root),
+        review_spec_path=review_path,
+        now=NOW,
+    )
+    assert assertion.claim.work_unit_id == "wu-integration"
+
+    current[0] = replace(
+        item,
+        work_graph_sha256="f" * 64,
+        work_unit_id="wu-other",
+    )
+    with pytest.raises(IntegrationAuthorityError, match="differs from canonical claim"):
+        validate_integration_authority(
+            assertion,
+            expected_target=exact_target,
+            agent="codex",
+            repo_root=Path(item.repo_root),
+            review_spec_path=review_path,
+            now=NOW + timedelta(seconds=1),
+        )
+
+
 def test_guard_holds_registry_lock_across_caller_operation(tmp_path, monkeypatch) -> None:
     item = claim(tmp_path)
     arrange(monkeypatch, item)
     assertion = assert_integration_authority(
-        target=target(), agent="codex", repo_root=Path(item.repo_root), now=NOW,
+        target=target(), agent="codex", repo_root=Path(item.repo_root),
+        review_spec_path=REVIEW_SPEC_PATH, now=NOW,
     )
     events: list[str] = []
 
@@ -310,7 +418,7 @@ def test_guard_holds_registry_lock_across_caller_operation(tmp_path, monkeypatch
     monkeypatch.setattr(coordination_claims, "claim_registry_lock", locked)
     with integration_authority_guard(
         assertion, expected_target=target(), agent="codex",
-        repo_root=Path(item.repo_root), now=NOW,
+        repo_root=Path(item.repo_root), review_spec_path=REVIEW_SPEC_PATH, now=NOW,
     ):
         events.append("remote-head-cas")
     assert events == ["lock", "remote-head-cas", "unlock"]
@@ -353,9 +461,17 @@ def test_authentic_linked_worktree_identity_and_exact_head_are_required(
         "claim_runtime_status",
         lambda *_args, **_kwargs: "healthy",
     )
-    exact_target = target().model_copy(update={"head_sha": head})
+    review_path = tmp_path / "review.json"
+    review_path.write_text("{}\n", encoding="utf-8")
+    exact_target = target().model_copy(
+        update={
+            "head_sha": head,
+            "review_spec_sha256": authority_module.review_spec_sha256(review_path),
+        }
+    )
     assertion = assert_integration_authority(
-        target=exact_target, agent="codex", repo_root=repo, now=NOW,
+        target=exact_target, agent="codex", repo_root=repo,
+        review_spec_path=review_path, now=NOW,
     )
     assert assertion.target.head_sha == head
 
@@ -366,6 +482,7 @@ def test_authentic_linked_worktree_identity_and_exact_head_are_required(
             expected_target=exact_target,
             agent="codex",
             repo_root=repo,
+            review_spec_path=review_path,
             now=NOW + timedelta(seconds=1),
         )
 
@@ -384,7 +501,7 @@ def test_process_death_releases_registry_lock_for_transferred_successor(
     )
     assertion = assert_integration_authority(
         target=target(), agent="codex", repo_root=Path(item.repo_root),
-        claims_dir=claims_dir, now=NOW,
+        review_spec_path=REVIEW_SPEC_PATH, claims_dir=claims_dir, now=NOW,
     )
 
     pid = os.fork()
@@ -394,6 +511,7 @@ def test_process_death_releases_registry_lock_for_transferred_successor(
             expected_target=target(),
             agent="codex",
             repo_root=Path(item.repo_root),
+            review_spec_path=REVIEW_SPEC_PATH,
             claims_dir=claims_dir,
             now=NOW,
         ):
@@ -409,6 +527,7 @@ def test_process_death_releases_registry_lock_for_transferred_successor(
         target=target(),
         agent="codex",
         repo_root=Path(item.repo_root),
+        review_spec_path=REVIEW_SPEC_PATH,
         claims_dir=claims_dir,
         now=NOW + timedelta(seconds=1),
     )

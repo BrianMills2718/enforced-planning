@@ -46,6 +46,14 @@ class IntegrationTargetV1(_StrictModel):
     base_sha: str = Field(pattern=FULL_SHA_PATTERN)
     head_sha: str = Field(pattern=FULL_SHA_PATTERN)
     review_spec_sha256: str = Field(pattern=SHA256_PATTERN)
+    review_work_graph_sha256: str | None = Field(default=None, pattern=SHA256_PATTERN)
+    review_work_unit_id: str | None = None
+
+    @model_validator(mode="after")
+    def _validate_review_authority(self) -> IntegrationTargetV1:
+        if bool(self.review_work_graph_sha256) != bool(self.review_work_unit_id):
+            raise ValueError("review spec work-graph and work-unit authority must be paired")
+        return self
 
 
 class IntegrationClaimBindingV1(_StrictModel):
@@ -74,6 +82,10 @@ class IntegrationAuthorityAssertionV1(_StrictModel):
     def _validate_assertion(self) -> IntegrationAuthorityAssertionV1:
         if self.valid_until <= self.asserted_at:
             raise ValueError("integration assertion validity interval is empty")
+        if (self.valid_until - self.asserted_at).total_seconds() > MAX_ASSERTION_SECONDS:
+            raise ValueError(
+                f"integration assertion validity exceeds {MAX_ASSERTION_SECONDS} seconds"
+            )
         expected = canonical_sha256(
             self.model_dump(mode="json", exclude={"assertion_sha256"})
         )
@@ -99,6 +111,41 @@ def review_spec_sha256(path: Path) -> str:
         return hashlib.sha256(resolved.read_bytes()).hexdigest()
     except OSError as exc:
         raise IntegrationAuthorityError(f"cannot read trusted review spec: {exc}") from exc
+
+
+def _review_spec_work_authority(path: Path) -> tuple[str | None, str | None]:
+    try:
+        payload = json.loads(path.expanduser().resolve(strict=True).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise IntegrationAuthorityError(f"cannot parse trusted review spec: {exc}") from exc
+    if not isinstance(payload, dict):
+        raise IntegrationAuthorityError("trusted review spec must be a JSON object")
+    graph = payload.get("work_graph_sha256")
+    unit = payload.get("work_unit_id")
+    if graph is not None and (
+        not isinstance(graph, str)
+        or len(graph) != 64
+        or any(character not in "0123456789abcdef" for character in graph)
+    ):
+        raise IntegrationAuthorityError("trusted review spec work_graph_sha256 is invalid")
+    if unit is not None and (not isinstance(unit, str) or not unit.strip()):
+        raise IntegrationAuthorityError("trusted review spec work_unit_id is invalid")
+    if bool(graph) != bool(unit):
+        raise IntegrationAuthorityError(
+            "trusted review spec work-graph and work-unit authority must be paired"
+        )
+    return graph, unit
+
+
+def _validate_review_spec_identity(target: IntegrationTargetV1, path: Path) -> None:
+    if review_spec_sha256(path) != target.review_spec_sha256:
+        raise IntegrationAuthorityError("trusted review spec bytes changed")
+    graph, unit = _review_spec_work_authority(path)
+    if (graph, unit) != (
+        target.review_work_graph_sha256,
+        target.review_work_unit_id,
+    ):
+        raise IntegrationAuthorityError("trusted review spec work-unit authority changed")
 
 
 def _parse_time(value: str | None) -> datetime | None:
@@ -239,6 +286,13 @@ def _exact_active_claim(
     expires_at = _parse_time(claim.expires_at)
     if expires_at is None or expires_at <= now:
         raise IntegrationAuthorityError("integration claim is expired")
+    if (claim.work_graph_sha256, claim.work_unit_id) != (
+        target.review_work_graph_sha256,
+        target.review_work_unit_id,
+    ):
+        raise IntegrationAuthorityError(
+            "trusted review spec work-unit authority differs from canonical claim"
+        )
     _validate_claimed_git_identity(claim, target=target, repo_root=repo_root)
     return claim
 
@@ -269,6 +323,7 @@ def assert_integration_authority(
     target: IntegrationTargetV1,
     agent: str,
     repo_root: Path,
+    review_spec_path: Path,
     claims_dir: Path | None = None,
     now: datetime | None = None,
     validity: timedelta = timedelta(seconds=DEFAULT_ASSERTION_SECONDS),
@@ -285,6 +340,7 @@ def assert_integration_authority(
     resolved_root = repo_root.expanduser().resolve()
 
     def build(observed: datetime) -> IntegrationAuthorityAssertionV1:
+        _validate_review_spec_identity(target, review_spec_path)
         claim = _exact_active_claim(
             target=target,
             agent=agent,
@@ -328,6 +384,7 @@ def validate_integration_authority(
     expected_target: IntegrationTargetV1,
     agent: str,
     repo_root: Path,
+    review_spec_path: Path,
     claims_dir: Path | None = None,
     now: datetime | None = None,
     lock_registry: bool = True,
@@ -347,6 +404,7 @@ def validate_integration_authority(
             )
         if assertion.valid_until <= observed:
             raise IntegrationAuthorityError("integration authority assertion is stale")
+        _validate_review_spec_identity(assertion.target, review_spec_path)
         claim = _exact_active_claim(
             target=assertion.target,
             agent=agent,
@@ -376,6 +434,7 @@ def integration_authority_guard(
     expected_target: IntegrationTargetV1,
     agent: str,
     repo_root: Path,
+    review_spec_path: Path,
     claims_dir: Path | None = None,
     now: datetime | None = None,
 ) -> Iterator[None]:
@@ -387,6 +446,7 @@ def integration_authority_guard(
             expected_target=expected_target,
             agent=agent,
             repo_root=repo_root,
+            review_spec_path=review_spec_path,
             claims_dir=claims_dir,
             now=now,
             lock_registry=False,

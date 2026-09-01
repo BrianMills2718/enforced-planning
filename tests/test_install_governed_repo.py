@@ -1227,6 +1227,149 @@ def _installed_worktree_make_args(tmp_path: Path, *, scope: str) -> list[str]:
     ]
 
 
+def test_installed_maintenance_bootstrap_denies_then_narrows_and_closes(
+    tmp_path: Path,
+) -> None:
+    """One generated consumer completes the public bootstrap recovery journey."""
+
+    environment, _revision = _installed_planning_make_fixture(tmp_path)
+    environment["PYTHONDONTWRITEBYTECODE"] = "1"
+    scope = f"plan132-installed-{tmp_path.name}"
+    worktrees = tmp_path / "worktrees"
+    created = subprocess.run(
+        [
+            "make",
+            "maintenance-worktree",
+            f"PYTHON={sys.executable}",
+            f"BRANCH={scope}",
+            "TASK=Exercise installed broad-claim narrowing",
+            "WORKTREE_AGENT=codex",
+            "WORKTREE_PROJECT=fixture",
+            f"WORKTREE_DIR={worktrees}",
+        ],
+        cwd=tmp_path,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert created.returncode == 0, created.stdout + created.stderr
+
+    worktree = worktrees / scope
+    claims_dir = Path(environment["HOME"]) / ".claude" / "coordination" / "claims"
+    receipt_path = claims_dir.parent / "receipts" / "installed-prewrite-receipts.jsonl"
+    payload = json.dumps(
+        {
+            "session_id": environment["CODEX_THREAD_ID"],
+            "hook_event_name": "PreToolUse",
+            "cwd": str(worktree),
+            "tool_name": "apply_patch",
+            "tool_input": {
+                "command": (
+                    f"*** Begin Patch\n*** Update File: {worktree / 'CLAUDE.md'}"
+                    "\n@@\n-old\n+new\n*** End Patch"
+                )
+            },
+        }
+    )
+    gate_adapter = "\n".join(
+        [
+            "import json, sys",
+            "from pathlib import Path",
+            "from enforced_planning.prewrite_claim_fast import evaluate_prewrite_fast, projection_path_for",
+            "claims_dir = Path(sys.argv[1])",
+            "result = evaluate_prewrite_fast(json.load(sys.stdin), client='codex', mode='enforce', "
+            "claims_dir=claims_dir, projection_path=projection_path_for(claims_dir), "
+            "receipt_path=Path(sys.argv[2]))",
+            "print(json.dumps(result, sort_keys=True))",
+            "raise SystemExit(0 if result['decision'] == 'allow' else 1)",
+        ]
+    )
+    gate_command = [
+        sys.executable,
+        "-c",
+        gate_adapter,
+        str(claims_dir),
+        str(receipt_path),
+    ]
+    denied = subprocess.run(
+        gate_command,
+        cwd=worktree,
+        env=environment,
+        input=payload,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert denied.returncode == 1, denied.stdout + denied.stderr
+    assert denied.stdout, denied.stderr
+    assert json.loads(denied.stdout)["reason_code"] == "no_exact_claim"
+
+    narrowed = subprocess.run(
+        [
+            sys.executable,
+            str(tmp_path / "scripts" / "meta" / "session_narrow.py"),
+            "--agent",
+            "codex",
+            "--project",
+            "fixture",
+            "--scope",
+            scope,
+            "--session-id",
+            f"codex:{environment['CODEX_THREAD_ID']}",
+            "--write-path",
+            "CLAUDE.md",
+            "--json",
+        ],
+        cwd=worktree,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert narrowed.returncode == 0, narrowed.stdout + narrowed.stderr
+    assert json.loads(narrowed.stdout)["new_write_paths"] == ["CLAUDE.md"]
+
+    admitted = subprocess.run(
+        gate_command,
+        cwd=worktree,
+        env=environment,
+        input=payload,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert admitted.returncode == 0, admitted.stdout + admitted.stderr
+    assert json.loads(admitted.stdout)["reason_code"] == "exact_live_claim"
+
+    closed = subprocess.run(
+        [
+            sys.executable,
+            str(tmp_path / "scripts" / "meta" / "session_close.py"),
+            "--agent",
+            "codex",
+            "--project",
+            "fixture",
+            "--scope",
+            scope,
+            "--worktree-path",
+            str(worktree),
+            "--branch",
+            scope,
+            "--json",
+        ],
+        cwd=tmp_path,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert closed.returncode == 0, closed.stdout + closed.stderr
+    close_payload = json.loads(closed.stdout)
+    assert close_payload["disposition"] == "merged"
+    assert close_payload["released"] is True
+
+
 def test_installed_make_retains_one_revision_across_claim_worktree_and_tracker(
     tmp_path: Path,
 ) -> None:

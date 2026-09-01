@@ -2338,6 +2338,55 @@ def test_explicit_mode_exempts_only_classified_sanctioned_maintenance(
     assert result["outcome_admission_exemption"] == exemption
 
 
+def test_delegated_maintenance_exemption_is_distinct_and_evidenced(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from enforced_planning import outcome_admission
+
+    class DelegatedClaim:
+        scope = "fix/delegated-child"
+        source_file = "/tmp/delegated-claim.yaml"
+        tracker_path = "/tmp/delegated-tracker.yaml"
+        parent_scope = "weekly-parent"
+        start_revision = "a" * 40
+
+        @staticmethod
+        def primary_project() -> str:
+            return "host-gate-test"
+
+    claim = DelegatedClaim()
+    monkeypatch.setattr(prewrite_claim_gate, "_exact_outcome_claim", lambda _decision: claim)
+    monkeypatch.setattr(
+        outcome_admission,
+        "is_sanctioned_maintenance_claim",
+        lambda _claim: False,
+    )
+    monkeypatch.setattr(
+        outcome_admission,
+        "is_sanctioned_delegated_maintenance_claim",
+        lambda _claim: True,
+        raising=False,
+    )
+
+    result = prewrite_claim_gate._sanctioned_maintenance_exemption(
+        {
+            "decision": "allow",
+            "reason_code": "exact_live_claim",
+            "claim_source_file": claim.source_file,
+        }
+    )
+
+    assert result == {
+        "reason_code": "sanctioned_delegated_maintenance",
+        "claim_project": "host-gate-test",
+        "claim_scope": "fix/delegated-child",
+        "claim_source_file": claim.source_file,
+        "tracker_path": claim.tracker_path,
+        "parent_scope": "weekly-parent",
+        "start_revision": "a" * 40,
+    }
+
+
 def test_explicit_mode_exempts_read_only_bash_from_repo_local_enforce_selected(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

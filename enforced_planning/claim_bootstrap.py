@@ -1741,17 +1741,35 @@ def _execute_revoke_delegated_worktree(
         tracker_path=str(tracker_path),
         note=f"Pristine delegated lane revoked by parent {request.parent_scope}",
     )
-    lock_reconciliation = _reconcile_canonical_after_claim(
-        repo,
-        session_id=session_id,
-    )
+    try:
+        lock_reconciliation = _reconcile_canonical_after_claim(
+            repo,
+            session_id=session_id,
+        )
+    except Exception as exc:  # noqa: BLE001 - revocation already completed irreversibly
+        return {
+            **result,
+            "action": "pristine_delegated_lane_revoked_canonical_reconciliation_required",
+            "status": "revoked_canonical_reconciliation_required",
+            "delegated_session_id": child_session_id,
+            "delegated_by_session_id": session_id,
+            "parent_scope": request.parent_scope,
+            "canonical_lock": None,
+            "canonical_lock_reconciliation_required": True,
+            "canonical_lock_error": {
+                "type": type(exc).__name__,
+                "message": str(exc)[:500],
+            },
+        }
     return {
         **result,
         "action": "pristine_delegated_lane_revoked",
+        "status": "revoked",
         "delegated_session_id": child_session_id,
         "delegated_by_session_id": session_id,
         "parent_scope": request.parent_scope,
         "canonical_lock": lock_reconciliation,
+        "canonical_lock_reconciliation_required": False,
     }
 
 
@@ -1989,6 +2007,37 @@ def _execute_maintenance_worktree(
                 target_worktree_path=str(worktree) if bootstrap_broad else None,
             )
     except Exception as exc:
+        if delegated:
+            candidates = [
+                claim
+                for claim in coordination_claims.check_claims(request.project)
+                if claim.scope == request.scope
+            ]
+            if candidates or tracker_path.exists():
+                residue = []
+                if candidates:
+                    residue.append("delegated claim remains")
+                if tracker_path.exists():
+                    residue.append("delegated tracker remains")
+                detail = "; ".join(residue)
+                raise ClaimBootstrapError(
+                    "delegated maintenance bootstrap failed with lifecycle residue; "
+                    f"intact lane preserved for retry: {exc}; {detail}"
+                ) from exc
+            cleanup_errors = _rollback_created_worktree(
+                repo=repo,
+                worktree=worktree,
+                branch=request.branch,
+                expected_head=starting_head,
+                branch_created=branch_created,
+                created_dirs=created_dirs,
+            )
+            detail = f"; {'; '.join(cleanup_errors)}" if cleanup_errors else ""
+            disposition = "; lane preserved for inspection" if cleanup_errors else "; transaction rolled back"
+            raise ClaimBootstrapError(
+                f"delegated maintenance bootstrap failed before claim creation: {exc}{disposition}{detail}"
+            ) from exc
+
         cleanup_errors: list[str] = []
         claim_verified = False
         candidates = [
@@ -2049,23 +2098,11 @@ def _execute_maintenance_worktree(
                         tracker_path.unlink(missing_ok=True)
             except Exception as cleanup_exc:  # noqa: BLE001
                 cleanup_errors.append(f"claim/tracker cleanup failed: {cleanup_exc}")
-        if delegated and branch_created:
-            cleanup_errors.extend(
-                _rollback_created_worktree(
-                    repo=repo,
-                    worktree=worktree,
-                    branch=request.branch,
-                    expected_head=starting_head,
-                    branch_created=branch_created,
-                    created_dirs=created_dirs,
-                )
-            )
-        else:
-            for candidate in reversed(created_dirs):
-                try:
-                    candidate.rmdir()
-                except OSError:
-                    pass
+        for candidate in reversed(created_dirs):
+            try:
+                candidate.rmdir()
+            except OSError:
+                pass
         detail = f"; {'; '.join(cleanup_errors)}" if cleanup_errors else ""
         raise ClaimBootstrapError(
             f"maintenance claim bootstrap failed before Git artifacts: {exc}{detail}"
@@ -2096,6 +2133,31 @@ def _execute_maintenance_worktree(
             "parent_scope": parent_scope,
         }
     except Exception as exc:
+        if delegated:
+            try:
+                session_lifecycle.revoke_delegated_session(
+                    agent=agent,
+                    project=request.project,
+                    scope=request.scope,
+                    repo_root=str(repo),
+                    worktree_path=str(worktree),
+                    branch=request.branch,
+                    parent_scope=request.parent_scope,
+                    parent_session_id=session_id,
+                    child_session_id=owner_session_id,
+                    expected_start_revision=starting_head,
+                    tracker_path=str(tracker_path),
+                    note="Delegated maintenance bootstrap rolled back after post-claim failure",
+                )
+            except Exception as cleanup_exc:  # noqa: BLE001 - preserve the intact delegated lane for retry
+                raise ClaimBootstrapError(
+                    "delegated maintenance session creation failed after claim creation: "
+                    f"{exc}; delegated revoke failed: {cleanup_exc}; intact lane preserved for retry"
+                ) from exc
+            raise ClaimBootstrapError(
+                f"delegated maintenance session creation failed after claim creation: {exc}; transaction revoked"
+            ) from exc
+
         cleanup_errors = _rollback_created_worktree(
             repo=repo,
             worktree=worktree,

@@ -1513,7 +1513,8 @@ def test_claude_lifecycle_adapter_is_duplicate_safe_with_repository_project_over
     assert later.returncode == 0
     assert persisted.message.message_id in later.stdout
     status = store.status(MessageStatusRequest(message_id=persisted.message.message_id))
-    assert [receipt.event for receipt in status.receipts] == ["observed"]
+    assert status.state == "persisted"
+    assert [receipt.event for receipt in status.receipts] == []
 
 
 def test_claude_prompt_lifecycle_uses_native_prompt_id_for_duplicate_safety(
@@ -1802,7 +1803,7 @@ def test_codex_lifecycle_hook_polls_after_write_claim_completion(
     assert persisted.message.message_id in json.loads(result.stdout)["systemMessage"]
     assert store.status(
         MessageStatusRequest(message_id=persisted.message.message_id)
-    ).state == "observed"
+    ).state == "persisted"
 
 
 def test_codex_lifecycle_hook_rejects_malformed_input_without_receipt(

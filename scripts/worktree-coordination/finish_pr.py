@@ -21,9 +21,9 @@ from types import ModuleType
 def _framework_root() -> Path:
     """Resolve both source and installed ``scripts/meta`` layouts."""
     for candidate in Path(__file__).resolve().parents:
-        if (candidate / "enforced_planning").is_dir():
+        if (candidate / "contracts" / "pr-review-signoff.schema.json").is_file():
             return candidate
-    raise RuntimeError("cannot locate the installed enforced_planning package")
+    raise RuntimeError("cannot locate the installed PR review contract")
 
 
 REPO_ROOT = _framework_root()
@@ -326,7 +326,11 @@ def prepare_merge_gate(
         output_root=review_output_root / repo_slug.replace("/", "__") / f"pr-{pr_number}",
     )
     final, _ = fetch_pr_snapshot(pr_number, repo_slug, gh_env)
-    if final.head_sha != first.head_sha or final.state != "OPEN":
+    if (
+        final.base_sha != first.base_sha
+        or final.head_sha != first.head_sha
+        or final.state != "OPEN"
+    ):
         raise RuntimeError("PR changed after review; signoff is stale")
     checks_ok, reason = require_all_required_checks(pr_number, repo_slug, gh_env)
     if not checks_ok:

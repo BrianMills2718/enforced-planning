@@ -25,6 +25,7 @@ HOOK_PATH = (
 )
 SHA_A = "a" * 40
 SHA_B = "b" * 40
+SHA_C = "c" * 40
 
 
 def _load():
@@ -40,9 +41,9 @@ def completed(cmd, returncode=0, stdout="", stderr=""):
     return subprocess.CompletedProcess(cmd, returncode, stdout, stderr)
 
 
-def snapshot(module, sha=SHA_A, checks=()):
+def snapshot(module, sha=SHA_A, checks=(), base_sha=SHA_B):
     return module.PrSnapshot(
-        SHA_B, sha, "feature", "main", "OPEN", "MERGEABLE", tuple(checks)
+        base_sha, sha, "feature", "main", "OPEN", "MERGEABLE", tuple(checks)
     )
 
 
@@ -135,6 +136,39 @@ def test_prepare_merge_gate_runs_local_review_and_rechecks_head(monkeypatch) -> 
     assert receipt == Path("/receipts/receipt.json")
     assert observed["spec"] is spec
     assert observed["review_worktree"] == Path("/review")
+
+
+def test_base_change_after_review_invalidates_signoff(monkeypatch) -> None:
+    module = _load()
+    snapshots = iter([
+        (snapshot(module), None),
+        (snapshot(module), None),
+        (snapshot(module, base_sha=SHA_C), None),
+    ])
+    monkeypatch.setattr(module, "fetch_pr_snapshot", lambda *_args: next(snapshots))
+    monkeypatch.setattr(module, "fetch_exact_pr_head", lambda *_args: (True, "OK"))
+    monkeypatch.setattr(module, "require_all_required_checks", lambda *_args: (True, "OK"))
+    monkeypatch.setattr(module, "load_trusted_review_spec", lambda *_args, **_kwargs: object())
+    monkeypatch.setattr(module, "resolve_branch_worktree", lambda _branch: Path("/review"))
+    monkeypatch.setattr(
+        module,
+        "run_local_review_gate",
+        lambda **_kwargs: (object(), Path("/receipt.json")),
+    )
+
+    try:
+        module.prepare_merge_gate(
+            304,
+            "feature",
+            "owner/repo",
+            {},
+            review_spec_path=Path("/tmp/review.json"),
+            review_output_root=Path("/tmp/reviews"),
+        )
+    except RuntimeError as exc:
+        assert "changed after review" in str(exc)
+    else:
+        raise AssertionError("changed base must invalidate review")
 
 
 def test_merge_uses_match_head_commit_and_never_deletes_branch(monkeypatch) -> None:
@@ -262,6 +296,13 @@ def test_hook_blocks_direct_merge_and_finish_command_variants() -> None:
         "./scripts/meta/worktree-coordination/finish_pr.py --branch feature --pr 42",
         "gh pr merge 42",
         "gh --repo owner/repo pr merge 42 --squash",
+        "gh pr --repo owner/repo merge 42 --squash",
+        "env gh pr merge 42",
+        "command gh pr merge 42",
+        "GH_HOST=github.com gh pr merge 42",
+        "env python scripts/worktree-coordination/finish_pr.py --branch feature --pr 42",
+        "command python scripts/worktree-coordination/finish_pr.py --branch feature --pr 42",
+        "PYTHONPATH=. python scripts/worktree-coordination/finish_pr.py --branch feature --pr 42",
     )
     for command in commands:
         payload = json.dumps({"tool_input": {"command": command}, "cwd": "/repo"})

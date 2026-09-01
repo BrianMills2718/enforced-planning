@@ -25,11 +25,82 @@ if [[ -z "$COMMAND" ]]; then
     exit 0  # No command, allow
 fi
 
-# Check if a command segment invokes gh, with or without global flags, then
-# reaches `pr merge`. Keep this lexical and fast; the sanctioned command does
-# not invoke gh directly, so false negatives are more dangerous than a bounded
-# false positive on an unusual shell expression.
-if echo "$COMMAND" | grep -qE '(^|&&|;|\|)[[:space:]]*([^[:space:]]*/)?gh([[:space:]]+[^;&|]*)?[[:space:]]+pr[[:space:]]+merge([[:space:]]|$)'; then
+# Normalize shell segments with the standard-library lexer so ordinary wrappers,
+# assignments, absolute interpreters, and gh option placement cannot bypass a
+# growing collection of regular expressions.
+BLOCK_KIND=$(python3 - "$COMMAND" <<'PY'
+import os
+import re
+import shlex
+import sys
+
+raw = sys.argv[1]
+try:
+    lexer = shlex.shlex(raw, posix=True, punctuation_chars=";&|")
+    lexer.whitespace_split = True
+    tokens = list(lexer)
+except ValueError:
+    tokens = raw.replace(";", " ; ").replace("|", " | ").replace("&", " & ").split()
+
+segments, current = [], []
+for token in tokens:
+    if token and set(token) <= set(";&|"):
+        if current:
+            segments.append(current)
+            current = []
+    else:
+        current.append(token)
+if current:
+    segments.append(current)
+
+assignment = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
+python_name = re.compile(r"^python(?:[0-9]+(?:\.[0-9]+)*)?$")
+for segment in segments:
+    words = list(segment)
+    while words and assignment.match(words[0]):
+        words.pop(0)
+    changed = True
+    while words and changed:
+        changed = False
+        command = os.path.basename(words[0])
+        if command in {"command", "nohup", "setsid", "time"}:
+            words.pop(0)
+            while words and words[0].startswith("-"):
+                words.pop(0)
+            changed = True
+        elif command == "env":
+            words.pop(0)
+            while words and (words[0].startswith("-") or assignment.match(words[0])):
+                option = words.pop(0)
+                if option in {"-u", "--unset", "-C", "--chdir"} and words:
+                    words.pop(0)
+            changed = True
+        elif command == "uv" and len(words) > 1 and words[1] == "run":
+            words = words[2:]
+            changed = True
+        while words and assignment.match(words[0]):
+            words.pop(0)
+    if not words:
+        continue
+    command = os.path.basename(words[0])
+    if command == "gh":
+        try:
+            pr_index = words.index("pr", 1)
+            if "merge" in words[pr_index + 1:]:
+                print("merge")
+                raise SystemExit
+        except ValueError:
+            pass
+    if command == "finish_pr.py" or (
+        python_name.fullmatch(command)
+        and any(os.path.basename(word) == "finish_pr.py" for word in words[1:])
+    ):
+        print("finish")
+        raise SystemExit
+PY
+)
+
+if [[ "$BLOCK_KIND" == "merge" ]]; then
     PR_NUM=$(echo "$COMMAND" | grep -oE 'merge\s+[0-9]+' | grep -oE '[0-9]+' || echo "N")
 
     echo "BLOCKED: Direct GitHub CLI merge is not allowed" >&2
@@ -58,13 +129,7 @@ if echo "$COMMAND" | grep -qE '(^|&&|;|\|)\s*python[3]?\s+scripts/safe_worktree_
     exit 2
 fi
 
-# Block direct calls to finish_pr.py (must use make finish). Cover source and
-# installed paths, absolute interpreters, optional interpreter flags, `uv run`,
-# and an executable script path. The match is constrained to a command segment
-# so searches or commit messages that merely mention the filename are allowed.
-PYTHON_FINISH_RE='(^|&&|;|\|)[[:space:]]*(uv[[:space:]]+run[[:space:]]+)?([^[:space:]]*/)?python([0-9.]*)?([[:space:]]+-[^[:space:]]+)*[[:space:]]+[^;&|]*finish_pr\.py([[:space:]]|$)'
-EXEC_FINISH_RE='(^|&&|;|\|)[[:space:]]*([^[:space:]]*/)?finish_pr\.py([[:space:]]|$)'
-if echo "$COMMAND" | grep -qE "$PYTHON_FINISH_RE|$EXEC_FINISH_RE"; then
+if [[ "$BLOCK_KIND" == "finish" ]]; then
     BRANCH=$(echo "$COMMAND" | grep -oE '\-\-branch\s+\S+' | sed 's/--branch\s*//' || echo "BRANCH")
     PR_NUM=$(echo "$COMMAND" | grep -oE '\-\-pr\s+[0-9]+' | grep -oE '[0-9]+' || echo "N")
 

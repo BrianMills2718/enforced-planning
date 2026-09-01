@@ -27,16 +27,17 @@ from typing import Any
 if str(Path(__file__).resolve().parents[1]) not in sys.path:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from enforced_planning.governed_repo_audit import _refresh_agents
-from enforced_planning.governed_repo_audit import audit_repo
 from enforced_planning import coordination_claims
-from enforced_planning.installed_framework import drop_vendored_package_files
-from enforced_planning.hook_wiring import TargetRepo
+from enforced_planning.governed_repo_audit import _refresh_agents, audit_repo
+from enforced_planning.hook_wiring import (
+    TargetRepo,
+    context_runtime_error,
+    plan_coordination_message_generation,
+    plan_merge_guard_generation,
+)
 from enforced_planning.hook_wiring import apply_generation as apply_hook_generation
-from enforced_planning.hook_wiring import context_runtime_error
-from enforced_planning.hook_wiring import plan_coordination_message_generation
 from enforced_planning.hook_wiring import plan_generation as plan_hook_generation
-
+from enforced_planning.installed_framework import drop_vendored_package_files
 
 FRAMEWORK_ROOT = Path(__file__).resolve().parents[1]
 MAKEFILE_META_MARKER = "# === META-PROCESS TARGETS ==="
@@ -926,8 +927,12 @@ def install_or_plan(
         plans_dir="docs/plans",
     )
 
-    if not skip_hook_wiring and not worktree_only and not claim_projection_refresh_only:
-        if coordination_messages_only:
+    if not skip_hook_wiring and not claim_projection_refresh_only:
+        if worktree_only:
+            hook_actions, hook_writes, _ = plan_merge_guard_generation(
+                _hook_target(repo_root)
+            )
+        elif coordination_messages_only:
             hook_actions, hook_writes, _ = plan_coordination_message_generation(_hook_target(repo_root))
         else:
             hook_actions, hook_writes, _ = plan_hook_generation(
@@ -971,7 +976,7 @@ def install_or_plan(
             applied_actions.extend(actions)
             if git_hook_action:
                 _activate_git_hooks(repo_root)
-            if not skip_hook_wiring and not worktree_only and not claim_projection_refresh_only:
+            if not skip_hook_wiring and not claim_projection_refresh_only:
                 apply_hook_generation(_hook_target(repo_root), hook_writes)
             if (
                 not worktree_only

@@ -325,6 +325,10 @@ def test_coordination_messages_only_rollout_is_bounded_runnable_and_idempotent(
     assert written.returncode == 0, written.stdout + written.stderr
     for relative in MAILBOX_ROLLOUT_PATHS:
         assert (tmp_path / relative).exists()
+    codex_settings = json.loads(
+        (tmp_path / ".codex" / "hooks.json").read_text(encoding="utf-8")
+    )
+    assert "enforce-make-merge.sh" not in json.dumps(codex_settings)
     for wrapper in (
         "coordination_hook.py",
         "coordination_inbox.py",
@@ -2070,8 +2074,13 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
                 "install:scripts/meta/worktree-coordination/create_review_claim.py",
                 "install:scripts/meta/worktree-coordination/finish_pr.py",
             "install:scripts/meta/worktree-coordination/raise_concern.py",
-            "install:scripts/meta/worktree-coordination/safe_worktree_remove.py",
-            "append:Makefile.status",
+                "install:scripts/meta/worktree-coordination/safe_worktree_remove.py",
+                "sync:.claude/hooks/worktree-coordination/check-hook-enabled.sh",
+                "sync:.claude/hooks/worktree-coordination/enforce-make-merge.sh",
+                "sync:.claude/settings.json",
+                "sync:.codex/hooks/enforce-make-merge.sh",
+                "sync:.codex/hooks.json",
+                "append:Makefile.status",
             "append:Makefile.worktree",
         ]
     )

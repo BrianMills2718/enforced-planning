@@ -118,9 +118,11 @@ enforced by the installed client hooks.
 
 ## Hook-first finish
 
-The hook must stay fast: it blocks direct `gh pr merge`, direct finish-script
-calls, and finish attempts from inside a linked worktree. It directs the caller
-to the canonical checkout instead:
+The hook must stay fast: a standard-library shell tokenizer normalizes command
+segments, environment assignments, and wrappers such as `env`, `command`, and
+`uv run`; it then blocks direct `gh pr merge`, direct finish-script calls, and
+finish attempts from inside a linked worktree. It directs the caller to the
+canonical checkout instead:
 
 ```bash
 make finish \
@@ -153,6 +155,8 @@ checkout directory, so pull-request content cannot rewrite its own rubric.
 - Any blocking finding exists: reject signoff even if the model says `pass`.
 - PR receives another commit: the old receipt remains historical evidence but
   cannot authorize the new head.
+- PR base advances after review: the final base/head comparison rejects the
+  stale integration evidence before merge.
 - A command uses an absolute interpreter, an installed `scripts/meta` finish
   path, `uv run`, or `gh` global flags: the fast merge guard still routes it to
   `make finish`.

@@ -159,7 +159,8 @@ make finish \
   REVIEW_SPEC=/absolute/path/outside-the-repository/review-spec.json
 ```
 
-The hook itself remains fast. `make finish` runs the longer programmatic and
+The hook itself remains fast and is installed by both the full and bounded
+worktree rollout profiles. `make finish` runs the longer programmatic and
 fresh-agent review, persists the exact-head receipt, rechecks required GitHub
 checks, merges with head-SHA matching, and closes the claim/worktree. Missing,
 rejected, or stale review evidence fails before merge.

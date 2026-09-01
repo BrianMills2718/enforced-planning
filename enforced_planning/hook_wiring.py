@@ -19,8 +19,6 @@ non-functional.
 
 from __future__ import annotations
 
-from enforced_planning.installed_framework import drop_vendored_package_files
-
 import argparse
 import json
 import os
@@ -33,6 +31,7 @@ from typing import Any, cast
 
 import yaml  # type: ignore[import-untyped]
 
+from enforced_planning.installed_framework import drop_vendored_package_files
 
 FRAMEWORK_ROOT = Path(__file__).resolve().parents[1]
 
@@ -528,6 +527,7 @@ def _merge_codex_mailbox_hooks(
     *,
     include_prewrite: bool = False,
     include_artifact_creation: bool = False,
+    include_merge_guard: bool = True,
 ) -> bool:
     """Install mailbox polling on supported Codex lifecycle boundaries."""
 
@@ -542,13 +542,14 @@ def _merge_codex_mailbox_hooks(
         hooks = _ensure_matcher_block(settings, event_name=event_name, matcher=matcher)
         if _ensure_hook_command(hooks, CODEX_MAILBOX_HOOK):
             changed = True
-    merge_hooks = _ensure_matcher_block(
-        settings,
-        event_name="PreToolUse",
-        matcher="Bash",
-    )
-    if _ensure_hook_command(merge_hooks, CODEX_MERGE_GUARD_HOOK):
-        changed = True
+    if include_merge_guard:
+        merge_hooks = _ensure_matcher_block(
+            settings,
+            event_name="PreToolUse",
+            matcher="Bash",
+        )
+        if _ensure_hook_command(merge_hooks, CODEX_MERGE_GUARD_HOOK):
+            changed = True
     if include_prewrite:
         prewrite_command = cast(str, CODEX_PREWRITE_HOOK["command"])
         for legacy_matcher in ("Edit|Write", "apply_patch"):
@@ -577,7 +578,9 @@ def _merge_codex_mailbox_hooks(
     return changed
 
 
-def _plan_codex_settings(target: TargetRepo) -> tuple[list[str], dict[Path, str]]:
+def _plan_codex_settings(
+    target: TargetRepo, *, include_merge_guard: bool = True
+) -> tuple[list[str], dict[Path, str]]:
     """Plan a preserving merge into the target's native Codex hooks file."""
 
     path = target.root / ".codex" / "hooks.json"
@@ -586,12 +589,52 @@ def _plan_codex_settings(target: TargetRepo) -> tuple[list[str], dict[Path, str]
         settings,
         include_prewrite=_configured_prewrite_mode(target.root) != "off",
         include_artifact_creation=_configured_artifact_creation_mode(target.root) != "off",
+        include_merge_guard=include_merge_guard,
     )
     rendered = _render_settings(settings)
     current = path.read_text(encoding="utf-8") if path.exists() else None
     if current != rendered or changed:
         return ["sync:.codex/hooks.json"], {path: rendered}
     return [], {}
+
+
+def plan_merge_guard_generation(
+    target: TargetRepo,
+) -> tuple[list[str], dict[Path, str], str]:
+    """Plan only the fast sanctioned-merge guard for bounded worktree rollout."""
+    actions: list[str] = []
+    writes: dict[Path, str] = {}
+    for target_relpath, source_relpath in MERGE_GUARD_HOOK_FILES.items():
+        target_path = target.root / target_relpath
+        content = (FRAMEWORK_ROOT / source_relpath).read_text(encoding="utf-8")
+        current = target_path.read_text(encoding="utf-8") if target_path.exists() else None
+        if current != content:
+            actions.append(f"sync:{target_relpath}")
+            writes[target_path] = content
+
+    claude = _read_json_file(target.settings_file)
+    claude_hooks = _ensure_matcher_block(
+        claude, event_name="PreToolUse", matcher="Bash"
+    )
+    _ensure_hook_command(claude_hooks, MERGE_GUARD_HOOK)
+    rendered_claude = _render_settings(claude)
+    if not target.settings_file.exists() or target.settings_file.read_text(
+        encoding="utf-8"
+    ) != rendered_claude:
+        actions.append("sync:.claude/settings.json")
+        writes[target.settings_file] = rendered_claude
+
+    codex_path = target.root / ".codex" / "hooks.json"
+    codex = _read_json_file(codex_path)
+    codex_hooks = _ensure_matcher_block(
+        codex, event_name="PreToolUse", matcher="Bash"
+    )
+    _ensure_hook_command(codex_hooks, CODEX_MERGE_GUARD_HOOK)
+    rendered_codex = _render_settings(codex)
+    if not codex_path.exists() or codex_path.read_text(encoding="utf-8") != rendered_codex:
+        actions.append("sync:.codex/hooks.json")
+        writes[codex_path] = rendered_codex
+    return actions, writes, rendered_claude
 
 
 def _plan_codex_artifact_creation_settings(
@@ -813,7 +856,9 @@ def plan_coordination_message_generation(
     if current_settings != rendered_settings or changed:
         actions.append("sync:.claude/settings.json")
         file_writes[target.settings_file] = rendered_settings
-    codex_actions, codex_writes = _plan_codex_settings(target)
+    codex_actions, codex_writes = _plan_codex_settings(
+        target, include_merge_guard=False
+    )
     actions.extend(codex_actions)
     file_writes.update(codex_writes)
     return actions, file_writes, rendered_settings

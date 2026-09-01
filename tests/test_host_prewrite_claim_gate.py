@@ -274,6 +274,7 @@ def test_workspace_inventory_can_pipe_through_safe_sort(tmp_path: Path) -> None:
         "git ls-remote --heads origin | jq -R .",
         "gh pr view 132 --json state | jq -r .state",
         "gh api --method GET repos/example/project | jq -r .default_branch",
+        "gh api -XGET repos/example/project | jq -r .default_branch",
     ],
 )
 def test_external_observation_commands_and_safe_jq_pipelines_are_read_only(
@@ -292,10 +293,14 @@ def test_external_observation_commands_and_safe_jq_pipelines_are_read_only(
     "command",
     [
         "date --set=tomorrow",
+        "date --se=tomorrow",
         "git ls-remote --upload-pack='touch marker' origin",
         "gh pr merge 132",
         "gh api --method POST repos/example/project/issues",
+        "gh api -XPOST repos/example/project/issues",
         "gh api repos/example/project -f name=value",
+        "gh api repos/example/project -fname=value",
+        "gh api repos/example/project -Fname=value",
         "python --help",
     ],
 )

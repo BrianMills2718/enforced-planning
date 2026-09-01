@@ -293,6 +293,12 @@ def _gh_command_is_read_only(argv: tuple[str, ...]) -> bool:
         "--input",
     }
     for index, token in enumerate(tail):
+        if token.startswith(("-f", "-F")) and token not in {"-f", "-F"}:
+            return False
+        if token.startswith("-X") and token != "-X":
+            if token[2:].upper() == "GET":
+                continue
+            return False
         option = token.split("=", 1)[0]
         if option in unsafe_api_flags:
             if option in {"-X", "--method"} and "=" not in token:
@@ -310,7 +316,7 @@ def _date_command_is_read_only(argv: tuple[str, ...]) -> bool:
 
     for token in argv[1:]:
         option = token.split("=", 1)[0]
-        if option == "--set":
+        if option.startswith("--") and option != "--" and "--set".startswith(option):
             return False
         if token.startswith("-") and not token.startswith("--") and "s" in token[1:]:
             return False

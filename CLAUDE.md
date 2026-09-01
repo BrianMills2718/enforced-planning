@@ -163,6 +163,11 @@ adoption.
    single-writer development task does not need a session/claim lifecycle.
 7. Use `session-close` or `make worktree-remove` for claimed lane cleanup; do
    not manually split claim release from worktree removal.
+   A legacy `session_ended` claim that recorded the canonical repository root
+   is the one exception to physical cleanup: use `session-close
+   --reconcile-canonical-root` with exact claim and tracker SHA-256 digests so
+   only coordination metadata is archived and the repository and branch stay
+   intact.
 8. One runtime session owns one unparented live claim root by default. Claim
    type does not exempt a lane from this lifecycle guard. Related work declares
    `parent_scope`; intentional additional roots require explicit parallel

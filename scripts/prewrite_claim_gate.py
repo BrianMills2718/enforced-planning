@@ -337,7 +337,12 @@ def _native_notice(message: str) -> str:
     return json.dumps({"systemMessage": message}, sort_keys=True)
 
 
-def _parse_native_mailbox_command(command: str, *, client: str) -> None:
+def _parse_native_mailbox_command(
+    command: str,
+    *,
+    client: str,
+    native_session: str | None = None,
+) -> None:
     """Validate one exact host mailbox command before claimless admission.
 
     The mailbox CLI already binds mutating operations to the ambient native
@@ -345,7 +350,7 @@ def _parse_native_mailbox_command(command: str, *, client: str) -> None:
     overrides before allowing that narrower authority check to run.
     """
 
-    from enforced_planning import coordination_claims, coordination_messages
+    from enforced_planning import coordination_messages
 
     if "\n" in command or "\r" in command:
         raise ValueError("mailbox command must be exactly one line")
@@ -378,14 +383,19 @@ def _parse_native_mailbox_command(command: str, *, client: str) -> None:
         "acknowledge": "current_session_id",
     }[operation]
     caller = getattr(request, session_field)
-    native_session = coordination_claims.resolve_session_id(client)
     if native_session is None or caller != native_session:
         raise ValueError("mailbox caller does not match the ambient native session")
     if operation == "send" and request.sender_session_id != native_session:
         raise ValueError("mailbox sender does not match the ambient native session")
 
 
-def _parse_native_closeout_command(command: str, *, client: str, claims_dir: Path) -> None:
+def _parse_native_closeout_command(
+    command: str,
+    *,
+    client: str,
+    claims_dir: Path,
+    native_session: str | None = None,
+) -> None:
     """Validate one exact closeout command for the ambient claim owner.
 
     Closeout is a control-plane mutation, not ordinary repository work.  It is
@@ -409,7 +419,6 @@ def _parse_native_closeout_command(command: str, *, client: str, claims_dir: Pat
             args = session_close.parse_args(tokens[2:])
     except SystemExit as exc:
         raise ValueError("closeout command does not match the canonical CLI grammar") from exc
-    native_session = coordination_claims.resolve_session_id(client)
     if native_session is None or args.agent != client:
         raise ValueError("closeout agent does not match the ambient native client")
     matches = [
@@ -430,7 +439,13 @@ def _parse_native_closeout_command(command: str, *, client: str, claims_dir: Pat
         raise ValueError("closeout branch does not match the exact live claim")
 
 
-def _parse_native_narrow_command(command: str, *, client: str, claims_dir: Path) -> None:
+def _parse_native_narrow_command(
+    command: str,
+    *,
+    client: str,
+    claims_dir: Path,
+    native_session: str | None = None,
+) -> None:
     """Admit only the exact owner-bound Make recovery command for claim narrowing."""
 
     from enforced_planning import coordination_claims
@@ -454,7 +469,6 @@ def _parse_native_narrow_command(command: str, *, client: str, claims_dir: Path)
         raise ValueError("session-narrow command has missing or extra variables")
     if assignments["WORKTREE_AGENT"] != client:
         raise ValueError("session-narrow client does not match the ambient native client")
-    native_session = coordination_claims.resolve_session_id(client)
     if native_session is None:
         raise ValueError("session-narrow requires an ambient native session")
     matches = [
@@ -504,6 +518,7 @@ def _special_unclaimed_command(
     claims_dir: Path,
     projection_path: Path,
     subagent_event: bool,
+    native_session: str | None = None,
 ) -> bool | str:
     """Classify one exact typed bootstrap, read-target, or recovery operation."""
 
@@ -523,17 +538,31 @@ def _special_unclaimed_command(
     if subagent_event:
         return False
     try:
-        _parse_native_mailbox_command(command, client=client)
+        _parse_native_mailbox_command(
+            command,
+            client=client,
+            native_session=native_session,
+        )
         return "native_mailbox"
     except Exception:  # noqa: BLE001 -- try the remaining strict control grammars
         pass
     try:
-        _parse_native_closeout_command(command, client=client, claims_dir=claims_dir)
+        _parse_native_closeout_command(
+            command,
+            client=client,
+            claims_dir=claims_dir,
+            native_session=native_session,
+        )
         return "native_closeout"
     except Exception:  # noqa: BLE001 -- try the remaining strict control grammars
         pass
     try:
-        _parse_native_narrow_command(command, client=client, claims_dir=claims_dir)
+        _parse_native_narrow_command(
+            command,
+            client=client,
+            claims_dir=claims_dir,
+            native_session=native_session,
+        )
         return "native_session_narrow"
     except Exception:  # noqa: BLE001 -- try the remaining strict control grammars
         pass
@@ -803,6 +832,12 @@ def main(argv: list[str] | None = None) -> int:
             claims_dir=args.claims_dir,
             projection_path=projection_path,
         )
+        from enforced_planning.session_target import SessionTargetError, effective_session_id
+
+        try:
+            native_session = effective_session_id(payload, args.client)
+        except SessionTargetError:
+            native_session = None
         special_classifier = lambda command: _special_unclaimed_command(
             command,
             client=args.client,
@@ -810,6 +845,7 @@ def main(argv: list[str] | None = None) -> int:
             projection_path=projection_path,
             subagent_event=isinstance(payload.get("agent_id"), str)
             and bool(payload["agent_id"].strip()),
+            native_session=native_session,
         )
         early_bash_classification = None
         tool_input = payload.get("tool_input")

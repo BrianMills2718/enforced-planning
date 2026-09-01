@@ -449,7 +449,7 @@ def test_host_gate_admits_exact_native_mailbox_send_without_repository_claim(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    monkeypatch.setenv("CODEX_THREAD_ID", "host-gate-test")
+    monkeypatch.setenv("CODEX_THREAD_ID", "conflicting-shell-session")
     native_session = "codex:host-gate-test"
     request = json.dumps(
         {
@@ -482,7 +482,7 @@ def test_host_gate_admits_exact_native_closeout_for_merged_claim(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     _workspace, repo, worktree, claims_dir, _claim_path = _fixture(tmp_path)
-    monkeypatch.setenv("CLAUDE_SESSION_ID", "host-gate-test")
+    monkeypatch.setenv("CLAUDE_SESSION_ID", "conflicting-shell-session")
     _git(worktree, "add", "src/allowed.py")
     _git(worktree, "commit", "-m", "lane work")
     _git(repo, "merge", "--ff-only", "host-gate-lane")
@@ -571,6 +571,7 @@ def test_workspace_root_admits_exact_native_session_narrow(
     """A bootstrap claim can admit its only strict-subset recovery operation."""
 
     workspace, _worktree, claims_dir, command = _bootstrap_narrow_fixture(tmp_path, monkeypatch)
+    monkeypatch.setenv("CODEX_THREAD_ID", "conflicting-shell-session")
     payload = _payload(
         cwd=workspace,
         tool="Bash",
@@ -591,6 +592,33 @@ def test_workspace_root_admits_exact_native_session_narrow(
     assert code == 0, decision
     assert decision["decision"] == "allow"
     assert decision["reason_code"] == "native_session_narrow_command"
+
+
+def test_native_session_narrow_does_not_fall_back_to_shell_identity(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The authenticated hook payload, not an ambient variable, owns control commands."""
+
+    workspace, _worktree, claims_dir, command = _bootstrap_narrow_fixture(tmp_path, monkeypatch)
+    payload = _payload(cwd=workspace, tool="Bash", tool_input={"command": command})
+    payload.pop("session_id")
+
+    code, decision = _run_cli(
+        monkeypatch,
+        capsys,
+        tmp_path,
+        payload,
+        claims_dir=claims_dir,
+        projection_path=tmp_path / "projection.json",
+        client="codex",
+    )
+
+    assert code == 2
+    assert decision["ok"] is False
+    assert decision["reason_code"] == "invalid_hook_payload"
+    assert "session_id" in decision["error"]
 
 
 @pytest.mark.parametrize(

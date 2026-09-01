@@ -265,6 +265,32 @@ and refresh the pre-write projection in the same locked mutation.
    non-live, retain its completed audit record, remove the worktree, and safely
    delete the local branch.
 
+### Legacy canonical-root claim reconciliation
+
+An older operator lane may have recorded the canonical repository checkout as
+its `worktree_path`. Ordinary `session-close` must never process that record as
+a removable linked worktree. After the owning runtime is truly ended and the
+branch is integrated, archive only its coordination metadata with:
+
+```bash
+python scripts/session_close.py \
+  --agent codex --project PROJECT --scope SCOPE \
+  --reconcile-canonical-root \
+  --claim-sha256 EXACT_CLAIM_SHA256 \
+  --tracker-sha256 EXACT_TRACKER_SHA256 \
+  --json
+```
+
+This exceptional reconciliation fails closed unless the claim is exactly
+`session_ended`, both preserved files match their supplied digests and each
+other's identity, the recorded path is the existing clean canonical Git main
+worktree, and its checked-out branch matches the claim. It records the exact
+claim/tracker binding in the completed archive while retaining the repository
+directory, worktree registration, checked-out branch, branch ref, repository
+contents, and submodules. It never calls worktree removal or branch deletion.
+Use ordinary `session-close` for real linked worktrees and
+`--reconcile-missing-worktree` only for an already-absent recorded worktree.
+
 ### Append-only stores do not create contention
 
 Two lanes declaring the same write path normally conflict, and the second lane

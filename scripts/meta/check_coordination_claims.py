@@ -168,10 +168,10 @@ def prune_stale(*args: Any, **kwargs: Any) -> tuple[int, list[str]]:
     return _impl.prune_stale(*args, **kwargs)
 
 
-def prune_completed() -> tuple[int, list[str]]:
+def prune_completed(*args: Any, **kwargs: Any) -> tuple[int, list[str]]:
     """Delegate completed-claim pruning while honoring script-level CLAIMS_DIR overrides."""
     _sync_runtime_config()
-    return _impl.prune_completed()
+    return _impl.prune_completed(*args, **kwargs)
 
 
 def heartbeat_claims(*args: Any, **kwargs: Any) -> tuple[int, list[str], str, str]:

@@ -583,3 +583,13 @@ consumer; schema and command substrate alone are not completion.
 - It does not implement Project Meta rollout or fleet enforcement.
 - A passing fixture proves claim lifecycle behavior at the tested revision; it
   does not prove every repository has installed that revision.
+
+## Post-Plan Lifecycle Compatibility Note (2026-09-01)
+
+The source/installed CLI lineage now also carries the bounded
+`--reconcile-canonical-root` closeout mode for legacy `session_ended` claims
+whose recorded worktree is the canonical checkout. That maintenance path is
+not broad claim authority: it requires exact claim/tracker digests and a clean
+main-worktree identity, archives only coordination metadata, and retains the
+filesystem and branch. Focused lifecycle controls prove the removal helpers are
+never invoked for this case.

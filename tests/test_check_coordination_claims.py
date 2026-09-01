@@ -3766,6 +3766,64 @@ def test_prune_expired_without_selectors_remains_fleet_wide(
     assert (claims_dir / "unexpired.yaml").exists()
 
 
+@pytest.mark.parametrize("prune_flag", ["--prune", "--prune-stale", "--prune-completed"])
+@pytest.mark.parametrize(
+    "selector_args",
+    [
+        ["--agent", "unsupported-agent"],
+        ["--agent", ""],
+        ["--project", ""],
+        ["--project", "   "],
+        ["--scope", ""],
+        ["--scope", "\t"],
+    ],
+)
+def test_prune_rejects_invalid_explicit_selectors_before_lock_or_mutation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    prune_flag: str,
+    selector_args: list[str],
+) -> None:
+    """Malformed targeted cleanup must fail before observing mutable state."""
+
+    module = _load_module()
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
+    claim_path = claims_dir / "preserved.yaml"
+    _write_claim(
+        claims_dir,
+        claim_path.name,
+        {
+            "agent": "codex",
+            "claimed_at": "2026-04-05T12:00:00+00:00",
+            "expires_at": "2026-04-05T13:00:00+00:00",
+            "projects": ["demo"],
+            "scope": "preserved",
+            "intent": "Must survive invalid prune selector",
+            "claim_type": "program",
+            "status": "completed" if prune_flag == "--prune-completed" else "active",
+        },
+    )
+    before = claim_path.read_bytes()
+    lock_entries: list[Path] = []
+
+    @contextmanager
+    def forbidden_lock(path: Path):
+        lock_entries.append(path)
+        raise AssertionError("invalid selector reached the registry lock")
+        yield
+
+    monkeypatch.setattr(module._impl, "claim_registry_lock", forbidden_lock)
+
+    with pytest.raises(SystemExit) as exc_info:
+        module.main([prune_flag, *selector_args, "--json"])
+
+    assert exc_info.value.code not in (None, 0)
+    assert lock_entries == []
+    assert claim_path.read_bytes() == before
+    assert not projection_path_for(claims_dir).exists()
+
+
 def test_prune_stale_honors_agent_project_and_scope_filters(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

@@ -523,6 +523,8 @@ All three prune operations (`--prune`, `--prune-stale`, and
 `--prune-completed`) accept `--agent`, `--project`, and `--scope`. Supplied
 selectors are conjunctive and are applied before any registry mutation. The
 JSON result reports both the count and the exact `project:scope` labels removed.
+Unsupported agents and explicitly blank or whitespace-only project/scope
+selectors fail before the claim registry lock is acquired.
 Omitting every selector is an explicit fleet-wide cleanup and may remove every
 claim eligible for that prune mode; use at least one selector for targeted
 operator cleanup.

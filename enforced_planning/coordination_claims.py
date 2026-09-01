@@ -61,6 +61,7 @@ COMPLETED_STATUSES = {"complete", "completed"}
 SESSION_ENDED_STATUS = "session_ended"
 CLOSEABLE_STATUSES = LIVE_STATUSES | {SESSION_ENDED_STATUS}
 CLAIM_TYPES = {"program", "write", "review", "research"}
+SUPPORTED_AGENTS = ("claude-code", "codex", "openclaw")
 STRICT_LIVE_METADATA_CLAIM_TYPES = {"program", "write", "review", "research"}
 CURRENT_CLAIM_SCHEMA_VERSION = 6
 BROAD_SCOPE_MODES = {"bootstrap", "bounded"}
@@ -4058,7 +4059,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Record one durable progress event on an exact live claim owned by the current session.",
     )
 
-    parser.add_argument("--agent", help="Agent brain name (claude-code, codex, openclaw)")
+    parser.add_argument(
+        "--agent",
+        choices=SUPPORTED_AGENTS,
+        help="Agent brain name (claude-code, codex, openclaw)",
+    )
     parser.add_argument("--project", help="Project name")
     parser.add_argument("--scope", help="Scope path or identifier")
     parser.add_argument("--intent", help="What the agent intends to do")
@@ -4161,6 +4166,17 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+def _validate_explicit_prune_selectors(args: argparse.Namespace) -> None:
+    """Reject empty prune selectors before the registry lock can be acquired."""
+
+    if not (args.prune or args.prune_stale or args.prune_completed):
+        return
+    for name in ("project", "scope"):
+        value = getattr(args, name)
+        if value is not None and not value.strip():
+            raise SystemExit(f"--{name} must contain non-whitespace text when supplied")
+
+
 def _render_check_output(
     *,
     claims: list[ClaimRecord],
@@ -4247,6 +4263,7 @@ def _render_completed_claim_archive_failure(
 def main(argv: list[str] | None = None) -> int:
     """Run the CLI for cross-brain coordination claim management."""
     args = parse_args(argv)
+    _validate_explicit_prune_selectors(args)
 
     if args.check:
         claims = check_claims(args.project)

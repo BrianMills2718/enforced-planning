@@ -1,6 +1,11 @@
 from __future__ import annotations
 
+import hashlib
+import json
+import subprocess
+import sys
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import pytest
 
@@ -19,13 +24,10 @@ NOW = datetime(2026, 9, 1, 20, 0, tzinfo=UTC)
 OWNER = "codex:owner-session"
 SUCCESSOR = "claude-code:successor-session"
 HEAD = "a" * 40
-RECEIPT = "b" * 64
 CANDIDATE = b'{"review":"accepted"}\n'
 
 
 def target(*, mode: str = "compatibility_status", app_id: int | None = None) -> ApprovalTargetV1:
-    import hashlib
-
     return ApprovalTargetV1(
         repository="BrianMills2718/enforced-planning",
         pr_number=321,
@@ -321,3 +323,39 @@ def test_app_receipt_rejects_wrong_app_and_old_head(tmp_path) -> None:
             live_facts_after=observed, repository_owner="BrianMills2718",
             published_at=NOW,
         )
+
+
+def test_direct_cli_acquire_status_and_release_journey(tmp_path) -> None:
+    candidate = tmp_path / "candidate.json"
+    candidate.write_bytes(CANDIDATE)
+    item = target()
+    target_path = tmp_path / "target.json"
+    target_path.write_text(item.model_dump_json(), encoding="utf-8")
+    state_root = tmp_path / "state"
+    script = (
+        Path(__file__).resolve().parents[1]
+        / "scripts"
+        / "worktree-coordination"
+        / "publish_coordination_approval.py"
+    )
+
+    def run(*arguments: str) -> dict:
+        completed = subprocess.run(
+            [sys.executable, str(script), "--state-root", str(state_root), *arguments],
+            check=True, capture_output=True, text=True,
+        )
+        return json.loads(completed.stdout)
+
+    acquired = run(
+        "acquire", "--target", str(target_path), "--session-id", OWNER,
+        "--duration-seconds", "600", "--evidence-ref", "direct CLI test",
+    )
+    digest = acquired["lease_sha256"]
+    status = run("status", "--target", str(target_path))
+    assert status["lease_sha256"] == digest
+    released = run(
+        "release", "--target", str(target_path), "--session-id", OWNER,
+        "--expected-lease-sha256", digest, "--evidence-ref", "CLI journey complete",
+    )
+    assert released["mutation_receipt"]["operation"] == "release"
+    assert run("status", "--target", str(target_path))["lease"] is None

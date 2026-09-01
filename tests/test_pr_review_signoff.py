@@ -10,6 +10,7 @@ from pydantic import ValidationError
 
 from enforced_planning.pr_review_signoff import (
     CriterionResult,
+    ProgrammaticCheck,
     ProgrammaticCheckResult,
     ReviewerSession,
     ReviewFinding,
@@ -20,6 +21,7 @@ from enforced_planning.pr_review_signoff import (
     build_codex_command,
     evaluate_signoff,
     load_review_spec,
+    run_programmatic_checks,
     run_review,
 )
 
@@ -40,6 +42,16 @@ RUBRIC = SemanticRubric(
 )
 LANES = ("correctness",)
 SESSIONS = (ReviewerSession(review_lane="correctness", session_id="codex:fresh-reviewer"),)
+CHECK_SPECS = (ProgrammaticCheck(check_id="focused-tests", argv=("pytest", "-q")),)
+PASSING_CHECKS = (
+    ProgrammaticCheckResult(
+        check_id="focused-tests",
+        argv=("pytest", "-q"),
+        exit_code=0,
+        output_sha256="c" * 64,
+        output_excerpt="one passed",
+    ),
+)
 
 
 def _passing_criterion() -> CriterionResult:
@@ -175,6 +187,7 @@ def test_failed_programmatic_check_cannot_be_signed_off() -> None:
         expected_head=HEAD,
         observed_head=HEAD,
         expected_rubric=RUBRIC,
+        expected_checks=CHECK_SPECS,
         expected_lanes=LANES,
         reviewer_sessions=SESSIONS,
         checks=checks,
@@ -200,9 +213,10 @@ def test_stale_semantic_result_cannot_approve_new_head() -> None:
         expected_head=HEAD,
         observed_head=HEAD,
         expected_rubric=RUBRIC,
+        expected_checks=CHECK_SPECS,
         expected_lanes=LANES,
         reviewer_sessions=SESSIONS,
-        checks=(),
+        checks=PASSING_CHECKS,
         semantics=(semantic,),
     )
 
@@ -232,9 +246,10 @@ def test_blocking_finding_cannot_be_hidden_behind_pass_verdict() -> None:
         expected_head=HEAD,
         observed_head=HEAD,
         expected_rubric=RUBRIC,
+        expected_checks=CHECK_SPECS,
         expected_lanes=LANES,
         reviewer_sessions=SESSIONS,
-        checks=(),
+        checks=PASSING_CHECKS,
         semantics=(semantic,),
     )
 
@@ -256,14 +271,39 @@ def test_clean_exact_head_evidence_is_signed_off() -> None:
         expected_head=HEAD,
         observed_head=HEAD,
         expected_rubric=RUBRIC,
+        expected_checks=CHECK_SPECS,
         expected_lanes=LANES,
         reviewer_sessions=SESSIONS,
-        checks=(),
+        checks=PASSING_CHECKS,
         semantics=(semantic,),
     )
 
     assert receipt.verdict == "signed_off"
     assert receipt.reasons == ()
+
+
+def test_empty_programmatic_results_fail_loud() -> None:
+    semantic = SemanticReviewResult(
+        schema_version="1.0",
+        review_lane="correctness",
+        head_sha=HEAD,
+        verdict="pass",
+        criterion_results=[_passing_criterion()],
+        findings=[],
+        summary="Unsupported pass.",
+    )
+
+    with pytest.raises(ValueError, match="must not be empty"):
+        evaluate_signoff(
+            expected_head=HEAD,
+            observed_head=HEAD,
+            expected_rubric=RUBRIC,
+            expected_checks=CHECK_SPECS,
+            expected_lanes=LANES,
+            reviewer_sessions=SESSIONS,
+            checks=(),
+            semantics=(semantic,),
+        )
 
 
 def test_missing_or_unknown_rubric_result_cannot_be_signed_off() -> None:
@@ -288,9 +328,10 @@ def test_missing_or_unknown_rubric_result_cannot_be_signed_off() -> None:
         expected_head=HEAD,
         observed_head=HEAD,
         expected_rubric=RUBRIC,
+        expected_checks=CHECK_SPECS,
         expected_lanes=LANES,
         reviewer_sessions=SESSIONS,
-        checks=(),
+        checks=PASSING_CHECKS,
         semantics=(semantic,),
     )
 
@@ -354,9 +395,10 @@ def test_check_payload_is_success_only_for_signed_exact_head() -> None:
         expected_head=HEAD,
         observed_head=HEAD,
         expected_rubric=RUBRIC,
+        expected_checks=CHECK_SPECS,
         expected_lanes=LANES,
         reviewer_sessions=SESSIONS,
-        checks=(),
+        checks=PASSING_CHECKS,
         semantics=(semantic,),
     )
 
@@ -442,6 +484,12 @@ def test_runner_executes_checks_and_fresh_schema_bound_reviewer(tmp_path: Path) 
     receipt_path = tmp_path / "receipt.json"
     check_path = tmp_path / "check.json"
 
+    pr_head_observations: list[tuple[str, int]] = []
+
+    def resolve_pr_head(repository: str, pull_request: int) -> str:
+        pr_head_observations.append((repository, pull_request))
+        return head
+
     receipt = run_review(
         load_review_spec(spec_file),
         repo_root=repo,
@@ -449,6 +497,7 @@ def test_runner_executes_checks_and_fresh_schema_bound_reviewer(tmp_path: Path) 
         receipt_path=receipt_path,
         check_payload_path=check_path,
         codex_bin=str(fake_codex),
+        pr_head_resolver=resolve_pr_head,
     )
 
     assert receipt.verdict == "signed_off"
@@ -463,6 +512,7 @@ def test_runner_executes_checks_and_fresh_schema_bound_reviewer(tmp_path: Path) 
     assert receipt.programmatic_checks[0].exit_code == 0
     assert json.loads(receipt_path.read_text())["head_sha"] == head
     assert json.loads(check_path.read_text())["conclusion"] == "success"
+    assert pr_head_observations == [("owner/repo", 7), ("owner/repo", 7)]
 
 
 def test_runner_refuses_to_spend_on_a_nonmatching_worktree_head(tmp_path: Path) -> None:
@@ -520,7 +570,7 @@ def test_runner_refuses_dirty_worktree_before_checks_or_model(tmp_path: Path) ->
         )
 
 
-def test_runner_rejects_programmatic_check_that_mutates_worktree(tmp_path: Path) -> None:
+def test_programmatic_check_cannot_mutate_frozen_worktree(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
     repo.mkdir()
     subprocess.run(["git", "init", "-q", "-b", "main"], cwd=repo, check=True)
@@ -542,12 +592,8 @@ def test_runner_rejects_programmatic_check_that_mutates_worktree(tmp_path: Path)
     ]
     spec_path.write_text(json.dumps(payload), encoding="utf-8")
 
-    with pytest.raises(RuntimeError, match="dirty during post-check"):
-        run_review(
-            load_review_spec(spec_path),
-            repo_root=repo,
-            output_schema=Path("unused.json"),
-            receipt_path=tmp_path / "receipt.json",
-            check_payload_path=tmp_path / "check.json",
-            codex_bin=str(tmp_path / "must-not-run"),
-        )
+    results = run_programmatic_checks(load_review_spec(spec_path), repo_root=repo)
+
+    assert results[0].exit_code != 0
+    assert results[0].execution_boundary == "systemd-read-only"
+    assert not (repo / "mutation.txt").exists()

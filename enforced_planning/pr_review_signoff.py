@@ -12,6 +12,7 @@ import json
 import os
 import subprocess
 import tempfile
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
@@ -88,6 +89,7 @@ class ProgrammaticCheckResult(StrictModel):
     exit_code: int
     output_sha256: str = Field(pattern=SHA256_PATTERN)
     output_excerpt: str
+    execution_boundary: Literal["systemd-read-only"] = "systemd-read-only"
 
 
 class CriterionResult(StrictModel):
@@ -131,7 +133,7 @@ class PRSignoffReceipt(StrictModel):
     )
     verdict: Literal["signed_off", "rejected"]
     reasons: tuple[str, ...]
-    programmatic_checks: tuple[ProgrammaticCheckResult, ...]
+    programmatic_checks: tuple[ProgrammaticCheckResult, ...] = Field(min_length=1)
     semantic_reviews: tuple[SemanticReviewResult, ...] = Field(min_length=1)
     reviewed_at: str
 
@@ -182,6 +184,7 @@ def evaluate_signoff(
     expected_head: str,
     observed_head: str,
     expected_rubric: SemanticRubric,
+    expected_checks: tuple[ProgrammaticCheck, ...],
     expected_lanes: tuple[str, ...],
     reviewer_sessions: tuple[ReviewerSession, ...],
     checks: tuple[ProgrammaticCheckResult, ...],
@@ -189,10 +192,18 @@ def evaluate_signoff(
     reviewed_at: str | None = None,
 ) -> PRSignoffReceipt:
     reasons: list[str] = []
+    if not checks:
+        raise ValueError("programmatic check results must not be empty")
     if observed_head != expected_head:
         reasons.append("checked worktree is not at the expected head")
     if any(check.exit_code != 0 for check in checks):
         reasons.append("programmatic checks failed")
+    expected_check_ids = [check.check_id for check in expected_checks]
+    observed_check_ids = [check.check_id for check in checks]
+    if len(observed_check_ids) != len(set(observed_check_ids)) or set(
+        observed_check_ids
+    ) != set(expected_check_ids):
+        reasons.append("programmatic results did not return exactly the required checks")
     expected_criteria = [criterion.criterion_id for criterion in expected_rubric.criteria]
     observed_lanes = [semantic.review_lane for semantic in semantics]
     session_lanes = [session.review_lane for session in reviewer_sessions]
@@ -268,8 +279,19 @@ def run_programmatic_checks(
 ) -> tuple[ProgrammaticCheckResult, ...]:
     results: list[ProgrammaticCheckResult] = []
     for check in spec.programmatic_checks:
+        confined_command = [
+            "systemd-run",
+            "--user",
+            "--pipe",
+            "--quiet",
+            "--collect",
+            f"--property=ReadOnlyPaths={repo_root}",
+            f"--property=WorkingDirectory={repo_root}",
+            "--",
+            *check.argv,
+        ]
         completed = subprocess.run(
-            list(check.argv),
+            confined_command,
             cwd=repo_root,
             capture_output=True,
             text=True,
@@ -338,6 +360,42 @@ def _assert_frozen_worktree(repo_root: Path, expected_head: str, *, phase: str) 
     if dirty:
         raise RuntimeError(f"review worktree is dirty during {phase}: {dirty[:1000]}")
     return observed_head
+
+
+def _resolve_github_pr_head(repository: str, pull_request: int) -> str:
+    result = subprocess.run(
+        [
+            "gh",
+            "api",
+            f"repos/{repository}/pulls/{pull_request}",
+            "--jq",
+            ".head.sha",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout).strip()
+        raise RuntimeError(f"could not observe live pull-request head: {detail}")
+    head = result.stdout.strip()
+    if not head or len(head) != 40:
+        raise RuntimeError(f"GitHub returned an invalid pull-request head: {head!r}")
+    return head
+
+
+def _assert_live_pr_head(
+    spec: PRReviewSpec,
+    resolver: Callable[[str, int], str],
+    *,
+    phase: str,
+) -> None:
+    live_head = resolver(spec.repository, spec.pull_request)
+    if live_head != spec.head_sha:
+        raise RuntimeError(
+            f"live pull-request head {live_head} does not match frozen head "
+            f"{spec.head_sha} during {phase}"
+        )
 
 
 def _atomic_write(path: Path, text: str) -> None:
@@ -423,11 +481,14 @@ def run_review(
     model: str | None = None,
     effort: str = "high",
     review_timeout_seconds: int = 1800,
+    pr_head_resolver: Callable[[str, int], str] | None = None,
 ) -> PRSignoffReceipt:
     if review_timeout_seconds < 1:
         raise ValueError("review timeout must be at least one second")
     root = repo_root.resolve()
     observed_head = _assert_frozen_worktree(root, spec.head_sha, phase="preflight")
+    resolver = pr_head_resolver or _resolve_github_pr_head
+    _assert_live_pr_head(spec, resolver, phase="preflight")
     _git_output(root, "merge-base", "--is-ancestor", spec.base_sha, spec.head_sha)
     checks = run_programmatic_checks(spec, repo_root=root)
     _assert_frozen_worktree(root, spec.head_sha, phase="post-check")
@@ -453,6 +514,7 @@ def run_review(
             lane_results = tuple(executor.map(run_lane, spec.review_lanes))
 
     _assert_frozen_worktree(root, spec.head_sha, phase="post-review")
+    _assert_live_pr_head(spec, resolver, phase="post-review")
     reviewer_sessions = tuple(result[0] for result in lane_results)
     semantics = tuple(result[1] for result in lane_results)
 
@@ -460,6 +522,7 @@ def run_review(
         expected_head=spec.head_sha,
         observed_head=observed_head,
         expected_rubric=spec.semantic_rubric,
+        expected_checks=spec.programmatic_checks,
         expected_lanes=spec.review_lanes,
         reviewer_sessions=reviewer_sessions,
         checks=checks,

@@ -2829,6 +2829,79 @@ def test_runtime_session_can_refresh_same_non_program_root(
     assert len(module.check_claims()) == 1
 
 
+def test_canonical_claim_expansion_preserves_enriched_exact_owner_state(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The sanctioned upsert expands paths without rebuilding custody metadata."""
+
+    module = _load_module()
+    claims_dir = tmp_path / "claims"
+    tracker_path = tmp_path / "sessions" / "owned.yaml"
+    tracker_path.parent.mkdir()
+    tracker_path.write_bytes(b"tracker-authority\n")
+    monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
+    monkeypatch.setenv("CODEX_THREAD_ID", "owned-runtime")
+    kwargs = {
+        "agent": "codex",
+        "project": "demo",
+        "scope": "enriched-owner",
+        "intent": "expand one owned claim",
+        "claim_type": "write",
+        "write_paths": ["src/owned.py"],
+        "repo_root": str(tmp_path / "demo"),
+        "worktree_path": str(tmp_path / "demo" / "worktrees" / "enriched-owner"),
+        "branch": "enriched-owner",
+        "session_id": "codex:owned-runtime",
+        "session_name": "enriched-owner",
+        "plan_ref": "UNPLANNED",
+        "tracker_path": str(tracker_path),
+    }
+    ok, _message = module.create_claim(**kwargs)
+    assert ok
+    claim_path = claims_dir / "codex_demo_enriched-owner.yaml"
+    enriched = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    enriched["takeover_receipt"] = {"receipt_id": "custody-1", "prior_session_id": "codex:prior"}
+    enriched["progress_kind"] = "implementation_checkpoint"
+    enriched["progress_evidence_ref"] = "commit:abc123"
+    enriched["progress_next_action"] = "run focused tests"
+    claim_path.write_text(yaml.safe_dump(enriched, sort_keys=False), encoding="utf-8")
+    tracker_before = tracker_path.read_bytes()
+
+    result = module.main(
+        [
+            "--claim",
+            "--agent",
+            "codex",
+            "--project",
+            "demo",
+            "--scope",
+            "enriched-owner",
+            "--intent",
+            "expand one owned claim",
+            "--plan",
+            "UNPLANNED",
+            "--session-id",
+            "codex:owned-runtime",
+            "--write-path",
+            "src/owned.py",
+            "--write-path",
+            "tests/test_owned.py",
+        ]
+    )
+
+    assert result == 0
+    refreshed = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    assert refreshed["write_paths"] == ["src/owned.py", "tests/test_owned.py"]
+    assert refreshed["tracker_path"] == str(tracker_path)
+    assert refreshed["takeover_receipt"] == enriched["takeover_receipt"]
+    assert {key: refreshed[key] for key in claims_impl.PROGRESS_FIELD_NAMES} == {
+        key: enriched[key] for key in claims_impl.PROGRESS_FIELD_NAMES
+    }
+    assert tracker_path.read_bytes() == tracker_before
+    assert prewrite_claim_projection.projection_is_current(claims_dir=claims_dir)
+
+
 def test_cross_session_refresh_cannot_replace_live_claim_slot(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

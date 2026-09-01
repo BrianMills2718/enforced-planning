@@ -6,9 +6,11 @@ import base64
 import hashlib
 import importlib.util
 import json
+import os
 import subprocess
 import sys
 import time
+from contextlib import contextmanager
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -43,6 +45,8 @@ def _isolate_claim_mutation_ledger(tmp_path: Path, monkeypatch: pytest.MonkeyPat
         "DEFAULT_COMPLETED_CLAIM_ARCHIVE_PATH",
         tmp_path / "completed-claim-archive.jsonl",
     )
+    monkeypatch.delenv("CODEX_THREAD_ID", raising=False)
+    monkeypatch.delenv("CLAUDE_CODE_SESSION_ID", raising=False)
 
 
 def _git(cwd: Path, *args: str) -> str:
@@ -84,32 +88,54 @@ def _claim_owner(*, agent: str, project: str, scope: str) -> str:
     return claim.session_id
 
 
+@contextmanager
+def _native_actor(agent: str, session_id: str):
+    """Expose the fixture owner through the same ambient marker as production."""
+
+    env_key = coordination_claims.STRICT_NATIVE_SESSION_ENV_KEYS[agent]
+    previous = os.environ.get(env_key)
+    os.environ[env_key] = session_id.removeprefix(f"{agent}:")
+    try:
+        yield
+    finally:
+        if previous is None:
+            os.environ.pop(env_key, None)
+        else:
+            os.environ[env_key] = previous
+
+
+def _owner_bound_call(function, **kwargs: object) -> dict[str, object]:
+    owner = _claim_owner(**{key: str(kwargs[key]) for key in ("agent", "project", "scope")})
+    with _native_actor(str(kwargs["agent"]), owner):
+        return function(actor_session_id=owner, **kwargs)
+
+
+def _resume_session_as_native(**kwargs: object) -> dict[str, object]:
+    session_id = str(kwargs["session_id"])
+    with _native_actor(str(kwargs["agent"]), session_id):
+        return session_lifecycle.resume_session(**kwargs)
+
+
+def _heartbeat_session_as_native(**kwargs: object) -> dict[str, object]:
+    session_id = str(kwargs["session_id"])
+    with _native_actor(str(kwargs["agent"]), session_id):
+        return session_lifecycle.heartbeat_session(**kwargs)
+
+
 def _finish_session_as_owner(**kwargs: object) -> dict[str, object]:
-    return session_lifecycle.finish_session(
-        actor_session_id=_claim_owner(**{key: str(kwargs[key]) for key in ("agent", "project", "scope")}),
-        **kwargs,
-    )
+    return _owner_bound_call(session_lifecycle.finish_session, **kwargs)
 
 
 def _close_session_as_owner(**kwargs: object) -> dict[str, object]:
-    return session_lifecycle.close_session(
-        actor_session_id=_claim_owner(**{key: str(kwargs[key]) for key in ("agent", "project", "scope")}),
-        **kwargs,
-    )
+    return _owner_bound_call(session_lifecycle.close_session, **kwargs)
 
 
 def _handoff_session_as_owner(**kwargs: object) -> dict[str, object]:
-    return session_lifecycle.handoff_session(
-        actor_session_id=_claim_owner(**{key: str(kwargs[key]) for key in ("agent", "project", "scope")}),
-        **kwargs,
-    )
+    return _owner_bound_call(session_lifecycle.handoff_session, **kwargs)
 
 
 def _abandon_session_as_owner(**kwargs: object) -> dict[str, object]:
-    return session_lifecycle.abandon_session(
-        actor_session_id=_claim_owner(**{key: str(kwargs[key]) for key in ("agent", "project", "scope")}),
-        **kwargs,
-    )
+    return _owner_bound_call(session_lifecycle.abandon_session, **kwargs)
 
 
 def test_session_narrow_json_deny_narrow_admit_journey(
@@ -519,7 +545,7 @@ def _prepare_selection_pending_reservation(
     monkeypatch.setattr(
         coordination_claims,
         "validate_native_session_binding",
-        lambda _agent, _session_id: None,
+        lambda _agent, _session_id, **_kwargs: None,
     )
     _git(repo_root, "init", "-b", "main")
     _git(repo_root, "config", "user.email", "tests@example.com")
@@ -662,7 +688,7 @@ def test_configured_session_start_defers_only_tracker_creation_until_selection(
     assert prewrite_payload["resolution_error_code"] == "selection_missing"
 
     with pytest.raises(PermissionError, match="outcome_selection_required"):
-        session_lifecycle.heartbeat_session(
+        _heartbeat_session_as_native(
             agent="codex",
             project="demo",
             scope="staged-lane",
@@ -1385,7 +1411,7 @@ def test_session_end_retires_live_ownership_and_preserves_resume_state(
             tracker_path=str(trackers_dir / "replacement.yaml"),
         )
 
-    resumed = session_lifecycle.resume_session(
+    resumed = _resume_session_as_native(
         agent="codex",
         project="enforced-planning",
         scope="plan-105-root",
@@ -1773,7 +1799,7 @@ def test_heartbeat_session_updates_tracker_phase(tmp_path: Path, monkeypatch: py
         tracker_dir=trackers_dir,
     )
 
-    payload = session_lifecycle.heartbeat_session(
+    payload = _heartbeat_session_as_native(
         agent="codex",
         project="enforced-planning",
         scope="plan-31-session-cli-enforcement",
@@ -1819,7 +1845,7 @@ def test_unplanned_program_owner_heartbeat_is_liveness_not_outcome_admission(
         encoding="utf-8",
     )
 
-    payload = session_lifecycle.heartbeat_session(
+    payload = _heartbeat_session_as_native(
         agent="codex",
         project="enforced-planning",
         scope="unplanned-heartbeat",
@@ -1868,7 +1894,7 @@ def test_heartbeat_session_rejects_zero_matching_claims(
     )
 
     with pytest.raises(ValueError, match="Heartbeat matched no live claim"):
-        session_lifecycle.heartbeat_session(
+        _heartbeat_session_as_native(
             agent="codex",
             project="plan-73-coordination-status-integrity",
             scope="plan-73-coordination-status-integrity",
@@ -3559,7 +3585,7 @@ def test_resume_session_rebinds_stale_or_handoff_lane(
         note="resume later",
     )
 
-    payload = session_lifecycle.resume_session(
+    payload = _resume_session_as_native(
         agent="codex",
         project="enforced-planning",
         scope="plan-37-session-recovery",
@@ -3639,7 +3665,7 @@ def test_resume_rolls_back_claim_and_tracker_when_tracker_write_fails(
     )
 
     with pytest.raises(OSError, match="injected tracker failure"):
-        session_lifecycle.resume_session(
+        _resume_session_as_native(
             agent="codex",
             project="enforced-planning",
             scope="resume-rollback",
@@ -3698,7 +3724,7 @@ def test_resume_session_rejects_different_runtime_for_healthy_live_lane_without_
     tracker_before = tracker_path.read_bytes()
 
     with pytest.raises(ValueError, match="still owned by runtime session codex:owning-runtime"):
-        session_lifecycle.resume_session(
+        _resume_session_as_native(
             agent="codex",
             project="enforced-planning",
             scope="healthy-live-lane",
@@ -3712,7 +3738,7 @@ def test_resume_session_rejects_different_runtime_for_healthy_live_lane_without_
     assert projection_path.read_bytes() == projection_before
     assert tracker_path.read_bytes() == tracker_before
 
-    resumed = session_lifecycle.resume_session(
+    resumed = _resume_session_as_native(
         agent="codex",
         project="enforced-planning",
         scope="healthy-live-lane",
@@ -3757,7 +3783,7 @@ def test_resume_session_rebinds_lane_with_stale_heartbeat(
     claim_payload["heartbeat_at"] = "2000-01-01T00:00:00+00:00"
     claim_path.write_text(yaml.safe_dump(claim_payload, sort_keys=False), encoding="utf-8")
 
-    payload = session_lifecycle.resume_session(
+    payload = _resume_session_as_native(
         agent="codex",
         project="enforced-planning",
         scope="stale-heartbeat-lane",

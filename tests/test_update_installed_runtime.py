@@ -217,6 +217,42 @@ def test_symlinked_exact_runtime_path_is_denied_before_resolution(
         update_runtime(source_repo=source, runtime_repo=runtime, revision=after, write=False)
 
     assert caught.value.receipt["runtime_repo"] == str(runtime.absolute())
+    assert _git(external, "rev-parse", "HEAD") == _before
+
+
+def test_symlink_loop_runtime_path_emits_structured_denial(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, runtime, _before, after = _repos(tmp_path, monkeypatch)
+    external = tmp_path / "preserved-runtime"
+    runtime.rename(external)
+    runtime.symlink_to(runtime, target_is_directory=True)
+    monkeypatch.setattr(runtime_update, "_canonical_runtime_repo", lambda: runtime.absolute())
+
+    with pytest.raises(RuntimeUpdateError, match="must not contain symlinks") as caught:
+        update_runtime(source_repo=source, runtime_repo=runtime, revision=after, write=False)
+
+    receipt = caught.value.receipt
+    assert receipt["action"] == "denied"
+    assert receipt["state"] == "failed"
+    assert receipt["stage"] == "preflight"
+    assert receipt["runtime_repo"] == str(runtime.absolute())
+    assert _git(external, "rev-parse", "HEAD") == _before
+
+
+def test_source_symlink_loop_emits_structured_denial(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, runtime, _before, after = _repos(tmp_path, monkeypatch)
+    source.rename(tmp_path / "preserved-source")
+    source.symlink_to(source, target_is_directory=True)
+
+    with pytest.raises(RuntimeUpdateError, match="source repository path cannot be resolved") as caught:
+        update_runtime(source_repo=source, runtime_repo=runtime, revision=after, write=False)
+
+    assert caught.value.receipt["action"] == "denied"
+    assert caught.value.receipt["stage"] == "preflight"
+    assert caught.value.receipt["source_repo"] == str(source.absolute())
 
 
 def test_unsupported_origin_credentials_never_enter_receipt(

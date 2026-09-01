@@ -6,11 +6,11 @@
       "id": "cn132-01-source-atomic-claim-narrowing",
       "initiative_id": "coordination-integrity",
       "goal_id": "claim-granularity-and-safe-narrowing",
-      "design_revision": "user-approved:codex-session-01a058cd-44d2-7ca0-92bb-c3ce68f04960:2026-08-31",
-      "spec_revision": "plan-132-adopted-v1",
+      "design_revision": "user-approved:codex-session-01a058cd-44d2-7ca0-92bb-c3ce68f04960:2026-08-31;audited-v2:2026-09-01",
+      "spec_revision": "plan-132-adopted-v2-audited",
       "title": "Implement atomic broad-claim narrowing and source-consumer enforcement",
       "class": "implementation",
-      "objective": "Extend the canonical claim registry with compatible broad-scope metadata, owner-only atomic narrowing, explanatory conflict receipts, bootstrap pre-write denial, and one disposable installed-consumer replay without weakening parent-child exclusion.",
+      "objective": "Extend the canonical claim registry with compatible broad-scope metadata, separated session target and mutation authority, owner-only fail-atomic claim/projection narrowing, truthful post-commit receipts, explanatory conflicts, bootstrap pre-write denial, and one disposable installed-consumer replay without weakening parent-child exclusion.",
       "profile": "standard",
       "execution_class": "independently_executable",
       "claimability": "ready_for_execution",
@@ -18,8 +18,9 @@
       "scope": {
         "included": [
           "Claim schema v6 broad-scope metadata and legacy read compatibility",
+          "Exact session target separated from legacy-visible mutation worktree authority",
           "Owner/session-bound subset-only atomic narrow transaction",
-          "Projection and mutation-receipt coherence",
+          "Fail-atomic claim/projection transition and truthful post-commit mutation receipt",
           "Exact versus parent-side conflict classification and advisory Git evidence",
           "Bootstrap broad-mode pre-write denial",
           "Source CLI, Make template, installer propagation, operator docs, and focused tests",
@@ -38,7 +39,7 @@
         {
           "kind": "bounded_design",
           "id": "docs/plans/132_overbroad_claim_narrowing.md",
-          "revision": "plan-132-adopted-v1"
+          "revision": "plan-132-adopted-v2-audited"
         },
         {
           "kind": "policy_direction",
@@ -49,11 +50,17 @@
           "kind": "reproduced_failure",
           "id": "project-meta-docs-vs-docs-wiki-false-serialization",
           "revision": "codex-session-01a058cd-44d2-7ca0-92bb-c3ce68f04960@2026-08-31"
+        },
+        {
+          "kind": "implementation_readiness_audit",
+          "id": "plan-132-canonical-ingress-and-mixed-version-audit",
+          "revision": "82a9451a318e41b1a642623a774bc3e86d6faf48@2026-09-01"
         }
       ],
       "outputs": [
         "Compatible broad-claim metadata and classifier",
-        "Atomic narrow transaction and append-only receipt",
+        "Fail-atomic claim/projection narrow transaction and truthful post-commit receipt",
+        "Separated session target and mutation-authority worktree binding",
         "Public session-narrow CLI and Make entrypoint",
         "Explanatory conflict receipt with unchanged denial semantics",
         "Bootstrap-mode pre-write enforcement",
@@ -224,6 +231,111 @@
         },
         {
           "kind": "repository_path",
+          "target": "enforced_planning/claim_bootstrap.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-132-claim-narrowing"
+        },
+        {
+          "kind": "repository_path",
+          "target": "enforced_planning/session_target.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-132-claim-narrowing"
+        },
+        {
+          "kind": "repository_path",
+          "target": "scripts/session_start.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-132-claim-narrowing"
+        },
+        {
+          "kind": "repository_path",
+          "target": "scripts/prewrite_claim_gate.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-132-claim-narrowing"
+        },
+        {
+          "kind": "repository_path",
+          "target": "scripts/worktree-coordination/create_worktree.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-132-claim-narrowing"
+        },
+        {
+          "kind": "repository_path",
+          "target": "scripts/relationships.yaml",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-132-claim-narrowing"
+        },
+        {
+          "kind": "repository_path",
+          "target": "tests/test_claim_bootstrap.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-132-claim-narrowing"
+        },
+        {
+          "kind": "repository_path",
+          "target": "tests/test_session_lifecycle.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-132-claim-narrowing"
+        },
+        {
+          "kind": "repository_path",
+          "target": "tests/test_session_target.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-132-claim-narrowing"
+        },
+        {
+          "kind": "repository_path",
+          "target": "tests/test_prewrite_claim_projection.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-132-claim-narrowing"
+        },
+        {
+          "kind": "repository_path",
+          "target": "tests/test_host_prewrite_claim_gate.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-132-claim-narrowing"
+        },
+        {
+          "kind": "repository_path",
+          "target": "tests/test_create_worktree.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-132-claim-narrowing"
+        },
+        {
+          "kind": "repository_path",
+          "target": "tests/test_makefile_worktree_targets.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-132-claim-narrowing"
+        },
+        {
+          "kind": "repository_path",
+          "target": "tests/test_source_makefile.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-132-claim-narrowing"
+        },
+        {
+          "kind": "repository_path",
+          "target": "CLAUDE.md",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-132-claim-narrowing"
+        },
+        {
+          "kind": "repository_path",
           "target": "ROADMAP.md",
           "repository": "enforced-planning",
           "access": "exclusive",
@@ -233,20 +345,21 @@
       "acceptance": [
         {
           "id": "CN132-A1",
-          "criterion": "An owner can atomically narrow a live broad claim to strict descendant paths, after which a previously denied disjoint child claim is admitted while true overlap remains denied.",
+          "criterion": "An owner can fail-atomically narrow claim plus projection to strict descendant paths, after which a previously denied disjoint child claim is admitted while true overlap remains denied and the append-only receipt truthfully reports post-commit state.",
           "evidence_required": [
             "Temporary-registry deny-narrow-admit transcript",
             "Claim and projection digest transition",
             "Existing parent-child denial regression"
           ],
-          "negative_control": "Foreign-session, sibling escape, expansion, empty replacement, and failed projection refresh leave claim and projection bytes unchanged."
+          "negative_control": "Foreign-session, sibling escape, expansion, empty replacement, and failed projection refresh leave claim and projection bytes unchanged; receipt failure reports applied_projection_current rather than false rollback."
         },
         {
           "id": "CN132-A2",
-          "criterion": "New broad claims carry explicit bootstrap or bounded intent; bootstrap claims cannot authorize ordinary repository writes before narrowing and legacy claims remain readable.",
+          "criterion": "New broad claims carry explicit bootstrap or bounded intent; bootstrap target resolution remains separate from mutation authority, ordinary writes are denied before narrowing, old projection readers fail closed, and legacy claims remain readable.",
           "evidence_required": [
             "Schema v6 round-trip tests",
-            "Bootstrap pre-write deny then post-narrow allow",
+            "Workspace-root target resolution plus pre-write deny then post-narrow allow",
+            "Old-reader/new-projection and old-projection-writer fail-closed controls",
             "Legacy schema compatibility fixture"
           ],
           "negative_control": "Missing reason, contradictory narrow metadata, ambiguous root, and unsupported mode deny before claim or worktree residue."
@@ -287,7 +400,7 @@
       "status": "ready",
       "record_version": 1,
       "created_at": "2026-09-01T00:44:45Z",
-      "updated_at": "2026-09-01T00:44:45Z"
+      "updated_at": "2026-09-01T02:20:00Z"
     }
   ]
 }

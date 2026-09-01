@@ -1517,6 +1517,84 @@ def test_maintenance_refresh_serializes_tracker_write_through_claim_upsert(
     assert failures == []
 
 
+def test_maintenance_refresh_classifies_one_locked_tracker_snapshot(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Immutable tracker state cannot change between classification and snapshot custody."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    common = _maintenance_refresh_args(tmp_path, trackers_dir)
+    started = session_lifecycle.start_session(
+        **{**common, "notes": "original immutable notes"}
+    )
+    tracker_path = Path(started["tracker_path"])
+    waiting_for_tracker_lock = Event()
+    tracker_lock_acquired = Event()
+    completed = Event()
+    failures: list[BaseException] = []
+    competitor: list[Thread] = []
+    classifier_observed = Event()
+    real_classifier = outcome_admission.is_sanctioned_maintenance_claim_payload
+    real_tracker_lock = session_contracts.session_tracker_lock
+
+    @contextmanager
+    def observed_tracker_lock(path: Path):
+        is_competitor = current_thread().name == "pre-snapshot-tracker-writer"
+        if is_competitor:
+            waiting_for_tracker_lock.set()
+        with real_tracker_lock(path):
+            if is_competitor:
+                tracker_lock_acquired.set()
+            yield
+
+    def competing_tracker_write() -> None:
+        try:
+            session_contracts.update_session_tracker(
+                tracker_path,
+                notes="concurrent notes after coherent refresh",
+            )
+        except BaseException as exc:  # pragma: no cover - asserted below
+            failures.append(exc)
+        finally:
+            completed.set()
+
+    def classify_locked_payload(*args: object, **kwargs: object) -> bool:
+        thread = Thread(target=competing_tracker_write, name="pre-snapshot-tracker-writer")
+        competitor.append(thread)
+        thread.start()
+        assert waiting_for_tracker_lock.wait(timeout=2)
+        assert tracker_lock_acquired.is_set() is False
+        classifier_observed.set()
+        return real_classifier(*args, **kwargs)
+
+    monkeypatch.setattr(session_contracts, "session_tracker_lock", observed_tracker_lock)
+    monkeypatch.setattr(
+        outcome_admission,
+        "is_sanctioned_maintenance_claim_payload",
+        classify_locked_payload,
+    )
+    refreshed = session_lifecycle.start_session(
+        **{
+            **common,
+            "current_phase": "coherent locked refresh",
+            "notes": "original immutable notes",
+        }
+    )
+
+    assert refreshed["action"] == "updated"
+    assert classifier_observed.is_set()
+    assert len(competitor) == 1
+    competitor[0].join(timeout=2)
+    assert tracker_lock_acquired.is_set()
+    assert completed.is_set()
+    assert failures == []
+    tracker_after = yaml.safe_load(tracker_path.read_text(encoding="utf-8"))
+    assert tracker_after["tracker"]["current_phase"] == "coherent locked refresh"
+    assert tracker_after["tracker"]["notes"] == "concurrent notes after coherent refresh"
+
+
 @pytest.mark.parametrize(
     "drift",
     [
@@ -1548,7 +1626,13 @@ def test_sanctioned_maintenance_start_rejects_provenance_drift_without_mutation(
     claim_before = claim_path.read_bytes()
     tracker_before = tracker_path.read_bytes()
 
-    with pytest.raises(ValueError, match="sanctioned maintenance refresh cannot change immutable provenance"):
+    with pytest.raises(
+        ValueError,
+        match=(
+            "sanctioned maintenance refresh cannot change immutable provenance"
+            "|A live lane already exists"
+        ),
+    ):
         session_lifecycle.start_session(**{**common, "current_phase": "drift attempt", **drift})
 
     assert claim_path.read_bytes() == claim_before

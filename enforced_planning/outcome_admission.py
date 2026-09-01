@@ -564,8 +564,13 @@ def evaluate_claim_bootstrap_admission(
     )
 
 
-def is_sanctioned_maintenance_claim(claim: coordination_claims.ClaimRecord) -> bool:
-    """Return whether an ordinary-authorized claim has typed maintenance provenance.
+def is_sanctioned_maintenance_claim_payload(
+    claim: coordination_claims.ClaimRecord,
+    payload: object,
+    *,
+    tracker_path: Path | None = None,
+) -> bool:
+    """Classify typed maintenance provenance from one already-read tracker payload.
 
     ``UNPLANNED`` alone is not an exemption from selected-outcome admission.
     The claim must retain the exact identity written by the sanctioned
@@ -613,10 +618,10 @@ def is_sanctioned_maintenance_claim(claim: coordination_claims.ClaimRecord) -> b
     ):
         return False
 
-    tracker_path = Path(claim.tracker_path).expanduser().resolve()
-    try:
-        payload = session_contracts.read_session_tracker(tracker_path)
-    except (OSError, TypeError, ValueError, yaml.YAMLError):
+    resolved_tracker_path = (
+        tracker_path if tracker_path is not None else Path(claim.tracker_path)
+    ).expanduser().resolve()
+    if not isinstance(payload, dict):
         return False
     tracker_claim = payload.get("claim")
     tracker = payload.get("tracker")
@@ -634,13 +639,31 @@ def is_sanctioned_maintenance_claim(claim: coordination_claims.ClaimRecord) -> b
         "session_id": claim.session_id,
         "session_name": claim.session_name,
         "broader_goal": claim.broader_goal,
-        "tracker_path": str(tracker_path),
+        "tracker_path": str(resolved_tracker_path),
     }
     current_phase = tracker.get("current_phase")
     return (
         isinstance(current_phase, str)
         and bool(current_phase.strip())
         and all(tracker_claim.get(field) == value for field, value in expected_identity.items())
+    )
+
+
+def is_sanctioned_maintenance_claim(claim: coordination_claims.ClaimRecord) -> bool:
+    """Read and classify one claim's linked tracker without a caller-held lock."""
+
+    if not claim.tracker_path:
+        return False
+    tracker_path = Path(claim.tracker_path).expanduser().resolve()
+    try:
+        tracker_bytes = tracker_path.read_bytes()
+        payload = yaml.safe_load(tracker_bytes)
+    except (OSError, TypeError, ValueError, yaml.YAMLError):
+        return False
+    return is_sanctioned_maintenance_claim_payload(
+        claim,
+        payload,
+        tracker_path=tracker_path,
     )
 
 
@@ -1276,6 +1299,7 @@ __all__ = [
     "infer_first_consumer_bootstrap_plan",
     "is_first_consumer_bootstrap_path",
     "is_sanctioned_maintenance_claim",
+    "is_sanctioned_maintenance_claim_payload",
     "load_outcome_admission_mode",
     "load_outcome_admission_receipts",
     "load_selection_pending_activation_receipts",

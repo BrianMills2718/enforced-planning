@@ -1271,7 +1271,6 @@ def _upsert_session_claim(
         payload = {
             **refreshed_payload,
             "agent": agent,
-            "project": project,
             "projects": [project],
             "scope": scope,
             "intent": intent,
@@ -1300,6 +1299,8 @@ def _upsert_session_claim(
             "parallel_root_authorized": candidate.parallel_root_authorized,
             **progress_payload,
         }
+        if "project" in refreshed_payload:
+            payload["project"] = project
         for field, value in (
             ("broad_scope_mode", candidate.broad_scope_mode),
             ("broad_scope_reason", candidate.broad_scope_reason),
@@ -1964,6 +1965,142 @@ def _delete_branch(repo_root: Path, branch: str | None, *, force: bool = False) 
     return "deleted"
 
 
+@dataclass(frozen=True)
+class _MaintenanceRefreshSnapshot:
+    """Immutable maintenance-bootstrap state observed before session refresh."""
+
+    claim: coordination_claims.ClaimRecord
+    claim_path: Path
+    claim_bytes: bytes
+    tracker_path: Path
+    tracker_bytes: bytes
+
+
+def _snapshot_sanctioned_maintenance_refresh(
+    existing_claim: coordination_claims.ClaimRecord | None,
+    *,
+    agent: str,
+    project: str,
+    scope: str,
+    intent: str,
+    plan_ref: str | None,
+    repo_root: str,
+    worktree_path: str,
+    branch: str,
+    session_id: str,
+    session_name: str | None,
+    broader_goal: str,
+    current_phase: str,
+    intended_next_phases: list[str] | None,
+    depends_on_repos: list[str] | None,
+    requires_shared_infra_changes: bool,
+    stop_conditions: list[str] | None,
+    notes: str | None,
+    claim_type: str | None,
+    write_paths: list[str] | None,
+    read_paths: list[str] | None,
+    parent_scope: str | None,
+    work_graph_path: str | None,
+    work_unit_id: str | None,
+    start_revision: str | None,
+    plan_repo_root: str | None,
+    plan_start_point: str | None,
+    allow_unplanned: bool,
+    allow_parallel: bool,
+    broad_scope_mode: str | None,
+    broad_scope_reason: str | None,
+    target_worktree_path: str | None,
+    tracker_dir: Path,
+) -> _MaintenanceRefreshSnapshot | None:
+    """Reject identity drift before refreshing a sanctioned maintenance lane."""
+
+    if existing_claim is None or not outcome_admission.is_sanctioned_maintenance_claim(existing_claim):
+        return None
+
+    contract = session_contracts.SessionContract.build(
+        agent=agent,
+        project=project,
+        scope=scope,
+        intent=intent,
+        plan_ref=plan_ref,
+        repo_root=repo_root,
+        worktree_path=worktree_path,
+        branch=branch,
+        session_id=session_id,
+        broader_goal=broader_goal,
+        session_name=session_name,
+        start_revision=start_revision,
+        plan_repo_root=plan_repo_root,
+        plan_revision=plan_start_point,
+        plan_sha256=existing_claim.plan_sha256 if plan_repo_root is not None else None,
+        allow_unplanned=allow_unplanned,
+    )
+    tracker_path = session_contracts.session_tracker_path(contract, tracker_dir=tracker_dir).expanduser().resolve()
+    expected_tracker_path = Path(existing_claim.tracker_path or "").expanduser().resolve()
+    candidate_tracker = session_contracts.build_session_tracker(
+        contract=contract.with_tracker_path(str(tracker_path)),
+        current_phase=current_phase,
+        intended_next_phases=intended_next_phases,
+        depends_on_repos=depends_on_repos,
+        requires_shared_infra_changes=requires_shared_infra_changes,
+        stop_conditions=stop_conditions,
+        notes=notes,
+    )
+    existing_tracker = session_contracts.read_session_tracker(expected_tracker_path)
+    existing_tracker_fields = existing_tracker.get("tracker")
+    if not isinstance(existing_tracker_fields, dict):
+        raise ValueError("sanctioned maintenance tracker is missing execution metadata")
+
+    immutable_inputs: dict[str, tuple[Any, Any]] = {
+        "agent": (agent, existing_claim.agent),
+        "project": (project, existing_claim.primary_project()),
+        "scope": (scope, existing_claim.scope),
+        "intent": (intent, existing_claim.intent),
+        "plan_ref": (contract.plan_ref, existing_claim.plan_ref),
+        "repo_root": (repo_root, existing_claim.repo_root),
+        "worktree_path": (worktree_path, existing_claim.worktree_path),
+        "branch": (branch, existing_claim.branch),
+        "session_id": (session_id, existing_claim.session_id),
+        "session_name": (contract.session_name, existing_claim.session_name),
+        "broader_goal": (broader_goal, existing_claim.broader_goal),
+        "tracker_path": (str(tracker_path), str(expected_tracker_path)),
+        "claim_type": (claim_type or existing_claim.claim_type, existing_claim.claim_type),
+        "write_paths": (existing_claim.write_paths if write_paths is None else write_paths, existing_claim.write_paths),
+        "read_paths": (existing_claim.read_paths if read_paths is None else read_paths, existing_claim.read_paths),
+        "parent_scope": (parent_scope, existing_claim.parent_scope),
+        "work_graph_path": (work_graph_path, existing_claim.work_graph_path),
+        "work_unit_id": (work_unit_id, existing_claim.work_unit_id),
+        "start_revision": (start_revision, existing_claim.start_revision),
+        "plan_repo_root": (contract.plan_repo_root, existing_claim.plan_repo_root),
+        "plan_revision": (contract.plan_revision, existing_claim.plan_revision),
+        "allow_parallel": (allow_parallel, existing_claim.parallel_root_authorized),
+        "broad_scope_mode": (broad_scope_mode, existing_claim.broad_scope_mode),
+        "broad_scope_reason": (broad_scope_reason, existing_claim.broad_scope_reason),
+        "target_worktree_path": (target_worktree_path, existing_claim.target_worktree_path),
+    }
+    candidate_tracker_fields = candidate_tracker.tracker_fields()
+    for field in session_contracts.TRACKER_ONLY_FIELD_NAMES:
+        if field != "current_phase":
+            immutable_inputs[f"tracker.{field}"] = (
+                candidate_tracker_fields[field],
+                existing_tracker_fields.get(field),
+            )
+    mismatches = sorted(field for field, (candidate, existing) in immutable_inputs.items() if candidate != existing)
+    if mismatches:
+        raise ValueError(
+            "sanctioned maintenance refresh cannot change immutable provenance: " + ", ".join(mismatches)
+        )
+
+    claim_path = Path(existing_claim.source_file or "")
+    return _MaintenanceRefreshSnapshot(
+        claim=existing_claim,
+        claim_path=claim_path,
+        claim_bytes=claim_path.read_bytes(),
+        tracker_path=expected_tracker_path,
+        tracker_bytes=expected_tracker_path.read_bytes(),
+    )
+
+
 def start_session(
     *,
     agent: str,
@@ -2010,6 +2147,45 @@ def start_session(
             "Unable to resolve a session ID. Pass --session-id explicitly or run from a supported tool runtime."
         )
     coordination_claims.validate_native_session_binding(agent, resolved_session_id)
+    exact_existing_claims = _iter_matching_live_claims(agent=agent, project=project, scope=scope)
+    if len(exact_existing_claims) > 1:
+        raise ValueError(f"Multiple live claims found for {agent} → {project}:{scope}")
+    existing_claim = exact_existing_claims[0] if exact_existing_claims else None
+    maintenance_snapshot = _snapshot_sanctioned_maintenance_refresh(
+        existing_claim,
+        agent=agent,
+        project=project,
+        scope=scope,
+        intent=intent,
+        plan_ref=plan_ref,
+        repo_root=repo_root,
+        worktree_path=worktree_path,
+        branch=branch,
+        session_id=resolved_session_id,
+        session_name=session_name,
+        broader_goal=broader_goal,
+        current_phase=current_phase,
+        intended_next_phases=intended_next_phases,
+        depends_on_repos=depends_on_repos,
+        requires_shared_infra_changes=requires_shared_infra_changes,
+        stop_conditions=stop_conditions,
+        notes=notes,
+        claim_type=claim_type,
+        write_paths=write_paths,
+        read_paths=read_paths,
+        parent_scope=parent_scope,
+        work_graph_path=work_graph_path,
+        work_unit_id=work_unit_id,
+        start_revision=start_revision,
+        plan_repo_root=plan_repo_root,
+        plan_start_point=plan_start_point,
+        allow_unplanned=allow_unplanned,
+        allow_parallel=allow_parallel,
+        broad_scope_mode=broad_scope_mode,
+        broad_scope_reason=broad_scope_reason,
+        target_worktree_path=target_worktree_path,
+        tracker_dir=tracker_dir,
+    )
     configured_outcome_mode = outcome_admission.load_outcome_admission_mode(Path(worktree_path))
     explicit_unplanned_maintenance = (
         allow_unplanned
@@ -2109,10 +2285,6 @@ def start_session(
                 )
             )
 
-    exact_existing_claims = _iter_matching_live_claims(agent=agent, project=project, scope=scope)
-    if len(exact_existing_claims) > 1:
-        raise ValueError(f"Multiple live claims found for {agent} → {project}:{scope}")
-    existing_claim = exact_existing_claims[0] if exact_existing_claims else None
     if start_revision is None and existing_claim is not None:
         start_revision = existing_claim.start_revision
     if (
@@ -2194,6 +2366,11 @@ def start_session(
     claim_bytes_before = claim_slot_path.read_bytes() if claim_slot_path.is_file() else None
     tracker_preexisting = tracker_path.is_file()
     tracker_bytes_before = tracker_path.read_bytes() if tracker_preexisting else None
+    if maintenance_snapshot is not None and (
+        maintenance_snapshot.claim_path.read_bytes() != maintenance_snapshot.claim_bytes
+        or maintenance_snapshot.tracker_path.read_bytes() != maintenance_snapshot.tracker_bytes
+    ):
+        raise ValueError("sanctioned maintenance provenance changed during session refresh; retry from current state")
     session_contracts.write_session_tracker(tracker, tracker_dir=tracker_dir)
     tracker_bytes_written = tracker_path.read_bytes()
     try:

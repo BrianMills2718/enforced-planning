@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import shlex
+import shutil
 import subprocess
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -1765,3 +1766,155 @@ def test_a_fresh_unobserved_message_is_not_yet_evidence(
 
     assert second.recipient_unobserved_backlog == 1
     assert second.recipient_may_be_unreachable is False
+
+
+def _unrelated_traffic(store: CoordinationMessageStore, count: int) -> None:
+    """Fill the store with acknowledged traffic addressed to other sessions."""
+
+    for index in range(count):
+        sent = store.send(
+            _send_request(idempotency_key=f"noise-{index}", subject=f"Noise {index}"),
+            now=NOW,
+        )
+        store.acknowledge(
+            AcknowledgeMessageRequest(
+                current_session_id=CLAUDE_SESSION,
+                message_id=sent.message.message_id,
+                disposition="information_only",
+                note="noise",
+            ),
+            now=NOW + timedelta(seconds=1),
+        )
+
+
+def test_receipt_lookup_reads_only_the_receipts_of_the_requested_message(
+    mailbox: tuple[CoordinationMessageStore, Path, Path],
+) -> None:
+    """Status projection must not cost one full receipt-store scan per message.
+
+    Reading every receipt to answer one message made a single inbox poll cost
+    ``messages x receipts`` and pushed the lifecycle hook past its budget.
+    """
+
+    store, _claims_dir, _root = mailbox
+    _unrelated_traffic(store, 12)
+    target = store.send(_send_request(idempotency_key="target-1"), now=NOW)
+    store.acknowledge(
+        AcknowledgeMessageRequest(
+            current_session_id=CLAUDE_SESSION,
+            message_id=target.message.message_id,
+            disposition="accepted",
+            note="done",
+        ),
+        now=NOW + timedelta(seconds=2),
+    )
+
+    reads: list[Path] = []
+    original = CoordinationMessageStore._read_receipt_path
+
+    def _counting_read(self: CoordinationMessageStore, path: Path) -> MessageReceipt:
+        reads.append(path)
+        return original(self, path)
+
+    fresh = CoordinationMessageStore(root=store.root, claims_dir=store.claims_dir)
+    fresh._refresh_receipt_index()
+    CoordinationMessageStore._read_receipt_path = _counting_read  # type: ignore[method-assign]
+    try:
+        receipts = fresh._receipts_for(target.message.message_id)
+    finally:
+        CoordinationMessageStore._read_receipt_path = original  # type: ignore[method-assign]
+
+    assert {receipt.message_id for receipt in receipts} == {target.message.message_id}
+    assert len(reads) == len(receipts)
+    assert len(list(store.receipts_dir.glob("*.json"))) > len(receipts)
+
+
+def test_inbox_poll_reads_only_the_recipient_messages(
+    mailbox: tuple[CoordinationMessageStore, Path, Path],
+) -> None:
+    """An inbox poll must not parse every message the store has ever held."""
+
+    store, claims_dir, _root = mailbox
+    _write_claim(
+        claims_dir,
+        agent="claude-code",
+        project="enforced-planning",
+        scope="other-lane",
+        session_id="claude-code:other-999",
+    )
+    _unrelated_traffic(store, 10)
+    mine = store.send(
+        _send_request(idempotency_key="mine-1", recipient="claude-code:other-999"),
+        now=NOW,
+    )
+
+    reads: list[Path] = []
+    original = CoordinationMessageStore._read_message_path
+
+    def _counting_read(self: CoordinationMessageStore, path: Path) -> CoordinationMessage:
+        reads.append(path)
+        return original(self, path)
+
+    fresh = CoordinationMessageStore(root=store.root, claims_dir=store.claims_dir)
+    fresh._refresh_message_index()
+    CoordinationMessageStore._read_message_path = _counting_read  # type: ignore[method-assign]
+    try:
+        selected = fresh._messages_for_recipient("claude-code:other-999")
+    finally:
+        CoordinationMessageStore._read_message_path = original  # type: ignore[method-assign]
+
+    assert [message.message_id for message, _path in selected] == [mine.message.message_id]
+    assert len(reads) == 1
+    assert len(list(store.messages_dir.glob("*.json"))) > 1
+
+
+def test_derived_index_is_rebuilt_from_the_canonical_records(
+    mailbox: tuple[CoordinationMessageStore, Path, Path],
+) -> None:
+    """A discarded or never-written index must reproduce full-scan results exactly."""
+
+    store, _claims_dir, _root = mailbox
+    _unrelated_traffic(store, 6)
+    sent = store.send(_send_request(idempotency_key="rebuild-1"), now=NOW)
+
+    expected_messages = {
+        message.message_id
+        for message, _path in store._all_messages()
+        if message.recipient_session_id == CLAUDE_SESSION
+    }
+    expected_receipts = {receipt.receipt_id for receipt in store._receipts_for(sent.message.message_id)}
+
+    shutil.rmtree(store.index_dir)
+    assert not store.index_dir.exists()
+
+    rebuilt = CoordinationMessageStore(root=store.root, claims_dir=store.claims_dir)
+    assert {
+        message.message_id for message, _path in rebuilt._messages_for_recipient(CLAUDE_SESSION)
+    } == expected_messages
+    assert {
+        receipt.receipt_id for receipt in rebuilt._receipts_for(sent.message.message_id)
+    } == expected_receipts
+    assert store.index_dir.is_dir()
+
+
+def test_quarantined_record_does_not_leave_a_broken_index_entry(
+    mailbox: tuple[CoordinationMessageStore, Path, Path],
+) -> None:
+    """The canonical record set stays authoritative when a record is quarantined."""
+
+    store, _claims_dir, _root = mailbox
+    kept = store.send(_send_request(idempotency_key="kept-1"), now=NOW)
+    doomed = store.send(_send_request(idempotency_key="doomed-1", subject="Doomed"), now=NOW)
+
+    doomed_path = store.messages_dir / f"{doomed.message.message_id}.json"
+    doomed_path.write_text("{ not json", encoding="utf-8")
+    with pytest.raises(CorruptRecordError):
+        CoordinationMessageStore(
+            root=store.root, claims_dir=store.claims_dir
+        )._messages_for_recipient(CLAUDE_SESSION)
+
+    assert list(store.quarantine_dir.glob("*.corrupt"))
+    survivors = CoordinationMessageStore(
+        root=store.root, claims_dir=store.claims_dir
+    )._messages_for_recipient(CLAUDE_SESSION)
+    assert [message.message_id for message, _path in survivors] == [kept.message.message_id]

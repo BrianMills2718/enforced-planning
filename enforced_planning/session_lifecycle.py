@@ -1065,6 +1065,7 @@ def _upsert_session_claim(
     broad_scope_reason: str | None = None,
     target_worktree_path: str | None = None,
     staged_reservation: coordination_claims.ClaimRecord | None = None,
+    maintenance_snapshot: _MaintenanceRefreshSnapshot | None = None,
 ) -> str:
     """Create or update the compact claim-side session contract metadata."""
 
@@ -1130,6 +1131,8 @@ def _upsert_session_claim(
             raise ValueError(f"Claim at {path} belongs to {existing.agent}, not {agent}")
         if existing.session_id and existing.session_id != session_id:
             raise ValueError(f"Claim at {path} belongs to session {existing.session_id}, not {session_id}")
+        if maintenance_snapshot is not None and path.read_bytes() != maintenance_snapshot.claim_bytes:
+            raise ValueError("sanctioned maintenance provenance changed during session refresh; retry from current state")
 
         effective_claim_type = claim_type or existing.claim_type
         effective_write_paths = existing.write_paths if write_paths is None else write_paths
@@ -2017,6 +2020,16 @@ def _snapshot_sanctioned_maintenance_refresh(
     if existing_claim is None or not outcome_admission.is_sanctioned_maintenance_claim(existing_claim):
         return None
 
+    effective_start_revision = existing_claim.start_revision if start_revision is None else start_revision
+    effective_plan_repo_root = existing_claim.plan_repo_root if plan_repo_root is None else plan_repo_root
+    effective_plan_revision = existing_claim.plan_revision if plan_start_point is None else plan_start_point
+    effective_broad_scope_mode = existing_claim.broad_scope_mode if broad_scope_mode is None else broad_scope_mode
+    effective_broad_scope_reason = (
+        existing_claim.broad_scope_reason if broad_scope_reason is None else broad_scope_reason
+    )
+    effective_target_worktree_path = (
+        existing_claim.target_worktree_path if target_worktree_path is None else target_worktree_path
+    )
     contract = session_contracts.SessionContract.build(
         agent=agent,
         project=project,
@@ -2029,10 +2042,10 @@ def _snapshot_sanctioned_maintenance_refresh(
         session_id=session_id,
         broader_goal=broader_goal,
         session_name=session_name,
-        start_revision=start_revision,
-        plan_repo_root=plan_repo_root,
-        plan_revision=plan_start_point,
-        plan_sha256=existing_claim.plan_sha256 if plan_repo_root is not None else None,
+        start_revision=effective_start_revision,
+        plan_repo_root=effective_plan_repo_root,
+        plan_revision=effective_plan_revision,
+        plan_sha256=existing_claim.plan_sha256 if effective_plan_repo_root is not None else None,
         allow_unplanned=allow_unplanned,
     )
     tracker_path = session_contracts.session_tracker_path(contract, tracker_dir=tracker_dir).expanduser().resolve()
@@ -2070,13 +2083,13 @@ def _snapshot_sanctioned_maintenance_refresh(
         "parent_scope": (parent_scope, existing_claim.parent_scope),
         "work_graph_path": (work_graph_path, existing_claim.work_graph_path),
         "work_unit_id": (work_unit_id, existing_claim.work_unit_id),
-        "start_revision": (start_revision, existing_claim.start_revision),
+        "start_revision": (effective_start_revision, existing_claim.start_revision),
         "plan_repo_root": (contract.plan_repo_root, existing_claim.plan_repo_root),
         "plan_revision": (contract.plan_revision, existing_claim.plan_revision),
         "allow_parallel": (allow_parallel, existing_claim.parallel_root_authorized),
-        "broad_scope_mode": (broad_scope_mode, existing_claim.broad_scope_mode),
-        "broad_scope_reason": (broad_scope_reason, existing_claim.broad_scope_reason),
-        "target_worktree_path": (target_worktree_path, existing_claim.target_worktree_path),
+        "broad_scope_mode": (effective_broad_scope_mode, existing_claim.broad_scope_mode),
+        "broad_scope_reason": (effective_broad_scope_reason, existing_claim.broad_scope_reason),
+        "target_worktree_path": (effective_target_worktree_path, existing_claim.target_worktree_path),
     }
     candidate_tracker_fields = candidate_tracker.tracker_fields()
     for field in session_contracts.TRACKER_ONLY_FIELD_NAMES:
@@ -2366,12 +2379,28 @@ def start_session(
     claim_bytes_before = claim_slot_path.read_bytes() if claim_slot_path.is_file() else None
     tracker_preexisting = tracker_path.is_file()
     tracker_bytes_before = tracker_path.read_bytes() if tracker_preexisting else None
-    if maintenance_snapshot is not None and (
-        maintenance_snapshot.claim_path.read_bytes() != maintenance_snapshot.claim_bytes
-        or maintenance_snapshot.tracker_path.read_bytes() != maintenance_snapshot.tracker_bytes
-    ):
-        raise ValueError("sanctioned maintenance provenance changed during session refresh; retry from current state")
-    session_contracts.write_session_tracker(tracker, tracker_dir=tracker_dir)
+    if maintenance_snapshot is None:
+        session_contracts.write_session_tracker(tracker, tracker_dir=tracker_dir)
+    else:
+        with (
+            coordination_claims.claim_registry_lock(coordination_claims.CLAIMS_DIR),
+            session_contracts.session_tracker_lock(maintenance_snapshot.tracker_path),
+        ):
+            if (
+                maintenance_snapshot.claim_path.read_bytes() != maintenance_snapshot.claim_bytes
+                or maintenance_snapshot.tracker_path.read_bytes() != maintenance_snapshot.tracker_bytes
+            ):
+                raise ValueError(
+                    "sanctioned maintenance provenance changed during session refresh; retry from current state"
+                )
+            tracker_payload = session_contracts.read_session_tracker(maintenance_snapshot.tracker_path)
+            tracker_section = tracker_payload.get("tracker")
+            timestamps = tracker_payload.get("timestamps")
+            if not isinstance(tracker_section, dict) or not isinstance(timestamps, dict):
+                raise ValueError("sanctioned maintenance tracker is missing execution or timestamp metadata")
+            tracker_section["current_phase"] = tracker.current_phase
+            timestamps["updated_at"] = tracker.updated_at
+            session_contracts._atomic_write_session_tracker(maintenance_snapshot.tracker_path, tracker_payload)
     tracker_bytes_written = tracker_path.read_bytes()
     try:
         action = _upsert_session_claim(
@@ -2401,6 +2430,7 @@ def start_session(
             broad_scope_reason=broad_scope_reason,
             target_worktree_path=target_worktree_path,
             staged_reservation=staged_reservation,
+            maintenance_snapshot=maintenance_snapshot,
         )
     except Exception as claim_error:
         try:

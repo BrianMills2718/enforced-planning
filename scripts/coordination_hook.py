@@ -12,11 +12,12 @@ import shlex
 import subprocess
 import sys
 import time
+from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Iterator, Literal
+from typing import Any, Literal
 
 try:
     from hook_receipts import DEFAULT_RECEIPT_ROOT, HookInvocation, start_hook_invocation
@@ -57,6 +58,7 @@ _bootstrap_package()
 from enforced_planning import (
     coordination_claims,
     coordination_messages,
+    mailbox_execution_identity,
     prewrite_claim_fast,
     prewrite_claim_projection,
 )
@@ -85,6 +87,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--root", type=Path)
     parser.add_argument("--closeout-ledger-dir", type=Path)
     parser.add_argument("--hook-receipt-dir", type=Path)
+    parser.add_argument("--execution-binding-dir", type=Path)
     parser.add_argument("--agent", choices=("codex", "claude-code"), default="codex")
     parser.add_argument("--project", help="Canonical project override supplied by a repository compatibility hook.")
     parser.add_argument("--repair-projection-only", action="store_true", help=argparse.SUPPRESS)
@@ -878,6 +881,21 @@ def main(argv: list[str] | None = None) -> int:
         telemetry_reason = "no_active_boundary"
         session_id = _session_id(args.agent, payload["session_id"])
         event_name = payload["hook_event_name"]
+        execution_decision = mailbox_execution_identity.PrimaryExecutionBindingStore(
+            args.execution_binding_dir
+            or mailbox_execution_identity.DEFAULT_BINDING_ROOT
+        ).classify(
+            session_id=session_id,
+            run_id=mailbox_execution_identity.hook_run_id(payload),
+            event_name=event_name,
+        )
+        primary_execution = execution_decision.role == "primary"
+        if not primary_execution:
+            telemetry_reason = (
+                "secondary_execution_callback"
+                if execution_decision.role == "secondary"
+                else "execution_identity_unbound"
+            )
         projection_warning: str | None = None
         if event_name == "SessionStart":
             # Startup and the latency-sensitive pre-tool boundary are advisory.
@@ -898,16 +916,20 @@ def main(argv: list[str] | None = None) -> int:
             (args.claims_dir or coordination_claims.CLAIMS_DIR).expanduser().resolve().parent
             / "repository-closeout-ledgers"
         )
-        if payload["hook_event_name"] == "SessionStart" or (
+        if primary_execution and (payload["hook_event_name"] == "SessionStart" or (
             payload["hook_event_name"] == "PreToolUse" and _is_mutation_boundary(payload)
-        ):
+        )):
             _write_closeout_baseline(
                 payload=payload,
                 agent=args.agent,
                 session_id=session_id,
                 ledger_dir=closeout_ledger_dir,
             )
-        if payload["hook_event_name"] == "PreToolUse" and _is_mutation_boundary(payload):
+        if (
+            primary_execution
+            and payload["hook_event_name"] == "PreToolUse"
+            and _is_mutation_boundary(payload)
+        ):
             _record_touched_repositories(
                 payload=payload,
                 agent=args.agent,
@@ -930,7 +952,7 @@ def main(argv: list[str] | None = None) -> int:
         # PreToolUse is a latency-sensitive decision boundary. Heartbeat writes
         # take the registry lock and refresh the full projection; lifecycle
         # events keep leases fresh without putting that work before every tool.
-        heartbeat_projects = () if payload["hook_event_name"] in {"SessionStart", "PreToolUse", "Stop"} else (
+        heartbeat_projects = () if not primary_execution or payload["hook_event_name"] in {"SessionStart", "PreToolUse", "Stop"} else (
             (project,)
             if project is not None
             else _claimed_projects(
@@ -947,22 +969,35 @@ def main(argv: list[str] | None = None) -> int:
                 claims_dir=args.claims_dir,
                 require_exact_session=True,
             )
-        notice = coordination_messages.poll_session_inbox(
-            agent=args.agent,
-            project=project,
-            session_id=session_id,
-            observe=True,
-            claims_dir=args.claims_dir,
-            root=args.root,
-            # Gate events must re-read canonical active state on every callback.
-            # Native display suppression is appropriate only for advisory events.
-            delivery_event_id=(
-                None if payload["hook_event_name"] in {"PreToolUse", "Stop"} else delivery_event_id
-            ),
-            require_live_claim=False,
-        )
+        if primary_execution:
+            notice = coordination_messages.poll_session_inbox(
+                agent=args.agent,
+                project=project,
+                session_id=session_id,
+                # PostToolUse output is advisory hook emission, not evidence
+                # that the model-visible primary execution observed it.
+                observe=payload["hook_event_name"] != "PostToolUse",
+                claims_dir=args.claims_dir,
+                root=args.root,
+                # Gate events must re-read canonical active state on every callback.
+                # Native display suppression is appropriate only for advisory events.
+                delivery_event_id=(
+                    None if payload["hook_event_name"] in {"PreToolUse", "Stop"} else delivery_event_id
+                ),
+                require_live_claim=False,
+            )
+        else:
+            # A same-session secondary execution must not inspect, observe, or
+            # block the primary execution's inbox.
+            notice = coordination_messages.SessionInboxNotice(
+                session_id=session_id,
+                project=project,
+                active_count=0,
+                message_ids=(),
+                summary="",
+            )
         closeout_failure = None
-        if payload["hook_event_name"] == "Stop":
+        if primary_execution and payload["hook_event_name"] == "Stop":
             closeout_failure = _repository_closeout_failure(
                 agent=args.agent,
                 session_id=session_id,

@@ -14,6 +14,7 @@ from pathlib import Path
 import yaml
 
 from enforced_planning import prewrite_claim_fast, prewrite_claim_projection
+from enforced_planning.coordination_messages import SessionInboxNotice
 from scripts import coordination_hook
 
 
@@ -55,6 +56,157 @@ def test_stop_refire_returns_before_receipts_or_projection(monkeypatch, tmp_path
     monkeypatch.setattr(coordination_hook, "_active_claims", unexpected)
 
     assert coordination_hook.main(["--hook-receipt-dir", str(tmp_path / "receipts")]) == 0
+
+
+def test_posttool_is_advisory_and_secondary_run_cannot_poll_root_inbox(
+    monkeypatch, tmp_path: Path, capsys
+) -> None:
+    """Only the bound run polls, and PostTool never creates observation evidence."""
+
+    payload: dict[str, object] = {}
+    calls: list[dict[str, object]] = []
+    monkeypatch.setattr(
+        "sys.stdin",
+        type("Input", (), {"read": lambda _self: json.dumps(payload)})(),
+    )
+    monkeypatch.setattr(coordination_hook, "_active_claims", lambda *_args, **_kwargs: ())
+    monkeypatch.setattr(coordination_hook, "_canonical_project", lambda _cwd: "demo")
+    monkeypatch.setattr(
+        coordination_hook.coordination_claims,
+        "heartbeat_claims",
+        lambda **_kwargs: (),
+    )
+
+    def poll(**kwargs: object) -> SessionInboxNotice:
+        calls.append(kwargs)
+        return SessionInboxNotice(
+            session_id=str(kwargs["session_id"]),
+            project="demo",
+            active_count=0,
+            message_ids=(),
+            summary="",
+        )
+
+    monkeypatch.setattr(coordination_hook.coordination_messages, "poll_session_inbox", poll)
+    arguments = [
+        "--claims-dir",
+        str(tmp_path / "claims"),
+        "--root",
+        str(tmp_path / "messages"),
+        "--hook-receipt-dir",
+        str(tmp_path / "receipts"),
+        "--execution-binding-dir",
+        str(tmp_path / "bindings"),
+    ]
+
+    payload.update(
+        session_id="shared-session",
+        cwd="/tmp",
+        hook_event_name="UserPromptSubmit",
+        hook_run_id="root-run",
+        event_id="prompt-one",
+    )
+    assert coordination_hook.main(arguments) == 0
+    capsys.readouterr()
+    payload.update(
+        hook_event_name="PostToolUse",
+        hook_run_id="root-run",
+        event_id="root-posttool",
+    )
+    assert coordination_hook.main(arguments) == 0
+    capsys.readouterr()
+    payload.update(hook_run_id="subagent-run", event_id="secondary-posttool")
+    assert coordination_hook.main(arguments) == 0
+    capsys.readouterr()
+
+    assert [call["observe"] for call in calls] == [True, False]
+
+
+def test_secondary_callback_leaves_obligation_for_root_next_pretool(
+    monkeypatch, tmp_path: Path, capsys
+) -> None:
+    """Maintenance-mode settings cannot let a secondary callback consume the root gate."""
+
+    payload: dict[str, object] = {}
+    poll_count = 0
+    monkeypatch.setenv("ENFORCED_PLANNING_HOOK_MODE", "off")
+    monkeypatch.setattr(
+        "sys.stdin",
+        type("Input", (), {"read": lambda _self: json.dumps(payload)})(),
+    )
+    monkeypatch.setattr(coordination_hook, "_active_claims", lambda *_args, **_kwargs: ())
+    monkeypatch.setattr(coordination_hook, "_canonical_project", lambda _cwd: "demo")
+    monkeypatch.setattr(coordination_hook, "_write_closeout_baseline", lambda **_kwargs: None)
+    monkeypatch.setattr(coordination_hook, "_record_touched_repositories", lambda **_kwargs: None)
+    monkeypatch.setattr(
+        coordination_hook.coordination_claims,
+        "heartbeat_claims",
+        lambda **_kwargs: (),
+    )
+
+    def poll(**kwargs: object) -> SessionInboxNotice:
+        nonlocal poll_count
+        poll_count += 1
+        active = poll_count > 1
+        return SessionInboxNotice(
+            session_id=str(kwargs["session_id"]),
+            project="demo",
+            active_count=1 if active else 0,
+            message_ids=("msg_" + "1" * 32,) if active else (),
+            summary="ACKNOWLEDGEMENT REQUIRED" if active else "",
+        )
+
+    class FakeStore:
+        def __init__(self, **_kwargs: object) -> None:
+            pass
+
+        def record_boundary_block(self, **_kwargs: object) -> None:
+            pass
+
+    monkeypatch.setattr(coordination_hook.coordination_messages, "poll_session_inbox", poll)
+    monkeypatch.setattr(coordination_hook.coordination_messages, "CoordinationMessageStore", FakeStore)
+    arguments = [
+        "--claims-dir",
+        str(tmp_path / "claims"),
+        "--root",
+        str(tmp_path / "messages"),
+        "--hook-receipt-dir",
+        str(tmp_path / "receipts"),
+        "--execution-binding-dir",
+        str(tmp_path / "bindings"),
+    ]
+
+    payload.update(
+        session_id="shared-session",
+        cwd="/tmp",
+        hook_event_name="UserPromptSubmit",
+        hook_run_id="root-run",
+        event_id="prompt-one",
+    )
+    assert coordination_hook.main(arguments) == 0
+    capsys.readouterr()
+    payload.update(
+        hook_event_name="PostToolUse",
+        hook_run_id="subagent-run",
+        event_id="secondary-posttool",
+    )
+    assert coordination_hook.main(arguments) == 0
+    assert capsys.readouterr().out == ""
+    payload.update(
+        hook_event_name="PreToolUse",
+        hook_run_id="root-run",
+        tool_use_id="root-next-tool",
+        tool_name="Bash",
+        tool_input={"command": "git status --short"},
+    )
+    assert coordination_hook.main(arguments) == 0
+    denial = json.loads(capsys.readouterr().out)
+
+    assert poll_count == 2
+    assert denial["hookSpecificOutput"]["permissionDecision"] == "deny"
+    assert "ACKNOWLEDGEMENT REQUIRED" in denial["hookSpecificOutput"][
+        "permissionDecisionReason"
+    ]
 
 
 def test_repository_statuses_are_collected_concurrently(monkeypatch, tmp_path: Path) -> None:

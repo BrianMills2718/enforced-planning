@@ -2098,11 +2098,17 @@ def _plan_cursor_command_fixture(
     return command, claims_dir, worktree
 
 
+@pytest.mark.parametrize("operation", ["start", "replace", "archive"])
 def test_exact_plan_cursor_manager_treats_candidate_as_read_only_input(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    operation: str,
 ) -> None:
     command, claims_dir, _worktree = _plan_cursor_command_fixture(tmp_path, monkeypatch)
+    if operation == "replace":
+        command = command.replace(" start ", " replace ") + " --expected-revision 1"
+    elif operation == "archive":
+        command = command.rsplit(" start ", 1)[0] + " archive"
 
     classification = prewrite_claim_gate._special_unclaimed_command(
         command,

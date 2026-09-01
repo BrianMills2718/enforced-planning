@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import hashlib
 import io
 import json
 import shlex
@@ -404,29 +405,40 @@ def _parse_native_closeout_command(
     """
 
     from enforced_planning import coordination_claims
-    from scripts import session_close
+    from scripts import session_close, session_finish
 
     if "\n" in command or "\r" in command:
         raise ValueError("closeout command must be exactly one line")
     tokens = shlex.split(command)
-    script = (REPO_ROOT / "scripts" / "session_close.py").resolve()
-    if len(tokens) < 8 or tokens[:2] != ["/usr/bin/python3", str(script)]:
+    close_script = (REPO_ROOT / "scripts" / "session_close.py").resolve()
+    finish_script = (REPO_ROOT / "scripts" / "session_finish.py").resolve()
+    if len(tokens) < 8 or tokens[0] != "/usr/bin/python3" or tokens[1] not in {
+        str(close_script),
+        str(finish_script),
+    }:
         raise ValueError("closeout command does not use the canonical host script")
     if any(token in {";", "&", "&&", "|", "||", ">", ">>", "<"} for token in tokens):
         raise ValueError("closeout command cannot compose shell operations")
+    parser = session_finish.parse_args if tokens[1] == str(finish_script) else session_close.parse_args
     try:
         with contextlib.redirect_stderr(io.StringIO()):
-            args = session_close.parse_args(tokens[2:])
+            args = parser(tokens[2:])
     except SystemExit as exc:
         raise ValueError("closeout command does not match the canonical CLI grammar") from exc
     if native_session is None or args.agent != client:
         raise ValueError("closeout agent does not match the ambient native client")
+    if tokens[1] == str(finish_script):
+        if not args.allow_dirty_handoff or args.release_claim:
+            raise ValueError("session-finish bypass is restricted to dirty handoff recovery")
+        if args.session_id not in {None, native_session}:
+            raise ValueError("session-finish asserted session does not match the ambient native session")
     matches = [
         claim
         for claim in coordination_claims.check_claims(project=args.project, claims_dir=claims_dir)
         if claim.agent == args.agent
         and claim.scope == args.scope
         and claim.session_id == native_session
+        and claim.is_live()
     ]
     if len(matches) != 1:
         raise ValueError("closeout target is not the ambient runtime's exact live claim")
@@ -436,8 +448,57 @@ def _parse_native_closeout_command(
         effective_worktree or ""
     ).expanduser().resolve():
         raise ValueError("closeout worktree does not match the exact live claim")
-    if args.branch and args.branch != claim.branch:
+    if getattr(args, "branch", None) and args.branch != claim.branch:
         raise ValueError("closeout branch does not match the exact live claim")
+
+
+def _same_file_digest(left: Path, right: Path) -> bool:
+    """Compare bounded control files without trusting path names alone."""
+
+    try:
+        return hashlib.sha256(left.read_bytes()).digest() == hashlib.sha256(right.read_bytes()).digest()
+    except OSError:
+        return False
+
+
+def _parse_hook_feedback_report_command(command: str) -> None:
+    """Validate the exact content-free report entrypoint as claimless observation."""
+
+    from scripts import hook_feedback_report
+
+    if "\n" in command or "\r" in command or any(char in command for char in ";&|<>`$"):
+        raise ValueError("hook feedback command cannot compose shell operations")
+    tokens = shlex.split(command)
+    canonical_script = (REPO_ROOT / "scripts" / "hook_feedback_report.py").resolve()
+    report_args: list[str]
+    if len(tokens) >= 2 and tokens[:2] == ["/usr/bin/python3", str(canonical_script)]:
+        report_args = tokens[2:]
+    elif len(tokens) in {4, 5} and tokens[0] in {"make", "/usr/bin/make"} and tokens[1] == "-C":
+        target = Path(tokens[2]).expanduser()
+        if not target.is_absolute() or tokens[3] != "hook-feedback-report":
+            raise ValueError("hook feedback Make target must use one absolute -C directory")
+        target = target.resolve()
+        target_script = target / "scripts" / "hook_feedback_report.py"
+        target_makefile = target / "Makefile"
+        if target != REPO_ROOT.resolve() and not (
+            _same_file_digest(target_script, canonical_script)
+            and _same_file_digest(target_makefile, REPO_ROOT / "Makefile")
+        ):
+            raise ValueError("hook feedback Make target does not match the installed control revision")
+        if len(tokens) == 5:
+            key, separator, raw_args = tokens[4].partition("=")
+            if key != "ARGS" or not separator:
+                raise ValueError("hook feedback Make target accepts only one ARGS assignment")
+            report_args = shlex.split(raw_args)
+        else:
+            report_args = []
+    else:
+        raise ValueError("hook feedback command does not use a canonical entrypoint")
+    try:
+        with contextlib.redirect_stderr(io.StringIO()):
+            hook_feedback_report._parser().parse_args(report_args)
+    except SystemExit as exc:
+        raise ValueError("hook feedback arguments do not match the read-only report grammar") from exc
 
 
 def _parse_native_narrow_command(
@@ -570,6 +631,11 @@ def _special_unclaimed_command(
 
     if subagent_event:
         return False
+    try:
+        _parse_hook_feedback_report_command(command)
+        return "hook_feedback_report"
+    except Exception as exc:  # noqa: BLE001 -- try the remaining strict control grammars
+        _ = exc
     try:
         _parse_native_mailbox_command(
             command,
@@ -895,6 +961,7 @@ def main(argv: list[str] | None = None) -> int:
             "native_mailbox",
             "native_closeout",
             "native_session_narrow",
+            "hook_feedback_report",
             "read_target_selection",
             "projection_recovery",
         }:
@@ -969,6 +1036,7 @@ def main(argv: list[str] | None = None) -> int:
         "claim_bootstrap_command",
         "native_mailbox_command",
         "native_closeout_command",
+        "hook_feedback_report_command",
         "read_target_selection_command",
         "projection_recovery_command",
     }

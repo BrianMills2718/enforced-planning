@@ -13,6 +13,7 @@ from types import ModuleType
 import pytest
 import yaml  # type: ignore[import-untyped]
 
+from enforced_planning import coordination_claims, session_lifecycle
 from enforced_planning.prewrite_claim_fast import _argv_is_read_only, evaluate_prewrite_fast
 from enforced_planning.prewrite_claim_projection import write_projection
 from scripts import prewrite_claim_gate
@@ -473,6 +474,41 @@ def test_explicit_host_mode_allows_read_only_bash_from_workspace_root(
     assert decision["reason_code"] == "bash_read_only"
 
 
+def test_host_gate_admits_exact_hook_feedback_make_target_without_claim(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    command = (
+        f"make -C {prewrite_claim_gate.REPO_ROOT} hook-feedback-report "
+        "ARGS='--threshold 2 --format json'"
+    )
+    payload = _payload(cwd=tmp_path, tool="Bash", tool_input={"command": command})
+
+    code, decision = _run_cli(monkeypatch, capsys, tmp_path, payload)
+
+    assert code == 0, decision
+    assert decision["decision"] == "allow"
+    assert decision["reason_code"] == "hook_feedback_report_command"
+
+
+def test_hook_feedback_make_target_rejects_unmatched_control_files(tmp_path: Path) -> None:
+    target = tmp_path / "lookalike"
+    (target / "scripts").mkdir(parents=True)
+    (target / "Makefile").write_text("hook-feedback-report:\n\ttouch escaped\n", encoding="utf-8")
+    (target / "scripts" / "hook_feedback_report.py").write_text("print('not canonical')\n", encoding="utf-8")
+    command = f"make -C {target} hook-feedback-report ARGS='--threshold 2'"
+
+    assert prewrite_claim_gate._special_unclaimed_command(
+        command,
+        client="claude-code",
+        claims_dir=tmp_path / "claims",
+        projection_path=tmp_path / "projection.json",
+        subagent_event=False,
+        native_session=SESSION,
+    ) is False
+
+
 def test_read_only_bash_survives_malformed_outcome_configuration(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -585,6 +621,67 @@ def test_host_gate_admits_exact_native_closeout_for_merged_claim(
     assert code == 0, decision
     assert decision["decision"] == "allow"
     assert decision["reason_code"] == "native_closeout_command"
+
+def test_host_gate_admits_exact_dirty_handoff_finish_for_live_owner(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    workspace, _repo, worktree, claims_dir, _claim_path = _fixture(tmp_path)
+    command = (
+        f"/usr/bin/python3 {prewrite_claim_gate.REPO_ROOT / 'scripts' / 'session_finish.py'} "
+        "--agent claude-code --project host-gate-test --scope host-gate-lane "
+        f"--worktree-path {worktree} --allow-dirty-handoff --json"
+    )
+    payload = _payload(cwd=workspace, tool="Bash", tool_input={"command": command})
+
+    code, decision = _run_cli(
+        monkeypatch,
+        capsys,
+        tmp_path,
+        payload,
+        claims_dir=claims_dir,
+        projection_path=tmp_path / "projection.json",
+    )
+
+    assert code == 0, decision
+    assert decision["decision"] == "allow"
+    assert decision["reason_code"] == "native_closeout_command"
+
+    monkeypatch.setenv("CLAUDE_CODE_SESSION_ID", "host-gate-test")
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    result = session_lifecycle.finish_session(
+        agent="claude-code",
+        project="host-gate-test",
+        scope="host-gate-lane",
+        worktree_path=str(worktree),
+        allow_dirty_handoff=True,
+        note="preserve dirty state after enforce-mode recovery",
+        actor_session_id=SESSION,
+    )
+    claim = coordination_claims._load_claims(claims_dir)[0]
+    assert result["action"] == "handoff"
+    assert claim.status == "handoff"
+
+
+def test_host_gate_rejects_claimless_session_finish_without_dirty_handoff(
+    tmp_path: Path,
+) -> None:
+    _workspace, _repo, worktree, claims_dir, _claim_path = _fixture(tmp_path)
+    command = (
+        f"/usr/bin/python3 {prewrite_claim_gate.REPO_ROOT / 'scripts' / 'session_finish.py'} "
+        "--agent claude-code --project host-gate-test --scope host-gate-lane "
+        f"--worktree-path {worktree} --json"
+    )
+
+    assert prewrite_claim_gate._special_unclaimed_command(
+        command,
+        client="claude-code",
+        claims_dir=claims_dir,
+        projection_path=tmp_path / "projection.json",
+        subagent_event=False,
+        native_session=SESSION,
+    ) is False
 
 
 def test_host_gate_admits_bootstrap_closeout_for_real_target_worktree(

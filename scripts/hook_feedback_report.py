@@ -19,14 +19,17 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from scripts.hook_receipts import (
+    DEFAULT_PREWRITE_EVENT_PATH,
     DEFAULT_RECEIPT_ROOT,
     DEFAULT_SETTINGS_PATHS,
     DEFAULT_TIMEOUT_BUDGET_FRACTION,
     HookReceiptError,
     group_hook_recurrences,
+    group_prewrite_recurrences,
     load_declared_hook_commands,
     match_declared_timeouts,
     scan_hook_receipts,
+    scan_prewrite_events,
     summarize_hook_health,
 )
 
@@ -34,6 +37,7 @@ from scripts.hook_receipts import (
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--receipt-root", type=Path, default=DEFAULT_RECEIPT_ROOT)
+    parser.add_argument("--prewrite-events", type=Path, default=DEFAULT_PREWRITE_EVENT_PATH)
     parser.add_argument("--threshold", type=int, default=2)
     parser.add_argument(
         "--settings",
@@ -187,6 +191,30 @@ def _render_text(report: dict[str, Any], *, max_examples: int) -> str:
         lines.append(f"  ... {len(recurrent) - 20} more recurrent groups (use --format json)")
     lines.append("")
 
+    prewrite = report["prewrite_recurrence"]
+    recurrent_prewrite = [group for group in prewrite["groups"] if group["recurrent"]]
+    lines.append(
+        f"Prewrite decision groups (threshold {prewrite['threshold']}): "
+        f"{len(recurrent_prewrite)} of {len(prewrite['groups'])} groups recurrent"
+    )
+    lines.append(f"  event path: {prewrite['event_path']}")
+    lines.append(
+        f"  scanned {prewrite['event_count']:,} valid events; "
+        f"{prewrite['malformed_count']:,} malformed lines"
+    )
+    for group in sorted(recurrent_prewrite, key=lambda item: -item["count"])[:20]:
+        lines.append(
+            f"  {group['count']:>6,}  {group['client']} [{group['mode']}] "
+            f"{group['decision']} / {group['reason_code']}"
+        )
+    if len(recurrent_prewrite) > 20:
+        lines.append(f"  ... {len(recurrent_prewrite) - 20} more recurrent groups (use --format json)")
+    if prewrite["missing"]:
+        lines.append("  note: prewrite event store does not exist")
+    for malformed in prewrite["malformed"][:max_examples]:
+        lines.append(f"  malformed line {malformed['line']}: {malformed['reason']}")
+    lines.append("")
+
     if report["notes"]:
         lines.append("Notes")
         for note in report["notes"]:
@@ -201,6 +229,7 @@ def _render_text(report: dict[str, Any], *, max_examples: int) -> str:
 def build_report(
     *,
     receipt_root: Path,
+    prewrite_event_path: Path = DEFAULT_PREWRITE_EVENT_PATH,
     threshold: int,
     settings_paths: tuple[Path, ...],
     budget_fraction: float,
@@ -210,6 +239,10 @@ def build_report(
     declared = match_declared_timeouts(scan.completed, declared_commands)
     health = summarize_hook_health(scan, declared=declared, budget_fraction=budget_fraction)
     recurrence = group_hook_recurrences(scan.completed, threshold=threshold)
+    prewrite_recurrence = group_prewrite_recurrences(
+        scan_prewrite_events(prewrite_event_path),
+        threshold=threshold,
+    )
     all_notes = list(notes)
     for name, entry in sorted(declared.items()):
         if not entry.get("matched"):
@@ -223,6 +256,7 @@ def build_report(
         "settings_paths": [str(path) for path in settings_paths],
         "health": health,
         "recurrence": recurrence,
+        "prewrite_recurrence": prewrite_recurrence,
         "notes": all_notes,
     }
 
@@ -233,6 +267,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         report = build_report(
             receipt_root=args.receipt_root,
+            prewrite_event_path=args.prewrite_events,
             threshold=args.threshold,
             settings_paths=settings_paths,
             budget_fraction=args.budget_fraction,
@@ -246,10 +281,13 @@ def main(argv: list[str] | None = None) -> int:
     else:
         print(_render_text(report, max_examples=args.max_malformed_examples))
 
-    malformed = report["health"]["malformed_receipt_count"]
+    malformed = (
+        report["health"]["malformed_receipt_count"]
+        + report["prewrite_recurrence"]["malformed_count"]
+    )
     if malformed and args.strict:
         print(
-            f"strict mode: {malformed} malformed receipt(s) skipped; see the MALFORMED section",
+            f"strict mode: {malformed} malformed telemetry record(s) skipped; see the report",
             file=sys.stderr,
         )
         return 1

@@ -33,6 +33,9 @@ As of this version, the framework defaults to **governance enabled** (opt-out):
 
 - **`claims.enabled: true`** — Coordination claims tracked by default. To disable
   for a specific repository, set to `false`.
+  Completed-claim maintenance accepts `--agent`, `--project`, and `--scope`
+  together with `--prune-completed`; the script adapter forwards those exact
+  selectors to the canonical package implementation and never broadens them.
 - **`plans.integrity.mode: enforce`** — Structural plan integrity enforced by
   default. To disable, set to `off`.
 

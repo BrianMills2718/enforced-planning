@@ -1,0 +1,85 @@
+{
+  "active_slice": {
+    "description": "Remediate activation evidence by enforcing disable-probe-enable order, performing a real claimed Codex mutation, and observing a native Claude startup.",
+    "next_action": null,
+    "requires_external_action": false,
+    "requires_spend": false,
+    "slice_id": "remediate-authentic-activation-evidence",
+    "status": "accepted",
+    "target_revision": "sha256:6527a8d80eb8d7580719432bd4454b20227e8fdaba3d5e750fe2ffa963191043"
+  },
+  "authority": {
+    "external_action_authorized": false,
+    "human_decision": null,
+    "human_decision_required": false,
+    "implementation_authorized": true,
+    "spend_cap_usd": 0,
+    "spend_used_usd": 0
+  },
+  "circuit_breakers": {
+    "context_integrity_valid": true,
+    "max_same_boundary_failures": 3,
+    "runtime_integrity_valid": true
+  },
+  "completion": {
+    "evidence_revision": "sha256:6527a8d80eb8d7580719432bd4454b20227e8fdaba3d5e750fe2ffa963191043",
+    "receipt_ref": "prewrite_bcaae1ec9245490f837f5bd370123498+prewrite_f645c53a149949ec8c1ffbe1ce46c909",
+    "remaining_ready_work": 0,
+    "requested": true,
+    "verifier_outcome": "pass"
+  },
+  "cursor_id": "coordination-controls-activation-remediation-20260901",
+  "cursor_revision": 2,
+  "failure_state": {
+    "boundary": null,
+    "last_failure_ref": null,
+    "same_boundary_failures": 0
+  },
+  "goal_ref": "user:remediate-coordination-controls-activation-audit",
+  "lease": {
+    "heartbeat_at": "2026-09-01T06:22:30Z",
+    "lease_revision": 2,
+    "owner_session_id": "codex:01a05b24-a6f6-7781-b812-558dd75ee0d7",
+    "status": "active"
+  },
+  "lifecycle_state": "complete",
+  "observations": [
+    {
+      "boundary": "installed-candidate-probes",
+      "evidence_ref": "prewrite_db143f28e4c24cd182c2b1afa7176a94+prewrite_d57798f13a0d428b9c012fa484ba9096+prewrite_250380713fc54de6aa0227267a9dbd9f",
+      "kind": "authentic_result",
+      "observation_id": "obs-disabled-candidate-probes",
+      "outcome": "pass"
+    },
+    {
+      "boundary": "native-claude-session-start",
+      "evidence_ref": "/home/brian/.claude/projects/-home-brian-code-active-enforced-planning-worktrees-audit-activation-evidence-remediation-20260901/8f4ea6fe-5bf5-4fc7-b552-3e6516caea2a.jsonl",
+      "kind": "authentic_result",
+      "observation_id": "obs-native-claude-global-label",
+      "outcome": "pass"
+    },
+    {
+      "boundary": "native-codex-apply-patch",
+      "evidence_ref": "prewrite_bcaae1ec9245490f837f5bd370123498+prewrite_f645c53a149949ec8c1ffbe1ce46c909",
+      "kind": "authentic_result",
+      "observation_id": "obs-native-codex-mutation",
+      "outcome": "pass"
+    },
+    {
+      "boundary": "focused-real-gate-suite",
+      "evidence_ref": "pytest:28-passed",
+      "kind": "authentic_result",
+      "observation_id": "obs-focused-terminal-gates",
+      "outcome": "pass"
+    }
+  ],
+  "plan_revision": "audit:coordination-controls@2026-09-01+enforced-planning@cfbc59e48e9987ddd94fe33627d1eb7c52220adb",
+  "ready_alternatives": [],
+  "record_type": "plan_execution_cursor",
+  "schema_version": "1.0",
+  "target": {
+    "branch": "audit-activation-evidence-remediation-20260901",
+    "repository": "/home/brian/code/active/enforced-planning",
+    "worktree": "/home/brian/code/active/enforced-planning/worktrees/audit-activation-evidence-remediation-20260901"
+  }
+}

@@ -1178,6 +1178,17 @@ python scripts/session_status.py --include-ended --json
 python scripts/session_status.py --session-id codex:<thread-id> --include-ended --json
 ```
 
+The native pre-write classifier admits the installed status operation as
+read-only only through a strict command grammar: an optional absolute
+`/usr/bin/env -C <worktree>` wrapper, `/usr/bin/python3`, the fixed Codex or
+Claude installed `scripts/session_status.py` path (or that worktree's installed
+`scripts/meta/session_status.py`), and only the status CLI's declared query
+flags. Arbitrary Python, alternate scripts, relative worktree wrappers,
+composition, duplicate flags, unknown options, and extra operands remain
+claim-required. This exception observes lifecycle state; it grants no mutation
+authority and is available even when the observed bootstrap claim has disabled
+ordinary writes.
+
 The JSON end receipt names the session, end time, reason, and every affected
 `project:scope`. Claim YAML is the durable audit record; the generated active
 work registry remains a derivative and no second mutable lane store is added.

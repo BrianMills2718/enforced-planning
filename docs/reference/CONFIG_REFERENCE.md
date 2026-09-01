@@ -224,6 +224,12 @@ worktree targets. Claim-runtime schema v6 also requires `session-narrow`; a
 generated consumer that lacks that entrypoint is not compatible with typed
 bootstrap broad claims.
 
+`session-status` is the sole Python-backed lifecycle command classified as
+claimless read-only. The classifier accepts only the fixed installed script,
+its declared query arguments, and an optional absolute `/usr/bin/env -C`
+worktree binding. This is a command contract rather than a configuration knob;
+it does not admit generic Python or change `claims.prewrite_mode`.
+
 ## commits
 
 | Key | Type | Default | Read By | Default When Absent |

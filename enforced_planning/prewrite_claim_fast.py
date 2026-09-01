@@ -102,6 +102,18 @@ _BASENAME_PATH_COMMANDS = frozenset({"mkdir", "rm", "rmdir", "touch", "truncate"
 
 BashBootstrapClassifier = Callable[[str], bool | str]
 
+_SESSION_STATUS_VALUE_OPTIONS = frozenset(
+    {
+        "--project",
+        "--agent",
+        "--scope",
+        "--branch",
+        "--session-id",
+        "--codex-session-index",
+    }
+)
+_SESSION_STATUS_FLAG_OPTIONS = frozenset({"--include-ended", "--json"})
+
 
 class FastPreWriteError(ValueError):
     """Raised when a hook request cannot be normalized safely."""
@@ -470,8 +482,63 @@ def _bash_is_explicitly_bound(command: str, worktree: Path) -> bool:
     return _bash_explicit_worktree(command) == worktree
 
 
+def _session_status_command_is_read_only(argv: tuple[str, ...]) -> bool:
+    """Recognize only the canonical Python-backed session-status operation."""
+
+    tokens = list(argv)
+    bound_worktree: Path | None = None
+    if len(tokens) >= 4 and tokens[:2] == ["/usr/bin/env", "-C"]:
+        worktree = Path(tokens[2]).expanduser()
+        if not worktree.is_absolute():
+            return False
+        bound_worktree = worktree.resolve(strict=False)
+        tokens = tokens[3:]
+    if len(tokens) < 2 or tokens[0] != "/usr/bin/python3":
+        return False
+
+    script = Path(tokens[1]).expanduser()
+    if not script.is_absolute():
+        return False
+    resolved_script = script.resolve(strict=False)
+    installed_scripts = {
+        (Path.home() / ".codex/runtime/enforced-planning/scripts/session_status.py").resolve(strict=False),
+        (Path.home() / ".claude/runtime/enforced-planning/scripts/session_status.py").resolve(strict=False),
+    }
+    if bound_worktree is not None:
+        installed_scripts.add((bound_worktree / "scripts/meta/session_status.py").resolve(strict=False))
+    if resolved_script not in installed_scripts:
+        return False
+
+    seen: set[str] = set()
+    index = 2
+    while index < len(tokens):
+        token = tokens[index]
+        if token in _SESSION_STATUS_FLAG_OPTIONS:
+            if token in seen:
+                return False
+            seen.add(token)
+            index += 1
+            continue
+        option, separator, inline_value = token.partition("=")
+        if option not in _SESSION_STATUS_VALUE_OPTIONS or option in seen:
+            return False
+        seen.add(option)
+        if separator:
+            if not inline_value:
+                return False
+            index += 1
+            continue
+        if index + 1 >= len(tokens) or not tokens[index + 1]:
+            return False
+        index += 2
+    return True
+
+
 def _argv_is_read_only(argv: tuple[str, ...]) -> bool:
     """Return whether one already-tokenized shell component is read-only."""
+
+    if _session_status_command_is_read_only(argv):
+        return True
 
     executable_token = argv[0]
     if Path(executable_token).name != executable_token:

@@ -223,7 +223,11 @@ The same current runtime keeps housekeeping and observation bounded: completed
 claim pruning applies optional agent/project/scope selectors before archival,
 and claimless Bash admission accepts only fully classified read-only command
 groups (including safe `jq` pipelines), never an arbitrary interpreter help or
-write-capable lookalike.
+write-capable lookalike. The later installed-runtime repair keeps that boundary
+closed while admitting one strict Python-backed observer: canonical
+`session_status.py` with only its query grammar and optional absolute
+worktree-binding wrapper. This does not create an interpreter bypass or expand
+Planning Integrity authority.
 
 ### Plan #130 extension — external plan authority
 

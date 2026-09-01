@@ -181,7 +181,7 @@ def test_matching_caller_selected_wrong_origins_are_denied(
 def test_noncanonical_runtime_path_is_denied_before_repository_inspection(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    source, runtime, _before, after = _repos(tmp_path, monkeypatch)
+    source, _runtime, _before, after = _repos(tmp_path, monkeypatch)
     impostor = tmp_path / "impostor"
     subprocess.run(["git", "clone", str(tmp_path / "remote.git"), str(impostor)], check=True, capture_output=True)
 

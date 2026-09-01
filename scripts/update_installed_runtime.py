@@ -84,6 +84,7 @@ def update_runtime(
     runtime_repo: Path,
     revision: str,
     write: bool,
+    allow_detached_replacement: bool = False,
     now: datetime | None = None,
 ) -> dict[str, Any]:
     """Validate and optionally fast-forward one exact installed runtime clone."""
@@ -110,9 +111,14 @@ def update_runtime(
         raise RuntimeUpdateError(
             f"requested revision {revision} is not the fetched canonical origin/main {remote_main}"
         )
-    if _run(runtime_repo, "merge-base", "--is-ancestor", before, revision, check=False).returncode != 0:
+    fast_forward = (
+        _run(runtime_repo, "merge-base", "--is-ancestor", before, revision, check=False).returncode == 0
+    )
+    detached_replacement = checkout_mode == "detached" and allow_detached_replacement
+    if not fast_forward and not detached_replacement:
         raise RuntimeUpdateError(
-            f"installed runtime {before} cannot fast-forward to canonical revision {revision}"
+            f"installed runtime {before} cannot fast-forward to canonical revision {revision}; "
+            "an explicit detached replacement with a recovery ref is required"
         )
 
     payload: dict[str, Any] = {
@@ -127,6 +133,7 @@ def update_runtime(
         "after_revision": before,
         "recovery_ref": None,
         "changed": before != revision,
+        "update_mode": "fast_forward" if fast_forward else "detached_replacement",
     }
     if not write or before == revision:
         payload["action"] = "current" if before == revision else "would_update"
@@ -135,7 +142,10 @@ def update_runtime(
     recovery_ref = _recovery_ref(before, now or datetime.now(UTC))
     _run(runtime_repo, "update-ref", recovery_ref, before)
     # The recovery ref deliberately remains even when the merge itself fails.
-    _run(runtime_repo, "merge", "--ff-only", revision)
+    if fast_forward:
+        _run(runtime_repo, "merge", "--ff-only", revision)
+    else:
+        _run(runtime_repo, "checkout", "--detach", revision)
 
     after = _output(runtime_repo, "rev-parse", "HEAD")
     _assert_clean_runtime(runtime_repo)
@@ -162,6 +172,11 @@ def _parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--revision", required=True, help="exact full canonical origin/main commit SHA")
     parser.add_argument("--write", action="store_true", help="perform the checked fast-forward")
+    parser.add_argument(
+        "--allow-detached-replacement",
+        action="store_true",
+        help="replace a clean divergent detached HEAD after retaining its exact recovery ref",
+    )
     return parser
 
 
@@ -173,6 +188,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             runtime_repo=args.runtime_repo,
             revision=args.revision,
             write=args.write,
+            allow_detached_replacement=args.allow_detached_replacement,
         )
     except RuntimeUpdateError as exc:
         print(json.dumps({"schema_version": "1.0", "action": "denied", "error": str(exc)}, sort_keys=True))

@@ -14,6 +14,7 @@ import os
 import re
 import subprocess
 import tempfile
+from contextlib import nullcontext
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -1065,6 +1066,8 @@ def _upsert_session_claim(
     broad_scope_reason: str | None = None,
     target_worktree_path: str | None = None,
     staged_reservation: coordination_claims.ClaimRecord | None = None,
+    maintenance_snapshot: _MaintenanceRefreshSnapshot | None = None,
+    registry_lock_held: bool = False,
 ) -> str:
     """Create or update the compact claim-side session contract metadata."""
 
@@ -1106,7 +1109,8 @@ def _upsert_session_claim(
             raise ValueError(message)
         return "created"
 
-    with coordination_claims.claim_registry_lock():
+    registry_context = nullcontext() if registry_lock_held else coordination_claims.claim_registry_lock()
+    with registry_context:
         registry_digest_before = coordination_claims._registry_digest(coordination_claims.CLAIMS_DIR)
         refreshed_payload = _load_claim_payload(agent, project, scope)
         if refreshed_payload is None:
@@ -1130,6 +1134,8 @@ def _upsert_session_claim(
             raise ValueError(f"Claim at {path} belongs to {existing.agent}, not {agent}")
         if existing.session_id and existing.session_id != session_id:
             raise ValueError(f"Claim at {path} belongs to session {existing.session_id}, not {session_id}")
+        if maintenance_snapshot is not None and path.read_bytes() != maintenance_snapshot.claim_bytes:
+            raise ValueError("sanctioned maintenance provenance changed during session refresh; retry from current state")
 
         effective_claim_type = claim_type or existing.claim_type
         effective_write_paths = existing.write_paths if write_paths is None else write_paths
@@ -1271,7 +1277,6 @@ def _upsert_session_claim(
         payload = {
             **refreshed_payload,
             "agent": agent,
-            "project": project,
             "projects": [project],
             "scope": scope,
             "intent": intent,
@@ -1300,6 +1305,8 @@ def _upsert_session_claim(
             "parallel_root_authorized": candidate.parallel_root_authorized,
             **progress_payload,
         }
+        if "project" in refreshed_payload:
+            payload["project"] = project
         for field, value in (
             ("broad_scope_mode", candidate.broad_scope_mode),
             ("broad_scope_reason", candidate.broad_scope_reason),
@@ -1964,6 +1971,172 @@ def _delete_branch(repo_root: Path, branch: str | None, *, force: bool = False) 
     return "deleted"
 
 
+@dataclass(frozen=True)
+class _MaintenanceRefreshSnapshot:
+    """Immutable maintenance-bootstrap state observed before session refresh."""
+
+    claim: coordination_claims.ClaimRecord
+    claim_path: Path
+    claim_bytes: bytes
+    tracker_path: Path
+    tracker_bytes: bytes
+
+
+def _validate_locked_sanctioned_maintenance_refresh(
+    existing_claim: coordination_claims.ClaimRecord,
+    *,
+    claim_path: Path,
+    claim_bytes: bytes,
+    tracker_path: Path,
+    tracker_bytes: bytes,
+    existing_tracker: dict[str, Any],
+    agent: str,
+    project: str,
+    scope: str,
+    intent: str,
+    plan_ref: str | None,
+    repo_root: str,
+    worktree_path: str,
+    branch: str,
+    session_id: str,
+    session_name: str | None,
+    broader_goal: str,
+    current_phase: str,
+    intended_next_phases: list[str] | None,
+    depends_on_repos: list[str] | None,
+    requires_shared_infra_changes: bool | None,
+    stop_conditions: list[str] | None,
+    notes: str | None,
+    claim_type: str | None,
+    write_paths: list[str] | None,
+    read_paths: list[str] | None,
+    parent_scope: str | None,
+    work_graph_path: str | None,
+    work_unit_id: str | None,
+    start_revision: str | None,
+    plan_repo_root: str | None,
+    plan_start_point: str | None,
+    allow_unplanned: bool,
+    allow_parallel: bool,
+    broad_scope_mode: str | None,
+    broad_scope_reason: str | None,
+    target_worktree_path: str | None,
+    tracker_dir: Path,
+) -> _MaintenanceRefreshSnapshot | None:
+    """Validate immutable refresh inputs against one locked claim/tracker snapshot."""
+
+    effective_start_revision = existing_claim.start_revision if start_revision is None else start_revision
+    effective_plan_repo_root = existing_claim.plan_repo_root if plan_repo_root is None else plan_repo_root
+    effective_plan_revision = existing_claim.plan_revision if plan_start_point is None else plan_start_point
+    effective_broad_scope_mode = existing_claim.broad_scope_mode if broad_scope_mode is None else broad_scope_mode
+    effective_broad_scope_reason = (
+        existing_claim.broad_scope_reason if broad_scope_reason is None else broad_scope_reason
+    )
+    effective_target_worktree_path = (
+        existing_claim.target_worktree_path if target_worktree_path is None else target_worktree_path
+    )
+    contract = session_contracts.SessionContract.build(
+        agent=agent,
+        project=project,
+        scope=scope,
+        intent=intent,
+        plan_ref=plan_ref,
+        repo_root=repo_root,
+        worktree_path=worktree_path,
+        branch=branch,
+        session_id=session_id,
+        broader_goal=broader_goal,
+        session_name=session_name,
+        start_revision=effective_start_revision,
+        plan_repo_root=effective_plan_repo_root,
+        plan_revision=effective_plan_revision,
+        plan_sha256=existing_claim.plan_sha256 if effective_plan_repo_root is not None else None,
+        allow_unplanned=allow_unplanned,
+    )
+    candidate_tracker_path = session_contracts.session_tracker_path(
+        contract,
+        tracker_dir=tracker_dir,
+    ).expanduser().resolve()
+    expected_tracker_path = tracker_path.expanduser().resolve()
+    existing_tracker_fields = existing_tracker.get("tracker")
+    if not isinstance(existing_tracker_fields, dict):
+        raise ValueError("sanctioned maintenance tracker is missing execution metadata")
+    effective_intended_next_phases = (
+        existing_tracker_fields.get("intended_next_phases")
+        if intended_next_phases is None
+        else intended_next_phases
+    )
+    effective_depends_on_repos = (
+        existing_tracker_fields.get("depends_on_repos") if depends_on_repos is None else depends_on_repos
+    )
+    effective_requires_shared_infra_changes = (
+        existing_tracker_fields.get("requires_shared_infra_changes")
+        if requires_shared_infra_changes is None
+        else requires_shared_infra_changes
+    )
+    effective_stop_conditions = (
+        existing_tracker_fields.get("stop_conditions") if stop_conditions is None else stop_conditions
+    )
+    effective_notes = existing_tracker_fields.get("notes") if notes is None else notes
+    candidate_tracker = session_contracts.build_session_tracker(
+        contract=contract.with_tracker_path(str(candidate_tracker_path)),
+        current_phase=current_phase,
+        intended_next_phases=effective_intended_next_phases,
+        depends_on_repos=effective_depends_on_repos,
+        requires_shared_infra_changes=effective_requires_shared_infra_changes,
+        stop_conditions=effective_stop_conditions,
+        notes=effective_notes,
+    )
+
+    immutable_inputs: dict[str, tuple[Any, Any]] = {
+        "agent": (agent, existing_claim.agent),
+        "project": (project, existing_claim.primary_project()),
+        "scope": (scope, existing_claim.scope),
+        "intent": (intent, existing_claim.intent),
+        "plan_ref": (contract.plan_ref, existing_claim.plan_ref),
+        "repo_root": (repo_root, existing_claim.repo_root),
+        "worktree_path": (worktree_path, existing_claim.worktree_path),
+        "branch": (branch, existing_claim.branch),
+        "session_id": (session_id, existing_claim.session_id),
+        "session_name": (contract.session_name, existing_claim.session_name),
+        "broader_goal": (broader_goal, existing_claim.broader_goal),
+        "tracker_path": (str(candidate_tracker_path), str(expected_tracker_path)),
+        "claim_type": (claim_type or existing_claim.claim_type, existing_claim.claim_type),
+        "write_paths": (existing_claim.write_paths if write_paths is None else write_paths, existing_claim.write_paths),
+        "read_paths": (existing_claim.read_paths if read_paths is None else read_paths, existing_claim.read_paths),
+        "parent_scope": (parent_scope, existing_claim.parent_scope),
+        "work_graph_path": (work_graph_path, existing_claim.work_graph_path),
+        "work_unit_id": (work_unit_id, existing_claim.work_unit_id),
+        "start_revision": (effective_start_revision, existing_claim.start_revision),
+        "plan_repo_root": (contract.plan_repo_root, existing_claim.plan_repo_root),
+        "plan_revision": (contract.plan_revision, existing_claim.plan_revision),
+        "allow_parallel": (allow_parallel, existing_claim.parallel_root_authorized),
+        "broad_scope_mode": (effective_broad_scope_mode, existing_claim.broad_scope_mode),
+        "broad_scope_reason": (effective_broad_scope_reason, existing_claim.broad_scope_reason),
+        "target_worktree_path": (effective_target_worktree_path, existing_claim.target_worktree_path),
+    }
+    candidate_tracker_fields = candidate_tracker.tracker_fields()
+    for field in session_contracts.TRACKER_ONLY_FIELD_NAMES:
+        if field != "current_phase":
+            immutable_inputs[f"tracker.{field}"] = (
+                candidate_tracker_fields[field],
+                existing_tracker_fields.get(field),
+            )
+    mismatches = sorted(field for field, (candidate, existing) in immutable_inputs.items() if candidate != existing)
+    if mismatches:
+        raise ValueError(
+            "sanctioned maintenance refresh cannot change immutable provenance: " + ", ".join(mismatches)
+        )
+
+    return _MaintenanceRefreshSnapshot(
+        claim=existing_claim,
+        claim_path=claim_path,
+        claim_bytes=claim_bytes,
+        tracker_path=expected_tracker_path,
+        tracker_bytes=tracker_bytes,
+    )
+
+
 def start_session(
     *,
     agent: str,
@@ -1980,7 +2153,7 @@ def start_session(
     session_name: str | None = None,
     intended_next_phases: list[str] | None = None,
     depends_on_repos: list[str] | None = None,
-    requires_shared_infra_changes: bool = False,
+    requires_shared_infra_changes: bool | None = None,
     stop_conditions: list[str] | None = None,
     notes: str | None = None,
     claim_type: str | None = None,
@@ -2010,6 +2183,10 @@ def start_session(
             "Unable to resolve a session ID. Pass --session-id explicitly or run from a supported tool runtime."
         )
     coordination_claims.validate_native_session_binding(agent, resolved_session_id)
+    exact_existing_claims = _iter_matching_live_claims(agent=agent, project=project, scope=scope)
+    if len(exact_existing_claims) > 1:
+        raise ValueError(f"Multiple live claims found for {agent} → {project}:{scope}")
+    existing_claim = exact_existing_claims[0] if exact_existing_claims else None
     configured_outcome_mode = outcome_admission.load_outcome_admission_mode(Path(worktree_path))
     explicit_unplanned_maintenance = (
         allow_unplanned
@@ -2109,10 +2286,6 @@ def start_session(
                 )
             )
 
-    exact_existing_claims = _iter_matching_live_claims(agent=agent, project=project, scope=scope)
-    if len(exact_existing_claims) > 1:
-        raise ValueError(f"Multiple live claims found for {agent} → {project}:{scope}")
-    existing_claim = exact_existing_claims[0] if exact_existing_claims else None
     if start_revision is None and existing_claim is not None:
         start_revision = existing_claim.start_revision
     if (
@@ -2186,18 +2359,14 @@ def start_session(
         current_phase=current_phase,
         intended_next_phases=intended_next_phases,
         depends_on_repos=depends_on_repos,
-        requires_shared_infra_changes=requires_shared_infra_changes,
+        requires_shared_infra_changes=bool(requires_shared_infra_changes),
         stop_conditions=stop_conditions,
         notes=notes,
     )
     claim_slot_path = _claim_path(agent, project, scope)
-    claim_bytes_before = claim_slot_path.read_bytes() if claim_slot_path.is_file() else None
-    tracker_preexisting = tracker_path.is_file()
-    tracker_bytes_before = tracker_path.read_bytes() if tracker_preexisting else None
-    session_contracts.write_session_tracker(tracker, tracker_dir=tracker_dir)
-    tracker_bytes_written = tracker_path.read_bytes()
-    try:
-        action = _upsert_session_claim(
+    maintenance_snapshot: _MaintenanceRefreshSnapshot | None = None
+    def upsert_claim(*, registry_lock_held: bool = False) -> str:
+        return _upsert_session_claim(
             agent=agent,
             project=project,
             scope=scope,
@@ -2224,31 +2393,196 @@ def start_session(
             broad_scope_reason=broad_scope_reason,
             target_worktree_path=target_worktree_path,
             staged_reservation=staged_reservation,
+            maintenance_snapshot=maintenance_snapshot,
+            registry_lock_held=registry_lock_held,
         )
-    except Exception as claim_error:
+
+    existing_action: str | None = None
+    if existing_claim is not None:
+        with coordination_claims.claim_registry_lock(coordination_claims.CLAIMS_DIR):
+            if not claim_slot_path.is_file():
+                raise ValueError(
+                    "session refresh lost the initially live claim before locked reload; refusing recreation"
+                )
+            locked_claim_bytes = claim_slot_path.read_bytes()
+            locked_claim_payload = yaml.safe_load(locked_claim_bytes)
+            locked_claim = (
+                coordination_claims.normalize_claim(
+                    locked_claim_payload,
+                    source_file=str(claim_slot_path),
+                )
+                if isinstance(locked_claim_payload, dict)
+                else None
+            )
+            if locked_claim is None:
+                raise ValueError(
+                    "session refresh could not reload the initially live claim; refusing recreation"
+                )
+            initial_owner = (
+                existing_claim.agent,
+                tuple(existing_claim.projects),
+                existing_claim.scope,
+                existing_claim.session_id,
+            )
+            locked_owner = (
+                locked_claim.agent,
+                tuple(locked_claim.projects),
+                locked_claim.scope,
+                locked_claim.session_id,
+            )
+            if locked_owner != initial_owner:
+                raise ValueError(
+                    "session refresh observed a different claim owner during locked reload; refusing replacement"
+                )
+            if not locked_claim.is_live():
+                raise ValueError(
+                    "session refresh observed that the initially live claim ended before locked reload; "
+                    "refusing reactivation"
+                )
+            if locked_claim.tracker_path:
+                locked_tracker_path = Path(locked_claim.tracker_path).expanduser().resolve()
+                with session_contracts.session_tracker_lock(locked_tracker_path):
+                    locked_tracker_bytes = locked_tracker_path.read_bytes()
+                    locked_tracker_payload = yaml.safe_load(locked_tracker_bytes)
+                    if outcome_admission.is_sanctioned_maintenance_claim_payload(
+                        locked_claim,
+                        locked_tracker_payload,
+                        tracker_path=locked_tracker_path,
+                    ):
+                        assert isinstance(locked_tracker_payload, dict)
+                        maintenance_snapshot = _validate_locked_sanctioned_maintenance_refresh(
+                            locked_claim,
+                            claim_path=claim_slot_path,
+                            claim_bytes=locked_claim_bytes,
+                            tracker_path=locked_tracker_path,
+                            tracker_bytes=locked_tracker_bytes,
+                            existing_tracker=locked_tracker_payload,
+                            agent=agent,
+                            project=project,
+                            scope=scope,
+                            intent=intent,
+                            plan_ref=plan_ref,
+                            repo_root=repo_root,
+                            worktree_path=worktree_path,
+                            branch=branch,
+                            session_id=resolved_session_id,
+                            session_name=session_name,
+                            broader_goal=broader_goal,
+                            current_phase=current_phase,
+                            intended_next_phases=intended_next_phases,
+                            depends_on_repos=depends_on_repos,
+                            requires_shared_infra_changes=requires_shared_infra_changes,
+                            stop_conditions=stop_conditions,
+                            notes=notes,
+                            claim_type=claim_type,
+                            write_paths=write_paths,
+                            read_paths=read_paths,
+                            parent_scope=parent_scope,
+                            work_graph_path=work_graph_path,
+                            work_unit_id=work_unit_id,
+                            start_revision=start_revision,
+                            plan_repo_root=plan_repo_root,
+                            plan_start_point=plan_start_point,
+                            allow_unplanned=allow_unplanned,
+                            allow_parallel=allow_parallel,
+                            broad_scope_mode=broad_scope_mode,
+                            broad_scope_reason=broad_scope_reason,
+                            target_worktree_path=target_worktree_path,
+                            tracker_dir=tracker_dir,
+                        )
+                        tracker_section = locked_tracker_payload.get("tracker")
+                        timestamps = locked_tracker_payload.get("timestamps")
+                        if not isinstance(tracker_section, dict) or not isinstance(timestamps, dict):
+                            raise ValueError(
+                                "sanctioned maintenance tracker is missing execution or timestamp metadata"
+                            )
+                        tracker_section["current_phase"] = tracker.current_phase
+                        timestamps["updated_at"] = tracker.updated_at
+                        session_contracts._atomic_write_session_tracker(
+                            locked_tracker_path,
+                            locked_tracker_payload,
+                        )
+                        tracker_bytes_written = locked_tracker_path.read_bytes()
+                        try:
+                            existing_action = upsert_claim(registry_lock_held=True)
+                        except Exception as claim_error:
+                            claim_bytes_after = claim_slot_path.read_bytes() if claim_slot_path.is_file() else None
+                            if claim_bytes_after == locked_claim_bytes:
+                                if locked_tracker_path.read_bytes() != tracker_bytes_written:
+                                    raise RuntimeError(
+                                        "session claim update failed and exact tracker rollback was incomplete: "
+                                        f"claim={claim_error}; rollback=session tracker changed inside locked refresh"
+                                    ) from claim_error
+                                _atomic_restore_bytes(locked_tracker_path, locked_tracker_bytes)
+                            raise
+                    elif outcome_admission.has_sanctioned_maintenance_claim_identity(locked_claim):
+                        raise ValueError(
+                            "explicit UNPLANNED maintenance claim has malformed locked tracker provenance; "
+                            "refusing generic refresh"
+                        )
+            if existing_action is None:
+                generic_claim_bytes = locked_claim_bytes
+                generic_tracker_preexisting = tracker_path.is_file()
+                generic_tracker_bytes = tracker_path.read_bytes() if generic_tracker_preexisting else None
+                session_contracts.write_session_tracker(tracker, tracker_dir=tracker_dir)
+                generic_tracker_written = tracker_path.read_bytes()
+                try:
+                    existing_action = upsert_claim(registry_lock_held=True)
+                except Exception as claim_error:
+                    claim_bytes_after = claim_slot_path.read_bytes() if claim_slot_path.is_file() else None
+                    if claim_bytes_after == generic_claim_bytes:
+                        try:
+                            with session_contracts.session_tracker_lock(tracker_path):
+                                if tracker_path.read_bytes() != generic_tracker_written:
+                                    raise ValueError(
+                                        "session tracker changed inside locked existing-claim refresh; "
+                                        "refusing unsafe rollback"
+                                    )
+                                if generic_tracker_preexisting:
+                                    assert generic_tracker_bytes is not None
+                                    _atomic_restore_bytes(tracker_path, generic_tracker_bytes)
+                                else:
+                                    tracker_path.unlink(missing_ok=True)
+                        except Exception as rollback_error:
+                            raise RuntimeError(
+                                "session claim update failed and exact tracker rollback was incomplete: "
+                                f"claim={claim_error}; rollback={rollback_error}"
+                            ) from claim_error
+                    raise
+    if existing_action is not None:
+        action = existing_action
+    else:
+        claim_bytes_before = claim_slot_path.read_bytes() if claim_slot_path.is_file() else None
+        tracker_preexisting = tracker_path.is_file()
+        tracker_bytes_before = tracker_path.read_bytes() if tracker_preexisting else None
+        session_contracts.write_session_tracker(tracker, tracker_dir=tracker_dir)
+        tracker_bytes_written = tracker_path.read_bytes()
         try:
-            claim_bytes_after = claim_slot_path.read_bytes() if claim_slot_path.is_file() else None
-        except OSError as inspection_error:
-            raise RuntimeError(
-                "session claim update failed and claim state could not be inspected before tracker rollback: "
-                f"claim={claim_error}; inspection={inspection_error}"
-            ) from claim_error
-        if claim_bytes_after == claim_bytes_before:
+            action = upsert_claim()
+        except Exception as claim_error:
             try:
-                with session_contracts.session_tracker_lock(tracker_path):
-                    if tracker_path.read_bytes() != tracker_bytes_written:
-                        raise ValueError("session tracker changed after this start attempt; refusing unsafe rollback")
-                    if tracker_preexisting:
-                        assert tracker_bytes_before is not None
-                        _atomic_restore_bytes(tracker_path, tracker_bytes_before)
-                    else:
-                        tracker_path.unlink(missing_ok=True)
-            except Exception as rollback_error:
+                claim_bytes_after = claim_slot_path.read_bytes() if claim_slot_path.is_file() else None
+            except OSError as inspection_error:
                 raise RuntimeError(
-                    "session claim update failed and exact tracker rollback was incomplete: "
-                    f"claim={claim_error}; rollback={rollback_error}"
+                    "session claim update failed and claim state could not be inspected before tracker rollback: "
+                    f"claim={claim_error}; inspection={inspection_error}"
                 ) from claim_error
-        raise
+            if claim_bytes_after == claim_bytes_before:
+                try:
+                    with session_contracts.session_tracker_lock(tracker_path):
+                        if tracker_path.read_bytes() != tracker_bytes_written:
+                            raise ValueError("session tracker changed after this start attempt; refusing unsafe rollback")
+                        if tracker_preexisting:
+                            assert tracker_bytes_before is not None
+                            _atomic_restore_bytes(tracker_path, tracker_bytes_before)
+                        else:
+                            tracker_path.unlink(missing_ok=True)
+                except Exception as rollback_error:
+                    raise RuntimeError(
+                        "session claim update failed and exact tracker rollback was incomplete: "
+                        f"claim={claim_error}; rollback={rollback_error}"
+                    ) from claim_error
+            raise
     persisted_claim = _single_matching_live_claim(
         agent=agent,
         project=project,
@@ -2270,6 +2604,469 @@ def start_session(
             project=project,
             session_id=resolved_session_id,
         ),
+    }
+
+
+def _require_delegation_session_id(agent: str, session_id: str, *, field: str) -> str:
+    """Require one exact native-client identity without accepting nested prefixes."""
+
+    if re.fullmatch(rf"{re.escape(agent)}:[^:]+", session_id) is None:
+        raise ValueError(f"{field} must be one canonical {agent}:<native-id> identity")
+    return session_id
+
+
+def _locked_delegation_parent(
+    *,
+    agent: str,
+    project: str,
+    parent_scope: str,
+    parent_session_id: str,
+    repo_root: str,
+    active_claims: list[coordination_claims.ClaimRecord],
+) -> coordination_claims.ClaimRecord:
+    """Return the exact healthy program root that may delegate one child lane."""
+
+    matches = [
+        claim
+        for claim in active_claims
+        if claim.agent == agent
+        and claim.primary_project() == project
+        and claim.scope == parent_scope
+        and claim.session_id == parent_session_id
+    ]
+    if len(matches) != 1:
+        raise ValueError("delegation requires exactly one live parent claim owned by the native parent session")
+    parent = matches[0]
+    if parent.claim_type != "program" or parent.parent_scope is not None:
+        raise ValueError("delegation parent must be one unparented program claim")
+    if not parent.repo_root or Path(parent.repo_root).expanduser().resolve() != Path(repo_root).expanduser().resolve():
+        raise ValueError("delegation parent and child must use the same canonical repository")
+    if coordination_claims.claim_runtime_status(parent, active_claims=active_claims) != "healthy":
+        raise ValueError("delegation parent claim is not healthy")
+    return parent
+
+
+def start_delegated_session(
+    *,
+    agent: str,
+    project: str,
+    scope: str,
+    intent: str,
+    repo_root: str,
+    worktree_path: str,
+    branch: str,
+    broader_goal: str,
+    current_phase: str,
+    parent_scope: str,
+    parent_session_id: str,
+    child_session_id: str,
+    start_revision: str,
+    write_paths: list[str],
+    session_name: str | None = None,
+    tracker_dir: Path = session_contracts.DEFAULT_SESSION_TRACKERS_DIR,
+    notes: str | None = None,
+    **legacy_fixed_fields: Any,
+) -> dict[str, Any]:
+    """Create one narrow child claim using its authenticated parent as actor."""
+
+    compatible_fixed_fields = {
+        "plan_ref": {None, session_contracts.UNPLANNED_PLAN_REF},
+        "claim_type": {None, "write"},
+        "allow_unplanned": {True},
+        "allow_parallel": {False, None},
+        "broad_scope_mode": {None},
+        "broad_scope_reason": {None},
+        "target_worktree_path": {None},
+        "work_graph_path": {None},
+        "work_unit_id": {None},
+        "plan_repo_root": {None},
+        "plan_start_point": {None},
+        "read_paths": {None, ()},
+    }
+    forbidden: dict[str, Any] = {}
+    for key, value in legacy_fixed_fields.items():
+        comparable = tuple(value) if isinstance(value, list) else value
+        if key not in compatible_fixed_fields or comparable not in compatible_fixed_fields[key]:
+            forbidden[key] = value
+    if forbidden:
+        raise ValueError("delegated session received unsupported authority fields: " + ", ".join(sorted(forbidden)))
+    parent_session_id = _require_delegation_session_id(agent, parent_session_id, field="parent_session_id")
+    child_session_id = _require_delegation_session_id(agent, child_session_id, field="child_session_id")
+    if parent_session_id == child_session_id:
+        raise ValueError("delegated child session must differ from its parent session")
+    coordination_claims.validate_native_session_binding(
+        agent,
+        parent_session_id,
+        require_native_marker=True,
+    )
+    if scope != branch:
+        raise ValueError("delegated scope must equal its task branch")
+    delegated_goal = f"Delegated maintenance: {branch.replace('-', ' ').replace('/', ' ')}"
+    if intent != delegated_goal or broader_goal != delegated_goal:
+        raise ValueError(f"delegated intent and broader_goal must equal {delegated_goal!r}")
+    normalized_paths = list(dict.fromkeys(coordination_claims._normalize_repo_path(path) for path in write_paths))
+    if not normalized_paths or "." in normalized_paths:
+        raise ValueError("delegated write ownership must be non-empty and narrower than the repository root")
+    if coordination_claims.classify_broad_write_paths(repo_root, normalized_paths):
+        raise ValueError("delegated write ownership must use narrow file or nested-directory paths")
+    coordination_claims.validate_start_revision_targets(
+        repo_root=repo_root,
+        start_revision=start_revision,
+        branch=branch,
+        worktree_path=worktree_path,
+        require_branch=True,
+        require_worktree=True,
+    )
+    contract = session_contracts.SessionContract.build(
+        agent=agent,
+        project=project,
+        scope=scope,
+        intent=intent,
+        plan_ref=session_contracts.UNPLANNED_PLAN_REF,
+        repo_root=repo_root,
+        worktree_path=worktree_path,
+        branch=branch,
+        session_id=child_session_id,
+        broader_goal=broader_goal,
+        session_name=session_name,
+        start_revision=start_revision,
+        allow_unplanned=True,
+    )
+    tracker_path = session_contracts.session_tracker_path(contract, tracker_dir=tracker_dir).expanduser().resolve()
+    contract = contract.with_tracker_path(str(tracker_path))
+    now = datetime.now(timezone.utc)
+    tracker = session_contracts.build_session_tracker(
+        contract=contract,
+        current_phase=current_phase,
+        notes=notes,
+        now=now,
+    )
+    event = coordination_claims.build_progress_event(
+        progress_kind="claim_started",
+        evidence_ref=scope,
+        next_action=intent,
+        progress_at=now,
+    )
+    claim_path = _claim_path(agent, project, scope)
+    with coordination_claims.claim_registry_lock(coordination_claims.CLAIMS_DIR):
+        active_claims = coordination_claims.check_claims()
+        _locked_delegation_parent(
+            agent=agent,
+            project=project,
+            parent_scope=parent_scope,
+            parent_session_id=parent_session_id,
+            repo_root=repo_root,
+            active_claims=active_claims,
+        )
+        if any(claim.session_id == child_session_id for claim in active_claims):
+            raise ValueError("delegated child session already owns a live claim")
+        if claim_path.exists():
+            raise ValueError(f"delegated child claim slot already exists: {project}:{scope}")
+        if tracker_path.exists():
+            raise ValueError("delegated child tracker path already exists")
+        coordination_claims.validate_start_revision_targets(
+            repo_root=repo_root,
+            start_revision=start_revision,
+            branch=branch,
+            worktree_path=worktree_path,
+            require_branch=True,
+            require_worktree=True,
+        )
+        candidate = coordination_claims.build_candidate_claim(
+            agent=agent,
+            project=project,
+            scope=scope,
+            intent=intent,
+            plan_ref=session_contracts.UNPLANNED_PLAN_REF,
+            claim_type="write",
+            write_paths=normalized_paths,
+            read_paths=[],
+            worktree_path=worktree_path,
+            repo_root=repo_root,
+            branch=branch,
+            session_name=contract.session_name,
+            broader_goal=broader_goal,
+            tracker_path=str(tracker_path),
+            session_id=child_session_id,
+            heartbeat_at=now.isoformat(),
+            parent_scope=parent_scope,
+            notes=notes,
+            claimed_at=now.isoformat(),
+            expires_at=(now + timedelta(hours=coordination_claims.DEFAULT_TTL_HOURS)).isoformat(),
+            updated_at=now.isoformat(),
+            start_revision=start_revision,
+            schema_version=6,
+            **coordination_claims._progress_event_payload(event),
+        )
+        coordination_claims.validate_claim_for_creation(candidate)
+        coordination_claims.validate_no_preserved_lane_conflict(
+            candidate,
+            claims=coordination_claims.list_claims(include_inactive=True),
+        )
+        coordination_claims.validate_claim_hierarchy_for_creation(candidate, active_claims=active_claims)
+        coordination_claims.validate_session_root_for_creation(candidate, active_claims=active_claims)
+        conflicts = coordination_claims.evaluate_claim(candidate, active_claims=active_claims)
+        if conflicts.hard_conflicts:
+            owners = ", ".join(f"{item.other_agent}:{item.other_scope}" for item in conflicts.hard_conflicts)
+            raise ValueError(f"delegated write ownership conflicts with {owners}")
+        claim_payload = candidate.to_dict()
+        claim_payload.pop("source_file", None)
+        claim_payload.pop("project", None)
+        registry_digest_before = coordination_claims._registry_digest(coordination_claims.CLAIMS_DIR)
+        from enforced_planning.prewrite_claim_fast import projection_path_for
+
+        projection_path = projection_path_for(coordination_claims.CLAIMS_DIR)
+        projection_before = projection_path.read_bytes() if projection_path.exists() else None
+        tracker_preexisting = tracker_path.is_file()
+        tracker_before = tracker_path.read_bytes() if tracker_preexisting else None
+        session_contracts.write_session_tracker(tracker, tracker_dir=tracker_dir)
+        tracker_written = tracker_path.read_bytes()
+        try:
+            _projection_path, projection_digest = (
+                coordination_claims._replace_claim_and_refresh_projection_fail_atomic(
+                    claim_path=claim_path,
+                    payload=claim_payload,
+                    claims_dir=coordination_claims.CLAIMS_DIR,
+                )
+            )
+            coordination_claims.record_claim_mutation(
+                operation="create",
+                claims_dir=coordination_claims.CLAIMS_DIR,
+                registry_digest_before=registry_digest_before,
+                target_project=project,
+                target_scope=scope,
+                target_claim_path=claim_path,
+                session_id=child_session_id,
+                projection_digest_after=projection_digest,
+            )
+        except Exception as claim_error:
+            try:
+                claim_after = claim_path.read_bytes() if claim_path.exists() else None
+                projection_after = projection_path.read_bytes() if projection_path.exists() else None
+                if claim_after is not None:
+                    coordination_claims._atomic_restore_file(claim_path, None)
+                if projection_after != projection_before:
+                    coordination_claims._atomic_restore_file(projection_path, projection_before)
+                with session_contracts.session_tracker_lock(tracker_path):
+                    if tracker_path.read_bytes() != tracker_written:
+                        raise ValueError("delegated tracker changed after creation; refusing unsafe rollback")
+                    if tracker_preexisting:
+                        assert tracker_before is not None
+                        _atomic_restore_bytes(tracker_path, tracker_before)
+                    else:
+                        tracker_path.unlink(missing_ok=True)
+            except Exception as rollback_error:
+                raise RuntimeError(
+                    "delegated claim creation failed and tracker rollback was incomplete: "
+                    f"claim={claim_error}; rollback={rollback_error}"
+                ) from claim_error
+            raise
+    persisted = _single_matching_live_claim(agent=agent, project=project, scope=scope)
+    if not outcome_admission.is_sanctioned_delegated_maintenance_claim(persisted):
+        raise RuntimeError("delegated child persisted without its exact sanctioned provenance")
+    return {
+        "action": "delegated_created",
+        "parent_session_id": parent_session_id,
+        "child_session_id": child_session_id,
+        "scope": scope,
+        "tracker_path": str(tracker_path),
+        "start_revision": start_revision,
+    }
+
+
+def revoke_delegated_session(
+    *,
+    agent: str,
+    project: str,
+    scope: str,
+    repo_root: str,
+    worktree_path: str,
+    branch: str,
+    parent_scope: str,
+    parent_session_id: str,
+    child_session_id: str,
+    expected_start_revision: str,
+    tracker_path: str,
+    note: str | None = None,
+) -> dict[str, Any]:
+    """Cancel one pristine delegated child using its authenticated parent."""
+
+    parent_session_id = _require_delegation_session_id(agent, parent_session_id, field="parent_session_id")
+    child_session_id = _require_delegation_session_id(agent, child_session_id, field="child_session_id")
+    if parent_session_id == child_session_id:
+        raise ValueError("delegated child session must differ from its parent session")
+    coordination_claims.validate_native_session_binding(
+        agent,
+        parent_session_id,
+        require_native_marker=True,
+    )
+    claim_path = _claim_path(agent, project, scope)
+    resolved_tracker_path = Path(tracker_path).expanduser().resolve()
+    resolved_worktree = Path(worktree_path).expanduser().resolve()
+    resolved_repo = Path(repo_root).expanduser().resolve()
+    cancelled_note = note or "unused delegated child cancelled by its authenticated parent"
+    with coordination_claims.claim_registry_lock(coordination_claims.CLAIMS_DIR):
+        active_claims = coordination_claims.check_claims()
+        _locked_delegation_parent(
+            agent=agent,
+            project=project,
+            parent_scope=parent_scope,
+            parent_session_id=parent_session_id,
+            repo_root=repo_root,
+            active_claims=active_claims,
+        )
+        if not claim_path.is_file():
+            raise ValueError(f"delegated child claim does not exist: {project}:{scope}")
+        raw = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+        child = coordination_claims.normalize_claim(raw, source_file=str(claim_path)) if isinstance(raw, dict) else None
+        if child is None:
+            raise ValueError("delegated child claim is invalid")
+        expected = {
+            "agent": agent,
+            "project": project,
+            "scope": scope,
+            "session_id": child_session_id,
+            "parent_scope": parent_scope,
+            "repo_root": str(resolved_repo),
+            "worktree_path": str(resolved_worktree),
+            "branch": branch,
+            "start_revision": expected_start_revision,
+        }
+        observed = {
+            "agent": child.agent,
+            "project": child.primary_project(),
+            "scope": child.scope,
+            "session_id": child.session_id,
+            "parent_scope": child.parent_scope,
+            "repo_root": str(Path(child.repo_root).expanduser().resolve()) if child.repo_root else None,
+            "worktree_path": str(Path(child.worktree_path).expanduser().resolve()) if child.worktree_path else None,
+            "branch": child.branch,
+            "start_revision": child.start_revision,
+        }
+        mismatches = sorted(field for field, value in expected.items() if observed[field] != value)
+        if mismatches:
+            raise ValueError("delegated child identity changed before revoke: " + ", ".join(mismatches))
+        if child.status not in {"active", "closing", "completed"}:
+            raise ValueError(f"delegated child cannot be revoked from status {child.status!r}")
+        if child.status in {"closing", "completed"} and (
+            raw.get("disposition") != "superseded"
+            or raw.get("disposition_reason") != "unused delegated child cancelled"
+        ):
+            raise ValueError("delegated child has a different in-progress closeout disposition")
+        if not resolved_tracker_path.is_file():
+            raise ValueError("delegated child tracker is missing")
+        tracker_payload = yaml.safe_load(resolved_tracker_path.read_bytes())
+        if not outcome_admission.is_sanctioned_delegated_maintenance_claim_payload(
+            child,
+            tracker_payload,
+            tracker_path=resolved_tracker_path,
+        ):
+            raise ValueError("delegated child tracker or claim provenance is malformed")
+        if child.status == "completed":
+            _archived_claim, archive_receipt = coordination_claims._archive_completed_claim_locked(
+                claim_path,
+                claims_dir=coordination_claims.CLAIMS_DIR,
+            )
+            return {
+                "action": "delegated_revoked",
+                "parent_session_id": parent_session_id,
+                "child_session_id": child_session_id,
+                "worktree_action": "already_missing",
+                "branch_action": "already_missing",
+                "claim_archive_id": archive_receipt.archive_id,
+                "tracker_path": str(resolved_tracker_path),
+                "canonical_lock_reconciliation_required": True,
+            }
+        branch_exists = _branch_exists(resolved_repo, branch)
+        worktree_exists = resolved_worktree.exists()
+        if child.status == "active" and (not branch_exists or not worktree_exists):
+            raise ValueError("active delegated child must retain both its branch and worktree")
+        if branch_exists or worktree_exists:
+            coordination_claims.validate_start_revision_targets(
+                repo_root=resolved_repo,
+                start_revision=expected_start_revision,
+                branch=branch,
+                worktree_path=str(resolved_worktree),
+                require_branch=branch_exists,
+                require_worktree=worktree_exists,
+            )
+        if worktree_exists:
+            surface_runtime.assert_no_live_leases_for_worktree(resolved_worktree)
+            clean, details = _worktree_is_clean(str(resolved_worktree))
+            if not clean:
+                raise ValueError(f"delegated child worktree is dirty; refusing revoke:\n{details}")
+            _assert_worktree_removal_access(resolved_worktree)
+        if child.write_paths:
+            doc_authority.assert_no_unresolved_owned_obligations(child)
+
+        closing_payload = dict(raw)
+        closing_payload.update(
+            {
+                "status": "closing",
+                "disposition": "superseded",
+                "disposition_reason": "unused delegated child cancelled",
+                "merged_to_default": None,
+                "merge_evidence": None,
+                "notes": cancelled_note,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            }
+        )
+        registry_digest_before = coordination_claims._registry_digest(coordination_claims.CLAIMS_DIR)
+        _projection_path, projection_digest = coordination_claims._replace_claim_and_refresh_projection_fail_atomic(
+            claim_path=claim_path,
+            payload=closing_payload,
+            claims_dir=coordination_claims.CLAIMS_DIR,
+        )
+        coordination_claims.record_claim_mutation(
+            operation="session_upsert",
+            claims_dir=coordination_claims.CLAIMS_DIR,
+            registry_digest_before=registry_digest_before,
+            target_project=project,
+            target_scope=scope,
+            target_claim_path=claim_path,
+            session_id=child_session_id,
+            projection_digest_after=projection_digest,
+        )
+        session_contracts.update_session_tracker(
+            resolved_tracker_path,
+            current_phase="cancelled",
+            notes=cancelled_note,
+            updated_at=closing_payload["updated_at"],
+        )
+        worktree_action = _remove_worktree_path(resolved_repo, resolved_worktree)
+        branch_action = _delete_branch(resolved_repo, branch, force=True)
+        closed_at = datetime.now(timezone.utc).isoformat()
+        completed_payload = dict(closing_payload)
+        completed_payload.update({"status": "completed", "closed_at": closed_at, "updated_at": closed_at})
+        registry_digest_before = coordination_claims._registry_digest(coordination_claims.CLAIMS_DIR)
+        _projection_path, projection_digest = coordination_claims._replace_claim_and_refresh_projection_fail_atomic(
+            claim_path=claim_path,
+            payload=completed_payload,
+            claims_dir=coordination_claims.CLAIMS_DIR,
+        )
+        coordination_claims.record_claim_mutation(
+            operation="closeout",
+            claims_dir=coordination_claims.CLAIMS_DIR,
+            registry_digest_before=registry_digest_before,
+            target_project=project,
+            target_scope=scope,
+            target_claim_path=claim_path,
+            session_id=child_session_id,
+            projection_digest_after=projection_digest,
+        )
+        _archived_claim, archive_receipt = coordination_claims._archive_completed_claim_locked(
+            claim_path,
+            claims_dir=coordination_claims.CLAIMS_DIR,
+        )
+    return {
+        "action": "delegated_revoked",
+        "parent_session_id": parent_session_id,
+        "child_session_id": child_session_id,
+        "worktree_action": worktree_action,
+        "branch_action": branch_action,
+        "claim_archive_id": archive_receipt.archive_id,
+        "tracker_path": str(resolved_tracker_path),
+        "canonical_lock_reconciliation_required": True,
     }
 
 

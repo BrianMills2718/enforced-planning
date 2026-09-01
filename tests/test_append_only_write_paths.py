@@ -65,7 +65,7 @@ def test_the_shared_front_door_still_conflicts() -> None:
     left = _claim("render-a", ["learnings.md"])
     right = _claim("render-b", ["learnings.md"])
     assert cc._compute_overlapping_write_paths(left, right) == [
-        "learnings.md <-> learnings.md"
+        "yours=learnings.md <-> theirs=learnings.md"
     ]
 
 
@@ -74,7 +74,7 @@ def test_claiming_the_parent_directory_still_conflicts() -> None:
     left = _claim("broad-a", ["learnings"])
     right = _claim("broad-b", ["learnings"])
     assert cc._compute_overlapping_write_paths(left, right) == [
-        "learnings <-> learnings"
+        "yours=learnings <-> theirs=learnings"
     ]
 
 
@@ -83,7 +83,7 @@ def test_an_ordinary_shared_path_still_conflicts() -> None:
     left = _claim("code-a", ["scripts/log_learning.py"])
     right = _claim("code-b", ["scripts"])
     assert cc._compute_overlapping_write_paths(left, right) == [
-        "scripts/log_learning.py <-> scripts"
+        "yours=scripts/log_learning.py <-> theirs=scripts"
     ]
 
 
@@ -92,7 +92,7 @@ def test_a_mixed_claim_still_conflicts_on_its_mutable_half() -> None:
     left = _claim("mixed-a", ["learnings/entries", "learnings.md"])
     right = _claim("mixed-b", ["learnings/entries", "learnings.md"])
     assert cc._compute_overlapping_write_paths(left, right) == [
-        "learnings.md <-> learnings.md"
+        "yours=learnings.md <-> theirs=learnings.md"
     ]
 
 
@@ -111,3 +111,24 @@ def test_a_mixed_claim_still_conflicts_on_its_mutable_half() -> None:
 )
 def test_append_only_classification(path: str, expected: bool) -> None:
     assert cc._is_append_only_path(path) is expected
+
+
+def test_overlap_labels_say_which_side_is_yours() -> None:
+    """The candidate's own path must be identifiable in a conflict message.
+
+    Recorded twice in the register: an agent reads
+    ``codex (their-lane: learnings <-> learnings/entries)``, sees another
+    agent's name wrapped around both paths, and reports that the other lane is
+    blocking it. The first path is its own. Labelling the sides is what makes
+    the message readable without knowing the argument order of an internal
+    function.
+    """
+
+    left = _claim("mine", ["learnings"])
+    right = _claim("theirs", ["learnings/entries"])
+    overlaps = cc._compute_overlapping_write_paths(left, right)
+
+    assert overlaps == ["yours=learnings <-> theirs=learnings/entries"]
+    # The candidate's path is the one prefixed "yours=", never the other's.
+    assert overlaps[0].startswith("yours=learnings <->")
+    assert "theirs=learnings/entries" in overlaps[0]

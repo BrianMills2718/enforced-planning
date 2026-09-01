@@ -365,6 +365,47 @@ def test_unpublished_branch_create_race_leaves_local_branch_unchanged(tmp_path: 
     assert commands[-1][:3] == ["git", "update-ref", "-d"]
 
 
+def test_staged_rebase_attempts_ref_cleanup_and_preserves_primary_error(tmp_path: Path) -> None:
+    """Cleanup failures are combined without replacing the publication failure."""
+    module = _load()
+    commands: list[list[str]] = []
+    candidate = "e" * 40
+    primary_error = RuntimeError("publication failed")
+
+    def fake_run(
+        cmd: list[str],
+        *,
+        cwd: Path,
+        env: dict[str, str] | None = None,
+        check: bool = True,
+    ) -> subprocess.CompletedProcess[str]:
+        del cwd, env, check
+        commands.append(cmd)
+        if cmd[:3] == ["git", "rev-parse", "HEAD"]:
+            return _completed(cmd, stdout=f"{candidate}\n")
+        if cmd[:4] == ["git", "worktree", "remove", "--force"]:
+            raise subprocess.CalledProcessError(1, cmd, stderr="worktree cleanup failed")
+        if cmd[:3] == ["git", "update-ref", "-d"]:
+            return _completed(cmd, returncode=1, stderr="ref cleanup failed")
+        return _completed(cmd)
+
+    module.run_cmd = fake_run  # type: ignore[attr-defined]
+
+    with (
+        pytest.raises(RuntimeError) as exc_info,
+        module._staged_rebased_history(tmp_path, base="main"),  # type: ignore[attr-defined]
+    ):
+        raise primary_error
+
+    assert exc_info.value is primary_error
+    assert commands[-2][:4] == ["git", "worktree", "remove", "--force"]
+    assert commands[-1][:3] == ["git", "update-ref", "-d"]
+    notes = getattr(primary_error, "__notes__", [])
+    assert len(notes) == 1
+    assert "worktree cleanup failed" in notes[0]
+    assert "ref cleanup failed" in notes[0]
+
+
 @pytest.mark.parametrize(
     "stdout",
     [

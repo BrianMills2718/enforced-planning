@@ -14,6 +14,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 import uuid
 from collections.abc import Iterator, Mapping
@@ -244,13 +245,44 @@ def _staged_rebased_history(cwd: Path, *, base: str) -> Iterator[tuple[str, str]
             ref_created = True
             yield temporary_ref, candidate
         finally:
+            primary_error = sys.exc_info()[1]
+            cleanup_failures: list[str] = []
             if worktree_added:
-                run_cmd(
-                    ["git", "worktree", "remove", "--force", str(staging_worktree)],
-                    cwd=cwd,
-                )
+                command = ["git", "worktree", "remove", "--force", str(staging_worktree)]
+                try:
+                    result = run_cmd(command, cwd=cwd, check=False)
+                except subprocess.CalledProcessError as exc:
+                    detail = str(exc.stderr).strip() if exc.stderr else str(exc)
+                    cleanup_failures.append(f"{' '.join(command)}: {detail}")
+                except (OSError, subprocess.SubprocessError) as exc:
+                    cleanup_failures.append(f"{' '.join(command)}: {exc}")
+                else:
+                    if result.returncode != 0:
+                        cleanup_failures.append(
+                            f"{' '.join(command)}: {result.stderr.strip() or f'exit {result.returncode}'}",
+                        )
             if ref_created:
-                run_cmd(["git", "update-ref", "-d", temporary_ref], cwd=cwd)
+                command = ["git", "update-ref", "-d", temporary_ref]
+                try:
+                    result = run_cmd(command, cwd=cwd, check=False)
+                except subprocess.CalledProcessError as exc:
+                    detail = str(exc.stderr).strip() if exc.stderr else str(exc)
+                    cleanup_failures.append(f"{' '.join(command)}: {detail}")
+                except (OSError, subprocess.SubprocessError) as exc:
+                    cleanup_failures.append(f"{' '.join(command)}: {exc}")
+                else:
+                    if result.returncode != 0:
+                        cleanup_failures.append(
+                            f"{' '.join(command)}: {result.stderr.strip() or f'exit {result.returncode}'}",
+                        )
+            if cleanup_failures:
+                message = "Temporary publication cleanup failed:\n" + "\n".join(
+                    f"  {failure}" for failure in cleanup_failures
+                )
+                if primary_error is not None:
+                    primary_error.add_note(message)
+                else:
+                    raise SystemExit(message)
 
 
 def _publish_unpublished_branch(cwd: Path, *, branch: str, base: str) -> None:

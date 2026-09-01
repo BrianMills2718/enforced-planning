@@ -162,6 +162,15 @@ target or one supported literal Bash `-C <worktree>` target selects the matching
 healthy claim. Relative mutation with multiple possible claims remains denied
 as ambiguous.
 
+The execution cursor overlap rule is fixed control behavior, not a
+`meta-process.yaml` setting. Distinct sanctioned worktrees in the same
+repository may each claim exactly
+`.company-planning/active-execution.json` only when Git proves the path ignored
+and untracked in both lanes. Tracked cursor files, parent paths, same-lane
+duplicates, nonstandard cursor paths, and ordinary overlaps still conflict.
+Last verified by implementation checkpoint `6346a691`; see
+`docs/evidence/isolated-execution-cursor-20260901.json`.
+
 `outcome_admission_mode: enforce_selected` is a separate, stricter source
 continuation gate. It requires ordinary `prewrite_mode: enforce`, derives the
 exact selected outcome from the claim-linked tracker, and records admission

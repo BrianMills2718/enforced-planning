@@ -1241,6 +1241,15 @@ make -C /absolute/project-meta policy-friction \
   RECOMMENDATION="<smallest corrective change>"
 ```
 
+The active-execution cursor has one bounded overlap exception for isolated
+lanes in the same repository. Two distinct sanctioned worktrees may each claim
+exactly `.company-planning/active-execution.json` only when Git proves that
+path is both ignored and untracked in each lane. A tracked cursor, a parent
+path, the same lane, a nonstandard cursor path, and every ordinary overlapping
+write path still conflict. Last verified by implementation checkpoint
+`6346a691`; durable evidence is
+`docs/evidence/isolated-execution-cursor-20260901.json`.
+
 ## Consumer Rule
 
 Downstream coordination consumers such as assignment managers, dashboards, or

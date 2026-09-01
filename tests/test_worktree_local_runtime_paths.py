@@ -5,6 +5,7 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
+from enforced_planning import coordination_claims as cc
 from enforced_planning.worktree_local_runtime_paths import is_isolated_runtime_overlap
 
 CURSOR = ".company-planning/active-execution.json"
@@ -103,3 +104,64 @@ def test_nonstandard_worktree_path_is_not_exempt(tmp_path: Path) -> None:
         left_repo_root=str(repo),
         right_repo_root=str(repo),
     )
+
+
+def _claim(repo: Path, *, scope: str, session_id: str, lane: str, path: str = CURSOR):
+    return cc.build_candidate_claim(
+        agent="codex",
+        project="demo",
+        scope=scope,
+        intent="Run one isolated execution loop",
+        plan_ref="UNPLANNED",
+        claim_type="write",
+        write_paths=[path],
+        worktree_path=str(repo / "worktrees" / lane),
+        repo_root=str(repo),
+        branch=f"fix/{lane}",
+        session_id=session_id,
+        session_name="run-one-isolated-execution-loop",
+        broader_goal="Run one isolated execution loop",
+        parallel_root_authorized=True,
+    )
+
+
+def test_two_linked_worktrees_can_concurrently_claim_exact_execution_cursor(
+    tmp_path: Path,
+) -> None:
+    """The ignored cursor's identical repo-relative name is not shared bytes."""
+
+    repo = _repo(tmp_path)
+    left = _claim(repo, scope="left", session_id="codex:left", lane="left")
+    right = _claim(repo, scope="right", session_id="codex:right", lane="right")
+
+    result = cc.evaluate_claim(right, active_claims=[left])
+
+    assert result.hard_conflicts == []
+    assert cc._compute_overlapping_write_paths(right, left) == []
+
+
+def test_two_linked_worktrees_still_conflict_on_ordinary_shared_path(
+    tmp_path: Path,
+) -> None:
+    repo = _repo(tmp_path)
+    left = _claim(
+        repo,
+        scope="left",
+        session_id="codex:left",
+        lane="left",
+        path="README.md",
+    )
+    right = _claim(
+        repo,
+        scope="right",
+        session_id="codex:right",
+        lane="right",
+        path="README.md",
+    )
+
+    result = cc.evaluate_claim(right, active_claims=[left])
+
+    assert len(result.hard_conflicts) == 1
+    assert result.hard_conflicts[0].overlapping_write_paths == [
+        "README.md <-> README.md"
+    ]

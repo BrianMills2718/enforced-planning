@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import fcntl
 import hashlib
 import json
 import os
@@ -12,9 +13,10 @@ import subprocess
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Iterator, Literal
 
 try:
     from hook_receipts import DEFAULT_RECEIPT_ROOT, HookInvocation, start_hook_invocation
@@ -63,6 +65,8 @@ SUPPORTED_EVENTS = {"SessionStart", "UserPromptSubmit", "PostToolUse", "PreToolU
 MUTATION_TOOL_NAMES = frozenset({"bash", "apply_patch", "edit", "write"})
 REPOSITORY_SCAN_MAX_WORKERS = 16
 TURN_END_PROJECTION_REPAIR_TIMEOUT_SECONDS = 1.5
+STARTUP_PROJECTION_READ_LOCK_TIMEOUT_SECONDS = 1.0
+STARTUP_PROJECTION_READ_LOCK_POLL_SECONDS = 0.01
 
 
 class RepositoryCloseoutError(RuntimeError):
@@ -436,15 +440,17 @@ def _startup_claims(claims_dir: Path | None) -> tuple[tuple[Any, ...], str | Non
     if not projection_path.is_file():
         return (), None
     try:
-        if _projection_has_registry_change(projection_path, resolved):
-            return (), "Startup claim context unavailable: canonical projection is stale; no assignment was adopted."
-        projection = prewrite_claim_projection.PreWriteAuthorityProjectionV1.model_validate_json(
-            projection_path.read_text(encoding="utf-8")
-        )
+        with _startup_registry_read_lock(resolved):
+            projection = prewrite_claim_projection.PreWriteAuthorityProjectionV1.model_validate_json(
+                projection_path.read_text(encoding="utf-8")
+            )
+            if (
+                projection.claims_dir != str(resolved)
+                or projection.registry_digest != prewrite_claim_fast.registry_digest(resolved)
+            ):
+                return (), "Startup claim context unavailable: canonical projection is stale; no assignment was adopted."
     except (OSError, ValueError, TurnEndProjectionError) as exc:
         return (), f"Startup claim context unavailable: {exc}; no assignment was adopted."
-    if projection.claims_dir != str(resolved):
-        return (), "Startup claim context unavailable: projection targets another registry; no assignment was adopted."
     now = datetime.now(UTC)
     return (
         tuple(
@@ -455,6 +461,40 @@ def _startup_claims(claims_dir: Path | None) -> tuple[tuple[Any, ...], str | Non
         ),
         None,
     )
+
+
+@contextmanager
+def _startup_registry_read_lock(claims_dir: Path) -> Iterator[None]:
+    """Observe claims and their projection under the writer's lock, without mutation."""
+
+    lock_path = claims_dir.parent / f".{claims_dir.name}.lock"
+    flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0)
+    try:
+        lock_fd = os.open(lock_path, flags)
+    except FileNotFoundError:
+        # An initialized sanctioned registry always has the writer lock. For a
+        # test or first-run empty registry, the digest check below still makes
+        # adoption fail closed if canonical state changes during observation.
+        yield
+        return
+    deadline = time.monotonic() + STARTUP_PROJECTION_READ_LOCK_TIMEOUT_SECONDS
+    try:
+        while True:
+            try:
+                fcntl.flock(lock_fd, fcntl.LOCK_SH | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                if time.monotonic() >= deadline:
+                    raise TurnEndProjectionError(
+                        "timed out waiting for the canonical claim registry writer"
+                    )
+                time.sleep(STARTUP_PROJECTION_READ_LOCK_POLL_SECONDS)
+        try:
+            yield
+        finally:
+            fcntl.flock(lock_fd, fcntl.LOCK_UN)
+    finally:
+        os.close(lock_fd)
 
 
 def _startup_claim_summary(

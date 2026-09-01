@@ -70,6 +70,7 @@ MAILBOX_ROLLOUT_PATHS = MAILBOX_COMMON_ROLLOUT_PATHS | {
     "enforced_planning/claim_mutation_receipts.py",
     "enforced_planning/client_session_metadata.py",
     "enforced_planning/coordination_claims.py",
+    "enforced_planning/mailbox_execution_identity.py",
     "enforced_planning/coordination_messages.py",
     "enforced_planning/outcome_admission.py",
     "enforced_planning/outcome_continuation.py",
@@ -95,6 +96,7 @@ CLAIM_PROJECTION_REFRESH_PATHS = {
     "enforced_planning/claim_mutation_receipts.py",
     "enforced_planning/client_session_metadata.py",
     "enforced_planning/coordination_claims.py",
+    "enforced_planning/mailbox_execution_identity.py",
     "enforced_planning/coordination_messages.py",
     "enforced_planning/outcome_admission.py",
     "enforced_planning/outcome_continuation.py",
@@ -1767,6 +1769,7 @@ def test_full_install_coordination_hook_has_clean_import_closure(tmp_path: Path)
     assert installed.returncode == 0, installed.stdout + installed.stderr
     assert (tmp_path / "scripts" / "hook_receipts.py").is_file()
     assert (tmp_path / "scripts" / "meta" / "hook_receipts.py").is_file()
+    assert (tmp_path / "enforced_planning" / "mailbox_execution_identity.py").is_file()
 
     imported = subprocess.run(
         [
@@ -2120,12 +2123,14 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
             "install:enforced_planning/claim_mutation_receipts.py",
             "install:enforced_planning/client_session_metadata.py",
             "install:enforced_planning/coordination_claims.py",
+            "install:enforced_planning/mailbox_execution_identity.py",
             "install:enforced_planning/coordination_messages.py",
             "install:enforced_planning/outcome_admission.py",
             "install:enforced_planning/outcome_continuation.py",
             "install:enforced_planning/outcome_portfolio.py",
             "install:enforced_planning/outcome_selection.py",
                 "install:enforced_planning/prewrite_claim_fast.py",
+                "install:enforced_planning/integration_authority.py",
                 "install:enforced_planning/pr_review_signoff.py",
             "install:enforced_planning/prewrite_claim_projection.py",
             "install:enforced_planning/plan_readiness.py",
@@ -2175,6 +2180,7 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
             "install:scripts/meta/worktree-coordination/create_publish_worktree.py",
             "install:scripts/meta/worktree-coordination/create_review_claim.py",
             "install:scripts/meta/worktree-coordination/finish_pr.py",
+            "install:scripts/meta/worktree-coordination/integration_authority.py",
             "install:scripts/meta/worktree-coordination/raise_concern.py",
             "install:scripts/meta/worktree-coordination/safe_worktree_remove.py",
             "sync:.claude/hooks/worktree-coordination/check-hook-enabled.sh",
@@ -2250,8 +2256,12 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
     assert (tmp_path / "scripts" / "meta" / "worktree-coordination" / "create_worktree.py").exists()
     assert (tmp_path / "scripts" / "meta" / "worktree-coordination" / "create_publish_worktree.py").exists()
     assert (tmp_path / "scripts" / "meta" / "worktree-coordination" / "finish_pr.py").exists()
+    assert (
+        tmp_path / "scripts" / "meta" / "worktree-coordination" / "integration_authority.py"
+    ).exists()
     assert (tmp_path / "scripts" / "meta" / "worktree-coordination" / "safe_worktree_remove.py").exists()
     assert (tmp_path / "enforced_planning" / "pr_review_signoff.py").exists()
+    assert (tmp_path / "enforced_planning" / "integration_authority.py").exists()
     assert (tmp_path / "scripts" / "meta" / "pr_review_signoff_runtime.py").exists()
     assert (tmp_path / "contracts" / "pr-review-signoff.schema.json").exists()
     makefile_text = (tmp_path / "Makefile").read_text(encoding="utf-8")
@@ -2715,6 +2725,7 @@ def test_worktree_only_install_preserves_declared_framework_dependency(tmp_path:
     assert not (tmp_path / "enforced_planning").exists()
     assert (tmp_path / "scripts/meta/pr_review_signoff_runtime.py").is_file()
     assert (tmp_path / "scripts/meta/worktree-coordination/finish_pr.py").is_file()
+    assert (tmp_path / "scripts/meta/worktree-coordination/integration_authority.py").is_file()
     assert "mode:installed-package" in payload["actions"]
     assert (tmp_path / "pyproject.toml").read_bytes() == declaration
     assert "PLAN_REPO_ROOT ?=" in (tmp_path / "Makefile").read_text(encoding="utf-8")

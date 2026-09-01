@@ -169,8 +169,12 @@ standalone review runtime used by this entrypoint, without restoring a vendored
 `merge` or `finish` recipe would collide with the sanctioned target, including
 a historical recipe outside an existing generated block. `make finish` runs the longer programmatic and
 fresh-agent review, persists the exact-head receipt, rechecks required GitHub
-checks, merges with head-SHA matching, and closes the claim/worktree. Missing,
-rejected, or stale review evidence fails before merge.
+checks, asserts that the exact native agent and canonical project still own the
+reviewed claim/work-unit provenance, merges with head-SHA matching while that
+authority guard is held, and closes the claim/worktree. Missing, rejected,
+stale, or claim-mismatched review evidence fails before merge. A retry after a
+post-merge crash re-observes the exact GitHub merge and authority before
+finishing closeout; it never issues a second merge.
 
 The Enforced Planning source repository additionally sets
 `meta_process.claims.outcome_admission_mode: enforce_selected`. New source
@@ -318,8 +322,9 @@ installed environment separately through its package workflow. An unchanged
 For external plan ownership, the upgraded runtime and wrappers must both
 support the operator guide's explicit plan-authority root/revision inputs.
 The bounded mailbox and claim-projection profiles install their complete local
-import closure, and worktree bootstrap fetches and resolves the advertised
-remote default before creating a claim, branch, or linked worktree.
+import closure, including the shared mailbox execution-identity resolver, and
+worktree bootstrap fetches and resolves the advertised remote default before
+creating a claim, branch, or linked worktree.
 
 - `./install.sh /path/to/your/project --worktree-only`
   - canonical bounded sync for sanctioned worktree entrypoints only

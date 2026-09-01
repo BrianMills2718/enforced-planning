@@ -101,6 +101,36 @@ def test_review_spec_preserves_programmatic_and_semantic_modalities(tmp_path: Pa
     assert spec.review_lanes == ("correctness", "test-evidence")
 
 
+def test_review_spec_preserves_paired_work_unit_authority(tmp_path: Path) -> None:
+    spec_path = _write_spec(tmp_path / "spec.json")
+    payload = json.loads(spec_path.read_text())
+    payload["work_graph_sha256"] = "d" * 64
+    payload["work_unit_id"] = "review-pr-42"
+    spec_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    spec = load_review_spec(spec_path)
+
+    assert spec.work_graph_sha256 == "d" * 64
+    assert spec.work_unit_id == "review-pr-42"
+
+
+@pytest.mark.parametrize(
+    ("graph", "unit"),
+    [("d" * 64, None), (None, "review-pr-42"), ("d" * 64, " ")],
+)
+def test_review_spec_rejects_incomplete_work_unit_authority(
+    tmp_path: Path, graph: str | None, unit: str | None
+) -> None:
+    spec_path = _write_spec(tmp_path / "spec.json")
+    payload = json.loads(spec_path.read_text())
+    payload["work_graph_sha256"] = graph
+    payload["work_unit_id"] = unit
+    spec_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(ValidationError, match="work-(?:graph|unit) authority"):
+        load_review_spec(spec_path)
+
+
 @pytest.mark.parametrize(
     ("field", "value", "message"),
     [

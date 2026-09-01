@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import importlib.util
 import json
 import os
@@ -29,6 +30,22 @@ def _framework_root() -> Path:
 REPO_ROOT = _framework_root()
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
+
+_INTEGRATION_AUTHORITY_IMPORT_ERROR: ModuleNotFoundError | None = None
+try:
+    from enforced_planning.integration_authority import (
+        IntegrationAuthorityAssertionV1,
+        IntegrationTargetV1,
+        assert_integration_authority,
+        integration_authority_guard,
+    )
+except ModuleNotFoundError as exc:
+    if exc.name not in {
+        "enforced_planning",
+        "enforced_planning.integration_authority",
+    }:
+        raise
+    _INTEGRATION_AUTHORITY_IMPORT_ERROR = exc
 
 try:
     from enforced_planning.pr_review_signoff import (
@@ -56,6 +73,16 @@ except ModuleNotFoundError as exc:
     load_review_spec = runtime.load_review_spec
     run_review = runtime.run_review
 
+
+def require_integration_authority() -> None:
+    """Fail execution, but not CLI discovery, when the pinned package is stale."""
+
+    if _INTEGRATION_AUTHORITY_IMPORT_ERROR is not None:
+        raise RuntimeError(
+            "integration authority runtime is unavailable; update the declared "
+            "enforced-planning dependency before running make finish"
+        ) from _INTEGRATION_AUTHORITY_IMPORT_ERROR
+
 FULL_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 
 
@@ -68,6 +95,12 @@ class PrSnapshot:
     state: str
     mergeable: str
     checks: tuple[dict[str, object], ...]
+
+
+@dataclass(frozen=True)
+class TrustedReviewSpec:
+    spec: PRReviewSpec
+    sha256: str
 
 
 def run_cmd(
@@ -215,6 +248,31 @@ def load_trusted_review_spec(
     return load_review_spec(resolved)
 
 
+def load_trusted_review_bundle(
+    path: Path,
+    *,
+    canonical_root: Path,
+    worktree_roots: tuple[Path, ...] | None = None,
+) -> TrustedReviewSpec:
+    """Read and validate the trusted review spec exactly once."""
+
+    if not path.is_absolute():
+        raise ValueError("review spec must be an absolute path outside the repository")
+    lexical = path.absolute()
+    resolved = path.resolve(strict=True)
+    roots = worktree_roots or registered_worktree_roots(canonical_root)
+    if any(
+        lexical.is_relative_to(root.resolve()) or resolved.is_relative_to(root.resolve())
+        for root in roots
+    ):
+        raise ValueError("review spec must be outside the repository and its worktrees")
+    content = resolved.read_bytes()
+    return TrustedReviewSpec(
+        spec=PRReviewSpec.model_validate_json(content),
+        sha256=hashlib.sha256(content).hexdigest(),
+    )
+
+
 def resolve_branch_worktree(branch: str) -> Path:
     """Resolve exactly one linked worktree checked out on the requested branch."""
     result = run_cmd(["git", "worktree", "list", "--porcelain"], check=False)
@@ -316,7 +374,7 @@ def prepare_merge_gate(
     *,
     review_spec_path: Path,
     review_output_root: Path,
-) -> tuple[PrSnapshot, Path]:
+) -> tuple[PrSnapshot, Path, TrustedReviewSpec]:
     first, _ = fetch_pr_snapshot(pr_number, repo_slug, gh_env)
     if first.state != "OPEN":
         raise RuntimeError(f"PR state is {first.state}, not OPEN")
@@ -337,9 +395,11 @@ def prepare_merge_gate(
         )
     if second.state != "OPEN":
         raise RuntimeError(f"PR state changed to {second.state} before merge")
-    spec = load_trusted_review_spec(review_spec_path, canonical_root=get_main_repo_root())
+    trusted_review = load_trusted_review_bundle(
+        review_spec_path, canonical_root=get_main_repo_root()
+    )
     _receipt, receipt_path = run_local_review_gate(
-        spec=spec,
+        spec=trusted_review.spec,
         snapshot=second,
         review_worktree=resolve_branch_worktree(branch),
         repo_slug=repo_slug,
@@ -360,17 +420,56 @@ def prepare_merge_gate(
     after_checks, _ = fetch_pr_snapshot(pr_number, repo_slug, gh_env)
     if after_checks != final:
         raise RuntimeError("PR changed while final required checks ran; signoff is stale")
-    return after_checks, receipt_path
+    return after_checks, receipt_path, trusted_review
+
+
+def integration_target(
+    *,
+    snapshot: PrSnapshot,
+    repository: str,
+    project: str,
+    pr_number: int,
+    branch: str,
+    trusted_review: TrustedReviewSpec,
+) -> IntegrationTargetV1:
+    """Bind the reviewed revision and trusted spec to canonical claim custody."""
+
+    require_integration_authority()
+    return IntegrationTargetV1(
+        repository=repository,
+        project=project,
+        pr_number=pr_number,
+        branch=branch,
+        base_sha=snapshot.base_sha,
+        head_sha=snapshot.head_sha,
+        review_spec_sha256=trusted_review.sha256,
+        review_work_graph_sha256=trusted_review.spec.work_graph_sha256,
+        review_work_unit_id=trusted_review.spec.work_unit_id,
+    )
 
 
 def merge_exact_head(
     pr_number: int, snapshot: PrSnapshot, repo_slug: str,
     gh_env: Mapping[str, str],
+    *,
+    authority: IntegrationAuthorityAssertionV1,
+    target: IntegrationTargetV1,
+    agent: str,
+    repo_root: Path,
+    review_spec_path: Path,
 ) -> tuple[bool, str]:
-    result = run_cmd([
-        "gh", "pr", "merge", str(pr_number), "--repo", repo_slug, "--squash",
-        "--match-head-commit", snapshot.head_sha,
-    ], check=False, env=gh_env)
+    require_integration_authority()
+    with integration_authority_guard(
+        authority,
+        expected_target=target,
+        agent=agent,
+        repo_root=repo_root,
+        review_spec_path=review_spec_path,
+    ):
+        result = run_cmd([
+            "gh", "pr", "merge", str(pr_number), "--repo", repo_slug, "--squash",
+            "--match-head-commit", snapshot.head_sha,
+        ], check=False, env=gh_env)
     return (
         (True, "Merged") if result.returncode == 0
         else (False, (result.stderr or result.stdout).strip())
@@ -389,6 +488,61 @@ def verify_merged_pr(
     if merge_commit is None:
         return False, None, "GitHub did not report one full merge commit SHA"
     return True, merge_commit, "OK"
+
+
+def prepare_post_merge_recovery(
+    *,
+    snapshot: PrSnapshot,
+    merge_commit: str | None,
+    branch: str,
+    pr_number: int,
+    repo_slug: str,
+    gh_env: Mapping[str, str],
+    agent: str,
+    project: str,
+    repo_root: Path,
+    review_spec_path: Path,
+    review_output_root: Path,
+) -> tuple[str, Path, IntegrationAuthorityAssertionV1]:
+    """Re-prove exact review and claim custody after merge-before-close failure."""
+
+    require_integration_authority()
+    if snapshot.state != "MERGED" or merge_commit is None:
+        raise RuntimeError("post-merge recovery requires a verified merged PR")
+    if snapshot.head_branch != branch:
+        raise RuntimeError(
+            f"merged PR head branch {snapshot.head_branch!r} != requested {branch!r}"
+        )
+    checks_ok, reason = require_all_required_checks(pr_number, repo_slug, gh_env)
+    if not checks_ok:
+        raise RuntimeError(reason)
+    trusted_review = load_trusted_review_bundle(
+        review_spec_path, canonical_root=repo_root
+    )
+    _receipt, receipt_path = run_local_review_gate(
+        spec=trusted_review.spec,
+        snapshot=snapshot,
+        review_worktree=resolve_branch_worktree(branch),
+        repo_slug=repo_slug,
+        pr_number=pr_number,
+        gh_env=gh_env,
+        output_root=review_output_root / repo_slug.replace("/", "__") / f"pr-{pr_number}",
+    )
+    target = integration_target(
+        snapshot=snapshot,
+        repository=repo_slug,
+        project=project,
+        pr_number=pr_number,
+        branch=branch,
+        trusted_review=trusted_review,
+    )
+    authority = assert_integration_authority(
+        target=target,
+        agent=agent,
+        repo_root=repo_root,
+        review_spec_path=review_spec_path,
+    )
+    return merge_commit, receipt_path, authority
 
 
 def close_merged_lane(branch: str, merge_commit: str, base_branch: str) -> tuple[bool, str]:
@@ -419,6 +573,8 @@ def finish_pr(
     branch: str,
     pr_number: int,
     *,
+    agent: str,
+    project: str,
     review_spec_path: Path,
     review_output_root: Path,
 ) -> bool:
@@ -428,28 +584,78 @@ def finish_pr(
         return False
     try:
         with github_repository_context() as (repo_slug, gh_env):
-            snapshot, receipt_path = prepare_merge_gate(
-                pr_number,
-                branch,
-                repo_slug,
-                gh_env,
-                review_spec_path=review_spec_path,
-                review_output_root=review_output_root,
+            repo_root = get_main_repo_root().resolve()
+            live_snapshot, live_merge_commit = fetch_pr_snapshot(
+                pr_number, repo_slug, gh_env
             )
-            print(
-                f"Reviewed exact head {snapshot.head_sha}; all required checks passed. "
-                f"Receipt: {receipt_path}"
-            )
-            merged, reason = merge_exact_head(pr_number, snapshot, repo_slug, gh_env)
-            if not merged:
-                print(f"ERROR: merge failed: {reason}")
-                return False
-            verified, merge_commit, reason = verify_merged_pr(
-                pr_number, snapshot.head_sha, repo_slug, gh_env
-            )
-            if not verified or merge_commit is None:
-                print(f"HIGH: merge command returned but verification failed: {reason}")
-                return False
+            if live_snapshot.state == "MERGED":
+                merge_commit, receipt_path, authority = prepare_post_merge_recovery(
+                    snapshot=live_snapshot,
+                    merge_commit=live_merge_commit,
+                    branch=branch,
+                    pr_number=pr_number,
+                    repo_slug=repo_slug,
+                    gh_env=gh_env,
+                    agent=agent,
+                    project=project,
+                    repo_root=repo_root,
+                    review_spec_path=review_spec_path,
+                    review_output_root=review_output_root,
+                )
+                snapshot = live_snapshot
+                print(
+                    f"Recovered merged exact head {snapshot.head_sha}; "
+                    f"re-reviewed receipt: {receipt_path}; integration authority: "
+                    f"{authority.assertion_sha256}"
+                )
+            else:
+                snapshot, receipt_path, trusted_review = prepare_merge_gate(
+                    pr_number,
+                    branch,
+                    repo_slug,
+                    gh_env,
+                    review_spec_path=review_spec_path,
+                    review_output_root=review_output_root,
+                )
+                target = integration_target(
+                    snapshot=snapshot,
+                    repository=repo_slug,
+                    project=project,
+                    pr_number=pr_number,
+                    branch=branch,
+                    trusted_review=trusted_review,
+                )
+                authority = assert_integration_authority(
+                    target=target,
+                    agent=agent,
+                    repo_root=repo_root,
+                    review_spec_path=review_spec_path,
+                )
+                print(
+                    f"Reviewed exact head {snapshot.head_sha}; all required checks passed. "
+                    f"Receipt: {receipt_path}; integration authority: "
+                    f"{authority.assertion_sha256}"
+                )
+                merged, reason = merge_exact_head(
+                    pr_number,
+                    snapshot,
+                    repo_slug,
+                    gh_env,
+                    authority=authority,
+                    target=target,
+                    agent=agent,
+                    repo_root=repo_root,
+                    review_spec_path=review_spec_path,
+                )
+                if not merged:
+                    print(f"ERROR: merge failed: {reason}")
+                    return False
+                verified, merge_commit, reason = verify_merged_pr(
+                    pr_number, snapshot.head_sha, repo_slug, gh_env
+                )
+                if not verified or merge_commit is None:
+                    print(f"HIGH: merge command returned but verification failed: {reason}")
+                    return False
     except (RuntimeError, TypeError, ValueError) as exc:
         print(f"ERROR: merge gate denied: {exc}")
         return False
@@ -467,6 +673,8 @@ def main() -> int:
     )
     parser.add_argument("--branch", "-b", required=True)
     parser.add_argument("--pr", "-p", type=int, required=True)
+    parser.add_argument("--agent", choices=("codex", "claude-code", "openclaw"), required=True)
+    parser.add_argument("--project", required=True)
     parser.add_argument("--review-spec", type=Path, required=True)
     parser.add_argument(
         "--review-output-root",
@@ -477,6 +685,8 @@ def main() -> int:
     return 0 if finish_pr(
         args.branch,
         args.pr,
+        agent=args.agent,
+        project=args.project,
         review_spec_path=args.review_spec,
         review_output_root=args.review_output_root,
     ) else 1

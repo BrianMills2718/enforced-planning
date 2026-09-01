@@ -429,9 +429,14 @@ both lexically and after symlink resolution outside the repository and its
 worktrees. Installed-package consumers receive a standalone copy of the review
 runtime so the finish entrypoint does not depend on a vendored package tree.
 After review it rechecks the live head
-and required checks, then passes that same full commit to
-`gh pr merge --squash --match-head-commit`. A missing, rejected, or stale review
-never reaches merge. The helper does not request branch deletion as part of the
+and required checks, then requires canonical integration authority for the
+exact native agent, canonical project, claim, reviewed work graph/unit, review
+spec digest, base, and head. It holds the registry-backed authority guard while
+passing that same full commit to `gh pr merge --squash --match-head-commit`.
+A missing, rejected, stale, or claim-mismatched review never reaches merge. If
+the merge succeeded but the process crashed before closeout, a retry re-observes
+the exact GitHub merge, reruns the review and authority assertion, skips a
+second merge, and resumes closeout. The helper does not request branch deletion as part of the
 merge; only verified GitHub merge evidence is passed into the sanctioned
 claim/worktree close lifecycle, which owns local branch deletion.
 Before closeout, the helper fetches the canonical base ref and proves that the

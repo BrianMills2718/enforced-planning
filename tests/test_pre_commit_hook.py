@@ -25,6 +25,12 @@ def _hook_repo(tmp_path: Path) -> tuple[Path, Path]:
     return repo_root, hook_copy
 
 
+def _hook_env(**overrides: str) -> dict[str, str]:
+    """Run hook-unit fixtures through their intentionally canonical test repositories."""
+
+    return {**os.environ, "ALLOW_CANONICAL_CHECKOUT_COMMIT": "1", **overrides}
+
+
 def test_pre_commit_hook_invokes_doc_coupling_in_staged_mode(tmp_path: Path) -> None:
     """The hook should inspect the staged slice, not the whole branch history."""
 
@@ -51,6 +57,7 @@ def test_pre_commit_hook_invokes_doc_coupling_in_staged_mode(tmp_path: Path) -> 
     result = subprocess.run(
         ["bash", str(hook_copy)],
         cwd=repo_root,
+        env=_hook_env(),
         capture_output=True,
         text=True,
         check=False,
@@ -85,6 +92,7 @@ def test_pre_commit_hook_passes_ephemeral_doc_coupling_ack_file(tmp_path: Path) 
     result = subprocess.run(
         ["bash", str(hook_copy)],
         cwd=repo_root,
+        env=_hook_env(),
         capture_output=True,
         text=True,
         check=False,
@@ -126,6 +134,7 @@ def test_pre_commit_hook_warns_by_default_on_governance_failure(tmp_path: Path) 
     result = subprocess.run(
         ["bash", str(hook_copy)],
         cwd=repo_root,
+        env=_hook_env(),
         capture_output=True,
         text=True,
         check=False,
@@ -147,7 +156,7 @@ def test_pre_commit_hook_blocks_when_explicitly_requested(tmp_path: Path) -> Non
     result = subprocess.run(
         ["bash", str(hook_copy)],
         cwd=repo_root,
-        env={**os.environ, "ENFORCED_PLANNING_HOOK_MODE": "block"},
+        env=_hook_env(ENFORCED_PLANNING_HOOK_MODE="block"),
         capture_output=True,
         text=True,
         check=False,
@@ -164,7 +173,7 @@ def test_pre_commit_hook_rejects_unknown_mode(tmp_path: Path) -> None:
     result = subprocess.run(
         ["bash", str(hook_copy)],
         cwd=repo_root,
-        env={**os.environ, "ENFORCED_PLANNING_HOOK_MODE": "strictest"},
+        env=_hook_env(ENFORCED_PLANNING_HOOK_MODE="strictest"),
         capture_output=True,
         text=True,
         check=False,
@@ -194,6 +203,7 @@ def test_pre_commit_hook_does_not_generate_or_stage_plan_index(tmp_path: Path) -
     result = subprocess.run(
         ["bash", str(hook_copy)],
         cwd=repo_root,
+        env=_hook_env(),
         capture_output=True,
         text=True,
         check=False,
@@ -230,7 +240,7 @@ def test_pre_commit_hook_blocks_mutation_of_frozen_verification_batch(tmp_path: 
     result = subprocess.run(
         ["bash", str(hook_copy)],
         cwd=repo_root,
-        env={**os.environ, "ENFORCED_PLANNING_HOOK_MODE": "off"},
+        env=_hook_env(ENFORCED_PLANNING_HOOK_MODE="off"),
         capture_output=True,
         text=True,
         check=False,

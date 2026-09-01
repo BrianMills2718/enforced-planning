@@ -8,6 +8,7 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
+import yaml  # type: ignore[import-untyped]
 
 from enforced_planning import (
     claim_bootstrap,
@@ -101,6 +102,11 @@ def test_unclaimed_native_session_can_start_its_own_claim(
     monkeypatch.setattr(
         claim_bootstrap.coordination_claims.claim_mutation_receipts,
         "append_receipt",
+        lambda _receipt: None,
+    )
+    monkeypatch.setattr(
+        claim_bootstrap.coordination_claims.claim_mutation_receipts,
+        "append_narrow_receipt",
         lambda _receipt: None,
     )
     monkeypatch.setattr(
@@ -288,6 +294,8 @@ def test_typed_local_repository_bootstrap_creates_local_repo_claim_and_worktree(
     assert claims[0].session_id == "codex:native-123"
     assert claims[0].write_paths == ["."]
     assert claims[0].worktree_path == str(worktree)
+    assert claims[0].target_worktree_path is None
+    assert claims[0].broad_scope_mode == "bounded"
     assert len(list(trackers_dir.rglob("*.yaml"))) == 1
     assert prewrite_claim_projection.projection_is_current(
         claims_dir=claims_dir,
@@ -807,7 +815,15 @@ def test_typed_maintenance_worktree_transaction_creates_claim_tracker_and_projec
     claims = claim_bootstrap.coordination_claims.check_claims(repo.name)
     assert len(claims) == 1
     assert claims[0].session_id == "codex:native-123"
-    assert claims[0].worktree_path == str(worktree)
+    if write_paths is None:
+        assert claims[0].worktree_path.endswith(".bootstrap-no-mutation-authority")
+        assert claims[0].target_worktree_path == str(worktree)
+        assert claims[0].broad_scope_mode == "bootstrap"
+        assert receipt["result"]["bootstrap_requires_narrowing"] is True
+    else:
+        assert claims[0].worktree_path == str(worktree)
+        assert claims[0].target_worktree_path is None
+        assert receipt["result"]["bootstrap_requires_narrowing"] is False
     assert claims[0].claim_type == "program"
     assert claims[0].write_paths == (write_paths or ["."])
     assert len(list(trackers_dir.rglob("*.yaml"))) == 1
@@ -856,8 +872,33 @@ def test_typed_maintenance_worktree_transaction_creates_claim_tracker_and_projec
         receipt_path=tmp_path / "outside-receipts.jsonl",
     )
     # A narrow lane must not inherit permission to edit the root instruction.
-    assert inside["decision"] == ("allow" if write_paths is None else "deny")
+    assert inside["decision"] == "deny"
     assert outside["decision"] == "deny"
+    if write_paths is None:
+        claim_bootstrap.coordination_claims.narrow_claim(
+            agent="codex",
+            project=repo.name,
+            scope="fix/safe-lane",
+            session_id="codex:native-123",
+            write_paths=["CLAUDE.md"],
+        )
+        admitted = prewrite_claim_fast.evaluate_prewrite_fast(
+            {
+                "session_id": "native-123",
+                "hook_event_name": "PreToolUse",
+                "cwd": str(worktree),
+                "tool_name": "apply_patch",
+                "tool_input": {
+                    "command": f"*** Begin Patch\n*** Update File: {worktree / 'CLAUDE.md'}\n@@\n-old\n+new\n*** End Patch"
+                },
+            },
+            client="codex",
+            mode="enforce",
+            claims_dir=claims_dir,
+            projection_path=projection_path,
+            receipt_path=tmp_path / "admitted-receipts.jsonl",
+        )
+        assert admitted["decision"] == "allow"
 
 
 @pytest.mark.parametrize("extra", [{"extra": "nope"}, {"agent": "claude-code"}])
@@ -1069,7 +1110,7 @@ def test_typed_maintenance_rejects_session_with_existing_root_without_residue(
     assert set(trackers_dir.rglob("*.yaml")) == tracker_paths_before
 
 
-def test_typed_maintenance_preserves_and_blocks_partial_session_start(
+def test_typed_maintenance_rolls_back_partial_session_start_before_git_artifacts(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1087,16 +1128,54 @@ def test_typed_maintenance_preserves_and_blocks_partial_session_start(
         claim_bootstrap.execute_request(request)
 
     worktree = repo / "worktrees" / "fix" / "safe-lane"
-    assert worktree.is_dir()
-    claims = claim_bootstrap.coordination_claims.check_claims(repo.name)
-    assert len(claims) == 1
-    assert claims[0].status == "blocked"
-    assert list(trackers_dir.rglob("*.yaml"))
+    assert not worktree.exists()
+    assert claim_bootstrap.coordination_claims.check_claims(repo.name) == []
+    assert list(trackers_dir.rglob("*.yaml")) == []
     assert subprocess.run(
         ["git", "-C", str(repo), "show-ref", "--verify", "refs/heads/fix/safe-lane"],
         capture_output=True,
         check=False,
-    ).returncode == 0
+    ).returncode != 0
+
+
+def test_typed_maintenance_preserves_claim_when_partial_tracker_identity_changes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Bootstrap must verify both authority records before deleting either one."""
+
+    repo = _governed_repo(tmp_path)
+    _claims_dir, trackers_dir = _configure_maintenance_runtime(tmp_path, monkeypatch)
+    real_start = claim_bootstrap.session_lifecycle.start_session
+
+    def persist_tamper_then_fail(**kwargs: object) -> dict[str, object]:
+        real_start(**kwargs)
+        tracker_path = next(trackers_dir.rglob("*.yaml"))
+        tracker = yaml.safe_load(tracker_path.read_text(encoding="utf-8"))
+        tracker["claim"]["session_id"] = "codex:foreign-runtime"
+        tracker_path.write_text(yaml.safe_dump(tracker, sort_keys=False), encoding="utf-8")
+        raise RuntimeError("simulated failure after tracker ownership changed")
+
+    monkeypatch.setattr(
+        claim_bootstrap.session_lifecycle,
+        "start_session",
+        persist_tamper_then_fail,
+    )
+    request = claim_bootstrap.parse_request_json(json.dumps(_maintenance_payload(repo)))
+
+    with pytest.raises(claim_bootstrap.ClaimBootstrapError, match="tracker identity changed"):
+        claim_bootstrap.execute_request(request)
+
+    claims = claim_bootstrap.coordination_claims.check_claims(repo.name)
+    assert len(claims) == 1
+    assert claims[0].session_id == "codex:native-123"
+    assert len(list(trackers_dir.rglob("*.yaml"))) == 1
+    assert not (repo / "worktrees" / "fix" / "safe-lane").exists()
+    assert subprocess.run(
+        ["git", "-C", str(repo), "show-ref", "--verify", "refs/heads/fix/safe-lane"],
+        capture_output=True,
+        check=False,
+    ).returncode != 0
 
 
 def test_typed_maintenance_preserves_detached_same_head_worktree_on_rollback(
@@ -1107,15 +1186,19 @@ def test_typed_maintenance_preserves_detached_same_head_worktree_on_rollback(
     _configure_maintenance_runtime(tmp_path, monkeypatch)
     worktree = repo / "worktrees" / "fix" / "safe-lane"
 
-    def detach_then_fail(**_kwargs: object) -> dict[str, object]:
-        subprocess.run(
-            ["git", "-c", "core.hooksPath=/dev/null", "-C", str(worktree), "checkout", "--detach", "--force"],
-            check=True,
-            capture_output=True,
-        )
-        raise RuntimeError("simulated session failure after detach")
+    real_run = claim_bootstrap.subprocess.run
 
-    monkeypatch.setattr(claim_bootstrap.session_lifecycle, "start_session", detach_then_fail)
+    def detach_on_population(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        if str(worktree) in argv and "checkout" in argv and "fix/safe-lane" in argv:
+            real_run(
+                ["git", "-c", "core.hooksPath=/dev/null", "-C", str(worktree), "checkout", "--detach", "--force"],
+                check=True,
+                capture_output=True,
+            )
+            return subprocess.CompletedProcess(argv, 1, "", "simulated population failure after detach")
+        return real_run(argv, **kwargs)
+
+    monkeypatch.setattr(claim_bootstrap.subprocess, "run", detach_on_population)
     request = claim_bootstrap.parse_request_json(json.dumps(_maintenance_payload(repo)))
 
     with pytest.raises(claim_bootstrap.ClaimBootstrapError, match="refusing unsafe cleanup"):
@@ -1141,11 +1224,17 @@ def test_typed_maintenance_preserves_untracked_content_on_rollback(
     worktree = repo / "worktrees" / "fix" / "safe-lane"
     sentinel = worktree / "preserve-me.txt"
 
-    def add_sentinel_then_fail(**_kwargs: object) -> dict[str, object]:
-        sentinel.write_text("valuable concurrent state\n", encoding="utf-8")
-        raise RuntimeError("simulated session failure after concurrent write")
+    real_run = claim_bootstrap.subprocess.run
 
-    monkeypatch.setattr(claim_bootstrap.session_lifecycle, "start_session", add_sentinel_then_fail)
+    def add_sentinel_on_population(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        if str(worktree) in argv and "checkout" in argv and "fix/safe-lane" in argv:
+            completed = real_run(argv, **kwargs)
+            assert completed.returncode == 0
+            sentinel.write_text("valuable concurrent state\n", encoding="utf-8")
+            return subprocess.CompletedProcess(argv, 1, "", "simulated failure after concurrent write")
+        return real_run(argv, **kwargs)
+
+    monkeypatch.setattr(claim_bootstrap.subprocess, "run", add_sentinel_on_population)
     request = claim_bootstrap.parse_request_json(json.dumps(_maintenance_payload(repo)))
 
     with pytest.raises(claim_bootstrap.ClaimBootstrapError, match="refusing unsafe cleanup"):
@@ -1170,14 +1259,11 @@ def test_typed_maintenance_preserves_branch_when_worktree_cleanup_fails(
     def fail_remove(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
         if "worktree" in argv and "remove" in argv:
             return subprocess.CompletedProcess(argv, 1, "", "simulated remove failure")
+        if "checkout" in argv and "fix/safe-lane" in argv:
+            return subprocess.CompletedProcess(argv, 1, "", "simulated population failure")
         return real_run(argv, **kwargs)
 
     monkeypatch.setattr(claim_bootstrap.subprocess, "run", fail_remove)
-    monkeypatch.setattr(
-        claim_bootstrap.session_lifecycle,
-        "start_session",
-        lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("simulated session failure")),
-    )
     request = claim_bootstrap.parse_request_json(json.dumps(_maintenance_payload(repo)))
     with pytest.raises(claim_bootstrap.ClaimBootstrapError, match="simulated remove failure"):
         claim_bootstrap.execute_request(request)
@@ -1357,12 +1443,24 @@ def test_narrow_bootstrap_preserves_other_writers(
 ) -> None:
     repo = _governed_repo(tmp_path)
     _configure_maintenance_runtime(tmp_path, monkeypatch)
+    if other_path == "unrelated.txt":
+        (repo / other_path).write_text("unrelated\n", encoding="utf-8")
+        subprocess.run(["git", "-C", str(repo), "add", other_path], check=True)
+        subprocess.run(
+            [
+                "git", "-c", "user.name=Test User", "-c", "user.email=test@example.invalid",
+                "-C", str(repo), "commit", "-m", "add unrelated fixture",
+            ],
+            check=True,
+        )
     ok, message = claim_bootstrap.coordination_claims.create_claim(
         agent="codex", project=repo.name, scope="other-lane", intent="other work",
         plan_ref="UNPLANNED", claim_type="write", write_paths=[other_path],
         repo_root=str(repo), worktree_path=str(repo / "worktrees" / "other-lane"),
         branch="other-lane", session_id="codex:other-native",
         session_name="other-work", broader_goal="Other work",
+        broad_scope_mode="bounded" if other_path == "." else None,
+        broad_scope_reason="deliberately reserve the whole fixture" if other_path == "." else None,
     )
     assert ok, message
     request = claim_bootstrap.parse_request_json(json.dumps(

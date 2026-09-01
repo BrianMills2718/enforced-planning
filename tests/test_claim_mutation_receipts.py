@@ -92,6 +92,39 @@ def test_receipt_contract_rejects_unknown_fields() -> None:
         )
 
 
+def test_narrow_operation_is_isolated_from_shared_v1_ledger(tmp_path: Path) -> None:
+    """Old shared-ledger readers never encounter the new narrow operation enum."""
+
+    shared_payload = {
+        "operation": "narrow",
+        "result": "applied_projection_current",
+        "writer_source_path": "/tmp/runtime.py",
+        "writer_source_sha256": "a" * 64,
+        "writer_repo_root": "/tmp",
+        "process_id": 1,
+        "session_id": "codex:test",
+        "target_project": "project",
+        "target_scope": "scope",
+        "target_claim_path": "/tmp/claim.yaml",
+        "registry_digest_before": "b" * 64,
+        "registry_digest_after": "c" * 64,
+        "projection_digest_after": "d" * 64,
+        "projection_current_after": True,
+        "error_code": None,
+    }
+    with pytest.raises(ValidationError):
+        receipts.ClaimMutationReceiptV1.model_validate(shared_payload)
+
+    narrow = receipts.NarrowClaimMutationReceiptV1.model_validate(
+        {key: value for key, value in shared_payload.items() if key != "error_code"}
+    )
+    narrow_path = tmp_path / "claim-narrow-events-v1.jsonl"
+    receipts.append_narrow_receipt(narrow, events_path=narrow_path)
+
+    assert receipts.load_receipts(events_path=tmp_path / "shared-v1.jsonl") == []
+    assert receipts.load_narrow_receipts(events_path=narrow_path) == [narrow]
+
+
 def test_each_supported_mutation_emits_one_terminal_receipt(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

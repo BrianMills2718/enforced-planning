@@ -31,7 +31,7 @@ import tempfile
 import time
 from collections.abc import Iterator
 from contextlib import contextmanager
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Literal, get_args
@@ -62,6 +62,9 @@ SESSION_ENDED_STATUS = "session_ended"
 CLOSEABLE_STATUSES = LIVE_STATUSES | {SESSION_ENDED_STATUS}
 CLAIM_TYPES = {"program", "write", "review", "research"}
 STRICT_LIVE_METADATA_CLAIM_TYPES = {"program", "write", "review", "research"}
+CURRENT_CLAIM_SCHEMA_VERSION = 6
+BROAD_SCOPE_MODES = {"bootstrap", "bounded"}
+BOOTSTRAP_AUTHORITY_DISABLED_SUFFIX = ".bootstrap-no-mutation-authority"
 
 # Directories whose contents are immutable, uniquely-named artifacts created by
 # an atomic exclusive open. Two lanes appending to one of these cannot collide:
@@ -264,6 +267,54 @@ def _atomic_write_claim(path: Path, payload: dict[str, Any]) -> None:
             temp_path.unlink()
 
 
+def _atomic_restore_file(path: Path, content: bytes | None) -> None:
+    """Restore exact prior bytes, or exact prior absence, after a failed transition."""
+
+    if content is None:
+        path.unlink(missing_ok=True)
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            "wb",
+            dir=path.parent,
+            prefix=f".{path.name}.",
+            suffix=".rollback.tmp",
+            delete=False,
+        ) as handle:
+            temp_path = Path(handle.name)
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temp_path, path)
+    finally:
+        if temp_path is not None and temp_path.exists():
+            temp_path.unlink()
+
+
+def _replace_claim_and_refresh_projection_fail_atomic(
+    *,
+    claim_path: Path,
+    payload: dict[str, Any],
+    claims_dir: Path,
+) -> tuple[str, str]:
+    """Replace claim plus projection or restore both exact preflight states."""
+
+    from enforced_planning.prewrite_claim_fast import projection_path_for
+
+    projection_path = projection_path_for(claims_dir)
+    prior_claim = claim_path.read_bytes() if claim_path.exists() else None
+    prior_projection = projection_path.read_bytes() if projection_path.exists() else None
+    try:
+        _atomic_write_claim(claim_path, payload)
+        return refresh_prewrite_authority_projection(claims_dir)
+    except Exception:
+        _atomic_restore_file(claim_path, prior_claim)
+        _atomic_restore_file(projection_path, prior_projection)
+        raise
+
+
 def refresh_prewrite_authority_projection(
     claims_dir: Path | None = None,
 ) -> tuple[str, str]:
@@ -395,6 +446,58 @@ def record_claim_mutation(
     return receipt
 
 
+def record_claim_narrow_mutation(
+    *,
+    claims_dir: Path,
+    registry_digest_before: str,
+    target_project: str,
+    target_scope: str,
+    target_claim_path: Path,
+    session_id: str,
+    projection_digest_after: str,
+) -> "claim_mutation_receipts.NarrowClaimMutationReceiptV1":
+    """Persist one narrow receipt without extending the shared v1 operation enum."""
+
+    resolved_claims_dir = claims_dir.expanduser().resolve()
+    from enforced_planning.prewrite_claim_projection import projection_is_current
+
+    registry_digest_after = _registry_digest(resolved_claims_dir)
+    projection_current_after = projection_is_current(claims_dir=resolved_claims_dir)
+    writer_source_path, writer_source_sha256, writer_repo_root = _LOADED_WRITER_IDENTITY
+    receipt = claim_mutation_receipts.NarrowClaimMutationReceiptV1(
+        result=(
+            "applied_projection_current"
+            if projection_current_after
+            else "applied_projection_stale"
+        ),
+        writer_source_path=writer_source_path,
+        writer_source_sha256=writer_source_sha256,
+        writer_repo_root=writer_repo_root,
+        process_id=os.getpid(),
+        session_id=session_id,
+        target_project=target_project,
+        target_scope=target_scope,
+        target_claim_path=str(target_claim_path),
+        registry_digest_before=registry_digest_before,
+        registry_digest_after=registry_digest_after,
+        projection_digest_after=projection_digest_after,
+        projection_current_after=projection_current_after,
+    )
+    try:
+        claim_mutation_receipts.append_narrow_receipt(receipt)
+    except OSError as exc:
+        raise claim_mutation_receipts.MutationAuditError(
+            operation="narrow",
+            target_project=target_project,
+            target_scope=target_scope,
+            registry_digest_after=registry_digest_after,
+            projection_digest_after=projection_digest_after,
+            projection_current_after=projection_current_after,
+            cause=exc,
+        ) from exc
+    return receipt
+
+
 @dataclass(frozen=True)
 class PlanAuthorityBinding:
     """Resolved navigation-independent target and numbered-plan identities."""
@@ -480,6 +583,9 @@ class ClaimRecord:
     next_action: str | None = None
     expected_quiet_until: str | None = None
     quiet_reason: str | None = None
+    broad_scope_mode: str | None = None
+    broad_scope_reason: str | None = None
+    target_worktree_path: str | None = None
 
     def primary_project(self) -> str | None:
         """Return the first project for CLI compatibility surfaces."""
@@ -510,9 +616,32 @@ class ClaimInteraction:
     other_source_file: str | None
     other_session_id: str | None = None
     other_session_last_active_at: datetime | None = None
+    overlap_relations: tuple[str, ...] = ()
+    reservation_kind: str | None = None
+    other_broad_scope_mode: str | None = None
+    current_diff_disjoint: bool | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-safe interaction summary."""
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class NarrowClaimResult:
+    """Committed result of one owner/session-bound subset-only narrowing."""
+
+    project: str
+    scope: str
+    session_id: str
+    old_write_paths: tuple[str, ...]
+    new_write_paths: tuple[str, ...]
+    broad_scope_mode: str | None
+    projection_path: str
+    projection_digest: str
+    receipt_id: str
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a JSON-safe narrowing result."""
         return asdict(self)
 
 
@@ -671,6 +800,13 @@ def claim_health_issues(claim: ClaimRecord) -> list[str]:
                 issues.append("missing_plan_sha256")
             elif re.fullmatch(r"[0-9a-f]{64}", claim.plan_sha256) is None:
                 issues.append("invalid_plan_sha256")
+    try:
+        broad_issues = _broad_scope_contract_issues(claim)
+        issues.extend(issue for issue in broad_issues if issue != "legacy_broad_scope_unclassified")
+        if claim.broad_scope_mode == "bootstrap" and not broad_issues:
+            issues.append("bootstrap_broad_claim_requires_narrowing")
+    except ValueError as exc:
+        issues.append(str(exc).split(":", 1)[0])
     return issues
 
 
@@ -1286,36 +1422,36 @@ def claim_enforcement_issues(claim: ClaimRecord) -> list[dict[str, str]]:
 def validate_claim_for_creation(claim: ClaimRecord) -> None:
     """Reject new claims that omit required ownership metadata for live coordination."""
     issues = [issue for issue in claim_health_issues(claim) if issue in CREATION_BLOCKING_HEALTH_ISSUES]
-    if not issues:
-        return
-    if not claim.is_live():
-        return
-    flag_map = {
-        "missing_project": "--project",
-        "missing_write_paths": "--write-path",
-        "missing_branch": "--branch",
-        "missing_worktree_path": "--worktree-path",
-        "missing_session_id": "--session-id",
-        "missing_session_name": "--session-name",
-        "missing_plan_ref": "--plan (`--plan UNPLANNED` for unplanned work, as `make maintenance-worktree` passes)",
-        "missing_work_unit_id": "--work-unit-id",
-        "missing_work_graph_path": "--work-graph",
-        "missing_work_graph_sha256": "a validated canonical work-graph binding",
-        "missing_start_revision": "a validated full --start-point revision",
-        "invalid_start_revision": "a valid full --start-point revision",
-        "missing_plan_repo_root": "an explicit --plan-repo-root",
-        "invalid_plan_repo_root": "an absolute --plan-repo-root",
-        "missing_plan_revision": "an exact --plan-start-point",
-        "invalid_plan_revision": "a valid full --plan-start-point revision",
-        "missing_plan_sha256": "a validated external plan digest",
-        "invalid_plan_sha256": "a valid external plan SHA-256 digest",
-    }
-    required_flags = [flag_map[item] for item in issues if item in flag_map]
-    required_text = ", ".join(required_flags)
-    raise ValueError(
-        f"Active {claim.claim_type} claims require {required_text}. "
-        "Legacy claims remain readable, but new live claims must declare real ownership."
-    )
+    if claim.is_live() and issues:
+        flag_map = {
+            "missing_project": "--project",
+            "missing_write_paths": "--write-path",
+            "missing_branch": "--branch",
+            "missing_worktree_path": "--worktree-path",
+            "missing_session_id": "--session-id",
+            "missing_session_name": "--session-name",
+            "missing_plan_ref": "--plan (or explicit UNPLANNED authority via `--plan UNPLANNED`, as `make maintenance-worktree` passes)",
+            "missing_work_unit_id": "--work-unit-id",
+            "missing_work_graph_path": "--work-graph",
+            "missing_work_graph_sha256": "a validated canonical work-graph binding",
+            "missing_start_revision": "a validated full --start-point revision",
+            "invalid_start_revision": "a valid full --start-point revision",
+            "missing_plan_repo_root": "an explicit --plan-repo-root",
+            "invalid_plan_repo_root": "an absolute --plan-repo-root",
+            "missing_plan_revision": "an exact --plan-start-point",
+            "invalid_plan_revision": "a valid full --plan-start-point revision",
+            "missing_plan_sha256": "a validated external plan digest",
+            "invalid_plan_sha256": "a valid external plan SHA-256 digest",
+        }
+        required_flags = [flag_map[item] for item in issues if item in flag_map]
+        required_text = ", ".join(required_flags)
+        raise ValueError(
+            f"Active {claim.claim_type} claims require {required_text}. "
+            "Legacy claims remain readable, but new live claims must declare real ownership."
+        )
+    broad_issues = _broad_scope_contract_issues(claim)
+    if claim.is_live() and claim.schema_version >= 6 and broad_issues:
+        raise ValueError("; ".join(broad_issues))
 
 
 def _plan_number(plan_ref: str | None) -> int | None:
@@ -1718,6 +1854,97 @@ def _normalize_repo_path(path: str) -> str:
     return normalized
 
 
+def bootstrap_authority_disabled_worktree_path(target_worktree_path: str) -> str:
+    """Return a deterministic non-Git path that older readers cannot authorize."""
+
+    target = Path(target_worktree_path).expanduser()
+    if not target.is_absolute():
+        raise ValueError("target_worktree_path must be absolute for bootstrap authority")
+    return f"{target.resolve(strict=False)}{BOOTSTRAP_AUTHORITY_DISABLED_SUFFIX}"
+
+
+def classify_broad_write_paths(repo_root: str | None, write_paths: list[str]) -> dict[str, str]:
+    """Classify root/top-level directory reservations without guessing.
+
+    Nested paths are narrow for this contract. A missing top-level component is
+    ambiguous because filesystem evidence cannot distinguish an intended file
+    from a directory reservation. Symlinks must remain within the declared root.
+    """
+
+    normalized = list(dict.fromkeys(_normalize_repo_path(path) for path in write_paths))
+    if any(Path(path).is_absolute() or path == ".." or path.startswith("../") for path in normalized):
+        raise ValueError("write paths must remain repository-relative and cannot traverse outside repo_root")
+    if not repo_root:
+        raise ValueError("repo_root is required to classify broad write paths")
+    root = Path(repo_root).expanduser()
+    if not root.is_absolute():
+        raise ValueError("repo_root must be absolute to classify broad write paths")
+    resolved_root = root.resolve(strict=False)
+    for path in normalized:
+        if path == ".":
+            continue
+        resolved = (resolved_root / path).resolve(strict=False)
+        try:
+            resolved.relative_to(resolved_root)
+        except ValueError as exc:
+            raise ValueError(f"write path {path!r} escapes repo_root through symlink resolution") from exc
+    candidates = [path for path in normalized if path == "." or "/" not in path]
+    if not candidates:
+        return {}
+    broad: dict[str, str] = {}
+    for path in candidates:
+        if path == ".":
+            broad[path] = "repository_root"
+            continue
+        candidate = resolved_root / path
+        resolved = candidate.resolve(strict=False)
+        try:
+            resolved.relative_to(resolved_root)
+        except ValueError as exc:
+            raise ValueError(f"broad path {path!r} escapes repo_root through symlink resolution") from exc
+        if not candidate.exists():
+            raise ValueError(f"broad_scope_ambiguous: top-level path {path!r} does not exist")
+        if candidate.is_dir():
+            broad[path] = "existing_top_level_directory"
+    return broad
+
+
+def _broad_scope_contract_issues(claim: ClaimRecord) -> list[str]:
+    """Return deterministic schema-v6 broad-scope contract violations."""
+
+    if not _has_write_ownership(claim):
+        return []
+    mode = claim.broad_scope_mode.strip() if isinstance(claim.broad_scope_mode, str) else None
+    reason = claim.broad_scope_reason.strip() if isinstance(claim.broad_scope_reason, str) else None
+    issues: list[str] = []
+    if claim.schema_version < 6:
+        possible_broad = any(
+            _normalize_repo_path(path) == "." or "/" not in _normalize_repo_path(path)
+            for path in claim.write_paths
+        )
+        if possible_broad:
+            issues.append("legacy_broad_scope_unclassified")
+        return issues
+    broad_paths = classify_broad_write_paths(claim.repo_root, claim.write_paths)
+    if broad_paths:
+        if mode not in BROAD_SCOPE_MODES:
+            issues.append("broad_scope_mode_required")
+        if not reason:
+            issues.append("broad_scope_reason_required")
+    elif mode is not None or reason is not None:
+        issues.append("broad scope metadata is forbidden when no broad path remains")
+    if mode == "bootstrap":
+        if not claim.target_worktree_path:
+            issues.append("bootstrap_target_worktree_path_required")
+        else:
+            expected = bootstrap_authority_disabled_worktree_path(claim.target_worktree_path)
+            if claim.worktree_path != expected:
+                issues.append("bootstrap_mutation_worktree_not_authority_disabled")
+    elif mode == "bounded" and claim.target_worktree_path not in {None, claim.worktree_path}:
+        issues.append("bounded_target_worktree_mismatch")
+    return issues
+
+
 def _projects_overlap(left: ClaimRecord, right: ClaimRecord) -> bool:
     """Return whether two claims touch at least one common project."""
     return bool(set(left.projects) & set(right.projects))
@@ -1839,6 +2066,83 @@ def _compute_overlapping_write_paths(candidate: ClaimRecord, other: ClaimRecord)
     return sorted(set(overlaps))
 
 
+def _overlap_relations(candidate: ClaimRecord, other: ClaimRecord) -> tuple[str, ...]:
+    """Classify every effective overlap from the candidate's perspective."""
+
+    relations: set[str] = set()
+    for left_raw in candidate.write_paths:
+        for right_raw in other.write_paths:
+            if not _paths_overlap(left_raw, right_raw):
+                continue
+            if _is_append_only_path(left_raw) and _is_append_only_path(right_raw):
+                continue
+            left = _normalize_repo_path(left_raw)
+            right = _normalize_repo_path(right_raw)
+            if left == right:
+                relations.add("exact")
+            elif left == "." or right.startswith(f"{left}/"):
+                relations.add("candidate_parent")
+            else:
+                relations.add("owner_parent")
+    return tuple(sorted(relations))
+
+
+def _reservation_kind(other: ClaimRecord, relations: tuple[str, ...]) -> str | None:
+    """Explain a parent reservation without changing conflict severity."""
+
+    if "owner_parent" not in relations:
+        return None
+    if other.broad_scope_mode == "bounded":
+        return "deliberate_bounded_reservation"
+    if other.broad_scope_mode == "bootstrap" or "legacy_broad_scope_unclassified" in _broad_scope_contract_issues(other):
+        return "overbroad_reservation"
+    return None
+
+
+def _current_diff_disjoint(candidate: ClaimRecord, other: ClaimRecord) -> bool | None:
+    """Return advisory Git status disjointness, or unknown when unreadable."""
+
+    if not other.worktree_path:
+        return None
+    worktree = Path(other.worktree_path).expanduser()
+    result = subprocess.run(
+        ["git", "-C", str(worktree), "status", "--porcelain=v1", "--untracked-files=all"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        return None
+    changed: list[str] = []
+    for line in result.stdout.splitlines():
+        if len(line) < 4:
+            continue
+        path = line[3:]
+        if " -> " in path:
+            path = path.rsplit(" -> ", 1)[1]
+        changed.append(_normalize_repo_path(path.strip('"')))
+    return not any(
+        _paths_overlap(changed_path, candidate_path)
+        for changed_path in changed
+        for candidate_path in candidate.write_paths
+    )
+
+
+def _interaction_explanation(candidate: ClaimRecord, other: ClaimRecord) -> dict[str, Any]:
+    """Build shared explanatory fields for one overlap interaction."""
+
+    relations = _overlap_relations(candidate, other)
+    return {
+        "overlap_relations": relations,
+        "reservation_kind": _reservation_kind(other, relations),
+        "other_broad_scope_mode": (
+            other.broad_scope_mode
+            or ("legacy_unclassified" if "legacy_broad_scope_unclassified" in _broad_scope_contract_issues(other) else None)
+        ),
+        "current_diff_disjoint": _current_diff_disjoint(candidate, other),
+    }
+
+
 def _has_write_ownership(claim: ClaimRecord) -> bool:
     """Return whether a claim owns its declared write paths.
 
@@ -1908,8 +2212,10 @@ def normalize_claim(data: dict[str, Any], *, source_file: str | None = None) -> 
     raw_status = data.get("status")
     status = raw_status if isinstance(raw_status, str) and raw_status.strip() else "active"
     raw_schema_version = data.get("schema_version")
-    if isinstance(raw_schema_version, int) and raw_schema_version in {1, 2, 3, 4, 5}:
+    if isinstance(raw_schema_version, int) and raw_schema_version in {1, 2, 3, 4, 5, 6}:
         schema_version = raw_schema_version
+    elif any(key in data for key in ("broad_scope_mode", "broad_scope_reason", "target_worktree_path")):
+        schema_version = 6
     elif any(key in data for key in ("plan_repo_root", "plan_revision", "plan_sha256")):
         schema_version = 5
     elif "start_revision" in data:
@@ -2001,6 +2307,21 @@ def normalize_claim(data: dict[str, Any], *, source_file: str | None = None) -> 
             data,
             "quiet_reason",
             null_is_invalid=False,
+        ),
+        broad_scope_mode=(
+            data.get("broad_scope_mode")
+            if isinstance(data.get("broad_scope_mode"), str)
+            else None
+        ),
+        broad_scope_reason=(
+            data.get("broad_scope_reason")
+            if isinstance(data.get("broad_scope_reason"), str)
+            else None
+        ),
+        target_worktree_path=(
+            data.get("target_worktree_path")
+            if isinstance(data.get("target_worktree_path"), str)
+            else None
         ),
     )
 
@@ -2103,6 +2424,7 @@ def evaluate_claim(candidate: ClaimRecord, *, active_claims: list[ClaimRecord] |
                     other_source_file=other.source_file,
                     other_session_id=other.session_id,
                     other_session_last_active_at=session_last_active_at(other.session_id),
+                    **_interaction_explanation(candidate, other),
                 )
             )
             continue
@@ -2123,6 +2445,7 @@ def evaluate_claim(candidate: ClaimRecord, *, active_claims: list[ClaimRecord] |
                     other_source_file=other.source_file,
                     other_session_id=other.session_id,
                     other_session_last_active_at=session_last_active_at(other.session_id),
+                    **_interaction_explanation(candidate, other),
                 )
             )
             continue
@@ -2140,6 +2463,7 @@ def evaluate_claim(candidate: ClaimRecord, *, active_claims: list[ClaimRecord] |
                     other_source_file=other.source_file,
                     other_session_id=other.session_id,
                     other_session_last_active_at=session_last_active_at(other.session_id),
+                    **(_interaction_explanation(candidate, other) if overlapping_write_paths else {}),
                 )
             )
             continue
@@ -2157,6 +2481,7 @@ def evaluate_claim(candidate: ClaimRecord, *, active_claims: list[ClaimRecord] |
                     other_source_file=other.source_file,
                     other_session_id=other.session_id,
                     other_session_last_active_at=session_last_active_at(other.session_id),
+                    **_interaction_explanation(candidate, other),
                 )
             )
             continue
@@ -2217,6 +2542,10 @@ def build_candidate_claim(
     next_action: str | None = None,
     expected_quiet_until: str | None = None,
     quiet_reason: str | None = None,
+    broad_scope_mode: str | None = None,
+    broad_scope_reason: str | None = None,
+    target_worktree_path: str | None = None,
+    schema_version: int | None = None,
 ) -> ClaimRecord:
     """Build a normalized candidate claim from CLI or test inputs."""
     normalized_write_paths = [_normalize_repo_path(path) for path in (write_paths or [])]
@@ -2227,6 +2556,14 @@ def build_candidate_claim(
         raise ValueError(f"Unsupported claim type: {resolved_claim_type}")
     if resolved_claim_type == "write" and not normalized_write_paths:
         raise ValueError("Write claims require at least one --write-path.")
+    normalized_mode = broad_scope_mode.strip() if isinstance(broad_scope_mode, str) else None
+    normalized_reason = broad_scope_reason.strip() if isinstance(broad_scope_reason, str) else None
+    effective_target_worktree = target_worktree_path
+    effective_worktree = worktree_path
+    if normalized_mode == "bootstrap":
+        effective_target_worktree = target_worktree_path or worktree_path
+        if effective_target_worktree is not None:
+            effective_worktree = bootstrap_authority_disabled_worktree_path(effective_target_worktree)
     return ClaimRecord(
         agent=agent,
         claimed_at=claimed_at,
@@ -2237,7 +2574,7 @@ def build_candidate_claim(
         claim_type=resolved_claim_type,
         write_paths=normalized_write_paths,
         read_paths=normalized_read_paths,
-        worktree_path=worktree_path,
+        worktree_path=effective_worktree,
         repo_root=repo_root,
         branch=branch,
         session_name=session_name,
@@ -2251,9 +2588,19 @@ def build_candidate_claim(
         notes=notes,
         plan_ref=plan_ref,
         source_file=None,
-        schema_version=5
-        if any((plan_repo_root, plan_revision, plan_sha256))
-        else (4 if start_revision is not None else 3),
+        schema_version=(
+            schema_version
+            if schema_version is not None
+            else (
+                6
+                if any((broad_scope_mode, broad_scope_reason, target_worktree_path))
+                else (
+                    5
+                    if any((plan_repo_root, plan_revision, plan_sha256))
+                    else (4 if start_revision is not None else 3)
+                )
+            )
+        ),
         start_revision=start_revision,
         plan_repo_root=plan_repo_root,
         plan_revision=plan_revision,
@@ -2269,6 +2616,9 @@ def build_candidate_claim(
         next_action=next_action,
         expected_quiet_until=expected_quiet_until,
         quiet_reason=quiet_reason,
+        broad_scope_mode=normalized_mode,
+        broad_scope_reason=normalized_reason,
+        target_worktree_path=effective_target_worktree,
     )
 
 
@@ -2301,6 +2651,9 @@ def create_claim(
     require_new: bool = False,
     allow_parallel: bool = False,
     require_native_session_binding: bool = False,
+    broad_scope_mode: str | None = None,
+    broad_scope_reason: str | None = None,
+    target_worktree_path: str | None = None,
 ) -> tuple[bool, str]:
     """Create a new claim after checking for hard conflicts."""
     now = datetime.now(timezone.utc)
@@ -2397,6 +2750,10 @@ def create_claim(
         plan_repo_root=retained_plan_repo_root,
         plan_revision=plan_revision,
         plan_sha256=plan_sha256,
+        broad_scope_mode=broad_scope_mode,
+        broad_scope_reason=broad_scope_reason,
+        target_worktree_path=target_worktree_path,
+        schema_version=6,
         **_progress_event_payload(initial_progress),
     )
     validate_claim_for_creation(candidate)
@@ -2479,6 +2836,152 @@ def create_claim(
             projection_digest_after=projection_digest_after,
         )
     return True, (f"Claimed: {agent} → {project}:{scope} [{candidate.claim_type}] (expires in {ttl_hours}h)")
+
+
+def _replacement_is_within_existing_authority(replacement: str, existing: str) -> bool:
+    """Return whether one normalized replacement is equal to/below an old path."""
+
+    new = _normalize_repo_path(replacement)
+    old = _normalize_repo_path(existing)
+    return old == "." or new == old or new.startswith(f"{old}/")
+
+
+def _validate_bootstrap_target_identity(claim: ClaimRecord) -> None:
+    """Require the separated bootstrap target to be the claimed Git branch/repository."""
+
+    if not claim.target_worktree_path or not claim.repo_root or not claim.branch:
+        raise ValueError("bootstrap narrowing requires target_worktree_path, repo_root, and branch")
+    target = Path(claim.target_worktree_path).expanduser().resolve()
+    repository = Path(claim.repo_root).expanduser().resolve()
+    target_identity = _run_git(target, ["rev-parse", "--show-toplevel", "--git-common-dir", "--abbrev-ref", "HEAD"])
+    repository_identity = _run_git(repository, ["rev-parse", "--git-common-dir"])
+    lines = target_identity.stdout.splitlines() if target_identity.returncode == 0 else []
+    if len(lines) != 3 or repository_identity.returncode != 0:
+        raise ValueError("bootstrap target worktree Git identity is unavailable")
+    actual_root = Path(lines[0]).expanduser().resolve()
+    target_common = Path(lines[1])
+    if not target_common.is_absolute():
+        target_common = target / target_common
+    repository_common = Path(repository_identity.stdout.strip())
+    if not repository_common.is_absolute():
+        repository_common = repository / repository_common
+    if (
+        actual_root != target
+        or target_common.resolve() != repository_common.resolve()
+        or lines[2] != claim.branch
+    ):
+        raise ValueError("bootstrap target worktree does not match claimed repository and branch")
+
+
+def narrow_claim(
+    *,
+    agent: str,
+    project: str,
+    scope: str,
+    session_id: str | None,
+    write_paths: list[str],
+    claims_dir: Path | None = None,
+    require_native_session_binding: bool = False,
+) -> NarrowClaimResult:
+    """Commit one owner-only strict subset claim/projection transition."""
+
+    resolved_session_id = resolve_session_id(agent, session_id)
+    if not resolved_session_id:
+        raise ValueError("narrowing requires an exact session_id")
+    if require_native_session_binding:
+        validate_native_session_binding(agent, resolved_session_id, require_native_marker=True)
+    replacements = list(dict.fromkeys(_normalize_repo_path(path) for path in write_paths))
+    if not replacements:
+        raise ValueError("narrowing requires at least one replacement write path")
+    if any(Path(path).is_absolute() or path == ".." or path.startswith("../") for path in replacements):
+        raise ValueError("replacement write paths must remain repository-relative")
+
+    resolved_claims = (claims_dir or CLAIMS_DIR).expanduser().resolve()
+    claim_path = resolved_claims / _claim_filename(agent, project, scope)
+    with claim_registry_lock(resolved_claims):
+        if not claim_path.is_file():
+            raise ValueError(f"live claim {project}:{scope} does not exist")
+        raw = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+        claim = normalize_claim(raw, source_file=str(claim_path)) if isinstance(raw, dict) else None
+        if claim is None or not claim.is_live():
+            raise ValueError(f"claim {project}:{scope} is not one valid live claim")
+        if claim.agent != agent or claim.primary_project() != project:
+            raise ValueError(f"claim {project}:{scope} belongs to another owner")
+        if claim.session_id != resolved_session_id:
+            raise ValueError(
+                f"claim {project}:{scope} belongs to session {claim.session_id or '<missing>'}, "
+                f"not {resolved_session_id}"
+            )
+        old_paths = list(dict.fromkeys(_normalize_repo_path(path) for path in claim.write_paths))
+        if set(replacements) == set(old_paths):
+            raise ValueError("narrowing requires at least one strict reduction")
+        outside = [
+            path
+            for path in replacements
+            if not any(_replacement_is_within_existing_authority(path, old) for old in old_paths)
+        ]
+        if outside:
+            raise ValueError(
+                "replacement path outside existing authority: " + ", ".join(outside)
+            )
+
+        remaining_broad = classify_broad_write_paths(claim.repo_root, replacements)
+        if remaining_broad and claim.broad_scope_mode not in BROAD_SCOPE_MODES:
+            raise ValueError(
+                "a legacy/untyped broad claim may narrow only to non-broad exact paths"
+            )
+        payload = dict(raw)
+        payload["schema_version"] = 6
+        payload["write_paths"] = replacements
+        if remaining_broad:
+            payload["broad_scope_mode"] = claim.broad_scope_mode
+            payload["broad_scope_reason"] = claim.broad_scope_reason
+        else:
+            payload.pop("broad_scope_mode", None)
+            payload.pop("broad_scope_reason", None)
+            if claim.broad_scope_mode == "bootstrap":
+                _validate_bootstrap_target_identity(claim)
+                payload["worktree_path"] = claim.target_worktree_path
+            payload.pop("target_worktree_path", None)
+
+        candidate = normalize_claim(payload, source_file=str(claim_path))
+        if candidate is None:
+            raise ValueError("narrowed claim payload could not be normalized")
+        validate_claim_for_creation(candidate)
+        active_claims = check_claims(project, claims_dir=resolved_claims)
+        conflict_result = evaluate_claim(candidate, active_claims=active_claims)
+        if conflict_result.hard_conflicts:
+            formatted = "; ".join(
+                f"{item.other_agent}:{item.other_scope}" for item in conflict_result.hard_conflicts
+            )
+            raise ValueError(f"narrowed authority still conflicts with {formatted}")
+
+        registry_digest_before = _registry_digest(resolved_claims)
+        projection_path, projection_digest = _replace_claim_and_refresh_projection_fail_atomic(
+            claim_path=claim_path,
+            payload=payload,
+            claims_dir=resolved_claims,
+        )
+        receipt = record_claim_narrow_mutation(
+            claims_dir=resolved_claims,
+            registry_digest_before=registry_digest_before,
+            target_project=project,
+            target_scope=scope,
+            target_claim_path=claim_path,
+            session_id=resolved_session_id,
+            projection_digest_after=projection_digest,
+        )
+        return NarrowClaimResult(
+            project=project,
+            scope=scope,
+            session_id=resolved_session_id,
+            old_write_paths=tuple(old_paths),
+            new_write_paths=tuple(replacements),
+            broad_scope_mode=payload.get("broad_scope_mode"),
+            projection_path=projection_path,
+            projection_digest=projection_digest,
+            receipt_id=receipt.event_id,
+        )
 
 
 def hydrate_missing_session_ids(
@@ -3064,7 +3567,12 @@ def prune_stale(
     return len(removed_labels), sorted(removed_labels)
 
 
-def prune_completed() -> tuple[int, list[str]]:
+def prune_completed(
+    *,
+    agent: str | None = None,
+    project: str | None = None,
+    scope: str | None = None,
+) -> tuple[int, list[str]]:
     """Remove claims already marked complete/completed.
 
     This is intentionally narrower than ``prune_expired``: it never removes a
@@ -3111,6 +3619,12 @@ def prune_completed() -> tuple[int, list[str]]:
                     cause=invalid_claim,
                 ) from invalid_claim
             if claim.status.strip().lower() not in COMPLETED_STATUSES:
+                continue
+            if agent is not None and claim.agent != agent:
+                continue
+            if project is not None and project not in claim.projects:
+                continue
+            if scope is not None and claim.scope != scope:
                 continue
             try:
                 archive_receipt = claim_mutation_receipts.build_completed_claim_archive_receipt(
@@ -3373,6 +3887,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--write-path", action="append", default=[], help="Repo-relative write path")
     parser.add_argument("--read-path", action="append", default=[], help="Repo-relative read path")
     parser.add_argument("--worktree-path", help="Worktree path for this claim")
+    parser.add_argument("--broad-scope-mode", choices=sorted(BROAD_SCOPE_MODES))
+    parser.add_argument("--broad-scope-reason")
+    parser.add_argument("--target-worktree-path")
     parser.add_argument("--repo-root", help="Canonical repository root for readiness validation")
     parser.add_argument("--branch", help="Branch for this claim")
     parser.add_argument(
@@ -3492,6 +4009,11 @@ def _render_check_output(
                 "liveness_issues": claim_liveness_issues(claim, now=observed_at),
                 "progress_issues": claim_progress_issues(claim, now=observed_at),
                 "enforcement_issues": claim_enforcement_issues(claim),
+                "broad_scope_diagnostic": (
+                    "legacy_unclassified"
+                    if "legacy_broad_scope_unclassified" in _broad_scope_contract_issues(claim)
+                    else None
+                ),
             }
             for claim in claims
         ],
@@ -3558,6 +4080,9 @@ def main(argv: list[str] | None = None) -> int:
                 claim_type=args.claim_type,
                 write_paths=args.write_path,
                 read_paths=args.read_path,
+                broad_scope_mode=args.broad_scope_mode,
+                broad_scope_reason=args.broad_scope_reason,
+                target_worktree_path=args.target_worktree_path,
                 worktree_path=args.worktree_path,
                 repo_root=args.repo_root,
                 branch=args.branch,
@@ -3580,6 +4105,8 @@ def main(argv: list[str] | None = None) -> int:
             print(f"    expires: {claim.expires_at}")
             if claim.write_paths:
                 print(f"    write_paths: {', '.join(claim.write_paths)}")
+            if "legacy_broad_scope_unclassified" in _broad_scope_contract_issues(claim):
+                print("    broad_scope: legacy_unclassified (narrow or explicitly classify on material upsert)")
             for issue in claim_enforcement_issues(claim):
                 print(
                     f"HIGH: {issue['code']}: {issue['message']}",
@@ -3595,7 +4122,10 @@ def main(argv: list[str] | None = None) -> int:
                     overlaps = ", ".join(item.overlapping_write_paths) or "none"
                     print(
                         f"  - {item.severity}: {item.other_agent} {item.other_scope} "
-                        f"({item.reason}; overlap={overlaps})"
+                        f"({item.reason}; overlap={overlaps}; "
+                        f"relations={','.join(item.overlap_relations) or 'none'}; "
+                        f"reservation={item.reservation_kind or 'none'}; "
+                        f"current_diff_disjoint={item.current_diff_disjoint!r})"
                     )
         return 1 if any(claim_enforcement_issues(claim) for claim in claims) else 0
 
@@ -3618,6 +4148,8 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         for claim in claims:
             print(f"  [{claim.agent}] {claim.primary_project()}:{claim.scope} [{claim.claim_type}] — {claim.intent}")
+            if "legacy_broad_scope_unclassified" in _broad_scope_contract_issues(claim):
+                print("    broad_scope: legacy_unclassified")
         return 0
 
     if args.progress:
@@ -3702,6 +4234,9 @@ def main(argv: list[str] | None = None) -> int:
                 resume_requested=args.resume,
                 require_new=args.require_new,
                 allow_parallel=args.allow_parallel,
+                broad_scope_mode=args.broad_scope_mode,
+                broad_scope_reason=args.broad_scope_reason,
+                target_worktree_path=args.target_worktree_path,
                 require_native_session_binding=True,
             )
         except MutationAuditError as exc:
@@ -3785,7 +4320,11 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.prune_completed:
         try:
-            removed, removed_scopes = prune_completed()
+            removed, removed_scopes = prune_completed(
+                agent=args.agent,
+                project=args.project,
+                scope=args.scope,
+            )
         except CompletedClaimArchiveError as exc:
             return _render_completed_claim_archive_failure(
                 exc,

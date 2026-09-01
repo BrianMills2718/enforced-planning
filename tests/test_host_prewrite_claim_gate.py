@@ -267,6 +267,55 @@ def test_workspace_inventory_can_pipe_through_safe_sort(tmp_path: Path) -> None:
     assert decision["reason_code"] == "bash_read_only"
 
 
+@pytest.mark.parametrize(
+    "command",
+    [
+        "date -u +%Y-%m-%dT%H:%M:%SZ",
+        "git ls-remote --heads origin | jq -R .",
+        "gh pr view 132 --json state | jq -r .state",
+        "gh api --method GET repos/example/project | jq -r .default_branch",
+        "gh api -XGET repos/example/project | jq -r .default_branch",
+    ],
+)
+def test_external_observation_commands_and_safe_jq_pipelines_are_read_only(
+    tmp_path: Path,
+    command: str,
+) -> None:
+    payload = _payload(cwd=tmp_path, tool="Bash", tool_input={"command": command})
+
+    decision = _evaluate(tmp_path, payload, tmp_path / "missing-claims")
+
+    assert decision["decision"] == "allow", decision
+    assert decision["reason_code"] == "bash_read_only"
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "date --set=tomorrow",
+        "date --se=tomorrow",
+        "git ls-remote --upload-pack='touch marker' origin",
+        "gh pr merge 132",
+        "gh api --method POST repos/example/project/issues",
+        "gh api -XPOST repos/example/project/issues",
+        "gh api repos/example/project -f name=value",
+        "gh api repos/example/project -fname=value",
+        "gh api repos/example/project -Fname=value",
+        "python --help",
+    ],
+)
+def test_write_capable_or_unbounded_observation_lookalikes_require_claim(
+    tmp_path: Path,
+    command: str,
+) -> None:
+    payload = _payload(cwd=tmp_path, tool="Bash", tool_input={"command": command})
+
+    decision = _evaluate(tmp_path, payload, tmp_path / "missing-claims")
+
+    assert decision["decision"] == "deny"
+    assert decision["reason_code"] == "repository_identity_unavailable"
+
+
 def test_compound_bash_with_a_mutation_requires_an_exact_healthy_claim(tmp_path: Path) -> None:
     _workspace, _repo, worktree, claims_dir, _claim_path = _fixture(tmp_path)
     payload = _payload(
@@ -480,6 +529,108 @@ def test_host_gate_rejects_tampered_native_closeout(
         claims_dir=claims_dir,
         projection_path=tmp_path / "projection.json",
         subagent_event=False,
+    )
+
+    assert classification is False
+
+
+def _bootstrap_narrow_fixture(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> tuple[Path, Path, Path, str]:
+    """Return one valid authority-disabled v6 claim and its exact recovery command."""
+
+    workspace, _repo, worktree, claims_dir, claim_path = _fixture(tmp_path)
+    monkeypatch.setenv("CODEX_THREAD_ID", "host-gate-test")
+    claim = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    claim.update(
+        schema_version=6,
+        agent="codex",
+        session_id="codex:host-gate-test",
+        write_paths=["."],
+        broad_scope_mode="bootstrap",
+        broad_scope_reason="construct and narrow the exact maintenance lane",
+        target_worktree_path=str(worktree),
+        worktree_path=f"{worktree}.bootstrap-no-mutation-authority",
+    )
+    claim_path.write_text(yaml.safe_dump(claim, sort_keys=False), encoding="utf-8")
+    write_projection(claims_dir=claims_dir, projection_path=tmp_path / "projection.json")
+    command = (
+        f"/usr/bin/make -C {worktree} session-narrow "
+        "WORKTREE_AGENT=codex WORKTREE_PROJECT=host-gate-test "
+        "BRANCH=host-gate-lane SESSION_WRITE_PATHS='src/allowed.py'"
+    )
+    return workspace, worktree, claims_dir, command
+
+
+def test_workspace_root_admits_exact_native_session_narrow(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A bootstrap claim can admit its only strict-subset recovery operation."""
+
+    workspace, _worktree, claims_dir, command = _bootstrap_narrow_fixture(tmp_path, monkeypatch)
+    payload = _payload(
+        cwd=workspace,
+        tool="Bash",
+        tool_input={"command": command},
+        session="host-gate-test",
+    )
+
+    code, decision = _run_cli(
+        monkeypatch,
+        capsys,
+        tmp_path,
+        payload,
+        claims_dir=claims_dir,
+        projection_path=tmp_path / "projection.json",
+        client="codex",
+    )
+
+    assert code == 0, decision
+    assert decision["decision"] == "allow"
+    assert decision["reason_code"] == "native_session_narrow_command"
+
+
+@pytest.mark.parametrize(
+    "tamper",
+    [
+        "extra-variable",
+        "composed",
+        "relative-target",
+        "traversal-path",
+        "client-mismatch",
+        "no-op",
+        "subagent",
+    ],
+)
+def test_workspace_root_rejects_tampered_native_session_narrow(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    tamper: str,
+) -> None:
+    """Composition, ambiguity, expansion, and borrowed identity all fail closed."""
+
+    _workspace, worktree, claims_dir, command = _bootstrap_narrow_fixture(tmp_path, monkeypatch)
+    if tamper == "extra-variable":
+        command += " EXTRA=1"
+    elif tamper == "composed":
+        command += " && touch escaped"
+    elif tamper == "relative-target":
+        command = command.replace(str(worktree), "relative/worktree", 1)
+    elif tamper == "traversal-path":
+        command = command.replace("src/allowed.py", "../escaped.py")
+    elif tamper == "client-mismatch":
+        command = command.replace("WORKTREE_AGENT=codex", "WORKTREE_AGENT=claude-code")
+    elif tamper == "no-op":
+        command = command.replace("src/allowed.py", ".")
+    classification = prewrite_claim_gate._special_unclaimed_command(
+        command,
+        client="codex",
+        claims_dir=claims_dir,
+        projection_path=tmp_path / "projection.json",
+        subagent_event=tamper == "subagent",
     )
 
     assert classification is False

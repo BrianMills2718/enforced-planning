@@ -115,6 +115,7 @@ python scripts/check_coordination_claims.py --progress --help
 python scripts/session_end.py --help
 python scripts/session_finish.py --help
 python scripts/session_close.py --help
+python scripts/session_narrow.py --help
 
 # Tests
 pytest -q
@@ -166,6 +167,10 @@ adoption.
    type does not exempt a lane from this lifecycle guard. Related work declares
    `parent_scope`; intentional additional roots require explicit parallel
    authorization.
+   A new broad write claim must declare `bootstrap` or `bounded` intent plus a
+   non-empty reason. Use `session-narrow` to reduce it; bootstrap claims cannot
+   authorize ordinary repository writes until that owner/session-bound narrow
+   succeeds.
 9. A new plan-bound lane resolves the canonical default-integration tip once
    and retains that full revision through its pre-worktree claim, branch,
    worktree, and session tracker. Only an already-retained lane can resume from

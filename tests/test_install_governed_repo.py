@@ -56,6 +56,7 @@ MAILBOX_COMMON_ROLLOUT_PATHS = {
     "scripts/meta/coordination_messages.py",
     "scripts/meta/coordination_operator_status.py",
     "scripts/meta/session_heartbeat.py",
+    "scripts/meta/session_narrow.py",
     "scripts/meta/session_close.py",
     "scripts/meta/session_resume.py",
     "scripts/meta/session_start.py",
@@ -112,10 +113,12 @@ CLAIM_PROJECTION_REFRESH_PATHS = {
     "enforced_planning/worktree_paths.py",
     "scripts/refresh_prewrite_claim_projection.py",
     "scripts/meta/check_coordination_claims.py",
+    "scripts/meta/worktree-coordination/create_worktree.py",
     "scripts/meta/session_close.py",
     "scripts/meta/session_end.py",
     "scripts/meta/session_finish.py",
     "scripts/meta/session_heartbeat.py",
+    "scripts/meta/session_narrow.py",
     "scripts/meta/session_resume.py",
     "scripts/meta/session_start.py",
 }
@@ -128,6 +131,21 @@ def test_source_repo_claim_facade_projection_matches_canonical_source() -> None:
     installed = PROJECT_META_ROOT / "scripts" / "meta" / "check_coordination_claims.py"
 
     assert installed.read_bytes() == canonical.read_bytes()
+
+
+def test_source_repo_narrowing_facades_match_canonical_sources() -> None:
+    """Generated lifecycle/worktree copies are installer outputs, never independent owners."""
+
+    pairs = {
+        "scripts/meta/session_start.py": "scripts/session_start.py",
+        "scripts/meta/session_narrow.py": "scripts/session_narrow.py",
+        "scripts/meta/session_close.py": "scripts/session_close.py",
+        "scripts/meta/worktree-coordination/create_worktree.py": (
+            "scripts/worktree-coordination/create_worktree.py"
+        ),
+    }
+    for generated, canonical in pairs.items():
+        assert (PROJECT_META_ROOT / generated).read_bytes() == (PROJECT_META_ROOT / canonical).read_bytes()
 
 
 def _write_minimal_claude(repo_root: Path) -> None:
@@ -397,7 +415,7 @@ def test_claim_projection_refresh_only_is_bounded_and_idempotent(tmp_path: Path)
         installed_lifecycle.read_bytes()
         == (PROJECT_META_ROOT / "enforced_planning" / "session_lifecycle.py").read_bytes()
     )
-    for wrapper in ("session_start.py", "session_close.py"):
+    for wrapper in ("session_start.py", "session_narrow.py", "session_close.py"):
         help_result = subprocess.run(
             [sys.executable, str(tmp_path / "scripts/meta" / wrapper), "--help"],
             cwd=str(tmp_path),
@@ -1209,6 +1227,149 @@ def _installed_worktree_make_args(tmp_path: Path, *, scope: str) -> list[str]:
     ]
 
 
+def test_installed_maintenance_bootstrap_denies_then_narrows_and_closes(
+    tmp_path: Path,
+) -> None:
+    """One generated consumer completes the public bootstrap recovery journey."""
+
+    environment, _revision = _installed_planning_make_fixture(tmp_path)
+    environment["PYTHONDONTWRITEBYTECODE"] = "1"
+    scope = f"plan132-installed-{tmp_path.name}"
+    worktrees = tmp_path / "worktrees"
+    created = subprocess.run(
+        [
+            "make",
+            "maintenance-worktree",
+            f"PYTHON={sys.executable}",
+            f"BRANCH={scope}",
+            "TASK=Exercise installed broad-claim narrowing",
+            "WORKTREE_AGENT=codex",
+            "WORKTREE_PROJECT=fixture",
+            f"WORKTREE_DIR={worktrees}",
+        ],
+        cwd=tmp_path,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert created.returncode == 0, created.stdout + created.stderr
+
+    worktree = worktrees / scope
+    claims_dir = Path(environment["HOME"]) / ".claude" / "coordination" / "claims"
+    receipt_path = claims_dir.parent / "receipts" / "installed-prewrite-receipts.jsonl"
+    payload = json.dumps(
+        {
+            "session_id": environment["CODEX_THREAD_ID"],
+            "hook_event_name": "PreToolUse",
+            "cwd": str(worktree),
+            "tool_name": "apply_patch",
+            "tool_input": {
+                "command": (
+                    f"*** Begin Patch\n*** Update File: {worktree / 'CLAUDE.md'}"
+                    "\n@@\n-old\n+new\n*** End Patch"
+                )
+            },
+        }
+    )
+    gate_adapter = "\n".join(
+        [
+            "import json, sys",
+            "from pathlib import Path",
+            "from enforced_planning.prewrite_claim_fast import evaluate_prewrite_fast, projection_path_for",
+            "claims_dir = Path(sys.argv[1])",
+            "result = evaluate_prewrite_fast(json.load(sys.stdin), client='codex', mode='enforce', "
+            "claims_dir=claims_dir, projection_path=projection_path_for(claims_dir), "
+            "receipt_path=Path(sys.argv[2]))",
+            "print(json.dumps(result, sort_keys=True))",
+            "raise SystemExit(0 if result['decision'] == 'allow' else 1)",
+        ]
+    )
+    gate_command = [
+        sys.executable,
+        "-c",
+        gate_adapter,
+        str(claims_dir),
+        str(receipt_path),
+    ]
+    denied = subprocess.run(
+        gate_command,
+        cwd=worktree,
+        env=environment,
+        input=payload,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert denied.returncode == 1, denied.stdout + denied.stderr
+    assert denied.stdout, denied.stderr
+    assert json.loads(denied.stdout)["reason_code"] == "no_exact_claim"
+
+    narrowed = subprocess.run(
+        [
+            sys.executable,
+            str(tmp_path / "scripts" / "meta" / "session_narrow.py"),
+            "--agent",
+            "codex",
+            "--project",
+            "fixture",
+            "--scope",
+            scope,
+            "--session-id",
+            f"codex:{environment['CODEX_THREAD_ID']}",
+            "--write-path",
+            "CLAUDE.md",
+            "--json",
+        ],
+        cwd=worktree,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert narrowed.returncode == 0, narrowed.stdout + narrowed.stderr
+    assert json.loads(narrowed.stdout)["new_write_paths"] == ["CLAUDE.md"]
+
+    admitted = subprocess.run(
+        gate_command,
+        cwd=worktree,
+        env=environment,
+        input=payload,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert admitted.returncode == 0, admitted.stdout + admitted.stderr
+    assert json.loads(admitted.stdout)["reason_code"] == "exact_live_claim"
+
+    closed = subprocess.run(
+        [
+            sys.executable,
+            str(tmp_path / "scripts" / "meta" / "session_close.py"),
+            "--agent",
+            "codex",
+            "--project",
+            "fixture",
+            "--scope",
+            scope,
+            "--worktree-path",
+            str(worktree),
+            "--branch",
+            scope,
+            "--json",
+        ],
+        cwd=tmp_path,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert closed.returncode == 0, closed.stdout + closed.stderr
+    close_payload = json.loads(closed.stdout)
+    assert close_payload["disposition"] == "merged"
+    assert close_payload["released"] is True
+
+
 def test_installed_make_retains_one_revision_across_claim_worktree_and_tracker(
     tmp_path: Path,
 ) -> None:
@@ -1240,7 +1401,8 @@ def test_installed_make_retains_one_revision_across_claim_worktree_and_tracker(
         capture_output=True,
         text=True,
     ).stdout.strip()
-    assert claim["schema_version"] == 4
+    assert claim["schema_version"] == 6
+    assert "broad_scope_mode" not in claim
     assert claim["start_revision"] == revision
     assert tracker["schema_version"] == 2
     assert tracker["claim"]["start_revision"] == revision
@@ -1864,8 +2026,9 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
             "install:scripts/meta/session_close.py",
             "install:scripts/meta/session_end.py",
             "install:scripts/meta/session_finish.py",
-            "install:scripts/meta/session_heartbeat.py",
-            "install:scripts/meta/session_start.py",
+                "install:scripts/meta/session_heartbeat.py",
+                "install:scripts/meta/session_narrow.py",
+                "install:scripts/meta/session_start.py",
             "install:scripts/meta/session_status.py",
             "install:scripts/meta/project_status.py",
             "install:scripts/meta/session_resume.py",
@@ -2458,3 +2621,78 @@ def test_missing_or_unparseable_pyproject_is_not_a_declaration(tmp_path: Path) -
     assert declares_installed_framework(tmp_path) is False
     (tmp_path / "pyproject.toml").write_text("this is not toml [[[", encoding="utf-8")
     assert declares_installed_framework(tmp_path) is False
+
+
+def test_live_v6_broad_claim_blocks_runtime_downgrade(tmp_path: Path) -> None:
+    """An installer cannot remove schema or narrow support beneath a live broad lease."""
+
+    from scripts import install_governed_repo
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    claims_dir = tmp_path / "claims"
+    claims_dir.mkdir()
+    claim_path = claims_dir / "codex_demo_lane.yaml"
+    claim_path.write_text(
+        yaml.safe_dump(
+            {
+                "schema_version": 6,
+                "agent": "codex",
+                "projects": ["demo"],
+                "scope": "lane",
+                "intent": "exercise downgrade protection",
+                "claim_type": "program",
+                "plan_ref": "UNPLANNED",
+                "write_paths": ["."],
+                "repo_root": str(repo),
+                "worktree_path": f"{repo}.bootstrap-no-mutation-authority",
+                "target_worktree_path": str(repo),
+                "branch": "lane",
+                "session_id": "codex:runtime",
+                "session_name": "runtime",
+                "broader_goal": "Keep broad authority fail-closed",
+                "status": "active",
+                "broad_scope_mode": "bootstrap",
+                "broad_scope_reason": "construct and narrow this fixture",
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    compatible = install_governed_repo._claim_runtime_downgrade_blockers(
+        repo,
+        candidate_schema_version=6,
+        session_narrow_available=True,
+        claims_dir=claims_dir,
+    )
+    older = install_governed_repo._claim_runtime_downgrade_blockers(
+        repo,
+        candidate_schema_version=5,
+        session_narrow_available=True,
+        claims_dir=claims_dir,
+    )
+    missing_recovery = install_governed_repo._claim_runtime_downgrade_blockers(
+        repo,
+        candidate_schema_version=6,
+        session_narrow_available=False,
+        claims_dir=claims_dir,
+    )
+
+    assert compatible == []
+    assert len(older) == 1 and "older than required schema 6" in older[0]
+    assert len(missing_recovery) == 1 and "lacks scripts/session_narrow.py" in missing_recovery[0]
+
+
+def test_every_claim_runtime_installer_profile_carries_session_narrow() -> None:
+    """Full and bounded runtime rollouts must install the owner recovery adapter."""
+
+    from scripts import install_governed_repo
+
+    for manifest in (
+        install_governed_repo.SYNC_SUPPORT_FILES,
+        install_governed_repo.WORKTREE_ONLY_SYNC_SUPPORT_FILES,
+        install_governed_repo.COORDINATION_MESSAGES_SHARED_FILES,
+        install_governed_repo.CLAIM_PROJECTION_SHARED_FILES,
+    ):
+        assert manifest["scripts/meta/session_narrow.py"] == "scripts/session_narrow.py"

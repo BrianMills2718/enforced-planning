@@ -3,11 +3,18 @@
 from __future__ import annotations
 
 import subprocess
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
+import yaml  # type: ignore[import-untyped]
 
-from enforced_planning import coordination_messages, session_lifecycle
+from enforced_planning import (
+    claim_mutation_receipts,
+    coordination_claims,
+    coordination_messages,
+    session_lifecycle,
+)
 
 
 def _git(repo: Path, *args: str) -> str:
@@ -78,6 +85,84 @@ def test_other_mailbox_failures_still_surface() -> None:
             )
     finally:
         coordination_messages.poll_session_inbox = original  # type: ignore[assignment]
+
+
+def test_bounded_broad_heartbeat_preserves_expiry_and_polls_mailbox(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A heartbeat refreshes liveness, never silently extends a bounded lease."""
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-b", "lane")
+    _git(repo, "config", "user.email", "test@example.com")
+    _git(repo, "config", "user.name", "Test User")
+    (repo / "docs").mkdir()
+    (repo / "docs" / "README.md").write_text("docs\n", encoding="utf-8")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-m", "seed")
+    claims_dir = tmp_path / "claims"
+    claims_dir.mkdir()
+    now = datetime.now(timezone.utc)
+    expiry = (now + timedelta(hours=1)).isoformat()
+    claim_path = claims_dir / "codex_demo_lane.yaml"
+    claim_path.write_text(
+        yaml.safe_dump(
+            {
+                "schema_version": 6,
+                "agent": "codex",
+                "claimed_at": now.isoformat(),
+                "expires_at": expiry,
+                "projects": ["demo"],
+                "scope": "lane",
+                "intent": "exercise bounded lease heartbeat",
+                "claim_type": "write",
+                "plan_ref": "UNPLANNED",
+                "write_paths": ["docs"],
+                "repo_root": str(repo),
+                "worktree_path": str(repo),
+                "branch": "lane",
+                "session_id": "codex:heartbeat-test",
+                "session_name": "heartbeat-test",
+                "broader_goal": "Prove lease bounds survive heartbeat",
+                "heartbeat_at": (now - timedelta(minutes=1)).isoformat(),
+                "status": "active",
+                "broad_scope_mode": "bounded",
+                "broad_scope_reason": "the fixture deliberately owns the docs tree",
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+    mailbox_calls: list[tuple[str, str, str]] = []
+
+    def poll_mailbox(*, agent: str, project: str, session_id: str) -> dict[str, object]:
+        mailbox_calls.append((agent, project, session_id))
+        return {"polled": True, "active_count": 0}
+
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    monkeypatch.setattr(
+        claim_mutation_receipts,
+        "DEFAULT_EVENTS_PATH",
+        tmp_path / "claim-mutation-events.jsonl",
+    )
+    monkeypatch.setattr(session_lifecycle, "_poll_mailbox", poll_mailbox)
+
+    result = session_lifecycle.heartbeat_session(
+        agent="codex",
+        project="demo",
+        session_id="codex:heartbeat-test",
+        scope="lane",
+    )
+
+    persisted = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    assert persisted["expires_at"] == expiry
+    assert persisted["broad_scope_mode"] == "bounded"
+    assert persisted["broad_scope_reason"] == "the fixture deliberately owns the docs tree"
+    assert persisted["heartbeat_at"] == result["heartbeat_at"]
+    assert result["coordination_mailbox"] == {"polled": True, "active_count": 0}
+    assert mailbox_calls == [("codex", "demo", "codex:heartbeat-test")]
 
 
 def test_remove_worktree_reanchors_process_cwd_before_removal(

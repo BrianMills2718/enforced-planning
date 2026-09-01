@@ -60,6 +60,9 @@ def _supported_start_kwargs(args: argparse.Namespace) -> dict[str, Any]:
         "session_name": args.session_name,
         "claim_type": args.claim_type,
         "parent_scope": args.parent_scope,
+        "broad_scope_mode": args.broad_scope_mode,
+        "broad_scope_reason": args.broad_scope_reason,
+        "target_worktree_path": args.target_worktree_path,
         "write_paths": args.write_path or None,
         "read_paths": args.read_path or None,
         "work_graph_path": args.work_graph,
@@ -91,6 +94,15 @@ def _supported_start_kwargs(args: argparse.Namespace) -> dict[str, Any]:
             "Installed session lifecycle does not support external plan-authority custody; "
             "synchronize enforced-planning support before starting this lane."
         )
+    if any((args.broad_scope_mode, args.broad_scope_reason, args.target_worktree_path)) and not {
+        "broad_scope_mode",
+        "broad_scope_reason",
+        "target_worktree_path",
+    }.issubset(supported):
+        raise RuntimeError(
+            "Installed session lifecycle does not support explicit broad-scope custody; "
+            "synchronize enforced-planning support before starting this lane."
+        )
     return {name: value for name, value in kwargs.items() if name in supported}
 
 
@@ -113,6 +125,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--session-name")
     parser.add_argument("--claim-type", choices=["program", "write", "review", "research"])
     parser.add_argument("--parent-scope")
+    parser.add_argument("--broad-scope-mode", choices=["bounded", "bootstrap"])
+    parser.add_argument("--broad-scope-reason")
+    parser.add_argument("--target-worktree-path")
     parser.add_argument("--write-path", action="append", default=[])
     parser.add_argument("--read-path", action="append", default=[])
     parser.add_argument("--work-graph")

@@ -114,6 +114,7 @@ After a successful minimum install, your repo should have:
 - `scripts/meta/render_agents_md.py`
 - `scripts/meta/session_finish.py`
 - `scripts/meta/session_heartbeat.py`
+- `scripts/meta/session_narrow.py`
 - `scripts/meta/session_start.py`
 - `scripts/meta/session_status.py`
 - `scripts/meta/sync_plan_status.py`
@@ -134,6 +135,10 @@ claim entrypoint is `scripts/meta/check_coordination_claims.py`. The sanctioned
 metadata stays truthful without inventing fake broad write ownership.
 The same sanctioned flow also starts a linked session contract and tracker, and
 it uses the same claim/tracker model for Codex and Claude Code.
+When `make maintenance-worktree` starts with whole-repository bootstrap custody,
+ordinary writes remain disabled until the exact owning session runs
+`make session-narrow BRANCH=... SESSION_WRITE_PATHS="..."`. Supplying narrow
+write paths at creation avoids that temporary broad reservation.
 
 The Enforced Planning source repository additionally sets
 `meta_process.claims.outcome_admission_mode: enforce_selected`. New source

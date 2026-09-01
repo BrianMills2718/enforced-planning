@@ -151,6 +151,7 @@ def test_generate_registry_outputs_json_and_markdown(tmp_path: Path) -> None:
         "missing_worktree_path",
         "missing_session_id",
         "missing_session_name",
+        "missing_plan_ref",
     ]
     markdown = markdown_output.read_text(encoding="utf-8")
     assert "# Active Work Registry" in markdown
@@ -376,6 +377,7 @@ def test_registry_reports_correlated_stalled_progress_evidence(tmp_path: Path) -
         scope="progress-lane",
         intent="Expose stalled progress",
         claim_type="program",
+        plan_ref="UNPLANNED",
         worktree_path=str(repo_root),
         repo_root=str(repo_root),
         branch="main",
@@ -434,11 +436,13 @@ def test_registry_lane_reports_weak_before_stalled_for_mixed_progress_claims(
         "project": "demo",
         "intent": "Expose mixed progress health",
         "claim_type": "review",
+        "plan_ref": "UNPLANNED",
         "worktree_path": str(repo_root),
         "repo_root": str(repo_root),
         "branch": "main",
         "session_name": "mixed-progress-lane",
         "broader_goal": "Progress Lease",
+        "tracker_path": str(tmp_path / "tracker.yaml"),
         "session_id": "codex:owner",
         "heartbeat_at": "2026-08-21T09:59:00+00:00",
         "expires_at": "2099-08-22T00:00:00+00:00",

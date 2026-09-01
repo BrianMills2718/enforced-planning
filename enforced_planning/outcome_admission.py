@@ -284,7 +284,7 @@ class SelectedOutcomeAdmissionEvidenceV1(StrictModel):
 
 
 class SelectionPendingActivationEvidenceV1(StrictModel):
-    """Exact v4 reservation allowed to create only its first session tracker."""
+    """Exact current reservation allowed to create only its first session tracker."""
 
     schema_version: Literal["1.0.0"] = "1.0.0"
     agent: str = Field(min_length=1)
@@ -293,7 +293,7 @@ class SelectionPendingActivationEvidenceV1(StrictModel):
     session_id: str = Field(min_length=3)
     claim_source_file: str = Field(min_length=1)
     claim_reservation_sha256: str = Field(pattern=HEX_SHA256_PATTERN)
-    claim_schema_version: Literal[4] = 4
+    claim_schema_version: Literal[4, 5, 6]
     repo_root: str = Field(min_length=1)
     worktree_path: str = Field(min_length=1)
     branch: str = Field(min_length=1)
@@ -934,7 +934,7 @@ def _selection_pending_failure(code: str, message: str) -> SelectionPendingActiv
 def evaluate_selection_pending_session_activation(
     claim: coordination_claims.ClaimRecord,
 ) -> SelectionPendingActivationResultV1:
-    """Validate one exact pre-tracker v4/v5 reservation without selecting an outcome.
+    """Validate one exact pre-tracker v4/v5/v6 reservation without selecting an outcome.
 
     This is intentionally narrower than selected admission. It can justify
     only the first tracker write at ``session_start``; every later protected
@@ -961,10 +961,10 @@ def evaluate_selection_pending_session_activation(
             "selection_pending_identity_incomplete",
             "staged reservation lacks required identity: " + ", ".join(missing),
         )
-    if claim.schema_version not in {4, 5}:
+    if claim.schema_version not in {4, 5, 6}:
         return _selection_pending_failure(
             "selection_pending_claim_version_invalid",
-            "staged session activation requires an exact schema-v4 or schema-v5 claim",
+            "staged session activation requires an exact schema-v4, schema-v5, or schema-v6 claim",
         )
     if claim.claim_type != "write" or not claim.write_paths:
         return _selection_pending_failure(
@@ -1076,6 +1076,7 @@ def evaluate_selection_pending_session_activation(
         session_id=str(claim.session_id),
         claim_source_file=str(source_path),
         claim_reservation_sha256=canonical_sha256(claim.to_dict()),
+        claim_schema_version=claim.schema_version,
         repo_root=str(Path(claim.repo_root).expanduser().resolve()),
         worktree_path=str(Path(str(claim.worktree_path)).expanduser().resolve()),
         branch=str(claim.branch),

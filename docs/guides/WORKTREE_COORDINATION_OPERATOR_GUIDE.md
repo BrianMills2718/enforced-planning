@@ -213,7 +213,8 @@ and refresh the pre-write projection in the same locked mutation.
    itself (`.`): it is bounded by the named repository, branch, worktree, and
    native session, then must be narrowed before scoped implementation begins.
    An explicit `SESSION_WRITE_PATHS="..."` overrides that default and is
-   claimed as given, like every other maintenance default. Do not read the
+   claimed as given without bootstrap mode, reason, or target metadata; those
+   fields describe only the implicit repository-wide `.` custody state. Do not read the
    bootstrap `.` as mandatory: discarding a declared scope made every
    maintenance lane claim the whole repository and therefore overlap every
    other active lane, and because the overlap message reads

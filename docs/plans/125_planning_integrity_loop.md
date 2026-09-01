@@ -365,6 +365,12 @@ admission creates a revision-bound reservation without a tracker; worktree
 creation accepts only that narrow staged omission; session activation supplies
 the tracker or rolls the invocation-owned state back.
 
+The maintenance entrypoint also keeps bootstrap provenance exact. When
+`SESSION_WRITE_PATHS` is omitted it creates temporary repository-wide `.`
+custody with bootstrap mode, reason, and target metadata. When the caller
+supplies exact paths, it forwards those paths without bootstrap metadata; the
+claim is narrow from creation and needs no bootstrap classification.
+
 The provider commit hook then named two coupled operator surfaces rather than
 silently treating code tests as documentation adoption:
 `docs/guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md` for the claim/worktree

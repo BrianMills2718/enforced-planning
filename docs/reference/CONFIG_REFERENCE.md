@@ -224,6 +224,12 @@ worktree targets. Claim-runtime schema v6 also requires `session-narrow`; a
 generated consumer that lacks that entrypoint is not compatible with typed
 bootstrap broad claims.
 
+For `make maintenance-worktree`, omitted `SESSION_WRITE_PATHS` creates the
+temporary repository-wide `.` bootstrap claim and supplies its typed broad-scope
+mode, reason, and target worktree. An explicit nonempty `SESSION_WRITE_PATHS`
+value is already narrow authority: the Make entrypoint forwards those exact
+paths and omits all bootstrap metadata.
+
 ## commits
 
 | Key | Type | Default | Read By | Default When Absent |

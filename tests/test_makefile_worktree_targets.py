@@ -75,7 +75,7 @@ def test_maintenance_worktree_claim_declares_unplanned_ownership() -> None:
 
 
 def test_maintenance_worktree_keeps_an_explicitly_declared_write_scope() -> None:
-    """An explicit SESSION_WRITE_PATHS must reach the claim, not be replaced by ".".
+    """Exact SESSION_WRITE_PATHS must reach the claim without bootstrap metadata.
 
     Hardcoding the repo-root bootstrap default discarded whatever the caller
     supplied, so every maintenance lane claimed the whole repository and
@@ -94,8 +94,11 @@ def test_maintenance_worktree_keeps_an_explicitly_declared_write_scope() -> None
     assert '--write-path "Makefile"' in invocation
     assert '--write-path "docs/plans"' in invocation
     assert '--write-path "."' not in invocation
-    # The bootstrap contract itself is unchanged; only the scope narrows.
-    assert '--broad-scope-mode "bootstrap"' in invocation
+    # Exact paths are already narrow. Bootstrap metadata is valid only when the
+    # entrypoint had to invent the repository-wide "." authority surface.
+    assert '--broad-scope-mode' not in invocation
+    assert '--broad-scope-reason' not in invocation
+    assert '--target-worktree-path' not in invocation
 
 
 def test_plan_bound_worktree_claim_keeps_its_real_plan_reference() -> None:
@@ -320,8 +323,9 @@ def test_consumer_template_exposes_session_narrow_and_bootstrap_metadata() -> No
     assert '--project "$(WORKTREE_PROJECT)"' in narrow
     assert '--scope "$(BRANCH)"' in narrow
     assert '$(foreach path,$(SESSION_WRITE_PATHS),--write-path "$(path)")' in narrow
-    assert "SESSION_BROAD_SCOPE_MODE=bootstrap" in maintenance
-    assert 'SESSION_TARGET_WORKTREE_PATH="$(WORKTREE_DIR)/$(BRANCH)"' in maintenance
+    assert 'SESSION_BROAD_SCOPE_MODE="$(MAINTENANCE_BROAD_SCOPE_MODE)"' in maintenance
+    assert 'SESSION_BROAD_SCOPE_REASON="$(MAINTENANCE_BROAD_SCOPE_REASON)"' in maintenance
+    assert 'SESSION_TARGET_WORKTREE_PATH="$(MAINTENANCE_TARGET_WORKTREE_PATH)"' in maintenance
 
 
 def test_unplanned_session_start_without_permission_names_its_recovery() -> None:

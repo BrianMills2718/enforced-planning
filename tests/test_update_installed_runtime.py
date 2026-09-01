@@ -389,7 +389,8 @@ def test_update_runtime_suppresses_raw_operational_exception_traceback(
     assert str(caught.value) == runtime_update.SAFE_FAILURE_MESSAGE
     assert raw_error not in str(caught.value)
     assert raw_error not in rendered
-    assert caught.value.__suppress_context__ is True
+    assert caught.value.__cause__ is None
+    assert caught.value.__context__ is None
 
 
 def test_write_fast_forwards_and_retains_exact_recovery_ref(

@@ -377,6 +377,7 @@ def update_runtime(
 ) -> dict[str, Any]:
     """Validate and optionally fast-forward one exact installed runtime clone."""
 
+    denial: RuntimeUpdateError | None = None
     source_repo = Path(os.path.abspath(source_repo.expanduser()))
     runtime_repo = Path(os.path.abspath(runtime_repo.expanduser()))
     receipt = _base_receipt(
@@ -525,7 +526,10 @@ def update_runtime(
         return receipt
     except (RuntimeUpdateError, OSError, subprocess.SubprocessError) as exc:
         _refresh_failure_state(runtime_repo, receipt)
-        raise _deny(receipt, exc) from None
+        denial = _deny(receipt, exc)
+    if denial is not None:
+        raise denial
+    raise AssertionError("runtime updater reached an impossible fallthrough")
 
 
 def _parser() -> argparse.ArgumentParser:

@@ -1,6 +1,6 @@
 ## enforced-planning — framework for enforced planning, context gating, doc-code alignment
 
-.PHONY: help test test-quick check lint dead-code dead-code-audit dead-code-validate push-check infer check-deps check-caps apparatus-ratio migrate-rels verify-couplings review-surfaces promote plan-registry ecosystem-status docstring-wiki docstring-wiki-check test-relationships status reachability reachability-check reachability-baseline repo-stats fleet-drift fleet-drift-json
+.PHONY: help test test-quick check lint dead-code dead-code-audit dead-code-validate push-check infer check-deps check-caps apparatus-ratio migrate-rels verify-couplings review-surfaces promote plan-registry ecosystem-status docstring-wiki docstring-wiki-check test-relationships status reachability reachability-check reachability-baseline repo-stats fleet-drift fleet-drift-json install-codex-runtime commit-workspace-control-bootstrap
 
 PYTHON ?= $(if $(wildcard .venv/bin/python),.venv/bin/python,python3)
 PROJECT_STATUS_PYTHON ?= $(PYTHON)
@@ -10,9 +10,28 @@ SCAN_DIR ?= ~/projects
 TRUTH_CONFIG ?= $(REPO)/scripts/truth_surface_drift.yaml
 SEMANTIC_REVIEW_JSON ?= $(REPO)/docs/ops/semantic_truth_surface_review.json
 SEMANTIC_REVIEW_HISTORY ?= $(REPO)/docs/ops/semantic_truth_surface_review_history.json
+CODEX_RUNTIME_ROOT ?= $(HOME)/.codex/runtime/enforced-planning
+RUNTIME_REVISION ?=
 
 help:  ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*##' $(MAKEFILE_LIST) | awk -F ':.*##' '{printf "%-20s %s\n", $$1, $$2}'
+
+install-codex-runtime:  ## Install an exact pushed revision into the clean detached Codex runtime with a rollback ref
+	@test -n "$(RUNTIME_REVISION)" || { echo "RUNTIME_REVISION is required"; exit 1; }
+	@test -d "$(CODEX_RUNTIME_ROOT)/.git" || { echo "Codex runtime checkout is missing"; exit 1; }
+	@test -z "$$(git -C "$(CODEX_RUNTIME_ROOT)" status --porcelain)" || { echo "Codex runtime checkout is dirty"; exit 1; }
+	@case "$(RUNTIME_REVISION)" in *[!0-9a-f]*|'') echo "RUNTIME_REVISION must be hexadecimal"; exit 1;; esac
+	@length=$$(printf %s "$(RUNTIME_REVISION)" | wc -c); \
+		test "$$length" -ge 40 -a "$$length" -le 64 || { echo "RUNTIME_REVISION must be a full Git object id"; exit 1; }
+	@before=$$(git -C "$(CODEX_RUNTIME_ROOT)" rev-parse HEAD); \
+	rollback="refs/enforced-planning/runtime-rollback/$$(date -u +%Y%m%dT%H%M%SZ)-$$before"; \
+	git -C "$(CODEX_RUNTIME_ROOT)" update-ref "$$rollback" "$$before"; \
+	git -C "$(CODEX_RUNTIME_ROOT)" fetch --no-tags origin "$(RUNTIME_REVISION)"; \
+	git -C "$(CODEX_RUNTIME_ROOT)" checkout --detach "$(RUNTIME_REVISION)"; \
+	printf 'installed %s; rollback %s -> %s\n' "$(RUNTIME_REVISION)" "$$rollback" "$$before"
+
+commit-workspace-control-bootstrap:  ## One-time bridge for the pre-repair quoted-prefix deadlock
+	git commit -m '[Unplanned] Bootstrap workspace-root control repair'
 
 test:  ## Run full test suite
 	python -m pytest tests/ -v

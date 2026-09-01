@@ -21,7 +21,6 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-
 DEFAULT_CLAIMS_DIR = Path.home() / ".claude" / "coordination" / "claims"
 DEFAULT_PROJECTION_PATH = (
     Path.home() / ".claude" / "coordination" / "prewrite-authority-v1.json"
@@ -77,6 +76,7 @@ _SIMPLE_READ_ONLY_COMMANDS = frozenset(
         "readlink",
         "realpath",
         "rg",
+        "sha256sum",
         "stat",
         "tail",
         "test",
@@ -416,14 +416,37 @@ def _bash_declared_paths(command: str) -> tuple[str, ...]:
         return ()
     paths: list[str] = []
     command_start = True
+    env_command = False
+    python_script_pending = False
+    skip_env_cwd = False
     for token in tokens:
         if token in _SHELL_CONTROL or set(token) <= set(";&|<>"):
             command_start = token in {";", "&&", "||", "|", "&"}
             continue
         if command_start:
             command_start = False
+            env_command = token == "/usr/bin/env"
             if token.startswith(("/usr/bin/", "/bin/")):
                 continue
+        if env_command:
+            if skip_env_cwd:
+                skip_env_cwd = False
+                continue
+            if token in {"-C", "--chdir"}:
+                skip_env_cwd = True
+                continue
+            if token.startswith("--chdir=") or (
+                "=" in token and not token.startswith(("/", "~", "."))
+            ):
+                continue
+            env_command = False
+            python_script_pending = Path(token).name in {"python", "python3", "python3.12"}
+            continue
+        if python_script_pending:
+            if token.startswith("-"):
+                continue
+            python_script_pending = False
+            continue
         candidate = token.split("=", 1)[1] if token.startswith("-") and "=" in token else token
         if "://" in candidate or candidate in {"-", "."}:
             continue
@@ -457,7 +480,41 @@ def _bash_declared_paths(command: str) -> tuple[str, ...]:
 def _bash_target_is_unprovable(command: str) -> bool:
     """Reject expansions that can conceal a target path from the hook."""
 
-    return any(marker in command for marker in ("$", "`", "*", "?", "[", ">(", "<("))
+    quote: str | None = None
+    escaped = False
+    index = 0
+    while index < len(command):
+        char = command[index]
+        if escaped:
+            escaped = False
+            index += 1
+            continue
+        if quote == "'":
+            if char == "'":
+                quote = None
+            index += 1
+            continue
+        if char == "\\":
+            escaped = True
+            index += 1
+            continue
+        if char == '"':
+            quote = None if quote == '"' else '"'
+            index += 1
+            continue
+        if quote == '"':
+            if char in {"$", "`"}:
+                return True
+            index += 1
+            continue
+        if char == "'":
+            quote = "'"
+            index += 1
+            continue
+        if char in {"$", "`", "*", "?", "["} or command.startswith((">(", "<("), index):
+            return True
+        index += 1
+    return False
 
 
 def _bash_explicit_worktree(command: str) -> Path | None:
@@ -553,6 +610,8 @@ def _argv_is_read_only(argv: tuple[str, ...]) -> bool:
                 for token in argv[1:]
             )
         )
+    if executable == "systemctl":
+        return _systemctl_command_is_read_only(argv)
     if executable == "sed":
         tail = argv[1:]
         if any(
@@ -590,6 +649,40 @@ def _argv_is_read_only(argv: tuple[str, ...]) -> bool:
     if executable == "gh":
         return _gh_command_is_read_only(argv)
     return executable == "git" and _git_command_is_read_only(argv)
+
+
+def _systemctl_command_is_read_only(argv: tuple[str, ...]) -> bool:
+    """Admit only bounded systemd queries; lifecycle verbs remain claim-bound."""
+
+    flags = {
+        "--user",
+        "--system",
+        "--no-pager",
+        "--plain",
+        "--quiet",
+        "--no-legend",
+        "--full",
+        "--all",
+        "--value",
+    }
+    value_prefixes = ("--property=", "--type=", "--state=", "--lines=")
+    index = 1
+    while index < len(argv) and (
+        argv[index] in flags or argv[index].startswith(value_prefixes)
+    ):
+        index += 1
+    if index >= len(argv) or argv[index] not in {"is-active", "show"}:
+        return False
+    verb = argv[index]
+    tail = argv[index + 1 :]
+    if verb == "is-active" and not any(not token.startswith("-") for token in tail):
+        return False
+    return all(
+        not token.startswith("-")
+        or token in flags
+        or token.startswith(value_prefixes)
+        for token in tail
+    )
 
 
 def adapt_native_payload(

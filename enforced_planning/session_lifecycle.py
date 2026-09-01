@@ -2515,10 +2515,7 @@ def start_session(
                                     ) from claim_error
                                 _atomic_restore_bytes(locked_tracker_path, locked_tracker_bytes)
                             raise
-                    elif (
-                        explicit_unplanned_maintenance
-                        and outcome_admission.has_sanctioned_maintenance_claim_identity(locked_claim)
-                    ):
+                    elif outcome_admission.has_sanctioned_maintenance_claim_identity(locked_claim):
                         raise ValueError(
                             "explicit UNPLANNED maintenance claim has malformed locked tracker provenance; "
                             "refusing generic refresh"

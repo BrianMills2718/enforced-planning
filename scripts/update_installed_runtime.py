@@ -30,6 +30,18 @@ ZERO_OID = "0" * 40
 CANONICAL_ORIGIN = "https://github.com/BrianMills2718/enforced-planning.git"
 CANONICAL_ORIGIN_IDENTITY = "github.com/BrianMills2718/enforced-planning"
 LEGACY_RUNTIME_ORIGIN = "git@github-personal:BrianMills2718/enforced-planning.git"
+ALLOWED_RUNTIME_CONFIG_KEYS = {
+    "branch.main.merge",
+    "branch.main.remote",
+    "core.bare",
+    "core.filemode",
+    "core.logallrefupdates",
+    "core.repositoryformatversion",
+    "remote.origin.fetch",
+    "remote.origin.url",
+    "user.email",
+    "user.name",
+}
 
 
 class RuntimeUpdateError(RuntimeError):
@@ -233,20 +245,16 @@ def _assert_repo(path: Path, label: str) -> Path:
     return common.resolve()
 
 
-def _assert_no_local_url_rewrites(repo: Path, label: str) -> None:
-    result = _run(
-        repo,
-        "config",
-        "--includes",
-        "--local",
-        "--get-regexp",
-        r"^url\..*\.insteadof$",
-        check=False,
-    )
-    if result.returncode not in {0, 1}:
-        raise RuntimeUpdateError(f"cannot inspect {label} URL rewrite configuration")
-    if result.returncode == 0 and result.stdout.strip():
-        raise RuntimeUpdateError(f"{label} must not configure URL rewrites")
+def _assert_safe_runtime_local_config(repo: Path) -> None:
+    """Reject every unneeded local key that could alter Git's network boundary."""
+
+    result = _run(repo, "config", "--includes", "--local", "--name-only", "--list")
+    observed = {line.strip().lower() for line in result.stdout.splitlines() if line.strip()}
+    unsupported = sorted(observed - ALLOWED_RUNTIME_CONFIG_KEYS)
+    if unsupported:
+        raise RuntimeUpdateError(
+            "installed runtime has unsupported local Git configuration: " + ", ".join(unsupported)
+        )
 
 
 def _assert_clean_runtime(runtime_repo: Path) -> str:
@@ -334,7 +342,7 @@ def update_runtime(
         checkout_mode = _assert_clean_runtime(runtime_repo)
         receipt["checkout_mode"] = checkout_mode
 
-        _assert_no_local_url_rewrites(runtime_repo, "installed runtime")
+        _assert_safe_runtime_local_config(runtime_repo)
         runtime_origin = _output(runtime_repo, "config", "--local", "--get", "remote.origin.url")
         expected_origin = _canonical_origin_identity()
         if runtime_origin == CANONICAL_ORIGIN:
@@ -391,7 +399,7 @@ def update_runtime(
         if write and before != revision:
             receipt["stage"] = "fetch_target"
             receipt["mutation_started"] = True
-            _assert_no_local_url_rewrites(runtime_repo, "installed runtime")
+            _assert_safe_runtime_local_config(runtime_repo)
             _run(
                 runtime_repo,
                 "fetch",

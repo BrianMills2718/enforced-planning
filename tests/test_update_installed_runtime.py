@@ -138,7 +138,17 @@ def test_local_url_rewrite_is_denied(
         _git(runtime, "config", "--local", "--get", "remote.origin.url"),
     )
 
-    with pytest.raises(RuntimeUpdateError, match="must not configure URL rewrites"):
+    with pytest.raises(RuntimeUpdateError, match="unsupported local Git configuration"):
+        update_runtime(source_repo=source, runtime_repo=runtime, revision=after, write=False)
+
+
+def test_local_tls_override_is_denied(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, runtime, _before, after = _repos(tmp_path, monkeypatch)
+    _git(runtime, "config", "http.sslVerify", "false")
+
+    with pytest.raises(RuntimeUpdateError, match="unsupported local Git configuration"):
         update_runtime(source_repo=source, runtime_repo=runtime, revision=after, write=False)
 
 

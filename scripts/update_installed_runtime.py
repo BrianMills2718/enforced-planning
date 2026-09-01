@@ -42,12 +42,21 @@ class ReceiptArgumentParser(argparse.ArgumentParser):
         raise RuntimeUpdateError(message)
 
 
-def _run(repo: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
+def _run(
+    repo: Path,
+    *args: str,
+    check: bool = True,
+    mutating: bool = False,
+) -> subprocess.CompletedProcess[str]:
+    env = os.environ.copy()
+    if not mutating:
+        env["GIT_OPTIONAL_LOCKS"] = "0"
     result = subprocess.run(
         ["git", "-C", str(repo), *args],
         check=False,
         capture_output=True,
         text=True,
+        env=env,
     )
     if check and result.returncode != 0:
         detail = result.stderr.strip() or result.stdout.strip() or "git command failed"
@@ -184,6 +193,7 @@ def _remote_main_revision() -> str:
         check=False,
         capture_output=True,
         text=True,
+        env={**os.environ, "GIT_OPTIONAL_LOCKS": "0"},
     )
     if result.returncode != 0:
         detail = result.stderr.strip() or result.stdout.strip() or "git ls-remote failed"
@@ -279,20 +289,28 @@ def update_runtime(
         if write:
             receipt["stage"] = "fetch_target"
             receipt["mutation_started"] = True
-            _run(runtime_repo, "fetch", "--no-tags", "--no-write-fetch-head", CANONICAL_ORIGIN, revision)
+            _run(
+                runtime_repo,
+                "fetch",
+                "--no-tags",
+                "--no-write-fetch-head",
+                CANONICAL_ORIGIN,
+                revision,
+                mutating=True,
+            )
             _validate_revision(runtime_repo, revision)
 
         recovery_ref = _recovery_ref(before, now or datetime.now(UTC))
         receipt["stage"] = "create_recovery_ref"
-        _run(runtime_repo, "update-ref", recovery_ref, before, ZERO_OID)
+        _run(runtime_repo, "update-ref", recovery_ref, before, ZERO_OID, mutating=True)
         receipt["recovery_ref"] = recovery_ref
         receipt["mutation_started"] = True
         # The recovery ref deliberately remains and is reported if mutation fails.
         receipt["stage"] = "apply_update"
         if fast_forward:
-            _run(runtime_repo, "merge", "--ff-only", revision)
+            _run(runtime_repo, "merge", "--ff-only", revision, mutating=True)
         else:
-            _run(runtime_repo, "checkout", "--detach", revision)
+            _run(runtime_repo, "checkout", "--detach", revision, mutating=True)
 
         receipt["stage"] = "verify"
         after = _output(runtime_repo, "rev-parse", "HEAD")

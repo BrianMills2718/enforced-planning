@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import Any
 
 FULL_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
-URL_USERINFO_RE = re.compile(r"(?P<prefix>[A-Za-z][A-Za-z0-9+.-]*://)[^/@\s]+@")
+URL_USERINFO_RE = re.compile(r"(?P<prefix>[A-Za-z][A-Za-z0-9+.-]*://)[^@\r\n]*@")
 RECOVERY_NAMESPACE = "refs/codex-runtime-recovery"
 ZERO_OID = "0" * 40
 CANONICAL_ORIGIN = "https://github.com/BrianMills2718/enforced-planning.git"
@@ -119,6 +119,13 @@ def _observed_at(now: datetime | None = None) -> str:
     return (now or datetime.now(UTC)).astimezone(UTC).isoformat().replace("+00:00", "Z")
 
 
+def _safe_hostname() -> str:
+    try:
+        return socket.gethostname()
+    except OSError:
+        return "unavailable"
+
+
 def _base_receipt(
     *, source_repo: Path, runtime_repo: Path, revision: str, write: bool, now: datetime | None
 ) -> dict[str, Any]:
@@ -127,7 +134,7 @@ def _base_receipt(
         "action": "denied",
         "state": "checking",
         "stage": "preflight",
-        "host": socket.gethostname(),
+        "host": _safe_hostname(),
         "observed_at": _observed_at(now),
         "source_repo": str(source_repo.resolve()),
         "runtime_repo": str(runtime_repo.absolute()),

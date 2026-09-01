@@ -246,6 +246,42 @@ def test_main_emits_structured_receipt_for_argument_denial(capsys: pytest.Captur
     assert payload["error"]["type"] == "RuntimeUpdateError"
 
 
+def test_main_emits_complete_json_when_hostname_lookup_fails(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def fail_hostname() -> str:
+        raise OSError("injected hostname failure")
+
+    monkeypatch.setattr(runtime_update.socket, "gethostname", fail_hostname)
+
+    assert runtime_update.main([]) == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["action"] == "denied"
+    assert payload["state"] == "failed"
+    assert payload["stage"] == "arguments"
+    assert payload["host"] == "unavailable"
+    assert payload["error"]["type"] == "RuntimeUpdateError"
+
+
+def test_malformed_whitespace_url_credentials_are_redacted_from_denial() -> None:
+    receipt = runtime_update._base_receipt(
+        source_repo=Path("/source"),
+        runtime_repo=Path("/runtime"),
+        revision="0" * 40,
+        write=False,
+        now=datetime(2026, 9, 1, 17, 0, tzinfo=UTC),
+    )
+    denial = runtime_update._deny(
+        receipt,
+        RuntimeUpdateError("failed https://token:super secret@evil.example/repo.git"),
+    )
+
+    serialized = json.dumps(denial.receipt, sort_keys=True)
+    assert "token" not in serialized
+    assert "super secret" not in serialized
+    assert "https://<redacted>@evil.example/repo.git" in serialized
+
+
 def test_write_fast_forwards_and_retains_exact_recovery_ref(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -401,6 +401,12 @@ MAINTENANCE_AGENT = $(if $(strip $(WORKTREE_AGENT)),$(WORKTREE_AGENT),claude-cod
 # lane conflict with every other active lane by construction, and the operator
 # saw a CONFLICT naming the other lanes rather than their own claim.
 MAINTENANCE_BOOTSTRAP_WRITE_PATHS = $(if $(strip $(SESSION_WRITE_PATHS)),$(SESSION_WRITE_PATHS),.)
+# Bootstrap metadata is valid only for the implicit repository-wide claim.
+# An explicit path list is already narrow authority, and attaching bootstrap
+# metadata makes the typed claim contract reject the otherwise-safe request.
+MAINTENANCE_BROAD_SCOPE_MODE = $(if $(strip $(SESSION_WRITE_PATHS)),,bootstrap)
+MAINTENANCE_BROAD_SCOPE_REASON = $(if $(strip $(SESSION_WRITE_PATHS)),,construct this maintenance lane, then narrow before its first repository write)
+MAINTENANCE_TARGET_WORKTREE_PATH = $(if $(strip $(SESSION_WRITE_PATHS)),,$(WORKTREE_DIR)/$(BRANCH))
 
 maintenance-worktree:  ## Claimed light maintenance worktree; needs BRANCH (other maintenance metadata has safe defaults)
 ifndef BRANCH
@@ -414,9 +420,9 @@ endif
 		SESSION_NEXT="$(SESSION_NEXT)" SESSION_DEPENDS="$(SESSION_DEPENDS)" \
 		SESSION_STOP_CONDITIONS="$(SESSION_STOP_CONDITIONS)" SESSION_NOTE="$(SESSION_NOTE)" \
 		SESSION_CLAIM_TYPE="$(SESSION_CLAIM_TYPE)" SESSION_PARENT_SCOPE="$(SESSION_PARENT_SCOPE)" \
-		SESSION_BROAD_SCOPE_MODE=bootstrap \
-		SESSION_BROAD_SCOPE_REASON="construct this maintenance lane, then narrow before its first repository write" \
-		SESSION_TARGET_WORKTREE_PATH="$(WORKTREE_DIR)/$(BRANCH)" \
+		SESSION_BROAD_SCOPE_MODE="$(MAINTENANCE_BROAD_SCOPE_MODE)" \
+		SESSION_BROAD_SCOPE_REASON="$(MAINTENANCE_BROAD_SCOPE_REASON)" \
+		SESSION_TARGET_WORKTREE_PATH="$(MAINTENANCE_TARGET_WORKTREE_PATH)" \
 		SESSION_ALLOW_PARALLEL="$(SESSION_ALLOW_PARALLEL)" \
 		WORKTREE_EXECUTION_PROFILE=light ALLOW_UNPLANNED=1
 

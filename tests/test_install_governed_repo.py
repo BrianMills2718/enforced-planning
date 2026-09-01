@@ -1466,6 +1466,40 @@ def test_installed_context_packet_wrapper_resolves_target_repo_root(tmp_path: Pa
     assert payload["items"][0]["path"] == "CLAUDE.md"
 
 
+def test_full_install_coordination_hook_has_clean_import_closure(tmp_path: Path) -> None:
+    """Default full mode must install every direct coordination-hook dependency."""
+
+    _write_minimal_claude(tmp_path)
+    installed = _run(
+        "--repo-root",
+        str(tmp_path),
+        "--write",
+        "--json",
+        cwd=PROJECT_META_ROOT,
+    )
+    assert installed.returncode == 0, installed.stdout + installed.stderr
+    assert (tmp_path / "scripts" / "hook_receipts.py").is_file()
+    assert (tmp_path / "scripts" / "meta" / "hook_receipts.py").is_file()
+
+    imported = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import sys; "
+                f"sys.path.insert(0, {str(tmp_path / 'scripts')!r}); "
+                "import coordination_hook"
+            ),
+        ],
+        cwd=tmp_path,
+        env={**os.environ, "PYTHONPATH": ""},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert imported.returncode == 0, imported.stdout + imported.stderr
+
+
 def test_install_governed_repo_is_idempotent_after_write(tmp_path: Path) -> None:
     """A second dry-run after bootstrap should report no further actions."""
     _write_minimal_claude(tmp_path)

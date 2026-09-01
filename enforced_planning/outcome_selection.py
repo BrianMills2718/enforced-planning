@@ -7,6 +7,7 @@ resolving it never changes the ordinary pre-write decision.
 
 from __future__ import annotations
 
+import copy
 import hashlib
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
@@ -1136,6 +1137,82 @@ def prepare_outcome_session_transfer(
     )
 
 
+def build_prepared_outcome_session_transfer_payload(
+    prepared: PreparedOutcomeSessionTransfer,
+    *,
+    tracker_payload: dict[str, Any],
+    predecessor_claim: coordination_claims.ClaimRecord,
+    successor_claim: coordination_claims.ClaimRecord,
+    current_phase: str,
+    notes: str,
+    updated_at: str,
+) -> dict[str, Any]:
+    """Build the successor tracker without acquiring or mutating external state."""
+
+    if _claim_identity_sha256(successor_claim) != prepared.transfer.successor_claim_identity_sha256:
+        raise OutcomeSelectionError(
+            "session_transfer_claim_mismatch",
+            "resumed claim identity does not match the prepared successor binding",
+        )
+
+    payload = copy.deepcopy(tracker_payload)
+    if canonical_sha256(payload) != prepared.tracker_payload_sha256:
+        raise OutcomeSelectionError(
+            "session_transfer_tracker_changed",
+            "session tracker changed after transfer preflight",
+        )
+    tracker = _validate_tracker_claim(
+        payload,
+        claim=predecessor_claim,
+        tracker_path=prepared.tracker_path,
+    )
+    try:
+        current = OutcomeSelectionBindingV1.model_validate(tracker.get("outcome_selection"))
+    except ValidationError as exc:
+        raise OutcomeSelectionError(
+            "selection_binding_invalid",
+            f"existing outcome selection is invalid: {exc}",
+        ) from exc
+    if current != prepared.predecessor_binding:
+        raise OutcomeSelectionError(
+            "session_transfer_selection_changed",
+            "selected outcome changed after transfer preflight",
+        )
+    raw_history = tracker.get("outcome_session_transfers", [])
+    if not isinstance(raw_history, list):
+        raise OutcomeSelectionError(
+            "session_transfer_history_invalid",
+            "outcome_session_transfers must be a list",
+        )
+    try:
+        history = [OutcomeSessionTransferV1.model_validate(item) for item in raw_history]
+    except ValidationError as exc:
+        raise OutcomeSelectionError(
+            "session_transfer_history_invalid",
+            f"existing outcome session transfer is invalid: {exc}",
+        ) from exc
+
+    tracker_claim = payload.get("claim")
+    timestamps = payload.get("timestamps")
+    if not isinstance(tracker_claim, dict) or not isinstance(timestamps, dict):
+        raise OutcomeSelectionError("tracker_invalid", "session tracker is missing claim or timestamp metadata")
+    tracker_claim["session_id"] = successor_claim.session_id
+    tracker["current_phase"] = current_phase.strip()
+    tracker["notes"] = notes.strip()
+    tracker["outcome_selection"] = prepared.successor_binding.model_dump(mode="json")
+    tracker["outcome_session_transfers"] = [
+        *[item.model_dump(mode="json") for item in history],
+        prepared.transfer.model_dump(mode="json"),
+    ]
+    timestamps["updated_at"] = updated_at
+    _validate_tracker_claim(
+        payload,
+        claim=successor_claim,
+        tracker_path=prepared.tracker_path,
+    )
+    return payload
+
+
 def apply_prepared_outcome_session_transfer(
     prepared: PreparedOutcomeSessionTransfer,
     *,
@@ -1147,65 +1224,18 @@ def apply_prepared_outcome_session_transfer(
 ) -> OutcomeSessionTransferV1:
     """Atomically rebind one prepared selection and append its transfer receipt."""
 
-    if _claim_identity_sha256(successor_claim) != prepared.transfer.successor_claim_identity_sha256:
-        raise OutcomeSelectionError(
-            "session_transfer_claim_mismatch",
-            "resumed claim identity does not match the prepared successor binding",
-        )
-
     def apply_transfer(payload: dict[str, Any]) -> None:
-        if canonical_sha256(payload) != prepared.tracker_payload_sha256:
-            raise OutcomeSelectionError(
-                "session_transfer_tracker_changed",
-                "session tracker changed after transfer preflight",
-            )
-        tracker = _validate_tracker_claim(
-            payload,
-            claim=predecessor_claim,
-            tracker_path=prepared.tracker_path,
+        successor = build_prepared_outcome_session_transfer_payload(
+            prepared,
+            tracker_payload=payload,
+            predecessor_claim=predecessor_claim,
+            successor_claim=successor_claim,
+            current_phase=current_phase,
+            notes=notes,
+            updated_at=updated_at,
         )
-        try:
-            current = OutcomeSelectionBindingV1.model_validate(tracker.get("outcome_selection"))
-        except ValidationError as exc:
-            raise OutcomeSelectionError(
-                "selection_binding_invalid",
-                f"existing outcome selection is invalid: {exc}",
-            ) from exc
-        if current != prepared.predecessor_binding:
-            raise OutcomeSelectionError(
-                "session_transfer_selection_changed",
-                "selected outcome changed after transfer preflight",
-            )
-        raw_history = tracker.get("outcome_session_transfers", [])
-        if not isinstance(raw_history, list):
-            raise OutcomeSelectionError(
-                "session_transfer_history_invalid",
-                "outcome_session_transfers must be a list",
-            )
-        try:
-            history = [OutcomeSessionTransferV1.model_validate(item) for item in raw_history]
-        except ValidationError as exc:
-            raise OutcomeSelectionError(
-                "session_transfer_history_invalid",
-                f"existing outcome session transfer is invalid: {exc}",
-            ) from exc
-
-        tracker_claim = payload.get("claim")
-        if not isinstance(tracker_claim, dict):
-            raise OutcomeSelectionError("tracker_invalid", "session tracker is missing claim metadata")
-        tracker_claim["session_id"] = successor_claim.session_id
-        tracker["current_phase"] = current_phase.strip()
-        tracker["notes"] = notes.strip()
-        tracker["outcome_selection"] = prepared.successor_binding.model_dump(mode="json")
-        tracker["outcome_session_transfers"] = [
-            *[item.model_dump(mode="json") for item in history],
-            prepared.transfer.model_dump(mode="json"),
-        ]
-        _validate_tracker_claim(
-            payload,
-            claim=successor_claim,
-            tracker_path=prepared.tracker_path,
-        )
+        payload.clear()
+        payload.update(successor)
 
     session_contracts.mutate_session_tracker(
         prepared.tracker_path,

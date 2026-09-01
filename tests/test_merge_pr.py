@@ -282,6 +282,61 @@ def test_canonical_repo_root_uses_git_common_dir(monkeypatch, tmp_path) -> None:
     assert module.canonical_repo_root() == common_dir.parent
 
 
+def test_reject_self_removing_invocation_inside_target_worktree(
+    monkeypatch, tmp_path, capsys
+) -> None:
+    """The merge must not invalidate the parent tool runner's working directory."""
+
+    module = _load()
+    canonical_root = tmp_path / "canonical"
+    worktree = canonical_root / "worktrees" / "feature"
+    invocation_cwd = worktree / "src"
+    invocation_cwd.mkdir(parents=True)
+    monkeypatch.setattr(module, "find_worktree_for_branch", lambda _branch: worktree)
+    monkeypatch.setattr(module, "canonical_repo_root", lambda: canonical_root)
+
+    assert module.reject_self_removing_invocation(
+        "feature",
+        invocation_cwd=invocation_cwd,
+        pr_number=315,
+    )
+
+    output = capsys.readouterr().out
+    assert "parent tool runner would retain this cwd" in output
+    assert (
+        f"cd {canonical_root} && python scripts/merge_pr.py 315"
+        in output
+    )
+
+
+def test_merge_refuses_self_removing_caller_before_github_mutation(
+    monkeypatch, tmp_path, capsys
+) -> None:
+    """Unsafe invocation is rejected before fetch, mergeability, or GitHub writes."""
+
+    module = _load()
+    worktree = tmp_path / "worktrees" / "feature"
+    worktree.mkdir(parents=True)
+    observed_calls: list[list[str]] = []
+    monkeypatch.setattr(module, "get_pr_branch", lambda _pr: "feature")
+    monkeypatch.setattr(module, "find_worktree_for_branch", lambda _branch: worktree)
+    monkeypatch.setattr(module, "canonical_repo_root", lambda: tmp_path)
+    monkeypatch.setattr(
+        module,
+        "run_cmd",
+        lambda cmd, check=True, capture=True: (
+            observed_calls.append(cmd) or completed_process(cmd)
+        ),
+    )
+
+    assert not module.merge_pr(
+        315,
+        invocation_cwd=worktree,
+    )
+    assert observed_calls == []
+    assert "refusing to merge" in capsys.readouterr().out
+
+
 def test_merge_reports_high_failure_when_post_merge_closeout_fails(
     monkeypatch, capsys
 ) -> None:
@@ -497,16 +552,17 @@ def test_main_passes_defer_closeout_flag(monkeypatch, tmp_path) -> None:
     """The public CLI must preserve explicit deferred-closeout intent."""
 
     module = _load()
-    observed: list[tuple[int, bool, bool]] = []
+    observed: list[tuple[int, bool, bool, Path | None]] = []
+    monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(module, "canonical_repo_root", lambda: tmp_path)
     monkeypatch.setattr(
         module,
         "merge_pr",
-        lambda pr, dry_run=False, *, defer_closeout=False: (
-            observed.append((pr, dry_run, defer_closeout)) or True
+        lambda pr, dry_run=False, *, defer_closeout=False, invocation_cwd=None: (
+            observed.append((pr, dry_run, defer_closeout, invocation_cwd)) or True
         ),
     )
     monkeypatch.setattr(sys, "argv", ["merge_pr.py", "146", "--defer-closeout"])
 
     assert module.main() == 0
-    assert observed == [(146, False, True)]
+    assert observed == [(146, False, True, tmp_path)]

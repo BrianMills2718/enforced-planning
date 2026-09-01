@@ -31,6 +31,7 @@ from enforced_planning import (
     outcome_selection,
     push_safety,
     session_contracts,
+    session_process_fencing,
     surface_runtime,
 )
 from enforced_planning.worktree_paths import resolve_canonical_repo_root
@@ -3519,6 +3520,7 @@ def close_session(
     mailbox_disposition: str | None = None,
     mailbox_note: str | None = None,
     actor_session_id: str | None = None,
+    terminalize_shared_child: bool = False,
 ) -> dict[str, Any]:
     """Finish, clean up, and release one claimed lane as a single sanctioned flow.
 
@@ -3561,7 +3563,33 @@ def close_session(
         else None
     )
 
-    if resolved_worktree_path:
+    retained_parent_scope: str | None = None
+    if terminalize_shared_child:
+        if disposition != MERGED_DISPOSITION:
+            raise ValueError("Shared child terminalization requires disposition=merged.")
+        if not claim.parent_scope:
+            raise ValueError("Shared child terminalization requires an exact parent_scope.")
+        if not resolved_worktree_path or not resolved_branch:
+            raise ValueError("Shared child terminalization requires exact worktree and branch custody.")
+        canonical_worktree_path = resolved_worktree_path.resolve()
+        parent_matches = [
+            sibling
+            for sibling in coordination_claims.check_claims()
+            if sibling.primary_project() == claim.primary_project()
+            and sibling.scope == claim.parent_scope
+            and sibling.worktree_path
+            and Path(sibling.worktree_path).expanduser().resolve() == canonical_worktree_path
+            and sibling.branch == resolved_branch
+            and sibling.repo_root
+            and Path(sibling.repo_root).expanduser().resolve() == repo_root
+        ]
+        if len(parent_matches) != 1:
+            raise ValueError(
+                "Shared child terminalization requires exactly one live parent with the same "
+                "repository, worktree, and branch custody."
+            )
+        retained_parent_scope = parent_matches[0].scope
+    elif resolved_worktree_path:
         canonical_worktree_path = resolved_worktree_path.resolve()
         sibling_scopes = sorted(
             sibling.scope
@@ -3654,10 +3682,14 @@ def close_session(
         worktree_action = reconciliation_receipt["filesystem_action"]
     elif canonical_root_reconciliation is not None:
         worktree_action = canonical_root_reconciliation["filesystem_action"]
+    elif terminalize_shared_child:
+        worktree_action = "retained_for_parent"
     elif worktree_path or claim.worktree_path:
         worktree_action = _remove_worktree_path(repo_root, resolved_worktree_path)
     if canonical_root_reconciliation is not None:
         branch_action = canonical_root_reconciliation["branch_action"]
+    elif terminalize_shared_child:
+        branch_action = "retained_for_parent"
     elif delete_branch:
         branch_action = _delete_branch(
             repo_root,
@@ -3711,6 +3743,7 @@ def close_session(
         "tracker_path": tracker_path_text,
         "missing_worktree_reconciliation": reconciliation_receipt,
         "canonical_root_reconciliation": canonical_root_reconciliation,
+        "retained_parent_scope": retained_parent_scope,
         **mailbox_closeout,
     }
 
@@ -3725,6 +3758,7 @@ def resume_session(
     current_phase: str,
     session_id: str | None = None,
     note: str | None = None,
+    predecessor_process_pid: int | None = None,
 ) -> dict[str, Any]:
     """Reattach a new runtime session to an existing plan-bound lane."""
 
@@ -3767,6 +3801,7 @@ def resume_session(
 
     updated_at = datetime.now(timezone.utc).isoformat()
     transfer_preflight: outcome_selection.PreparedOutcomeSessionTransfer | None = None
+    process_fence: dict[str, Any] | None = None
     claim_bytes_before: bytes | None = None
     tracker_bytes_before: bytes | None = None
     tracker_path_text = claim.tracker_path
@@ -3794,6 +3829,20 @@ def resume_session(
         )
         if transfer_preflight is not None and transfer_preflight.tracker_path != tracker_path.resolve():
             raise ValueError("selected outcome transfer resolved a different tracker path")
+        if agent == "codex":
+            if predecessor_process_pid is None:
+                raise ValueError(
+                    "Cross-session Codex resume requires --predecessor-process-pid so the exact "
+                    "prior runtime is fenced before custody transfer."
+                )
+            if not claim.session_id:
+                raise ValueError("Cross-session Codex resume cannot fence an unbound predecessor session.")
+            process_fence = session_process_fencing.fence_predecessor_process(
+                predecessor_session_id=claim.session_id,
+                successor_session_id=resolved_session_id,
+                worktree_path=worktree_path,
+                predecessor_pid=predecessor_process_pid,
+            )
 
     expected_fields = (
         payload
@@ -3903,6 +3952,7 @@ def resume_session(
             transfer_receipt.model_dump(mode="json") if transfer_receipt is not None else None
         ),
         "claim_session_transfer": claim_session_transfer,
+        "predecessor_process_fence": process_fence,
         "coordination_mailbox": _poll_mailbox_after_committed_transition(
             agent=agent,
             project=project,

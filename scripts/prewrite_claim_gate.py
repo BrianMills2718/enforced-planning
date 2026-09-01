@@ -391,6 +391,108 @@ def _parse_native_mailbox_command(
         raise ValueError("mailbox sender does not match the ambient native session")
 
 
+def _parse_plan_execution_cursor_command(
+    command: str,
+    *,
+    client: str,
+    claims_dir: Path,
+    native_session: str | None = None,
+) -> None:
+    """Validate the version-bound plan cursor manager as one control mutation."""
+
+    from enforced_planning import coordination_claims
+
+    if "\n" in command or "\r" in command:
+        raise ValueError("plan execution cursor command must be exactly one line")
+    tokens = shlex.split(command)
+    if any(token in {";", "&", "&&", "|", "||", ">", ">>", "<"} for token in tokens):
+        raise ValueError("plan execution cursor command cannot compose shell operations")
+    if len(tokens) < 7 or tokens[0] != "/usr/bin/python3":
+        raise ValueError("plan execution cursor command requires the canonical interpreter")
+
+    script = Path(tokens[1]).expanduser()
+    cache_root = (
+        Path.home() / ".codex" / "plugins" / "cache" / "inside-success" / "company-planning"
+    ).resolve()
+    if not script.is_absolute() or script.resolve() != script or not script.is_file():
+        raise ValueError("plan execution cursor manager must be one canonical installed file")
+    try:
+        relative_script = script.relative_to(cache_root)
+    except ValueError as exc:
+        raise ValueError("plan execution cursor manager is outside the trusted plugin cache") from exc
+    if len(relative_script.parts) != 3 or relative_script.parts[1:] != (
+        "scripts",
+        "manage_plan_execution.py",
+    ):
+        raise ValueError("plan execution cursor manager has an invalid installed layout")
+    version = relative_script.parts[0]
+    manifest_path = cache_root / version / ".codex-plugin" / "plugin.json"
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, TypeError, json.JSONDecodeError) as exc:
+        raise ValueError("plan execution cursor manager has no valid installed manifest") from exc
+    if manifest.get("name") != "company-planning" or manifest.get("version") != version:
+        raise ValueError("plan execution cursor manager version does not match its manifest")
+
+    if tokens[2] != "--cwd" or tokens[4] != "--session-id":
+        raise ValueError("plan execution cursor command does not match the canonical CLI order")
+    worktree = Path(tokens[3]).expanduser()
+    if not worktree.is_absolute() or worktree.resolve() != worktree:
+        raise ValueError("plan execution cursor cwd must be canonical and absolute")
+    if native_session is None or tokens[5] != native_session:
+        raise ValueError("plan execution cursor session does not match the ambient native session")
+
+    operation = tokens[6]
+    candidate: Path | None = None
+    if operation == "start" and len(tokens) == 8:
+        candidate = Path(tokens[7]).expanduser()
+    elif operation == "replace" and len(tokens) == 10 and tokens[8] == "--expected-revision":
+        candidate = Path(tokens[7]).expanduser()
+        try:
+            if int(tokens[9]) < 1:
+                raise ValueError
+        except ValueError as exc:
+            raise ValueError("plan execution cursor expected revision must be positive") from exc
+    elif operation == "archive" and len(tokens) == 7:
+        pass
+    else:
+        raise ValueError("plan execution cursor command does not match a supported exact operation")
+    if candidate is not None and (
+        not candidate.is_absolute()
+        or candidate.resolve() != candidate
+        or candidate.suffix != ".json"
+        or not candidate.is_file()
+    ):
+        raise ValueError("plan execution cursor candidate must be one canonical readable JSON file")
+
+    active_claims = coordination_claims.check_claims(claims_dir=claims_dir)
+    claims = [
+        claim
+        for claim in active_claims
+        if claim.agent == client
+        and claim.session_id == native_session
+        and claim.is_live()
+        and (claim.target_worktree_path or claim.worktree_path)
+        and Path(claim.target_worktree_path or claim.worktree_path).expanduser().resolve() == worktree
+    ]
+    if len(claims) != 1:
+        raise ValueError("plan execution cursor target is not the ambient runtime's exact live claim")
+    claim = claims[0]
+    if coordination_claims.claim_runtime_status(claim, active_claims=active_claims) != "healthy":
+        raise ValueError("plan execution cursor target claim is not healthy")
+    required_paths = [".company-planning/active-execution.json"]
+    if operation == "archive":
+        required_paths.append(".company-planning/history")
+    normalized_claim_paths = [
+        coordination_claims._normalize_repo_path(path) for path in claim.write_paths
+    ]
+    if any(
+        not any(coordination_claims._paths_overlap(required, owned) for owned in normalized_claim_paths)
+        for required in required_paths
+    ):
+        raise ValueError("plan execution cursor output is outside the exact claim")
+
+
 def _parse_native_closeout_command(
     command: str,
     *,
@@ -740,6 +842,18 @@ def _special_unclaimed_command(
             native_session=native_session,
         )
         return "native_mailbox"
+    except Exception:  # noqa: BLE001 -- try the remaining strict control grammars
+        pass
+    try:
+        _parse_plan_execution_cursor_command(
+            command,
+            client=client,
+            claims_dir=claims_dir,
+            native_session=native_session,
+        )
+        # Compatibility classification: this strict control-plane mutation
+        # owns its own fixed output contract just like typed claim bootstrap.
+        return "claim_bootstrap"
     except Exception:  # noqa: BLE001 -- try the remaining strict control grammars
         pass
     try:

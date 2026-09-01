@@ -2036,6 +2036,93 @@ def test_bound_workspace_root_command_still_denies_path_outside_claimed_worktree
     assert decision["reason_code"] == "bash_path_outside_worktree"
 
 
+def _plan_cursor_command_fixture(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> tuple[str, Path, Path]:
+    _workspace, _repo, worktree, claims_dir, claim_path = _fixture(tmp_path)
+    claim = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    claim["write_paths"] = [
+        "src",
+        ".company-planning/active-execution.json",
+        ".company-planning/history",
+    ]
+    claim_path.write_text(yaml.safe_dump(claim, sort_keys=False), encoding="utf-8")
+    monkeypatch.setattr(
+        coordination_claims,
+        "claim_runtime_status",
+        lambda _claim, *, active_claims: "healthy",
+    )
+
+    home = tmp_path / "home"
+    monkeypatch.setenv("HOME", str(home))
+    version = "0.2.0+codex.test"
+    plugin = home / ".codex/plugins/cache/inside-success/company-planning" / version
+    manager = plugin / "scripts" / "manage_plan_execution.py"
+    manager.parent.mkdir(parents=True)
+    manager.write_text("# trusted fixture\n", encoding="utf-8")
+    manifest = plugin / ".codex-plugin" / "plugin.json"
+    manifest.parent.mkdir()
+    manifest.write_text(
+        json.dumps({"name": "company-planning", "version": version}),
+        encoding="utf-8",
+    )
+    candidate = tmp_path / "candidate.json"
+    candidate.write_text("{}\n", encoding="utf-8")
+    command = (
+        f"/usr/bin/python3 {manager} --cwd {worktree} "
+        f"--session-id {SESSION} start {candidate}"
+    )
+    return command, claims_dir, worktree
+
+
+def test_exact_plan_cursor_manager_treats_candidate_as_read_only_input(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    command, claims_dir, _worktree = _plan_cursor_command_fixture(tmp_path, monkeypatch)
+
+    classification = prewrite_claim_gate._special_unclaimed_command(
+        command,
+        client="claude-code",
+        claims_dir=claims_dir,
+        projection_path=tmp_path / "projection.json",
+        subagent_event=False,
+        native_session=SESSION,
+    )
+
+    assert classification == "claim_bootstrap"
+
+
+@pytest.mark.parametrize("tamper", ["wrong-session", "wrong-worktree", "untrusted", "composed"])
+def test_plan_cursor_manager_rejects_unbound_or_composed_commands(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    tamper: str,
+) -> None:
+    command, claims_dir, worktree = _plan_cursor_command_fixture(tmp_path, monkeypatch)
+    if tamper == "wrong-session":
+        command = command.replace(SESSION, "claude-code:other")
+    elif tamper == "wrong-worktree":
+        other = tmp_path / "other"
+        other.mkdir()
+        command = command.replace(str(worktree), str(other))
+    elif tamper == "untrusted":
+        untrusted = tmp_path / "manage_plan_execution.py"
+        untrusted.write_text("# untrusted fixture\n", encoding="utf-8")
+        command = command.replace(command.split()[1], str(untrusted))
+    else:
+        command += " && touch escaped"
+
+    with pytest.raises(ValueError):
+        prewrite_claim_gate._parse_plan_execution_cursor_command(
+            command,
+            client="claude-code",
+            claims_dir=claims_dir,
+            native_session=SESSION,
+        )
+
+
 def test_workspace_root_symlink_sequence_is_not_treated_as_target_proof(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

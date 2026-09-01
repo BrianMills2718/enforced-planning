@@ -108,6 +108,41 @@ def test_git_global_url_rewrite_environment_is_ignored(
     assert result["remote_main_revision"] == after
 
 
+def test_source_local_url_rewrite_cannot_spoof_remote_main(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, runtime, _before, after = _repos(tmp_path, monkeypatch)
+    _git(
+        source,
+        "config",
+        "url.file:///definitely-not-the-canonical-remote/.insteadOf",
+        runtime_update.CANONICAL_ORIGIN,
+    )
+
+    result = update_runtime(source_repo=source, runtime_repo=runtime, revision=after, write=False)
+
+    assert result["action"] == "would_update"
+    assert result["remote_main_revision"] == after
+
+
+def test_caller_path_cannot_intercept_git_or_receive_auth_environment(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, runtime, _before, after = _repos(tmp_path, monkeypatch)
+    attacker_bin = tmp_path / "attacker-bin"
+    attacker_bin.mkdir()
+    marker = tmp_path / "fake-git-ran"
+    fake_git = attacker_bin / "git"
+    fake_git.write_text(f"#!/bin/sh\ntouch {marker}\nexit 99\n", encoding="utf-8")
+    fake_git.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{attacker_bin}:{os.environ['PATH']}")
+
+    result = update_runtime(source_repo=source, runtime_repo=runtime, revision=after, write=False)
+
+    assert result["remote_main_revision"] == after
+    assert not marker.exists()
+
+
 def test_caller_injected_git_config_and_tls_environment_is_stripped(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -162,6 +197,21 @@ def test_symlinked_runtime_git_directory_is_denied(
 
     with pytest.raises(RuntimeUpdateError, match="standalone clone"):
         update_runtime(source_repo=source, runtime_repo=runtime, revision=after, write=False)
+
+
+def test_symlinked_exact_runtime_path_is_denied_before_resolution(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, runtime, _before, after = _repos(tmp_path, monkeypatch)
+    external = tmp_path / "external-runtime"
+    runtime.rename(external)
+    runtime.symlink_to(external, target_is_directory=True)
+    monkeypatch.setattr(runtime_update, "_canonical_runtime_repo", lambda: runtime.absolute())
+
+    with pytest.raises(RuntimeUpdateError, match="must not contain symlinks") as caught:
+        update_runtime(source_repo=source, runtime_repo=runtime, revision=after, write=False)
+
+    assert caught.value.receipt["runtime_repo"] == str(runtime.absolute())
 
 
 def test_unsupported_origin_credentials_never_enter_receipt(

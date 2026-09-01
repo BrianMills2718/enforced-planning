@@ -15,9 +15,9 @@ import json
 import os
 import pwd
 import re
-import shutil
 import socket
 import subprocess
+import tempfile
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
@@ -30,6 +30,8 @@ ZERO_OID = "0" * 40
 CANONICAL_ORIGIN = "https://github.com/BrianMills2718/enforced-planning.git"
 CANONICAL_ORIGIN_IDENTITY = "github.com/BrianMills2718/enforced-planning"
 LEGACY_RUNTIME_ORIGIN = "git@github-personal:BrianMills2718/enforced-planning.git"
+GIT_EXECUTABLE = Path("/usr/bin/git")
+GH_EXECUTABLE = Path("/usr/bin/gh")
 ALLOWED_RUNTIME_CONFIG_KEYS = {
     "branch.main.merge",
     "branch.main.remote",
@@ -70,7 +72,7 @@ def _run(
     if not mutating:
         env["GIT_OPTIONAL_LOCKS"] = "0"
     result = subprocess.run(
-        ["git", "-C", str(repo), *args],
+        [str(GIT_EXECUTABLE), "-C", str(repo), *args],
         check=False,
         capture_output=True,
         text=True,
@@ -94,7 +96,7 @@ def _default_runtime_repo() -> Path:
 def _canonical_runtime_repo() -> Path:
     """Return the host-owned installed-runtime path, never a caller-selected path."""
 
-    return _default_runtime_repo().resolve()
+    return _default_runtime_repo()
 
 
 def _normalize_origin(origin: str) -> str:
@@ -128,7 +130,7 @@ def _base_receipt(
         "host": socket.gethostname(),
         "observed_at": _observed_at(now),
         "source_repo": str(source_repo.resolve()),
-        "runtime_repo": str(runtime_repo.resolve()),
+        "runtime_repo": str(runtime_repo.absolute()),
         "origin": None,
         "stored_origin_before": None,
         "stored_origin_after": None,
@@ -177,12 +179,11 @@ def _canonical_network_git_env() -> dict[str, str]:
     env = _sanitized_git_env()
     if not CANONICAL_ORIGIN.startswith("https://github.com/"):
         return env
-    gh = shutil.which("gh", path="/usr/local/bin:/usr/bin:/bin")
-    if gh is None:
+    if not GH_EXECUTABLE.is_file() or not os.access(GH_EXECUTABLE, os.X_OK):
         raise RuntimeUpdateError("canonical GitHub credential helper is unavailable")
     account_home = Path(pwd.getpwuid(os.getuid()).pw_dir)
     token_result = subprocess.run(
-        [gh, "auth", "token", "--hostname", "github.com", "--user", "BrianMills2718"],
+        [str(GH_EXECUTABLE), "auth", "token", "--hostname", "github.com", "--user", "BrianMills2718"],
         check=False,
         capture_output=True,
         text=True,
@@ -245,6 +246,21 @@ def _assert_repo(path: Path, label: str) -> Path:
     return common.resolve()
 
 
+def _assert_runtime_path_not_symlinked(runtime_repo: Path) -> None:
+    default_runtime = _default_runtime_repo()
+    if runtime_repo == default_runtime:
+        components = [
+            default_runtime.parents[1],
+            default_runtime.parent,
+            default_runtime,
+        ]
+    else:
+        # Test/profile seam: the exact runtime itself remains non-symlinkable.
+        components = [runtime_repo]
+    if any(path.is_symlink() for path in components):
+        raise RuntimeUpdateError("installed runtime path must not contain symlinks")
+
+
 def _assert_safe_runtime_local_config(repo: Path) -> None:
     """Reject every unneeded local key that could alter Git's network boundary."""
 
@@ -277,13 +293,15 @@ def _validate_revision(source_repo: Path, revision: str) -> None:
 
 
 def _remote_main_revision() -> str:
-    result = subprocess.run(
-        ["git", "ls-remote", CANONICAL_ORIGIN, "refs/heads/main"],
-        check=False,
-        capture_output=True,
-        text=True,
-        env={**_canonical_network_git_env(), "GIT_OPTIONAL_LOCKS": "0"},
-    )
+    with tempfile.TemporaryDirectory(prefix="codex-runtime-ls-remote-") as directory:
+        result = subprocess.run(
+            [str(GIT_EXECUTABLE), "ls-remote", CANONICAL_ORIGIN, "refs/heads/main"],
+            check=False,
+            capture_output=True,
+            text=True,
+            cwd=directory,
+            env={**_canonical_network_git_env(), "GIT_OPTIONAL_LOCKS": "0"},
+        )
     if result.returncode != 0:
         detail = result.stderr.strip() or result.stdout.strip() or "git ls-remote failed"
         raise RuntimeUpdateError(f"cannot resolve canonical origin/main read-only: {detail}")
@@ -294,6 +312,40 @@ def _remote_main_revision() -> str:
     if not FULL_SHA_RE.fullmatch(revision):
         raise RuntimeUpdateError("canonical origin/main returned an invalid commit SHA")
     return revision
+
+
+def _fetch_canonical_revision_into_quarantine(revision: str) -> tempfile.TemporaryDirectory[str]:
+    """Fetch canonical HTTPS into a fresh bare repo isolated from caller config."""
+
+    temporary = tempfile.TemporaryDirectory(prefix="codex-runtime-fetch-")
+    quarantine = Path(temporary.name) / "quarantine.git"
+    init = subprocess.run(
+        [str(GIT_EXECUTABLE), "init", "--bare", str(quarantine)],
+        check=False,
+        capture_output=True,
+        text=True,
+        cwd=temporary.name,
+        env=_sanitized_git_env(),
+    )
+    if init.returncode != 0:
+        temporary.cleanup()
+        raise RuntimeUpdateError("cannot initialize isolated canonical fetch quarantine")
+    try:
+        _run(
+            quarantine,
+            "fetch",
+            "--no-tags",
+            "--no-write-fetch-head",
+            CANONICAL_ORIGIN,
+            revision,
+            mutating=True,
+            network_auth=True,
+        )
+        _validate_revision(quarantine, revision)
+    except Exception:
+        temporary.cleanup()
+        raise
+    return temporary
 
 
 def _recovery_ref(before: str, now: datetime) -> str:
@@ -313,7 +365,7 @@ def update_runtime(
     """Validate and optionally fast-forward one exact installed runtime clone."""
 
     source_repo = source_repo.resolve()
-    runtime_repo = runtime_repo.resolve()
+    runtime_repo = Path(os.path.abspath(runtime_repo.expanduser()))
     receipt = _base_receipt(
         source_repo=source_repo,
         runtime_repo=runtime_repo,
@@ -322,11 +374,13 @@ def update_runtime(
         now=now,
     )
     try:
-        expected_runtime = _canonical_runtime_repo()
+        expected_runtime = Path(os.path.abspath(_canonical_runtime_repo().expanduser()))
         if runtime_repo != expected_runtime:
             raise RuntimeUpdateError(
                 f"installed runtime path must be exactly {expected_runtime}, found {runtime_repo}"
             )
+        _assert_runtime_path_not_symlinked(runtime_repo)
+        runtime_repo = runtime_repo.resolve()
         source_common_dir = _assert_repo(source_repo, "source repository")
         runtime_common_dir = _assert_repo(runtime_repo, "installed runtime")
         runtime_git_dir = runtime_repo / ".git"
@@ -400,17 +454,20 @@ def update_runtime(
             receipt["stage"] = "fetch_target"
             receipt["mutation_started"] = True
             _assert_safe_runtime_local_config(runtime_repo)
-            _run(
-                runtime_repo,
-                "fetch",
-                "--no-tags",
-                "--no-write-fetch-head",
-                CANONICAL_ORIGIN,
-                revision,
-                mutating=True,
-                network_auth=True,
-            )
-            _validate_revision(runtime_repo, revision)
+            quarantine = _fetch_canonical_revision_into_quarantine(revision)
+            try:
+                _run(
+                    runtime_repo,
+                    "fetch",
+                    "--no-tags",
+                    "--no-write-fetch-head",
+                    str(Path(quarantine.name) / "quarantine.git"),
+                    revision,
+                    mutating=True,
+                )
+                _validate_revision(runtime_repo, revision)
+            finally:
+                quarantine.cleanup()
 
         recovery_ref = _recovery_ref(before, now or datetime.now(UTC))
         receipt["stage"] = "create_recovery_ref"

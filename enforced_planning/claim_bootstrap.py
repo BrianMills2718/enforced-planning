@@ -281,6 +281,34 @@ class WorkspaceFileArchiveRequest(_StrictRequest):
         return self
 
 
+class WorkspaceImageCanaryRequest(_StrictRequest):
+    """Stage one preserved PNG as the exact image.png watcher canary."""
+
+    operation: Literal["workspace_image_canary"]
+    agent: AgentName
+    project: Literal["workspace-root"]
+    scope: Literal["image-ingest-canary"]
+    workspace_root: str = Field(min_length=1)
+    source: str = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _validate_stage(self) -> WorkspaceImageCanaryRequest:
+        root = Path(self.workspace_root).expanduser()
+        if not root.is_absolute() or ".." in root.parts or str(root.resolve()) != self.workspace_root:
+            raise ValueError("workspace_root must be one canonical absolute path")
+        source = Path(self.source)
+        if (
+            source.is_absolute()
+            or len(source.parts) < 2
+            or source.parts[0] != "archive"
+            or ".." in source.parts
+            or source.as_posix() != self.source
+            or source.suffix.casefold() != ".png"
+        ):
+            raise ValueError("source must be one canonical archived PNG path")
+        return self
+
+
 class ProgressRequest(_StrictRequest):
     operation: Literal["progress"]
     progress_kind: ProgressKind
@@ -297,7 +325,8 @@ ClaimBootstrapRequest = Annotated[
     | MaintenanceWorktreeRequest
     | LocalRepositoryWorktreeRequest
     | LocalRepositoryIntegrateRequest
-    | WorkspaceFileArchiveRequest,
+    | WorkspaceFileArchiveRequest
+    | WorkspaceImageCanaryRequest,
     Field(discriminator="operation"),
 ]
 _REQUEST_ADAPTER = TypeAdapter(ClaimBootstrapRequest)
@@ -723,12 +752,53 @@ def _execute_workspace_file_archive(request: WorkspaceFileArchiveRequest) -> dic
     }
 
 
+def _execute_workspace_image_canary(request: WorkspaceImageCanaryRequest) -> dict[str, Any]:
+    root = Path(request.workspace_root)
+    if Path.cwd().resolve() != root:
+        raise ClaimBootstrapError("workspace_image_canary must run from the exact workspace_root")
+    source = root / request.source
+    destination = root / "image.png"
+    current = root
+    for part in Path(request.source).parts:
+        current /= part
+        if current != source and os.path.lexists(current) and current.is_symlink():
+            raise ClaimBootstrapError(f"canary source ancestor is a symlink: {current}")
+    try:
+        source_info = source.lstat()
+    except OSError as exc:
+        raise ClaimBootstrapError(f"canary source is unavailable: {request.source}: {exc}") from exc
+    if source.is_symlink() or not stat.S_ISREG(source_info.st_mode):
+        raise ClaimBootstrapError("canary source must be a non-symlink regular PNG")
+    if os.path.lexists(destination):
+        raise ClaimBootstrapError("image.png already exists; canary never overwrites")
+
+    digest = _file_sha256(source)
+    try:
+        with source.open("rb") as source_handle, destination.open("xb") as destination_handle:
+            shutil.copyfileobj(source_handle, destination_handle, length=1024 * 1024)
+            destination_handle.flush()
+            os.fsync(destination_handle.fileno())
+    except OSError as exc:
+        destination.unlink(missing_ok=True)
+        raise ClaimBootstrapError(f"image.png canary staging failed; source was retained: {exc}") from exc
+    return {
+        "action": "workspace_image_canary_staged",
+        "source": str(source),
+        "destination": str(destination),
+        "sha256": digest,
+        "size_bytes": source_info.st_size,
+        "source_preserved": True,
+    }
+
+
 def execute_request(request: ClaimBootstrapRequest) -> dict[str, Any]:
     """Execute one self-owned claim mutation and return a JSON-safe receipt."""
 
     agent, session_id = _native_agent(request.agent)
 
-    if isinstance(request, WorkspaceFileArchiveRequest):
+    if isinstance(request, WorkspaceImageCanaryRequest):
+        payload = _execute_workspace_image_canary(request)
+    elif isinstance(request, WorkspaceFileArchiveRequest):
         payload = _execute_workspace_file_archive(request)
     elif isinstance(request, LocalRepositoryIntegrateRequest):
         payload = _execute_local_repository_integrate(request, agent=agent, session_id=session_id)

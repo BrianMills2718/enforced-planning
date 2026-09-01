@@ -730,9 +730,26 @@ def _apply_cross_session_resume_transaction(
                 successor_claim_bytes=claim_file.read_bytes(),
             )
         except Exception:
+            rollback_registry_digest_before = coordination_claims._registry_digest(
+                coordination_claims.CLAIMS_DIR
+            )
             _atomic_restore_bytes(claim_file, claim_bytes_before)
             _atomic_restore_bytes(tracker_path, tracker_bytes_before)
-            coordination_claims.refresh_prewrite_authority_projection(coordination_claims.CLAIMS_DIR)
+            _projection_path, rollback_projection_digest = (
+                coordination_claims.refresh_prewrite_authority_projection(
+                    coordination_claims.CLAIMS_DIR
+                )
+            )
+            coordination_claims.record_claim_mutation(
+                operation="session_upsert",
+                claims_dir=coordination_claims.CLAIMS_DIR,
+                registry_digest_before=rollback_registry_digest_before,
+                target_project=claim.primary_project(),
+                target_scope=claim.scope,
+                target_claim_path=claim_file,
+                session_id=claim.session_id,
+                projection_digest_after=rollback_projection_digest,
+            )
             raise
     return current, transfer_receipt, claim_session_transfer
 
@@ -845,9 +862,26 @@ def _reattach_same_runtime_tracker(
                 projection_digest_after=projection_digest_after,
             )
         except Exception:
+            rollback_registry_digest_before = coordination_claims._registry_digest(
+                coordination_claims.CLAIMS_DIR
+            )
             _atomic_restore_bytes(claim_file, claim_bytes_before)
             _atomic_restore_bytes(tracker_path, tracker_bytes_before)
-            coordination_claims.refresh_prewrite_authority_projection(coordination_claims.CLAIMS_DIR)
+            _projection_path, rollback_projection_digest = (
+                coordination_claims.refresh_prewrite_authority_projection(
+                    coordination_claims.CLAIMS_DIR
+                )
+            )
+            coordination_claims.record_claim_mutation(
+                operation="session_upsert",
+                claims_dir=coordination_claims.CLAIMS_DIR,
+                registry_digest_before=rollback_registry_digest_before,
+                target_project=claim.primary_project(),
+                target_scope=claim.scope,
+                target_claim_path=claim_file,
+                session_id=claim.session_id,
+                projection_digest_after=rollback_projection_digest,
+            )
             raise
     return current
 

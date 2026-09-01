@@ -151,6 +151,8 @@ def test_caller_injected_git_config_and_tls_environment_is_stripped(
     monkeypatch.setenv("GIT_CONFIG_VALUE_0", "https://github.com/")
     monkeypatch.setenv("GIT_SSL_NO_VERIFY", "1")
     monkeypatch.setenv("SSL_CERT_FILE", "/tmp/attacker-ca.pem")
+    monkeypatch.setenv("LD_PRELOAD", "/tmp/attacker.so")
+    monkeypatch.setenv("HTTPS_PROXY", "http://attacker.invalid:8080")
 
     env = runtime_update._sanitized_git_env()
 
@@ -159,7 +161,10 @@ def test_caller_injected_git_config_and_tls_environment_is_stripped(
     assert "GIT_CONFIG_VALUE_0" not in env
     assert "GIT_SSL_NO_VERIFY" not in env
     assert "SSL_CERT_FILE" not in env
+    assert "LD_PRELOAD" not in env
+    assert "HTTPS_PROXY" not in env
     assert env["GIT_CONFIG_GLOBAL"] == os.devnull
+    assert env["PATH"] == "/usr/bin:/bin"
 
 
 def test_local_url_rewrite_is_denied(

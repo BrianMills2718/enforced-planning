@@ -158,19 +158,17 @@ def _redact_sensitive_text(value: str) -> str:
 def _sanitized_git_env() -> dict[str, str]:
     """Return a Git environment without caller-selected config or TLS overrides."""
 
-    env = {
-        key: value
-        for key, value in os.environ.items()
-        if not key.startswith("GIT_")
-        and key not in {"CURL_CA_BUNDLE", "SSL_CERT_DIR", "SSL_CERT_FILE"}
+    account_home = Path(pwd.getpwuid(os.getuid()).pw_dir)
+    return {
+        "HOME": str(account_home),
+        "LANG": "C.UTF-8",
+        "LC_ALL": "C.UTF-8",
+        "PATH": "/usr/bin:/bin",
+        "GIT_CONFIG_GLOBAL": os.devnull,
+        "GIT_CONFIG_NOSYSTEM": "1",
+        "GIT_CONFIG_SYSTEM": os.devnull,
+        "GIT_TERMINAL_PROMPT": "0",
     }
-    env.update(
-        GIT_CONFIG_GLOBAL=os.devnull,
-        GIT_CONFIG_NOSYSTEM="1",
-        GIT_CONFIG_SYSTEM=os.devnull,
-        GIT_TERMINAL_PROMPT="0",
-    )
-    return env
 
 
 def _canonical_network_git_env() -> dict[str, str]:

@@ -202,6 +202,54 @@ def test_validate_plan_accepts_file_when_references_and_adr_mentioned(tmp_path: 
     assert result.missing_strict == set()
     assert result.missing_soft == {"docs/coupled_soft.md"}
     assert result.missing_adrs == []
+    assert not any(warning["code"] == "deprecated_references_heading" for warning in result.warnings)
+
+
+def test_parse_references_reviewed_accepts_legacy_headings() -> None:
+    """Legacy plan headings remain readable during the documented migration."""
+
+    module = _load_module()
+    for heading in ("Research", "References", "Prior Art"):
+        content = f"# Plan\n\n## {heading}\n\n- docs/legacy-source.md\n"
+        assert module.parse_references_reviewed(content) == ["docs/legacy-source.md"]
+
+
+def test_validate_plan_warns_when_legacy_research_heading_is_used(tmp_path: Path) -> None:
+    """Compatibility must stay visible instead of silently extending forever."""
+
+    module = _load_module()
+    plan_file = tmp_path / "05_legacy_heading.md"
+    config_file = tmp_path / "relationships.yaml"
+    config_file.write_text(_relationships_config(), encoding="utf-8")
+    plan_file.write_text(
+        "# Legacy Heading Plan\n"
+        "**Status:** Draft\n\n"
+        "## Gap\n"
+        "Current: legacy heading. Target: canonical heading.\n\n"
+        "## Files Affected\n"
+        "- src/module.py\n\n"
+        "## Research\n"
+        "- docs/current.md\n"
+        "- docs/gaps.md\n"
+        "- docs/plan-ref.md\n"
+        "ADR-0101 is the related governance ADR.\n\n"
+        "## Acceptance Criteria\n"
+        "- [ ] Compatibility remains visible.\n",
+        encoding="utf-8",
+    )
+
+    result = module.validate_plan(
+        plan_file=plan_file,
+        plan_number=5,
+        relationships=module.load_relationships(config_path=config_file),
+    )
+
+    assert result.references_reviewed == [
+        "docs/current.md",
+        "docs/gaps.md",
+        "docs/plan-ref.md",
+    ]
+    assert any(warning["code"] == "deprecated_references_heading" for warning in result.warnings)
 
 
 def test_validate_plan_cli_warn_only_honors_non_blocking_exit(tmp_path: Path) -> None:

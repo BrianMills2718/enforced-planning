@@ -56,6 +56,13 @@ def detect_repository_id(repo_root: Path) -> str:
 ROOT = _detect_repo_root(Path(__file__).resolve())
 PLANS_DIR = ROOT / "docs" / "plans"
 PATH_CLEAN_RE = re.compile(r"[,;:.()]$")
+REFERENCES_REVIEWED_HEADINGS = (
+    "References Reviewed",
+    "Research",
+    "References",
+    "Prior Art",
+)
+LEGACY_REFERENCES_REVIEWED_HEADINGS = REFERENCES_REVIEWED_HEADINGS[1:]
 RESEARCH_CITATION_RE = re.compile(r"^agent_memory:[A-Za-z0-9._-]+$")
 LANDSCAPE_DISPOSITIONS = frozenset({"linked", "inline", "exempt-trivial"})
 CRITICAL_PATH_CLASSES = frozenset({"vertical", "direct_blocker", "enabler", "hardening"})
@@ -914,8 +921,12 @@ def parse_files_affected(content: str) -> list[str]:
 
 
 def parse_references_reviewed(content: str) -> list[str]:
-    """Parse the References Reviewed section of a plan."""
-    return extract_paths(extract_section(content, "References Reviewed"))
+    """Parse the canonical reviewed-reference section or a legacy alias."""
+    for heading in REFERENCES_REVIEWED_HEADINGS:
+        section = extract_section(content, heading)
+        if section.strip():
+            return extract_paths(section)
+    return []
 
 
 def parse_uncertainty_register(content: str) -> list[str]:
@@ -1182,7 +1193,7 @@ def _parse_landscape_contract(
 def _research_provenance_hint_present(content: str) -> bool:
     """Heuristically detect plan text that cites prior-session provenance."""
     sections = [
-        extract_section(content, "References Reviewed"),
+        *(extract_section(content, heading) for heading in REFERENCES_REVIEWED_HEADINGS),
         extract_section(content, "Research Basis For This Slice"),
     ]
     searchable = "\n".join(section for section in sections if section)
@@ -1268,8 +1279,8 @@ REQUIRED_PLAN_SECTIONS: dict[str, tuple[list[str], str]] = {
         ["Gap", "Goal", "Problem"],
         "Must describe what exists now and what we want (requirements).",
     ),
-    "Research": (
-        ["Research", "References Reviewed", "References", "Prior Art"],
+    "References Reviewed": (
+        list(REFERENCES_REVIEWED_HEADINGS),
         "Must cite code/docs/prior art reviewed before planning (no guessing).",
     ),
     "Acceptance Criteria": (
@@ -1358,6 +1369,26 @@ def validate_plan(
 
     references = parse_references_reviewed(content)
     research_citations, warnings = _parse_research_citations(content)
+    canonical_references_section = extract_section(content, "References Reviewed")
+    legacy_references_heading = next(
+        (
+            heading
+            for heading in LEGACY_REFERENCES_REVIEWED_HEADINGS
+            if extract_section(content, heading).strip()
+        ),
+        None,
+    )
+    if not canonical_references_section.strip() and legacy_references_heading:
+        warnings.append(
+            {
+                "code": "deprecated_references_heading",
+                "message": (
+                    f"`## {legacy_references_heading}` is a deprecated alias for "
+                    "`## References Reviewed`. It remains readable during the documented "
+                    "compatibility window, but new plans must use the canonical heading."
+                ),
+            }
+        )
     landscape_disposition, landscape_references, landscape_warnings = _parse_landscape_contract(content)
     warnings.extend(landscape_warnings)
     plan_type = (_extract_metadata_value(content, "Type") or "implementation").lower()

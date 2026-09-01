@@ -54,6 +54,25 @@ def _claim_invocation(make_output: str) -> str:
     return "\n".join(collected)
 
 
+def test_finish_target_requires_and_forwards_external_review_spec() -> None:
+    output = _dry_run_make(
+        "finish",
+        "BRANCH=feature",
+        "PR=42",
+        "REVIEW_SPEC=/tmp/review-spec.json",
+    )
+
+    assert 'scripts/worktree-coordination/finish_pr.py" --branch "feature"' in output
+    assert '--pr "42" --review-spec "/tmp/review-spec.json"' in output
+
+
+def test_consumer_template_exposes_the_same_finish_contract() -> None:
+    recipe = _template_recipe("finish")
+
+    assert "WORKTREE_FINISH_SCRIPT" in recipe
+    assert '--review-spec "$(REVIEW_SPEC)"' in recipe
+
+
 def test_maintenance_worktree_claim_declares_unplanned_ownership() -> None:
     """The maintenance lane must stamp UNPLANNED on its pre-worktree claim.
 

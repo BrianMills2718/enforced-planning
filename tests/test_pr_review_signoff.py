@@ -450,7 +450,8 @@ def test_check_payload_is_success_only_for_signed_exact_head() -> None:
 
     assert payload["head_sha"] == HEAD
     assert payload["name"] == "agent-review-candidate"
-    assert receipt.authority_state == "candidate_only"
+    assert receipt.authority_state == "evidence_receipt"
+    assert receipt.publication_requirement == "none"
     assert payload["conclusion"] == "success"
     assert payload["external_id"] == receipt.receipt_sha256()
 

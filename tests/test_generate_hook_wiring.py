@@ -18,6 +18,13 @@ CODEX_MAILBOX_COMMAND = (
     'bash "$(git rev-parse --show-toplevel)/.codex/hooks/'
     'notify-coordination-messages.sh"'
 )
+CLAUDE_MERGE_GUARD_COMMAND = (
+    "bash .claude/hooks/worktree-coordination/enforce-make-merge.sh"
+)
+CODEX_MERGE_GUARD_COMMAND = (
+    'bash "$(git rev-parse --show-toplevel)/.codex/hooks/'
+    'enforce-make-merge.sh"'
+)
 
 
 def _scaffold_target_repo(repo_root: Path) -> None:
@@ -66,6 +73,8 @@ def test_generate_hook_wiring_dry_run_reports_expected_changes(tmp_path: Path) -
     assert "sync:.claude/hooks/track-reads.sh" in payload["actions"]
     assert "sync:.claude/hooks/notify-coordination-messages.sh" in payload["actions"]
     assert "sync:.codex/hooks/notify-coordination-messages.sh" in payload["actions"]
+    assert "sync:.claude/hooks/worktree-coordination/enforce-make-merge.sh" in payload["actions"]
+    assert "sync:.codex/hooks/enforce-make-merge.sh" in payload["actions"]
     assert "sync:.codex/hooks.json" in payload["actions"]
     assert "sync:scripts/check_required_reading.py" in payload["actions"]
     assert "sync:scripts/meta/hook_log.py" in payload["actions"]
@@ -161,6 +170,9 @@ def test_generate_hook_wiring_writes_files_and_merges_settings(tmp_path: Path) -
     assert canonical_lock_events["PostToolUse"]
     assert not canonical_lock_events.get("Stop")
     assert (tmp_path / ".claude" / "hooks" / "reconcile-canonical-locks.sh").exists()
+    assert (
+        tmp_path / ".claude" / "hooks" / "worktree-coordination" / "enforce-make-merge.sh"
+    ).exists()
     assert (tmp_path / "scripts" / "meta" / "canonical_lock.py").exists()
 
     assert (tmp_path / ".claude" / "hooks" / "gate-edit.sh").exists()
@@ -174,6 +186,15 @@ def test_generate_hook_wiring_writes_files_and_merges_settings(tmp_path: Path) -
         "Stop",
     }
     assert (tmp_path / ".codex" / "hooks" / "notify-coordination-messages.sh").exists()
+    assert (tmp_path / ".codex" / "hooks" / "enforce-make-merge.sh").exists()
+    claude_merge = next(
+        item for item in settings["hooks"]["PreToolUse"] if item["matcher"] == "Bash"
+    )
+    codex_merge = next(
+        item for item in codex_hooks["hooks"]["PreToolUse"] if item["matcher"] == "Bash"
+    )
+    assert CLAUDE_MERGE_GUARD_COMMAND in [item["command"] for item in claude_merge["hooks"]]
+    assert CODEX_MERGE_GUARD_COMMAND in [item["command"] for item in codex_merge["hooks"]]
     assert (tmp_path / "scripts" / "check_required_reading.py").exists()
     assert (tmp_path / "scripts" / "meta" / "hook_log.py").exists()
     assert (tmp_path / "scripts" / "meta" / "context_packet.py").exists()

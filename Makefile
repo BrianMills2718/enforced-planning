@@ -151,6 +151,7 @@ WORKTREE_SESSION_CLOSE_SCRIPT := scripts/meta/worktree-coordination/../session_c
 WORKTREE_REVIEW_CLAIM_SCRIPT := scripts/meta/worktree-coordination/create_review_claim.py
 WORKTREE_RAISE_CONCERN_SCRIPT := scripts/meta/worktree-coordination/raise_concern.py
 WORKTREE_PLAN_READINESS_SCRIPT := scripts/check_plan_readiness.py
+WORKTREE_FINISH_SCRIPT := scripts/worktree-coordination/finish_pr.py
 SURFACE_RUNTIME_SCRIPT := scripts/surface_runtime.py
 WORKTREE_DIR ?= $(shell $(PYTHON) "$(WORKTREE_CREATE_SCRIPT)" --repo-root . --print-default-worktree-dir)
 WORKTREE_REPO_ROOT ?= $(shell git rev-parse --path-format=absolute --git-common-dir 2>/dev/null | sed 's|/\.git$$||')
@@ -193,7 +194,7 @@ REVIEW_SCOPE ?=
 REVIEW_NOTES ?=
 RECIPIENT ?=
 
-.PHONY: outcome-bootstrap worktree maintenance-worktree worktree-list worktree-remove session-start session-narrow session-heartbeat session-status session-end session-finish session-close review-claim raise-concern hook-feedback-report verification-batch-freeze verification-batch-check verification-batch-thaw surface-up surface-preview surface-status surface-down surface-audit
+.PHONY: outcome-bootstrap worktree maintenance-worktree worktree-list worktree-remove finish session-start session-narrow session-heartbeat session-status session-end session-finish session-close review-claim raise-concern hook-feedback-report verification-batch-freeze verification-batch-check verification-batch-thaw surface-up surface-preview surface-status surface-down surface-audit
 
 hook-feedback-report:  ## Group content-free hook receipts; pass ARGS="--threshold 3"
 	$(PYTHON) scripts/hook_feedback_report.py $(ARGS)
@@ -588,6 +589,19 @@ endif
 	@$(MAKE) session-close BRANCH="$(BRANCH)" \
 		$(if $(WORKTREE_MERGE_COMMIT),WORKTREE_MERGE_COMMIT="$(WORKTREE_MERGE_COMMIT)",) \
 		$(if $(SESSION_NOTE),SESSION_NOTE="$(SESSION_NOTE)",)
+
+finish:  ## Review exact PR head, merge it, and close its claimed worktree
+ifndef BRANCH
+	$(error BRANCH is required. Usage: make finish BRANCH=feature PR=42 REVIEW_SPEC=/absolute/review-spec.json)
+endif
+ifndef PR
+	$(error PR is required. Usage: make finish BRANCH=feature PR=42 REVIEW_SPEC=/absolute/review-spec.json)
+endif
+ifndef REVIEW_SPEC
+	$(error REVIEW_SPEC is required and must be an absolute path outside the repository)
+endif
+	@test -f "$(WORKTREE_FINISH_SCRIPT)" || { echo "Missing finish module: $(WORKTREE_FINISH_SCRIPT)"; exit 1; }
+	@$(PYTHON) "$(WORKTREE_FINISH_SCRIPT)" --branch "$(BRANCH)" --pr "$(PR)" --review-spec "$(REVIEW_SPEC)"
 
 review-claim:  ## Create a review claim for TARGET_BRANCH=name WRITE_PATHS="a|b" TASK="..."
 ifndef TARGET_BRANCH

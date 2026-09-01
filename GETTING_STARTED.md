@@ -118,6 +118,9 @@ After a successful minimum install, your repo should have:
 - `scripts/meta/session_narrow.py`
 - `scripts/meta/session_start.py`
 - `scripts/meta/session_status.py`
+- `scripts/meta/worktree-coordination/finish_pr.py`
+- `enforced_planning/pr_review_signoff.py`
+- `contracts/pr-review-signoff.schema.json`
 - `scripts/meta/sync_plan_status.py`
 - `scripts/hook_receipts.py` and `scripts/meta/hook_receipts.py`
 - `scripts/meta/validate_plan.py`
@@ -144,6 +147,22 @@ When `make maintenance-worktree` starts with whole-repository bootstrap custody,
 ordinary writes remain disabled until the exact owning session runs
 `make session-narrow BRANCH=... SESSION_WRITE_PATHS="..."`. Supplying narrow
 write paths at creation avoids that temporary broad reservation.
+
+The installed hook stack blocks direct pull-request merges and routes them to
+the sanctioned finish transaction. Supply a planning-derived review spec from
+outside the repository and all of its linked worktrees:
+
+```bash
+make finish \
+  BRANCH=feature/example \
+  PR=42 \
+  REVIEW_SPEC=/absolute/path/outside-the-repository/review-spec.json
+```
+
+The hook itself remains fast. `make finish` runs the longer programmatic and
+fresh-agent review, persists the exact-head receipt, rechecks required GitHub
+checks, merges with head-SHA matching, and closes the claim/worktree. Missing,
+rejected, or stale review evidence fails before merge.
 
 The Enforced Planning source repository additionally sets
 `meta_process.claims.outcome_admission_mode: enforce_selected`. New source

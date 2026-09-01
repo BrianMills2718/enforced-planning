@@ -155,10 +155,8 @@ class PRSignoffReceipt(StrictModel):
     head_sha: str = Field(pattern=SHA_PATTERN)
     rubric_revision: str = Field(min_length=1)
     reviewer_sessions: tuple[ReviewerSession, ...] = Field(min_length=1)
-    authority_state: Literal["candidate_only"] = "candidate_only"
-    publication_requirement: Literal["coordinator_app_required"] = (
-        "coordinator_app_required"
-    )
+    authority_state: Literal["evidence_receipt"] = "evidence_receipt"
+    publication_requirement: Literal["none"] = "none"
     verdict: Literal["signed_off", "rejected"]
     reasons: tuple[str, ...]
     programmatic_checks: tuple[ProgrammaticCheckResult, ...] = Field(min_length=1)

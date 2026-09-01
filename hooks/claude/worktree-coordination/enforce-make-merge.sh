@@ -4,9 +4,9 @@
 # Also blocks direct script calls that bypass make targets
 #
 # Rules:
-# 1. No direct GitHub merge CLI - must use make merge/finish
+# 1. No direct GitHub merge CLI - must use make finish
 # 2. No direct python scripts/safe_worktree_remove.py - must use make worktree-remove
-# 3. No direct python scripts/finish_pr.py - must use make finish
+# 3. No direct finish_pr.py invocation - must use make finish
 # 4. No direct python scripts/merge_pr.py - must use make merge/finish
 # 5. No merge/finish/worktree-remove from inside a worktree
 # 6. Must cd to main FIRST (separate command), then run finish
@@ -31,10 +31,10 @@ if echo "$COMMAND" | grep -qE 'gh\s+pr\s+merge'; then
 
     echo "BLOCKED: Direct GitHub CLI merge is not allowed" >&2
     echo "" >&2
-    echo "This bypasses worktree auto-cleanup - orphan worktrees will accumulate." >&2
+    echo "This bypasses exact-head review and worktree auto-cleanup." >&2
     echo "" >&2
     echo "Use the proper command instead:" >&2
-    echo "  make merge PR=$PR_NUM" >&2
+    echo "  make finish BRANCH=<branch> PR=$PR_NUM REVIEW_SPEC=/absolute/review-spec.json" >&2
     exit 2
 fi
 
@@ -57,17 +57,17 @@ fi
 
 # Block direct calls to finish_pr.py (must use make finish)
 # This ensures proper workflow and uses main's scripts
-if echo "$COMMAND" | grep -qE '(^|&&|;|\|)\s*python[3]?\s+scripts/finish_pr\.py'; then
+if echo "$COMMAND" | grep -qE '(^|&&|;|\|)\s*python[3]?\s+(scripts/)?(worktree-coordination/)?finish_pr\.py'; then
     BRANCH=$(echo "$COMMAND" | grep -oE '\-\-branch\s+\S+' | sed 's/--branch\s*//' || echo "BRANCH")
     PR_NUM=$(echo "$COMMAND" | grep -oE '\-\-pr\s+[0-9]+' | grep -oE '[0-9]+' || echo "N")
 
     echo "BLOCKED: Direct script call is not allowed" >&2
     echo "" >&2
-    echo "Running 'python scripts/finish_pr.py' directly may use a stale" >&2
+    echo "Running finish_pr.py directly may use a stale" >&2
     echo "copy of the script from your worktree instead of the latest from main." >&2
     echo "" >&2
     echo "Use the proper command instead:" >&2
-    echo "  make finish BRANCH=$BRANCH PR=$PR_NUM" >&2
+    echo "  make finish BRANCH=$BRANCH PR=$PR_NUM REVIEW_SPEC=/absolute/review-spec.json" >&2
     exit 2
 fi
 
@@ -84,14 +84,16 @@ if echo "$COMMAND" | grep -qE '(^|&&|;|\|)\s*python[3]?\s+(scripts/)?merge_pr\.p
     echo "  - Break your shell if CWD is in a worktree being cleaned up" >&2
     echo "" >&2
     echo "Use the proper command instead:" >&2
-    echo "  make merge PR=$PR_NUM" >&2
-    echo "Or for full workflow (from main):" >&2
-    echo "  make finish BRANCH=<branch> PR=$PR_NUM" >&2
+    echo "  make finish BRANCH=<branch> PR=$PR_NUM REVIEW_SPEC=/absolute/review-spec.json" >&2
     exit 2
 fi
 
 # Get the working directory from the tool input
 CWD=$(echo "$INPUT" | jq -r '.cwd // empty')
+REVIEW_SPEC=$(echo "$COMMAND" | grep -oE 'REVIEW_SPEC=[^ ]+' | head -1 | cut -d= -f2- || true)
+if [[ -z "$REVIEW_SPEC" ]]; then
+    REVIEW_SPEC="/absolute/review-spec.json"
+fi
 
 # Check if CWD is inside a worktree
 if [[ "$CWD" == */worktrees/* ]]; then
@@ -109,9 +111,9 @@ if [[ "$CWD" == */worktrees/* ]]; then
 
         # Build the finish command
         if [[ -n "$PR_NUM" ]]; then
-            FINISH_CMD="make finish BRANCH=$BRANCH PR=$PR_NUM"
+            FINISH_CMD="make finish BRANCH=$BRANCH PR=$PR_NUM REVIEW_SPEC=$REVIEW_SPEC"
         else
-            FINISH_CMD="make finish BRANCH=$BRANCH PR=<PR_NUMBER>"
+            FINISH_CMD="make finish BRANCH=$BRANCH PR=<PR_NUMBER> REVIEW_SPEC=$REVIEW_SPEC"
         fi
 
         # Save pending command to file for easy execution after cd
@@ -181,9 +183,9 @@ SCRIPT_EOF
         PR_NUM=$(echo "$COMMAND" | grep -oE 'PR=[0-9]+' | grep -oE '[0-9]+' || echo "")
 
         if [[ -n "$PR_NUM" ]]; then
-            FINISH_CMD="make finish BRANCH=$BRANCH PR=$PR_NUM"
+            FINISH_CMD="make finish BRANCH=$BRANCH PR=$PR_NUM REVIEW_SPEC=$REVIEW_SPEC"
         else
-            FINISH_CMD="make finish BRANCH=$BRANCH PR=<PR_NUMBER>"
+            FINISH_CMD="make finish BRANCH=$BRANCH PR=<PR_NUMBER> REVIEW_SPEC=$REVIEW_SPEC"
         fi
 
         # Save pending command to file for easy execution after cd

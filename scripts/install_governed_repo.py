@@ -68,6 +68,7 @@ SYNC_SUPPORT_FILES: dict[str, str] = {
     "enforced_planning/outcome_portfolio.py": "enforced_planning/outcome_portfolio.py",
     "enforced_planning/outcome_selection.py": "enforced_planning/outcome_selection.py",
     "enforced_planning/prewrite_claim_fast.py": "enforced_planning/prewrite_claim_fast.py",
+    "enforced_planning/pr_review_signoff.py": "enforced_planning/pr_review_signoff.py",
     "enforced_planning/session_target.py": "enforced_planning/session_target.py",
     "enforced_planning/prewrite_claim_projection.py": "enforced_planning/prewrite_claim_projection.py",
     "enforced_planning/artifact_creation.py": "enforced_planning/artifact_creation.py",
@@ -107,6 +108,7 @@ SYNC_SUPPORT_FILES: dict[str, str] = {
     "scripts/meta/session_status.py": "scripts/session_status.py",
     "scripts/meta/session_end.py": "scripts/session_end.py",
     "scripts/meta/project_status.py": "scripts/project_status.py",
+    "scripts/meta/pr_auto.py": "scripts/pr_auto.py",
     "scripts/meta/session_resume.py": "scripts/session_resume.py",
     "scripts/meta/surface_runtime.py": "scripts/surface_runtime.py",
     "scripts/coordination_inbox.py": "scripts/coordination_inbox.py",
@@ -145,15 +147,18 @@ SYNC_SUPPORT_FILES: dict[str, str] = {
     "scripts/meta/validate_plan.py": "scripts/validate_plan.py",
     "scripts/meta/canonical_lock.py": "scripts/worktree-coordination/canonical_lock.py",
     "scripts/meta/worktree-coordination/create_worktree.py": "scripts/worktree-coordination/create_worktree.py",
+    "scripts/meta/worktree-coordination/finish_pr.py": "scripts/worktree-coordination/finish_pr.py",
     "scripts/meta/worktree-coordination/create_publish_worktree.py": "scripts/worktree-coordination/create_publish_worktree.py",
     "scripts/meta/worktree-coordination/create_review_claim.py": "scripts/worktree-coordination/create_review_claim.py",
     "scripts/meta/worktree-coordination/raise_concern.py": "scripts/worktree-coordination/raise_concern.py",
     "scripts/meta/worktree-coordination/safe_worktree_remove.py": "scripts/worktree-coordination/safe_worktree_remove.py",
+    "contracts/pr-review-signoff.schema.json": "contracts/pr-review-signoff.schema.json",
     "meta-process/templates/agents.md.template": "templates/agents.md.template",
 }
 
 WORKTREE_ONLY_SYNC_SUPPORT_FILES: dict[str, str] = {
     "enforced_planning/__init__.py": "enforced_planning/__init__.py",
+    "enforced_planning/pr_review_signoff.py": "enforced_planning/pr_review_signoff.py",
     "enforced_planning/concern_routing.py": "enforced_planning/concern_routing.py",
     "enforced_planning/claim_mutation_receipts.py": "enforced_planning/claim_mutation_receipts.py",
     "enforced_planning/client_session_metadata.py": "enforced_planning/client_session_metadata.py",
@@ -193,6 +198,7 @@ WORKTREE_ONLY_SYNC_SUPPORT_FILES: dict[str, str] = {
     "scripts/meta/session_status.py": "scripts/session_status.py",
     "scripts/meta/session_end.py": "scripts/session_end.py",
     "scripts/meta/project_status.py": "scripts/project_status.py",
+    "scripts/meta/pr_auto.py": "scripts/pr_auto.py",
     "scripts/meta/session_resume.py": "scripts/session_resume.py",
     "scripts/meta/surface_runtime.py": "scripts/surface_runtime.py",
     "scripts/meta/verification_batch.py": "scripts/verification_batch.py",
@@ -208,10 +214,12 @@ WORKTREE_ONLY_SYNC_SUPPORT_FILES: dict[str, str] = {
     "scripts/meta/check_plan_readiness.py": "scripts/check_plan_readiness.py",
     "scripts/meta/plan_close.py": "scripts/plan_close.py",
     "scripts/meta/worktree-coordination/create_worktree.py": "scripts/worktree-coordination/create_worktree.py",
+    "scripts/meta/worktree-coordination/finish_pr.py": "scripts/worktree-coordination/finish_pr.py",
     "scripts/meta/worktree-coordination/create_publish_worktree.py": "scripts/worktree-coordination/create_publish_worktree.py",
     "scripts/meta/worktree-coordination/create_review_claim.py": "scripts/worktree-coordination/create_review_claim.py",
     "scripts/meta/worktree-coordination/raise_concern.py": "scripts/worktree-coordination/raise_concern.py",
     "scripts/meta/worktree-coordination/safe_worktree_remove.py": "scripts/worktree-coordination/safe_worktree_remove.py",
+    "contracts/pr-review-signoff.schema.json": "contracts/pr-review-signoff.schema.json",
 }
 
 RELATIONSHIP_CONTEXT_SYNC_SUPPORT_FILES: dict[str, str] = {

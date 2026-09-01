@@ -15,6 +15,13 @@ MODULE_PATH = (
     / "worktree-coordination"
     / "finish_pr.py"
 )
+HOOK_PATH = (
+    Path(__file__).resolve().parents[1]
+    / "hooks"
+    / "claude"
+    / "worktree-coordination"
+    / "enforce-make-merge.sh"
+)
 SHA_A = "a" * 40
 SHA_B = "b" * 40
 
@@ -33,149 +40,88 @@ def completed(cmd, returncode=0, stdout="", stderr=""):
 
 
 def snapshot(module, sha=SHA_A, checks=()):
-    return module.PrSnapshot(sha, "feature", "main", "OPEN", "MERGEABLE", tuple(checks))
+    return module.PrSnapshot(
+        SHA_B, sha, "feature", "main", "OPEN", "MERGEABLE", tuple(checks)
+    )
 
 
-def test_status_context_success_requires_exact_creator_and_target() -> None:
+def test_review_spec_must_be_absolute_and_outside_repository(
+    tmp_path, monkeypatch
+) -> None:
     module = _load()
-    status = {
-        "context": "coordination-approval",
-        "state": "success",
-        "creator": {"login": "owner"},
-        "target_url": "https://github.com/owner/repo/pull/304",
-    }
-    assert module.evaluate_coordination_approval(
-        statuses=[status], check_runs=[], head_sha=SHA_A,
-        trusted_creator="owner", trusted_check_app_id=None,
-        expected_target_url="https://github.com/owner/repo/pull/304",
-    ) == (True, "OK")
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    inside = repo / "review.json"
+    inside.write_text("{}", encoding="utf-8")
 
-    status["creator"] = {"login": "other-user"}
-    ok, reason = module.evaluate_coordination_approval(
-        statuses=[status], check_runs=[], head_sha=SHA_A,
-        trusted_creator="owner", trusted_check_app_id=None,
-        expected_target_url="https://github.com/owner/repo/pull/304",
-    )
-    assert ok is False
-    assert "trusted producer" in reason
+    for candidate in (Path("review.json"), inside):
+        try:
+            module.load_trusted_review_spec(candidate, canonical_root=repo)
+        except ValueError as exc:
+            assert "outside the repository" in str(exc)
+        else:
+            raise AssertionError("PR-controlled review specs must be rejected")
 
-
-def test_app_binding_disables_owner_status_compatibility_arm() -> None:
-    status = {
-        "context": "coordination-approval",
-        "state": "success",
-        "creator": {"login": "owner"},
-        "target_url": "https://github.com/owner/repo/pull/304",
-    }
-    module = _load()
-
-    ok, reason = module.evaluate_coordination_approval(
-        statuses=[status], check_runs=[], head_sha=SHA_A,
-        trusted_creator="owner", trusted_check_app_id=99,
-        expected_target_url="https://github.com/owner/repo/pull/304",
-    )
-
-    assert ok is False
-    assert "trusted producer" in reason
-
-
-def test_missing_or_pending_coordination_approval_fails_visibly() -> None:
-    module = _load()
-    ok, missing = module.evaluate_coordination_approval(
-        statuses=[], check_runs=[], head_sha=SHA_A,
-        trusted_creator="owner", trusted_check_app_id=None,
-        expected_target_url="https://github.com/owner/repo/pull/304",
-    )
-    assert ok is False
-    assert "missing required coordination-approval" in missing
-
-    pending_run = {
-        "name": "coordination-approval",
-        "head_sha": SHA_A,
-        "status": "in_progress",
-        "conclusion": "success",
-        "app": {"id": 99},
-    }
-    ok, pending = module.evaluate_coordination_approval(
-        statuses=[], check_runs=[pending_run], head_sha=SHA_A,
-        trusted_creator="owner", trusted_check_app_id=99,
-        expected_target_url="https://github.com/owner/repo/pull/304",
-    )
-    assert ok is False
-    assert "trusted producer" in pending
-
-
-def test_same_named_check_run_from_wrong_app_is_rejected() -> None:
-    module = _load()
-    run = {
-        "name": "coordination-approval",
-        "head_sha": SHA_A,
-        "status": "completed",
-        "conclusion": "success",
-        "app": {"id": 55, "slug": "untrusted-app"},
-    }
-    ok, reason = module.evaluate_coordination_approval(
-        statuses=[], check_runs=[run], head_sha=SHA_A,
-        trusted_creator="owner", trusted_check_app_id=99,
-        expected_target_url="https://github.com/owner/repo/pull/304",
-    )
-    assert ok is False
-    assert "trusted producer" in reason
-
-    run["app"] = {"id": 99, "slug": "coordination-approver"}
-    assert module.evaluate_coordination_approval(
-        statuses=[], check_runs=[run], head_sha=SHA_A,
-        trusted_creator="owner", trusted_check_app_id=99,
-        expected_target_url="https://github.com/owner/repo/pull/304",
-    ) == (True, "OK")
-
-    ok, reason = module.evaluate_coordination_approval(
-        statuses=[], check_runs=[run], head_sha=SHA_A,
-        trusted_creator="owner", trusted_check_app_id=None,
-        expected_target_url="https://github.com/owner/repo/pull/304",
-    )
-    assert ok is False
-    assert "trusted producer" in reason
-
-
-def test_newer_pending_status_invalidates_older_success() -> None:
-    module = _load()
-    status_base = {
-        "context": "coordination-approval",
-        "creator": {"login": "owner"},
-        "target_url": "https://github.com/owner/repo/pull/304",
-    }
-    ok, reason = module.evaluate_coordination_approval(
-        statuses=[
-            {**status_base, "state": "pending"},
-            {**status_base, "state": "success"},
-        ],
-        check_runs=[], head_sha=SHA_A, trusted_creator="owner",
-        trusted_check_app_id=None,
-        expected_target_url="https://github.com/owner/repo/pull/304",
-    )
-    assert ok is False
-    assert "trusted producer" in reason
+    outside = tmp_path / "review.json"
+    outside.write_text("{}", encoding="utf-8")
+    expected = object()
+    monkeypatch.setattr(module, "load_review_spec", lambda path: expected)
+    assert module.load_trusted_review_spec(outside, canonical_root=repo) is expected
 
 
 def test_head_change_invalidates_previously_successful_approval(monkeypatch) -> None:
     module = _load()
-    approval = ({"context": "coordination-approval", "state": "SUCCESS"},)
     snapshots = iter([
-        (snapshot(module, SHA_A, approval), None),
-        (snapshot(module, SHA_B, approval), None),
+        (snapshot(module, SHA_A), None),
+        (snapshot(module, SHA_B), None),
     ])
     monkeypatch.setattr(module, "fetch_pr_snapshot", lambda *_args: next(snapshots))
     monkeypatch.setattr(module, "fetch_exact_pr_head", lambda *_args: (True, "OK"))
     monkeypatch.setattr(module, "require_all_required_checks", lambda *_args: (True, "OK"))
-    monkeypatch.setattr(module, "require_coordination_approval", lambda *_args: (True, "OK"))
 
     try:
-        module.prepare_merge_gate(304, "feature", "owner/repo", {})
+        module.prepare_merge_gate(
+            304,
+            "feature",
+            "owner/repo",
+            {},
+            review_spec_path=Path("/tmp/review.json"),
+            review_output_root=Path("/tmp/reviews"),
+        )
     except RuntimeError as exc:
-        assert "approval is stale" in str(exc)
+        assert "review is stale" in str(exc)
     else:
-        raise AssertionError("changed head must invalidate approval")
+        raise AssertionError("changed head must invalidate review")
+
+
+def test_prepare_merge_gate_runs_local_review_and_rechecks_head(monkeypatch) -> None:
+    module = _load()
+    snapshots = iter([(snapshot(module), None)] * 3)
+    monkeypatch.setattr(module, "fetch_pr_snapshot", lambda *_args: next(snapshots))
+    monkeypatch.setattr(module, "fetch_exact_pr_head", lambda *_args: (True, "OK"))
+    monkeypatch.setattr(module, "require_all_required_checks", lambda *_args: (True, "OK"))
+    spec = SimpleNamespace()
+    monkeypatch.setattr(module, "load_trusted_review_spec", lambda *_args, **_kwargs: spec)
+    monkeypatch.setattr(module, "resolve_branch_worktree", lambda _branch: Path("/review"))
+    observed = {}
+
+    def review(**kwargs):
+        observed.update(kwargs)
+        return SimpleNamespace(verdict="signed_off"), Path("/receipts/receipt.json")
+
+    monkeypatch.setattr(module, "run_local_review_gate", review)
+    result, receipt = module.prepare_merge_gate(
+        304,
+        "feature",
+        "owner/repo",
+        {},
+        review_spec_path=Path("/tmp/review.json"),
+        review_output_root=Path("/tmp/reviews"),
+    )
+    assert result.head_sha == SHA_A
+    assert receipt == Path("/receipts/receipt.json")
+    assert observed["spec"] is spec
+    assert observed["review_worktree"] == Path("/review")
 
 
 def test_merge_uses_match_head_commit_and_never_deletes_branch(monkeypatch) -> None:
@@ -254,3 +200,22 @@ def test_closeout_precedes_canonical_pull_and_uses_merge_receipt(monkeypatch) ->
         ["make", "worktree-remove", "BRANCH=feature", f"WORKTREE_MERGE_COMMIT={SHA_B}"],
         ["git", "pull", "--ff-only", "origin", "main"],
     ]
+
+
+def test_hook_blocks_real_finish_script_path_and_routes_to_make() -> None:
+    payload = (
+        '{"tool_input":{"command":"python scripts/worktree-coordination/finish_pr.py '
+        '--branch feature --pr 42 --review-spec /tmp/spec.json"},'
+        '"cwd":"/repo"}'
+    )
+    result = subprocess.run(
+        ["bash", str(HOOK_PATH)],
+        input=payload,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 2
+    assert "make finish BRANCH=feature PR=42" in result.stderr
+    assert "REVIEW_SPEC=/absolute/review-spec.json" in result.stderr

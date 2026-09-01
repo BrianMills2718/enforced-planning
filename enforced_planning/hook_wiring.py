@@ -70,6 +70,18 @@ CANONICAL_LOCK_HOOK_FILES: dict[str, str] = {
     ),
 }
 
+MERGE_GUARD_HOOK_FILES: dict[str, str] = {
+    ".claude/hooks/worktree-coordination/check-hook-enabled.sh": (
+        "hooks/claude/check-hook-enabled.sh"
+    ),
+    ".claude/hooks/worktree-coordination/enforce-make-merge.sh": (
+        "hooks/claude/worktree-coordination/enforce-make-merge.sh"
+    ),
+    ".codex/hooks/enforce-make-merge.sh": (
+        "hooks/claude/worktree-coordination/enforce-make-merge.sh"
+    ),
+}
+
 CANONICAL_LOCK_SUPPORT_FILES: dict[str, str] = {
     "scripts/meta/canonical_lock.py": "scripts/worktree-coordination/canonical_lock.py",
 }
@@ -159,6 +171,12 @@ CANONICAL_LOCK_HOOK = {
     "timeout": 10000,
 }
 
+MERGE_GUARD_HOOK = {
+    "type": "command",
+    "command": "bash .claude/hooks/worktree-coordination/enforce-make-merge.sh",
+    "timeout": 3000,
+}
+
 CODEX_MAILBOX_HOOK = {
     "type": "command",
     "command": (
@@ -167,6 +185,16 @@ CODEX_MAILBOX_HOOK = {
     ),
     "timeout": 3,
     "statusMessage": "Checking coordination requests",
+}
+
+CODEX_MERGE_GUARD_HOOK = {
+    "type": "command",
+    "command": (
+        'bash "$(git rev-parse --show-toplevel)/.codex/hooks/'
+        'enforce-make-merge.sh"'
+    ),
+    "timeout": 3,
+    "statusMessage": "Checking sanctioned merge path",
 }
 
 GATE_HOOK = {
@@ -514,6 +542,13 @@ def _merge_codex_mailbox_hooks(
         hooks = _ensure_matcher_block(settings, event_name=event_name, matcher=matcher)
         if _ensure_hook_command(hooks, CODEX_MAILBOX_HOOK):
             changed = True
+    merge_hooks = _ensure_matcher_block(
+        settings,
+        event_name="PreToolUse",
+        matcher="Bash",
+    )
+    if _ensure_hook_command(merge_hooks, CODEX_MERGE_GUARD_HOOK):
+        changed = True
     if include_prewrite:
         prewrite_command = cast(str, CODEX_PREWRITE_HOOK["command"])
         for legacy_matcher in ("Edit|Write", "apply_patch"):
@@ -630,6 +665,7 @@ def plan_generation(
         source_files.update(ARTIFACT_CREATION_HOOK_FILES)
         source_files.update(ARTIFACT_CREATION_SUPPORT_FILES)
     if include_coordination_messages:
+        source_files.update(MERGE_GUARD_HOOK_FILES)
         source_files.update(MAILBOX_HOOK_FILES)
         source_files.update(CANONICAL_LOCK_HOOK_FILES)
         source_files.update(CANONICAL_LOCK_SUPPORT_FILES)
@@ -689,6 +725,14 @@ def plan_generation(
         after_command="bash .claude/hooks/protect-main.sh",
     ):
         changed = True
+    if include_coordination_messages:
+        merge_hooks = _ensure_matcher_block(
+            settings,
+            event_name="PreToolUse",
+            matcher="Bash",
+        )
+        if _ensure_hook_command(merge_hooks, MERGE_GUARD_HOOK):
+            changed = True
     if prewrite_enabled and _ensure_hook_command(
         edit_hooks,
         PREWRITE_HOOK,

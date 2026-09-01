@@ -415,27 +415,24 @@ is already absent. `session-close` itself refuses physical cleanup while any
 other live claim still references the same canonical worktree path and lists
 the sibling scopes that must be disposed or transferred first.
 
-The compatibility `scripts/worktree-coordination/finish_pr.py` merge path also
-fails closed. It resolves the repository owner through the existing isolated
-GitHub-account seam, fetches the exact pull-request head, requires an
-authoritative `coordination-approval` plus GitHub's complete required-check set
-on that head, rechecks that the head did not move, and passes the same full commit to
-`gh pr merge --squash --match-head-commit`. A missing, pending, failing, or
-stale approval never reaches merge. The helper does not request branch deletion
-as part of the merge; only verified GitHub merge evidence is passed into the
-sanctioned claim/worktree close lifecycle, which owns local branch deletion.
+The compatibility `scripts/worktree-coordination/finish_pr.py` path also fails
+closed. It resolves the repository owner through the isolated GitHub-account
+seam, fetches the exact pull-request head, requires GitHub's complete required
+check set, and runs the evidence-bound programmatic plus fresh-agent review from
+the clean linked worktree. Its review specification must be an absolute path
+outside the repository and its worktrees. After review it rechecks the live head
+and required checks, then passes that same full commit to
+`gh pr merge --squash --match-head-commit`. A missing, rejected, or stale review
+never reaches merge. The helper does not request branch deletion as part of the
+merge; only verified GitHub merge evidence is passed into the sanctioned
+claim/worktree close lifecycle, which owns local branch deletion.
 
-The approval producer contract is stricter than a shared context name. A commit
-status qualifies only when the newest same-context status is `success`, its
-creator is exactly the repository owner resolved from `origin`, and its target
-is the exact pull-request URL. A check run qualifies only when it is
-`completed/success`, names the exact head, and its GitHub App ID equals the
-non-null App ID bound to `coordination-approval` in branch protection. Rollup
-entries alone do not carry enough provenance and cannot grant approval. The
-current manual status compatibility arm remains locally stricter than an
-`app_id: null` protection context; the intended remote terminal state is a
-dedicated coordination-approver GitHub App with that exact App ID bound in
-branch protection.
+Hooks provide the fast enforcement layer: they block direct merge commands and
+route callers to `make finish BRANCH=<branch> PR=<number>
+REVIEW_SPEC=/absolute/review-spec.json`. The expensive review never runs inside
+`PreToolUse`, avoiding hook timeouts. This is operational enforcement on clients
+with the governed hooks installed; GitHub branch protection remains useful for
+repository-wide CI checks but no GitHub App is required for semantic signoff.
 
 Squash merges require an explicit `--merge-commit <sha>` receipt. Closeout
 accepts it only when that one-parent commit is retained by the canonical

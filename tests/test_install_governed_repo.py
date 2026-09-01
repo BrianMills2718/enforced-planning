@@ -2007,8 +2007,9 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
     assert payload["worktree_only_mode"] is True
     assert not (tmp_path / "enforced_planning" / "__init__.py").read_bytes().endswith(b"\n\n")
     assert sorted(payload["actions"]) == sorted(
-        [
-            "install:enforced_planning/__init__.py",
+            [
+                "install:contracts/pr-review-signoff.schema.json",
+                "install:enforced_planning/__init__.py",
             "install:enforced_planning/artifact_creation.py",
             "install:enforced_planning/concern_routing.py",
             "install:enforced_planning/claim_mutation_receipts.py",
@@ -2019,7 +2020,8 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
             "install:enforced_planning/outcome_continuation.py",
             "install:enforced_planning/outcome_portfolio.py",
             "install:enforced_planning/outcome_selection.py",
-            "install:enforced_planning/prewrite_claim_fast.py",
+                "install:enforced_planning/prewrite_claim_fast.py",
+                "install:enforced_planning/pr_review_signoff.py",
             "install:enforced_planning/prewrite_claim_projection.py",
             "install:enforced_planning/plan_readiness.py",
             "install:enforced_planning/plan_close.py",
@@ -2051,7 +2053,8 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
                 "install:scripts/meta/session_narrow.py",
                 "install:scripts/meta/session_start.py",
             "install:scripts/meta/session_status.py",
-            "install:scripts/meta/project_status.py",
+                "install:scripts/meta/project_status.py",
+                "install:scripts/meta/pr_auto.py",
             "install:scripts/meta/session_resume.py",
             "install:scripts/meta/surface_runtime.py",
             "install:scripts/meta/validate_doc_authority.py",
@@ -2064,7 +2067,8 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
             "install:scripts/meta/coordination_operator_status.py",
             "install:scripts/meta/worktree-coordination/create_worktree.py",
             "install:scripts/meta/worktree-coordination/create_publish_worktree.py",
-            "install:scripts/meta/worktree-coordination/create_review_claim.py",
+                "install:scripts/meta/worktree-coordination/create_review_claim.py",
+                "install:scripts/meta/worktree-coordination/finish_pr.py",
             "install:scripts/meta/worktree-coordination/raise_concern.py",
             "install:scripts/meta/worktree-coordination/safe_worktree_remove.py",
             "append:Makefile.status",
@@ -2134,11 +2138,16 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
         assert help_result.returncode == 0, help_result.stdout + help_result.stderr
     assert (tmp_path / "scripts" / "meta" / "worktree-coordination" / "create_worktree.py").exists()
     assert (tmp_path / "scripts" / "meta" / "worktree-coordination" / "create_publish_worktree.py").exists()
+    assert (tmp_path / "scripts" / "meta" / "worktree-coordination" / "finish_pr.py").exists()
     assert (tmp_path / "scripts" / "meta" / "worktree-coordination" / "safe_worktree_remove.py").exists()
+    assert (tmp_path / "enforced_planning" / "pr_review_signoff.py").exists()
+    assert (tmp_path / "contracts" / "pr-review-signoff.schema.json").exists()
     makefile_text = (tmp_path / "Makefile").read_text(encoding="utf-8")
     assert "worktree:" in makefile_text
     assert "worktree-list:" in makefile_text
     assert "worktree-remove:" in makefile_text
+    assert "finish:" in makefile_text
+    assert 'REVIEW_SPEC=/absolute/review-spec.json' in makefile_text
     assert "session-start:" in makefile_text
     assert "session-finish:" in makefile_text
     assert "session-close:" in makefile_text

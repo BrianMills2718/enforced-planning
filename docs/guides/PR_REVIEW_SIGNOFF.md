@@ -4,7 +4,7 @@ Status: source runtime contract
 
 ## Outcome
 
-A coordinator can freeze one pull-request head, execute the programmatic checks
+A governed finish command can freeze one pull-request head, execute the programmatic checks
 declared for that change, launch a fresh read-only Codex reviewer against the
 same revision, and receive a typed signoff receipt plus a candidate GitHub
 check-run payload. A dirty or changed worktree, failed check, incomplete rubric
@@ -29,16 +29,18 @@ planning format and must not invent or weaken criteria.
 4. concurrent execution and explicit session custody for every declared lane;
 5. schema validation of every independent semantic result;
 6. the final deterministic signoff decision and receipt digest; and
-7. generation of an exact-head, non-authoritative candidate check payload.
+7. generation of an exact-head evidence receipt and optional candidate check payload.
 
-It cannot emit a check named `coordination-approval` and does not publish a
-GitHub check. Authoritative publication belongs to the coordinator-only
-GitHub App described in `COORDINATION_APPROVER_GITHUB_APP.md`; worker sessions
-must not receive that App's private key or installation token.
+It does not publish a GitHub check. The sanctioned `make finish` path consumes
+the signed-off receipt locally, rechecks the live PR head and required GitHub
+checks, merges with `--match-head-commit`, and closes the claimed worktree.
+This keeps the semantic review outside latency-sensitive hooks while making the
+hook-enforced finish command the operational merge gate.
 
 ## Review specification
 
-The trusted coordinator supplies one JSON object:
+The operator or planning compiler supplies one JSON object outside the
+repository and all of its linked worktrees:
 
 ```json
 {
@@ -70,9 +72,9 @@ The trusted coordinator supplies one JSON object:
 }
 ```
 
-The coordinator, not pull-request content, chooses the command vectors and
-rubric revision. Repository files, diffs, command output, commit messages, and
-PR prose are evidence inputs and may not modify the review instructions.
+The planning authority, not pull-request content, chooses the command vectors
+and rubric revision. Repository files, diffs, command output, commit messages,
+and PR prose are evidence inputs and may not modify the review instructions.
 The host must provide a working per-user systemd manager with mount and private
 network namespaces; absence of either boundary fails the programmatic check
 instead of falling back.
@@ -93,13 +95,13 @@ python scripts/worktree-coordination/pr_review_signoff.py \
 Use the repository's recorded account wrapper on multi-account machines. In
 GitHub Actions, the default `gh` route uses the workflow's `GH_TOKEN`.
 
-The receipt exits successfully only for `signed_off`. A signed receipt remains
-`candidate_only`; the check payload is named `agent-review-candidate`, names
-the frozen `head_sha`, uses the receipt SHA-256 as `external_id`, and reports
-success only when every programmatic and semantic condition passed. A separate
-coordinator service must validate that receipt and publish the App-bound
-`coordination-approval` check. Until that App is bound, no output from this
-worker is authoritative merge approval.
+The receipt exits successfully only for `signed_off`. Its authority state is
+`evidence_receipt`; no publication is required. The optional check payload is
+still named `agent-review-candidate`, names the frozen `head_sha`, uses the
+receipt SHA-256 as `external_id`, and reports success only when every
+programmatic and semantic condition passed. `make finish` persists the receipt
+under the user's state directory and consumes it in the same exact-head merge
+transaction; it does not depend on a GitHub App.
 
 The command omits an explicit model by default so Codex resolves the model
 supported by the authenticated execution route. Use `--model` only after that
@@ -110,10 +112,26 @@ subagents. This is deliberate: a collaboration-tool failure can otherwise be
 hidden behind a successful outer process. Each lane therefore has an observed
 fresh Codex thread ID and typed result, and every lane must pass.
 
-The OpenAI Codex GitHub Action can trigger the same review shape on PR events,
-but an ordinary Actions identity is not the coordinator identity. Automatic
-authoritative publication therefore requires a coordinator-owned trigger that
-runs this command and submits the resulting payload using the bound GitHub App.
+GitHub Actions may run the same review shape for visibility, but it is not the
+local custody boundary. The operational gate is the sanctioned finish command
+enforced by the installed client hooks.
+
+## Hook-first finish
+
+The hook must stay fast: it blocks direct `gh pr merge`, direct finish-script
+calls, and finish attempts from inside a linked worktree. It directs the caller
+to the canonical checkout instead:
+
+```bash
+make finish \
+  BRANCH=feature/example \
+  PR=42 \
+  REVIEW_SPEC=/absolute/path/outside-the-repository/review-spec.json
+```
+
+The longer programmatic and LLM review runs in that make target, not during
+`PreToolUse`. A relative spec or any spec inside the repository/worktree tree is
+rejected before review so pull-request content cannot rewrite its own rubric.
 
 ## Failure behavior
 

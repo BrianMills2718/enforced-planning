@@ -43,6 +43,13 @@ def test_canonical_lock_resolves_source_and_installed_layouts(tmp_path: Path) ->
     installed_helper.touch()
     assert module._canonical_lock_module_path(installed_script) == installed_helper.resolve()
 
+    source_facade = tmp_path / "source" / "scripts" / "meta" / "worktree-coordination" / "create_worktree.py"
+    source_helper = source_facade.parents[2] / "worktree-coordination" / "canonical_lock.py"
+    source_facade.parent.mkdir(parents=True)
+    source_helper.parent.mkdir(parents=True)
+    source_helper.touch()
+    assert module._canonical_lock_module_path(source_facade) == source_helper.resolve()
+
 
 def _run_git(repo_root: Path, *args: str) -> subprocess.CompletedProcess[str]:
     """Run one git command against a temp repo."""

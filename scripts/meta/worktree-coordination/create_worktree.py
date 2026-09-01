@@ -897,6 +897,7 @@ def _canonical_lock_module_path(script_path: Path | None = None) -> Path:
     candidates = (
         current.parent / "canonical_lock.py",
         current.parents[1] / "canonical_lock.py",
+        current.parents[2] / "worktree-coordination" / "canonical_lock.py",
     )
     return next((candidate for candidate in candidates if candidate.is_file()), candidates[0])
 

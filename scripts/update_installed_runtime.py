@@ -381,12 +381,15 @@ def _recovery_ref_target(runtime_repo: Path, recovery_ref: str) -> str:
         raise RuntimeUpdateError(
             f"--rollback-ref must be one exact {RECOVERY_NAMESPACE}/<timestamp>-<sha-prefix> ref"
         )
+    symbolic = _run(runtime_repo, "symbolic-ref", "--quiet", recovery_ref, check=False)
+    if symbolic.returncode == 0:
+        raise RuntimeUpdateError("runtime recovery ref must be a direct ref, not a symbolic ref")
     result = _run(runtime_repo, "show-ref", "--verify", "--hash", recovery_ref, check=False)
     target = result.stdout.strip()
     if result.returncode != 0 or not FULL_SHA_RE.fullmatch(target):
         raise RuntimeUpdateError("requested runtime recovery ref does not exist as one exact commit ref")
-    resolved = _output(runtime_repo, "rev-parse", f"{recovery_ref}^{{commit}}")
-    if resolved != target or not target.startswith(match.group(1)):
+    object_type = _output(runtime_repo, "cat-file", "-t", target)
+    if object_type != "commit" or not target.startswith(match.group(1)):
         raise RuntimeUpdateError("runtime recovery ref does not match its retained commit identity")
     return target
 
@@ -411,7 +414,6 @@ def rollback_runtime(
         write=write,
         now=now,
     )
-    receipt["rollback_ref"] = recovery_ref
     try:
         try:
             source_repo = source_repo.resolve()
@@ -457,7 +459,7 @@ def rollback_runtime(
 
         before = _output(runtime_repo, "rev-parse", "HEAD")
         target = _recovery_ref_target(runtime_repo, recovery_ref)
-        _validate_revision(source_repo, target)
+        receipt["rollback_ref"] = recovery_ref
         receipt.update(
             before_revision=before,
             target_revision=target,
@@ -465,11 +467,6 @@ def rollback_runtime(
             changed=before != target,
             update_mode="recovery_ref_rollback",
         )
-        receipt["stage"] = "resolve_remote"
-        remote_main = _remote_main_revision()
-        receipt["remote_main_revision"] = remote_main
-        if _run(source_repo, "merge-base", "--is-ancestor", target, remote_main, check=False).returncode != 0:
-            raise RuntimeUpdateError("runtime recovery target is not an ancestor of canonical origin/main")
 
         if not write or before == target:
             receipt.update(
@@ -478,6 +475,15 @@ def rollback_runtime(
                 stage="complete",
             )
             return receipt
+
+        receipt["stage"] = "revalidate"
+        if _recovery_ref_target(runtime_repo, recovery_ref) != target:
+            raise RuntimeUpdateError("runtime recovery ref changed before rollback mutation")
+        _assert_safe_runtime_local_config(runtime_repo)
+        if _assert_clean_runtime(runtime_repo) != "detached":
+            raise RuntimeUpdateError("runtime rollback requires a clean detached installed runtime")
+        if _output(runtime_repo, "rev-parse", "HEAD") != before:
+            raise RuntimeUpdateError("installed runtime HEAD changed before rollback mutation")
 
         retained_current_ref = _recovery_ref(before, now or datetime.now(UTC))
         receipt["stage"] = "create_recovery_ref"

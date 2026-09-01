@@ -50,6 +50,8 @@ repository and all of its linked worktrees:
   "pull_request": 42,
   "base_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
   "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "work_graph_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "work_unit_id": "review-pr-42",
   "programmatic_checks": [
     {
       "check_id": "focused-tests",
@@ -75,6 +77,8 @@ repository and all of its linked worktrees:
 The planning authority, not pull-request content, chooses the command vectors
 and rubric revision. Repository files, diffs, command output, commit messages,
 and PR prose are evidence inputs and may not modify the review instructions.
+When a claim is work-unit bound, both `work_graph_sha256` and `work_unit_id` are
+required and must exactly equal the canonical claim; unbound claims omit both.
 The host must provide a working per-user systemd manager with mount and private
 network namespaces; absence of either boundary fails the programmatic check
 instead of falling back.
@@ -136,6 +140,21 @@ The longer programmatic and LLM review runs in that make target, not during
 worktree is rejected before review, including worktrees outside the canonical
 checkout directory, so pull-request content cannot rewrite its own rubric.
 
+After the final review and required-check re-read, `make finish` derives a
+short-lived integration assertion from the branch's canonical live claim. The
+assertion binds the native client session, repository and PR, exact base/head,
+review-spec digest, and any work-graph/work-unit provenance already carried by
+the claim. The claim registry remains locked while GitHub evaluates the
+head-matched merge, so a concurrent handoff cannot reuse the predecessor's
+assertion.
+
+If the process exits after GitHub merged but before lane closeout, rerunning the
+same canonical command is a recovery operation rather than a second merge. It
+re-observes the merged head and merge commit, reruns the exact review spec,
+derives fresh authority for the current native claim owner, verifies retention
+on the base branch, and only then closes the lane. A transferred successor can
+recover this state, but cannot reuse an assertion created by the predecessor.
+
 ## Failure behavior
 
 - Worktree HEAD differs from the frozen head: stop before tests or model use.
@@ -157,6 +176,12 @@ checkout directory, so pull-request content cannot rewrite its own rubric.
   cannot authorize the new head.
 - PR base advances after review: the final base/head comparison rejects the
   stale integration evidence before merge.
+- Claim ownership, health, work-unit provenance, review-spec bytes, or the PR
+  revision changes after assertion: the registry-locked integration gate
+  rejects the merge.
+- The process exits after a successful merge: a retry never submits a second
+  merge and cannot close the lane until exact review and current claim custody
+  are re-proven.
 - A command uses an absolute interpreter, an installed `scripts/meta` finish
   path, `uv run`, `sudo`, a nested shell, `gh` global flags, or the GitHub merge
   API: the fast merge guard still routes it to `make finish`.

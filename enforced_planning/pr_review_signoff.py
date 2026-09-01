@@ -74,12 +74,18 @@ class PRReviewSpec(StrictModel):
     pull_request: int = Field(gt=0)
     base_sha: str = Field(pattern=SHA_PATTERN)
     head_sha: str = Field(pattern=SHA_PATTERN)
+    work_graph_sha256: str | None = Field(default=None, pattern=SHA256_PATTERN)
+    work_unit_id: str | None = None
     programmatic_checks: tuple[ProgrammaticCheck, ...] = Field(min_length=1)
     semantic_rubric: SemanticRubric
     review_lanes: tuple[str, ...] = Field(min_length=1, max_length=8)
 
     @model_validator(mode="after")
     def orchestration_ids_are_unique(self) -> PRReviewSpec:
+        if bool(self.work_graph_sha256) != bool(self.work_unit_id):
+            raise ValueError("review work-graph and work-unit authority must be paired")
+        if self.work_unit_id is not None and not self.work_unit_id.strip():
+            raise ValueError("review work-unit authority must be non-blank")
         check_ids = [check.check_id for check in self.programmatic_checks]
         if len(check_ids) != len(set(check_ids)):
             raise ValueError("programmatic check IDs must be unique")

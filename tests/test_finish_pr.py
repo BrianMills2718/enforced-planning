@@ -210,14 +210,42 @@ def test_head_change_during_final_check_invalidates_signoff(monkeypatch) -> None
 def test_merge_uses_match_head_commit_and_never_deletes_branch(monkeypatch) -> None:
     module = _load()
     calls = []
+    guard_calls = []
 
     def fake_run(cmd, check=True, capture=True, *, env=None):
         calls.append(cmd)
         return completed(cmd)
 
+    @contextmanager
+    def guard(authority, **kwargs):
+        guard_calls.append((authority, kwargs))
+        yield
+
     monkeypatch.setattr(module, "run_cmd", fake_run)
-    ok, _ = module.merge_exact_head(304, snapshot(module), "owner/repo", {})
+    monkeypatch.setattr(module, "integration_authority_guard", guard)
+    authority = SimpleNamespace(assertion_sha256="d" * 64)
+    target = SimpleNamespace()
+    ok, _ = module.merge_exact_head(
+        304,
+        snapshot(module),
+        "owner/repo",
+        {},
+        authority=authority,
+        target=target,
+        agent="codex",
+        repo_root=Path("/repo"),
+        review_spec_path=Path("/review.json"),
+    )
     assert ok is True
+    assert guard_calls == [(
+        authority,
+        {
+            "expected_target": target,
+            "agent": "codex",
+            "repo_root": Path("/repo"),
+            "review_spec_path": Path("/review.json"),
+        },
+    )]
     assert calls == [[
         "gh", "pr", "merge", "304", "--repo", "owner/repo", "--squash",
         "--match-head-commit", SHA_A,
@@ -252,6 +280,33 @@ def test_repository_context_routes_to_origin_owner_in_isolated_auth(monkeypatch)
         assert slug == "ExactOwner/repository"
         assert gh_env["GH_CONFIG_DIR"] == "/isolated"
     assert observed["account"] == "ExactOwner"
+
+
+def test_integration_target_binds_review_work_unit_authority(monkeypatch) -> None:
+    module = _load()
+    monkeypatch.setattr(module, "get_main_repo_root", lambda: Path("/repo"))
+    monkeypatch.setattr(
+        module,
+        "load_trusted_review_spec",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            work_graph_sha256="e" * 64,
+            work_unit_id="review-pr-304",
+        ),
+    )
+    monkeypatch.setattr(module, "review_spec_sha256", lambda _path: "d" * 64)
+
+    target = module.integration_target(
+        snapshot=snapshot(module),
+        repository="owner/repo",
+        project="enforced-planning",
+        pr_number=304,
+        branch="feature",
+        review_spec_path=Path("/review.json"),
+    )
+
+    assert target.review_spec_sha256 == "d" * 64
+    assert target.review_work_graph_sha256 == "e" * 64
+    assert target.review_work_unit_id == "review-pr-304"
 
 
 def test_required_check_command_is_repository_bound(monkeypatch) -> None:
@@ -299,10 +354,23 @@ def test_failed_merge_verification_never_closes_lane(monkeypatch, tmp_path) -> N
     monkeypatch.setattr(module, "github_repository_context", repository_context)
     monkeypatch.setattr(
         module,
+        "fetch_pr_snapshot",
+        lambda *_args: (snapshot(module), None),
+    )
+    monkeypatch.setattr(
+        module,
         "prepare_merge_gate",
         lambda *_args, **_kwargs: (snapshot(module), tmp_path / "receipt.json"),
     )
-    monkeypatch.setattr(module, "merge_exact_head", lambda *_args: (True, "Merged"))
+    monkeypatch.setattr(module, "integration_target", lambda **_kwargs: object())
+    monkeypatch.setattr(
+        module,
+        "assert_integration_authority",
+        lambda **_kwargs: SimpleNamespace(assertion_sha256="d" * 64),
+    )
+    monkeypatch.setattr(
+        module, "merge_exact_head", lambda *_args, **_kwargs: (True, "Merged")
+    )
     monkeypatch.setattr(
         module,
         "verify_merged_pr",
@@ -317,10 +385,133 @@ def test_failed_merge_verification_never_closes_lane(monkeypatch, tmp_path) -> N
     assert module.finish_pr(
         "feature",
         42,
+        agent="codex",
+        project="enforced-planning",
         review_spec_path=tmp_path / "spec.json",
         review_output_root=tmp_path,
     ) is False
     assert closed == []
+
+
+def test_post_merge_recovery_reproves_review_and_claim_authority(
+    monkeypatch, tmp_path
+) -> None:
+    module = _load()
+    merged = module.PrSnapshot(
+        SHA_B, SHA_A, "feature", "main", "MERGED", "MERGEABLE", ()
+    )
+    spec = object()
+    target = object()
+    authority = SimpleNamespace(assertion_sha256="d" * 64)
+    observed = {}
+
+    monkeypatch.setattr(module, "require_all_required_checks", lambda *_args: (True, "OK"))
+    monkeypatch.setattr(module, "load_trusted_review_spec", lambda *_args, **_kwargs: spec)
+    monkeypatch.setattr(module, "resolve_branch_worktree", lambda _branch: Path("/review"))
+
+    def review(**kwargs):
+        observed["review"] = kwargs
+        return SimpleNamespace(verdict="signed_off"), Path("/receipt.json")
+
+    monkeypatch.setattr(module, "run_local_review_gate", review)
+
+    def build_target(**kwargs):
+        observed["target"] = kwargs
+        return target
+
+    def assert_authority(**kwargs):
+        observed["authority"] = kwargs
+        return authority
+
+    monkeypatch.setattr(module, "integration_target", build_target)
+    monkeypatch.setattr(
+        module,
+        "assert_integration_authority",
+        assert_authority,
+    )
+
+    result = module.prepare_post_merge_recovery(
+        snapshot=merged,
+        merge_commit=SHA_C,
+        branch="feature",
+        pr_number=42,
+        repo_slug="owner/repo",
+        gh_env={},
+        agent="codex",
+        project="enforced-planning",
+        repo_root=Path("/repo"),
+        review_spec_path=tmp_path / "review.json",
+        review_output_root=tmp_path / "receipts",
+    )
+
+    assert result == (SHA_C, Path("/receipt.json"), authority)
+    assert observed["review"]["spec"] is spec
+    assert observed["review"]["snapshot"] == merged
+    assert observed["review"]["review_worktree"] == Path("/review")
+    assert observed["target"] == {
+        "snapshot": merged,
+        "repository": "owner/repo",
+        "project": "enforced-planning",
+        "pr_number": 42,
+        "branch": "feature",
+        "review_spec_path": tmp_path / "review.json",
+    }
+    assert observed["authority"] == {
+        "target": target,
+        "agent": "codex",
+        "repo_root": Path("/repo"),
+        "review_spec_path": tmp_path / "review.json",
+    }
+
+
+def test_retry_after_merge_skips_second_merge_and_closes_exact_lane(
+    monkeypatch, tmp_path
+) -> None:
+    module = _load()
+    merged = module.PrSnapshot(
+        SHA_B, SHA_A, "feature", "main", "MERGED", "MERGEABLE", ()
+    )
+    closed = []
+
+    @contextmanager
+    def repository_context():
+        yield "owner/repo", {}
+
+    monkeypatch.setattr(module, "is_in_worktree", lambda: False)
+    monkeypatch.setattr(module, "github_repository_context", repository_context)
+    monkeypatch.setattr(module, "get_main_repo_root", lambda: Path("/repo"))
+    monkeypatch.setattr(module, "fetch_pr_snapshot", lambda *_args: (merged, SHA_C))
+    monkeypatch.setattr(
+        module,
+        "prepare_post_merge_recovery",
+        lambda **_kwargs: (
+            SHA_C,
+            Path("/receipt.json"),
+            SimpleNamespace(assertion_sha256="d" * 64),
+        ),
+    )
+    monkeypatch.setattr(
+        module,
+        "merge_exact_head",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("retry must not submit a second merge")
+        ),
+    )
+    monkeypatch.setattr(
+        module,
+        "close_merged_lane",
+        lambda *args: closed.append(args) or (True, "Closed"),
+    )
+
+    assert module.finish_pr(
+        "feature",
+        42,
+        agent="codex",
+        project="enforced-planning",
+        review_spec_path=tmp_path / "review.json",
+        review_output_root=tmp_path / "receipts",
+    ) is True
+    assert closed == [("feature", SHA_C, "main")]
 
 
 def test_hook_blocks_direct_merge_and_finish_command_variants() -> None:
@@ -375,6 +566,8 @@ def test_hook_blocks_direct_merge_and_finish_command_variants() -> None:
         )
         assert result.returncode == 2, command
         assert "make finish" in result.stderr
+        if "gh pr merge" in command and command.startswith("gh pr merge"):
+            assert "canonical claim authority" in result.stderr
 
 
 def test_hook_allows_search_that_only_mentions_finish_filename() -> None:

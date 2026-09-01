@@ -571,7 +571,7 @@ ifndef REVIEW_SPEC
 	$(error REVIEW_SPEC is required and must be an absolute path outside the repository)
 endif
 	@test -f "$(WORKTREE_FINISH_SCRIPT)" || { echo "Missing finish module: $(WORKTREE_FINISH_SCRIPT)"; exit 1; }
-	@$(PYTHON) "$(WORKTREE_FINISH_SCRIPT)" --branch "$(BRANCH)" --pr "$(PR)" --review-spec "$(REVIEW_SPEC)"
+	@$(PYTHON) "$(WORKTREE_FINISH_SCRIPT)" --agent "$(WORKTREE_AGENT)" --project "$(WORKTREE_PROJECT)" --branch "$(BRANCH)" --pr "$(PR)" --review-spec "$(REVIEW_SPEC)"
 
 review-claim:  ## Create a review claim for TARGET_BRANCH=name WRITE_PATHS="a|b" TASK="..."
 ifndef TARGET_BRANCH

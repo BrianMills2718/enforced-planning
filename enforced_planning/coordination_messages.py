@@ -18,8 +18,10 @@ import inspect
 import json
 import os
 import shlex
+import shutil
 import sys
 import tempfile
+import tomllib
 import uuid
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
@@ -30,7 +32,6 @@ from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, ValidationErro
 
 from enforced_planning import coordination_claims
 
-
 SCHEMA_VERSION: Literal["1.0"] = "1.0"
 INDEX_DIRNAME = "index-v1"
 DEFAULT_TTL_SECONDS = 86_400
@@ -38,6 +39,7 @@ MAX_NOTE_LENGTH = 2_000
 DEFAULT_NOTICE_BODY_LENGTH = 500
 DEFAULT_NOTICE_MESSAGE_LIMIT = 20
 MessageState = Literal["persisted", "runtime_accepted", "observed", "acknowledged", "expired"]
+DeliveryMode = Literal["enforced", "advisory_only", "unavailable"]
 
 
 class CoordinationMessageError(RuntimeError):
@@ -383,6 +385,268 @@ class MessageStatusView(StrictContract):
     message_path: str = Field(min_length=1, description="Evidence path to the canonical stored message.")
 
 
+class HostDeliveryCapabilityV1(StrictContract):
+    """Sender-visible local host capability for the recipient's client type.
+
+    This is deliberately scoped to the sender's current host configuration. It
+    does not claim that a remote recipient process loaded those bytes.
+    """
+
+    schema_version: Literal["mailbox_host_delivery_capability.v1"] = (
+        "mailbox_host_delivery_capability.v1"
+    )
+    client: Literal["codex", "claude-code", "unknown"]
+    config_path: str = Field(min_length=1)
+    scope: Literal[
+        "sender_host_recipient_client_config",
+        "operator_host_recipient_client_config",
+    ] = "sender_host_recipient_client_config"
+    configured_events: tuple[str, ...]
+    delivery_mode: DeliveryMode
+    mutation_enforcement_available: bool
+    stop_enforcement_available: bool
+    issues: tuple[str, ...]
+    operator_message: str = Field(min_length=1)
+    observed_proves_exposure_only: Literal[True] = True
+    observed_proves_stopped: Literal[False] = False
+    observed_proves_acknowledged: Literal[False] = False
+
+
+_CLIENT_HOOK_REQUIREMENTS: dict[str, tuple[tuple[str, str], ...]] = {
+    "codex": (
+        ("SessionStart", "startup|resume|clear|compact"),
+        ("UserPromptSubmit", ""),
+        ("PostToolUse", "*"),
+        ("PreToolUse", "Bash|apply_patch"),
+        ("Stop", ""),
+    ),
+    "claude-code": (
+        ("SessionStart", "startup|resume|clear|compact"),
+        ("UserPromptSubmit", ""),
+        ("PostToolUse", "*"),
+        ("PreToolUse", "Bash|Edit|Write"),
+        ("Stop", ""),
+    ),
+}
+
+
+def _event_state_name(event: str) -> str:
+    """Render native CamelCase hook names as Codex state-table identifiers."""
+
+    return "".join(f"_{char.lower()}" if char.isupper() else char for char in event).lstrip("_")
+
+
+def _configured_coordination_hook_command(
+    config: dict[str, Any], event: str, matcher: str, *, config_path: Path
+) -> str | None:
+    """Return the enabled coordination adapter command for one exact hook surface."""
+
+    hooks = config.get("hooks")
+    blocks = hooks.get(event) if isinstance(hooks, dict) else None
+    state = hooks.get("state") if isinstance(hooks, dict) else None
+    if not isinstance(blocks, list):
+        return None
+    resolved_config_path = config_path.expanduser().resolve()
+    for block_index, block in enumerate(blocks):
+        if not isinstance(block, dict) or block.get("matcher", "") != matcher:
+            continue
+        entries = block.get("hooks")
+        if not isinstance(entries, list):
+            continue
+        for hook_index, entry in enumerate(entries):
+            command = entry.get("command") if isinstance(entry, dict) else None
+            if isinstance(command, str) and (
+                "coordination_hook.py" in command or "notify-coordination-messages.sh" in command
+            ):
+                state_key = (
+                    f"{resolved_config_path}:{_event_state_name(event)}:{block_index}:{hook_index}"
+                )
+                state_record = state.get(state_key) if isinstance(state, dict) else None
+                if isinstance(state_record, dict) and state_record.get("enabled") is False:
+                    continue
+                return command
+    return None
+
+
+def _configured_adapter_issue(client: str, commands: tuple[str, ...]) -> str | None:
+    """Fail closed unless configured commands match the canonical adapter bytes."""
+
+    canonical_root = Path(__file__).resolve().parents[1]
+    expected_by_name = {
+        "coordination_hook.py": canonical_root / "scripts" / "coordination_hook.py",
+        "notify-coordination-messages.sh": (
+            canonical_root / "hooks" / ("codex" if client == "codex" else "claude")
+            / "notify-coordination-messages.sh"
+        ),
+    }
+    for command in commands:
+        try:
+            tokens = shlex.split(command)
+        except ValueError:
+            return "adapter_command_invalid"
+        adapter_token: str | None = None
+        interpreter = Path(tokens[0]).expanduser() if tokens else None
+        if interpreter is not None and not interpreter.is_absolute():
+            resolved_interpreter = shutil.which(tokens[0])
+            interpreter = Path(resolved_interpreter) if resolved_interpreter else None
+        try:
+            trusted_interpreter = Path(sys.executable).resolve(strict=True)
+            trusted_bash = Path("/bin/bash").resolve(strict=True)
+            interpreter_is_trusted = bool(
+                interpreter is not None
+                and interpreter.is_file()
+                and os.access(interpreter, os.X_OK)
+                and interpreter.resolve(strict=True) == trusted_interpreter
+            )
+        except OSError:
+            interpreter_is_trusted = False
+            trusted_bash = None
+        direct_python_adapter = (
+            len(tokens) == 4
+            and interpreter_is_trusted
+            and Path(tokens[1]).name == "coordination_hook.py"
+            and tokens[2:] == ["--agent", client]
+        )
+        direct_shell_adapter = (
+            len(tokens) == 2
+            and interpreter is not None
+            and interpreter.is_file()
+            and os.access(interpreter, os.X_OK)
+            and trusted_bash is not None
+            and interpreter.resolve() == trusted_bash
+            and Path(tokens[1]).name == "notify-coordination-messages.sh"
+        )
+        if direct_python_adapter or direct_shell_adapter:
+            adapter_token = tokens[1]
+        elif len(tokens) == 1 and Path(tokens[0]).name == "notify-coordination-messages.sh":
+            adapter_token = tokens[0]
+        if adapter_token is None:
+            return "adapter_command_invalid"
+        adapter_path = Path(adapter_token).expanduser()
+        expected_path = expected_by_name[adapter_path.name]
+        if not adapter_path.is_absolute() or not adapter_path.is_file():
+            return "adapter_missing"
+        if len(tokens) == 1 and not os.access(adapter_path, os.X_OK):
+            return "adapter_command_invalid"
+        if not expected_path.is_file():
+            return "canonical_adapter_missing"
+        if hashlib.sha256(adapter_path.read_bytes()).digest() != hashlib.sha256(
+            expected_path.read_bytes()
+        ).digest():
+            return "adapter_digest_mismatch"
+    return None
+
+
+def inspect_host_delivery_capability(
+    session_id: str,
+    *,
+    codex_config_path: Path | None = None,
+    claude_config_path: Path | None = None,
+    scope: Literal[
+        "sender_host_recipient_client_config",
+        "operator_host_recipient_client_config",
+    ] = "sender_host_recipient_client_config",
+) -> HostDeliveryCapabilityV1:
+    """Inspect local configured hook state without promoting it to runtime proof."""
+
+    if session_id.startswith("codex:"):
+        client = "codex"
+        path = codex_config_path or Path.home() / ".codex" / "config.toml"
+        parser = "toml"
+    elif session_id.startswith("claude-code:"):
+        client = "claude-code"
+        path = claude_config_path or Path.home() / ".claude" / "settings.json"
+        parser = "json"
+    else:
+        return HostDeliveryCapabilityV1(
+            client="unknown",
+            config_path="unknown",
+            scope=scope,
+            configured_events=(),
+            delivery_mode="unavailable",
+            mutation_enforcement_available=False,
+            stop_enforcement_available=False,
+            issues=("unsupported_recipient_client",),
+            operator_message=(
+                "Mailbox delivery enforcement is unavailable for this recipient client. "
+                "Persistence is not delivery, and an observed receipt proves exposure only, "
+                "not that the recipient stopped or acknowledged."
+            ),
+        )
+
+    issues: list[str] = []
+    try:
+        if parser == "toml":
+            with path.open("rb") as handle:
+                raw = tomllib.load(handle)
+        else:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(raw, dict):
+            raise TypeError("host hook config must be an object")
+    except (OSError, tomllib.TOMLDecodeError, json.JSONDecodeError, TypeError) as exc:
+        issues.append(f"config_unavailable:{type(exc).__name__}")
+        raw = {}
+
+    configured_commands = {
+        event: command
+        for event, matcher in _CLIENT_HOOK_REQUIREMENTS[client]
+        if (
+            command := _configured_coordination_hook_command(
+                raw, event, matcher, config_path=path
+            )
+        )
+        is not None
+    }
+    configured_events = tuple(configured_commands)
+    missing_required = len(configured_events) != len(_CLIENT_HOOK_REQUIREMENTS[client])
+    if missing_required:
+        issues.append("missing_required_hook")
+    adapter_issue = _configured_adapter_issue(
+        client, tuple(dict.fromkeys(configured_commands.values()))
+    )
+    if adapter_issue is not None:
+        issues.append(adapter_issue)
+    adapter_ready = adapter_issue is None
+    surface_ready = adapter_ready and not missing_required
+    mutation_available = "PreToolUse" in configured_events and surface_ready
+    stop_available = "Stop" in configured_events and adapter_ready
+    advisory_events = {"SessionStart", "UserPromptSubmit", "PostToolUse"}
+    has_advisory_delivery = bool(advisory_events.intersection(configured_events)) and adapter_ready
+    if mutation_available:
+        delivery_mode: DeliveryMode = "enforced"
+        operator_message = (
+            "Mailbox mutation enforcement is configured on this host. An observed receipt "
+            "proves exposure only, not that the recipient stopped or acknowledged."
+        )
+    elif has_advisory_delivery:
+        delivery_mode = "advisory_only"
+        issues.append("pretooluse_coordination_hook_missing")
+        operator_message = (
+            "Mailbox delivery is advisory-only on this host: the coordination surface is incomplete "
+            "or its PreToolUse hook is disabled, so mutation enforcement is unavailable. An observed receipt "
+            "proves exposure only, not that the recipient stopped or acknowledged."
+        )
+    else:
+        delivery_mode = "unavailable"
+        issues.append("coordination_delivery_hooks_missing")
+        operator_message = (
+            "Mailbox delivery enforcement is unavailable on this host for this recipient client. "
+            "Persistence is not delivery, and an observed receipt proves exposure only, not that "
+            "the recipient stopped or acknowledged."
+        )
+    return HostDeliveryCapabilityV1(
+        client=client,
+        config_path=str(path),
+        scope=scope,
+        configured_events=configured_events,
+        delivery_mode=delivery_mode,
+        mutation_enforcement_available=mutation_available,
+        stop_enforcement_available=stop_available,
+        issues=tuple(issues),
+        operator_message=operator_message,
+    )
+
+
 UNREACHABLE_BACKLOG_SECONDS = 300.0
 """How stale an unobserved message must be before it implies a deaf recipient."""
 
@@ -396,7 +660,7 @@ def _looks_unreachable(backlog: int, oldest_age_seconds: float | None) -> bool:
 
 
 class PersistedMessageResult(StrictContract):
-    """Result of one successful or idempotently replayed send operation."""
+    """Legacy V1 send result retained for strict consumer compatibility."""
 
     message: CoordinationMessage = Field(description="Canonical persisted message.")
     message_path: str = Field(min_length=1, description="Evidence path to the canonical message record.")
@@ -417,6 +681,18 @@ class PersistedMessageResult(StrictContract):
             "Whether the recipient looks unable to receive: it has an earlier active message "
             "it never observed. Storing a message is persistence, never delivery."
         ),
+    )
+
+
+class PersistedMessageResultV2(PersistedMessageResult):
+    """Versioned send result that adds truthful sender-host delivery capability."""
+
+    schema_version: Literal["2.0.0"] = "2.0.0"
+    local_host_delivery_capability: HostDeliveryCapabilityV1 = Field(
+        description=(
+            "Sender-host configured capability for the recipient client type; this is not proof "
+            "that a remote recipient process loaded the configuration."
+        )
     )
 
 
@@ -982,7 +1258,7 @@ class CoordinationMessageStore:
         *,
         now: datetime | None = None,
         require_live_claim: bool = True,
-    ) -> PersistedMessageResult:
+    ) -> PersistedMessageResultV2:
         """Resolve identities and persist one immutable coordination message.
 
         Native client adapters may set ``require_live_claim=False`` only after
@@ -1012,13 +1288,16 @@ class CoordinationMessageStore:
                     now=now or _utc_now(),
                     before=existing.created_at,
                 )
-                return PersistedMessageResult(
+                return PersistedMessageResultV2(
                     message=existing,
                     message_path=str(existing_path),
                     idempotent_replay=True,
                     recipient_unobserved_backlog=backlog,
                     recipient_oldest_unobserved_seconds=age,
                     recipient_may_be_unreachable=_looks_unreachable(backlog, age),
+                    local_host_delivery_capability=inspect_host_delivery_capability(
+                        existing.recipient_session_id
+                    ),
                 )
         recipient_session_id = self.resolve_recipient(request.recipient)
         created_at = now or _utc_now()
@@ -1048,13 +1327,14 @@ class CoordinationMessageStore:
         path, idempotent = self._store_message(message)
         if idempotent:
             message = self._read_message_path(path)
-        return PersistedMessageResult(
+        return PersistedMessageResultV2(
             message=message,
             message_path=str(path),
             idempotent_replay=idempotent,
             recipient_unobserved_backlog=backlog,
             recipient_oldest_unobserved_seconds=age,
             recipient_may_be_unreachable=_looks_unreachable(backlog, age),
+            local_host_delivery_capability=inspect_host_delivery_capability(recipient_session_id),
         )
 
     def _append_observation(self, message: CoordinationMessage, *, now: datetime) -> tuple[MessageReceipt, Path]:
@@ -1187,6 +1467,8 @@ class CoordinationMessageStore:
         *,
         now: datetime | None = None,
         require_live_claim: bool = True,
+        max_messages: int | None = None,
+        active_only: bool = False,
     ) -> MessagePollResult:
         """Read one session inbox and optionally append observation receipts.
 
@@ -1202,27 +1484,41 @@ class CoordinationMessageStore:
         as_of = request.as_of or now or _utc_now()
         if as_of.tzinfo is None:
             raise ValueError("as_of must be timezone-aware")
+        if max_messages is not None and max_messages < 1:
+            raise ValueError("max_messages must be positive")
         selected = [
             message
             for message, _path in self._messages_for_recipient(request.current_session_id)
             if request.project is None or message.project == request.project
         ]
-        observations: list[MessageReceipt] = []
-        observation_paths: list[str] = []
-        views: list[MessageStatusView] = []
-        suppressed_message_ids: list[str] = []
+        eligible: list[CoordinationMessage] = []
         for message in selected:
             before = self.status(MessageStatusRequest(message_id=message.message_id, as_of=as_of))
             if before.expired and not request.include_expired:
                 continue
-            if request.delivery_event_id is not None and not before.acknowledged:
-                if not self._claim_event_delivery(
+            if active_only and before.acknowledged:
+                continue
+            eligible.append(message)
+        if max_messages is not None:
+            eligible = eligible[:max_messages]
+
+        observations: list[MessageReceipt] = []
+        observation_paths: list[str] = []
+        views: list[MessageStatusView] = []
+        suppressed_message_ids: list[str] = []
+        for message in eligible:
+            before = self.status(MessageStatusRequest(message_id=message.message_id, as_of=as_of))
+            if (
+                request.delivery_event_id is not None
+                and not before.acknowledged
+                and not self._claim_event_delivery(
                     message,
                     delivery_event_id=request.delivery_event_id,
                     now=as_of,
-                ):
-                    suppressed_message_ids.append(message.message_id)
-                    continue
+                )
+            ):
+                suppressed_message_ids.append(message.message_id)
+                continue
             if request.observe and not before.expired and not before.observed:
                 observation, observation_path = self._append_observation(message, now=as_of)
                 observations.append(observation)
@@ -1336,9 +1632,22 @@ def poll_session_inbox(
             delivery_event_id=delivery_event_id,
         ),
         require_live_claim=require_live_claim,
+        max_messages=max_messages,
+        active_only=True,
     )
     active = tuple(
         view for view in result.messages if not view.expired and not view.acknowledged
+    )
+    all_visible = store.poll(
+        PollMessagesRequest(
+            current_session_id=resolved_session_id,
+            project=project,
+            observe=False,
+        ),
+        require_live_claim=require_live_claim,
+    )
+    all_active = tuple(
+        view for view in all_visible.messages if not view.expired and not view.acknowledged
     )
     acknowledgements = store.poll_sender_acknowledgements(
         current_session_id=resolved_session_id,
@@ -1349,7 +1658,7 @@ def poll_session_inbox(
     summary_parts: list[str] = []
     acknowledgement_script = Path(__file__).resolve().parents[1] / "scripts" / "coordination_messages.py"
     if active:
-        displayed = active[:max_messages]
+        displayed = active
         rendered_messages: list[str] = []
         acknowledgement_commands: list[str] = []
         for view in displayed:
@@ -1375,14 +1684,16 @@ def poll_session_inbox(
                 f"--request-json {shlex.quote(acknowledgement_request)}"
             )
         details = "; ".join(rendered_messages)
-        remainder = len(active) - len(displayed)
+        remainder = max(0, len(all_active) - len(displayed))
         suffix = f"; {remainder} more not shown" if remainder else ""
         summary_parts.extend(
             (
-                "ACKNOWLEDGEMENT REQUIRED. DO NOT pass the next natural work "
-                "boundary until every displayed message has a truthful durable "
-                "disposition",
-                f"{len(active)} active message(s): {details}{suffix}",
+                (
+                    "ACKNOWLEDGEMENT REQUIRED. DO NOT pass the next natural work "
+                    "boundary until every displayed message has a truthful durable "
+                    "disposition"
+                ),
+                f"{len(all_active)} active message(s): {details}{suffix}",
                 "Acknowledge each displayed message by replacing the disposition "
                 "and note placeholders in its command: "
                 + " ; ".join(acknowledgement_commands),
@@ -1412,8 +1723,8 @@ def poll_session_inbox(
     return SessionInboxNotice(
         session_id=resolved_session_id,
         project=project,
-        active_count=len(active),
-        message_ids=tuple(view.message.message_id for view in active[:max_messages]),
+        active_count=len(all_active) if active else 0,
+        message_ids=tuple(view.message.message_id for view in active),
         acknowledgement_count=len(acknowledgements),
         acknowledgement_message_ids=tuple(view.message.message_id for view in acknowledgements),
         summary=summary,
@@ -1485,7 +1796,7 @@ def main(argv: list[str] | None = None) -> int:
     except (ValidationError, CoordinationMessageError, ValueError) as exc:
         print(json.dumps({"ok": False, "error_type": type(exc).__name__, "error": str(exc)}, sort_keys=True))
         return 2
-    if isinstance(result, PersistedMessageResult) and result.recipient_may_be_unreachable:
+    if isinstance(result, PersistedMessageResultV2) and result.recipient_may_be_unreachable:
         age_minutes = int((result.recipient_oldest_unobserved_seconds or 0) // 60)
         print(
             "WARNING: this message is stored but probably will not be read. "
@@ -1494,6 +1805,14 @@ def main(argv: list[str] | None = None) -> int:
             "A session running without the mailbox hook loaded accumulates exactly this backlog while "
             "every send still reports success. Check "
             "scripts/verify_mailbox_hook_activation.py before waiting on a reply.",
+            file=sys.stderr,
+        )
+    if (
+        isinstance(result, PersistedMessageResultV2)
+        and result.local_host_delivery_capability.delivery_mode != "enforced"
+    ):
+        print(
+            f"WARNING: {result.local_host_delivery_capability.operator_message}",
             file=sys.stderr,
         )
     print(result.model_dump_json(indent=2))

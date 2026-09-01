@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import shutil
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from enforced_planning import client_session_metadata, coordination_claims, coordination_messages
-
 
 NOW = datetime(2026, 7, 30, 19, 15, tzinfo=UTC)
 SESSION_ID = "codex:019f95f8-75e9-7a31-bba1-527695ed821e"
@@ -191,6 +192,143 @@ def test_response_readout_never_conflates_display_acknowledgement_or_completion(
     if readout.manual_resume_command:
         assert SESSION_ID.removeprefix("codex:") in readout.manual_resume_command
         assert "gap_closure_including_composability" not in readout.manual_resume_command
+
+
+def test_operator_readout_exposes_state_disabled_pretooluse_as_advisory_only(
+    tmp_path: Path,
+) -> None:
+    """The canonical readout reports actual operator-host enforcement, not hook presence."""
+
+    index = tmp_path / "session_index.jsonl"
+    _write_index(index)
+    config = tmp_path / "config.toml"
+    adapter = tmp_path / "coordination_hook.py"
+    shutil.copy2(Path(__file__).resolve().parents[1] / "scripts" / adapter.name, adapter)
+    command = f"python3 {adapter} --agent codex"
+    config.write_text(
+        f'''[[hooks.SessionStart]]
+matcher = "startup|resume|clear|compact"
+[[hooks.SessionStart.hooks]]
+type = "command"
+command = "{command}"
+
+[[hooks.PostToolUse]]
+matcher = "*"
+[[hooks.PostToolUse.hooks]]
+type = "command"
+command = "{command}"
+
+[[hooks.PreToolUse]]
+matcher = "Bash|apply_patch"
+[[hooks.PreToolUse.hooks]]
+type = "command"
+command = "{command}"
+
+[[hooks.Stop]]
+matcher = ""
+[[hooks.Stop.hooks]]
+type = "command"
+command = "{command}"
+
+[hooks.state."{config.resolve()}:pre_tool_use:0:0"]
+enabled = false
+''',
+        encoding="utf-8",
+    )
+
+    readout = client_session_metadata.build_coordination_response_readout(
+        _status("observed"),
+        claims=[_claim()],
+        codex_session_index=index,
+        codex_config_path=config,
+    )
+
+    capability = readout.operator_host_delivery_capability
+    assert capability.scope == "operator_host_recipient_client_config"
+    assert capability.delivery_mode == "advisory_only"
+    assert capability.mutation_enforcement_available is False
+    assert capability.stop_enforcement_available is True
+    assert capability.observed_proves_exposure_only is True
+    assert capability.observed_proves_stopped is False
+    assert capability.observed_proves_acknowledged is False
+    assert "mutation enforcement is unavailable" in capability.operator_message
+
+
+def test_operator_readout_fails_closed_for_digest_drift(tmp_path: Path) -> None:
+    """The canonical operator projection shares adapter-aware host classification."""
+
+    index = tmp_path / "session_index.jsonl"
+    _write_index(index)
+    adapter = tmp_path / "coordination_hook.py"
+    adapter.write_text("# drifted adapter\n", encoding="utf-8")
+    command = f"python3 {adapter} --agent codex"
+    config = tmp_path / "config.toml"
+    blocks = "\n".join(
+        f'''[[hooks.{event}]]
+matcher = "{matcher}"
+[[hooks.{event}.hooks]]
+type = "command"
+command = "{command}"
+'''
+        for event, matcher in (
+            ("SessionStart", "startup|resume|clear|compact"),
+            ("UserPromptSubmit", ""),
+            ("PostToolUse", "*"),
+            ("PreToolUse", "Bash|apply_patch"),
+            ("Stop", ""),
+        )
+    )
+    config.write_text(blocks, encoding="utf-8")
+
+    readout = client_session_metadata.build_coordination_response_readout(
+        _status("observed"),
+        claims=[_claim()],
+        codex_session_index=index,
+        codex_config_path=config,
+    )
+
+    capability = readout.operator_host_delivery_capability
+    assert capability.delivery_mode == "unavailable"
+    assert capability.mutation_enforcement_available is False
+    assert capability.stop_enforcement_available is False
+    assert "adapter_digest_mismatch" in capability.issues
+
+
+def test_v2_operator_readout_has_explicit_v1_migration_boundary(tmp_path: Path) -> None:
+    """The operator capability addition advances the strict readout contract version."""
+
+    index = tmp_path / "session_index.jsonl"
+    _write_index(index)
+    current = client_session_metadata.build_coordination_response_readout(
+        _status("observed"), claims=[_claim()], codex_session_index=index
+    )
+    current_payload = current.model_dump(mode="json")
+    legacy_payload = {
+        **current_payload,
+        "schema_version": "1.0.0",
+    }
+    legacy_payload.pop("operator_host_delivery_capability")
+
+    assert (
+        client_session_metadata.CoordinationResponseReadoutV1.model_validate_json(
+            json.dumps(legacy_payload)
+        ).schema_version
+        == "1.0.0"
+    )
+    assert (
+        client_session_metadata.CoordinationResponseReadoutV2.model_validate_json(
+            json.dumps(current_payload)
+        ).schema_version
+        == "1.1.0"
+    )
+    with pytest.raises(ValidationError):
+        client_session_metadata.CoordinationResponseReadoutV1.model_validate_json(
+            json.dumps(current_payload)
+        )
+    with pytest.raises(ValidationError):
+        client_session_metadata.CoordinationResponseReadoutV2.model_validate_json(
+            json.dumps(legacy_payload)
+        )
 
 
 def test_session_status_enrichment_preserves_internal_name(tmp_path: Path) -> None:

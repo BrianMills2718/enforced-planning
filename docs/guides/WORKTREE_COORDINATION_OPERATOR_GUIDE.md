@@ -203,6 +203,16 @@ and refresh the pre-write projection in the same locked mutation.
    implementation begins. `make worktree` (plan-owned lanes) deliberately
    keeps every input explicit, including `SESSION_WRITE_PATHS="..."`.
 
+   In a repository with hard selected-outcome admission, that maintenance
+   claim is exempt from selecting a planned outcome only while its exact root
+   identity and typed tracker still satisfy the maintenance contract. The
+   ordinary pre-write gate remains authoritative: it selects the sole
+   same-session claim whose declared `write_paths` cover every mutation target,
+   then validates that selected claim's health. Parent and child claims with
+   disjoint paths therefore do not conflict, but overlapping authority remains
+   ambiguous and separate claims never combine to authorize one multi-target
+   mutation. A generic `UNPLANNED` claim is not this exemption.
+
    The pre-commit canonical-checkout guard's escape hatch,
    `ALLOW_CANONICAL_CHECKOUT_COMMIT=1`, is metered per repository per session:
    the first use is recorded quietly, the second warns, the third is refused.

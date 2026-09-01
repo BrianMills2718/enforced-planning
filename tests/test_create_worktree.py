@@ -242,6 +242,34 @@ def test_fresh_start_uses_advertised_default_when_local_remote_head_is_stale(tmp
     assert _run_git(repo_root, "symbolic-ref", "refs/remotes/origin/HEAD").stdout.strip() == stale_remote_head
 
 
+def test_fresh_start_rejects_successful_fetch_with_stale_tracking_ref(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_module()
+    repo_root = _init_repo_with_stale_origin(tmp_path)
+    real_run_git = module.run_git
+    advertised = "f" * 40
+    remote_head = _run_git(repo_root, "symbolic-ref", "--short", "refs/remotes/origin/HEAD").stdout.strip()
+    advertised_branch = remote_head.split("/", 1)[1]
+
+    def controlled_run_git(args: list[str], *, cwd: Path):
+        if args == ["fetch", "origin"]:
+            return subprocess.CompletedProcess(["git", *args], 0, "", "")
+        if args == ["ls-remote", "--symref", "origin", "HEAD"]:
+            return subprocess.CompletedProcess(
+                ["git", *args],
+                0,
+                f"ref: refs/heads/{advertised_branch}\tHEAD\n{advertised}\tHEAD\n",
+                "",
+            )
+        return real_run_git(args, cwd=cwd)
+
+    monkeypatch.setattr(module, "run_git", controlled_run_git)
+    with pytest.raises(ValueError, match="does not match advertised HEAD"):
+        module.resolve_fresh_start_revision(repo_root=repo_root, start_point="HEAD")
+
+
 def test_create_worktree_reuses_only_branch_at_exact_start_revision(tmp_path: Path) -> None:
     """A pre-existing branch is recoverable only when it already retains the requested commit."""
 

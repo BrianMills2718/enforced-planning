@@ -225,13 +225,16 @@ def resolve_fresh_start_revision(*, repo_root: Path, start_point: str) -> str:
         if fetched.returncode != 0:
             detail = (fetched.stderr or fetched.stdout).strip()
             raise ValueError(f"Unable to refresh upstream {upstream_ref!r}: {detail}")
+    advertised_revision: str | None = None
     if start_point == "HEAD":
         advertised = run_git(["ls-remote", "--symref", remote_name, "HEAD"], cwd=repo_root)
         match = re.search(r"^ref:\s+refs/heads/([^\s]+)\s+HEAD$", advertised.stdout, re.MULTILINE)
-        if advertised.returncode != 0 or match is None:
+        revisions = re.findall(r"^([0-9a-f]{40}|[0-9a-f]{64})\s+HEAD$", advertised.stdout, re.MULTILINE)
+        if advertised.returncode != 0 or match is None or len(revisions) != 1:
             detail = (advertised.stderr or advertised.stdout).strip()
             raise ValueError(f"Unable to resolve remote default for {remote_name!r}: {detail}")
         upstream_ref = f"{remote_name}/{match.group(1)}"
+        advertised_revision = revisions[0]
     elif explicit_remote == remote_name:
         upstream_ref = start_point
     if not upstream_ref:
@@ -240,6 +243,10 @@ def resolve_fresh_start_revision(*, repo_root: Path, start_point: str) -> str:
     fresh_revision = fresh.stdout.strip()
     if fresh.returncode != 0 or re.fullmatch(r"(?:[0-9a-f]{40}|[0-9a-f]{64})", fresh_revision) is None:
         raise ValueError(f"Unable to resolve refreshed upstream revision from {upstream_ref!r}")
+    if advertised_revision is not None and fresh_revision != advertised_revision:
+        raise ValueError(
+            f"Refreshed remote-tracking revision {fresh_revision} does not match advertised HEAD {advertised_revision}"
+        )
     return fresh_revision
 
 

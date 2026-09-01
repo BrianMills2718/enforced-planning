@@ -158,6 +158,10 @@ handoff/session-end plus session-resume before it may hand off, abandon, finish,
 or close the lane; claim creation fails
 without changing the claim or its derived projection.
 
+New-lane creation is stricter: `require_new` bypasses same-owner refresh, then
+rejects an occupied slot or creates the claim while holding the registry lock.
+A concurrent exact-owner claim therefore cannot turn bootstrap into refresh.
+
 A successful cross-session `session-resume` also writes one immutable
 `claim_session_custody_transfer` receipt under the coordination root and returns
 its exact path and SHA-256. The receipt binds the project, scope, repository,
@@ -1013,12 +1017,17 @@ In that configured source checkout:
 - source `make worktree`, `make session-start`, and
   `make session-heartbeat` prefer the canonical `scripts/session_*.py`
   owners when present, with installed `scripts/meta/` files only as fallback;
-- session renewal and heartbeat automatically require exact selected state;
+- ordinary session heartbeat renews liveness only; exact selected state is
+  required only when the caller explicitly requests outcome-selected
+  admission;
 - native pre-write automatically requires selected state after ordinary
   authority, except for an exact restricted bootstrap claim writing one of its
   own bootstrap paths; and
-- omitting an outcome flag, changing approval text, increasing elapsed time or
-  cost, or passing a weaker ordinary mode cannot change the decision.
+- an explicit selected-outcome heartbeat flag gates that renewal through
+  selected outcome admission; omitting it performs owner-bound liveness refresh
+  only and never renews outcome state. Changing approval text, increasing
+  elapsed time or cost, or passing a weaker ordinary mode cannot change an
+  explicit selected-outcome decision.
 
 Malformed mode values, ambiguous or mixed bootstrap claims, source smuggling,
 missing selection, inactive allocation, and stalled or terminal continuation
@@ -1087,14 +1096,16 @@ The runtime declaration remains in the consumer repository's
 `~/.local/state/governed-surfaces`; they are operational state, not Git
 authority.
 
-Supported runtime adapters:
+Supported runtime adapters for actor-bound lifecycle mutations:
 
 - Codex: `CODEX_THREAD_ID`
-- Claude Code: `CLAUDE_SESSION_ID` or `CLAUDE_CODE_SSE_PORT`
-- OpenClaw: `OPENCLAW_SESSION_ID` or `OPENCLAW_RUN_ID`
+- Claude Code: `CLAUDE_CODE_SESSION_ID`
+- OpenClaw: `OPENCLAW_SESSION_ID`
 
-Those adapters only resolve runtime identity. They do not change the session
-contract schema, the tracker schema, or the sanctioned repo lifecycle commands.
+An explicit owner ID, process discovery, or an SSE port cannot self-attest a
+foreign runtime for heartbeat, handoff, abandon, finish, or close. The adapters
+only bind the ambient actor identity; they do not change the session contract
+schema, tracker schema, or sanctioned repo lifecycle commands.
 
 ## Crash / Resume Policy
 
@@ -1178,6 +1189,12 @@ python scripts/session_status.py --session-id codex:<thread-id> --include-ended 
 The JSON end receipt names the session, end time, reason, and every affected
 `project:scope`. Claim YAML is the durable audit record; the generated active
 work registry remains a derivative and no second mutable lane store is added.
+
+`session-status` is a strictly read-only observer. It takes shared locks only
+when the existing writer-owned lock files can be opened without mutation. When
+a lock is absent, it accepts only an optimistic claim/tracker snapshot whose
+source bytes stay stable and whose lock remains absent; it never creates or
+chmods lock files, creates directories, or prunes stale staging artifacts.
 
 When this control blocks valid work, loses an expected session transition, or
 creates avoidable process cost, record concrete evidence in Project Meta's

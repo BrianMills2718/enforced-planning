@@ -2636,6 +2636,107 @@ def build_candidate_claim(
     )
 
 
+def _refresh_exact_owner_claim(
+    *,
+    agent: str,
+    project: str,
+    scope: str,
+    session_id: str | None,
+    intent: str,
+    plan_ref: str | None,
+    claim_type: str | None,
+    write_paths: list[str] | None,
+    read_paths: list[str] | None,
+    worktree_path: str | None,
+    repo_root: str | None,
+    branch: str | None,
+    session_name: str | None,
+    broader_goal: str | None,
+    status: str,
+    parent_scope: str | None,
+    notes: str | None,
+    allow_parallel: bool,
+    broad_scope_mode: str | None,
+    broad_scope_reason: str | None,
+    target_worktree_path: str | None,
+    ttl_hours: float,
+) -> tuple[bool, str] | None:
+    """Expand an exact-owner live claim without reconstructing retained custody."""
+
+    claim_path = CLAIMS_DIR / _claim_filename(agent, project, scope)
+    if not claim_path.is_file():
+        return None
+    with claim_registry_lock(CLAIMS_DIR):
+        raw = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+        existing = normalize_claim(raw, source_file=str(claim_path)) if isinstance(raw, dict) else None
+        if existing is None or not existing.is_live():
+            return None
+        resolved_session_id = resolve_session_id(agent, session_id)
+        if not resolved_session_id or existing.session_id != resolved_session_id:
+            return None
+        if existing.status != status:
+            raise ValueError("exact-owner claim refresh cannot change lifecycle status")
+        requested_identity = {
+            "intent": intent,
+            "plan_ref": plan_ref,
+            "claim_type": claim_type,
+            "worktree_path": worktree_path,
+            "repo_root": repo_root,
+            "branch": branch,
+            "session_name": session_name,
+            "broader_goal": broader_goal,
+            "parent_scope": parent_scope,
+            "broad_scope_mode": broad_scope_mode,
+            "broad_scope_reason": broad_scope_reason,
+            "target_worktree_path": target_worktree_path,
+        }
+        for field, requested in requested_identity.items():
+            if requested is not None and requested != getattr(existing, field):
+                raise ValueError(f"exact-owner claim refresh cannot change retained {field}")
+        if allow_parallel and not existing.parallel_root_authorized:
+            raise ValueError("exact-owner claim refresh cannot add parallel-root authority")
+
+        payload = dict(raw)
+        if write_paths:
+            payload["write_paths"] = [_normalize_repo_path(path) for path in write_paths]
+        if read_paths:
+            payload["read_paths"] = [_normalize_repo_path(path) for path in read_paths]
+        if notes is not None:
+            payload["notes"] = notes
+        now = datetime.now(timezone.utc)
+        payload["expires_at"] = (now + timedelta(hours=ttl_hours)).isoformat()
+        payload["updated_at"] = now.isoformat()
+        candidate = normalize_claim(payload, source_file=str(claim_path))
+        if candidate is None:
+            raise ValueError("exact-owner claim refresh produced an invalid claim")
+        validate_claim_for_creation(candidate)
+        active_claims = check_claims(project)
+        check_result = evaluate_claim(candidate, active_claims=active_claims)
+        if check_result.hard_conflicts:
+            formatted = "; ".join(
+                f"{item.other_agent} ({item.other_scope}: {', '.join(item.overlapping_write_paths)})"
+                for item in check_result.hard_conflicts
+            )
+            return False, f"CONFLICT: active write claim overlap in '{project}' — {formatted}."
+        registry_digest_before = _registry_digest(CLAIMS_DIR)
+        _projection_path, projection_digest_after = _replace_claim_and_refresh_projection_fail_atomic(
+            claim_path=claim_path,
+            payload=payload,
+            claims_dir=CLAIMS_DIR,
+        )
+        record_claim_mutation(
+            operation="create",
+            claims_dir=CLAIMS_DIR,
+            registry_digest_before=registry_digest_before,
+            target_project=project,
+            target_scope=scope,
+            target_claim_path=claim_path,
+            session_id=resolved_session_id,
+            projection_digest_after=projection_digest_after,
+        )
+    return True, f"Refreshed exact-owner claim: {agent} → {project}:{scope}"
+
+
 def create_claim(
     agent: str,
     project: str,
@@ -2665,6 +2766,7 @@ def create_claim(
     require_new: bool = False,
     allow_parallel: bool = False,
     require_native_session_binding: bool = False,
+    require_native_session_marker: bool = False,
     broad_scope_mode: str | None = None,
     broad_scope_reason: str | None = None,
     target_worktree_path: str | None = None,
@@ -2678,7 +2780,38 @@ def create_claim(
         progress_at=now,
     )
     if require_native_session_binding:
-        validate_native_session_binding(agent, session_id)
+        validate_native_session_binding(
+            agent,
+            session_id,
+            require_native_marker=require_native_session_marker,
+        )
+    if not require_new:
+        refreshed = _refresh_exact_owner_claim(
+            agent=agent,
+            project=project,
+            scope=scope,
+            session_id=session_id,
+            intent=intent,
+            plan_ref=plan_ref,
+            claim_type=claim_type,
+            write_paths=write_paths,
+            read_paths=read_paths,
+            worktree_path=worktree_path,
+            repo_root=repo_root,
+            branch=branch,
+            session_name=session_name,
+            broader_goal=broader_goal,
+            status=status,
+            parent_scope=parent_scope,
+            notes=notes,
+            allow_parallel=allow_parallel,
+            broad_scope_mode=broad_scope_mode,
+            broad_scope_reason=broad_scope_reason,
+            target_worktree_path=target_worktree_path,
+            ttl_hours=ttl_hours,
+        )
+        if refreshed is not None:
+            return refreshed
     resolved_claim_type = claim_type or ("write" if write_paths else "program")
     work_graph_sha256: str | None = None
     approval_revisions: tuple[str, ...] = ()
@@ -4252,6 +4385,7 @@ def main(argv: list[str] | None = None) -> int:
                 broad_scope_reason=args.broad_scope_reason,
                 target_worktree_path=args.target_worktree_path,
                 require_native_session_binding=True,
+                require_native_session_marker=True,
             )
         except MutationAuditError as exc:
             return _render_mutation_audit_failure(exc, as_json=args.json)

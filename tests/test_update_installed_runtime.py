@@ -387,6 +387,7 @@ def test_write_fast_forwards_and_retains_exact_recovery_ref(
     assert result["before_revision"] == before
     assert result["after_revision"] == after
     assert result["recovery_ref"] == f"refs/codex-runtime-recovery/20260901T160000000000Z-{before[:12]}"
+    assert result["recovery_ref_retained"] is True
     assert _git(runtime, "rev-parse", "HEAD") == after
     assert _git(runtime, "rev-parse", result["recovery_ref"]) == before
     assert _git(runtime, "status", "--porcelain", "--untracked-files=all") == ""
@@ -726,6 +727,41 @@ def test_partial_failure_receipt_retains_recovery_ref(
         "message": "Runtime update failed at the recorded stage; raw error details are omitted.",
     }
     assert real_run(runtime, "rev-parse", receipt["recovery_ref"]).stdout.strip() == before
+
+
+def test_quarantine_failure_is_denied_before_installed_runtime_mutation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, runtime, before, after = _repos(tmp_path, monkeypatch)
+    refs_before = _all_refs(runtime)
+    fetch_head_before = _fetch_head(runtime)
+    index_before = _git_path_bytes(runtime, "index")
+
+    def fail_quarantine(_revision: str) -> None:
+        raise OSError("injected quarantine failure")
+
+    monkeypatch.setattr(
+        runtime_update,
+        "_fetch_canonical_revision_into_quarantine",
+        fail_quarantine,
+    )
+
+    with pytest.raises(RuntimeUpdateError, match="injected quarantine failure") as caught:
+        update_runtime(source_repo=source, runtime_repo=runtime, revision=after, write=True)
+
+    receipt = caught.value.receipt
+    assert receipt["action"] == "denied"
+    assert receipt["stage"] == "fetch_target"
+    assert receipt["mutation_started"] is False
+    assert receipt["recovery_ref"] is None
+    assert receipt["recovery_ref_retained"] is None
+    assert _git(runtime, "rev-parse", "HEAD") == before
+    assert _all_refs(runtime) == refs_before
+    assert _fetch_head(runtime) == fetch_head_before
+    assert _git_path_bytes(runtime, "index") == index_before
+    assert runtime_update._run(
+        runtime, "cat-file", "-e", f"{after}^{{commit}}", check=False
+    ).returncode != 0
 
 
 def test_oserror_after_recovery_ref_emits_structured_partial_failure(

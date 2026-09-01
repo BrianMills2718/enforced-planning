@@ -151,6 +151,7 @@ def _base_receipt(
         "target_revision": None,
         "after_revision": None,
         "recovery_ref": None,
+        "recovery_ref_retained": None,
         "remote_main_revision": None,
         "changed": None,
         "update_mode": None,
@@ -472,10 +473,10 @@ def update_runtime(
 
         if write and before != revision:
             receipt["stage"] = "fetch_target"
-            receipt["mutation_started"] = True
             _assert_safe_runtime_local_config(runtime_repo)
             quarantine = _fetch_canonical_revision_into_quarantine(revision)
             try:
+                receipt["mutation_started"] = True
                 _run(
                     runtime_repo,
                     "fetch",
@@ -492,8 +493,8 @@ def update_runtime(
         recovery_ref = _recovery_ref(before, now or datetime.now(UTC))
         receipt["stage"] = "create_recovery_ref"
         receipt["recovery_ref"] = recovery_ref
-        _run(runtime_repo, "update-ref", recovery_ref, before, ZERO_OID, mutating=True)
         receipt["mutation_started"] = True
+        _run(runtime_repo, "update-ref", recovery_ref, before, ZERO_OID, mutating=True)
         # The recovery ref deliberately remains and is reported if mutation fails.
         receipt["stage"] = "apply_update"
         if before != revision:
@@ -513,7 +514,13 @@ def update_runtime(
         stored_origin_after = _output(runtime_repo, "config", "--local", "--get", "remote.origin.url")
         if after != revision or retained != before or stored_origin_after != CANONICAL_ORIGIN:
             raise RuntimeUpdateError("post-update revision, origin, or recovery-ref verification failed")
-        receipt.update(action="updated", state="succeeded", stage="complete", after_revision=after)
+        receipt.update(
+            action="updated",
+            state="succeeded",
+            stage="complete",
+            after_revision=after,
+            recovery_ref_retained=True,
+        )
         return receipt
     except (RuntimeUpdateError, OSError, subprocess.SubprocessError) as exc:
         _refresh_failure_state(runtime_repo, receipt)

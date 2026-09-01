@@ -94,6 +94,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+def _execution_binding_root(args: argparse.Namespace) -> Path:
+    """Keep an overridden mailbox authority and its run bindings isolated."""
+
+    if args.execution_binding_dir is not None:
+        return args.execution_binding_dir
+    if args.root is not None:
+        return args.root.expanduser().resolve().parent / "mailbox-primary-executions-v1"
+    return mailbox_execution_identity.DEFAULT_BINDING_ROOT
+
+
 def _read_hook_input(*, project_supplied: bool) -> dict[str, Any]:
     """Read and validate the common native lifecycle-hook fields from stdin."""
 
@@ -882,8 +892,7 @@ def main(argv: list[str] | None = None) -> int:
         session_id = _session_id(args.agent, payload["session_id"])
         event_name = payload["hook_event_name"]
         execution_decision = mailbox_execution_identity.PrimaryExecutionBindingStore(
-            args.execution_binding_dir
-            or mailbox_execution_identity.DEFAULT_BINDING_ROOT
+            _execution_binding_root(args)
         ).classify(
             session_id=session_id,
             run_id=mailbox_execution_identity.hook_run_id(payload),

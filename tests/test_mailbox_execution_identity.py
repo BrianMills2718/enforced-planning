@@ -90,7 +90,7 @@ def test_session_start_epoch_rejects_stale_run_until_new_prompt_binds(tmp_path: 
         now=NOW,
     )
 
-    assert reset.role == "unbound"
+    assert reset.role == "primary"
     assert reset.reason == "session_start_awaiting_primary_run"
     assert stale.role == "unbound"
     assert stale.reason == "awaiting_primary_run"

@@ -64,6 +64,18 @@ def test_stop_refire_returns_before_receipts_or_projection(monkeypatch, tmp_path
     assert coordination_hook.main(["--hook-receipt-dir", str(tmp_path / "receipts")]) == 0
 
 
+def test_mailbox_override_isolates_primary_run_cache(tmp_path: Path) -> None:
+    first = coordination_hook.parse_args(["--root", str(tmp_path / "one" / "messages-v1")])
+    second = coordination_hook.parse_args(["--root", str(tmp_path / "two" / "messages-v1")])
+
+    assert coordination_hook._execution_binding_root(first) == (
+        tmp_path / "one" / "mailbox-primary-executions-v1"
+    )
+    assert coordination_hook._execution_binding_root(second) == (
+        tmp_path / "two" / "mailbox-primary-executions-v1"
+    )
+
+
 def test_posttool_is_advisory_and_secondary_run_cannot_poll_root_inbox(
     monkeypatch, tmp_path: Path, capsys
 ) -> None:

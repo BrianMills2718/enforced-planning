@@ -153,7 +153,7 @@ class PrimaryExecutionBindingStore:
             if event_name == "SessionStart" and run_digest is None:
                 if current is not None and current.status == "awaiting_primary_run":
                     return PrimaryExecutionDecisionV1(
-                        role="unbound",
+                        role="primary",
                         reason="session_start_awaiting_primary_run",
                         generation=current.generation,
                         binding_path=str(path),
@@ -171,7 +171,11 @@ class PrimaryExecutionBindingStore:
                     ),
                 )
                 return PrimaryExecutionDecisionV1(
-                    role="unbound",
+                    # The startup callback itself is a model-visible delivery
+                    # surface even when the client omits a run identity. The
+                    # persisted awaiting marker still prevents later stale or
+                    # secondary callbacks from adopting the new epoch.
+                    role="primary",
                     reason="session_start_awaiting_primary_run",
                     generation=generation,
                     binding_path=str(path),

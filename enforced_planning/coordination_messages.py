@@ -483,10 +483,22 @@ def _configured_adapter_issue(client: str, commands: tuple[str, ...]) -> str | N
             tokens = shlex.split(command)
         except ValueError:
             return "adapter_command_invalid"
-        adapter_token = next(
-            (token for token in tokens if Path(token).name in expected_by_name),
-            None,
+        adapter_token: str | None = None
+        direct_python_adapter = (
+            len(tokens) == 4
+            and Path(tokens[0]).name in {"python", "python3", Path(sys.executable).name}
+            and Path(tokens[1]).name == "coordination_hook.py"
+            and tokens[2:] == ["--agent", client]
         )
+        direct_shell_adapter = (
+            len(tokens) == 2
+            and Path(tokens[0]).name == "bash"
+            and Path(tokens[1]).name == "notify-coordination-messages.sh"
+        )
+        if direct_python_adapter or direct_shell_adapter:
+            adapter_token = tokens[1]
+        elif len(tokens) == 1 and Path(tokens[0]).name == "notify-coordination-messages.sh":
+            adapter_token = tokens[0]
         if adapter_token is None:
             return "adapter_command_invalid"
         adapter_path = Path(adapter_token).expanduser()
@@ -1432,6 +1444,8 @@ class CoordinationMessageStore:
         *,
         now: datetime | None = None,
         require_live_claim: bool = True,
+        max_messages: int | None = None,
+        active_only: bool = False,
     ) -> MessagePollResult:
         """Read one session inbox and optionally append observation receipts.
 
@@ -1447,19 +1461,30 @@ class CoordinationMessageStore:
         as_of = request.as_of or now or _utc_now()
         if as_of.tzinfo is None:
             raise ValueError("as_of must be timezone-aware")
+        if max_messages is not None and max_messages < 1:
+            raise ValueError("max_messages must be positive")
         selected = [
             message
             for message, _path in self._messages_for_recipient(request.current_session_id)
             if request.project is None or message.project == request.project
         ]
-        observations: list[MessageReceipt] = []
-        observation_paths: list[str] = []
-        views: list[MessageStatusView] = []
-        suppressed_message_ids: list[str] = []
+        eligible: list[CoordinationMessage] = []
         for message in selected:
             before = self.status(MessageStatusRequest(message_id=message.message_id, as_of=as_of))
             if before.expired and not request.include_expired:
                 continue
+            if active_only and before.acknowledged:
+                continue
+            eligible.append(message)
+        if max_messages is not None:
+            eligible = eligible[:max_messages]
+
+        observations: list[MessageReceipt] = []
+        observation_paths: list[str] = []
+        views: list[MessageStatusView] = []
+        suppressed_message_ids: list[str] = []
+        for message in eligible:
+            before = self.status(MessageStatusRequest(message_id=message.message_id, as_of=as_of))
             if (
                 request.delivery_event_id is not None
                 and not before.acknowledged
@@ -1584,9 +1609,22 @@ def poll_session_inbox(
             delivery_event_id=delivery_event_id,
         ),
         require_live_claim=require_live_claim,
+        max_messages=max_messages,
+        active_only=True,
     )
     active = tuple(
         view for view in result.messages if not view.expired and not view.acknowledged
+    )
+    all_visible = store.poll(
+        PollMessagesRequest(
+            current_session_id=resolved_session_id,
+            project=project,
+            observe=False,
+        ),
+        require_live_claim=require_live_claim,
+    )
+    all_active = tuple(
+        view for view in all_visible.messages if not view.expired and not view.acknowledged
     )
     acknowledgements = store.poll_sender_acknowledgements(
         current_session_id=resolved_session_id,
@@ -1597,7 +1635,7 @@ def poll_session_inbox(
     summary_parts: list[str] = []
     acknowledgement_script = Path(__file__).resolve().parents[1] / "scripts" / "coordination_messages.py"
     if active:
-        displayed = active[:max_messages]
+        displayed = active
         rendered_messages: list[str] = []
         acknowledgement_commands: list[str] = []
         for view in displayed:
@@ -1623,7 +1661,7 @@ def poll_session_inbox(
                 f"--request-json {shlex.quote(acknowledgement_request)}"
             )
         details = "; ".join(rendered_messages)
-        remainder = len(active) - len(displayed)
+        remainder = max(0, len(all_active) - len(displayed))
         suffix = f"; {remainder} more not shown" if remainder else ""
         summary_parts.extend(
             (
@@ -1632,7 +1670,7 @@ def poll_session_inbox(
                     "boundary until every displayed message has a truthful durable "
                     "disposition"
                 ),
-                f"{len(active)} active message(s): {details}{suffix}",
+                f"{len(all_active)} active message(s): {details}{suffix}",
                 "Acknowledge each displayed message by replacing the disposition "
                 "and note placeholders in its command: "
                 + " ; ".join(acknowledgement_commands),
@@ -1662,8 +1700,8 @@ def poll_session_inbox(
     return SessionInboxNotice(
         session_id=resolved_session_id,
         project=project,
-        active_count=len(active),
-        message_ids=tuple(view.message.message_id for view in active[:max_messages]),
+        active_count=len(all_active) if active else 0,
+        message_ids=tuple(view.message.message_id for view in active),
         acknowledgement_count=len(acknowledgements),
         acknowledgement_message_ids=tuple(view.message.message_id for view in acknowledgements),
         summary=summary,

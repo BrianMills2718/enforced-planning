@@ -7,6 +7,7 @@ import os
 import shlex
 import shutil
 import subprocess
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -38,6 +39,7 @@ from enforced_planning.coordination_messages import (
     UnknownSessionError,
     WrongRecipientError,
     inspect_host_delivery_capability,
+    poll_session_inbox,
 )
 
 NOW = datetime(2026, 7, 15, 20, 0, tzinfo=UTC)
@@ -264,6 +266,46 @@ def test_send_result_fails_closed_for_untrusted_configured_adapter(
     assert expected_issue in capability.issues
 
 
+@pytest.mark.parametrize(
+    "command_template",
+    (
+        "exit 0; python3 {adapter} --agent codex",
+        "python3 {adapter} --agent claude-code",
+        "/usr/bin/env python3 {adapter} --agent codex",
+    ),
+)
+def test_host_delivery_rejects_composed_wrapped_or_wrong_client_commands(
+    tmp_path: Path,
+    command_template: str,
+) -> None:
+    """Byte-equal adapters count only when the configured argv invokes them directly."""
+
+    config = tmp_path / "config.toml"
+    adapter = tmp_path / "coordination_hook.py"
+    shutil.copy2(Path(__file__).resolve().parents[1] / "scripts" / adapter.name, adapter)
+    command = command_template.format(adapter=adapter)
+    blocks = []
+    for event, matcher in (
+        ("SessionStart", "startup|resume|clear|compact"),
+        ("UserPromptSubmit", ""),
+        ("PostToolUse", "*"),
+        ("PreToolUse", "Bash|apply_patch"),
+        ("Stop", ""),
+    ):
+        blocks.append(
+            f'[[hooks.{event}]]\nmatcher = "{matcher}"\n'
+            f'[[hooks.{event}.hooks]]\ntype = "command"\ncommand = "{command}"\n'
+        )
+    config.write_text("\n".join(blocks), encoding="utf-8")
+
+    capability = inspect_host_delivery_capability("codex:recipient", codex_config_path=config)
+
+    assert capability.delivery_mode == "unavailable"
+    assert capability.mutation_enforcement_available is False
+    assert capability.stop_enforcement_available is False
+    assert "adapter_command_invalid" in capability.issues
+
+
 def test_v2_send_result_has_explicit_legacy_migration_boundary(
     mailbox: tuple[CoordinationMessageStore, Path, Path],
 ) -> None:
@@ -412,6 +454,52 @@ def test_duplicate_adapters_show_one_notice_per_event_then_repeat_for_later_even
     status = store.status(MessageStatusRequest(message_id=message.message_id))
     assert status.state == "observed"
     assert [receipt.event for receipt in status.receipts] == ["observed"]
+
+
+def test_concurrent_truncated_notices_observe_and_claim_only_the_displayed_prefix(
+    mailbox: tuple[CoordinationMessageStore, Path, Path],
+) -> None:
+    """Truncation must occur before delivery reservation or observation side effects."""
+
+    store, claims_dir, root = mailbox
+    current_time = datetime.now(UTC)
+    messages = [
+        store.send(
+            _send_request(
+                idempotency_key=f"truncated-{index}",
+                subject=f"Message {index}",
+            ),
+            now=current_time + timedelta(seconds=index),
+        ).message
+        for index in range(3)
+    ]
+
+    def poll_once() -> SessionInboxNotice:
+        return poll_session_inbox(
+            agent="claude-code",
+            project="enforced-planning",
+            session_id=CLAUDE_SESSION,
+            observe=True,
+            claims_dir=claims_dir,
+            root=root,
+            max_messages=1,
+            delivery_event_id="same-native-event",
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        notices = tuple(executor.map(lambda _index: poll_once(), range(2)))
+
+    displayed_ids = [message_id for notice in notices for message_id in notice.message_ids]
+    assert displayed_ids == [messages[0].message_id]
+    winner = next(notice for notice in notices if notice.message_ids)
+    assert winner.active_count == 3
+    assert "2 more not shown" in winner.summary
+    assert store.status(MessageStatusRequest(message_id=messages[0].message_id)).state == "observed"
+    assert [
+        store.status(MessageStatusRequest(message_id=message.message_id)).state
+        for message in messages[1:]
+    ] == ["persisted", "persisted"]
+    assert len(tuple((root / "deliveries").glob("*.json"))) == 1
 
 
 def test_claim_selector_resolves_unique_session_and_rejects_ambiguity(

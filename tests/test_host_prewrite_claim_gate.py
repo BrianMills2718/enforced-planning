@@ -603,6 +603,107 @@ def test_host_gate_admits_exact_hook_feedback_make_target_without_claim(
     assert decision["reason_code"] == "hook_feedback_report_command"
 
 
+def test_host_gate_admits_exact_maintenance_worktree_make_target_without_claim(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    command = (
+        f"make -C {prewrite_claim_gate.REPO_ROOT} maintenance-worktree "
+        "BRANCH=verify/maintenance-bootstrap "
+        "SESSION_WRITE_PATHS=.company-planning/maintenance-bootstrap-proof"
+    )
+    payload = _payload(cwd=tmp_path, tool="Bash", tool_input={"command": command})
+
+    code, decision = _run_cli(monkeypatch, capsys, tmp_path, payload)
+
+    assert code == 0, decision
+    assert decision["decision"] == "allow"
+    assert decision["reason_code"] == "claim_bootstrap_command"
+
+
+def test_root_agent_id_equal_to_session_id_keeps_maintenance_bootstrap_admitted(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    command = (
+        f"make -C {prewrite_claim_gate.REPO_ROOT} maintenance-worktree "
+        "BRANCH=verify/root-bootstrap"
+    )
+    payload = _payload(cwd=tmp_path, tool="Bash", tool_input={"command": command})
+    payload["agent_id"] = payload["session_id"]
+
+    code, decision = _run_cli(monkeypatch, capsys, tmp_path, payload, client="codex")
+
+    assert code == 0, decision
+    assert decision["reason_code"] == "claim_bootstrap_command"
+
+
+def test_child_agent_id_keeps_maintenance_bootstrap_denied(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    command = (
+        f"make -C {prewrite_claim_gate.REPO_ROOT} maintenance-worktree "
+        "BRANCH=verify/child-bootstrap"
+    )
+    payload = _payload(cwd=tmp_path, tool="Bash", tool_input={"command": command})
+    payload["agent_id"] = "different-child-agent"
+
+    code, decision = _run_cli(monkeypatch, capsys, tmp_path, payload, client="codex")
+
+    assert code == 2
+    assert decision["decision"] == "deny"
+
+
+@pytest.mark.parametrize(
+    "suffix",
+    [
+        "BRANCH=main",
+        "BRANCH=../escape",
+        "BRANCH=verify/safe SESSION_WRITE_PATHS=../escape",
+        "BRANCH=verify/safe SESSION_WRITE_PATHS='src src'",
+        "BRANCH=verify/safe EVIL=1",
+        "BRANCH=verify/safe; touch escaped",
+        "BRANCH=verify/safe WORKTREE_AGENT=claude-code",
+    ],
+)
+def test_maintenance_worktree_make_target_rejects_unsafe_variants(suffix: str) -> None:
+    command = f"make -C {prewrite_claim_gate.REPO_ROOT} maintenance-worktree {suffix}"
+
+    assert prewrite_claim_gate._special_unclaimed_command(
+        command,
+        client="codex",
+        claims_dir=Path("/tmp/claims"),
+        projection_path=Path("/tmp/projection.json"),
+        subagent_event=False,
+        native_session=SESSION,
+    ) is False
+
+
+def test_maintenance_worktree_make_target_rejects_unmatched_control_files(tmp_path: Path) -> None:
+    target = tmp_path / "lookalike"
+    (target / "scripts").mkdir(parents=True)
+    (target / "Makefile").write_text(
+        "maintenance-worktree:\n\ttouch escaped\n", encoding="utf-8"
+    )
+    (target / "scripts" / "claim_bootstrap.py").write_text(
+        "print('not canonical')\n", encoding="utf-8"
+    )
+    command = f"make -C {target} maintenance-worktree BRANCH=verify/safe"
+
+    assert prewrite_claim_gate._special_unclaimed_command(
+        command,
+        client="codex",
+        claims_dir=tmp_path / "claims",
+        projection_path=tmp_path / "projection.json",
+        subagent_event=False,
+        native_session=SESSION,
+    ) is False
+
+
 def test_hook_feedback_make_target_rejects_unmatched_control_files(tmp_path: Path) -> None:
     target = tmp_path / "lookalike"
     (target / "scripts").mkdir(parents=True)

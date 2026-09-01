@@ -36,31 +36,107 @@ def snapshot(module, sha=SHA_A, checks=()):
     return module.PrSnapshot(sha, "feature", "main", "OPEN", "MERGEABLE", tuple(checks))
 
 
-def test_status_context_success_is_a_valid_coordination_approval() -> None:
+def test_status_context_success_requires_exact_creator_and_target() -> None:
     module = _load()
-    current = snapshot(module, checks=({
-        "__typename": "StatusContext",
+    status = {
         "context": "coordination-approval",
-        "state": "SUCCESS",
-    },))
-    assert module.require_coordination_approval(current) == (True, "OK")
+        "state": "success",
+        "creator": {"login": "owner"},
+        "target_url": "https://github.com/owner/repo/pull/304",
+    }
+    assert module.evaluate_coordination_approval(
+        statuses=[status], check_runs=[], head_sha=SHA_A,
+        trusted_creator="owner", trusted_check_app_id=None,
+        expected_target_url="https://github.com/owner/repo/pull/304",
+    ) == (True, "OK")
+
+    status["creator"] = {"login": "other-user"}
+    ok, reason = module.evaluate_coordination_approval(
+        statuses=[status], check_runs=[], head_sha=SHA_A,
+        trusted_creator="owner", trusted_check_app_id=None,
+        expected_target_url="https://github.com/owner/repo/pull/304",
+    )
+    assert ok is False
+    assert "trusted producer" in reason
 
 
 def test_missing_or_pending_coordination_approval_fails_visibly() -> None:
     module = _load()
-    ok, missing = module.require_coordination_approval(snapshot(module))
+    ok, missing = module.evaluate_coordination_approval(
+        statuses=[], check_runs=[], head_sha=SHA_A,
+        trusted_creator="owner", trusted_check_app_id=None,
+        expected_target_url="https://github.com/owner/repo/pull/304",
+    )
     assert ok is False
     assert "missing required coordination-approval" in missing
 
-    pending_snapshot = snapshot(module, checks=({
-        "__typename": "CheckRun",
+    pending_run = {
         "name": "coordination-approval",
-        "status": "IN_PROGRESS",
-        "conclusion": None,
-    },))
-    ok, pending = module.require_coordination_approval(pending_snapshot)
+        "head_sha": SHA_A,
+        "status": "in_progress",
+        "conclusion": "success",
+        "app": {"id": 99},
+    }
+    ok, pending = module.evaluate_coordination_approval(
+        statuses=[], check_runs=[pending_run], head_sha=SHA_A,
+        trusted_creator="owner", trusted_check_app_id=99,
+        expected_target_url="https://github.com/owner/repo/pull/304",
+    )
     assert ok is False
-    assert "PENDING" in pending
+    assert "trusted producer" in pending
+
+
+def test_same_named_check_run_from_wrong_app_is_rejected() -> None:
+    module = _load()
+    run = {
+        "name": "coordination-approval",
+        "head_sha": SHA_A,
+        "status": "completed",
+        "conclusion": "success",
+        "app": {"id": 55, "slug": "untrusted-app"},
+    }
+    ok, reason = module.evaluate_coordination_approval(
+        statuses=[], check_runs=[run], head_sha=SHA_A,
+        trusted_creator="owner", trusted_check_app_id=99,
+        expected_target_url="https://github.com/owner/repo/pull/304",
+    )
+    assert ok is False
+    assert "trusted producer" in reason
+
+    run["app"] = {"id": 99, "slug": "coordination-approver"}
+    assert module.evaluate_coordination_approval(
+        statuses=[], check_runs=[run], head_sha=SHA_A,
+        trusted_creator="owner", trusted_check_app_id=99,
+        expected_target_url="https://github.com/owner/repo/pull/304",
+    ) == (True, "OK")
+
+    ok, reason = module.evaluate_coordination_approval(
+        statuses=[], check_runs=[run], head_sha=SHA_A,
+        trusted_creator="owner", trusted_check_app_id=None,
+        expected_target_url="https://github.com/owner/repo/pull/304",
+    )
+    assert ok is False
+    assert "trusted producer" in reason
+
+
+def test_newer_pending_status_invalidates_older_success() -> None:
+    module = _load()
+    status_base = {
+        "context": "coordination-approval",
+        "creator": {"login": "owner"},
+        "target_url": "https://github.com/owner/repo/pull/304",
+    }
+    ok, reason = module.evaluate_coordination_approval(
+        statuses=[
+            {**status_base, "state": "pending"},
+            {**status_base, "state": "success"},
+        ],
+        check_runs=[], head_sha=SHA_A, trusted_creator="owner",
+        trusted_check_app_id=None,
+        expected_target_url="https://github.com/owner/repo/pull/304",
+    )
+    assert ok is False
+    assert "trusted producer" in reason
 
 
 def test_head_change_invalidates_previously_successful_approval(monkeypatch) -> None:
@@ -73,6 +149,7 @@ def test_head_change_invalidates_previously_successful_approval(monkeypatch) -> 
     monkeypatch.setattr(module, "fetch_pr_snapshot", lambda *_args: next(snapshots))
     monkeypatch.setattr(module, "fetch_exact_pr_head", lambda *_args: (True, "OK"))
     monkeypatch.setattr(module, "require_all_required_checks", lambda *_args: (True, "OK"))
+    monkeypatch.setattr(module, "require_coordination_approval", lambda *_args: (True, "OK"))
 
     try:
         module.prepare_merge_gate(304, "feature", "owner/repo", {})

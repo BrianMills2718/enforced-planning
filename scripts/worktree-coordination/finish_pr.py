@@ -131,33 +131,140 @@ def fetch_pr_snapshot(
     return _parse_pr_snapshot(result.stdout)
 
 
-def _check_name(check: Mapping[str, object]) -> str:
-    name = check.get("name")
-    if isinstance(name, str) and name:
-        return name
-    context = check.get("context")
-    return context if isinstance(context, str) else ""
-
-
-def _check_result(check: Mapping[str, object]) -> str:
-    conclusion = check.get("conclusion")
-    if isinstance(conclusion, str) and conclusion:
-        return conclusion.upper()
-    state = check.get("state")
-    return state.upper() if isinstance(state, str) and state else "PENDING"
-
-
-def require_coordination_approval(snapshot: PrSnapshot) -> tuple[bool, str]:
-    matching = [c for c in snapshot.checks if _check_name(c) == APPROVAL_CONTEXT]
-    if not matching:
-        return False, f"missing required {APPROVAL_CONTEXT} on head {snapshot.head_sha}"
-    non_success = [_check_result(c) for c in matching if _check_result(c) != "SUCCESS"]
-    if non_success:
-        return False, (
-            f"{APPROVAL_CONTEXT} is not successful on head {snapshot.head_sha}: "
-            + ", ".join(non_success)
+def _gh_api_json(
+    endpoint: str, gh_env: Mapping[str, str]
+) -> dict[str, object] | list[object]:
+    result = run_cmd(["gh", "api", endpoint], check=False, env=gh_env)
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"Failed to fetch GitHub approval provenance from {endpoint}: "
+            + (result.stderr or result.stdout).strip()
         )
-    return True, "OK"
+    try:
+        payload = json.loads(result.stdout)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"GitHub provenance API returned invalid JSON: {exc}") from exc
+    if not isinstance(payload, (dict, list)):
+        raise TypeError("GitHub provenance API response must be an object or array")
+    return payload
+
+
+def _trusted_check_app_id(
+    repo_slug: str, base_branch: str, gh_env: Mapping[str, str]
+) -> int | None:
+    """Return the app bound to the protected approval context, never a guessed app."""
+    payload = _gh_api_json(
+        f"repos/{repo_slug}/branches/{base_branch}/protection/required_status_checks",
+        gh_env,
+    )
+    if not isinstance(payload, dict):
+        raise TypeError("required-status-check protection response must be an object")
+    checks = payload.get("checks")
+    if not isinstance(checks, list):
+        raise TypeError("branch protection does not expose its required check bindings")
+    matches = [
+        row for row in checks
+        if isinstance(row, dict) and row.get("context") == APPROVAL_CONTEXT
+    ]
+    if len(matches) != 1:
+        raise ValueError(
+            f"branch protection must require exactly one {APPROVAL_CONTEXT} context"
+        )
+    app_id = matches[0].get("app_id")
+    if app_id is None:
+        return None
+    if not isinstance(app_id, int) or isinstance(app_id, bool) or app_id <= 0:
+        raise ValueError(f"{APPROVAL_CONTEXT} branch-protection app_id is malformed")
+    return app_id
+
+
+def evaluate_coordination_approval(
+    *,
+    statuses: list[object],
+    check_runs: list[object],
+    head_sha: str,
+    trusted_creator: str,
+    trusted_check_app_id: int | None,
+    expected_target_url: str,
+) -> tuple[bool, str]:
+    """Accept only a terminal success from an exact authoritative producer.
+
+    Commit statuses are newest-first. Only the newest same-context status may
+    satisfy the status arm, preventing an older success from surviving a later
+    pending/failing update. Check runs require the app ID that branch protection
+    binds to this exact context; an unbound or differently owned app is never
+    authoritative merely because it reused the name.
+    """
+    matching_statuses = [
+        row for row in statuses
+        if isinstance(row, dict) and row.get("context") == APPROVAL_CONTEXT
+    ]
+    if matching_statuses:
+        latest = matching_statuses[0]
+        creator = latest.get("creator")
+        creator_login = creator.get("login") if isinstance(creator, dict) else None
+        if (
+            str(latest.get("state", "")).upper() == "SUCCESS"
+            and creator_login == trusted_creator
+            and latest.get("target_url") == expected_target_url
+        ):
+            return True, "OK"
+
+    matching_runs = [
+        row for row in check_runs
+        if isinstance(row, dict) and row.get("name") == APPROVAL_CONTEXT
+    ]
+    if matching_runs:
+        latest_run = matching_runs[0]
+        app = latest_run.get("app")
+        app_id = app.get("id") if isinstance(app, dict) else None
+        if (
+            trusted_check_app_id is not None
+            and app_id == trusted_check_app_id
+            and latest_run.get("head_sha") == head_sha
+            and str(latest_run.get("status", "")).upper() == "COMPLETED"
+            and str(latest_run.get("conclusion", "")).upper() == "SUCCESS"
+        ):
+            return True, "OK"
+
+    if not matching_statuses and not matching_runs:
+        return False, f"missing required {APPROVAL_CONTEXT} on head {head_sha}"
+    return False, (
+        f"{APPROVAL_CONTEXT} lacks terminal success from its trusted producer "
+        f"on head {head_sha}"
+    )
+
+
+def require_coordination_approval(
+    snapshot: PrSnapshot,
+    pr_number: int,
+    repo_slug: str,
+    gh_env: Mapping[str, str],
+) -> tuple[bool, str]:
+    statuses = _gh_api_json(
+        f"repos/{repo_slug}/commits/{snapshot.head_sha}/statuses", gh_env
+    )
+    check_payload = _gh_api_json(
+        f"repos/{repo_slug}/commits/{snapshot.head_sha}/check-runs", gh_env
+    )
+    if not isinstance(statuses, list):
+        raise TypeError("commit-status provenance response must be an array")
+    if not isinstance(check_payload, dict):
+        raise TypeError("check-run provenance response is malformed")
+    check_runs = check_payload.get("check_runs")
+    if not isinstance(check_runs, list):
+        raise TypeError("check-run provenance response is malformed")
+    trusted_creator = repo_slug.split("/", 1)[0]
+    return evaluate_coordination_approval(
+        statuses=statuses,
+        check_runs=check_runs,
+        head_sha=snapshot.head_sha,
+        trusted_creator=trusted_creator,
+        trusted_check_app_id=_trusted_check_app_id(
+            repo_slug, snapshot.base_branch, gh_env
+        ),
+        expected_target_url=f"https://github.com/{repo_slug}/pull/{pr_number}",
+    )
 
 
 def fetch_exact_pr_head(pr_number: int, expected_sha: str) -> tuple[bool, str]:
@@ -197,7 +304,9 @@ def prepare_merge_gate(
         raise RuntimeError(f"PR head branch {first.head_branch!r} != requested {branch!r}")
     if first.mergeable == "CONFLICTING":
         raise RuntimeError("PR has merge conflicts")
-    approved, reason = require_coordination_approval(first)
+    approved, reason = require_coordination_approval(
+        first, pr_number, repo_slug, gh_env
+    )
     if not approved:
         raise RuntimeError(reason)
     fetched, reason = fetch_exact_pr_head(pr_number, first.head_sha)
@@ -213,7 +322,9 @@ def prepare_merge_gate(
         )
     if second.state != "OPEN":
         raise RuntimeError(f"PR state changed to {second.state} before merge")
-    approved, reason = require_coordination_approval(second)
+    approved, reason = require_coordination_approval(
+        second, pr_number, repo_slug, gh_env
+    )
     if not approved:
         raise RuntimeError(reason)
     return second

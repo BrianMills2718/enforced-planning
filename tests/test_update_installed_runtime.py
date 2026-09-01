@@ -4,14 +4,13 @@ import json
 import os
 import pwd
 import subprocess
-import threading
 from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 
 from scripts import update_installed_runtime as runtime_update
-from scripts.update_installed_runtime import RuntimeUpdateError, rollback_runtime, update_runtime
+from scripts.update_installed_runtime import RuntimeUpdateError, update_runtime
 
 
 def _git(repo: Path, *args: str) -> str:
@@ -304,7 +303,7 @@ def test_main_emits_complete_json_when_hostname_lookup_fails(
     "argv",
     [
         ["--revision", "https://USERMARK:SECRETMARK@TRANSPORTMARK.invalid/repo.git"],
-        ["--rollback-ref", "https://USERMARK:SECRETMARK@TRANSPORTMARK.invalid/ref"],
+        ["--unknown-option", "https://USERMARK:SECRETMARK@TRANSPORTMARK.invalid/ref"],
         [
             "--source-repo",
             "/tmp/USERMARK:SECRETMARK@TRANSPORTMARK.invalid/repo",
@@ -603,290 +602,6 @@ def test_explicit_detached_replacement_retains_divergent_head(
     assert _git(runtime, "rev-parse", result["recovery_ref"]) == divergent
 
 
-def test_forward_update_then_exact_rollback_restores_revision_and_origin(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    source, runtime, before, after = _repos(tmp_path, monkeypatch)
-    _git(runtime, "checkout", "--detach", before)
-    _git(runtime, "remote", "set-url", "origin", runtime_update.LEGACY_RUNTIME_ORIGIN)
-
-    updated = update_runtime(
-        source_repo=source,
-        runtime_repo=runtime,
-        revision=after,
-        write=True,
-        now=datetime(2026, 9, 1, 18, 0, tzinfo=UTC),
-    )
-    recovery_ref = updated["recovery_ref"]
-    assert _git(runtime, "rev-parse", "HEAD") == after
-    assert _git(runtime, "remote", "get-url", "origin") == runtime_update.CANONICAL_ORIGIN
-
-    checked = rollback_runtime(runtime_repo=runtime, recovery_ref=recovery_ref, write=False)
-    assert checked["action"] == "would_rollback"
-    assert checked["mutation_started"] is False
-    assert _git(runtime, "rev-parse", "HEAD") == after
-
-    rolled_back = rollback_runtime(runtime_repo=runtime, recovery_ref=recovery_ref, write=True)
-    assert rolled_back["action"] == "rolled_back"
-    assert rolled_back["recovery_ref_consumed"] is True
-    assert _git(runtime, "rev-parse", "HEAD") == before
-    assert _git(runtime, "remote", "get-url", "origin") == runtime_update.LEGACY_RUNTIME_ORIGIN
-    assert subprocess.run(
-        ["git", "-C", str(runtime), "rev-parse", "--verify", recovery_ref],
-        check=False,
-        capture_output=True,
-        text=True,
-    ).returncode != 0
-    assert runtime_update._load_recovery_metadata(runtime, recovery_ref)["state"] == "consumed"
-
-
-def test_rollback_denies_mismatched_recovery_ref_without_mutation(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    source, runtime, before, after = _repos(tmp_path, monkeypatch)
-    _git(runtime, "checkout", "--detach", before)
-    updated = update_runtime(
-        source_repo=source,
-        runtime_repo=runtime,
-        revision=after,
-        write=True,
-        now=datetime(2026, 9, 1, 18, 5, tzinfo=UTC),
-    )
-    recovery_ref = updated["recovery_ref"]
-    _git(runtime, "update-ref", recovery_ref, after, before)
-
-    with pytest.raises(RuntimeUpdateError, match="no longer matches") as caught:
-        rollback_runtime(runtime_repo=runtime, recovery_ref=recovery_ref, write=True)
-
-    assert caught.value.receipt["mutation_started"] is False
-    assert _git(runtime, "rev-parse", "HEAD") == after
-
-
-def test_rollback_recovers_partial_update_before_origin_migration(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    source, runtime, before, after = _repos(tmp_path, monkeypatch)
-    _git(runtime, "checkout", "--detach", before)
-    _git(runtime, "remote", "set-url", "origin", runtime_update.LEGACY_RUNTIME_ORIGIN)
-    real_run = runtime_update._run
-
-    def fail_origin_migration(
-        repo: Path,
-        *args: str,
-        check: bool = True,
-        mutating: bool = False,
-        network_auth: bool = False,
-    ) -> subprocess.CompletedProcess[str]:
-        if args[:3] == ("remote", "set-url", "origin"):
-            raise RuntimeUpdateError("injected origin migration failure")
-        return real_run(repo, *args, check=check, mutating=mutating, network_auth=network_auth)
-
-    monkeypatch.setattr(runtime_update, "_run", fail_origin_migration)
-    with pytest.raises(RuntimeUpdateError, match="injected origin migration failure") as caught:
-        update_runtime(
-            source_repo=source,
-            runtime_repo=runtime,
-            revision=after,
-            write=True,
-            now=datetime(2026, 9, 1, 18, 10, tzinfo=UTC),
-        )
-
-    recovery_ref = caught.value.receipt["recovery_ref"]
-    assert _git(runtime, "rev-parse", "HEAD") == after
-    monkeypatch.setattr(runtime_update, "_run", real_run)
-
-    rolled_back = rollback_runtime(runtime_repo=runtime, recovery_ref=recovery_ref, write=True)
-
-    assert rolled_back["action"] == "rolled_back"
-    assert _git(runtime, "rev-parse", "HEAD") == before
-    assert _git(runtime, "remote", "get-url", "origin") == runtime_update.LEGACY_RUNTIME_ORIGIN
-
-
-def test_main_checkout_update_then_rollback_restores_main_branch(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    source, runtime, before, after = _repos(tmp_path, monkeypatch)
-    updated = update_runtime(
-        source_repo=source,
-        runtime_repo=runtime,
-        revision=after,
-        write=True,
-        now=datetime(2026, 9, 1, 18, 15, tzinfo=UTC),
-    )
-
-    rolled_back = rollback_runtime(
-        runtime_repo=runtime,
-        recovery_ref=updated["recovery_ref"],
-        write=True,
-    )
-
-    assert rolled_back["action"] == "rolled_back"
-    assert rolled_back["checkout_mode"] == "main"
-    assert _git(runtime, "symbolic-ref", "--short", "HEAD") == "main"
-    assert _git(runtime, "rev-parse", "HEAD") == before
-
-
-def test_rollback_origin_failure_is_retryable_with_current_receipt_state(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    source, runtime, before, after = _repos(tmp_path, monkeypatch)
-    _git(runtime, "checkout", "--detach", before)
-    _git(runtime, "remote", "set-url", "origin", runtime_update.LEGACY_RUNTIME_ORIGIN)
-    updated = update_runtime(
-        source_repo=source,
-        runtime_repo=runtime,
-        revision=after,
-        write=True,
-        now=datetime(2026, 9, 1, 18, 16, tzinfo=UTC),
-    )
-    recovery_ref = updated["recovery_ref"]
-    real_run = runtime_update._run
-    failed = False
-
-    def fail_origin_once(
-        repo: Path,
-        *args: str,
-        check: bool = True,
-        mutating: bool = False,
-        network_auth: bool = False,
-    ) -> subprocess.CompletedProcess[str]:
-        nonlocal failed
-        if not failed and args[:3] == ("remote", "set-url", "origin"):
-            failed = True
-            raise RuntimeUpdateError("injected rollback origin failure")
-        return real_run(repo, *args, check=check, mutating=mutating, network_auth=network_auth)
-
-    monkeypatch.setattr(runtime_update, "_run", fail_origin_once)
-    with pytest.raises(RuntimeUpdateError, match="injected rollback origin failure") as caught:
-        rollback_runtime(runtime_repo=runtime, recovery_ref=recovery_ref, write=True)
-
-    assert caught.value.receipt["after_revision"] == before
-    assert caught.value.receipt["recovery_ref_consumed"] is False
-    assert _git(runtime, "rev-parse", recovery_ref) == before
-    monkeypatch.setattr(runtime_update, "_run", real_run)
-
-    retried = rollback_runtime(runtime_repo=runtime, recovery_ref=recovery_ref, write=True)
-    assert retried["action"] == "rolled_back"
-    assert _git(runtime, "rev-parse", "HEAD") == before
-    assert _git(runtime, "remote", "get-url", "origin") == runtime_update.LEGACY_RUNTIME_ORIGIN
-
-
-def test_rollback_ref_delete_failure_is_retryable(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    source, runtime, before, after = _repos(tmp_path, monkeypatch)
-    _git(runtime, "checkout", "--detach", before)
-    updated = update_runtime(
-        source_repo=source,
-        runtime_repo=runtime,
-        revision=after,
-        write=True,
-        now=datetime(2026, 9, 1, 18, 17, tzinfo=UTC),
-    )
-    recovery_ref = updated["recovery_ref"]
-    real_run = runtime_update._run
-    failed = False
-
-    def fail_ref_delete_once(
-        repo: Path,
-        *args: str,
-        check: bool = True,
-        mutating: bool = False,
-        network_auth: bool = False,
-    ) -> subprocess.CompletedProcess[str]:
-        nonlocal failed
-        if not failed and args[:3] == ("update-ref", "--no-deref", "-d"):
-            failed = True
-            raise RuntimeUpdateError("injected recovery ref deletion failure")
-        return real_run(repo, *args, check=check, mutating=mutating, network_auth=network_auth)
-
-    monkeypatch.setattr(runtime_update, "_run", fail_ref_delete_once)
-    with pytest.raises(RuntimeUpdateError, match="injected recovery ref deletion failure") as caught:
-        rollback_runtime(runtime_repo=runtime, recovery_ref=recovery_ref, write=True)
-
-    assert caught.value.receipt["after_revision"] == before
-    assert caught.value.receipt["recovery_ref_consumed"] is False
-    assert _git(runtime, "rev-parse", recovery_ref) == before
-    monkeypatch.setattr(runtime_update, "_run", real_run)
-
-    retried = rollback_runtime(runtime_repo=runtime, recovery_ref=recovery_ref, write=True)
-    assert retried["action"] == "finalized_rollback"
-    assert retried["recovery_ref_consumed"] is True
-    assert retried["recovery_record_state"] == "consumed"
-
-
-def test_rollback_rejects_forged_suffix_even_with_matching_ref_and_record(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    source, runtime, before, after = _repos(tmp_path, monkeypatch)
-    _git(runtime, "checkout", "--detach", before)
-    update_runtime(
-        source_repo=source,
-        runtime_repo=runtime,
-        revision=after,
-        write=True,
-        now=datetime(2026, 9, 1, 18, 18, tzinfo=UTC),
-    )
-    forged_ref = f"{runtime_update.RECOVERY_NAMESPACE}/20260901T181800000000Z-{after[:12]}"
-    _git(runtime, "update-ref", "--no-deref", forged_ref, before)
-    runtime_update._record_recovery_metadata(
-        runtime,
-        recovery_ref=forged_ref,
-        before=before,
-        target=after,
-        prior_origin=runtime_update.CANONICAL_ORIGIN,
-        checkout_mode="detached",
-        checkout_ref=None,
-    )
-
-    with pytest.raises(RuntimeUpdateError, match="not bound") as caught:
-        rollback_runtime(runtime_repo=runtime, recovery_ref=forged_ref, write=True)
-
-    assert caught.value.receipt["mutation_started"] is False
-    assert _git(runtime, "rev-parse", "HEAD") == after
-
-
-@pytest.mark.parametrize("symbolic_target", ["refs/heads/main", "refs/heads/missing-target"])
-def test_update_refuses_symbolic_recovery_ref_without_mutating_its_target(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    symbolic_target: str,
-) -> None:
-    source, runtime, before, after = _repos(tmp_path, monkeypatch)
-    observed = datetime(2026, 9, 1, 18, 19, tzinfo=UTC)
-    recovery_ref = runtime_update._recovery_ref(before, observed)
-    _git(runtime, "symbolic-ref", recovery_ref, symbolic_target)
-    target_before = subprocess.run(
-        ["git", "-C", str(runtime), "rev-parse", "--verify", symbolic_target],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-
-    with pytest.raises(RuntimeUpdateError) as caught:
-        update_runtime(
-            source_repo=source,
-            runtime_repo=runtime,
-            revision=after,
-            write=True,
-            now=observed,
-        )
-
-    assert caught.value.receipt["recovery_ref_retained"] is None
-    assert caught.value.receipt["receipt_refresh_failed"] is True
-    assert _git(runtime, "symbolic-ref", recovery_ref) == symbolic_target
-    target_after = subprocess.run(
-        ["git", "-C", str(runtime), "rev-parse", "--verify", symbolic_target],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-    assert (target_after.returncode, target_after.stdout) == (
-        target_before.returncode,
-        target_before.stdout,
-    )
-
-
 def test_check_rejects_fsmonitor_before_it_can_execute(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -903,406 +618,29 @@ def test_check_rejects_fsmonitor_before_it_can_execute(
     assert not marker.exists()
 
 
-def test_mutating_update_and_rollback_suppress_checkout_hooks(
+def test_mutating_detached_replacement_suppresses_checkout_hook(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     source, runtime, before, after = _repos(tmp_path, monkeypatch)
     _git(runtime, "checkout", "--detach", before)
+    _git(runtime, "config", "user.email", "test@example.com")
+    _git(runtime, "config", "user.name", "Test User")
+    _commit(runtime, "divergent.txt", "divergent\n")
     marker = tmp_path / "post-checkout-executed"
     hook = runtime / ".git" / "hooks" / "post-checkout"
     hook.write_text(f"#!/bin/sh\ntouch {marker}\n", encoding="utf-8")
     hook.chmod(0o755)
 
-    updated = update_runtime(
+    result = update_runtime(
         source_repo=source,
         runtime_repo=runtime,
         revision=after,
         write=True,
-        now=datetime(2026, 9, 1, 18, 20, tzinfo=UTC),
+        allow_detached_replacement=True,
     )
-    rollback_runtime(runtime_repo=runtime, recovery_ref=updated["recovery_ref"], write=True)
 
+    assert result["action"] == "updated"
     assert not marker.exists()
-
-
-def test_rollback_origin_after_effect_failure_is_observed_and_retryable(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    source, runtime, before, after = _repos(tmp_path, monkeypatch)
-    _git(runtime, "checkout", "--detach", before)
-    _git(runtime, "remote", "set-url", "origin", runtime_update.LEGACY_RUNTIME_ORIGIN)
-    updated = update_runtime(
-        source_repo=source,
-        runtime_repo=runtime,
-        revision=after,
-        write=True,
-        now=datetime(2026, 9, 1, 18, 21, tzinfo=UTC),
-    )
-    real_run = runtime_update._run
-    failed = False
-
-    def fail_after_origin_change(
-        repo: Path,
-        *args: str,
-        check: bool = True,
-        mutating: bool = False,
-        network_auth: bool = False,
-    ) -> subprocess.CompletedProcess[str]:
-        nonlocal failed
-        result = real_run(repo, *args, check=check, mutating=mutating, network_auth=network_auth)
-        if not failed and args[:3] == ("remote", "set-url", "origin"):
-            failed = True
-            raise RuntimeUpdateError("injected after-effect origin failure")
-        return result
-
-    monkeypatch.setattr(runtime_update, "_run", fail_after_origin_change)
-    with pytest.raises(RuntimeUpdateError, match="injected after-effect origin failure") as caught:
-        rollback_runtime(runtime_repo=runtime, recovery_ref=updated["recovery_ref"], write=True)
-
-    assert caught.value.receipt["after_revision"] == before
-    assert caught.value.receipt["stored_origin_after"] == "legacy_github_personal_alias"
-    assert caught.value.receipt["receipt_refresh_failed"] is False
-    monkeypatch.setattr(runtime_update, "_run", real_run)
-    retried = rollback_runtime(runtime_repo=runtime, recovery_ref=updated["recovery_ref"], write=True)
-    assert retried["action"] == "rolled_back"
-
-
-def test_rollback_ref_delete_after_effect_failure_retries_from_tombstone(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    source, runtime, before, after = _repos(tmp_path, monkeypatch)
-    _git(runtime, "checkout", "--detach", before)
-    updated = update_runtime(
-        source_repo=source,
-        runtime_repo=runtime,
-        revision=after,
-        write=True,
-        now=datetime(2026, 9, 1, 18, 22, tzinfo=UTC),
-    )
-    real_run = runtime_update._run
-    failed = False
-
-    def fail_after_ref_delete(
-        repo: Path,
-        *args: str,
-        check: bool = True,
-        mutating: bool = False,
-        network_auth: bool = False,
-    ) -> subprocess.CompletedProcess[str]:
-        nonlocal failed
-        result = real_run(repo, *args, check=check, mutating=mutating, network_auth=network_auth)
-        if not failed and args[:3] == ("update-ref", "--no-deref", "-d"):
-            failed = True
-            raise RuntimeUpdateError("injected after-effect ref deletion failure")
-        return result
-
-    monkeypatch.setattr(runtime_update, "_run", fail_after_ref_delete)
-    with pytest.raises(RuntimeUpdateError, match="injected after-effect ref deletion failure") as caught:
-        rollback_runtime(runtime_repo=runtime, recovery_ref=updated["recovery_ref"], write=True)
-
-    assert caught.value.receipt["recovery_ref_consumed"] is True
-    assert caught.value.receipt["recovery_record_state"] == "consumed"
-    monkeypatch.setattr(runtime_update, "_run", real_run)
-    retried = rollback_runtime(runtime_repo=runtime, recovery_ref=updated["recovery_ref"], write=True)
-    assert retried["action"] == "already_rolled_back"
-
-
-def test_rollback_failure_receipt_marks_refresh_probe_failure_unknown(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    source, runtime, before, after = _repos(tmp_path, monkeypatch)
-    _git(runtime, "checkout", "--detach", before)
-    _git(runtime, "remote", "set-url", "origin", runtime_update.LEGACY_RUNTIME_ORIGIN)
-    updated = update_runtime(
-        source_repo=source,
-        runtime_repo=runtime,
-        revision=after,
-        write=True,
-        now=datetime(2026, 9, 1, 18, 23, tzinfo=UTC),
-    )
-    real_run = runtime_update._run
-    mutation_failed = False
-
-    def fail_mutation_then_refresh(
-        repo: Path,
-        *args: str,
-        check: bool = True,
-        mutating: bool = False,
-        network_auth: bool = False,
-    ) -> subprocess.CompletedProcess[str]:
-        nonlocal mutation_failed
-        if not mutation_failed and args[:3] == ("remote", "set-url", "origin"):
-            mutation_failed = True
-            raise RuntimeUpdateError("injected rollback failure")
-        if mutation_failed and args == ("rev-parse", "HEAD") and not check:
-            raise RuntimeUpdateError("injected refresh failure with secret text")
-        return real_run(repo, *args, check=check, mutating=mutating, network_auth=network_auth)
-
-    monkeypatch.setattr(runtime_update, "_run", fail_mutation_then_refresh)
-    with pytest.raises(RuntimeUpdateError, match="injected rollback failure") as caught:
-        rollback_runtime(runtime_repo=runtime, recovery_ref=updated["recovery_ref"], write=True)
-
-    assert caught.value.receipt["receipt_refresh_failed"] is True
-    assert caught.value.receipt["after_revision"] is None
-    assert "secret text" not in json.dumps(caught.value.receipt)
-
-
-def test_rollback_rejects_annotated_tag_recovery_ref(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    source, runtime, before, after = _repos(tmp_path, monkeypatch)
-    _git(runtime, "checkout", "--detach", before)
-    updated = update_runtime(
-        source_repo=source,
-        runtime_repo=runtime,
-        revision=after,
-        write=True,
-        now=datetime(2026, 9, 1, 18, 24, tzinfo=UTC),
-    )
-    _git(runtime, "config", "user.email", "test@example.com")
-    _git(runtime, "config", "user.name", "Test User")
-    _git(runtime, "tag", "-a", "annotated-recovery", before, "-m", "test")
-    tag_object = _git(runtime, "rev-parse", "annotated-recovery")
-    _git(runtime, "update-ref", "--no-deref", updated["recovery_ref"], tag_object)
-
-    with pytest.raises(RuntimeUpdateError, match="directly to a commit") as caught:
-        rollback_runtime(runtime_repo=runtime, recovery_ref=updated["recovery_ref"], write=True)
-
-    assert caught.value.receipt["mutation_started"] is False
-    assert _git(runtime, "rev-parse", "HEAD") == after
-
-
-def test_rollback_rejects_duplicate_recovery_metadata_values(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    source, runtime, before, after = _repos(tmp_path, monkeypatch)
-    _git(runtime, "checkout", "--detach", before)
-    updated = update_runtime(
-        source_repo=source,
-        runtime_repo=runtime,
-        revision=after,
-        write=True,
-        now=datetime(2026, 9, 1, 18, 25, tzinfo=UTC),
-    )
-    key = runtime_update._recovery_config_key(updated["recovery_ref"], "record")
-    record = _git(runtime, "config", "--local", "--get", key)
-    _git(runtime, "config", "--local", "--add", key, record)
-
-    with pytest.raises(RuntimeUpdateError, match="exactly one recovery record") as caught:
-        rollback_runtime(runtime_repo=runtime, recovery_ref=updated["recovery_ref"], write=True)
-
-    assert caught.value.receipt["mutation_started"] is False
-    assert _git(runtime, "rev-parse", "HEAD") == after
-
-
-def test_rollback_rejects_changed_checkout_identity(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    source, runtime, _before, after = _repos(tmp_path, monkeypatch)
-    updated = update_runtime(
-        source_repo=source,
-        runtime_repo=runtime,
-        revision=after,
-        write=True,
-        now=datetime(2026, 9, 1, 18, 26, tzinfo=UTC),
-    )
-    _git(runtime, "checkout", "--detach", after)
-
-    with pytest.raises(RuntimeUpdateError, match="checkout identity") as caught:
-        rollback_runtime(runtime_repo=runtime, recovery_ref=updated["recovery_ref"], write=True)
-
-    assert caught.value.receipt["mutation_started"] is False
-    assert _git(runtime, "rev-parse", "HEAD") == after
-
-
-def test_update_operations_share_one_exclusive_runtime_lock(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    source, runtime, _before, after = _repos(tmp_path, monkeypatch)
-    entered = threading.Event()
-    finished = threading.Event()
-    result: list[dict[str, object]] = []
-
-    def run_check() -> None:
-        entered.set()
-        result.append(
-            update_runtime(source_repo=source, runtime_repo=runtime, revision=after, write=False)
-        )
-        finished.set()
-
-    with runtime_update._exclusive_runtime_lock(runtime):
-        worker = threading.Thread(target=run_check)
-        worker.start()
-        assert entered.wait(timeout=1)
-        assert not finished.wait(timeout=0.1)
-    worker.join(timeout=5)
-
-    assert finished.is_set()
-    assert result[0]["action"] == "would_update"
-
-
-def test_metadata_write_failure_never_creates_recovery_ref(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    source, runtime, before, after = _repos(tmp_path, monkeypatch)
-    observed = datetime(2026, 9, 1, 18, 27, tzinfo=UTC)
-    recovery_ref = runtime_update._recovery_ref(before, observed)
-    real_run = runtime_update._run
-
-    def fail_metadata_write(
-        repo: Path,
-        *args: str,
-        check: bool = True,
-        mutating: bool = False,
-        network_auth: bool = False,
-    ) -> subprocess.CompletedProcess[str]:
-        if (
-            args[:2] == ("config", "--local")
-            and len(args) >= 3
-            and args[2].startswith(runtime_update.RECOVERY_CONFIG_PREFIX)
-        ):
-            raise RuntimeUpdateError("injected metadata write failure")
-        return real_run(repo, *args, check=check, mutating=mutating, network_auth=network_auth)
-
-    monkeypatch.setattr(runtime_update, "_run", fail_metadata_write)
-    with pytest.raises(RuntimeUpdateError, match="injected metadata write failure") as caught:
-        update_runtime(
-            source_repo=source,
-            runtime_repo=runtime,
-            revision=after,
-            write=True,
-            now=observed,
-        )
-
-    assert caught.value.receipt["stage"] == "record_recovery"
-    assert caught.value.receipt["recovery_ref_retained"] is False
-    assert real_run(runtime, "for-each-ref", recovery_ref).stdout == ""
-    assert runtime_update._recovery_metadata_records(runtime, recovery_ref) == []
-
-
-def test_ref_creation_failure_leaves_consumable_metadata_only_state(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    source, runtime, before, after = _repos(tmp_path, monkeypatch)
-    observed = datetime(2026, 9, 1, 18, 28, tzinfo=UTC)
-    recovery_ref = runtime_update._recovery_ref(before, observed)
-    real_run = runtime_update._run
-    failed = False
-
-    def fail_ref_create_once(
-        repo: Path,
-        *args: str,
-        check: bool = True,
-        mutating: bool = False,
-        network_auth: bool = False,
-    ) -> subprocess.CompletedProcess[str]:
-        nonlocal failed
-        if not failed and args[:2] == ("update-ref", "--no-deref") and "-d" not in args:
-            failed = True
-            raise RuntimeUpdateError("injected recovery ref creation failure")
-        return real_run(repo, *args, check=check, mutating=mutating, network_auth=network_auth)
-
-    monkeypatch.setattr(runtime_update, "_run", fail_ref_create_once)
-    with pytest.raises(RuntimeUpdateError, match="injected recovery ref creation failure"):
-        update_runtime(
-            source_repo=source,
-            runtime_repo=runtime,
-            revision=after,
-            write=True,
-            now=observed,
-        )
-
-    assert runtime_update._load_recovery_metadata(runtime, recovery_ref)["state"] == "active"
-    assert real_run(runtime, "for-each-ref", recovery_ref).stdout == ""
-    monkeypatch.setattr(runtime_update, "_run", real_run)
-    consumed = rollback_runtime(runtime_repo=runtime, recovery_ref=recovery_ref, write=True)
-    assert consumed["action"] == "already_rolled_back"
-    assert consumed["recovery_record_state"] == "consumed"
-
-
-def test_update_retry_resumes_exact_coherent_metadata_only_state(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    source, runtime, before, after = _repos(tmp_path, monkeypatch)
-    observed = datetime(2026, 9, 1, 18, 29, tzinfo=UTC)
-    recovery_ref = runtime_update._recovery_ref(before, observed)
-    real_run = runtime_update._run
-    failed = False
-
-    def fail_ref_create_once(
-        repo: Path,
-        *args: str,
-        check: bool = True,
-        mutating: bool = False,
-        network_auth: bool = False,
-    ) -> subprocess.CompletedProcess[str]:
-        nonlocal failed
-        if not failed and args[:2] == ("update-ref", "--no-deref") and "-d" not in args:
-            failed = True
-            raise RuntimeUpdateError("injected recovery ref creation failure")
-        return real_run(repo, *args, check=check, mutating=mutating, network_auth=network_auth)
-
-    monkeypatch.setattr(runtime_update, "_run", fail_ref_create_once)
-    with pytest.raises(RuntimeUpdateError):
-        update_runtime(
-            source_repo=source,
-            runtime_repo=runtime,
-            revision=after,
-            write=True,
-            now=observed,
-        )
-    monkeypatch.setattr(runtime_update, "_run", real_run)
-
-    retried = update_runtime(
-        source_repo=source,
-        runtime_repo=runtime,
-        revision=after,
-        write=True,
-        now=observed,
-    )
-    assert retried["action"] == "updated"
-    assert _git(runtime, "rev-parse", recovery_ref) == before
-    assert _git(runtime, "rev-parse", "HEAD") == after
-
-
-def test_update_rejects_stale_or_duplicate_metadata_without_ref_creation(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    source, runtime, before, after = _repos(tmp_path, monkeypatch)
-    observed = datetime(2026, 9, 1, 18, 30, tzinfo=UTC)
-    recovery_ref = runtime_update._recovery_ref(before, observed)
-    runtime_update._record_recovery_metadata(
-        runtime,
-        recovery_ref=recovery_ref,
-        before=before,
-        target=after,
-        prior_origin=runtime_update.LEGACY_RUNTIME_ORIGIN,
-        checkout_mode="main",
-        checkout_ref="refs/heads/main",
-    )
-
-    with pytest.raises(RuntimeUpdateError, match="stale or mismatched"):
-        update_runtime(
-            source_repo=source,
-            runtime_repo=runtime,
-            revision=after,
-            write=True,
-            now=observed,
-        )
-    assert _git(runtime, "for-each-ref", recovery_ref) == ""
-
-    key = runtime_update._recovery_config_key(recovery_ref, "record")
-    record = _git(runtime, "config", "--local", "--get", key)
-    _git(runtime, "config", "--local", "--add", key, record)
-    with pytest.raises(RuntimeUpdateError, match="duplicate metadata"):
-        update_runtime(
-            source_repo=source,
-            runtime_repo=runtime,
-            revision=after,
-            write=True,
-            now=observed,
-        )
-    assert _git(runtime, "for-each-ref", recovery_ref) == ""
 
 
 def test_partial_failure_receipt_retains_recovery_ref(
@@ -1398,7 +736,7 @@ def test_recovery_ref_collision_is_denied_without_overwrite(
     recovery_ref = runtime_update._recovery_ref(before, observed)
     _git(runtime, "update-ref", recovery_ref, before)
 
-    with pytest.raises(RuntimeUpdateError, match="without coherent metadata") as caught:
+    with pytest.raises(RuntimeUpdateError, match="cannot lock ref") as caught:
         update_runtime(
             source_repo=source,
             runtime_repo=runtime,
@@ -1407,9 +745,9 @@ def test_recovery_ref_collision_is_denied_without_overwrite(
             now=observed,
         )
 
-    assert caught.value.receipt["action"] == "denied"
+    assert caught.value.receipt["action"] == "partial_failure"
     assert caught.value.receipt["stage"] == "create_recovery_ref"
-    assert caught.value.receipt["mutation_started"] is False
+    assert caught.value.receipt["mutation_started"] is True
     assert caught.value.receipt["recovery_ref"] == recovery_ref
     assert caught.value.receipt["recovery_ref_retained"] is True
     assert _git(runtime, "rev-parse", recovery_ref) == before

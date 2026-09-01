@@ -32,6 +32,7 @@ def _parser() -> argparse.ArgumentParser:
         help="Explicit Codex model override; omit to use the authenticated route's supported default",
     )
     parser.add_argument("--effort", default="high")
+    parser.add_argument("--review-timeout-seconds", type=int, default=1800)
     return parser
 
 
@@ -46,6 +47,7 @@ def main(argv: list[str] | None = None) -> int:
         codex_bin=args.codex_bin,
         model=args.model,
         effort=args.effort,
+        review_timeout_seconds=args.review_timeout_seconds,
     )
     print(json.dumps(receipt.model_dump(mode="json"), indent=2, sort_keys=True))
     return 0 if receipt.verdict == "signed_off" else 1

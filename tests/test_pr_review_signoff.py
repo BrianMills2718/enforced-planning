@@ -9,9 +9,13 @@ import pytest
 from pydantic import ValidationError
 
 from enforced_planning.pr_review_signoff import (
+    CriterionResult,
     ProgrammaticCheckResult,
+    ReviewerSession,
     ReviewFinding,
+    SemanticCriterion,
     SemanticReviewResult,
+    SemanticRubric,
     build_check_run_payload,
     build_codex_command,
     evaluate_signoff,
@@ -21,6 +25,30 @@ from enforced_planning.pr_review_signoff import (
 
 HEAD = "a" * 40
 BASE = "b" * 40
+
+
+RUBRIC = SemanticRubric(
+    revision="rubric-v1",
+    criteria=(
+        SemanticCriterion(
+            criterion_id="AC-1",
+            criterion="The changed behavior is tested at its public boundary.",
+            evidence_required=("test output",),
+            negative_control="An isolated helper test cannot satisfy the criterion.",
+        ),
+    ),
+)
+LANES = ("correctness",)
+SESSIONS = (ReviewerSession(review_lane="correctness", session_id="codex:fresh-reviewer"),)
+
+
+def _passing_criterion() -> CriterionResult:
+    return CriterionResult(
+        criterion_id="AC-1",
+        outcome="pass",
+        evidence_refs=("tests/test_feature.py",),
+        rationale="The public-boundary test passed.",
+    )
 
 
 def _write_spec(path: Path) -> Path:
@@ -60,13 +88,45 @@ def test_review_spec_preserves_programmatic_and_semantic_modalities(tmp_path: Pa
     assert spec.review_lanes == ("correctness", "test-evidence")
 
 
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("programmatic_checks", [], "at least 1 item"),
+        ("review_lanes", ["correctness", "correctness"], "review lanes must be unique"),
+    ],
+)
+def test_review_spec_rejects_vacuous_or_duplicate_orchestration(
+    tmp_path: Path, field: str, value: object, message: str
+) -> None:
+    spec_path = _write_spec(tmp_path / "spec.json")
+    payload = json.loads(spec_path.read_text())
+    payload[field] = value
+    spec_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(ValidationError, match=message):
+        load_review_spec(spec_path)
+
+
+def test_review_spec_rejects_duplicate_rubric_criteria(tmp_path: Path) -> None:
+    spec_path = _write_spec(tmp_path / "spec.json")
+    payload = json.loads(spec_path.read_text())
+    payload["semantic_rubric"]["criteria"].append(
+        payload["semantic_rubric"]["criteria"][0]
+    )
+    spec_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(ValidationError, match="criterion IDs must be unique"):
+        load_review_spec(spec_path)
+
+
 def test_semantic_result_rejects_a_non_sha_revision() -> None:
     with pytest.raises(ValidationError):
         SemanticReviewResult(
             schema_version="1.0",
+            review_lane="correctness",
             head_sha="latest",
             verdict="pass",
-            criterion_results=[],
+            criterion_results=[_passing_criterion()],
             findings=[],
             summary="No blocking defects found.",
         )
@@ -94,9 +154,10 @@ def test_codex_output_schema_types_every_const_and_enum() -> None:
 def test_failed_programmatic_check_cannot_be_signed_off() -> None:
     semantic = SemanticReviewResult(
         schema_version="1.0",
+        review_lane="correctness",
         head_sha=HEAD,
         verdict="pass",
-        criterion_results=[],
+        criterion_results=[_passing_criterion()],
         findings=[],
         summary="No blocking defects found.",
     )
@@ -113,10 +174,11 @@ def test_failed_programmatic_check_cannot_be_signed_off() -> None:
     receipt = evaluate_signoff(
         expected_head=HEAD,
         observed_head=HEAD,
-        rubric_revision="rubric-v1",
-        reviewer_session_id="codex:fresh-reviewer",
+        expected_rubric=RUBRIC,
+        expected_lanes=LANES,
+        reviewer_sessions=SESSIONS,
         checks=checks,
-        semantic=semantic,
+        semantics=(semantic,),
     )
 
     assert receipt.verdict == "rejected"
@@ -126,9 +188,10 @@ def test_failed_programmatic_check_cannot_be_signed_off() -> None:
 def test_stale_semantic_result_cannot_approve_new_head() -> None:
     semantic = SemanticReviewResult(
         schema_version="1.0",
+        review_lane="correctness",
         head_sha="d" * 40,
         verdict="pass",
-        criterion_results=[],
+        criterion_results=[_passing_criterion()],
         findings=[],
         summary="Pass on an older revision.",
     )
@@ -136,22 +199,24 @@ def test_stale_semantic_result_cannot_approve_new_head() -> None:
     receipt = evaluate_signoff(
         expected_head=HEAD,
         observed_head=HEAD,
-        rubric_revision="rubric-v1",
-        reviewer_session_id="codex:fresh-reviewer",
+        expected_rubric=RUBRIC,
+        expected_lanes=LANES,
+        reviewer_sessions=SESSIONS,
         checks=(),
-        semantic=semantic,
+        semantics=(semantic,),
     )
 
     assert receipt.verdict == "rejected"
-    assert "semantic review is bound to a different head" in receipt.reasons
+    assert "is bound to a different head" in receipt.reasons[-1]
 
 
 def test_blocking_finding_cannot_be_hidden_behind_pass_verdict() -> None:
     semantic = SemanticReviewResult(
         schema_version="1.0",
+        review_lane="correctness",
         head_sha=HEAD,
         verdict="pass",
-        criterion_results=[],
+        criterion_results=[_passing_criterion()],
         findings=[
             ReviewFinding(
                 finding_id="F-1",
@@ -166,36 +231,81 @@ def test_blocking_finding_cannot_be_hidden_behind_pass_verdict() -> None:
     receipt = evaluate_signoff(
         expected_head=HEAD,
         observed_head=HEAD,
-        rubric_revision="rubric-v1",
-        reviewer_session_id="codex:fresh-reviewer",
+        expected_rubric=RUBRIC,
+        expected_lanes=LANES,
+        reviewer_sessions=SESSIONS,
         checks=(),
-        semantic=semantic,
+        semantics=(semantic,),
     )
 
     assert receipt.verdict == "rejected"
-    assert "semantic review reported blocking findings" in receipt.reasons
+    assert "reported blocking findings" in receipt.reasons[-1]
 
 
 def test_clean_exact_head_evidence_is_signed_off() -> None:
     semantic = SemanticReviewResult(
         schema_version="1.0",
+        review_lane="correctness",
         head_sha=HEAD,
         verdict="pass",
-        criterion_results=[],
+        criterion_results=[_passing_criterion()],
         findings=[],
         summary="No blocking defects found.",
     )
     receipt = evaluate_signoff(
         expected_head=HEAD,
         observed_head=HEAD,
-        rubric_revision="rubric-v1",
-        reviewer_session_id="codex:fresh-reviewer",
+        expected_rubric=RUBRIC,
+        expected_lanes=LANES,
+        reviewer_sessions=SESSIONS,
         checks=(),
-        semantic=semantic,
+        semantics=(semantic,),
     )
 
     assert receipt.verdict == "signed_off"
     assert receipt.reasons == ()
+
+
+def test_missing_or_unknown_rubric_result_cannot_be_signed_off() -> None:
+    semantic = SemanticReviewResult(
+        schema_version="1.0",
+        review_lane="correctness",
+        head_sha=HEAD,
+        verdict="pass",
+        criterion_results=[
+            CriterionResult(
+                criterion_id="NOT-AC-1",
+                outcome="pass",
+                evidence_refs=("unrelated.txt",),
+                rationale="A different criterion passed.",
+            )
+        ],
+        findings=[],
+        summary="Passed a substituted criterion.",
+    )
+
+    receipt = evaluate_signoff(
+        expected_head=HEAD,
+        observed_head=HEAD,
+        expected_rubric=RUBRIC,
+        expected_lanes=LANES,
+        reviewer_sessions=SESSIONS,
+        checks=(),
+        semantics=(semantic,),
+    )
+
+    assert receipt.verdict == "rejected"
+    assert "exactly the required rubric criteria" in receipt.reasons[-1]
+
+
+def test_criterion_result_requires_concrete_evidence() -> None:
+    with pytest.raises(ValidationError, match="at least 1 item"):
+        CriterionResult(
+            criterion_id="AC-1",
+            outcome="pass",
+            evidence_refs=(),
+            rationale="Unsupported pass.",
+        )
 
 
 def test_codex_command_is_ephemeral_read_only_and_schema_bound(tmp_path: Path) -> None:
@@ -233,24 +343,28 @@ def test_codex_command_uses_authenticated_route_default_when_model_is_omitted(
 def test_check_payload_is_success_only_for_signed_exact_head() -> None:
     semantic = SemanticReviewResult(
         schema_version="1.0",
+        review_lane="correctness",
         head_sha=HEAD,
         verdict="pass",
-        criterion_results=[],
+        criterion_results=[_passing_criterion()],
         findings=[],
         summary="No blocking defects found.",
     )
     receipt = evaluate_signoff(
         expected_head=HEAD,
         observed_head=HEAD,
-        rubric_revision="rubric-v1",
-        reviewer_session_id="codex:fresh-reviewer",
+        expected_rubric=RUBRIC,
+        expected_lanes=LANES,
+        reviewer_sessions=SESSIONS,
         checks=(),
-        semantic=semantic,
+        semantics=(semantic,),
     )
 
-    payload = build_check_run_payload(receipt, name="coordination-approval")
+    payload = build_check_run_payload(receipt)
 
     assert payload["head_sha"] == HEAD
+    assert payload["name"] == "agent-review-candidate"
+    assert receipt.authority_state == "candidate_only"
     assert payload["conclusion"] == "success"
     assert payload["external_id"] == receipt.receipt_sha256()
 
@@ -290,13 +404,14 @@ def test_runner_executes_checks_and_fresh_schema_bound_reviewer(tmp_path: Path) 
                 }
             ],
         },
-        "review_lanes": ["correctness"],
+        "review_lanes": ["correctness", "test-evidence"],
     }
     spec_file = tmp_path / "spec.json"
     spec_file.write_text(json.dumps(spec_payload), encoding="utf-8")
     fake_codex = tmp_path / "fake-codex"
     semantic = {
         "schema_version": "1.0",
+        "review_lane": "correctness",
         "head_sha": head,
         "verdict": "pass",
         "criterion_results": [
@@ -313,10 +428,14 @@ def test_runner_executes_checks_and_fresh_schema_bound_reviewer(tmp_path: Path) 
     fake_codex.write_text(
         "#!/usr/bin/env python3\n"
         "import json, pathlib, sys\n"
+        "prompt = sys.stdin.read()\n"
+        "lane = 'test-evidence' if '\"review_lane\": \"test-evidence\"' in prompt else 'correctness'\n"
         "args = sys.argv[1:]\n"
         "out = pathlib.Path(args[args.index('--output-last-message') + 1])\n"
-        f"out.write_text({json.dumps(json.dumps(semantic))}, encoding='utf-8')\n"
-        "print(json.dumps({'type': 'thread.started', 'thread_id': 'fresh-123'}))\n",
+        f"semantic = {semantic!r}\n"
+        "semantic['review_lane'] = lane\n"
+        "out.write_text(json.dumps(semantic), encoding='utf-8')\n"
+        "print(json.dumps({'type': 'thread.started', 'thread_id': 'fresh-' + lane}))\n",
         encoding="utf-8",
     )
     fake_codex.chmod(0o755)
@@ -333,7 +452,14 @@ def test_runner_executes_checks_and_fresh_schema_bound_reviewer(tmp_path: Path) 
     )
 
     assert receipt.verdict == "signed_off"
-    assert receipt.reviewer_session_id == "codex:fresh-123"
+    assert {session.session_id for session in receipt.reviewer_sessions} == {
+        "codex:fresh-correctness",
+        "codex:fresh-test-evidence",
+    }
+    assert {review.review_lane for review in receipt.semantic_reviews} == {
+        "correctness",
+        "test-evidence",
+    }
     assert receipt.programmatic_checks[0].exit_code == 0
     assert json.loads(receipt_path.read_text())["head_sha"] == head
     assert json.loads(check_path.read_text())["conclusion"] == "success"
@@ -358,6 +484,67 @@ def test_runner_refuses_to_spend_on_a_nonmatching_worktree_head(tmp_path: Path) 
     with pytest.raises(RuntimeError, match="does not match frozen head"):
         run_review(
             load_review_spec(spec_file),
+            repo_root=repo,
+            output_schema=Path("unused.json"),
+            receipt_path=tmp_path / "receipt.json",
+            check_payload_path=tmp_path / "check.json",
+            codex_bin=str(tmp_path / "must-not-run"),
+        )
+
+
+def test_runner_refuses_dirty_worktree_before_checks_or_model(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "init", "-q", "-b", "main"], cwd=repo, check=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo, check=True)
+    subprocess.run(["git", "config", "user.name", "Test"], cwd=repo, check=True)
+    (repo / "feature.txt").write_text("base\n", encoding="utf-8")
+    subprocess.run(["git", "add", "feature.txt"], cwd=repo, check=True)
+    subprocess.run(["git", "commit", "-q", "-m", "base"], cwd=repo, check=True)
+    head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo, text=True).strip()
+    (repo / "untracked.txt").write_text("not frozen\n", encoding="utf-8")
+    spec_path = _write_spec(tmp_path / "spec.json")
+    payload = json.loads(spec_path.read_text())
+    payload["base_sha"] = head
+    payload["head_sha"] = head
+    spec_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="dirty during preflight"):
+        run_review(
+            load_review_spec(spec_path),
+            repo_root=repo,
+            output_schema=Path("unused.json"),
+            receipt_path=tmp_path / "receipt.json",
+            check_payload_path=tmp_path / "check.json",
+            codex_bin=str(tmp_path / "must-not-run"),
+        )
+
+
+def test_runner_rejects_programmatic_check_that_mutates_worktree(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "init", "-q", "-b", "main"], cwd=repo, check=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo, check=True)
+    subprocess.run(["git", "config", "user.name", "Test"], cwd=repo, check=True)
+    (repo / "feature.txt").write_text("base\n", encoding="utf-8")
+    subprocess.run(["git", "add", "feature.txt"], cwd=repo, check=True)
+    subprocess.run(["git", "commit", "-q", "-m", "base"], cwd=repo, check=True)
+    head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo, text=True).strip()
+    spec_path = _write_spec(tmp_path / "spec.json")
+    payload = json.loads(spec_path.read_text())
+    payload["base_sha"] = head
+    payload["head_sha"] = head
+    payload["programmatic_checks"] = [
+        {
+            "check_id": "mutating-check",
+            "argv": [sys.executable, "-c", "open('mutation.txt', 'w').write('changed')"],
+        }
+    ]
+    spec_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="dirty during post-check"):
+        run_review(
+            load_review_spec(spec_path),
             repo_root=repo,
             output_schema=Path("unused.json"),
             receipt_path=tmp_path / "receipt.json",

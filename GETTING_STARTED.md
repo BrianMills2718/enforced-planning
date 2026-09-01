@@ -117,11 +117,16 @@ After a successful minimum install, your repo should have:
 - `scripts/meta/session_start.py`
 - `scripts/meta/session_status.py`
 - `scripts/meta/sync_plan_status.py`
+- `scripts/hook_receipts.py` and `scripts/meta/hook_receipts.py`
 - `scripts/meta/validate_plan.py`
 - `.claude/hooks/gate-edit.sh`
 - `.claude/hooks/track-reads.sh`
 - `.claude/settings.json`
 - generated `AGENTS.md`
+
+The default full installer synchronizes the hook receipt helpers together with
+the coordination hook, so a clean consumer can import and execute the installed
+hook without relying on files from the framework source checkout.
 
 If the repo enables sanctioned worktree coordination, the canonical installed
 claim entrypoint is `scripts/meta/check_coordination_claims.py`. The sanctioned

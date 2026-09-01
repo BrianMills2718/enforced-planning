@@ -306,6 +306,41 @@ def test_empty_programmatic_results_fail_loud() -> None:
         )
 
 
+def test_substituted_programmatic_command_cannot_be_signed_off() -> None:
+    semantic = SemanticReviewResult(
+        schema_version="1.0",
+        review_lane="correctness",
+        head_sha=HEAD,
+        verdict="pass",
+        criterion_results=[_passing_criterion()],
+        findings=[],
+        summary="Semantic review passed.",
+    )
+    substituted = (
+        ProgrammaticCheckResult(
+            check_id="focused-tests",
+            argv=("true",),
+            exit_code=0,
+            output_sha256="c" * 64,
+            output_excerpt="",
+        ),
+    )
+
+    receipt = evaluate_signoff(
+        expected_head=HEAD,
+        observed_head=HEAD,
+        expected_rubric=RUBRIC,
+        expected_checks=CHECK_SPECS,
+        expected_lanes=LANES,
+        reviewer_sessions=SESSIONS,
+        checks=substituted,
+        semantics=(semantic,),
+    )
+
+    assert receipt.verdict == "rejected"
+    assert "command vectors differ" in receipt.reasons[-1]
+
+
 def test_missing_or_unknown_rubric_result_cannot_be_signed_off() -> None:
     semantic = SemanticReviewResult(
         schema_version="1.0",

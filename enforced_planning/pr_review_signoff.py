@@ -204,6 +204,10 @@ def evaluate_signoff(
         observed_check_ids
     ) != set(expected_check_ids):
         reasons.append("programmatic results did not return exactly the required checks")
+    else:
+        expected_argv = {check.check_id: check.argv for check in expected_checks}
+        if any(check.argv != expected_argv[check.check_id] for check in checks):
+            reasons.append("programmatic result command vectors differ from the required checks")
     expected_criteria = [criterion.criterion_id for criterion in expected_rubric.criteria]
     observed_lanes = [semantic.review_lane for semantic in semantics]
     session_lanes = [session.review_lane for session in reviewer_sessions]

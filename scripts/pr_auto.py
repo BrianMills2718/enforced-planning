@@ -14,12 +14,12 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
+import uuid
+from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
-from collections.abc import Iterator
 from pathlib import Path
-from typing import Mapping
-
 
 GITHUB_TOKEN_ENV_VARS: tuple[str, ...] = (
     "GITHUB_TOKEN",
@@ -175,9 +175,175 @@ def isolated_github_auth(
         yield isolated_env
 
 
-def _fetch_and_rebase(cwd: Path, base: str) -> None:
-    run_cmd(["git", "fetch", "origin", base], cwd=cwd)
-    run_cmd(["git", "rebase", f"origin/{base}"], cwd=cwd)
+def _remote_branch_exists(cwd: Path, branch: str) -> bool:
+    expected_ref = f"refs/heads/{branch}"
+    result = run_cmd(
+        ["git", "ls-remote", "--exit-code", "--heads", "origin", expected_ref],
+        cwd=cwd,
+        check=False,
+    )
+    if result.returncode == 2:
+        if result.stdout.strip():
+            raise SystemExit(
+                "Preflight failed: remote branch lookup reported absence with unexpected output.",
+            )
+        return False
+    if result.returncode != 0:
+        raise SystemExit(
+            "Preflight failed: unable to determine whether the feature branch is published.\n"
+            f"stderr: {result.stderr.strip()}",
+        )
+
+    lines = result.stdout.splitlines()
+    if len(lines) != 1:
+        raise SystemExit(
+            "Preflight failed: remote branch lookup did not return exactly one ref.",
+        )
+    fields = lines[0].split()
+    if (
+        len(fields) != 2
+        or re.fullmatch(r"[0-9a-fA-F]{40}", fields[0]) is None
+        or fields[1] != expected_ref
+    ):
+        raise SystemExit(
+            f"Preflight failed: remote branch lookup returned malformed or mismatched evidence for '{expected_ref}'.",
+        )
+    return True
+
+
+def _is_ancestor(cwd: Path, ancestor: str, descendant: str = "HEAD") -> bool:
+    result = run_cmd(
+        ["git", "merge-base", "--is-ancestor", ancestor, descendant],
+        cwd=cwd,
+        check=False,
+    )
+    if result.returncode in {0, 1}:
+        return result.returncode == 0
+    raise SystemExit(
+        f"Preflight failed: unable to compare '{ancestor}' with '{descendant}'.\n"
+        f"stderr: {result.stderr.strip()}",
+    )
+
+
+@contextmanager
+def _staged_rebased_history(cwd: Path, *, base: str) -> Iterator[tuple[str, str]]:
+    """Yield a temporary ref containing rebased history without moving the branch."""
+    temporary_ref = f"refs/pr-auto/{uuid.uuid4().hex}"
+    worktree_added = False
+    ref_created = False
+    with tempfile.TemporaryDirectory(prefix="pr-auto-rebase-") as temp_dir:
+        staging_worktree = Path(temp_dir) / "worktree"
+        try:
+            run_cmd(
+                ["git", "worktree", "add", "--detach", str(staging_worktree), "HEAD"],
+                cwd=cwd,
+            )
+            worktree_added = True
+            run_cmd(["git", "rebase", f"origin/{base}"], cwd=staging_worktree)
+            candidate = _git_stdout(["rev-parse", "HEAD"], cwd=staging_worktree)
+            run_cmd(["git", "update-ref", temporary_ref, candidate], cwd=cwd)
+            ref_created = True
+            yield temporary_ref, candidate
+        finally:
+            primary_error = sys.exc_info()[1]
+            cleanup_failures: list[str] = []
+            if worktree_added:
+                command = ["git", "worktree", "remove", "--force", str(staging_worktree)]
+                try:
+                    result = run_cmd(command, cwd=cwd, check=False)
+                except subprocess.CalledProcessError as exc:
+                    detail = str(exc.stderr).strip() if exc.stderr else str(exc)
+                    cleanup_failures.append(f"{' '.join(command)}: {detail}")
+                except (OSError, subprocess.SubprocessError) as exc:
+                    cleanup_failures.append(f"{' '.join(command)}: {exc}")
+                else:
+                    if result.returncode != 0:
+                        cleanup_failures.append(
+                            f"{' '.join(command)}: {result.stderr.strip() or f'exit {result.returncode}'}",
+                        )
+            if ref_created:
+                command = ["git", "update-ref", "-d", temporary_ref]
+                try:
+                    result = run_cmd(command, cwd=cwd, check=False)
+                except subprocess.CalledProcessError as exc:
+                    detail = str(exc.stderr).strip() if exc.stderr else str(exc)
+                    cleanup_failures.append(f"{' '.join(command)}: {detail}")
+                except (OSError, subprocess.SubprocessError) as exc:
+                    cleanup_failures.append(f"{' '.join(command)}: {exc}")
+                else:
+                    if result.returncode != 0:
+                        cleanup_failures.append(
+                            f"{' '.join(command)}: {result.stderr.strip() or f'exit {result.returncode}'}",
+                        )
+            if cleanup_failures:
+                message = "Temporary publication cleanup failed:\n" + "\n".join(
+                    f"  {failure}" for failure in cleanup_failures
+                )
+                if primary_error is not None:
+                    primary_error.add_note(message)
+                else:
+                    raise SystemExit(message)
+
+
+def _publish_unpublished_branch(cwd: Path, *, branch: str, base: str) -> None:
+    """Create a remote branch before advancing its clean local counterpart."""
+    remote_ref = f"refs/heads/{branch}"
+    with _staged_rebased_history(cwd, base=base) as (temporary_ref, candidate):
+        run_cmd(
+            [
+                "git",
+                "push",
+                "--atomic",
+                f"--force-with-lease={remote_ref}:",
+                "origin",
+                f"{temporary_ref}:{remote_ref}",
+            ],
+            cwd=cwd,
+        )
+        run_cmd(
+            ["git", "fetch", "origin", f"+{remote_ref}:refs/remotes/origin/{branch}"],
+            cwd=cwd,
+        )
+        run_cmd(["git", "reset", "--keep", candidate], cwd=cwd)
+        run_cmd(["git", "branch", "--set-upstream-to", f"origin/{branch}", branch], cwd=cwd)
+
+
+def _prepare_branch_for_push(cwd: Path, *, branch: str, base: str) -> bool:
+    """Publish an unpublished branch or validate a published fast-forward push.
+
+    Return True when the unpublished path already performed its create-only
+    push. Once ``origin/<branch>`` exists, this workflow never rebases it and
+    leaves the ordinary fast-forward push to the caller.
+    """
+    if not _remote_branch_exists(cwd, branch):
+        run_cmd(["git", "fetch", "origin"], cwd=cwd)
+        if _remote_branch_exists(cwd, branch):
+            raise SystemExit(
+                f"Preflight failed: branch '{branch}' was published while pr-auto was preparing it.\n"
+                "No rebase or push was attempted. Rerun pr-auto so the published-branch safety "
+                "checks can evaluate the current remote history.",
+            )
+        _publish_unpublished_branch(cwd, branch=branch, base=base)
+        return True
+
+    run_cmd(["git", "fetch", "origin"], cwd=cwd)
+    remote_branch = f"origin/{branch}"
+    remote_base = f"origin/{base}"
+    if not _is_ancestor(cwd, remote_branch):
+        raise SystemExit(
+            f"Preflight failed: published branch '{branch}' is not an ancestor of local HEAD.\n"
+            "pr-auto will not rebase or overwrite published history. Reconcile the local and "
+            "remote branch explicitly, then push with --force-with-lease only if rewriting that "
+            "published history is intentional.",
+        )
+    if not _is_ancestor(cwd, remote_base):
+        raise SystemExit(
+            f"Preflight failed: origin/{base} advanced after published branch '{branch}'.\n"
+            f"pr-auto will not automatically rebase a published branch. Explicitly run "
+            f"'git rebase origin/{base}', review the rewritten commits, then recover with "
+            f"'git push --force-with-lease origin HEAD:{branch}' if the rewrite is intentional.",
+        )
+    return False
 
 
 def _push_branch(cwd: Path) -> None:
@@ -269,8 +435,9 @@ def main() -> int:
             print("Preflight passed.")
             return 0
 
-        _fetch_and_rebase(cwd, args.base)
-        _push_branch(cwd)
+        branch_published = _prepare_branch_for_push(cwd, branch=branch, base=args.base)
+        if not branch_published:
+            _push_branch(cwd)
 
         pr = _find_open_pr(cwd=cwd, gh_env=isolated_env, branch=branch, base=args.base)
         if pr is None:

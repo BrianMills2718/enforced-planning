@@ -1,0 +1,293 @@
+{
+  "units": [
+    {
+      "schema_version": "1.0",
+      "record_type": "work_unit",
+      "id": "cn132-01-source-atomic-claim-narrowing",
+      "initiative_id": "coordination-integrity",
+      "goal_id": "claim-granularity-and-safe-narrowing",
+      "design_revision": "user-approved:codex-session-01a058cd-44d2-7ca0-92bb-c3ce68f04960:2026-08-31",
+      "spec_revision": "plan-132-adopted-v1",
+      "title": "Implement atomic broad-claim narrowing and source-consumer enforcement",
+      "class": "implementation",
+      "objective": "Extend the canonical claim registry with compatible broad-scope metadata, owner-only atomic narrowing, explanatory conflict receipts, bootstrap pre-write denial, and one disposable installed-consumer replay without weakening parent-child exclusion.",
+      "profile": "standard",
+      "execution_class": "independently_executable",
+      "claimability": "ready_for_execution",
+      "authorization_mode": "registry_claim",
+      "scope": {
+        "included": [
+          "Claim schema v6 broad-scope metadata and legacy read compatibility",
+          "Owner/session-bound subset-only atomic narrow transaction",
+          "Projection and mutation-receipt coherence",
+          "Exact versus parent-side conflict classification and advisory Git evidence",
+          "Bootstrap broad-mode pre-write denial",
+          "Source CLI, Make template, installer propagation, operator docs, and focused tests",
+          "Disposable installed deny-narrow-admit journey and Plan 132 evidence"
+        ],
+        "excluded": [
+          "Weakening parent-child overlap",
+          "Git diff as admission authority",
+          "Automatic claim revocation or takeover",
+          "A second mailbox, registry, lock, or policy store",
+          "Real Project Meta mutation",
+          "Fleet installation or hard-enforcement rollout"
+        ]
+      },
+      "inputs": [
+        {
+          "kind": "bounded_design",
+          "id": "docs/plans/132_overbroad_claim_narrowing.md",
+          "revision": "plan-132-adopted-v1"
+        },
+        {
+          "kind": "policy_direction",
+          "id": "project-meta:policy/proposals/2026-08-31-overbroad-claims-require-narrowing.yaml",
+          "revision": "b5033793e735acba0d98cd1ff1fb92f810cce49e"
+        },
+        {
+          "kind": "reproduced_failure",
+          "id": "project-meta-docs-vs-docs-wiki-false-serialization",
+          "revision": "codex-session-01a058cd-44d2-7ca0-92bb-c3ce68f04960@2026-08-31"
+        }
+      ],
+      "outputs": [
+        "Compatible broad-claim metadata and classifier",
+        "Atomic narrow transaction and append-only receipt",
+        "Public session-narrow CLI and Make entrypoint",
+        "Explanatory conflict receipt with unchanged denial semantics",
+        "Bootstrap-mode pre-write enforcement",
+        "Source/installer parity and disposable installed-consumer evidence"
+      ],
+      "dependencies": [],
+      "conflict_surfaces": [
+        {
+          "kind": "repository_path",
+          "target": "enforced_planning/coordination_claims.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-132-claim-narrowing"
+        },
+        {
+          "kind": "repository_path",
+          "target": "enforced_planning/claim_mutation_receipts.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-132-claim-narrowing"
+        },
+        {
+          "kind": "repository_path",
+          "target": "enforced_planning/session_lifecycle.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-132-claim-narrowing"
+        },
+        {
+          "kind": "repository_path",
+          "target": "enforced_planning/prewrite_claim_projection.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-132-claim-narrowing"
+        },
+        {
+          "kind": "repository_path",
+          "target": "enforced_planning/prewrite_claim_fast.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-132-claim-narrowing"
+        },
+        {
+          "kind": "repository_path",
+          "target": "scripts/session_narrow.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-132-claim-narrowing"
+        },
+        {
+          "kind": "repository_path",
+          "target": "scripts/check_coordination_claims.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-132-claim-narrowing"
+        },
+        {
+          "kind": "repository_path",
+          "target": "Makefile",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-132-claim-narrowing"
+        },
+        {
+          "kind": "repository_path",
+          "target": "templates/Makefile.worktree.block.template",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-132-claim-narrowing"
+        },
+        {
+          "kind": "repository_path",
+          "target": "scripts/install_governed_repo.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-132-claim-narrowing"
+        },
+        {
+          "kind": "repository_path",
+          "target": "tests/test_check_coordination_claims.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-132-claim-narrowing"
+        },
+        {
+          "kind": "repository_path",
+          "target": "tests/test_claim_mutation_receipts.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-132-claim-narrowing"
+        },
+        {
+          "kind": "repository_path",
+          "target": "tests/test_session_cli.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-132-claim-narrowing"
+        },
+        {
+          "kind": "repository_path",
+          "target": "tests/test_prewrite_claim_fast.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-132-claim-narrowing"
+        },
+        {
+          "kind": "repository_path",
+          "target": "tests/test_install_governed_repo.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-132-claim-narrowing"
+        },
+        {
+          "kind": "repository_path",
+          "target": "docs/guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-132-claim-narrowing"
+        },
+        {
+          "kind": "repository_path",
+          "target": "docs/reference/CONFIG_REFERENCE.md",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-132-claim-narrowing"
+        },
+        {
+          "kind": "repository_path",
+          "target": "GETTING_STARTED.md",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-132-claim-narrowing"
+        },
+        {
+          "kind": "repository_path",
+          "target": "docs/plans/125_planning_integrity_loop.md",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-132-claim-narrowing"
+        },
+        {
+          "kind": "repository_path",
+          "target": "docs/evidence/plan132_claim_narrowing.json",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-132-claim-narrowing"
+        },
+        {
+          "kind": "repository_path",
+          "target": "docs/plans/132_overbroad_claim_narrowing.md",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-132-claim-narrowing"
+        },
+        {
+          "kind": "repository_path",
+          "target": "docs/plans/132_overbroad_claim_narrowing_work_graph.json",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-132-claim-narrowing"
+        },
+        {
+          "kind": "repository_path",
+          "target": "docs/plans/CLAUDE.md",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-132-claim-narrowing"
+        },
+        {
+          "kind": "repository_path",
+          "target": "ROADMAP.md",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-132-claim-narrowing"
+        }
+      ],
+      "acceptance": [
+        {
+          "id": "CN132-A1",
+          "criterion": "An owner can atomically narrow a live broad claim to strict descendant paths, after which a previously denied disjoint child claim is admitted while true overlap remains denied.",
+          "evidence_required": [
+            "Temporary-registry deny-narrow-admit transcript",
+            "Claim and projection digest transition",
+            "Existing parent-child denial regression"
+          ],
+          "negative_control": "Foreign-session, sibling escape, expansion, empty replacement, and failed projection refresh leave claim and projection bytes unchanged."
+        },
+        {
+          "id": "CN132-A2",
+          "criterion": "New broad claims carry explicit bootstrap or bounded intent; bootstrap claims cannot authorize ordinary repository writes before narrowing and legacy claims remain readable.",
+          "evidence_required": [
+            "Schema v6 round-trip tests",
+            "Bootstrap pre-write deny then post-narrow allow",
+            "Legacy schema compatibility fixture"
+          ],
+          "negative_control": "Missing reason, contradictory narrow metadata, ambiguous root, and unsupported mode deny before claim or worktree residue."
+        },
+        {
+          "id": "CN132-A3",
+          "criterion": "Conflict receipts distinguish exact, candidate-parent, and owner-parent overlap and may expose current-diff disjointness only as advisory evidence.",
+          "evidence_required": [
+            "Structured interaction tests",
+            "Human and JSON CLI snapshots"
+          ],
+          "negative_control": "Changing advisory diff state cannot change hard-conflict severity or admit a candidate."
+        },
+        {
+          "id": "CN132-A4",
+          "criterion": "Source, Make template, installer, and generated consumer expose the same narrowing contract and a disposable installed repo completes the canonical journey.",
+          "evidence_required": [
+            "Installer parity tests",
+            "Disposable installed-consumer transcript",
+            "Framework self-test"
+          ],
+          "negative_control": "A generated consumer missing the narrow CLI, broad metadata, or projection fields fails parity before being used as rollout evidence."
+        }
+      ],
+      "readiness": {
+        "status": "ready",
+        "required_approval_types": [],
+        "approvals": [],
+        "failed_guards": []
+      },
+      "claim_policy": {
+        "eligibility_rule": "One exact Plan 132 source lane owns only the claim runtime, lifecycle, projection, CLI, Make/template, installer, focused tests, operator docs, evidence, and plan-closeout paths declared here.",
+        "lease_policy": "renewable",
+        "lease_duration_minutes": 1440,
+        "max_active_per_claimant": 1,
+        "named_owner_id": null
+      },
+      "status": "ready",
+      "record_version": 1,
+      "created_at": "2026-09-01T00:44:45Z",
+      "updated_at": "2026-09-01T00:44:45Z"
+    }
+  ]
+}

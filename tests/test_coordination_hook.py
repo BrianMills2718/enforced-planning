@@ -17,6 +17,24 @@ from enforced_planning import prewrite_claim_fast, prewrite_claim_projection
 from scripts import coordination_hook
 
 
+def test_meta_wrapper_bootstraps_script_imports_outside_repository(tmp_path: Path) -> None:
+    """The project-local native wrapper must not depend on its launch cwd."""
+
+    wrapper = Path(__file__).resolve().parents[1] / "scripts" / "meta" / "coordination_hook.py"
+
+    completed = subprocess.run(
+        [sys.executable, str(wrapper), "--help"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    assert "Expose canonical mailbox requests" in completed.stdout
+    assert "ModuleNotFoundError" not in completed.stderr
+
+
 def test_stop_refire_returns_before_receipts_or_projection(monkeypatch, tmp_path: Path) -> None:
     payload = {
         "hook_event_name": "Stop",

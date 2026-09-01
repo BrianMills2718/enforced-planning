@@ -60,8 +60,10 @@ def test_maintenance_worktree_claim_declares_unplanned_ownership() -> None:
     Without this the claim is created planless, and the planless-claim guard
     rejects the very entrypoint it is meant to govern.
     """
+    # A later command-line assignment wins, so this clears the SESSION_WRITE_PATHS
+    # that _COMMON_MAKE_VARS supplies and exercises the undeclared-scope default.
     invocation = _claim_invocation(
-        _dry_run_make("maintenance-worktree", "BRANCH=probe-unplanned")
+        _dry_run_make("maintenance-worktree", "BRANCH=probe-unplanned", "SESSION_WRITE_PATHS=")
     )
 
     assert "--plan UNPLANNED" in invocation
@@ -70,9 +72,30 @@ def test_maintenance_worktree_claim_declares_unplanned_ownership() -> None:
     assert '--broad-scope-mode "bootstrap"' in invocation
     assert '--broad-scope-reason "construct this maintenance lane, then narrow before its first repository write"' in invocation
     assert '--target-worktree-path "' in invocation
-    # _dry_run_make supplies SESSION_WRITE_PATHS=README.md for ordinary lanes;
-    # maintenance must not let that hidden caller value choose bootstrap scope.
-    assert "README.md" not in invocation
+
+
+def test_maintenance_worktree_keeps_an_explicitly_declared_write_scope() -> None:
+    """An explicit SESSION_WRITE_PATHS must reach the claim, not be replaced by ".".
+
+    Hardcoding the repo-root bootstrap default discarded whatever the caller
+    supplied, so every maintenance lane claimed the whole repository and
+    conflicted with every other active lane by construction. The CONFLICT
+    message format is "<yours> <-> <theirs>", which made the lane's own broad
+    claim read as though it belonged to the other lanes.
+    """
+    invocation = _claim_invocation(
+        _dry_run_make(
+            "maintenance-worktree",
+            "BRANCH=probe-narrow",
+            "SESSION_WRITE_PATHS=Makefile docs/plans",
+        )
+    )
+
+    assert '--write-path "Makefile"' in invocation
+    assert '--write-path "docs/plans"' in invocation
+    assert '--write-path "."' not in invocation
+    # The bootstrap contract itself is unchanged; only the scope narrows.
+    assert '--broad-scope-mode "bootstrap"' in invocation
 
 
 def test_plan_bound_worktree_claim_keeps_its_real_plan_reference() -> None:

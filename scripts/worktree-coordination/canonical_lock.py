@@ -343,6 +343,11 @@ def _control_path_issues(repo_root: Path) -> list[str]:
         relative = str(path.relative_to(repo_root))
         try:
             info = path.lstat()
+        except FileNotFoundError:
+            # Git creates and removes transient administration files (for
+            # example index.lock) while another sanctioned process runs. A
+            # path disappearing after enumeration is already reconciled.
+            continue
         except OSError:
             issues.append(f"{relative}: missing or unreadable")
             continue
@@ -368,6 +373,11 @@ def _restore_control_path_write_access(repo_root: Path) -> dict[str, Any]:
             if not mode & stat.S_IWUSR:
                 os.chmod(path, mode | stat.S_IWUSR)
                 restored.append(relative)
+        except FileNotFoundError:
+            # A transient Git administration entry can disappear between
+            # _control_paths() and this repair. There is nothing left to make
+            # writable, so this is success rather than a durable failure.
+            continue
         except OSError as exc:
             failures.append(f"{relative}: {exc}")
     return {"restored": restored, "failures": failures}

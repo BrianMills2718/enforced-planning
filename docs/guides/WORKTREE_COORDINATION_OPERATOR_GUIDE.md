@@ -1190,6 +1190,12 @@ The JSON end receipt names the session, end time, reason, and every affected
 `project:scope`. Claim YAML is the durable audit record; the generated active
 work registry remains a derivative and no second mutable lane store is added.
 
+`session-status` is a strictly read-only observer. It takes shared locks only
+when the existing writer-owned lock files can be opened without mutation. When
+a lock is absent, it accepts only an optimistic claim/tracker snapshot whose
+source bytes stay stable and whose lock remains absent; it never creates or
+chmods lock files, creates directories, or prunes stale staging artifacts.
+
 When this control blocks valid work, loses an expected session transition, or
 creates avoidable process cost, record concrete evidence in Project Meta's
 canonical feedback register:

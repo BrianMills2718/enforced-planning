@@ -7,6 +7,7 @@ inventing a second coordination registry.
 
 from __future__ import annotations
 
+import fcntl
 import hashlib
 import json
 import os
@@ -46,6 +47,81 @@ class OutcomeAdmissionDeniedError(PermissionError):
     """One recorded outcome denial raised before lifecycle mutation."""
 
     code = "outcome_admission_denied"
+
+
+_STATUS_OBSERVATION_ATTEMPTS = 3
+
+
+def _shared_lock_fd_if_present(lock_path: Path) -> int | None:
+    """Acquire an existing lock for observation without creating or chmodding it."""
+
+    flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0)
+    try:
+        fd = os.open(lock_path, flags)
+    except FileNotFoundError:
+        return None
+    try:
+        fcntl.flock(fd, fcntl.LOCK_SH)
+    except BaseException:
+        os.close(fd)
+        raise
+    return fd
+
+
+def _release_shared_lock(fd: int) -> None:
+    """Release one observation lock acquired by `_shared_lock_fd_if_present`."""
+
+    try:
+        fcntl.flock(fd, fcntl.LOCK_UN)
+    finally:
+        os.close(fd)
+
+
+def _file_observation_fingerprint(path: Path) -> tuple[int, int, str] | None:
+    """Return stable identity, size, and digest for an observed file."""
+
+    try:
+        stat_result = path.stat()
+        content = path.read_bytes()
+    except FileNotFoundError:
+        return None
+    return stat_result.st_ino, len(content), hashlib.sha256(content).hexdigest()
+
+
+def _claim_registry_observation_fingerprint(claims_dir: Path) -> tuple[tuple[str, int, int, str], ...]:
+    """Fingerprint authoritative claim YAML without touching staging artifacts."""
+
+    if not claims_dir.is_dir():
+        return ()
+    rows: list[tuple[str, int, int, str]] = []
+    for path in sorted(claims_dir.glob("*.yaml")):
+        fingerprint = _file_observation_fingerprint(path)
+        if fingerprint is not None:
+            inode, size, digest = fingerprint
+            rows.append((path.name, inode, size, digest))
+    return tuple(rows)
+
+
+def _read_session_tracker_for_status(path: Path) -> dict[str, Any] | None:
+    """Read one tracker under an existing shared lock or a verified stable snapshot."""
+
+    resolved = path.expanduser().resolve()
+    lock_path = resolved.parent / f".{resolved.name}.lock"
+    for _attempt in range(_STATUS_OBSERVATION_ATTEMPTS):
+        lock_fd = _shared_lock_fd_if_present(lock_path)
+        if lock_fd is not None:
+            try:
+                return session_contracts.read_session_tracker(resolved)
+            finally:
+                _release_shared_lock(lock_fd)
+        before = _file_observation_fingerprint(resolved)
+        if before is None:
+            return None
+        payload = session_contracts.read_session_tracker(resolved)
+        after = _file_observation_fingerprint(resolved)
+        if before == after and not lock_path.exists():
+            return payload
+    raise RuntimeError(f"session status could not establish a stable read-only tracker snapshot for {resolved}")
 
 
 def _poll_mailbox(*, agent: str, project: str, session_id: str) -> dict[str, Any]:
@@ -2204,9 +2280,7 @@ def _status_sessions_locked(
         tracker_payload: dict[str, Any] | None = None
         if claim.tracker_path:
             path = Path(claim.tracker_path).expanduser()
-            if path.exists():
-                with session_contracts.session_tracker_lock(path):
-                    tracker_payload = session_contracts.read_session_tracker(path)
+            tracker_payload = _read_session_tracker_for_status(path)
         tracker_section = tracker_payload.get("tracker") if isinstance(tracker_payload, dict) else {}
         timestamps = tracker_payload.get("timestamps") if isinstance(tracker_payload, dict) else {}
         health_issues = coordination_claims.coordination_health_issues(
@@ -2289,10 +2363,27 @@ def status_sessions(
     include_ended: bool = False,
     now: datetime | None = None,
 ) -> dict[str, Any]:
-    """Observe claims and trackers under the same claim-then-tracker protocol as transfers."""
+    """Observe claims and trackers without creating or pruning coordination artifacts."""
 
-    with coordination_claims.claim_registry_lock(coordination_claims.CLAIMS_DIR):
-        return _status_sessions_locked(
+    claims_dir = coordination_claims.CLAIMS_DIR.expanduser().resolve()
+    lock_path = claims_dir.parent / f".{claims_dir.name}.lock"
+    for _attempt in range(_STATUS_OBSERVATION_ATTEMPTS):
+        lock_fd = _shared_lock_fd_if_present(lock_path)
+        if lock_fd is not None:
+            try:
+                return _status_sessions_locked(
+                    project=project,
+                    agent=agent,
+                    scope=scope,
+                    branch=branch,
+                    session_id=session_id,
+                    include_ended=include_ended,
+                    now=now,
+                )
+            finally:
+                _release_shared_lock(lock_fd)
+        before = _claim_registry_observation_fingerprint(claims_dir)
+        result = _status_sessions_locked(
             project=project,
             agent=agent,
             scope=scope,
@@ -2301,6 +2392,10 @@ def status_sessions(
             include_ended=include_ended,
             now=now,
         )
+        after = _claim_registry_observation_fingerprint(claims_dir)
+        if before == after and not lock_path.exists():
+            return result
+    raise RuntimeError("session status could not establish a stable read-only claim-registry snapshot")
 
 
 def end_runtime_session(

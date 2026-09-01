@@ -3758,6 +3758,83 @@ def test_resume_observer_cannot_see_split_claim_tracker_identity(
     assert tracker["claim"]["session_id"] == "codex:new-runtime"
 
 
+def test_status_observer_does_not_create_chmod_or_prune_coordination_artifacts(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Claimless status remains read-only when writer lock files are absent."""
+
+    coordination_root = tmp_path / "coordination"
+    claims_dir = coordination_root / "claims"
+    trackers_dir = coordination_root / "sessions"
+    worktree = tmp_path / "worktree"
+    worktree.mkdir()
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    started = session_lifecycle.start_session(
+        agent="codex",
+        project="enforced-planning",
+        scope="read-only-status",
+        intent="prove read-only observation",
+        repo_root=str(tmp_path),
+        worktree_path=str(worktree),
+        branch="read-only-status",
+        broader_goal="Read Only Status",
+        current_phase="fixture setup",
+        plan_ref="UNPLANNED",
+        session_id="codex:read-only-status",
+        tracker_dir=trackers_dir,
+    )
+    tracker_path = Path(started["tracker_path"])
+    claim_lock = claims_dir.parent / f".{claims_dir.name}.lock"
+    tracker_lock = tracker_path.parent / f".{tracker_path.name}.lock"
+    claim_lock.unlink()
+    tracker_lock.unlink()
+    legacy_staging = claims_dir / ".owner.yaml.status-observer.tmp"
+    legacy_staging.write_text("retain legacy staging", encoding="utf-8")
+    shared_staging_dir = claims_dir.parent / f".{claims_dir.name}-write-staging"
+    shared_staging_dir.mkdir(exist_ok=True)
+    shared_staging = shared_staging_dir / "status-observer.tmp"
+    shared_staging.write_text("retain shared staging", encoding="utf-8")
+    stale_time = time.time() - coordination_claims.CLAIM_WRITE_STAGING_MAX_AGE_SECONDS - 60
+    os.utime(legacy_staging, (stale_time, stale_time))
+    os.utime(shared_staging, (stale_time, stale_time))
+
+    def tree_snapshot(root: Path) -> tuple[tuple[str, int, int, str | None], ...]:
+        rows: list[tuple[str, int, int, str | None]] = []
+        for path in sorted(root.rglob("*")):
+            stat_result = path.lstat()
+            digest = hashlib.sha256(path.read_bytes()).hexdigest() if path.is_file() else None
+            rows.append((str(path.relative_to(root)), stat_result.st_mode, stat_result.st_ino, digest))
+        return tuple(rows)
+
+    original_modes = {
+        coordination_root: coordination_root.stat().st_mode,
+        claims_dir: claims_dir.stat().st_mode,
+        tracker_path.parent: tracker_path.parent.stat().st_mode,
+        shared_staging_dir: shared_staging_dir.stat().st_mode,
+    }
+    for directory in original_modes:
+        directory.chmod(0o500)
+    before = tree_snapshot(coordination_root)
+    try:
+        payload = session_lifecycle.status_sessions(
+            project="enforced-planning",
+            scope="read-only-status",
+        )
+        after = tree_snapshot(coordination_root)
+    finally:
+        for directory, mode in original_modes.items():
+            directory.chmod(mode & 0o777)
+
+    assert payload["session_count"] == 1
+    assert payload["sessions"][0]["current_phase"] == "fixture setup"
+    assert before == after
+    assert not claim_lock.exists()
+    assert not tracker_lock.exists()
+    assert legacy_staging.exists()
+    assert shared_staging.exists()
+
+
 def test_resume_reports_post_commit_mailbox_failure_without_rolling_back(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

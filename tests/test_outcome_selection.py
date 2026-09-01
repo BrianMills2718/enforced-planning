@@ -1556,9 +1556,11 @@ def test_cross_session_resume_retains_progress_head_and_successor_extends_it(
         agent="codex",
         project="enforced-planning",
         scope="plan117-test",
+        actor_session_id=SESSION,
         note="continue the exact selected progress head",
     )
     successor_session = "codex:plan119-successor"
+    monkeypatch.setenv("CODEX_THREAD_ID", successor_session.removeprefix("codex:"))
     resumed = session_lifecycle.resume_session(
         agent="codex",
         project="enforced-planning",
@@ -1762,11 +1764,13 @@ def test_cross_session_resume_transfers_selected_outcome_without_reset(
         agent="codex",
         project="enforced-planning",
         scope="plan117-test",
+        actor_session_id=SESSION,
         note="transfer the interrupted outcome without resetting its evidence",
     )
     assert handed_off["action"] == "handoff"
 
     successor_session = "codex:plan118-successor"
+    monkeypatch.setenv("CODEX_THREAD_ID", successor_session.removeprefix("codex:"))
     resumed = session_lifecycle.resume_session(
         agent="codex",
         project="enforced-planning",
@@ -1865,6 +1869,7 @@ def test_cross_session_resume_restores_exact_preflight_state_when_tracker_transf
         agent="codex",
         project="enforced-planning",
         scope="plan117-test",
+        actor_session_id=SESSION,
         note="preserve these exact preflight bytes",
     )
     claim_before = claim_path.read_bytes()
@@ -1879,6 +1884,7 @@ def test_cross_session_resume_restores_exact_preflight_state_when_tracker_transf
         "apply_prepared_outcome_session_transfer",
         fail_tracker_transfer,
     )
+    monkeypatch.setenv("CODEX_THREAD_ID", "plan118-failed-successor")
     with pytest.raises(OSError, match="injected tracker replacement failure"):
         session_lifecycle.resume_session(
             agent="codex",
@@ -1913,6 +1919,7 @@ def test_cross_session_resume_restores_exact_preflight_state_when_successor_clai
         agent="codex",
         project="enforced-planning",
         scope="plan117-test",
+        actor_session_id=SESSION,
         note="preserve preflight bytes if the successor claim is invalid",
     )
     claim_before = claim_path.read_bytes()
@@ -1934,6 +1941,7 @@ def test_cross_session_resume_restores_exact_preflight_state_when_successor_clai
         return original_normalize_claim(data, source_file=source_file)
 
     monkeypatch.setattr(coordination_claims, "normalize_claim", invalidate_successor_claim)
+    monkeypatch.setenv("CODEX_THREAD_ID", "plan118-invalid-successor")
     with pytest.raises(ValueError, match="could not be normalized"):
         session_lifecycle.resume_session(
             agent="codex",
@@ -1968,6 +1976,7 @@ def test_cross_session_resume_rolls_back_if_claim_projection_refresh_fails(
         agent="codex",
         project="enforced-planning",
         scope="plan117-test",
+        actor_session_id=SESSION,
         note="preserve preflight bytes if projection refresh fails",
     )
     claim_before = claim_path.read_bytes()
@@ -1988,6 +1997,7 @@ def test_cross_session_resume_rolls_back_if_claim_projection_refresh_fails(
         return original_normalize_claim(data, source_file=source_file)
 
     monkeypatch.setattr(coordination_claims, "normalize_claim", fail_projection_refresh)
+    monkeypatch.setenv("CODEX_THREAD_ID", "plan118-projection-failure")
     with pytest.raises(ValueError, match="cannot be normalized"):
         session_lifecycle.resume_session(
             agent="codex",
@@ -2022,6 +2032,7 @@ def test_cross_session_resume_reports_typed_incomplete_transition_if_rollback_fa
         agent="codex",
         project="enforced-planning",
         scope="plan117-test",
+        actor_session_id=SESSION,
         note="exercise typed incomplete transfer reporting",
     )
 
@@ -2037,6 +2048,7 @@ def test_cross_session_resume_reports_typed_incomplete_transition_if_rollback_fa
         fail_tracker_transfer,
     )
     monkeypatch.setattr(session_lifecycle, "_rollback_outcome_session_transfer", fail_rollback)
+    monkeypatch.setenv("CODEX_THREAD_ID", "plan118-incomplete-successor")
 
     with pytest.raises(session_lifecycle.SessionTransferIncompleteError) as caught:
         session_lifecycle.resume_session(

@@ -307,6 +307,7 @@ def test_finish_session_fails_when_lane_owns_unresolved_authority_obligation(tmp
             project=repo_root.name,
             scope="authority-owner",
             worktree_path=str(repo_root),
+            actor_session_id="codex:test-session",
         )
     except ValueError as exc:
         message = str(exc)

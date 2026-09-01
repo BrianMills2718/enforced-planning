@@ -216,3 +216,65 @@ def test_session_status_enrichment_preserves_internal_name(tmp_path: Path) -> No
     session = payload["sessions"][0]  # type: ignore[index]
     assert session["session_name"] == "close-plan-189-situational-composition-architecture-gap"
     assert session["client_display"]["display_name"] == "gap_closure_including_composability"
+
+
+def test_session_status_keeps_live_but_unindexed_runtime_healthy(tmp_path: Path) -> None:
+    """Missing display metadata cannot negate independent live claim evidence."""
+
+    script = Path(__file__).resolve().parents[1] / "scripts" / "session_status.py"
+    spec = importlib.util.spec_from_file_location("session_status_script_missing", script)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    index = tmp_path / "session_index.jsonl"
+    index.write_text("", encoding="utf-8")
+    payload: dict[str, object] = {
+        "session_count": 1,
+        "sessions": [
+            {
+                "session_id": SESSION_ID,
+                "health_status": "healthy",
+                "recovery_action": "continue",
+                "health_issues": [],
+            }
+        ],
+    }
+
+    module.enrich_client_displays(payload, codex_session_index=index)
+
+    session = payload["sessions"][0]  # type: ignore[index]
+    assert session["health_status"] == "healthy"
+    assert session["recovery_action"] == "continue"
+    assert session["health_issues"] == []
+    assert session["client_evidence_issues"] == ["metadata_not_indexed"]
+
+
+def test_session_status_preserves_independent_runtime_absence_classification(tmp_path: Path) -> None:
+    """A stale heartbeat remains unhealthy independently of display-index state."""
+
+    script = Path(__file__).resolve().parents[1] / "scripts" / "session_status.py"
+    spec = importlib.util.spec_from_file_location("session_status_script_stale", script)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    index = tmp_path / "session_index.jsonl"
+    index.write_text("", encoding="utf-8")
+    payload: dict[str, object] = {
+        "session_count": 1,
+        "sessions": [
+            {
+                "session_id": SESSION_ID,
+                "health_status": "stale",
+                "recovery_action": "resume_or_disposition_stale_lane",
+                "health_issues": ["stale_session_heartbeat"],
+            }
+        ],
+    }
+
+    module.enrich_client_displays(payload, codex_session_index=index)
+
+    session = payload["sessions"][0]  # type: ignore[index]
+    assert session["health_status"] == "stale"
+    assert session["recovery_action"] == "resume_or_disposition_stale_lane"
+    assert session["health_issues"] == ["stale_session_heartbeat"]
+    assert session["client_evidence_issues"] == ["metadata_not_indexed"]

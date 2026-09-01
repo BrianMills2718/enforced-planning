@@ -1936,10 +1936,8 @@ def _broad_scope_contract_issues(claim: ClaimRecord) -> list[str]:
     if mode == "bootstrap":
         if not claim.target_worktree_path:
             issues.append("bootstrap_target_worktree_path_required")
-        else:
-            expected = bootstrap_authority_disabled_worktree_path(claim.target_worktree_path)
-            if claim.worktree_path != expected:
-                issues.append("bootstrap_mutation_worktree_not_authority_disabled")
+        elif claim.worktree_path != claim.target_worktree_path:
+            issues.append("bootstrap_physical_worktree_identity_mismatch")
     elif mode == "bounded" and claim.target_worktree_path not in {None, claim.worktree_path}:
         issues.append("bounded_target_worktree_mismatch")
     return issues
@@ -2256,6 +2254,27 @@ def normalize_claim(data: dict[str, Any], *, source_file: str | None = None) -> 
     else:
         schema_version = 1
 
+    target_worktree_path = (
+        data.get("target_worktree_path")
+        if isinstance(data.get("target_worktree_path"), str)
+        else None
+    )
+    worktree_path = data.get("worktree_path") if isinstance(data.get("worktree_path"), str) else None
+    if (
+        schema_version >= 6
+        and data.get("broad_scope_mode") == "bootstrap"
+        and target_worktree_path is not None
+        and worktree_path
+        in {
+            target_worktree_path,
+            bootstrap_authority_disabled_worktree_path(target_worktree_path),
+        }
+    ):
+        # Bootstrap disables write authority in the derived projection, not by
+        # corrupting the canonical lane's physical identity. Normalize legacy
+        # sentinel claims to their immutable physical worktree on read.
+        worktree_path = target_worktree_path
+
     return ClaimRecord(
         agent=agent_text,
         claimed_at=data.get("claimed_at") if isinstance(data.get("claimed_at"), str) else None,
@@ -2266,7 +2285,7 @@ def normalize_claim(data: dict[str, Any], *, source_file: str | None = None) -> 
         claim_type=claim_type,
         write_paths=write_paths,
         read_paths=read_paths,
-        worktree_path=data.get("worktree_path") if isinstance(data.get("worktree_path"), str) else None,
+        worktree_path=worktree_path,
         repo_root=data.get("repo_root") if isinstance(data.get("repo_root"), str) else None,
         branch=data.get("branch") if isinstance(data.get("branch"), str) else None,
         session_name=data.get("session_name") if isinstance(data.get("session_name"), str) else None,
@@ -2318,11 +2337,7 @@ def normalize_claim(data: dict[str, Any], *, source_file: str | None = None) -> 
             if isinstance(data.get("broad_scope_reason"), str)
             else None
         ),
-        target_worktree_path=(
-            data.get("target_worktree_path")
-            if isinstance(data.get("target_worktree_path"), str)
-            else None
-        ),
+        target_worktree_path=target_worktree_path,
     )
 
 
@@ -2562,8 +2577,7 @@ def build_candidate_claim(
     effective_worktree = worktree_path
     if normalized_mode == "bootstrap":
         effective_target_worktree = target_worktree_path or worktree_path
-        if effective_target_worktree is not None:
-            effective_worktree = bootstrap_authority_disabled_worktree_path(effective_target_worktree)
+        effective_worktree = effective_target_worktree
     return ClaimRecord(
         agent=agent,
         claimed_at=claimed_at,

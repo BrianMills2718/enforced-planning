@@ -22,6 +22,7 @@ from enforced_planning import (
     coordination_claims,
     coordination_messages,
     outcome_admission,
+    prewrite_claim_fast,
     prewrite_claim_projection,
     session_contracts,
     session_lifecycle,
@@ -70,6 +71,45 @@ def _archived_claim_payload(archive_id: str) -> dict[str, object]:
     payload = yaml.safe_load(base64.b64decode(matches[0].source_yaml_bytes))
     assert isinstance(payload, dict)
     return payload
+
+
+def _claim_owner(*, agent: str, project: str, scope: str) -> str:
+    """Resolve the fixture's current actor without weakening the production guard."""
+
+    claim, _path, _status = session_lifecycle._claim_record_any_status(
+        agent=agent,
+        project=project,
+        scope=scope,
+    )
+    return claim.session_id
+
+
+def _finish_session_as_owner(**kwargs: object) -> dict[str, object]:
+    return session_lifecycle.finish_session(
+        actor_session_id=_claim_owner(**{key: str(kwargs[key]) for key in ("agent", "project", "scope")}),
+        **kwargs,
+    )
+
+
+def _close_session_as_owner(**kwargs: object) -> dict[str, object]:
+    return session_lifecycle.close_session(
+        actor_session_id=_claim_owner(**{key: str(kwargs[key]) for key in ("agent", "project", "scope")}),
+        **kwargs,
+    )
+
+
+def _handoff_session_as_owner(**kwargs: object) -> dict[str, object]:
+    return session_lifecycle.handoff_session(
+        actor_session_id=_claim_owner(**{key: str(kwargs[key]) for key in ("agent", "project", "scope")}),
+        **kwargs,
+    )
+
+
+def _abandon_session_as_owner(**kwargs: object) -> dict[str, object]:
+    return session_lifecycle.abandon_session(
+        actor_session_id=_claim_owner(**{key: str(kwargs[key]) for key in ("agent", "project", "scope")}),
+        **kwargs,
+    )
 
 
 def test_session_narrow_json_deny_narrow_admit_journey(
@@ -629,6 +669,7 @@ def test_configured_session_start_defers_only_tracker_creation_until_selection(
             branch="staged-lane",
             session_id="codex:staged-owner",
             tracker_dir=trackers_dir,
+            outcome_selected=True,
             outcome_admission_receipt_path=receipt_path,
         )
 
@@ -1748,6 +1789,60 @@ def test_heartbeat_session_updates_tracker_phase(tmp_path: Path, monkeypatch: py
     assert tracker_payload["timestamps"]["updated_at"] == payload["heartbeat_at"]
 
 
+def test_unplanned_program_owner_heartbeat_is_liveness_not_outcome_admission(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An exact owner can stay live without claiming a selected outcome."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    worktree = tmp_path / "worktree"
+    worktree.mkdir()
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    session_lifecycle.start_session(
+        agent="codex",
+        project="enforced-planning",
+        scope="unplanned-heartbeat",
+        intent="repair lifecycle liveness",
+        repo_root=str(tmp_path),
+        worktree_path=str(worktree),
+        branch="unplanned-heartbeat",
+        broader_goal="Lifecycle Liveness",
+        current_phase="fixture setup",
+        allow_unplanned=True,
+        session_id="codex:owner-runtime",
+        tracker_dir=trackers_dir,
+    )
+    (worktree / "meta-process.yaml").write_text(
+        "meta_process:\n  claims:\n    outcome_admission_mode: enforce_selected\n",
+        encoding="utf-8",
+    )
+
+    payload = session_lifecycle.heartbeat_session(
+        agent="codex",
+        project="enforced-planning",
+        scope="unplanned-heartbeat",
+        session_id="codex:owner-runtime",
+        current_phase="active repair",
+    )
+    claim_path = claims_dir / "codex_enforced-planning_unplanned-heartbeat.yaml"
+    owner_bytes = claim_path.read_bytes()
+    monkeypatch.setenv("CODEX_THREAD_ID", "foreign-runtime")
+
+    with pytest.raises(ValueError, match="does not match the current codex runtime"):
+        session_lifecycle.heartbeat_session(
+            agent="codex",
+            project="enforced-planning",
+            scope="unplanned-heartbeat",
+            session_id="codex:owner-runtime",
+        )
+
+    assert payload["updated_count"] == 1
+    assert payload["outcome_admission_receipts"] == []
+    assert claim_path.read_bytes() == owner_bytes
+
+
 def test_heartbeat_session_rejects_zero_matching_claims(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -1821,7 +1916,7 @@ def test_finish_session_blocks_dirty_cleanup_without_handoff(
     monkeypatch.setattr(session_lifecycle.subprocess, "run", _fake_run)
 
     with pytest.raises(ValueError, match="Worktree is dirty"):
-        session_lifecycle.finish_session(
+        _finish_session_as_owner(
             agent="codex",
             project="enforced-planning",
             scope="plan-31-session-cli-enforcement",
@@ -1867,7 +1962,7 @@ def test_finish_session_dirty_handoff_refreshes_projection(
 
     monkeypatch.setattr(session_lifecycle.subprocess, "run", _fake_run)
 
-    payload = session_lifecycle.finish_session(
+    payload = _finish_session_as_owner(
         agent="codex",
         project="enforced-planning",
         scope="plan-31-session-cli-enforcement",
@@ -1920,7 +2015,7 @@ def test_finish_session_rejects_clean_managed_worktree_bypass(
     monkeypatch.setattr(session_lifecycle.subprocess, "run", _fake_run)
 
     with pytest.raises(ValueError, match="use session-close"):
-        session_lifecycle.finish_session(
+        _finish_session_as_owner(
             agent="codex",
             project="enforced-planning",
             scope="plan-31-session-cli-enforcement",
@@ -1976,7 +2071,7 @@ def test_close_session_rejects_clean_unmerged_branch_before_mutation(
     )
 
     with pytest.raises(ValueError, match="not integrated"):
-        session_lifecycle.close_session(
+        _close_session_as_owner(
             agent="codex",
             project="enforced-planning",
             scope=branch,
@@ -2009,7 +2104,7 @@ def test_close_session_closes_branch_merged_to_default(
     )
     _git(repo_root, "merge", "--no-ff", branch, "-m", "merge feature")
 
-    payload = session_lifecycle.close_session(
+    payload = _close_session_as_owner(
         agent="codex",
         project="enforced-planning",
         scope=branch,
@@ -2064,7 +2159,7 @@ def test_close_session_rejects_active_mailbox_message_before_mutation(
     message_id = _send_active_closeout_message(claims_dir=claims_dir, recipient_session_id="codex:test-session")
 
     with pytest.raises(ValueError, match="active mailbox message"):
-        session_lifecycle.close_session(agent="codex", project="enforced-planning", scope=branch)
+        _close_session_as_owner(agent="codex", project="enforced-planning", scope=branch)
 
     assert worktree.exists()
     assert _git(repo_root, "show-ref", "--verify", f"refs/heads/{branch}")
@@ -2095,7 +2190,7 @@ def test_close_session_records_explicit_mailbox_deferral(
     _git(repo_root, "merge", "--no-ff", branch, "-m", "merge feature")
     message_id = _send_active_closeout_message(claims_dir=claims_dir, recipient_session_id="codex:test-session")
 
-    payload = session_lifecycle.close_session(
+    payload = _close_session_as_owner(
         agent="codex",
         project="enforced-planning",
         scope=branch,
@@ -2160,7 +2255,7 @@ def test_close_session_rejects_live_sibling_claim_on_same_worktree_before_cleanu
     _git(repo_root, "merge", "--no-ff", branch, "-m", "merge feature")
 
     with pytest.raises(ValueError, match="sibling-review"):
-        session_lifecycle.close_session(
+        _close_session_as_owner(
             agent="codex",
             project="enforced-planning",
             scope=branch,
@@ -2192,7 +2287,7 @@ def test_close_session_accepts_exact_squash_merge_patch_receipt(
     _git(repo_root, "commit", "-m", "squash merge feature")
     merge_commit = _git(repo_root, "rev-parse", "HEAD")
 
-    payload = session_lifecycle.close_session(
+    payload = _close_session_as_owner(
         agent="codex",
         project="enforced-planning",
         scope=branch,
@@ -2273,7 +2368,7 @@ def test_close_session_accepts_squash_patch_after_independent_same_file_change(
     _git(repo_root, "commit", "-m", "squash merge feature after main advanced")
     merge_commit = _git(repo_root, "rev-parse", "HEAD")
 
-    payload = session_lifecycle.close_session(
+    payload = _close_session_as_owner(
         agent="codex",
         project="enforced-planning",
         scope=branch,
@@ -2311,7 +2406,7 @@ def test_close_session_rejects_unrelated_commit_as_squash_receipt(
     unrelated_commit = _git(repo_root, "rev-parse", "HEAD")
 
     with pytest.raises(ValueError, match="not integrated"):
-        session_lifecycle.close_session(
+        _close_session_as_owner(
             agent="codex",
             project="enforced-planning",
             scope=branch,
@@ -2346,7 +2441,7 @@ def test_close_session_accepts_branch_merged_to_remote_default_when_local_defaul
         f"refs/heads/{branch}",
     )
 
-    payload = session_lifecycle.close_session(
+    payload = _close_session_as_owner(
         agent="codex",
         project="enforced-planning",
         scope=branch,
@@ -2392,7 +2487,7 @@ def test_close_session_deletes_merged_branch_with_stale_feature_upstream(
     _git(repo_root, "config", f"branch.{branch}.remote", "origin")
     _git(repo_root, "config", f"branch.{branch}.merge", f"refs/heads/{branch}")
 
-    payload = session_lifecycle.close_session(
+    payload = _close_session_as_owner(
         agent="codex",
         project="enforced-planning",
         scope=branch,
@@ -2435,7 +2530,7 @@ def test_close_session_rejects_unpushed_default_branch_before_mutation(
     _git(repo_root, "merge", "--no-ff", branch, "-m", "merge feature")
 
     with pytest.raises(ValueError, match="Push the default branch before closeout"):
-        session_lifecycle.close_session(
+        _close_session_as_owner(
             agent="codex",
             project="enforced-planning",
             scope=branch,
@@ -2443,7 +2538,7 @@ def test_close_session_rejects_unpushed_default_branch_before_mutation(
     assert worktree.exists()
 
     _git(repo_root, "update-ref", remote_default_ref, "refs/heads/main")
-    payload = session_lifecycle.close_session(
+    payload = _close_session_as_owner(
         agent="codex",
         project="enforced-planning",
         scope=branch,
@@ -2467,7 +2562,7 @@ def test_close_session_accepts_branch_merged_to_pushed_remote_default_when_local
     _git(repo_root, "update-ref", "refs/remotes/origin/main", "refs/heads/main")
     _git(repo_root, "reset", "--hard", stale_main)
 
-    payload = session_lifecycle.close_session(agent="codex", project="enforced-planning", scope=branch)
+    payload = _close_session_as_owner(agent="codex", project="enforced-planning", scope=branch)
 
     assert payload["merged_to_default"] is True
     assert payload["default_branch_pushed"] is True
@@ -2492,7 +2587,7 @@ def test_close_session_accepts_remote_merged_branch_when_local_default_diverges(
     _git(repo_root, "update-ref", "refs/remotes/origin/main", f"refs/heads/{branch}")
     _git(repo_root, "update-ref", "refs/heads/main", divergent_main)
 
-    payload = session_lifecycle.close_session(agent="codex", project="enforced-planning", scope=branch)
+    payload = _close_session_as_owner(agent="codex", project="enforced-planning", scope=branch)
 
     assert payload["merged_to_default"] is True
     assert payload["default_branch_pushed"] is False
@@ -2521,7 +2616,7 @@ def test_close_session_keeps_canonical_root_after_worktree_removal(
     claim_payload.pop("repo_root")
     claim_file.write_text(yaml.safe_dump(claim_payload, sort_keys=False), encoding="utf-8")
 
-    payload = session_lifecycle.close_session(
+    payload = _close_session_as_owner(
         agent="codex",
         project="enforced-planning",
         scope=branch,
@@ -2559,7 +2654,7 @@ def test_close_session_recovers_from_stale_repo_root_using_recorded_worktree(
     claim_payload["status"] = "closing"
     claim_file.write_text(yaml.safe_dump(claim_payload, sort_keys=False), encoding="utf-8")
 
-    payload = session_lifecycle.close_session(
+    payload = _close_session_as_owner(
         agent="codex",
         project="enforced-planning",
         scope=branch,
@@ -2597,7 +2692,7 @@ def test_close_session_reanchors_inside_worktree_cwd_before_removal(
     tracker_path = Path(original_claim["tracker_path"])
     monkeypatch.chdir(worktree)
 
-    payload = session_lifecycle.close_session(
+    payload = _close_session_as_owner(
         agent="codex",
         project="enforced-planning",
         scope=branch,
@@ -2640,7 +2735,7 @@ def test_close_session_fails_before_registry_mutation_when_ignored_directory_is_
 
     try:
         with pytest.raises(PermissionError, match="before Git registry mutation"):
-            session_lifecycle.close_session(
+            _close_session_as_owner(
                 agent="codex",
                 project="enforced-planning",
                 scope=branch,
@@ -2681,7 +2776,7 @@ def test_close_session_resolves_missing_nested_worktree_repo_root(
     _git(repo_root, "merge", "--no-ff", branch, "-m", "merge nested feature")
     _git(repo_root, "worktree", "remove", str(worktree))
 
-    payload = session_lifecycle.close_session(
+    payload = _close_session_as_owner(
         agent="codex",
         project="enforced-planning",
         scope=branch,
@@ -2726,7 +2821,7 @@ def test_close_session_records_receipt_after_removing_loaded_runtime_worktree(
     monkeypatch.setattr(coordination_claims, "_LOADED_WRITER_IDENTITY", loaded_identity)
     _git(repo_root, "merge", "--no-ff", branch, "-m", "merge feature")
 
-    payload = session_lifecycle.close_session(
+    payload = _close_session_as_owner(
         agent="codex",
         project="enforced-planning",
         scope=branch,
@@ -2777,7 +2872,7 @@ def test_close_session_reconciles_exact_session_ended_missing_worktree(
     tracker = Path(claim_before["tracker_path"])
     digest = session_lifecycle._tracker_sha256(tracker)
 
-    payload = session_lifecycle.close_session(
+    payload = _close_session_as_owner(
         agent="codex",
         project="enforced-planning",
         scope=branch,
@@ -2871,7 +2966,7 @@ def test_close_session_archives_session_ended_canonical_root_without_removal(
     monkeypatch.setattr(session_lifecycle, "_remove_worktree_path", fail_remove)
     monkeypatch.setattr(session_lifecycle, "_delete_branch", fail_delete)
 
-    payload = session_lifecycle.close_session(
+    payload = _close_session_as_owner(
         agent="codex",
         project="inside-success-mega",
         scope=branch,
@@ -2967,7 +3062,7 @@ def test_close_session_canonical_root_reconciliation_rejects_before_mutation(
         (repo_root / "uncommitted.txt").write_text("preserve me\n", encoding="utf-8")
 
     with pytest.raises(ValueError, match=expected):
-        session_lifecycle.close_session(
+        _close_session_as_owner(
             agent="codex",
             project="inside-success-mega",
             scope=branch,
@@ -3026,7 +3121,7 @@ def test_close_session_missing_worktree_reconciliation_rejects_before_mutation(
         expected_digest = "0" * 64
 
     with pytest.raises(ValueError):
-        session_lifecycle.close_session(
+        _close_session_as_owner(
             agent="codex",
             project="enforced-planning",
             scope=branch,
@@ -3059,7 +3154,7 @@ def test_close_session_rejects_unknown_disposition(
     )
 
     with pytest.raises(ValueError, match="Unsupported worktree disposition"):
-        session_lifecycle.close_session(
+        _close_session_as_owner(
             agent="codex",
             project="enforced-planning",
             scope=branch,
@@ -3088,7 +3183,7 @@ def test_close_session_archives_unique_branch_with_durable_recovery_ref(
     recovery_ref = f"refs/remotes/origin/{branch}"
     _git(repo_root, "update-ref", recovery_ref, f"refs/heads/{branch}")
 
-    payload = session_lifecycle.close_session(
+    payload = _close_session_as_owner(
         agent="codex",
         project="enforced-planning",
         scope=branch,
@@ -3124,7 +3219,7 @@ def test_close_session_requires_durable_ref_for_retained_unique_commits(
     )
 
     with pytest.raises(ValueError, match="requires --recovery-ref"):
-        session_lifecycle.close_session(
+        _close_session_as_owner(
             agent="codex",
             project="enforced-planning",
             scope=branch,
@@ -3153,7 +3248,7 @@ def test_close_session_requires_explicit_unique_discard_authorization(
     )
 
     with pytest.raises(ValueError, match="requires --allow-discard-unique"):
-        session_lifecycle.close_session(
+        _close_session_as_owner(
             agent="codex",
             project="enforced-planning",
             scope=branch,
@@ -3181,7 +3276,7 @@ def test_close_session_abandons_unique_branch_only_with_explicit_authorization(
         trackers_dir=trackers_dir,
     )
 
-    payload = session_lifecycle.close_session(
+    payload = _close_session_as_owner(
         agent="codex",
         project="enforced-planning",
         scope=branch,
@@ -3246,7 +3341,7 @@ def test_close_session_refuses_merged_disposition_when_worktree_and_branch_are_m
     monkeypatch.setattr(session_lifecycle.subprocess, "run", _fake_run)
 
     with pytest.raises(ValueError, match="integration.*cannot be proven"):
-        session_lifecycle.close_session(
+        _close_session_as_owner(
             agent="codex",
             project="enforced-planning",
             scope="plan-42-atomic-closeout",
@@ -3286,7 +3381,7 @@ def test_close_session_recovers_exact_tracker_after_claim_refresh_lost_path(
     claim_file.write_text(yaml.safe_dump(refreshed_claim, sort_keys=False), encoding="utf-8")
     _git(repo_root, "merge", "--no-ff", branch, "-m", "merge feature")
 
-    payload = session_lifecycle.close_session(
+    payload = _close_session_as_owner(
         agent="codex",
         project="enforced-planning",
         scope=branch,
@@ -3367,7 +3462,7 @@ def test_handoff_session_marks_lane_for_resume(
     before_handoff = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
     progress_before = {field: before_handoff.get(field) for field in coordination_claims.PROGRESS_FIELD_NAMES}
 
-    payload = session_lifecycle.handoff_session(
+    payload = _handoff_session_as_owner(
         agent="codex",
         project="enforced-planning",
         scope="plan-37-session-recovery",
@@ -3383,6 +3478,47 @@ def test_handoff_session_marks_lane_for_resume(
     assert tracker_payload["tracker"]["current_phase"] == "handoff required"
     assert {field: after_handoff.get(field) for field in coordination_claims.PROGRESS_FIELD_NAMES} == progress_before
     assert prewrite_claim_projection.projection_is_current(claims_dir=claims_dir)
+
+
+def test_foreign_runtime_cannot_handoff_claim_owner_lane(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A terminal lifecycle writer must prove it is the claim's exact actor."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    worktree = tmp_path / "worktree"
+    worktree.mkdir()
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    session_lifecycle.start_session(
+        agent="codex",
+        project="enforced-planning",
+        scope="actor-guard",
+        intent="prove foreign lifecycle denial",
+        repo_root=str(tmp_path),
+        worktree_path=str(worktree),
+        branch="actor-guard",
+        broader_goal="Actor Guard",
+        current_phase="fixture setup",
+        plan_ref="UNPLANNED",
+        session_id="codex:owner-runtime",
+        tracker_dir=trackers_dir,
+    )
+    claim_path = claims_dir / "codex_enforced-planning_actor-guard.yaml"
+    claim_before = claim_path.read_bytes()
+    monkeypatch.setenv("CODEX_THREAD_ID", "foreign-runtime")
+
+    with pytest.raises(ValueError, match="does not match the current codex runtime"):
+        session_lifecycle.handoff_session(
+            agent="codex",
+            project="enforced-planning",
+            scope="actor-guard",
+            note="foreign mutation attempt",
+            actor_session_id="codex:owner-runtime",
+        )
+
+    assert claim_path.read_bytes() == claim_before
 
 
 def test_resume_session_rebinds_stale_or_handoff_lane(
@@ -3416,7 +3552,7 @@ def test_resume_session_rebinds_stale_or_handoff_lane(
         field: yaml.safe_load(claim_path.read_text(encoding="utf-8")).get(field)
         for field in coordination_claims.PROGRESS_FIELD_NAMES
     }
-    session_lifecycle.handoff_session(
+    _handoff_session_as_owner(
         agent="codex",
         project="enforced-planning",
         scope="plan-37-session-recovery",
@@ -3456,8 +3592,68 @@ def test_resume_session_rebinds_stale_or_handoff_lane(
     assert status_payload["sessions"][0]["claim_status"] == "active"
     assert status_payload["sessions"][0]["recovery_action"] == "continue"
     assert tracker_payload["tracker"]["current_phase"] == "fresh runtime resumed"
+    assert tracker_payload["claim"]["session_id"] == "codex:new-session"
     assert {field: resumed_claim.get(field) for field in coordination_claims.PROGRESS_FIELD_NAMES} == progress_before
     assert prewrite_claim_projection.projection_is_current(claims_dir=claims_dir)
+
+
+def test_resume_rolls_back_claim_and_tracker_when_tracker_write_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ordinary cross-runtime resume is exact-byte atomic across both authorities."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    worktree = tmp_path / "worktree"
+    worktree.mkdir()
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    started = session_lifecycle.start_session(
+        agent="codex",
+        project="enforced-planning",
+        scope="resume-rollback",
+        intent="exercise resume rollback",
+        repo_root=str(tmp_path),
+        worktree_path=str(worktree),
+        branch="resume-rollback",
+        broader_goal="Resume Rollback",
+        current_phase="fixture setup",
+        plan_ref="UNPLANNED",
+        session_id="codex:old-session",
+        tracker_dir=trackers_dir,
+    )
+    _handoff_session_as_owner(
+        agent="codex",
+        project="enforced-planning",
+        scope="resume-rollback",
+        note="transfer fixture",
+    )
+    claim_path = claims_dir / "codex_enforced-planning_resume-rollback.yaml"
+    tracker_path = Path(started["tracker_path"])
+    projection_path = prewrite_claim_fast.projection_path_for(claims_dir)
+    before = (claim_path.read_bytes(), tracker_path.read_bytes())
+    monkeypatch.setattr(
+        session_contracts,
+        "_atomic_write_session_tracker",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(OSError("injected tracker failure")),
+    )
+
+    with pytest.raises(OSError, match="injected tracker failure"):
+        session_lifecycle.resume_session(
+            agent="codex",
+            project="enforced-planning",
+            scope="resume-rollback",
+            worktree_path=str(worktree),
+            branch="resume-rollback",
+            current_phase="new runtime",
+            session_id="codex:new-session",
+        )
+
+    assert (claim_path.read_bytes(), tracker_path.read_bytes()) == before
+    assert prewrite_claim_projection.projection_is_current(
+        claims_dir=claims_dir,
+        projection_path=projection_path,
+    )
 
 
 @pytest.mark.parametrize("claim_status", ["active", "blocked"])
@@ -3605,7 +3801,7 @@ def test_abandon_session_removes_lane_from_live_status(
         tracker_dir=trackers_dir,
     )
 
-    payload = session_lifecycle.abandon_session(
+    payload = _abandon_session_as_owner(
         agent="codex",
         project="enforced-planning",
         scope="plan-37-session-recovery",

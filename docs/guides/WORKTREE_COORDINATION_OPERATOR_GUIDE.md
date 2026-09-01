@@ -92,9 +92,10 @@ repository-relative paths, for example `["scripts/adapter.py", "tests/test_adapt
 Omitting it requests the legacy-looking `["."]` scope, but new maintenance
 bootstraps persist that scope as typed `bootstrap` custody: the real target is
 available for instruction/read context while ordinary repository mutations are
-denied. During that restricted state, lifecycle cleanup resolves the physical
-worktree from the recorded bootstrap target rather than the non-authorizing
-sentinel used by the pre-write projection. The owning native session must run
+denied. The canonical claim and tracker always retain the same physical
+worktree identity; only the derived pre-write projection substitutes a
+non-authorizing sentinel while bootstrap authority is disabled. The owning
+native session must run
 `make session-narrow` with explicit descendant `SESSION_WRITE_PATHS` before its
 first repository write. A Project-Graph-registered repository that does not
 install the Make target may invoke the canonical absolute `session_narrow.py`
@@ -153,7 +154,8 @@ decisions.
 owns a live claim. Two Codex windows are therefore two writers even though both
 claims say `agent: codex`. A live `agent + project + scope` slot may be refreshed
 only by its exact owning session. A different session must use sanctioned
-handoff/session-end plus session-resume, or close the lane; claim creation fails
+handoff/session-end plus session-resume before it may hand off, abandon, finish,
+or close the lane; claim creation fails
 without changing the claim or its derived projection.
 
 A successful cross-session `session-resume` also writes one immutable
@@ -163,8 +165,9 @@ worktree, branch, predecessor and successor sessions, transfer time, and exact
 pre/post claim bytes. Downstream execution cursors may consume that receipt to
 move their own lease without treating prose or a session ID alone as transfer
 authority. Same-runtime resume returns no custody-transfer receipt. If receipt
-persistence fails after claim custody changes, resume fails visibly as an
-incomplete transfer instead of claiming a fully evidenced handoff.
+persistence or tracker replacement fails after claim custody changes, resume
+restores the exact predecessor claim and tracker bytes before failing. It never
+reports a successor while those two authorities disagree.
 
 The legacy `~/.claude/coordination/active-work-registry.yaml` and tracked
 `generated/runtime/active_work_registry.*` files may survive as compatibility,
@@ -1041,7 +1044,9 @@ Canonical lifecycle commands:
 - `session-heartbeat`: refresh the lease and tracker timestamp
 - `session-narrow`: atomically replace a claim's write paths with a strict
   owner/session-bound subset without renewing its heartbeat or expiry
-- `session-status`: show live sessions derived from claims plus trackers
+- `session-status`: show live sessions derived from claims plus trackers;
+  missing Codex display-index metadata is reported separately and never
+  overrides independent heartbeat, progress, hook, or runtime evidence
 - `session-end`: detach a terminating runtime from all of its exact-session
   claims without deleting branches, worktrees, trackers, or Git objects
 - `session-finish`: record an explicit dirty handoff; a clean managed lane must
@@ -1057,6 +1062,11 @@ Canonical lifecycle commands:
 - `session-handoff`: intentionally pause or transfer work with a durable note
 - `session-abandon`: explicitly mark a dead lane as abandoned instead of
   leaving it stale forever
+
+Every terminal mutation (`session-finish`, `session-close`, `session-handoff`,
+and `session-abandon`) is bound to the exact claim-owning native session. A
+foreign runtime must first use `session-resume`; supplying the predecessor's ID
+does not impersonate it when the client exposes a different native identity.
 
 Human-facing services have a separate but connected runtime lifecycle:
 

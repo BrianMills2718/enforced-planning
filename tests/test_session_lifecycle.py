@@ -212,6 +212,6 @@ def test_bootstrap_closeout_resolves_real_target_instead_of_authority_sentinel(
         session_id="codex:bootstrap-closeout",
     )
 
-    assert claim.worktree_path == str(sentinel)
+    assert claim.worktree_path == str(target)
     assert session_lifecycle._resolve_closeout_worktree_path(claim, None) == target
     assert session_lifecycle._resolve_closeout_worktree_path(claim, str(target)) == target

@@ -35,6 +35,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--agent", required=True)
     parser.add_argument("--project", required=True)
     parser.add_argument("--scope", required=True)
+    parser.add_argument("--session-id")
     parser.add_argument("--note", required=True)
     parser.add_argument("--current-phase", default="handoff required")
     parser.add_argument("--json", action="store_true")
@@ -49,6 +50,7 @@ def main(argv: list[str] | None = None) -> int:
         scope=args.scope,
         note=args.note,
         current_phase=args.current_phase,
+        actor_session_id=args.session_id,
     )
     if args.json:
         print(json.dumps(payload, indent=2, sort_keys=True))

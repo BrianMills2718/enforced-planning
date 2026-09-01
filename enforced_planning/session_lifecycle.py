@@ -561,8 +561,25 @@ def _persist_claim_session_transfer_receipt(
         if receipt_path.read_bytes() != canonical:
             raise ValueError(f"Claim custody receipt collision at {receipt_path}")
     else:
-        _atomic_restore_bytes(receipt_path, canonical)
-        os.chmod(receipt_path, 0o600)
+        receipt_root.mkdir(parents=True, exist_ok=True, mode=0o700)
+        temp_path: Path | None = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                "wb",
+                dir=receipt_root,
+                prefix=f".{receipt_path.name}.",
+                suffix=".tmp",
+                delete=False,
+            ) as handle:
+                temp_path = Path(handle.name)
+                handle.write(canonical)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.chmod(temp_path, 0o600)
+            os.replace(temp_path, receipt_path)
+        finally:
+            if temp_path is not None and temp_path.exists():
+                temp_path.unlink()
     return {
         "receipt": payload,
         "receipt_path": str(receipt_path),
@@ -627,6 +644,11 @@ def _apply_claim_payload_updates(
                 raise ValueError(
                     f"Claim at {claim_file} changed while preparing {operation}; retry from current ownership state"
                 )
+        if claim.broad_scope_mode == "bootstrap" and claim.target_worktree_path:
+            # Legacy bootstrap records stored the authorization sentinel as
+            # canonical identity. Any sanctioned mutation migrates that raw
+            # record to the physical identity already exposed by normalization.
+            current["worktree_path"] = claim.target_worktree_path
         current.update(updates)
         _projection_path, projection_digest_after = _write_claim_and_refresh_projection(
             claim_file, current, coordination_claims.CLAIMS_DIR
@@ -1143,6 +1165,26 @@ def _claim_status(claim: coordination_claims.ClaimRecord) -> str:
     return claim.status
 
 
+def _require_claim_actor(
+    claim: coordination_claims.ClaimRecord,
+    *,
+    actor_session_id: str | None,
+) -> str:
+    """Require the exact native actor before a lane lifecycle mutation."""
+
+    resolved = coordination_claims.resolve_session_id(claim.agent, actor_session_id)
+    if not resolved:
+        raise ValueError("lifecycle mutation requires an exact actor_session_id")
+    coordination_claims.validate_native_session_binding(claim.agent, resolved)
+    if claim.session_id != resolved:
+        raise ValueError(
+            f"claim {claim.primary_project()}:{claim.scope} belongs to session "
+            f"{claim.session_id or '<missing>'}, not actor {resolved}; use sanctioned "
+            "session-resume before mutating another runtime's lane"
+        )
+    return resolved
+
+
 def _recovery_action_for_claim(
     claim: coordination_claims.ClaimRecord,
     *,
@@ -1596,7 +1638,10 @@ def start_session(
     coordination_claims.validate_native_session_binding(agent, resolved_session_id)
     configured_outcome_mode = outcome_admission.load_outcome_admission_mode(Path(worktree_path))
     explicit_unplanned_maintenance = (
-        allow_unplanned and not plan_ref and outcome_bootstrap_plan is None and not outcome_selected
+        allow_unplanned
+        and plan_ref in {None, session_contracts.UNPLANNED_PLAN_REF}
+        and outcome_bootstrap_plan is None
+        and not outcome_selected
     )
     selected_admission_required = outcome_selected or (
         configured_outcome_mode == "enforce_selected" and not explicit_unplanned_maintenance
@@ -1872,10 +1917,11 @@ def heartbeat_session(
     admitted_session_id = session_id
     selected_claims: list[coordination_claims.ClaimRecord] = []
     candidate_session_id = coordination_claims.resolve_session_id(agent, session_id)
-    if outcome_selected and not candidate_session_id:
-        raise ValueError("Unable to resolve a session ID for selected outcome heartbeat admission")
-    if candidate_session_id:
-        matching_claims = [
+    if not candidate_session_id:
+        raise ValueError("Unable to resolve a session ID for heartbeat ownership")
+    coordination_claims.validate_native_session_binding(agent, candidate_session_id)
+    if outcome_selected:
+        selected_claims = [
             claim
             for claim in _iter_matching_live_claims(
                 agent=agent,
@@ -1885,16 +1931,6 @@ def heartbeat_session(
             )
             if claim.session_id == candidate_session_id
         ]
-        if outcome_selected:
-            selected_claims = matching_claims
-        else:
-            selected_claims = [
-                claim
-                for claim in matching_claims
-                if (claim.worktree_path or claim.repo_root)
-                and outcome_admission.load_outcome_admission_mode(Path(str(claim.worktree_path or claim.repo_root)))
-                == "enforce_selected"
-            ]
     if selected_claims:
         admitted_session_id = candidate_session_id
         assert admitted_session_id is not None
@@ -2164,10 +2200,12 @@ def finish_session(
     note: str | None = None,
     release_claim: bool = False,
     allow_dirty_handoff: bool = False,
+    actor_session_id: str | None = None,
 ) -> dict[str, Any]:
     """Close out one session or fail loud if the worktree state is unsafe."""
 
     claim = _single_matching_live_claim(agent=agent, project=project, scope=scope)
+    _require_claim_actor(claim, actor_session_id=actor_session_id)
 
     clean, dirty_details = _worktree_is_clean(worktree_path)
     updated_at = datetime.now(timezone.utc).isoformat()
@@ -2254,6 +2292,7 @@ def close_session(
     expected_claim_sha256: str | None = None,
     mailbox_disposition: str | None = None,
     mailbox_note: str | None = None,
+    actor_session_id: str | None = None,
 ) -> dict[str, Any]:
     """Finish, clean up, and release one claimed lane as a single sanctioned flow.
 
@@ -2263,6 +2302,7 @@ def close_session(
     """
 
     claim, payload, claim_file = _claim_record_any_status(agent=agent, project=project, scope=scope)
+    _require_claim_actor(claim, actor_session_id=actor_session_id)
     if reconcile_missing_worktree and reconcile_canonical_root:
         raise ValueError("Choose only one reconciliation mode per session-close invocation.")
     mailbox_closeout = _resolve_active_mailbox_for_closeout(
@@ -2479,6 +2519,7 @@ def resume_session(
     resolved_session_id = coordination_claims.resolve_session_id(agent, session_id)
     if not resolved_session_id:
         raise ValueError("Unable to resolve a session ID for session-resume.")
+    coordination_claims.validate_native_session_binding(agent, resolved_session_id)
 
     same_runtime = claim.session_id == resolved_session_id
     explicitly_transferable = claim.status in {
@@ -2498,15 +2539,20 @@ def resume_session(
     transfer_preflight: outcome_selection.PreparedOutcomeSessionTransfer | None = None
     claim_bytes_before: bytes | None = None
     tracker_bytes_before: bytes | None = None
+    tracker_path_text = claim.tracker_path
+    tracker_path = Path(tracker_path_text).expanduser() if tracker_path_text else None
     if not same_runtime:
         claim_bytes_before = claim_file.read_bytes()
+        if tracker_path is None or not tracker_path.is_file():
+            raise ValueError("cross-session resume requires one existing exact session tracker")
+        tracker_bytes_before = tracker_path.read_bytes()
         transfer_preflight = outcome_selection.prepare_outcome_session_transfer(
             claim=claim,
             successor_session_id=resolved_session_id,
             transferred_at=datetime.fromisoformat(updated_at),
         )
-        if transfer_preflight is not None:
-            tracker_bytes_before = transfer_preflight.tracker_path.read_bytes()
+        if transfer_preflight is not None and transfer_preflight.tracker_path != tracker_path.resolve():
+            raise ValueError("selected outcome transfer resolved a different tracker path")
 
     expected_fields = (
         payload
@@ -2518,8 +2564,8 @@ def resume_session(
             "updated_at": claim.updated_at,
         }
     )
-    tracker_path_text = claim.tracker_path
     transfer_receipt: outcome_selection.OutcomeSessionTransferV1 | None = None
+    claim_session_transfer: dict[str, Any] | None = None
     try:
         payload = _apply_claim_payload_updates(
             claim=claim,
@@ -2549,25 +2595,55 @@ def resume_session(
                 notes=payload["notes"],
                 updated_at=updated_at,
             )
-        elif tracker_path_text:
-            path = Path(tracker_path_text).expanduser()
-            if path.exists():
+        elif tracker_path is not None:
+            if same_runtime:
                 session_contracts.update_session_tracker(
-                    path,
+                    tracker_path,
                     current_phase=current_phase,
                     notes=payload["notes"],
                     updated_at=updated_at,
                 )
+            else:
+                with session_contracts.session_tracker_lock(tracker_path):
+                    tracker_payload = session_contracts.read_session_tracker(tracker_path)
+                    tracker_claim = tracker_payload.get("claim")
+                    if not isinstance(tracker_claim, dict) or tracker_claim.get("session_id") != claim.session_id:
+                        raise ValueError("session tracker predecessor identity does not match the claim")
+                    tracker_claim["session_id"] = resolved_session_id
+                    tracker_section = tracker_payload.get("tracker")
+                    timestamps = tracker_payload.get("timestamps")
+                    if not isinstance(tracker_section, dict) or not isinstance(timestamps, dict):
+                        raise ValueError("session tracker is missing tracker or timestamps state")
+                    tracker_section["current_phase"] = current_phase
+                    tracker_section["notes"] = payload["notes"]
+                    timestamps["updated_at"] = updated_at
+                    session_contracts._atomic_write_session_tracker(tracker_path, tracker_payload)
+
+        if not same_runtime:
+            if claim_bytes_before is None:
+                raise SessionTransferIncompleteError("claim custody changed without predecessor bytes")
+            claim_session_transfer = _persist_claim_session_transfer_receipt(
+                claim=claim,
+                project=project,
+                scope=scope,
+                worktree_path=worktree_path,
+                branch=branch,
+                successor_session_id=resolved_session_id,
+                transferred_at=updated_at,
+                prior_claim_bytes=claim_bytes_before,
+                successor_claim_bytes=claim_file.read_bytes(),
+            )
     except Exception as transfer_error:
-        if transfer_preflight is None:
+        if same_runtime:
             raise
         if claim_bytes_before is None or tracker_bytes_before is None:
             raise SessionTransferIncompleteError(
-                f"selected outcome transfer failed without exact rollback evidence: transfer={transfer_error}"
+                f"session transfer failed without exact rollback evidence: transfer={transfer_error}"
             ) from transfer_error
         try:
             claim_changed = claim_file.read_bytes() != claim_bytes_before
-            tracker_changed = transfer_preflight.tracker_path.read_bytes() != tracker_bytes_before
+            assert tracker_path is not None
+            tracker_changed = tracker_path.read_bytes() != tracker_bytes_before
         except OSError as inspection_error:
             raise SessionTransferIncompleteError(
                 "selected outcome transfer failed and current state could not be inspected for rollback: "
@@ -2581,7 +2657,7 @@ def resume_session(
                 claim_file=claim_file,
                 successor_session_id=resolved_session_id,
                 claim_bytes=claim_bytes_before,
-                tracker_path=transfer_preflight.tracker_path,
+                tracker_path=tracker_path,
                 tracker_bytes=tracker_bytes_before,
             )
         except Exception as rollback_error:  # noqa: BLE001 - every rollback failure is terminal evidence
@@ -2590,30 +2666,6 @@ def resume_session(
                 f"transfer={transfer_error}; rollback={rollback_error}"
             ) from transfer_error
         raise
-
-    claim_session_transfer: dict[str, Any] | None = None
-    if not same_runtime:
-        if claim_bytes_before is None:
-            raise SessionTransferIncompleteError(
-                "claim custody changed without retained predecessor bytes"
-            )
-        try:
-            claim_session_transfer = _persist_claim_session_transfer_receipt(
-                claim=claim,
-                project=project,
-                scope=scope,
-                worktree_path=worktree_path,
-                branch=branch,
-                successor_session_id=resolved_session_id,
-                transferred_at=updated_at,
-                prior_claim_bytes=claim_bytes_before,
-                successor_claim_bytes=claim_file.read_bytes(),
-            )
-        except Exception as receipt_error:
-            raise SessionTransferIncompleteError(
-                "claim custody changed but its immutable transfer receipt could not be persisted: "
-                f"{receipt_error}"
-            ) from receipt_error
 
     return {
         "action": "resumed",
@@ -2639,10 +2691,12 @@ def handoff_session(
     scope: str,
     note: str,
     current_phase: str = "handoff required",
+    actor_session_id: str | None = None,
 ) -> dict[str, Any]:
     """Mark one live lane as intentionally handed off."""
 
     claim = _single_matching_live_claim(agent=agent, project=project, scope=scope)
+    _require_claim_actor(claim, actor_session_id=actor_session_id)
     updated_at = datetime.now(timezone.utc).isoformat()
     claim_file = _claim_path(agent, project, scope)
     payload = _load_claim_payload(agent, project, scope)
@@ -2682,10 +2736,12 @@ def abandon_session(
     project: str,
     scope: str,
     note: str,
+    actor_session_id: str | None = None,
 ) -> dict[str, Any]:
     """Mark one live lane as explicitly abandoned."""
 
     claim = _single_matching_live_claim(agent=agent, project=project, scope=scope)
+    _require_claim_actor(claim, actor_session_id=actor_session_id)
     updated_at = datetime.now(timezone.utc).isoformat()
     claim_file = _claim_path(agent, project, scope)
     payload = _load_claim_payload(agent, project, scope)

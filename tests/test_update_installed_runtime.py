@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import os
+import pwd
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
@@ -68,15 +70,85 @@ def _git_path_bytes(repo: Path, name: str) -> bytes | None:
 def test_normalize_origin_accepts_only_explicit_canonical_transports() -> None:
     expected = "github.com/BrianMills2718/enforced-planning"
     assert runtime_update._normalize_origin(
-        "git@github-personal:BrianMills2718/enforced-planning.git"
+        "https://github.com/BrianMills2718/enforced-planning.git"
     ) == expected
-    assert runtime_update._normalize_origin(
-        "ssh://git@github.com/BrianMills2718/enforced-planning.git"
-    ) == expected
-    with pytest.raises(RuntimeUpdateError, match="unsupported origin transport"):
-        runtime_update._normalize_origin(
-            "git@untrusted-alias:BrianMills2718/enforced-planning.git"
-        )
+    for origin in (
+        "git@github-personal:BrianMills2718/enforced-planning.git",
+        "ssh://git@github.com/BrianMills2718/enforced-planning.git",
+        "git@untrusted-alias:BrianMills2718/enforced-planning.git",
+    ):
+        with pytest.raises(RuntimeUpdateError, match="unsupported origin transport"):
+            runtime_update._normalize_origin(origin)
+
+
+def test_default_runtime_path_ignores_caller_codex_home(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CODEX_HOME", "/tmp/attacker-codex-home")
+
+    account_home = Path(pwd.getpwuid(os.getuid()).pw_dir)
+    assert runtime_update._default_runtime_repo() == (
+        account_home / ".codex" / "runtime" / "enforced-planning"
+    )
+
+
+def test_git_global_url_rewrite_environment_is_ignored(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, runtime, _before, after = _repos(tmp_path, monkeypatch)
+    injected_config = tmp_path / "attacker.gitconfig"
+    injected_config.write_text(
+        f'[url "file:///definitely-not-the-canonical-remote/"]\n'
+        f'\tinsteadOf = {_git(source, "config", "--local", "--get", "remote.origin.url")}\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(injected_config))
+
+    result = update_runtime(source_repo=source, runtime_repo=runtime, revision=after, write=False)
+
+    assert result["action"] == "would_update"
+    assert result["remote_main_revision"] == after
+
+
+def test_local_url_rewrite_is_denied(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, runtime, _before, after = _repos(tmp_path, monkeypatch)
+    _git(
+        runtime,
+        "config",
+        "url.file:///tmp/attacker.git.insteadOf",
+        _git(runtime, "config", "--local", "--get", "remote.origin.url"),
+    )
+
+    with pytest.raises(RuntimeUpdateError, match="must not configure URL rewrites"):
+        update_runtime(source_repo=source, runtime_repo=runtime, revision=after, write=False)
+
+
+def test_symlinked_runtime_git_directory_is_denied(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, runtime, _before, after = _repos(tmp_path, monkeypatch)
+    external_git_dir = tmp_path / "external-runtime.git-dir"
+    (runtime / ".git").rename(external_git_dir)
+    (runtime / ".git").symlink_to(external_git_dir, target_is_directory=True)
+
+    with pytest.raises(RuntimeUpdateError, match="standalone clone"):
+        update_runtime(source_repo=source, runtime_repo=runtime, revision=after, write=False)
+
+
+def test_unsupported_origin_credentials_never_enter_receipt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, runtime, _before, after = _repos(tmp_path, monkeypatch)
+    credentialed_origin = "https://token:super-secret@evil.example/repo.git"
+    _git(runtime, "remote", "set-url", "origin", credentialed_origin)
+
+    with pytest.raises(RuntimeUpdateError, match="not the canonical") as caught:
+        update_runtime(source_repo=source, runtime_repo=runtime, revision=after, write=False)
+
+    serialized = json.dumps(caught.value.receipt, sort_keys=True)
+    assert "token" not in serialized
+    assert "super-secret" not in serialized
+    assert credentialed_origin not in serialized
 
 
 def test_main_emits_structured_receipt_for_argument_denial(capsys: pytest.CaptureFixture[str]) -> None:
@@ -114,6 +186,23 @@ def test_write_fast_forwards_and_retains_exact_recovery_ref(
     assert _git(runtime, "rev-parse", "HEAD") == after
     assert _git(runtime, "rev-parse", result["recovery_ref"]) == before
     assert _git(runtime, "status", "--porcelain", "--untracked-files=all") == ""
+
+
+def test_write_migrates_exact_legacy_runtime_alias_without_dereferencing_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, runtime, before, after = _repos(tmp_path, monkeypatch)
+    _git(runtime, "remote", "set-url", "origin", runtime_update.LEGACY_RUNTIME_ORIGIN)
+
+    result = update_runtime(source_repo=source, runtime_repo=runtime, revision=after, write=True)
+
+    assert result["action"] == "updated"
+    assert result["stored_origin_before"] == "legacy_github_personal_alias"
+    assert result["stored_origin_after"] == "canonical_https"
+    assert result["origin_migration_required"] is True
+    assert _git(runtime, "config", "--local", "--get", "remote.origin.url") == runtime_update.CANONICAL_ORIGIN
+    assert _git(runtime, "rev-parse", "HEAD") == after
+    assert _git(runtime, "rev-parse", result["recovery_ref"]) == before
 
 
 def test_check_reports_update_without_mutating_refs_or_fetch_head(
@@ -173,18 +262,18 @@ def test_wrong_origin_is_denied(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
     assert _git(runtime, "rev-parse", "HEAD") == before
 
 
-def test_matching_caller_selected_wrong_origins_are_denied(
+def test_source_origin_metadata_is_not_a_trust_anchor(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     source, runtime, before, after = _repos(tmp_path, monkeypatch)
     other = tmp_path / "other.git"
     subprocess.run(["git", "init", "--bare", str(other)], check=True, capture_output=True)
     _git(source, "remote", "set-url", "origin", str(other))
-    _git(runtime, "remote", "set-url", "origin", str(other))
 
-    with pytest.raises(RuntimeUpdateError, match="source repository is not the canonical"):
-        update_runtime(source_repo=source, runtime_repo=runtime, revision=after, write=False)
+    result = update_runtime(source_repo=source, runtime_repo=runtime, revision=after, write=False)
 
+    assert result["action"] == "would_update"
+    assert result["remote_main_revision"] == after
     assert _git(runtime, "rev-parse", "HEAD") == before
 
 
@@ -351,6 +440,45 @@ def test_partial_failure_receipt_retains_recovery_ref(
     assert real_run(runtime, "rev-parse", receipt["recovery_ref"]).stdout.strip() == before
 
 
+def test_oserror_after_recovery_ref_emits_structured_partial_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, runtime, before, after = _repos(tmp_path, monkeypatch)
+    real_run = runtime_update._run
+
+    def fail_merge(
+        repo: Path,
+        *args: str,
+        check: bool = True,
+        mutating: bool = False,
+    ) -> subprocess.CompletedProcess[str]:
+        if args and args[0] == "merge":
+            raise OSError("injected operating-system failure")
+        return real_run(repo, *args, check=check, mutating=mutating)
+
+    monkeypatch.setattr(runtime_update, "_run", fail_merge)
+    with pytest.raises(RuntimeUpdateError, match="injected operating-system failure") as caught:
+        update_runtime(
+            source_repo=source,
+            runtime_repo=runtime,
+            revision=after,
+            write=True,
+            now=datetime(2026, 9, 1, 16, 35, tzinfo=UTC),
+        )
+
+    receipt = caught.value.receipt
+    assert receipt["action"] == "partial_failure"
+    assert receipt["state"] == "failed"
+    assert receipt["stage"] == "apply_update"
+    assert receipt["after_revision"] == before
+    assert receipt["recovery_ref_retained"] is True
+    assert receipt["error"] == {
+        "type": "OSError",
+        "message": "injected operating-system failure",
+    }
+    assert real_run(runtime, "rev-parse", receipt["recovery_ref"]).stdout.strip() == before
+
+
 def test_recovery_ref_collision_is_denied_without_overwrite(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -371,5 +499,7 @@ def test_recovery_ref_collision_is_denied_without_overwrite(
     assert caught.value.receipt["action"] == "partial_failure"
     assert caught.value.receipt["stage"] == "create_recovery_ref"
     assert caught.value.receipt["mutation_started"] is True
+    assert caught.value.receipt["recovery_ref"] == recovery_ref
+    assert caught.value.receipt["recovery_ref_retained"] is True
     assert _git(runtime, "rev-parse", recovery_ref) == before
     assert _git(runtime, "rev-parse", "HEAD") == before

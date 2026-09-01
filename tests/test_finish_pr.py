@@ -375,6 +375,8 @@ def test_hook_blocks_direct_merge_and_finish_command_variants() -> None:
         )
         assert result.returncode == 2, command
         assert "make finish" in result.stderr
+        if "gh pr merge" in command and command.startswith("gh pr merge"):
+            assert "canonical claim authority" in result.stderr
 
 
 def test_hook_allows_search_that_only_mentions_finish_filename() -> None:

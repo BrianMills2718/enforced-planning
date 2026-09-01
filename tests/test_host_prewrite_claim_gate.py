@@ -307,6 +307,70 @@ def test_external_observation_commands_and_safe_jq_pipelines_are_read_only(
 
 
 @pytest.mark.parametrize(
+    ("client", "raw_session", "agent"),
+    [
+        ("codex", "codex-status-fixture", "codex"),
+        ("claude-code", "claude-status-fixture", "claude-code"),
+    ],
+)
+def test_canonical_installed_session_status_payload_is_read_only_for_both_clients(
+    tmp_path: Path,
+    client: str,
+    raw_session: str,
+    agent: str,
+) -> None:
+    """The exact installed status grammar bypasses claims without opening Python."""
+
+    worktree = tmp_path / "target-worktree"
+    worktree.mkdir()
+    script = Path.home() / ".codex/runtime/enforced-planning/scripts/session_status.py"
+    command = (
+        f"/usr/bin/env -C {worktree} /usr/bin/python3 {script} "
+        f"--agent {agent} --project demo --scope lane "
+        f"--session-id {agent}:{raw_session} --include-ended --json"
+    )
+    decision = evaluate_prewrite_fast(
+        _payload(
+            cwd=tmp_path,
+            tool="Bash",
+            tool_input={"command": command},
+            session=raw_session,
+        ),
+        client=client,
+        mode="enforce",
+        claims_dir=tmp_path / "missing-claims",
+        projection_path=tmp_path / "missing-projection.json",
+        receipt_path=tmp_path / f"{client}-receipts.jsonl",
+    )
+
+    assert decision["decision"] == "allow", decision
+    assert decision["reason_code"] == "bash_read_only"
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "/usr/bin/python3 /tmp/session_status.py --json",
+        "/usr/bin/python3 -c 'print(1)'",
+        "/usr/bin/env -C relative /usr/bin/python3 /home/brian/.codex/runtime/enforced-planning/scripts/session_status.py --json",
+        "/usr/bin/env -C /tmp/evil /usr/bin/python3 /tmp/evil/scripts/meta/session_status.py --json",
+        "/usr/bin/env -C /tmp/worktree /usr/bin/python3 /home/brian/.codex/runtime/enforced-planning/scripts/session_status.py --json --json",
+        "/usr/bin/env -C /tmp/worktree /usr/bin/python3 /home/brian/.codex/runtime/enforced-planning/scripts/session_status.py --write",
+    ],
+)
+def test_session_status_lookalikes_do_not_create_generic_python_bypass(
+    tmp_path: Path,
+    command: str,
+) -> None:
+    payload = _payload(cwd=tmp_path, tool="Bash", tool_input={"command": command})
+
+    decision = _evaluate(tmp_path, payload, tmp_path / "missing-claims")
+
+    assert decision["decision"] == "deny", decision
+    assert decision["reason_code"] in {"no_exact_claim", "repository_identity_unavailable"}
+
+
+@pytest.mark.parametrize(
     "command",
     [
         "date --set=tomorrow",

@@ -544,6 +544,12 @@ def test_env_bound_python_script_is_read_input_not_external_mutation_target() ->
     assert _bash_declared_paths(command) == (".company-planning/candidate.json",)
 
 
+def test_env_bound_basename_command_retains_target_operand() -> None:
+    command = "/usr/bin/env -C /repo/worktrees/lane /usr/bin/touch README.md"
+
+    assert _bash_declared_paths(command) == ("README.md",)
+
+
 def test_git_merge_revision_is_not_misclassified_as_a_path() -> None:
     command = "git -C /repo/worktrees/lane merge --no-edit origin/main"
 
@@ -1526,7 +1532,7 @@ def test_explicit_host_mode_resolves_bash_through_one_exact_session_claim(
     payload = _payload(
         cwd=workspace,
         tool="Bash",
-        tool_input={"command": f"/usr/bin/env -C {worktree} touch generated.py"},
+        tool_input={"command": f"/usr/bin/env -C {worktree} touch src/allowed.py"},
     )
 
     code, decision = _run_cli(
@@ -1542,6 +1548,7 @@ def test_explicit_host_mode_resolves_bash_through_one_exact_session_claim(
     assert decision["decision"] == "allow", decision
     assert decision["reason_code"] == "exact_live_claim"
     assert decision["worktree_path"] == str(worktree)
+    assert decision["normalized_target_paths"] == ["src/allowed.py"]
 
 
 def test_git_launch_cwd_resolves_bash_through_different_exact_session_claim(
@@ -1553,7 +1560,7 @@ def test_git_launch_cwd_resolves_bash_through_different_exact_session_claim(
     payload = _payload(
         cwd=repo,
         tool="Bash",
-        tool_input={"command": f"/usr/bin/env -C {worktree} touch generated.py"},
+        tool_input={"command": f"/usr/bin/env -C {worktree} touch src/allowed.py"},
     )
 
     code, decision = _run_cli(
@@ -1569,6 +1576,7 @@ def test_git_launch_cwd_resolves_bash_through_different_exact_session_claim(
     assert decision["decision"] == "allow", decision
     assert decision["reason_code"] == "exact_live_claim"
     assert decision["worktree_path"] == str(worktree)
+    assert decision["normalized_target_paths"] == ["src/allowed.py"]
 
 
 def test_git_launch_cwd_accepts_quoted_shell_metacharacters_in_bound_command(
@@ -1751,7 +1759,7 @@ def test_git_launch_cwd_does_not_hide_stale_session_target_projection(
         _payload(
             cwd=repo,
             tool="Bash",
-            tool_input={"command": f"/usr/bin/env -C {worktree} touch generated.py"},
+            tool_input={"command": f"/usr/bin/env -C {worktree} touch src/allowed.py"},
         ),
         claims_dir=claims_dir,
         projection_path=tmp_path / "projection.json",
@@ -1779,7 +1787,7 @@ def test_git_launch_cwd_repairs_valid_projection_staled_by_heartbeat(
         _payload(
             cwd=repo,
             tool="Bash",
-            tool_input={"command": f"/usr/bin/env -C {worktree} touch generated.py"},
+            tool_input={"command": f"/usr/bin/env -C {worktree} touch src/allowed.py"},
         ),
         claims_dir=claims_dir,
         projection_path=tmp_path / "projection.json",
@@ -1788,6 +1796,7 @@ def test_git_launch_cwd_repairs_valid_projection_staled_by_heartbeat(
     assert code == 0
     assert decision["decision"] == "allow", decision
     assert decision["reason_code"] == "exact_live_claim"
+    assert decision["normalized_target_paths"] == ["src/allowed.py"]
 
 
 def test_git_launch_cwd_stale_projection_still_allows_provably_read_only_bash(
@@ -1827,7 +1836,7 @@ def test_git_launch_cwd_uses_claimed_repo_outcome_policy(
     payload = _payload(
         cwd=repo,
         tool="Bash",
-        tool_input={"command": f"/usr/bin/env -C {worktree} touch generated.py"},
+        tool_input={"command": f"/usr/bin/env -C {worktree} touch src/allowed.py"},
     )
 
     targeted = prewrite_claim_gate._session_bound_payload(
@@ -2110,6 +2119,27 @@ def test_bound_workspace_root_command_still_denies_path_outside_claimed_worktree
     )
     assert code == 2
     assert decision["reason_code"] == "bash_path_outside_worktree"
+
+
+def test_bound_worktree_command_denies_repo_relative_path_outside_claim(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    workspace, _repo, worktree, claims_dir, _claim_path = _fixture(tmp_path)
+    command = f"/usr/bin/env -C {worktree} touch GETTING_STARTED.md"
+    code, decision = _run_cli(
+        monkeypatch,
+        capsys,
+        tmp_path,
+        _payload(cwd=workspace, tool="Bash", tool_input={"command": command}),
+        claims_dir=claims_dir,
+        projection_path=tmp_path / "projection.json",
+    )
+
+    assert code == 2
+    assert decision["reason_code"] == "path_outside_claim"
+    assert decision["normalized_target_paths"] == ["GETTING_STARTED.md"]
 
 
 def _plan_cursor_command_fixture(

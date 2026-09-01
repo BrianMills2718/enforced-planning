@@ -411,16 +411,14 @@ def _bash_declared_paths(command: str) -> tuple[str, ...]:
 
     commands = _shell_commands(command)
     if commands is not None and len(commands) == 1:
-        git_paths = _git_declared_paths(commands[0])
+        git_paths = _git_declared_paths(_bash_effective_argv(commands[0]))
         if git_paths is not None:
             return git_paths
 
     pytest_node_paths: dict[str, str] = {}
     if commands is not None:
         for argv in commands:
-            command_tokens = list(argv)
-            if len(command_tokens) >= 4 and command_tokens[:2] == ["/usr/bin/env", "-C"]:
-                command_tokens = command_tokens[3:]
+            command_tokens = list(_bash_effective_argv(argv))
             executable = Path(command_tokens[0]).name if command_tokens else ""
             tail: list[str] = []
             if executable in {"pytest", "py.test"}:
@@ -484,11 +482,14 @@ def _bash_declared_paths(command: str) -> tuple[str, ...]:
             paths.append(candidate)
     if commands is not None:
         for argv in commands:
-            executable = Path(argv[0]).name
+            command_argv = _bash_effective_argv(argv)
+            if not command_argv:
+                continue
+            executable = Path(command_argv[0]).name
             if executable not in _BASENAME_PATH_COMMANDS:
                 continue
             after_options = False
-            for operand in argv[1:]:
+            for operand in command_argv[1:]:
                 if operand == "--":
                     after_options = True
                     continue
@@ -502,6 +503,14 @@ def _bash_declared_paths(command: str) -> tuple[str, ...]:
                 ):
                     paths.append(operand)
     return tuple(dict.fromkeys(paths))
+
+
+def _bash_effective_argv(argv: tuple[str, ...]) -> tuple[str, ...]:
+    """Return the command executed by the supported literal env cwd wrapper."""
+
+    if len(argv) >= 4 and argv[:2] == ("/usr/bin/env", "-C"):
+        return argv[3:]
+    return argv
 
 
 def _git_declared_paths(argv: tuple[str, ...]) -> tuple[str, ...] | None:

@@ -137,7 +137,7 @@ SURFACE_RUNTIME_SCRIPT := scripts/surface_runtime.py
 WORKTREE_DIR ?= $(shell $(PYTHON) "$(WORKTREE_CREATE_SCRIPT)" --repo-root . --print-default-worktree-dir)
 WORKTREE_REPO_ROOT ?= $(shell git rev-parse --path-format=absolute --git-common-dir 2>/dev/null | sed 's|/\.git$$||')
 WORKTREE_START_POINT ?= HEAD
-WORKTREE_START_REVISION := $(shell $(PYTHON) "$(WORKTREE_CREATE_SCRIPT)" --repo-root "$(WORKTREE_REPO_ROOT)" --start-point "$(WORKTREE_START_POINT)" --print-fresh-start-revision 2>/dev/null)
+WORKTREE_START_REVISION ?=
 WORKTREE_PROJECT ?= $(shell $(PYTHON) "$(WORKTREE_CREATE_SCRIPT)" --repo-root . --print-canonical-project)
 WORKTREE_AGENT ?= $(shell if [ -n "$$CODEX_THREAD_ID" ]; then printf codex; elif [ -n "$$CLAUDE_CODE_SESSION_ID" ] || [ -n "$$CLAUDE_SESSION_ID" ] || [ -n "$$CLAUDE_CODE_SSE_PORT" ]; then printf claude-code; elif [ -n "$$OPENCLAW_SESSION_ID" ] || [ -n "$$OPENCLAW_RUN_ID" ]; then printf openclaw; fi)
 SESSION_GOAL ?=
@@ -196,6 +196,7 @@ endif
 	@$(MAKE) worktree PLAN= WORKTREE_EXECUTION_PROFILE=light ALLOW_UNPLANNED=1 \
 		OUTCOME_ADMISSION_BOOTSTRAP_PLAN="$(PLAN)"
 
+worktree: WORKTREE_START_REVISION := $(shell $(PYTHON) "$(WORKTREE_CREATE_SCRIPT)" --repo-root "$(WORKTREE_REPO_ROOT)" --start-point "$(WORKTREE_START_POINT)" --print-fresh-start-revision 2>/dev/null)
 worktree:  ## Create claimed worktree (BRANCH=name TASK="..." [PLAN=N] [AGENT=name])
 ifndef BRANCH
 	$(error BRANCH is required. Usage: make worktree BRANCH=plan-42-feature TASK="Describe the task")

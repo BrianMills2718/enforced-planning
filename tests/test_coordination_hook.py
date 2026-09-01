@@ -396,7 +396,13 @@ def test_session_start_skips_heartbeat_with_large_completed_registry(monkeypatch
 def test_pretool_gate_never_heartbeats_or_rebuilds_claim_state(monkeypatch, tmp_path: Path) -> None:
     """The latency-sensitive gate must remain a projection read, not a registry write."""
 
-    monkeypatch.setattr(coordination_hook, "_active_claims", lambda *_args, **_kwargs: ())
+    monkeypatch.setattr(
+        coordination_hook,
+        "_active_claims",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("PreToolUse scanned the claim registry")
+        ),
+    )
     monkeypatch.setattr(coordination_hook, "_write_closeout_baseline", lambda **_kwargs: None)
     monkeypatch.setattr(coordination_hook, "_record_touched_repositories", lambda **_kwargs: None)
     monkeypatch.setattr(coordination_hook, "_canonical_project", lambda _cwd: "demo")

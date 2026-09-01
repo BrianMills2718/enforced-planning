@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import Any
 
 FULL_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
-URL_USERINFO_RE = re.compile(r"(?P<prefix>[A-Za-z][A-Za-z0-9+.-]*://)[^/@\s]+@")
+URL_USERINFO_RE = re.compile(r"(?P<prefix>[A-Za-z][A-Za-z0-9+.-]*://)[^@\r\n]*@")
 RECOVERY_NAMESPACE = "refs/codex-runtime-recovery"
 ZERO_OID = "0" * 40
 CANONICAL_ORIGIN = "https://github.com/BrianMills2718/enforced-planning.git"
@@ -119,6 +119,13 @@ def _observed_at(now: datetime | None = None) -> str:
     return (now or datetime.now(UTC)).astimezone(UTC).isoformat().replace("+00:00", "Z")
 
 
+def _safe_hostname() -> str:
+    try:
+        return socket.gethostname()
+    except OSError:
+        return "unavailable"
+
+
 def _base_receipt(
     *, source_repo: Path, runtime_repo: Path, revision: str, write: bool, now: datetime | None
 ) -> dict[str, Any]:
@@ -127,9 +134,9 @@ def _base_receipt(
         "action": "denied",
         "state": "checking",
         "stage": "preflight",
-        "host": socket.gethostname(),
+        "host": _safe_hostname(),
         "observed_at": _observed_at(now),
-        "source_repo": str(source_repo.resolve()),
+        "source_repo": str(source_repo.absolute()),
         "runtime_repo": str(runtime_repo.absolute()),
         "origin": None,
         "stored_origin_before": None,
@@ -235,13 +242,19 @@ def _refresh_failure_state(runtime_repo: Path, receipt: dict[str, Any]) -> None:
 def _assert_repo(path: Path, label: str) -> Path:
     if not path.is_dir() or _run(path, "rev-parse", "--is-inside-work-tree", check=False).stdout.strip() != "true":
         raise RuntimeUpdateError(f"{label} is not a Git worktree: {path}")
-    top = Path(_output(path, "rev-parse", "--show-toplevel")).resolve()
+    try:
+        top = Path(_output(path, "rev-parse", "--show-toplevel")).resolve()
+    except RuntimeError as exc:
+        raise RuntimeUpdateError(f"{label} path cannot be resolved") from exc
     if top != path:
         raise RuntimeUpdateError(f"{label} must be the exact Git worktree root: {path}")
     common = Path(_output(path, "rev-parse", "--git-common-dir"))
     if not common.is_absolute():
         common = path / common
-    return common.resolve()
+    try:
+        return common.resolve()
+    except RuntimeError as exc:
+        raise RuntimeUpdateError(f"{label} Git directory cannot be resolved") from exc
 
 
 def _assert_runtime_path_not_symlinked(runtime_repo: Path) -> None:
@@ -362,7 +375,7 @@ def update_runtime(
 ) -> dict[str, Any]:
     """Validate and optionally fast-forward one exact installed runtime clone."""
 
-    source_repo = source_repo.resolve()
+    source_repo = Path(os.path.abspath(source_repo.expanduser()))
     runtime_repo = Path(os.path.abspath(runtime_repo.expanduser()))
     receipt = _base_receipt(
         source_repo=source_repo,
@@ -372,13 +385,20 @@ def update_runtime(
         now=now,
     )
     try:
+        try:
+            source_repo = source_repo.resolve()
+        except RuntimeError as exc:
+            raise RuntimeUpdateError("source repository path cannot be resolved") from exc
         expected_runtime = Path(os.path.abspath(_canonical_runtime_repo().expanduser()))
         if runtime_repo != expected_runtime:
             raise RuntimeUpdateError(
                 f"installed runtime path must be exactly {expected_runtime}, found {runtime_repo}"
             )
         _assert_runtime_path_not_symlinked(runtime_repo)
-        runtime_repo = runtime_repo.resolve()
+        try:
+            runtime_repo = runtime_repo.resolve()
+        except RuntimeError as exc:
+            raise RuntimeUpdateError("installed runtime path cannot be resolved") from exc
         source_common_dir = _assert_repo(source_repo, "source repository")
         runtime_common_dir = _assert_repo(runtime_repo, "installed runtime")
         runtime_git_dir = runtime_repo / ".git"

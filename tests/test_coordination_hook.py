@@ -393,6 +393,100 @@ def test_session_start_skips_heartbeat_with_large_completed_registry(monkeypatch
     assert time.monotonic() - started < 1.0
 
 
+def test_startup_claims_filter_canonical_live_statuses_without_yaml_parse(
+    monkeypatch, tmp_path: Path
+) -> None:
+    claims_dir = tmp_path / "claims"
+    claims_dir.mkdir()
+    source = claims_dir / "claim.yaml"
+    source.write_text("status: active\n", encoding="utf-8")
+    claims = tuple(
+        prewrite_claim_projection.PreWriteAuthorityClaimV1(
+            agent="codex",
+            projects=("demo",),
+            scope=status,
+            claim_type="write",
+            session_id=f"codex:{status}",
+            repo_root=str(tmp_path / "demo"),
+            worktree_path=str(tmp_path / "demo" / "worktrees" / status),
+            branch=status,
+            write_paths=("src",),
+            expires_at=None,
+            heartbeat_at=None,
+            status=status,
+            source_file=str(source),
+            source_sha256="a" * 64,
+            static_issues=(),
+        )
+        for status in ("active", "blocked", "handoff", "completed")
+    )
+    projection = prewrite_claim_projection.PreWriteAuthorityProjectionV1(
+        generated_at=datetime.now(UTC),
+        claims_dir=str(claims_dir.resolve()),
+        registry_digest=prewrite_claim_fast.registry_digest(claims_dir),
+        claims=claims,
+    )
+    projection_path = prewrite_claim_fast.projection_path_for(claims_dir)
+    projection_path.write_text(projection.model_dump_json(), encoding="utf-8")
+    monkeypatch.setattr(
+        coordination_hook.coordination_claims,
+        "check_claims",
+        lambda **_kwargs: (_ for _ in ()).throw(AssertionError("startup parsed YAML registry")),
+    )
+
+    live, warning = coordination_hook._startup_claims(claims_dir)
+
+    assert warning is None
+    assert [claim.status for claim in live] == ["active", "blocked", "handoff"]
+
+
+def test_startup_claims_reject_stale_projection_without_adopting_claim(tmp_path: Path) -> None:
+    claims_dir = tmp_path / "claims"
+    claims_dir.mkdir()
+    coordination_hook.coordination_claims.refresh_prewrite_authority_projection(claims_dir)
+    time.sleep(0.002)
+    _write_live_claim(claims_dir, scope="stale-startup")
+
+    claims, warning = coordination_hook._startup_claims(claims_dir)
+
+    assert claims == ()
+    assert warning is not None
+    assert "projection is stale" in warning
+    assert "no assignment was adopted" in warning
+
+
+def test_shared_startup_labels_exact_owner_and_other_session_as_global_context() -> None:
+    def claim(agent: str, session_id: str, scope: str) -> object:
+        return type(
+            "ProjectedClaim",
+            (),
+            {
+                "agent": agent,
+                "session_id": session_id,
+                "scope": scope,
+                "status": "active",
+                "projects": ("demo",),
+            },
+        )()
+
+    claims = (
+        claim("codex", "codex:current", "owned-lane"),
+        claim("claude-code", "claude-code:other", "other-lane"),
+    )
+
+    codex = coordination_hook._startup_claim_summary(
+        agent="codex", session_id="codex:current", project="demo", claims=claims
+    )
+    claude = coordination_hook._startup_claim_summary(
+        agent="claude-code", session_id="claude-code:other", project="demo", claims=claims
+    )
+
+    assert codex is not None and "Current session ownership: project=demo; scope=owned-lane" in codex
+    assert codex is not None and "Global context (not your current work): project=demo; scope=other-lane" in codex
+    assert claude is not None and "Current session ownership: project=demo; scope=other-lane" in claude
+    assert claude is not None and "Global context (not your current work): project=demo; scope=owned-lane" in claude
+
+
 def test_pretool_gate_never_heartbeats_or_rebuilds_claim_state(monkeypatch, tmp_path: Path) -> None:
     """The latency-sensitive gate must remain a projection read, not a registry write."""
 

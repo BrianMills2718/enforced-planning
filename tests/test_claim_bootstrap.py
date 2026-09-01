@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import json
 import os
-import subprocess
 import stat
+import subprocess
 from dataclasses import replace
 from pathlib import Path
 
@@ -85,6 +85,104 @@ def _local_integration_payload(repo: Path, **updates: object) -> dict[str, objec
     }
     payload.update(updates)
     return payload
+
+
+def _workspace_archive_payload(root: Path, **updates: object) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "schema_version": "1.0",
+        "operation": "workspace_file_archive",
+        "agent": "codex",
+        "project": "workspace-root",
+        "scope": "loose-file-archive",
+        "workspace_root": str(root.resolve()),
+        "source": "screenshot.png",
+        "destination": "archive/workspace-cleanup/screenshot.png",
+    }
+    payload.update(updates)
+    return payload
+
+
+def test_workspace_file_archive_preserves_bytes_and_removes_only_exact_source(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CODEX_THREAD_ID", "native-archive")
+    monkeypatch.chdir(tmp_path)
+    source = tmp_path / "screenshot.png"
+    source.write_bytes(b"png-like-evidence")
+    request = claim_bootstrap.parse_request_json(
+        json.dumps(_workspace_archive_payload(tmp_path))
+    )
+
+    receipt = claim_bootstrap.execute_request(request)
+
+    destination = tmp_path / "archive/workspace-cleanup/screenshot.png"
+    assert not source.exists()
+    assert destination.read_bytes() == b"png-like-evidence"
+    assert receipt["result"]["destination"] == str(destination)
+    assert receipt["result"]["recoverable"] is True
+    assert len(receipt["result"]["sha256"]) == 64
+
+
+@pytest.mark.parametrize(
+    "updates",
+    [
+        {"source": "nested/screenshot.png"},
+        {"source": "../screenshot.png"},
+        {"destination": "inbox/screenshot.png"},
+        {"destination": "archive/../screenshot.png"},
+        {"project": "another-workspace"},
+    ],
+)
+def test_workspace_file_archive_rejects_ambiguous_or_nonarchive_paths(
+    tmp_path: Path,
+    updates: dict[str, object],
+) -> None:
+    with pytest.raises(claim_bootstrap.ClaimBootstrapError):
+        claim_bootstrap.parse_request_json(
+            json.dumps(_workspace_archive_payload(tmp_path, **updates))
+        )
+
+
+def test_workspace_file_archive_never_overwrites_destination(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CODEX_THREAD_ID", "native-archive")
+    monkeypatch.chdir(tmp_path)
+    source = tmp_path / "screenshot.png"
+    destination = tmp_path / "archive/workspace-cleanup/screenshot.png"
+    source.write_bytes(b"new")
+    destination.parent.mkdir(parents=True)
+    destination.write_bytes(b"old")
+    request = claim_bootstrap.parse_request_json(
+        json.dumps(_workspace_archive_payload(tmp_path))
+    )
+
+    with pytest.raises(claim_bootstrap.ClaimBootstrapError, match="never overwrites"):
+        claim_bootstrap.execute_request(request)
+
+    assert source.read_bytes() == b"new"
+    assert destination.read_bytes() == b"old"
+
+
+def test_workspace_file_archive_rejects_symlink_source(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CODEX_THREAD_ID", "native-archive")
+    monkeypatch.chdir(tmp_path)
+    target = tmp_path / "target.png"
+    target.write_bytes(b"preserve")
+    (tmp_path / "screenshot.png").symlink_to(target)
+    request = claim_bootstrap.parse_request_json(
+        json.dumps(_workspace_archive_payload(tmp_path))
+    )
+
+    with pytest.raises(claim_bootstrap.ClaimBootstrapError, match="non-symlink"):
+        claim_bootstrap.execute_request(request)
+
+    assert target.read_bytes() == b"preserve"
 
 
 def test_unclaimed_native_session_can_start_its_own_claim(

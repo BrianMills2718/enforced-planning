@@ -595,6 +595,8 @@ def _argv_is_read_only(argv: tuple[str, ...]) -> bool:
 
     if _session_status_command_is_read_only(argv):
         return True
+    if _goal_authority_validator_is_read_only(argv):
+        return True
 
     executable_token = argv[0]
     if Path(executable_token).name != executable_token:
@@ -649,6 +651,25 @@ def _argv_is_read_only(argv: tuple[str, ...]) -> bool:
     if executable == "gh":
         return _gh_command_is_read_only(argv)
     return executable == "git" and _git_command_is_read_only(argv)
+
+
+def _goal_authority_validator_is_read_only(argv: tuple[str, ...]) -> bool:
+    """Admit the exact shared goal validator with one read-only document operand."""
+
+    if len(argv) != 3 or argv[0] != "/usr/bin/python3":
+        return False
+    validator = Path(argv[1]).expanduser()
+    if not validator.is_absolute():
+        return False
+    expected = (
+        Path.home()
+        / ".agents"
+        / "skills"
+        / "authoring-goals"
+        / "scripts"
+        / "validate_goal_authority.py"
+    ).resolve(strict=False)
+    return validator.resolve(strict=False) == expected and bool(argv[2])
 
 
 def _systemctl_command_is_read_only(argv: tuple[str, ...]) -> bool:

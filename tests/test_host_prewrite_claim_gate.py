@@ -513,6 +513,22 @@ def test_systemctl_mutation_or_incomplete_query_is_not_read_only(command: str) -
     assert not _argv_is_read_only(tuple(command.split()))
 
 
+def test_exact_shared_goal_validator_is_read_only() -> None:
+    validator = (
+        Path.home()
+        / ".agents"
+        / "skills"
+        / "authoring-goals"
+        / "scripts"
+        / "validate_goal_authority.py"
+    )
+    assert _argv_is_read_only(("/usr/bin/python3", str(validator), "/tmp/goal.md"))
+    assert not _argv_is_read_only(("python3", str(validator), "/tmp/goal.md"))
+    assert not _argv_is_read_only(
+        ("/usr/bin/python3", str(validator), "/tmp/goal.md", "--write")
+    )
+
+
 def test_quoted_brackets_do_not_make_literal_commit_message_unprovable() -> None:
     assert not _bash_target_is_unprovable("git commit -m '[Unplanned] literal message'")
     assert _bash_target_is_unprovable("touch source[12].txt")

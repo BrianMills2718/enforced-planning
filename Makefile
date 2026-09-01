@@ -1,6 +1,6 @@
 ## enforced-planning — framework for enforced planning, context gating, doc-code alignment
 
-.PHONY: help test test-quick check lint dead-code dead-code-audit dead-code-validate push-check infer check-deps check-caps apparatus-ratio migrate-rels verify-couplings review-surfaces promote plan-registry ecosystem-status docstring-wiki docstring-wiki-check test-relationships status reachability reachability-check reachability-baseline repo-stats fleet-drift fleet-drift-json install-codex-runtime commit-workspace-control-bootstrap push-workspace-control-bootstrap
+.PHONY: help test test-quick check lint dead-code dead-code-audit dead-code-validate push-check infer check-deps check-caps apparatus-ratio migrate-rels verify-couplings review-surfaces promote plan-registry ecosystem-status docstring-wiki docstring-wiki-check test-relationships status reachability reachability-check reachability-baseline repo-stats fleet-drift fleet-drift-json install-codex-runtime
 
 PYTHON ?= $(if $(wildcard .venv/bin/python),.venv/bin/python,python3)
 PROJECT_STATUS_PYTHON ?= $(PYTHON)
@@ -30,12 +30,6 @@ install-codex-runtime:  ## Install an exact pushed revision into the clean detac
 	git -C "$(CODEX_RUNTIME_ROOT)" fetch --no-tags origin "$(RUNTIME_REVISION)"; \
 	git -C "$(CODEX_RUNTIME_ROOT)" checkout --detach "$(RUNTIME_REVISION)"; \
 	printf 'installed %s; rollback %s -> %s\n' "$(RUNTIME_REVISION)" "$$rollback" "$$before"
-
-commit-workspace-control-bootstrap:  ## One-time bridge for the pre-repair quoted-prefix deadlock
-	git commit -m '[Unplanned] Bootstrap workspace-root control repair'
-
-push-workspace-control-bootstrap:  ## One-time bridge for branch-name path misclassification
-	git push -u origin HEAD:refs/heads/fix/workspace-root-cleanup-controls-20260901
 
 test:  ## Run full test suite
 	python -m pytest tests/ -v

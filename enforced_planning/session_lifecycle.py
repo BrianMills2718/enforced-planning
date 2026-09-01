@@ -14,6 +14,7 @@ import os
 import re
 import subprocess
 import tempfile
+from contextlib import nullcontext
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -1066,6 +1067,7 @@ def _upsert_session_claim(
     target_worktree_path: str | None = None,
     staged_reservation: coordination_claims.ClaimRecord | None = None,
     maintenance_snapshot: _MaintenanceRefreshSnapshot | None = None,
+    registry_lock_held: bool = False,
 ) -> str:
     """Create or update the compact claim-side session contract metadata."""
 
@@ -1107,7 +1109,8 @@ def _upsert_session_claim(
             raise ValueError(message)
         return "created"
 
-    with coordination_claims.claim_registry_lock():
+    registry_context = nullcontext() if registry_lock_held else coordination_claims.claim_registry_lock()
+    with registry_context:
         registry_digest_before = coordination_claims._registry_digest(coordination_claims.CLAIMS_DIR)
         refreshed_payload = _load_claim_payload(agent, project, scope)
         if refreshed_payload is None:
@@ -1996,7 +1999,7 @@ def _snapshot_sanctioned_maintenance_refresh(
     current_phase: str,
     intended_next_phases: list[str] | None,
     depends_on_repos: list[str] | None,
-    requires_shared_infra_changes: bool,
+    requires_shared_infra_changes: bool | None,
     stop_conditions: list[str] | None,
     notes: str | None,
     claim_type: str | None,
@@ -2050,19 +2053,36 @@ def _snapshot_sanctioned_maintenance_refresh(
     )
     tracker_path = session_contracts.session_tracker_path(contract, tracker_dir=tracker_dir).expanduser().resolve()
     expected_tracker_path = Path(existing_claim.tracker_path or "").expanduser().resolve()
-    candidate_tracker = session_contracts.build_session_tracker(
-        contract=contract.with_tracker_path(str(tracker_path)),
-        current_phase=current_phase,
-        intended_next_phases=intended_next_phases,
-        depends_on_repos=depends_on_repos,
-        requires_shared_infra_changes=requires_shared_infra_changes,
-        stop_conditions=stop_conditions,
-        notes=notes,
-    )
     existing_tracker = session_contracts.read_session_tracker(expected_tracker_path)
     existing_tracker_fields = existing_tracker.get("tracker")
     if not isinstance(existing_tracker_fields, dict):
         raise ValueError("sanctioned maintenance tracker is missing execution metadata")
+    effective_intended_next_phases = (
+        existing_tracker_fields.get("intended_next_phases")
+        if intended_next_phases is None
+        else intended_next_phases
+    )
+    effective_depends_on_repos = (
+        existing_tracker_fields.get("depends_on_repos") if depends_on_repos is None else depends_on_repos
+    )
+    effective_requires_shared_infra_changes = (
+        existing_tracker_fields.get("requires_shared_infra_changes")
+        if requires_shared_infra_changes is None
+        else requires_shared_infra_changes
+    )
+    effective_stop_conditions = (
+        existing_tracker_fields.get("stop_conditions") if stop_conditions is None else stop_conditions
+    )
+    effective_notes = existing_tracker_fields.get("notes") if notes is None else notes
+    candidate_tracker = session_contracts.build_session_tracker(
+        contract=contract.with_tracker_path(str(tracker_path)),
+        current_phase=current_phase,
+        intended_next_phases=effective_intended_next_phases,
+        depends_on_repos=effective_depends_on_repos,
+        requires_shared_infra_changes=effective_requires_shared_infra_changes,
+        stop_conditions=effective_stop_conditions,
+        notes=effective_notes,
+    )
 
     immutable_inputs: dict[str, tuple[Any, Any]] = {
         "agent": (agent, existing_claim.agent),
@@ -2130,7 +2150,7 @@ def start_session(
     session_name: str | None = None,
     intended_next_phases: list[str] | None = None,
     depends_on_repos: list[str] | None = None,
-    requires_shared_infra_changes: bool = False,
+    requires_shared_infra_changes: bool | None = None,
     stop_conditions: list[str] | None = None,
     notes: str | None = None,
     claim_type: str | None = None,
@@ -2371,7 +2391,7 @@ def start_session(
         current_phase=current_phase,
         intended_next_phases=intended_next_phases,
         depends_on_repos=depends_on_repos,
-        requires_shared_infra_changes=requires_shared_infra_changes,
+        requires_shared_infra_changes=bool(requires_shared_infra_changes),
         stop_conditions=stop_conditions,
         notes=notes,
     )
@@ -2379,31 +2399,8 @@ def start_session(
     claim_bytes_before = claim_slot_path.read_bytes() if claim_slot_path.is_file() else None
     tracker_preexisting = tracker_path.is_file()
     tracker_bytes_before = tracker_path.read_bytes() if tracker_preexisting else None
-    if maintenance_snapshot is None:
-        session_contracts.write_session_tracker(tracker, tracker_dir=tracker_dir)
-    else:
-        with (
-            coordination_claims.claim_registry_lock(coordination_claims.CLAIMS_DIR),
-            session_contracts.session_tracker_lock(maintenance_snapshot.tracker_path),
-        ):
-            if (
-                maintenance_snapshot.claim_path.read_bytes() != maintenance_snapshot.claim_bytes
-                or maintenance_snapshot.tracker_path.read_bytes() != maintenance_snapshot.tracker_bytes
-            ):
-                raise ValueError(
-                    "sanctioned maintenance provenance changed during session refresh; retry from current state"
-                )
-            tracker_payload = session_contracts.read_session_tracker(maintenance_snapshot.tracker_path)
-            tracker_section = tracker_payload.get("tracker")
-            timestamps = tracker_payload.get("timestamps")
-            if not isinstance(tracker_section, dict) or not isinstance(timestamps, dict):
-                raise ValueError("sanctioned maintenance tracker is missing execution or timestamp metadata")
-            tracker_section["current_phase"] = tracker.current_phase
-            timestamps["updated_at"] = tracker.updated_at
-            session_contracts._atomic_write_session_tracker(maintenance_snapshot.tracker_path, tracker_payload)
-    tracker_bytes_written = tracker_path.read_bytes()
-    try:
-        action = _upsert_session_claim(
+    def upsert_claim(*, registry_lock_held: bool = False) -> str:
+        return _upsert_session_claim(
             agent=agent,
             project=project,
             scope=scope,
@@ -2431,31 +2428,72 @@ def start_session(
             target_worktree_path=target_worktree_path,
             staged_reservation=staged_reservation,
             maintenance_snapshot=maintenance_snapshot,
+            registry_lock_held=registry_lock_held,
         )
-    except Exception as claim_error:
-        try:
-            claim_bytes_after = claim_slot_path.read_bytes() if claim_slot_path.is_file() else None
-        except OSError as inspection_error:
-            raise RuntimeError(
-                "session claim update failed and claim state could not be inspected before tracker rollback: "
-                f"claim={claim_error}; inspection={inspection_error}"
-            ) from claim_error
-        if claim_bytes_after == claim_bytes_before:
+
+    if maintenance_snapshot is not None:
+        with (
+            coordination_claims.claim_registry_lock(coordination_claims.CLAIMS_DIR),
+            session_contracts.session_tracker_lock(maintenance_snapshot.tracker_path),
+        ):
+            if (
+                maintenance_snapshot.claim_path.read_bytes() != maintenance_snapshot.claim_bytes
+                or maintenance_snapshot.tracker_path.read_bytes() != maintenance_snapshot.tracker_bytes
+            ):
+                raise ValueError(
+                    "sanctioned maintenance provenance changed during session refresh; retry from current state"
+                )
+            tracker_payload = session_contracts.read_session_tracker(maintenance_snapshot.tracker_path)
+            tracker_section = tracker_payload.get("tracker")
+            timestamps = tracker_payload.get("timestamps")
+            if not isinstance(tracker_section, dict) or not isinstance(timestamps, dict):
+                raise ValueError("sanctioned maintenance tracker is missing execution or timestamp metadata")
+            tracker_section["current_phase"] = tracker.current_phase
+            timestamps["updated_at"] = tracker.updated_at
+            session_contracts._atomic_write_session_tracker(maintenance_snapshot.tracker_path, tracker_payload)
+            tracker_bytes_written = tracker_path.read_bytes()
             try:
-                with session_contracts.session_tracker_lock(tracker_path):
+                action = upsert_claim(registry_lock_held=True)
+            except Exception as claim_error:
+                claim_bytes_after = claim_slot_path.read_bytes() if claim_slot_path.is_file() else None
+                if claim_bytes_after == claim_bytes_before:
                     if tracker_path.read_bytes() != tracker_bytes_written:
-                        raise ValueError("session tracker changed after this start attempt; refusing unsafe rollback")
-                    if tracker_preexisting:
-                        assert tracker_bytes_before is not None
-                        _atomic_restore_bytes(tracker_path, tracker_bytes_before)
-                    else:
-                        tracker_path.unlink(missing_ok=True)
-            except Exception as rollback_error:
+                        raise RuntimeError(
+                            "session claim update failed and exact tracker rollback was incomplete: "
+                            f"claim={claim_error}; rollback=session tracker changed inside locked refresh"
+                        ) from claim_error
+                    assert tracker_bytes_before is not None
+                    _atomic_restore_bytes(tracker_path, tracker_bytes_before)
+                raise
+    else:
+        session_contracts.write_session_tracker(tracker, tracker_dir=tracker_dir)
+        tracker_bytes_written = tracker_path.read_bytes()
+        try:
+            action = upsert_claim()
+        except Exception as claim_error:
+            try:
+                claim_bytes_after = claim_slot_path.read_bytes() if claim_slot_path.is_file() else None
+            except OSError as inspection_error:
                 raise RuntimeError(
-                    "session claim update failed and exact tracker rollback was incomplete: "
-                    f"claim={claim_error}; rollback={rollback_error}"
+                    "session claim update failed and claim state could not be inspected before tracker rollback: "
+                    f"claim={claim_error}; inspection={inspection_error}"
                 ) from claim_error
-        raise
+            if claim_bytes_after == claim_bytes_before:
+                try:
+                    with session_contracts.session_tracker_lock(tracker_path):
+                        if tracker_path.read_bytes() != tracker_bytes_written:
+                            raise ValueError("session tracker changed after this start attempt; refusing unsafe rollback")
+                        if tracker_preexisting:
+                            assert tracker_bytes_before is not None
+                            _atomic_restore_bytes(tracker_path, tracker_bytes_before)
+                        else:
+                            tracker_path.unlink(missing_ok=True)
+                except Exception as rollback_error:
+                    raise RuntimeError(
+                        "session claim update failed and exact tracker rollback was incomplete: "
+                        f"claim={claim_error}; rollback={rollback_error}"
+                    ) from claim_error
+            raise
     persisted_claim = _single_matching_live_claim(
         agent=agent,
         project=project,

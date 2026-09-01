@@ -123,3 +123,31 @@ def test_divergent_runtime_is_denied(tmp_path: Path) -> None:
 
     assert _git(runtime, "rev-parse", "HEAD") == divergent
     assert _git(runtime, "for-each-ref", "--format=%(refname)", "refs/codex-runtime-recovery") == ""
+
+
+def test_detached_runtime_fast_forwards_with_checkout_mode_receipt(tmp_path: Path) -> None:
+    source, runtime, before, after = _repos(tmp_path)
+    _git(runtime, "checkout", "--detach", before)
+
+    result = update_runtime(source_repo=source, runtime_repo=runtime, revision=after, write=True)
+
+    assert result["checkout_mode"] == "detached"
+    assert result["after_revision"] == after
+    symbolic_ref = subprocess.run(
+        ["git", "-C", str(runtime), "symbolic-ref", "--quiet", "--short", "HEAD"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert symbolic_ref.returncode == 1
+    assert symbolic_ref.stdout == ""
+
+
+def test_non_main_named_branch_is_denied(tmp_path: Path) -> None:
+    source, runtime, before, after = _repos(tmp_path)
+    _git(runtime, "checkout", "-b", "feature")
+
+    with pytest.raises(RuntimeUpdateError, match="must be on main"):
+        update_runtime(source_repo=source, runtime_repo=runtime, revision=after, write=True)
+
+    assert _git(runtime, "rev-parse", "HEAD") == before

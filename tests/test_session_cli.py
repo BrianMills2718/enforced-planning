@@ -1400,7 +1400,7 @@ def test_native_session_end_hook_requires_real_end_event(
         sys.executable,
         "-c",
         subprocess_wrapper,
-        "scripts/session_end.py",
+        str(Path(__file__).resolve().parents[1] / "scripts" / "session_end.py"),
         str(subprocess_ledger),
         "--agent",
         "codex",

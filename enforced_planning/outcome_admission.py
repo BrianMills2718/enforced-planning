@@ -564,21 +564,8 @@ def evaluate_claim_bootstrap_admission(
     )
 
 
-def is_sanctioned_maintenance_claim_payload(
-    claim: coordination_claims.ClaimRecord,
-    payload: object,
-    *,
-    tracker_path: Path | None = None,
-) -> bool:
-    """Classify typed maintenance provenance from one already-read tracker payload.
-
-    ``UNPLANNED`` alone is not an exemption from selected-outcome admission.
-    The claim must retain the exact identity written by the sanctioned
-    ``maintenance_worktree`` transaction and its linked session tracker must
-    retain the same claim identity.  Ordinary prewrite admission remains
-    responsible for proving the live session, repository, branch, worktree,
-    and target path before this narrower policy classifier is consulted.
-    """
+def has_sanctioned_maintenance_claim_identity(claim: coordination_claims.ClaimRecord) -> bool:
+    """Return whether claim-side fields retain canonical maintenance identity."""
 
     branch = claim.branch
     if (
@@ -610,14 +597,42 @@ def is_sanctioned_maintenance_claim_payload(
     ):
         return False
 
+    assert isinstance(branch, str)
     goal = f"Unplanned maintenance: {branch.replace('-', ' ').replace('/', ' ')}"
-    if (
+    return not (
         claim.intent != goal
         or claim.broader_goal != goal
         or claim.session_name != session_contracts.derive_session_name(goal)
-    ):
+    )
+
+
+def is_sanctioned_maintenance_claim_payload(
+    claim: coordination_claims.ClaimRecord,
+    payload: object,
+    *,
+    tracker_path: Path | None = None,
+) -> bool:
+    """Classify typed maintenance provenance from one already-read tracker payload.
+
+    ``UNPLANNED`` alone is not an exemption from selected-outcome admission.
+    The claim must retain the exact identity written by the sanctioned
+    ``maintenance_worktree`` transaction and its linked session tracker must
+    retain the same claim identity.  Ordinary prewrite admission remains
+    responsible for proving the live session, repository, branch, worktree,
+    and target path before this narrower policy classifier is consulted.
+    """
+
+    if not has_sanctioned_maintenance_claim_identity(claim):
         return False
 
+    branch = claim.branch
+    assert isinstance(branch, str)
+    assert claim.tracker_path is not None
+    assert claim.session_id is not None
+    assert claim.repo_root is not None
+    assert claim.worktree_path is not None
+    assert claim.session_name is not None
+    assert claim.broader_goal is not None
     resolved_tracker_path = (
         tracker_path if tracker_path is not None else Path(claim.tracker_path)
     ).expanduser().resolve()
@@ -1296,6 +1311,7 @@ __all__ = [
     "evaluate_selected_claim_admission",
     "evaluate_selected_outcome_admission",
     "evaluate_selection_pending_session_activation",
+    "has_sanctioned_maintenance_claim_identity",
     "infer_first_consumer_bootstrap_plan",
     "is_first_consumer_bootstrap_path",
     "is_sanctioned_maintenance_claim",

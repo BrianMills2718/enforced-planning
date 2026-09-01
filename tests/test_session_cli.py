@@ -1738,6 +1738,37 @@ def test_malformed_maintenance_refresh_fails_before_concurrent_session_end(
     assert tracker_path.read_bytes() == tracker_before
 
 
+def test_explicit_unplanned_marker_malformed_maintenance_refresh_fails_without_mutation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Canonical claim identity fails closed independent of caller flag syntax."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    common = {
+        **_maintenance_refresh_args(tmp_path, trackers_dir),
+        "plan_ref": session_contracts.UNPLANNED_PLAN_REF,
+        "allow_unplanned": False,
+    }
+    started = session_lifecycle.start_session(**common)
+    claim_path = claims_dir / "codex_enforced-planning_fix_maintenance-provenance-refresh.yaml"
+    tracker_path = Path(started["tracker_path"])
+    malformed_tracker = yaml.safe_load(tracker_path.read_text(encoding="utf-8"))
+    malformed_tracker["claim"]["broader_goal"] = "corrupted maintenance provenance"
+    session_contracts._atomic_write_session_tracker(tracker_path, malformed_tracker)
+    claim_before = claim_path.read_bytes()
+    tracker_before = tracker_path.read_bytes()
+
+    with pytest.raises(ValueError, match="malformed locked tracker provenance"):
+        session_lifecycle.start_session(
+            **{**common, "current_phase": "must not rewrite malformed explicit marker"}
+        )
+
+    assert claim_path.read_bytes() == claim_before
+    assert tracker_path.read_bytes() == tracker_before
+
+
 def test_malformed_maintenance_refresh_cannot_overwrite_cross_session_successor(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

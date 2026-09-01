@@ -216,7 +216,7 @@ def test_symlinked_exact_runtime_path_is_denied_before_resolution(
     with pytest.raises(RuntimeUpdateError, match="must not contain symlinks") as caught:
         update_runtime(source_repo=source, runtime_repo=runtime, revision=after, write=False)
 
-    assert caught.value.receipt["runtime_repo"] == str(runtime.absolute())
+    assert caught.value.receipt["runtime_repo"] is None
     assert _git(external, "rev-parse", "HEAD") == _before
 
 
@@ -236,7 +236,7 @@ def test_symlink_loop_runtime_path_emits_structured_denial(
     assert receipt["action"] == "denied"
     assert receipt["state"] == "failed"
     assert receipt["stage"] == "preflight"
-    assert receipt["runtime_repo"] == str(runtime.absolute())
+    assert receipt["runtime_repo"] is None
     assert _git(external, "rev-parse", "HEAD") == _before
 
 
@@ -252,7 +252,7 @@ def test_source_symlink_loop_emits_structured_denial(
 
     assert caught.value.receipt["action"] == "denied"
     assert caught.value.receipt["stage"] == "preflight"
-    assert caught.value.receipt["source_repo"] == str(source.absolute())
+    assert caught.value.receipt["source_repo"] is None
 
 
 def test_unsupported_origin_credentials_never_enter_receipt(
@@ -297,6 +297,31 @@ def test_main_emits_complete_json_when_hostname_lookup_fails(
     assert payload["stage"] == "arguments"
     assert payload["host"] == "unavailable"
     assert payload["error"]["type"] == "RuntimeUpdateError"
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["--revision", "https://USERMARK:SECRETMARK@TRANSPORTMARK.invalid/repo.git"],
+        ["--rollback-ref", "https://USERMARK:SECRETMARK@TRANSPORTMARK.invalid/ref"],
+        [
+            "--source-repo",
+            "/tmp/USERMARK:SECRETMARK@TRANSPORTMARK.invalid/repo",
+            "--revision",
+            "0" * 40,
+        ],
+    ],
+)
+def test_cli_never_serializes_unvalidated_identifier_markers(
+    argv: list[str], capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert runtime_update.main(argv) == 1
+
+    stdout = capsys.readouterr().out
+    json.loads(stdout)
+    assert "USERMARK" not in stdout
+    assert "SECRETMARK" not in stdout
+    assert "TRANSPORTMARK" not in stdout
 
 
 @pytest.mark.parametrize(
@@ -466,7 +491,7 @@ def test_noncanonical_runtime_path_is_denied_before_repository_inspection(
     with pytest.raises(RuntimeUpdateError, match="installed runtime path must be exactly") as caught:
         update_runtime(source_repo=source, runtime_repo=impostor, revision=after, write=False)
 
-    assert caught.value.receipt["runtime_repo"] == str(impostor.resolve())
+    assert caught.value.receipt["runtime_repo"] is None
     assert caught.value.receipt["stage"] == "preflight"
 
 

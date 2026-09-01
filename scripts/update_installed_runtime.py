@@ -141,8 +141,8 @@ def _base_receipt(
         "stage": "preflight",
         "host": _safe_hostname(),
         "observed_at": _observed_at(now),
-        "source_repo": str(source_repo.absolute()),
-        "runtime_repo": str(runtime_repo.absolute()),
+        "source_repo": None,
+        "runtime_repo": None,
         "origin": None,
         "stored_origin_before": None,
         "stored_origin_after": None,
@@ -150,7 +150,7 @@ def _base_receipt(
         "canonical_repository": _canonical_origin_identity(),
         "checkout_mode": None,
         "before_revision": None,
-        "target_revision": revision,
+        "target_revision": revision if FULL_SHA_RE.fullmatch(revision) else None,
         "after_revision": None,
         "recovery_ref": None,
         "remote_main_revision": None,
@@ -482,7 +482,9 @@ def update_runtime(
             runtime_repo = runtime_repo.resolve()
         except RuntimeError as exc:
             raise RuntimeUpdateError("installed runtime path cannot be resolved") from exc
+        receipt["runtime_repo"] = str(runtime_repo)
         source_common_dir = _assert_repo(source_repo, "source repository")
+        receipt["source_repo"] = str(source_repo)
         runtime_common_dir = _assert_repo(runtime_repo, "installed runtime")
         runtime_git_dir = runtime_repo / ".git"
         if (
@@ -494,6 +496,7 @@ def update_runtime(
         if source_common_dir == runtime_common_dir:
             raise RuntimeUpdateError("source repository and installed runtime must be distinct clones")
         _validate_revision(source_repo, revision)
+        receipt["target_revision"] = revision
         checkout_mode = _assert_clean_runtime(runtime_repo)
         receipt["checkout_mode"] = checkout_mode
 
@@ -627,8 +630,8 @@ def rollback_runtime(
         "stage": "preflight",
         "host": _safe_hostname(),
         "observed_at": _observed_at(now),
-        "runtime_repo": str(runtime_repo.absolute()),
-        "recovery_ref": recovery_ref,
+        "runtime_repo": None,
+        "recovery_ref": None,
         "before_revision": None,
         "target_revision": None,
         "after_revision": None,
@@ -638,6 +641,8 @@ def rollback_runtime(
         "write_requested": write,
     }
     try:
+        _recovery_key(recovery_ref)
+        receipt["recovery_ref"] = recovery_ref
         expected_runtime = Path(os.path.abspath(_canonical_runtime_repo().expanduser()))
         if runtime_repo != expected_runtime:
             raise RuntimeUpdateError(
@@ -648,6 +653,7 @@ def rollback_runtime(
             runtime_repo = runtime_repo.resolve()
         except RuntimeError as exc:
             raise RuntimeUpdateError("installed runtime path cannot be resolved") from exc
+        receipt["runtime_repo"] = str(runtime_repo)
         runtime_common_dir = _assert_repo(runtime_repo, "installed runtime")
         runtime_git_dir = runtime_repo / ".git"
         if (

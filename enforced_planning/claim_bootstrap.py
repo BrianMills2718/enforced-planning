@@ -350,14 +350,15 @@ def _git(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
 def _canonical_lock_module() -> Any:
     """Load the shipped canonical-lock owner without creating a second implementation."""
 
-    module_path = (
-        Path(__file__).resolve().parents[1]
-        / "scripts"
-        / "worktree-coordination"
-        / "canonical_lock.py"
+    package_root = Path(__file__).resolve().parents[1]
+    candidates = (
+        package_root / "scripts" / "worktree-coordination" / "canonical_lock.py",
+        package_root / "scripts" / "meta" / "canonical_lock.py",
     )
-    if not module_path.is_file():
-        raise ClaimBootstrapError(f"canonical lock control is unavailable: {module_path}")
+    module_path = next((candidate for candidate in candidates if candidate.is_file()), None)
+    if module_path is None:
+        rendered = ", ".join(str(candidate) for candidate in candidates)
+        raise ClaimBootstrapError(f"canonical lock control is unavailable; checked: {rendered}")
     module_name = f"_claim_bootstrap_canonical_lock_{abs(hash(str(module_path)))}"
     existing = sys.modules.get(module_name)
     if existing is not None:
@@ -369,6 +370,27 @@ def _canonical_lock_module() -> Any:
     sys.modules[module_name] = module
     spec.loader.exec_module(module)
     return module
+
+
+def _reconcile_canonical_after_claim(
+    repo: Path,
+    *,
+    session_id: str,
+) -> dict[str, Any]:
+    """Make the canonical checkout match the exact live-claim registry."""
+
+    canonical_lock = _canonical_lock_module()
+    report = canonical_lock.reconcile(
+        repos=[repo],
+        claims_dir=coordination_claims.CLAIMS_DIR,
+        session_id=session_id,
+    )
+    integrity = canonical_lock.verify_lock_integrity(repo)
+    if integrity.get("verdict") != canonical_lock.VERDICT_LOCKED:
+        raise ClaimBootstrapError(
+            "canonical checkout did not become read-only after maintenance lane creation"
+        )
+    return report
 
 
 def _finish_canonical_relock(
@@ -1737,6 +1759,11 @@ def _execute_maintenance_worktree(
             raise ClaimBootstrapError(
                 populated.stderr.strip() or "maintenance worktree population failed after claim creation"
             )
+        lock_reconciliation = _reconcile_canonical_after_claim(
+            repo,
+            session_id=session_id,
+        )
+        payload = {**payload, "canonical_lock": lock_reconciliation}
         return {
             **payload,
             "project_graph_id": authority.project_id,
@@ -1794,6 +1821,12 @@ def _execute_maintenance_worktree(
                 if tracker_verified:
                     with session_contracts.session_tracker_lock(tracker_path):
                         tracker_path.unlink(missing_ok=True)
+                canonical_lock = _canonical_lock_module()
+                canonical_lock.reconcile(
+                    repos=[repo],
+                    claims_dir=coordination_claims.CLAIMS_DIR,
+                    session_id=session_id,
+                )
             except Exception as cleanup_exc:  # noqa: BLE001 - retain recoverable residue details
                 cleanup_errors.append(f"claim/tracker cleanup failed: {cleanup_exc}")
         if cleanup_errors:

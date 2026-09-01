@@ -64,7 +64,8 @@ def test_finish_target_requires_and_forwards_external_review_spec() -> None:
         "REVIEW_SPEC=/tmp/review-spec.json",
     )
 
-    assert 'scripts/worktree-coordination/finish_pr.py" --branch "feature"' in output
+    assert 'scripts/worktree-coordination/finish_pr.py" --agent "codex"' in output
+    assert '--project "enforced-planning" --branch "feature"' in output
     assert '--pr "42" --review-spec "/tmp/review-spec.json"' in output
 
 
@@ -72,6 +73,8 @@ def test_consumer_template_exposes_the_same_finish_contract() -> None:
     recipe = _template_recipe("finish")
 
     assert "WORKTREE_FINISH_SCRIPT" in recipe
+    assert '--agent "$(WORKTREE_AGENT)"' in recipe
+    assert '--project "$(WORKTREE_PROJECT)"' in recipe
     assert '--review-spec "$(REVIEW_SPEC)"' in recipe
 
 

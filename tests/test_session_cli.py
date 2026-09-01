@@ -1661,6 +1661,317 @@ def test_maintenance_refresh_cannot_reactivate_claim_ended_before_locked_reload(
     assert tracker_path.read_bytes() == tracker_before
 
 
+def test_malformed_maintenance_refresh_fails_before_concurrent_session_end(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Malformed explicit maintenance never escapes locked custody into generic refresh."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    common = _maintenance_refresh_args(tmp_path, trackers_dir)
+    started = session_lifecycle.start_session(**common)
+    claim_path = claims_dir / "codex_enforced-planning_fix_maintenance-provenance-refresh.yaml"
+    tracker_path = Path(started["tracker_path"])
+    malformed_tracker = yaml.safe_load(tracker_path.read_text(encoding="utf-8"))
+    malformed_tracker["claim"]["broader_goal"] = "corrupted maintenance provenance"
+    session_contracts._atomic_write_session_tracker(tracker_path, malformed_tracker)
+    tracker_before = tracker_path.read_bytes()
+    waiting_for_registry = Event()
+    registry_acquired = Event()
+    completed = Event()
+    failures: list[BaseException] = []
+    end_threads: list[Thread] = []
+    real_classifier = outcome_admission.is_sanctioned_maintenance_claim_payload
+    real_registry_lock = coordination_claims.claim_registry_lock
+
+    @contextmanager
+    def observed_registry_lock(path: Path | None = None):
+        is_ender = current_thread().name == "ending-malformed-maintenance"
+        if is_ender:
+            waiting_for_registry.set()
+        with real_registry_lock(path):
+            if is_ender:
+                registry_acquired.set()
+            yield
+
+    def end_claim() -> None:
+        try:
+            coordination_claims.end_session_claims(
+                agent="codex",
+                session_id=str(common["session_id"]),
+                reason="end malformed maintenance owner",
+            )
+        except BaseException as exc:  # pragma: no cover - asserted below
+            failures.append(exc)
+        finally:
+            completed.set()
+
+    def classify_then_end(*args: object, **kwargs: object) -> bool:
+        result = real_classifier(*args, **kwargs)
+        assert result is False
+        thread = Thread(target=end_claim, name="ending-malformed-maintenance")
+        end_threads.append(thread)
+        thread.start()
+        assert waiting_for_registry.wait(timeout=2)
+        assert registry_acquired.is_set() is False
+        return result
+
+    monkeypatch.setattr(coordination_claims, "claim_registry_lock", observed_registry_lock)
+    monkeypatch.setattr(
+        outcome_admission,
+        "is_sanctioned_maintenance_claim_payload",
+        classify_then_end,
+    )
+    with pytest.raises(ValueError, match="malformed locked tracker provenance"):
+        session_lifecycle.start_session(
+            **{**common, "current_phase": "must not repair malformed provenance"}
+        )
+
+    assert len(end_threads) == 1
+    end_threads[0].join(timeout=2)
+    assert registry_acquired.is_set()
+    assert completed.is_set()
+    assert failures == []
+    claim_after = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    assert claim_after["status"] == coordination_claims.SESSION_ENDED_STATUS
+    assert tracker_path.read_bytes() == tracker_before
+
+
+def test_malformed_maintenance_refresh_cannot_overwrite_cross_session_successor(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A blocked successor transfer wins without any old-owner tracker mutation."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    common = _maintenance_refresh_args(tmp_path, trackers_dir)
+    started = session_lifecycle.start_session(**common)
+    claim_path = claims_dir / "codex_enforced-planning_fix_maintenance-provenance-refresh.yaml"
+    tracker_path = Path(started["tracker_path"])
+    malformed_tracker = yaml.safe_load(tracker_path.read_text(encoding="utf-8"))
+    malformed_tracker["claim"]["broader_goal"] = "corrupted maintenance provenance"
+    session_contracts._atomic_write_session_tracker(tracker_path, malformed_tracker)
+    tracker_before = tracker_path.read_bytes()
+    transfer_waiting = Event()
+    transfer_acquired = Event()
+    release_transfer = Event()
+    transfer_completed = Event()
+    transfer_results: list[dict[str, object]] = []
+    transfer_failures: list[BaseException] = []
+    transfer_threads: list[Thread] = []
+    real_classifier = outcome_admission.is_sanctioned_maintenance_claim_payload
+    real_registry_lock = coordination_claims.claim_registry_lock
+    paused_transfer_lock = False
+
+    @contextmanager
+    def pause_transfer_after_registry_acquisition(path: Path | None = None):
+        nonlocal paused_transfer_lock
+        is_transfer = current_thread().name == "cross-session-maintenance-transfer"
+        if is_transfer and not paused_transfer_lock:
+            transfer_waiting.set()
+        with real_registry_lock(path):
+            if is_transfer and not paused_transfer_lock:
+                paused_transfer_lock = True
+                transfer_acquired.set()
+                assert release_transfer.wait(timeout=2)
+            yield
+
+    def transfer_claim() -> None:
+        try:
+            session_lifecycle.end_runtime_session(
+                agent="codex",
+                session_id=str(common["session_id"]),
+                reason="transfer malformed maintenance lane",
+            )
+            transfer_results.append(
+                _resume_session_as_native(
+                    agent="codex",
+                    project="enforced-planning",
+                    scope=str(common["scope"]),
+                    worktree_path=str(common["worktree_path"]),
+                    branch=str(common["branch"]),
+                    current_phase="successor owns malformed lane disposition",
+                    session_id="codex:successor-runtime",
+                    note="successor accepted custody",
+                )
+            )
+        except BaseException as exc:  # pragma: no cover - asserted below
+            transfer_failures.append(exc)
+        finally:
+            transfer_completed.set()
+
+    def classify_then_transfer(*args: object, **kwargs: object) -> bool:
+        result = real_classifier(*args, **kwargs)
+        assert result is False
+        thread = Thread(target=transfer_claim, name="cross-session-maintenance-transfer")
+        transfer_threads.append(thread)
+        thread.start()
+        assert transfer_waiting.wait(timeout=2)
+        assert transfer_acquired.is_set() is False
+        return result
+
+    monkeypatch.setattr(
+        coordination_claims,
+        "claim_registry_lock",
+        pause_transfer_after_registry_acquisition,
+    )
+    monkeypatch.setattr(
+        outcome_admission,
+        "is_sanctioned_maintenance_claim_payload",
+        classify_then_transfer,
+    )
+    with pytest.raises(ValueError, match="malformed locked tracker provenance"):
+        session_lifecycle.start_session(
+            **{**common, "current_phase": "old owner must not overwrite successor"}
+        )
+
+    assert transfer_acquired.wait(timeout=2)
+    assert tracker_path.read_bytes() == tracker_before
+    release_transfer.set()
+    assert len(transfer_threads) == 1
+    transfer_threads[0].join(timeout=5)
+    assert transfer_completed.is_set()
+    assert transfer_failures == []
+    assert len(transfer_results) == 1
+    assert transfer_results[0]["action"] == "resumed"
+    successor_claim = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    successor_tracker = yaml.safe_load(tracker_path.read_text(encoding="utf-8"))
+    assert successor_claim["status"] == "active"
+    assert successor_claim["session_id"] == "codex:successor-runtime"
+    assert successor_tracker["claim"]["session_id"] == "codex:successor-runtime"
+    assert successor_tracker["tracker"]["current_phase"] == "successor owns malformed lane disposition"
+
+
+def test_generic_existing_refresh_serializes_cross_session_transfer(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Generic tracker and claim refresh retains registry custody until both commit."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    goal = "ordinary unplanned lifecycle coverage"
+    common = {
+        **_maintenance_refresh_args(tmp_path, trackers_dir),
+        "intent": goal,
+        "broader_goal": goal,
+        "session_name": session_contracts.derive_session_name(goal),
+        "plan_ref": session_contracts.UNPLANNED_PLAN_REF,
+        "allow_unplanned": False,
+    }
+    started = session_lifecycle.start_session(**common)
+    claim_path = claims_dir / "codex_enforced-planning_fix_maintenance-provenance-refresh.yaml"
+    tracker_path = Path(started["tracker_path"])
+    transfer_waiting = Event()
+    transfer_acquired = Event()
+    transfer_completed = Event()
+    transfer_results: list[dict[str, object]] = []
+    transfer_failures: list[BaseException] = []
+    transfer_threads: list[Thread] = []
+    real_registry_lock = coordination_claims.claim_registry_lock
+    real_tracker_write = session_contracts.write_session_tracker
+
+    @contextmanager
+    def observed_registry_lock(path: Path | None = None):
+        is_transfer = current_thread().name == "generic-cross-session-transfer"
+        if is_transfer:
+            transfer_waiting.set()
+        with real_registry_lock(path):
+            if is_transfer:
+                transfer_acquired.set()
+            yield
+
+    def transfer_claim() -> None:
+        try:
+            session_lifecycle.end_runtime_session(
+                agent="codex",
+                session_id=str(common["session_id"]),
+                reason="generic refresh owner ended",
+            )
+            transfer_results.append(
+                _resume_session_as_native(
+                    agent="codex",
+                    project="enforced-planning",
+                    scope=str(common["scope"]),
+                    worktree_path=str(common["worktree_path"]),
+                    branch=str(common["branch"]),
+                    current_phase="generic successor active",
+                    session_id="codex:generic-successor",
+                )
+            )
+        except BaseException as exc:  # pragma: no cover - asserted below
+            transfer_failures.append(exc)
+        finally:
+            transfer_completed.set()
+
+    def write_while_transfer_waits(*args: object, **kwargs: object) -> Path:
+        thread = Thread(target=transfer_claim, name="generic-cross-session-transfer")
+        transfer_threads.append(thread)
+        thread.start()
+        assert transfer_waiting.wait(timeout=2)
+        assert transfer_acquired.is_set() is False
+        result = real_tracker_write(*args, **kwargs)
+        assert transfer_acquired.is_set() is False
+        return result
+
+    monkeypatch.setattr(coordination_claims, "claim_registry_lock", observed_registry_lock)
+    monkeypatch.setattr(session_contracts, "write_session_tracker", write_while_transfer_waits)
+    refreshed = session_lifecycle.start_session(
+        **{**common, "current_phase": "generic refresh committed first"}
+    )
+
+    assert refreshed["action"] == "updated"
+    assert len(transfer_threads) == 1
+    transfer_threads[0].join(timeout=5)
+    assert transfer_acquired.is_set()
+    assert transfer_completed.is_set()
+    assert transfer_failures == []
+    assert transfer_results[0]["action"] == "resumed"
+    successor_claim = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    successor_tracker = yaml.safe_load(tracker_path.read_text(encoding="utf-8"))
+    assert successor_claim["session_id"] == "codex:generic-successor"
+    assert successor_tracker["claim"]["session_id"] == "codex:generic-successor"
+    assert successor_tracker["tracker"]["current_phase"] == "generic successor active"
+
+
+def test_generic_existing_refresh_rolls_back_tracker_before_releasing_custody(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A failed generic claim update restores exact tracker bytes under registry custody."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    goal = "ordinary unplanned rollback coverage"
+    common = {
+        **_maintenance_refresh_args(tmp_path, trackers_dir),
+        "intent": goal,
+        "broader_goal": goal,
+        "session_name": session_contracts.derive_session_name(goal),
+        "plan_ref": session_contracts.UNPLANNED_PLAN_REF,
+        "allow_unplanned": False,
+    }
+    started = session_lifecycle.start_session(**common)
+    claim_path = claims_dir / "codex_enforced-planning_fix_maintenance-provenance-refresh.yaml"
+    tracker_path = Path(started["tracker_path"])
+    claim_before = claim_path.read_bytes()
+    tracker_before = tracker_path.read_bytes()
+
+    def reject_claim_update(**_kwargs: object) -> str:
+        raise ValueError("injected generic claim failure")
+
+    monkeypatch.setattr(session_lifecycle, "_upsert_session_claim", reject_claim_update)
+    with pytest.raises(ValueError, match="injected generic claim failure"):
+        session_lifecycle.start_session(
+            **{**common, "current_phase": "must roll back generic tracker"}
+        )
+
+    assert claim_path.read_bytes() == claim_before
+    assert tracker_path.read_bytes() == tracker_before
+
+
 @pytest.mark.parametrize(
     "drift",
     [

@@ -2397,7 +2397,7 @@ def start_session(
             registry_lock_held=registry_lock_held,
         )
 
-    maintenance_action: str | None = None
+    existing_action: str | None = None
     if existing_claim is not None:
         with coordination_claims.claim_registry_lock(coordination_claims.CLAIMS_DIR):
             if not claim_slot_path.is_file():
@@ -2504,7 +2504,7 @@ def start_session(
                         )
                         tracker_bytes_written = locked_tracker_path.read_bytes()
                         try:
-                            maintenance_action = upsert_claim(registry_lock_held=True)
+                            existing_action = upsert_claim(registry_lock_held=True)
                         except Exception as claim_error:
                             claim_bytes_after = claim_slot_path.read_bytes() if claim_slot_path.is_file() else None
                             if claim_bytes_after == locked_claim_bytes:
@@ -2515,8 +2515,45 @@ def start_session(
                                     ) from claim_error
                                 _atomic_restore_bytes(locked_tracker_path, locked_tracker_bytes)
                             raise
-    if maintenance_action is not None:
-        action = maintenance_action
+                    elif (
+                        explicit_unplanned_maintenance
+                        and outcome_admission.has_sanctioned_maintenance_claim_identity(locked_claim)
+                    ):
+                        raise ValueError(
+                            "explicit UNPLANNED maintenance claim has malformed locked tracker provenance; "
+                            "refusing generic refresh"
+                        )
+            if existing_action is None:
+                generic_claim_bytes = locked_claim_bytes
+                generic_tracker_preexisting = tracker_path.is_file()
+                generic_tracker_bytes = tracker_path.read_bytes() if generic_tracker_preexisting else None
+                session_contracts.write_session_tracker(tracker, tracker_dir=tracker_dir)
+                generic_tracker_written = tracker_path.read_bytes()
+                try:
+                    existing_action = upsert_claim(registry_lock_held=True)
+                except Exception as claim_error:
+                    claim_bytes_after = claim_slot_path.read_bytes() if claim_slot_path.is_file() else None
+                    if claim_bytes_after == generic_claim_bytes:
+                        try:
+                            with session_contracts.session_tracker_lock(tracker_path):
+                                if tracker_path.read_bytes() != generic_tracker_written:
+                                    raise ValueError(
+                                        "session tracker changed inside locked existing-claim refresh; "
+                                        "refusing unsafe rollback"
+                                    )
+                                if generic_tracker_preexisting:
+                                    assert generic_tracker_bytes is not None
+                                    _atomic_restore_bytes(tracker_path, generic_tracker_bytes)
+                                else:
+                                    tracker_path.unlink(missing_ok=True)
+                        except Exception as rollback_error:
+                            raise RuntimeError(
+                                "session claim update failed and exact tracker rollback was incomplete: "
+                                f"claim={claim_error}; rollback={rollback_error}"
+                            ) from claim_error
+                    raise
+    if existing_action is not None:
+        action = existing_action
     else:
         claim_bytes_before = claim_slot_path.read_bytes() if claim_slot_path.is_file() else None
         tracker_preexisting = tracker_path.is_file()

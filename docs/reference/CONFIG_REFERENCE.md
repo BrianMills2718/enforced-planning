@@ -224,11 +224,14 @@ worktree targets. Claim-runtime schema v6 also requires `session-narrow`; a
 generated consumer that lacks that entrypoint is not compatible with typed
 bootstrap broad claims.
 
-For `make maintenance-worktree`, omitted `SESSION_WRITE_PATHS` creates the
-temporary repository-wide `.` bootstrap claim and supplies its typed broad-scope
-mode, reason, and target worktree. An explicit nonempty `SESSION_WRITE_PATHS`
-value is already narrow authority: the Make entrypoint forwards those exact
-paths and omits all bootstrap metadata.
+`make maintenance-worktree` serializes its bounded inputs into the typed
+`maintenance_worktree` claim-bootstrap operation; Make does not independently
+create or roll back the claim, worktree, or tracker. Omitted
+`SESSION_WRITE_PATHS` creates the temporary repository-wide `.` bootstrap claim
+and supplies its typed broad-scope mode, reason, and target worktree. An
+explicit nonempty `SESSION_WRITE_PATHS` value is already narrow authority: the
+entrypoint forwards those exact paths and the typed operation omits bootstrap
+metadata.
 
 `session-status` is the sole Python-backed lifecycle command classified as
 claimless read-only. The classifier accepts only the fixed installed script,

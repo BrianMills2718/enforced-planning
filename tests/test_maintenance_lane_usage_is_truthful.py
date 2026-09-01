@@ -44,4 +44,5 @@ def test_bootstrap_scope_is_declared_by_the_maintainer_surface(surface):
         "MAINTENANCE_BOOTSTRAP_WRITE_PATHS = "
         "$(if $(strip $(SESSION_WRITE_PATHS)),$(SESSION_WRITE_PATHS),.)"
     ) in text
-    assert 'SESSION_WRITE_PATHS="$(MAINTENANCE_BOOTSTRAP_WRITE_PATHS)"' in text
+    assert '"write_paths":sys.argv[5:]' in text
+    assert "scripts/claim_bootstrap.py --request-json" in text

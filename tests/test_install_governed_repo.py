@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 import stat
 import subprocess
@@ -839,6 +840,7 @@ def test_install_governed_repo_write_bootstraps_minimum_repo_and_passes_audit(
     assert (tmp_path / "hooks" / "pre-push").exists()
     assert os.access(tmp_path / "hooks" / "pre-push", os.X_OK)
     assert (tmp_path / "enforced_planning" / "repository_status.py").exists()
+    assert (tmp_path / "enforced_planning" / "repository_authority.py").exists()
     assert (tmp_path / "enforced_planning" / "session_contracts.py").exists()
     assert (tmp_path / "enforced_planning" / "session_lifecycle.py").exists()
     assert (tmp_path / "enforced_planning" / "worktree_lifecycle.yaml").exists()
@@ -872,7 +874,7 @@ def test_install_governed_repo_write_bootstraps_minimum_repo_and_passes_audit(
     makefile_text = (tmp_path / "Makefile").read_text(encoding="utf-8")
     assert "worktree:" in makefile_text
     assert "maintenance-worktree:" in makefile_text
-    assert "WORKTREE_EXECUTION_PROFILE=light ALLOW_UNPLANNED=1" in makefile_text
+    assert "scripts/meta/claim_bootstrap.py --request-json" in makefile_text
     assert "worktree-list:" in makefile_text
     assert "worktree-remove:" in makefile_text
     assert "session-start:" in makefile_text
@@ -979,7 +981,7 @@ def test_default_off_reenable_and_wiki_freshness_journey(tmp_path: Path) -> None
     assert "WORKTREE_MERGE_COMMIT ?=" in makefile_text
     assert '$(if $(WORKTREE_MERGE_COMMIT),--merge-commit "$(WORKTREE_MERGE_COMMIT)",)' in makefile_text
     assert '$(if $(WORKTREE_MERGE_COMMIT),WORKTREE_MERGE_COMMIT="$(WORKTREE_MERGE_COMMIT)",)' in makefile_text
-    assert 'SESSION_ALLOW_PARALLEL="$(SESSION_ALLOW_PARALLEL)"' in makefile_text
+    assert "scripts/meta/claim_bootstrap.py --request-json" in makefile_text
     maintenance_with_plan = subprocess.run(
         ["make", "maintenance-worktree", "PLAN=123"],
         cwd=str(tmp_path),
@@ -1199,11 +1201,58 @@ def _installed_planning_make_fixture(tmp_path: Path) -> tuple[dict[str, str], st
     ).stdout.strip()
     isolated_home = tmp_path / "operator-home"
     isolated_home.mkdir()
+    remote = tmp_path.parent / f"{tmp_path.name}-origin.git"
+    subprocess.run(["git", "init", "--bare", str(remote)], check=True, capture_output=True)
+    subprocess.run(
+        ["git", "push", str(remote), "main"], cwd=tmp_path, check=True, capture_output=True
+    )
+    subprocess.run(
+        ["git", "--git-dir", str(remote), "symbolic-ref", "HEAD", "refs/heads/main"],
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "remote", "add", "origin", "git@github.com:fixture/fixture.git"],
+        cwd=tmp_path,
+        check=True,
+    )
+    fake_ssh = isolated_home / "fixture-ssh"
+    fake_ssh.write_text(
+        f"#!/bin/sh\nexec git-upload-pack {str(remote)!r}\n",
+        encoding="utf-8",
+    )
+    fake_ssh.chmod(0o700)
+    provider = isolated_home / "repository-authority-provider.py"
+    provider.write_text(
+        "#!/usr/bin/env python3\n"
+        "import json, sys\n"
+        "request = json.load(sys.stdin)\n"
+        "response = dict(request)\n"
+        "response.update(allowed=True, project_id='fixture', default_branch='main', "
+        "mutation_authority='normal_push')\n"
+        "print(json.dumps(response, separators=(',', ':')))\n",
+        encoding="utf-8",
+    )
+    provider.chmod(0o700)
+    provider_config = isolated_home / ".config/enforced-planning/repository-authority-provider-v1.json"
+    provider_config.parent.mkdir(parents=True)
+    provider_config.write_text(
+        json.dumps(
+            {
+                "schema_version": "1.0",
+                "provider_path": str(provider),
+                "provider_sha256": hashlib.sha256(provider.read_bytes()).hexdigest(),
+            }
+        ),
+        encoding="utf-8",
+    )
+    provider_config.chmod(0o600)
     environment = os.environ.copy()
     environment["HOME"] = str(isolated_home)
     environment["PYTHON"] = sys.executable
     environment["PYTHONPATH"] = os.pathsep.join(path for path in sys.path if path and "site-packages" in path)
     environment["CODEX_THREAD_ID"] = f"installed-{tmp_path.name}"
+    environment["GIT_SSH_COMMAND"] = str(fake_ssh)
     environment.pop("CLAUDE_SESSION_ID", None)
     environment.pop("OPENCLAW_SESSION_ID", None)
     environment.pop("OPENCLAW_RUN_ID", None)

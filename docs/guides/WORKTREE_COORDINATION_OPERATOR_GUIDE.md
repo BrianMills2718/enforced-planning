@@ -215,14 +215,19 @@ and refresh the pre-write projection in the same locked mutation.
    `make worktree BRANCH=... TASK="..." [PLAN=N]`; do not create new lanes in
    `~/worktrees/`, `_worktrees/`, `<repo>_worktrees/`, or ad hoc sibling paths.
    For bounded light maintenance without a numbered plan, use
-   `make maintenance-worktree BRANCH=<name>`; it creates the initial claim,
-   worktree, tracker, and explicit `UNPLANNED` claim linkage as one sanctioned
-   journey. `BRANCH` is the only required input: `TASK`, `SESSION_GOAL`, and
-   `SESSION_PHASE` default from the branch name, and the agent defaults from the
-   runtime. When the lane does not declare `SESSION_WRITE_PATHS`, the
-   maintenance transaction supplies the one temporary program write scope
-   itself (`.`): it is bounded by the named repository, branch, worktree, and
-   native session, then must be narrowed before scoped implementation begins.
+   `make maintenance-worktree BRANCH=<name>`; the Make target builds one typed
+   `maintenance_worktree` request and delegates claim, worktree, tracker, and
+   explicit `UNPLANNED` linkage creation to the atomic claim-bootstrap
+   transaction. `BRANCH` is the only required input and the agent defaults from
+   the runtime. When the lane does not declare `SESSION_WRITE_PATHS`, the typed
+   transaction supplies the one temporary program write scope itself (`.`): it
+   is bounded by the named repository, branch, worktree, and native session,
+   then must be narrowed before scoped implementation begins.
+   In generated consumers, the installer owns `scripts/meta/claim_bootstrap.py`
+   and the synchronized bootstrap authority module. Claimless host admission
+   requires the exact rendered worktree block and exact installed wrapper/module
+   digests, so unrelated Makefile content remains consumer-owned without being
+   trusted as control code.
    An explicit `SESSION_WRITE_PATHS="..."` overrides that default and is
    claimed as given without bootstrap mode, reason, or target metadata; those
    fields describe only the implicit repository-wide `.` custody state. Do not read the
@@ -1233,6 +1238,21 @@ when the existing writer-owned lock files can be opened without mutation. When
 a lock is absent, it accepts only an optimistic claim/tracker snapshot whose
 source bytes stay stable and whose lock remains absent; it never creates or
 chmods lock files, creates directories, or prunes stale staging artifacts.
+
+The Company Planning execution loop is admitted as one strict control-plane
+mutation, not as an arbitrary Python command. The host adapter requires the
+installed `company-planning` cache layout and matching plugin manifest, the
+ambient native session's exact healthy worktree claim, and claim ownership of
+`.company-planning/active-execution.json` (plus the nested history directory
+for archive). A canonical external candidate JSON is read-only input; wrong
+session/worktree bindings, untrusted script locations, and shell composition
+remain denied.
+
+Git revision and ref operands are identifiers rather than paths. Read-only
+queries such as `git rev-list ... origin/topic...HEAD` therefore retain only an
+explicit `git -C` directory as path evidence, and `git push origin <ref>` stays
+claim-bound without treating `<ref>` as a file. Pytest node selectors retain
+only the file portion before `::` for claim-path evaluation.
 
 When this control blocks valid work, loses an expected session transition, or
 creates avoidable process cost, record concrete evidence in Project Meta's

@@ -69,6 +69,8 @@ def _supported_closeout_kwargs(args: argparse.Namespace) -> dict[str, object]:
         ("merge_commit", args.merge_commit),
         ("reconcile_missing_worktree", args.reconcile_missing_worktree),
         ("expected_tracker_sha256", args.tracker_sha256),
+        ("reconcile_canonical_root", args.reconcile_canonical_root),
+        ("expected_claim_sha256", args.claim_sha256),
         ("mailbox_disposition", args.mailbox_disposition),
         ("mailbox_note", args.mailbox_note),
     ):
@@ -113,7 +115,19 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--tracker-sha256",
-        help="Exact SHA-256 of the preserved session tracker required for missing-worktree reconciliation.",
+        help="Exact SHA-256 of the preserved session tracker required for reconciliation.",
+    )
+    parser.add_argument(
+        "--reconcile-canonical-root",
+        action="store_true",
+        help=(
+            "Archive an exact session-ended legacy claim whose recorded worktree is the clean canonical "
+            "repository root, retaining the filesystem and branch."
+        ),
+    )
+    parser.add_argument(
+        "--claim-sha256",
+        help="Exact SHA-256 of the preserved claim required for canonical-root reconciliation.",
     )
     parser.add_argument(
         "--allow-discard-unique",

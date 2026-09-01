@@ -2805,6 +2805,182 @@ def test_close_session_reconciles_exact_session_ended_missing_worktree(
     assert session_contracts.read_session_tracker(tracker)["tracker"]["current_phase"] == "closed"
 
 
+def test_close_session_archives_session_ended_canonical_root_without_removal(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Legacy canonical-root custody archives metadata while retaining Git state."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    monkeypatch.delenv("CODEX_THREAD_ID", raising=False)
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    _git(repo_root, "init", "-b", "main")
+    _git(repo_root, "config", "user.email", "tests@example.com")
+    _git(repo_root, "config", "user.name", "Test User")
+    (repo_root / "README.md").write_text("baseline\n", encoding="utf-8")
+    _git(repo_root, "add", "README.md")
+    _git(repo_root, "commit", "-m", "initial")
+    branch = "docs/refresh-arrangement"
+    _git(repo_root, "switch", "-c", branch)
+    (repo_root / "finder.md").write_text("current\n", encoding="utf-8")
+    _git(repo_root, "add", "finder.md")
+    _git(repo_root, "commit", "-m", "refresh finder")
+    _git(repo_root, "switch", "main")
+    _git(repo_root, "merge", "--no-ff", branch, "-m", "merge finder")
+    _git(repo_root, "update-ref", "refs/remotes/origin/main", "refs/heads/main")
+    _git(repo_root, "switch", branch)
+    session_lifecycle.start_session(
+        agent="codex",
+        project="inside-success-mega",
+        scope=branch,
+        intent="archive legacy canonical-root custody",
+        repo_root=str(repo_root),
+        worktree_path=str(repo_root),
+        branch=branch,
+        broader_goal="Retain Finder Repository",
+        current_phase="terminal metadata archival",
+        plan_ref="UNPLANNED",
+        session_id="codex:canonical-root-owner",
+        tracker_dir=trackers_dir,
+    )
+    session_lifecycle.end_runtime_session(
+        agent="codex",
+        session_id="codex:canonical-root-owner",
+        reason="implementation merged before metadata closeout",
+        claims_dir=claims_dir,
+    )
+    claim_file = claims_dir / coordination_claims._claim_filename(
+        "codex", "inside-success-mega", branch
+    )
+    claim_before = claim_file.read_bytes()
+    tracker = Path(yaml.safe_load(claim_before)["tracker_path"])
+    tracker_digest = session_lifecycle._tracker_sha256(tracker)
+    claim_digest = hashlib.sha256(claim_before).hexdigest()
+    branch_tip = _git(repo_root, "rev-parse", f"refs/heads/{branch}")
+    worktree_list_before = _git(repo_root, "worktree", "list", "--porcelain")
+
+    def fail_remove(*_args: object, **_kwargs: object) -> str:
+        raise AssertionError("canonical-root reconciliation must never remove a worktree")
+
+    def fail_delete(*_args: object, **_kwargs: object) -> str:
+        raise AssertionError("canonical-root reconciliation must never delete a branch")
+
+    monkeypatch.setattr(session_lifecycle, "_remove_worktree_path", fail_remove)
+    monkeypatch.setattr(session_lifecycle, "_delete_branch", fail_delete)
+
+    payload = session_lifecycle.close_session(
+        agent="codex",
+        project="inside-success-mega",
+        scope=branch,
+        reconcile_canonical_root=True,
+        expected_claim_sha256=claim_digest,
+        expected_tracker_sha256=tracker_digest,
+    )
+
+    assert payload["action"] == "closed"
+    assert payload["worktree_action"] == "retained_canonical_root"
+    assert payload["branch_action"] == "retained_canonical_branch"
+    assert repo_root.is_dir()
+    assert _git(repo_root, "rev-parse", f"refs/heads/{branch}") == branch_tip
+    assert _git(repo_root, "symbolic-ref", "--short", "HEAD") == branch
+    assert _git(repo_root, "worktree", "list", "--porcelain") == worktree_list_before
+    assert not claim_file.exists()
+    archived = _archived_claim_payload(payload["claim_archive_id"])
+    receipt = archived["canonical_root_reconciliation"]
+    assert archived["status"] == "completed"
+    assert receipt["claim_sha256"] == claim_digest
+    assert receipt["tracker_sha256"] == tracker_digest
+    assert receipt["filesystem_action"] == "retained_canonical_root"
+    assert receipt["branch_action"] == "retained_canonical_branch"
+
+
+@pytest.mark.parametrize(
+    ("ended", "claim_digest", "tracker_digest", "dirty", "expected"),
+    [
+        (False, "correct", "correct", False, "session_ended"),
+        (True, "wrong", "correct", False, "claim digest mismatch"),
+        (True, "correct", "wrong", False, "tracker digest mismatch"),
+        (True, "correct", "correct", True, "clean canonical checkout"),
+    ],
+)
+def test_close_session_canonical_root_reconciliation_rejects_before_mutation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    ended: bool,
+    claim_digest: str,
+    tracker_digest: str,
+    dirty: bool,
+    expected: str,
+) -> None:
+    """Status, exact digests, and clean canonical identity all fail closed."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    monkeypatch.delenv("CODEX_THREAD_ID", raising=False)
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    _git(repo_root, "init", "-b", "main")
+    _git(repo_root, "config", "user.email", "tests@example.com")
+    _git(repo_root, "config", "user.name", "Test User")
+    (repo_root / "README.md").write_text("baseline\n", encoding="utf-8")
+    _git(repo_root, "add", "README.md")
+    _git(repo_root, "commit", "-m", "initial")
+    branch = "legacy-finder"
+    _git(repo_root, "switch", "-c", branch)
+    session_lifecycle.start_session(
+        agent="codex",
+        project="inside-success-mega",
+        scope=branch,
+        intent="negative canonical-root reconciliation",
+        repo_root=str(repo_root),
+        worktree_path=str(repo_root),
+        branch=branch,
+        broader_goal="Retain Finder Repository",
+        current_phase="terminal metadata archival",
+        plan_ref="UNPLANNED",
+        session_id="codex:canonical-root-owner",
+        tracker_dir=trackers_dir,
+    )
+    if ended:
+        session_lifecycle.end_runtime_session(
+            agent="codex",
+            session_id="codex:canonical-root-owner",
+            reason="runtime ended",
+            claims_dir=claims_dir,
+        )
+    claim_file = claims_dir / coordination_claims._claim_filename(
+        "codex", "inside-success-mega", branch
+    )
+    claim_before = claim_file.read_bytes()
+    tracker = Path(yaml.safe_load(claim_before)["tracker_path"])
+    expected_claim_digest = hashlib.sha256(claim_before).hexdigest()
+    expected_tracker_digest = session_lifecycle._tracker_sha256(tracker)
+    if claim_digest == "wrong":
+        expected_claim_digest = "0" * 64
+    if tracker_digest == "wrong":
+        expected_tracker_digest = "0" * 64
+    if dirty:
+        (repo_root / "uncommitted.txt").write_text("preserve me\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match=expected):
+        session_lifecycle.close_session(
+            agent="codex",
+            project="inside-success-mega",
+            scope=branch,
+            reconcile_canonical_root=True,
+            expected_claim_sha256=expected_claim_digest,
+            expected_tracker_sha256=expected_tracker_digest,
+        )
+
+    assert claim_file.read_bytes() == claim_before
+    assert repo_root.exists()
+    assert _git(repo_root, "symbolic-ref", "--short", "HEAD") == branch
+
+
 @pytest.mark.parametrize(
     ("end_session", "remove_worktree", "digest"),
     [

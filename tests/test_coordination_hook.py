@@ -14,6 +14,13 @@ from pathlib import Path
 import yaml
 
 from enforced_planning import prewrite_claim_fast, prewrite_claim_projection
+from enforced_planning.coordination_messages import (
+    CoordinationMessageStore,
+    ExactSessionSelector,
+    MessageStatusRequest,
+    SendMessageRequest,
+    SessionInboxNotice,
+)
 from scripts import coordination_hook
 
 
@@ -55,6 +62,290 @@ def test_stop_refire_returns_before_receipts_or_projection(monkeypatch, tmp_path
     monkeypatch.setattr(coordination_hook, "_active_claims", unexpected)
 
     assert coordination_hook.main(["--hook-receipt-dir", str(tmp_path / "receipts")]) == 0
+
+
+def test_posttool_is_advisory_and_secondary_agent_cannot_poll_root_inbox(
+    monkeypatch, tmp_path: Path, capsys
+) -> None:
+    """Only the root polls, and PostTool never creates observation evidence."""
+
+    payload: dict[str, object] = {}
+    calls: list[dict[str, object]] = []
+    monkeypatch.setattr(
+        "sys.stdin",
+        type("Input", (), {"read": lambda _self: json.dumps(payload)})(),
+    )
+    monkeypatch.setattr(coordination_hook, "_active_claims", lambda *_args, **_kwargs: ())
+    monkeypatch.setattr(coordination_hook, "_canonical_project", lambda _cwd: "demo")
+    monkeypatch.setattr(
+        coordination_hook.coordination_claims,
+        "heartbeat_claims",
+        lambda **_kwargs: (),
+    )
+
+    def poll(**kwargs: object) -> SessionInboxNotice:
+        calls.append(kwargs)
+        return SessionInboxNotice(
+            session_id=str(kwargs["session_id"]),
+            project="demo",
+            active_count=0,
+            message_ids=(),
+            summary="",
+        )
+
+    monkeypatch.setattr(coordination_hook.coordination_messages, "poll_session_inbox", poll)
+    arguments = [
+        "--claims-dir",
+        str(tmp_path / "claims"),
+        "--root",
+        str(tmp_path / "messages"),
+        "--hook-receipt-dir",
+        str(tmp_path / "receipts"),
+    ]
+
+    payload.update(
+        session_id="shared-session",
+        cwd="/tmp",
+        hook_event_name="UserPromptSubmit",
+        hook_run_id="user_prompt_submit:1:/config.toml",
+        event_id="prompt-one",
+    )
+    assert coordination_hook.main(arguments) == 0
+    capsys.readouterr()
+    payload.update(
+        hook_event_name="PostToolUse",
+        hook_run_id="post_tool_use:2:/config.toml",
+        event_id="root-posttool",
+    )
+    assert coordination_hook.main(arguments) == 0
+    capsys.readouterr()
+    payload.update(
+        agent_id="child-agent",
+        hook_run_id="post_tool_use:3:/config.toml",
+        event_id="secondary-posttool",
+    )
+    assert coordination_hook.main(arguments) == 0
+    capsys.readouterr()
+
+    assert [call["observe"] for call in calls] == [True, False]
+
+
+def test_secondary_callback_leaves_obligation_for_root_next_pretool(
+    monkeypatch, tmp_path: Path, capsys
+) -> None:
+    """Maintenance-mode settings cannot let a secondary callback consume the root gate."""
+
+    payload: dict[str, object] = {}
+    poll_count = 0
+    monkeypatch.setenv("ENFORCED_PLANNING_HOOK_MODE", "off")
+    monkeypatch.setattr(
+        "sys.stdin",
+        type("Input", (), {"read": lambda _self: json.dumps(payload)})(),
+    )
+    monkeypatch.setattr(coordination_hook, "_active_claims", lambda *_args, **_kwargs: ())
+    monkeypatch.setattr(coordination_hook, "_canonical_project", lambda _cwd: "demo")
+    monkeypatch.setattr(coordination_hook, "_write_closeout_baseline", lambda **_kwargs: None)
+    monkeypatch.setattr(coordination_hook, "_record_touched_repositories", lambda **_kwargs: None)
+    monkeypatch.setattr(
+        coordination_hook.coordination_claims,
+        "heartbeat_claims",
+        lambda **_kwargs: (),
+    )
+
+    def poll(**kwargs: object) -> SessionInboxNotice:
+        nonlocal poll_count
+        poll_count += 1
+        active = poll_count > 2
+        return SessionInboxNotice(
+            session_id=str(kwargs["session_id"]),
+            project="demo",
+            active_count=1 if active else 0,
+            message_ids=("msg_" + "1" * 32,) if active else (),
+            summary="ACKNOWLEDGEMENT REQUIRED" if active else "",
+        )
+
+    class FakeStore:
+        def __init__(self, **_kwargs: object) -> None:
+            pass
+
+        def record_boundary_block(self, **_kwargs: object) -> None:
+            pass
+
+    monkeypatch.setattr(coordination_hook.coordination_messages, "poll_session_inbox", poll)
+    monkeypatch.setattr(coordination_hook.coordination_messages, "CoordinationMessageStore", FakeStore)
+    arguments = [
+        "--claims-dir",
+        str(tmp_path / "claims"),
+        "--root",
+        str(tmp_path / "messages"),
+        "--hook-receipt-dir",
+        str(tmp_path / "receipts"),
+    ]
+
+    payload.update(
+        session_id="shared-session",
+        cwd="/tmp",
+        hook_event_name="SessionStart",
+        event_id="session-start",
+    )
+    assert coordination_hook.main(arguments) == 0
+    capsys.readouterr()
+    payload.update(
+        session_id="shared-session",
+        cwd="/tmp",
+        hook_event_name="UserPromptSubmit",
+        hook_run_id="user_prompt_submit:1:/config.toml",
+        event_id="prompt-one",
+    )
+    assert coordination_hook.main(arguments) == 0
+    capsys.readouterr()
+    payload.update(
+        hook_event_name="PostToolUse",
+        agent_id="child-agent",
+        hook_run_id="post_tool_use:2:/config.toml",
+        event_id="secondary-posttool",
+    )
+    assert coordination_hook.main(arguments) == 0
+    assert capsys.readouterr().out == ""
+    payload.pop("agent_id")
+    payload.update(
+        hook_event_name="PreToolUse",
+        hook_run_id="pre_tool_use:3:/config.toml",
+        tool_use_id="root-next-tool",
+        tool_name="Bash",
+        tool_input={"command": "git status --short"},
+    )
+    assert coordination_hook.main(arguments) == 0
+    denial = json.loads(capsys.readouterr().out)
+
+    assert poll_count == 3
+    assert denial["hookSpecificOutput"]["permissionDecision"] == "deny"
+    assert "ACKNOWLEDGEMENT REQUIRED" in denial["hookSpecificOutput"][
+        "permissionDecisionReason"
+    ]
+
+
+def test_real_subprocess_secondary_posttool_preserves_root_pretool_obligation(
+    tmp_path: Path,
+) -> None:
+    """Exercise the native JSON process boundary with one session and two runs."""
+
+    claims_dir = tmp_path / "coordination" / "claims"
+    message_root = tmp_path / "coordination" / "messages-v1"
+    claims_dir.mkdir(parents=True)
+    for agent, session_id, scope in (
+        ("codex", "codex:shared-session", "recipient"),
+        ("claude-code", "claude-code:sender", "sender"),
+    ):
+        (claims_dir / f"{agent}_{scope}.yaml").write_text(
+            yaml.safe_dump(
+                {
+                    "schema_version": 2,
+                    "agent": agent,
+                    "projects": ["enforced-planning"],
+                    "scope": scope,
+                    "intent": scope,
+                    "claim_type": "program",
+                    "write_paths": [],
+                    "read_paths": [],
+                    "session_id": session_id,
+                    "status": "active",
+                    "claimed_at": "2026-09-01T19:00:00+00:00",
+                    "expires_at": "2099-09-01T19:00:00+00:00",
+                },
+                sort_keys=False,
+            ),
+            encoding="utf-8",
+        )
+    store = CoordinationMessageStore(root=message_root, claims_dir=claims_dir)
+    command = [
+        sys.executable,
+        "scripts/coordination_hook.py",
+        "--claims-dir",
+        str(claims_dir),
+        "--root",
+        str(message_root),
+        "--hook-receipt-dir",
+        str(tmp_path / "hook-receipts"),
+    ]
+    cwd = Path(__file__).resolve().parents[1]
+    initial_boundary = {
+        "session_id": "shared-session",
+        "cwd": str(cwd),
+        "hook_event_name": "PreToolUse",
+        "hook_run_id": "pre_tool_use:1:/config.toml",
+        "tool_use_id": "initial-root-tool",
+        "tool_name": "Bash",
+        "tool_input": {"command": "git status --short"},
+    }
+    initial = subprocess.run(
+        command,
+        input=json.dumps(initial_boundary),
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert initial.returncode == 0, initial.stderr or initial.stdout
+    assert initial.stdout == ""
+    persisted = store.send(
+        SendMessageRequest(
+            caller_session_id="claude-code:sender",
+            sender_session_id="claude-code:sender",
+            recipient=ExactSessionSelector(
+                kind="session", session_id="codex:shared-session"
+            ),
+            project="enforced-planning",
+            kind="coordination_request",
+            subject="Root must see this",
+            body="Do not let a secondary callback consume this obligation.",
+        )
+    )
+    secondary = subprocess.run(
+        command,
+        input=json.dumps(
+            {
+                "session_id": "shared-session",
+                "agent_id": "child-agent",
+                "cwd": str(cwd),
+                "hook_event_name": "PostToolUse",
+                "hook_run_id": "post_tool_use:2:/config.toml",
+                "tool_use_id": "secondary-tool",
+                "tool_name": "Bash",
+            }
+        ),
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert secondary.returncode == 0, secondary.stderr or secondary.stdout
+    assert secondary.stdout == ""
+    assert store.status(
+        MessageStatusRequest(message_id=persisted.message.message_id)
+    ).state == "persisted"
+
+    root_next = subprocess.run(
+        command,
+        input=json.dumps(
+            {
+                **initial_boundary,
+                "hook_run_id": "pre_tool_use:3:/config.toml",
+                "tool_use_id": "root-next-tool",
+            }
+        ),
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert root_next.returncode == 0, root_next.stderr or root_next.stdout
+    denial = json.loads(root_next.stdout)["hookSpecificOutput"]
+    assert denial["permissionDecision"] == "deny"
+    assert persisted.message.message_id in denial["permissionDecisionReason"]
+    assert store.status(
+        MessageStatusRequest(message_id=persisted.message.message_id)
+    ).state == "observed"
 
 
 def test_repository_statuses_are_collected_concurrently(monkeypatch, tmp_path: Path) -> None:

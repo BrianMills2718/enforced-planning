@@ -383,6 +383,14 @@ def test_criterion_result_requires_concrete_evidence() -> None:
             rationale="Unsupported pass.",
         )
 
+    with pytest.raises(ValidationError, match="must be non-blank"):
+        CriterionResult(
+            criterion_id="AC-1",
+            outcome="pass",
+            evidence_refs=("   ",),
+            rationale="Unsupported pass.",
+        )
+
 
 def test_codex_command_is_ephemeral_read_only_and_schema_bound(tmp_path: Path) -> None:
     command = build_codex_command(

@@ -47,6 +47,13 @@ class SemanticCriterion(StrictModel):
     evidence_required: tuple[str, ...] = Field(min_length=1)
     negative_control: str = Field(min_length=1)
 
+    @field_validator("evidence_required")
+    @classmethod
+    def required_evidence_is_concrete(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        if any(not reference.strip() for reference in value):
+            raise ValueError("required evidence entries must be non-blank")
+        return value
+
 
 class SemanticRubric(StrictModel):
     revision: str = Field(min_length=1)
@@ -98,12 +105,26 @@ class CriterionResult(StrictModel):
     evidence_refs: tuple[str, ...] = Field(min_length=1)
     rationale: str = Field(min_length=1)
 
+    @field_validator("evidence_refs")
+    @classmethod
+    def evidence_is_concrete(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        if any(not reference.strip() for reference in value):
+            raise ValueError("evidence references must be non-blank")
+        return value
+
 
 class ReviewFinding(StrictModel):
     finding_id: str = Field(min_length=1)
     severity: Literal["blocking", "advisory"]
     summary: str = Field(min_length=1)
     evidence_refs: tuple[str, ...] = Field(min_length=1)
+
+    @field_validator("evidence_refs")
+    @classmethod
+    def evidence_is_concrete(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        if any(not reference.strip() for reference in value):
+            raise ValueError("evidence references must be non-blank")
+        return value
 
 
 class SemanticReviewResult(StrictModel):

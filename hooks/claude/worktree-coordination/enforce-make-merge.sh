@@ -190,7 +190,7 @@ if [[ "$BLOCK_KIND" == "merge" ]]; then
 
     echo "BLOCKED: Direct GitHub CLI merge is not allowed" >&2
     echo "" >&2
-    echo "This bypasses exact-head review and worktree auto-cleanup." >&2
+    echo "This bypasses exact-head review, canonical claim authority, and worktree auto-cleanup." >&2
     echo "" >&2
     echo "Use the proper command instead:" >&2
     echo "  make finish BRANCH=<branch> PR=$PR_NUM REVIEW_SPEC=/absolute/review-spec.json" >&2
@@ -220,8 +220,8 @@ if [[ "$BLOCK_KIND" == "finish" ]]; then
 
     echo "BLOCKED: Direct script call is not allowed" >&2
     echo "" >&2
-    echo "Running finish_pr.py directly may use a stale" >&2
-    echo "copy of the script from your worktree instead of the latest from main." >&2
+    echo "Running finish_pr.py directly may use a stale copy of the script" >&2
+    echo "and bypass the canonical claim-bound integration entrypoint." >&2
     echo "" >&2
     echo "Use the proper command instead:" >&2
     echo "  make finish BRANCH=$BRANCH PR=$PR_NUM REVIEW_SPEC=/absolute/review-spec.json" >&2

@@ -158,6 +158,10 @@ handoff/session-end plus session-resume before it may hand off, abandon, finish,
 or close the lane; claim creation fails
 without changing the claim or its derived projection.
 
+New-lane creation is stricter: `require_new` bypasses same-owner refresh, then
+rejects an occupied slot or creates the claim while holding the registry lock.
+A concurrent exact-owner claim therefore cannot turn bootstrap into refresh.
+
 A successful cross-session `session-resume` also writes one immutable
 `claim_session_custody_transfer` receipt under the coordination root and returns
 its exact path and SHA-256. The receipt binds the project, scope, repository,

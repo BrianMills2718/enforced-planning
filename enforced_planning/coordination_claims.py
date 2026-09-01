@@ -2772,13 +2772,6 @@ def create_claim(
     target_worktree_path: str | None = None,
 ) -> tuple[bool, str]:
     """Create a new claim after checking for hard conflicts."""
-    if require_new:
-        with claim_registry_lock():
-            claim_path = CLAIMS_DIR / _claim_filename(agent, project, scope)
-            if claim_path.exists():
-                raise ValueError(
-                    f"Claim slot {project}:{scope} already exists; new-lane creation will not overwrite it"
-                )
     now = datetime.now(timezone.utc)
     initial_progress = build_progress_event(
         progress_kind="claim_started",
@@ -2792,32 +2785,33 @@ def create_claim(
             session_id,
             require_native_marker=require_native_session_marker,
         )
-    refreshed = _refresh_exact_owner_claim(
-        agent=agent,
-        project=project,
-        scope=scope,
-        session_id=session_id,
-        intent=intent,
-        plan_ref=plan_ref,
-        claim_type=claim_type,
-        write_paths=write_paths,
-        read_paths=read_paths,
-        worktree_path=worktree_path,
-        repo_root=repo_root,
-        branch=branch,
-        session_name=session_name,
-        broader_goal=broader_goal,
-        status=status,
-        parent_scope=parent_scope,
-        notes=notes,
-        allow_parallel=allow_parallel,
-        broad_scope_mode=broad_scope_mode,
-        broad_scope_reason=broad_scope_reason,
-        target_worktree_path=target_worktree_path,
-        ttl_hours=ttl_hours,
-    )
-    if refreshed is not None:
-        return refreshed
+    if not require_new:
+        refreshed = _refresh_exact_owner_claim(
+            agent=agent,
+            project=project,
+            scope=scope,
+            session_id=session_id,
+            intent=intent,
+            plan_ref=plan_ref,
+            claim_type=claim_type,
+            write_paths=write_paths,
+            read_paths=read_paths,
+            worktree_path=worktree_path,
+            repo_root=repo_root,
+            branch=branch,
+            session_name=session_name,
+            broader_goal=broader_goal,
+            status=status,
+            parent_scope=parent_scope,
+            notes=notes,
+            allow_parallel=allow_parallel,
+            broad_scope_mode=broad_scope_mode,
+            broad_scope_reason=broad_scope_reason,
+            target_worktree_path=target_worktree_path,
+            ttl_hours=ttl_hours,
+        )
+        if refreshed is not None:
+            return refreshed
     resolved_claim_type = claim_type or ("write" if write_paths else "program")
     work_graph_sha256: str | None = None
     approval_revisions: tuple[str, ...] = ()

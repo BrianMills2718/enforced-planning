@@ -2985,6 +2985,73 @@ def test_require_new_preserves_occupied_same_session_claim_slot(
     assert projection_path.read_bytes() == projection_before
 
 
+def test_require_new_rejects_same_session_slot_created_after_validation_without_mutation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A racing exact owner cannot enter the refresh path during new-lane creation."""
+
+    module = _load_module()
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
+    kwargs = {
+        "agent": "codex",
+        "project": "demo",
+        "scope": "racing-slot",
+        "intent": "create only a new lane",
+        "claim_type": "write",
+        "write_paths": ["src/racing.py"],
+        "repo_root": str(tmp_path / "demo"),
+        "worktree_path": str(tmp_path / "demo" / "worktrees" / "racing-slot"),
+        "branch": "racing-slot",
+        "session_id": "codex:same-session",
+        "session_name": "racing-slot",
+        "plan_ref": "UNPLANNED",
+    }
+    claim_path = claims_dir / "codex_demo_racing-slot.yaml"
+    projection_path = projection_path_for(claims_dir)
+    inserted_bytes: dict[str, bytes] = {}
+    original_validate = module._impl.validate_claim_for_creation
+
+    def validate_then_insert(candidate: object) -> None:
+        original_validate(candidate)
+        _write_claim(
+            claims_dir,
+            claim_path.name,
+            {
+                "schema_version": 4,
+                "agent": "codex",
+                "projects": ["demo"],
+                "scope": "racing-slot",
+                "intent": "concurrent exact-owner lane",
+                "plan_ref": "UNPLANNED",
+                "claim_type": "write",
+                "write_paths": ["src/racing.py"],
+                "repo_root": str(tmp_path / "demo"),
+                "worktree_path": str(tmp_path / "demo" / "worktrees" / "racing-slot"),
+                "branch": "racing-slot",
+                "session_id": "codex:same-session",
+                "session_name": "racing-slot",
+                "status": "active",
+            },
+        )
+        prewrite_claim_projection.write_projection(claims_dir=claims_dir)
+        inserted_bytes["claim"] = claim_path.read_bytes()
+        inserted_bytes["projection"] = projection_path.read_bytes()
+
+    def forbidden_refresh(**_kwargs: object) -> None:
+        raise AssertionError("require_new reached the existing-owner refresh path")
+
+    monkeypatch.setattr(module._impl, "validate_claim_for_creation", validate_then_insert)
+    monkeypatch.setattr(module._impl, "_refresh_exact_owner_claim", forbidden_refresh)
+
+    with pytest.raises(ValueError, match="already exists"):
+        module.create_claim(**kwargs, require_new=True)
+
+    assert claim_path.read_bytes() == inserted_bytes["claim"]
+    assert projection_path.read_bytes() == inserted_bytes["projection"]
+
+
 def test_guarded_release_preserves_claim_when_revision_or_session_changes(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

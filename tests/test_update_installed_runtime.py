@@ -353,8 +353,8 @@ def test_recovery_ref_collision_is_denied_without_overwrite(
             now=observed,
         )
 
-    assert caught.value.receipt["action"] == "denied"
+    assert caught.value.receipt["action"] == "partial_failure"
     assert caught.value.receipt["stage"] == "create_recovery_ref"
-    assert caught.value.receipt["mutation_started"] is False
+    assert caught.value.receipt["mutation_started"] is True
     assert _git(runtime, "rev-parse", recovery_ref) == before
     assert _git(runtime, "rev-parse", "HEAD") == before

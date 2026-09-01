@@ -110,7 +110,7 @@ def _base_receipt(
         "source_repo": str(source_repo.resolve()),
         "runtime_repo": str(runtime_repo.resolve()),
         "origin": None,
-        "canonical_repository": CANONICAL_ORIGIN_IDENTITY,
+        "canonical_repository": _canonical_origin_identity(),
         "checkout_mode": None,
         "before_revision": None,
         "target_revision": revision,
@@ -268,11 +268,6 @@ def update_runtime(
                 "an explicit detached replacement with a recovery ref is required"
             )
 
-        if write:
-            receipt["stage"] = "fetch_target"
-            _run(runtime_repo, "fetch", "--no-tags", "--no-write-fetch-head", CANONICAL_ORIGIN, revision)
-            _validate_revision(runtime_repo, revision)
-
         if not write or before == revision:
             receipt.update(
                 action="current" if before == revision else "would_update",
@@ -280,6 +275,12 @@ def update_runtime(
                 stage="complete",
             )
             return receipt
+
+        if write:
+            receipt["stage"] = "fetch_target"
+            receipt["mutation_started"] = True
+            _run(runtime_repo, "fetch", "--no-tags", "--no-write-fetch-head", CANONICAL_ORIGIN, revision)
+            _validate_revision(runtime_repo, revision)
 
         recovery_ref = _recovery_ref(before, now or datetime.now(UTC))
         receipt["stage"] = "create_recovery_ref"

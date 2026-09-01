@@ -51,8 +51,14 @@ def _claim(
 def _isolated_registry(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, Path]:
     claims_dir = tmp_path / "claims"
     events_path = tmp_path / "events.jsonl"
+    completed_archive_path = tmp_path / "completed-claim-archive-v1.jsonl"
     monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
     monkeypatch.setattr(receipts, "DEFAULT_EVENTS_PATH", events_path)
+    monkeypatch.setattr(
+        receipts,
+        "DEFAULT_COMPLETED_CLAIM_ARCHIVE_PATH",
+        completed_archive_path,
+    )
     return claims_dir, events_path
 
 
@@ -138,6 +144,12 @@ def test_each_supported_mutation_emits_one_terminal_receipt(
     assert set(_operations(events_path)) == {"create", "heartbeat", "release", "session_end", "closeout", "prune"}
     assert all(record.result == "applied_projection_current" for record in records)
     assert all(record.projection_current_after is True for record in records)
+    isolated_archive = tmp_path / "completed-claim-archive-v1.jsonl"
+    assert receipts.DEFAULT_COMPLETED_CLAIM_ARCHIVE_PATH == isolated_archive
+    assert isolated_archive.is_file()
+    archived_claims = receipts.load_completed_claim_archive_receipts()
+    assert len(archived_claims) == 1
+    assert archived_claims[0].source_path == str(closeout_path)
 
 
 def test_ledger_failure_reports_mutation_applied_without_rollback(
@@ -186,6 +198,8 @@ def test_cli_returns_nonzero_and_discloses_applied_audit_failure(
             "codex:receipt-test",
             "--session-name",
             "cli-audit-failure",
+            "--plan",
+            "UNPLANNED",
             "--json",
         ]
     )

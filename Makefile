@@ -10,7 +10,6 @@ SCAN_DIR ?= ~/projects
 TRUTH_CONFIG ?= $(REPO)/scripts/truth_surface_drift.yaml
 SEMANTIC_REVIEW_JSON ?= $(REPO)/docs/ops/semantic_truth_surface_review.json
 SEMANTIC_REVIEW_HISTORY ?= $(REPO)/docs/ops/semantic_truth_surface_review_history.json
-CODEX_RUNTIME_ROOT ?= $(HOME)/.codex/runtime/enforced-planning
 RUNTIME_REVISION ?=
 
 help:  ## Show available targets
@@ -18,18 +17,7 @@ help:  ## Show available targets
 
 install-codex-runtime:  ## Install an exact pushed revision into the clean detached Codex runtime with a rollback ref
 	@test -n "$(RUNTIME_REVISION)" || { echo "RUNTIME_REVISION is required"; exit 1; }
-	@test -d "$(CODEX_RUNTIME_ROOT)/.git" || { echo "Codex runtime checkout is missing"; exit 1; }
-	@test -z "$$(git -C "$(CODEX_RUNTIME_ROOT)" status --porcelain)" || { echo "Codex runtime checkout is dirty"; exit 1; }
-	@case "$(RUNTIME_REVISION)" in *[!0-9a-f]*|'') echo "RUNTIME_REVISION must be hexadecimal"; exit 1;; esac
-	@length=$$(printf %s "$(RUNTIME_REVISION)" | wc -c); \
-		test "$$length" -ge 40 -a "$$length" -le 64 || { echo "RUNTIME_REVISION must be a full Git object id"; exit 1; }
-	@set -eu; \
-	before=$$(git -C "$(CODEX_RUNTIME_ROOT)" rev-parse HEAD); \
-	rollback="refs/enforced-planning/runtime-rollback/$$(date -u +%Y%m%dT%H%M%SZ)-$$before"; \
-	git -C "$(CODEX_RUNTIME_ROOT)" update-ref "$$rollback" "$$before"; \
-	git -C "$(CODEX_RUNTIME_ROOT)" fetch --no-tags origin "$(RUNTIME_REVISION)"; \
-	git -C "$(CODEX_RUNTIME_ROOT)" checkout --detach "$(RUNTIME_REVISION)"; \
-	printf 'installed %s; rollback %s -> %s\n' "$(RUNTIME_REVISION)" "$$rollback" "$$before"
+	@$(PYTHON) scripts/update_installed_runtime.py --revision "$(RUNTIME_REVISION)" --allow-detached-replacement --write
 
 test:  ## Run full test suite
 	python -m pytest tests/ -v
@@ -402,10 +390,6 @@ endif
 # than create a single worktree. Every default below stays overridable, and
 # `make worktree` (plan-owned lanes) still requires all of them explicitly --
 # a numbered plan lane should not get its goal invented from a branch name.
-MAINTENANCE_LABEL = $(subst -, ,$(BRANCH))
-MAINTENANCE_TASK = $(if $(strip $(TASK)),$(TASK),Unplanned maintenance: $(MAINTENANCE_LABEL))
-MAINTENANCE_SESSION_GOAL = $(if $(strip $(SESSION_GOAL)),$(SESSION_GOAL),Unplanned maintenance: $(MAINTENANCE_LABEL))
-MAINTENANCE_SESSION_PHASE = $(if $(strip $(SESSION_PHASE)),$(SESSION_PHASE),maintenance)
 MAINTENANCE_AGENT = $(if $(strip $(WORKTREE_AGENT)),$(WORKTREE_AGENT),claude-code)
 # This is the one deliberately broad bootstrap claim.  A maintenance lane has
 # no declared implementation surface yet, so requiring a caller-supplied path
@@ -418,30 +402,16 @@ MAINTENANCE_AGENT = $(if $(strip $(WORKTREE_AGENT)),$(WORKTREE_AGENT),claude-cod
 # lane conflict with every other active lane by construction, and the operator
 # saw a CONFLICT naming the other lanes rather than their own claim.
 MAINTENANCE_BOOTSTRAP_WRITE_PATHS = $(if $(strip $(SESSION_WRITE_PATHS)),$(SESSION_WRITE_PATHS),.)
-# Bootstrap metadata is valid only for the implicit repository-wide claim.
-# An explicit path list is already narrow authority, and attaching bootstrap
-# metadata makes the typed claim contract reject the otherwise-safe request.
-MAINTENANCE_BROAD_SCOPE_MODE = $(if $(strip $(SESSION_WRITE_PATHS)),,bootstrap)
-MAINTENANCE_BROAD_SCOPE_REASON = $(if $(strip $(SESSION_WRITE_PATHS)),,construct this maintenance lane, then narrow before its first repository write)
-MAINTENANCE_TARGET_WORKTREE_PATH = $(if $(strip $(SESSION_WRITE_PATHS)),,$(WORKTREE_DIR)/$(BRANCH))
+MAINTENANCE_REQUEST_JSON = $(shell $(PYTHON) -c 'import json,sys; print(json.dumps({"schema_version":"1.0","operation":"maintenance_worktree","agent":sys.argv[1],"project":sys.argv[2],"scope":sys.argv[3],"repo_root":sys.argv[4],"branch":sys.argv[3],"claim_type":"program","write_paths":sys.argv[5:]},separators=(",",":")))' "$(MAINTENANCE_AGENT)" "$(WORKTREE_PROJECT)" "$(BRANCH)" "$(WORKTREE_REPO_ROOT)" $(foreach path,$(MAINTENANCE_BOOTSTRAP_WRITE_PATHS),"$(path)"))
 
 maintenance-worktree:  ## Claimed light maintenance worktree; needs BRANCH (other maintenance metadata has safe defaults)
+ifneq ($(strip $(PLAN)),)
+	$(error maintenance-worktree is only for explicitly unplanned light maintenance; use make worktree PLAN=N for plan-owned work)
+endif
 ifndef BRANCH
 	$(error BRANCH is required. Usage: make maintenance-worktree BRANCH=fix-hook-guard)
 endif
-	@$(MAKE) worktree BRANCH="$(BRANCH)" TASK="$(MAINTENANCE_TASK)" \
-		SESSION_GOAL="$(MAINTENANCE_SESSION_GOAL)" \
-		SESSION_PHASE="$(MAINTENANCE_SESSION_PHASE)" \
-		WORKTREE_AGENT="$(MAINTENANCE_AGENT)" \
-		SESSION_WRITE_PATHS="$(MAINTENANCE_BOOTSTRAP_WRITE_PATHS)" SESSION_READ_PATHS="$(SESSION_READ_PATHS)" \
-		SESSION_NEXT="$(SESSION_NEXT)" SESSION_DEPENDS="$(SESSION_DEPENDS)" \
-		SESSION_STOP_CONDITIONS="$(SESSION_STOP_CONDITIONS)" SESSION_NOTE="$(SESSION_NOTE)" \
-		SESSION_CLAIM_TYPE="$(SESSION_CLAIM_TYPE)" SESSION_PARENT_SCOPE="$(SESSION_PARENT_SCOPE)" \
-		SESSION_BROAD_SCOPE_MODE="$(MAINTENANCE_BROAD_SCOPE_MODE)" \
-		SESSION_BROAD_SCOPE_REASON="$(MAINTENANCE_BROAD_SCOPE_REASON)" \
-		SESSION_TARGET_WORKTREE_PATH="$(MAINTENANCE_TARGET_WORKTREE_PATH)" \
-		SESSION_ALLOW_PARALLEL="$(SESSION_ALLOW_PARALLEL)" \
-		WORKTREE_EXECUTION_PROFILE=light ALLOW_UNPLANNED=1
+	@$(PYTHON) scripts/claim_bootstrap.py --request-json '$(MAINTENANCE_REQUEST_JSON)'
 
 session-start:  ## Create or refresh the active session contract for BRANCH=name
 ifndef BRANCH

@@ -7,6 +7,7 @@ import os
 import shlex
 import shutil
 import subprocess
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -30,12 +31,15 @@ from enforced_planning.coordination_messages import (
     MessageStatusRequest,
     MessageStatusView,
     PersistedMessageResult,
+    PersistedMessageResultV2,
     PollMessagesRequest,
     RecordCollisionError,
     SendMessageRequest,
     SessionInboxNotice,
     UnknownSessionError,
     WrongRecipientError,
+    inspect_host_delivery_capability,
+    poll_session_inbox,
 )
 
 NOW = datetime(2026, 7, 15, 20, 0, tzinfo=UTC)
@@ -112,6 +116,284 @@ def _send_request(
         idempotency_key=idempotency_key,
         plan_ref="Plan #67",
     )
+
+
+def test_sender_status_reports_advisory_only_when_local_pretooluse_is_disabled(
+    tmp_path: Path,
+) -> None:
+    """Sender-visible status must not translate configured delivery into a stop claim."""
+
+    config = tmp_path / "config.toml"
+    adapter = tmp_path / "coordination_hook.py"
+    shutil.copy2(Path(__file__).resolve().parents[1] / "scripts" / adapter.name, adapter)
+    command = f"python3 {adapter} --agent codex"
+    config.write_text(
+        f'''[[hooks.SessionStart]]
+matcher = "startup|resume|clear|compact"
+[[hooks.SessionStart.hooks]]
+type = "command"
+command = "{command}"
+
+[[hooks.PostToolUse]]
+matcher = "*"
+[[hooks.PostToolUse.hooks]]
+type = "command"
+command = "{command}"
+
+[[hooks.PreToolUse]]
+matcher = "Bash|apply_patch"
+[[hooks.PreToolUse.hooks]]
+type = "command"
+command = "{command}"
+
+[[hooks.Stop]]
+matcher = ""
+[[hooks.Stop.hooks]]
+type = "command"
+command = "{command}"
+
+[hooks.state."{config.resolve()}:pre_tool_use:0:0"]
+enabled = false
+''',
+        encoding="utf-8",
+    )
+
+    status = inspect_host_delivery_capability("codex:recipient", codex_config_path=config)
+
+    assert status.delivery_mode == "advisory_only"
+    assert status.mutation_enforcement_available is False
+    assert status.stop_enforcement_available is True
+    assert status.observed_proves_exposure_only is True
+    assert status.observed_proves_stopped is False
+    assert status.observed_proves_acknowledged is False
+    assert "mutation enforcement is unavailable" in status.operator_message
+
+
+def test_send_result_carries_advisory_only_local_host_status(
+    mailbox: tuple[CoordinationMessageStore, Path, Path],
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """A persisted send reports the configured delivery boundary without upgrading observation."""
+
+    store, _claims_dir, _root = mailbox
+    monkeypatch.setenv("HOME", str(tmp_path))
+    settings = tmp_path / ".claude" / "settings.json"
+    settings.parent.mkdir()
+    adapter = tmp_path / "coordination_hook.py"
+    shutil.copy2(Path(__file__).resolve().parents[1] / "scripts" / adapter.name, adapter)
+    command = f"python3 {adapter} --agent claude-code"
+    settings.write_text(
+        json.dumps(
+            {
+                "hooks": {
+                    "SessionStart": [
+                        {
+                            "matcher": "startup|resume|clear|compact",
+                            "hooks": [{"type": "command", "command": command}],
+                        }
+                    ],
+                    "PostToolUse": [
+                        {
+                            "matcher": "*",
+                            "hooks": [{"type": "command", "command": command}],
+                        }
+                    ],
+                    "Stop": [
+                        {
+                            "matcher": "",
+                            "hooks": [{"type": "command", "command": command}],
+                        }
+                    ],
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = store.send(_send_request(), now=NOW)
+
+    assert result.local_host_delivery_capability.delivery_mode == "advisory_only"
+    assert result.local_host_delivery_capability.mutation_enforcement_available is False
+    assert result.local_host_delivery_capability.observed_proves_stopped is False
+    assert result.local_host_delivery_capability.observed_proves_acknowledged is False
+
+
+@pytest.mark.parametrize(
+    ("adapter_state", "expected_issue"),
+    [("missing", "adapter_missing"), ("digest_drift", "adapter_digest_mismatch")],
+)
+def test_send_result_fails_closed_for_untrusted_configured_adapter(
+    mailbox: tuple[CoordinationMessageStore, Path, Path],
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    adapter_state: str,
+    expected_issue: str,
+) -> None:
+    """A configured command is not enforcement when its adapter bytes are unavailable or drifted."""
+
+    store, _claims_dir, _root = mailbox
+    monkeypatch.setenv("HOME", str(tmp_path))
+    adapter = tmp_path / "coordination_hook.py"
+    if adapter_state == "digest_drift":
+        adapter.write_text("# drifted adapter\n", encoding="utf-8")
+    command = f"python3 {adapter} --agent claude-code"
+    settings = tmp_path / ".claude" / "settings.json"
+    settings.parent.mkdir()
+    settings.write_text(
+        json.dumps(
+            {
+                "hooks": {
+                    event: [{"matcher": matcher, "hooks": [{"type": "command", "command": command}]}]
+                    for event, matcher in (
+                        ("SessionStart", "startup|resume|clear|compact"),
+                        ("UserPromptSubmit", ""),
+                        ("PostToolUse", "*"),
+                        ("PreToolUse", "Bash|Edit|Write"),
+                        ("Stop", ""),
+                    )
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    capability = store.send(_send_request(), now=NOW).local_host_delivery_capability
+
+    assert capability.delivery_mode == "unavailable"
+    assert capability.mutation_enforcement_available is False
+    assert capability.stop_enforcement_available is False
+    assert expected_issue in capability.issues
+
+
+@pytest.mark.parametrize(
+    "command_template",
+    (
+        "exit 0; python3 {adapter} --agent codex",
+        "python3 {adapter} --agent claude-code",
+        "/usr/bin/env python3 {adapter} --agent codex",
+        "/definitely/missing/python3 {adapter} --agent codex",
+    ),
+)
+def test_host_delivery_rejects_composed_wrapped_or_wrong_client_commands(
+    tmp_path: Path,
+    command_template: str,
+) -> None:
+    """Byte-equal adapters count only when the configured argv invokes them directly."""
+
+    config = tmp_path / "config.toml"
+    adapter = tmp_path / "coordination_hook.py"
+    shutil.copy2(Path(__file__).resolve().parents[1] / "scripts" / adapter.name, adapter)
+    command = command_template.format(adapter=adapter)
+    blocks = []
+    for event, matcher in (
+        ("SessionStart", "startup|resume|clear|compact"),
+        ("UserPromptSubmit", ""),
+        ("PostToolUse", "*"),
+        ("PreToolUse", "Bash|apply_patch"),
+        ("Stop", ""),
+    ):
+        blocks.append(
+            f'[[hooks.{event}]]\nmatcher = "{matcher}"\n'
+            f'[[hooks.{event}.hooks]]\ntype = "command"\ncommand = "{command}"\n'
+        )
+    config.write_text("\n".join(blocks), encoding="utf-8")
+
+    capability = inspect_host_delivery_capability("codex:recipient", codex_config_path=config)
+
+    assert capability.delivery_mode == "unavailable"
+    assert capability.mutation_enforcement_available is False
+    assert capability.stop_enforcement_available is False
+    assert "adapter_command_invalid" in capability.issues
+
+
+def test_host_delivery_rejects_untrusted_executable_named_python3(tmp_path: Path) -> None:
+    """An executable basename cannot substitute for the interpreter running the classifier."""
+
+    config = tmp_path / "config.toml"
+    adapter = tmp_path / "coordination_hook.py"
+    shutil.copy2(Path(__file__).resolve().parents[1] / "scripts" / adapter.name, adapter)
+    no_op_python = tmp_path / "python3"
+    no_op_python.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    no_op_python.chmod(0o755)
+    command = f"{no_op_python} {adapter} --agent codex"
+    blocks = []
+    for event, matcher in (
+        ("SessionStart", "startup|resume|clear|compact"),
+        ("UserPromptSubmit", ""),
+        ("PostToolUse", "*"),
+        ("PreToolUse", "Bash|apply_patch"),
+        ("Stop", ""),
+    ):
+        blocks.append(
+            f'[[hooks.{event}]]\nmatcher = "{matcher}"\n'
+            f'[[hooks.{event}.hooks]]\ntype = "command"\ncommand = "{command}"\n'
+        )
+    config.write_text("\n".join(blocks), encoding="utf-8")
+
+    capability = inspect_host_delivery_capability("codex:recipient", codex_config_path=config)
+
+    assert capability.delivery_mode == "unavailable"
+    assert capability.mutation_enforcement_available is False
+    assert capability.stop_enforcement_available is False
+    assert "adapter_command_invalid" in capability.issues
+
+
+def test_host_delivery_rejects_non_executable_direct_shell_adapter(tmp_path: Path) -> None:
+    """A direct script command is runnable only when its executable bit is present."""
+
+    config = tmp_path / "config.toml"
+    adapter = tmp_path / "notify-coordination-messages.sh"
+    shutil.copy2(
+        Path(__file__).resolve().parents[1] / "hooks" / "codex" / adapter.name,
+        adapter,
+    )
+    adapter.chmod(0o644)
+    blocks = []
+    for event, matcher in (
+        ("SessionStart", "startup|resume|clear|compact"),
+        ("UserPromptSubmit", ""),
+        ("PostToolUse", "*"),
+        ("PreToolUse", "Bash|apply_patch"),
+        ("Stop", ""),
+    ):
+        blocks.append(
+            f'[[hooks.{event}]]\nmatcher = "{matcher}"\n'
+            f'[[hooks.{event}.hooks]]\ntype = "command"\ncommand = "{adapter}"\n'
+        )
+    config.write_text("\n".join(blocks), encoding="utf-8")
+
+    capability = inspect_host_delivery_capability("codex:recipient", codex_config_path=config)
+
+    assert capability.delivery_mode == "unavailable"
+    assert capability.mutation_enforcement_available is False
+    assert capability.stop_enforcement_available is False
+    assert "adapter_command_invalid" in capability.issues
+
+
+def test_v2_send_result_has_explicit_legacy_migration_boundary(
+    mailbox: tuple[CoordinationMessageStore, Path, Path],
+) -> None:
+    """The delivery-capability addition is a named successor, not a silent V1 shape change."""
+
+    store, _claims_dir, _root = mailbox
+    current = store.send(_send_request(), now=NOW)
+    current_payload = current.model_dump(mode="json")
+    legacy_payload = {
+        key: value
+        for key, value in current_payload.items()
+        if key not in {"schema_version", "local_host_delivery_capability"}
+    }
+
+    assert (
+        PersistedMessageResult.model_validate_json(json.dumps(legacy_payload)).model_dump(mode="json")
+        == legacy_payload
+    )
+    assert PersistedMessageResultV2.model_validate_json(json.dumps(current_payload)).schema_version == "2.0.0"
+    with pytest.raises(ValidationError):
+        PersistedMessageResult.model_validate_json(json.dumps(current_payload))
+    with pytest.raises(ValidationError):
+        PersistedMessageResultV2.model_validate_json(json.dumps(legacy_payload))
 
 
 def test_mailbox_supports_canonical_legacy_claim_registry_signature(
@@ -237,6 +519,52 @@ def test_duplicate_adapters_show_one_notice_per_event_then_repeat_for_later_even
     status = store.status(MessageStatusRequest(message_id=message.message_id))
     assert status.state == "observed"
     assert [receipt.event for receipt in status.receipts] == ["observed"]
+
+
+def test_concurrent_truncated_notices_observe_and_claim_only_the_displayed_prefix(
+    mailbox: tuple[CoordinationMessageStore, Path, Path],
+) -> None:
+    """Truncation must occur before delivery reservation or observation side effects."""
+
+    store, claims_dir, root = mailbox
+    current_time = datetime.now(UTC)
+    messages = [
+        store.send(
+            _send_request(
+                idempotency_key=f"truncated-{index}",
+                subject=f"Message {index}",
+            ),
+            now=current_time + timedelta(seconds=index),
+        ).message
+        for index in range(3)
+    ]
+
+    def poll_once() -> SessionInboxNotice:
+        return poll_session_inbox(
+            agent="claude-code",
+            project="enforced-planning",
+            session_id=CLAUDE_SESSION,
+            observe=True,
+            claims_dir=claims_dir,
+            root=root,
+            max_messages=1,
+            delivery_event_id="same-native-event",
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        notices = tuple(executor.map(lambda _index: poll_once(), range(2)))
+
+    displayed_ids = [message_id for notice in notices for message_id in notice.message_ids]
+    assert displayed_ids == [messages[0].message_id]
+    winner = next(notice for notice in notices if notice.message_ids)
+    assert winner.active_count == 3
+    assert "2 more not shown" in winner.summary
+    assert store.status(MessageStatusRequest(message_id=messages[0].message_id)).state == "observed"
+    assert [
+        store.status(MessageStatusRequest(message_id=message.message_id)).state
+        for message in messages[1:]
+    ] == ["persisted", "persisted"]
+    assert len(tuple((root / "deliveries").glob("*.json"))) == 1
 
 
 def test_claim_selector_resolves_unique_session_and_rejects_ambiguity(

@@ -12,7 +12,6 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from enforced_planning import coordination_claims, coordination_messages
 
-
 DEFAULT_CODEX_SESSION_INDEX = Path.home() / ".codex" / "session_index.jsonl"
 
 
@@ -36,7 +35,7 @@ class ClientSessionDisplayV1(StrictProjection):
 
 
 class CoordinationResponseReadoutV1(StrictProjection):
-    """Joined operator view that never upgrades response into work completion."""
+    """Legacy joined operator view retained for strict consumer compatibility."""
 
     schema_version: Literal["1.0.0"] = "1.0.0"
     message_id: str
@@ -58,6 +57,13 @@ class CoordinationResponseReadoutV1(StrictProjection):
     response_ref: str | None = None
     manual_resume_command: str | None = None
     completion_claim: Literal["not_evaluated"] = "not_evaluated"
+
+
+class CoordinationResponseReadoutV2(CoordinationResponseReadoutV1):
+    """Versioned operator view with explicit host delivery capability."""
+
+    schema_version: Literal["1.1.0"] = "1.1.0"
+    operator_host_delivery_capability: coordination_messages.HostDeliveryCapabilityV1
 
 
 ResponseState = Literal[
@@ -136,7 +142,7 @@ def resolve_client_session_display(
             warnings.append(f"matching_row_missing_updated_at:{line_number}")
             continue
         try:
-            parsed_updated_at = datetime.fromisoformat(updated_at.replace("Z", "+00:00"))
+            parsed_updated_at = datetime.fromisoformat(updated_at)
         except ValueError:
             warnings.append(f"matching_row_invalid_updated_at:{line_number}")
             continue
@@ -170,7 +176,9 @@ def build_coordination_response_readout(
     *,
     claims: list[coordination_claims.ClaimRecord],
     codex_session_index: Path = DEFAULT_CODEX_SESSION_INDEX,
-) -> CoordinationResponseReadoutV1:
+    codex_config_path: Path | None = None,
+    claude_config_path: Path | None = None,
+) -> CoordinationResponseReadoutV2:
     """Join message lifecycle and display metadata without inferring completion."""
 
     recipient_session_id = status.message.recipient_session_id
@@ -203,7 +211,7 @@ def build_coordination_response_readout(
         )
         manual_resume_command = shlex.join(("codex", "exec", "resume", raw_session_id, prompt))
 
-    return CoordinationResponseReadoutV1(
+    return CoordinationResponseReadoutV2(
         message_id=status.message.message_id,
         recipient_session_id=recipient_session_id,
         client_display=resolve_client_session_display(
@@ -226,6 +234,12 @@ def build_coordination_response_readout(
             sorted({claim.scope for claim in recipient_claims if not claim.is_live()})
         ),
         message_state=status.state,
+        operator_host_delivery_capability=coordination_messages.inspect_host_delivery_capability(
+            recipient_session_id,
+            codex_config_path=codex_config_path,
+            claude_config_path=claude_config_path,
+            scope="operator_host_recipient_client_config",
+        ),
         response_state=response_state,
         acknowledgement_disposition=acknowledgement.disposition if acknowledgement else None,
         acknowledgement_note=acknowledgement.note if acknowledgement else None,

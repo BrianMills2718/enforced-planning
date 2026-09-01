@@ -339,6 +339,51 @@ def _native_notice(message: str) -> str:
     return json.dumps({"systemMessage": message}, sort_keys=True)
 
 
+def _refresh_projection_for_claimed_command(
+    *,
+    claims_dir: Path,
+    projection_path: Path,
+) -> None:
+    """Repair one stale valid projection under the canonical registry lock.
+
+    Claim heartbeats can run between native tool events. Resolving a session
+    target against a digest-stale projection before attempting recovery makes
+    the recovery command itself an operator-visible prerequisite for every
+    subsequent write. The registry lock gives projection build and publication
+    one coherent claim snapshot; invalid registries remain stale and therefore
+    fail closed through ordinary admission.
+    """
+
+    from enforced_planning import coordination_claims
+    from enforced_planning.prewrite_claim_projection import (
+        ProjectionBuildError,
+        projection_is_current,
+        write_projection,
+    )
+
+    # Missing projection state is not repairable authority. Preserve the
+    # established fail-closed ``projection_unavailable_or_stale`` decision;
+    # this helper only closes the heartbeat race for an existing projection.
+    if not claims_dir.is_dir() or not projection_path.is_file():
+        return
+
+    try:
+        with coordination_claims.claim_registry_lock(claims_dir):
+            if projection_is_current(
+                claims_dir=claims_dir,
+                projection_path=projection_path,
+            ):
+                return
+            write_projection(
+                claims_dir=claims_dir,
+                projection_path=projection_path,
+            )
+    except (OSError, ProjectionBuildError, ValueError):
+        # Do not turn an invalid registry into authority. The subsequent
+        # ordinary evaluation emits the existing fail-closed stale receipt.
+        return
+
+
 def _parse_native_mailbox_command(
     command: str,
     *,
@@ -389,6 +434,116 @@ def _parse_native_mailbox_command(
         raise ValueError("mailbox caller does not match the ambient native session")
     if operation == "send" and request.sender_session_id != native_session:
         raise ValueError("mailbox sender does not match the ambient native session")
+
+
+def _parse_plan_execution_cursor_command(
+    command: str,
+    *,
+    client: str,
+    claims_dir: Path,
+    native_session: str | None = None,
+) -> None:
+    """Validate the version-bound plan cursor manager as one control mutation."""
+
+    from enforced_planning import coordination_claims
+
+    if "\n" in command or "\r" in command:
+        raise ValueError("plan execution cursor command must be exactly one line")
+    tokens = shlex.split(command)
+    if any(token in {";", "&", "&&", "|", "||", ">", ">>", "<"} for token in tokens):
+        raise ValueError("plan execution cursor command cannot compose shell operations")
+    bound_worktree: Path | None = None
+    if len(tokens) >= 4 and tokens[:2] == ["/usr/bin/env", "-C"]:
+        bound_worktree = Path(tokens[2]).expanduser()
+        if not bound_worktree.is_absolute() or bound_worktree.resolve() != bound_worktree:
+            raise ValueError("plan execution cursor runtime cwd must be canonical and absolute")
+        tokens = tokens[3:]
+    if len(tokens) < 7 or tokens[0] != "/usr/bin/python3":
+        raise ValueError("plan execution cursor command requires the canonical interpreter")
+
+    script = Path(tokens[1]).expanduser()
+    cache_root = (
+        Path.home() / ".codex" / "plugins" / "cache" / "inside-success" / "company-planning"
+    ).resolve()
+    if not script.is_absolute() or script.resolve() != script or not script.is_file():
+        raise ValueError("plan execution cursor manager must be one canonical installed file")
+    try:
+        relative_script = script.relative_to(cache_root)
+    except ValueError as exc:
+        raise ValueError("plan execution cursor manager is outside the trusted plugin cache") from exc
+    if len(relative_script.parts) != 3 or relative_script.parts[1:] != (
+        "scripts",
+        "manage_plan_execution.py",
+    ):
+        raise ValueError("plan execution cursor manager has an invalid installed layout")
+    version = relative_script.parts[0]
+    manifest_path = cache_root / version / ".codex-plugin" / "plugin.json"
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, TypeError, json.JSONDecodeError) as exc:
+        raise ValueError("plan execution cursor manager has no valid installed manifest") from exc
+    if manifest.get("name") != "company-planning" or manifest.get("version") != version:
+        raise ValueError("plan execution cursor manager version does not match its manifest")
+
+    if tokens[2] != "--cwd" or tokens[4] != "--session-id":
+        raise ValueError("plan execution cursor command does not match the canonical CLI order")
+    worktree = Path(tokens[3]).expanduser()
+    if not worktree.is_absolute() or worktree.resolve() != worktree:
+        raise ValueError("plan execution cursor cwd must be canonical and absolute")
+    if bound_worktree is not None and bound_worktree != worktree:
+        raise ValueError("plan execution cursor runtime cwd does not match --cwd")
+    if native_session is None or tokens[5] != native_session:
+        raise ValueError("plan execution cursor session does not match the ambient native session")
+
+    operation = tokens[6]
+    candidate: Path | None = None
+    if operation == "start" and len(tokens) == 8:
+        candidate = Path(tokens[7]).expanduser()
+    elif operation == "replace" and len(tokens) == 10 and tokens[8] == "--expected-revision":
+        candidate = Path(tokens[7]).expanduser()
+        try:
+            if int(tokens[9]) < 1:
+                raise ValueError
+        except ValueError as exc:
+            raise ValueError("plan execution cursor expected revision must be positive") from exc
+    elif operation == "archive" and len(tokens) == 7:
+        pass
+    else:
+        raise ValueError("plan execution cursor command does not match a supported exact operation")
+    if candidate is not None and (
+        not candidate.is_absolute()
+        or candidate.resolve() != candidate
+        or candidate.suffix != ".json"
+        or not candidate.is_file()
+    ):
+        raise ValueError("plan execution cursor candidate must be one canonical readable JSON file")
+
+    active_claims = coordination_claims.check_claims(claims_dir=claims_dir)
+    claims = [
+        claim
+        for claim in active_claims
+        if claim.agent == client
+        and claim.session_id == native_session
+        and claim.is_live()
+        and (claim.target_worktree_path or claim.worktree_path)
+        and Path(claim.target_worktree_path or claim.worktree_path).expanduser().resolve() == worktree
+    ]
+    if len(claims) != 1:
+        raise ValueError("plan execution cursor target is not the ambient runtime's exact live claim")
+    claim = claims[0]
+    if coordination_claims.claim_runtime_status(claim, active_claims=active_claims) != "healthy":
+        raise ValueError("plan execution cursor target claim is not healthy")
+    required_paths = [".company-planning/active-execution.json"]
+    if operation == "archive":
+        required_paths.append(".company-planning/history")
+    normalized_claim_paths = [
+        coordination_claims._normalize_repo_path(path) for path in claim.write_paths
+    ]
+    if any(
+        not any(coordination_claims._paths_overlap(required, owned) for owned in normalized_claim_paths)
+        for required in required_paths
+    ):
+        raise ValueError("plan execution cursor output is outside the exact claim")
 
 
 def _parse_native_closeout_command(
@@ -462,6 +617,29 @@ def _same_file_digest(left: Path, right: Path) -> bool:
         return False
 
 
+def _rendered_consumer_worktree_block_matches(target_makefile: Path) -> bool:
+    """Match only the installed governed block, not consumer-owned Make content."""
+
+    start = "# >>> META-PROCESS WORKTREE TARGETS >>>"
+    end = "# <<< META-PROCESS WORKTREE TARGETS <<<"
+    try:
+        target_text = target_makefile.read_text(encoding="utf-8")
+        template_text = (REPO_ROOT / "templates" / "Makefile.worktree.block.template").read_text(
+            encoding="utf-8"
+        )
+    except OSError:
+        return False
+    expected = template_text.replace(
+        "__WORKTREE_SCRIPT_ROOT__", "scripts/meta/worktree-coordination"
+    ).strip()
+    start_at = target_text.find(start)
+    end_at = target_text.find(end, start_at + len(start))
+    if start_at < 0 or end_at < 0:
+        return False
+    actual = target_text[start_at : end_at + len(end)].strip()
+    return hashlib.sha256(actual.encode()).digest() == hashlib.sha256(expected.encode()).digest()
+
+
 def _parse_hook_feedback_report_command(command: str) -> None:
     """Validate the exact content-free report entrypoint as claimless observation."""
 
@@ -520,11 +698,14 @@ def _parse_maintenance_worktree_make_command(command: str, *, client: str) -> No
     if not target.is_absolute() or target.resolve() != target or tokens[3] != "maintenance-worktree":
         raise ValueError("maintenance-worktree requires one canonical absolute Make directory")
     target = target.resolve()
-    canonical_makefile = REPO_ROOT / "Makefile"
     canonical_bootstrap = REPO_ROOT / "scripts" / "claim_bootstrap.py"
+    canonical_module = REPO_ROOT / "enforced_planning" / "claim_bootstrap.py"
     if target != REPO_ROOT.resolve() and not (
-        _same_file_digest(target / "Makefile", canonical_makefile)
-        and _same_file_digest(target / "scripts" / "claim_bootstrap.py", canonical_bootstrap)
+        _rendered_consumer_worktree_block_matches(target / "Makefile")
+        and _same_file_digest(target / "scripts" / "meta" / "claim_bootstrap.py", canonical_bootstrap)
+        and _same_file_digest(
+            target / "enforced_planning" / "claim_bootstrap.py", canonical_module
+        )
     ):
         raise ValueError("maintenance-worktree target does not match the installed control revision")
 
@@ -717,6 +898,18 @@ def _special_unclaimed_command(
     except Exception:  # noqa: BLE001 -- try the remaining strict control grammars
         pass
     try:
+        _parse_plan_execution_cursor_command(
+            command,
+            client=client,
+            claims_dir=claims_dir,
+            native_session=native_session,
+        )
+        # Compatibility classification: this strict control-plane mutation
+        # owns its own fixed output contract just like typed claim bootstrap.
+        return "claim_bootstrap"
+    except Exception:  # noqa: BLE001 -- try the remaining strict control grammars
+        pass
+    try:
         _parse_native_closeout_command(
             command,
             client=client,
@@ -901,22 +1094,32 @@ def _exact_outcome_claim(decision: dict[str, Any]) -> Any:
 
 
 def _sanctioned_maintenance_exemption(decision: dict[str, Any]) -> dict[str, Any] | None:
-    """Return bounded exemption evidence only after ordinary exact-claim allow."""
+    """Return bounded typed-maintenance evidence after ordinary exact-claim allow."""
 
     if decision.get("decision") != "allow" or decision.get("reason_code") != "exact_live_claim":
         return None
-    from enforced_planning.outcome_admission import is_sanctioned_maintenance_claim
+    from enforced_planning import outcome_admission
 
     claim = _exact_outcome_claim(decision)
-    if not is_sanctioned_maintenance_claim(claim):
-        return None
-    return {
-        "reason_code": "sanctioned_unplanned_maintenance",
-        "claim_project": claim.primary_project(),
-        "claim_scope": claim.scope,
-        "claim_source_file": claim.source_file,
-        "tracker_path": claim.tracker_path,
-    }
+    if outcome_admission.is_sanctioned_maintenance_claim(claim):
+        return {
+            "reason_code": "sanctioned_unplanned_maintenance",
+            "claim_project": claim.primary_project(),
+            "claim_scope": claim.scope,
+            "claim_source_file": claim.source_file,
+            "tracker_path": claim.tracker_path,
+        }
+    if outcome_admission.is_sanctioned_delegated_maintenance_claim(claim):
+        return {
+            "reason_code": "sanctioned_delegated_maintenance",
+            "claim_project": claim.primary_project(),
+            "claim_scope": claim.scope,
+            "claim_source_file": claim.source_file,
+            "tracker_path": claim.tracker_path,
+            "parent_scope": claim.parent_scope,
+            "start_revision": claim.start_revision,
+        }
+    return None
 
 
 def _enforce_selected_outcome(
@@ -1006,13 +1209,6 @@ def main(argv: list[str] | None = None) -> int:
             projection_path = args.cache_dir / "authority-projection-v1.json"
         if projection_path is None:
             projection_path = DEFAULT_PROJECTION_PATH
-        payload = _session_bound_payload(
-            payload,
-            client=args.client,
-            claims_dir=args.claims_dir,
-            projection_path=projection_path,
-        )
-        mode = _mode(payload, args.mode)
         from enforced_planning.claim_bootstrap import projection_recovery_command
 
         recovery_command = projection_recovery_command(
@@ -1043,7 +1239,7 @@ def main(argv: list[str] | None = None) -> int:
                     command,
                     claim_bootstrap_classifier=special_classifier,
                 )
-        if early_bash_classification in {
+        claimless_classifications = {
             "read_only",
             "claim_bootstrap",
             "native_mailbox",
@@ -1052,7 +1248,20 @@ def main(argv: list[str] | None = None) -> int:
             "hook_feedback_report",
             "read_target_selection",
             "projection_recovery",
-        }:
+        }
+        if early_bash_classification not in claimless_classifications:
+            _refresh_projection_for_claimed_command(
+                claims_dir=args.claims_dir,
+                projection_path=projection_path,
+            )
+        payload = _session_bound_payload(
+            payload,
+            client=args.client,
+            claims_dir=args.claims_dir,
+            projection_path=projection_path,
+        )
+        mode = _mode(payload, args.mode)
+        if early_bash_classification in claimless_classifications:
             outcome_mode = "off"
         else:
             try:

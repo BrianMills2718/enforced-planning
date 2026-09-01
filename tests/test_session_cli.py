@@ -14,7 +14,7 @@ from contextlib import contextmanager
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from threading import Event
+from threading import Event, Thread, current_thread
 from types import SimpleNamespace
 
 import pytest
@@ -1227,6 +1227,1062 @@ def test_existing_session_upsert_refreshes_projection_and_emits_receipt(
     assert receipt.projection_current_after is True
     assert refreshed["action"] == "updated"
     assert {field: refreshed_claim.get(field) for field in coordination_claims.PROGRESS_FIELD_NAMES} == progress_before
+
+
+def _maintenance_refresh_args(tmp_path: Path, trackers_dir: Path) -> dict[str, object]:
+    branch = "fix/maintenance-provenance-refresh"
+    goal = "Unplanned maintenance: fix maintenance provenance refresh"
+    worktree = tmp_path / "repo" / "worktrees" / branch
+    worktree.mkdir(parents=True)
+    return {
+        "agent": "codex",
+        "project": "enforced-planning",
+        "scope": branch,
+        "intent": goal,
+        "repo_root": str(tmp_path / "repo"),
+        "worktree_path": str(worktree),
+        "branch": branch,
+        "broader_goal": goal,
+        "current_phase": "maintenance-bootstrap",
+        "plan_ref": None,
+        "session_id": "codex:maintenance-owner",
+        "session_name": session_contracts.derive_session_name(goal),
+        "claim_type": "program",
+        "write_paths": ["enforced_planning/session_lifecycle.py", "tests/test_session_cli.py"],
+        "read_paths": [],
+        "tracker_dir": trackers_dir,
+        "allow_unplanned": True,
+    }
+
+
+def _delegated_session_fixture(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> tuple[dict[str, object], Path, Path]:
+    """Create one healthy parent and pristine child Git lane."""
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-b", "main")
+    _git(repo, "config", "user.name", "Test")
+    _git(repo, "config", "user.email", "test@example.com")
+    (repo / "README.md").write_text("seed\n", encoding="utf-8")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-m", "seed")
+    _git(repo, "switch", "-c", "weekly-parent")
+    (repo / "parent.txt").write_text("parent\n", encoding="utf-8")
+    _git(repo, "add", "parent.txt")
+    _git(repo, "commit", "-m", "parent lane")
+    child_worktree = tmp_path / "child-worktree"
+    _git(repo, "worktree", "add", "-b", "fix/delegated-child", str(child_worktree), "HEAD")
+    (child_worktree / "enforced_planning").mkdir()
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "trackers"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    monkeypatch.setenv("CODEX_THREAD_ID", "parent-native")
+    session_lifecycle.start_session(
+        agent="codex",
+        project="enforced-planning",
+        scope="weekly-parent",
+        intent="Coordinate the weekly implementation",
+        repo_root=str(repo),
+        worktree_path=str(repo),
+        branch="weekly-parent",
+        broader_goal="Coordinate the weekly implementation",
+        current_phase="delegating one bounded child",
+        session_id="codex:parent-native",
+        claim_type="program",
+        tracker_dir=trackers_dir,
+        allow_unplanned=True,
+    )
+    goal = "Delegated maintenance: fix delegated child"
+    start_revision = _git(child_worktree, "rev-parse", "HEAD")
+    args: dict[str, object] = {
+        "agent": "codex",
+        "project": "enforced-planning",
+        "scope": "fix/delegated-child",
+        "intent": goal,
+        "repo_root": str(repo),
+        "worktree_path": str(child_worktree),
+        "branch": "fix/delegated-child",
+        "broader_goal": goal,
+        "current_phase": "implement delegated lifecycle test",
+        "parent_scope": "weekly-parent",
+        "parent_session_id": "codex:parent-native",
+        "child_session_id": "codex:child-native",
+        "start_revision": start_revision,
+        "write_paths": ["enforced_planning/delegated.py"],
+        "tracker_dir": trackers_dir,
+    }
+    return args, claims_dir, child_worktree
+
+
+def test_parent_can_create_and_revoke_one_pristine_delegated_child(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The parent acts as itself while the child receives and loses custody."""
+
+    args, claims_dir, child_worktree = _delegated_session_fixture(tmp_path, monkeypatch)
+    started = session_lifecycle.start_delegated_session(**args)
+    assert started["action"] == "delegated_created"
+    child_claim = session_lifecycle._single_matching_live_claim(
+        agent="codex",
+        project="enforced-planning",
+        scope="fix/delegated-child",
+    )
+    assert child_claim.session_id == "codex:child-native"
+    assert child_claim.parent_scope == "weekly-parent"
+    assert outcome_admission.is_sanctioned_delegated_maintenance_claim(child_claim)
+
+    revoked = session_lifecycle.revoke_delegated_session(
+        agent="codex",
+        project="enforced-planning",
+        scope="fix/delegated-child",
+        repo_root=str(args["repo_root"]),
+        worktree_path=str(args["worktree_path"]),
+        branch=str(args["branch"]),
+        parent_scope="weekly-parent",
+        parent_session_id="codex:parent-native",
+        child_session_id="codex:child-native",
+        expected_start_revision=str(args["start_revision"]),
+        tracker_path=str(started["tracker_path"]),
+    )
+    assert revoked["action"] == "delegated_revoked"
+    assert revoked["canonical_lock_reconciliation_required"] is True
+    assert not child_worktree.exists()
+    assert not (claims_dir / coordination_claims._claim_filename("codex", "enforced-planning", "fix/delegated-child")).exists()
+    parent = session_lifecycle._single_matching_live_claim(
+        agent="codex",
+        project="enforced-planning",
+        scope="weekly-parent",
+    )
+    assert parent.session_id == "codex:parent-native"
+    archived = _archived_claim_payload(str(revoked["claim_archive_id"]))
+    assert archived["disposition"] == "superseded"
+    assert archived["disposition_reason"] == "unused delegated child cancelled"
+
+
+def test_delegated_start_rejects_a_non_native_parent_without_mutation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    args, claims_dir, _child_worktree = _delegated_session_fixture(tmp_path, monkeypatch)
+    args["parent_session_id"] = "codex:someone-else"
+    with pytest.raises(ValueError, match="does not match the current codex runtime"):
+        session_lifecycle.start_delegated_session(**args)
+    assert not (claims_dir / coordination_claims._claim_filename("codex", "enforced-planning", "fix/delegated-child")).exists()
+
+
+def test_delegated_start_rolls_back_claim_projection_and_tracker_on_audit_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    args, claims_dir, _child_worktree = _delegated_session_fixture(tmp_path, monkeypatch)
+    from enforced_planning.prewrite_claim_fast import projection_path_for
+
+    projection_path = projection_path_for(claims_dir)
+    projection_before = projection_path.read_bytes()
+    child_claim_path = claims_dir / coordination_claims._claim_filename(
+        "codex", "enforced-planning", "fix/delegated-child"
+    )
+    contract = session_contracts.SessionContract.build(
+        agent="codex",
+        project="enforced-planning",
+        scope="fix/delegated-child",
+        intent=str(args["intent"]),
+        plan_ref=session_contracts.UNPLANNED_PLAN_REF,
+        repo_root=str(args["repo_root"]),
+        worktree_path=str(args["worktree_path"]),
+        branch=str(args["branch"]),
+        session_id="codex:child-native",
+        broader_goal=str(args["broader_goal"]),
+        start_revision=str(args["start_revision"]),
+        allow_unplanned=True,
+    )
+    tracker_path = session_contracts.session_tracker_path(
+        contract,
+        tracker_dir=args["tracker_dir"],
+    ).expanduser().resolve()
+
+    def fail_audit(**_kwargs: object) -> object:
+        raise OSError("injected delegated audit failure")
+
+    monkeypatch.setattr(coordination_claims, "record_claim_mutation", fail_audit)
+    with pytest.raises(OSError, match="injected delegated audit failure"):
+        session_lifecycle.start_delegated_session(**args)
+    assert not child_claim_path.exists()
+    assert not tracker_path.exists()
+    assert projection_path.read_bytes() == projection_before
+
+
+def test_delegated_revoke_rejects_dirty_child_without_mutation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    args, claims_dir, child_worktree = _delegated_session_fixture(tmp_path, monkeypatch)
+    started = session_lifecycle.start_delegated_session(**args)
+    (child_worktree / "dirty.txt").write_text("dirty\n", encoding="utf-8")
+    child_claim_path = claims_dir / coordination_claims._claim_filename(
+        "codex", "enforced-planning", "fix/delegated-child"
+    )
+    claim_before = child_claim_path.read_bytes()
+    with pytest.raises(ValueError, match="worktree is dirty"):
+        session_lifecycle.revoke_delegated_session(
+            agent="codex",
+            project="enforced-planning",
+            scope="fix/delegated-child",
+            repo_root=str(args["repo_root"]),
+            worktree_path=str(args["worktree_path"]),
+            branch=str(args["branch"]),
+            parent_scope="weekly-parent",
+            parent_session_id="codex:parent-native",
+            child_session_id="codex:child-native",
+            expected_start_revision=str(args["start_revision"]),
+            tracker_path=str(started["tracker_path"]),
+        )
+    assert child_claim_path.read_bytes() == claim_before
+
+
+def test_delegated_revoke_retries_exact_completed_child_after_archive_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    args, claims_dir, child_worktree = _delegated_session_fixture(tmp_path, monkeypatch)
+    started = session_lifecycle.start_delegated_session(**args)
+    real_archive = coordination_claims._archive_completed_claim_locked
+    attempts = 0
+
+    def fail_first_archive(*archive_args: object, **archive_kwargs: object):
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise OSError("injected delegated archive failure")
+        return real_archive(*archive_args, **archive_kwargs)
+
+    monkeypatch.setattr(
+        coordination_claims,
+        "_archive_completed_claim_locked",
+        fail_first_archive,
+    )
+    revoke_args = {
+        "agent": "codex",
+        "project": "enforced-planning",
+        "scope": "fix/delegated-child",
+        "repo_root": str(args["repo_root"]),
+        "worktree_path": str(args["worktree_path"]),
+        "branch": str(args["branch"]),
+        "parent_scope": "weekly-parent",
+        "parent_session_id": "codex:parent-native",
+        "child_session_id": "codex:child-native",
+        "expected_start_revision": str(args["start_revision"]),
+        "tracker_path": str(started["tracker_path"]),
+    }
+    with pytest.raises(OSError, match="injected delegated archive failure"):
+        session_lifecycle.revoke_delegated_session(**revoke_args)
+    child_claim_path = claims_dir / coordination_claims._claim_filename(
+        "codex", "enforced-planning", "fix/delegated-child"
+    )
+    stranded = yaml.safe_load(child_claim_path.read_text(encoding="utf-8"))
+    assert stranded["status"] == "completed"
+    assert not child_worktree.exists()
+
+    retried = session_lifecycle.revoke_delegated_session(**revoke_args)
+    assert retried["action"] == "delegated_revoked"
+    assert attempts == 2
+    assert not child_claim_path.exists()
+
+
+def test_sanctioned_maintenance_start_refresh_preserves_bootstrap_provenance(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An exact owner refresh may move liveness and phase, never maintenance identity."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    common = _maintenance_refresh_args(tmp_path, trackers_dir)
+    started = session_lifecycle.start_session(**common)
+    claim_path = claims_dir / "codex_enforced-planning_fix_maintenance-provenance-refresh.yaml"
+    tracker_path = Path(started["tracker_path"])
+    claim_before = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    tracker_before = yaml.safe_load(tracker_path.read_text(encoding="utf-8"))
+
+    refreshed = session_lifecycle.start_session(**{**common, "current_phase": "focused regression tests"})
+    claim_after = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    tracker_after = yaml.safe_load(tracker_path.read_text(encoding="utf-8"))
+
+    assert refreshed["action"] == "updated"
+    assert outcome_admission.is_sanctioned_maintenance_claim(
+        session_lifecycle._single_matching_live_claim(
+            agent="codex", project="enforced-planning", scope=str(common["scope"])
+        )
+    )
+    assert tracker_after["claim"] == tracker_before["claim"]
+    assert tracker_after["tracker"]["current_phase"] == "focused regression tests"
+    immutable_claim_fields = set(tracker_before["claim"]) | {
+        "claim_type",
+        "write_paths",
+        "read_paths",
+        "parent_scope",
+        "work_graph_path",
+        "work_unit_id",
+        "start_revision",
+        "plan_repo_root",
+        "plan_revision",
+        "plan_sha256",
+    }
+    assert {field: claim_after.get(field) for field in immutable_claim_fields} == {
+        field: claim_before.get(field) for field in immutable_claim_fields
+    }
+
+
+def test_broad_maintenance_refresh_preserves_omitted_bootstrap_metadata(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ordinary refresh omission retains the broad bootstrap's typed custody."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    common = _maintenance_refresh_args(tmp_path, trackers_dir)
+    target_worktree = str(common["worktree_path"])
+    bootstrap_reason = "construct this maintenance lane, then narrow before its first repository write"
+    bootstrap = {
+        **common,
+        "write_paths": ["."],
+        "broad_scope_mode": "bootstrap",
+        "broad_scope_reason": bootstrap_reason,
+        "target_worktree_path": target_worktree,
+    }
+    started = session_lifecycle.start_session(**bootstrap)
+    claim_path = claims_dir / "codex_enforced-planning_fix_maintenance-provenance-refresh.yaml"
+    tracker_path = Path(started["tracker_path"])
+    tracker_claim_before = yaml.safe_load(tracker_path.read_text(encoding="utf-8"))["claim"]
+    assert outcome_admission.is_sanctioned_maintenance_claim(
+        session_lifecycle._single_matching_live_claim(
+            agent="codex", project="enforced-planning", scope=str(common["scope"])
+        )
+    )
+
+    ordinary_refresh = {
+        key: value
+        for key, value in common.items()
+        if key not in {"claim_type", "write_paths", "read_paths"}
+    }
+    refreshed = session_lifecycle.start_session(
+        **{**ordinary_refresh, "current_phase": "narrowing maintenance custody"}
+    )
+    claim_after = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    tracker_after = yaml.safe_load(tracker_path.read_text(encoding="utf-8"))
+
+    assert refreshed["action"] == "updated"
+    assert claim_after["write_paths"] == ["."]
+    assert claim_after["broad_scope_mode"] == "bootstrap"
+    assert claim_after["broad_scope_reason"] == bootstrap_reason
+    assert claim_after["target_worktree_path"] == target_worktree
+    assert tracker_after["claim"] == tracker_claim_before
+    assert tracker_after["tracker"]["current_phase"] == "narrowing maintenance custody"
+    assert outcome_admission.is_sanctioned_maintenance_claim(
+        session_lifecycle._single_matching_live_claim(
+            agent="codex", project="enforced-planning", scope=str(common["scope"])
+        )
+    )
+
+
+def test_maintenance_cli_omission_preserves_tracker_contract_and_explicit_api_drift_denies(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """CLI omission is distinct from an explicit API request to replace tracker state."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    common = _maintenance_refresh_args(tmp_path, trackers_dir)
+    tracker_contract = {
+        "intended_next_phases": ["integration", "closeout"],
+        "depends_on_repos": ["project-meta"],
+        "requires_shared_infra_changes": True,
+        "stop_conditions": ["authority changes"],
+        "notes": "retain exact maintenance context",
+    }
+    started = session_lifecycle.start_session(**{**common, **tracker_contract})
+    claim_path = claims_dir / "codex_enforced-planning_fix_maintenance-provenance-refresh.yaml"
+    tracker_path = Path(started["tracker_path"])
+
+    module_path = Path(__file__).resolve().parents[1] / "scripts" / "session_start.py"
+    spec = importlib.util.spec_from_file_location("session_start_omission_contract_test", module_path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    args = module.parse_args(
+        [
+            "--agent",
+            "codex",
+            "--project",
+            "enforced-planning",
+            "--scope",
+            str(common["scope"]),
+            "--intent",
+            str(common["intent"]),
+            "--repo-root",
+            str(common["repo_root"]),
+            "--worktree-path",
+            str(common["worktree_path"]),
+            "--branch",
+            str(common["branch"]),
+            "--broader-goal",
+            str(common["broader_goal"]),
+            "--current-phase",
+            "CLI omission refresh",
+            "--allow-unplanned",
+            "--session-id",
+            str(common["session_id"]),
+            "--session-name",
+            str(common["session_name"]),
+        ]
+    )
+    kwargs = module._supported_start_kwargs(args)
+    assert {
+        field: kwargs[field]
+        for field in (
+            "intended_next_phases",
+            "depends_on_repos",
+            "requires_shared_infra_changes",
+            "stop_conditions",
+            "notes",
+        )
+    } == {
+        "intended_next_phases": None,
+        "depends_on_repos": None,
+        "requires_shared_infra_changes": None,
+        "stop_conditions": None,
+        "notes": None,
+    }
+
+    refreshed = session_lifecycle.start_session(**kwargs, tracker_dir=trackers_dir)
+    tracker_after = yaml.safe_load(tracker_path.read_text(encoding="utf-8"))
+    assert refreshed["action"] == "updated"
+    assert tracker_after["tracker"] == {"current_phase": "CLI omission refresh", **tracker_contract}
+
+    for explicit_drift in (
+        {"intended_next_phases": []},
+        {"depends_on_repos": []},
+        {"requires_shared_infra_changes": False},
+        {"stop_conditions": []},
+        {"notes": ""},
+    ):
+        claim_before = claim_path.read_bytes()
+        tracker_before = tracker_path.read_bytes()
+        with pytest.raises(
+            ValueError,
+            match="sanctioned maintenance refresh cannot change immutable provenance",
+        ):
+            session_lifecycle.start_session(
+                **{
+                    **kwargs,
+                    "current_phase": "explicit drift attempt",
+                    "tracker_dir": trackers_dir,
+                    **explicit_drift,
+                }
+            )
+        assert claim_path.read_bytes() == claim_before
+        assert tracker_path.read_bytes() == tracker_before
+
+
+def test_maintenance_refresh_serializes_tracker_write_through_claim_upsert(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A competing tracker writer cannot enter between phase and claim persistence."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    common = _maintenance_refresh_args(tmp_path, trackers_dir)
+    started = session_lifecycle.start_session(**common)
+    tracker_path = Path(started["tracker_path"])
+    waiting_for_tracker_lock = Event()
+    tracker_lock_acquired = Event()
+    completed = Event()
+    failures: list[BaseException] = []
+    competitor: list[Thread] = []
+    real_write = session_lifecycle._write_claim_and_refresh_projection
+    real_tracker_lock = session_contracts.session_tracker_lock
+
+    @contextmanager
+    def observed_tracker_lock(path: Path):
+        is_competitor = current_thread().name == "competing-tracker-writer"
+        if is_competitor:
+            waiting_for_tracker_lock.set()
+        with real_tracker_lock(path):
+            if is_competitor:
+                tracker_lock_acquired.set()
+            yield
+
+    def competing_tracker_write() -> None:
+        try:
+            session_contracts.update_session_tracker(
+                tracker_path,
+                current_phase="concurrent tracker refresh",
+            )
+        except BaseException as exc:  # pragma: no cover - asserted below
+            failures.append(exc)
+        finally:
+            completed.set()
+
+    def observe_claim_write(*args: object, **kwargs: object) -> tuple[Path, str]:
+        thread = Thread(target=competing_tracker_write, name="competing-tracker-writer")
+        competitor.append(thread)
+        thread.start()
+        assert waiting_for_tracker_lock.wait(timeout=2)
+        assert tracker_lock_acquired.is_set() is False
+        tracker_payload = yaml.safe_load(tracker_path.read_text(encoding="utf-8"))
+        assert tracker_payload["tracker"]["current_phase"] == "serialized maintenance refresh"
+        return real_write(*args, **kwargs)
+
+    monkeypatch.setattr(session_contracts, "session_tracker_lock", observed_tracker_lock)
+    monkeypatch.setattr(session_lifecycle, "_write_claim_and_refresh_projection", observe_claim_write)
+    refreshed = session_lifecycle.start_session(
+        **{**common, "current_phase": "serialized maintenance refresh"}
+    )
+
+    assert refreshed["action"] == "updated"
+    assert len(competitor) == 1
+    competitor[0].join(timeout=2)
+    assert tracker_lock_acquired.is_set()
+    assert completed.is_set()
+    assert failures == []
+
+
+def test_maintenance_refresh_classifies_one_locked_tracker_snapshot(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Immutable tracker state cannot change between classification and snapshot custody."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    common = _maintenance_refresh_args(tmp_path, trackers_dir)
+    started = session_lifecycle.start_session(
+        **{**common, "notes": "original immutable notes"}
+    )
+    tracker_path = Path(started["tracker_path"])
+    waiting_for_tracker_lock = Event()
+    tracker_lock_acquired = Event()
+    completed = Event()
+    failures: list[BaseException] = []
+    competitor: list[Thread] = []
+    classifier_observed = Event()
+    real_classifier = outcome_admission.is_sanctioned_maintenance_claim_payload
+    real_tracker_lock = session_contracts.session_tracker_lock
+
+    @contextmanager
+    def observed_tracker_lock(path: Path):
+        is_competitor = current_thread().name == "pre-snapshot-tracker-writer"
+        if is_competitor:
+            waiting_for_tracker_lock.set()
+        with real_tracker_lock(path):
+            if is_competitor:
+                tracker_lock_acquired.set()
+            yield
+
+    def competing_tracker_write() -> None:
+        try:
+            session_contracts.update_session_tracker(
+                tracker_path,
+                notes="concurrent notes after coherent refresh",
+            )
+        except BaseException as exc:  # pragma: no cover - asserted below
+            failures.append(exc)
+        finally:
+            completed.set()
+
+    def classify_locked_payload(*args: object, **kwargs: object) -> bool:
+        thread = Thread(target=competing_tracker_write, name="pre-snapshot-tracker-writer")
+        competitor.append(thread)
+        thread.start()
+        assert waiting_for_tracker_lock.wait(timeout=2)
+        assert tracker_lock_acquired.is_set() is False
+        classifier_observed.set()
+        return real_classifier(*args, **kwargs)
+
+    monkeypatch.setattr(session_contracts, "session_tracker_lock", observed_tracker_lock)
+    monkeypatch.setattr(
+        outcome_admission,
+        "is_sanctioned_maintenance_claim_payload",
+        classify_locked_payload,
+    )
+    refreshed = session_lifecycle.start_session(
+        **{
+            **common,
+            "current_phase": "coherent locked refresh",
+            "notes": "original immutable notes",
+        }
+    )
+
+    assert refreshed["action"] == "updated"
+    assert classifier_observed.is_set()
+    assert len(competitor) == 1
+    competitor[0].join(timeout=2)
+    assert tracker_lock_acquired.is_set()
+    assert completed.is_set()
+    assert failures == []
+    tracker_after = yaml.safe_load(tracker_path.read_text(encoding="utf-8"))
+    assert tracker_after["tracker"]["current_phase"] == "coherent locked refresh"
+    assert tracker_after["tracker"]["notes"] == "concurrent notes after coherent refresh"
+
+
+def test_maintenance_refresh_cannot_reactivate_claim_ended_before_locked_reload(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A canonical session end wins when it completes before refresh takes custody."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    common = _maintenance_refresh_args(tmp_path, trackers_dir)
+    started = session_lifecycle.start_session(**common)
+    claim_path = claims_dir / "codex_enforced-planning_fix_maintenance-provenance-refresh.yaml"
+    tracker_path = Path(started["tracker_path"])
+    claim_before = claim_path.read_bytes()
+    tracker_before = tracker_path.read_bytes()
+    real_registry_lock = coordination_claims.claim_registry_lock
+    refresh_thread = current_thread()
+    end_completed = Event()
+    end_results: list[tuple[int, list[str], str, str]] = []
+    end_failures: list[BaseException] = []
+    end_threads: list[Thread] = []
+    end_started = False
+
+    def end_claim() -> None:
+        try:
+            end_results.append(
+                coordination_claims.end_session_claims(
+                    agent="codex",
+                    session_id=str(common["session_id"]),
+                    reason="runtime terminated during refresh",
+                )
+            )
+        except BaseException as exc:  # pragma: no cover - asserted below
+            end_failures.append(exc)
+        finally:
+            end_completed.set()
+
+    @contextmanager
+    def end_before_refresh_lock(path: Path | None = None):
+        nonlocal end_started
+        if current_thread() is refresh_thread and not end_started:
+            end_started = True
+            thread = Thread(target=end_claim, name="ending-maintenance-owner")
+            end_threads.append(thread)
+            thread.start()
+            assert end_completed.wait(timeout=2)
+        with real_registry_lock(path):
+            yield
+
+    monkeypatch.setattr(coordination_claims, "claim_registry_lock", end_before_refresh_lock)
+    with pytest.raises(ValueError, match="initially live claim ended.*refusing reactivation"):
+        session_lifecycle.start_session(
+            **{**common, "current_phase": "must not reactivate ended claim"}
+        )
+
+    assert len(end_threads) == 1
+    end_threads[0].join(timeout=2)
+    assert end_failures == []
+    assert len(end_results) == 1
+    assert end_results[0][0] == 1
+    claim_after = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    assert claim_path.read_bytes() != claim_before
+    assert claim_after["status"] == coordination_claims.SESSION_ENDED_STATUS
+    assert claim_after["session_end_reason"] == "runtime terminated during refresh"
+    assert tracker_path.read_bytes() == tracker_before
+
+
+def test_malformed_maintenance_refresh_fails_before_concurrent_session_end(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Malformed explicit maintenance never escapes locked custody into generic refresh."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    common = _maintenance_refresh_args(tmp_path, trackers_dir)
+    started = session_lifecycle.start_session(**common)
+    claim_path = claims_dir / "codex_enforced-planning_fix_maintenance-provenance-refresh.yaml"
+    tracker_path = Path(started["tracker_path"])
+    malformed_tracker = yaml.safe_load(tracker_path.read_text(encoding="utf-8"))
+    malformed_tracker["claim"]["broader_goal"] = "corrupted maintenance provenance"
+    session_contracts._atomic_write_session_tracker(tracker_path, malformed_tracker)
+    tracker_before = tracker_path.read_bytes()
+    waiting_for_registry = Event()
+    registry_acquired = Event()
+    completed = Event()
+    failures: list[BaseException] = []
+    end_threads: list[Thread] = []
+    real_classifier = outcome_admission.is_sanctioned_maintenance_claim_payload
+    real_registry_lock = coordination_claims.claim_registry_lock
+
+    @contextmanager
+    def observed_registry_lock(path: Path | None = None):
+        is_ender = current_thread().name == "ending-malformed-maintenance"
+        if is_ender:
+            waiting_for_registry.set()
+        with real_registry_lock(path):
+            if is_ender:
+                registry_acquired.set()
+            yield
+
+    def end_claim() -> None:
+        try:
+            coordination_claims.end_session_claims(
+                agent="codex",
+                session_id=str(common["session_id"]),
+                reason="end malformed maintenance owner",
+            )
+        except BaseException as exc:  # pragma: no cover - asserted below
+            failures.append(exc)
+        finally:
+            completed.set()
+
+    def classify_then_end(*args: object, **kwargs: object) -> bool:
+        result = real_classifier(*args, **kwargs)
+        assert result is False
+        thread = Thread(target=end_claim, name="ending-malformed-maintenance")
+        end_threads.append(thread)
+        thread.start()
+        assert waiting_for_registry.wait(timeout=2)
+        assert registry_acquired.is_set() is False
+        return result
+
+    monkeypatch.setattr(coordination_claims, "claim_registry_lock", observed_registry_lock)
+    monkeypatch.setattr(
+        outcome_admission,
+        "is_sanctioned_maintenance_claim_payload",
+        classify_then_end,
+    )
+    with pytest.raises(ValueError, match="malformed locked tracker provenance"):
+        session_lifecycle.start_session(
+            **{**common, "current_phase": "must not repair malformed provenance"}
+        )
+
+    assert len(end_threads) == 1
+    end_threads[0].join(timeout=2)
+    assert registry_acquired.is_set()
+    assert completed.is_set()
+    assert failures == []
+    claim_after = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    assert claim_after["status"] == coordination_claims.SESSION_ENDED_STATUS
+    assert tracker_path.read_bytes() == tracker_before
+
+
+def test_explicit_unplanned_marker_malformed_maintenance_refresh_fails_without_mutation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Canonical claim identity fails closed independent of caller flag syntax."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    common = {
+        **_maintenance_refresh_args(tmp_path, trackers_dir),
+        "plan_ref": session_contracts.UNPLANNED_PLAN_REF,
+        "allow_unplanned": False,
+    }
+    started = session_lifecycle.start_session(**common)
+    claim_path = claims_dir / "codex_enforced-planning_fix_maintenance-provenance-refresh.yaml"
+    tracker_path = Path(started["tracker_path"])
+    malformed_tracker = yaml.safe_load(tracker_path.read_text(encoding="utf-8"))
+    malformed_tracker["claim"]["broader_goal"] = "corrupted maintenance provenance"
+    session_contracts._atomic_write_session_tracker(tracker_path, malformed_tracker)
+    claim_before = claim_path.read_bytes()
+    tracker_before = tracker_path.read_bytes()
+
+    with pytest.raises(ValueError, match="malformed locked tracker provenance"):
+        session_lifecycle.start_session(
+            **{**common, "current_phase": "must not rewrite malformed explicit marker"}
+        )
+
+    assert claim_path.read_bytes() == claim_before
+    assert tracker_path.read_bytes() == tracker_before
+
+
+def test_malformed_maintenance_refresh_cannot_overwrite_cross_session_successor(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A blocked successor transfer wins without any old-owner tracker mutation."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    common = _maintenance_refresh_args(tmp_path, trackers_dir)
+    started = session_lifecycle.start_session(**common)
+    claim_path = claims_dir / "codex_enforced-planning_fix_maintenance-provenance-refresh.yaml"
+    tracker_path = Path(started["tracker_path"])
+    malformed_tracker = yaml.safe_load(tracker_path.read_text(encoding="utf-8"))
+    malformed_tracker["claim"]["broader_goal"] = "corrupted maintenance provenance"
+    session_contracts._atomic_write_session_tracker(tracker_path, malformed_tracker)
+    tracker_before = tracker_path.read_bytes()
+    transfer_waiting = Event()
+    transfer_acquired = Event()
+    release_transfer = Event()
+    transfer_completed = Event()
+    transfer_results: list[dict[str, object]] = []
+    transfer_failures: list[BaseException] = []
+    transfer_threads: list[Thread] = []
+    real_classifier = outcome_admission.is_sanctioned_maintenance_claim_payload
+    real_registry_lock = coordination_claims.claim_registry_lock
+    paused_transfer_lock = False
+
+    @contextmanager
+    def pause_transfer_after_registry_acquisition(path: Path | None = None):
+        nonlocal paused_transfer_lock
+        is_transfer = current_thread().name == "cross-session-maintenance-transfer"
+        if is_transfer and not paused_transfer_lock:
+            transfer_waiting.set()
+        with real_registry_lock(path):
+            if is_transfer and not paused_transfer_lock:
+                paused_transfer_lock = True
+                transfer_acquired.set()
+                assert release_transfer.wait(timeout=2)
+            yield
+
+    def transfer_claim() -> None:
+        try:
+            session_lifecycle.end_runtime_session(
+                agent="codex",
+                session_id=str(common["session_id"]),
+                reason="transfer malformed maintenance lane",
+            )
+            transfer_results.append(
+                _resume_session_as_native(
+                    agent="codex",
+                    project="enforced-planning",
+                    scope=str(common["scope"]),
+                    worktree_path=str(common["worktree_path"]),
+                    branch=str(common["branch"]),
+                    current_phase="successor owns malformed lane disposition",
+                    session_id="codex:successor-runtime",
+                    note="successor accepted custody",
+                )
+            )
+        except BaseException as exc:  # pragma: no cover - asserted below
+            transfer_failures.append(exc)
+        finally:
+            transfer_completed.set()
+
+    def classify_then_transfer(*args: object, **kwargs: object) -> bool:
+        result = real_classifier(*args, **kwargs)
+        assert result is False
+        thread = Thread(target=transfer_claim, name="cross-session-maintenance-transfer")
+        transfer_threads.append(thread)
+        thread.start()
+        assert transfer_waiting.wait(timeout=2)
+        assert transfer_acquired.is_set() is False
+        return result
+
+    monkeypatch.setattr(
+        coordination_claims,
+        "claim_registry_lock",
+        pause_transfer_after_registry_acquisition,
+    )
+    monkeypatch.setattr(
+        outcome_admission,
+        "is_sanctioned_maintenance_claim_payload",
+        classify_then_transfer,
+    )
+    with pytest.raises(ValueError, match="malformed locked tracker provenance"):
+        session_lifecycle.start_session(
+            **{**common, "current_phase": "old owner must not overwrite successor"}
+        )
+
+    assert transfer_acquired.wait(timeout=2)
+    assert tracker_path.read_bytes() == tracker_before
+    release_transfer.set()
+    assert len(transfer_threads) == 1
+    transfer_threads[0].join(timeout=5)
+    assert transfer_completed.is_set()
+    assert transfer_failures == []
+    assert len(transfer_results) == 1
+    assert transfer_results[0]["action"] == "resumed"
+    successor_claim = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    successor_tracker = yaml.safe_load(tracker_path.read_text(encoding="utf-8"))
+    assert successor_claim["status"] == "active"
+    assert successor_claim["session_id"] == "codex:successor-runtime"
+    assert successor_tracker["claim"]["session_id"] == "codex:successor-runtime"
+    assert successor_tracker["tracker"]["current_phase"] == "successor owns malformed lane disposition"
+
+
+def test_generic_existing_refresh_serializes_cross_session_transfer(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Generic tracker and claim refresh retains registry custody until both commit."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    goal = "ordinary unplanned lifecycle coverage"
+    common = {
+        **_maintenance_refresh_args(tmp_path, trackers_dir),
+        "intent": goal,
+        "broader_goal": goal,
+        "session_name": session_contracts.derive_session_name(goal),
+        "plan_ref": session_contracts.UNPLANNED_PLAN_REF,
+        "allow_unplanned": False,
+    }
+    started = session_lifecycle.start_session(**common)
+    claim_path = claims_dir / "codex_enforced-planning_fix_maintenance-provenance-refresh.yaml"
+    tracker_path = Path(started["tracker_path"])
+    transfer_waiting = Event()
+    transfer_acquired = Event()
+    transfer_completed = Event()
+    transfer_results: list[dict[str, object]] = []
+    transfer_failures: list[BaseException] = []
+    transfer_threads: list[Thread] = []
+    real_registry_lock = coordination_claims.claim_registry_lock
+    real_tracker_write = session_contracts.write_session_tracker
+
+    @contextmanager
+    def observed_registry_lock(path: Path | None = None):
+        is_transfer = current_thread().name == "generic-cross-session-transfer"
+        if is_transfer:
+            transfer_waiting.set()
+        with real_registry_lock(path):
+            if is_transfer:
+                transfer_acquired.set()
+            yield
+
+    def transfer_claim() -> None:
+        try:
+            session_lifecycle.end_runtime_session(
+                agent="codex",
+                session_id=str(common["session_id"]),
+                reason="generic refresh owner ended",
+            )
+            transfer_results.append(
+                _resume_session_as_native(
+                    agent="codex",
+                    project="enforced-planning",
+                    scope=str(common["scope"]),
+                    worktree_path=str(common["worktree_path"]),
+                    branch=str(common["branch"]),
+                    current_phase="generic successor active",
+                    session_id="codex:generic-successor",
+                )
+            )
+        except BaseException as exc:  # pragma: no cover - asserted below
+            transfer_failures.append(exc)
+        finally:
+            transfer_completed.set()
+
+    def write_while_transfer_waits(*args: object, **kwargs: object) -> Path:
+        thread = Thread(target=transfer_claim, name="generic-cross-session-transfer")
+        transfer_threads.append(thread)
+        thread.start()
+        assert transfer_waiting.wait(timeout=2)
+        assert transfer_acquired.is_set() is False
+        result = real_tracker_write(*args, **kwargs)
+        assert transfer_acquired.is_set() is False
+        return result
+
+    monkeypatch.setattr(coordination_claims, "claim_registry_lock", observed_registry_lock)
+    monkeypatch.setattr(session_contracts, "write_session_tracker", write_while_transfer_waits)
+    refreshed = session_lifecycle.start_session(
+        **{**common, "current_phase": "generic refresh committed first"}
+    )
+
+    assert refreshed["action"] == "updated"
+    assert len(transfer_threads) == 1
+    transfer_threads[0].join(timeout=5)
+    assert transfer_acquired.is_set()
+    assert transfer_completed.is_set()
+    assert transfer_failures == []
+    assert transfer_results[0]["action"] == "resumed"
+    successor_claim = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    successor_tracker = yaml.safe_load(tracker_path.read_text(encoding="utf-8"))
+    assert successor_claim["session_id"] == "codex:generic-successor"
+    assert successor_tracker["claim"]["session_id"] == "codex:generic-successor"
+    assert successor_tracker["tracker"]["current_phase"] == "generic successor active"
+
+
+def test_generic_existing_refresh_rolls_back_tracker_before_releasing_custody(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A failed generic claim update restores exact tracker bytes under registry custody."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    goal = "ordinary unplanned rollback coverage"
+    common = {
+        **_maintenance_refresh_args(tmp_path, trackers_dir),
+        "intent": goal,
+        "broader_goal": goal,
+        "session_name": session_contracts.derive_session_name(goal),
+        "plan_ref": session_contracts.UNPLANNED_PLAN_REF,
+        "allow_unplanned": False,
+    }
+    started = session_lifecycle.start_session(**common)
+    claim_path = claims_dir / "codex_enforced-planning_fix_maintenance-provenance-refresh.yaml"
+    tracker_path = Path(started["tracker_path"])
+    claim_before = claim_path.read_bytes()
+    tracker_before = tracker_path.read_bytes()
+
+    def reject_claim_update(**_kwargs: object) -> str:
+        raise ValueError("injected generic claim failure")
+
+    monkeypatch.setattr(session_lifecycle, "_upsert_session_claim", reject_claim_update)
+    with pytest.raises(ValueError, match="injected generic claim failure"):
+        session_lifecycle.start_session(
+            **{**common, "current_phase": "must roll back generic tracker"}
+        )
+
+    assert claim_path.read_bytes() == claim_before
+    assert tracker_path.read_bytes() == tracker_before
+
+
+@pytest.mark.parametrize(
+    "drift",
+    [
+        {"intent": "replace immutable maintenance intent"},
+        {"repo_root": "/tmp/different-repo"},
+        {"worktree_path": "/tmp/different-worktree"},
+        {"branch": "fix/different-branch"},
+        {"broader_goal": "Unplanned maintenance: different goal", "session_name": None},
+        {"claim_type": "write"},
+        {"write_paths": ["different.py"]},
+        {"intended_next_phases": ["newly invented phase"]},
+        {"broad_scope_reason": "replace immutable bootstrap custody"},
+    ],
+)
+def test_sanctioned_maintenance_start_rejects_provenance_drift_without_mutation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    drift: dict[str, object],
+) -> None:
+    """Identity drift fails before either the claim or tracker bytes change."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    common = _maintenance_refresh_args(tmp_path, trackers_dir)
+    started = session_lifecycle.start_session(**common)
+    claim_path = claims_dir / "codex_enforced-planning_fix_maintenance-provenance-refresh.yaml"
+    tracker_path = Path(started["tracker_path"])
+    claim_before = claim_path.read_bytes()
+    tracker_before = tracker_path.read_bytes()
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            "sanctioned maintenance refresh cannot change immutable provenance"
+            "|A live lane already exists"
+        ),
+    ):
+        session_lifecycle.start_session(**{**common, "current_phase": "drift attempt", **drift})
+
+    assert claim_path.read_bytes() == claim_before
+    assert tracker_path.read_bytes() == tracker_before
 
 
 def test_existing_session_upsert_rejects_new_write_overlap_without_mutation(

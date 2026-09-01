@@ -94,6 +94,7 @@ _READ_ONLY_GIT_SUBCOMMANDS = frozenset(
         "ls-files",
         "ls-tree",
         "rev-parse",
+        "rev-list",
         "show",
         "status",
     }
@@ -410,9 +411,29 @@ def _bash_declared_paths(command: str) -> tuple[str, ...]:
 
     commands = _shell_commands(command)
     if commands is not None and len(commands) == 1:
-        git_merge_paths = _git_merge_declared_paths(commands[0])
-        if git_merge_paths is not None:
-            return git_merge_paths
+        git_paths = _git_declared_paths(commands[0])
+        if git_paths is not None:
+            return git_paths
+
+    pytest_node_paths: dict[str, str] = {}
+    if commands is not None:
+        for argv in commands:
+            command_tokens = list(argv)
+            if len(command_tokens) >= 4 and command_tokens[:2] == ["/usr/bin/env", "-C"]:
+                command_tokens = command_tokens[3:]
+            executable = Path(command_tokens[0]).name if command_tokens else ""
+            tail: list[str] = []
+            if executable in {"pytest", "py.test"}:
+                tail = command_tokens[1:]
+            elif (
+                executable in {"python", "python3", "python3.12"}
+                and len(command_tokens) >= 3
+                and command_tokens[1:3] == ["-m", "pytest"]
+            ):
+                tail = command_tokens[3:]
+            for operand in tail:
+                if not operand.startswith("-") and "::" in operand:
+                    pytest_node_paths[operand] = operand.split("::", 1)[0]
 
     try:
         lexer = shlex.shlex(command, posix=True, punctuation_chars=";&|<>")
@@ -454,6 +475,7 @@ def _bash_declared_paths(command: str) -> tuple[str, ...]:
             python_script_pending = False
             continue
         candidate = token.split("=", 1)[1] if token.startswith("-") and "=" in token else token
+        candidate = pytest_node_paths.get(candidate, candidate)
         if "://" in candidate or candidate in {"-", "."}:
             continue
         if "=" in candidate and not candidate.startswith(("/", "~", ".")):
@@ -482,14 +504,13 @@ def _bash_declared_paths(command: str) -> tuple[str, ...]:
     return tuple(dict.fromkeys(paths))
 
 
-def _git_merge_declared_paths(argv: tuple[str, ...]) -> tuple[str, ...] | None:
-    """Return actual path operands for one direct ``git merge`` command.
+def _git_declared_paths(argv: tuple[str, ...]) -> tuple[str, ...] | None:
+    """Return actual path operands for bounded Git command shapes.
 
-    A merge's positional operands are revision names, not filesystem paths.
-    Treating ``origin/main`` as a path creates a circular failure at the exact
-    integration boundary the claim is meant to authorize. Execution-directory
-    and merge-message-file operands remain paths and stay subject to the claim.
-    ``None`` means the command is not the narrow shape handled here.
+    Read-only Git operands and a push's remote/ref operands are identifiers,
+    not filesystem paths. Treating ``origin/main`` or ``branch...HEAD`` as a
+    path creates a circular denial at inspection and integration boundaries.
+    Execution-directory and merge-message-file operands remain paths.
     """
 
     if not argv or Path(argv[0]).name != "git":
@@ -513,7 +534,18 @@ def _git_merge_declared_paths(argv: tuple[str, ...]) -> tuple[str, ...] | None:
             index += 1
             continue
         break
-    if index >= len(argv) or argv[index] != "merge":
+    if index >= len(argv):
+        return None
+    subcommand = argv[index]
+    if _git_command_is_read_only(argv):
+        return tuple(dict.fromkeys(paths))
+    if subcommand == "push":
+        tail = argv[index + 1 :]
+        positional = [token for token in tail if not token.startswith("-")]
+        if not positional or positional[0] == "origin":
+            return tuple(dict.fromkeys(paths))
+        return None
+    if subcommand != "merge":
         return None
     index += 1
     while index < len(argv):
@@ -573,13 +605,13 @@ def _bash_target_is_unprovable(command: str) -> bool:
 def _bash_explicit_worktree(command: str) -> Path | None:
     """Return one literal runtime cwd attested by a supported Bash form."""
 
-    if _bash_target_is_unprovable(command) or any(marker in command for marker in (";", "&&", "||", "|", ">", "<")):
+    if _bash_target_is_unprovable(command):
         return None
-    try:
-        argv = shlex.split(command)
-    except ValueError:
+    commands = _shell_commands(command)
+    if commands is None or len(commands) != 1:
         return None
-    if len(argv) >= 4 and argv[:2] == ["/usr/bin/env", "-C"]:
+    argv = commands[0]
+    if len(argv) >= 4 and argv[:2] == ("/usr/bin/env", "-C"):
         return Path(argv[2]).expanduser().resolve()
     executable = Path(argv[0]).name if argv else ""
     if executable in {"git", "make"} and len(argv) >= 3 and argv[1] == "-C":

@@ -9,6 +9,8 @@ plan-bound lanes -- fails here instead of at a live lane creation.
 from __future__ import annotations
 
 import importlib.util
+import json
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -54,6 +56,35 @@ def _claim_invocation(make_output: str) -> str:
     return "\n".join(collected)
 
 
+def _maintenance_request(make_output: str) -> dict[str, object]:
+    lines = [
+        line
+        for line in make_output.splitlines()
+        if "claim_bootstrap.py" in line and "--request-json" in line
+    ]
+    assert len(lines) == 1, f"expected one typed bootstrap invocation, got {len(lines)}"
+    tokens = shlex.split(lines[0])
+    return json.loads(tokens[tokens.index("--request-json") + 1])
+
+
+def test_install_codex_runtime_delegates_to_canonical_updater() -> None:
+    revision = "a" * 40
+    result = subprocess.run(
+        ["make", "-n", "install-codex-runtime", f"RUNTIME_REVISION={revision}"],
+        cwd=str(PROJECT_ROOT),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert (
+        f'python3 scripts/update_installed_runtime.py --revision "{revision}" '
+        "--allow-detached-replacement --write"
+    ) in result.stdout
+    assert "git -C" not in result.stdout
+
+
 def test_maintenance_worktree_claim_declares_unplanned_ownership() -> None:
     """The maintenance lane must stamp UNPLANNED on its pre-worktree claim.
 
@@ -62,16 +93,15 @@ def test_maintenance_worktree_claim_declares_unplanned_ownership() -> None:
     """
     # A later command-line assignment wins, so this clears the SESSION_WRITE_PATHS
     # that _COMMON_MAKE_VARS supplies and exercises the undeclared-scope default.
-    invocation = _claim_invocation(
+    request = _maintenance_request(
         _dry_run_make("maintenance-worktree", "BRANCH=probe-unplanned", "SESSION_WRITE_PATHS=")
     )
 
-    assert "--plan UNPLANNED" in invocation
-    assert "#" not in invocation.split("--plan")[1]
-    assert '--write-path "."' in invocation
-    assert '--broad-scope-mode "bootstrap"' in invocation
-    assert '--broad-scope-reason "construct this maintenance lane, then narrow before its first repository write"' in invocation
-    assert '--target-worktree-path "' in invocation
+    assert request["operation"] == "maintenance_worktree"
+    assert request["scope"] == "probe-unplanned"
+    assert request["branch"] == "probe-unplanned"
+    assert request["claim_type"] == "program"
+    assert request["write_paths"] == ["."]
 
 
 def test_maintenance_worktree_keeps_an_explicitly_declared_write_scope() -> None:
@@ -83,7 +113,7 @@ def test_maintenance_worktree_keeps_an_explicitly_declared_write_scope() -> None
     message format is "<yours> <-> <theirs>", which made the lane's own broad
     claim read as though it belonged to the other lanes.
     """
-    invocation = _claim_invocation(
+    request = _maintenance_request(
         _dry_run_make(
             "maintenance-worktree",
             "BRANCH=probe-narrow",
@@ -91,14 +121,29 @@ def test_maintenance_worktree_keeps_an_explicitly_declared_write_scope() -> None
         )
     )
 
-    assert '--write-path "Makefile"' in invocation
-    assert '--write-path "docs/plans"' in invocation
-    assert '--write-path "."' not in invocation
-    # Exact paths are already narrow. Bootstrap metadata is valid only when the
-    # entrypoint had to invent the repository-wide "." authority surface.
-    assert '--broad-scope-mode' not in invocation
-    assert '--broad-scope-reason' not in invocation
-    assert '--target-worktree-path' not in invocation
+    assert request["write_paths"] == ["Makefile", "docs/plans"]
+
+
+def test_maintenance_worktree_rejects_plan_owned_work() -> None:
+    result = subprocess.run(
+        [
+            "make",
+            "-n",
+            "maintenance-worktree",
+            *_COMMON_MAKE_VARS,
+            "BRANCH=plan-owned-probe",
+            "PLAN=123",
+        ],
+        cwd=str(PROJECT_ROOT),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    assert "maintenance-worktree is only for explicitly unplanned light maintenance" in (
+        result.stdout + result.stderr
+    )
 
 
 def test_plan_bound_worktree_claim_keeps_its_real_plan_reference() -> None:
@@ -323,9 +368,8 @@ def test_consumer_template_exposes_session_narrow_and_bootstrap_metadata() -> No
     assert '--project "$(WORKTREE_PROJECT)"' in narrow
     assert '--scope "$(BRANCH)"' in narrow
     assert '$(foreach path,$(SESSION_WRITE_PATHS),--write-path "$(path)")' in narrow
-    assert 'SESSION_BROAD_SCOPE_MODE="$(MAINTENANCE_BROAD_SCOPE_MODE)"' in maintenance
-    assert 'SESSION_BROAD_SCOPE_REASON="$(MAINTENANCE_BROAD_SCOPE_REASON)"' in maintenance
-    assert 'SESSION_TARGET_WORKTREE_PATH="$(MAINTENANCE_TARGET_WORKTREE_PATH)"' in maintenance
+    assert 'scripts/meta/claim_bootstrap.py --request-json' in maintenance
+    assert "$(MAINTENANCE_REQUEST_JSON)" in maintenance
 
 
 def test_unplanned_session_start_without_permission_names_its_recovery() -> None:

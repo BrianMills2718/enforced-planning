@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 from scripts import update_installed_runtime as runtime_update
-from scripts.update_installed_runtime import RuntimeUpdateError, update_runtime
+from scripts.update_installed_runtime import RuntimeUpdateError, rollback_runtime, update_runtime
 
 
 def _git(repo: Path, *args: str) -> str:
@@ -418,6 +418,99 @@ def test_write_fast_forwards_and_retains_exact_recovery_ref(
     assert _git(runtime, "rev-parse", "HEAD") == after
     assert _git(runtime, "rev-parse", result["recovery_ref"]) == before
     assert _git(runtime, "status", "--porcelain", "--untracked-files=all") == ""
+
+
+def test_recovery_ref_rollback_preserves_current_head_and_restores_to_main(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, runtime, before, after = _repos(tmp_path, monkeypatch)
+    updated = update_runtime(
+        source_repo=source,
+        runtime_repo=runtime,
+        revision=after,
+        write=True,
+        now=datetime(2026, 9, 1, 16, 0, tzinfo=UTC),
+    )
+    _git(runtime, "checkout", "--detach", after)
+
+    rolled_back = rollback_runtime(
+        source_repo=source,
+        runtime_repo=runtime,
+        recovery_ref=updated["recovery_ref"],
+        write=True,
+        now=datetime(2026, 9, 1, 16, 1, tzinfo=UTC),
+    )
+
+    assert rolled_back["action"] == "rolled_back"
+    assert rolled_back["update_mode"] == "recovery_ref_rollback"
+    assert rolled_back["before_revision"] == after
+    assert rolled_back["target_revision"] == before
+    assert rolled_back["after_revision"] == before
+    assert rolled_back["rollback_ref"] == updated["recovery_ref"]
+    assert _git(runtime, "rev-parse", rolled_back["recovery_ref"]) == after
+    assert _git(runtime, "rev-parse", updated["recovery_ref"]) == before
+    assert _git(runtime, "status", "--porcelain", "--untracked-files=all") == ""
+
+    restored = update_runtime(
+        source_repo=source,
+        runtime_repo=runtime,
+        revision=after,
+        write=True,
+    )
+
+    assert restored["action"] == "updated"
+    assert restored["before_revision"] == before
+    assert restored["after_revision"] == after
+    assert _git(runtime, "rev-parse", "HEAD") == after
+
+
+def test_recovery_ref_rollback_check_is_non_mutating(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, runtime, before, after = _repos(tmp_path, monkeypatch)
+    updated = update_runtime(
+        source_repo=source,
+        runtime_repo=runtime,
+        revision=after,
+        write=True,
+        now=datetime(2026, 9, 1, 16, 0, tzinfo=UTC),
+    )
+    _git(runtime, "checkout", "--detach", after)
+    refs_before = _all_refs(runtime)
+
+    result = rollback_runtime(
+        source_repo=source,
+        runtime_repo=runtime,
+        recovery_ref=updated["recovery_ref"],
+        write=False,
+    )
+
+    assert result["action"] == "would_rollback"
+    assert result["target_revision"] == before
+    assert _git(runtime, "rev-parse", "HEAD") == after
+    assert _all_refs(runtime) == refs_before
+
+
+def test_recovery_ref_rollback_rejects_forged_identity_without_mutation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, runtime, before, after = _repos(tmp_path, monkeypatch)
+    _git(runtime, "checkout", "--detach", before)
+    forged = "refs/codex-runtime-recovery/20260901T160000000000Z-000000000000"
+    _git(runtime, "update-ref", forged, before)
+    refs_before = _all_refs(runtime)
+
+    with pytest.raises(RuntimeUpdateError, match=runtime_update.SAFE_FAILURE_MESSAGE):
+        rollback_runtime(
+            source_repo=source,
+            runtime_repo=runtime,
+            recovery_ref=forged,
+            write=True,
+        )
+
+    assert _git(runtime, "rev-parse", "HEAD") == before
+    assert _all_refs(runtime) == refs_before
+    assert _git(source, "rev-parse", "origin/main") == after
 
 
 def test_write_migrates_exact_legacy_runtime_alias_without_dereferencing_it(

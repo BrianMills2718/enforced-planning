@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
-"""Safely update the installed Codex Enforced Planning runtime.
+"""Safely update or roll back the installed Codex Enforced Planning runtime.
 
 The installed runtime is a host control surface, not a governed project
 worktree. This command is the narrow mutation boundary for updating it from
 the canonical remote. It refuses dirty, non-main branches, unapproved divergent
 states, and wrong identities, and retains the previous HEAD before mutation.
+Rollback is limited to an exact recovery ref previously retained in the
+installed runtime; returning to canonical ``origin/main`` uses the normal
+update path.
 """
 
 from __future__ import annotations
@@ -25,6 +28,9 @@ from typing import Any
 
 FULL_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 RECOVERY_NAMESPACE = "refs/codex-runtime-recovery"
+RECOVERY_REF_RE = re.compile(
+    rf"^{re.escape(RECOVERY_NAMESPACE)}/[0-9]{{8}}T[0-9]{{12}}Z-([0-9a-f]{{12}})$"
+)
 ZERO_OID = "0" * 40
 CANONICAL_ORIGIN = "https://github.com/BrianMills2718/enforced-planning.git"
 CANONICAL_ORIGIN_IDENTITY = "github.com/BrianMills2718/enforced-planning"
@@ -150,6 +156,7 @@ def _base_receipt(
         "checkout_mode": None,
         "before_revision": None,
         "target_revision": None,
+        "rollback_ref": None,
         "after_revision": None,
         "recovery_ref": None,
         "recovery_ref_retained": None,
@@ -366,6 +373,149 @@ def _recovery_ref(before: str, now: datetime) -> str:
     return f"{RECOVERY_NAMESPACE}/{stamp}-{before[:12]}"
 
 
+def _recovery_ref_target(runtime_repo: Path, recovery_ref: str) -> str:
+    """Resolve one exact updater-owned recovery ref without accepting aliases."""
+
+    match = RECOVERY_REF_RE.fullmatch(recovery_ref)
+    if match is None:
+        raise RuntimeUpdateError(
+            f"--rollback-ref must be one exact {RECOVERY_NAMESPACE}/<timestamp>-<sha-prefix> ref"
+        )
+    result = _run(runtime_repo, "show-ref", "--verify", "--hash", recovery_ref, check=False)
+    target = result.stdout.strip()
+    if result.returncode != 0 or not FULL_SHA_RE.fullmatch(target):
+        raise RuntimeUpdateError("requested runtime recovery ref does not exist as one exact commit ref")
+    resolved = _output(runtime_repo, "rev-parse", f"{recovery_ref}^{{commit}}")
+    if resolved != target or not target.startswith(match.group(1)):
+        raise RuntimeUpdateError("runtime recovery ref does not match its retained commit identity")
+    return target
+
+
+def rollback_runtime(
+    *,
+    source_repo: Path,
+    runtime_repo: Path,
+    recovery_ref: str,
+    write: bool,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    """Move a clean detached runtime to one exact retained canonical recovery ref."""
+
+    denial: RuntimeUpdateError | None = None
+    source_repo = Path(os.path.abspath(source_repo.expanduser()))
+    runtime_repo = Path(os.path.abspath(runtime_repo.expanduser()))
+    receipt = _base_receipt(
+        source_repo=source_repo,
+        runtime_repo=runtime_repo,
+        revision="",
+        write=write,
+        now=now,
+    )
+    receipt["rollback_ref"] = recovery_ref
+    try:
+        try:
+            source_repo = source_repo.resolve()
+        except RuntimeError as exc:
+            raise RuntimeUpdateError("source repository path cannot be resolved") from exc
+        expected_runtime = Path(os.path.abspath(_canonical_runtime_repo().expanduser()))
+        if runtime_repo != expected_runtime:
+            raise RuntimeUpdateError(
+                f"installed runtime path must be exactly {expected_runtime}, found {runtime_repo}"
+            )
+        _assert_runtime_path_not_symlinked(runtime_repo)
+        try:
+            runtime_repo = runtime_repo.resolve()
+        except RuntimeError as exc:
+            raise RuntimeUpdateError("installed runtime path cannot be resolved") from exc
+        source_common_dir = _assert_repo(source_repo, "source repository")
+        receipt["source_repo"] = str(source_repo)
+        runtime_common_dir = _assert_repo(runtime_repo, "installed runtime")
+        runtime_git_dir = runtime_repo / ".git"
+        if (
+            not runtime_git_dir.is_dir()
+            or runtime_git_dir.is_symlink()
+            or runtime_common_dir != runtime_git_dir.resolve()
+        ):
+            raise RuntimeUpdateError("installed runtime must be a standalone clone, not a linked worktree")
+        receipt["runtime_repo"] = str(runtime_repo)
+        if source_common_dir == runtime_common_dir:
+            raise RuntimeUpdateError("source repository and installed runtime must be distinct clones")
+        _assert_safe_runtime_local_config(runtime_repo)
+        checkout_mode = _assert_clean_runtime(runtime_repo)
+        receipt["checkout_mode"] = checkout_mode
+        if checkout_mode != "detached":
+            raise RuntimeUpdateError("runtime rollback requires a clean detached installed runtime")
+        runtime_origin = _output(runtime_repo, "config", "--local", "--get", "remote.origin.url")
+        if runtime_origin != CANONICAL_ORIGIN:
+            raise RuntimeUpdateError("runtime rollback requires the canonical HTTPS origin")
+        receipt.update(
+            origin=_canonical_origin_identity(),
+            stored_origin_before="canonical_https",
+            stored_origin_after="canonical_https",
+            origin_migration_required=False,
+        )
+
+        before = _output(runtime_repo, "rev-parse", "HEAD")
+        target = _recovery_ref_target(runtime_repo, recovery_ref)
+        _validate_revision(source_repo, target)
+        receipt.update(
+            before_revision=before,
+            target_revision=target,
+            after_revision=before,
+            changed=before != target,
+            update_mode="recovery_ref_rollback",
+        )
+        receipt["stage"] = "resolve_remote"
+        remote_main = _remote_main_revision()
+        receipt["remote_main_revision"] = remote_main
+        if _run(source_repo, "merge-base", "--is-ancestor", target, remote_main, check=False).returncode != 0:
+            raise RuntimeUpdateError("runtime recovery target is not an ancestor of canonical origin/main")
+
+        if not write or before == target:
+            receipt.update(
+                action="current" if before == target else "would_rollback",
+                state="succeeded",
+                stage="complete",
+            )
+            return receipt
+
+        retained_current_ref = _recovery_ref(before, now or datetime.now(UTC))
+        receipt["stage"] = "create_recovery_ref"
+        receipt["recovery_ref"] = retained_current_ref
+        _run(runtime_repo, "update-ref", retained_current_ref, before, ZERO_OID, mutating=True)
+        receipt["mutation_started"] = True
+        receipt["stage"] = "apply_rollback"
+        _run(runtime_repo, "checkout", "--detach", target, mutating=True)
+
+        receipt["stage"] = "verify"
+        after = _output(runtime_repo, "rev-parse", "HEAD")
+        _assert_clean_runtime(runtime_repo)
+        retained_current = _output(runtime_repo, "rev-parse", retained_current_ref)
+        retained_target = _output(runtime_repo, "rev-parse", recovery_ref)
+        stored_origin_after = _output(runtime_repo, "config", "--local", "--get", "remote.origin.url")
+        if (
+            after != target
+            or retained_current != before
+            or retained_target != target
+            or stored_origin_after != CANONICAL_ORIGIN
+        ):
+            raise RuntimeUpdateError("post-rollback revision, origin, or recovery-ref verification failed")
+        receipt.update(
+            action="rolled_back",
+            state="succeeded",
+            stage="complete",
+            after_revision=after,
+            recovery_ref_retained=True,
+        )
+        return receipt
+    except (RuntimeUpdateError, OSError, subprocess.SubprocessError) as exc:
+        _refresh_failure_state(runtime_repo, receipt)
+        denial = _deny(receipt, exc)
+    if denial is not None:
+        raise denial
+    raise AssertionError("runtime rollback reached an impossible fallthrough")
+
+
 def update_runtime(
     *,
     source_repo: Path,
@@ -546,8 +696,13 @@ def _parser() -> argparse.ArgumentParser:
         default=_default_runtime_repo(),
         help="installed runtime clone (default: $CODEX_HOME/runtime/enforced-planning)",
     )
-    parser.add_argument("--revision", required=True, help="exact full canonical origin/main commit SHA")
-    parser.add_argument("--write", action="store_true", help="perform the checked fast-forward")
+    target = parser.add_mutually_exclusive_group(required=True)
+    target.add_argument("--revision", help="exact full canonical origin/main commit SHA")
+    target.add_argument(
+        "--rollback-ref",
+        help=f"exact retained {RECOVERY_NAMESPACE}/<timestamp>-<sha-prefix> ref",
+    )
+    parser.add_argument("--write", action="store_true", help="perform the checked runtime transition")
     parser.add_argument(
         "--allow-detached-replacement",
         action="store_true",
@@ -559,13 +714,23 @@ def _parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None) -> int:
     try:
         args = _parser().parse_args(argv)
-        payload = update_runtime(
-            source_repo=args.source_repo,
-            runtime_repo=args.runtime_repo,
-            revision=args.revision,
-            write=args.write,
-            allow_detached_replacement=args.allow_detached_replacement,
-        )
+        if args.rollback_ref is not None:
+            if args.allow_detached_replacement:
+                raise RuntimeUpdateError("--allow-detached-replacement is valid only with --revision")
+            payload = rollback_runtime(
+                source_repo=args.source_repo,
+                runtime_repo=args.runtime_repo,
+                recovery_ref=args.rollback_ref,
+                write=args.write,
+            )
+        else:
+            payload = update_runtime(
+                source_repo=args.source_repo,
+                runtime_repo=args.runtime_repo,
+                revision=args.revision,
+                write=args.write,
+                allow_detached_replacement=args.allow_detached_replacement,
+            )
     except (RuntimeUpdateError, OSError, subprocess.SubprocessError) as exc:
         payload = exc.receipt or _base_receipt(
             source_repo=Path(__file__).resolve().parents[1],

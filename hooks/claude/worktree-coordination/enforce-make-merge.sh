@@ -25,8 +25,11 @@ if [[ -z "$COMMAND" ]]; then
     exit 0  # No command, allow
 fi
 
-# Check if command contains direct GitHub CLI merge
-if echo "$COMMAND" | grep -qE 'gh\s+pr\s+merge'; then
+# Check if a command segment invokes gh, with or without global flags, then
+# reaches `pr merge`. Keep this lexical and fast; the sanctioned command does
+# not invoke gh directly, so false negatives are more dangerous than a bounded
+# false positive on an unusual shell expression.
+if echo "$COMMAND" | grep -qE '(^|&&|;|\|)[[:space:]]*([^[:space:]]*/)?gh([[:space:]]+[^;&|]*)?[[:space:]]+pr[[:space:]]+merge([[:space:]]|$)'; then
     PR_NUM=$(echo "$COMMAND" | grep -oE 'merge\s+[0-9]+' | grep -oE '[0-9]+' || echo "N")
 
     echo "BLOCKED: Direct GitHub CLI merge is not allowed" >&2
@@ -55,9 +58,13 @@ if echo "$COMMAND" | grep -qE '(^|&&|;|\|)\s*python[3]?\s+scripts/safe_worktree_
     exit 2
 fi
 
-# Block direct calls to finish_pr.py (must use make finish)
-# This ensures proper workflow and uses main's scripts
-if echo "$COMMAND" | grep -qE '(^|&&|;|\|)\s*python[3]?\s+(scripts/)?(worktree-coordination/)?finish_pr\.py'; then
+# Block direct calls to finish_pr.py (must use make finish). Cover source and
+# installed paths, absolute interpreters, optional interpreter flags, `uv run`,
+# and an executable script path. The match is constrained to a command segment
+# so searches or commit messages that merely mention the filename are allowed.
+PYTHON_FINISH_RE='(^|&&|;|\|)[[:space:]]*(uv[[:space:]]+run[[:space:]]+)?([^[:space:]]*/)?python([0-9.]*)?([[:space:]]+-[^[:space:]]+)*[[:space:]]+[^;&|]*finish_pr\.py([[:space:]]|$)'
+EXEC_FINISH_RE='(^|&&|;|\|)[[:space:]]*([^[:space:]]*/)?finish_pr\.py([[:space:]]|$)'
+if echo "$COMMAND" | grep -qE "$PYTHON_FINISH_RE|$EXEC_FINISH_RE"; then
     BRANCH=$(echo "$COMMAND" | grep -oE '\-\-branch\s+\S+' | sed 's/--branch\s*//' || echo "BRANCH")
     PR_NUM=$(echo "$COMMAND" | grep -oE '\-\-pr\s+[0-9]+' | grep -oE '[0-9]+' || echo "N")
 

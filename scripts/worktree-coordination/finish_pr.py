@@ -157,12 +157,38 @@ def fetch_pr_snapshot(
     return _parse_pr_snapshot(result.stdout)
 
 
-def load_trusted_review_spec(path: Path, *, canonical_root: Path) -> PRReviewSpec:
+def registered_worktree_roots(canonical_root: Path) -> tuple[Path, ...]:
+    result = run_cmd(
+        ["git", "-C", str(canonical_root), "worktree", "list", "--porcelain"],
+        check=False,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(
+            "cannot enumerate repository worktrees: "
+            + (result.stderr or result.stdout).strip()
+        )
+    roots = tuple(
+        Path(line.removeprefix("worktree ")).resolve()
+        for line in result.stdout.splitlines()
+        if line.startswith("worktree ")
+    )
+    if not roots:
+        raise RuntimeError("repository reported no registered worktrees")
+    return roots
+
+
+def load_trusted_review_spec(
+    path: Path,
+    *,
+    canonical_root: Path,
+    worktree_roots: tuple[Path, ...] | None = None,
+) -> PRReviewSpec:
     """Load coordinator input only when it is outside PR-controlled repository bytes."""
     if not path.is_absolute():
         raise ValueError("review spec must be an absolute path outside the repository")
     resolved = path.resolve(strict=True)
-    if resolved.is_relative_to(canonical_root.resolve()):
+    roots = worktree_roots or registered_worktree_roots(canonical_root)
+    if any(resolved.is_relative_to(root.resolve()) for root in roots):
         raise ValueError("review spec must be outside the repository and its worktrees")
     return load_review_spec(resolved)
 
@@ -337,6 +363,17 @@ def verify_merged_pr(
 
 
 def close_merged_lane(branch: str, merge_commit: str, base_branch: str) -> tuple[bool, str]:
+    refresh = run_cmd(["git", "fetch", "--no-tags", "origin", base_branch], check=False)
+    if refresh.returncode != 0:
+        return False, (refresh.stderr or refresh.stdout).strip()
+    retained = run_cmd(
+        ["git", "merge-base", "--is-ancestor", merge_commit, f"origin/{base_branch}"],
+        check=False,
+    )
+    if retained.returncode != 0:
+        return False, (
+            f"verified merge commit {merge_commit} is not retained by origin/{base_branch}"
+        )
     close = run_cmd([
         "make", "worktree-remove", f"BRANCH={branch}",
         f"WORKTREE_MERGE_COMMIT={merge_commit}",

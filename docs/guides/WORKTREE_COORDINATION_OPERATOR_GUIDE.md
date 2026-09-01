@@ -426,6 +426,10 @@ and required checks, then passes that same full commit to
 never reaches merge. The helper does not request branch deletion as part of the
 merge; only verified GitHub merge evidence is passed into the sanctioned
 claim/worktree close lifecycle, which owns local branch deletion.
+Before closeout, the helper fetches the canonical base ref and proves that the
+reported merge commit is retained by `origin/<base>`. This makes the merge
+object and updated remote-tracking ref available to squash-closeout validation
+before the linked worktree or claim is removed.
 
 Hooks provide the fast enforcement layer: they block direct merge commands and
 route callers to `make finish BRANCH=<branch> PR=<number>

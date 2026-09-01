@@ -130,8 +130,9 @@ make finish \
 ```
 
 The longer programmatic and LLM review runs in that make target, not during
-`PreToolUse`. A relative spec or any spec inside the repository/worktree tree is
-rejected before review so pull-request content cannot rewrite its own rubric.
+`PreToolUse`. A relative spec or any spec inside any Git-registered linked
+worktree is rejected before review, including worktrees outside the canonical
+checkout directory, so pull-request content cannot rewrite its own rubric.
 
 ## Failure behavior
 
@@ -152,3 +153,6 @@ rejected before review so pull-request content cannot rewrite its own rubric.
 - Any blocking finding exists: reject signoff even if the model says `pass`.
 - PR receives another commit: the old receipt remains historical evidence but
   cannot authorize the new head.
+- A command uses an absolute interpreter, an installed `scripts/meta` finish
+  path, `uv run`, or `gh` global flags: the fast merge guard still routes it to
+  `make finish`.

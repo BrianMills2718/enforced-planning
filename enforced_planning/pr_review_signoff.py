@@ -309,31 +309,35 @@ def run_programmatic_checks(
 ) -> tuple[ProgrammaticCheckResult, ...]:
     results: list[ProgrammaticCheckResult] = []
     for check in spec.programmatic_checks:
-        confined_command = [
-            "systemd-run",
-            "--user",
-            "--pipe",
-            "--quiet",
-            "--collect",
-            f"--property=ReadOnlyPaths={repo_root}",
-            f"--property=WorkingDirectory={repo_root}",
-            "--property=PrivateNetwork=yes",
-            "--setenv=GH_TOKEN=",
-            "--setenv=GITHUB_TOKEN=",
-            "--setenv=SSH_AUTH_SOCK=",
-            "--setenv=GIT_ASKPASS=/bin/false",
-            "--setenv=GIT_TERMINAL_PROMPT=0",
-            "--",
-            *check.argv,
-        ]
-        completed = subprocess.run(
-            confined_command,
-            cwd=repo_root,
-            capture_output=True,
-            text=True,
-            timeout=check.timeout_seconds,
-            check=False,
-        )
+        with tempfile.TemporaryDirectory(prefix="pr-review-check-cache-") as cache:
+            confined_command = [
+                "systemd-run",
+                "--user",
+                "--pipe",
+                "--quiet",
+                "--collect",
+                f"--property=ReadOnlyPaths={repo_root}",
+                f"--property=WorkingDirectory={repo_root}",
+                "--property=PrivateNetwork=yes",
+                f"--setenv=RUFF_CACHE_DIR={cache}/ruff",
+                f"--setenv=XDG_CACHE_HOME={cache}/xdg",
+                f"--setenv=PYTHONPYCACHEPREFIX={cache}/pycache",
+                "--setenv=GH_TOKEN=",
+                "--setenv=GITHUB_TOKEN=",
+                "--setenv=SSH_AUTH_SOCK=",
+                "--setenv=GIT_ASKPASS=/bin/false",
+                "--setenv=GIT_TERMINAL_PROMPT=0",
+                "--",
+                *check.argv,
+            ]
+            completed = subprocess.run(
+                confined_command,
+                cwd=repo_root,
+                capture_output=True,
+                text=True,
+                timeout=check.timeout_seconds,
+                check=False,
+            )
         output = f"{completed.stdout}\n{completed.stderr}".strip()
         results.append(
             ProgrammaticCheckResult(

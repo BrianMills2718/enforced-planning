@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import subprocess
 import sys
 from contextlib import contextmanager
@@ -53,10 +54,19 @@ def test_review_spec_must_be_absolute_and_outside_repository(
     repo.mkdir()
     inside = repo / "review.json"
     inside.write_text("{}", encoding="utf-8")
+    external_worktree = tmp_path / "external-worktree"
+    external_worktree.mkdir()
+    external_spec = external_worktree / "review.json"
+    external_spec.write_text("{}", encoding="utf-8")
 
-    for candidate in (Path("review.json"), inside):
+    roots = (repo, external_worktree)
+    monkeypatch.setattr(module, "registered_worktree_roots", lambda _root: roots)
+    for candidate in (Path("review.json"), inside, external_spec):
         try:
-            module.load_trusted_review_spec(candidate, canonical_root=repo)
+            module.load_trusted_review_spec(
+                candidate,
+                canonical_root=repo,
+            )
         except ValueError as exc:
             assert "outside the repository" in str(exc)
         else:
@@ -66,7 +76,10 @@ def test_review_spec_must_be_absolute_and_outside_repository(
     outside.write_text("{}", encoding="utf-8")
     expected = object()
     monkeypatch.setattr(module, "load_review_spec", lambda path: expected)
-    assert module.load_trusted_review_spec(outside, canonical_root=repo) is expected
+    assert module.load_trusted_review_spec(
+        outside,
+        canonical_root=repo,
+    ) is expected
 
 
 def test_head_change_invalidates_previously_successful_approval(monkeypatch) -> None:
@@ -186,7 +199,7 @@ def test_required_check_command_is_repository_bound(monkeypatch) -> None:
     ]]
 
 
-def test_closeout_precedes_canonical_pull_and_uses_merge_receipt(monkeypatch) -> None:
+def test_closeout_refreshes_remote_before_removal_and_uses_merge_receipt(monkeypatch) -> None:
     module = _load()
     calls = []
 
@@ -197,15 +210,75 @@ def test_closeout_precedes_canonical_pull_and_uses_merge_receipt(monkeypatch) ->
     monkeypatch.setattr(module, "run_cmd", fake_run)
     assert module.close_merged_lane("feature", SHA_B, "main") == (True, "Closed")
     assert calls == [
+        ["git", "fetch", "--no-tags", "origin", "main"],
+        ["git", "merge-base", "--is-ancestor", SHA_B, "origin/main"],
         ["make", "worktree-remove", "BRANCH=feature", f"WORKTREE_MERGE_COMMIT={SHA_B}"],
         ["git", "pull", "--ff-only", "origin", "main"],
     ]
 
 
-def test_hook_blocks_real_finish_script_path_and_routes_to_make() -> None:
+def test_failed_merge_verification_never_closes_lane(monkeypatch, tmp_path) -> None:
+    module = _load()
+    closed = []
+
+    @contextmanager
+    def repository_context():
+        yield "owner/repo", {}
+
+    monkeypatch.setattr(module, "is_in_worktree", lambda: False)
+    monkeypatch.setattr(module, "github_repository_context", repository_context)
+    monkeypatch.setattr(
+        module,
+        "prepare_merge_gate",
+        lambda *_args, **_kwargs: (snapshot(module), tmp_path / "receipt.json"),
+    )
+    monkeypatch.setattr(module, "merge_exact_head", lambda *_args: (True, "Merged"))
+    monkeypatch.setattr(
+        module,
+        "verify_merged_pr",
+        lambda *_args: (False, None, "missing merge evidence"),
+    )
+    monkeypatch.setattr(
+        module,
+        "close_merged_lane",
+        lambda *_args: closed.append(True) or (True, "Closed"),
+    )
+
+    assert module.finish_pr(
+        "feature",
+        42,
+        review_spec_path=tmp_path / "spec.json",
+        review_output_root=tmp_path,
+    ) is False
+    assert closed == []
+
+
+def test_hook_blocks_direct_merge_and_finish_command_variants() -> None:
+    commands = (
+        "python scripts/worktree-coordination/finish_pr.py --branch feature --pr 42",
+        "python ./scripts/worktree-coordination/finish_pr.py --branch feature --pr 42",
+        "/usr/bin/python3 scripts/meta/worktree-coordination/finish_pr.py --branch feature --pr 42",
+        "uv run python scripts/worktree-coordination/finish_pr.py --branch feature --pr 42",
+        "./scripts/meta/worktree-coordination/finish_pr.py --branch feature --pr 42",
+        "gh pr merge 42",
+        "gh --repo owner/repo pr merge 42 --squash",
+    )
+    for command in commands:
+        payload = json.dumps({"tool_input": {"command": command}, "cwd": "/repo"})
+        result = subprocess.run(
+            ["bash", str(HOOK_PATH)],
+            input=payload,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == 2, command
+        assert "make finish" in result.stderr
+
+
+def test_hook_allows_search_that_only_mentions_finish_filename() -> None:
     payload = (
-        '{"tool_input":{"command":"python scripts/worktree-coordination/finish_pr.py '
-        '--branch feature --pr 42 --review-spec /tmp/spec.json"},'
+        '{"tool_input":{"command":"rg finish_pr.py scripts tests"},'
         '"cwd":"/repo"}'
     )
     result = subprocess.run(
@@ -215,7 +288,4 @@ def test_hook_blocks_real_finish_script_path_and_routes_to_make() -> None:
         text=True,
         check=False,
     )
-
-    assert result.returncode == 2
-    assert "make finish BRANCH=feature PR=42" in result.stderr
-    assert "REVIEW_SPEC=/absolute/review-spec.json" in result.stderr
+    assert result.returncode == 0

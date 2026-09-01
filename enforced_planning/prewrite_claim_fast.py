@@ -605,13 +605,13 @@ def _bash_target_is_unprovable(command: str) -> bool:
 def _bash_explicit_worktree(command: str) -> Path | None:
     """Return one literal runtime cwd attested by a supported Bash form."""
 
-    if _bash_target_is_unprovable(command) or any(marker in command for marker in (";", "&&", "||", "|", ">", "<")):
+    if _bash_target_is_unprovable(command):
         return None
-    try:
-        argv = shlex.split(command)
-    except ValueError:
+    commands = _shell_commands(command)
+    if commands is None or len(commands) != 1:
         return None
-    if len(argv) >= 4 and argv[:2] == ["/usr/bin/env", "-C"]:
+    argv = commands[0]
+    if len(argv) >= 4 and argv[:2] == ("/usr/bin/env", "-C"):
         return Path(argv[2]).expanduser().resolve()
     executable = Path(argv[0]).name if argv else ""
     if executable in {"git", "make"} and len(argv) >= 3 and argv[1] == "-C":

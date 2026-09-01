@@ -1571,6 +1571,32 @@ def test_git_launch_cwd_resolves_bash_through_different_exact_session_claim(
     assert decision["worktree_path"] == str(worktree)
 
 
+def test_git_launch_cwd_accepts_quoted_shell_metacharacters_in_bound_command(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _workspace, repo, worktree, claims_dir, _claim_path = _fixture(tmp_path)
+    command = (
+        f"/usr/bin/env -C {worktree} gh api --method POST example "
+        "-f 'description=verified; exact head | approved'"
+    )
+
+    code, decision = _run_cli(
+        monkeypatch,
+        capsys,
+        tmp_path,
+        _payload(cwd=repo, tool="Bash", tool_input={"command": command}),
+        claims_dir=claims_dir,
+        projection_path=tmp_path / "projection.json",
+    )
+
+    assert code == 0
+    assert decision["decision"] == "allow", decision
+    assert decision["reason_code"] == "exact_live_claim"
+    assert decision["worktree_path"] == str(worktree)
+
+
 @pytest.mark.parametrize("command", ["touch generated.py", "{launch_bound}"])
 def test_git_launch_cwd_requires_runtime_binding_to_different_claimed_worktree(
     tmp_path: Path,
@@ -1734,6 +1760,34 @@ def test_git_launch_cwd_does_not_hide_stale_session_target_projection(
     assert code == 2
     assert decision["decision"] == "deny"
     assert decision["reason_code"] == "projection_unavailable_or_stale"
+
+
+def test_git_launch_cwd_repairs_valid_projection_staled_by_heartbeat(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _workspace, repo, worktree, claims_dir, claim_path = _fixture(tmp_path)
+    claim = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    claim["heartbeat_at"] = datetime.now(timezone.utc).isoformat()
+    claim_path.write_text(yaml.safe_dump(claim, sort_keys=False), encoding="utf-8")
+
+    code, decision = _run_cli(
+        monkeypatch,
+        capsys,
+        tmp_path,
+        _payload(
+            cwd=repo,
+            tool="Bash",
+            tool_input={"command": f"/usr/bin/env -C {worktree} touch generated.py"},
+        ),
+        claims_dir=claims_dir,
+        projection_path=tmp_path / "projection.json",
+    )
+
+    assert code == 0
+    assert decision["decision"] == "allow", decision
+    assert decision["reason_code"] == "exact_live_claim"
 
 
 def test_git_launch_cwd_stale_projection_still_allows_provably_read_only_bash(

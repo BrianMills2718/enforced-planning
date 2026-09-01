@@ -339,6 +339,51 @@ def _native_notice(message: str) -> str:
     return json.dumps({"systemMessage": message}, sort_keys=True)
 
 
+def _refresh_projection_for_claimed_command(
+    *,
+    claims_dir: Path,
+    projection_path: Path,
+) -> None:
+    """Repair one stale valid projection under the canonical registry lock.
+
+    Claim heartbeats can run between native tool events. Resolving a session
+    target against a digest-stale projection before attempting recovery makes
+    the recovery command itself an operator-visible prerequisite for every
+    subsequent write. The registry lock gives projection build and publication
+    one coherent claim snapshot; invalid registries remain stale and therefore
+    fail closed through ordinary admission.
+    """
+
+    from enforced_planning import coordination_claims
+    from enforced_planning.prewrite_claim_projection import (
+        ProjectionBuildError,
+        projection_is_current,
+        write_projection,
+    )
+
+    # Missing projection state is not repairable authority. Preserve the
+    # established fail-closed ``projection_unavailable_or_stale`` decision;
+    # this helper only closes the heartbeat race for an existing projection.
+    if not claims_dir.is_dir() or not projection_path.is_file():
+        return
+
+    try:
+        with coordination_claims.claim_registry_lock(claims_dir):
+            if projection_is_current(
+                claims_dir=claims_dir,
+                projection_path=projection_path,
+            ):
+                return
+            write_projection(
+                claims_dir=claims_dir,
+                projection_path=projection_path,
+            )
+    except (OSError, ProjectionBuildError, ValueError):
+        # Do not turn an invalid registry into authority. The subsequent
+        # ordinary evaluation emits the existing fail-closed stale receipt.
+        return
+
+
 def _parse_native_mailbox_command(
     command: str,
     *,
@@ -1154,13 +1199,6 @@ def main(argv: list[str] | None = None) -> int:
             projection_path = args.cache_dir / "authority-projection-v1.json"
         if projection_path is None:
             projection_path = DEFAULT_PROJECTION_PATH
-        payload = _session_bound_payload(
-            payload,
-            client=args.client,
-            claims_dir=args.claims_dir,
-            projection_path=projection_path,
-        )
-        mode = _mode(payload, args.mode)
         from enforced_planning.claim_bootstrap import projection_recovery_command
 
         recovery_command = projection_recovery_command(
@@ -1191,7 +1229,7 @@ def main(argv: list[str] | None = None) -> int:
                     command,
                     claim_bootstrap_classifier=special_classifier,
                 )
-        if early_bash_classification in {
+        claimless_classifications = {
             "read_only",
             "claim_bootstrap",
             "native_mailbox",
@@ -1200,7 +1238,20 @@ def main(argv: list[str] | None = None) -> int:
             "hook_feedback_report",
             "read_target_selection",
             "projection_recovery",
-        }:
+        }
+        if early_bash_classification not in claimless_classifications:
+            _refresh_projection_for_claimed_command(
+                claims_dir=args.claims_dir,
+                projection_path=projection_path,
+            )
+        payload = _session_bound_payload(
+            payload,
+            client=args.client,
+            claims_dir=args.claims_dir,
+            projection_path=projection_path,
+        )
+        mode = _mode(payload, args.mode)
+        if early_bash_classification in claimless_classifications:
             outcome_mode = "off"
         else:
             try:

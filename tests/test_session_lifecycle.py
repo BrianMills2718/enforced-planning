@@ -186,3 +186,32 @@ def test_remove_worktree_reanchors_process_cwd_before_removal(
     assert action == "removed"
     assert Path.cwd() == repo.resolve()
     assert not worktree.exists()
+
+
+def test_bootstrap_closeout_resolves_real_target_instead_of_authority_sentinel(
+    tmp_path: Path,
+) -> None:
+    """Early bootstrap failure must still clean the physical worktree it created."""
+
+    target = tmp_path / "target-worktree"
+    sentinel = Path(f"{target}.bootstrap-no-mutation-authority")
+    claim = coordination_claims.build_candidate_claim(
+        agent="codex",
+        project="demo",
+        scope="lane",
+        intent="exercise bootstrap closeout",
+        plan_ref="UNPLANNED",
+        claim_type="program",
+        write_paths=["."],
+        broad_scope_mode="bootstrap",
+        broad_scope_reason="construct and narrow the exact maintenance lane",
+        target_worktree_path=str(target),
+        worktree_path=str(sentinel),
+        repo_root=str(tmp_path),
+        branch="lane",
+        session_id="codex:bootstrap-closeout",
+    )
+
+    assert claim.worktree_path == str(sentinel)
+    assert session_lifecycle._resolve_closeout_worktree_path(claim, None) == target
+    assert session_lifecycle._resolve_closeout_worktree_path(claim, str(target)) == target

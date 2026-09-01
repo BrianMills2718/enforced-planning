@@ -92,8 +92,14 @@ repository-relative paths, for example `["scripts/adapter.py", "tests/test_adapt
 Omitting it requests the legacy-looking `["."]` scope, but new maintenance
 bootstraps persist that scope as typed `bootstrap` custody: the real target is
 available for instruction/read context while ordinary repository mutations are
-denied. The owning native session must run `make session-narrow` with explicit
-descendant `SESSION_WRITE_PATHS` before its first repository write. Empty lists,
+denied. During that restricted state, lifecycle cleanup resolves the physical
+worktree from the recorded bootstrap target rather than the non-authorizing
+sentinel used by the pre-write projection. The owning native session must run
+`make session-narrow` with explicit descendant `SESSION_WRITE_PATHS` before its
+first repository write. A Project-Graph-registered repository that does not
+install the Make target may invoke the canonical absolute `session_narrow.py`
+runtime directly; it remains bound to the ambient native session, exact claim,
+and strict descendant paths. Empty lists,
 duplicates, traversal,
 absolute paths, glob patterns, and mixed broad/narrow declarations are rejected.
 Narrow creation uses the same registry overlap checks: it can coexist with

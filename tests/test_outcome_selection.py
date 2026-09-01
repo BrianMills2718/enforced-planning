@@ -385,6 +385,11 @@ def _fixture(
     claims_dir = tmp_path / "claims"
     claims_dir.mkdir()
     now = datetime.now(UTC)
+    external_plan = bool(
+        plan_ref
+        and "#" in plan_ref
+        and plan_ref.rpartition("#")[0].lower().replace("_", "-") != "enforced-planning"
+    )
     claim_path = claims_dir / "codex_enforced-planning_plan117-test.yaml"
     claim_payload = {
         "schema_version": 3,
@@ -411,6 +416,9 @@ def _fixture(
         "work_unit_id": "osel-01" if plan_ref and not plan_ref.startswith("goal:") else None,
         "work_graph_path": "docs/plans/117_graph.json" if plan_ref and not plan_ref.startswith("goal:") else None,
         "work_graph_sha256": "a" * 64 if plan_ref and not plan_ref.startswith("goal:") else None,
+        "plan_repo_root": str(repo) if external_plan else None,
+        "plan_revision": _git(worktree, "rev-parse", "HEAD") if external_plan else None,
+        "plan_sha256": "b" * 64 if external_plan else None,
         "approval_revisions": [],
     }
     claim_path.write_text(yaml.safe_dump(claim_payload, sort_keys=False), encoding="utf-8")
@@ -717,7 +725,7 @@ def test_planned_selection_rejects_mismatched_qualified_project(
             claims_dir=claims_dir,
         )
 
-    assert caught.value.code == "claim_not_healthy"
+    assert caught.value.code == "plan_identity_mismatch"
 
 
 def test_enforced_selection_rejects_symbolic_baseline_revision(

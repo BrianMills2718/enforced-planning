@@ -208,7 +208,14 @@ def resolve_fresh_start_revision(*, repo_root: Path, start_point: str) -> str:
         candidate = upstream_ref.split("/", 1)[0]
         remote_name = candidate if candidate in remotes else None
     if remote_name is None and start_point == "HEAD":
-        remote_name = "origin" if "origin" in remotes else (next(iter(sorted(remotes)), None))
+        if "origin" in remotes:
+            remote_name = "origin"
+        elif len(remotes) == 1:
+            remote_name = next(iter(remotes))
+        elif len(remotes) > 1:
+            raise ValueError(
+                "Unable to choose a remote default: multiple remotes exist and none is named 'origin'"
+            )
     if remote_name is None:
         return local_revision
     if remote_name:
@@ -219,16 +226,12 @@ def resolve_fresh_start_revision(*, repo_root: Path, start_point: str) -> str:
             detail = (fetched.stderr or fetched.stdout).strip()
             raise ValueError(f"Unable to refresh upstream {upstream_ref!r}: {detail}")
     if start_point == "HEAD":
-        remote_head = run_git(["symbolic-ref", "--quiet", "--short", f"refs/remotes/{remote_name}/HEAD"], cwd=repo_root)
-        if remote_head.returncode == 0:
-            upstream_ref = remote_head.stdout.strip()
-        else:
-            advertised = run_git(["ls-remote", "--symref", remote_name, "HEAD"], cwd=repo_root)
-            match = re.search(r"^ref:\s+refs/heads/([^\s]+)\s+HEAD$", advertised.stdout, re.MULTILINE)
-            if advertised.returncode != 0 or match is None:
-                detail = (advertised.stderr or advertised.stdout).strip()
-                raise ValueError(f"Unable to resolve remote default for {remote_name!r}: {detail}")
-            upstream_ref = f"{remote_name}/{match.group(1)}"
+        advertised = run_git(["ls-remote", "--symref", remote_name, "HEAD"], cwd=repo_root)
+        match = re.search(r"^ref:\s+refs/heads/([^\s]+)\s+HEAD$", advertised.stdout, re.MULTILINE)
+        if advertised.returncode != 0 or match is None:
+            detail = (advertised.stderr or advertised.stdout).strip()
+            raise ValueError(f"Unable to resolve remote default for {remote_name!r}: {detail}")
+        upstream_ref = f"{remote_name}/{match.group(1)}"
     elif explicit_remote == remote_name:
         upstream_ref = start_point
     if not upstream_ref:

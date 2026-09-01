@@ -14,6 +14,11 @@ import yaml  # type: ignore[import-untyped]
 MODULE_PATH = Path(__file__).resolve().parents[1] / "scripts" / "worktree-coordination" / "create_worktree.py"
 
 
+def test_source_repo_worktree_facade_matches_canonical_source() -> None:
+    installed = Path(__file__).resolve().parents[1] / "scripts" / "meta" / "worktree-coordination" / "create_worktree.py"
+    assert installed.read_bytes() == MODULE_PATH.read_bytes()
+
+
 def _load_module():
     """Load the standalone worktree-creation script as a module."""
     spec = importlib.util.spec_from_file_location("create_worktree_module", MODULE_PATH)
@@ -207,6 +212,34 @@ def test_create_worktree_fetch_failure_leaves_no_branch_or_worktree(tmp_path: Pa
 
     assert not worktree_path.exists()
     assert _run_git(repo_root, "show-ref", "--verify", "refs/heads/fetch-failure").returncode != 0
+
+
+def test_fresh_start_fails_closed_for_ambiguous_non_origin_remotes(tmp_path: Path) -> None:
+    module = _load_module()
+    repo_root = tmp_path / "repo"
+    _init_temp_repo(repo_root)
+    assert _run_git(repo_root, "remote", "add", "alpha", str(tmp_path / "alpha")).returncode == 0
+    assert _run_git(repo_root, "remote", "add", "beta", str(tmp_path / "beta")).returncode == 0
+
+    with pytest.raises(ValueError, match="multiple remotes"):
+        module.resolve_fresh_start_revision(repo_root=repo_root, start_point="HEAD")
+
+
+def test_fresh_start_uses_advertised_default_when_local_remote_head_is_stale(tmp_path: Path) -> None:
+    module = _load_module()
+    repo_root = _init_repo_with_stale_origin(tmp_path)
+    origin_root = tmp_path / "origin"
+    stale_remote_head = _run_git(repo_root, "symbolic-ref", "refs/remotes/origin/HEAD").stdout.strip()
+    assert _run_git(origin_root, "switch", "-c", "new-default").returncode == 0
+    (origin_root / "DEFAULT.txt").write_text("new default\n", encoding="utf-8")
+    assert _run_git(origin_root, "add", "DEFAULT.txt").returncode == 0
+    assert _run_git(origin_root, "commit", "-m", "new advertised default").returncode == 0
+    expected = _run_git(origin_root, "rev-parse", "HEAD").stdout.strip()
+
+    resolved = module.resolve_fresh_start_revision(repo_root=repo_root, start_point="HEAD")
+
+    assert resolved == expected
+    assert _run_git(repo_root, "symbolic-ref", "refs/remotes/origin/HEAD").stdout.strip() == stale_remote_head
 
 
 def test_create_worktree_reuses_only_branch_at_exact_start_revision(tmp_path: Path) -> None:
@@ -462,9 +495,12 @@ def test_create_worktree_rejects_conflicting_scoped_write_claim(
             "claim_type": authorizing_claim_type,
             "write_paths": ["docs/ops"],
             "branch": "plan-62-conflict",
-            "worktree_path": "~/projects/repo_worktrees/plan-62-conflict",
+            "repo_root": str(repo_root),
+            "worktree_path": str(worktree_path),
             "session_id": "codex-session",
             "session_name": "coordination-v2",
+            "broader_goal": "Verify conflict enforcement",
+            "plan_ref": "UNPLANNED",
             "status": "active",
         },
     )
@@ -569,9 +605,12 @@ def test_create_worktree_allows_matching_scoped_write_claim(tmp_path: Path) -> N
             "claim_type": "write",
             "write_paths": ["docs/ops"],
             "branch": "plan-62-valid",
-            "worktree_path": "~/projects/repo_worktrees/plan-62-valid",
+            "repo_root": str(repo_root),
+            "worktree_path": str(worktree_path),
             "session_id": "codex-session",
             "session_name": "coordination-v2",
+            "broader_goal": "Verify scoped worktree creation",
+            "plan_ref": "UNPLANNED",
             "status": "active",
         },
     )
@@ -624,9 +663,12 @@ def test_create_worktree_allows_program_claim_with_exact_write_paths(tmp_path: P
             "claim_type": "program",
             "write_paths": ["docs/reviews/owner-week.md"],
             "branch": "goal-owner-week",
-            "worktree_path": "~/projects/repo_worktrees/goal-owner-week",
+            "repo_root": str(repo_root),
+            "worktree_path": str(worktree_path),
             "session_id": "codex-session",
             "session_name": "complete-one-bounded-owner-outcome",
+            "broader_goal": "Complete one bounded owner outcome",
+            "plan_ref": "UNPLANNED",
             "status": "active",
         },
     )

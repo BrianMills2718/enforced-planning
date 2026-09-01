@@ -275,6 +275,9 @@ installed environment separately through its package workflow. An unchanged
 `mode:installed-package` receipt is informational, not installer drift.
 For external plan ownership, the upgraded runtime and wrappers must both
 support the operator guide's explicit plan-authority root/revision inputs.
+The bounded mailbox and claim-projection profiles install their complete local
+import closure, and worktree bootstrap fetches and resolves the advertised
+remote default before creating a claim, branch, or linked worktree.
 
 - `./install.sh /path/to/your/project --worktree-only`
   - canonical bounded sync for sanctioned worktree entrypoints only

@@ -1,6 +1,6 @@
 # Plan #132: Overbroad Claim Narrowing and False-Serialization Repair
 
-**Status:** Planned
+**Status:** Planned — implementation-readiness audit incorporated
 **Type:** implementation
 **Priority:** Critical
 **phase_ref:** "Phase 9: Fleet Adoption and Framework Maintenance"
@@ -29,9 +29,11 @@ lane receives only a generic conflict.
 claims cannot authorize ordinary repository writes until the owner atomically
 narrows them. Deliberately bounded broad claims must state why their entire
 parent scope is required and remain bounded by the existing claim expiry. A
-first-class owner-only narrowing operation replaces the paths, projection, and
-mutation receipt under one registry lock. Conflict output distinguishes exact
-contention from a broad-parent reservation without weakening either denial.
+first-class owner-only narrowing operation replaces the mutation-authority
+paths and projection under one registry lock, with rollback on projection
+failure and an immediately following append-only audit receipt. Conflict output
+distinguishes exact contention from a broad-parent reservation without
+weakening either denial.
 
 **Why:** Claims are advance reservations for future writes; current Git diffs
 cannot safely override them. The repair belongs in claim declaration and
@@ -58,11 +60,12 @@ ownership of the same file.
 owner-parent broad reservation. Lane A runs the sanctioned narrow operation
 with its exact two paths. Lane B retries the unchanged request.
 
-**Expected observable result:** Lane A's claim, digest-bound pre-write
-projection, and append-only mutation receipt atomically record the narrower
-paths; lane B is admitted. Replacing Lane A's paths with any path outside
-`docs`, or invoking the operation from another session, fails without changing
-the claim or projection.
+**Expected observable result:** Lane A's claim and digest-bound pre-write
+projection commit the narrower paths as one fail-atomic locked transition; an
+append-only mutation receipt then records that committed transition and whether
+the projection is current. Lane B is admitted. Replacing Lane A's paths with
+any path outside `docs`, or invoking the operation from another session, fails
+without changing the claim or projection.
 
 **Behavioral evidence:** Unobserved; Plan 132 implementation must retain a
 temporary-registry transcript of the deny -> narrow -> admit sequence and one
@@ -123,6 +126,48 @@ claim authorizes an ordinary write, or parent/child overlap stops blocking.
 
 ---
 
+## Implementation-readiness audit corrections
+
+An implementation-readiness audit at
+`82a9451a318e41b1a642623a774bc3e86d6faf48` traced the public maintenance
+bootstrap through `claim_bootstrap.py`, `session_start.py`, the host gate,
+`session_target.py`, and `create_worktree.py`; those canonical ingresses were
+missing from the v1 work graph. It also reproduced the mixed-version and
+receipt-ordering gaps below. The following corrections are part of the adopted
+design, not optional follow-up:
+
+1. `claim_bootstrap.py` is the canonical workspace-root ingress and must create
+   the typed claim before worktree residue. Direct Make/session creation must
+   propagate the same mode, reason, and exact target.
+2. Navigation/target identity remains distinct from mutation authority.
+   Schema v6 adds `target_worktree_path`. A bootstrap claim retains the real
+   target there while its legacy-visible `worktree_path` is a deterministic
+  non-Git authority-disabled sentinel. New instruction/read resolution may
+   verify `source_file` against the projection's existing `source_sha256`, read
+   the exact target from that canonical claim YAML, and accept only the typed
+   bootstrap authority-disabled issue for read context. Old or new ordinary
+   pre-write readers cannot mistake the bootstrap claim for authority in the
+   real worktree. Successful narrowing atomically makes
+   `worktree_path == target_worktree_path`.
+3. The projection wire contract stays v1 and keeps its exact field set. A new
+   generator expresses bootstrap denial through the existing `static_issues`
+   list, so an older fast reader of a newer projection also fails closed.
+   Downgrade/install checks must reject a prior runtime while any live v6 broad
+   claim exists; the authority-disabled worktree binding remains a second
+   fail-closed control if an older projection writer runs.
+4. Claim YAML and projection replacement form the locked fail-atomic
+   transaction. The append-only receipt is necessarily post-commit. Receipt
+   persistence failure raises the existing truthful post-mutation audit error
+   and may not claim that registry mutation was rolled back.
+5. `session-narrow` is a narrowly parsed, native-session-bound host
+   coordination command. The host gate admits exactly that grammar so a
+   bootstrap claim cannot block its own only recovery operation.
+6. The installed proof must cover the complete source/installer manifest
+   closure and the public workspace-root bootstrap, deny, narrow, allow, and
+   close journey. Project Meta and fleet mutation remain conditional.
+
+---
+
 ## Research Basis For This Slice
 
 No external research is needed. This is a reproduced local coordination failure
@@ -165,7 +210,7 @@ the existing latency budget.
 
 | Part | Mode | Why | Planning Treatment |
 |---|---|---|---|
-| atomic narrowing | Deductive | subset, owner, lock, projection, and receipt invariants are exact | specify transaction and both-sign tests first |
+| atomic narrowing | Deductive | subset, owner, lock, claim/projection rollback, and post-commit receipt invariants are exact | specify transaction and both-sign tests first |
 | broad-path classification | Deductive with bounded compatibility observation | `repo_root` and existing filesystem type are inspectable; legacy claims lack new metadata | strict rules for new claims; legacy read compatibility and explicit diagnostic |
 | conflict explanation | Deductive | parent direction and current worktree diff are inspectable | typed interaction fields; Git diff is advisory only |
 | Project Meta rollout | Conditional | exact source revision does not exist until source acceptance | disposable consumer first; target-repo graph and rollout only after source merge |
@@ -183,12 +228,13 @@ the concrete changed paths observed from Git when available.
 
 ### Claim schema v6
 
-Add two optional fields to `ClaimRecord` and persisted YAML:
+Add three optional fields to `ClaimRecord` and persisted YAML:
 
 | Field | Type | Rule |
 |---|---|---|
 | `broad_scope_mode` | `bootstrap | bounded | null` | Required on every new write-owning claim containing a broad path; forbidden when no broad path remains. |
 | `broad_scope_reason` | non-empty string or null | Required exactly when `broad_scope_mode` is present. |
+| `target_worktree_path` | absolute path or null | Required for bootstrap claims and equal to the intended exact session target. For ordinary/bounded claims it is null or equal to `worktree_path`. |
 
 A path is broad when it is `.` or resolves, under the claim's declared
 `repo_root`, to an existing top-level directory. New write-owning claims require
@@ -205,8 +251,13 @@ its terminal deadline. Heartbeat does not silently extend claim expiry.
 ### Broad-mode rules
 
 - `bootstrap` permits claim/worktree/session construction and sanctioned claim
-  mutation only. The pre-write authority projection denies ordinary repository
-  writes until no broad path remains.
+  mutation only. It stores the real target in `target_worktree_path` and an
+  authority-disabled non-Git sentinel in legacy-visible `worktree_path`.
+  Session instruction/read resolution verifies and reads the target field from
+  the projection-digest-bound source claim; the projection wire shape remains
+  unchanged. Pre-write authority remains bound to `worktree_path` and therefore
+  denies ordinary repository writes until a successful narrow makes the two
+  paths equal.
 - `bounded` authorizes the declared broad parent until existing expiry and
   makes that deliberate reservation visible in conflicts.
 - New broad claims without both fields fail before claim or worktree residue.
@@ -226,12 +277,19 @@ existing registry lock and:
 4. re-evaluates live conflicts from the same locked registry snapshot;
 5. clears broad metadata when no broad path remains, otherwise requires the
    retained paths to satisfy the existing declared mode;
-6. atomically replaces claim YAML, refreshes the digest-bound projection, and
-   appends one `operation: narrow` mutation receipt;
-7. returns old/new paths, cleared/retained broad mode, projection digest, and
+6. for bootstrap mode, verifies the target Git identity and replaces the
+   authority-disabled `worktree_path` with `target_worktree_path`;
+7. replaces claim YAML and refreshes the digest-bound projection as one
+   rollback-capable locked transition;
+8. appends one `operation: narrow` mutation receipt for the committed
+   transition; a receipt failure reports post-commit audit failure rather than
+   pretending the claim mutation did not occur;
+9. returns old/new paths, cleared/retained broad mode, projection digest, and
    mailbox observation summary.
 
-Any failed guard leaves claim bytes and projection digest unchanged. General
+Any failed guard or projection refresh leaves claim bytes and projection bytes
+unchanged. Receipt failure occurs after a successful commit and is reported
+with the existing applied-state audit-error semantics. General
 session upsert remains capable of legitimate expansion, but must apply the same
 broad-mode admission rules; it cannot masquerade as the narrow operation.
 
@@ -256,11 +314,18 @@ request rather than adding another message store.
 
 - Schema v1-v5 claims load unchanged; no eager registry rewrite or migration.
 - Narrow new claims serialize as v6 without broad fields.
+- Projection schema 1.0 and its exact claim field set remain unchanged;
+  bootstrap denial uses the existing `static_issues` list. Older fast readers
+  therefore fail closed when consuming a projection produced by v6 code.
+- A live v6 bootstrap claim keeps its legacy-visible `worktree_path` detached
+  from the real target, so an older projection writer cannot promote it to
+  ordinary worktree authority merely by ignoring unknown fields.
 - Source implementation and disposable installed consumer land before any real
   Project Meta installation.
-- Rollback is the source commit revert plus reinstall of the prior accepted
-  version. Claims already narrowed remain valid narrow claims; v6 broad claims
-  must not be created in a consumer until that consumer has v6 readers.
+- Downgrade/reinstall to a pre-v6 runtime fails while any live v6 broad claim
+  exists. After narrowing or closing those claims, rollback is the source
+  commit revert plus reinstall of the prior accepted version; v6 narrow claims
+  retain v5-compatible authority semantics.
 
 ---
 
@@ -340,19 +405,34 @@ copies and dogfood evidence in a separate target repository claim.
 
 - `enforced_planning/coordination_claims.py`
 - `enforced_planning/claim_mutation_receipts.py`
+- `enforced_planning/claim_bootstrap.py`
 - `enforced_planning/session_lifecycle.py`
+- `enforced_planning/session_target.py`
 - `enforced_planning/prewrite_claim_projection.py`
 - `enforced_planning/prewrite_claim_fast.py`
 - `scripts/session_narrow.py` (create)
+- `scripts/session_start.py`
 - `scripts/check_coordination_claims.py`
+- `scripts/prewrite_claim_gate.py`
+- `scripts/worktree-coordination/create_worktree.py`
 - `Makefile`
 - `templates/Makefile.worktree.block.template`
 - `scripts/install_governed_repo.py`
+- `scripts/relationships.yaml`
 - `tests/test_check_coordination_claims.py`
 - `tests/test_claim_mutation_receipts.py`
+- `tests/test_claim_bootstrap.py`
+- `tests/test_session_lifecycle.py`
 - `tests/test_session_cli.py`
+- `tests/test_session_target.py`
 - `tests/test_prewrite_claim_fast.py`
+- `tests/test_prewrite_claim_projection.py`
+- `tests/test_host_prewrite_claim_gate.py`
+- `tests/test_create_worktree.py`
+- `tests/test_makefile_worktree_targets.py`
+- `tests/test_source_makefile.py`
 - `tests/test_install_governed_repo.py`
+- `CLAUDE.md`
 - `docs/guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md`
 - `docs/reference/CONFIG_REFERENCE.md`
 - `GETTING_STARTED.md`
@@ -386,10 +466,12 @@ consumer; schema and command substrate alone are not completion.
    schema v6 compatibility, broad classification, owner-only `narrow_claim`,
    mutation receipt, interaction classification, CLI/Make seam, and focused
    temporary-registry replay. This is one implementation unit because the lock,
-   claim bytes, projection, receipt, and command must change atomically.
+   claim bytes, projection rollback, post-commit receipt, and command must be
+   verified as one public lifecycle.
 2. **CN132-02 — Bootstrap and installed-consumer integration
    (`fully_specifiable_now`, same unit/batch).** Carry broad mode through the
-   projection, deny bootstrap-broad ordinary writes, update the canonical Make
+   unchanged v1 projection wire shape, deny bootstrap-broad ordinary writes,
+   preserve target-versus-mutation-authority separation, update the canonical Make
    template and installer, and replay the canonical example in a disposable
    installed repo. Batch any directly observed parity repairs before rerunning
    the fixed-cost installed proof.
@@ -410,12 +492,25 @@ consumer; schema and command substrate alone are not completion.
 | `tests/test_check_coordination_claims.py` | `test_new_broad_claim_requires_mode_and_reason` | broad admission fails before residue without typed intent |
 | same | `test_atomic_narrow_replaces_subset_and_refreshes_projection` | one-lock claim/projection transition |
 | same | `test_atomic_narrow_rejects_escape_expansion_and_foreign_session_without_change` | both-sign ownership and subset invariants |
+| same | `test_narrow_projection_failure_restores_exact_claim_and_projection_bytes` | fail-atomic rollback on derived-state failure |
+| same | `test_broad_classifier_handles_root_file_missing_component_and_symlink_escape` | root-bound classification cannot guess or escape |
+| same | `test_bounded_broad_claim_remains_authorized_without_heartbeat_expiry_extension` | deliberate broad authority and terminal lease stay truthful |
 | same | `test_parent_child_conflict_classifies_owner_parent_without_weakening_denial` | explanatory receipt retains hard conflict |
 | same | `test_legacy_broad_claim_remains_readable_and_is_diagnostic` | compatibility without silent promotion |
 | `tests/test_claim_mutation_receipts.py` | `test_narrow_mutation_receipt_binds_post_change_projection` | append-only audit provenance |
+| same | `test_narrow_receipt_failure_reports_applied_projection_current` | post-commit audit failure never claims rollback |
 | `tests/test_prewrite_claim_fast.py` | `test_bootstrap_broad_claim_denies_repo_write_until_narrowed` | structural first-write deadline |
+| `tests/test_prewrite_claim_projection.py` | `test_bootstrap_uses_v1_static_issue_without_projection_shape_drift` | old-reader/new-projection compatibility |
+| `tests/test_session_target.py` | `test_bootstrap_target_resolves_for_context_without_mutation_authority` | navigation target remains distinct from mutation binding |
 | `tests/test_session_cli.py` | `test_session_narrow_json_deny_narrow_admit_journey` | public operator journey and failure output |
+| `tests/test_session_lifecycle.py` | `test_heartbeat_observes_narrowing_request_without_extending_expiry` | existing mailbox and lease semantics are reused |
+| `tests/test_claim_bootstrap.py` | `test_workspace_bootstrap_creates_authority_disabled_target_then_requires_narrow` | canonical JSON bootstrap has no residue on failure and no pre-narrow write authority |
+| `tests/test_host_prewrite_claim_gate.py` | `test_native_session_narrow_command_is_exactly_parsed_and_self_recovery_admissible` | only the native bounded recovery grammar bypasses ordinary write admission |
+| `tests/test_create_worktree.py` | `test_bootstrap_claim_validates_exact_target_without_granting_worktree_authority` | worktree construction honors the separated target |
+| `tests/test_makefile_worktree_targets.py` | `test_maintenance_worktree_propagates_bootstrap_mode_reason_and_target` | Make ingress matches the canonical transaction |
+| `tests/test_source_makefile.py` | `test_session_narrow_target_and_arguments_are_canonical` | source target is present and shell-safe |
 | `tests/test_install_governed_repo.py` | `test_installed_consumer_includes_narrowing_runtime_and_make_target` | source/generated lineage |
+| same | `test_downgrade_rejected_while_live_v6_broad_claim_exists` | rollback cannot silently promote bootstrap authority |
 
 ### Existing Tests (Must Pass)
 
@@ -435,7 +530,11 @@ consumer; schema and command substrate alone are not completion.
 - [ ] New broad claims require mode/reason; `bootstrap` cannot authorize an
   ordinary repository write and `bounded` remains limited by existing expiry.
 - [ ] Narrowing is owner/session bound, strictly subset-only, fail-atomic, and
-  recorded in the existing projection and mutation receipt stream.
+  commits claim plus projection with rollback; its post-commit receipt
+  truthfully reports the applied state even if audit persistence fails.
+- [ ] Bootstrap instruction/read context resolves the exact target worktree
+  while both old and new pre-write readers lack mutation authority until
+  successful narrowing.
 - [ ] Parent/child overlap remains a hard conflict; advisory Git-diff evidence
   never changes admission.
 - [ ] Existing schema v1-v5 claims remain readable and honestly diagnostic.
@@ -452,7 +551,9 @@ consumer; schema and command substrate alone are not completion.
 |---|---|
 | broad classifier mistakes a root file for a directory | require declared repo root and inspect existing filesystem type; fail ambiguous missing paths |
 | “narrow” expands into a sibling | subset relation checked under the registry lock before any write |
-| claim changes but projection/receipt does not | reuse the existing locked mutation + projection refresh transaction and bind its digest in the receipt |
+| projection refresh fails after claim replacement | restore the exact prior claim and projection bytes before releasing the registry lock; inject failure in tests |
+| audit receipt append fails after commit | raise the existing post-mutation audit error with `applied_projection_current`; never report not-applied or silently rollback committed authority |
+| an old reader or projection writer sees a v6 bootstrap claim | keep projection v1, add an existing-format static issue, and keep legacy-visible `worktree_path` authority-disabled until narrow |
 | bootstrap mode blocks its own remediation | treat the sanctioned claim-mutation CLI as host coordination, not a repository write |
 | diff looks disjoint and is treated as permission | advisory field cannot influence `severity` or admission result |
 | implementation duplicates mailbox machinery | reuse heartbeat polling and existing message status contracts |

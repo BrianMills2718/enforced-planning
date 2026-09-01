@@ -3629,24 +3629,55 @@ def complete_claims_for_plan(
     return len(completed_scopes), sorted(completed_scopes)
 
 
-def prune_expired() -> int:
-    """Remove expired claims and return the number pruned."""
+def _matches_prune_selectors(
+    claim: ClaimRecord,
+    *,
+    agent: str | None,
+    project: str | None,
+    scope: str | None,
+) -> bool:
+    """Return whether one normalized claim matches every supplied selector."""
+
+    return not (
+        (agent is not None and claim.agent != agent)
+        or (project is not None and project not in claim.projects)
+        or (scope is not None and claim.scope != scope)
+    )
+
+
+def prune_expired(
+    *,
+    agent: str | None = None,
+    project: str | None = None,
+    scope: str | None = None,
+) -> tuple[int, list[str]]:
+    """Remove selected expired claims and return count plus exact scope labels."""
     now = datetime.now(timezone.utc)
-    removed_claims: list[tuple[Path, ClaimRecord | None]] = []
+    removed_claims: list[tuple[Path, ClaimRecord]] = []
     with claim_registry_lock(CLAIMS_DIR):
         registry_digest_before = _registry_digest(CLAIMS_DIR)
         if not CLAIMS_DIR.exists():
-            return 0
+            return 0, []
         for claim_file in CLAIMS_DIR.glob("*.yaml"):
             try:
                 data = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
             except Exception:
                 continue
-            expires_at = _parse_iso_datetime(data.get("expires_at") if isinstance(data, dict) else None)
-            if expires_at is not None and expires_at < now:
-                claim = normalize_claim(data, source_file=str(claim_file)) if isinstance(data, dict) else None
-                claim_file.unlink()
-                removed_claims.append((claim_file, claim))
+            if not isinstance(data, dict):
+                continue
+            claim = normalize_claim(data, source_file=str(claim_file))
+            if claim is None or not _matches_prune_selectors(
+                claim,
+                agent=agent,
+                project=project,
+                scope=scope,
+            ):
+                continue
+            expires_at = _parse_iso_datetime(data.get("expires_at"))
+            if expires_at is None or expires_at >= now:
+                continue
+            claim_file.unlink()
+            removed_claims.append((claim_file, claim))
         if removed_claims:
             _projection_path, projection_digest_after = refresh_prewrite_authority_projection(CLAIMS_DIR)
             for claim_file, claim in removed_claims:
@@ -3654,13 +3685,14 @@ def prune_expired() -> int:
                     operation="prune",
                     claims_dir=CLAIMS_DIR,
                     registry_digest_before=registry_digest_before,
-                    target_project=claim.primary_project() if claim else None,
-                    target_scope=claim.scope if claim else None,
+                    target_project=claim.primary_project(),
+                    target_scope=claim.scope,
                     target_claim_path=claim_file,
-                    session_id=claim.session_id if claim else None,
+                    session_id=claim.session_id,
                     projection_digest_after=projection_digest_after,
                 )
-    return len(removed_claims)
+    removed_labels = [f"{claim.primary_project()}:{claim.scope}" for _path, claim in removed_claims]
+    return len(removed_labels), sorted(removed_labels)
 
 
 def prune_stale(
@@ -3685,11 +3717,12 @@ def prune_stale(
             claim = normalize_claim(data, source_file=str(claim_file))
             if claim is None or not claim.is_live():
                 continue
-            if agent is not None and claim.agent != agent:
-                continue
-            if project is not None and project not in claim.projects:
-                continue
-            if scope is not None and claim.scope != scope:
+            if not _matches_prune_selectors(
+                claim,
+                agent=agent,
+                project=project,
+                scope=scope,
+            ):
                 continue
             liveness_issues = claim_liveness_issues(claim)
             proven_stale_liveness = [issue for issue in liveness_issues if issue != "missing_session_heartbeat"]
@@ -3767,11 +3800,12 @@ def prune_completed(
                 ) from invalid_claim
             if claim.status.strip().lower() not in COMPLETED_STATUSES:
                 continue
-            if agent is not None and claim.agent != agent:
-                continue
-            if project is not None and project not in claim.projects:
-                continue
-            if scope is not None and claim.scope != scope:
+            if not _matches_prune_selectors(
+                claim,
+                agent=agent,
+                project=project,
+                scope=scope,
+            ):
                 continue
             try:
                 archive_receipt = claim_mutation_receipts.build_completed_claim_archive_receipt(
@@ -4439,13 +4473,20 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.prune:
         try:
-            removed = prune_expired()
+            removed, removed_scopes = prune_expired(
+                agent=args.agent,
+                project=args.project,
+                scope=args.scope,
+            )
         except MutationAuditError as exc:
             return _render_mutation_audit_failure(exc, as_json=args.json)
+        payload = {"pruned": removed, "removed_scopes": removed_scopes}
         if args.json:
-            print(json.dumps({"pruned": removed}, indent=2))
+            print(json.dumps(payload, indent=2))
         else:
             print(f"Expired claims pruned: {removed}")
+            if removed_scopes:
+                print("Removed scopes: " + ", ".join(removed_scopes))
         return 0
 
     if args.prune_stale:

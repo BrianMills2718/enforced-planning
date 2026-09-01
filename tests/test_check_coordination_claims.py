@@ -59,6 +59,26 @@ def test_script_prune_completed_forwards_exact_selectors(monkeypatch: pytest.Mon
     }
 
 
+def test_script_prune_expired_forwards_exact_selectors(monkeypatch: pytest.MonkeyPatch) -> None:
+    module = _load_module()
+    observed: dict[str, object] = {}
+
+    def fake_prune_expired(*args: object, **kwargs: object) -> tuple[int, list[str]]:
+        observed["args"] = args
+        observed["kwargs"] = kwargs
+        return 1, ["project-meta:exact-scope"]
+
+    monkeypatch.setattr(module._impl, "prune_expired", fake_prune_expired)
+
+    result = module.prune_expired(agent="codex", project="project-meta", scope="exact-scope")
+
+    assert result == (1, ["project-meta:exact-scope"])
+    assert observed == {
+        "args": (),
+        "kwargs": {"agent": "codex", "project": "project-meta", "scope": "exact-scope"},
+    }
+
+
 @pytest.fixture(autouse=True)
 def _isolate_claim_mutation_ledger(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Keep deterministic claim fixtures out of the shared operator ledger."""
@@ -3623,6 +3643,127 @@ def test_prune_stale_removes_only_mechanically_stale_claims(
     assert removed_scopes == ["demo:stale-scope"]
     assert not (claims_dir / "stale.yaml").exists()
     assert (claims_dir / "healthy.yaml").exists()
+
+
+def test_prune_expired_honors_agent_project_and_scope_filters(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A targeted expiry cleanup must not prune any selector sibling."""
+
+    module = _load_module()
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
+    base = {
+        "claimed_at": "2026-04-05T12:00:00+00:00",
+        "expires_at": "2026-04-05T13:00:00+00:00",
+        "intent": "Expired claim",
+        "claim_type": "program",
+        "status": "active",
+    }
+    fixtures = {
+        "selected.yaml": {
+            **base,
+            "agent": "codex",
+            "projects": ["selected-project"],
+            "scope": "selected-scope",
+        },
+        "other-project.yaml": {
+            **base,
+            "agent": "codex",
+            "projects": ["other-project"],
+            "scope": "selected-scope",
+        },
+        "other-scope.yaml": {
+            **base,
+            "agent": "codex",
+            "projects": ["selected-project"],
+            "scope": "other-scope",
+        },
+        "other-agent.yaml": {
+            **base,
+            "agent": "claude-code",
+            "projects": ["selected-project"],
+            "scope": "selected-scope",
+        },
+    }
+    for name, payload in fixtures.items():
+        _write_claim(claims_dir, name, payload)
+
+    exit_code = module.main(
+        [
+            "--prune",
+            "--agent",
+            "codex",
+            "--project",
+            "selected-project",
+            "--scope",
+            "selected-scope",
+            "--json",
+        ]
+    )
+
+    assert exit_code == 0
+    assert json.loads(capsys.readouterr().out) == {
+        "pruned": 1,
+        "removed_scopes": ["selected-project:selected-scope"],
+    }
+    assert not (claims_dir / "selected.yaml").exists()
+    assert (claims_dir / "other-project.yaml").exists()
+    assert (claims_dir / "other-scope.yaml").exists()
+    assert (claims_dir / "other-agent.yaml").exists()
+
+
+def test_prune_expired_without_selectors_remains_fleet_wide(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Omitting selectors deliberately removes every valid expired claim."""
+
+    module = _load_module()
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
+    base = {
+        "claimed_at": "2026-04-05T12:00:00+00:00",
+        "expires_at": "2026-04-05T13:00:00+00:00",
+        "intent": "Expired claim",
+        "claim_type": "program",
+        "status": "active",
+    }
+    _write_claim(
+        claims_dir,
+        "codex.yaml",
+        {**base, "agent": "codex", "projects": ["alpha"], "scope": "one"},
+    )
+    _write_claim(
+        claims_dir,
+        "claude.yaml",
+        {**base, "agent": "claude-code", "projects": ["beta"], "scope": "two"},
+    )
+    _write_claim(
+        claims_dir,
+        "unexpired.yaml",
+        {
+            **base,
+            "agent": "codex",
+            "projects": ["gamma"],
+            "scope": "three",
+            "expires_at": "2099-04-05T13:00:00+00:00",
+        },
+    )
+
+    exit_code = module.main(["--prune", "--json"])
+
+    assert exit_code == 0
+    assert json.loads(capsys.readouterr().out) == {
+        "pruned": 2,
+        "removed_scopes": ["alpha:one", "beta:two"],
+    }
+    assert not (claims_dir / "codex.yaml").exists()
+    assert not (claims_dir / "claude.yaml").exists()
+    assert (claims_dir / "unexpired.yaml").exists()
 
 
 def test_prune_stale_honors_agent_project_and_scope_filters(

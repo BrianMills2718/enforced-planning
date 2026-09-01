@@ -156,10 +156,10 @@ def unregistered_claim_files() -> list[str]:
     return _impl.unregistered_claim_files()
 
 
-def prune_expired() -> int:
+def prune_expired(*args: Any, **kwargs: Any) -> tuple[int, list[str]]:
     """Delegate claim pruning while honoring script-level CLAIMS_DIR overrides."""
     _sync_runtime_config()
-    return _impl.prune_expired()
+    return _impl.prune_expired(*args, **kwargs)
 
 
 def prune_stale(*args: Any, **kwargs: Any) -> tuple[int, list[str]]:

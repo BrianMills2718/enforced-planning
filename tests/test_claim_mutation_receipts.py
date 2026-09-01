@@ -163,7 +163,7 @@ def test_each_supported_mutation_emits_one_terminal_receipt(
         }
     )
     expired_path.write_text(yaml.safe_dump(expired_payload, sort_keys=False), encoding="utf-8")
-    assert coordination_claims.prune_expired() == 1
+    assert coordination_claims.prune_expired() == (1, ["enforced-planning:expired"])
 
     records = receipts.load_receipts(events_path=events_path)
     by_path: dict[str, list[receipts.ClaimMutationReceiptV1]] = {}

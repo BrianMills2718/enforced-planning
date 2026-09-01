@@ -139,6 +139,14 @@ plan. No Company Planning or Project Meta runtime dependency is added.
 intended first consumer. Proof requires an installed AES path plus both-sign
 admission controls; isolated parser tests prove only implementation.
 
+Execution-cursor isolation uses the coordination owner rather than creating a
+second authority system. Distinct sanctioned worktrees in one repository may
+overlap only on the exact ignored-and-untracked
+`.company-planning/active-execution.json` path; tracked, parent, same-lane,
+nonstandard, and ordinary overlaps remain conflicts. This bounded rule was last
+verified at implementation checkpoint `6346a691` with evidence in
+`docs/evidence/isolated-execution-cursor-20260901.json`.
+
 ## Capabilities
 
 | Capability | Input | Output | Producer | Consumer |

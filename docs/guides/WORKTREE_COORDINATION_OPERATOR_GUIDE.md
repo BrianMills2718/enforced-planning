@@ -1244,6 +1244,15 @@ for archive). A canonical external candidate JSON is read-only input; wrong
 session/worktree bindings, untrusted script locations, and shell composition
 remain denied.
 
+The active-execution cursor has one bounded overlap exception for isolated
+lanes in the same repository. Two distinct sanctioned worktrees may each claim
+exactly `.company-planning/active-execution.json` only when Git proves that
+path is both ignored and untracked in each lane. A tracked cursor, a parent
+path, the same lane, a nonstandard cursor path, and every ordinary overlapping
+write path still conflict. Last verified by implementation checkpoint
+`6346a691`; durable evidence is
+`docs/evidence/isolated-execution-cursor-20260901.json`.
+
 Git revision and ref operands are identifiers rather than paths. Read-only
 queries such as `git rev-list ... origin/topic...HEAD` therefore retain only an
 explicit `git -C` directory as path evidence, and `git push origin <ref>` stays

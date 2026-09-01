@@ -73,6 +73,7 @@ def _supported_closeout_kwargs(args: argparse.Namespace) -> dict[str, object]:
         ("expected_claim_sha256", args.claim_sha256),
         ("mailbox_disposition", args.mailbox_disposition),
         ("mailbox_note", args.mailbox_note),
+        ("actor_session_id", args.session_id),
     ):
         if name in supported:
             kwargs[name] = value
@@ -84,6 +85,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--agent", required=True)
     parser.add_argument("--project", required=True)
     parser.add_argument("--scope", required=True)
+    parser.add_argument("--session-id")
     parser.add_argument("--worktree-path")
     parser.add_argument("--branch")
     parser.add_argument("--note")

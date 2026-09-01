@@ -1216,7 +1216,7 @@ def test_selected_heartbeat_denial_precedes_heartbeat_mutation(
     assert receipt.result.decision.disposition == "deny"
 
 
-def test_configured_heartbeat_requires_selection_without_a_flag(
+def test_configured_heartbeat_without_selected_flag_records_liveness_only(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1231,6 +1231,7 @@ def test_configured_heartbeat_requires_selection_without_a_flag(
         session_id="codex:plan123-configured",
         worktree_path=str(worktree),
         repo_root=str(tmp_path / "repo"),
+        tracker_path=None,
     )
     monkeypatch.setattr(
         session_lifecycle.coordination_claims,
@@ -1253,27 +1254,29 @@ def test_configured_heartbeat_requires_selection_without_a_flag(
         lambda *_args, **_kwargs: _missing_selected_result(),
     )
 
-    def forbidden_heartbeat(**_kwargs: object) -> tuple[int, list[str], str, datetime]:
-        raise AssertionError("heartbeat mutation ran after configured admission denial")
+    heartbeat_at = datetime.now(UTC).isoformat()
+
+    def record_heartbeat(**_kwargs: object) -> tuple[int, list[str], str, str]:
+        return 1, ["plan123-configured"], "codex:plan123-configured", heartbeat_at
 
     monkeypatch.setattr(
         session_lifecycle.coordination_claims,
         "heartbeat_claims",
-        forbidden_heartbeat,
+        record_heartbeat,
     )
 
-    with pytest.raises(PermissionError, match="outcome_selection_required"):
-        session_lifecycle.heartbeat_session(
-            agent="codex",
-            project="enforced-planning",
-            scope="plan123-configured",
-            branch="plan123-configured",
-            session_id="codex:plan123-configured",
-            outcome_admission_receipt_path=receipt_path,
-        )
+    payload = session_lifecycle.heartbeat_session(
+        agent="codex",
+        project="enforced-planning",
+        scope="plan123-configured",
+        branch="plan123-configured",
+        session_id="codex:plan123-configured",
+        outcome_admission_receipt_path=receipt_path,
+    )
 
-    [receipt] = load_outcome_admission_receipts(receipt_path)
-    assert receipt.result.decision.disposition == "deny"
+    assert payload["updated_count"] == 1
+    assert payload["outcome_admission_receipts"] == []
+    assert not receipt_path.exists()
 
 
 def test_opted_in_heartbeat_cli_returns_structured_denial(

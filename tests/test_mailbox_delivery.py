@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import json
 import hashlib
+import json
 import os
 import subprocess
 import sys
@@ -13,7 +13,15 @@ from pathlib import Path
 
 import pytest
 
-import enforced_planning.mailbox_delivery as mailbox_delivery
+from enforced_planning import mailbox_delivery
+from enforced_planning.coordination_messages import (
+    CoordinationMessage,
+    ExactSessionSelector,
+    MessageReceipt,
+    StoredMessageRecord,
+    StoredReceiptRecord,
+    _model_digest,
+)
 from enforced_planning.mailbox_delivery import (
     HostAdapterSpecV1,
     HostInstallationApplyError,
@@ -30,15 +38,6 @@ from enforced_planning.mailbox_delivery import (
     generate_host_installation_candidate,
     plan_host_installation,
 )
-from enforced_planning.coordination_messages import (
-    CoordinationMessage,
-    ExactSessionSelector,
-    MessageReceipt,
-    StoredMessageRecord,
-    StoredReceiptRecord,
-    _model_digest,
-)
-
 
 CODEX_COMMAND = "python3 /opt/mailbox/codex_adapter.py"
 CLAUDE_COMMAND = "python3 /opt/mailbox/claude_adapter.py"
@@ -269,6 +268,34 @@ def test_configured_both_signs_preserve_unrelated_semantic_content(tmp_path: Pat
     assert Path(request.claude_config_path).read_text(encoding="utf-8") == before_claude
 
 
+def test_disabled_pretooluse_reports_advisory_only_and_no_mutation_enforcement(tmp_path: Path) -> None:
+    """A present but state-disabled PreToolUse hook is not a mutation gate."""
+
+    request = _request(tmp_path)
+    codex = tomllib.loads(_configured_codex())
+    state_key = f"{Path(request.codex_config_path).resolve()}:pre_tool_use:0:0"
+    codex["hooks"]["state"] = {state_key: {"enabled": False}}
+    Path(request.codex_config_path).write_text(mailbox_delivery._render_toml(codex), encoding="utf-8")
+    Path(request.claude_config_path).write_text(json.dumps(_configured_claude()), encoding="utf-8")
+
+    receipt = audit_host_installation(request)
+    codex_surface = next(surface for surface in receipt.host_surfaces if surface.client == "codex")
+
+    assert codex_surface.configuration_state == "drifted"
+    assert codex_surface.delivery_mode == "advisory_only"
+    assert codex_surface.mutation_enforcement_available is False
+    assert codex_surface.stop_enforcement_available is True
+    assert "mutation_enforcement_unavailable" in codex_surface.issues
+    assert "advisory-only" in codex_surface.operator_message
+    assert "observed receipt proves exposure only" in codex_surface.operator_message
+    assert codex_surface.observed_proves_stopped is False
+    assert codex_surface.observed_proves_acknowledged is False
+
+    plan = plan_host_installation(HostInstallationPlanRequestV1(**request.model_dump()))
+    codex_change = next(change for change in plan.changes if change.client == "codex")
+    assert codex_change.configuration_state_before == "drifted"
+
+
 def test_drifted_command_and_missing_adapter_are_repairable_not_configured(tmp_path: Path) -> None:
     """Exact command and adapter presence are required for the configured state."""
 
@@ -298,6 +325,9 @@ def test_adapter_digest_drift_is_not_reported_as_configured(tmp_path: Path) -> N
     codex = next(surface for surface in receipt.host_surfaces if surface.client == "codex")
     assert codex.configuration_state == "drifted"
     assert "adapter_digest_mismatch" in codex.issues
+    assert codex.delivery_mode == "unavailable"
+    assert codex.mutation_enforcement_available is False
+    assert codex.stop_enforcement_available is False
 
 
 def test_dry_run_candidate_preserves_unrelated_hooks_in_both_native_formats(tmp_path: Path) -> None:

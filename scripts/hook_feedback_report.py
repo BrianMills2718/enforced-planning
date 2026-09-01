@@ -163,6 +163,23 @@ def _render_text(report: dict[str, Any], *, max_examples: int) -> str:
         lines.append("  none")
     lines.append("")
 
+    lines.append("Output envelope contract failures (independent of process exit)")
+    any_invalid_output = False
+    for hook in health["hooks"]:
+        if hook["invalid_output_contract_count"]:
+            any_invalid_output = True
+            shapes = ", ".join(
+                f"{shape} x{count}"
+                for shape, count in hook["output_contract_by_shape"].items()
+                if shape.startswith("invalid:")
+            )
+            lines.append(
+                f"  {hook['hook_name']}: {hook['invalid_output_contract_count']:,} invalid -- {shapes}"
+            )
+    if not any_invalid_output:
+        lines.append("  none")
+    lines.append("")
+
     lines.append("Orphaned starts (started receipt with no sibling completion = interrupted hook)")
     any_orphan = False
     for hook in health["hooks"]:

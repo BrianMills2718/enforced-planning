@@ -325,6 +325,12 @@ def main(argv: list[str] | None = None) -> int:
     invocation: HookInvocation | None = None
     telemetry_decision = "block"
     telemetry_reason = "hook_unavailable"
+    emitted_output: list[str] = []
+
+    def emit(value: str) -> None:
+        emitted_output.append(value + "\n")
+        print(value)
+
     try:
         payload = read_event()
         if payload.get("stop_hook_active"):
@@ -364,7 +370,7 @@ def main(argv: list[str] | None = None) -> int:
                 detail=detail,
             )
         if decision.startswith("block_"):
-            print(
+            emit(
                 json.dumps(
                     {
                         "decision": "block",
@@ -373,7 +379,7 @@ def main(argv: list[str] | None = None) -> int:
                 )
             )
         elif args.emit_result:
-            print(
+            emit(
                 json.dumps(
                     {
                         "decision": "allow",
@@ -385,10 +391,15 @@ def main(argv: list[str] | None = None) -> int:
             )
     except (json.JSONDecodeError, OSError, TypeError, ValueError) as exc:
         reason = f"learning-capture gate unavailable: {type(exc).__name__}: {exc}"
-        print(json.dumps({"decision": "block", "reason": reason}))
+        emit(json.dumps({"decision": "block", "reason": reason}))
     finally:
         if invocation is not None:
-            invocation.complete(decision=telemetry_decision, reason_code=telemetry_reason)
+            invocation.complete(
+                decision=telemetry_decision,
+                reason_code=telemetry_reason,
+                output="".join(emitted_output),
+                client=args.agent,
+            )
     return 0
 
 

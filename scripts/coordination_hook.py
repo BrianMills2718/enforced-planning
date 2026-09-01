@@ -845,6 +845,12 @@ def main(argv: list[str] | None = None) -> int:
     """Refresh matching claim state and expose requests to the native session."""
 
     args = parse_args(argv)
+    emitted_output: list[str] = []
+
+    def emit(value: str) -> None:
+        emitted_output.append(value + "\n")
+        print(value)
+
     if args.repair_projection_only:
         result = _repair_projection_under_lock(
             (args.claims_dir or coordination_claims.CLAIMS_DIR).expanduser().resolve()
@@ -1012,7 +1018,7 @@ def main(argv: list[str] | None = None) -> int:
             )
             denial_parts = [part for part in (notice.summary, closeout_failure) if part]
             denial_parts.append(f"Hook receipt: {invocation.receipt_id}.")
-            print(json.dumps(_render_boundary_denial(boundary_event, "\n\n".join(denial_parts))))
+            emit(json.dumps(_render_boundary_denial(boundary_event, "\n\n".join(denial_parts))))
             return 0
         if projection_warning:
             telemetry_decision = "warn"
@@ -1025,9 +1031,9 @@ def main(argv: list[str] | None = None) -> int:
         if summaries:
             summary = "\n\n".join(summaries)
             if args.agent == "codex":
-                print(json.dumps(_render_codex_result(payload["hook_event_name"], summary)))
+                emit(json.dumps(_render_codex_result(payload["hook_event_name"], summary)))
             else:
-                print(summary)
+                emit(summary)
     except (
         RepositoryCloseoutError,
         coordination_messages.CoordinationMessageError,
@@ -1053,12 +1059,17 @@ def main(argv: list[str] | None = None) -> int:
             and "payload" in locals()
             and payload.get("hook_event_name") == "Stop"
         ):
-            print(json.dumps(_render_boundary_denial("Stop", warning)))
+            emit(json.dumps(_render_boundary_denial("Stop", warning)))
         else:
-            print(json.dumps({"systemMessage": warning}))
+            emit(json.dumps({"systemMessage": warning}))
     finally:
         if invocation is not None:
-            invocation.complete(decision=telemetry_decision, reason_code=telemetry_reason)
+            invocation.complete(
+                decision=telemetry_decision,
+                reason_code=telemetry_reason,
+                output="".join(emitted_output),
+                client=args.agent,
+            )
     return 0
 
 

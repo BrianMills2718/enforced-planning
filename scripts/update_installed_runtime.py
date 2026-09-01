@@ -148,7 +148,7 @@ def _base_receipt(
         "canonical_repository": _canonical_origin_identity(),
         "checkout_mode": None,
         "before_revision": None,
-        "target_revision": revision if FULL_SHA_RE.fullmatch(revision) else None,
+        "target_revision": None,
         "after_revision": None,
         "recovery_ref": None,
         "remote_main_revision": None,
@@ -399,7 +399,6 @@ def update_runtime(
             runtime_repo = runtime_repo.resolve()
         except RuntimeError as exc:
             raise RuntimeUpdateError("installed runtime path cannot be resolved") from exc
-        receipt["runtime_repo"] = str(runtime_repo)
         source_common_dir = _assert_repo(source_repo, "source repository")
         receipt["source_repo"] = str(source_repo)
         runtime_common_dir = _assert_repo(runtime_repo, "installed runtime")
@@ -410,6 +409,7 @@ def update_runtime(
             or runtime_common_dir != runtime_git_dir.resolve()
         ):
             raise RuntimeUpdateError("installed runtime must be a standalone clone, not a linked worktree")
+        receipt["runtime_repo"] = str(runtime_repo)
         if source_common_dir == runtime_common_dir:
             raise RuntimeUpdateError("source repository and installed runtime must be distinct clones")
         _validate_revision(source_repo, revision)

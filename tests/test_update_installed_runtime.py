@@ -495,6 +495,28 @@ def test_noncanonical_runtime_path_is_denied_before_repository_inspection(
     assert caught.value.receipt["stage"] == "preflight"
 
 
+def test_canonical_plain_directory_is_not_serialized_as_validated_runtime(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, _runtime, _before, after = _repos(tmp_path, monkeypatch)
+    plain_directory = tmp_path / "plain-runtime"
+    plain_directory.mkdir()
+    monkeypatch.setattr(
+        runtime_update, "_canonical_runtime_repo", lambda: plain_directory.resolve()
+    )
+
+    with pytest.raises(RuntimeUpdateError, match="not a Git worktree") as caught:
+        update_runtime(
+            source_repo=source,
+            runtime_repo=plain_directory,
+            revision=after,
+            write=False,
+        )
+
+    assert caught.value.receipt["source_repo"] == str(source.resolve())
+    assert caught.value.receipt["runtime_repo"] is None
+
+
 def test_runtime_subdirectory_is_denied_as_nonexact_worktree_root(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -531,6 +553,25 @@ def test_non_tip_revision_is_denied_without_fetch(
     assert _all_refs(runtime) == refs_before
     assert _fetch_head(runtime) == fetch_head_before
     assert after != before
+
+
+def test_nonexistent_full_sha_is_not_serialized_as_validated_target(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, runtime, _before, _after = _repos(tmp_path, monkeypatch)
+    nonexistent_revision = "f" * 40
+
+    with pytest.raises(RuntimeUpdateError, match="git rev-parse") as caught:
+        update_runtime(
+            source_repo=source,
+            runtime_repo=runtime,
+            revision=nonexistent_revision,
+            write=False,
+        )
+
+    assert caught.value.receipt["source_repo"] == str(source.resolve())
+    assert caught.value.receipt["runtime_repo"] == str(runtime.resolve())
+    assert caught.value.receipt["target_revision"] is None
 
 
 def test_divergent_runtime_is_denied(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

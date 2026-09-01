@@ -25,7 +25,12 @@ from urllib.parse import urlparse
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, field_validator, model_validator
 
-from enforced_planning import coordination_claims, session_contracts, session_lifecycle
+from enforced_planning import (
+    coordination_claims,
+    repository_authority,
+    session_contracts,
+    session_lifecycle,
+)
 from enforced_planning.repository_authority import (
     MaintenanceWorktreeAuthority,
     RepositoryAuthority,
@@ -701,10 +706,69 @@ def _file_sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _execute_workspace_file_archive(request: WorkspaceFileArchiveRequest) -> dict[str, Any]:
-    root = Path(request.workspace_root)
+def _configured_workspace_root() -> Path:
+    """Resolve the canonical workspace from the hash-pinned authority provider.
+
+    The request may name the root it expects, but it cannot select the authority
+    used to verify that claim. The provider config fixes a digest-verified
+    Project Meta adapter, whose three configured ``code-*`` homes must agree on
+    one parent workspace.
+    """
+
+    try:
+        provider = repository_authority._load_provider(  # noqa: SLF001
+            repository_authority.DEFAULT_PROVIDER_CONFIG
+        )
+        module_name = f"_claim_bootstrap_workspace_authority_{abs(hash(str(provider)))}"
+        module = sys.modules.get(module_name)
+        if module is None:
+            spec = importlib.util.spec_from_file_location(module_name, provider)
+            if spec is None or spec.loader is None:
+                raise ClaimBootstrapError("workspace authority provider cannot be loaded")
+            module = importlib.util.module_from_spec(spec)
+            sys.modules[module_name] = module
+            spec.loader.exec_module(module)
+        raw_paths = getattr(module, "WORKSPACE_HOME_PATHS", None)
+    except (OSError, RepositoryAuthorityError) as exc:
+        raise ClaimBootstrapError(f"workspace authority is unavailable: {exc}") from exc
+
+    keys = ("code-active", "code-inactive", "code-template")
+    if not isinstance(raw_paths, dict) or any(key not in raw_paths for key in keys):
+        raise ClaimBootstrapError("workspace authority provider has no complete code workspace homes")
+    configured: list[Path] = []
+    for key in keys:
+        value = raw_paths[key]
+        if not isinstance(value, Path):
+            raise ClaimBootstrapError(f"workspace authority path {key!r} is not a Path")
+        resolved = value.expanduser().resolve()
+        if not value.is_absolute() or ".." in value.parts or resolved != value:
+            raise ClaimBootstrapError(f"workspace authority path {key!r} is not canonical")
+        configured.append(resolved)
+    parents = {path.parent for path in configured}
+    if len(parents) != 1:
+        raise ClaimBootstrapError("configured code workspace homes do not share one root")
+    root = parents.pop()
+    if not root.is_dir():
+        raise ClaimBootstrapError(f"configured workspace root is unavailable: {root}")
+    return root
+
+
+def _workspace_root_for_request(*, requested: str, operation: str) -> Path:
+    root = _configured_workspace_root()
+    if Path(requested) != root:
+        raise ClaimBootstrapError(
+            f"{operation} workspace_root does not match the configured workspace root"
+        )
     if Path.cwd().resolve() != root:
-        raise ClaimBootstrapError("workspace_file_archive must run from the exact workspace_root")
+        raise ClaimBootstrapError(f"{operation} must run from the configured workspace root")
+    return root
+
+
+def _execute_workspace_file_archive(request: WorkspaceFileArchiveRequest) -> dict[str, Any]:
+    root = _workspace_root_for_request(
+        requested=request.workspace_root,
+        operation="workspace_file_archive",
+    )
 
     source = root / request.source
     destination = root / request.destination
@@ -753,9 +817,10 @@ def _execute_workspace_file_archive(request: WorkspaceFileArchiveRequest) -> dic
 
 
 def _execute_workspace_image_canary(request: WorkspaceImageCanaryRequest) -> dict[str, Any]:
-    root = Path(request.workspace_root)
-    if Path.cwd().resolve() != root:
-        raise ClaimBootstrapError("workspace_image_canary must run from the exact workspace_root")
+    root = _workspace_root_for_request(
+        requested=request.workspace_root,
+        operation="workspace_image_canary",
+    )
     source = root / request.source
     destination = root / "image.png"
     current = root

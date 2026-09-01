@@ -223,6 +223,7 @@ def test_relative_nested_target_is_resolved_from_root_cwd(tmp_path: Path) -> Non
     "command",
     [
         "pwd",
+        "cat README.md",
         "ls -la",
         "rg needle .",
         "git status --short",
@@ -249,6 +250,22 @@ def test_compound_bash_does_not_require_claim_when_every_command_is_read_only(tm
         tool="Bash",
         tool_input={"command": "git status --short && pwd"},
         session="wrong-session",
+    )
+
+    decision = _evaluate(tmp_path, payload, tmp_path / "missing-claims")
+
+    assert decision["decision"] == "allow"
+    assert decision["reason_code"] == "bash_read_only"
+
+
+def test_compound_cat_inventory_from_workspace_root_does_not_require_claim(tmp_path: Path) -> None:
+    payload = _payload(
+        cwd=tmp_path,
+        tool="Bash",
+        tool_input={
+            "command": "cat /workspace/CLAUDE.md && cat /workspace/project-meta/README.md",
+        },
+        session="unclaimed-session",
     )
 
     decision = _evaluate(tmp_path, payload, tmp_path / "missing-claims")

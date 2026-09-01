@@ -63,6 +63,7 @@ _READ_ONLY_SEPARATORS = frozenset({";", "&&", "||", "|"})
 _SIMPLE_READ_ONLY_COMMANDS = frozenset(
     {
         ":",
+        "cat",
         "cd",
         "date",
         "echo",

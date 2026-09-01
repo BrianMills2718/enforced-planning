@@ -63,10 +63,23 @@ def enrich_client_displays(
         session_id = session.get("session_id")
         if not isinstance(session_id, str) or not session_id:
             raise ValueError("session status entries require session_id")
-        session["client_display"] = client_session_metadata.resolve_client_session_display(
+        display = client_session_metadata.resolve_client_session_display(
             session_id,
             codex_session_index=codex_session_index,
-        ).model_dump(mode="json")
+        )
+        session["client_display"] = display.model_dump(mode="json")
+        if display.client == "codex" and display.state != "resolved":
+            metadata_issue = (
+                "metadata_not_indexed"
+                if display.state == "not_found"
+                else "client_metadata_source_unavailable"
+            )
+            issues = session.get("client_evidence_issues")
+            if not isinstance(issues, list):
+                issues = []
+            if metadata_issue not in issues:
+                issues.append(metadata_issue)
+            session["client_evidence_issues"] = issues
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -105,6 +118,8 @@ def main(argv: list[str] | None = None) -> int:
         )
         if session["health_issues"]:
             print(f"  issues={','.join(session['health_issues'])}")
+        if session.get("client_evidence_issues"):
+            print(f"  client_evidence={','.join(session['client_evidence_issues'])}")
         if session.get("progress_at"):
             print(
                 "  progress="

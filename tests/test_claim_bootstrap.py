@@ -346,6 +346,7 @@ def test_typed_local_repository_bootstrap_creates_local_repo_claim_and_worktree(
         scope="codex/initial-setup",
         worktree_path=str(worktree),
         branch="codex/initial-setup",
+        actor_session_id="codex:native-123",
     )
     assert closed["released"] is True
     assert closed["disposition"] == "merged"
@@ -816,7 +817,7 @@ def test_typed_maintenance_worktree_transaction_creates_claim_tracker_and_projec
     assert len(claims) == 1
     assert claims[0].session_id == "codex:native-123"
     if write_paths is None:
-        assert claims[0].worktree_path.endswith(".bootstrap-no-mutation-authority")
+        assert claims[0].worktree_path == str(worktree)
         assert claims[0].target_worktree_path == str(worktree)
         assert claims[0].broad_scope_mode == "bootstrap"
         assert receipt["result"]["bootstrap_requires_narrowing"] is True

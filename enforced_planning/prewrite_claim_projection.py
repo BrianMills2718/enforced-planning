@@ -115,6 +115,13 @@ def build_projection(*, claims_dir: Path) -> PreWriteAuthorityProjectionV1:
         session_id = claim.session_id or ""
         repo_root = claim.repo_root or ""
         worktree_path = claim.worktree_path or ""
+        if claim.broad_scope_mode == "bootstrap" and claim.target_worktree_path:
+            # Preserve the legacy projection wire shape as a fail-closed
+            # authority view while canonical claim/tracker identity remains the
+            # real physical worktree.
+            worktree_path = coordination_claims.bootstrap_authority_disabled_worktree_path(
+                claim.target_worktree_path
+            )
         branch = claim.branch or ""
         source_file = claim.source_file or ""
         source_path = Path(source_file) if source_file else None

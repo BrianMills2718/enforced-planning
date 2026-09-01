@@ -27,7 +27,7 @@ REPO_ROOT = _find_repo_root()
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from enforced_planning import session_lifecycle  # noqa: E402
+from enforced_planning import client_session_metadata, session_lifecycle  # noqa: E402
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -38,8 +38,48 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--branch")
     parser.add_argument("--session-id")
     parser.add_argument("--include-ended", action="store_true")
+    parser.add_argument(
+        "--codex-session-index",
+        type=Path,
+        default=client_session_metadata.DEFAULT_CODEX_SESSION_INDEX,
+    )
     parser.add_argument("--json", action="store_true")
     return parser.parse_args(argv)
+
+
+def enrich_client_displays(
+    payload: dict[str, object],
+    *,
+    codex_session_index: Path,
+) -> None:
+    """Add read-only client display projections to session-status output."""
+
+    sessions = payload.get("sessions")
+    if not isinstance(sessions, list):
+        raise ValueError("session status payload requires a sessions list")
+    for session in sessions:
+        if not isinstance(session, dict):
+            raise ValueError("session status entries must be objects")
+        session_id = session.get("session_id")
+        if not isinstance(session_id, str) or not session_id:
+            raise ValueError("session status entries require session_id")
+        display = client_session_metadata.resolve_client_session_display(
+            session_id,
+            codex_session_index=codex_session_index,
+        )
+        session["client_display"] = display.model_dump(mode="json")
+        if display.client == "codex" and display.state != "resolved":
+            metadata_issue = (
+                "metadata_not_indexed"
+                if display.state == "not_found"
+                else "client_metadata_source_unavailable"
+            )
+            issues = session.get("client_evidence_issues")
+            if not isinstance(issues, list):
+                issues = []
+            if metadata_issue not in issues:
+                issues.append(metadata_issue)
+            session["client_evidence_issues"] = issues
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -52,6 +92,7 @@ def main(argv: list[str] | None = None) -> int:
         session_id=args.session_id,
         include_ended=args.include_ended,
     )
+    enrich_client_displays(payload, codex_session_index=args.codex_session_index)
     if args.json:
         print(json.dumps(payload, indent=2, sort_keys=True))
         return 0
@@ -69,8 +110,30 @@ def main(argv: list[str] | None = None) -> int:
             f"{session_name} :: {current_phase} "
             f"(hierarchy={hierarchy}; recovery={session['recovery_action']})"
         )
+        client_display = session["client_display"]
+        display_name = client_display["display_name"] or f"<{client_display['state']}>"
+        print(
+            f"  client_thread={display_name}; "
+            f"routing_session_id={session['session_id']}"
+        )
         if session["health_issues"]:
             print(f"  issues={','.join(session['health_issues'])}")
+        if session.get("client_evidence_issues"):
+            print(f"  client_evidence={','.join(session['client_evidence_issues'])}")
+        if session.get("progress_at"):
+            print(
+                "  progress="
+                f"{session['progress_at']} {session.get('progress_kind') or '<invalid-kind>'}; "
+                f"evidence={session.get('evidence_ref') or '<missing>'}; "
+                f"next={session.get('next_action') or '<missing>'}"
+            )
+        if session.get("expected_quiet_until"):
+            print(
+                f"  quiet_until={session['expected_quiet_until']}; "
+                f"reason={session.get('quiet_reason') or '<missing>'}"
+            )
+        if session.get("progress_issues"):
+            print(f"  progress_issues={','.join(session['progress_issues'])}")
     return 0
 
 

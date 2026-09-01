@@ -150,6 +150,7 @@ def _default_closer(claim: coordination_claims.ClaimRecord) -> dict[str, Any]:
         worktree_path=claim.worktree_path,
         branch=claim.branch,
         note=f"closed atomically for {claim.plan_ref}",
+        actor_session_id=claim.session_id,
     )
 
 

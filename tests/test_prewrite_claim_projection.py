@@ -191,7 +191,7 @@ def test_bootstrap_uses_v1_static_issue_without_projection_shape_drift(tmp_path:
         broad_scope_mode="bootstrap",
         broad_scope_reason="create and narrow the maintenance lane",
         target_worktree_path=str(worktree),
-        worktree_path=f"{worktree}.bootstrap-no-mutation-authority",
+        worktree_path=str(worktree),
     )
     claim_path.write_text(yaml.safe_dump(claim, sort_keys=False), encoding="utf-8")
     projection_path = tmp_path / "projection.json"

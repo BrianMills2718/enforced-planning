@@ -479,6 +479,9 @@ def _configure_maintenance_runtime(
     monkeypatch.delenv("CLAUDE_CODE_SESSION_ID", raising=False)
     monkeypatch.setattr(claim_bootstrap.coordination_claims, "CLAIMS_DIR", claims_dir)
     monkeypatch.setattr(claim_bootstrap, "SESSION_TRACKERS_DIR", trackers_dir)
+    canonical_lock = claim_bootstrap._canonical_lock_module()
+    monkeypatch.setattr(canonical_lock, "LOCK_INDEX", tmp_path / "canonical-locks.json")
+    monkeypatch.setattr(claim_bootstrap, "_canonical_lock_module", lambda: canonical_lock)
     monkeypatch.setattr(
         claim_bootstrap.coordination_claims.claim_mutation_receipts,
         "append_receipt",
@@ -1784,3 +1787,54 @@ def test_unknown_operation_and_extra_fields_fail_closed() -> None:
 def test_duplicate_json_object_keys_fail_closed_at_every_depth(raw_json: str) -> None:
     with pytest.raises(claim_bootstrap.ClaimBootstrapError, match="duplicate object key"):
         claim_bootstrap.parse_request_json(raw_json)
+
+
+def test_maintenance_creation_reconciles_canonical_checkout_lock(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = _governed_repo(tmp_path)
+    _claims_dir, _trackers_dir = _configure_maintenance_runtime(tmp_path, monkeypatch)
+    request = claim_bootstrap.parse_request_json(json.dumps(_maintenance_payload(repo)))
+
+    receipt = claim_bootstrap.execute_request(request)
+
+    canonical_lock = claim_bootstrap._canonical_lock_module()
+    assert canonical_lock.verify_lock_integrity(repo)["verdict"] == canonical_lock.VERDICT_LOCKED
+    assert receipt["result"]["canonical_lock"]["ok"] is True
+
+
+def test_maintenance_lock_failure_rolls_back_lane_and_reconciles_canonical_checkout(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = _governed_repo(tmp_path)
+    claims_dir, _trackers_dir = _configure_maintenance_runtime(tmp_path, monkeypatch)
+    canonical_lock = claim_bootstrap._canonical_lock_module()
+    original_reconcile = canonical_lock.reconcile
+    calls = 0
+
+    def fail_after_first_reconcile(**kwargs: object) -> dict[str, object]:
+        nonlocal calls
+        calls += 1
+        result = original_reconcile(**kwargs)
+        if calls == 1:
+            raise RuntimeError("simulated post-lock transaction failure")
+        return result
+
+    monkeypatch.setattr(canonical_lock, "reconcile", fail_after_first_reconcile)
+    request = claim_bootstrap.parse_request_json(json.dumps(_maintenance_payload(repo)))
+
+    with pytest.raises(claim_bootstrap.ClaimBootstrapError, match="transaction rolled back"):
+        claim_bootstrap.execute_request(request)
+
+    assert calls == 2
+    assert not claim_bootstrap.coordination_claims.check_claims(repo.name)
+    assert not (repo / "worktrees" / "fix" / "safe-lane").exists()
+    assert subprocess.run(
+        ["git", "-C", str(repo), "show-ref", "--verify", "refs/heads/fix/safe-lane"],
+        capture_output=True,
+        check=False,
+    ).returncode != 0
+    assert canonical_lock.verify_lock_integrity(repo)["verdict"] == canonical_lock.VERDICT_UNLOCKED
+    assert not list(claims_dir.glob("*.yaml"))

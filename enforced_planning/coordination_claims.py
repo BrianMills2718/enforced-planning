@@ -2061,7 +2061,9 @@ def _compute_overlapping_write_paths(candidate: ClaimRecord, other: ClaimRecord)
                 continue
             if _is_append_only_path(left) and _is_append_only_path(right):
                 continue
-            overlaps.append(f"{_normalize_repo_path(left)} <-> {_normalize_repo_path(right)}")
+            overlaps.append(
+                f"yours={_normalize_repo_path(left)} <-> theirs={_normalize_repo_path(right)}"
+            )
     return sorted(set(overlaps))
 
 
@@ -2718,7 +2720,7 @@ def _refresh_exact_owner_claim(
                 f"{item.other_agent} ({item.other_scope}: {', '.join(item.overlapping_write_paths)})"
                 for item in check_result.hard_conflicts
             )
-            return False, f"CONFLICT: active write claim overlap in '{project}' — {formatted}."
+            return False, f"CONFLICT: active write claim overlap in '{project}' — {formatted}. Check which side is YOURS before attributing cause: the path prefixed 'yours=' is the one this lane declared, not the other agent's. Narrowing your own write path is often the fix, and an append-only store never contends with itself."
         registry_digest_before = _registry_digest(CLAIMS_DIR)
         _projection_path, projection_digest_after = _replace_claim_and_refresh_projection_fail_atomic(
             claim_path=claim_path,
@@ -2950,6 +2952,10 @@ def create_claim(
             )
             return False, (
                 f"CONFLICT: active write claim overlap in '{project}' — {formatted}. "
+                f"Check which side is YOURS before attributing cause: the path "
+                f"prefixed 'yours=' is the one this lane declared, not the other "
+                f"agent's. Narrowing your own write path is often the fix, and an "
+                f"append-only store never contends with itself. "
                 "This is a path-local integration wait, not a whole-goal blocker: "
                 "continue claim-compatible work or record the required reconciliation "
                 "obligation before deferring the overlapping authority surface."

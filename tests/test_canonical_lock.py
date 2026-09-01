@@ -290,6 +290,20 @@ def test_verify_and_reconcile_repair_excluded_control_path_drift(repo: Path, tmp
     assert not stat.S_IMODE((repo / "src" / "module.py").lstat().st_mode) & stat.S_IWUSR
 
 
+def test_control_path_repair_tolerates_entry_removed_after_enumeration(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Transient Git lock files may disappear while control paths are repaired."""
+    vanished = repo / ".git" / "worktrees" / "lane" / "index.lock"
+    monkeypatch.setattr(canonical_lock, "_control_paths", lambda _repo: (vanished,))
+
+    assert canonical_lock._control_path_issues(repo) == []
+    assert canonical_lock._restore_control_path_write_access(repo) == {
+        "restored": [],
+        "failures": [],
+    }
+
+
 # ------------------------------------------------------------------ reconcile
 
 

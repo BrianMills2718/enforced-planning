@@ -107,6 +107,7 @@ After a successful minimum install, your repo should have:
 - `scripts/relationships.yaml`
 - `scripts/meta/check_agents_sync.py`
 - `scripts/meta/check_coordination_claims.py`
+- `scripts/meta/canonical_lock.py`
 - `scripts/meta/check_doc_coupling.py`
 - `scripts/meta/check_reachability.py`
 - `scripts/meta/repo_stats_block.py`
@@ -135,6 +136,10 @@ claim entrypoint is `scripts/meta/check_coordination_claims.py`. The sanctioned
 metadata stays truthful without inventing fake broad write ownership.
 The same sanctioned flow also starts a linked session contract and tracker, and
 it uses the same claim/tracker model for Codex and Claude Code.
+The installed worktree entrypoint calls `scripts/meta/canonical_lock.py` after
+lane creation so the canonical checkout becomes read-only while a live lane
+claim exists. A missing helper or failed reconciliation is reported loudly;
+verify it with `python scripts/meta/canonical_lock.py --verify . --json`.
 When `make maintenance-worktree` starts with whole-repository bootstrap custody,
 ordinary writes remain disabled until the exact owning session runs
 `make session-narrow BRANCH=... SESSION_WRITE_PATHS="..."`. Supplying narrow

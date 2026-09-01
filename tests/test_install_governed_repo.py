@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import stat
 import subprocess
 import sys
 from pathlib import Path
@@ -112,6 +113,7 @@ CLAIM_PROJECTION_REFRESH_PATHS = {
     "enforced_planning/worktree_lifecycle.yaml",
     "enforced_planning/worktree_paths.py",
     "scripts/refresh_prewrite_claim_projection.py",
+    "scripts/meta/canonical_lock.py",
     "scripts/meta/check_coordination_claims.py",
     "scripts/meta/worktree-coordination/create_worktree.py",
     "scripts/meta/session_close.py",
@@ -1254,6 +1256,24 @@ def test_installed_maintenance_bootstrap_denies_then_narrows_and_closes(
         check=False,
     )
     assert created.returncode == 0, created.stdout + created.stderr
+    assert "canonical lock unavailable" not in created.stderr
+    assert not ((tmp_path / "CLAUDE.md").stat().st_mode & stat.S_IWUSR)
+    lock_status = subprocess.run(
+        [
+            sys.executable,
+            str(tmp_path / "scripts/meta/canonical_lock.py"),
+            "--verify",
+            str(tmp_path),
+            "--json",
+        ],
+        cwd=tmp_path,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert lock_status.returncode == 0, lock_status.stdout + lock_status.stderr
+    assert json.loads(lock_status.stdout)["verdict"] == "locked"
 
     worktree = worktrees / scope
     claims_dir = Path(environment["HOME"]) / ".claude" / "coordination" / "claims"
@@ -2018,6 +2038,7 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
             "install:enforced_planning/worktree_paths.py",
             "install:hooks/pre-push",
             "install:scripts/meta/check_coordination_claims.py",
+            "install:scripts/meta/canonical_lock.py",
             "install:scripts/refresh_prewrite_claim_projection.py",
             "install:scripts/artifact_creation.py",
             "install:scripts/meta/check_push_safety.py",

@@ -143,6 +143,7 @@ SYNC_SUPPORT_FILES: dict[str, str] = {
     "scripts/meta/validate_dead_code_audit.py": "scripts/validate_dead_code_audit.py",
     "scripts/meta/validate_doc_authority.py": "scripts/validate_doc_authority.py",
     "scripts/meta/validate_plan.py": "scripts/validate_plan.py",
+    "scripts/meta/canonical_lock.py": "scripts/worktree-coordination/canonical_lock.py",
     "scripts/meta/worktree-coordination/create_worktree.py": "scripts/worktree-coordination/create_worktree.py",
     "scripts/meta/worktree-coordination/create_publish_worktree.py": "scripts/worktree-coordination/create_publish_worktree.py",
     "scripts/meta/worktree-coordination/create_review_claim.py": "scripts/worktree-coordination/create_review_claim.py",
@@ -196,6 +197,7 @@ WORKTREE_ONLY_SYNC_SUPPORT_FILES: dict[str, str] = {
     "scripts/meta/surface_runtime.py": "scripts/surface_runtime.py",
     "scripts/meta/verification_batch.py": "scripts/verification_batch.py",
     "scripts/meta/validate_doc_authority.py": "scripts/validate_doc_authority.py",
+    "scripts/meta/canonical_lock.py": "scripts/worktree-coordination/canonical_lock.py",
     "scripts/coordination_inbox.py": "scripts/coordination_inbox.py",
     "scripts/coordination_messages.py": "scripts/coordination_messages.py",
     "scripts/coordination_operator_status.py": "scripts/coordination_operator_status.py",
@@ -226,6 +228,7 @@ RELATIONSHIP_CONTEXT_SYNC_SUPPORT_FILES: dict[str, str] = {
 }
 
 COORDINATION_MESSAGES_SHARED_FILES: dict[str, str] = {
+    "scripts/meta/canonical_lock.py": "scripts/worktree-coordination/canonical_lock.py",
     "scripts/hook_receipts.py": "scripts/hook_receipts.py",
     "scripts/meta/hook_receipts.py": "scripts/hook_receipts.py",
     "scripts/coordination_inbox.py": "scripts/coordination_inbox.py",
@@ -269,6 +272,7 @@ COORDINATION_MESSAGES_LOCAL_PACKAGE_FILES: dict[str, str] = {
 }
 
 CLAIM_PROJECTION_SHARED_FILES: dict[str, str] = {
+    "scripts/meta/canonical_lock.py": "scripts/worktree-coordination/canonical_lock.py",
     "scripts/meta/check_coordination_claims.py": "scripts/check_coordination_claims.py",
     "scripts/meta/worktree-coordination/create_worktree.py": "scripts/worktree-coordination/create_worktree.py",
     "scripts/meta/session_close.py": "scripts/session_close.py",

@@ -559,6 +559,28 @@ def test_git_merge_message_file_remains_a_declared_path() -> None:
     )
 
 
+def test_git_rev_list_range_is_an_identifier_not_a_path() -> None:
+    command = "git -C /repo/worktrees/lane rev-list --left-right --count origin/topic...HEAD"
+
+    assert _argv_is_read_only(tuple(command.split()))
+    assert _bash_declared_paths(command) == ("/repo/worktrees/lane",)
+
+
+def test_git_push_origin_branch_is_an_identifier_not_a_path() -> None:
+    command = "git -C /repo/worktrees/lane push origin fix/topic"
+
+    assert _bash_declared_paths(command) == ("/repo/worktrees/lane",)
+
+
+def test_pytest_node_selector_retains_only_its_file_path() -> None:
+    command = (
+        "/usr/bin/env -C /repo/worktrees/lane python3 -m pytest -q "
+        "tests/test_feature.py::test_exact_case"
+    )
+
+    assert _bash_declared_paths(command) == ("tests/test_feature.py",)
+
+
 def test_claimed_env_bound_python_manager_uses_candidate_as_the_write_target(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -702,6 +724,37 @@ def test_maintenance_worktree_make_target_rejects_unmatched_control_files(tmp_pa
         subagent_event=False,
         native_session=SESSION,
     ) is False
+
+
+def test_maintenance_worktree_make_target_accepts_exact_rendered_consumer_block(
+    tmp_path: Path,
+) -> None:
+    target = tmp_path / "consumer"
+    (target / "scripts" / "meta").mkdir(parents=True)
+    (target / "enforced_planning").mkdir()
+    template = (
+        prewrite_claim_gate.REPO_ROOT / "templates" / "Makefile.worktree.block.template"
+    ).read_text(encoding="utf-8")
+    rendered = template.replace(
+        "__WORKTREE_SCRIPT_ROOT__", "scripts/meta/worktree-coordination"
+    )
+    (target / "Makefile").write_text(f"consumer-target:\n\t@true\n\n{rendered}", encoding="utf-8")
+    (target / "scripts" / "meta" / "claim_bootstrap.py").write_bytes(
+        (prewrite_claim_gate.REPO_ROOT / "scripts" / "claim_bootstrap.py").read_bytes()
+    )
+    (target / "enforced_planning" / "claim_bootstrap.py").write_bytes(
+        (prewrite_claim_gate.REPO_ROOT / "enforced_planning" / "claim_bootstrap.py").read_bytes()
+    )
+    command = f"make -C {target} maintenance-worktree BRANCH=verify/consumer"
+
+    assert prewrite_claim_gate._special_unclaimed_command(
+        command,
+        client="codex",
+        claims_dir=tmp_path / "claims",
+        projection_path=tmp_path / "projection.json",
+        subagent_event=False,
+        native_session=SESSION,
+    ) == "claim_bootstrap"
 
 
 def test_hook_feedback_make_target_rejects_unmatched_control_files(tmp_path: Path) -> None:
@@ -1518,6 +1571,32 @@ def test_git_launch_cwd_resolves_bash_through_different_exact_session_claim(
     assert decision["worktree_path"] == str(worktree)
 
 
+def test_git_launch_cwd_accepts_quoted_shell_metacharacters_in_bound_command(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _workspace, repo, worktree, claims_dir, _claim_path = _fixture(tmp_path)
+    command = (
+        f"/usr/bin/env -C {worktree} gh api --method POST example "
+        "-f 'description=verified; exact head | approved'"
+    )
+
+    code, decision = _run_cli(
+        monkeypatch,
+        capsys,
+        tmp_path,
+        _payload(cwd=repo, tool="Bash", tool_input={"command": command}),
+        claims_dir=claims_dir,
+        projection_path=tmp_path / "projection.json",
+    )
+
+    assert code == 0
+    assert decision["decision"] == "allow", decision
+    assert decision["reason_code"] == "exact_live_claim"
+    assert decision["worktree_path"] == str(worktree)
+
+
 @pytest.mark.parametrize("command", ["touch generated.py", "{launch_bound}"])
 def test_git_launch_cwd_requires_runtime_binding_to_different_claimed_worktree(
     tmp_path: Path,
@@ -1681,6 +1760,34 @@ def test_git_launch_cwd_does_not_hide_stale_session_target_projection(
     assert code == 2
     assert decision["decision"] == "deny"
     assert decision["reason_code"] == "projection_unavailable_or_stale"
+
+
+def test_git_launch_cwd_repairs_valid_projection_staled_by_heartbeat(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _workspace, repo, worktree, claims_dir, claim_path = _fixture(tmp_path)
+    claim = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    claim["heartbeat_at"] = datetime.now(timezone.utc).isoformat()
+    claim_path.write_text(yaml.safe_dump(claim, sort_keys=False), encoding="utf-8")
+
+    code, decision = _run_cli(
+        monkeypatch,
+        capsys,
+        tmp_path,
+        _payload(
+            cwd=repo,
+            tool="Bash",
+            tool_input={"command": f"/usr/bin/env -C {worktree} touch generated.py"},
+        ),
+        claims_dir=claims_dir,
+        projection_path=tmp_path / "projection.json",
+    )
+
+    assert code == 0
+    assert decision["decision"] == "allow", decision
+    assert decision["reason_code"] == "exact_live_claim"
 
 
 def test_git_launch_cwd_stale_projection_still_allows_provably_read_only_bash(
@@ -2003,6 +2110,107 @@ def test_bound_workspace_root_command_still_denies_path_outside_claimed_worktree
     )
     assert code == 2
     assert decision["reason_code"] == "bash_path_outside_worktree"
+
+
+def _plan_cursor_command_fixture(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> tuple[str, Path, Path]:
+    _workspace, _repo, worktree, claims_dir, claim_path = _fixture(tmp_path)
+    claim = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    claim["write_paths"] = [
+        "src",
+        ".company-planning/active-execution.json",
+        ".company-planning/history",
+    ]
+    claim_path.write_text(yaml.safe_dump(claim, sort_keys=False), encoding="utf-8")
+    monkeypatch.setattr(
+        coordination_claims,
+        "claim_runtime_status",
+        lambda _claim, *, active_claims: "healthy",
+    )
+
+    home = tmp_path / "home"
+    monkeypatch.setenv("HOME", str(home))
+    version = "0.2.0+codex.test"
+    plugin = home / ".codex/plugins/cache/inside-success/company-planning" / version
+    manager = plugin / "scripts" / "manage_plan_execution.py"
+    manager.parent.mkdir(parents=True)
+    manager.write_text("# trusted fixture\n", encoding="utf-8")
+    manifest = plugin / ".codex-plugin" / "plugin.json"
+    manifest.parent.mkdir()
+    manifest.write_text(
+        json.dumps({"name": "company-planning", "version": version}),
+        encoding="utf-8",
+    )
+    candidate = tmp_path / "candidate.json"
+    candidate.write_text("{}\n", encoding="utf-8")
+    command = (
+        f"/usr/bin/env -C {worktree} /usr/bin/python3 {manager} --cwd {worktree} "
+        f"--session-id {SESSION} start {candidate}"
+    )
+    return command, claims_dir, worktree
+
+
+@pytest.mark.parametrize("operation", ["start", "replace", "archive"])
+def test_exact_plan_cursor_manager_treats_candidate_as_read_only_input(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    operation: str,
+) -> None:
+    command, claims_dir, _worktree = _plan_cursor_command_fixture(tmp_path, monkeypatch)
+    if operation == "replace":
+        command = command.replace(" start ", " replace ") + " --expected-revision 1"
+    elif operation == "archive":
+        command = command.rsplit(" start ", 1)[0] + " archive"
+
+    classification = prewrite_claim_gate._special_unclaimed_command(
+        command,
+        client="claude-code",
+        claims_dir=claims_dir,
+        projection_path=tmp_path / "projection.json",
+        subagent_event=False,
+        native_session=SESSION,
+    )
+
+    assert classification == "claim_bootstrap"
+
+
+@pytest.mark.parametrize(
+    "tamper",
+    ["wrong-session", "wrong-worktree", "wrong-runtime-worktree", "untrusted", "composed"],
+)
+def test_plan_cursor_manager_rejects_unbound_or_composed_commands(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    tamper: str,
+) -> None:
+    command, claims_dir, worktree = _plan_cursor_command_fixture(tmp_path, monkeypatch)
+    if tamper == "wrong-session":
+        command = command.replace(SESSION, "claude-code:other")
+    elif tamper == "wrong-worktree":
+        other = tmp_path / "other"
+        other.mkdir()
+        command = command.replace(f"--cwd {worktree}", f"--cwd {other}")
+    elif tamper == "wrong-runtime-worktree":
+        other = tmp_path / "other"
+        other.mkdir()
+        command = command.replace(f"-C {worktree}", f"-C {other}")
+    elif tamper == "untrusted":
+        untrusted = tmp_path / "manage_plan_execution.py"
+        untrusted.write_text("# untrusted fixture\n", encoding="utf-8")
+        manager = next(token for token in command.split() if token.endswith("/manage_plan_execution.py"))
+        command = command.replace(manager, str(untrusted))
+    else:
+        command += " && touch escaped"
+
+    with pytest.raises(ValueError):
+        prewrite_claim_gate._parse_plan_execution_cursor_command(
+            command,
+            client="claude-code",
+            claims_dir=claims_dir,
+            native_session=SESSION,
+        )
 
 
 def test_workspace_root_symlink_sequence_is_not_treated_as_target_proof(

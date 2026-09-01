@@ -431,8 +431,9 @@ def _parse_native_closeout_command(
     if len(matches) != 1:
         raise ValueError("closeout target is not the ambient runtime's exact live claim")
     claim = matches[0]
+    effective_worktree = claim.target_worktree_path or claim.worktree_path
     if args.worktree_path and Path(args.worktree_path).expanduser().resolve() != Path(
-        claim.worktree_path or ""
+        effective_worktree or ""
     ).expanduser().resolve():
         raise ValueError("closeout worktree does not match the exact live claim")
     if args.branch and args.branch != claim.branch:
@@ -446,49 +447,81 @@ def _parse_native_narrow_command(
     claims_dir: Path,
     native_session: str | None = None,
 ) -> None:
-    """Admit only the exact owner-bound Make recovery command for claim narrowing."""
+    """Admit one exact owner-bound recovery command for claim narrowing.
+
+    Governed repositories expose the Make target. Project-Graph-registered
+    repositories outside the governed fleet may not; they use the canonical
+    installed script directly. Both forms resolve the same live claim and
+    retain the same strict-subset and native-session checks.
+    """
 
     from enforced_planning import coordination_claims
+    from scripts import session_narrow
 
     if "\n" in command or "\r" in command or any(char in command for char in ";&|<>`$"):
         raise ValueError("session-narrow command cannot compose shell operations")
     tokens = shlex.split(command)
-    if len(tokens) != 8 or tokens[0:2] != ["/usr/bin/make", "-C"] or tokens[3] != "session-narrow":
-        raise ValueError("session-narrow command does not match the exact Make grammar")
-    target = Path(tokens[2]).expanduser()
-    if not target.is_absolute():
-        raise ValueError("session-narrow target must be one absolute worktree")
-    assignments: dict[str, str] = {}
-    for token in tokens[4:]:
-        key, separator, value = token.partition("=")
-        if not separator or key in assignments:
-            raise ValueError("session-narrow variables must be unique literal assignments")
-        assignments[key] = value
-    required = {"WORKTREE_AGENT", "WORKTREE_PROJECT", "BRANCH", "SESSION_WRITE_PATHS"}
-    if set(assignments) != required:
-        raise ValueError("session-narrow command has missing or extra variables")
-    if assignments["WORKTREE_AGENT"] != client:
+    target: Path | None = None
+    if (
+        len(tokens) == 8
+        and tokens[0:2] == ["/usr/bin/make", "-C"]
+        and tokens[3] == "session-narrow"
+    ):
+        target = Path(tokens[2]).expanduser()
+        if not target.is_absolute():
+            raise ValueError("session-narrow target must be one absolute worktree")
+        assignments: dict[str, str] = {}
+        for token in tokens[4:]:
+            key, separator, value = token.partition("=")
+            if not separator or key in assignments:
+                raise ValueError("session-narrow variables must be unique literal assignments")
+            assignments[key] = value
+        required = {"WORKTREE_AGENT", "WORKTREE_PROJECT", "BRANCH", "SESSION_WRITE_PATHS"}
+        if set(assignments) != required:
+            raise ValueError("session-narrow command has missing or extra variables")
+        agent = assignments["WORKTREE_AGENT"]
+        project = assignments["WORKTREE_PROJECT"]
+        scope = assignments["BRANCH"]
+        raw_replacements = assignments["SESSION_WRITE_PATHS"].split()
+    else:
+        script = (REPO_ROOT / "scripts" / "session_narrow.py").resolve()
+        if len(tokens) < 10 or tokens[:2] != ["/usr/bin/python3", str(script)]:
+            raise ValueError("session-narrow command does not match a canonical recovery grammar")
+        try:
+            with contextlib.redirect_stderr(io.StringIO()):
+                args = session_narrow.parse_args(tokens[2:])
+        except SystemExit as exc:
+            raise ValueError("session-narrow command does not match the canonical CLI grammar") from exc
+        if args.session_id not in {None, native_session}:
+            raise ValueError("session-narrow asserted session does not match the ambient native session")
+        agent = args.agent
+        project = args.project
+        scope = args.scope
+        raw_replacements = args.write_path
+    if agent != client:
         raise ValueError("session-narrow client does not match the ambient native client")
     if native_session is None:
         raise ValueError("session-narrow requires an ambient native session")
     matches = [
         claim
         for claim in coordination_claims.check_claims(
-            project=assignments["WORKTREE_PROJECT"], claims_dir=claims_dir
+            project=project, claims_dir=claims_dir
         )
         if claim.agent == client
-        and claim.scope == assignments["BRANCH"]
+        and claim.scope == scope
         and claim.session_id == native_session
     ]
     if len(matches) != 1:
         raise ValueError("session-narrow target is not the ambient runtime's exact live claim")
     claim = matches[0]
     effective_target = claim.target_worktree_path or claim.worktree_path
-    if not effective_target or Path(effective_target).expanduser().resolve() != target.resolve():
+    if target is not None and (
+        not effective_target or Path(effective_target).expanduser().resolve() != target.resolve()
+    ):
         raise ValueError("session-narrow Make directory does not match the exact claim target")
     replacements = [
         coordination_claims._normalize_repo_path(path)
-        for path in assignments["SESSION_WRITE_PATHS"].split()
+        for path in raw_replacements
     ]
     if not replacements or len(replacements) != len(set(replacements)):
         raise ValueError("session-narrow requires unique non-empty replacement paths")

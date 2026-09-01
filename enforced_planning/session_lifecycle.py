@@ -2220,6 +2220,20 @@ def finish_session(
     )
 
 
+def _resolve_closeout_worktree_path(
+    claim: coordination_claims.ClaimRecord,
+    requested_worktree_path: str | None,
+) -> Path:
+    """Resolve physical cleanup to the real bootstrap target, never its sentinel."""
+
+    return Path(
+        requested_worktree_path
+        or claim.target_worktree_path
+        or claim.worktree_path
+        or ""
+    ).expanduser()
+
+
 def close_session(
     *,
     agent: str,
@@ -2256,7 +2270,7 @@ def close_session(
         mailbox_disposition=mailbox_disposition,
         mailbox_note=mailbox_note,
     )
-    resolved_worktree_path = Path(worktree_path or claim.worktree_path or "").expanduser()
+    resolved_worktree_path = _resolve_closeout_worktree_path(claim, worktree_path)
     resolved_branch = branch or claim.branch
     repo_root = _resolve_claim_repo_root(claim)
     updated_at = datetime.now(timezone.utc).isoformat()

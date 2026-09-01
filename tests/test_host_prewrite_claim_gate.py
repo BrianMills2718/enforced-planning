@@ -523,6 +523,54 @@ def test_host_gate_admits_exact_native_closeout_for_merged_claim(
     assert decision["reason_code"] == "native_closeout_command"
 
 
+def test_host_gate_admits_bootstrap_closeout_for_real_target_worktree(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Control-plane closeout binds to the real target, not the authority sentinel."""
+
+    workspace, _repo, worktree, claims_dir, claim_path = _fixture(tmp_path)
+    claim = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    claim.update(
+        schema_version=6,
+        agent="codex",
+        session_id="codex:host-gate-test",
+        write_paths=["."],
+        broad_scope_mode="bootstrap",
+        broad_scope_reason="construct and narrow the exact maintenance lane",
+        target_worktree_path=str(worktree),
+        worktree_path=f"{worktree}.bootstrap-no-mutation-authority",
+    )
+    claim_path.write_text(yaml.safe_dump(claim, sort_keys=False), encoding="utf-8")
+    write_projection(claims_dir=claims_dir, projection_path=tmp_path / "projection.json")
+    command = (
+        f"/usr/bin/python3 {prewrite_claim_gate.REPO_ROOT / 'scripts' / 'session_close.py'} "
+        "--agent codex --project host-gate-test --scope host-gate-lane "
+        f"--worktree-path {worktree} --branch host-gate-lane --disposition merged --json"
+    )
+    payload = _payload(
+        cwd=workspace,
+        tool="Bash",
+        tool_input={"command": command},
+        session="host-gate-test",
+    )
+
+    code, decision = _run_cli(
+        monkeypatch,
+        capsys,
+        tmp_path,
+        payload,
+        claims_dir=claims_dir,
+        projection_path=tmp_path / "projection.json",
+        client="codex",
+    )
+
+    assert code == 0, decision
+    assert decision["decision"] == "allow"
+    assert decision["reason_code"] == "native_closeout_command"
+
+
 @pytest.mark.parametrize("tamper", ["wrong-scope", "wrong-agent", "composed"])
 def test_host_gate_rejects_tampered_native_closeout(
     tmp_path: Path,
@@ -609,6 +657,80 @@ def test_workspace_root_admits_exact_native_session_narrow(
     assert code == 0, decision
     assert decision["decision"] == "allow"
     assert decision["reason_code"] == "native_session_narrow_command"
+
+
+def test_workspace_root_admits_direct_runtime_session_narrow_without_repo_make_target(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A registered non-governed target can use the canonical host runtime directly."""
+
+    workspace, _worktree, claims_dir, _make_command = _bootstrap_narrow_fixture(
+        tmp_path, monkeypatch
+    )
+    monkeypatch.setenv("CODEX_THREAD_ID", "conflicting-shell-session")
+    command = (
+        f"/usr/bin/python3 {prewrite_claim_gate.REPO_ROOT / 'scripts' / 'session_narrow.py'} "
+        "--agent codex --project host-gate-test --scope host-gate-lane "
+        "--session-id codex:host-gate-test --write-path src/allowed.py --json"
+    )
+    payload = _payload(
+        cwd=workspace,
+        tool="Bash",
+        tool_input={"command": command},
+        session="host-gate-test",
+    )
+
+    code, decision = _run_cli(
+        monkeypatch,
+        capsys,
+        tmp_path,
+        payload,
+        claims_dir=claims_dir,
+        projection_path=tmp_path / "projection.json",
+        client="codex",
+    )
+
+    assert code == 0, decision
+    assert decision["decision"] == "allow"
+    assert decision["reason_code"] == "native_session_narrow_command"
+
+
+@pytest.mark.parametrize(
+    "tamper",
+    ["wrong-session", "noncanonical-script", "traversal", "composed", "subagent"],
+)
+def test_workspace_root_rejects_tampered_direct_runtime_session_narrow(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    tamper: str,
+) -> None:
+    _workspace, _worktree, claims_dir, _make_command = _bootstrap_narrow_fixture(
+        tmp_path, monkeypatch
+    )
+    script = prewrite_claim_gate.REPO_ROOT / "scripts" / "session_narrow.py"
+    session_id = "codex:other" if tamper == "wrong-session" else "codex:host-gate-test"
+    write_path = "../escaped.py" if tamper == "traversal" else "src/allowed.py"
+    if tamper == "noncanonical-script":
+        script = tmp_path / "session_narrow.py"
+    command = (
+        f"/usr/bin/python3 {script} --agent codex --project host-gate-test "
+        f"--scope host-gate-lane --session-id {session_id} --write-path {write_path} --json"
+    )
+    if tamper == "composed":
+        command += " && touch escaped"
+
+    classification = prewrite_claim_gate._special_unclaimed_command(
+        command,
+        client="codex",
+        claims_dir=claims_dir,
+        projection_path=tmp_path / "projection.json",
+        subagent_event=tamper == "subagent",
+        native_session="codex:host-gate-test",
+    )
+
+    assert classification is False
 
 
 def test_native_session_narrow_does_not_fall_back_to_shell_identity(

@@ -217,6 +217,42 @@ def test_symlinked_exact_runtime_path_is_denied_before_resolution(
         update_runtime(source_repo=source, runtime_repo=runtime, revision=after, write=False)
 
     assert caught.value.receipt["runtime_repo"] == str(runtime.absolute())
+    assert _git(external, "rev-parse", "HEAD") == _before
+
+
+def test_symlink_loop_runtime_path_emits_structured_denial(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, runtime, _before, after = _repos(tmp_path, monkeypatch)
+    external = tmp_path / "preserved-runtime"
+    runtime.rename(external)
+    runtime.symlink_to(runtime, target_is_directory=True)
+    monkeypatch.setattr(runtime_update, "_canonical_runtime_repo", lambda: runtime.absolute())
+
+    with pytest.raises(RuntimeUpdateError, match="must not contain symlinks") as caught:
+        update_runtime(source_repo=source, runtime_repo=runtime, revision=after, write=False)
+
+    receipt = caught.value.receipt
+    assert receipt["action"] == "denied"
+    assert receipt["state"] == "failed"
+    assert receipt["stage"] == "preflight"
+    assert receipt["runtime_repo"] == str(runtime.absolute())
+    assert _git(external, "rev-parse", "HEAD") == _before
+
+
+def test_source_symlink_loop_emits_structured_denial(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, runtime, _before, after = _repos(tmp_path, monkeypatch)
+    source.rename(tmp_path / "preserved-source")
+    source.symlink_to(source, target_is_directory=True)
+
+    with pytest.raises(RuntimeUpdateError, match="source repository path cannot be resolved") as caught:
+        update_runtime(source_repo=source, runtime_repo=runtime, revision=after, write=False)
+
+    assert caught.value.receipt["action"] == "denied"
+    assert caught.value.receipt["stage"] == "preflight"
+    assert caught.value.receipt["source_repo"] == str(source.absolute())
 
 
 def test_unsupported_origin_credentials_never_enter_receipt(
@@ -244,6 +280,42 @@ def test_main_emits_structured_receipt_for_argument_denial(capsys: pytest.Captur
     assert payload["host"]
     assert payload["observed_at"].endswith("Z")
     assert payload["error"]["type"] == "RuntimeUpdateError"
+
+
+def test_main_emits_complete_json_when_hostname_lookup_fails(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def fail_hostname() -> str:
+        raise OSError("injected hostname failure")
+
+    monkeypatch.setattr(runtime_update.socket, "gethostname", fail_hostname)
+
+    assert runtime_update.main([]) == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["action"] == "denied"
+    assert payload["state"] == "failed"
+    assert payload["stage"] == "arguments"
+    assert payload["host"] == "unavailable"
+    assert payload["error"]["type"] == "RuntimeUpdateError"
+
+
+def test_malformed_whitespace_url_credentials_are_redacted_from_denial() -> None:
+    receipt = runtime_update._base_receipt(
+        source_repo=Path("/source"),
+        runtime_repo=Path("/runtime"),
+        revision="0" * 40,
+        write=False,
+        now=datetime(2026, 9, 1, 17, 0, tzinfo=UTC),
+    )
+    denial = runtime_update._deny(
+        receipt,
+        RuntimeUpdateError("failed https://token:super secret@evil.example/repo.git"),
+    )
+
+    serialized = json.dumps(denial.receipt, sort_keys=True)
+    assert "token" not in serialized
+    assert "super secret" not in serialized
+    assert "https://<redacted>@evil.example/repo.git" in serialized
 
 
 def test_write_fast_forwards_and_retains_exact_recovery_ref(

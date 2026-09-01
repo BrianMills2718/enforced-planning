@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import stat
@@ -116,12 +117,59 @@ def _workspace_image_canary_payload(root: Path, **updates: object) -> dict[str, 
     return payload
 
 
+def _bind_workspace_root(monkeypatch: pytest.MonkeyPatch, root: Path) -> None:
+    monkeypatch.setattr(claim_bootstrap, "_configured_workspace_root", lambda: root.resolve())
+
+
+def test_configured_workspace_root_comes_from_hash_pinned_provider(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = tmp_path / "code"
+    homes = {
+        "code-active": root / "active",
+        "code-inactive": root / "inactive",
+        "code-template": root / "templates",
+    }
+    root.mkdir()
+    provider = tmp_path / "workspace_authority_provider.py"
+    configured = ", ".join(
+        f"{key!r}: Path({str(path)!r})" for key, path in homes.items()
+    )
+    provider.write_text(
+        "from pathlib import Path\n"
+        f"WORKSPACE_HOME_PATHS = {{{configured}}}\n",
+        encoding="utf-8",
+    )
+    provider.chmod(0o755)
+    config = tmp_path / "provider.json"
+    config.write_text(
+        json.dumps(
+            {
+                "schema_version": "1.0",
+                "provider_path": str(provider),
+                "provider_sha256": hashlib.sha256(provider.read_bytes()).hexdigest(),
+            }
+        ),
+        encoding="utf-8",
+    )
+    config.chmod(0o600)
+    monkeypatch.setattr(
+        claim_bootstrap.repository_authority,
+        "DEFAULT_PROVIDER_CONFIG",
+        config,
+    )
+
+    assert claim_bootstrap._configured_workspace_root() == root
+
+
 def test_workspace_file_archive_preserves_bytes_and_removes_only_exact_source(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("CODEX_THREAD_ID", "native-archive")
     monkeypatch.chdir(tmp_path)
+    _bind_workspace_root(monkeypatch, tmp_path)
     source = tmp_path / "screenshot.png"
     source.write_bytes(b"png-like-evidence")
     request = claim_bootstrap.parse_request_json(
@@ -164,6 +212,7 @@ def test_workspace_file_archive_never_overwrites_destination(
 ) -> None:
     monkeypatch.setenv("CODEX_THREAD_ID", "native-archive")
     monkeypatch.chdir(tmp_path)
+    _bind_workspace_root(monkeypatch, tmp_path)
     source = tmp_path / "screenshot.png"
     destination = tmp_path / "archive/workspace-cleanup/screenshot.png"
     source.write_bytes(b"new")
@@ -186,6 +235,7 @@ def test_workspace_file_archive_rejects_symlink_source(
 ) -> None:
     monkeypatch.setenv("CODEX_THREAD_ID", "native-archive")
     monkeypatch.chdir(tmp_path)
+    _bind_workspace_root(monkeypatch, tmp_path)
     target = tmp_path / "target.png"
     target.write_bytes(b"preserve")
     (tmp_path / "screenshot.png").symlink_to(target)
@@ -205,6 +255,7 @@ def test_workspace_image_canary_stages_image_png_and_preserves_archive(
 ) -> None:
     monkeypatch.setenv("CODEX_THREAD_ID", "native-canary")
     monkeypatch.chdir(tmp_path)
+    _bind_workspace_root(monkeypatch, tmp_path)
     source = tmp_path / "archive/workspace-cleanup/screenshot.png"
     source.parent.mkdir(parents=True)
     source.write_bytes(b"\x89PNG\r\n\x1a\ncanary")
@@ -226,6 +277,7 @@ def test_workspace_image_canary_never_overwrites_existing_image(
 ) -> None:
     monkeypatch.setenv("CODEX_THREAD_ID", "native-canary")
     monkeypatch.chdir(tmp_path)
+    _bind_workspace_root(monkeypatch, tmp_path)
     source = tmp_path / "archive/workspace-cleanup/screenshot.png"
     source.parent.mkdir(parents=True)
     source.write_bytes(b"source")
@@ -253,6 +305,38 @@ def test_workspace_image_canary_requires_canonical_archived_png(
         claim_bootstrap.parse_request_json(
             json.dumps(_workspace_image_canary_payload(tmp_path, source=source))
         )
+
+
+@pytest.mark.parametrize("operation", ["archive", "canary"])
+def test_workspace_operations_reject_request_selected_absolute_cwd(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    operation: str,
+) -> None:
+    canonical = tmp_path / "canonical-code"
+    unrelated = tmp_path / "unrelated"
+    canonical.mkdir()
+    unrelated.mkdir()
+    monkeypatch.setenv("CODEX_THREAD_ID", f"native-{operation}")
+    monkeypatch.chdir(unrelated)
+    _bind_workspace_root(monkeypatch, canonical)
+
+    if operation == "archive":
+        source = unrelated / "screenshot.png"
+        source.write_bytes(b"must-stay")
+        payload = _workspace_archive_payload(unrelated)
+    else:
+        source = unrelated / "archive/workspace-cleanup/screenshot.png"
+        source.parent.mkdir(parents=True)
+        source.write_bytes(b"must-stay")
+        payload = _workspace_image_canary_payload(unrelated)
+    request = claim_bootstrap.parse_request_json(json.dumps(payload))
+
+    with pytest.raises(claim_bootstrap.ClaimBootstrapError, match="configured workspace root"):
+        claim_bootstrap.execute_request(request)
+
+    assert source.read_bytes() == b"must-stay"
+    assert not (unrelated / "image.png").exists()
 
 
 def test_unclaimed_native_session_can_start_its_own_claim(

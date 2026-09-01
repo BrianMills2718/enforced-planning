@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import pwd
 import re
 import socket
 import subprocess
@@ -21,10 +22,12 @@ from pathlib import Path
 from typing import Any
 
 FULL_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+URL_USERINFO_RE = re.compile(r"(?P<prefix>[A-Za-z][A-Za-z0-9+.-]*://)[^/@\s]+@")
 RECOVERY_NAMESPACE = "refs/codex-runtime-recovery"
 ZERO_OID = "0" * 40
 CANONICAL_ORIGIN = "https://github.com/BrianMills2718/enforced-planning.git"
 CANONICAL_ORIGIN_IDENTITY = "github.com/BrianMills2718/enforced-planning"
+LEGACY_RUNTIME_ORIGIN = "git@github-personal:BrianMills2718/enforced-planning.git"
 
 
 class RuntimeUpdateError(RuntimeError):
@@ -48,7 +51,7 @@ def _run(
     check: bool = True,
     mutating: bool = False,
 ) -> subprocess.CompletedProcess[str]:
-    env = os.environ.copy()
+    env = _sanitized_git_env()
     if not mutating:
         env["GIT_OPTIONAL_LOCKS"] = "0"
     result = subprocess.run(
@@ -69,8 +72,8 @@ def _output(repo: Path, *args: str) -> str:
 
 
 def _default_runtime_repo() -> Path:
-    codex_home = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex"))
-    return codex_home / "runtime" / "enforced-planning"
+    account_home = Path(pwd.getpwuid(os.getuid()).pw_dir)
+    return account_home / ".codex" / "runtime" / "enforced-planning"
 
 
 def _canonical_runtime_repo() -> Path:
@@ -81,21 +84,14 @@ def _canonical_runtime_repo() -> Path:
 
 def _normalize_origin(origin: str) -> str:
     value = origin.strip().removesuffix("/").removesuffix(".git")
-    for prefix in ("git@github.com:", "git@github-personal:"):
-        if value.startswith(prefix):
-            return f"github.com/{value.removeprefix(prefix)}"
-    for prefix in (
-        "https://github.com/",
-        "ssh://git@github.com/",
-        "ssh://git@github-personal/",
-    ):
+    for prefix in ("https://github.com/",):
         if value.startswith(prefix):
             return f"github.com/{value.removeprefix(prefix)}"
     if value.startswith("file://"):
         return str(Path(value.removeprefix("file://")).resolve())
     if value.startswith("/"):
         return str(Path(value).resolve())
-    raise RuntimeUpdateError(f"unsupported origin transport: {origin!r}")
+    raise RuntimeUpdateError("unsupported origin transport")
 
 
 def _canonical_origin_identity() -> str:
@@ -119,6 +115,9 @@ def _base_receipt(
         "source_repo": str(source_repo.resolve()),
         "runtime_repo": str(runtime_repo.resolve()),
         "origin": None,
+        "stored_origin_before": None,
+        "stored_origin_after": None,
+        "origin_migration_required": None,
         "canonical_repository": _canonical_origin_identity(),
         "checkout_mode": None,
         "before_revision": None,
@@ -133,27 +132,57 @@ def _base_receipt(
     }
 
 
-def _deny(receipt: dict[str, Any], error: RuntimeUpdateError) -> RuntimeUpdateError:
+def _redact_sensitive_text(value: str) -> str:
+    """Remove URL userinfo before an operational error enters a durable receipt."""
+
+    return URL_USERINFO_RE.sub(r"\g<prefix><redacted>@", value)
+
+
+def _sanitized_git_env() -> dict[str, str]:
+    """Return a Git environment without caller-selected config or TLS overrides."""
+
+    env = {
+        key: value
+        for key, value in os.environ.items()
+        if not key.startswith("GIT_")
+        and key not in {"CURL_CA_BUNDLE", "SSL_CERT_DIR", "SSL_CERT_FILE"}
+    }
+    env.update(
+        GIT_CONFIG_GLOBAL=os.devnull,
+        GIT_CONFIG_NOSYSTEM="1",
+        GIT_CONFIG_SYSTEM=os.devnull,
+        GIT_TERMINAL_PROMPT="0",
+    )
+    return env
+
+
+def _deny(receipt: dict[str, Any], error: Exception) -> RuntimeUpdateError:
+    message = _redact_sensitive_text(str(error))
     receipt.update(
         action="partial_failure" if receipt["mutation_started"] else "denied",
         state="failed",
-        error={"type": type(error).__name__, "message": str(error)},
+        error={"type": type(error).__name__, "message": message},
     )
-    return RuntimeUpdateError(str(error), receipt=receipt.copy())
+    return RuntimeUpdateError(message, receipt=receipt.copy())
 
 
 def _refresh_failure_state(runtime_repo: Path, receipt: dict[str, Any]) -> None:
     if receipt["before_revision"] is None:
         return
-    head = _run(runtime_repo, "rev-parse", "HEAD", check=False)
-    if head.returncode == 0 and FULL_SHA_RE.fullmatch(head.stdout.strip()):
-        receipt["after_revision"] = head.stdout.strip()
-    recovery_ref = receipt["recovery_ref"]
-    if recovery_ref:
-        retained = _run(runtime_repo, "rev-parse", recovery_ref, check=False)
-        receipt["recovery_ref_retained"] = (
-            retained.returncode == 0 and retained.stdout.strip() == receipt["before_revision"]
-        )
+    try:
+        head = _run(runtime_repo, "rev-parse", "HEAD", check=False)
+        if head.returncode == 0 and FULL_SHA_RE.fullmatch(head.stdout.strip()):
+            receipt["after_revision"] = head.stdout.strip()
+        recovery_ref = receipt["recovery_ref"]
+        if recovery_ref:
+            retained = _run(runtime_repo, "rev-parse", recovery_ref, check=False)
+            receipt["recovery_ref_retained"] = (
+                retained.returncode == 0 and retained.stdout.strip() == receipt["before_revision"]
+            )
+    except (RuntimeUpdateError, OSError, subprocess.SubprocessError):
+        # Preserve the original operational failure receipt even when its
+        # best-effort post-failure observation boundary is also unavailable.
+        return
 
 
 def _assert_repo(path: Path, label: str) -> Path:
@@ -166,6 +195,22 @@ def _assert_repo(path: Path, label: str) -> Path:
     if not common.is_absolute():
         common = path / common
     return common.resolve()
+
+
+def _assert_no_local_url_rewrites(repo: Path, label: str) -> None:
+    result = _run(
+        repo,
+        "config",
+        "--includes",
+        "--local",
+        "--get-regexp",
+        r"^url\..*\.insteadof$",
+        check=False,
+    )
+    if result.returncode not in {0, 1}:
+        raise RuntimeUpdateError(f"cannot inspect {label} URL rewrite configuration")
+    if result.returncode == 0 and result.stdout.strip():
+        raise RuntimeUpdateError(f"{label} must not configure URL rewrites")
 
 
 def _assert_clean_runtime(runtime_repo: Path) -> str:
@@ -193,7 +238,7 @@ def _remote_main_revision() -> str:
         check=False,
         capture_output=True,
         text=True,
-        env={**os.environ, "GIT_OPTIONAL_LOCKS": "0"},
+        env={**_sanitized_git_env(), "GIT_OPTIONAL_LOCKS": "0"},
     )
     if result.returncode != 0:
         detail = result.stderr.strip() or result.stdout.strip() or "git ls-remote failed"
@@ -240,7 +285,12 @@ def update_runtime(
             )
         source_common_dir = _assert_repo(source_repo, "source repository")
         runtime_common_dir = _assert_repo(runtime_repo, "installed runtime")
-        if runtime_common_dir != (runtime_repo / ".git").resolve():
+        runtime_git_dir = runtime_repo / ".git"
+        if (
+            not runtime_git_dir.is_dir()
+            or runtime_git_dir.is_symlink()
+            or runtime_common_dir != runtime_git_dir.resolve()
+        ):
             raise RuntimeUpdateError("installed runtime must be a standalone clone, not a linked worktree")
         if source_common_dir == runtime_common_dir:
             raise RuntimeUpdateError("source repository and installed runtime must be distinct clones")
@@ -248,17 +298,30 @@ def update_runtime(
         checkout_mode = _assert_clean_runtime(runtime_repo)
         receipt["checkout_mode"] = checkout_mode
 
-        source_origin = _output(source_repo, "remote", "get-url", "origin")
-        runtime_origin = _output(runtime_repo, "remote", "get-url", "origin")
+        _assert_no_local_url_rewrites(runtime_repo, "installed runtime")
+        runtime_origin = _output(runtime_repo, "config", "--local", "--get", "remote.origin.url")
         expected_origin = _canonical_origin_identity()
-        if _normalize_origin(source_origin) != expected_origin:
-            raise RuntimeUpdateError("source repository is not the canonical Enforced Planning origin")
-        if _normalize_origin(runtime_origin) != expected_origin:
+        if runtime_origin == CANONICAL_ORIGIN:
+            stored_origin_state = "canonical_https"
+            origin_migration_required = False
+        elif runtime_origin == LEGACY_RUNTIME_ORIGIN:
+            stored_origin_state = "legacy_github_personal_alias"
+            origin_migration_required = True
+        else:
             raise RuntimeUpdateError("installed runtime is not the canonical Enforced Planning origin")
-        receipt["origin"] = expected_origin
+        receipt.update(
+            origin=expected_origin,
+            stored_origin_before=stored_origin_state,
+            stored_origin_after=stored_origin_state,
+            origin_migration_required=origin_migration_required,
+        )
 
         before = _output(runtime_repo, "rev-parse", "HEAD")
-        receipt.update(before_revision=before, after_revision=before, changed=before != revision)
+        receipt.update(
+            before_revision=before,
+            after_revision=before,
+            changed=before != revision or origin_migration_required,
+        )
         receipt["stage"] = "resolve_remote"
         remote_main = _remote_main_revision()
         receipt["remote_main_revision"] = remote_main
@@ -271,24 +334,28 @@ def update_runtime(
             _run(source_repo, "merge-base", "--is-ancestor", before, revision, check=False).returncode == 0
         )
         detached_replacement = checkout_mode == "detached" and allow_detached_replacement
-        receipt["update_mode"] = "fast_forward" if fast_forward else "detached_replacement"
+        if before == revision and origin_migration_required:
+            receipt["update_mode"] = "origin_migration"
+        else:
+            receipt["update_mode"] = "fast_forward" if fast_forward else "detached_replacement"
         if not fast_forward and not detached_replacement:
             raise RuntimeUpdateError(
                 f"installed runtime {before} cannot fast-forward to canonical revision {revision}; "
                 "an explicit detached replacement with a recovery ref is required"
             )
 
-        if not write or before == revision:
+        if not write or (before == revision and not origin_migration_required):
             receipt.update(
-                action="current" if before == revision else "would_update",
+                action="current" if not receipt["changed"] else "would_update",
                 state="succeeded",
                 stage="complete",
             )
             return receipt
 
-        if write:
+        if write and before != revision:
             receipt["stage"] = "fetch_target"
             receipt["mutation_started"] = True
+            _assert_no_local_url_rewrites(runtime_repo, "installed runtime")
             _run(
                 runtime_repo,
                 "fetch",
@@ -302,25 +369,31 @@ def update_runtime(
 
         recovery_ref = _recovery_ref(before, now or datetime.now(UTC))
         receipt["stage"] = "create_recovery_ref"
-        _run(runtime_repo, "update-ref", recovery_ref, before, ZERO_OID, mutating=True)
         receipt["recovery_ref"] = recovery_ref
+        _run(runtime_repo, "update-ref", recovery_ref, before, ZERO_OID, mutating=True)
         receipt["mutation_started"] = True
         # The recovery ref deliberately remains and is reported if mutation fails.
         receipt["stage"] = "apply_update"
-        if fast_forward:
-            _run(runtime_repo, "merge", "--ff-only", revision, mutating=True)
-        else:
-            _run(runtime_repo, "checkout", "--detach", revision, mutating=True)
+        if before != revision:
+            if fast_forward:
+                _run(runtime_repo, "merge", "--ff-only", revision, mutating=True)
+            else:
+                _run(runtime_repo, "checkout", "--detach", revision, mutating=True)
+        if origin_migration_required:
+            receipt["stage"] = "migrate_origin"
+            _run(runtime_repo, "remote", "set-url", "origin", CANONICAL_ORIGIN, mutating=True)
+            receipt["stored_origin_after"] = "canonical_https"
 
         receipt["stage"] = "verify"
         after = _output(runtime_repo, "rev-parse", "HEAD")
         _assert_clean_runtime(runtime_repo)
         retained = _output(runtime_repo, "rev-parse", recovery_ref)
-        if after != revision or retained != before:
-            raise RuntimeUpdateError("post-update revision or recovery-ref verification failed")
+        stored_origin_after = _output(runtime_repo, "config", "--local", "--get", "remote.origin.url")
+        if after != revision or retained != before or stored_origin_after != CANONICAL_ORIGIN:
+            raise RuntimeUpdateError("post-update revision, origin, or recovery-ref verification failed")
         receipt.update(action="updated", state="succeeded", stage="complete", after_revision=after)
         return receipt
-    except RuntimeUpdateError as exc:
+    except (RuntimeUpdateError, OSError, subprocess.SubprocessError) as exc:
         _refresh_failure_state(runtime_repo, receipt)
         raise _deny(receipt, exc) from exc
 
@@ -359,7 +432,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             write=args.write,
             allow_detached_replacement=args.allow_detached_replacement,
         )
-    except RuntimeUpdateError as exc:
+    except (RuntimeUpdateError, OSError, subprocess.SubprocessError) as exc:
         payload = exc.receipt or _base_receipt(
             source_repo=Path(__file__).resolve().parents[1],
             runtime_repo=_default_runtime_repo(),

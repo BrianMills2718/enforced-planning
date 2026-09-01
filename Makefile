@@ -395,7 +395,12 @@ MAINTENANCE_AGENT = $(if $(strip $(WORKTREE_AGENT)),$(WORKTREE_AGENT),claude-cod
 # makes the sanctioned entrypoint impossible to use.  The surrounding command
 # still binds it to one repository, branch, worktree, and native session; the
 # lane must narrow its authority before it begins scoped implementation work.
-MAINTENANCE_BOOTSTRAP_WRITE_PATHS = .
+# Bootstrap claim scope for an unplanned maintenance lane. Defaults to the repo
+# root because the lane may not know its targets yet, but an explicit
+# SESSION_WRITE_PATHS must win: silently discarding it made every maintenance
+# lane conflict with every other active lane by construction, and the operator
+# saw a CONFLICT naming the other lanes rather than their own claim.
+MAINTENANCE_BOOTSTRAP_WRITE_PATHS = $(if $(strip $(SESSION_WRITE_PATHS)),$(SESSION_WRITE_PATHS),.)
 
 maintenance-worktree:  ## Claimed light maintenance worktree; needs BRANCH (other maintenance metadata has safe defaults)
 ifndef BRANCH

@@ -36,6 +36,7 @@ from enforced_planning.coordination_messages import (
     SessionInboxNotice,
     UnknownSessionError,
     WrongRecipientError,
+    inspect_host_delivery_capability,
 )
 
 NOW = datetime(2026, 7, 15, 20, 0, tzinfo=UTC)
@@ -112,6 +113,94 @@ def _send_request(
         idempotency_key=idempotency_key,
         plan_ref="Plan #67",
     )
+
+
+def test_sender_status_reports_advisory_only_when_local_pretooluse_is_disabled(
+    tmp_path: Path,
+) -> None:
+    """Sender-visible status must not translate configured delivery into a stop claim."""
+
+    config = tmp_path / "config.toml"
+    command = "python3 /runtime/scripts/coordination_hook.py --agent codex"
+    config.write_text(
+        f'''[[hooks.SessionStart]]
+matcher = "startup|resume|clear|compact"
+[[hooks.SessionStart.hooks]]
+type = "command"
+command = "{command}"
+
+[[hooks.PostToolUse]]
+matcher = "*"
+[[hooks.PostToolUse.hooks]]
+type = "command"
+command = "{command}"
+
+[[hooks.Stop]]
+matcher = ""
+[[hooks.Stop.hooks]]
+type = "command"
+command = "{command}"
+''',
+        encoding="utf-8",
+    )
+
+    status = inspect_host_delivery_capability("codex:recipient", codex_config_path=config)
+
+    assert status.delivery_mode == "advisory_only"
+    assert status.mutation_enforcement_available is False
+    assert status.stop_enforcement_available is True
+    assert status.observed_proves_exposure_only is True
+    assert status.observed_proves_stopped is False
+    assert status.observed_proves_acknowledged is False
+    assert "mutation enforcement is unavailable" in status.operator_message
+
+
+def test_send_result_carries_advisory_only_local_host_status(
+    mailbox: tuple[CoordinationMessageStore, Path, Path],
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """A persisted send reports the configured delivery boundary without upgrading observation."""
+
+    store, _claims_dir, _root = mailbox
+    monkeypatch.setenv("HOME", str(tmp_path))
+    settings = tmp_path / ".claude" / "settings.json"
+    settings.parent.mkdir()
+    command = "python3 /runtime/scripts/coordination_hook.py --agent claude-code"
+    settings.write_text(
+        json.dumps(
+            {
+                "hooks": {
+                    "SessionStart": [
+                        {
+                            "matcher": "startup|resume|clear|compact",
+                            "hooks": [{"type": "command", "command": command}],
+                        }
+                    ],
+                    "PostToolUse": [
+                        {
+                            "matcher": "*",
+                            "hooks": [{"type": "command", "command": command}],
+                        }
+                    ],
+                    "Stop": [
+                        {
+                            "matcher": "",
+                            "hooks": [{"type": "command", "command": command}],
+                        }
+                    ],
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = store.send(_send_request(), now=NOW)
+
+    assert result.local_host_delivery_capability.delivery_mode == "advisory_only"
+    assert result.local_host_delivery_capability.mutation_enforcement_available is False
+    assert result.local_host_delivery_capability.observed_proves_stopped is False
+    assert result.local_host_delivery_capability.observed_proves_acknowledged is False
 
 
 def test_mailbox_supports_canonical_legacy_claim_registry_signature(

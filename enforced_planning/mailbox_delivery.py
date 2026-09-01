@@ -29,10 +29,10 @@ from enforced_planning.coordination_messages import (
     StoredReceiptRecord,
 )
 
-
 ClientName = Literal["codex", "claude-code"]
 ConfigurationState = Literal["absent", "drifted", "configured"]
 TrustState = Literal["unknown", "operationally_observed"]
+DeliveryMode = Literal["enforced", "advisory_only", "unavailable"]
 
 CODEX_HOOK_REQUIREMENTS: tuple[tuple[str, str], ...] = (
     ("SessionStart", "startup|resume|clear|compact"),
@@ -106,6 +106,13 @@ class HookSurfaceV1(StrictContract):
     adapter_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     configuration_state: ConfigurationState
     trust_state: TrustState
+    delivery_mode: DeliveryMode
+    mutation_enforcement_available: bool
+    stop_enforcement_available: bool
+    observed_proves_exposure_only: Literal[True] = True
+    observed_proves_stopped: Literal[False] = False
+    observed_proves_acknowledged: Literal[False] = False
+    operator_message: str = Field(min_length=1)
     issues: tuple[str, ...]
 
 
@@ -675,6 +682,14 @@ def _audit_surface(
                 adapter_sha256=digest,
                 configuration_state="absent",
                 trust_state=_trust_state(client, observed_clients),
+                delivery_mode="unavailable",
+                mutation_enforcement_available=False,
+                stop_enforcement_available=False,
+                operator_message=(
+                    "Mailbox delivery enforcement is unavailable: this hook configuration is absent. "
+                    "Persistence is not delivery, and an observed receipt proves exposure only, not "
+                    "that the recipient stopped or acknowledged."
+                ),
                 issues=("config_missing", *adapter_issues),
             ),
             0,
@@ -684,6 +699,32 @@ def _audit_surface(
     issues = [*adapter_issues]
     if missing:
         issues.append("missing_required_hook")
+    mutation_available = "PreToolUse" in configured
+    stop_available = "Stop" in configured
+    has_advisory_delivery = bool(
+        {"SessionStart", "UserPromptSubmit", "PostToolUse"}.intersection(configured)
+    )
+    if mutation_available:
+        delivery_mode: DeliveryMode = "enforced"
+        operator_message = (
+            "Mailbox mutation enforcement is configured on this surface. An observed receipt "
+            "proves exposure only, not that the recipient stopped or acknowledged."
+        )
+    elif has_advisory_delivery:
+        delivery_mode = "advisory_only"
+        issues.append("mutation_enforcement_unavailable")
+        operator_message = (
+            "Mailbox delivery is advisory-only: the PreToolUse coordination hook is not configured, "
+            "so mutation enforcement is unavailable. An observed receipt proves exposure only, not "
+            "that the recipient stopped or acknowledged."
+        )
+    else:
+        delivery_mode = "unavailable"
+        issues.append("coordination_delivery_unavailable")
+        operator_message = (
+            "Mailbox delivery enforcement is unavailable on this surface. Persistence is not delivery, "
+            "and an observed receipt proves exposure only, not that the recipient stopped or acknowledged."
+        )
     state: ConfigurationState = "configured" if not issues else "drifted"
     return (
         HookSurfaceV1(
@@ -695,6 +736,10 @@ def _audit_surface(
             adapter_sha256=digest,
             configuration_state=state,
             trust_state=_trust_state(client, observed_clients),
+            delivery_mode=delivery_mode,
+            mutation_enforcement_available=mutation_available,
+            stop_enforcement_available=stop_available,
+            operator_message=operator_message,
             issues=tuple(issues),
         ),
         unrelated,

@@ -20,6 +20,7 @@ import os
 import shlex
 import sys
 import tempfile
+import tomllib
 import uuid
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
@@ -30,7 +31,6 @@ from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, ValidationErro
 
 from enforced_planning import coordination_claims
 
-
 SCHEMA_VERSION: Literal["1.0"] = "1.0"
 INDEX_DIRNAME = "index-v1"
 DEFAULT_TTL_SECONDS = 86_400
@@ -38,6 +38,7 @@ MAX_NOTE_LENGTH = 2_000
 DEFAULT_NOTICE_BODY_LENGTH = 500
 DEFAULT_NOTICE_MESSAGE_LIMIT = 20
 MessageState = Literal["persisted", "runtime_accepted", "observed", "acknowledged", "expired"]
+DeliveryMode = Literal["enforced", "advisory_only", "unavailable"]
 
 
 class CoordinationMessageError(RuntimeError):
@@ -383,6 +384,158 @@ class MessageStatusView(StrictContract):
     message_path: str = Field(min_length=1, description="Evidence path to the canonical stored message.")
 
 
+class HostDeliveryCapabilityV1(StrictContract):
+    """Sender-visible local host capability for the recipient's client type.
+
+    This is deliberately scoped to the sender's current host configuration. It
+    does not claim that a remote recipient process loaded those bytes.
+    """
+
+    schema_version: Literal["mailbox_host_delivery_capability.v1"] = (
+        "mailbox_host_delivery_capability.v1"
+    )
+    client: Literal["codex", "claude-code", "unknown"]
+    config_path: str = Field(min_length=1)
+    scope: Literal["sender_host_recipient_client_config"] = "sender_host_recipient_client_config"
+    configured_events: tuple[str, ...]
+    delivery_mode: DeliveryMode
+    mutation_enforcement_available: bool
+    stop_enforcement_available: bool
+    issues: tuple[str, ...]
+    operator_message: str = Field(min_length=1)
+    observed_proves_exposure_only: Literal[True] = True
+    observed_proves_stopped: Literal[False] = False
+    observed_proves_acknowledged: Literal[False] = False
+
+
+_CLIENT_HOOK_REQUIREMENTS: dict[str, tuple[tuple[str, str], ...]] = {
+    "codex": (
+        ("SessionStart", "startup|resume|clear|compact"),
+        ("UserPromptSubmit", ""),
+        ("PostToolUse", "*"),
+        ("PreToolUse", "Bash|apply_patch"),
+        ("Stop", ""),
+    ),
+    "claude-code": (
+        ("SessionStart", "startup|resume|clear|compact"),
+        ("UserPromptSubmit", ""),
+        ("PostToolUse", "*"),
+        ("PreToolUse", "Bash|Edit|Write"),
+        ("Stop", ""),
+    ),
+}
+
+
+def _coordination_hook_configured(config: dict[str, Any], event: str, matcher: str) -> bool:
+    """Return whether the exact event/matcher invokes the coordination adapter."""
+
+    hooks = config.get("hooks")
+    blocks = hooks.get(event) if isinstance(hooks, dict) else None
+    if not isinstance(blocks, list):
+        return False
+    for block in blocks:
+        if not isinstance(block, dict) or block.get("matcher", "") != matcher:
+            continue
+        entries = block.get("hooks")
+        if not isinstance(entries, list):
+            continue
+        for entry in entries:
+            command = entry.get("command") if isinstance(entry, dict) else None
+            if isinstance(command, str) and (
+                "coordination_hook.py" in command or "notify-coordination-messages.sh" in command
+            ):
+                return True
+    return False
+
+
+def inspect_host_delivery_capability(
+    session_id: str,
+    *,
+    codex_config_path: Path | None = None,
+    claude_config_path: Path | None = None,
+) -> HostDeliveryCapabilityV1:
+    """Inspect local configured hook state without promoting it to runtime proof."""
+
+    if session_id.startswith("codex:"):
+        client = "codex"
+        path = codex_config_path or Path.home() / ".codex" / "config.toml"
+        parser = "toml"
+    elif session_id.startswith("claude-code:"):
+        client = "claude-code"
+        path = claude_config_path or Path.home() / ".claude" / "settings.json"
+        parser = "json"
+    else:
+        return HostDeliveryCapabilityV1(
+            client="unknown",
+            config_path="unknown",
+            configured_events=(),
+            delivery_mode="unavailable",
+            mutation_enforcement_available=False,
+            stop_enforcement_available=False,
+            issues=("unsupported_recipient_client",),
+            operator_message=(
+                "Mailbox delivery enforcement is unavailable for this recipient client. "
+                "Persistence is not delivery, and an observed receipt proves exposure only, "
+                "not that the recipient stopped or acknowledged."
+            ),
+        )
+
+    issues: list[str] = []
+    try:
+        if parser == "toml":
+            with path.open("rb") as handle:
+                raw = tomllib.load(handle)
+        else:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(raw, dict):
+            raise TypeError("host hook config must be an object")
+    except (OSError, tomllib.TOMLDecodeError, json.JSONDecodeError, TypeError) as exc:
+        issues.append(f"config_unavailable:{type(exc).__name__}")
+        raw = {}
+
+    configured_events = tuple(
+        event
+        for event, matcher in _CLIENT_HOOK_REQUIREMENTS[client]
+        if _coordination_hook_configured(raw, event, matcher)
+    )
+    mutation_available = "PreToolUse" in configured_events
+    stop_available = "Stop" in configured_events
+    advisory_events = {"SessionStart", "UserPromptSubmit", "PostToolUse"}
+    has_advisory_delivery = bool(advisory_events.intersection(configured_events))
+    if mutation_available:
+        delivery_mode: DeliveryMode = "enforced"
+        operator_message = (
+            "Mailbox mutation enforcement is configured on this host. An observed receipt "
+            "proves exposure only, not that the recipient stopped or acknowledged."
+        )
+    elif has_advisory_delivery:
+        delivery_mode = "advisory_only"
+        issues.append("pretooluse_coordination_hook_missing")
+        operator_message = (
+            "Mailbox delivery is advisory-only on this host: the PreToolUse coordination hook "
+            "is not configured, so mutation enforcement is unavailable. An observed receipt "
+            "proves exposure only, not that the recipient stopped or acknowledged."
+        )
+    else:
+        delivery_mode = "unavailable"
+        issues.append("coordination_delivery_hooks_missing")
+        operator_message = (
+            "Mailbox delivery enforcement is unavailable on this host for this recipient client. "
+            "Persistence is not delivery, and an observed receipt proves exposure only, not that "
+            "the recipient stopped or acknowledged."
+        )
+    return HostDeliveryCapabilityV1(
+        client=client,
+        config_path=str(path),
+        configured_events=configured_events,
+        delivery_mode=delivery_mode,
+        mutation_enforcement_available=mutation_available,
+        stop_enforcement_available=stop_available,
+        issues=tuple(issues),
+        operator_message=operator_message,
+    )
+
+
 UNREACHABLE_BACKLOG_SECONDS = 300.0
 """How stale an unobserved message must be before it implies a deaf recipient."""
 
@@ -417,6 +570,12 @@ class PersistedMessageResult(StrictContract):
             "Whether the recipient looks unable to receive: it has an earlier active message "
             "it never observed. Storing a message is persistence, never delivery."
         ),
+    )
+    local_host_delivery_capability: HostDeliveryCapabilityV1 = Field(
+        description=(
+            "Sender-host configured capability for the recipient client type; this is not proof "
+            "that a remote recipient process loaded the configuration."
+        )
     )
 
 
@@ -1019,6 +1178,9 @@ class CoordinationMessageStore:
                     recipient_unobserved_backlog=backlog,
                     recipient_oldest_unobserved_seconds=age,
                     recipient_may_be_unreachable=_looks_unreachable(backlog, age),
+                    local_host_delivery_capability=inspect_host_delivery_capability(
+                        existing.recipient_session_id
+                    ),
                 )
         recipient_session_id = self.resolve_recipient(request.recipient)
         created_at = now or _utc_now()
@@ -1055,6 +1217,7 @@ class CoordinationMessageStore:
             recipient_unobserved_backlog=backlog,
             recipient_oldest_unobserved_seconds=age,
             recipient_may_be_unreachable=_looks_unreachable(backlog, age),
+            local_host_delivery_capability=inspect_host_delivery_capability(recipient_session_id),
         )
 
     def _append_observation(self, message: CoordinationMessage, *, now: datetime) -> tuple[MessageReceipt, Path]:
@@ -1494,6 +1657,14 @@ def main(argv: list[str] | None = None) -> int:
             "A session running without the mailbox hook loaded accumulates exactly this backlog while "
             "every send still reports success. Check "
             "scripts/verify_mailbox_hook_activation.py before waiting on a reply.",
+            file=sys.stderr,
+        )
+    if (
+        isinstance(result, PersistedMessageResult)
+        and result.local_host_delivery_capability.delivery_mode != "enforced"
+    ):
+        print(
+            f"WARNING: {result.local_host_delivery_capability.operator_message}",
             file=sys.stderr,
         )
     print(result.model_dump_json(indent=2))

@@ -12,11 +12,12 @@ import shlex
 import subprocess
 import sys
 import time
+from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Iterator, Literal
+from typing import Any, Literal
 
 try:
     from hook_receipts import DEFAULT_RECEIPT_ROOT, HookInvocation, start_hook_invocation
@@ -57,6 +58,7 @@ _bootstrap_package()
 from enforced_planning import (
     coordination_claims,
     coordination_messages,
+    mailbox_execution_identity,
     prewrite_claim_fast,
     prewrite_claim_projection,
 )
@@ -96,7 +98,7 @@ def _read_hook_input(*, project_supplied: bool) -> dict[str, Any]:
 
     payload = json.loads(sys.stdin.read())
     if not isinstance(payload, dict):
-        raise ValueError("Lifecycle hook input must be a JSON object")
+        raise TypeError("Lifecycle hook input must be a JSON object")
     required_fields = ("session_id", "hook_event_name") if project_supplied else ("session_id", "cwd", "hook_event_name")
     for field in required_fields:
         if not isinstance(payload.get(field), str) or not payload[field].strip():
@@ -594,9 +596,8 @@ def _record_touched_repositories(
     touched = set(prior_touched)
     candidates: set[Path] = set()
     cwd = payload.get("cwd")
-    if isinstance(cwd, str) and cwd.strip():
-        if _canonical_repository_root(cwd) is not None:
-            candidates.add(_repository_scan_root(cwd))
+    if isinstance(cwd, str) and cwd.strip() and _canonical_repository_root(cwd) is not None:
+        candidates.add(_repository_scan_root(cwd))
     for claim in active_claims:
         if claim.agent == agent and claim.session_id == session_id and claim.worktree_path:
             candidates.add(Path(claim.worktree_path).expanduser().resolve())
@@ -878,6 +879,13 @@ def main(argv: list[str] | None = None) -> int:
         telemetry_reason = "no_active_boundary"
         session_id = _session_id(args.agent, payload["session_id"])
         event_name = payload["hook_event_name"]
+        execution_decision = mailbox_execution_identity.classify_hook_execution(
+            payload,
+            client=args.agent,
+        )
+        primary_execution = execution_decision.role == "primary"
+        if not primary_execution:
+            telemetry_reason = "secondary_execution_callback"
         projection_warning: str | None = None
         if event_name == "SessionStart":
             # Startup and the latency-sensitive pre-tool boundary are advisory.
@@ -898,16 +906,20 @@ def main(argv: list[str] | None = None) -> int:
             (args.claims_dir or coordination_claims.CLAIMS_DIR).expanduser().resolve().parent
             / "repository-closeout-ledgers"
         )
-        if payload["hook_event_name"] == "SessionStart" or (
+        if primary_execution and (payload["hook_event_name"] == "SessionStart" or (
             payload["hook_event_name"] == "PreToolUse" and _is_mutation_boundary(payload)
-        ):
+        )):
             _write_closeout_baseline(
                 payload=payload,
                 agent=args.agent,
                 session_id=session_id,
                 ledger_dir=closeout_ledger_dir,
             )
-        if payload["hook_event_name"] == "PreToolUse" and _is_mutation_boundary(payload):
+        if (
+            primary_execution
+            and payload["hook_event_name"] == "PreToolUse"
+            and _is_mutation_boundary(payload)
+        ):
             _record_touched_repositories(
                 payload=payload,
                 agent=args.agent,
@@ -930,7 +942,7 @@ def main(argv: list[str] | None = None) -> int:
         # PreToolUse is a latency-sensitive decision boundary. Heartbeat writes
         # take the registry lock and refresh the full projection; lifecycle
         # events keep leases fresh without putting that work before every tool.
-        heartbeat_projects = () if payload["hook_event_name"] in {"SessionStart", "PreToolUse", "Stop"} else (
+        heartbeat_projects = () if not primary_execution or payload["hook_event_name"] in {"SessionStart", "PreToolUse", "Stop"} else (
             (project,)
             if project is not None
             else _claimed_projects(
@@ -947,22 +959,35 @@ def main(argv: list[str] | None = None) -> int:
                 claims_dir=args.claims_dir,
                 require_exact_session=True,
             )
-        notice = coordination_messages.poll_session_inbox(
-            agent=args.agent,
-            project=project,
-            session_id=session_id,
-            observe=True,
-            claims_dir=args.claims_dir,
-            root=args.root,
-            # Gate events must re-read canonical active state on every callback.
-            # Native display suppression is appropriate only for advisory events.
-            delivery_event_id=(
-                None if payload["hook_event_name"] in {"PreToolUse", "Stop"} else delivery_event_id
-            ),
-            require_live_claim=False,
-        )
+        if primary_execution:
+            notice = coordination_messages.poll_session_inbox(
+                agent=args.agent,
+                project=project,
+                session_id=session_id,
+                # PostToolUse output is advisory hook emission, not evidence
+                # that the model-visible primary execution observed it.
+                observe=payload["hook_event_name"] != "PostToolUse",
+                claims_dir=args.claims_dir,
+                root=args.root,
+                # Gate events must re-read canonical active state on every callback.
+                # Native display suppression is appropriate only for advisory events.
+                delivery_event_id=(
+                    None if payload["hook_event_name"] in {"PreToolUse", "Stop"} else delivery_event_id
+                ),
+                require_live_claim=False,
+            )
+        else:
+            # A same-session secondary execution must not inspect, observe, or
+            # block the primary execution's inbox.
+            notice = coordination_messages.SessionInboxNotice(
+                session_id=session_id,
+                project=project,
+                active_count=0,
+                message_ids=(),
+                summary="",
+            )
         closeout_failure = None
-        if payload["hook_event_name"] == "Stop":
+        if primary_execution and payload["hook_event_name"] == "Stop":
             closeout_failure = _repository_closeout_failure(
                 agent=args.agent,
                 session_id=session_id,

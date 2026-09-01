@@ -180,6 +180,36 @@ def test_projection_contains_no_native_write_content(tmp_path: Path) -> None:
     assert "patch" not in rendered
 
 
+def test_bootstrap_uses_v1_static_issue_without_projection_shape_drift(tmp_path: Path) -> None:
+    """New bootstrap denial remains consumable by the exact legacy v1 wire reader."""
+
+    _repo, worktree, claims_dir, claim_path = _fixture(tmp_path)
+    claim = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    claim.update(
+        schema_version=6,
+        write_paths=["."],
+        broad_scope_mode="bootstrap",
+        broad_scope_reason="create and narrow the maintenance lane",
+        target_worktree_path=str(worktree),
+        worktree_path=f"{worktree}.bootstrap-no-mutation-authority",
+    )
+    claim_path.write_text(yaml.safe_dump(claim, sort_keys=False), encoding="utf-8")
+    projection_path = tmp_path / "projection.json"
+
+    write_projection(claims_dir=claims_dir, projection_path=projection_path)
+    payload = json.loads(projection_path.read_text(encoding="utf-8"))
+    projected = payload["claims"][0]
+    decision = _evaluate(tmp_path, worktree, claims_dir, projection_path)
+
+    assert payload["schema_version"] == "1.0"
+    assert set(payload) == prewrite_claim_fast.PROJECTION_FIELDS
+    assert set(projected) == prewrite_claim_fast.CLAIM_FIELDS
+    assert projected["worktree_path"].endswith(".bootstrap-no-mutation-authority")
+    assert projected["static_issues"] == ["bootstrap_broad_claim_requires_narrowing"]
+    assert decision["decision"] == "deny"
+    assert decision["reason_code"] == "no_exact_claim"
+
+
 def test_duplicate_exact_projection_denies_as_ambiguous(tmp_path: Path) -> None:
     _repo, worktree, claims_dir, claim_path = _fixture(tmp_path)
     duplicate = yaml.safe_load(claim_path.read_text(encoding="utf-8"))

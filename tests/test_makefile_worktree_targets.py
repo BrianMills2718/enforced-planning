@@ -67,6 +67,9 @@ def test_maintenance_worktree_claim_declares_unplanned_ownership() -> None:
     assert "--plan UNPLANNED" in invocation
     assert "#" not in invocation.split("--plan")[1]
     assert '--write-path "."' in invocation
+    assert '--broad-scope-mode "bootstrap"' in invocation
+    assert '--broad-scope-reason "construct this maintenance lane, then narrow before its first repository write"' in invocation
+    assert '--target-worktree-path "' in invocation
     # _dry_run_make supplies SESSION_WRITE_PATHS=README.md for ordinary lanes;
     # maintenance must not let that hidden caller value choose bootstrap scope.
     assert "README.md" not in invocation
@@ -263,6 +266,39 @@ def test_consumer_template_session_start_keeps_plan_binding_conditional() -> Non
 
     assert '$(if $(PLAN),--plan "$(PLAN_PROJECT)#$(PLAN)",)' in recipe
     assert "--plan UNPLANNED" not in recipe
+
+
+def test_session_narrow_make_target_forwards_only_exact_owner_and_paths() -> None:
+    """The sanctioned Make recovery target maps its four inputs to one narrow CLI call."""
+
+    output = _dry_run_make(
+        "session-narrow",
+        "BRANCH=host-gate-lane",
+        "WORKTREE_AGENT=codex",
+        "WORKTREE_PROJECT=enforced-planning",
+        "SESSION_WRITE_PATHS=src/allowed.py docs/ops/INDEX.md",
+    )
+
+    assert 'scripts/session_narrow.py"' in output
+    assert '--agent "codex"' in output
+    assert '--project "enforced-planning"' in output
+    assert '--scope "host-gate-lane"' in output
+    assert '--write-path "src/allowed.py" --write-path "docs/ops/INDEX.md"' in output
+
+
+def test_consumer_template_exposes_session_narrow_and_bootstrap_metadata() -> None:
+    """Fleet Makefiles must retain the recovery target and authority-disabled bootstrap shape."""
+
+    narrow = _template_recipe("session-narrow")
+    maintenance = _template_recipe("maintenance-worktree")
+
+    assert '"$(WORKTREE_SESSION_NARROW_SCRIPT)"' in narrow
+    assert '--agent "$(WORKTREE_AGENT)"' in narrow
+    assert '--project "$(WORKTREE_PROJECT)"' in narrow
+    assert '--scope "$(BRANCH)"' in narrow
+    assert '$(foreach path,$(SESSION_WRITE_PATHS),--write-path "$(path)")' in narrow
+    assert "SESSION_BROAD_SCOPE_MODE=bootstrap" in maintenance
+    assert 'SESSION_TARGET_WORKTREE_PATH="$(WORKTREE_DIR)/$(BRANCH)"' in maintenance
 
 
 def test_unplanned_session_start_without_permission_names_its_recovery() -> None:

@@ -936,13 +936,14 @@ def _rollback_created_worktree(
             and head_paths.returncode == 0
             and sorted(status_entries) == sorted(b"D  " + path for path in tracked_paths)
         )
+        pristine_checkout = status.returncode == 0 and not status_entries
         if (
             not branch_created
             or not branch_unchanged
             or not target_branch_matches
             or worktree_head.returncode != 0
             or worktree_head.stdout.strip() != expected_head
-            or not pristine_no_checkout
+            or not (pristine_no_checkout or pristine_checkout)
         ):
             errors.append("worktree identity changed; refusing unsafe cleanup")
             safe_to_delete_branch = False
@@ -1014,11 +1015,14 @@ def _preserve_partial_session_claim_as_blocked(
     if len(candidates) != 1:
         return True
     claim = candidates[0]
+    expected_target = str(worktree)
+    if (claim.target_worktree_path or claim.worktree_path) != expected_target:
+        return True
     expected = {
         "agent": agent,
         "session_id": session_id,
         "branch": branch,
-        "worktree_path": str(worktree),
+        "worktree_path": claim.worktree_path,
     }
     if any(getattr(claim, key) != value for key, value in expected.items()):
         return True
@@ -1194,6 +1198,8 @@ def _execute_local_repository_worktree(
             read_paths=[],
             tracker_dir=SESSION_TRACKERS_DIR,
             allow_unplanned=True,
+            broad_scope_mode="bounded",
+            broad_scope_reason="initialize the intentionally new local repository within this lane lease",
         )
         populated = subprocess.run(
             ["git", "-c", "core.hooksPath=/dev/null", "-C", str(worktree),
@@ -1352,49 +1358,7 @@ def _execute_maintenance_worktree(
     if not worktree.resolve().is_relative_to(base.resolve()):
         raise ClaimBootstrapError("maintenance worktree path escapes the governed repository")
 
-    created_branch = subprocess.run(
-        [
-            "git",
-            "-c",
-            "core.hooksPath=/dev/null",
-            "-C",
-            str(repo),
-            "update-ref",
-            f"refs/heads/{request.branch}",
-            starting_head,
-            "0" * len(starting_head),
-        ],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if created_branch.returncode != 0:
-        for candidate in reversed(created_dirs):
-            try:
-                candidate.rmdir()
-            except OSError:
-                pass
-        raise ClaimBootstrapError(created_branch.stderr.strip() or "atomic maintenance branch creation failed")
-    created = subprocess.run(
-        [
-            "git", "-c", "core.hooksPath=/dev/null", "-C", str(repo),
-            "worktree", "add", "--no-checkout", str(worktree), request.branch,
-        ],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if created.returncode != 0:
-        cleanup_errors = _rollback_created_worktree(
-            repo=repo,
-            worktree=worktree,
-            branch=request.branch,
-            expected_head=starting_head,
-            branch_created=True,
-            created_dirs=created_dirs,
-        )
-        detail = f"; {'; '.join(cleanup_errors)}" if cleanup_errors else ""
-        raise ClaimBootstrapError((created.stderr.strip() or "git worktree creation failed") + detail)
+    bootstrap_broad = request.write_paths == ["."]
     try:
         payload = session_lifecycle.start_session(
             agent=agent,
@@ -1405,7 +1369,7 @@ def _execute_maintenance_worktree(
             worktree_path=str(worktree),
             branch=request.branch,
             broader_goal=goal,
-            current_phase="maintenance",
+            current_phase="maintenance-bootstrap",
             plan_ref=None,
             session_id=session_id,
             session_name=session_name,
@@ -1414,7 +1378,117 @@ def _execute_maintenance_worktree(
             read_paths=[],
             tracker_dir=SESSION_TRACKERS_DIR,
             allow_unplanned=True,
+            broad_scope_mode="bootstrap" if bootstrap_broad else None,
+            broad_scope_reason=(
+                "construct this maintenance lane, then narrow before its first repository write"
+                if bootstrap_broad
+                else None
+            ),
+            target_worktree_path=str(worktree) if bootstrap_broad else None,
         )
+    except Exception as exc:
+        cleanup_errors: list[str] = []
+        claim_verified = False
+        candidates = [
+            claim
+            for claim in coordination_claims.check_claims(request.project)
+            if claim.scope == request.scope
+        ]
+        if candidates:
+            if len(candidates) != 1:
+                cleanup_errors.append("claim cleanup found ambiguous exact scope")
+            else:
+                claim = candidates[0]
+                effective_target = claim.target_worktree_path or claim.worktree_path
+                if (
+                    claim.agent != agent
+                    or claim.session_id != session_id
+                    or claim.branch != request.branch
+                    or effective_target != str(worktree)
+                ):
+                    cleanup_errors.append("claim identity changed; refusing unsafe cleanup")
+                else:
+                    claim_verified = True
+        tracker_verified = False
+        if not cleanup_errors and tracker_path.is_file():
+            try:
+                with session_contracts.session_tracker_lock(tracker_path):
+                    tracker = session_contracts.read_session_tracker(tracker_path)
+                    tracker_claim = tracker.get("claim")
+                    expected_identity = {
+                        "agent": agent,
+                        "project": request.project,
+                        "scope": request.scope,
+                        "session_id": session_id,
+                        "branch": request.branch,
+                        "worktree_path": str(worktree),
+                    }
+                    if not isinstance(tracker_claim, dict) or any(
+                        tracker_claim.get(key) != value for key, value in expected_identity.items()
+                    ):
+                        raise ValueError("tracker identity changed; refusing unsafe cleanup")
+                    tracker_verified = True
+            except Exception as cleanup_exc:  # noqa: BLE001
+                cleanup_errors.append(f"tracker verification failed: {cleanup_exc}")
+        if not cleanup_errors:
+            try:
+                if claim_verified:
+                    released, message = coordination_claims.release_claim(
+                        agent,
+                        request.project,
+                        request.scope,
+                        expected_session_id=session_id,
+                        allow_managed_lane_rollback=True,
+                    )
+                    if not released:
+                        raise ValueError(message)
+                if tracker_verified:
+                    with session_contracts.session_tracker_lock(tracker_path):
+                        tracker_path.unlink(missing_ok=True)
+            except Exception as cleanup_exc:  # noqa: BLE001
+                cleanup_errors.append(f"claim/tracker cleanup failed: {cleanup_exc}")
+        for candidate in reversed(created_dirs):
+            try:
+                candidate.rmdir()
+            except OSError:
+                pass
+        detail = f"; {'; '.join(cleanup_errors)}" if cleanup_errors else ""
+        raise ClaimBootstrapError(
+            f"maintenance claim bootstrap failed before Git artifacts: {exc}{detail}"
+        ) from exc
+
+    branch_created = False
+    try:
+        created_branch = subprocess.run(
+            [
+                "git",
+                "-c",
+                "core.hooksPath=/dev/null",
+                "-C",
+                str(repo),
+                "update-ref",
+                f"refs/heads/{request.branch}",
+                starting_head,
+                "0" * len(starting_head),
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if created_branch.returncode != 0:
+            raise ClaimBootstrapError(created_branch.stderr.strip() or "atomic maintenance branch creation failed")
+        branch_created = True
+        created = subprocess.run(
+            [
+                "git", "-c", "core.hooksPath=/dev/null", "-C", str(repo),
+                "worktree", "add", "--no-checkout", str(worktree), request.branch,
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if created.returncode != 0:
+            raise ClaimBootstrapError(created.stderr.strip() or "git worktree creation failed")
         populated = subprocess.run(
             [
                 "git", "-c", "core.hooksPath=/dev/null", "-C", str(worktree),
@@ -1434,6 +1508,7 @@ def _execute_maintenance_worktree(
             "github_repo": authority.repository_identity,
             "default_branch": authority.default_branch,
             "start_revision": starting_head,
+            "bootstrap_requires_narrowing": bootstrap_broad,
             "authority_scope": {
                 "operation": "maintenance_worktree",
                 "repo_root": str(repo),
@@ -1441,36 +1516,15 @@ def _execute_maintenance_worktree(
             },
         }
     except Exception as exc:
-        cleanup_errors: list[str] = []
-        try:
-            preserved_claim = _preserve_partial_session_claim_as_blocked(
-                agent=agent,
-                project=request.project,
-                scope=request.scope,
-                session_id=session_id,
-                branch=request.branch,
-                worktree=worktree,
-                failure=exc,
-            )
-        except Exception as cleanup_exc:  # noqa: BLE001 - preserve ambiguous residue
-            preserved_claim = True
-            cleanup_errors.append(f"claim preservation failed: {cleanup_exc}")
-        if preserved_claim:
-            detail = f"; {'; '.join(cleanup_errors)}" if cleanup_errors else ""
-            raise ClaimBootstrapError(
-                "maintenance session creation failed after claim persistence; "
-                f"lane preserved for inspection: {exc}{detail}"
-            ) from exc
-        try:
-            coordination_claims.release_claim(
-                agent,
-                request.project,
-                request.scope,
-                expected_session_id=session_id,
-                allow_managed_lane_rollback=True,
-            )
-        except Exception as cleanup_exc:  # noqa: BLE001 - retain recoverable residue details
-            cleanup_errors.append(f"claim cleanup failed: {cleanup_exc}")
+        cleanup_errors = _rollback_created_worktree(
+            repo=repo,
+            worktree=worktree,
+            branch=request.branch,
+            expected_head=starting_head,
+            branch_created=branch_created,
+            created_dirs=created_dirs,
+        )
+        tracker_verified = False
         try:
             with session_contracts.session_tracker_lock(tracker_path):
                 if tracker_path.is_file():
@@ -1488,21 +1542,41 @@ def _execute_maintenance_worktree(
                         tracker_claim.get(key) != value for key, value in expected_identity.items()
                     ):
                         raise ValueError("tracker identity changed; refusing unsafe cleanup")
-                    tracker_path.unlink()
+                    tracker_verified = True
         except Exception as cleanup_exc:  # noqa: BLE001 - retain recoverable residue details
-            cleanup_errors.append(f"tracker cleanup failed: {cleanup_exc}")
-        cleanup_errors.extend(
-            _rollback_created_worktree(
-                repo=repo,
-                worktree=worktree,
-                branch=request.branch,
-                expected_head=starting_head,
-                branch_created=True,
-                created_dirs=created_dirs,
-            )
-        )
+            cleanup_errors.append(f"tracker verification failed: {cleanup_exc}")
+        if not cleanup_errors:
+            try:
+                released, message = coordination_claims.release_claim(
+                    agent,
+                    request.project,
+                    request.scope,
+                    expected_session_id=session_id,
+                    allow_managed_lane_rollback=True,
+                )
+                if not released:
+                    raise ValueError(message)
+                if tracker_verified:
+                    with session_contracts.session_tracker_lock(tracker_path):
+                        tracker_path.unlink(missing_ok=True)
+            except Exception as cleanup_exc:  # noqa: BLE001 - retain recoverable residue details
+                cleanup_errors.append(f"claim/tracker cleanup failed: {cleanup_exc}")
+        if cleanup_errors:
+            try:
+                _preserve_partial_session_claim_as_blocked(
+                    agent=agent,
+                    project=request.project,
+                    scope=request.scope,
+                    session_id=session_id,
+                    branch=request.branch,
+                    worktree=worktree,
+                    failure=exc,
+                )
+            except Exception as cleanup_exc:  # noqa: BLE001 - preserve ambiguous residue
+                cleanup_errors.append(f"claim preservation failed: {cleanup_exc}")
         detail = f"; {'; '.join(cleanup_errors)}" if cleanup_errors else ""
-        raise ClaimBootstrapError(f"maintenance session creation failed: {exc}{detail}") from exc
+        disposition = "; lane preserved for inspection" if cleanup_errors else "; transaction rolled back"
+        raise ClaimBootstrapError(f"maintenance session creation failed: {exc}{disposition}{detail}") from exc
 
 
 __all__ = [

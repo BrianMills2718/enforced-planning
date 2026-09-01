@@ -670,6 +670,60 @@ def test_create_worktree_allows_matching_scoped_write_claim(tmp_path: Path) -> N
     assert delete_branch.returncode == 0, delete_branch.stdout + delete_branch.stderr
 
 
+def test_bootstrap_claim_validates_exact_target_without_granting_worktree_authority(
+    tmp_path: Path,
+) -> None:
+    """Construction matches target_worktree_path while legacy mutation binding stays detached."""
+
+    module = _load_module()
+    repo_root = tmp_path / "repo"
+    worktree_path = tmp_path / "repo_worktrees" / "bootstrap-lane"
+    claims_dir = tmp_path / "claims"
+    _init_temp_repo(repo_root)
+    sentinel = f"{worktree_path}.bootstrap-no-mutation-authority"
+    _write_claim(
+        claims_dir,
+        "codex.yaml",
+        {
+            "schema_version": 6,
+            "agent": "codex",
+            "claimed_at": "2026-04-02T08:00:00+00:00",
+            "expires_at": "2099-04-02T09:00:00+00:00",
+            "projects": ["repo"],
+            "scope": "bootstrap-lane",
+            "intent": "construct then narrow",
+            "claim_type": "program",
+            "write_paths": ["."],
+            "branch": "bootstrap-lane",
+            "repo_root": str(repo_root),
+            "worktree_path": sentinel,
+            "target_worktree_path": str(worktree_path),
+            "broad_scope_mode": "bootstrap",
+            "broad_scope_reason": "construct then narrow before the first write",
+            "session_id": "codex:owner",
+            "session_name": "bootstrap-lane",
+            "broader_goal": "Prove separated bootstrap authority",
+            "tracker_path": str(tmp_path / "tracker.yaml"),
+            "plan_ref": "UNPLANNED",
+            "status": "active",
+        },
+    )
+
+    ok, message = module.verify_scoped_write_claim(
+        repo_root=repo_root,
+        worktree_path=worktree_path,
+        branch="bootstrap-lane",
+        claim_agent="codex",
+        claim_project="repo",
+        claim_write_paths=["docs/file.md"],
+        claims_dir=claims_dir,
+    )
+
+    assert ok, message
+    assert not Path(sentinel).exists()
+    assert not worktree_path.exists()
+
+
 def test_create_worktree_allows_program_claim_with_exact_write_paths(tmp_path: Path) -> None:
     """A program claim with explicit paths should carry the same write authority."""
     module = _load_module()

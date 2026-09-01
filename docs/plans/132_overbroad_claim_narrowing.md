@@ -1,6 +1,6 @@
 # Plan #132: Overbroad Claim Narrowing and False-Serialization Repair
 
-**Status:** Planned — implementation-readiness audit incorporated
+**Status:** Complete
 **Type:** implementation
 **Priority:** Critical
 **phase_ref:** "Phase 9: Fleet Adoption and Framework Maintenance"
@@ -67,9 +67,10 @@ the projection is current. Lane B is admitted. Replacing Lane A's paths with
 any path outside `docs`, or invoking the operation from another session, fails
 without changing the claim or projection.
 
-**Behavioral evidence:** Unobserved; Plan 132 implementation must retain a
-temporary-registry transcript of the deny -> narrow -> admit sequence and one
-installed-consumer replay.
+**Behavioral evidence:** Observed in
+`docs/evidence/plan132_claim_narrowing.json`: the generated consumer denied the
+pre-narrow write, narrowed `.` to `CLAUDE.md`, admitted the unchanged write,
+and closed the clean lane through installed entrypoints.
 
 **Substrate/process evidence:** Both-sign claim tests, projection digest checks,
 mutation-receipt checks, source/generated parity, and framework self-test.
@@ -281,9 +282,12 @@ existing registry lock and:
    authority-disabled `worktree_path` with `target_worktree_path`;
 7. replaces claim YAML and refreshes the digest-bound projection as one
    rollback-capable locked transition;
-8. appends one `operation: narrow` mutation receipt for the committed
-   transition; a receipt failure reports post-commit audit failure rather than
-   pretending the claim mutation did not occur;
+8. appends one `operation: narrow` receipt to the version-isolated
+   `claim-narrow-events-v1.jsonl` ledger for the committed transition; the
+   existing shared claim-mutation v1 ledger and its closed operation enum stay
+   byte-contract compatible with older readers. A narrow-receipt failure
+   reports post-commit audit failure rather than pretending the claim mutation
+   did not occur;
 9. returns old/new paths, cleared/retained broad mode, projection digest, and
    mailbox observation summary.
 
@@ -313,6 +317,10 @@ request rather than adding another message store.
 ### Compatibility and rollback
 
 - Schema v1-v5 claims load unchanged; no eager registry rewrite or migration.
+- Every schema-version gate in the existing outcome-admission/session-activation
+  path accepts v6 with the same authority semantics as v5; unsupported future
+  versions still fail closed. A v6 claim must never become unusable merely
+  because it is waiting for its tracker attachment.
 - Narrow new claims serialize as v6 without broad fields.
 - Projection schema 1.0 and its exact claim field set remain unchanged;
   bootstrap denial uses the existing `static_issues` list. Older fast readers
@@ -322,6 +330,8 @@ request rather than adding another message store.
   ordinary worktree authority merely by ignoring unknown fields.
 - Source implementation and disposable installed consumer land before any real
   Project Meta installation.
+- Narrow receipts never enter the older shared mutation ledger, so installing
+  a pre-v6 reader cannot make historical shared receipts unreadable.
 - Downgrade/reinstall to a pre-v6 runtime fails while any live v6 broad claim
   exists. After narrowing or closing those claims, rollback is the source
   commit revert plus reinstall of the prior accepted version; v6 narrow claims
@@ -339,11 +349,11 @@ request rather than adding another message store.
 
 ### Capability Validation
 
-- [ ] Claim schema v6 round-trips through source and installed readers.
-- [ ] New broad claims require typed mode/reason while legacy claims remain readable.
-- [ ] Narrowing enforces owner, exact session, subset, strict reduction, and no-change-on-denial.
-- [ ] Projection and mutation receipts bind the same post-narrow registry digest.
-- [ ] An installed consumer uses the canonical source seam; no parallel claim model appears.
+- [x] Claim schema v6 round-trips through source and installed readers.
+- [x] New broad claims require typed mode/reason while legacy claims remain readable.
+- [x] Narrowing enforces owner, exact session, subset, strict reduction, and no-change-on-denial.
+- [x] Projection and mutation receipts bind the same post-narrow registry digest.
+- [x] An installed consumer uses the canonical source seam; no parallel claim model appears.
 
 ## Capability Adoption
 
@@ -503,6 +513,7 @@ consumer; schema and command substrate alone are not completion.
 | `tests/test_prewrite_claim_projection.py` | `test_bootstrap_uses_v1_static_issue_without_projection_shape_drift` | old-reader/new-projection compatibility |
 | `tests/test_session_target.py` | `test_bootstrap_target_resolves_for_context_without_mutation_authority` | navigation target remains distinct from mutation binding |
 | `tests/test_session_cli.py` | `test_session_narrow_json_deny_narrow_admit_journey` | public operator journey and failure output |
+| `tests/test_outcome_admission.py` | `test_selection_pending_accepts_schema_v6_without_weakening_binding_guards` | the new claim schema remains activatable while later unknown versions fail closed |
 | `tests/test_session_lifecycle.py` | `test_heartbeat_observes_narrowing_request_without_extending_expiry` | existing mailbox and lease semantics are reused |
 | `tests/test_claim_bootstrap.py` | `test_workspace_bootstrap_creates_authority_disabled_target_then_requires_narrow` | canonical JSON bootstrap has no residue on failure and no pre-narrow write authority |
 | `tests/test_host_prewrite_claim_gate.py` | `test_native_session_narrow_command_is_exactly_parsed_and_self_recovery_admissible` | only the native bounded recovery grammar bypasses ordinary write admission |
@@ -525,22 +536,22 @@ consumer; schema and command substrate alone are not completion.
 
 ## Acceptance Criteria
 
-- [ ] The canonical `docs` -> exact paths narrowing example produces deny ->
+- [x] The canonical `docs` -> exact paths narrowing example produces deny ->
   atomic narrow -> admit with no interval of duplicate ownership.
-- [ ] New broad claims require mode/reason; `bootstrap` cannot authorize an
+- [x] New broad claims require mode/reason; `bootstrap` cannot authorize an
   ordinary repository write and `bounded` remains limited by existing expiry.
-- [ ] Narrowing is owner/session bound, strictly subset-only, fail-atomic, and
+- [x] Narrowing is owner/session bound, strictly subset-only, fail-atomic, and
   commits claim plus projection with rollback; its post-commit receipt
   truthfully reports the applied state even if audit persistence fails.
-- [ ] Bootstrap instruction/read context resolves the exact target worktree
+- [x] Bootstrap instruction/read context resolves the exact target worktree
   while both old and new pre-write readers lack mutation authority until
   successful narrowing.
-- [ ] Parent/child overlap remains a hard conflict; advisory Git-diff evidence
+- [x] Parent/child overlap remains a hard conflict; advisory Git-diff evidence
   never changes admission.
-- [ ] Existing schema v1-v5 claims remain readable and honestly diagnostic.
-- [ ] The source and installed command/Make/runtime surfaces are byte-lineage
+- [x] Existing schema v1-v5 claims remain readable and honestly diagnostic.
+- [x] The source and installed command/Make/runtime surfaces are byte-lineage
   consistent and a disposable installed consumer passes the canonical journey.
-- [ ] Project Meta and fleet rollout remain excluded until their explicit
+- [x] Project Meta and fleet rollout remain excluded until their explicit
   source-revision and target-graph gates are satisfied.
 
 ---

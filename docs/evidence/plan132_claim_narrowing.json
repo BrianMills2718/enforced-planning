@@ -1,0 +1,105 @@
+{
+  "schema_version": "1.0.0",
+  "record_type": "framework_defect_repair_evidence",
+  "plan_ref": "enforced-planning#132",
+  "observed_at": "2026-09-01T04:47:00Z",
+  "disposition": "source_acceptance_passed",
+  "source_lane": "plan132-overbroad-claim-narrowing-v2",
+  "implementation_revision": "b598dda",
+  "canonical_journey": {
+    "starting_state": "A generated governed consumer opened a maintenance worktree with a schema-v6 bootstrap claim for '.'.",
+    "pre_narrow_probe": {
+      "operation": "apply_patch against the installed worktree CLAUDE.md",
+      "decision": "deny",
+      "reason_code": "no_exact_claim"
+    },
+    "narrow": {
+      "entrypoint": "installed scripts/meta/session_narrow.py",
+      "old_write_paths": ["."],
+      "new_write_paths": ["CLAUDE.md"],
+      "result": "narrowed"
+    },
+    "post_narrow_probe": {
+      "operation": "the unchanged apply_patch request",
+      "decision": "allow",
+      "reason_code": "exact_live_claim"
+    },
+    "closeout": {
+      "entrypoint": "installed scripts/meta/session_close.py",
+      "disposition": "merged",
+      "claim_released": true
+    },
+    "test": "tests/test_install_governed_repo.py::test_installed_maintenance_bootstrap_denies_then_narrows_and_closes",
+    "result": "1 passed"
+  },
+  "claim_contract": {
+    "schema_version": 6,
+    "broad_modes": ["bootstrap", "bounded"],
+    "target_and_mutation_authority_separated": true,
+    "owner_session_bound": true,
+    "strict_subset_only": true,
+    "claim_projection_fail_atomic": true,
+    "post_commit_receipt_truthful": true,
+    "maintenance_authority": "UNPLANNED"
+  },
+  "read_only_classifier": {
+    "admitted": ["jq pipelines", "date observations", "git ls-remote", "bounded gh reads", "gh api GET"],
+    "negative_controls": [
+      "date --set and GNU long-option abbreviations",
+      "git ls-remote upload-pack overrides",
+      "gh write subcommands",
+      "gh api POST and attached -X/-f/-F values",
+      "arbitrary python --help"
+    ],
+    "focused_result": "16 passed"
+  },
+  "exact_prune_filtering": {
+    "selectors": ["agent", "project", "scope"],
+    "result": "exact invocation cannot prune unrelated completed claims"
+  },
+  "dirty_state_gate": {
+    "repair_pull_request": "https://github.com/BrianMills2718/enforced-planning/pull/290",
+    "merge_revision": "446415dc2c529af412ce12665cb8061afb1424cc",
+    "fixture_boundary": "real linked worktrees",
+    "focused_result": "3 passed"
+  },
+  "supporting_recovery_lanes": [
+    {
+      "scope": "plan132-explicit-plan-fixtures",
+      "disposition": "superseded",
+      "recovery_ref": "refs/heads/plan132-overbroad-claim-narrowing-v2",
+      "archive_id": "96f76d522336eeb4df599319780068077c5a442eb9cde836be72d0d728dc4b51"
+    },
+    {
+      "scope": "plan132-portability-self-sentinel",
+      "disposition": "superseded",
+      "recovery_ref": "refs/heads/plan132-overbroad-claim-narrowing-v2",
+      "archive_id": "112895365b30a26a1cefd17010a71daa2084a6b20f082ab465c368384d32c79e"
+    }
+  ],
+  "verification": {
+    "full_gate": {
+      "command": "env -u CODEX_SESSION_ID -u CODEX_THREAD_ID make test",
+      "revision": "74f3525a32f949aff890c9445fe858ab44dbe28b",
+      "passed": 2064,
+      "failed": 0,
+      "skipped": 1,
+      "warnings": 1
+    },
+    "installed_journey": {
+      "command": "pytest -q tests/test_install_governed_repo.py::test_installed_maintenance_bootstrap_denies_then_narrows_and_closes",
+      "revision": "b598dda",
+      "passed": 1,
+      "failed": 0
+    },
+    "framework_self_test": {
+      "command": "python scripts/self_test.py",
+      "result": "pass"
+    }
+  },
+  "excluded": [
+    "Project Meta installation before source acceptance",
+    "fleet hard-enforcement rollout",
+    "weakening parent-child overlap"
+  ]
+}

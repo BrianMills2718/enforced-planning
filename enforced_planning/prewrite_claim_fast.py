@@ -64,10 +64,12 @@ _SIMPLE_READ_ONLY_COMMANDS = frozenset(
     {
         ":",
         "cd",
+        "date",
         "echo",
         "false",
         "grep",
         "head",
+        "jq",
         "ls",
         "printf",
         "pwd",
@@ -232,6 +234,12 @@ def _git_command_is_read_only(argv: tuple[str, ...]) -> bool:
         return False
     subcommand = argv[index]
     tail = argv[index + 1 :]
+    if subcommand == "ls-remote":
+        return not any(
+            token in {"--upload-pack", "--exec"}
+            or token.startswith(("--upload-pack=", "--exec="))
+            for token in tail
+        )
     if subcommand in _READ_ONLY_GIT_SUBCOMMANDS:
         return not any(
             token in {"--output", "--output-indicator-new", "--output-indicator-old"} or token.startswith("--output=")
@@ -250,6 +258,69 @@ def _git_command_is_read_only(argv: tuple[str, ...]) -> bool:
     if subcommand == "config":
         return bool(tail) and tail[0] in {"--get", "--get-all", "--get-regexp", "--list", "-l"}
     return False
+
+
+def _gh_command_is_read_only(argv: tuple[str, ...]) -> bool:
+    """Admit only bounded GitHub CLI queries with no write-capable flags."""
+
+    if len(argv) < 2:
+        return False
+    group = argv[1]
+    tail = argv[2:]
+    if group in {"status", "search"}:
+        return True
+    if group == "auth":
+        return bool(tail) and tail[0] == "status"
+    allowed = {
+        "issue": {"list", "status", "view"},
+        "pr": {"checks", "diff", "list", "status", "view"},
+        "release": {"list", "view"},
+        "repo": {"list", "view"},
+        "run": {"list", "view"},
+        "workflow": {"list", "view"},
+    }
+    if group in allowed:
+        return bool(tail) and tail[0] in allowed[group]
+    if group != "api":
+        return False
+    unsafe_api_flags = {
+        "-X",
+        "--method",
+        "-f",
+        "--raw-field",
+        "-F",
+        "--field",
+        "--input",
+    }
+    for index, token in enumerate(tail):
+        if token.startswith(("-f", "-F")) and token not in {"-f", "-F"}:
+            return False
+        if token.startswith("-X") and token != "-X":
+            if token[2:].upper() == "GET":
+                continue
+            return False
+        option = token.split("=", 1)[0]
+        if option in unsafe_api_flags:
+            if option in {"-X", "--method"} and "=" not in token:
+                method = tail[index + 1] if index + 1 < len(tail) else ""
+                if method.upper() == "GET":
+                    continue
+            elif option in {"-X", "--method"} and token.split("=", 1)[1].upper() == "GET":
+                continue
+            return False
+    return bool(tail)
+
+
+def _date_command_is_read_only(argv: tuple[str, ...]) -> bool:
+    """Reject GNU date's clock-setting forms while allowing observation."""
+
+    for token in argv[1:]:
+        option = token.split("=", 1)[0]
+        if option.startswith("--") and option != "--" and "--set".startswith(option):
+            return False
+        if token.startswith("-") and not token.startswith("--") and "s" in token[1:]:
+            return False
+    return True
 
 
 def _sort_command_is_read_only(argv: tuple[str, ...]) -> bool:
@@ -297,6 +368,7 @@ def classify_bash_command(
                 "claim_bootstrap",
                 "native_mailbox",
                 "native_closeout",
+                "native_session_narrow",
                 "read_target_selection",
                 "projection_recovery",
             }:
@@ -405,6 +477,8 @@ def _argv_is_read_only(argv: tuple[str, ...]) -> bool:
         return False
     executable = executable_token
     if executable in _SIMPLE_READ_ONLY_COMMANDS:
+        if executable == "date":
+            return _date_command_is_read_only(argv)
         return not (
             executable == "rg"
             and any(
@@ -446,6 +520,8 @@ def _argv_is_read_only(argv: tuple[str, ...]) -> bool:
         return not any(token in mutating for token in argv[1:])
     if executable == "sort":
         return _sort_command_is_read_only(argv)
+    if executable == "gh":
+        return _gh_command_is_read_only(argv)
     return executable == "git" and _git_command_is_read_only(argv)
 
 
@@ -876,6 +952,7 @@ def evaluate_request_fast(
         "claim_bootstrap",
         "native_mailbox",
         "native_closeout",
+        "native_session_narrow",
         "read_target_selection",
         "projection_recovery",
     }:
@@ -884,6 +961,7 @@ def evaluate_request_fast(
             "claim_bootstrap": "claim_bootstrap_command",
             "native_mailbox": "native_mailbox_command",
             "native_closeout": "native_closeout_command",
+            "native_session_narrow": "native_session_narrow_command",
             "read_target_selection": "read_target_selection_command",
             "projection_recovery": "projection_recovery_command",
         }

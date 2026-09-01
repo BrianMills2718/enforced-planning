@@ -91,6 +91,13 @@
         },
         {
           "kind": "repository_path",
+          "target": "enforced_planning/outcome_admission.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-132-claim-narrowing"
+        },
+        {
+          "kind": "repository_path",
           "target": "enforced_planning/prewrite_claim_projection.py",
           "repository": "enforced-planning",
           "access": "exclusive",
@@ -161,7 +168,7 @@
         },
         {
           "kind": "repository_path",
-          "target": "tests/test_prewrite_claim_fast.py",
+          "target": "tests/test_outcome_admission.py",
           "repository": "enforced-planning",
           "access": "exclusive",
           "coordination_key": "plan-132-claim-narrowing"
@@ -260,6 +267,34 @@
         {
           "kind": "repository_path",
           "target": "scripts/worktree-coordination/create_worktree.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-132-claim-narrowing"
+        },
+        {
+          "kind": "repository_path",
+          "target": "scripts/meta/worktree-coordination/create_worktree.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-132-claim-narrowing"
+        },
+        {
+          "kind": "repository_path",
+          "target": "scripts/meta/session_start.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-132-claim-narrowing"
+        },
+        {
+          "kind": "repository_path",
+          "target": "scripts/meta/session_close.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-132-claim-narrowing"
+        },
+        {
+          "kind": "repository_path",
+          "target": "scripts/meta/session_narrow.py",
           "repository": "enforced-planning",
           "access": "exclusive",
           "coordination_key": "plan-132-claim-narrowing"
@@ -397,10 +432,10 @@
         "max_active_per_claimant": 1,
         "named_owner_id": null
       },
-      "status": "ready",
+      "status": "accepted",
       "record_version": 1,
       "created_at": "2026-09-01T00:44:45Z",
-      "updated_at": "2026-09-01T02:20:00Z"
+      "updated_at": "2026-09-01T04:47:00Z"
     }
   ]
 }

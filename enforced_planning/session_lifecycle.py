@@ -8,6 +8,7 @@ inventing a second coordination registry.
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import re
 import subprocess
@@ -407,6 +408,60 @@ def _atomic_restore_bytes(path: Path, content: bytes) -> None:
             temp_path.unlink()
 
 
+def _persist_claim_session_transfer_receipt(
+    *,
+    claim: coordination_claims.ClaimRecord,
+    project: str,
+    scope: str,
+    worktree_path: str,
+    branch: str,
+    successor_session_id: str,
+    transferred_at: str,
+    prior_claim_bytes: bytes,
+    successor_claim_bytes: bytes,
+) -> dict[str, Any]:
+    """Persist one immutable, digest-bound receipt for cross-session claim custody."""
+
+    prior_session_id = claim.session_id
+    if not prior_session_id or prior_session_id == successor_session_id:
+        raise ValueError("Claim custody transfer requires distinct predecessor and successor sessions")
+    if not claim.repo_root:
+        raise ValueError("Claim custody transfer requires the canonical repository root")
+    payload = {
+        "schema_version": "1.0",
+        "record_type": "claim_session_custody_transfer",
+        "action": "session_resume",
+        "project": project,
+        "scope": scope,
+        "repo_root": str(Path(claim.repo_root).expanduser().resolve()),
+        "worktree_path": str(Path(worktree_path).expanduser().resolve()),
+        "branch": branch,
+        "prior_session_id": prior_session_id,
+        "successor_session_id": successor_session_id,
+        "transferred_at": transferred_at,
+        "prior_claim_sha256": hashlib.sha256(prior_claim_bytes).hexdigest(),
+        "successor_claim_sha256": hashlib.sha256(successor_claim_bytes).hexdigest(),
+    }
+    canonical = (json.dumps(payload, indent=2, sort_keys=True) + "\n").encode("utf-8")
+    receipt_sha256 = hashlib.sha256(canonical).hexdigest()
+    receipt_root = (
+        coordination_claims.CLAIMS_DIR.expanduser().resolve().parent
+        / "session-custody-transfers-v1"
+    )
+    receipt_path = receipt_root / f"{receipt_sha256[:32]}.json"
+    if receipt_path.exists():
+        if receipt_path.read_bytes() != canonical:
+            raise ValueError(f"Claim custody receipt collision at {receipt_path}")
+    else:
+        _atomic_restore_bytes(receipt_path, canonical)
+        os.chmod(receipt_path, 0o600)
+    return {
+        "receipt": payload,
+        "receipt_path": str(receipt_path),
+        "receipt_sha256": receipt_sha256,
+    }
+
+
 def _rollback_outcome_session_transfer(
     *,
     claim: coordination_claims.ClaimRecord,
@@ -506,6 +561,9 @@ def _upsert_session_claim(
     plan_start_point: str | None = None,
     ttl_hours: float = coordination_claims.DEFAULT_TTL_HOURS,
     allow_parallel: bool = False,
+    broad_scope_mode: str | None = None,
+    broad_scope_reason: str | None = None,
+    target_worktree_path: str | None = None,
     staged_reservation: coordination_claims.ClaimRecord | None = None,
 ) -> str:
     """Create or update the compact claim-side session contract metadata."""
@@ -539,6 +597,9 @@ def _upsert_session_claim(
             plan_start_point=plan_start_point,
             ttl_hours=ttl_hours,
             allow_parallel=allow_parallel,
+            broad_scope_mode=broad_scope_mode,
+            broad_scope_reason=broad_scope_reason,
+            target_worktree_path=target_worktree_path,
             require_native_session_binding=True,
         )
         if not ok:
@@ -578,6 +639,11 @@ def _upsert_session_claim(
         effective_work_unit_id = existing.work_unit_id if work_unit_id is None else work_unit_id
         effective_plan_repo_root = existing.plan_repo_root if plan_repo_root is None else plan_repo_root
         effective_plan_start_point = existing.plan_revision if plan_start_point is None else plan_start_point
+        effective_broad_scope_mode = existing.broad_scope_mode if broad_scope_mode is None else broad_scope_mode
+        effective_broad_scope_reason = existing.broad_scope_reason if broad_scope_reason is None else broad_scope_reason
+        effective_target_worktree_path = (
+            existing.target_worktree_path if target_worktree_path is None else target_worktree_path
+        )
         if start_revision is not None and existing.start_revision not in {None, start_revision}:
             raise ValueError(f"Claim at {path} retains start revision {existing.start_revision}, not {start_revision}")
         effective_start_revision = existing.start_revision or start_revision
@@ -656,6 +722,17 @@ def _upsert_session_claim(
             plan_revision=effective_plan_start_point,
             plan_sha256=plan_sha256 if effective_plan_repo_root is not None else None,
             parallel_root_authorized=(allow_parallel or existing.parallel_root_authorized),
+            broad_scope_mode=effective_broad_scope_mode,
+            broad_scope_reason=effective_broad_scope_reason,
+            target_worktree_path=effective_target_worktree_path,
+            # Ordinary refreshes preserve an existing legacy schema until the
+            # caller supplies v6-only metadata.  This keeps a tracker attach or
+            # heartbeat-equivalent upsert from becoming an implicit migration.
+            schema_version=(
+                6
+                if any((effective_broad_scope_mode, effective_broad_scope_reason, effective_target_worktree_path))
+                else existing.schema_version
+            ),
         )
         coordination_claims.validate_claim_hierarchy_for_creation(
             candidate,
@@ -700,7 +777,7 @@ def _upsert_session_claim(
             "intent": intent,
             "plan_ref": plan_ref,
             "repo_root": repo_root,
-            "worktree_path": worktree_path,
+            "worktree_path": candidate.worktree_path,
             "branch": branch,
             "session_id": session_id,
             "session_name": session_name,
@@ -723,6 +800,15 @@ def _upsert_session_claim(
             "parallel_root_authorized": candidate.parallel_root_authorized,
             **progress_payload,
         }
+        for field, value in (
+            ("broad_scope_mode", candidate.broad_scope_mode),
+            ("broad_scope_reason", candidate.broad_scope_reason),
+            ("target_worktree_path", candidate.target_worktree_path),
+        ):
+            if value is None:
+                payload.pop(field, None)
+            else:
+                payload[field] = value
         if effective_start_revision is not None:
             payload["start_revision"] = effective_start_revision
         else:
@@ -1385,6 +1471,9 @@ def start_session(
     tracker_dir: Path = session_contracts.DEFAULT_SESSION_TRACKERS_DIR,
     allow_unplanned: bool = False,
     allow_parallel: bool = False,
+    broad_scope_mode: str | None = None,
+    broad_scope_reason: str | None = None,
+    target_worktree_path: str | None = None,
     outcome_selected: bool = False,
     outcome_bootstrap_plan: int | None = None,
     outcome_admission_receipt_path: Path = (outcome_admission.DEFAULT_OUTCOME_ADMISSION_RECEIPT_PATH),
@@ -1604,6 +1693,9 @@ def start_session(
             plan_repo_root=plan_repo_root,
             plan_start_point=plan_start_point,
             allow_parallel=allow_parallel,
+            broad_scope_mode=broad_scope_mode,
+            broad_scope_reason=broad_scope_reason,
+            target_worktree_path=target_worktree_path,
             staged_reservation=staged_reservation,
         )
     except Exception as claim_error:
@@ -1765,6 +1857,35 @@ def heartbeat_session(
             agent=agent,
             project=project,
             session_id=resolved_session_id,
+        ),
+    }
+
+
+def narrow_session_claim(
+    *,
+    agent: str,
+    project: str,
+    scope: str,
+    write_paths: list[str],
+    session_id: str | None = None,
+) -> dict[str, Any]:
+    """Narrow one live claim without renewing its heartbeat or expiry."""
+
+    result = coordination_claims.narrow_claim(
+        agent=agent,
+        project=project,
+        scope=scope,
+        session_id=session_id,
+        write_paths=write_paths,
+        require_native_session_binding=True,
+    )
+    return {
+        "action": "narrowed",
+        **result.to_dict(),
+        "coordination_mailbox": _poll_mailbox(
+            agent=agent,
+            project=project,
+            session_id=result.session_id,
         ),
     }
 
@@ -2231,13 +2352,13 @@ def resume_session(
     claim_bytes_before: bytes | None = None
     tracker_bytes_before: bytes | None = None
     if not same_runtime:
+        claim_bytes_before = claim_file.read_bytes()
         transfer_preflight = outcome_selection.prepare_outcome_session_transfer(
             claim=claim,
             successor_session_id=resolved_session_id,
             transferred_at=datetime.fromisoformat(updated_at),
         )
         if transfer_preflight is not None:
-            claim_bytes_before = claim_file.read_bytes()
             tracker_bytes_before = transfer_preflight.tracker_path.read_bytes()
 
     expected_fields = (
@@ -2323,6 +2444,30 @@ def resume_session(
             ) from transfer_error
         raise
 
+    claim_session_transfer: dict[str, Any] | None = None
+    if not same_runtime:
+        if claim_bytes_before is None:
+            raise SessionTransferIncompleteError(
+                "claim custody changed without retained predecessor bytes"
+            )
+        try:
+            claim_session_transfer = _persist_claim_session_transfer_receipt(
+                claim=claim,
+                project=project,
+                scope=scope,
+                worktree_path=worktree_path,
+                branch=branch,
+                successor_session_id=resolved_session_id,
+                transferred_at=updated_at,
+                prior_claim_bytes=claim_bytes_before,
+                successor_claim_bytes=claim_file.read_bytes(),
+            )
+        except Exception as receipt_error:
+            raise SessionTransferIncompleteError(
+                "claim custody changed but its immutable transfer receipt could not be persisted: "
+                f"{receipt_error}"
+            ) from receipt_error
+
     return {
         "action": "resumed",
         "session_id": resolved_session_id,
@@ -2331,6 +2476,7 @@ def resume_session(
         "outcome_session_transfer": (
             transfer_receipt.model_dump(mode="json") if transfer_receipt is not None else None
         ),
+        "claim_session_transfer": claim_session_transfer,
         "coordination_mailbox": _poll_mailbox(
             agent=agent,
             project=project,

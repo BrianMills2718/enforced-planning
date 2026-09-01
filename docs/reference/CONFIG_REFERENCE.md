@@ -126,6 +126,11 @@ digest-bound projection; a legacy writer can otherwise make the projection
 stale, which is visible in `observe` and correctly denied in `enforce`.
 The current adapters cover Claude `Edit|Write` and Codex `apply_patch`; they do
 not provide OS-level protection or infer arbitrary shell write targets.
+Provably read-only Bash is classified before repository or claim admission.
+Every component of a compound command or pipeline must be in the bounded read
+grammar; this includes safe `date`, `git ls-remote`, GitHub CLI query, and `jq`
+forms. Clock-setting, upload-pack overrides, GitHub mutations, redirection,
+substitution, and unbounded interpreter commands remain claim-required.
 
 ### Host repository-authority provider
 
@@ -212,7 +217,9 @@ mode; it does not install mailbox or read-context hooks.
 Operational note: when `worktrees.enabled` is true and the sanctioned Makefile
 block is installed, governed repos are expected to expose `session-start`,
 `session-heartbeat`, `session-status`, and `session-finish` alongside the
-worktree targets.
+worktree targets. Claim-runtime schema v6 also requires `session-narrow`; a
+generated consumer that lacks that entrypoint is not compatible with typed
+bootstrap broad claims.
 
 ## commits
 

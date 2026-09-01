@@ -5,6 +5,7 @@ import io
 import json
 import subprocess
 import sys
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
@@ -69,6 +70,42 @@ from scripts import session_start as session_start_cli
 ROOT = Path(__file__).resolve().parents[1]
 CASES = ROOT / "evals" / "outcome_admission" / "plan121_cases.json"
 CLI = ROOT / "scripts" / "outcome_admission.py"
+
+
+def test_selection_pending_accepts_schema_v6_without_weakening_future_version_guard(
+    tmp_path: Path,
+) -> None:
+    """V6 reaches ordinary custody validation while an unknown future schema fails closed."""
+
+    claim = coordination_claims.build_candidate_claim(
+        agent="codex",
+        project="demo",
+        scope="schema-v6-staged",
+        intent="attach the first tracker",
+        plan_ref="demo#1",
+        claim_type="write",
+        write_paths=["src/feature.py"],
+        repo_root=str(tmp_path),
+        worktree_path=str(tmp_path / "worktree"),
+        branch="schema-v6-staged",
+        session_name="schema-v6-staged",
+        broader_goal="Prove schema v6 activation compatibility",
+        session_id="codex:schema-v6-staged",
+        start_revision="a" * 40,
+        work_graph_path="docs/plans/1_work_graph.json",
+        work_unit_id="schema-v6-staged",
+        work_graph_sha256="b" * 64,
+        schema_version=6,
+    )
+    claim = replace(claim, source_file=str(tmp_path / "missing-claim.yaml"))
+
+    accepted_version = outcome_admission.evaluate_selection_pending_session_activation(claim)
+    unknown_version = outcome_admission.evaluate_selection_pending_session_activation(
+        replace(claim, schema_version=7)
+    )
+
+    assert accepted_version.resolution_error_code == "selection_pending_claim_source_unavailable"
+    assert unknown_version.resolution_error_code == "selection_pending_claim_version_invalid"
 
 
 def _frozen_suite() -> OutcomeAdmissionEvaluationSuiteV1:

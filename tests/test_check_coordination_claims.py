@@ -133,6 +133,263 @@ def _git_head(repo_root: Path) -> str:
     ).stdout.strip()
 
 
+def _broad_claim_fixture(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, Path, Path]:
+    """Create one healthy v6 bounded claim and its current projection."""
+
+    repo = tmp_path / "repo"
+    _init_git_repo(repo)
+    (repo / "docs").mkdir()
+    (repo / "docs" / "plan.md").write_text("plan\n", encoding="utf-8")
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(claims_impl, "CLAIMS_DIR", claims_dir)
+    monkeypatch.setattr(
+        claim_mutation_receipts,
+        "DEFAULT_EVENTS_PATH",
+        tmp_path / "claim-mutation-events-v1.jsonl",
+    )
+    monkeypatch.setattr(
+        claim_mutation_receipts,
+        "DEFAULT_NARROW_EVENTS_PATH",
+        tmp_path / "claim-narrow-events-v1.jsonl",
+    )
+    now = datetime.now(timezone.utc)
+    claim_path = claims_dir / claims_impl._claim_filename("codex", "demo", "broad")
+    _write_claim(
+        claims_dir,
+        claim_path.name,
+        {
+            "schema_version": 6,
+            "agent": "codex",
+            "claimed_at": now.isoformat(),
+            "expires_at": "2099-09-01T00:00:00+00:00",
+            "projects": ["demo"],
+            "scope": "broad",
+            "intent": "narrow broad docs ownership",
+            "claim_type": "write",
+            "write_paths": ["docs"],
+            "read_paths": [],
+            "worktree_path": str(repo),
+            "repo_root": str(repo),
+            "branch": "main",
+            "session_name": "broad",
+            "broader_goal": "remove false serialization",
+            "tracker_path": str(tmp_path / "tracker.yaml"),
+            "session_id": "codex:owner",
+            "heartbeat_at": now.isoformat(),
+            "status": "active",
+            "updated_at": now.isoformat(),
+            "plan_ref": "UNPLANNED",
+            "broad_scope_mode": "bounded",
+            "broad_scope_reason": "the fixture deliberately owns all documentation",
+        },
+    )
+    prewrite_claim_projection.write_projection(claims_dir=claims_dir)
+    return repo, claims_dir, projection_path_for(claims_dir)
+
+
+def test_new_broad_claim_requires_mode_and_reason(tmp_path: Path) -> None:
+    """New broad ownership is explicit while narrow ownership rejects stale intent."""
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "docs").mkdir()
+    common = {
+        "agent": "codex",
+        "project": "demo",
+        "scope": "broad",
+        "intent": "test broad admission",
+        "claim_type": "write",
+        "repo_root": str(repo),
+        "worktree_path": str(repo),
+        "branch": "main",
+        "session_name": "broad",
+        "broader_goal": "test",
+        "tracker_path": str(tmp_path / "tracker.yaml"),
+        "session_id": "codex:owner",
+        "plan_ref": "UNPLANNED",
+    }
+
+    untyped = claims_impl.build_candidate_claim(
+        **common, write_paths=["docs"], schema_version=6
+    )
+    with pytest.raises(ValueError, match="broad_scope_mode"):
+        claims_impl.validate_claim_for_creation(untyped)
+
+    typed = claims_impl.build_candidate_claim(
+        **common,
+        write_paths=["docs"],
+        broad_scope_mode="bounded",
+        broad_scope_reason="all documentation moves together",
+    )
+    claims_impl.validate_claim_for_creation(typed)
+    assert typed.schema_version == 6
+    assert typed.broad_scope_mode == "bounded"
+
+    contradictory = claims_impl.build_candidate_claim(
+        **common,
+        write_paths=["docs/plan.md"],
+        broad_scope_mode="bounded",
+        broad_scope_reason="stale broad metadata",
+    )
+    with pytest.raises(ValueError, match="forbidden when no broad path"):
+        claims_impl.validate_claim_for_creation(contradictory)
+
+
+def test_broad_classifier_rejects_nested_symlink_escape(tmp_path: Path) -> None:
+    """A nested path cannot hide an escape merely because it is not broad."""
+
+    repo = tmp_path / "repo"
+    outside = tmp_path / "outside"
+    (repo / "links").mkdir(parents=True)
+    outside.mkdir()
+    (repo / "links" / "outside").symlink_to(outside, target_is_directory=True)
+
+    with pytest.raises(ValueError, match="escapes repo_root"):
+        claims_impl.classify_broad_write_paths(str(repo), ["links/outside/file.py"])
+
+
+def test_atomic_narrow_replaces_subset_and_refreshes_projection(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Narrowing commits exact claim and projection state under one lock."""
+
+    _repo, claims_dir, projection_path = _broad_claim_fixture(tmp_path, monkeypatch)
+    before_digest = registry_digest(claims_dir)
+
+    result = claims_impl.narrow_claim(
+        agent="codex",
+        project="demo",
+        scope="broad",
+        session_id="codex:owner",
+        write_paths=["docs/plan.md"],
+    )
+
+    claim_path = claims_dir / claims_impl._claim_filename("codex", "demo", "broad")
+    payload = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    projection = json.loads(projection_path.read_text(encoding="utf-8"))
+    assert result.old_write_paths == ("docs",)
+    assert result.new_write_paths == ("docs/plan.md",)
+    assert result.broad_scope_mode is None
+    assert payload["write_paths"] == ["docs/plan.md"]
+    assert "broad_scope_mode" not in payload
+    assert projection["registry_digest"] == registry_digest(claims_dir)
+    assert projection["registry_digest"] != before_digest
+    assert claim_mutation_receipts.load_receipts() == []
+    narrow_receipts = claim_mutation_receipts.load_narrow_receipts()
+    assert [receipt.operation for receipt in narrow_receipts] == ["narrow"]
+    assert narrow_receipts[0].event_id == result.receipt_id
+
+
+def test_atomic_narrow_rejects_escape_expansion_and_foreign_session_without_change(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Every failed owner/subset guard preserves exact authority bytes."""
+
+    _repo, claims_dir, projection_path = _broad_claim_fixture(tmp_path, monkeypatch)
+    claim_path = claims_dir / claims_impl._claim_filename("codex", "demo", "broad")
+    before_claim = claim_path.read_bytes()
+    before_projection = projection_path.read_bytes()
+
+    for session_id, paths, message in [
+        ("codex:foreign", ["docs/plan.md"], "belongs to session"),
+        ("codex:owner", ["src/new.py"], "outside existing authority"),
+        ("codex:owner", ["docs"], "strict reduction"),
+    ]:
+        with pytest.raises(ValueError, match=message):
+            claims_impl.narrow_claim(
+                agent="codex",
+                project="demo",
+                scope="broad",
+                session_id=session_id,
+                write_paths=paths,
+            )
+        assert claim_path.read_bytes() == before_claim
+        assert projection_path.read_bytes() == before_projection
+
+
+def test_atomic_narrow_rejects_reordered_authority_without_change(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Reordering the same effective paths is not a strict reduction."""
+
+    repo, claims_dir, projection_path = _broad_claim_fixture(tmp_path, monkeypatch)
+    claim_path = claims_dir / claims_impl._claim_filename("codex", "demo", "broad")
+    payload = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    (repo / "src").mkdir()
+    payload["write_paths"] = ["docs", "src"]
+    claim_path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
+    prewrite_claim_projection.write_projection(claims_dir=claims_dir)
+    before_claim = claim_path.read_bytes()
+    before_projection = projection_path.read_bytes()
+
+    with pytest.raises(ValueError, match="strict reduction"):
+        claims_impl.narrow_claim(
+            agent="codex",
+            project="demo",
+            scope="broad",
+            session_id="codex:owner",
+            write_paths=["src", "docs"],
+        )
+
+    assert claim_path.read_bytes() == before_claim
+    assert projection_path.read_bytes() == before_projection
+
+
+def test_narrow_projection_failure_restores_exact_claim_and_projection_bytes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A derived-state failure rolls both replaceable files back byte-for-byte."""
+
+    _repo, claims_dir, projection_path = _broad_claim_fixture(tmp_path, monkeypatch)
+    claim_path = claims_dir / claims_impl._claim_filename("codex", "demo", "broad")
+    before_claim = claim_path.read_bytes()
+    before_projection = projection_path.read_bytes()
+
+    def fail_refresh(_claims_dir: Path | None = None) -> tuple[str, str]:
+        projection_path.write_text("partial replacement\n", encoding="utf-8")
+        raise OSError("injected projection failure")
+
+    monkeypatch.setattr(claims_impl, "refresh_prewrite_authority_projection", fail_refresh)
+    with pytest.raises(OSError, match="injected projection failure"):
+        claims_impl.narrow_claim(
+            agent="codex",
+            project="demo",
+            scope="broad",
+            session_id="codex:owner",
+            write_paths=["docs/plan.md"],
+        )
+
+    assert claim_path.read_bytes() == before_claim
+    assert projection_path.read_bytes() == before_projection
+
+
+def test_narrow_receipt_failure_reports_applied_projection_current(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Audit append failure is post-commit and never misreported as rollback."""
+
+    _repo, claims_dir, projection_path = _broad_claim_fixture(tmp_path, monkeypatch)
+    claim_path = claims_dir / claims_impl._claim_filename("codex", "demo", "broad")
+
+    def fail_append(*_args: object, **_kwargs: object) -> Path:
+        raise OSError("injected narrow-ledger failure")
+
+    monkeypatch.setattr(claim_mutation_receipts, "append_narrow_receipt", fail_append)
+    with pytest.raises(claim_mutation_receipts.MutationAuditError) as raised:
+        claims_impl.narrow_claim(
+            agent="codex",
+            project="demo",
+            scope="broad",
+            session_id="codex:owner",
+            write_paths=["docs/plan.md"],
+        )
+
+    assert raised.value.operation == "narrow"
+    assert raised.value.projection_current_after is True
+    assert yaml.safe_load(claim_path.read_text(encoding="utf-8"))["write_paths"] == ["docs/plan.md"]
+    assert json.loads(projection_path.read_text(encoding="utf-8"))["registry_digest"] == registry_digest(claims_dir)
+
+
 def test_normalize_claim_reads_v1_schema_as_program_claim(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Legacy v1 claims should normalize into the v2 in-memory record cleanly."""
     module = _load_module()
@@ -159,6 +416,30 @@ def test_normalize_claim_reads_v1_schema_as_program_claim(tmp_path: Path, monkey
     assert claim.projects == ["project-meta"]
     assert claim.write_paths == []
     assert claim.schema_version == 1
+
+
+def test_check_output_labels_legacy_possible_broad_scope_without_revoking_authority() -> None:
+    """Compatibility is visible as diagnostic state rather than a health denial."""
+
+    claim = claims_impl.normalize_claim(
+        {
+            "schema_version": 3,
+            "agent": "codex",
+            "projects": ["demo"],
+            "scope": "legacy-docs",
+            "intent": "retain legacy docs authority",
+            "claim_type": "write",
+            "write_paths": ["docs"],
+            "status": "active",
+            "expires_at": "2099-09-01T00:00:00+00:00",
+        }
+    )
+    assert claim is not None
+
+    rendered = claims_impl._render_check_output(claims=[claim], project="demo", candidate=None)
+
+    assert rendered["claims"][0]["broad_scope_diagnostic"] == "legacy_unclassified"
+    assert "legacy_broad_scope_unclassified" not in rendered["claims"][0]["health_issues"]
 
 
 @pytest.mark.parametrize("invalid_progress_at", [None, 123, {"not": "text"}])
@@ -279,6 +560,9 @@ def test_evaluate_claim_detects_parent_child_write_overlap_as_hard_conflict(
     conflict = result.hard_conflicts[0]
     assert conflict.reason == "write ownership overlaps across active claims"
     assert conflict.overlapping_write_paths == ["docs/ops/INDEX.md <-> docs/ops"]
+    assert conflict.overlap_relations == ("owner_parent",)
+    assert conflict.reservation_kind is None
+    assert conflict.current_diff_disjoint is None
     assert result.to_dict()["continuation"] == {
         "state": "integration_wait",
         "goal_blocked": False,
@@ -293,6 +577,61 @@ def test_evaluate_claim_detects_parent_child_write_overlap_as_hard_conflict(
     }
 
 
+def test_parent_conflict_explains_bounded_reservation_and_advisory_diff(
+    tmp_path: Path,
+) -> None:
+    """Typed broad intent and Git evidence explain, but never weaken, denial."""
+
+    repo = tmp_path / "repo"
+    _init_git_repo(repo)
+    (repo / "docs").mkdir()
+    (repo / "docs" / "index.md").write_text("docs\n", encoding="utf-8")
+    (repo / "src").mkdir()
+    (repo / "src" / "other.py").write_text("seed\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(repo), "add", "."], check=True, capture_output=True, text=True)
+    subprocess.run(
+        ["git", "-C", str(repo), "commit", "-m", "seed"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    (repo / "src" / "other.py").write_text("changed\n", encoding="utf-8")
+    owner = claims_impl.build_candidate_claim(
+        agent="claude-code",
+        project="demo",
+        scope="docs-owner",
+        intent="deliberately reserve documentation",
+        claim_type="write",
+        write_paths=["docs"],
+        repo_root=str(repo),
+        worktree_path=str(repo),
+        branch="main",
+        session_id="claude-code:owner",
+        session_name="docs-owner",
+        broader_goal="Own documentation deliberately",
+        broad_scope_mode="bounded",
+        broad_scope_reason="the documentation move is intentionally coupled",
+        schema_version=6,
+    )
+    candidate = claims_impl.build_candidate_claim(
+        agent="codex",
+        project="demo",
+        scope="wiki-child",
+        intent="edit one wiki page",
+        claim_type="write",
+        write_paths=["docs/wiki/page.md"],
+    )
+
+    result = claims_impl.evaluate_claim(candidate, active_claims=[owner])
+
+    assert len(result.hard_conflicts) == 1
+    conflict = result.hard_conflicts[0]
+    assert conflict.overlap_relations == ("owner_parent",)
+    assert conflict.reservation_kind == "deliberate_bounded_reservation"
+    assert conflict.other_broad_scope_mode == "bounded"
+    assert conflict.current_diff_disjoint is True
+
+
 def test_evaluate_claim_reports_non_overlapping_candidate_paths_as_writable(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -300,6 +639,8 @@ def test_evaluate_claim_reports_non_overlapping_candidate_paths_as_writable(
     """A narrow collision must expose candidate paths that can still be claimed."""
     module = _load_module()
     claims_dir = tmp_path / "claims"
+    repo = tmp_path / "project-meta"
+    _init_git_repo(repo)
     monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
     _write_claim(
         claims_dir,
@@ -729,6 +1070,8 @@ def test_create_claim_auto_resolves_codex_session_id(
     """New claims should auto-populate session_id from the Codex runtime when available."""
     module = _load_module()
     claims_dir = tmp_path / "claims"
+    repo = tmp_path / "project-meta"
+    _init_git_repo(repo)
     monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
     monkeypatch.setenv("CODEX_THREAD_ID", "thread-123")
 
@@ -741,7 +1084,8 @@ def test_create_claim_auto_resolves_codex_session_id(
         claim_type="write",
         write_paths=["scripts/check_coordination_claims.py"],
         branch="plan-62-coordination-v2",
-        worktree_path="~/projects/project-meta_worktrees/plan-62-coordination-v2",
+        repo_root=str(repo),
+        worktree_path=str(repo),
         session_name="coordination-claim-repair",
     )
 
@@ -758,6 +1102,8 @@ def test_create_claim_rejects_live_claim_without_session_name(
 ) -> None:
     """A live claim cannot be attributable only to an opaque runtime ID."""
     module = _load_module()
+    repo = tmp_path / "project-meta"
+    _init_git_repo(repo)
     monkeypatch.setattr(module, "CLAIMS_DIR", tmp_path / "claims")
 
     with pytest.raises(ValueError, match="--session-name"):
@@ -769,7 +1115,8 @@ def test_create_claim_rejects_live_claim_without_session_name(
             claim_type="write",
             write_paths=["enforced_planning/coordination_claims.py"],
             branch="fix/identity-contract",
-            worktree_path="~/projects/project-meta/worktrees/fix/identity-contract",
+            repo_root=str(repo),
+            worktree_path=str(repo),
             session_id="codex:thread-identity",
         )
 
@@ -1020,7 +1367,7 @@ def test_plan_bound_write_claim_persists_exact_canonical_binding(
     assert payload["work_graph_path"] == graph
     assert len(payload["work_graph_sha256"]) == 64
     assert payload["approval_revisions"] == [f"readiness={digest}"]
-    assert payload["schema_version"] == 4
+    assert payload["schema_version"] == 6
     assert (
         payload["start_revision"]
         == subprocess.run(
@@ -1222,6 +1569,7 @@ def test_cross_repository_work_unit_binding_separates_target_and_plan_revisions(
     plan_root = tmp_path / "project-meta"
     _init_git_repo(target_root)
     _init_git_repo(plan_root)
+    (target_root / "tests").mkdir()
     plan_revision = _git_head(plan_root)
     plan_sha256 = "d" * 64
     graph = _commit_work_graph(
@@ -1534,6 +1882,7 @@ def test_cross_repository_claim_persists_external_plan_authority_custody(
     plan_root = tmp_path / "project-meta"
     _init_git_repo(target_root)
     _init_git_repo(plan_root)
+    (target_root / "tests").mkdir()
     plan_revision = _git_head(plan_root)
     plan_sha256 = "c" * 64
     graph = _commit_work_graph(
@@ -1571,6 +1920,8 @@ def test_cross_repository_claim_persists_external_plan_authority_custody(
         session_id="codex:test",
         session_name="Plan 249 AES vertical",
         broader_goal="Implement contract-coupled derived documentation",
+        broad_scope_mode="bounded",
+        broad_scope_reason="the cross-repository vertical owns the full test suite",
         work_graph_path=graph,
         work_unit_id="P249-AES01",
         start_point=_git_head(target_root),
@@ -1582,7 +1933,7 @@ def test_cross_repository_claim_persists_external_plan_authority_custody(
     payload = yaml.safe_load(
         (claims_dir / "codex_agentic-engineering-system_plan249-aes01.yaml").read_text(encoding="utf-8")
     )
-    assert payload["schema_version"] == 5
+    assert payload["schema_version"] == 6
     assert payload["start_revision"] == _git_head(target_root)
     assert payload["plan_repo_root"] == str(plan_root.resolve())
     assert payload["plan_revision"] == plan_revision
@@ -2373,6 +2724,9 @@ def test_runtime_session_counts_every_live_unparented_claim_as_root(
     module = _load_module()
     claims_dir = tmp_path / "claims"
     monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
+    repository_root = tmp_path / "workspace-instructions"
+    repository_root.mkdir()
+    (repository_root / "CLAUDE.md").write_text("instructions\n", encoding="utf-8")
     existing_kwargs = {
         "agent": "codex",
         "project": "workspace-instructions",
@@ -2380,7 +2734,7 @@ def test_runtime_session_counts_every_live_unparented_claim_as_root(
         "intent": "Edit the shared workspace instruction",
         "claim_type": existing_claim_type,
         "write_paths": ["CLAUDE.md"] if existing_claim_type == "write" else None,
-        "repo_root": str(tmp_path / "workspace-instructions"),
+        "repo_root": str(repository_root),
         "worktree_path": str(tmp_path / "workspace-instructions" / "worktrees" / "root-policy-edit"),
         "branch": "root-policy-edit",
         "session_id": "codex:week-long-session",
@@ -2431,6 +2785,9 @@ def test_runtime_session_can_refresh_same_non_program_root(
     module = _load_module()
     claims_dir = tmp_path / "claims"
     monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
+    repository_root = tmp_path / "workspace-instructions"
+    repository_root.mkdir()
+    (repository_root / "CLAUDE.md").write_text("instructions\n", encoding="utf-8")
     kwargs = {
         "agent": "codex",
         "project": "workspace-instructions",
@@ -2438,7 +2795,7 @@ def test_runtime_session_can_refresh_same_non_program_root(
         "intent": "Edit the shared workspace instruction",
         "claim_type": "write",
         "write_paths": ["CLAUDE.md"],
-        "repo_root": str(tmp_path / "workspace-instructions"),
+        "repo_root": str(repository_root),
         "worktree_path": str(tmp_path / "workspace-instructions" / "worktrees" / "root-policy-edit"),
         "branch": "root-policy-edit",
         "session_id": "codex:week-long-session",
@@ -3220,6 +3577,66 @@ def test_prune_completed_removes_only_completed_claims(
     assert not (claims_dir / "completed.yaml").exists()
     assert not (claims_dir / "complete.yaml").exists()
     assert (claims_dir / "expired-active.yaml").exists()
+
+
+def test_prune_completed_honors_exact_cli_filters(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A scoped housekeeping request must never prune unrelated completed claims."""
+
+    module = _load_module()
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
+    base = {
+        "claimed_at": "2026-04-05T12:00:00+00:00",
+        "expires_at": "2026-04-05T13:00:00+00:00",
+        "intent": "Cleanup one exact completed claim",
+        "claim_type": "program",
+        "status": "completed",
+    }
+    _write_claim(
+        claims_dir,
+        "selected.yaml",
+        {**base, "agent": "codex", "projects": ["demo"], "scope": "selected"},
+    )
+    _write_claim(
+        claims_dir,
+        "other-project.yaml",
+        {**base, "agent": "codex", "projects": ["other"], "scope": "selected"},
+    )
+    _write_claim(
+        claims_dir,
+        "other-scope.yaml",
+        {**base, "agent": "codex", "projects": ["demo"], "scope": "other"},
+    )
+    _write_claim(
+        claims_dir,
+        "other-agent.yaml",
+        {**base, "agent": "claude-code", "projects": ["demo"], "scope": "selected"},
+    )
+
+    exit_code = module.main(
+        [
+            "--prune-completed",
+            "--agent",
+            "codex",
+            "--project",
+            "demo",
+            "--scope",
+            "selected",
+            "--json",
+        ]
+    )
+
+    payload = json.loads(capsys.readouterr().out)
+    assert exit_code == 0
+    assert payload == {"pruned": 1, "removed_scopes": ["demo:selected"]}
+    assert not (claims_dir / "selected.yaml").exists()
+    assert (claims_dir / "other-project.yaml").exists()
+    assert (claims_dir / "other-scope.yaml").exists()
+    assert (claims_dir / "other-agent.yaml").exists()
 
 
 def _completed_claim_payload(

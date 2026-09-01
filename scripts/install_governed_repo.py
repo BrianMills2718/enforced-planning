@@ -29,6 +29,7 @@ if str(Path(__file__).resolve().parents[1]) not in sys.path:
 
 from enforced_planning.governed_repo_audit import _refresh_agents
 from enforced_planning.governed_repo_audit import audit_repo
+from enforced_planning import coordination_claims
 from enforced_planning.installed_framework import drop_vendored_package_files
 from enforced_planning.hook_wiring import TargetRepo
 from enforced_planning.hook_wiring import apply_generation as apply_hook_generation
@@ -101,6 +102,7 @@ SYNC_SUPPORT_FILES: dict[str, str] = {
     "scripts/meta/session_finish.py": "scripts/session_finish.py",
     "scripts/meta/session_close.py": "scripts/session_close.py",
     "scripts/meta/session_heartbeat.py": "scripts/session_heartbeat.py",
+    "scripts/meta/session_narrow.py": "scripts/session_narrow.py",
     "scripts/meta/session_start.py": "scripts/session_start.py",
     "scripts/meta/session_status.py": "scripts/session_status.py",
     "scripts/meta/session_end.py": "scripts/session_end.py",
@@ -185,6 +187,7 @@ WORKTREE_ONLY_SYNC_SUPPORT_FILES: dict[str, str] = {
     "scripts/meta/session_finish.py": "scripts/session_finish.py",
     "scripts/meta/session_close.py": "scripts/session_close.py",
     "scripts/meta/session_heartbeat.py": "scripts/session_heartbeat.py",
+    "scripts/meta/session_narrow.py": "scripts/session_narrow.py",
     "scripts/meta/session_start.py": "scripts/session_start.py",
     "scripts/meta/session_status.py": "scripts/session_status.py",
     "scripts/meta/session_end.py": "scripts/session_end.py",
@@ -234,6 +237,7 @@ COORDINATION_MESSAGES_SHARED_FILES: dict[str, str] = {
     "scripts/meta/coordination_messages.py": "scripts/meta/coordination_messages.py",
     "scripts/meta/coordination_operator_status.py": "scripts/coordination_operator_status.py",
     "scripts/meta/session_heartbeat.py": "scripts/session_heartbeat.py",
+    "scripts/meta/session_narrow.py": "scripts/session_narrow.py",
     "scripts/meta/session_close.py": "scripts/session_close.py",
     "scripts/meta/session_resume.py": "scripts/session_resume.py",
     "scripts/meta/session_start.py": "scripts/session_start.py",
@@ -266,10 +270,12 @@ COORDINATION_MESSAGES_LOCAL_PACKAGE_FILES: dict[str, str] = {
 
 CLAIM_PROJECTION_SHARED_FILES: dict[str, str] = {
     "scripts/meta/check_coordination_claims.py": "scripts/check_coordination_claims.py",
+    "scripts/meta/worktree-coordination/create_worktree.py": "scripts/worktree-coordination/create_worktree.py",
     "scripts/meta/session_close.py": "scripts/session_close.py",
     "scripts/meta/session_end.py": "scripts/session_end.py",
     "scripts/meta/session_finish.py": "scripts/session_finish.py",
     "scripts/meta/session_heartbeat.py": "scripts/session_heartbeat.py",
+    "scripts/meta/session_narrow.py": "scripts/session_narrow.py",
     "scripts/meta/session_resume.py": "scripts/session_resume.py",
     "scripts/meta/session_start.py": "scripts/session_start.py",
 }
@@ -768,6 +774,71 @@ def _write_agents(repo_root: Path) -> str:
     )
 
 
+def _claim_runtime_downgrade_blockers(
+    repo_root: Path,
+    *,
+    candidate_schema_version: int,
+    session_narrow_available: bool,
+    claims_dir: Path | None = None,
+) -> list[str]:
+    """Reject a runtime downgrade while a live typed broad lease depends on v6.
+
+    The bootstrap sentinel remains a second fail-closed control for an older
+    reader, but installation must not knowingly remove the only runtime that
+    understands the typed lease or its owner-bound narrowing operation.
+    """
+
+    target = repo_root.expanduser().resolve()
+
+    def git_common_dir(path: Path) -> Path | None:
+        result = subprocess.run(
+            ["git", "-C", str(path), "rev-parse", "--git-common-dir"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode != 0 or not result.stdout.strip():
+            return None
+        common = Path(result.stdout.strip())
+        if not common.is_absolute():
+            common = path / common
+        return common.resolve()
+
+    target_common = git_common_dir(target)
+    live_broad = []
+    for claim in coordination_claims.list_claims(claims_dir=claims_dir):
+        if claim.schema_version < 6 or claim.broad_scope_mode not in coordination_claims.BROAD_SCOPE_MODES:
+            continue
+        if not claim.repo_root:
+            continue
+        claim_root = Path(claim.repo_root).expanduser().resolve()
+        same_repository = claim_root == target
+        if not same_repository and target_common is not None:
+            same_repository = git_common_dir(claim_root) == target_common
+        if not same_repository:
+            continue
+        live_broad.append(claim)
+    if not live_broad:
+        return []
+    required_schema = max(claim.schema_version for claim in live_broad)
+    if candidate_schema_version >= required_schema and session_narrow_available:
+        return []
+    lanes = ", ".join(
+        sorted(f"{claim.primary_project()}:{claim.scope}" for claim in live_broad)
+    )
+    missing = []
+    if candidate_schema_version < required_schema:
+        missing.append(
+            f"candidate claim schema {candidate_schema_version} is older than required schema {required_schema}"
+        )
+    if not session_narrow_available:
+        missing.append("candidate runtime lacks scripts/session_narrow.py")
+    return [
+        "claim runtime downgrade denied while live typed broad claims exist "
+        f"({lanes}): {'; '.join(missing)}"
+    ]
+
+
 def install_or_plan(
     repo_root: Path,
     *,
@@ -790,6 +861,14 @@ def install_or_plan(
     scaffolded_files = list(static_plan.scaffolded_files)
     drift_files = list(static_plan.drift_files)
     blockers = list(static_plan.blockers)
+    if not relationship_context_only:
+        blockers.extend(
+            _claim_runtime_downgrade_blockers(
+                repo_root,
+                candidate_schema_version=coordination_claims.CURRENT_CLAIM_SCHEMA_VERSION,
+                session_narrow_available=(FRAMEWORK_ROOT / "scripts" / "session_narrow.py").is_file(),
+            )
+        )
     if not worktree_only:
         runtime_error = context_runtime_error(
             repo_root,

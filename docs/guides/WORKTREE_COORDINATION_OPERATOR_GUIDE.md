@@ -1012,7 +1012,9 @@ In that configured source checkout:
 - source `make worktree`, `make session-start`, and
   `make session-heartbeat` prefer the canonical `scripts/session_*.py`
   owners when present, with installed `scripts/meta/` files only as fallback;
-- session renewal and heartbeat automatically require exact selected state;
+- ordinary session heartbeat renews liveness only; exact selected state is
+  required only when the caller explicitly requests outcome-selected
+  admission;
 - native pre-write automatically requires selected state after ordinary
   authority, except for an exact restricted bootstrap claim writing one of its
   own bootstrap paths; and
@@ -1086,14 +1088,16 @@ The runtime declaration remains in the consumer repository's
 `~/.local/state/governed-surfaces`; they are operational state, not Git
 authority.
 
-Supported runtime adapters:
+Supported runtime adapters for actor-bound lifecycle mutations:
 
 - Codex: `CODEX_THREAD_ID`
-- Claude Code: `CLAUDE_SESSION_ID` or `CLAUDE_CODE_SSE_PORT`
-- OpenClaw: `OPENCLAW_SESSION_ID` or `OPENCLAW_RUN_ID`
+- Claude Code: `CLAUDE_CODE_SESSION_ID`
+- OpenClaw: `OPENCLAW_SESSION_ID`
 
-Those adapters only resolve runtime identity. They do not change the session
-contract schema, the tracker schema, or the sanctioned repo lifecycle commands.
+An explicit owner ID, process discovery, or an SSE port cannot self-attest a
+foreign runtime for heartbeat, handoff, abandon, finish, or close. The adapters
+only bind the ambient actor identity; they do not change the session contract
+schema, tracker schema, or sanctioned repo lifecycle commands.
 
 ## Crash / Resume Policy
 

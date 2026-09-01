@@ -92,6 +92,34 @@ def _poll_mailbox(*, agent: str, project: str, session_id: str) -> dict[str, Any
     return {**notice.model_dump(mode="json"), "polled": True, "degraded_reason": None}
 
 
+def _poll_mailbox_after_committed_transition(
+    *,
+    agent: str,
+    project: str,
+    session_id: str,
+) -> dict[str, Any]:
+    """Expose post-commit poll failure without misreporting committed custody."""
+
+    try:
+        return _poll_mailbox(agent=agent, project=project, session_id=session_id)
+    except Exception as exc:  # noqa: BLE001 - the committed transition is already authoritative
+        return {
+            "session_id": session_id,
+            "project": project,
+            "active_count": 0,
+            "message_ids": [],
+            "acknowledgement_count": 0,
+            "acknowledgement_message_ids": [],
+            "polled": False,
+            "degraded_reason": "post_commit_mailbox_poll_failed",
+            "error_type": type(exc).__name__,
+            "summary": (
+                "coordination mailbox: NOT POLLED after committed lifecycle transition; "
+                f"custody is committed but mailbox state is unknown ({type(exc).__name__}: {exc})"
+            ),
+        }
+
+
 def _load_worktree_lifecycle_policy(path: Path) -> tuple[str, frozenset[str], frozenset[str], frozenset[str]]:
     """Load and validate the configurable disposition vocabulary."""
 
@@ -514,6 +542,101 @@ def _atomic_restore_bytes(path: Path, content: bytes) -> None:
     finally:
         if temp_path is not None and temp_path.exists():
             temp_path.unlink()
+
+
+def _apply_cross_session_resume_transaction(
+    *,
+    claim: coordination_claims.ClaimRecord,
+    claim_file: Path,
+    claim_bytes_before: bytes,
+    tracker_path: Path,
+    tracker_bytes_before: bytes,
+    successor_session_id: str,
+    current_phase: str,
+    note: str | None,
+    updated_at: str,
+    expected_fields: dict[str, Any],
+    transfer_preflight: outcome_selection.PreparedOutcomeSessionTransfer | None,
+) -> tuple[dict[str, Any], outcome_selection.OutcomeSessionTransferV1 | None]:
+    """Commit claim and tracker identity under claim-registry then tracker lock."""
+
+    with (
+        coordination_claims.claim_registry_lock(coordination_claims.CLAIMS_DIR),
+        session_contracts.session_tracker_lock(tracker_path),
+    ):
+        if claim_file.read_bytes() != claim_bytes_before:
+            raise ValueError("claim changed after cross-session resume preflight")
+        if tracker_path.read_bytes() != tracker_bytes_before:
+            raise ValueError("session tracker changed after cross-session resume preflight")
+        current = yaml.safe_load(claim_bytes_before)
+        if not isinstance(current, dict):
+            raise ValueError("cross-session resume claim must be a YAML mapping")
+        for field, expected in expected_fields.items():
+            if current.get(field) != expected:
+                raise ValueError(f"claim field {field} changed after cross-session resume preflight")
+        if claim.broad_scope_mode == "bootstrap" and claim.target_worktree_path:
+            current["worktree_path"] = claim.target_worktree_path
+        current.update(
+            {
+                "status": "active",
+                "session_id": successor_session_id,
+                "heartbeat_at": updated_at,
+                "updated_at": updated_at,
+                "notes": note or "session resumed with a fresh runtime attachment",
+            }
+        )
+        successor_claim = coordination_claims.normalize_claim(current, source_file=str(claim_file.resolve()))
+        if successor_claim is None:
+            raise ValueError("resumed claim could not be normalized before tracker transfer")
+        tracker_payload = session_contracts.read_session_tracker(tracker_path)
+        transfer_receipt: outcome_selection.OutcomeSessionTransferV1 | None = None
+        if transfer_preflight is not None:
+            tracker_payload = outcome_selection.build_prepared_outcome_session_transfer_payload(
+                transfer_preflight,
+                tracker_payload=tracker_payload,
+                predecessor_claim=claim,
+                successor_claim=successor_claim,
+                current_phase=current_phase,
+                notes=current["notes"],
+                updated_at=updated_at,
+            )
+            transfer_receipt = transfer_preflight.transfer
+        else:
+            tracker_claim = tracker_payload.get("claim")
+            tracker_section = tracker_payload.get("tracker")
+            timestamps = tracker_payload.get("timestamps")
+            if not isinstance(tracker_claim, dict) or tracker_claim.get("session_id") != claim.session_id:
+                raise ValueError("session tracker predecessor identity does not match the claim")
+            if not isinstance(tracker_section, dict) or not isinstance(timestamps, dict):
+                raise ValueError("session tracker is missing tracker or timestamps state")
+            tracker_claim["session_id"] = successor_session_id
+            tracker_section["current_phase"] = current_phase
+            tracker_section["notes"] = current["notes"]
+            timestamps["updated_at"] = updated_at
+
+        registry_digest_before = coordination_claims._registry_digest(coordination_claims.CLAIMS_DIR)
+        try:
+            _write_claim_payload(claim_file, current)
+            session_contracts._atomic_write_session_tracker(tracker_path, tracker_payload)
+            _projection_path, projection_digest_after = coordination_claims.refresh_prewrite_authority_projection(
+                coordination_claims.CLAIMS_DIR
+            )
+            coordination_claims.record_claim_mutation(
+                operation="session_upsert",
+                claims_dir=coordination_claims.CLAIMS_DIR,
+                registry_digest_before=registry_digest_before,
+                target_project=claim.primary_project(),
+                target_scope=claim.scope,
+                target_claim_path=claim_file,
+                session_id=successor_session_id,
+                projection_digest_after=projection_digest_after,
+            )
+        except Exception:
+            _atomic_restore_bytes(claim_file, claim_bytes_before)
+            _atomic_restore_bytes(tracker_path, tracker_bytes_before)
+            coordination_claims.refresh_prewrite_authority_projection(coordination_claims.CLAIMS_DIR)
+            raise
+    return current, transfer_receipt
 
 
 def _persist_claim_session_transfer_receipt(
@@ -1175,7 +1298,11 @@ def _require_claim_actor(
     resolved = coordination_claims.resolve_session_id(claim.agent, actor_session_id)
     if not resolved:
         raise ValueError("lifecycle mutation requires an exact actor_session_id")
-    coordination_claims.validate_native_session_binding(claim.agent, resolved)
+    coordination_claims.validate_native_session_binding(
+        claim.agent,
+        resolved,
+        require_native_marker=True,
+    )
     if claim.session_id != resolved:
         raise ValueError(
             f"claim {claim.primary_project()}:{claim.scope} belongs to session "
@@ -1919,7 +2046,11 @@ def heartbeat_session(
     candidate_session_id = coordination_claims.resolve_session_id(agent, session_id)
     if not candidate_session_id:
         raise ValueError("Unable to resolve a session ID for heartbeat ownership")
-    coordination_claims.validate_native_session_binding(agent, candidate_session_id)
+    coordination_claims.validate_native_session_binding(
+        agent,
+        candidate_session_id,
+        require_native_marker=True,
+    )
     if outcome_selected:
         selected_claims = [
             claim
@@ -2034,7 +2165,7 @@ def narrow_session_claim(
     }
 
 
-def status_sessions(
+def _status_sessions_locked(
     *,
     project: str | None = None,
     agent: str | None = None,
@@ -2074,7 +2205,8 @@ def status_sessions(
         if claim.tracker_path:
             path = Path(claim.tracker_path).expanduser()
             if path.exists():
-                tracker_payload = session_contracts.read_session_tracker(path)
+                with session_contracts.session_tracker_lock(path):
+                    tracker_payload = session_contracts.read_session_tracker(path)
         tracker_section = tracker_payload.get("tracker") if isinstance(tracker_payload, dict) else {}
         timestamps = tracker_payload.get("timestamps") if isinstance(tracker_payload, dict) else {}
         health_issues = coordination_claims.coordination_health_issues(
@@ -2145,6 +2277,30 @@ def status_sessions(
         "session_count": len(sessions),
         "sessions": sessions,
     }
+
+
+def status_sessions(
+    *,
+    project: str | None = None,
+    agent: str | None = None,
+    scope: str | None = None,
+    branch: str | None = None,
+    session_id: str | None = None,
+    include_ended: bool = False,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    """Observe claims and trackers under the same claim-then-tracker protocol as transfers."""
+
+    with coordination_claims.claim_registry_lock(coordination_claims.CLAIMS_DIR):
+        return _status_sessions_locked(
+            project=project,
+            agent=agent,
+            scope=scope,
+            branch=branch,
+            session_id=session_id,
+            include_ended=include_ended,
+            now=now,
+        )
 
 
 def end_runtime_session(
@@ -2519,7 +2675,11 @@ def resume_session(
     resolved_session_id = coordination_claims.resolve_session_id(agent, session_id)
     if not resolved_session_id:
         raise ValueError("Unable to resolve a session ID for session-resume.")
-    coordination_claims.validate_native_session_binding(agent, resolved_session_id)
+    coordination_claims.validate_native_session_binding(
+        agent,
+        resolved_session_id,
+        require_native_marker=True,
+    )
 
     same_runtime = claim.session_id == resolved_session_id
     explicitly_transferable = claim.status in {
@@ -2567,61 +2727,42 @@ def resume_session(
     transfer_receipt: outcome_selection.OutcomeSessionTransferV1 | None = None
     claim_session_transfer: dict[str, Any] | None = None
     try:
-        payload = _apply_claim_payload_updates(
-            claim=claim,
-            claim_file=claim_file,
-            updates={
-                "status": "active",
-                "session_id": resolved_session_id,
-                "heartbeat_at": updated_at,
-                "updated_at": updated_at,
-                "notes": note or "session resumed with a fresh runtime attachment",
-            },
-            expected_fields=expected_fields,
-        )
-
-        if transfer_preflight is not None:
-            successor_claim = coordination_claims.normalize_claim(
-                payload,
-                source_file=str(claim_file.resolve()),
+        if same_runtime:
+            payload = _apply_claim_payload_updates(
+                claim=claim,
+                claim_file=claim_file,
+                updates={
+                    "status": "active",
+                    "session_id": resolved_session_id,
+                    "heartbeat_at": updated_at,
+                    "updated_at": updated_at,
+                    "notes": note or "session resumed with a fresh runtime attachment",
+                },
+                expected_fields=expected_fields,
             )
-            if successor_claim is None:
-                raise ValueError("resumed claim could not be normalized before tracker transfer")
-            transfer_receipt = outcome_selection.apply_prepared_outcome_session_transfer(
-                transfer_preflight,
-                predecessor_claim=claim,
-                successor_claim=successor_claim,
-                current_phase=current_phase,
-                notes=payload["notes"],
-                updated_at=updated_at,
-            )
-        elif tracker_path is not None:
-            if same_runtime:
+            if tracker_path is not None:
                 session_contracts.update_session_tracker(
                     tracker_path,
                     current_phase=current_phase,
                     notes=payload["notes"],
                     updated_at=updated_at,
                 )
-            else:
-                with session_contracts.session_tracker_lock(tracker_path):
-                    tracker_payload = session_contracts.read_session_tracker(tracker_path)
-                    tracker_claim = tracker_payload.get("claim")
-                    if not isinstance(tracker_claim, dict) or tracker_claim.get("session_id") != claim.session_id:
-                        raise ValueError("session tracker predecessor identity does not match the claim")
-                    tracker_claim["session_id"] = resolved_session_id
-                    tracker_section = tracker_payload.get("tracker")
-                    timestamps = tracker_payload.get("timestamps")
-                    if not isinstance(tracker_section, dict) or not isinstance(timestamps, dict):
-                        raise ValueError("session tracker is missing tracker or timestamps state")
-                    tracker_section["current_phase"] = current_phase
-                    tracker_section["notes"] = payload["notes"]
-                    timestamps["updated_at"] = updated_at
-                    session_contracts._atomic_write_session_tracker(tracker_path, tracker_payload)
-
-        if not same_runtime:
-            if claim_bytes_before is None:
-                raise SessionTransferIncompleteError("claim custody changed without predecessor bytes")
+        else:
+            if claim_bytes_before is None or tracker_bytes_before is None or tracker_path is None:
+                raise SessionTransferIncompleteError("cross-session resume lacks exact predecessor bytes")
+            payload, transfer_receipt = _apply_cross_session_resume_transaction(
+                claim=claim,
+                claim_file=claim_file,
+                claim_bytes_before=claim_bytes_before,
+                tracker_path=tracker_path,
+                tracker_bytes_before=tracker_bytes_before,
+                successor_session_id=resolved_session_id,
+                current_phase=current_phase,
+                note=note,
+                updated_at=updated_at,
+                expected_fields=expected_fields,
+                transfer_preflight=transfer_preflight,
+            )
             claim_session_transfer = _persist_claim_session_transfer_receipt(
                 claim=claim,
                 project=project,
@@ -2676,7 +2817,7 @@ def resume_session(
             transfer_receipt.model_dump(mode="json") if transfer_receipt is not None else None
         ),
         "claim_session_transfer": claim_session_transfer,
-        "coordination_mailbox": _poll_mailbox(
+        "coordination_mailbox": _poll_mailbox_after_committed_transition(
             agent=agent,
             project=project,
             session_id=resolved_session_id,

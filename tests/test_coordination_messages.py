@@ -135,11 +135,20 @@ matcher = "*"
 type = "command"
 command = "{command}"
 
+[[hooks.PreToolUse]]
+matcher = "Bash|apply_patch"
+[[hooks.PreToolUse.hooks]]
+type = "command"
+command = "{command}"
+
 [[hooks.Stop]]
 matcher = ""
 [[hooks.Stop.hooks]]
 type = "command"
 command = "{command}"
+
+[hooks.state."{config.resolve()}:pre_tool_use:0:0"]
+enabled = false
 ''',
         encoding="utf-8",
     )

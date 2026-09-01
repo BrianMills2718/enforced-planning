@@ -426,24 +426,40 @@ _CLIENT_HOOK_REQUIREMENTS: dict[str, tuple[tuple[str, str], ...]] = {
 }
 
 
-def _coordination_hook_configured(config: dict[str, Any], event: str, matcher: str) -> bool:
+def _event_state_name(event: str) -> str:
+    """Render native CamelCase hook names as Codex state-table identifiers."""
+
+    return "".join(f"_{char.lower()}" if char.isupper() else char for char in event).lstrip("_")
+
+
+def _coordination_hook_configured(
+    config: dict[str, Any], event: str, matcher: str, *, config_path: Path
+) -> bool:
     """Return whether the exact event/matcher invokes the coordination adapter."""
 
     hooks = config.get("hooks")
     blocks = hooks.get(event) if isinstance(hooks, dict) else None
+    state = hooks.get("state") if isinstance(hooks, dict) else None
     if not isinstance(blocks, list):
         return False
-    for block in blocks:
+    resolved_config_path = config_path.expanduser().resolve()
+    for block_index, block in enumerate(blocks):
         if not isinstance(block, dict) or block.get("matcher", "") != matcher:
             continue
         entries = block.get("hooks")
         if not isinstance(entries, list):
             continue
-        for entry in entries:
+        for hook_index, entry in enumerate(entries):
             command = entry.get("command") if isinstance(entry, dict) else None
             if isinstance(command, str) and (
                 "coordination_hook.py" in command or "notify-coordination-messages.sh" in command
             ):
+                state_key = (
+                    f"{resolved_config_path}:{_event_state_name(event)}:{block_index}:{hook_index}"
+                )
+                state_record = state.get(state_key) if isinstance(state, dict) else None
+                if isinstance(state_record, dict) and state_record.get("enabled") is False:
+                    continue
                 return True
     return False
 
@@ -496,7 +512,7 @@ def inspect_host_delivery_capability(
     configured_events = tuple(
         event
         for event, matcher in _CLIENT_HOOK_REQUIREMENTS[client]
-        if _coordination_hook_configured(raw, event, matcher)
+        if _coordination_hook_configured(raw, event, matcher, config_path=path)
     )
     mutation_available = "PreToolUse" in configured_events
     stop_available = "Stop" in configured_events

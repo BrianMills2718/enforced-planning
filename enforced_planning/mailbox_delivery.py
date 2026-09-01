@@ -609,7 +609,11 @@ def _commands(block: dict[str, Any]) -> list[str]:
 
 
 def _matching_events(
-    config: dict[str, Any], requirements: tuple[tuple[str, str], ...], command: str
+    config: dict[str, Any],
+    requirements: tuple[tuple[str, str], ...],
+    command: str,
+    *,
+    config_path: str | None = None,
 ) -> tuple[tuple[str, ...], tuple[str, ...], int]:
     """Return exact configured events, missing events, and unrelated command count."""
 
@@ -617,8 +621,33 @@ def _matching_events(
     missing: list[str] = []
     expected_pairs = set(requirements)
     unrelated_commands = 0
+    hooks = config.get("hooks")
+    state = hooks.get("state") if isinstance(hooks, dict) else None
+    resolved_config_path = str(_path(config_path).resolve()) if config_path is not None else None
     for event, matcher in requirements:
-        present = any(block.get("matcher", "") == matcher and command in _commands(block) for block in _hook_blocks(config, event))
+        present = False
+        for block_index, block in enumerate(_hook_blocks(config, event)):
+            if block.get("matcher", "") != matcher:
+                continue
+            entries = block.get("hooks")
+            if not isinstance(entries, list):
+                continue
+            for hook_index, entry in enumerate(entries):
+                configured_command = entry.get("command") if isinstance(entry, dict) else None
+                if configured_command != command:
+                    continue
+                state_key = (
+                    f"{resolved_config_path}:{_event_state_name(event)}:{block_index}:{hook_index}"
+                    if resolved_config_path is not None
+                    else None
+                )
+                state_record = state.get(state_key) if isinstance(state, dict) and state_key else None
+                if isinstance(state_record, dict) and state_record.get("enabled") is False:
+                    continue
+                present = True
+                break
+            if present:
+                break
         (configured if present else missing).append(event)
     for event, blocks in (config.get("hooks") or {}).items() if isinstance(config.get("hooks"), dict) else ():
         if not isinstance(event, str) or not isinstance(blocks, list):
@@ -631,6 +660,12 @@ def _matching_events(
                 if not (is_expected_block and configured_command == command):
                     unrelated_commands += 1
     return tuple(configured), tuple(missing), unrelated_commands
+
+
+def _event_state_name(event: str) -> str:
+    """Render native CamelCase hook names as Codex state-table identifiers."""
+
+    return "".join(f"_{char.lower()}" if char.isupper() else char for char in event).lstrip("_")
 
 
 def _verified_observed_clients(evidence: tuple[ObservationEvidenceV1, ...]) -> frozenset[ClientName]:
@@ -695,7 +730,12 @@ def _audit_surface(
             0,
         )
     requirements = CODEX_HOOK_REQUIREMENTS if client == "codex" else CLAUDE_HOOK_REQUIREMENTS
-    configured, missing, unrelated = _matching_events(config, requirements, adapter.command)
+    configured, missing, unrelated = _matching_events(
+        config,
+        requirements,
+        adapter.command,
+        config_path=config_path,
+    )
     issues = [*adapter_issues]
     if missing:
         issues.append("missing_required_hook")
@@ -841,6 +881,38 @@ def _ensure_required(config: dict[str, Any], requirements: tuple[tuple[str, str]
             hook_list.append({"type": "command", "command": command, "timeout": 3})
 
 
+def _enable_required(
+    config: dict[str, Any],
+    requirements: tuple[tuple[str, str], ...],
+    command: str,
+    *,
+    config_path: str,
+) -> None:
+    """Enable only state-disabled required hooks in a dry-run candidate."""
+
+    hooks = config.get("hooks")
+    state = hooks.get("state") if isinstance(hooks, dict) else None
+    if not isinstance(state, dict):
+        return
+    resolved_config_path = str(_path(config_path).resolve())
+    for event, matcher in requirements:
+        for block_index, block in enumerate(_hook_blocks(config, event)):
+            if block.get("matcher", "") != matcher:
+                continue
+            entries = block.get("hooks")
+            if not isinstance(entries, list):
+                continue
+            for hook_index, entry in enumerate(entries):
+                if not isinstance(entry, dict) or entry.get("command") != command:
+                    continue
+                state_key = (
+                    f"{resolved_config_path}:{_event_state_name(event)}:{block_index}:{hook_index}"
+                )
+                state_record = state.get(state_key)
+                if isinstance(state_record, dict) and state_record.get("enabled") is False:
+                    state_record["enabled"] = True
+
+
 def _toml_value(value: Any) -> str:
     if isinstance(value, str):
         return json.dumps(value)
@@ -902,6 +974,7 @@ def _candidate_content(
     client: ClientName,
     config: dict[str, Any] | None,
     adapter: HostAdapterSpecV1,
+    config_path: str | None = None,
 ) -> tuple[str, int] | None:
     """Render a non-persisted semantic merge candidate for deterministic planning."""
 
@@ -911,11 +984,18 @@ def _candidate_content(
     else:
         candidate = copy.deepcopy(config)
         requirements = CODEX_HOOK_REQUIREMENTS if client == "codex" else CLAUDE_HOOK_REQUIREMENTS
-        _configured, missing, unrelated = _matching_events(config, requirements, adapter.command)
+        _configured, missing, unrelated = _matching_events(
+            config,
+            requirements,
+            adapter.command,
+            config_path=config_path,
+        )
         if not missing:
             return None
     requirements = CODEX_HOOK_REQUIREMENTS if client == "codex" else CLAUDE_HOOK_REQUIREMENTS
     _ensure_required(candidate, requirements, adapter.command)
+    if config_path is not None:
+        _enable_required(candidate, requirements, adapter.command, config_path=config_path)
     rendered = _render_toml(candidate) if client == "codex" else json.dumps(candidate, indent=2, sort_keys=True) + "\n"
     return rendered, unrelated
 
@@ -928,7 +1008,12 @@ def _candidate_change(
     adapter: HostAdapterSpecV1,
     state: ConfigurationState,
 ) -> HostConfigChangeV1 | None:
-    candidate = _candidate_content(client=client, config=config, adapter=adapter)
+    candidate = _candidate_content(
+        client=client,
+        config=config,
+        adapter=adapter,
+        config_path=config_path,
+    )
     if candidate is None:
         return None
     rendered, unrelated = candidate

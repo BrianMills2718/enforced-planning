@@ -268,16 +268,13 @@ def test_configured_both_signs_preserve_unrelated_semantic_content(tmp_path: Pat
     assert Path(request.claude_config_path).read_text(encoding="utf-8") == before_claude
 
 
-def test_missing_pretooluse_reports_advisory_only_and_no_mutation_enforcement(tmp_path: Path) -> None:
-    """Delivery callbacks do not become a mutation gate when PreToolUse is absent."""
+def test_disabled_pretooluse_reports_advisory_only_and_no_mutation_enforcement(tmp_path: Path) -> None:
+    """A present but state-disabled PreToolUse hook is not a mutation gate."""
 
     request = _request(tmp_path)
     codex = tomllib.loads(_configured_codex())
-    codex["hooks"]["PreToolUse"] = [
-        block
-        for block in codex["hooks"]["PreToolUse"]
-        if block.get("matcher") != "Bash|apply_patch"
-    ]
+    state_key = f"{Path(request.codex_config_path).resolve()}:pre_tool_use:0:0"
+    codex["hooks"]["state"] = {state_key: {"enabled": False}}
     Path(request.codex_config_path).write_text(mailbox_delivery._render_toml(codex), encoding="utf-8")
     Path(request.claude_config_path).write_text(json.dumps(_configured_claude()), encoding="utf-8")
 
@@ -293,6 +290,10 @@ def test_missing_pretooluse_reports_advisory_only_and_no_mutation_enforcement(tm
     assert "observed receipt proves exposure only" in codex_surface.operator_message
     assert codex_surface.observed_proves_stopped is False
     assert codex_surface.observed_proves_acknowledged is False
+
+    plan = plan_host_installation(HostInstallationPlanRequestV1(**request.model_dump()))
+    codex_change = next(change for change in plan.changes if change.client == "codex")
+    assert codex_change.configuration_state_before == "drifted"
 
 
 def test_drifted_command_and_missing_adapter_are_repairable_not_configured(tmp_path: Path) -> None:

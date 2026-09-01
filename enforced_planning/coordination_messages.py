@@ -32,6 +32,7 @@ from enforced_planning import coordination_claims
 
 
 SCHEMA_VERSION: Literal["1.0"] = "1.0"
+INDEX_DIRNAME = "index-v1"
 DEFAULT_TTL_SECONDS = 86_400
 MAX_NOTE_LENGTH = 2_000
 DEFAULT_NOTICE_BODY_LENGTH = 500
@@ -525,6 +526,150 @@ class CoordinationMessageStore:
         self.deliveries_dir = self.root / "deliveries"
         self.boundary_blocks_dir = self.root / "boundary-blocks"
         self.quarantine_dir = self.root / "quarantine"
+        # Derived, rebuildable lookup index over the immutable canonical
+        # records.  Lifecycle hooks run on every mutation-shaped tool call, so
+        # they must never pay a cost proportional to every message and receipt
+        # the store has ever held.  Nothing here is authoritative: every marker
+        # is an empty file whose name is derived from a canonical record, and
+        # deleting the whole directory only costs one rebuild.
+        self.index_dir = self.root / INDEX_DIRNAME
+        self.index_messages_by_recipient_dir = self.index_dir / "messages-by-recipient"
+        self.index_messages_by_sender_dir = self.index_dir / "messages-by-sender"
+        self.index_receipts_by_message_dir = self.index_dir / "receipts-by-message"
+        self.index_indexed_messages_dir = self.index_dir / "indexed-messages"
+        self.index_indexed_receipts_dir = self.index_dir / "indexed-receipts"
+        # One backfill scan per store instance.  Records this instance writes
+        # are indexed inline at write time, so the scan only has to pick up
+        # records published by other processes, and a status projection is
+        # already a point-in-time view bounded by ``as_of``.
+        self._messages_backfilled = False
+        self._receipts_backfilled = False
+
+    @staticmethod
+    def _index_key(session_id: str) -> str:
+        """Derive one path-safe directory name for an arbitrary session identity."""
+
+        return hashlib.sha256(session_id.encode("utf-8")).hexdigest()[:40]
+
+    @staticmethod
+    def _record_ids(directory: Path, *, suffix: str = "") -> set[str]:
+        """List record identifiers in one directory without reading any record."""
+
+        if not directory.exists():
+            return set()
+        names: set[str] = set()
+        with os.scandir(directory) as entries:
+            for entry in entries:
+                name = entry.name
+                if suffix:
+                    if not name.endswith(suffix):
+                        continue
+                    name = name[: -len(suffix)]
+                names.add(name)
+        return names
+
+    @staticmethod
+    def _write_marker(path: Path) -> None:
+        """Create one empty derived-index marker, tolerating a concurrent writer.
+
+        ``FileExistsError`` is the success case for a second writer publishing
+        the identical derived fact; every other error is raised so an unusable
+        index fails loudly instead of degrading into a silent full scan.
+        """
+
+        try:
+            os.close(os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644))
+        except FileExistsError:
+            return
+        except FileNotFoundError:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                os.close(os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644))
+            except FileExistsError:
+                return
+
+    def _index_message(self, message: CoordinationMessage) -> None:
+        """Publish the derived lookup markers for one canonical message."""
+
+        self._write_marker(
+            self.index_messages_by_recipient_dir
+            / self._index_key(message.recipient_session_id)
+            / message.message_id
+        )
+        self._write_marker(
+            self.index_messages_by_sender_dir
+            / self._index_key(message.sender_session_id)
+            / message.message_id
+        )
+        # Written last: a crash between the lookup markers and this one only
+        # costs an idempotent re-index on the next backfill.
+        self._write_marker(self.index_indexed_messages_dir / message.message_id)
+
+    def _index_receipt(self, receipt: MessageReceipt) -> None:
+        """Publish the derived lookup marker for one canonical receipt."""
+
+        self._write_marker(
+            self.index_receipts_by_message_dir / receipt.message_id / receipt.receipt_id
+        )
+        self._write_marker(self.index_indexed_receipts_dir / receipt.receipt_id)
+
+    def _refresh_message_index(self) -> None:
+        """Backfill messages published without a derived index, once per instance."""
+
+        if self._messages_backfilled:
+            return
+        pending = self._record_ids(self.messages_dir, suffix=".json") - self._record_ids(
+            self.index_indexed_messages_dir
+        )
+        for message_id in sorted(pending):
+            self._index_message(self._read_message_path(self.messages_dir / f"{message_id}.json"))
+        self._messages_backfilled = True
+
+    def _refresh_receipt_index(self) -> None:
+        """Backfill receipts published without a derived index, once per instance."""
+
+        if self._receipts_backfilled:
+            return
+        pending = self._record_ids(self.receipts_dir, suffix=".json") - self._record_ids(
+            self.index_indexed_receipts_dir
+        )
+        for receipt_id in sorted(pending):
+            self._index_receipt(self._read_receipt_path(self.receipts_dir / f"{receipt_id}.json"))
+        self._receipts_backfilled = True
+
+    def _indexed_messages(self, index_root: Path, session_id: str) -> list[tuple[CoordinationMessage, Path]]:
+        """Load only the messages one session owns, in deterministic creation order."""
+
+        self._refresh_message_index()
+        selected: list[tuple[CoordinationMessage, Path]] = []
+        for message_id in sorted(self._record_ids(index_root / self._index_key(session_id))):
+            path = self.messages_dir / f"{message_id}.json"
+            if not path.is_file():
+                # The canonical record set is authoritative and the index is
+                # derived: a quarantined record leaves an orphan marker, and
+                # dropping that empty marker discards no content.
+                self._drop_orphan_marker(index_root / self._index_key(session_id) / message_id)
+                continue
+            selected.append((self._read_message_path(path), path))
+        return sorted(selected, key=lambda item: (item[0].created_at, item[0].message_id))
+
+    def _drop_orphan_marker(self, path: Path) -> None:
+        """Remove one derived marker whose canonical record no longer exists."""
+
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            return
+
+    def _messages_for_recipient(self, session_id: str) -> list[tuple[CoordinationMessage, Path]]:
+        """Return every message addressed to one exact recipient session."""
+
+        return self._indexed_messages(self.index_messages_by_recipient_dir, session_id)
+
+    def _messages_for_sender(self, session_id: str) -> list[tuple[CoordinationMessage, Path]]:
+        """Return every message sent by one exact session."""
+
+        return self._indexed_messages(self.index_messages_by_sender_dir, session_id)
 
     def _live_claims(self, project: str | None = None) -> list[coordination_claims.ClaimRecord]:
         """Read canonical live identity records without introducing another registry."""
@@ -643,10 +788,12 @@ class CoordinationMessageStore:
         )
         encoded = _canonical_json(record.model_dump(mode="json")) + b"\n"
         if self._write_immutable(path, encoded):
+            self._index_message(message)
             return path, False
         existing = self._read_message_path(path)
         if existing.request_sha256 != message.request_sha256:
             raise RecordCollisionError(f"Message ID {message.message_id} already contains different content")
+        self._index_message(existing)
         return path, True
 
     def _store_receipt(self, receipt: MessageReceipt) -> tuple[Path, bool]:
@@ -660,11 +807,13 @@ class CoordinationMessageStore:
         )
         encoded = _canonical_json(record.model_dump(mode="json")) + b"\n"
         if self._write_immutable(path, encoded):
+            self._index_receipt(receipt)
             return path, False
         existing = self._read_receipt_path(path)
         comparable_existing = existing.model_copy(update={"recorded_at": receipt.recorded_at})
         if comparable_existing != receipt:
             raise RecordCollisionError(f"Receipt ID {receipt.receipt_id} already contains different content")
+        self._index_receipt(existing)
         return path, True
 
     def _claim_event_delivery(
@@ -728,9 +877,7 @@ class CoordinationMessageStore:
             raise ValueError("limit must be positive")
         recorded_at = now or _utc_now()
         pending: list[MessageStatusView] = []
-        for message, _path in self._all_messages():
-            if message.sender_session_id != current_session_id:
-                continue
+        for message, _path in self._messages_for_sender(current_session_id):
             if project is not None and message.project != project:
                 continue
             status = self.status(MessageStatusRequest(message_id=message.message_id, as_of=recorded_at))
@@ -776,12 +923,25 @@ class CoordinationMessageStore:
         return sorted(messages, key=lambda item: (item[0].created_at, item[0].message_id))
 
     def _receipts_for(self, message_id: str) -> list[MessageReceipt]:
-        """Load and order every receipt, then select the requested message set."""
+        """Load and order only the receipts recorded against one message.
+
+        ``status`` is called once per polled message, so reading and validating
+        every receipt in the store here made one inbox poll cost
+        ``messages x receipts``.  The derived index keeps the cost proportional
+        to the receipts of the requested message.
+        """
 
         if not self.receipts_dir.exists():
             return []
-        receipts = [self._read_receipt_path(path) for path in sorted(self.receipts_dir.glob("*.json"))]
-        matching = [receipt for receipt in receipts if receipt.message_id == message_id]
+        self._refresh_receipt_index()
+        message_index = self.index_receipts_by_message_dir / message_id
+        matching: list[MessageReceipt] = []
+        for receipt_id in sorted(self._record_ids(message_index)):
+            path = self.receipts_dir / f"{receipt_id}.json"
+            if not path.is_file():
+                self._drop_orphan_marker(message_index / receipt_id)
+                continue
+            matching.append(self._read_receipt_path(path))
         return sorted(matching, key=lambda receipt: (receipt.recorded_at, receipt.receipt_id))
 
     def assess_recipient_reachability(
@@ -802,9 +962,7 @@ class CoordinationMessageStore:
         cutoff = before or now
         backlog = 0
         oldest: datetime | None = None
-        for message, _path in self._all_messages():
-            if message.recipient_session_id != recipient_session_id:
-                continue
+        for message, _path in self._messages_for_recipient(recipient_session_id):
             if message.created_at >= cutoff or message.expires_at <= now:
                 continue
             if any(
@@ -1046,9 +1204,8 @@ class CoordinationMessageStore:
             raise ValueError("as_of must be timezone-aware")
         selected = [
             message
-            for message, _path in self._all_messages()
-            if message.recipient_session_id == request.current_session_id
-            and (request.project is None or message.project == request.project)
+            for message, _path in self._messages_for_recipient(request.current_session_id)
+            if request.project is None or message.project == request.project
         ]
         observations: list[MessageReceipt] = []
         observation_paths: list[str] = []

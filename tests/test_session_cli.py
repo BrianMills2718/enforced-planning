@@ -10,8 +10,8 @@ import os
 import subprocess
 import sys
 import time
-from contextlib import contextmanager
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from threading import Event, Thread, current_thread
@@ -113,8 +113,26 @@ def _owner_bound_call(function, **kwargs: object) -> dict[str, object]:
 
 def _resume_session_as_native(**kwargs: object) -> dict[str, object]:
     session_id = str(kwargs["session_id"])
+    kwargs.setdefault("predecessor_process_pid", 4242)
     with _native_actor(str(kwargs["agent"]), session_id):
         return session_lifecycle.resume_session(**kwargs)
+
+
+@pytest.fixture(autouse=True)
+def _stub_exact_predecessor_process_fence(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep lifecycle fixtures deterministic; process identity has its own real seam tests."""
+
+    monkeypatch.setattr(
+        session_lifecycle.session_process_fencing,
+        "fence_predecessor_process",
+        lambda **kwargs: {
+            "record_type": "session_predecessor_process_fence",
+            "pid": kwargs["predecessor_pid"],
+            "predecessor_session_id": kwargs["predecessor_session_id"],
+            "successor_session_id": kwargs["successor_session_id"],
+            "worktree_path": kwargs["worktree_path"],
+        },
+    )
 
 
 def _heartbeat_session_as_native(**kwargs: object) -> dict[str, object]:
@@ -3357,6 +3375,85 @@ def test_close_session_rejects_live_sibling_claim_on_same_worktree_before_cleanu
     assert yaml.safe_load(claim_file.read_text(encoding="utf-8"))["status"] == "active"
 
 
+def test_close_session_terminalizes_merged_child_then_parent_closes_shared_worktree(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A merged child releases custody without deleting its live parent's lane."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    repo_root, worktree, branch = _real_repo_with_worktree(tmp_path)
+    parent_claim_file = _start_real_closeout_claim(
+        repo_root=repo_root,
+        worktree=worktree,
+        branch=branch,
+        claims_dir=claims_dir,
+        trackers_dir=trackers_dir,
+    )
+    child_scope = f"{branch}-child"
+    child = coordination_claims.build_candidate_claim(
+        agent="claude-code",
+        project="enforced-planning",
+        scope=child_scope,
+        intent="repair one inherited assertion for the parent lane",
+        claim_type="write",
+        write_paths=["feature.txt"],
+        repo_root=str(repo_root),
+        worktree_path=str(worktree),
+        branch=branch,
+        session_id="claude-code:child-session",
+        session_name="safe-worktree-lifecycle",
+        broader_goal="Safe Worktree Lifecycle",
+        parent_scope=branch,
+        claimed_at="2026-07-28T00:00:00+00:00",
+        expires_at="2099-07-28T00:00:00+00:00",
+    )
+    child_payload = child.to_dict()
+    child_payload.pop("project")
+    child_payload.pop("source_file")
+    child_claim_file = claims_dir / coordination_claims._claim_filename(
+        "claude-code", "enforced-planning", child_scope
+    )
+    child_claim_file.parent.mkdir(parents=True, exist_ok=True)
+    child_claim_file.write_text(
+        yaml.safe_dump(child_payload, sort_keys=False),
+        encoding="utf-8",
+    )
+    coordination_claims.refresh_prewrite_authority_projection(claims_dir=claims_dir)
+    _git(repo_root, "merge", "--no-ff", branch, "-m", "merge feature")
+    merge_commit = _git(repo_root, "rev-parse", "HEAD")
+
+    child_result = _close_session_as_owner(
+        agent="claude-code",
+        project="enforced-planning",
+        scope=child_scope,
+        disposition="merged",
+        merge_commit=merge_commit,
+        terminalize_shared_child=True,
+    )
+
+    assert child_result["action"] == "closed"
+    assert child_result["worktree_action"] == "retained_for_parent"
+    assert child_result["branch_action"] == "retained_for_parent"
+    assert child_result["retained_parent_scope"] == branch
+    assert not child_claim_file.exists()
+    assert parent_claim_file.exists()
+    assert worktree.exists()
+    assert _git(repo_root, "show-ref", "--verify", f"refs/heads/{branch}")
+
+    parent_result = _close_session_as_owner(
+        agent="codex",
+        project="enforced-planning",
+        scope=branch,
+    )
+
+    assert parent_result["action"] == "closed"
+    assert not parent_claim_file.exists()
+    assert not worktree.exists()
+
+
 def test_close_session_accepts_exact_squash_merge_patch_receipt(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -4807,6 +4904,40 @@ def test_resume_session_rebinds_stale_or_handoff_lane(
         scope="plan-37-session-recovery",
         note="resume later",
     )
+    claim_before_unfenced_resume = claim_path.read_bytes()
+    with _native_actor("codex", "codex:new-session"), pytest.raises(
+        ValueError, match="predecessor-process-pid"
+    ):
+        session_lifecycle.resume_session(
+            agent="codex",
+            project="enforced-planning",
+            scope="plan-37-session-recovery",
+            worktree_path=str(worktree),
+            branch="plan-37-session-recovery",
+            current_phase="unsafe unfenced resume",
+            session_id="codex:new-session",
+        )
+    assert claim_path.read_bytes() == claim_before_unfenced_resume
+    fence_calls: list[dict[str, object]] = []
+
+    def verify_predecessor_fenced_before_transfer(**kwargs: object) -> dict[str, object]:
+        current_claim = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+        assert current_claim["session_id"] == "codex:old-session"
+        assert current_claim["status"] == "handoff"
+        fence_calls.append(kwargs)
+        return {
+            "record_type": "session_predecessor_process_fence",
+            "pid": kwargs["predecessor_pid"],
+            "predecessor_session_id": kwargs["predecessor_session_id"],
+            "successor_session_id": kwargs["successor_session_id"],
+            "worktree_path": kwargs["worktree_path"],
+        }
+
+    monkeypatch.setattr(
+        session_lifecycle.session_process_fencing,
+        "fence_predecessor_process",
+        verify_predecessor_fenced_before_transfer,
+    )
 
     payload = _resume_session_as_native(
         agent="codex",
@@ -4824,6 +4955,8 @@ def test_resume_session_rebinds_stale_or_handoff_lane(
 
     assert payload["action"] == "resumed"
     assert payload["session_id"] == "codex:new-session"
+    assert payload["predecessor_process_fence"]["pid"] == 4242
+    assert len(fence_calls) == 1
     custody = payload["claim_session_transfer"]
     assert custody is not None
     custody_path = Path(custody["receipt_path"])

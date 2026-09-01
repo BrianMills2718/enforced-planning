@@ -222,6 +222,7 @@ RELATIONSHIP_CONTEXT_SYNC_SUPPORT_FILES: dict[str, str] = {
 
 COORDINATION_MESSAGES_SHARED_FILES: dict[str, str] = {
     "scripts/hook_receipts.py": "scripts/hook_receipts.py",
+    "scripts/meta/hook_receipts.py": "scripts/hook_receipts.py",
     "scripts/coordination_inbox.py": "scripts/coordination_inbox.py",
     "scripts/coordination_hook.py": "scripts/coordination_hook.py",
     "scripts/coordination_messages.py": "scripts/coordination_messages.py",
@@ -248,6 +249,9 @@ COORDINATION_MESSAGES_LOCAL_PACKAGE_FILES: dict[str, str] = {
     "enforced_planning/prewrite_claim_fast.py": "enforced_planning/prewrite_claim_fast.py",
     "enforced_planning/session_target.py": "enforced_planning/session_target.py",
     "enforced_planning/prewrite_claim_projection.py": "enforced_planning/prewrite_claim_projection.py",
+    "enforced_planning/file_context.py": "enforced_planning/file_context.py",
+    "enforced_planning/notebook_registry_validation.py": "enforced_planning/notebook_registry_validation.py",
+    "enforced_planning/plan_validation.py": "enforced_planning/plan_validation.py",
     "enforced_planning/doc_authority.py": "enforced_planning/doc_authority.py",
     "enforced_planning/push_safety.py": "enforced_planning/push_safety.py",
     "enforced_planning/session_contracts.py": "enforced_planning/session_contracts.py",

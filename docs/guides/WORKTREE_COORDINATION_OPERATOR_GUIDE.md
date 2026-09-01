@@ -1235,6 +1235,21 @@ a lock is absent, it accepts only an optimistic claim/tracker snapshot whose
 source bytes stay stable and whose lock remains absent; it never creates or
 chmods lock files, creates directories, or prunes stale staging artifacts.
 
+The Company Planning execution loop is admitted as one strict control-plane
+mutation, not as an arbitrary Python command. The host adapter requires the
+installed `company-planning` cache layout and matching plugin manifest, the
+ambient native session's exact healthy worktree claim, and claim ownership of
+`.company-planning/active-execution.json` (plus the nested history directory
+for archive). A canonical external candidate JSON is read-only input; wrong
+session/worktree bindings, untrusted script locations, and shell composition
+remain denied.
+
+Git revision and ref operands are identifiers rather than paths. Read-only
+queries such as `git rev-list ... origin/topic...HEAD` therefore retain only an
+explicit `git -C` directory as path evidence, and `git push origin <ref>` stays
+claim-bound without treating `<ref>` as a file. Pytest node selectors retain
+only the file portion before `::` for claim-path evaluation.
+
 When this control blocks valid work, loses an expected session transition, or
 creates avoidable process cost, record concrete evidence in Project Meta's
 canonical feedback register:

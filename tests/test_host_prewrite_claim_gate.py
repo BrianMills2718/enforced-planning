@@ -704,6 +704,37 @@ def test_maintenance_worktree_make_target_rejects_unmatched_control_files(tmp_pa
     ) is False
 
 
+def test_maintenance_worktree_make_target_accepts_exact_rendered_consumer_block(
+    tmp_path: Path,
+) -> None:
+    target = tmp_path / "consumer"
+    (target / "scripts" / "meta").mkdir(parents=True)
+    (target / "enforced_planning").mkdir()
+    template = (
+        prewrite_claim_gate.REPO_ROOT / "templates" / "Makefile.worktree.block.template"
+    ).read_text(encoding="utf-8")
+    rendered = template.replace(
+        "__WORKTREE_SCRIPT_ROOT__", "scripts/meta/worktree-coordination"
+    )
+    (target / "Makefile").write_text(f"consumer-target:\n\t@true\n\n{rendered}", encoding="utf-8")
+    (target / "scripts" / "meta" / "claim_bootstrap.py").write_bytes(
+        (prewrite_claim_gate.REPO_ROOT / "scripts" / "claim_bootstrap.py").read_bytes()
+    )
+    (target / "enforced_planning" / "claim_bootstrap.py").write_bytes(
+        (prewrite_claim_gate.REPO_ROOT / "enforced_planning" / "claim_bootstrap.py").read_bytes()
+    )
+    command = f"make -C {target} maintenance-worktree BRANCH=verify/consumer"
+
+    assert prewrite_claim_gate._special_unclaimed_command(
+        command,
+        client="codex",
+        claims_dir=tmp_path / "claims",
+        projection_path=tmp_path / "projection.json",
+        subagent_event=False,
+        native_session=SESSION,
+    ) == "claim_bootstrap"
+
+
 def test_hook_feedback_make_target_rejects_unmatched_control_files(tmp_path: Path) -> None:
     target = tmp_path / "lookalike"
     (target / "scripts").mkdir(parents=True)

@@ -143,7 +143,10 @@ verify it with `python scripts/meta/canonical_lock.py --verify . --json`.
 When `make maintenance-worktree` starts with whole-repository bootstrap custody,
 ordinary writes remain disabled until the exact owning session runs
 `make session-narrow BRANCH=... SESSION_WRITE_PATHS="..."`. Supplying narrow
-write paths at creation avoids that temporary broad reservation.
+write paths at creation avoids that temporary broad reservation. Generated
+consumers execute this transaction through the installer-owned
+`scripts/meta/claim_bootstrap.py` wrapper and its synchronized authority module;
+there is no fallback to a consumer-authored shell transaction.
 
 The Enforced Planning source repository additionally sets
 `meta_process.claims.outcome_admission_mode: enforce_selected`. New source

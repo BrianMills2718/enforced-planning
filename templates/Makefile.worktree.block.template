@@ -266,7 +266,7 @@ maintenance-worktree:  ## Claimed light maintenance worktree; needs BRANCH (othe
 		echo "from the branch name, and the agent from the runtime. Override any of them."; \
 		exit 2; \
 	fi
-	@$(PYTHON) scripts/claim_bootstrap.py --request-json '$(MAINTENANCE_REQUEST_JSON)'
+	@$(PYTHON) scripts/meta/claim_bootstrap.py --request-json '$(MAINTENANCE_REQUEST_JSON)'
 
 session-start:  ## Create or refresh the active session contract for BRANCH=name
 ifndef BRANCH

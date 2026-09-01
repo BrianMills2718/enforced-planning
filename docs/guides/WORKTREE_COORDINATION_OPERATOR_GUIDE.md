@@ -223,6 +223,11 @@ and refresh the pre-write projection in the same locked mutation.
    transaction supplies the one temporary program write scope itself (`.`): it
    is bounded by the named repository, branch, worktree, and native session,
    then must be narrowed before scoped implementation begins.
+   In generated consumers, the installer owns `scripts/meta/claim_bootstrap.py`
+   and the synchronized bootstrap authority module. Claimless host admission
+   requires the exact rendered worktree block and exact installed wrapper/module
+   digests, so unrelated Makefile content remains consumer-owned without being
+   trusted as control code.
    An explicit `SESSION_WRITE_PATHS="..."` overrides that default and is
    claimed as given without bootstrap mode, reason, or target metadata; those
    fields describe only the implicit repository-wide `.` custody state. Do not read the

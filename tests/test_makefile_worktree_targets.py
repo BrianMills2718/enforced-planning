@@ -57,7 +57,11 @@ def _claim_invocation(make_output: str) -> str:
 
 
 def _maintenance_request(make_output: str) -> dict[str, object]:
-    lines = [line for line in make_output.splitlines() if "scripts/claim_bootstrap.py" in line]
+    lines = [
+        line
+        for line in make_output.splitlines()
+        if "claim_bootstrap.py" in line and "--request-json" in line
+    ]
     assert len(lines) == 1, f"expected one typed bootstrap invocation, got {len(lines)}"
     tokens = shlex.split(lines[0])
     return json.loads(tokens[tokens.index("--request-json") + 1])
@@ -364,7 +368,7 @@ def test_consumer_template_exposes_session_narrow_and_bootstrap_metadata() -> No
     assert '--project "$(WORKTREE_PROJECT)"' in narrow
     assert '--scope "$(BRANCH)"' in narrow
     assert '$(foreach path,$(SESSION_WRITE_PATHS),--write-path "$(path)")' in narrow
-    assert 'scripts/claim_bootstrap.py --request-json' in maintenance
+    assert 'scripts/meta/claim_bootstrap.py --request-json' in maintenance
     assert "$(MAINTENANCE_REQUEST_JSON)" in maintenance
 
 

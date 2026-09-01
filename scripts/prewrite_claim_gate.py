@@ -462,6 +462,29 @@ def _same_file_digest(left: Path, right: Path) -> bool:
         return False
 
 
+def _rendered_consumer_worktree_block_matches(target_makefile: Path) -> bool:
+    """Match only the installed governed block, not consumer-owned Make content."""
+
+    start = "# >>> META-PROCESS WORKTREE TARGETS >>>"
+    end = "# <<< META-PROCESS WORKTREE TARGETS <<<"
+    try:
+        target_text = target_makefile.read_text(encoding="utf-8")
+        template_text = (REPO_ROOT / "templates" / "Makefile.worktree.block.template").read_text(
+            encoding="utf-8"
+        )
+    except OSError:
+        return False
+    expected = template_text.replace(
+        "__WORKTREE_SCRIPT_ROOT__", "scripts/meta/worktree-coordination"
+    ).strip()
+    start_at = target_text.find(start)
+    end_at = target_text.find(end, start_at + len(start))
+    if start_at < 0 or end_at < 0:
+        return False
+    actual = target_text[start_at : end_at + len(end)].strip()
+    return hashlib.sha256(actual.encode()).digest() == hashlib.sha256(expected.encode()).digest()
+
+
 def _parse_hook_feedback_report_command(command: str) -> None:
     """Validate the exact content-free report entrypoint as claimless observation."""
 
@@ -520,11 +543,14 @@ def _parse_maintenance_worktree_make_command(command: str, *, client: str) -> No
     if not target.is_absolute() or target.resolve() != target or tokens[3] != "maintenance-worktree":
         raise ValueError("maintenance-worktree requires one canonical absolute Make directory")
     target = target.resolve()
-    canonical_makefile = REPO_ROOT / "Makefile"
     canonical_bootstrap = REPO_ROOT / "scripts" / "claim_bootstrap.py"
+    canonical_module = REPO_ROOT / "enforced_planning" / "claim_bootstrap.py"
     if target != REPO_ROOT.resolve() and not (
-        _same_file_digest(target / "Makefile", canonical_makefile)
-        and _same_file_digest(target / "scripts" / "claim_bootstrap.py", canonical_bootstrap)
+        _rendered_consumer_worktree_block_matches(target / "Makefile")
+        and _same_file_digest(target / "scripts" / "meta" / "claim_bootstrap.py", canonical_bootstrap)
+        and _same_file_digest(
+            target / "enforced_planning" / "claim_bootstrap.py", canonical_module
+        )
     ):
         raise ValueError("maintenance-worktree target does not match the installed control revision")
 

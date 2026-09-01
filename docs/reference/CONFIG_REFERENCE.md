@@ -231,7 +231,10 @@ create or roll back the claim, worktree, or tracker. Omitted
 and supplies its typed broad-scope mode, reason, and target worktree. An
 explicit nonempty `SESSION_WRITE_PATHS` value is already narrow authority: the
 entrypoint forwards those exact paths and the typed operation omits bootstrap
-metadata.
+metadata. Generated consumers use the synchronized
+`scripts/meta/claim_bootstrap.py` wrapper; host admission accepts the Make target
+only when the rendered worktree block and installed wrapper/module digests match
+the canonical runtime.
 
 `session-status` is the sole Python-backed lifecycle command classified as
 claimless read-only. The classifier accepts only the fixed installed script,

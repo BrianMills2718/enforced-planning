@@ -377,6 +377,9 @@ omitted the transaction creates temporary repository-wide `.` custody with
 bootstrap mode, reason, and target metadata. When the caller supplies exact
 paths, it forwards those paths without bootstrap metadata; the claim is narrow
 from creation and needs no bootstrap classification.
+Generated consumers receive the wrapper and authority module from the canonical
+installer. Host admission binds the rendered worktree block plus those exact
+support-file digests rather than trusting the consumer's complete Makefile.
 
 The provider commit hook then named two coupled operator surfaces rather than
 silently treating code tests as documentation adoption:

@@ -4,6 +4,7 @@ import json
 import os
 import pwd
 import subprocess
+import traceback
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -178,7 +179,7 @@ def test_local_url_rewrite_is_denied(
         _git(runtime, "config", "--local", "--get", "remote.origin.url"),
     )
 
-    with pytest.raises(RuntimeUpdateError, match="unsupported local Git configuration"):
+    with pytest.raises(RuntimeUpdateError, match=runtime_update.SAFE_FAILURE_MESSAGE):
         update_runtime(source_repo=source, runtime_repo=runtime, revision=after, write=False)
 
 
@@ -188,7 +189,7 @@ def test_local_tls_override_is_denied(
     source, runtime, _before, after = _repos(tmp_path, monkeypatch)
     _git(runtime, "config", "http.sslVerify", "false")
 
-    with pytest.raises(RuntimeUpdateError, match="unsupported local Git configuration"):
+    with pytest.raises(RuntimeUpdateError, match=runtime_update.SAFE_FAILURE_MESSAGE):
         update_runtime(source_repo=source, runtime_repo=runtime, revision=after, write=False)
 
 
@@ -200,7 +201,7 @@ def test_symlinked_runtime_git_directory_is_denied(
     (runtime / ".git").rename(external_git_dir)
     (runtime / ".git").symlink_to(external_git_dir, target_is_directory=True)
 
-    with pytest.raises(RuntimeUpdateError, match="standalone clone"):
+    with pytest.raises(RuntimeUpdateError, match=runtime_update.SAFE_FAILURE_MESSAGE):
         update_runtime(source_repo=source, runtime_repo=runtime, revision=after, write=False)
 
 
@@ -213,10 +214,10 @@ def test_symlinked_exact_runtime_path_is_denied_before_resolution(
     runtime.symlink_to(external, target_is_directory=True)
     monkeypatch.setattr(runtime_update, "_canonical_runtime_repo", lambda: runtime.absolute())
 
-    with pytest.raises(RuntimeUpdateError, match="must not contain symlinks") as caught:
+    with pytest.raises(RuntimeUpdateError, match=runtime_update.SAFE_FAILURE_MESSAGE) as caught:
         update_runtime(source_repo=source, runtime_repo=runtime, revision=after, write=False)
 
-    assert caught.value.receipt["runtime_repo"] == str(runtime.absolute())
+    assert caught.value.receipt["runtime_repo"] is None
     assert _git(external, "rev-parse", "HEAD") == _before
 
 
@@ -229,14 +230,14 @@ def test_symlink_loop_runtime_path_emits_structured_denial(
     runtime.symlink_to(runtime, target_is_directory=True)
     monkeypatch.setattr(runtime_update, "_canonical_runtime_repo", lambda: runtime.absolute())
 
-    with pytest.raises(RuntimeUpdateError, match="must not contain symlinks") as caught:
+    with pytest.raises(RuntimeUpdateError, match=runtime_update.SAFE_FAILURE_MESSAGE) as caught:
         update_runtime(source_repo=source, runtime_repo=runtime, revision=after, write=False)
 
     receipt = caught.value.receipt
     assert receipt["action"] == "denied"
     assert receipt["state"] == "failed"
     assert receipt["stage"] == "preflight"
-    assert receipt["runtime_repo"] == str(runtime.absolute())
+    assert receipt["runtime_repo"] is None
     assert _git(external, "rev-parse", "HEAD") == _before
 
 
@@ -247,12 +248,12 @@ def test_source_symlink_loop_emits_structured_denial(
     source.rename(tmp_path / "preserved-source")
     source.symlink_to(source, target_is_directory=True)
 
-    with pytest.raises(RuntimeUpdateError, match="source repository path cannot be resolved") as caught:
+    with pytest.raises(RuntimeUpdateError, match=runtime_update.SAFE_FAILURE_MESSAGE) as caught:
         update_runtime(source_repo=source, runtime_repo=runtime, revision=after, write=False)
 
     assert caught.value.receipt["action"] == "denied"
     assert caught.value.receipt["stage"] == "preflight"
-    assert caught.value.receipt["source_repo"] == str(source.absolute())
+    assert caught.value.receipt["source_repo"] is None
 
 
 def test_unsupported_origin_credentials_never_enter_receipt(
@@ -262,7 +263,7 @@ def test_unsupported_origin_credentials_never_enter_receipt(
     credentialed_origin = "https://token:super-secret@evil.example/repo.git"
     _git(runtime, "remote", "set-url", "origin", credentialed_origin)
 
-    with pytest.raises(RuntimeUpdateError, match="not the canonical") as caught:
+    with pytest.raises(RuntimeUpdateError, match=runtime_update.SAFE_FAILURE_MESSAGE) as caught:
         update_runtime(source_repo=source, runtime_repo=runtime, revision=after, write=False)
 
     serialized = json.dumps(caught.value.receipt, sort_keys=True)
@@ -299,7 +300,52 @@ def test_main_emits_complete_json_when_hostname_lookup_fails(
     assert payload["error"]["type"] == "RuntimeUpdateError"
 
 
-def test_malformed_whitespace_url_credentials_are_redacted_from_denial() -> None:
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["--revision", "https://USERMARK:SECRETMARK@TRANSPORTMARK.invalid/repo.git"],
+        ["--unknown-option", "https://USERMARK:SECRETMARK@TRANSPORTMARK.invalid/ref"],
+        [
+            "--source-repo",
+            "/tmp/USERMARK:SECRETMARK@TRANSPORTMARK.invalid/repo",
+            "--revision",
+            "0" * 40,
+        ],
+    ],
+)
+def test_cli_never_serializes_unvalidated_identifier_markers(
+    argv: list[str], capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert runtime_update.main(argv) == 1
+
+    stdout = capsys.readouterr().out
+    json.loads(stdout)
+    assert "USERMARK" not in stdout
+    assert "SECRETMARK" not in stdout
+    assert "TRANSPORTMARK" not in stdout
+
+
+@pytest.mark.parametrize(
+    "raw_error",
+    [
+        "https://token:super secret@evil.example/repo.git",
+        "https://token:super\rsecret@evil.example/repo.git",
+        "https://token:super\nsecret@evil.example/repo.git",
+        "https://token:super\r\nsecret@evil.example/repo.git",
+        "https://token:super\tsecret@evil.example/repo.git",
+        "https://token:super\fsecret@evil.example/repo.git",
+        "https://token:super\vsecret@evil.example/repo.git",
+        "https://token:super@secret@evil.example/repo.git",
+        "https:/token:super-secret@evil.example/repo.git",
+        "https//token:super-secret@evil.example/repo.git",
+        r"https:\\token:super-secret@evil.example/repo.git",
+        "https::token:super-secret@evil.example/repo.git",
+        "mailto:ops@example.com",
+        "urn:contact:ops@example.com",
+        "label ops@example.com",
+    ],
+)
+def test_denial_receipt_uses_fixed_safe_error_boundary(raw_error: str) -> None:
     receipt = runtime_update._base_receipt(
         source_repo=Path("/source"),
         runtime_repo=Path("/runtime"),
@@ -309,13 +355,42 @@ def test_malformed_whitespace_url_credentials_are_redacted_from_denial() -> None
     )
     denial = runtime_update._deny(
         receipt,
-        RuntimeUpdateError("failed https://token:super secret@evil.example/repo.git"),
+        RuntimeUpdateError(f"failed {raw_error}"),
     )
 
     serialized = json.dumps(denial.receipt, sort_keys=True)
-    assert "token" not in serialized
-    assert "super secret" not in serialized
-    assert "https://<redacted>@evil.example/repo.git" in serialized
+    assert raw_error not in serialized
+    assert raw_error not in str(denial)
+    assert str(denial) == runtime_update.SAFE_FAILURE_MESSAGE
+    rendered = "".join(traceback.format_exception(denial))
+    assert raw_error not in rendered
+    assert denial.receipt["error"] == {
+        "type": "RuntimeUpdateError",
+        "code": "runtime_update_failed",
+        "message": runtime_update.SAFE_FAILURE_MESSAGE,
+    }
+
+
+def test_update_runtime_suppresses_raw_operational_exception_traceback(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, runtime, _before, after = _repos(tmp_path, monkeypatch)
+    raw_error = "https://token:super\r\nsecret@evil.example/repo.git"
+
+    def fail_remote_main() -> str:
+        raise RuntimeUpdateError(raw_error)
+
+    monkeypatch.setattr(runtime_update, "_remote_main_revision", fail_remote_main)
+
+    with pytest.raises(RuntimeUpdateError) as caught:
+        update_runtime(source_repo=source, runtime_repo=runtime, revision=after, write=False)
+
+    rendered = "".join(traceback.format_exception(caught.value))
+    assert str(caught.value) == runtime_update.SAFE_FAILURE_MESSAGE
+    assert raw_error not in str(caught.value)
+    assert raw_error not in rendered
+    assert caught.value.__cause__ is None
+    assert caught.value.__context__ is None
 
 
 def test_write_fast_forwards_and_retains_exact_recovery_ref(
@@ -339,6 +414,7 @@ def test_write_fast_forwards_and_retains_exact_recovery_ref(
     assert result["before_revision"] == before
     assert result["after_revision"] == after
     assert result["recovery_ref"] == f"refs/codex-runtime-recovery/20260901T160000000000Z-{before[:12]}"
+    assert result["recovery_ref_retained"] is True
     assert _git(runtime, "rev-parse", "HEAD") == after
     assert _git(runtime, "rev-parse", result["recovery_ref"]) == before
     assert _git(runtime, "status", "--porcelain", "--untracked-files=all") == ""
@@ -393,7 +469,7 @@ def test_dirty_runtime_is_denied_before_fetch_or_ref_creation(
     source, runtime, before, after = _repos(tmp_path, monkeypatch)
     (runtime / "dirty.txt").write_text("dirty\n", encoding="utf-8")
 
-    with pytest.raises(RuntimeUpdateError, match="installed runtime is dirty") as caught:
+    with pytest.raises(RuntimeUpdateError, match=runtime_update.SAFE_FAILURE_MESSAGE) as caught:
         update_runtime(source_repo=source, runtime_repo=runtime, revision=after, write=True)
 
     assert caught.value.receipt["state"] == "failed"
@@ -411,7 +487,7 @@ def test_wrong_origin_is_denied(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
     subprocess.run(["git", "init", "--bare", str(other)], check=True, capture_output=True)
     _git(runtime, "remote", "set-url", "origin", str(other))
 
-    with pytest.raises(RuntimeUpdateError, match="not the canonical") as caught:
+    with pytest.raises(RuntimeUpdateError, match=runtime_update.SAFE_FAILURE_MESSAGE) as caught:
         update_runtime(source_repo=source, runtime_repo=runtime, revision=after, write=True)
 
     assert caught.value.receipt["state"] == "failed"
@@ -440,11 +516,33 @@ def test_noncanonical_runtime_path_is_denied_before_repository_inspection(
     impostor = tmp_path / "impostor"
     subprocess.run(["git", "clone", str(tmp_path / "remote.git"), str(impostor)], check=True, capture_output=True)
 
-    with pytest.raises(RuntimeUpdateError, match="installed runtime path must be exactly") as caught:
+    with pytest.raises(RuntimeUpdateError, match=runtime_update.SAFE_FAILURE_MESSAGE) as caught:
         update_runtime(source_repo=source, runtime_repo=impostor, revision=after, write=False)
 
-    assert caught.value.receipt["runtime_repo"] == str(impostor.resolve())
+    assert caught.value.receipt["runtime_repo"] is None
     assert caught.value.receipt["stage"] == "preflight"
+
+
+def test_canonical_plain_directory_is_not_serialized_as_validated_runtime(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, _runtime, _before, after = _repos(tmp_path, monkeypatch)
+    plain_directory = tmp_path / "plain-runtime"
+    plain_directory.mkdir()
+    monkeypatch.setattr(
+        runtime_update, "_canonical_runtime_repo", lambda: plain_directory.resolve()
+    )
+
+    with pytest.raises(RuntimeUpdateError, match=runtime_update.SAFE_FAILURE_MESSAGE) as caught:
+        update_runtime(
+            source_repo=source,
+            runtime_repo=plain_directory,
+            revision=after,
+            write=False,
+        )
+
+    assert caught.value.receipt["source_repo"] == str(source.resolve())
+    assert caught.value.receipt["runtime_repo"] is None
 
 
 def test_runtime_subdirectory_is_denied_as_nonexact_worktree_root(
@@ -455,7 +553,7 @@ def test_runtime_subdirectory_is_denied_as_nonexact_worktree_root(
     subdirectory.mkdir()
     monkeypatch.setattr(runtime_update, "_canonical_runtime_repo", lambda: subdirectory.resolve())
 
-    with pytest.raises(RuntimeUpdateError, match="exact Git worktree root"):
+    with pytest.raises(RuntimeUpdateError, match=runtime_update.SAFE_FAILURE_MESSAGE):
         update_runtime(source_repo=source, runtime_repo=subdirectory, revision=after, write=False)
 
 
@@ -465,7 +563,7 @@ def test_source_and_runtime_must_be_distinct_clones(
     source, _runtime, _before, after = _repos(tmp_path, monkeypatch)
     monkeypatch.setattr(runtime_update, "_canonical_runtime_repo", lambda: source.resolve())
 
-    with pytest.raises(RuntimeUpdateError, match="must be distinct clones"):
+    with pytest.raises(RuntimeUpdateError, match=runtime_update.SAFE_FAILURE_MESSAGE):
         update_runtime(source_repo=source, runtime_repo=source, revision=after, write=False)
 
 
@@ -476,7 +574,7 @@ def test_non_tip_revision_is_denied_without_fetch(
     refs_before = _all_refs(runtime)
     fetch_head_before = _fetch_head(runtime)
 
-    with pytest.raises(RuntimeUpdateError, match="not canonical origin/main"):
+    with pytest.raises(RuntimeUpdateError, match=runtime_update.SAFE_FAILURE_MESSAGE):
         update_runtime(source_repo=source, runtime_repo=runtime, revision=before, write=False)
 
     assert _git(runtime, "rev-parse", "HEAD") == before
@@ -485,13 +583,32 @@ def test_non_tip_revision_is_denied_without_fetch(
     assert after != before
 
 
+def test_nonexistent_full_sha_is_not_serialized_as_validated_target(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, runtime, _before, _after = _repos(tmp_path, monkeypatch)
+    nonexistent_revision = "f" * 40
+
+    with pytest.raises(RuntimeUpdateError, match=runtime_update.SAFE_FAILURE_MESSAGE) as caught:
+        update_runtime(
+            source_repo=source,
+            runtime_repo=runtime,
+            revision=nonexistent_revision,
+            write=False,
+        )
+
+    assert caught.value.receipt["source_repo"] == str(source.resolve())
+    assert caught.value.receipt["runtime_repo"] == str(runtime.resolve())
+    assert caught.value.receipt["target_revision"] is None
+
+
 def test_divergent_runtime_is_denied(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     source, runtime, _before, after = _repos(tmp_path, monkeypatch)
     _git(runtime, "config", "user.email", "test@example.com")
     _git(runtime, "config", "user.name", "Test User")
     divergent = _commit(runtime, "local.txt", "local\n")
 
-    with pytest.raises(RuntimeUpdateError, match="cannot fast-forward"):
+    with pytest.raises(RuntimeUpdateError, match=runtime_update.SAFE_FAILURE_MESSAGE):
         update_runtime(source_repo=source, runtime_repo=runtime, revision=after, write=True)
 
     assert _git(runtime, "rev-parse", "HEAD") == divergent
@@ -524,7 +641,7 @@ def test_non_main_named_branch_is_denied(
     source, runtime, before, after = _repos(tmp_path, monkeypatch)
     _git(runtime, "checkout", "-b", "feature")
 
-    with pytest.raises(RuntimeUpdateError, match="must be on main"):
+    with pytest.raises(RuntimeUpdateError, match=runtime_update.SAFE_FAILURE_MESSAGE):
         update_runtime(source_repo=source, runtime_repo=runtime, revision=after, write=True)
 
     assert _git(runtime, "rev-parse", "HEAD") == before
@@ -554,6 +671,47 @@ def test_explicit_detached_replacement_retains_divergent_head(
     assert _git(runtime, "rev-parse", result["recovery_ref"]) == divergent
 
 
+def test_check_rejects_fsmonitor_before_it_can_execute(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, runtime, _before, after = _repos(tmp_path, monkeypatch)
+    marker = tmp_path / "fsmonitor-executed"
+    fsmonitor = tmp_path / "fsmonitor.sh"
+    fsmonitor.write_text(f"#!/bin/sh\ntouch {marker}\n", encoding="utf-8")
+    fsmonitor.chmod(0o755)
+    _git(runtime, "config", "core.fsmonitor", str(fsmonitor))
+
+    with pytest.raises(RuntimeUpdateError, match=runtime_update.SAFE_FAILURE_MESSAGE):
+        update_runtime(source_repo=source, runtime_repo=runtime, revision=after, write=False)
+
+    assert not marker.exists()
+
+
+def test_mutating_detached_replacement_suppresses_checkout_hook(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, runtime, before, after = _repos(tmp_path, monkeypatch)
+    _git(runtime, "checkout", "--detach", before)
+    _git(runtime, "config", "user.email", "test@example.com")
+    _git(runtime, "config", "user.name", "Test User")
+    _commit(runtime, "divergent.txt", "divergent\n")
+    marker = tmp_path / "post-checkout-executed"
+    hook = runtime / ".git" / "hooks" / "post-checkout"
+    hook.write_text(f"#!/bin/sh\ntouch {marker}\n", encoding="utf-8")
+    hook.chmod(0o755)
+
+    result = update_runtime(
+        source_repo=source,
+        runtime_repo=runtime,
+        revision=after,
+        write=True,
+        allow_detached_replacement=True,
+    )
+
+    assert result["action"] == "updated"
+    assert not marker.exists()
+
+
 def test_partial_failure_receipt_retains_recovery_ref(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -572,7 +730,7 @@ def test_partial_failure_receipt_retains_recovery_ref(
         return real_run(repo, *args, check=check, mutating=mutating, network_auth=network_auth)
 
     monkeypatch.setattr(runtime_update, "_run", fail_merge)
-    with pytest.raises(RuntimeUpdateError, match="injected merge failure") as caught:
+    with pytest.raises(RuntimeUpdateError, match=runtime_update.SAFE_FAILURE_MESSAGE) as caught:
         update_runtime(
             source_repo=source,
             runtime_repo=runtime,
@@ -592,9 +750,45 @@ def test_partial_failure_receipt_retains_recovery_ref(
     assert receipt["recovery_ref_retained"] is True
     assert receipt["error"] == {
         "type": "RuntimeUpdateError",
-        "message": "injected merge failure",
+        "code": "runtime_update_failed",
+        "message": "Runtime update failed at the recorded stage; raw error details are omitted.",
     }
     assert real_run(runtime, "rev-parse", receipt["recovery_ref"]).stdout.strip() == before
+
+
+def test_quarantine_failure_is_denied_before_installed_runtime_mutation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, runtime, before, after = _repos(tmp_path, monkeypatch)
+    refs_before = _all_refs(runtime)
+    fetch_head_before = _fetch_head(runtime)
+    index_before = _git_path_bytes(runtime, "index")
+
+    def fail_quarantine(_revision: str) -> None:
+        raise OSError("injected quarantine failure")
+
+    monkeypatch.setattr(
+        runtime_update,
+        "_fetch_canonical_revision_into_quarantine",
+        fail_quarantine,
+    )
+
+    with pytest.raises(RuntimeUpdateError, match=runtime_update.SAFE_FAILURE_MESSAGE) as caught:
+        update_runtime(source_repo=source, runtime_repo=runtime, revision=after, write=True)
+
+    receipt = caught.value.receipt
+    assert receipt["action"] == "denied"
+    assert receipt["stage"] == "fetch_target"
+    assert receipt["mutation_started"] is False
+    assert receipt["recovery_ref"] is None
+    assert receipt["recovery_ref_retained"] is None
+    assert _git(runtime, "rev-parse", "HEAD") == before
+    assert _all_refs(runtime) == refs_before
+    assert _fetch_head(runtime) == fetch_head_before
+    assert _git_path_bytes(runtime, "index") == index_before
+    assert runtime_update._run(
+        runtime, "cat-file", "-e", f"{after}^{{commit}}", check=False
+    ).returncode != 0
 
 
 def test_oserror_after_recovery_ref_emits_structured_partial_failure(
@@ -615,7 +809,7 @@ def test_oserror_after_recovery_ref_emits_structured_partial_failure(
         return real_run(repo, *args, check=check, mutating=mutating, network_auth=network_auth)
 
     monkeypatch.setattr(runtime_update, "_run", fail_merge)
-    with pytest.raises(RuntimeUpdateError, match="injected operating-system failure") as caught:
+    with pytest.raises(RuntimeUpdateError, match=runtime_update.SAFE_FAILURE_MESSAGE) as caught:
         update_runtime(
             source_repo=source,
             runtime_repo=runtime,
@@ -631,8 +825,9 @@ def test_oserror_after_recovery_ref_emits_structured_partial_failure(
     assert receipt["after_revision"] == before
     assert receipt["recovery_ref_retained"] is True
     assert receipt["error"] == {
-        "type": "OSError",
-        "message": "injected operating-system failure",
+        "type": "RuntimeUpdateError",
+        "code": "runtime_update_failed",
+        "message": "Runtime update failed at the recorded stage; raw error details are omitted.",
     }
     assert real_run(runtime, "rev-parse", receipt["recovery_ref"]).stdout.strip() == before
 
@@ -645,7 +840,7 @@ def test_recovery_ref_collision_is_denied_without_overwrite(
     recovery_ref = runtime_update._recovery_ref(before, observed)
     _git(runtime, "update-ref", recovery_ref, before)
 
-    with pytest.raises(RuntimeUpdateError, match="cannot lock ref") as caught:
+    with pytest.raises(RuntimeUpdateError, match=runtime_update.SAFE_FAILURE_MESSAGE) as caught:
         update_runtime(
             source_repo=source,
             runtime_repo=runtime,
@@ -661,3 +856,43 @@ def test_recovery_ref_collision_is_denied_without_overwrite(
     assert caught.value.receipt["recovery_ref_retained"] is True
     assert _git(runtime, "rev-parse", recovery_ref) == before
     assert _git(runtime, "rev-parse", "HEAD") == before
+
+
+def test_origin_only_recovery_ref_collision_is_denied_without_mutation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, runtime, _before, after = _repos(tmp_path, monkeypatch)
+    _git(runtime, "fetch", "origin", "main")
+    _git(runtime, "merge", "--ff-only", after)
+    _git(runtime, "remote", "set-url", "origin", runtime_update.LEGACY_RUNTIME_ORIGIN)
+    observed = datetime(2026, 9, 1, 16, 50, tzinfo=UTC)
+    recovery_ref = runtime_update._recovery_ref(after, observed)
+    _git(runtime, "update-ref", recovery_ref, after)
+    head_before = _git(runtime, "rev-parse", "HEAD")
+    refs_before = _all_refs(runtime)
+    fetch_head_before = _fetch_head(runtime)
+    index_before = _git_path_bytes(runtime, "index")
+    objects_before = _git(runtime, "count-objects", "-v")
+    origin_before = _git(runtime, "config", "--local", "--get", "remote.origin.url")
+
+    with pytest.raises(RuntimeUpdateError, match=runtime_update.SAFE_FAILURE_MESSAGE) as caught:
+        update_runtime(
+            source_repo=source,
+            runtime_repo=runtime,
+            revision=after,
+            write=True,
+            now=observed,
+        )
+
+    receipt = caught.value.receipt
+    assert receipt["action"] == "denied"
+    assert receipt["stage"] == "create_recovery_ref"
+    assert receipt["mutation_started"] is False
+    assert receipt["recovery_ref"] == recovery_ref
+    assert receipt["recovery_ref_retained"] is True
+    assert _git(runtime, "rev-parse", "HEAD") == head_before
+    assert _all_refs(runtime) == refs_before
+    assert _fetch_head(runtime) == fetch_head_before
+    assert _git_path_bytes(runtime, "index") == index_before
+    assert _git(runtime, "count-objects", "-v") == objects_before
+    assert _git(runtime, "config", "--local", "--get", "remote.origin.url") == origin_before

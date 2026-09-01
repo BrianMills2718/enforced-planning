@@ -24,7 +24,6 @@ from pathlib import Path
 from typing import Any
 
 FULL_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
-URL_USERINFO_RE = re.compile(r"(?P<prefix>[A-Za-z][A-Za-z0-9+.-]*://)[^@\r\n]*@")
 RECOVERY_NAMESPACE = "refs/codex-runtime-recovery"
 ZERO_OID = "0" * 40
 CANONICAL_ORIGIN = "https://github.com/BrianMills2718/enforced-planning.git"
@@ -32,6 +31,7 @@ CANONICAL_ORIGIN_IDENTITY = "github.com/BrianMills2718/enforced-planning"
 LEGACY_RUNTIME_ORIGIN = "git@github-personal:BrianMills2718/enforced-planning.git"
 GIT_EXECUTABLE = Path("/usr/bin/git")
 GH_EXECUTABLE = Path("/usr/bin/gh")
+SAFE_FAILURE_MESSAGE = "Runtime update failed at the recorded stage; raw error details are omitted."
 ALLOWED_RUNTIME_CONFIG_KEYS = {
     "branch.main.merge",
     "branch.main.remote",
@@ -71,8 +71,12 @@ def _run(
     env = _canonical_network_git_env() if network_auth else _sanitized_git_env()
     if not mutating:
         env["GIT_OPTIONAL_LOCKS"] = "0"
+    command = [str(GIT_EXECUTABLE)]
+    if mutating:
+        command.extend(("-c", "core.hooksPath=/dev/null"))
+    command.extend(("-C", str(repo), *args))
     result = subprocess.run(
-        [str(GIT_EXECUTABLE), "-C", str(repo), *args],
+        command,
         check=False,
         capture_output=True,
         text=True,
@@ -136,8 +140,8 @@ def _base_receipt(
         "stage": "preflight",
         "host": _safe_hostname(),
         "observed_at": _observed_at(now),
-        "source_repo": str(source_repo.absolute()),
-        "runtime_repo": str(runtime_repo.absolute()),
+        "source_repo": None,
+        "runtime_repo": None,
         "origin": None,
         "stored_origin_before": None,
         "stored_origin_after": None,
@@ -145,21 +149,16 @@ def _base_receipt(
         "canonical_repository": _canonical_origin_identity(),
         "checkout_mode": None,
         "before_revision": None,
-        "target_revision": revision,
+        "target_revision": None,
         "after_revision": None,
         "recovery_ref": None,
+        "recovery_ref_retained": None,
         "remote_main_revision": None,
         "changed": None,
         "update_mode": None,
         "mutation_started": False,
         "write_requested": write,
     }
-
-
-def _redact_sensitive_text(value: str) -> str:
-    """Remove URL userinfo before an operational error enters a durable receipt."""
-
-    return URL_USERINFO_RE.sub(r"\g<prefix><redacted>@", value)
 
 
 def _sanitized_git_env() -> dict[str, str]:
@@ -210,14 +209,17 @@ def _canonical_network_git_env() -> dict[str, str]:
     return env
 
 
-def _deny(receipt: dict[str, Any], error: Exception) -> RuntimeUpdateError:
-    message = _redact_sensitive_text(str(error))
+def _deny(receipt: dict[str, Any], _error: Exception) -> RuntimeUpdateError:
     receipt.update(
         action="partial_failure" if receipt["mutation_started"] else "denied",
         state="failed",
-        error={"type": type(error).__name__, "message": message},
+        error={
+            "type": "RuntimeUpdateError",
+            "code": "runtime_update_failed",
+            "message": SAFE_FAILURE_MESSAGE,
+        },
     )
-    return RuntimeUpdateError(message, receipt=receipt.copy())
+    return RuntimeUpdateError(SAFE_FAILURE_MESSAGE, receipt=receipt.copy())
 
 
 def _refresh_failure_state(runtime_repo: Path, receipt: dict[str, Any]) -> None:
@@ -375,6 +377,7 @@ def update_runtime(
 ) -> dict[str, Any]:
     """Validate and optionally fast-forward one exact installed runtime clone."""
 
+    denial: RuntimeUpdateError | None = None
     source_repo = Path(os.path.abspath(source_repo.expanduser()))
     runtime_repo = Path(os.path.abspath(runtime_repo.expanduser()))
     receipt = _base_receipt(
@@ -400,6 +403,7 @@ def update_runtime(
         except RuntimeError as exc:
             raise RuntimeUpdateError("installed runtime path cannot be resolved") from exc
         source_common_dir = _assert_repo(source_repo, "source repository")
+        receipt["source_repo"] = str(source_repo)
         runtime_common_dir = _assert_repo(runtime_repo, "installed runtime")
         runtime_git_dir = runtime_repo / ".git"
         if (
@@ -408,13 +412,14 @@ def update_runtime(
             or runtime_common_dir != runtime_git_dir.resolve()
         ):
             raise RuntimeUpdateError("installed runtime must be a standalone clone, not a linked worktree")
+        receipt["runtime_repo"] = str(runtime_repo)
         if source_common_dir == runtime_common_dir:
             raise RuntimeUpdateError("source repository and installed runtime must be distinct clones")
         _validate_revision(source_repo, revision)
+        receipt["target_revision"] = revision
+        _assert_safe_runtime_local_config(runtime_repo)
         checkout_mode = _assert_clean_runtime(runtime_repo)
         receipt["checkout_mode"] = checkout_mode
-
-        _assert_safe_runtime_local_config(runtime_repo)
         runtime_origin = _output(runtime_repo, "config", "--local", "--get", "remote.origin.url")
         expected_origin = _canonical_origin_identity()
         if runtime_origin == CANONICAL_ORIGIN:
@@ -470,10 +475,10 @@ def update_runtime(
 
         if write and before != revision:
             receipt["stage"] = "fetch_target"
-            receipt["mutation_started"] = True
             _assert_safe_runtime_local_config(runtime_repo)
             quarantine = _fetch_canonical_revision_into_quarantine(revision)
             try:
+                receipt["mutation_started"] = True
                 _run(
                     runtime_repo,
                     "fetch",
@@ -511,11 +516,20 @@ def update_runtime(
         stored_origin_after = _output(runtime_repo, "config", "--local", "--get", "remote.origin.url")
         if after != revision or retained != before or stored_origin_after != CANONICAL_ORIGIN:
             raise RuntimeUpdateError("post-update revision, origin, or recovery-ref verification failed")
-        receipt.update(action="updated", state="succeeded", stage="complete", after_revision=after)
+        receipt.update(
+            action="updated",
+            state="succeeded",
+            stage="complete",
+            after_revision=after,
+            recovery_ref_retained=True,
+        )
         return receipt
     except (RuntimeUpdateError, OSError, subprocess.SubprocessError) as exc:
         _refresh_failure_state(runtime_repo, receipt)
-        raise _deny(receipt, exc) from exc
+        denial = _deny(receipt, exc)
+    if denial is not None:
+        raise denial
+    raise AssertionError("runtime updater reached an impossible fallthrough")
 
 
 def _parser() -> argparse.ArgumentParser:

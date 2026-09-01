@@ -161,12 +161,43 @@ def _load_mode(repo_root: Path) -> str:
 
 
 def _mode(payload: dict[str, Any], explicit: str | None) -> str:
-    if explicit is not None:
-        return explicit
+    """Resolve the effective mode for the already target-rebound payload.
+
+    ``main`` rebinds ``payload["cwd"]`` to the repository that actually owns
+    the mutation target before calling this, so the question here is whether
+    *that* location is a governed checkout -- never merely where the native
+    session happened to launch.
+
+    An explicit host ``--mode enforce`` still enforces inside a Git checkout.
+    Outside one there is no repository whose claims could authorise the write
+    and no repo-local mode to load, so enforcing there denies every write
+    including the ``Edit`` that would reconfigure this hook.  That bootstrap
+    trap caused two total session outages, so an explicit enforce downgrades
+    to ``observe`` outside a checkout instead of denying.
+    """
+
     cwd = payload.get("cwd")
     if not isinstance(cwd, str) or not cwd.strip():
         cwd = str(Path.cwd())
-    return _load_mode(_git_root(cwd))
+    if explicit is not None and explicit != "enforce":
+        return explicit
+    try:
+        repo_root = _git_root(cwd)
+    except NonGitWorkingDirectory:
+        if explicit != "enforce":
+            return "off"
+        if isinstance(payload.get("_session_target_error_code"), str):
+            # Target resolution did not merely find no governed repository --
+            # it failed.  The session has claim authority that does not cover
+            # this event (unclaimed, ambiguous, unhealthy, or an explicitly
+            # named worktree outside the claim).  Downgrading here would let
+            # any claimed session escape its own claim from a workspace root,
+            # so unresolved authority still fails closed.
+            return "enforce"
+        return "observe"
+    if explicit is not None:
+        return explicit
+    return _load_mode(repo_root)
 
 
 def _configured_outcome_mode(payload: dict[str, Any]) -> str:
@@ -177,7 +208,11 @@ def _configured_outcome_mode(payload: dict[str, Any]) -> str:
     cwd = payload.get("cwd")
     if not isinstance(cwd, str) or not cwd.strip():
         cwd = str(Path.cwd())
-    return load_outcome_admission_mode(_git_root(cwd))
+    try:
+        return load_outcome_admission_mode(_git_root(cwd))
+    except NonGitWorkingDirectory:
+        # Outside git repos: no repo-local outcome mode to load.
+        return "off"
 
 
 def _resolved_outcome_mode(payload: dict[str, Any], *, explicit_mode: str | None) -> str:

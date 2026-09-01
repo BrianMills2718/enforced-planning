@@ -202,11 +202,18 @@ and refresh the pre-write projection in the same locked mutation.
    worktree, tracker, and explicit `UNPLANNED` claim linkage as one sanctioned
    journey. `BRANCH` is the only required input: `TASK`, `SESSION_GOAL`, and
    `SESSION_PHASE` default from the branch name, and the agent defaults from the
-   runtime. The maintenance transaction supplies the one temporary program
-   write scope itself (`.`): it is bounded by the named repository, branch,
-   worktree, and native session, then must be narrowed before scoped
-   implementation begins. `make worktree` (plan-owned lanes) deliberately
-   keeps every input explicit, including `SESSION_WRITE_PATHS="..."`.
+   runtime. When the lane does not declare `SESSION_WRITE_PATHS`, the
+   maintenance transaction supplies the one temporary program write scope
+   itself (`.`): it is bounded by the named repository, branch, worktree, and
+   native session, then must be narrowed before scoped implementation begins.
+   An explicit `SESSION_WRITE_PATHS="..."` overrides that default and is
+   claimed as given, like every other maintenance default. Do not read the
+   bootstrap `.` as mandatory: discarding a declared scope made every
+   maintenance lane claim the whole repository and therefore overlap every
+   other active lane, and because the overlap message reads
+   `<yours> <-> <theirs>`, the lane's own broad claim looked like someone
+   else's. `make worktree` (plan-owned lanes) deliberately keeps every input
+   explicit, including `SESSION_WRITE_PATHS="..."`.
 
    In a repository with hard selected-outcome admission, that maintenance
    claim is exempt from selecting a planned outcome only while its exact root

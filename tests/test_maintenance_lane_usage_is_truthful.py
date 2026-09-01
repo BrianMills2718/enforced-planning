@@ -31,7 +31,17 @@ def test_help_text_promises_a_self_sufficient_bootstrap(surface):
     "surface", MAKE_SURFACES, ids=lambda p: p.name
 )
 def test_bootstrap_scope_is_declared_by_the_maintainer_surface(surface):
-    """The caller cannot accidentally select a broader or narrower path."""
+    """The surface supplies the bootstrap default without discarding an override.
+
+    The repo-root default is what makes the branch-only entrypoint usable: a
+    bootstrapping lane may not know its targets yet.  But hardcoding it made
+    every maintenance lane claim the whole repository and therefore conflict
+    with every other active lane by construction, so an explicit
+    SESSION_WRITE_PATHS must win over the default.
+    """
     text = surface.read_text(encoding="utf-8")
-    assert "MAINTENANCE_BOOTSTRAP_WRITE_PATHS = ." in text
+    assert (
+        "MAINTENANCE_BOOTSTRAP_WRITE_PATHS = "
+        "$(if $(strip $(SESSION_WRITE_PATHS)),$(SESSION_WRITE_PATHS),.)"
+    ) in text
     assert 'SESSION_WRITE_PATHS="$(MAINTENANCE_BOOTSTRAP_WRITE_PATHS)"' in text

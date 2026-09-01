@@ -23,7 +23,8 @@ install-codex-runtime:  ## Install an exact pushed revision into the clean detac
 	@case "$(RUNTIME_REVISION)" in *[!0-9a-f]*|'') echo "RUNTIME_REVISION must be hexadecimal"; exit 1;; esac
 	@length=$$(printf %s "$(RUNTIME_REVISION)" | wc -c); \
 		test "$$length" -ge 40 -a "$$length" -le 64 || { echo "RUNTIME_REVISION must be a full Git object id"; exit 1; }
-	@before=$$(git -C "$(CODEX_RUNTIME_ROOT)" rev-parse HEAD); \
+	@set -eu; \
+	before=$$(git -C "$(CODEX_RUNTIME_ROOT)" rev-parse HEAD); \
 	rollback="refs/enforced-planning/runtime-rollback/$$(date -u +%Y%m%dT%H%M%SZ)-$$before"; \
 	git -C "$(CODEX_RUNTIME_ROOT)" update-ref "$$rollback" "$$before"; \
 	git -C "$(CODEX_RUNTIME_ROOT)" fetch --no-tags origin "$(RUNTIME_REVISION)"; \

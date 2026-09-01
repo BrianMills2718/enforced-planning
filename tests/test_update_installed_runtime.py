@@ -58,6 +58,13 @@ def _all_refs(repo: Path) -> str:
     return _git(repo, "for-each-ref", "--format=%(refname) %(objectname)")
 
 
+def _git_path_bytes(repo: Path, name: str) -> bytes | None:
+    path = Path(_git(repo, "rev-parse", "--git-path", name))
+    if not path.is_absolute():
+        path = repo / path
+    return path.read_bytes() if path.exists() else None
+
+
 def test_normalize_origin_accepts_only_explicit_canonical_transports() -> None:
     expected = "github.com/BrianMills2718/enforced-planning"
     assert runtime_update._normalize_origin(
@@ -115,6 +122,8 @@ def test_check_reports_update_without_mutating_refs_or_fetch_head(
     source, runtime, before, after = _repos(tmp_path, monkeypatch)
     refs_before = _all_refs(runtime)
     fetch_head_before = _fetch_head(runtime)
+    index_before = _git_path_bytes(runtime, "index")
+    (runtime / "one.txt").touch()
 
     result = update_runtime(
         source_repo=source,
@@ -130,6 +139,7 @@ def test_check_reports_update_without_mutating_refs_or_fetch_head(
     assert _git(runtime, "for-each-ref", "--format=%(refname)", "refs/codex-runtime-recovery") == ""
     assert _all_refs(runtime) == refs_before
     assert _fetch_head(runtime) == fetch_head_before
+    assert _git_path_bytes(runtime, "index") == index_before
 
 
 def test_dirty_runtime_is_denied_before_fetch_or_ref_creation(
@@ -305,10 +315,15 @@ def test_partial_failure_receipt_retains_recovery_ref(
     source, runtime, before, after = _repos(tmp_path, monkeypatch)
     real_run = runtime_update._run
 
-    def fail_merge(repo: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
+    def fail_merge(
+        repo: Path,
+        *args: str,
+        check: bool = True,
+        mutating: bool = False,
+    ) -> subprocess.CompletedProcess[str]:
         if args and args[0] == "merge":
             raise RuntimeUpdateError("injected merge failure")
-        return real_run(repo, *args, check=check)
+        return real_run(repo, *args, check=check, mutating=mutating)
 
     monkeypatch.setattr(runtime_update, "_run", fail_merge)
     with pytest.raises(RuntimeUpdateError, match="injected merge failure") as caught:

@@ -170,8 +170,9 @@ checkout directory, so pull-request content cannot rewrite its own rubric.
   cannot rewrite the canonical checkout or closeout Makefile.
 - `make finish` is allowed only through the repository's canonical Makefile
   with its canonical runtime variables; `-f` and finish-runtime overrides are
-  blocked, and accepted variable values are literal-only. Direct runpy and
-  GitHub GraphQL merge forms are blocked as well.
+  blocked, accepted variable values are literal-only, and leading environment
+  assignments are rejected. Direct runpy and GitHub GraphQL merge forms are
+  blocked as well.
 
 The command hook is an operational guard for governed Claude and Codex clients,
 not a security sandbox for an adversarial local user with arbitrary process or

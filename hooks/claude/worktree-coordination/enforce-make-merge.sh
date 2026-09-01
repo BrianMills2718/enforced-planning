@@ -158,7 +158,7 @@ while queue:
             raise SystemExit
         if "finish" in words[1:]:
             allowed_assignments = {"BRANCH", "PR", "REVIEW_SPEC", "REVIEW_OUTPUT_ROOT"}
-            unsafe = any(word.startswith("-") for word in words[1:])
+            unsafe = bool(variables) or any(word.startswith("-") for word in words[1:])
             for word in words[1:]:
                 if not assignment.match(word):
                     continue

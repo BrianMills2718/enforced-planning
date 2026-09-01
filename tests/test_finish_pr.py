@@ -354,6 +354,8 @@ def test_hook_blocks_direct_merge_and_finish_command_variants() -> None:
         "make finish 'BRANCH=x\"; gh pr merge 42; echo \"' PR=42 REVIEW_SPEC=/tmp/spec.json",
         "make finish BRANCH='$(gh pr merge 42)' PR=42 REVIEW_SPEC=/tmp/spec.json",
         "make finish BRANCH=feature PR=42 REVIEW_SPEC='$(python scripts/worktree-coordination/finish_pr.py --branch feature --pr 42)'",
+        "FOO='$(gh pr merge 42)' make finish BRANCH=feature PR=42 REVIEW_SPEC=/tmp/spec.json",
+        "PYTHON='/tmp/untrusted-python' make finish BRANCH=feature PR=42 REVIEW_SPEC=/tmp/spec.json",
         "python -c \"import runpy; runpy.run_path('scripts/worktree-coordination/finish_pr.py', run_name='__main__')\"",
         "true\ngh pr merge 42",
         "MERGER=gh; \"$MERGER\" pr merge 42 --squash",

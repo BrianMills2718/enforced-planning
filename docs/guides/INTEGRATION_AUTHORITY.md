@@ -2,15 +2,16 @@
 
 The sanctioned `make finish` path is the only merge entrypoint. Its existing
 canonical branch claim is the integration lease; no second owner registry or
-transfer protocol is created. The path emits an assertion before review and
-validates it again under the claim-registry lock after the exact-head review
-and required-check re-read.
+transfer protocol is created. The path emits an assertion after the exact-head
+review and required-check re-read, then validates it again under the
+claim-registry lock immediately around GitHub's head-matched merge.
 
 Authority comes from the canonical branch claim, not a shared coordinator
 label or a GitHub status. The caller must be the native exact session that owns
 one active, healthy, unexpired claim for the PR branch. The assertion binds the
-repository, PR, base and head revisions, branch, claim bytes, owner session,
-and current lease digest.
+repository, PR, base and head revisions, branch, stable claim authority fields,
+owner session, and trusted review-spec digest. Heartbeat and progress timestamps
+remain live checks at the final gate but do not invalidate stable custody.
 
 The assertion lasts at most ten minutes and cannot transfer ownership. If the
 process dies, a sanctioned claim transfer or takeover gives the successor a

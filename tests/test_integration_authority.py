@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+import subprocess
 from contextlib import contextmanager
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
@@ -11,6 +13,7 @@ import pytest
 from pydantic import ValidationError
 
 from enforced_planning import coordination_claims
+from enforced_planning import integration_authority as authority_module
 from enforced_planning.integration_authority import (
     IntegrationAuthorityAssertionV1,
     IntegrationAuthorityError,
@@ -87,6 +90,11 @@ def arrange(monkeypatch, item: coordination_claims.ClaimRecord, *, status="healt
         coordination_claims,
         "claim_runtime_status",
         lambda *_args, **_kwargs: status,
+    )
+    monkeypatch.setattr(
+        authority_module,
+        "_validate_claimed_git_identity",
+        lambda *_args, **_kwargs: None,
     )
 
 
@@ -174,14 +182,45 @@ def test_stale_assertion_and_claim_transfer_both_fail(tmp_path, monkeypatch) -> 
         )
 
 
-def test_raw_claim_change_invalidates_premerge_assertion(tmp_path, monkeypatch) -> None:
+def test_heartbeat_and_progress_churn_preserve_premerge_assertion(
+    tmp_path, monkeypatch
+) -> None:
     item = claim(tmp_path)
     arrange(monkeypatch, item)
     assertion = assert_integration_authority(
         target=target(), agent="codex", repo_root=Path(item.repo_root), now=NOW,
     )
-    Path(item.source_file).write_text(
-        "owner: codex:owner-thread\nrevision: 2\n", encoding="utf-8"
+    refreshed = replace(
+        item,
+        heartbeat_at=(NOW + timedelta(minutes=1)).isoformat(),
+        progress_at=(NOW + timedelta(minutes=1)).isoformat(),
+        updated_at=(NOW + timedelta(minutes=1)).isoformat(),
+    )
+    monkeypatch.setattr(
+        coordination_claims,
+        "list_claims",
+        lambda *_args, **_kwargs: [refreshed],
+    )
+    validate_integration_authority(
+        assertion,
+        expected_target=target(),
+        agent="codex",
+        repo_root=Path(item.repo_root),
+        now=NOW + timedelta(minutes=1),
+    )
+
+
+def test_stable_claim_authority_change_invalidates_assertion(tmp_path, monkeypatch) -> None:
+    item = claim(tmp_path)
+    arrange(monkeypatch, item)
+    assertion = assert_integration_authority(
+        target=target(), agent="codex", repo_root=Path(item.repo_root), now=NOW,
+    )
+    changed = replace(item, plan_ref="goal:different-authority")
+    monkeypatch.setattr(
+        coordination_claims,
+        "list_claims",
+        lambda *_args, **_kwargs: [changed],
     )
     with pytest.raises(IntegrationAuthorityError, match="claim changed"):
         validate_integration_authority(
@@ -240,7 +279,7 @@ def test_plain_digest_tamper_is_rejected() -> None:
             "agent": "codex",
             "session_id": SESSION,
             "scope": "fix/review",
-            "claim_snapshot_sha256": "d" * 64,
+            "claim_authority_sha256": "d" * 64,
             "plan_ref": "UNPLANNED",
             "work_graph_sha256": None,
             "work_unit_id": None,
@@ -277,17 +316,100 @@ def test_guard_holds_registry_lock_across_caller_operation(tmp_path, monkeypatch
     assert events == ["lock", "remote-head-cas", "unlock"]
 
 
-def test_process_death_needs_no_secondary_lease_cleanup(tmp_path, monkeypatch) -> None:
+def test_authentic_linked_worktree_identity_and_exact_head_are_required(
+    tmp_path, monkeypatch
+) -> None:
+    repo = tmp_path / "repo"
+    worktree = tmp_path / "worktree"
+    repo.mkdir()
+
+    def git(*args: str, cwd: Path = repo) -> str:
+        result = subprocess.run(
+            ["git", *args], cwd=cwd, capture_output=True, text=True, check=True
+        )
+        return result.stdout.strip()
+
+    git("init", "-b", "main")
+    git("config", "user.email", "test@example.invalid")
+    git("config", "user.name", "Integration Authority Test")
+    (repo / "tracked.txt").write_text("base\n", encoding="utf-8")
+    git("add", "tracked.txt")
+    git("commit", "-m", "base")
+    git("worktree", "add", "-b", "fix/review", str(worktree))
+    head = git("rev-parse", "HEAD", cwd=worktree)
+
+    item = claim(
+        tmp_path,
+        repo_root=str(repo),
+        worktree_path=str(worktree),
+        branch="fix/review",
+    )
+    monkeypatch.setenv("CODEX_THREAD_ID", "owner-thread")
+    monkeypatch.setattr(
+        coordination_claims, "list_claims", lambda *_args, **_kwargs: [item]
+    )
+    monkeypatch.setattr(
+        coordination_claims,
+        "claim_runtime_status",
+        lambda *_args, **_kwargs: "healthy",
+    )
+    exact_target = target().model_copy(update={"head_sha": head})
+    assertion = assert_integration_authority(
+        target=exact_target, agent="codex", repo_root=repo, now=NOW,
+    )
+    assert assertion.target.head_sha == head
+
+    (worktree / "untracked.txt").write_text("dirty\n", encoding="utf-8")
+    with pytest.raises(IntegrationAuthorityError, match="dirty"):
+        validate_integration_authority(
+            assertion,
+            expected_target=exact_target,
+            agent="codex",
+            repo_root=repo,
+            now=NOW + timedelta(seconds=1),
+        )
+
+
+def test_process_death_releases_registry_lock_for_transferred_successor(
+    tmp_path, monkeypatch
+) -> None:
     item = claim(tmp_path)
     arrange(monkeypatch, item)
-    first = assert_integration_authority(
-        target=target(), agent="codex", repo_root=Path(item.repo_root), now=NOW,
+    claims_dir = tmp_path / "claims"
+    current = [item]
+    monkeypatch.setattr(
+        coordination_claims,
+        "list_claims",
+        lambda *_args, **_kwargs: current,
     )
-    second = assert_integration_authority(
+    assertion = assert_integration_authority(
+        target=target(), agent="codex", repo_root=Path(item.repo_root),
+        claims_dir=claims_dir, now=NOW,
+    )
+
+    pid = os.fork()
+    if pid == 0:
+        with integration_authority_guard(
+            assertion,
+            expected_target=target(),
+            agent="codex",
+            repo_root=Path(item.repo_root),
+            claims_dir=claims_dir,
+            now=NOW,
+        ):
+            os._exit(17)
+        os._exit(99)
+    _pid, status = os.waitpid(pid, 0)
+    assert os.waitstatus_to_exitcode(status) == 17
+
+    successor = replace(item, session_id="codex:successor-thread")
+    current[0] = successor
+    monkeypatch.setenv("CODEX_THREAD_ID", "successor-thread")
+    replacement = assert_integration_authority(
         target=target(),
         agent="codex",
         repo_root=Path(item.repo_root),
+        claims_dir=claims_dir,
         now=NOW + timedelta(seconds=1),
     )
-    assert first.assertion_sha256 != second.assertion_sha256
-    assert list(tmp_path.rglob("*integration*lease*")) == []
+    assert replacement.claim.session_id == "codex:successor-thread"

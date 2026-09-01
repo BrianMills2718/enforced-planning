@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import subprocess
 from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
@@ -51,7 +52,7 @@ class IntegrationClaimBindingV1(_StrictModel):
     agent: Literal["codex", "claude-code", "openclaw"]
     session_id: str = Field(pattern=SESSION_PATTERN)
     scope: str = Field(min_length=1)
-    claim_snapshot_sha256: str = Field(pattern=SHA256_PATTERN)
+    claim_authority_sha256: str = Field(pattern=SHA256_PATTERN)
     plan_ref: str = Field(min_length=1)
     work_graph_sha256: str | None = Field(default=None, pattern=SHA256_PATTERN)
     work_unit_id: str | None = None
@@ -112,13 +113,77 @@ def _parse_time(value: str | None) -> datetime | None:
     return parsed.astimezone(UTC)
 
 
-def _claim_snapshot_sha256(claim: coordination_claims.ClaimRecord) -> str:
-    if not claim.source_file:
-        raise IntegrationAuthorityError("canonical claim has no source file")
-    try:
-        return hashlib.sha256(Path(claim.source_file).read_bytes()).hexdigest()
-    except OSError as exc:
-        raise IntegrationAuthorityError(f"cannot read canonical claim bytes: {exc}") from exc
+def _claim_authority_sha256(claim: coordination_claims.ClaimRecord) -> str:
+    """Hash stable custody fields, excluding expected heartbeat/progress churn."""
+
+    return canonical_sha256(
+        {
+            "agent": claim.agent,
+            "projects": claim.projects,
+            "scope": claim.scope,
+            "claim_type": claim.claim_type,
+            "write_paths": claim.write_paths,
+            "worktree_path": claim.worktree_path,
+            "repo_root": claim.repo_root,
+            "branch": claim.branch,
+            "session_id": claim.session_id,
+            "parent_scope": claim.parent_scope,
+            "plan_ref": claim.plan_ref,
+            "start_revision": claim.start_revision,
+            "plan_repo_root": claim.plan_repo_root,
+            "plan_revision": claim.plan_revision,
+            "plan_sha256": claim.plan_sha256,
+            "work_unit_id": claim.work_unit_id,
+            "work_graph_path": claim.work_graph_path,
+            "work_graph_sha256": claim.work_graph_sha256,
+            "approval_revisions": claim.approval_revisions,
+        }
+    )
+
+
+def _git_output(root: Path, *args: str) -> str:
+    result = subprocess.run(
+        ["git", "-C", str(root), *args],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout).strip()
+        raise IntegrationAuthorityError(
+            f"cannot validate claimed Git identity ({' '.join(args)}): {detail}"
+        )
+    return result.stdout.strip()
+
+
+def _validate_claimed_git_identity(
+    claim: coordination_claims.ClaimRecord,
+    *,
+    target: IntegrationTargetV1,
+    repo_root: Path,
+) -> None:
+    if not claim.worktree_path:
+        raise IntegrationAuthorityError("integration claim has no worktree path")
+    worktree = Path(claim.worktree_path).expanduser().resolve()
+    if not worktree.is_dir():
+        raise IntegrationAuthorityError("integration claim worktree is unavailable")
+    observed_root = Path(_git_output(worktree, "rev-parse", "--show-toplevel")).resolve()
+    if observed_root != worktree:
+        raise IntegrationAuthorityError("claim worktree path is not the exact Git root")
+    common = Path(_git_output(worktree, "rev-parse", "--git-common-dir"))
+    if not common.is_absolute():
+        common = (worktree / common).resolve()
+    canonical_common = Path(_git_output(repo_root, "rev-parse", "--git-common-dir"))
+    if not canonical_common.is_absolute():
+        canonical_common = (repo_root / canonical_common).resolve()
+    if common.resolve() != canonical_common.resolve():
+        raise IntegrationAuthorityError("claim worktree belongs to a different Git repository")
+    if _git_output(worktree, "symbolic-ref", "--short", "HEAD") != target.branch:
+        raise IntegrationAuthorityError("claim worktree is checked out on a different branch")
+    if _git_output(worktree, "rev-parse", "HEAD") != target.head_sha:
+        raise IntegrationAuthorityError("claim worktree HEAD differs from reviewed PR head")
+    if _git_output(worktree, "status", "--porcelain=v1", "--untracked-files=all"):
+        raise IntegrationAuthorityError("claim worktree is dirty at integration authority gate")
 
 
 def resolve_native_session(agent: str) -> str:
@@ -174,6 +239,7 @@ def _exact_active_claim(
     expires_at = _parse_time(claim.expires_at)
     if expires_at is None or expires_at <= now:
         raise IntegrationAuthorityError("integration claim is expired")
+    _validate_claimed_git_identity(claim, target=target, repo_root=repo_root)
     return claim
 
 
@@ -190,7 +256,7 @@ def _claim_binding(
         agent=claim.agent,
         session_id=claim.session_id,
         scope=claim.scope,
-        claim_snapshot_sha256=_claim_snapshot_sha256(claim),
+        claim_authority_sha256=_claim_authority_sha256(claim),
         plan_ref=claim.plan_ref,
         work_graph_sha256=claim.work_graph_sha256,
         work_unit_id=claim.work_unit_id,
@@ -215,11 +281,10 @@ def assert_integration_authority(
         raise IntegrationAuthorityError(
             f"assertion validity must be 1..{MAX_ASSERTION_SECONDS} seconds"
         )
-    observed = (now or datetime.now(UTC)).astimezone(UTC)
     session_id = resolve_native_session(agent)
     resolved_root = repo_root.expanduser().resolve()
 
-    def build() -> IntegrationAuthorityAssertionV1:
+    def build(observed: datetime) -> IntegrationAuthorityAssertionV1:
         claim = _exact_active_claim(
             target=target,
             agent=agent,
@@ -250,9 +315,11 @@ def assert_integration_authority(
         )
 
     if not lock_registry:
-        return build()
+        observed = (now or datetime.now(UTC)).astimezone(UTC)
+        return build(observed)
     with coordination_claims.claim_registry_lock(claims_dir):
-        return build()
+        observed = (now or datetime.now(UTC)).astimezone(UTC)
+        return build(observed)
 
 
 def validate_integration_authority(
@@ -267,20 +334,19 @@ def validate_integration_authority(
 ) -> None:
     """Reject a stale assertion or any change to target, owner, or claim bytes."""
 
-    observed = (now or datetime.now(UTC)).astimezone(UTC)
-    if assertion.target != expected_target:
-        raise IntegrationAuthorityError(
-            "integration target or trusted review spec changed after authority was asserted"
-        )
-    if assertion.valid_until <= observed:
-        raise IntegrationAuthorityError("integration authority assertion is stale")
     session_id = resolve_native_session(agent)
     if assertion.claim.session_id != session_id or assertion.claim.agent != agent:
         raise IntegrationAuthorityError(
             "integration authority assertion belongs to another native session"
         )
 
-    def validate() -> None:
+    def validate(observed: datetime) -> None:
+        if assertion.target != expected_target:
+            raise IntegrationAuthorityError(
+                "integration target or trusted review spec changed after authority was asserted"
+            )
+        if assertion.valid_until <= observed:
+            raise IntegrationAuthorityError("integration authority assertion is stale")
         claim = _exact_active_claim(
             target=assertion.target,
             agent=agent,
@@ -295,10 +361,12 @@ def validate_integration_authority(
             )
 
     if not lock_registry:
-        validate()
+        observed = (now or datetime.now(UTC)).astimezone(UTC)
+        validate(observed)
         return
     with coordination_claims.claim_registry_lock(claims_dir):
-        validate()
+        observed = (now or datetime.now(UTC)).astimezone(UTC)
+        validate(observed)
 
 
 @contextmanager

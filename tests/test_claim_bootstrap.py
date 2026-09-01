@@ -58,6 +58,40 @@ def _maintenance_payload(repo: Path, **updates: object) -> dict[str, object]:
     return payload
 
 
+def _delegated_maintenance_payload(repo: Path, **updates: object) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "schema_version": "1.0",
+        "operation": "delegate_maintenance_worktree",
+        "agent": "codex",
+        "project": repo.name,
+        "scope": "fix/child-lane",
+        "repo_root": str(repo),
+        "branch": "fix/child-lane",
+        "claim_type": "write",
+        "write_paths": ["CLAUDE.md"],
+        "parent_scope": "coordinator-root",
+        "child_agent_id": "child-456",
+    }
+    payload.update(updates)
+    return payload
+
+
+def _revoke_delegated_maintenance_payload(repo: Path, **updates: object) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "schema_version": "1.0",
+        "operation": "revoke_delegated_maintenance_worktree",
+        "agent": "codex",
+        "project": repo.name,
+        "scope": "fix/child-lane",
+        "repo_root": str(repo),
+        "branch": "fix/child-lane",
+        "parent_scope": "coordinator-root",
+        "child_agent_id": "child-456",
+    }
+    payload.update(updates)
+    return payload
+
+
 def _local_repository_payload(repo: Path, **updates: object) -> dict[str, object]:
     payload: dict[str, object] = {
         "schema_version": "1.0",
@@ -515,6 +549,35 @@ def _configure_maintenance_runtime(
         ).stdout.strip(),
     )
     return claims_dir, trackers_dir
+
+
+def _start_coordinator_claim(repo: Path, trackers_dir: Path) -> Path:
+    worktree = repo / "worktrees" / "coordinator-root"
+    subprocess.run(
+        ["git", "-C", str(repo), "worktree", "add", "-b", "coordinator-root", str(worktree), "main"],
+        check=True,
+        capture_output=True,
+    )
+    claim_bootstrap.session_lifecycle.start_session(
+        agent="codex",
+        project=repo.name,
+        scope="coordinator-root",
+        intent="Coordinate bounded child maintenance",
+        repo_root=str(repo),
+        worktree_path=str(worktree),
+        branch="coordinator-root",
+        broader_goal="Coordinate bounded child maintenance",
+        current_phase="delegation",
+        plan_ref=None,
+        session_id="codex:native-123",
+        session_name="coordinate-bounded-child-maintenance",
+        claim_type="program",
+        write_paths=["docs/plans/CLAUDE.md"],
+        read_paths=[],
+        tracker_dir=trackers_dir,
+        allow_unplanned=True,
+    )
+    return worktree
 
 
 def test_typed_local_repository_bootstrap_creates_local_repo_claim_and_worktree(
@@ -1155,6 +1218,320 @@ def test_typed_maintenance_worktree_transaction_creates_claim_tracker_and_projec
             receipt_path=tmp_path / "admitted-receipts.jsonl",
         )
         assert admitted["decision"] == "allow"
+
+def test_parent_delegates_one_narrow_child_owned_maintenance_lane(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = _governed_repo(tmp_path)
+    claims_dir, trackers_dir = _configure_maintenance_runtime(tmp_path, monkeypatch)
+    parent_worktree = _start_coordinator_claim(repo, trackers_dir)
+    request = claim_bootstrap.parse_request_json(
+        json.dumps(_delegated_maintenance_payload(repo), separators=(",", ":"))
+    )
+
+    receipt = claim_bootstrap.execute_request(request)
+
+    child_worktree = repo / "worktrees" / "fix" / "child-lane"
+    claims = claim_bootstrap.coordination_claims.check_claims(repo.name)
+    parent = next(claim for claim in claims if claim.scope == "coordinator-root")
+    child = next(claim for claim in claims if claim.scope == "fix/child-lane")
+    assert parent.session_id == "codex:native-123"
+    assert parent.write_paths == ["docs/plans/CLAUDE.md"]
+    assert child.session_id == "codex:child-456"
+    assert child.claim_type == "write"
+    assert child.parent_scope == "coordinator-root"
+    assert child.write_paths == ["CLAUDE.md"]
+    assert child.worktree_path == str(child_worktree)
+    assert receipt["session_id"] == "codex:native-123"
+    assert receipt["result"]["delegated_session_id"] == "codex:child-456"
+    assert receipt["result"]["delegated_by_session_id"] == "codex:native-123"
+
+    projection_path = prewrite_claim_fast.projection_path_for(claims_dir)
+    child_write = prewrite_claim_fast.evaluate_prewrite_fast(
+        {
+            "session_id": "native-123",
+            "agent_id": "child-456",
+            "hook_event_name": "PreToolUse",
+            "cwd": str(child_worktree),
+            "tool_name": "apply_patch",
+            "tool_input": {
+                "command": (
+                    f"*** Begin Patch\n*** Update File: {child_worktree / 'CLAUDE.md'}"
+                    "\n@@\n-old\n+new\n*** End Patch"
+                )
+            },
+        },
+        client="codex",
+        mode="enforce",
+        claims_dir=claims_dir,
+        projection_path=projection_path,
+        receipt_path=tmp_path / "child-write.jsonl",
+    )
+    parent_borrow = prewrite_claim_fast.evaluate_prewrite_fast(
+        {
+            "session_id": "native-123",
+            "hook_event_name": "PreToolUse",
+            "cwd": str(parent_worktree),
+            "tool_name": "apply_patch",
+            "tool_input": {
+                "command": (
+                    f"*** Begin Patch\n*** Update File: {child_worktree / 'CLAUDE.md'}"
+                    "\n@@\n-old\n+new\n*** End Patch"
+                )
+            },
+        },
+        client="codex",
+        mode="enforce",
+        claims_dir=claims_dir,
+        projection_path=projection_path,
+        receipt_path=tmp_path / "parent-borrow.jsonl",
+    )
+    assert child_write["decision"] == "allow"
+    assert parent_borrow["decision"] == "deny"
+
+
+@pytest.mark.parametrize(
+    ("updates", "message"),
+    [
+        ({"write_paths": ["."]}, "narrow write_paths"),
+        ({"child_agent_id": "codex:native-123"}, "must differ"),
+        ({"child_agent_id": "claude-code:child-456"}, "does not belong"),
+        ({"parent_scope": "fix/child-lane"}, "cannot name itself"),
+    ],
+)
+def test_delegated_maintenance_rejects_unsafe_authority_shapes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    updates: dict[str, object],
+    message: str,
+) -> None:
+    repo = _governed_repo(tmp_path)
+    _claims_dir, trackers_dir = _configure_maintenance_runtime(tmp_path, monkeypatch)
+    _start_coordinator_claim(repo, trackers_dir)
+    payload = _delegated_maintenance_payload(repo, **updates)
+
+    if updates.get("write_paths") == ["."] or updates.get("parent_scope") == "fix/child-lane":
+        with pytest.raises(claim_bootstrap.ClaimBootstrapError, match=message):
+            claim_bootstrap.parse_request_json(json.dumps(payload))
+        return
+
+    request = claim_bootstrap.parse_request_json(json.dumps(payload))
+    with pytest.raises(claim_bootstrap.ClaimBootstrapError, match=message):
+        claim_bootstrap.execute_request(request)
+
+
+def test_delegated_maintenance_requires_exact_healthy_parent_before_artifacts(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = _governed_repo(tmp_path)
+    claims_dir, _trackers_dir = _configure_maintenance_runtime(tmp_path, monkeypatch)
+    request = claim_bootstrap.parse_request_json(
+        json.dumps(_delegated_maintenance_payload(repo, parent_scope="missing-root"))
+    )
+
+    with pytest.raises(claim_bootstrap.ClaimBootstrapError, match="exact live parent"):
+        claim_bootstrap.execute_request(request)
+
+    assert not (repo / "worktrees" / "fix" / "child-lane").exists()
+    assert not list(claims_dir.glob("*.yaml"))
+    assert subprocess.run(
+        ["git", "-C", str(repo), "show-ref", "--verify", "refs/heads/fix/child-lane"],
+        capture_output=True,
+        check=False,
+    ).returncode != 0
+
+
+def test_delegated_maintenance_keeps_sibling_overlap_as_hard_conflict(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = _governed_repo(tmp_path)
+    _claims_dir, trackers_dir = _configure_maintenance_runtime(tmp_path, monkeypatch)
+    _start_coordinator_claim(repo, trackers_dir)
+    first = claim_bootstrap.parse_request_json(json.dumps(_delegated_maintenance_payload(repo)))
+    claim_bootstrap.execute_request(first)
+    monkeypatch.setenv("CODEX_THREAD_ID", "native-123")
+    second = claim_bootstrap.parse_request_json(
+        json.dumps(
+            _delegated_maintenance_payload(
+                repo,
+                scope="fix/sibling-lane",
+                branch="fix/sibling-lane",
+                child_agent_id="child-789",
+            )
+        )
+    )
+
+    with pytest.raises(claim_bootstrap.ClaimBootstrapError, match="conflict"):
+        claim_bootstrap.execute_request(second)
+
+    assert not (repo / "worktrees" / "fix" / "sibling-lane").exists()
+
+
+def test_delegated_post_claim_failure_revokes_before_git_artifacts_disappear(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = _governed_repo(tmp_path)
+    _claims_dir, trackers_dir = _configure_maintenance_runtime(tmp_path, monkeypatch)
+    _start_coordinator_claim(repo, trackers_dir)
+    request = claim_bootstrap.parse_request_json(json.dumps(_delegated_maintenance_payload(repo)))
+    child_worktree = repo / "worktrees" / "fix" / "child-lane"
+    real_revoke = claim_bootstrap.session_lifecycle.revoke_delegated_session
+    observed: dict[str, bool] = {}
+
+    def revoke_after_observation(**kwargs: object) -> dict[str, object]:
+        observed["worktree_exists"] = child_worktree.is_dir()
+        observed["branch_exists"] = subprocess.run(
+            ["git", "-C", str(repo), "show-ref", "--verify", "refs/heads/fix/child-lane"],
+            capture_output=True,
+            check=False,
+        ).returncode == 0
+        observed["claim_exists"] = any(
+            claim.scope == "fix/child-lane"
+            for claim in claim_bootstrap.coordination_claims.check_claims(repo.name)
+        )
+        return real_revoke(**kwargs)
+
+    monkeypatch.setattr(
+        claim_bootstrap,
+        "_reconcile_canonical_after_claim",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("lock reconcile failed")),
+    )
+    monkeypatch.setattr(claim_bootstrap.session_lifecycle, "revoke_delegated_session", revoke_after_observation)
+
+    with pytest.raises(claim_bootstrap.ClaimBootstrapError, match="transaction revoked"):
+        claim_bootstrap.execute_request(request)
+
+    assert observed == {"worktree_exists": True, "branch_exists": True, "claim_exists": True}
+    assert not child_worktree.exists()
+    assert not any(
+        claim.scope == "fix/child-lane"
+        for claim in claim_bootstrap.coordination_claims.check_claims(repo.name)
+    )
+    assert subprocess.run(
+        ["git", "-C", str(repo), "show-ref", "--verify", "refs/heads/fix/child-lane"],
+        capture_output=True,
+        check=False,
+    ).returncode != 0
+
+
+def test_delegated_post_claim_revoke_failure_preserves_intact_lane_for_retry(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = _governed_repo(tmp_path)
+    _claims_dir, trackers_dir = _configure_maintenance_runtime(tmp_path, monkeypatch)
+    _start_coordinator_claim(repo, trackers_dir)
+    request = claim_bootstrap.parse_request_json(json.dumps(_delegated_maintenance_payload(repo)))
+    child_worktree = repo / "worktrees" / "fix" / "child-lane"
+    monkeypatch.setattr(
+        claim_bootstrap,
+        "_reconcile_canonical_after_claim",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("lock reconcile failed")),
+    )
+    monkeypatch.setattr(
+        claim_bootstrap.session_lifecycle,
+        "revoke_delegated_session",
+        lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("revoke unavailable")),
+    )
+    monkeypatch.setattr(
+        claim_bootstrap,
+        "_rollback_created_worktree",
+        lambda **_kwargs: pytest.fail("post-claim delegated cleanup must not independently remove Git artifacts"),
+    )
+
+    with pytest.raises(claim_bootstrap.ClaimBootstrapError, match="intact lane preserved for retry"):
+        claim_bootstrap.execute_request(request)
+
+    child = next(
+        claim
+        for claim in claim_bootstrap.coordination_claims.check_claims(repo.name)
+        if claim.scope == "fix/child-lane"
+    )
+    assert child.status == "active"
+    assert child_worktree.is_dir()
+    assert Path(child.tracker_path or "").is_file()
+    assert subprocess.run(
+        ["git", "-C", str(repo), "show-ref", "--verify", "refs/heads/fix/child-lane"],
+        capture_output=True,
+        check=False,
+    ).returncode == 0
+
+
+def test_delegated_pre_claim_failure_rolls_back_git_artifacts(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = _governed_repo(tmp_path)
+    _claims_dir, trackers_dir = _configure_maintenance_runtime(tmp_path, monkeypatch)
+    _start_coordinator_claim(repo, trackers_dir)
+    request = claim_bootstrap.parse_request_json(json.dumps(_delegated_maintenance_payload(repo)))
+    child_worktree = repo / "worktrees" / "fix" / "child-lane"
+    real_rollback = claim_bootstrap._rollback_created_worktree
+    rollback_calls = 0
+
+    def observed_rollback(**kwargs: object) -> list[str]:
+        nonlocal rollback_calls
+        rollback_calls += 1
+        assert child_worktree.is_dir()
+        return real_rollback(**kwargs)
+
+    monkeypatch.setattr(
+        claim_bootstrap.session_lifecycle,
+        "start_delegated_session",
+        lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("claim start failed")),
+    )
+    monkeypatch.setattr(claim_bootstrap, "_rollback_created_worktree", observed_rollback)
+
+    with pytest.raises(claim_bootstrap.ClaimBootstrapError, match="failed before claim creation"):
+        claim_bootstrap.execute_request(request)
+
+    assert rollback_calls == 1
+    assert not child_worktree.exists()
+    assert subprocess.run(
+        ["git", "-C", str(repo), "show-ref", "--verify", "refs/heads/fix/child-lane"],
+        capture_output=True,
+        check=False,
+    ).returncode != 0
+
+
+def test_public_delegated_revoke_reports_completed_when_lock_reconcile_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = _governed_repo(tmp_path)
+    _claims_dir, trackers_dir = _configure_maintenance_runtime(tmp_path, monkeypatch)
+    _start_coordinator_claim(repo, trackers_dir)
+    create_request = claim_bootstrap.parse_request_json(json.dumps(_delegated_maintenance_payload(repo)))
+    claim_bootstrap.execute_request(create_request)
+    revoke_request = claim_bootstrap.parse_request_json(
+        json.dumps(_revoke_delegated_maintenance_payload(repo))
+    )
+    child_worktree = repo / "worktrees" / "fix" / "child-lane"
+    monkeypatch.setattr(
+        claim_bootstrap,
+        "_reconcile_canonical_after_claim",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("bounded lock fault")),
+    )
+
+    receipt = claim_bootstrap.execute_request(revoke_request)
+
+    result = receipt["result"]
+    assert result["action"] == "pristine_delegated_lane_revoked_canonical_reconciliation_required"
+    assert result["status"] == "revoked_canonical_reconciliation_required"
+    assert result["canonical_lock_reconciliation_required"] is True
+    assert result["canonical_lock_error"] == {
+        "type": "RuntimeError",
+        "message": "bounded lock fault",
+    }
+    assert not child_worktree.exists()
+    assert not any(
+        claim.scope == "fix/child-lane"
+        for claim in claim_bootstrap.coordination_claims.check_claims(repo.name)
+    )
 
 
 @pytest.mark.parametrize("extra", [{"extra": "nope"}, {"agent": "claude-code"}])

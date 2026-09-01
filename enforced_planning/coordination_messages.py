@@ -435,16 +435,16 @@ def _event_state_name(event: str) -> str:
     return "".join(f"_{char.lower()}" if char.isupper() else char for char in event).lstrip("_")
 
 
-def _coordination_hook_configured(
+def _configured_coordination_hook_command(
     config: dict[str, Any], event: str, matcher: str, *, config_path: Path
-) -> bool:
-    """Return whether the exact event/matcher invokes the coordination adapter."""
+) -> str | None:
+    """Return the enabled coordination adapter command for one exact hook surface."""
 
     hooks = config.get("hooks")
     blocks = hooks.get(event) if isinstance(hooks, dict) else None
     state = hooks.get("state") if isinstance(hooks, dict) else None
     if not isinstance(blocks, list):
-        return False
+        return None
     resolved_config_path = config_path.expanduser().resolve()
     for block_index, block in enumerate(blocks):
         if not isinstance(block, dict) or block.get("matcher", "") != matcher:
@@ -463,8 +463,43 @@ def _coordination_hook_configured(
                 state_record = state.get(state_key) if isinstance(state, dict) else None
                 if isinstance(state_record, dict) and state_record.get("enabled") is False:
                     continue
-                return True
-    return False
+                return command
+    return None
+
+
+def _configured_adapter_issue(client: str, commands: tuple[str, ...]) -> str | None:
+    """Fail closed unless configured commands match the canonical adapter bytes."""
+
+    canonical_root = Path(__file__).resolve().parents[1]
+    expected_by_name = {
+        "coordination_hook.py": canonical_root / "scripts" / "coordination_hook.py",
+        "notify-coordination-messages.sh": (
+            canonical_root / "hooks" / ("codex" if client == "codex" else "claude")
+            / "notify-coordination-messages.sh"
+        ),
+    }
+    for command in commands:
+        try:
+            tokens = shlex.split(command)
+        except ValueError:
+            return "adapter_command_invalid"
+        adapter_token = next(
+            (token for token in tokens if Path(token).name in expected_by_name),
+            None,
+        )
+        if adapter_token is None:
+            return "adapter_command_invalid"
+        adapter_path = Path(adapter_token).expanduser()
+        expected_path = expected_by_name[adapter_path.name]
+        if not adapter_path.is_absolute() or not adapter_path.is_file():
+            return "adapter_missing"
+        if not expected_path.is_file():
+            return "canonical_adapter_missing"
+        if hashlib.sha256(adapter_path.read_bytes()).digest() != hashlib.sha256(
+            expected_path.read_bytes()
+        ).digest():
+            return "adapter_digest_mismatch"
+    return None
 
 
 def inspect_host_delivery_capability(
@@ -517,15 +552,31 @@ def inspect_host_delivery_capability(
         issues.append(f"config_unavailable:{type(exc).__name__}")
         raw = {}
 
-    configured_events = tuple(
-        event
+    configured_commands = {
+        event: command
         for event, matcher in _CLIENT_HOOK_REQUIREMENTS[client]
-        if _coordination_hook_configured(raw, event, matcher, config_path=path)
+        if (
+            command := _configured_coordination_hook_command(
+                raw, event, matcher, config_path=path
+            )
+        )
+        is not None
+    }
+    configured_events = tuple(configured_commands)
+    missing_required = len(configured_events) != len(_CLIENT_HOOK_REQUIREMENTS[client])
+    if missing_required:
+        issues.append("missing_required_hook")
+    adapter_issue = _configured_adapter_issue(
+        client, tuple(dict.fromkeys(configured_commands.values()))
     )
-    mutation_available = "PreToolUse" in configured_events
-    stop_available = "Stop" in configured_events
+    if adapter_issue is not None:
+        issues.append(adapter_issue)
+    adapter_ready = adapter_issue is None
+    surface_ready = adapter_ready and not missing_required
+    mutation_available = "PreToolUse" in configured_events and surface_ready
+    stop_available = "Stop" in configured_events and adapter_ready
     advisory_events = {"SessionStart", "UserPromptSubmit", "PostToolUse"}
-    has_advisory_delivery = bool(advisory_events.intersection(configured_events))
+    has_advisory_delivery = bool(advisory_events.intersection(configured_events)) and adapter_ready
     if mutation_available:
         delivery_mode: DeliveryMode = "enforced"
         operator_message = (
@@ -536,8 +587,8 @@ def inspect_host_delivery_capability(
         delivery_mode = "advisory_only"
         issues.append("pretooluse_coordination_hook_missing")
         operator_message = (
-            "Mailbox delivery is advisory-only on this host: the PreToolUse coordination hook "
-            "is not configured, so mutation enforcement is unavailable. An observed receipt "
+            "Mailbox delivery is advisory-only on this host: the coordination surface is incomplete "
+            "or its PreToolUse hook is disabled, so mutation enforcement is unavailable. An observed receipt "
             "proves exposure only, not that the recipient stopped or acknowledged."
         )
     else:
@@ -574,7 +625,7 @@ def _looks_unreachable(backlog: int, oldest_age_seconds: float | None) -> bool:
 
 
 class PersistedMessageResult(StrictContract):
-    """Result of one successful or idempotently replayed send operation."""
+    """Legacy V1 send result retained for strict consumer compatibility."""
 
     message: CoordinationMessage = Field(description="Canonical persisted message.")
     message_path: str = Field(min_length=1, description="Evidence path to the canonical message record.")
@@ -596,6 +647,12 @@ class PersistedMessageResult(StrictContract):
             "it never observed. Storing a message is persistence, never delivery."
         ),
     )
+
+
+class PersistedMessageResultV2(PersistedMessageResult):
+    """Versioned send result that adds truthful sender-host delivery capability."""
+
+    schema_version: Literal["2.0.0"] = "2.0.0"
     local_host_delivery_capability: HostDeliveryCapabilityV1 = Field(
         description=(
             "Sender-host configured capability for the recipient client type; this is not proof "
@@ -1166,7 +1223,7 @@ class CoordinationMessageStore:
         *,
         now: datetime | None = None,
         require_live_claim: bool = True,
-    ) -> PersistedMessageResult:
+    ) -> PersistedMessageResultV2:
         """Resolve identities and persist one immutable coordination message.
 
         Native client adapters may set ``require_live_claim=False`` only after
@@ -1196,7 +1253,7 @@ class CoordinationMessageStore:
                     now=now or _utc_now(),
                     before=existing.created_at,
                 )
-                return PersistedMessageResult(
+                return PersistedMessageResultV2(
                     message=existing,
                     message_path=str(existing_path),
                     idempotent_replay=True,
@@ -1235,7 +1292,7 @@ class CoordinationMessageStore:
         path, idempotent = self._store_message(message)
         if idempotent:
             message = self._read_message_path(path)
-        return PersistedMessageResult(
+        return PersistedMessageResultV2(
             message=message,
             message_path=str(path),
             idempotent_replay=idempotent,
@@ -1673,7 +1730,7 @@ def main(argv: list[str] | None = None) -> int:
     except (ValidationError, CoordinationMessageError, ValueError) as exc:
         print(json.dumps({"ok": False, "error_type": type(exc).__name__, "error": str(exc)}, sort_keys=True))
         return 2
-    if isinstance(result, PersistedMessageResult) and result.recipient_may_be_unreachable:
+    if isinstance(result, PersistedMessageResultV2) and result.recipient_may_be_unreachable:
         age_minutes = int((result.recipient_oldest_unobserved_seconds or 0) // 60)
         print(
             "WARNING: this message is stored but probably will not be read. "
@@ -1685,7 +1742,7 @@ def main(argv: list[str] | None = None) -> int:
             file=sys.stderr,
         )
     if (
-        isinstance(result, PersistedMessageResult)
+        isinstance(result, PersistedMessageResultV2)
         and result.local_host_delivery_capability.delivery_mode != "enforced"
     ):
         print(

@@ -30,6 +30,7 @@ from enforced_planning.coordination_messages import (
     MessageStatusRequest,
     MessageStatusView,
     PersistedMessageResult,
+    PersistedMessageResultV2,
     PollMessagesRequest,
     RecordCollisionError,
     SendMessageRequest,
@@ -121,7 +122,9 @@ def test_sender_status_reports_advisory_only_when_local_pretooluse_is_disabled(
     """Sender-visible status must not translate configured delivery into a stop claim."""
 
     config = tmp_path / "config.toml"
-    command = "python3 /runtime/scripts/coordination_hook.py --agent codex"
+    adapter = tmp_path / "coordination_hook.py"
+    shutil.copy2(Path(__file__).resolve().parents[1] / "scripts" / adapter.name, adapter)
+    command = f"python3 {adapter} --agent codex"
     config.write_text(
         f'''[[hooks.SessionStart]]
 matcher = "startup|resume|clear|compact"
@@ -175,7 +178,9 @@ def test_send_result_carries_advisory_only_local_host_status(
     monkeypatch.setenv("HOME", str(tmp_path))
     settings = tmp_path / ".claude" / "settings.json"
     settings.parent.mkdir()
-    command = "python3 /runtime/scripts/coordination_hook.py --agent claude-code"
+    adapter = tmp_path / "coordination_hook.py"
+    shutil.copy2(Path(__file__).resolve().parents[1] / "scripts" / adapter.name, adapter)
+    command = f"python3 {adapter} --agent claude-code"
     settings.write_text(
         json.dumps(
             {
@@ -210,6 +215,78 @@ def test_send_result_carries_advisory_only_local_host_status(
     assert result.local_host_delivery_capability.mutation_enforcement_available is False
     assert result.local_host_delivery_capability.observed_proves_stopped is False
     assert result.local_host_delivery_capability.observed_proves_acknowledged is False
+
+
+@pytest.mark.parametrize(
+    ("adapter_state", "expected_issue"),
+    [("missing", "adapter_missing"), ("digest_drift", "adapter_digest_mismatch")],
+)
+def test_send_result_fails_closed_for_untrusted_configured_adapter(
+    mailbox: tuple[CoordinationMessageStore, Path, Path],
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    adapter_state: str,
+    expected_issue: str,
+) -> None:
+    """A configured command is not enforcement when its adapter bytes are unavailable or drifted."""
+
+    store, _claims_dir, _root = mailbox
+    monkeypatch.setenv("HOME", str(tmp_path))
+    adapter = tmp_path / "coordination_hook.py"
+    if adapter_state == "digest_drift":
+        adapter.write_text("# drifted adapter\n", encoding="utf-8")
+    command = f"python3 {adapter} --agent claude-code"
+    settings = tmp_path / ".claude" / "settings.json"
+    settings.parent.mkdir()
+    settings.write_text(
+        json.dumps(
+            {
+                "hooks": {
+                    event: [{"matcher": matcher, "hooks": [{"type": "command", "command": command}]}]
+                    for event, matcher in (
+                        ("SessionStart", "startup|resume|clear|compact"),
+                        ("UserPromptSubmit", ""),
+                        ("PostToolUse", "*"),
+                        ("PreToolUse", "Bash|Edit|Write"),
+                        ("Stop", ""),
+                    )
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    capability = store.send(_send_request(), now=NOW).local_host_delivery_capability
+
+    assert capability.delivery_mode == "unavailable"
+    assert capability.mutation_enforcement_available is False
+    assert capability.stop_enforcement_available is False
+    assert expected_issue in capability.issues
+
+
+def test_v2_send_result_has_explicit_legacy_migration_boundary(
+    mailbox: tuple[CoordinationMessageStore, Path, Path],
+) -> None:
+    """The delivery-capability addition is a named successor, not a silent V1 shape change."""
+
+    store, _claims_dir, _root = mailbox
+    current = store.send(_send_request(), now=NOW)
+    current_payload = current.model_dump(mode="json")
+    legacy_payload = {
+        key: value
+        for key, value in current_payload.items()
+        if key not in {"schema_version", "local_host_delivery_capability"}
+    }
+
+    assert (
+        PersistedMessageResult.model_validate_json(json.dumps(legacy_payload)).model_dump(mode="json")
+        == legacy_payload
+    )
+    assert PersistedMessageResultV2.model_validate_json(json.dumps(current_payload)).schema_version == "2.0.0"
+    with pytest.raises(ValidationError):
+        PersistedMessageResult.model_validate_json(json.dumps(current_payload))
+    with pytest.raises(ValidationError):
+        PersistedMessageResultV2.model_validate_json(json.dumps(legacy_payload))
 
 
 def test_mailbox_supports_canonical_legacy_claim_registry_signature(

@@ -35,7 +35,7 @@ class ClientSessionDisplayV1(StrictProjection):
 
 
 class CoordinationResponseReadoutV1(StrictProjection):
-    """Joined operator view that never upgrades response into work completion."""
+    """Legacy joined operator view retained for strict consumer compatibility."""
 
     schema_version: Literal["1.0.0"] = "1.0.0"
     message_id: str
@@ -45,7 +45,6 @@ class CoordinationResponseReadoutV1(StrictProjection):
     active_claim_scopes: tuple[str, ...]
     retained_claim_scopes: tuple[str, ...]
     message_state: coordination_messages.MessageState
-    operator_host_delivery_capability: coordination_messages.HostDeliveryCapabilityV1
     response_state: Literal[
         "persisted_not_displayed",
         "runtime_accepted_not_displayed",
@@ -58,6 +57,13 @@ class CoordinationResponseReadoutV1(StrictProjection):
     response_ref: str | None = None
     manual_resume_command: str | None = None
     completion_claim: Literal["not_evaluated"] = "not_evaluated"
+
+
+class CoordinationResponseReadoutV2(CoordinationResponseReadoutV1):
+    """Versioned operator view with explicit host delivery capability."""
+
+    schema_version: Literal["1.1.0"] = "1.1.0"
+    operator_host_delivery_capability: coordination_messages.HostDeliveryCapabilityV1
 
 
 ResponseState = Literal[
@@ -172,7 +178,7 @@ def build_coordination_response_readout(
     codex_session_index: Path = DEFAULT_CODEX_SESSION_INDEX,
     codex_config_path: Path | None = None,
     claude_config_path: Path | None = None,
-) -> CoordinationResponseReadoutV1:
+) -> CoordinationResponseReadoutV2:
     """Join message lifecycle and display metadata without inferring completion."""
 
     recipient_session_id = status.message.recipient_session_id
@@ -205,7 +211,7 @@ def build_coordination_response_readout(
         )
         manual_resume_command = shlex.join(("codex", "exec", "resume", raw_session_id, prompt))
 
-    return CoordinationResponseReadoutV1(
+    return CoordinationResponseReadoutV2(
         message_id=status.message.message_id,
         recipient_session_id=recipient_session_id,
         client_display=resolve_client_session_display(

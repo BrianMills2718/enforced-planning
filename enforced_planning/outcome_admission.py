@@ -606,6 +606,63 @@ def has_sanctioned_maintenance_claim_identity(claim: coordination_claims.ClaimRe
     )
 
 
+def has_sanctioned_delegated_maintenance_claim_identity(
+    claim: coordination_claims.ClaimRecord,
+) -> bool:
+    """Return whether a child claim retains the exact delegated identity."""
+
+    branch = claim.branch
+    parent_scope = claim.parent_scope
+    session_id = claim.session_id
+    if (
+        claim.plan_ref != session_contracts.UNPLANNED_PLAN_REF
+        or claim.claim_type != "write"
+        or not isinstance(branch, str)
+        or not branch.strip()
+        or claim.scope != branch
+        or not isinstance(parent_scope, str)
+        or not parent_scope.strip()
+        or parent_scope != parent_scope.strip()
+        or parent_scope == claim.scope
+        or not claim.write_paths
+        or "." in claim.write_paths
+        or claim.read_paths
+        or not isinstance(claim.start_revision, str)
+        or re.fullmatch(r"(?:[0-9a-f]{40}|[0-9a-f]{64})", claim.start_revision) is None
+        or claim.parallel_root_authorized
+        or claim.broad_scope_mode is not None
+        or claim.broad_scope_reason is not None
+        or claim.target_worktree_path is not None
+        or not claim.tracker_path
+        or not isinstance(session_id, str)
+        or re.fullmatch(rf"{re.escape(claim.agent)}:[^:]+", session_id) is None
+        or not claim.repo_root
+        or not claim.worktree_path
+        or len(claim.projects) != 1
+        or not claim.source_file
+        or any(
+            value is not None
+            for value in (
+                claim.plan_repo_root,
+                claim.plan_revision,
+                claim.plan_sha256,
+                claim.work_unit_id,
+                claim.work_graph_path,
+                claim.work_graph_sha256,
+            )
+        )
+        or claim.approval_revisions
+    ):
+        return False
+
+    goal = f"Delegated maintenance: {branch.replace('-', ' ').replace('/', ' ')}"
+    return not (
+        claim.intent != goal
+        or claim.broader_goal != goal
+        or claim.session_name != session_contracts.derive_session_name(goal)
+    )
+
+
 def is_sanctioned_maintenance_claim_payload(
     claim: coordination_claims.ClaimRecord,
     payload: object,
@@ -664,6 +721,49 @@ def is_sanctioned_maintenance_claim_payload(
     )
 
 
+def is_sanctioned_delegated_maintenance_claim_payload(
+    claim: coordination_claims.ClaimRecord,
+    payload: object,
+    *,
+    tracker_path: Path | None = None,
+) -> bool:
+    """Classify a delegated child from one already-read tracker payload."""
+
+    if not has_sanctioned_delegated_maintenance_claim_identity(claim):
+        return False
+    assert claim.tracker_path is not None
+    resolved_tracker_path = (
+        tracker_path if tracker_path is not None else Path(claim.tracker_path)
+    ).expanduser().resolve()
+    if not isinstance(payload, dict):
+        return False
+    tracker_claim = payload.get("claim")
+    tracker = payload.get("tracker")
+    if not isinstance(tracker_claim, dict) or not isinstance(tracker, dict):
+        return False
+    expected_identity = {
+        "agent": claim.agent,
+        "project": claim.projects[0],
+        "scope": claim.scope,
+        "intent": claim.intent,
+        "plan_ref": session_contracts.UNPLANNED_PLAN_REF,
+        "repo_root": claim.repo_root,
+        "worktree_path": claim.worktree_path,
+        "branch": claim.branch,
+        "session_id": claim.session_id,
+        "session_name": claim.session_name,
+        "broader_goal": claim.broader_goal,
+        "tracker_path": str(resolved_tracker_path),
+        "start_revision": claim.start_revision,
+    }
+    current_phase = tracker.get("current_phase")
+    return (
+        isinstance(current_phase, str)
+        and bool(current_phase.strip())
+        and all(tracker_claim.get(field) == value for field, value in expected_identity.items())
+    )
+
+
 def is_sanctioned_maintenance_claim(claim: coordination_claims.ClaimRecord) -> bool:
     """Read and classify one claim's linked tracker without a caller-held lock."""
 
@@ -676,6 +776,25 @@ def is_sanctioned_maintenance_claim(claim: coordination_claims.ClaimRecord) -> b
     except (OSError, TypeError, ValueError, yaml.YAMLError):
         return False
     return is_sanctioned_maintenance_claim_payload(
+        claim,
+        payload,
+        tracker_path=tracker_path,
+    )
+
+
+def is_sanctioned_delegated_maintenance_claim(
+    claim: coordination_claims.ClaimRecord,
+) -> bool:
+    """Read and classify one exact delegated child claim fail-closed."""
+
+    if not claim.tracker_path:
+        return False
+    tracker_path = Path(claim.tracker_path).expanduser().resolve()
+    try:
+        payload = yaml.safe_load(tracker_path.read_bytes())
+    except (OSError, TypeError, ValueError, yaml.YAMLError):
+        return False
+    return is_sanctioned_delegated_maintenance_claim_payload(
         claim,
         payload,
         tracker_path=tracker_path,
@@ -1311,9 +1430,12 @@ __all__ = [
     "evaluate_selected_claim_admission",
     "evaluate_selected_outcome_admission",
     "evaluate_selection_pending_session_activation",
+    "has_sanctioned_delegated_maintenance_claim_identity",
     "has_sanctioned_maintenance_claim_identity",
     "infer_first_consumer_bootstrap_plan",
     "is_first_consumer_bootstrap_path",
+    "is_sanctioned_delegated_maintenance_claim",
+    "is_sanctioned_delegated_maintenance_claim_payload",
     "is_sanctioned_maintenance_claim",
     "is_sanctioned_maintenance_claim_payload",
     "load_outcome_admission_mode",

@@ -2607,6 +2607,469 @@ def start_session(
     }
 
 
+def _require_delegation_session_id(agent: str, session_id: str, *, field: str) -> str:
+    """Require one exact native-client identity without accepting nested prefixes."""
+
+    if re.fullmatch(rf"{re.escape(agent)}:[^:]+", session_id) is None:
+        raise ValueError(f"{field} must be one canonical {agent}:<native-id> identity")
+    return session_id
+
+
+def _locked_delegation_parent(
+    *,
+    agent: str,
+    project: str,
+    parent_scope: str,
+    parent_session_id: str,
+    repo_root: str,
+    active_claims: list[coordination_claims.ClaimRecord],
+) -> coordination_claims.ClaimRecord:
+    """Return the exact healthy program root that may delegate one child lane."""
+
+    matches = [
+        claim
+        for claim in active_claims
+        if claim.agent == agent
+        and claim.primary_project() == project
+        and claim.scope == parent_scope
+        and claim.session_id == parent_session_id
+    ]
+    if len(matches) != 1:
+        raise ValueError("delegation requires exactly one live parent claim owned by the native parent session")
+    parent = matches[0]
+    if parent.claim_type != "program" or parent.parent_scope is not None:
+        raise ValueError("delegation parent must be one unparented program claim")
+    if not parent.repo_root or Path(parent.repo_root).expanduser().resolve() != Path(repo_root).expanduser().resolve():
+        raise ValueError("delegation parent and child must use the same canonical repository")
+    if coordination_claims.claim_runtime_status(parent, active_claims=active_claims) != "healthy":
+        raise ValueError("delegation parent claim is not healthy")
+    return parent
+
+
+def start_delegated_session(
+    *,
+    agent: str,
+    project: str,
+    scope: str,
+    intent: str,
+    repo_root: str,
+    worktree_path: str,
+    branch: str,
+    broader_goal: str,
+    current_phase: str,
+    parent_scope: str,
+    parent_session_id: str,
+    child_session_id: str,
+    start_revision: str,
+    write_paths: list[str],
+    session_name: str | None = None,
+    tracker_dir: Path = session_contracts.DEFAULT_SESSION_TRACKERS_DIR,
+    notes: str | None = None,
+    **legacy_fixed_fields: Any,
+) -> dict[str, Any]:
+    """Create one narrow child claim using its authenticated parent as actor."""
+
+    compatible_fixed_fields = {
+        "plan_ref": {None, session_contracts.UNPLANNED_PLAN_REF},
+        "claim_type": {None, "write"},
+        "allow_unplanned": {True},
+        "allow_parallel": {False, None},
+        "broad_scope_mode": {None},
+        "broad_scope_reason": {None},
+        "target_worktree_path": {None},
+        "work_graph_path": {None},
+        "work_unit_id": {None},
+        "plan_repo_root": {None},
+        "plan_start_point": {None},
+        "read_paths": {None, ()},
+    }
+    forbidden: dict[str, Any] = {}
+    for key, value in legacy_fixed_fields.items():
+        comparable = tuple(value) if isinstance(value, list) else value
+        if key not in compatible_fixed_fields or comparable not in compatible_fixed_fields[key]:
+            forbidden[key] = value
+    if forbidden:
+        raise ValueError("delegated session received unsupported authority fields: " + ", ".join(sorted(forbidden)))
+    parent_session_id = _require_delegation_session_id(agent, parent_session_id, field="parent_session_id")
+    child_session_id = _require_delegation_session_id(agent, child_session_id, field="child_session_id")
+    if parent_session_id == child_session_id:
+        raise ValueError("delegated child session must differ from its parent session")
+    coordination_claims.validate_native_session_binding(
+        agent,
+        parent_session_id,
+        require_native_marker=True,
+    )
+    if scope != branch:
+        raise ValueError("delegated scope must equal its task branch")
+    delegated_goal = f"Delegated maintenance: {branch.replace('-', ' ').replace('/', ' ')}"
+    if intent != delegated_goal or broader_goal != delegated_goal:
+        raise ValueError(f"delegated intent and broader_goal must equal {delegated_goal!r}")
+    normalized_paths = list(dict.fromkeys(coordination_claims._normalize_repo_path(path) for path in write_paths))
+    if not normalized_paths or "." in normalized_paths:
+        raise ValueError("delegated write ownership must be non-empty and narrower than the repository root")
+    if coordination_claims.classify_broad_write_paths(repo_root, normalized_paths):
+        raise ValueError("delegated write ownership must use narrow file or nested-directory paths")
+    coordination_claims.validate_start_revision_targets(
+        repo_root=repo_root,
+        start_revision=start_revision,
+        branch=branch,
+        worktree_path=worktree_path,
+        require_branch=True,
+        require_worktree=True,
+    )
+    contract = session_contracts.SessionContract.build(
+        agent=agent,
+        project=project,
+        scope=scope,
+        intent=intent,
+        plan_ref=session_contracts.UNPLANNED_PLAN_REF,
+        repo_root=repo_root,
+        worktree_path=worktree_path,
+        branch=branch,
+        session_id=child_session_id,
+        broader_goal=broader_goal,
+        session_name=session_name,
+        start_revision=start_revision,
+        allow_unplanned=True,
+    )
+    tracker_path = session_contracts.session_tracker_path(contract, tracker_dir=tracker_dir).expanduser().resolve()
+    contract = contract.with_tracker_path(str(tracker_path))
+    now = datetime.now(timezone.utc)
+    tracker = session_contracts.build_session_tracker(
+        contract=contract,
+        current_phase=current_phase,
+        notes=notes,
+        now=now,
+    )
+    event = coordination_claims.build_progress_event(
+        progress_kind="claim_started",
+        evidence_ref=scope,
+        next_action=intent,
+        progress_at=now,
+    )
+    claim_path = _claim_path(agent, project, scope)
+    with coordination_claims.claim_registry_lock(coordination_claims.CLAIMS_DIR):
+        active_claims = coordination_claims.check_claims()
+        _locked_delegation_parent(
+            agent=agent,
+            project=project,
+            parent_scope=parent_scope,
+            parent_session_id=parent_session_id,
+            repo_root=repo_root,
+            active_claims=active_claims,
+        )
+        if any(claim.session_id == child_session_id for claim in active_claims):
+            raise ValueError("delegated child session already owns a live claim")
+        if claim_path.exists():
+            raise ValueError(f"delegated child claim slot already exists: {project}:{scope}")
+        if tracker_path.exists():
+            raise ValueError("delegated child tracker path already exists")
+        coordination_claims.validate_start_revision_targets(
+            repo_root=repo_root,
+            start_revision=start_revision,
+            branch=branch,
+            worktree_path=worktree_path,
+            require_branch=True,
+            require_worktree=True,
+        )
+        candidate = coordination_claims.build_candidate_claim(
+            agent=agent,
+            project=project,
+            scope=scope,
+            intent=intent,
+            plan_ref=session_contracts.UNPLANNED_PLAN_REF,
+            claim_type="write",
+            write_paths=normalized_paths,
+            read_paths=[],
+            worktree_path=worktree_path,
+            repo_root=repo_root,
+            branch=branch,
+            session_name=contract.session_name,
+            broader_goal=broader_goal,
+            tracker_path=str(tracker_path),
+            session_id=child_session_id,
+            heartbeat_at=now.isoformat(),
+            parent_scope=parent_scope,
+            notes=notes,
+            claimed_at=now.isoformat(),
+            expires_at=(now + timedelta(hours=coordination_claims.DEFAULT_TTL_HOURS)).isoformat(),
+            updated_at=now.isoformat(),
+            start_revision=start_revision,
+            schema_version=6,
+            **coordination_claims._progress_event_payload(event),
+        )
+        coordination_claims.validate_claim_for_creation(candidate)
+        coordination_claims.validate_no_preserved_lane_conflict(
+            candidate,
+            claims=coordination_claims.list_claims(include_inactive=True),
+        )
+        coordination_claims.validate_claim_hierarchy_for_creation(candidate, active_claims=active_claims)
+        coordination_claims.validate_session_root_for_creation(candidate, active_claims=active_claims)
+        conflicts = coordination_claims.evaluate_claim(candidate, active_claims=active_claims)
+        if conflicts.hard_conflicts:
+            owners = ", ".join(f"{item.other_agent}:{item.other_scope}" for item in conflicts.hard_conflicts)
+            raise ValueError(f"delegated write ownership conflicts with {owners}")
+        claim_payload = candidate.to_dict()
+        claim_payload.pop("source_file", None)
+        claim_payload.pop("project", None)
+        registry_digest_before = coordination_claims._registry_digest(coordination_claims.CLAIMS_DIR)
+        from enforced_planning.prewrite_claim_fast import projection_path_for
+
+        projection_path = projection_path_for(coordination_claims.CLAIMS_DIR)
+        projection_before = projection_path.read_bytes() if projection_path.exists() else None
+        tracker_preexisting = tracker_path.is_file()
+        tracker_before = tracker_path.read_bytes() if tracker_preexisting else None
+        session_contracts.write_session_tracker(tracker, tracker_dir=tracker_dir)
+        tracker_written = tracker_path.read_bytes()
+        try:
+            _projection_path, projection_digest = (
+                coordination_claims._replace_claim_and_refresh_projection_fail_atomic(
+                    claim_path=claim_path,
+                    payload=claim_payload,
+                    claims_dir=coordination_claims.CLAIMS_DIR,
+                )
+            )
+            coordination_claims.record_claim_mutation(
+                operation="create",
+                claims_dir=coordination_claims.CLAIMS_DIR,
+                registry_digest_before=registry_digest_before,
+                target_project=project,
+                target_scope=scope,
+                target_claim_path=claim_path,
+                session_id=child_session_id,
+                projection_digest_after=projection_digest,
+            )
+        except Exception as claim_error:
+            try:
+                claim_after = claim_path.read_bytes() if claim_path.exists() else None
+                projection_after = projection_path.read_bytes() if projection_path.exists() else None
+                if claim_after is not None:
+                    coordination_claims._atomic_restore_file(claim_path, None)
+                if projection_after != projection_before:
+                    coordination_claims._atomic_restore_file(projection_path, projection_before)
+                with session_contracts.session_tracker_lock(tracker_path):
+                    if tracker_path.read_bytes() != tracker_written:
+                        raise ValueError("delegated tracker changed after creation; refusing unsafe rollback")
+                    if tracker_preexisting:
+                        assert tracker_before is not None
+                        _atomic_restore_bytes(tracker_path, tracker_before)
+                    else:
+                        tracker_path.unlink(missing_ok=True)
+            except Exception as rollback_error:
+                raise RuntimeError(
+                    "delegated claim creation failed and tracker rollback was incomplete: "
+                    f"claim={claim_error}; rollback={rollback_error}"
+                ) from claim_error
+            raise
+    persisted = _single_matching_live_claim(agent=agent, project=project, scope=scope)
+    if not outcome_admission.is_sanctioned_delegated_maintenance_claim(persisted):
+        raise RuntimeError("delegated child persisted without its exact sanctioned provenance")
+    return {
+        "action": "delegated_created",
+        "parent_session_id": parent_session_id,
+        "child_session_id": child_session_id,
+        "scope": scope,
+        "tracker_path": str(tracker_path),
+        "start_revision": start_revision,
+    }
+
+
+def revoke_delegated_session(
+    *,
+    agent: str,
+    project: str,
+    scope: str,
+    repo_root: str,
+    worktree_path: str,
+    branch: str,
+    parent_scope: str,
+    parent_session_id: str,
+    child_session_id: str,
+    expected_start_revision: str,
+    tracker_path: str,
+    note: str | None = None,
+) -> dict[str, Any]:
+    """Cancel one pristine delegated child using its authenticated parent."""
+
+    parent_session_id = _require_delegation_session_id(agent, parent_session_id, field="parent_session_id")
+    child_session_id = _require_delegation_session_id(agent, child_session_id, field="child_session_id")
+    if parent_session_id == child_session_id:
+        raise ValueError("delegated child session must differ from its parent session")
+    coordination_claims.validate_native_session_binding(
+        agent,
+        parent_session_id,
+        require_native_marker=True,
+    )
+    claim_path = _claim_path(agent, project, scope)
+    resolved_tracker_path = Path(tracker_path).expanduser().resolve()
+    resolved_worktree = Path(worktree_path).expanduser().resolve()
+    resolved_repo = Path(repo_root).expanduser().resolve()
+    cancelled_note = note or "unused delegated child cancelled by its authenticated parent"
+    with coordination_claims.claim_registry_lock(coordination_claims.CLAIMS_DIR):
+        active_claims = coordination_claims.check_claims()
+        _locked_delegation_parent(
+            agent=agent,
+            project=project,
+            parent_scope=parent_scope,
+            parent_session_id=parent_session_id,
+            repo_root=repo_root,
+            active_claims=active_claims,
+        )
+        if not claim_path.is_file():
+            raise ValueError(f"delegated child claim does not exist: {project}:{scope}")
+        raw = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+        child = coordination_claims.normalize_claim(raw, source_file=str(claim_path)) if isinstance(raw, dict) else None
+        if child is None:
+            raise ValueError("delegated child claim is invalid")
+        expected = {
+            "agent": agent,
+            "project": project,
+            "scope": scope,
+            "session_id": child_session_id,
+            "parent_scope": parent_scope,
+            "repo_root": str(resolved_repo),
+            "worktree_path": str(resolved_worktree),
+            "branch": branch,
+            "start_revision": expected_start_revision,
+        }
+        observed = {
+            "agent": child.agent,
+            "project": child.primary_project(),
+            "scope": child.scope,
+            "session_id": child.session_id,
+            "parent_scope": child.parent_scope,
+            "repo_root": str(Path(child.repo_root).expanduser().resolve()) if child.repo_root else None,
+            "worktree_path": str(Path(child.worktree_path).expanduser().resolve()) if child.worktree_path else None,
+            "branch": child.branch,
+            "start_revision": child.start_revision,
+        }
+        mismatches = sorted(field for field, value in expected.items() if observed[field] != value)
+        if mismatches:
+            raise ValueError("delegated child identity changed before revoke: " + ", ".join(mismatches))
+        if child.status not in {"active", "closing", "completed"}:
+            raise ValueError(f"delegated child cannot be revoked from status {child.status!r}")
+        if child.status in {"closing", "completed"} and (
+            raw.get("disposition") != "superseded"
+            or raw.get("disposition_reason") != "unused delegated child cancelled"
+        ):
+            raise ValueError("delegated child has a different in-progress closeout disposition")
+        if not resolved_tracker_path.is_file():
+            raise ValueError("delegated child tracker is missing")
+        tracker_payload = yaml.safe_load(resolved_tracker_path.read_bytes())
+        if not outcome_admission.is_sanctioned_delegated_maintenance_claim_payload(
+            child,
+            tracker_payload,
+            tracker_path=resolved_tracker_path,
+        ):
+            raise ValueError("delegated child tracker or claim provenance is malformed")
+        if child.status == "completed":
+            _archived_claim, archive_receipt = coordination_claims._archive_completed_claim_locked(
+                claim_path,
+                claims_dir=coordination_claims.CLAIMS_DIR,
+            )
+            return {
+                "action": "delegated_revoked",
+                "parent_session_id": parent_session_id,
+                "child_session_id": child_session_id,
+                "worktree_action": "already_missing",
+                "branch_action": "already_missing",
+                "claim_archive_id": archive_receipt.archive_id,
+                "tracker_path": str(resolved_tracker_path),
+                "canonical_lock_reconciliation_required": True,
+            }
+        branch_exists = _branch_exists(resolved_repo, branch)
+        worktree_exists = resolved_worktree.exists()
+        if child.status == "active" and (not branch_exists or not worktree_exists):
+            raise ValueError("active delegated child must retain both its branch and worktree")
+        if branch_exists or worktree_exists:
+            coordination_claims.validate_start_revision_targets(
+                repo_root=resolved_repo,
+                start_revision=expected_start_revision,
+                branch=branch,
+                worktree_path=str(resolved_worktree),
+                require_branch=branch_exists,
+                require_worktree=worktree_exists,
+            )
+        if worktree_exists:
+            surface_runtime.assert_no_live_leases_for_worktree(resolved_worktree)
+            clean, details = _worktree_is_clean(str(resolved_worktree))
+            if not clean:
+                raise ValueError(f"delegated child worktree is dirty; refusing revoke:\n{details}")
+            _assert_worktree_removal_access(resolved_worktree)
+        if child.write_paths:
+            doc_authority.assert_no_unresolved_owned_obligations(child)
+
+        closing_payload = dict(raw)
+        closing_payload.update(
+            {
+                "status": "closing",
+                "disposition": "superseded",
+                "disposition_reason": "unused delegated child cancelled",
+                "merged_to_default": None,
+                "merge_evidence": None,
+                "notes": cancelled_note,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            }
+        )
+        registry_digest_before = coordination_claims._registry_digest(coordination_claims.CLAIMS_DIR)
+        _projection_path, projection_digest = coordination_claims._replace_claim_and_refresh_projection_fail_atomic(
+            claim_path=claim_path,
+            payload=closing_payload,
+            claims_dir=coordination_claims.CLAIMS_DIR,
+        )
+        coordination_claims.record_claim_mutation(
+            operation="session_upsert",
+            claims_dir=coordination_claims.CLAIMS_DIR,
+            registry_digest_before=registry_digest_before,
+            target_project=project,
+            target_scope=scope,
+            target_claim_path=claim_path,
+            session_id=child_session_id,
+            projection_digest_after=projection_digest,
+        )
+        session_contracts.update_session_tracker(
+            resolved_tracker_path,
+            current_phase="cancelled",
+            notes=cancelled_note,
+            updated_at=closing_payload["updated_at"],
+        )
+        worktree_action = _remove_worktree_path(resolved_repo, resolved_worktree)
+        branch_action = _delete_branch(resolved_repo, branch, force=True)
+        closed_at = datetime.now(timezone.utc).isoformat()
+        completed_payload = dict(closing_payload)
+        completed_payload.update({"status": "completed", "closed_at": closed_at, "updated_at": closed_at})
+        registry_digest_before = coordination_claims._registry_digest(coordination_claims.CLAIMS_DIR)
+        _projection_path, projection_digest = coordination_claims._replace_claim_and_refresh_projection_fail_atomic(
+            claim_path=claim_path,
+            payload=completed_payload,
+            claims_dir=coordination_claims.CLAIMS_DIR,
+        )
+        coordination_claims.record_claim_mutation(
+            operation="closeout",
+            claims_dir=coordination_claims.CLAIMS_DIR,
+            registry_digest_before=registry_digest_before,
+            target_project=project,
+            target_scope=scope,
+            target_claim_path=claim_path,
+            session_id=child_session_id,
+            projection_digest_after=projection_digest,
+        )
+        _archived_claim, archive_receipt = coordination_claims._archive_completed_claim_locked(
+            claim_path,
+            claims_dir=coordination_claims.CLAIMS_DIR,
+        )
+    return {
+        "action": "delegated_revoked",
+        "parent_session_id": parent_session_id,
+        "child_session_id": child_session_id,
+        "worktree_action": worktree_action,
+        "branch_action": branch_action,
+        "claim_archive_id": archive_receipt.archive_id,
+        "tracker_path": str(resolved_tracker_path),
+        "canonical_lock_reconciliation_required": True,
+    }
+
+
 def heartbeat_session(
     *,
     agent: str,

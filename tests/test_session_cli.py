@@ -1255,6 +1255,244 @@ def _maintenance_refresh_args(tmp_path: Path, trackers_dir: Path) -> dict[str, o
     }
 
 
+def _delegated_session_fixture(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> tuple[dict[str, object], Path, Path]:
+    """Create one healthy parent and pristine child Git lane."""
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-b", "main")
+    _git(repo, "config", "user.name", "Test")
+    _git(repo, "config", "user.email", "test@example.com")
+    (repo / "README.md").write_text("seed\n", encoding="utf-8")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-m", "seed")
+    _git(repo, "switch", "-c", "weekly-parent")
+    (repo / "parent.txt").write_text("parent\n", encoding="utf-8")
+    _git(repo, "add", "parent.txt")
+    _git(repo, "commit", "-m", "parent lane")
+    child_worktree = tmp_path / "child-worktree"
+    _git(repo, "worktree", "add", "-b", "fix/delegated-child", str(child_worktree), "HEAD")
+    (child_worktree / "enforced_planning").mkdir()
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "trackers"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    monkeypatch.setenv("CODEX_THREAD_ID", "parent-native")
+    session_lifecycle.start_session(
+        agent="codex",
+        project="enforced-planning",
+        scope="weekly-parent",
+        intent="Coordinate the weekly implementation",
+        repo_root=str(repo),
+        worktree_path=str(repo),
+        branch="weekly-parent",
+        broader_goal="Coordinate the weekly implementation",
+        current_phase="delegating one bounded child",
+        session_id="codex:parent-native",
+        claim_type="program",
+        tracker_dir=trackers_dir,
+        allow_unplanned=True,
+    )
+    goal = "Delegated maintenance: fix delegated child"
+    start_revision = _git(child_worktree, "rev-parse", "HEAD")
+    args: dict[str, object] = {
+        "agent": "codex",
+        "project": "enforced-planning",
+        "scope": "fix/delegated-child",
+        "intent": goal,
+        "repo_root": str(repo),
+        "worktree_path": str(child_worktree),
+        "branch": "fix/delegated-child",
+        "broader_goal": goal,
+        "current_phase": "implement delegated lifecycle test",
+        "parent_scope": "weekly-parent",
+        "parent_session_id": "codex:parent-native",
+        "child_session_id": "codex:child-native",
+        "start_revision": start_revision,
+        "write_paths": ["enforced_planning/delegated.py"],
+        "tracker_dir": trackers_dir,
+    }
+    return args, claims_dir, child_worktree
+
+
+def test_parent_can_create_and_revoke_one_pristine_delegated_child(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The parent acts as itself while the child receives and loses custody."""
+
+    args, claims_dir, child_worktree = _delegated_session_fixture(tmp_path, monkeypatch)
+    started = session_lifecycle.start_delegated_session(**args)
+    assert started["action"] == "delegated_created"
+    child_claim = session_lifecycle._single_matching_live_claim(
+        agent="codex",
+        project="enforced-planning",
+        scope="fix/delegated-child",
+    )
+    assert child_claim.session_id == "codex:child-native"
+    assert child_claim.parent_scope == "weekly-parent"
+    assert outcome_admission.is_sanctioned_delegated_maintenance_claim(child_claim)
+
+    revoked = session_lifecycle.revoke_delegated_session(
+        agent="codex",
+        project="enforced-planning",
+        scope="fix/delegated-child",
+        repo_root=str(args["repo_root"]),
+        worktree_path=str(args["worktree_path"]),
+        branch=str(args["branch"]),
+        parent_scope="weekly-parent",
+        parent_session_id="codex:parent-native",
+        child_session_id="codex:child-native",
+        expected_start_revision=str(args["start_revision"]),
+        tracker_path=str(started["tracker_path"]),
+    )
+    assert revoked["action"] == "delegated_revoked"
+    assert revoked["canonical_lock_reconciliation_required"] is True
+    assert not child_worktree.exists()
+    assert not (claims_dir / coordination_claims._claim_filename("codex", "enforced-planning", "fix/delegated-child")).exists()
+    parent = session_lifecycle._single_matching_live_claim(
+        agent="codex",
+        project="enforced-planning",
+        scope="weekly-parent",
+    )
+    assert parent.session_id == "codex:parent-native"
+    archived = _archived_claim_payload(str(revoked["claim_archive_id"]))
+    assert archived["disposition"] == "superseded"
+    assert archived["disposition_reason"] == "unused delegated child cancelled"
+
+
+def test_delegated_start_rejects_a_non_native_parent_without_mutation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    args, claims_dir, _child_worktree = _delegated_session_fixture(tmp_path, monkeypatch)
+    args["parent_session_id"] = "codex:someone-else"
+    with pytest.raises(ValueError, match="does not match the current codex runtime"):
+        session_lifecycle.start_delegated_session(**args)
+    assert not (claims_dir / coordination_claims._claim_filename("codex", "enforced-planning", "fix/delegated-child")).exists()
+
+
+def test_delegated_start_rolls_back_claim_projection_and_tracker_on_audit_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    args, claims_dir, _child_worktree = _delegated_session_fixture(tmp_path, monkeypatch)
+    from enforced_planning.prewrite_claim_fast import projection_path_for
+
+    projection_path = projection_path_for(claims_dir)
+    projection_before = projection_path.read_bytes()
+    child_claim_path = claims_dir / coordination_claims._claim_filename(
+        "codex", "enforced-planning", "fix/delegated-child"
+    )
+    contract = session_contracts.SessionContract.build(
+        agent="codex",
+        project="enforced-planning",
+        scope="fix/delegated-child",
+        intent=str(args["intent"]),
+        plan_ref=session_contracts.UNPLANNED_PLAN_REF,
+        repo_root=str(args["repo_root"]),
+        worktree_path=str(args["worktree_path"]),
+        branch=str(args["branch"]),
+        session_id="codex:child-native",
+        broader_goal=str(args["broader_goal"]),
+        start_revision=str(args["start_revision"]),
+        allow_unplanned=True,
+    )
+    tracker_path = session_contracts.session_tracker_path(
+        contract,
+        tracker_dir=args["tracker_dir"],
+    ).expanduser().resolve()
+
+    def fail_audit(**_kwargs: object) -> object:
+        raise OSError("injected delegated audit failure")
+
+    monkeypatch.setattr(coordination_claims, "record_claim_mutation", fail_audit)
+    with pytest.raises(OSError, match="injected delegated audit failure"):
+        session_lifecycle.start_delegated_session(**args)
+    assert not child_claim_path.exists()
+    assert not tracker_path.exists()
+    assert projection_path.read_bytes() == projection_before
+
+
+def test_delegated_revoke_rejects_dirty_child_without_mutation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    args, claims_dir, child_worktree = _delegated_session_fixture(tmp_path, monkeypatch)
+    started = session_lifecycle.start_delegated_session(**args)
+    (child_worktree / "dirty.txt").write_text("dirty\n", encoding="utf-8")
+    child_claim_path = claims_dir / coordination_claims._claim_filename(
+        "codex", "enforced-planning", "fix/delegated-child"
+    )
+    claim_before = child_claim_path.read_bytes()
+    with pytest.raises(ValueError, match="worktree is dirty"):
+        session_lifecycle.revoke_delegated_session(
+            agent="codex",
+            project="enforced-planning",
+            scope="fix/delegated-child",
+            repo_root=str(args["repo_root"]),
+            worktree_path=str(args["worktree_path"]),
+            branch=str(args["branch"]),
+            parent_scope="weekly-parent",
+            parent_session_id="codex:parent-native",
+            child_session_id="codex:child-native",
+            expected_start_revision=str(args["start_revision"]),
+            tracker_path=str(started["tracker_path"]),
+        )
+    assert child_claim_path.read_bytes() == claim_before
+
+
+def test_delegated_revoke_retries_exact_completed_child_after_archive_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    args, claims_dir, child_worktree = _delegated_session_fixture(tmp_path, monkeypatch)
+    started = session_lifecycle.start_delegated_session(**args)
+    real_archive = coordination_claims._archive_completed_claim_locked
+    attempts = 0
+
+    def fail_first_archive(*archive_args: object, **archive_kwargs: object):
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise OSError("injected delegated archive failure")
+        return real_archive(*archive_args, **archive_kwargs)
+
+    monkeypatch.setattr(
+        coordination_claims,
+        "_archive_completed_claim_locked",
+        fail_first_archive,
+    )
+    revoke_args = {
+        "agent": "codex",
+        "project": "enforced-planning",
+        "scope": "fix/delegated-child",
+        "repo_root": str(args["repo_root"]),
+        "worktree_path": str(args["worktree_path"]),
+        "branch": str(args["branch"]),
+        "parent_scope": "weekly-parent",
+        "parent_session_id": "codex:parent-native",
+        "child_session_id": "codex:child-native",
+        "expected_start_revision": str(args["start_revision"]),
+        "tracker_path": str(started["tracker_path"]),
+    }
+    with pytest.raises(OSError, match="injected delegated archive failure"):
+        session_lifecycle.revoke_delegated_session(**revoke_args)
+    child_claim_path = claims_dir / coordination_claims._claim_filename(
+        "codex", "enforced-planning", "fix/delegated-child"
+    )
+    stranded = yaml.safe_load(child_claim_path.read_text(encoding="utf-8"))
+    assert stranded["status"] == "completed"
+    assert not child_worktree.exists()
+
+    retried = session_lifecycle.revoke_delegated_session(**revoke_args)
+    assert retried["action"] == "delegated_revoked"
+    assert attempts == 2
+    assert not child_claim_path.exists()
+
+
 def test_sanctioned_maintenance_start_refresh_preserves_bootstrap_provenance(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

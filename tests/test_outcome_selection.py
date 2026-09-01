@@ -1879,11 +1879,7 @@ def test_cross_session_resume_restores_exact_preflight_state_when_tracker_transf
     def fail_tracker_transfer(*_args: object, **_kwargs: object) -> None:
         raise OSError("injected tracker replacement failure")
 
-    monkeypatch.setattr(
-        outcome_selection,
-        "apply_prepared_outcome_session_transfer",
-        fail_tracker_transfer,
-    )
+    monkeypatch.setattr(session_contracts, "_atomic_write_session_tracker", fail_tracker_transfer)
     monkeypatch.setenv("CODEX_THREAD_ID", "plan118-failed-successor")
     with pytest.raises(OSError, match="injected tracker replacement failure"):
         session_lifecycle.resume_session(
@@ -1927,16 +1923,13 @@ def test_cross_session_resume_restores_exact_preflight_state_when_successor_clai
     tracker_before = tracker_path.read_bytes()
 
     original_normalize_claim = coordination_claims.normalize_claim
-    normalize_calls = 0
 
     def invalidate_successor_claim(
         data: dict[str, Any],
         *,
         source_file: str | None = None,
     ) -> coordination_claims.ClaimRecord | None:
-        nonlocal normalize_calls
-        normalize_calls += 1
-        if normalize_calls == 3:
+        if data.get("session_id") == "codex:plan118-invalid-successor":
             return None
         return original_normalize_claim(data, source_file=source_file)
 
@@ -1982,23 +1975,19 @@ def test_cross_session_resume_rolls_back_if_claim_projection_refresh_fails(
     claim_before = claim_path.read_bytes()
     tracker_path = Path(selected.tracker_path)
     tracker_before = tracker_path.read_bytes()
-    original_normalize_claim = coordination_claims.normalize_claim
-    normalize_calls = 0
+    original_refresh = coordination_claims.refresh_prewrite_authority_projection
+    refresh_calls = 0
 
-    def fail_projection_refresh(
-        data: dict[str, Any],
-        *,
-        source_file: str | None = None,
-    ) -> coordination_claims.ClaimRecord | None:
-        nonlocal normalize_calls
-        normalize_calls += 1
-        if normalize_calls == 2:
-            return None
-        return original_normalize_claim(data, source_file=source_file)
+    def fail_projection_refresh(*args: object, **kwargs: object) -> tuple[Path, str]:
+        nonlocal refresh_calls
+        refresh_calls += 1
+        if refresh_calls == 1:
+            raise OSError("injected projection refresh failure")
+        return original_refresh(*args, **kwargs)
 
-    monkeypatch.setattr(coordination_claims, "normalize_claim", fail_projection_refresh)
+    monkeypatch.setattr(coordination_claims, "refresh_prewrite_authority_projection", fail_projection_refresh)
     monkeypatch.setenv("CODEX_THREAD_ID", "plan118-projection-failure")
-    with pytest.raises(ValueError, match="cannot be normalized"):
+    with pytest.raises(OSError, match="injected projection refresh failure"):
         session_lifecycle.resume_session(
             agent="codex",
             project="enforced-planning",
@@ -2042,11 +2031,16 @@ def test_cross_session_resume_reports_typed_incomplete_transition_if_rollback_fa
     def fail_rollback(**_kwargs: object) -> None:
         raise OSError("injected rollback failure")
 
-    monkeypatch.setattr(
-        outcome_selection,
-        "apply_prepared_outcome_session_transfer",
-        fail_tracker_transfer,
-    )
+    restore_calls = 0
+
+    def fail_first_internal_restore(*_args: object, **_kwargs: object) -> None:
+        nonlocal restore_calls
+        restore_calls += 1
+        if restore_calls == 1:
+            raise OSError("injected internal rollback failure")
+
+    monkeypatch.setattr(session_contracts, "_atomic_write_session_tracker", fail_tracker_transfer)
+    monkeypatch.setattr(session_lifecycle, "_atomic_restore_bytes", fail_first_internal_restore)
     monkeypatch.setattr(session_lifecycle, "_rollback_outcome_session_transfer", fail_rollback)
     monkeypatch.setenv("CODEX_THREAD_ID", "plan118-incomplete-successor")
 

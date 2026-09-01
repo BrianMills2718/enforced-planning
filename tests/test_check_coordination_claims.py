@@ -300,6 +300,68 @@ def test_atomic_narrow_replaces_subset_and_refreshes_projection(
     assert narrow_receipts[0].event_id == result.receipt_id
 
 
+def test_bootstrap_narrow_accepts_one_missing_exact_leaf_and_denies_sibling(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Bootstrap custody may narrow to one exact new leaf, never its sibling."""
+
+    repo, claims_dir, projection_path = _broad_claim_fixture(tmp_path, monkeypatch)
+    claim_path = claims_dir / claims_impl._claim_filename("codex", "demo", "broad")
+    payload = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    payload["write_paths"] = ["."]
+    payload["broad_scope_mode"] = "bootstrap"
+    payload["broad_scope_reason"] = "hold custody until the exact first leaf is selected"
+    payload["target_worktree_path"] = str(repo)
+    payload["worktree_path"] = claims_impl.bootstrap_authority_disabled_worktree_path(str(repo))
+    claim_path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
+    prewrite_claim_projection.write_projection(claims_dir=claims_dir)
+
+    result = claims_impl.narrow_claim(
+        agent="codex",
+        project="demo",
+        scope="broad",
+        session_id="codex:owner",
+        write_paths=[".plan132-authentic-fixture"],
+    )
+
+    narrowed = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    projection = json.loads(projection_path.read_text(encoding="utf-8"))
+    assert result.new_write_paths == (".plan132-authentic-fixture",)
+    assert narrowed["write_paths"] == [".plan132-authentic-fixture"]
+    assert narrowed["worktree_path"] == str(repo)
+    assert "broad_scope_mode" not in narrowed
+    projected = projection["claims"][0]
+    assert projected["write_paths"] == [".plan132-authentic-fixture"]
+    assert claims_impl._paths_overlap(".plan132-authentic-fixture", ".plan132-authentic-fixture")
+    assert not claims_impl._paths_overlap(".plan132-authentic-fixture", ".plan132-authentic-sibling")
+
+
+def test_bootstrap_narrow_missing_leaf_exception_is_single_path_only(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Multiple missing top-level paths retain the broad-scope ambiguity denial."""
+
+    repo, claims_dir, _projection_path = _broad_claim_fixture(tmp_path, monkeypatch)
+    claim_path = claims_dir / claims_impl._claim_filename("codex", "demo", "broad")
+    payload = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    payload["write_paths"] = ["."]
+    payload["broad_scope_mode"] = "bootstrap"
+    payload["broad_scope_reason"] = "hold custody until one exact first leaf is selected"
+    payload["target_worktree_path"] = str(repo)
+    payload["worktree_path"] = claims_impl.bootstrap_authority_disabled_worktree_path(str(repo))
+    claim_path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
+    prewrite_claim_projection.write_projection(claims_dir=claims_dir)
+
+    with pytest.raises(ValueError, match="broad_scope_ambiguous"):
+        claims_impl.narrow_claim(
+            agent="codex",
+            project="demo",
+            scope="broad",
+            session_id="codex:owner",
+            write_paths=[".plan132-authentic-fixture", ".plan132-authentic-sibling"],
+        )
+
+
 def test_atomic_narrow_rejects_escape_expansion_and_foreign_session_without_change(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

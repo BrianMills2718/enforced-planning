@@ -1419,7 +1419,11 @@ def claim_enforcement_issues(claim: ClaimRecord) -> list[dict[str, str]]:
     return issues
 
 
-def validate_claim_for_creation(claim: ClaimRecord) -> None:
+def validate_claim_for_creation(
+    claim: ClaimRecord,
+    *,
+    allow_missing_exact_path: str | None = None,
+) -> None:
     """Reject new claims that omit required ownership metadata for live coordination."""
     issues = [issue for issue in claim_health_issues(claim) if issue in CREATION_BLOCKING_HEALTH_ISSUES]
     if claim.is_live() and issues:
@@ -1449,7 +1453,10 @@ def validate_claim_for_creation(claim: ClaimRecord) -> None:
             f"Active {claim.claim_type} claims require {required_text}. "
             "Legacy claims remain readable, but new live claims must declare real ownership."
         )
-    broad_issues = _broad_scope_contract_issues(claim)
+    broad_issues = _broad_scope_contract_issues(
+        claim,
+        allow_missing_exact_path=allow_missing_exact_path,
+    )
     if claim.is_live() and claim.schema_version >= 6 and broad_issues:
         raise ValueError("; ".join(broad_issues))
 
@@ -1863,12 +1870,19 @@ def bootstrap_authority_disabled_worktree_path(target_worktree_path: str) -> str
     return f"{target.resolve(strict=False)}{BOOTSTRAP_AUTHORITY_DISABLED_SUFFIX}"
 
 
-def classify_broad_write_paths(repo_root: str | None, write_paths: list[str]) -> dict[str, str]:
+def classify_broad_write_paths(
+    repo_root: str | None,
+    write_paths: list[str],
+    *,
+    allow_missing_exact_path: str | None = None,
+) -> dict[str, str]:
     """Classify root/top-level directory reservations without guessing.
 
     Nested paths are narrow for this contract. A missing top-level component is
     ambiguous because filesystem evidence cannot distinguish an intended file
-    from a directory reservation. Symlinks must remain within the declared root.
+    from a directory reservation. The bootstrap-narrow transition may identify
+    one exact missing path as a not-yet-created leaf; every other caller retains
+    the ambiguity failure. Symlinks must remain within the declared root.
     """
 
     normalized = list(dict.fromkeys(_normalize_repo_path(path) for path in write_paths))
@@ -1902,6 +1916,8 @@ def classify_broad_write_paths(repo_root: str | None, write_paths: list[str]) ->
             resolved.relative_to(resolved_root)
         except ValueError as exc:
             raise ValueError(f"broad path {path!r} escapes repo_root through symlink resolution") from exc
+        if not candidate.exists() and path == allow_missing_exact_path:
+            continue
         if not candidate.exists():
             raise ValueError(f"broad_scope_ambiguous: top-level path {path!r} does not exist")
         if candidate.is_dir():
@@ -1909,7 +1925,11 @@ def classify_broad_write_paths(repo_root: str | None, write_paths: list[str]) ->
     return broad
 
 
-def _broad_scope_contract_issues(claim: ClaimRecord) -> list[str]:
+def _broad_scope_contract_issues(
+    claim: ClaimRecord,
+    *,
+    allow_missing_exact_path: str | None = None,
+) -> list[str]:
     """Return deterministic schema-v6 broad-scope contract violations."""
 
     if not _has_write_ownership(claim):
@@ -1925,7 +1945,11 @@ def _broad_scope_contract_issues(claim: ClaimRecord) -> list[str]:
         if possible_broad:
             issues.append("legacy_broad_scope_unclassified")
         return issues
-    broad_paths = classify_broad_write_paths(claim.repo_root, claim.write_paths)
+    broad_paths = classify_broad_write_paths(
+        claim.repo_root,
+        claim.write_paths,
+        allow_missing_exact_path=allow_missing_exact_path,
+    )
     if broad_paths:
         if mode not in BROAD_SCOPE_MODES:
             issues.append("broad_scope_mode_required")
@@ -2785,7 +2809,7 @@ def create_claim(
             session_id,
             require_native_marker=require_native_session_marker,
         )
-    refreshed = _refresh_exact_owner_claim(
+    refreshed = None if require_new else _refresh_exact_owner_claim(
         agent=agent,
         project=project,
         scope=scope,
@@ -3071,7 +3095,16 @@ def narrow_claim(
                 "replacement path outside existing authority: " + ", ".join(outside)
             )
 
-        remaining_broad = classify_broad_write_paths(claim.repo_root, replacements)
+        allowed_missing_exact_path = (
+            replacements[0]
+            if claim.broad_scope_mode == "bootstrap" and len(replacements) == 1
+            else None
+        )
+        remaining_broad = classify_broad_write_paths(
+            claim.repo_root,
+            replacements,
+            allow_missing_exact_path=allowed_missing_exact_path,
+        )
         if remaining_broad and claim.broad_scope_mode not in BROAD_SCOPE_MODES:
             raise ValueError(
                 "a legacy/untyped broad claim may narrow only to non-broad exact paths"
@@ -3093,7 +3126,10 @@ def narrow_claim(
         candidate = normalize_claim(payload, source_file=str(claim_path))
         if candidate is None:
             raise ValueError("narrowed claim payload could not be normalized")
-        validate_claim_for_creation(candidate)
+        validate_claim_for_creation(
+            candidate,
+            allow_missing_exact_path=allowed_missing_exact_path,
+        )
         active_claims = check_claims(project, claims_dir=resolved_claims)
         conflict_result = evaluate_claim(candidate, active_claims=active_claims)
         if conflict_result.hard_conflicts:

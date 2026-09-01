@@ -739,11 +739,14 @@ def _audit_surface(
     issues = [*adapter_issues]
     if missing:
         issues.append("missing_required_hook")
-    mutation_available = "PreToolUse" in configured
-    stop_available = "Stop" in configured
+    pretool_configured = "PreToolUse" in configured
+    stop_configured = "Stop" in configured
+    surface_ready = not issues
+    mutation_available = pretool_configured and surface_ready
+    stop_available = stop_configured and not adapter_issues
     has_advisory_delivery = bool(
         {"SessionStart", "UserPromptSubmit", "PostToolUse"}.intersection(configured)
-    )
+    ) and not adapter_issues
     if mutation_available:
         delivery_mode: DeliveryMode = "enforced"
         operator_message = (
@@ -754,9 +757,9 @@ def _audit_surface(
         delivery_mode = "advisory_only"
         issues.append("mutation_enforcement_unavailable")
         operator_message = (
-            "Mailbox delivery is advisory-only: the PreToolUse coordination hook is not configured, "
-            "so mutation enforcement is unavailable. An observed receipt proves exposure only, not "
-            "that the recipient stopped or acknowledged."
+            "Mailbox delivery is advisory-only: the PreToolUse coordination hook is absent, disabled, "
+            "or part of a drifted surface, so mutation enforcement is unavailable. An observed receipt "
+            "proves exposure only, not that the recipient stopped or acknowledged."
         )
     else:
         delivery_mode = "unavailable"

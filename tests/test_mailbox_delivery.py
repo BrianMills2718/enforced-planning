@@ -325,6 +325,9 @@ def test_adapter_digest_drift_is_not_reported_as_configured(tmp_path: Path) -> N
     codex = next(surface for surface in receipt.host_surfaces if surface.client == "codex")
     assert codex.configuration_state == "drifted"
     assert "adapter_digest_mismatch" in codex.issues
+    assert codex.delivery_mode == "unavailable"
+    assert codex.mutation_enforcement_available is False
+    assert codex.stop_enforcement_available is False
 
 
 def test_dry_run_candidate_preserves_unrelated_hooks_in_both_native_formats(tmp_path: Path) -> None:

@@ -39,6 +39,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         type=Path,
         default=client_session_metadata.DEFAULT_CODEX_SESSION_INDEX,
     )
+    parser.add_argument("--codex-config", type=Path, default=Path.home() / ".codex" / "config.toml")
+    parser.add_argument("--claude-config", type=Path, default=Path.home() / ".claude" / "settings.json")
     parser.add_argument("--json", action="store_true")
     return parser.parse_args(argv)
 
@@ -60,6 +62,8 @@ def main(argv: list[str] | None = None) -> int:
             include_inactive=True,
         ),
         codex_session_index=args.codex_session_index,
+        codex_config_path=args.codex_config,
+        claude_config_path=args.claude_config,
     )
     if args.json:
         print(readout.model_dump_json(indent=2))
@@ -86,6 +90,19 @@ def main(argv: list[str] | None = None) -> int:
         )
     print(f"Message state: {readout.message_state}")
     print(f"Response state: {readout.response_state}")
+    capability = readout.operator_host_delivery_capability
+    print(f"Delivery mode (operator host config): {capability.delivery_mode}")
+    print(
+        "Mutation enforcement available: "
+        + ("yes" if capability.mutation_enforcement_available else "no")
+    )
+    print(
+        "Stop enforcement available: "
+        + ("yes" if capability.stop_enforcement_available else "no")
+    )
+    print("Observation semantics: exposure only; not stopped; not acknowledged")
+    if capability.delivery_mode != "enforced":
+        print(f"Delivery warning: {capability.operator_message}")
     print("Completion: not evaluated")
     if readout.acknowledgement_disposition:
         print(f"Acknowledgement: {readout.acknowledgement_disposition}")

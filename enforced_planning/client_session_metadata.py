@@ -12,7 +12,6 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from enforced_planning import coordination_claims, coordination_messages
 
-
 DEFAULT_CODEX_SESSION_INDEX = Path.home() / ".codex" / "session_index.jsonl"
 
 
@@ -46,6 +45,7 @@ class CoordinationResponseReadoutV1(StrictProjection):
     active_claim_scopes: tuple[str, ...]
     retained_claim_scopes: tuple[str, ...]
     message_state: coordination_messages.MessageState
+    operator_host_delivery_capability: coordination_messages.HostDeliveryCapabilityV1
     response_state: Literal[
         "persisted_not_displayed",
         "runtime_accepted_not_displayed",
@@ -170,6 +170,8 @@ def build_coordination_response_readout(
     *,
     claims: list[coordination_claims.ClaimRecord],
     codex_session_index: Path = DEFAULT_CODEX_SESSION_INDEX,
+    codex_config_path: Path | None = None,
+    claude_config_path: Path | None = None,
 ) -> CoordinationResponseReadoutV1:
     """Join message lifecycle and display metadata without inferring completion."""
 
@@ -226,6 +228,12 @@ def build_coordination_response_readout(
             sorted({claim.scope for claim in recipient_claims if not claim.is_live()})
         ),
         message_state=status.state,
+        operator_host_delivery_capability=coordination_messages.inspect_host_delivery_capability(
+            recipient_session_id,
+            codex_config_path=codex_config_path,
+            claude_config_path=claude_config_path,
+            scope="operator_host_recipient_client_config",
+        ),
         response_state=response_state,
         acknowledgement_disposition=acknowledgement.disposition if acknowledgement else None,
         acknowledgement_note=acknowledgement.note if acknowledgement else None,

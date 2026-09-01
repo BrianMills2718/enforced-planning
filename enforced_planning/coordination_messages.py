@@ -396,7 +396,10 @@ class HostDeliveryCapabilityV1(StrictContract):
     )
     client: Literal["codex", "claude-code", "unknown"]
     config_path: str = Field(min_length=1)
-    scope: Literal["sender_host_recipient_client_config"] = "sender_host_recipient_client_config"
+    scope: Literal[
+        "sender_host_recipient_client_config",
+        "operator_host_recipient_client_config",
+    ] = "sender_host_recipient_client_config"
     configured_events: tuple[str, ...]
     delivery_mode: DeliveryMode
     mutation_enforcement_available: bool
@@ -469,6 +472,10 @@ def inspect_host_delivery_capability(
     *,
     codex_config_path: Path | None = None,
     claude_config_path: Path | None = None,
+    scope: Literal[
+        "sender_host_recipient_client_config",
+        "operator_host_recipient_client_config",
+    ] = "sender_host_recipient_client_config",
 ) -> HostDeliveryCapabilityV1:
     """Inspect local configured hook state without promoting it to runtime proof."""
 
@@ -484,6 +491,7 @@ def inspect_host_delivery_capability(
         return HostDeliveryCapabilityV1(
             client="unknown",
             config_path="unknown",
+            scope=scope,
             configured_events=(),
             delivery_mode="unavailable",
             mutation_enforcement_available=False,
@@ -543,6 +551,7 @@ def inspect_host_delivery_capability(
     return HostDeliveryCapabilityV1(
         client=client,
         config_path=str(path),
+        scope=scope,
         configured_events=configured_events,
         delivery_mode=delivery_mode,
         mutation_enforcement_available=mutation_available,

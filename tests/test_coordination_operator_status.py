@@ -11,7 +11,6 @@ import pytest
 
 from enforced_planning import client_session_metadata, coordination_claims, coordination_messages
 
-
 NOW = datetime(2026, 7, 30, 19, 15, tzinfo=UTC)
 SESSION_ID = "codex:019f95f8-75e9-7a31-bba1-527695ed821e"
 MESSAGE_ID = "msg_11111111111111111111111111111111"
@@ -191,6 +190,64 @@ def test_response_readout_never_conflates_display_acknowledgement_or_completion(
     if readout.manual_resume_command:
         assert SESSION_ID.removeprefix("codex:") in readout.manual_resume_command
         assert "gap_closure_including_composability" not in readout.manual_resume_command
+
+
+def test_operator_readout_exposes_state_disabled_pretooluse_as_advisory_only(
+    tmp_path: Path,
+) -> None:
+    """The canonical readout reports actual operator-host enforcement, not hook presence."""
+
+    index = tmp_path / "session_index.jsonl"
+    _write_index(index)
+    config = tmp_path / "config.toml"
+    command = "python3 /runtime/scripts/coordination_hook.py --agent codex"
+    config.write_text(
+        f'''[[hooks.SessionStart]]
+matcher = "startup|resume|clear|compact"
+[[hooks.SessionStart.hooks]]
+type = "command"
+command = "{command}"
+
+[[hooks.PostToolUse]]
+matcher = "*"
+[[hooks.PostToolUse.hooks]]
+type = "command"
+command = "{command}"
+
+[[hooks.PreToolUse]]
+matcher = "Bash|apply_patch"
+[[hooks.PreToolUse.hooks]]
+type = "command"
+command = "{command}"
+
+[[hooks.Stop]]
+matcher = ""
+[[hooks.Stop.hooks]]
+type = "command"
+command = "{command}"
+
+[hooks.state."{config.resolve()}:pre_tool_use:0:0"]
+enabled = false
+''',
+        encoding="utf-8",
+    )
+
+    readout = client_session_metadata.build_coordination_response_readout(
+        _status("observed"),
+        claims=[_claim()],
+        codex_session_index=index,
+        codex_config_path=config,
+    )
+
+    capability = readout.operator_host_delivery_capability
+    assert capability.scope == "operator_host_recipient_client_config"
+    assert capability.delivery_mode == "advisory_only"
+    assert capability.mutation_enforcement_available is False
+    assert capability.stop_enforcement_available is True
+    assert capability.observed_proves_exposure_only is True
+    assert capability.observed_proves_stopped is False
+    assert capability.observed_proves_acknowledged is False
+    assert "mutation enforcement is unavailable" in capability.operator_message
 
 
 def test_session_status_enrichment_preserves_internal_name(tmp_path: Path) -> None:

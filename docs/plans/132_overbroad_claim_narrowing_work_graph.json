@@ -91,6 +91,13 @@
         },
         {
           "kind": "repository_path",
+          "target": "enforced_planning/outcome_admission.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-132-claim-narrowing"
+        },
+        {
+          "kind": "repository_path",
           "target": "enforced_planning/prewrite_claim_projection.py",
           "repository": "enforced-planning",
           "access": "exclusive",
@@ -155,6 +162,13 @@
         {
           "kind": "repository_path",
           "target": "tests/test_session_cli.py",
+          "repository": "enforced-planning",
+          "access": "exclusive",
+          "coordination_key": "plan-132-claim-narrowing"
+        },
+        {
+          "kind": "repository_path",
+          "target": "tests/test_outcome_admission.py",
           "repository": "enforced-planning",
           "access": "exclusive",
           "coordination_key": "plan-132-claim-narrowing"

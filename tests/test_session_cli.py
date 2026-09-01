@@ -10,7 +10,7 @@ import subprocess
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -70,6 +70,93 @@ def _archived_claim_payload(archive_id: str) -> dict[str, object]:
     payload = yaml.safe_load(base64.b64decode(matches[0].source_yaml_bytes))
     assert isinstance(payload, dict)
     return payload
+
+
+def test_session_narrow_json_deny_narrow_admit_journey(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The public CLI performs one native-session-bound exact narrowing."""
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-b", "main")
+    _git(repo, "config", "user.name", "Test")
+    _git(repo, "config", "user.email", "test@example.com")
+    (repo / "docs").mkdir()
+    (repo / "docs" / "plan.md").write_text("plan\n", encoding="utf-8")
+    (repo / "README.md").write_text("seed\n", encoding="utf-8")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-m", "seed")
+    claims_dir = tmp_path / "claims"
+    claims_dir.mkdir()
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    monkeypatch.setenv("CODEX_THREAD_ID", "owner")
+    monkeypatch.setattr(
+        session_lifecycle,
+        "_poll_mailbox",
+        lambda **_kwargs: {"summary": "coordination mailbox: no active messages", "messages": []},
+    )
+    now = datetime.now(timezone.utc)
+    claim_path = claims_dir / coordination_claims._claim_filename("codex", "demo", "broad")
+    claim_path.write_text(
+        yaml.safe_dump(
+            {
+                "schema_version": 6,
+                "agent": "codex",
+                "claimed_at": now.isoformat(),
+                "expires_at": (now + timedelta(hours=1)).isoformat(),
+                "projects": ["demo"],
+                "scope": "broad",
+                "intent": "narrow docs ownership",
+                "claim_type": "write",
+                "write_paths": ["docs"],
+                "read_paths": [],
+                "worktree_path": str(repo),
+                "repo_root": str(repo),
+                "branch": "main",
+                "session_name": "broad",
+                "broader_goal": "remove false serialization",
+                "tracker_path": str(tmp_path / "tracker.yaml"),
+                "session_id": "codex:owner",
+                "heartbeat_at": now.isoformat(),
+                "status": "active",
+                "updated_at": now.isoformat(),
+                "plan_ref": "UNPLANNED",
+                "broad_scope_mode": "bounded",
+                "broad_scope_reason": "the fixture owns the full docs tree",
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+    prewrite_claim_projection.write_projection(claims_dir=claims_dir)
+    module_path = Path(__file__).resolve().parents[1] / "scripts" / "session_narrow.py"
+    spec = importlib.util.spec_from_file_location("session_narrow_cli_test", module_path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    exit_code = module.main(
+        [
+            "--agent",
+            "codex",
+            "--project",
+            "demo",
+            "--scope",
+            "broad",
+            "--write-path",
+            "docs/plan.md",
+            "--json",
+        ]
+    )
+
+    payload = json.loads(capsys.readouterr().out)
+    assert exit_code == 0
+    assert payload["ok"] is True
+    assert payload["action"] == "narrowed"
+    assert payload["old_write_paths"] == ["docs"]
+    assert payload["new_write_paths"] == ["docs/plan.md"]
+    assert yaml.safe_load(claim_path.read_text(encoding="utf-8"))["write_paths"] == ["docs/plan.md"]
 
 
 @pytest.mark.parametrize(

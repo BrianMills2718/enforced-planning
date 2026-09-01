@@ -23,6 +23,7 @@ DEFAULT_COMPLETED_CLAIM_ARCHIVE_PATH = (
 )
 MutationOperation = Literal[
     "create",
+    "narrow",
     "session_upsert",
     "heartbeat",
     "release",

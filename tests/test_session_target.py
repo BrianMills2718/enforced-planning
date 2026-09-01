@@ -102,6 +102,35 @@ def test_parent_claim_does_not_authorize_child_but_child_claim_does(tmp_path: Pa
     assert target.worktree_path == worktree
 
 
+def test_bootstrap_target_resolves_for_context_without_mutation_authority(tmp_path: Path) -> None:
+    """A v6 bootstrap claim selects its real target while legacy authority stays detached."""
+
+    _repo, worktree, claims, projection = _authority(tmp_path)
+    claim_path = claims / "claim.yaml"
+    claim = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    claim.update(
+        schema_version=6,
+        write_paths=["."],
+        broad_scope_mode="bootstrap",
+        broad_scope_reason="construct and narrow the maintenance lane",
+        target_worktree_path=str(worktree),
+        worktree_path=f"{worktree}.bootstrap-no-mutation-authority",
+    )
+    claim_path.write_text(yaml.safe_dump(claim, sort_keys=False), encoding="utf-8")
+    write_projection(claims_dir=claims, projection_path=projection)
+
+    target = resolve_exact_session_target(
+        {"session_id": "parent"},
+        client="codex",
+        claims_dir=claims,
+        projection_path=projection,
+    )
+
+    assert target.worktree_path == worktree
+    projected = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    assert projected["worktree_path"] != projected["target_worktree_path"]
+
+
 def test_stale_projection_and_branch_mismatch_fail_closed(tmp_path: Path) -> None:
     _repo, _worktree, claims, projection = _authority(tmp_path)
     payload = {"session_id": "parent"}

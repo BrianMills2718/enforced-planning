@@ -213,6 +213,13 @@ admission controls; isolated parser tests prove only implementation.
    legacy claim with no recorded start revision remains readable but cannot be
    auto-promoted to schema v4 by inventing historical custody.
 
+Plan #132 later advances new claims to schema v6 for explicit broad-scope
+custody. That extension preserves this staged-activation contract: v6 is an
+accepted current schema at the tracker-attachment boundary, legacy v1-v5
+records remain readable without eager migration, and unknown future versions
+still fail closed. Bootstrap broad claims additionally separate their readable
+target worktree from mutation authority until an atomic strict-subset narrow.
+
 ### Plan #130 extension — external plan authority
 
 The one-revision contract above and its original acceptance controls describe

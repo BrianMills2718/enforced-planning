@@ -89,7 +89,12 @@ artifacts, and client mismatch are denied.
 
 The optional `write_paths` array narrows initial ownership to literal
 repository-relative paths, for example `["scripts/adapter.py", "tests/test_adapter.py"]`.
-Omitting it retains the legacy `["."]` scope. Empty lists, duplicates, traversal,
+Omitting it requests the legacy-looking `["."]` scope, but new maintenance
+bootstraps persist that scope as typed `bootstrap` custody: the real target is
+available for instruction/read context while ordinary repository mutations are
+denied. The owning native session must run `make session-narrow` with explicit
+descendant `SESSION_WRITE_PATHS` before its first repository write. Empty lists,
+duplicates, traversal,
 absolute paths, glob patterns, and mixed broad/narrow declarations are rejected.
 Narrow creation uses the same registry overlap checks: it can coexist with
 unrelated writers but cannot override another writer's overlapping claim.
@@ -992,6 +997,8 @@ Canonical lifecycle commands:
 
 - `session-start`: create or refresh the claim-linked session contract
 - `session-heartbeat`: refresh the lease and tracker timestamp
+- `session-narrow`: atomically replace a claim's write paths with a strict
+  owner/session-bound subset without renewing its heartbeat or expiry
 - `session-status`: show live sessions derived from claims plus trackers
 - `session-end`: detach a terminating runtime from all of its exact-session
   claims without deleting branches, worktrees, trackers, or Git objects

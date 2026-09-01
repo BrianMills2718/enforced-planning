@@ -10,10 +10,13 @@ healthy claim must belong to the effective native agent identity.
 
 from __future__ import annotations
 
+import hashlib
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+import yaml  # type: ignore[import-untyped]
 
 from enforced_planning.prewrite_claim_fast import (
     LIVE_STATUSES,
@@ -40,6 +43,37 @@ class SessionTarget:
     worktree_path: Path
     branch: str
     source_file: Path
+
+
+def _bootstrap_target_worktree(claim: dict[str, Any]) -> Path | None:
+    """Read a v6 bootstrap target only from projection-bound canonical YAML."""
+
+    source_raw = claim.get("source_file")
+    source_sha = claim.get("source_sha256")
+    if not isinstance(source_raw, str) or not isinstance(source_sha, str):
+        return None
+    source = Path(source_raw).expanduser().resolve()
+    try:
+        source_bytes = source.read_bytes()
+    except OSError:
+        return None
+    if hashlib.sha256(source_bytes).hexdigest() != source_sha:
+        return None
+    try:
+        payload = yaml.safe_load(source_bytes)
+    except yaml.YAMLError:
+        return None
+    if not isinstance(payload, dict) or payload.get("schema_version") != 6:
+        return None
+    if payload.get("broad_scope_mode") != "bootstrap":
+        return None
+    target_raw = payload.get("target_worktree_path")
+    if not isinstance(target_raw, str):
+        return None
+    target = Path(target_raw).expanduser()
+    if not target.is_absolute():
+        return None
+    return target.resolve()
 
 
 def effective_session_id(payload: dict[str, Any], client: str) -> str:
@@ -101,19 +135,28 @@ def resolve_exact_session_target(
         if claim["agent"] == client and claim["session_id"] == session_id
     ]
     requested_worktree = target_worktree.expanduser().resolve() if target_worktree else None
-    target_matches = [
-        claim
-        for claim in identity_matches
-        if requested_worktree is None
-        or Path(claim["worktree_path"]).expanduser().resolve() == requested_worktree
-    ]
-    healthy = [
-        claim
-        for claim in target_matches
-        if claim["status"] in LIVE_STATUSES
-        and not claim["static_issues"]
-        and not _dynamic_claim_issues(claim)
-    ]
+    effective_matches: list[tuple[dict[str, Any], Path, bool]] = []
+    for claim in identity_matches:
+        bootstrap_target = _bootstrap_target_worktree(claim)
+        effective_worktree = (
+            bootstrap_target
+            if bootstrap_target is not None
+            else Path(claim["worktree_path"]).expanduser().resolve()
+        )
+        if requested_worktree is None or effective_worktree == requested_worktree:
+            effective_matches.append((claim, effective_worktree, bootstrap_target is not None))
+    target_matches = [claim for claim, _worktree, _bootstrap in effective_matches]
+    healthy: list[tuple[dict[str, Any], Path, bool]] = []
+    for claim, effective_worktree, bootstrap in effective_matches:
+        static_issues = set(claim["static_issues"])
+        allowed_static = {"bootstrap_broad_claim_requires_narrowing"} if bootstrap else set()
+        health_view = {**claim, "worktree_path": str(effective_worktree)}
+        if (
+            claim["status"] in LIVE_STATUSES
+            and static_issues <= allowed_static
+            and not _dynamic_claim_issues(health_view)
+        ):
+            healthy.append((claim, effective_worktree, bootstrap))
     if not healthy:
         if target_matches:
             details = sorted(
@@ -142,14 +185,13 @@ def resolve_exact_session_target(
             f"no healthy claim belongs to {session_id}",
         )
     if len(healthy) != 1:
-        lanes = sorted(f"{claim['projects'][0]}:{claim['scope']}" for claim in healthy)
+        lanes = sorted(f"{claim['projects'][0]}:{claim['scope']}" for claim, _path, _bootstrap in healthy)
         raise SessionTargetError(
             "ambiguous_exact_session_target",
             f"multiple healthy claims match {session_id}: {', '.join(lanes)}",
         )
 
-    claim = healthy[0]
-    worktree = Path(claim["worktree_path"]).expanduser().resolve()
+    claim, worktree, _bootstrap = healthy[0]
     repo_root = Path(claim["repo_root"]).expanduser().resolve()
     if not (worktree / ".git").exists():
         raise SessionTargetError(

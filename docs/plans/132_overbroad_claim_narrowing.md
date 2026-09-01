@@ -313,6 +313,10 @@ request rather than adding another message store.
 ### Compatibility and rollback
 
 - Schema v1-v5 claims load unchanged; no eager registry rewrite or migration.
+- Every schema-version gate in the existing outcome-admission/session-activation
+  path accepts v6 with the same authority semantics as v5; unsupported future
+  versions still fail closed. A v6 claim must never become unusable merely
+  because it is waiting for its tracker attachment.
 - Narrow new claims serialize as v6 without broad fields.
 - Projection schema 1.0 and its exact claim field set remain unchanged;
   bootstrap denial uses the existing `static_issues` list. Older fast readers
@@ -503,6 +507,7 @@ consumer; schema and command substrate alone are not completion.
 | `tests/test_prewrite_claim_projection.py` | `test_bootstrap_uses_v1_static_issue_without_projection_shape_drift` | old-reader/new-projection compatibility |
 | `tests/test_session_target.py` | `test_bootstrap_target_resolves_for_context_without_mutation_authority` | navigation target remains distinct from mutation binding |
 | `tests/test_session_cli.py` | `test_session_narrow_json_deny_narrow_admit_journey` | public operator journey and failure output |
+| `tests/test_outcome_admission.py` | `test_selection_pending_accepts_schema_v6_without_weakening_binding_guards` | the new claim schema remains activatable while later unknown versions fail closed |
 | `tests/test_session_lifecycle.py` | `test_heartbeat_observes_narrowing_request_without_extending_expiry` | existing mailbox and lease semantics are reused |
 | `tests/test_claim_bootstrap.py` | `test_workspace_bootstrap_creates_authority_disabled_target_then_requires_narrow` | canonical JSON bootstrap has no residue on failure and no pre-narrow write authority |
 | `tests/test_host_prewrite_claim_gate.py` | `test_native_session_narrow_command_is_exactly_parsed_and_self_recovery_admissible` | only the native bounded recovery grammar bypasses ordinary write admission |

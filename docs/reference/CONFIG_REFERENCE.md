@@ -212,7 +212,9 @@ mode; it does not install mailbox or read-context hooks.
 Operational note: when `worktrees.enabled` is true and the sanctioned Makefile
 block is installed, governed repos are expected to expose `session-start`,
 `session-heartbeat`, `session-status`, and `session-finish` alongside the
-worktree targets.
+worktree targets. Claim-runtime schema v6 also requires `session-narrow`; a
+generated consumer that lacks that entrypoint is not compatible with typed
+bootstrap broad claims.
 
 ## commits
 

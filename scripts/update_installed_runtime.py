@@ -10,10 +10,12 @@ states, and wrong identities, and retains the previous HEAD before mutation.
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import os
 import pwd
 import re
+import shutil
 import socket
 import subprocess
 from collections.abc import Sequence
@@ -50,8 +52,9 @@ def _run(
     *args: str,
     check: bool = True,
     mutating: bool = False,
+    network_auth: bool = False,
 ) -> subprocess.CompletedProcess[str]:
-    env = _sanitized_git_env()
+    env = _canonical_network_git_env() if network_auth else _sanitized_git_env()
     if not mutating:
         env["GIT_OPTIONAL_LOCKS"] = "0"
     result = subprocess.run(
@@ -156,6 +159,39 @@ def _sanitized_git_env() -> dict[str, str]:
     return env
 
 
+def _canonical_network_git_env() -> dict[str, str]:
+    """Add only the pinned Brian-owned GitHub credential for canonical HTTPS."""
+
+    env = _sanitized_git_env()
+    if not CANONICAL_ORIGIN.startswith("https://github.com/"):
+        return env
+    gh = shutil.which("gh", path="/usr/local/bin:/usr/bin:/bin")
+    if gh is None:
+        raise RuntimeUpdateError("canonical GitHub credential helper is unavailable")
+    account_home = Path(pwd.getpwuid(os.getuid()).pw_dir)
+    token_result = subprocess.run(
+        [gh, "auth", "token", "--hostname", "github.com", "--user", "BrianMills2718"],
+        check=False,
+        capture_output=True,
+        text=True,
+        env={
+            "HOME": str(account_home),
+            "GH_CONFIG_DIR": str(account_home / ".config" / "gh"),
+            "PATH": "/usr/local/bin:/usr/bin:/bin",
+        },
+    )
+    token = token_result.stdout.strip()
+    if token_result.returncode != 0 or not token:
+        raise RuntimeUpdateError("canonical BrianMills2718 GitHub credential is unavailable")
+    authorization = base64.b64encode(f"x-access-token:{token}".encode()).decode()
+    env.update(
+        GIT_CONFIG_COUNT="1",
+        GIT_CONFIG_KEY_0="http.https://github.com/.extraHeader",
+        GIT_CONFIG_VALUE_0=f"AUTHORIZATION: basic {authorization}",
+    )
+    return env
+
+
 def _deny(receipt: dict[str, Any], error: Exception) -> RuntimeUpdateError:
     message = _redact_sensitive_text(str(error))
     receipt.update(
@@ -238,7 +274,7 @@ def _remote_main_revision() -> str:
         check=False,
         capture_output=True,
         text=True,
-        env={**_sanitized_git_env(), "GIT_OPTIONAL_LOCKS": "0"},
+        env={**_canonical_network_git_env(), "GIT_OPTIONAL_LOCKS": "0"},
     )
     if result.returncode != 0:
         detail = result.stderr.strip() or result.stdout.strip() or "git ls-remote failed"
@@ -364,6 +400,7 @@ def update_runtime(
                 CANONICAL_ORIGIN,
                 revision,
                 mutating=True,
+                network_auth=True,
             )
             _validate_revision(runtime_repo, revision)
 

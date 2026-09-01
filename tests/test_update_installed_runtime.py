@@ -108,6 +108,25 @@ def test_git_global_url_rewrite_environment_is_ignored(
     assert result["remote_main_revision"] == after
 
 
+def test_caller_injected_git_config_and_tls_environment_is_stripped(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("GIT_CONFIG_COUNT", "1")
+    monkeypatch.setenv("GIT_CONFIG_KEY_0", "url.file:///tmp/attacker.insteadOf")
+    monkeypatch.setenv("GIT_CONFIG_VALUE_0", "https://github.com/")
+    monkeypatch.setenv("GIT_SSL_NO_VERIFY", "1")
+    monkeypatch.setenv("SSL_CERT_FILE", "/tmp/attacker-ca.pem")
+
+    env = runtime_update._sanitized_git_env()
+
+    assert "GIT_CONFIG_COUNT" not in env
+    assert "GIT_CONFIG_KEY_0" not in env
+    assert "GIT_CONFIG_VALUE_0" not in env
+    assert "GIT_SSL_NO_VERIFY" not in env
+    assert "SSL_CERT_FILE" not in env
+    assert env["GIT_CONFIG_GLOBAL"] == os.devnull
+
+
 def test_local_url_rewrite_is_denied(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -409,10 +428,11 @@ def test_partial_failure_receipt_retains_recovery_ref(
         *args: str,
         check: bool = True,
         mutating: bool = False,
+        network_auth: bool = False,
     ) -> subprocess.CompletedProcess[str]:
         if args and args[0] == "merge":
             raise RuntimeUpdateError("injected merge failure")
-        return real_run(repo, *args, check=check, mutating=mutating)
+        return real_run(repo, *args, check=check, mutating=mutating, network_auth=network_auth)
 
     monkeypatch.setattr(runtime_update, "_run", fail_merge)
     with pytest.raises(RuntimeUpdateError, match="injected merge failure") as caught:
@@ -451,10 +471,11 @@ def test_oserror_after_recovery_ref_emits_structured_partial_failure(
         *args: str,
         check: bool = True,
         mutating: bool = False,
+        network_auth: bool = False,
     ) -> subprocess.CompletedProcess[str]:
         if args and args[0] == "merge":
             raise OSError("injected operating-system failure")
-        return real_run(repo, *args, check=check, mutating=mutating)
+        return real_run(repo, *args, check=check, mutating=mutating, network_auth=network_auth)
 
     monkeypatch.setattr(runtime_update, "_run", fail_merge)
     with pytest.raises(RuntimeUpdateError, match="injected operating-system failure") as caught:

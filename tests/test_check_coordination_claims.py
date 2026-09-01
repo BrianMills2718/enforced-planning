@@ -39,6 +39,26 @@ def _load_module():
     return module
 
 
+def test_script_prune_completed_forwards_exact_selectors(monkeypatch: pytest.MonkeyPatch) -> None:
+    module = _load_module()
+    observed: dict[str, object] = {}
+
+    def fake_prune_completed(*args: object, **kwargs: object) -> tuple[int, list[str]]:
+        observed["args"] = args
+        observed["kwargs"] = kwargs
+        return 1, ["codex:project-meta:exact-scope"]
+
+    monkeypatch.setattr(module._impl, "prune_completed", fake_prune_completed)
+
+    result = module.prune_completed(agent="codex", project="project-meta", scope="exact-scope")
+
+    assert result == (1, ["codex:project-meta:exact-scope"])
+    assert observed == {
+        "args": (),
+        "kwargs": {"agent": "codex", "project": "project-meta", "scope": "exact-scope"},
+    }
+
+
 @pytest.fixture(autouse=True)
 def _isolate_claim_mutation_ledger(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Keep deterministic claim fixtures out of the shared operator ledger."""

@@ -151,3 +151,25 @@ def test_non_main_named_branch_is_denied(tmp_path: Path) -> None:
         update_runtime(source_repo=source, runtime_repo=runtime, revision=after, write=True)
 
     assert _git(runtime, "rev-parse", "HEAD") == before
+
+
+def test_explicit_detached_replacement_retains_divergent_head(tmp_path: Path) -> None:
+    source, runtime, before, after = _repos(tmp_path)
+    _git(runtime, "checkout", "--detach", before)
+    _git(runtime, "config", "user.email", "test@example.com")
+    _git(runtime, "config", "user.name", "Test User")
+    divergent = _commit(runtime, "divergent.txt", "divergent\n")
+
+    result = update_runtime(
+        source_repo=source,
+        runtime_repo=runtime,
+        revision=after,
+        write=True,
+        allow_detached_replacement=True,
+    )
+
+    assert result["checkout_mode"] == "detached"
+    assert result["update_mode"] == "detached_replacement"
+    assert result["before_revision"] == divergent
+    assert result["after_revision"] == after
+    assert _git(runtime, "rev-parse", result["recovery_ref"]) == divergent

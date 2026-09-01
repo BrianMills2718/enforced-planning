@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import subprocess
 from pathlib import Path
 from types import SimpleNamespace
@@ -68,6 +69,30 @@ def test_canonical_checkout_delta_is_not_claimed_as_session_custody(tmp_path: Pa
     ) is None
 
 
+def test_non_git_workspace_root_is_not_recorded_as_a_touched_repository(tmp_path: Path) -> None:
+    ledger = tmp_path / "ledgers"
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    hook._write_closeout_baseline(
+        payload={"cwd": str(workspace)},
+        agent="codex",
+        session_id="codex:current",
+        ledger_dir=ledger,
+    )
+
+    hook._record_touched_repositories(
+        payload={"cwd": str(workspace)},
+        agent="codex",
+        session_id="codex:current",
+        ledger_dir=ledger,
+        active_claims=(),
+    )
+
+    [ledger_path] = ledger.glob("*.json")
+    payload = json.loads(ledger_path.read_text(encoding="utf-8"))
+    assert payload["touched_repositories"] == []
+
+
 def test_claimed_linked_worktree_delta_blocks_session_closeout(tmp_path: Path) -> None:
     repository, worktree = _repository_with_worktree(tmp_path)
     ledger = tmp_path / "ledgers"
@@ -93,6 +118,29 @@ def test_claimed_linked_worktree_delta_blocks_session_closeout(tmp_path: Path) -
         ledger_dir=ledger,
         active_claims=(claim,),
     )
+    assert failure is not None
+    assert str(worktree) in failure
+
+
+def test_stop_adds_owned_claimed_worktree_when_pretool_cwd_was_canonical(tmp_path: Path) -> None:
+    repository, worktree = _repository_with_worktree(tmp_path)
+    ledger = tmp_path / "ledgers"
+    claim = _claim(worktree)
+    hook._write_closeout_baseline(
+        payload={"cwd": str(repository)},
+        agent="codex",
+        session_id="codex:current",
+        ledger_dir=ledger,
+    )
+    (worktree / "owned.txt").write_text("session work\n", encoding="utf-8")
+
+    failure = hook._repository_closeout_failure(
+        agent="codex",
+        session_id="codex:current",
+        ledger_dir=ledger,
+        active_claims=(claim,),
+    )
+
     assert failure is not None
     assert str(worktree) in failure
 

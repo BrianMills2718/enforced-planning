@@ -199,10 +199,18 @@ def resolve_fresh_start_revision(*, repo_root: Path, start_point: str) -> str:
         ["rev-parse", "--abbrev-ref", "--symbolic-full-name", f"{start_point}@{{upstream}}"],
         cwd=repo_root,
     )
-    if upstream.returncode != 0:
+    remotes_result = run_git(["remote"], cwd=repo_root)
+    remotes = set(remotes_result.stdout.split()) if remotes_result.returncode == 0 else set()
+    explicit_remote = start_point.split("/", 1)[0] if "/" in start_point else None
+    remote_name = explicit_remote if explicit_remote in remotes else None
+    upstream_ref = upstream.stdout.strip() if upstream.returncode == 0 else ""
+    if remote_name is None and "/" in upstream_ref:
+        candidate = upstream_ref.split("/", 1)[0]
+        remote_name = candidate if candidate in remotes else None
+    if remote_name is None and start_point == "HEAD":
+        remote_name = "origin" if "origin" in remotes else (next(iter(sorted(remotes)), None))
+    if remote_name is None:
         return local_revision
-    upstream_ref = upstream.stdout.strip()
-    remote_name = upstream_ref.split("/", 1)[0] if "/" in upstream_ref else None
     if remote_name:
         # This updates only remote-tracking refs. A failed fetch must not leave
         # claim bootstrap silently pinned to a cached revision.
@@ -210,6 +218,21 @@ def resolve_fresh_start_revision(*, repo_root: Path, start_point: str) -> str:
         if fetched.returncode != 0:
             detail = (fetched.stderr or fetched.stdout).strip()
             raise ValueError(f"Unable to refresh upstream {upstream_ref!r}: {detail}")
+    if start_point == "HEAD":
+        remote_head = run_git(["symbolic-ref", "--quiet", "--short", f"refs/remotes/{remote_name}/HEAD"], cwd=repo_root)
+        if remote_head.returncode == 0:
+            upstream_ref = remote_head.stdout.strip()
+        else:
+            advertised = run_git(["ls-remote", "--symref", remote_name, "HEAD"], cwd=repo_root)
+            match = re.search(r"^ref:\s+refs/heads/([^\s]+)\s+HEAD$", advertised.stdout, re.MULTILINE)
+            if advertised.returncode != 0 or match is None:
+                detail = (advertised.stderr or advertised.stdout).strip()
+                raise ValueError(f"Unable to resolve remote default for {remote_name!r}: {detail}")
+            upstream_ref = f"{remote_name}/{match.group(1)}"
+    elif explicit_remote == remote_name:
+        upstream_ref = start_point
+    if not upstream_ref:
+        return local_revision
     fresh = run_git(["rev-parse", "--verify", f"{upstream_ref}^{{commit}}"], cwd=repo_root)
     fresh_revision = fresh.stdout.strip()
     if fresh.returncode != 0 or re.fullmatch(r"(?:[0-9a-f]{40}|[0-9a-f]{64})", fresh_revision) is None:

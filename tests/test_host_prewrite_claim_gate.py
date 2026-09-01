@@ -935,6 +935,37 @@ def test_git_launch_cwd_absolute_apply_patch_uses_targeted_claimed_worktree(
     assert decision["normalized_target_paths"] == ["src/allowed.py"]
 
 
+def test_git_launch_cwd_absolute_new_file_patch_uses_targeted_claimed_worktree(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A nonexistent absolute file resolves through its owning worktree parent."""
+
+    _workspace, repo, worktree, claims_dir, claim_path = _fixture(tmp_path)
+    claim = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    claim["agent"] = "codex"
+    claim["session_id"] = "codex:host-gate-test"
+    claim_path.write_text(yaml.safe_dump(claim, sort_keys=False), encoding="utf-8")
+    write_projection(claims_dir=claims_dir, projection_path=tmp_path / "projection.json")
+    target = worktree / "src" / "new.py"
+    patch = f"*** Begin Patch\n*** Add File: {target}\n+VALUE = 1\n*** End Patch"
+
+    code, decision = _run_cli(
+        monkeypatch,
+        capsys,
+        tmp_path,
+        _payload(cwd=repo, tool="apply_patch", tool_input={"command": patch}),
+        claims_dir=claims_dir,
+        projection_path=tmp_path / "projection.json",
+        client="codex",
+    )
+
+    assert code == 0, decision
+    assert decision["worktree_path"] == str(worktree)
+    assert decision["normalized_target_paths"] == ["src/new.py"]
+
+
 def test_git_launch_cwd_does_not_hide_stale_session_target_projection(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

@@ -1595,6 +1595,72 @@ def test_maintenance_refresh_classifies_one_locked_tracker_snapshot(
     assert tracker_after["tracker"]["notes"] == "concurrent notes after coherent refresh"
 
 
+def test_maintenance_refresh_cannot_reactivate_claim_ended_before_locked_reload(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A canonical session end wins when it completes before refresh takes custody."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    common = _maintenance_refresh_args(tmp_path, trackers_dir)
+    started = session_lifecycle.start_session(**common)
+    claim_path = claims_dir / "codex_enforced-planning_fix_maintenance-provenance-refresh.yaml"
+    tracker_path = Path(started["tracker_path"])
+    claim_before = claim_path.read_bytes()
+    tracker_before = tracker_path.read_bytes()
+    real_registry_lock = coordination_claims.claim_registry_lock
+    refresh_thread = current_thread()
+    end_completed = Event()
+    end_results: list[tuple[int, list[str], str, str]] = []
+    end_failures: list[BaseException] = []
+    end_threads: list[Thread] = []
+    end_started = False
+
+    def end_claim() -> None:
+        try:
+            end_results.append(
+                coordination_claims.end_session_claims(
+                    agent="codex",
+                    session_id=str(common["session_id"]),
+                    reason="runtime terminated during refresh",
+                )
+            )
+        except BaseException as exc:  # pragma: no cover - asserted below
+            end_failures.append(exc)
+        finally:
+            end_completed.set()
+
+    @contextmanager
+    def end_before_refresh_lock(path: Path | None = None):
+        nonlocal end_started
+        if current_thread() is refresh_thread and not end_started:
+            end_started = True
+            thread = Thread(target=end_claim, name="ending-maintenance-owner")
+            end_threads.append(thread)
+            thread.start()
+            assert end_completed.wait(timeout=2)
+        with real_registry_lock(path):
+            yield
+
+    monkeypatch.setattr(coordination_claims, "claim_registry_lock", end_before_refresh_lock)
+    with pytest.raises(ValueError, match="initially live claim ended.*refusing reactivation"):
+        session_lifecycle.start_session(
+            **{**common, "current_phase": "must not reactivate ended claim"}
+        )
+
+    assert len(end_threads) == 1
+    end_threads[0].join(timeout=2)
+    assert end_failures == []
+    assert len(end_results) == 1
+    assert end_results[0][0] == 1
+    claim_after = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    assert claim_path.read_bytes() != claim_before
+    assert claim_after["status"] == coordination_claims.SESSION_ENDED_STATUS
+    assert claim_after["session_end_reason"] == "runtime terminated during refresh"
+    assert tracker_path.read_bytes() == tracker_before
+
+
 @pytest.mark.parametrize(
     "drift",
     [

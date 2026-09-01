@@ -2400,93 +2400,121 @@ def start_session(
     maintenance_action: str | None = None
     if existing_claim is not None:
         with coordination_claims.claim_registry_lock(coordination_claims.CLAIMS_DIR):
-            if claim_slot_path.is_file():
-                locked_claim_bytes = claim_slot_path.read_bytes()
-                locked_claim_payload = yaml.safe_load(locked_claim_bytes)
-                locked_claim = (
-                    coordination_claims.normalize_claim(
-                        locked_claim_payload,
-                        source_file=str(claim_slot_path),
-                    )
-                    if isinstance(locked_claim_payload, dict)
-                    else None
+            if not claim_slot_path.is_file():
+                raise ValueError(
+                    "session refresh lost the initially live claim before locked reload; refusing recreation"
                 )
-                if locked_claim is not None and locked_claim.tracker_path:
-                    locked_tracker_path = Path(locked_claim.tracker_path).expanduser().resolve()
-                    with session_contracts.session_tracker_lock(locked_tracker_path):
-                        locked_tracker_bytes = locked_tracker_path.read_bytes()
-                        locked_tracker_payload = yaml.safe_load(locked_tracker_bytes)
-                        if outcome_admission.is_sanctioned_maintenance_claim_payload(
+            locked_claim_bytes = claim_slot_path.read_bytes()
+            locked_claim_payload = yaml.safe_load(locked_claim_bytes)
+            locked_claim = (
+                coordination_claims.normalize_claim(
+                    locked_claim_payload,
+                    source_file=str(claim_slot_path),
+                )
+                if isinstance(locked_claim_payload, dict)
+                else None
+            )
+            if locked_claim is None:
+                raise ValueError(
+                    "session refresh could not reload the initially live claim; refusing recreation"
+                )
+            initial_owner = (
+                existing_claim.agent,
+                tuple(existing_claim.projects),
+                existing_claim.scope,
+                existing_claim.session_id,
+            )
+            locked_owner = (
+                locked_claim.agent,
+                tuple(locked_claim.projects),
+                locked_claim.scope,
+                locked_claim.session_id,
+            )
+            if locked_owner != initial_owner:
+                raise ValueError(
+                    "session refresh observed a different claim owner during locked reload; refusing replacement"
+                )
+            if not locked_claim.is_live():
+                raise ValueError(
+                    "session refresh observed that the initially live claim ended before locked reload; "
+                    "refusing reactivation"
+                )
+            if locked_claim.tracker_path:
+                locked_tracker_path = Path(locked_claim.tracker_path).expanduser().resolve()
+                with session_contracts.session_tracker_lock(locked_tracker_path):
+                    locked_tracker_bytes = locked_tracker_path.read_bytes()
+                    locked_tracker_payload = yaml.safe_load(locked_tracker_bytes)
+                    if outcome_admission.is_sanctioned_maintenance_claim_payload(
+                        locked_claim,
+                        locked_tracker_payload,
+                        tracker_path=locked_tracker_path,
+                    ):
+                        assert isinstance(locked_tracker_payload, dict)
+                        maintenance_snapshot = _validate_locked_sanctioned_maintenance_refresh(
                             locked_claim,
-                            locked_tracker_payload,
+                            claim_path=claim_slot_path,
+                            claim_bytes=locked_claim_bytes,
                             tracker_path=locked_tracker_path,
-                        ):
-                            assert isinstance(locked_tracker_payload, dict)
-                            maintenance_snapshot = _validate_locked_sanctioned_maintenance_refresh(
-                                locked_claim,
-                                claim_path=claim_slot_path,
-                                claim_bytes=locked_claim_bytes,
-                                tracker_path=locked_tracker_path,
-                                tracker_bytes=locked_tracker_bytes,
-                                existing_tracker=locked_tracker_payload,
-                                agent=agent,
-                                project=project,
-                                scope=scope,
-                                intent=intent,
-                                plan_ref=plan_ref,
-                                repo_root=repo_root,
-                                worktree_path=worktree_path,
-                                branch=branch,
-                                session_id=resolved_session_id,
-                                session_name=session_name,
-                                broader_goal=broader_goal,
-                                current_phase=current_phase,
-                                intended_next_phases=intended_next_phases,
-                                depends_on_repos=depends_on_repos,
-                                requires_shared_infra_changes=requires_shared_infra_changes,
-                                stop_conditions=stop_conditions,
-                                notes=notes,
-                                claim_type=claim_type,
-                                write_paths=write_paths,
-                                read_paths=read_paths,
-                                parent_scope=parent_scope,
-                                work_graph_path=work_graph_path,
-                                work_unit_id=work_unit_id,
-                                start_revision=start_revision,
-                                plan_repo_root=plan_repo_root,
-                                plan_start_point=plan_start_point,
-                                allow_unplanned=allow_unplanned,
-                                allow_parallel=allow_parallel,
-                                broad_scope_mode=broad_scope_mode,
-                                broad_scope_reason=broad_scope_reason,
-                                target_worktree_path=target_worktree_path,
-                                tracker_dir=tracker_dir,
+                            tracker_bytes=locked_tracker_bytes,
+                            existing_tracker=locked_tracker_payload,
+                            agent=agent,
+                            project=project,
+                            scope=scope,
+                            intent=intent,
+                            plan_ref=plan_ref,
+                            repo_root=repo_root,
+                            worktree_path=worktree_path,
+                            branch=branch,
+                            session_id=resolved_session_id,
+                            session_name=session_name,
+                            broader_goal=broader_goal,
+                            current_phase=current_phase,
+                            intended_next_phases=intended_next_phases,
+                            depends_on_repos=depends_on_repos,
+                            requires_shared_infra_changes=requires_shared_infra_changes,
+                            stop_conditions=stop_conditions,
+                            notes=notes,
+                            claim_type=claim_type,
+                            write_paths=write_paths,
+                            read_paths=read_paths,
+                            parent_scope=parent_scope,
+                            work_graph_path=work_graph_path,
+                            work_unit_id=work_unit_id,
+                            start_revision=start_revision,
+                            plan_repo_root=plan_repo_root,
+                            plan_start_point=plan_start_point,
+                            allow_unplanned=allow_unplanned,
+                            allow_parallel=allow_parallel,
+                            broad_scope_mode=broad_scope_mode,
+                            broad_scope_reason=broad_scope_reason,
+                            target_worktree_path=target_worktree_path,
+                            tracker_dir=tracker_dir,
+                        )
+                        tracker_section = locked_tracker_payload.get("tracker")
+                        timestamps = locked_tracker_payload.get("timestamps")
+                        if not isinstance(tracker_section, dict) or not isinstance(timestamps, dict):
+                            raise ValueError(
+                                "sanctioned maintenance tracker is missing execution or timestamp metadata"
                             )
-                            tracker_section = locked_tracker_payload.get("tracker")
-                            timestamps = locked_tracker_payload.get("timestamps")
-                            if not isinstance(tracker_section, dict) or not isinstance(timestamps, dict):
-                                raise ValueError(
-                                    "sanctioned maintenance tracker is missing execution or timestamp metadata"
-                                )
-                            tracker_section["current_phase"] = tracker.current_phase
-                            timestamps["updated_at"] = tracker.updated_at
-                            session_contracts._atomic_write_session_tracker(
-                                locked_tracker_path,
-                                locked_tracker_payload,
-                            )
-                            tracker_bytes_written = locked_tracker_path.read_bytes()
-                            try:
-                                maintenance_action = upsert_claim(registry_lock_held=True)
-                            except Exception as claim_error:
-                                claim_bytes_after = claim_slot_path.read_bytes() if claim_slot_path.is_file() else None
-                                if claim_bytes_after == locked_claim_bytes:
-                                    if locked_tracker_path.read_bytes() != tracker_bytes_written:
-                                        raise RuntimeError(
-                                            "session claim update failed and exact tracker rollback was incomplete: "
-                                            f"claim={claim_error}; rollback=session tracker changed inside locked refresh"
-                                        ) from claim_error
-                                    _atomic_restore_bytes(locked_tracker_path, locked_tracker_bytes)
-                                raise
+                        tracker_section["current_phase"] = tracker.current_phase
+                        timestamps["updated_at"] = tracker.updated_at
+                        session_contracts._atomic_write_session_tracker(
+                            locked_tracker_path,
+                            locked_tracker_payload,
+                        )
+                        tracker_bytes_written = locked_tracker_path.read_bytes()
+                        try:
+                            maintenance_action = upsert_claim(registry_lock_held=True)
+                        except Exception as claim_error:
+                            claim_bytes_after = claim_slot_path.read_bytes() if claim_slot_path.is_file() else None
+                            if claim_bytes_after == locked_claim_bytes:
+                                if locked_tracker_path.read_bytes() != tracker_bytes_written:
+                                    raise RuntimeError(
+                                        "session claim update failed and exact tracker rollback was incomplete: "
+                                        f"claim={claim_error}; rollback=session tracker changed inside locked refresh"
+                                    ) from claim_error
+                                _atomic_restore_bytes(locked_tracker_path, locked_tracker_bytes)
+                            raise
     if maintenance_action is not None:
         action = maintenance_action
     else:

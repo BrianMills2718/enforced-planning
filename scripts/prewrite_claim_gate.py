@@ -1094,22 +1094,32 @@ def _exact_outcome_claim(decision: dict[str, Any]) -> Any:
 
 
 def _sanctioned_maintenance_exemption(decision: dict[str, Any]) -> dict[str, Any] | None:
-    """Return bounded exemption evidence only after ordinary exact-claim allow."""
+    """Return bounded typed-maintenance evidence after ordinary exact-claim allow."""
 
     if decision.get("decision") != "allow" or decision.get("reason_code") != "exact_live_claim":
         return None
-    from enforced_planning.outcome_admission import is_sanctioned_maintenance_claim
+    from enforced_planning import outcome_admission
 
     claim = _exact_outcome_claim(decision)
-    if not is_sanctioned_maintenance_claim(claim):
-        return None
-    return {
-        "reason_code": "sanctioned_unplanned_maintenance",
-        "claim_project": claim.primary_project(),
-        "claim_scope": claim.scope,
-        "claim_source_file": claim.source_file,
-        "tracker_path": claim.tracker_path,
-    }
+    if outcome_admission.is_sanctioned_maintenance_claim(claim):
+        return {
+            "reason_code": "sanctioned_unplanned_maintenance",
+            "claim_project": claim.primary_project(),
+            "claim_scope": claim.scope,
+            "claim_source_file": claim.source_file,
+            "tracker_path": claim.tracker_path,
+        }
+    if outcome_admission.is_sanctioned_delegated_maintenance_claim(claim):
+        return {
+            "reason_code": "sanctioned_delegated_maintenance",
+            "claim_project": claim.primary_project(),
+            "claim_scope": claim.scope,
+            "claim_source_file": claim.source_file,
+            "tracker_path": claim.tracker_path,
+            "parent_scope": claim.parent_scope,
+            "start_revision": claim.start_revision,
+        }
+    return None
 
 
 def _enforce_selected_outcome(

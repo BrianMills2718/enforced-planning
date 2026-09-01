@@ -1299,6 +1299,59 @@ def test_sanctioned_maintenance_start_refresh_preserves_bootstrap_provenance(
     }
 
 
+def test_broad_maintenance_refresh_preserves_omitted_bootstrap_metadata(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ordinary refresh omission retains the broad bootstrap's typed custody."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    common = _maintenance_refresh_args(tmp_path, trackers_dir)
+    target_worktree = str(common["worktree_path"])
+    bootstrap_reason = "construct this maintenance lane, then narrow before its first repository write"
+    bootstrap = {
+        **common,
+        "write_paths": ["."],
+        "broad_scope_mode": "bootstrap",
+        "broad_scope_reason": bootstrap_reason,
+        "target_worktree_path": target_worktree,
+    }
+    started = session_lifecycle.start_session(**bootstrap)
+    claim_path = claims_dir / "codex_enforced-planning_fix_maintenance-provenance-refresh.yaml"
+    tracker_path = Path(started["tracker_path"])
+    tracker_claim_before = yaml.safe_load(tracker_path.read_text(encoding="utf-8"))["claim"]
+    assert outcome_admission.is_sanctioned_maintenance_claim(
+        session_lifecycle._single_matching_live_claim(
+            agent="codex", project="enforced-planning", scope=str(common["scope"])
+        )
+    )
+
+    ordinary_refresh = {
+        key: value
+        for key, value in common.items()
+        if key not in {"claim_type", "write_paths", "read_paths"}
+    }
+    refreshed = session_lifecycle.start_session(
+        **{**ordinary_refresh, "current_phase": "narrowing maintenance custody"}
+    )
+    claim_after = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    tracker_after = yaml.safe_load(tracker_path.read_text(encoding="utf-8"))
+
+    assert refreshed["action"] == "updated"
+    assert claim_after["write_paths"] == ["."]
+    assert claim_after["broad_scope_mode"] == "bootstrap"
+    assert claim_after["broad_scope_reason"] == bootstrap_reason
+    assert claim_after["target_worktree_path"] == target_worktree
+    assert tracker_after["claim"] == tracker_claim_before
+    assert tracker_after["tracker"]["current_phase"] == "narrowing maintenance custody"
+    assert outcome_admission.is_sanctioned_maintenance_claim(
+        session_lifecycle._single_matching_live_claim(
+            agent="codex", project="enforced-planning", scope=str(common["scope"])
+        )
+    )
+
+
 @pytest.mark.parametrize(
     "drift",
     [
@@ -1310,6 +1363,7 @@ def test_sanctioned_maintenance_start_refresh_preserves_bootstrap_provenance(
         {"claim_type": "write"},
         {"write_paths": ["different.py"]},
         {"intended_next_phases": ["newly invented phase"]},
+        {"broad_scope_reason": "replace immutable bootstrap custody"},
     ],
 )
 def test_sanctioned_maintenance_start_rejects_provenance_drift_without_mutation(

@@ -420,27 +420,38 @@ is already absent. `session-close` itself refuses physical cleanup while any
 other live claim still references the same canonical worktree path and lists
 the sibling scopes that must be disposed or transferred first.
 
-The compatibility `scripts/worktree-coordination/finish_pr.py` merge path also
-fails closed. It resolves the repository owner through the existing isolated
-GitHub-account seam, fetches the exact pull-request head, requires an
-authoritative `coordination-approval` plus GitHub's complete required-check set
-on that head, rechecks that the head did not move, and passes the same full commit to
-`gh pr merge --squash --match-head-commit`. A missing, pending, failing, or
-stale approval never reaches merge. The helper does not request branch deletion
-as part of the merge; only verified GitHub merge evidence is passed into the
-sanctioned claim/worktree close lifecycle, which owns local branch deletion.
+The compatibility `scripts/worktree-coordination/finish_pr.py` path also fails
+closed. It resolves the repository owner through the isolated GitHub-account
+seam, fetches the exact pull-request head, requires GitHub's complete required
+check set, and runs the evidence-bound programmatic plus fresh-agent review from
+the clean linked worktree. Its review specification must be an absolute path
+both lexically and after symlink resolution outside the repository and its
+worktrees. Installed-package consumers receive a standalone copy of the review
+runtime so the finish entrypoint does not depend on a vendored package tree.
+After review it rechecks the live head
+and required checks, then requires canonical integration authority for the
+exact native agent, canonical project, claim, reviewed work graph/unit, review
+spec digest, base, and head. It holds the registry-backed authority guard while
+passing that same full commit to `gh pr merge --squash --match-head-commit`.
+A missing, rejected, stale, or claim-mismatched review never reaches merge. If
+the merge succeeded but the process crashed before closeout, a retry re-observes
+the exact GitHub merge, reruns the review and authority assertion, skips a
+second merge, and resumes closeout. The helper does not request branch deletion as part of the
+merge; only verified GitHub merge evidence is passed into the sanctioned
+claim/worktree close lifecycle, which owns local branch deletion.
+Before closeout, the helper fetches the canonical base ref and proves that the
+reported merge commit is retained by `origin/<base>`. This makes the merge
+object and updated remote-tracking ref available to squash-closeout validation
+before the linked worktree or claim is removed.
 
-The approval producer contract is stricter than a shared context name. A commit
-status qualifies only when the newest same-context status is `success`, its
-creator is exactly the repository owner resolved from `origin`, and its target
-is the exact pull-request URL. A check run qualifies only when it is
-`completed/success`, names the exact head, and its GitHub App ID equals the
-non-null App ID bound to `coordination-approval` in branch protection. Rollup
-entries alone do not carry enough provenance and cannot grant approval. The
-current manual status compatibility arm remains locally stricter than an
-`app_id: null` protection context; the intended remote terminal state is a
-dedicated coordination-approver GitHub App with that exact App ID bound in
-branch protection.
+Hooks provide the fast enforcement layer: they block direct merge commands and
+route callers to `make finish BRANCH=<branch> PR=<number>
+REVIEW_SPEC=/absolute/review-spec.json`. The expensive review never runs inside
+`PreToolUse`, avoiding hook timeouts. This is operational enforcement on clients
+with the governed hooks installed; GitHub branch protection remains useful for
+repository-wide CI checks but no GitHub App is required for semantic signoff.
+The installer also rejects unmarked legacy `make merge` or `make finish`
+recipes, preventing a later duplicate target from overriding this transaction.
 
 Squash merges require an explicit `--merge-commit <sha>` receipt. Closeout
 accepts it only when that one-parent commit is retained by the canonical

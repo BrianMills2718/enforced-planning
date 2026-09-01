@@ -118,6 +118,9 @@ After a successful minimum install, your repo should have:
 - `scripts/meta/session_narrow.py`
 - `scripts/meta/session_start.py`
 - `scripts/meta/session_status.py`
+- `scripts/meta/worktree-coordination/finish_pr.py`
+- `enforced_planning/pr_review_signoff.py`
+- `contracts/pr-review-signoff.schema.json`
 - `scripts/meta/sync_plan_status.py`
 - `scripts/hook_receipts.py` and `scripts/meta/hook_receipts.py`
 - `scripts/meta/validate_plan.py`
@@ -147,6 +150,31 @@ write paths at creation avoids that temporary broad reservation. Generated
 consumers execute this transaction through the installer-owned
 `scripts/meta/claim_bootstrap.py` wrapper and its synchronized authority module;
 there is no fallback to a consumer-authored shell transaction.
+
+The installed hook stack blocks direct pull-request merges and routes them to
+the sanctioned finish transaction. Supply a planning-derived review spec from
+outside the repository and all of its linked worktrees:
+
+```bash
+make finish \
+  BRANCH=feature/example \
+  PR=42 \
+  REVIEW_SPEC=/absolute/path/outside-the-repository/review-spec.json
+```
+
+The hook itself remains fast and is installed by both the full and bounded
+worktree rollout profiles. Installed-package consumers also receive the
+standalone review runtime used by this entrypoint, without restoring a vendored
+`enforced_planning/` tree. Installation fails closed if an unmarked legacy
+`merge` or `finish` recipe would collide with the sanctioned target, including
+a historical recipe outside an existing generated block. `make finish` runs the longer programmatic and
+fresh-agent review, persists the exact-head receipt, rechecks required GitHub
+checks, asserts that the exact native agent and canonical project still own the
+reviewed claim/work-unit provenance, merges with head-SHA matching while that
+authority guard is held, and closes the claim/worktree. Missing, rejected,
+stale, or claim-mismatched review evidence fails before merge. A retry after a
+post-merge crash re-observes the exact GitHub merge and authority before
+finishing closeout; it never issues a second merge.
 
 The Enforced Planning source repository additionally sets
 `meta_process.claims.outcome_admission_mode: enforce_selected`. New source
@@ -294,8 +322,9 @@ installed environment separately through its package workflow. An unchanged
 For external plan ownership, the upgraded runtime and wrappers must both
 support the operator guide's explicit plan-authority root/revision inputs.
 The bounded mailbox and claim-projection profiles install their complete local
-import closure, and worktree bootstrap fetches and resolves the advertised
-remote default before creating a claim, branch, or linked worktree.
+import closure, including the shared mailbox execution-identity resolver, and
+worktree bootstrap fetches and resolves the advertised remote default before
+creating a claim, branch, or linked worktree.
 
 - `./install.sh /path/to/your/project --worktree-only`
   - canonical bounded sync for sanctioned worktree entrypoints only

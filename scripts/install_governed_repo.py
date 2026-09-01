@@ -27,16 +27,17 @@ from typing import Any
 if str(Path(__file__).resolve().parents[1]) not in sys.path:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from enforced_planning.governed_repo_audit import _refresh_agents
-from enforced_planning.governed_repo_audit import audit_repo
 from enforced_planning import coordination_claims
-from enforced_planning.installed_framework import drop_vendored_package_files
-from enforced_planning.hook_wiring import TargetRepo
+from enforced_planning.governed_repo_audit import _refresh_agents, audit_repo
+from enforced_planning.hook_wiring import (
+    TargetRepo,
+    context_runtime_error,
+    plan_coordination_message_generation,
+    plan_merge_guard_generation,
+)
 from enforced_planning.hook_wiring import apply_generation as apply_hook_generation
-from enforced_planning.hook_wiring import context_runtime_error
-from enforced_planning.hook_wiring import plan_coordination_message_generation
 from enforced_planning.hook_wiring import plan_generation as plan_hook_generation
-
+from enforced_planning.installed_framework import drop_vendored_package_files
 
 FRAMEWORK_ROOT = Path(__file__).resolve().parents[1]
 MAKEFILE_META_MARKER = "# === META-PROCESS TARGETS ==="
@@ -63,12 +64,15 @@ SYNC_SUPPORT_FILES: dict[str, str] = {
     "scripts/meta/claim_bootstrap.py": "scripts/claim_bootstrap.py",
     "enforced_planning/client_session_metadata.py": "enforced_planning/client_session_metadata.py",
     "enforced_planning/coordination_claims.py": "enforced_planning/coordination_claims.py",
+    "enforced_planning/mailbox_execution_identity.py": "enforced_planning/mailbox_execution_identity.py",
     "enforced_planning/coordination_messages.py": "enforced_planning/coordination_messages.py",
     "enforced_planning/outcome_admission.py": "enforced_planning/outcome_admission.py",
     "enforced_planning/outcome_continuation.py": "enforced_planning/outcome_continuation.py",
     "enforced_planning/outcome_portfolio.py": "enforced_planning/outcome_portfolio.py",
     "enforced_planning/outcome_selection.py": "enforced_planning/outcome_selection.py",
     "enforced_planning/prewrite_claim_fast.py": "enforced_planning/prewrite_claim_fast.py",
+    "enforced_planning/pr_review_signoff.py": "enforced_planning/pr_review_signoff.py",
+    "enforced_planning/integration_authority.py": "enforced_planning/integration_authority.py",
     "enforced_planning/repository_authority.py": "enforced_planning/repository_authority.py",
     "enforced_planning/session_target.py": "enforced_planning/session_target.py",
     "enforced_planning/prewrite_claim_projection.py": "enforced_planning/prewrite_claim_projection.py",
@@ -109,6 +113,8 @@ SYNC_SUPPORT_FILES: dict[str, str] = {
     "scripts/meta/session_status.py": "scripts/session_status.py",
     "scripts/meta/session_end.py": "scripts/session_end.py",
     "scripts/meta/project_status.py": "scripts/project_status.py",
+    "scripts/meta/pr_auto.py": "scripts/pr_auto.py",
+    "scripts/meta/pr_review_signoff_runtime.py": "enforced_planning/pr_review_signoff.py",
     "scripts/meta/session_resume.py": "scripts/session_resume.py",
     "scripts/meta/surface_runtime.py": "scripts/surface_runtime.py",
     "scripts/coordination_inbox.py": "scripts/coordination_inbox.py",
@@ -147,19 +153,25 @@ SYNC_SUPPORT_FILES: dict[str, str] = {
     "scripts/meta/validate_plan.py": "scripts/validate_plan.py",
     "scripts/meta/canonical_lock.py": "scripts/worktree-coordination/canonical_lock.py",
     "scripts/meta/worktree-coordination/create_worktree.py": "scripts/worktree-coordination/create_worktree.py",
+    "scripts/meta/worktree-coordination/finish_pr.py": "scripts/worktree-coordination/finish_pr.py",
+    "scripts/meta/worktree-coordination/integration_authority.py": "scripts/worktree-coordination/integration_authority.py",
     "scripts/meta/worktree-coordination/create_publish_worktree.py": "scripts/worktree-coordination/create_publish_worktree.py",
     "scripts/meta/worktree-coordination/create_review_claim.py": "scripts/worktree-coordination/create_review_claim.py",
     "scripts/meta/worktree-coordination/raise_concern.py": "scripts/worktree-coordination/raise_concern.py",
     "scripts/meta/worktree-coordination/safe_worktree_remove.py": "scripts/worktree-coordination/safe_worktree_remove.py",
+    "contracts/pr-review-signoff.schema.json": "contracts/pr-review-signoff.schema.json",
     "meta-process/templates/agents.md.template": "templates/agents.md.template",
 }
 
 WORKTREE_ONLY_SYNC_SUPPORT_FILES: dict[str, str] = {
     "enforced_planning/__init__.py": "enforced_planning/__init__.py",
+    "enforced_planning/pr_review_signoff.py": "enforced_planning/pr_review_signoff.py",
+    "enforced_planning/integration_authority.py": "enforced_planning/integration_authority.py",
     "enforced_planning/concern_routing.py": "enforced_planning/concern_routing.py",
     "enforced_planning/claim_mutation_receipts.py": "enforced_planning/claim_mutation_receipts.py",
     "enforced_planning/client_session_metadata.py": "enforced_planning/client_session_metadata.py",
     "enforced_planning/coordination_claims.py": "enforced_planning/coordination_claims.py",
+    "enforced_planning/mailbox_execution_identity.py": "enforced_planning/mailbox_execution_identity.py",
     "enforced_planning/coordination_messages.py": "enforced_planning/coordination_messages.py",
     "enforced_planning/outcome_admission.py": "enforced_planning/outcome_admission.py",
     "enforced_planning/outcome_continuation.py": "enforced_planning/outcome_continuation.py",
@@ -195,6 +207,8 @@ WORKTREE_ONLY_SYNC_SUPPORT_FILES: dict[str, str] = {
     "scripts/meta/session_status.py": "scripts/session_status.py",
     "scripts/meta/session_end.py": "scripts/session_end.py",
     "scripts/meta/project_status.py": "scripts/project_status.py",
+    "scripts/meta/pr_auto.py": "scripts/pr_auto.py",
+    "scripts/meta/pr_review_signoff_runtime.py": "enforced_planning/pr_review_signoff.py",
     "scripts/meta/session_resume.py": "scripts/session_resume.py",
     "scripts/meta/surface_runtime.py": "scripts/surface_runtime.py",
     "scripts/meta/verification_batch.py": "scripts/verification_batch.py",
@@ -210,10 +224,13 @@ WORKTREE_ONLY_SYNC_SUPPORT_FILES: dict[str, str] = {
     "scripts/meta/check_plan_readiness.py": "scripts/check_plan_readiness.py",
     "scripts/meta/plan_close.py": "scripts/plan_close.py",
     "scripts/meta/worktree-coordination/create_worktree.py": "scripts/worktree-coordination/create_worktree.py",
+    "scripts/meta/worktree-coordination/finish_pr.py": "scripts/worktree-coordination/finish_pr.py",
+    "scripts/meta/worktree-coordination/integration_authority.py": "scripts/worktree-coordination/integration_authority.py",
     "scripts/meta/worktree-coordination/create_publish_worktree.py": "scripts/worktree-coordination/create_publish_worktree.py",
     "scripts/meta/worktree-coordination/create_review_claim.py": "scripts/worktree-coordination/create_review_claim.py",
     "scripts/meta/worktree-coordination/raise_concern.py": "scripts/worktree-coordination/raise_concern.py",
     "scripts/meta/worktree-coordination/safe_worktree_remove.py": "scripts/worktree-coordination/safe_worktree_remove.py",
+    "contracts/pr-review-signoff.schema.json": "contracts/pr-review-signoff.schema.json",
 }
 
 RELATIONSHIP_CONTEXT_SYNC_SUPPORT_FILES: dict[str, str] = {
@@ -252,6 +269,7 @@ COORDINATION_MESSAGES_LOCAL_PACKAGE_FILES: dict[str, str] = {
     "enforced_planning/claim_mutation_receipts.py": "enforced_planning/claim_mutation_receipts.py",
     "enforced_planning/client_session_metadata.py": "enforced_planning/client_session_metadata.py",
     "enforced_planning/coordination_claims.py": "enforced_planning/coordination_claims.py",
+    "enforced_planning/mailbox_execution_identity.py": "enforced_planning/mailbox_execution_identity.py",
     "enforced_planning/coordination_messages.py": "enforced_planning/coordination_messages.py",
     "enforced_planning/outcome_admission.py": "enforced_planning/outcome_admission.py",
     "enforced_planning/outcome_continuation.py": "enforced_planning/outcome_continuation.py",
@@ -460,16 +478,31 @@ def _sync_makefile_relationship_block(
     return prefix + block + "\n", "append:Makefile.relationship-context", None
 
 
-def _sync_makefile_worktree_block(current_makefile: str) -> tuple[str, str | None]:
-    """Return synced Makefile text plus the installer action needed, if any."""
+def _sync_makefile_worktree_block(
+    current_makefile: str,
+) -> tuple[str, str | None, str | None]:
+    """Return synced Makefile text, action, and any unsafe target collision."""
     block = _render_makefile_worktree_block("scripts/meta/worktree-coordination").rstrip()
     normalized = current_makefile.rstrip("\n")
     if MAKEFILE_WORKTREE_BLOCK_START in normalized:
         start = normalized.index(MAKEFILE_WORKTREE_BLOCK_START)
         end = normalized.index(MAKEFILE_WORKTREE_BLOCK_END) + len(MAKEFILE_WORKTREE_BLOCK_END)
+        outside_block = normalized[:start] + "\n" + normalized[end:]
+        collisions = [
+            target
+            for target in ("merge", "finish")
+            if any(line.startswith(f"{target}:") for line in outside_block.splitlines())
+        ]
+        if collisions:
+            return (
+                current_makefile,
+                None,
+                "legacy PR Make targets outside the generated worktree block conflict with "
+                "sanctioned finish: " + ", ".join(collisions),
+            )
         existing_block = normalized[start:end].rstrip()
         if existing_block == block:
-            return normalized + "\n", None
+            return normalized + "\n", None, None
         updated = normalized[:start].rstrip()
         if updated:
             updated += "\n\n"
@@ -477,7 +510,20 @@ def _sync_makefile_worktree_block(current_makefile: str) -> tuple[str, str | Non
         trailing = normalized[end:].strip("\n")
         if trailing:
             updated += "\n\n" + trailing
-        return updated + "\n", "sync:Makefile.worktree"
+        return updated + "\n", "sync:Makefile.worktree", None
+
+    collisions = [
+        target
+        for target in ("merge", "finish")
+        if any(line.startswith(f"{target}:") for line in normalized.splitlines())
+    ]
+    if collisions:
+        return (
+            current_makefile,
+            None,
+            "unmarked legacy PR Make targets conflict with sanctioned finish: "
+            + ", ".join(collisions),
+        )
 
     insertion_index: int | None = None
     for anchor in MAKEFILE_WORKTREE_INSERTION_ANCHORS:
@@ -491,7 +537,7 @@ def _sync_makefile_worktree_block(current_makefile: str) -> tuple[str, str | Non
         if updated:
             updated += "\n\n"
         updated += block
-        return updated + "\n", "append:Makefile.worktree"
+        return updated + "\n", "append:Makefile.worktree", None
 
     before = normalized[:insertion_index].rstrip("\n")
     after = normalized[insertion_index:].lstrip("\n")
@@ -501,7 +547,7 @@ def _sync_makefile_worktree_block(current_makefile: str) -> tuple[str, str | Non
     updated += block
     if after:
         updated += "\n\n" + after
-    return updated + "\n", "append:Makefile.worktree"
+    return updated + "\n", "append:Makefile.worktree", None
 
 
 def _sync_makefile_status_target(
@@ -627,7 +673,9 @@ def _plan_static_support(
             actions.append("scaffold:Makefile")
             scaffolded_files.append("Makefile")
             # Include worktree block so the Makefile is complete on first install.
-            with_worktree, _ = _sync_makefile_worktree_block(makefile_template)
+            with_worktree, _, makefile_blocker = _sync_makefile_worktree_block(makefile_template)
+            if makefile_blocker:
+                blockers.append(makefile_blocker)
             file_writes[makefile_path] = with_worktree
     else:
         current_makefile = makefile_path.read_text(encoding="utf-8")
@@ -643,7 +691,11 @@ def _plan_static_support(
                 blockers.append(status_blocker)
                 synced_makefile, makefile_action = current_makefile, None
             else:
-                synced_makefile, makefile_action = _sync_makefile_worktree_block(status_synced)
+                synced_makefile, makefile_action, makefile_blocker = _sync_makefile_worktree_block(
+                    status_synced
+                )
+                if makefile_blocker:
+                    blockers.append(makefile_blocker)
                 if status_action:
                     actions.append(status_action)
         if makefile_action:
@@ -920,8 +972,12 @@ def install_or_plan(
         plans_dir="docs/plans",
     )
 
-    if not skip_hook_wiring and not worktree_only and not claim_projection_refresh_only:
-        if coordination_messages_only:
+    if not skip_hook_wiring and not claim_projection_refresh_only:
+        if worktree_only:
+            hook_actions, hook_writes, _ = plan_merge_guard_generation(
+                _hook_target(repo_root)
+            )
+        elif coordination_messages_only:
             hook_actions, hook_writes, _ = plan_coordination_message_generation(_hook_target(repo_root))
         else:
             hook_actions, hook_writes, _ = plan_hook_generation(
@@ -965,7 +1021,7 @@ def install_or_plan(
             applied_actions.extend(actions)
             if git_hook_action:
                 _activate_git_hooks(repo_root)
-            if not skip_hook_wiring and not worktree_only and not claim_projection_refresh_only:
+            if not skip_hook_wiring and not claim_projection_refresh_only:
                 apply_hook_generation(_hook_target(repo_root), hook_writes)
             if (
                 not worktree_only

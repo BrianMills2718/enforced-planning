@@ -4,9 +4,9 @@
 # Also blocks direct script calls that bypass make targets
 #
 # Rules:
-# 1. No direct GitHub merge CLI - must use make merge/finish
+# 1. No direct GitHub merge CLI - must use make finish
 # 2. No direct python scripts/safe_worktree_remove.py - must use make worktree-remove
-# 3. No direct python scripts/finish_pr.py - must use make finish
+# 3. No direct finish_pr.py invocation - must use make finish
 # 4. No direct python scripts/merge_pr.py - must use make merge/finish
 # 5. No merge/finish/worktree-remove from inside a worktree
 # 6. Must cd to main FIRST (separate command), then run finish
@@ -25,16 +25,175 @@ if [[ -z "$COMMAND" ]]; then
     exit 0  # No command, allow
 fi
 
-# Check if command contains direct GitHub CLI merge
-if echo "$COMMAND" | grep -qE 'gh\s+pr\s+merge'; then
+# Normalize shell segments with the standard-library lexer so ordinary wrappers,
+# assignments, absolute interpreters, and gh option placement cannot bypass a
+# growing collection of regular expressions.
+BLOCK_KIND=$(python3 - "$COMMAND" <<'PY'
+import os
+import re
+import shlex
+import sys
+
+assignment = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
+python_name = re.compile(r"^python(?:[0-9]+(?:\.[0-9]+)*)?$")
+
+def split_segments(raw):
+    raw = raw.replace("\r\n", "\n").replace("\r", "\n").replace("\n", " ; ")
+    try:
+        lexer = shlex.shlex(raw, posix=True, punctuation_chars=";&|")
+        lexer.whitespace_split = True
+        tokens = list(lexer)
+    except ValueError:
+        tokens = raw.replace(";", " ; ").replace("|", " | ").replace("&", " & ").split()
+    segments, current = [], []
+    for token in tokens:
+        if token and set(token) <= set(";&|"):
+            if current:
+                segments.append(current)
+                current = []
+        else:
+            current.append(token)
+    if current:
+        segments.append(current)
+    return segments
+
+variables = {}
+
+def expand_variables(word):
+    def replace(match):
+        return variables.get(match.group(1) or match.group(2), match.group(0))
+    return re.sub(r"\$(?:([A-Za-z_][A-Za-z0-9_]*)|\{([A-Za-z_][A-Za-z0-9_]*)\})", replace, word)
+
+queue = split_segments(sys.argv[1])
+while queue:
+    segment = queue.pop(0)
+    words = [expand_variables(word) for word in segment]
+    while words and assignment.match(words[0]):
+        name, value = words.pop(0).split("=", 1)
+        variables[name] = expand_variables(value)
+        words = [expand_variables(word) for word in words]
+    changed = True
+    while words and changed:
+        changed = False
+        command = os.path.basename(words[0])
+        if command in {"command", "exec", "nohup", "setsid", "sudo", "time"}:
+            words.pop(0)
+            while words and words[0].startswith("-"):
+                words.pop(0)
+            changed = True
+        elif command == "timeout":
+            words.pop(0)
+            while words and words[0].startswith("-"):
+                option = words.pop(0)
+                if option in {"-k", "--kill-after", "-s", "--signal"} and words:
+                    words.pop(0)
+            if words:
+                words.pop(0)
+            changed = True
+        elif command == "nice":
+            words.pop(0)
+            while words and words[0].startswith("-"):
+                option = words.pop(0)
+                if option in {"-n", "--adjustment"} and words:
+                    words.pop(0)
+            changed = True
+        elif command == "stdbuf":
+            words.pop(0)
+            while words and words[0].startswith("-"):
+                words.pop(0)
+            changed = True
+        elif command == "env":
+            words.pop(0)
+            split_string = None
+            for index, option in enumerate(words):
+                if option in {"-S", "--split-string"} and index + 1 < len(words):
+                    split_string = words[index + 1]
+                    break
+                if option.startswith("--split-string="):
+                    split_string = option.split("=", 1)[1]
+                    break
+            if split_string is not None:
+                queue[:0] = split_segments(split_string)
+                words = []
+                continue
+            while words and (words[0].startswith("-") or assignment.match(words[0])):
+                option = words.pop(0)
+                if option in {"-u", "--unset", "-C", "--chdir"} and words:
+                    words.pop(0)
+            changed = True
+        elif command == "uv" and len(words) > 1 and words[1] == "run":
+            words = words[2:]
+            changed = True
+        while words and assignment.match(words[0]):
+            words.pop(0)
+    if not words:
+        continue
+    command = os.path.basename(words[0])
+    if command in {"bash", "dash", "sh", "zsh"}:
+        for index, word in enumerate(words[1:], 1):
+            if word.startswith("-") and "c" in word and index + 1 < len(words):
+                queue[:0] = split_segments(words[index + 1])
+                break
+        continue
+    if command == "gh":
+        if "api" in words[1:] and any("mergePullRequest" in word for word in words[1:]):
+            print("merge")
+            raise SystemExit
+        if "api" in words[1:] and any(
+            re.search(r"(^|/)pulls/[1-9][0-9]*/merge$", word)
+            for word in words[1:]
+        ):
+            print("merge")
+            raise SystemExit
+        try:
+            pr_index = words.index("pr", 1)
+            if "merge" in words[pr_index + 1:]:
+                print("merge")
+                raise SystemExit
+        except ValueError:
+            pass
+    if command in {"make", "gmake"}:
+        if "merge" in words[1:]:
+            print("merge")
+            raise SystemExit
+        if "finish" in words[1:]:
+            allowed_assignments = {"BRANCH", "PR", "REVIEW_SPEC", "REVIEW_OUTPUT_ROOT"}
+            unsafe = bool(variables) or any(word.startswith("-") for word in words[1:])
+            for word in words[1:]:
+                if not assignment.match(word):
+                    continue
+                name, value = word.split("=", 1)
+                if name not in allowed_assignments:
+                    unsafe = True
+                elif name == "PR" and not re.fullmatch(r"[1-9][0-9]*", value):
+                    unsafe = True
+                elif name == "BRANCH" and not re.fullmatch(r"[A-Za-z0-9._/-]+", value):
+                    unsafe = True
+                elif name in {"REVIEW_SPEC", "REVIEW_OUTPUT_ROOT"} and not re.fullmatch(
+                    r"/[A-Za-z0-9._/+:-]+", value
+                ):
+                    unsafe = True
+            if unsafe:
+                print("unsafe_finish")
+                raise SystemExit
+    if command == "finish_pr.py" or (
+        python_name.fullmatch(command)
+        and any("finish_pr.py" in word for word in words[1:])
+    ):
+        print("finish")
+        raise SystemExit
+PY
+)
+
+if [[ "$BLOCK_KIND" == "merge" ]]; then
     PR_NUM=$(echo "$COMMAND" | grep -oE 'merge\s+[0-9]+' | grep -oE '[0-9]+' || echo "N")
 
     echo "BLOCKED: Direct GitHub CLI merge is not allowed" >&2
     echo "" >&2
-    echo "This bypasses worktree auto-cleanup - orphan worktrees will accumulate." >&2
+    echo "This bypasses exact-head review, canonical claim authority, and worktree auto-cleanup." >&2
     echo "" >&2
     echo "Use the proper command instead:" >&2
-    echo "  make merge PR=$PR_NUM" >&2
+    echo "  make finish BRANCH=<branch> PR=$PR_NUM REVIEW_SPEC=/absolute/review-spec.json" >&2
     exit 2
 fi
 
@@ -55,19 +214,23 @@ if echo "$COMMAND" | grep -qE '(^|&&|;|\|)\s*python[3]?\s+scripts/safe_worktree_
     exit 2
 fi
 
-# Block direct calls to finish_pr.py (must use make finish)
-# This ensures proper workflow and uses main's scripts
-if echo "$COMMAND" | grep -qE '(^|&&|;|\|)\s*python[3]?\s+scripts/finish_pr\.py'; then
+if [[ "$BLOCK_KIND" == "finish" ]]; then
     BRANCH=$(echo "$COMMAND" | grep -oE '\-\-branch\s+\S+' | sed 's/--branch\s*//' || echo "BRANCH")
     PR_NUM=$(echo "$COMMAND" | grep -oE '\-\-pr\s+[0-9]+' | grep -oE '[0-9]+' || echo "N")
 
     echo "BLOCKED: Direct script call is not allowed" >&2
     echo "" >&2
-    echo "Running 'python scripts/finish_pr.py' directly may use a stale" >&2
-    echo "copy of the script from your worktree instead of the latest from main." >&2
+    echo "Running finish_pr.py directly may use a stale copy of the script" >&2
+    echo "and bypass the canonical claim-bound integration entrypoint." >&2
     echo "" >&2
     echo "Use the proper command instead:" >&2
-    echo "  make finish BRANCH=$BRANCH PR=$PR_NUM" >&2
+    echo "  make finish BRANCH=$BRANCH PR=$PR_NUM REVIEW_SPEC=/absolute/review-spec.json" >&2
+    exit 2
+fi
+
+if [[ "$BLOCK_KIND" == "unsafe_finish" ]]; then
+    echo "BLOCKED: make finish must use the repository's canonical Makefile and finish runtime" >&2
+    echo "Use: make finish BRANCH=<branch> PR=<number> REVIEW_SPEC=/absolute/review-spec.json" >&2
     exit 2
 fi
 
@@ -84,14 +247,16 @@ if echo "$COMMAND" | grep -qE '(^|&&|;|\|)\s*python[3]?\s+(scripts/)?merge_pr\.p
     echo "  - Break your shell if CWD is in a worktree being cleaned up" >&2
     echo "" >&2
     echo "Use the proper command instead:" >&2
-    echo "  make merge PR=$PR_NUM" >&2
-    echo "Or for full workflow (from main):" >&2
-    echo "  make finish BRANCH=<branch> PR=$PR_NUM" >&2
+    echo "  make finish BRANCH=<branch> PR=$PR_NUM REVIEW_SPEC=/absolute/review-spec.json" >&2
     exit 2
 fi
 
 # Get the working directory from the tool input
 CWD=$(echo "$INPUT" | jq -r '.cwd // empty')
+REVIEW_SPEC=$(echo "$COMMAND" | grep -oE 'REVIEW_SPEC=[^ ]+' | head -1 | cut -d= -f2- || true)
+if [[ -z "$REVIEW_SPEC" ]]; then
+    REVIEW_SPEC="/absolute/review-spec.json"
+fi
 
 # Check if CWD is inside a worktree
 if [[ "$CWD" == */worktrees/* ]]; then
@@ -109,9 +274,9 @@ if [[ "$CWD" == */worktrees/* ]]; then
 
         # Build the finish command
         if [[ -n "$PR_NUM" ]]; then
-            FINISH_CMD="make finish BRANCH=$BRANCH PR=$PR_NUM"
+            FINISH_CMD="make finish BRANCH=$BRANCH PR=$PR_NUM REVIEW_SPEC=$REVIEW_SPEC"
         else
-            FINISH_CMD="make finish BRANCH=$BRANCH PR=<PR_NUMBER>"
+            FINISH_CMD="make finish BRANCH=$BRANCH PR=<PR_NUMBER> REVIEW_SPEC=$REVIEW_SPEC"
         fi
 
         # Save pending command to file for easy execution after cd
@@ -181,9 +346,9 @@ SCRIPT_EOF
         PR_NUM=$(echo "$COMMAND" | grep -oE 'PR=[0-9]+' | grep -oE '[0-9]+' || echo "")
 
         if [[ -n "$PR_NUM" ]]; then
-            FINISH_CMD="make finish BRANCH=$BRANCH PR=$PR_NUM"
+            FINISH_CMD="make finish BRANCH=$BRANCH PR=$PR_NUM REVIEW_SPEC=$REVIEW_SPEC"
         else
-            FINISH_CMD="make finish BRANCH=$BRANCH PR=<PR_NUMBER>"
+            FINISH_CMD="make finish BRANCH=$BRANCH PR=<PR_NUMBER> REVIEW_SPEC=$REVIEW_SPEC"
         fi
 
         # Save pending command to file for easy execution after cd

@@ -41,7 +41,7 @@ check-agents-sync:  ## Validate generated AGENTS.md matches canonical governance
 	@$(PYTHON) $(SCRIPTS_META)/check_agents_sync.py --repo-root . --check
 
 # --- PR Workflow ---
-.PHONY: pr-ready pr merge finish pr-auto-check pr-auto push-check
+.PHONY: pr-ready pr pr-auto-check pr-auto push-check
 
 pr-ready:  ## Rebase on main and push
 	@git fetch origin main
@@ -59,23 +59,6 @@ pr-auto:  ## Autonomous PR create + auto-merge request (non-interactive)
 
 push-check:  ## Validate branch push safety against default-branch and coordination state
 	@python $(SCRIPTS_META)/check_push_safety.py
-
-merge:  ## Merge PR (PR=number required)
-ifndef PR
-	$(error PR is required. Usage: make merge PR=123)
-endif
-	@python $(SCRIPTS_META)/merge_pr.py $(PR)
-
-finish:  ## Merge PR + cleanup branch (BRANCH=name PR=number required)
-ifndef BRANCH
-	$(error BRANCH is required. Usage: make finish BRANCH=plan-42-feature PR=123)
-endif
-ifndef PR
-	$(error PR is required. Usage: make finish BRANCH=plan-42-feature PR=123)
-endif
-	@gh pr merge $(PR) --squash --delete-branch
-	@git checkout main && git pull --ff-only
-	@git branch -d $(BRANCH) 2>/dev/null || true
 
 # --- Plans ---
 .PHONY: plan-tests plan-complete

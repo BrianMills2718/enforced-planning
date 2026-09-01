@@ -1,6 +1,6 @@
 # Plan #132: Overbroad Claim Narrowing and False-Serialization Repair
 
-**Status:** Planned — implementation-readiness audit incorporated
+**Status:** Complete
 **Type:** implementation
 **Priority:** Critical
 **phase_ref:** "Phase 9: Fleet Adoption and Framework Maintenance"
@@ -67,9 +67,10 @@ the projection is current. Lane B is admitted. Replacing Lane A's paths with
 any path outside `docs`, or invoking the operation from another session, fails
 without changing the claim or projection.
 
-**Behavioral evidence:** Unobserved; Plan 132 implementation must retain a
-temporary-registry transcript of the deny -> narrow -> admit sequence and one
-installed-consumer replay.
+**Behavioral evidence:** Observed in
+`docs/evidence/plan132_claim_narrowing.json`: the generated consumer denied the
+pre-narrow write, narrowed `.` to `CLAUDE.md`, admitted the unchanged write,
+and closed the clean lane through installed entrypoints.
 
 **Substrate/process evidence:** Both-sign claim tests, projection digest checks,
 mutation-receipt checks, source/generated parity, and framework self-test.
@@ -348,11 +349,11 @@ request rather than adding another message store.
 
 ### Capability Validation
 
-- [ ] Claim schema v6 round-trips through source and installed readers.
-- [ ] New broad claims require typed mode/reason while legacy claims remain readable.
-- [ ] Narrowing enforces owner, exact session, subset, strict reduction, and no-change-on-denial.
-- [ ] Projection and mutation receipts bind the same post-narrow registry digest.
-- [ ] An installed consumer uses the canonical source seam; no parallel claim model appears.
+- [x] Claim schema v6 round-trips through source and installed readers.
+- [x] New broad claims require typed mode/reason while legacy claims remain readable.
+- [x] Narrowing enforces owner, exact session, subset, strict reduction, and no-change-on-denial.
+- [x] Projection and mutation receipts bind the same post-narrow registry digest.
+- [x] An installed consumer uses the canonical source seam; no parallel claim model appears.
 
 ## Capability Adoption
 
@@ -535,22 +536,22 @@ consumer; schema and command substrate alone are not completion.
 
 ## Acceptance Criteria
 
-- [ ] The canonical `docs` -> exact paths narrowing example produces deny ->
+- [x] The canonical `docs` -> exact paths narrowing example produces deny ->
   atomic narrow -> admit with no interval of duplicate ownership.
-- [ ] New broad claims require mode/reason; `bootstrap` cannot authorize an
+- [x] New broad claims require mode/reason; `bootstrap` cannot authorize an
   ordinary repository write and `bounded` remains limited by existing expiry.
-- [ ] Narrowing is owner/session bound, strictly subset-only, fail-atomic, and
+- [x] Narrowing is owner/session bound, strictly subset-only, fail-atomic, and
   commits claim plus projection with rollback; its post-commit receipt
   truthfully reports the applied state even if audit persistence fails.
-- [ ] Bootstrap instruction/read context resolves the exact target worktree
+- [x] Bootstrap instruction/read context resolves the exact target worktree
   while both old and new pre-write readers lack mutation authority until
   successful narrowing.
-- [ ] Parent/child overlap remains a hard conflict; advisory Git-diff evidence
+- [x] Parent/child overlap remains a hard conflict; advisory Git-diff evidence
   never changes admission.
-- [ ] Existing schema v1-v5 claims remain readable and honestly diagnostic.
-- [ ] The source and installed command/Make/runtime surfaces are byte-lineage
+- [x] Existing schema v1-v5 claims remain readable and honestly diagnostic.
+- [x] The source and installed command/Make/runtime surfaces are byte-lineage
   consistent and a disposable installed consumer passes the canonical journey.
-- [ ] Project Meta and fleet rollout remain excluded until their explicit
+- [x] Project Meta and fleet rollout remain excluded until their explicit
   source-revision and target-graph gates are satisfied.
 
 ---

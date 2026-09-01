@@ -172,8 +172,10 @@ authority. Same-runtime resume returns no custody-transfer receipt. Claim,
 tracker, projection, mutation evidence, and custody receipt are serialized under
 the claim-registry then tracker locks. Failure before those locks release restores
 the exact predecessor claim and tracker bytes before failing, so a successor
-heartbeat cannot race rollback or be erased by it. Resume never reports a
-successor while the claim and tracker disagree.
+heartbeat cannot race rollback or be erased by it. When a successor mutation
+event was already appended, rollback appends a compensating predecessor event
+whose terminal registry digest matches the restored authority. Resume never
+reports a successor while the claim and tracker disagree.
 
 The legacy `~/.claude/coordination/active-work-registry.yaml` and tracked
 `generated/runtime/active_work_registry.*` files may survive as compatibility,

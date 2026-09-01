@@ -4120,6 +4120,11 @@ def test_resume_receipt_failure_rolls_back_before_successor_heartbeat_can_enter(
 
     assert claim_path.read_bytes() == claim_before
     assert tracker_path.read_bytes() == tracker_before
+    mutation_receipts = claim_mutation_receipts.load_receipts()
+    assert mutation_receipts[-2].session_id == "codex:new-runtime"
+    assert mutation_receipts[-1].session_id == "codex:old-runtime"
+    assert mutation_receipts[-1].registry_digest_after == coordination_claims._registry_digest(claims_dir)
+    assert mutation_receipts[-1].projection_current_after is True
 
 
 def test_resume_rolls_back_claim_and_tracker_when_tracker_write_fails(

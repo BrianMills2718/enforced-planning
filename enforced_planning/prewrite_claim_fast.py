@@ -382,6 +382,7 @@ def classify_bash_command(
                 "native_mailbox",
                 "native_closeout",
                 "native_session_narrow",
+                "hook_feedback_report",
                 "read_target_selection",
                 "projection_recovery",
             }:
@@ -1019,6 +1020,7 @@ def evaluate_request_fast(
         "native_mailbox",
         "native_closeout",
         "native_session_narrow",
+        "hook_feedback_report",
         "read_target_selection",
         "projection_recovery",
     }:
@@ -1028,6 +1030,7 @@ def evaluate_request_fast(
             "native_mailbox": "native_mailbox_command",
             "native_closeout": "native_closeout_command",
             "native_session_narrow": "native_session_narrow_command",
+            "hook_feedback_report": "hook_feedback_report_command",
             "read_target_selection": "read_target_selection_command",
             "projection_recovery": "projection_recovery_command",
         }

@@ -8,14 +8,17 @@ from pathlib import Path
 
 import pytest
 
+from scripts.hook_feedback_report import build_report
 from scripts.hook_receipts import (
     HookReceiptError,
     group_hook_recurrences,
+    group_prewrite_recurrences,
     load_completed_receipts,
     load_declared_hook_commands,
     match_declared_timeouts,
     percentile_nearest_rank,
     scan_hook_receipts,
+    scan_prewrite_events,
     start_hook_invocation,
     summarize_hook_health,
 )
@@ -80,6 +83,75 @@ def test_hook_feedback_report_rejects_invalid_completed_receipt(tmp_path: Path) 
 
     with pytest.raises(HookReceiptError, match="invalid 'schema_version'"):
         load_completed_receipts(tmp_path)
+
+
+def test_hook_feedback_report_includes_recurrent_prewrite_failures(tmp_path: Path) -> None:
+    receipts = tmp_path / "hook-receipts"
+    prewrite = tmp_path / "prewrite-events.jsonl"
+    _write_receipt(receipts, "session", "a" * 32)
+    events = [
+        {
+            "schema_version": "1.0",
+            "receipt_id": f"prewrite_{index}",
+            "client": "codex",
+            "mode": "enforce",
+            "decision": "deny",
+            "reason_code": "bash_runtime_workdir_unattested",
+            "recorded_at": f"2026-09-01T00:00:0{index}Z",
+            "details": ["private path must stay in the source receipt"],
+            "session_id": "private-session",
+        }
+        for index in (1, 2)
+    ]
+    prewrite.write_text("\n".join(json.dumps(event) for event in events) + "\n", encoding="utf-8")
+
+    report = build_report(
+        receipt_root=receipts,
+        prewrite_event_path=prewrite,
+        threshold=2,
+        settings_paths=(),
+        budget_fraction=0.6,
+    )
+
+    recurrence = report["prewrite_recurrence"]
+    assert recurrence["event_count"] == 2
+    assert recurrence["groups"] == [
+        {
+            "client": "codex",
+            "mode": "enforce",
+            "decision": "deny",
+            "reason_code": "bash_runtime_workdir_unattested",
+            "count": 2,
+            "recurrent": True,
+            "receipt_ids": ["prewrite_1", "prewrite_2"],
+            "disposition_command": "make ecosystem-feedback ARGS='record ...'",
+        }
+    ]
+    assert "private path" not in json.dumps(report)
+    assert "private-session" not in json.dumps(report)
+
+
+def test_prewrite_scan_reports_malformed_lines_without_hiding_valid_events(tmp_path: Path) -> None:
+    prewrite = tmp_path / "prewrite-events.jsonl"
+    valid = {
+        "schema_version": "1.0",
+        "receipt_id": "prewrite_valid",
+        "client": "codex",
+        "mode": "enforce",
+        "decision": "deny",
+        "reason_code": "no_exact_session_target",
+        "recorded_at": "2026-09-01T00:00:00Z",
+    }
+    prewrite.write_text(json.dumps(valid) + "\n{not json\n", encoding="utf-8")
+
+    scan = scan_prewrite_events(prewrite)
+    grouped = group_prewrite_recurrences(scan, threshold=1)
+
+    assert grouped["event_count"] == 1
+    assert grouped["malformed_count"] == 1
+    assert grouped["groups"][0]["receipt_ids"] == ["prewrite_valid"]
+    assert grouped["malformed"][0]["line"] == 2
+    assert "unparseable JSON" in grouped["malformed"][0]["reason"]
 
 
 def _write_receipt(root: Path, session: str, receipt_id: str, **overrides: object) -> Path:

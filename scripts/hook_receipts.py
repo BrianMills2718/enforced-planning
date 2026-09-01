@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any
 
 DEFAULT_RECEIPT_ROOT = Path("~/.claude/coordination/hook-invocations-v1")
+DEFAULT_PREWRITE_EVENT_PATH = Path("~/.claude/coordination/prewrite-events-v1.jsonl")
 DEFAULT_SETTINGS_PATHS = (
     Path("~/.claude/settings.json"),
     Path("~/.claude/settings.local.json"),
@@ -43,6 +44,105 @@ COMPLETED_RECEIPT_FIELDS: dict[str, type | tuple[type, ...]] = {
 
 class HookReceiptError(ValueError):
     """Raised when persisted hook evidence is incomplete or malformed."""
+
+
+PREWRITE_EVENT_FIELDS: dict[str, type] = {
+    "schema_version": str,
+    "receipt_id": str,
+    "client": str,
+    "mode": str,
+    "decision": str,
+    "reason_code": str,
+    "recorded_at": str,
+}
+
+
+def scan_prewrite_events(event_path: Path = DEFAULT_PREWRITE_EVENT_PATH) -> dict[str, Any]:
+    """Scan the append-only prewrite JSONL store without hiding bad lines.
+
+    Only content-free dimensions and exact receipt IDs leave this boundary.
+    Paths, command details, and session identity remain in the source receipt.
+    """
+
+    resolved = event_path.expanduser()
+    events: list[dict[str, str]] = []
+    malformed: list[dict[str, Any]] = []
+    if not resolved.exists():
+        return {
+            "event_path": str(resolved),
+            "event_count": 0,
+            "malformed_count": 0,
+            "events": events,
+            "malformed": malformed,
+            "missing": True,
+        }
+    if not resolved.is_file():
+        raise HookReceiptError(f"prewrite event path is not a file: {resolved}")
+
+    with resolved.open("r", encoding="utf-8") as handle:
+        for line_number, raw_line in enumerate(handle, start=1):
+            try:
+                payload = json.loads(raw_line)
+            except json.JSONDecodeError as exc:
+                malformed.append({"line": line_number, "reason": f"unparseable JSON: {exc.msg}"})
+                continue
+            if not isinstance(payload, dict):
+                malformed.append({"line": line_number, "reason": "event must be one JSON object"})
+                continue
+            defect = next(
+                (
+                    f"invalid {field!r}"
+                    for field, expected in PREWRITE_EVENT_FIELDS.items()
+                    if not isinstance(payload.get(field), expected) or not str(payload[field]).strip()
+                ),
+                None,
+            )
+            if defect is not None:
+                malformed.append({"line": line_number, "reason": defect})
+                continue
+            events.append({field: str(payload[field]) for field in PREWRITE_EVENT_FIELDS})
+
+    return {
+        "event_path": str(resolved),
+        "event_count": len(events),
+        "malformed_count": len(malformed),
+        "events": events,
+        "malformed": malformed,
+        "missing": False,
+    }
+
+
+def group_prewrite_recurrences(event_scan: dict[str, Any], *, threshold: int = 2) -> dict[str, Any]:
+    """Group prewrite decisions by stable content-free failure dimensions."""
+
+    if threshold < 1:
+        raise ValueError("threshold must be at least 1")
+    grouped: dict[tuple[str, str, str, str], list[str]] = {}
+    for event in event_scan["events"]:
+        key = (event["client"], event["mode"], event["decision"], event["reason_code"])
+        grouped.setdefault(key, []).append(event["receipt_id"])
+    groups = [
+        {
+            "client": key[0],
+            "mode": key[1],
+            "decision": key[2],
+            "reason_code": key[3],
+            "count": len(receipt_ids),
+            "recurrent": len(receipt_ids) >= threshold,
+            "receipt_ids": sorted(receipt_ids),
+            "disposition_command": "make ecosystem-feedback ARGS='record ...'",
+        }
+        for key, receipt_ids in sorted(grouped.items())
+    ]
+    return {
+        "event_path": event_scan["event_path"],
+        "event_count": event_scan["event_count"],
+        "malformed_count": event_scan["malformed_count"],
+        "malformed": event_scan["malformed"],
+        "missing": event_scan["missing"],
+        "threshold": threshold,
+        "groups": groups,
+    }
 
 
 def _digest(value: str) -> str:

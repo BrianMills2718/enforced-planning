@@ -14,7 +14,7 @@ from contextlib import contextmanager
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from threading import Event
+from threading import Event, Thread, current_thread
 from types import SimpleNamespace
 
 import pytest
@@ -1350,6 +1350,171 @@ def test_broad_maintenance_refresh_preserves_omitted_bootstrap_metadata(
             agent="codex", project="enforced-planning", scope=str(common["scope"])
         )
     )
+
+
+def test_maintenance_cli_omission_preserves_tracker_contract_and_explicit_api_drift_denies(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """CLI omission is distinct from an explicit API request to replace tracker state."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    common = _maintenance_refresh_args(tmp_path, trackers_dir)
+    tracker_contract = {
+        "intended_next_phases": ["integration", "closeout"],
+        "depends_on_repos": ["project-meta"],
+        "requires_shared_infra_changes": True,
+        "stop_conditions": ["authority changes"],
+        "notes": "retain exact maintenance context",
+    }
+    started = session_lifecycle.start_session(**{**common, **tracker_contract})
+    claim_path = claims_dir / "codex_enforced-planning_fix_maintenance-provenance-refresh.yaml"
+    tracker_path = Path(started["tracker_path"])
+
+    module_path = Path(__file__).resolve().parents[1] / "scripts" / "session_start.py"
+    spec = importlib.util.spec_from_file_location("session_start_omission_contract_test", module_path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    args = module.parse_args(
+        [
+            "--agent",
+            "codex",
+            "--project",
+            "enforced-planning",
+            "--scope",
+            str(common["scope"]),
+            "--intent",
+            str(common["intent"]),
+            "--repo-root",
+            str(common["repo_root"]),
+            "--worktree-path",
+            str(common["worktree_path"]),
+            "--branch",
+            str(common["branch"]),
+            "--broader-goal",
+            str(common["broader_goal"]),
+            "--current-phase",
+            "CLI omission refresh",
+            "--allow-unplanned",
+            "--session-id",
+            str(common["session_id"]),
+            "--session-name",
+            str(common["session_name"]),
+        ]
+    )
+    kwargs = module._supported_start_kwargs(args)
+    assert {
+        field: kwargs[field]
+        for field in (
+            "intended_next_phases",
+            "depends_on_repos",
+            "requires_shared_infra_changes",
+            "stop_conditions",
+            "notes",
+        )
+    } == {
+        "intended_next_phases": None,
+        "depends_on_repos": None,
+        "requires_shared_infra_changes": None,
+        "stop_conditions": None,
+        "notes": None,
+    }
+
+    refreshed = session_lifecycle.start_session(**kwargs, tracker_dir=trackers_dir)
+    tracker_after = yaml.safe_load(tracker_path.read_text(encoding="utf-8"))
+    assert refreshed["action"] == "updated"
+    assert tracker_after["tracker"] == {"current_phase": "CLI omission refresh", **tracker_contract}
+
+    for explicit_drift in (
+        {"intended_next_phases": []},
+        {"depends_on_repos": []},
+        {"requires_shared_infra_changes": False},
+        {"stop_conditions": []},
+        {"notes": ""},
+    ):
+        claim_before = claim_path.read_bytes()
+        tracker_before = tracker_path.read_bytes()
+        with pytest.raises(
+            ValueError,
+            match="sanctioned maintenance refresh cannot change immutable provenance",
+        ):
+            session_lifecycle.start_session(
+                **{
+                    **kwargs,
+                    "current_phase": "explicit drift attempt",
+                    "tracker_dir": trackers_dir,
+                    **explicit_drift,
+                }
+            )
+        assert claim_path.read_bytes() == claim_before
+        assert tracker_path.read_bytes() == tracker_before
+
+
+def test_maintenance_refresh_serializes_tracker_write_through_claim_upsert(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A competing tracker writer cannot enter between phase and claim persistence."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    common = _maintenance_refresh_args(tmp_path, trackers_dir)
+    started = session_lifecycle.start_session(**common)
+    tracker_path = Path(started["tracker_path"])
+    waiting_for_tracker_lock = Event()
+    tracker_lock_acquired = Event()
+    completed = Event()
+    failures: list[BaseException] = []
+    competitor: list[Thread] = []
+    real_write = session_lifecycle._write_claim_and_refresh_projection
+    real_tracker_lock = session_contracts.session_tracker_lock
+
+    @contextmanager
+    def observed_tracker_lock(path: Path):
+        is_competitor = current_thread().name == "competing-tracker-writer"
+        if is_competitor:
+            waiting_for_tracker_lock.set()
+        with real_tracker_lock(path):
+            if is_competitor:
+                tracker_lock_acquired.set()
+            yield
+
+    def competing_tracker_write() -> None:
+        try:
+            session_contracts.update_session_tracker(
+                tracker_path,
+                current_phase="concurrent tracker refresh",
+            )
+        except BaseException as exc:  # pragma: no cover - asserted below
+            failures.append(exc)
+        finally:
+            completed.set()
+
+    def observe_claim_write(*args: object, **kwargs: object) -> tuple[Path, str]:
+        thread = Thread(target=competing_tracker_write, name="competing-tracker-writer")
+        competitor.append(thread)
+        thread.start()
+        assert waiting_for_tracker_lock.wait(timeout=2)
+        assert tracker_lock_acquired.is_set() is False
+        tracker_payload = yaml.safe_load(tracker_path.read_text(encoding="utf-8"))
+        assert tracker_payload["tracker"]["current_phase"] == "serialized maintenance refresh"
+        return real_write(*args, **kwargs)
+
+    monkeypatch.setattr(session_contracts, "session_tracker_lock", observed_tracker_lock)
+    monkeypatch.setattr(session_lifecycle, "_write_claim_and_refresh_projection", observe_claim_write)
+    refreshed = session_lifecycle.start_session(
+        **{**common, "current_phase": "serialized maintenance refresh"}
+    )
+
+    assert refreshed["action"] == "updated"
+    assert len(competitor) == 1
+    competitor[0].join(timeout=2)
+    assert tracker_lock_acquired.is_set()
+    assert completed.is_set()
+    assert failures == []
 
 
 @pytest.mark.parametrize(

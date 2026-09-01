@@ -208,7 +208,7 @@ def test_cli_returns_nonzero_and_discloses_applied_audit_failure(
     """CLI callers receive a truthful nonzero result after a post-mutation audit failure."""
 
     claims_dir, _events_path = _isolated_registry(tmp_path, monkeypatch)
-    monkeypatch.delenv("CODEX_THREAD_ID", raising=False)
+    monkeypatch.setenv("CODEX_THREAD_ID", "receipt-test")
     blocked_parent = tmp_path / "not-a-directory"
     blocked_parent.write_text("not a ledger directory\n", encoding="utf-8")
     monkeypatch.setattr(receipts, "DEFAULT_EVENTS_PATH", blocked_parent / "events.jsonl")

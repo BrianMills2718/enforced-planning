@@ -3467,6 +3467,108 @@ def test_tracker_recovery_rejects_ambiguous_exact_identity(
         )
 
 
+def test_same_runtime_resume_atomically_reattaches_one_exact_tracker(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A refreshed claim can recover only its uniquely matching exact tracker."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    worktree = tmp_path / "worktree"
+    worktree.mkdir()
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    monkeypatch.setattr(session_contracts, "DEFAULT_SESSION_TRACKERS_DIR", trackers_dir)
+    started = session_lifecycle.start_session(
+        agent="codex",
+        project="enforced-planning",
+        scope="same-runtime-reattach",
+        intent="recover exact tracker custody",
+        repo_root=str(tmp_path),
+        worktree_path=str(worktree),
+        branch="same-runtime-reattach",
+        broader_goal="Same Runtime Reattachment",
+        current_phase="fixture setup",
+        plan_ref="UNPLANNED",
+        session_id="codex:same-runtime",
+        tracker_dir=trackers_dir,
+    )
+    tracker_path = Path(started["tracker_path"])
+    claim_path = claims_dir / "codex_enforced-planning_same-runtime-reattach.yaml"
+    claim_payload = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    claim_payload["tracker_path"] = None
+    claim_path.write_text(yaml.safe_dump(claim_payload, sort_keys=False), encoding="utf-8")
+
+    result = _resume_session_as_native(
+        agent="codex",
+        project="enforced-planning",
+        scope="same-runtime-reattach",
+        worktree_path=str(worktree),
+        branch="same-runtime-reattach",
+        current_phase="tracker restored",
+        session_id="codex:same-runtime",
+    )
+
+    restored_claim = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    restored_tracker = yaml.safe_load(tracker_path.read_text(encoding="utf-8"))
+    assert result["tracker_path"] == str(tracker_path.resolve())
+    assert restored_claim["tracker_path"] == str(tracker_path.resolve())
+    assert restored_claim["session_id"] == restored_tracker["claim"]["session_id"] == "codex:same-runtime"
+    assert restored_tracker["tracker"]["current_phase"] == "tracker restored"
+
+
+def test_same_runtime_resume_rejects_tracker_with_mismatched_exact_custody(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Filename identity cannot override branch/repo/worktree/tracker custody."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    worktree = tmp_path / "worktree"
+    worktree.mkdir()
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    monkeypatch.setattr(session_contracts, "DEFAULT_SESSION_TRACKERS_DIR", trackers_dir)
+    started = session_lifecycle.start_session(
+        agent="codex",
+        project="enforced-planning",
+        scope="mismatched-reattach",
+        intent="reject mismatched tracker custody",
+        repo_root=str(tmp_path),
+        worktree_path=str(worktree),
+        branch="mismatched-reattach",
+        broader_goal="Mismatched Reattachment",
+        current_phase="fixture setup",
+        plan_ref="UNPLANNED",
+        session_id="codex:same-runtime",
+        tracker_dir=trackers_dir,
+    )
+    tracker_path = Path(started["tracker_path"])
+    tracker_payload = yaml.safe_load(tracker_path.read_text(encoding="utf-8"))
+    tracker_payload["claim"]["branch"] = "foreign-branch"
+    tracker_path.write_text(yaml.safe_dump(tracker_payload, sort_keys=False), encoding="utf-8")
+    claim_path = claims_dir / "codex_enforced-planning_mismatched-reattach.yaml"
+    claim_payload = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    claim_payload["tracker_path"] = None
+    claim_path.write_text(yaml.safe_dump(claim_payload, sort_keys=False), encoding="utf-8")
+    claim_before = claim_path.read_bytes()
+    tracker_before = tracker_path.read_bytes()
+
+    with pytest.raises(ValueError, match="branch"):
+        _resume_session_as_native(
+            agent="codex",
+            project="enforced-planning",
+            scope="mismatched-reattach",
+            worktree_path=str(worktree),
+            branch="mismatched-reattach",
+            current_phase="must not resume",
+            session_id="codex:same-runtime",
+        )
+
+    assert claim_path.read_bytes() == claim_before
+    assert tracker_path.read_bytes() == tracker_before
+
+
 def test_handoff_session_marks_lane_for_resume(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -3835,6 +3937,60 @@ def test_status_observer_does_not_create_chmod_or_prune_coordination_artifacts(
     assert shared_staging.exists()
 
 
+def test_status_with_persistent_lock_and_missing_tracker_is_read_only_and_weak(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A vanished tracker under its retained lock is classified, not crashed or recreated."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    worktree = tmp_path / "worktree"
+    worktree.mkdir()
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    started = session_lifecycle.start_session(
+        agent="codex",
+        project="enforced-planning",
+        scope="missing-tracker-status",
+        intent="classify a missing tracker",
+        repo_root=str(tmp_path),
+        worktree_path=str(worktree),
+        branch="missing-tracker-status",
+        broader_goal="Missing Tracker Status",
+        current_phase="fixture setup",
+        plan_ref="UNPLANNED",
+        session_id="codex:missing-tracker",
+        tracker_dir=trackers_dir,
+    )
+    tracker_path = Path(started["tracker_path"])
+    tracker_lock = tracker_path.parent / f".{tracker_path.name}.lock"
+    assert tracker_lock.is_file()
+    tracker_path.unlink()
+    lock_before = tracker_lock.read_bytes()
+
+    result = session_lifecycle.status_sessions(
+        project="enforced-planning",
+        scope="missing-tracker-status",
+    )
+
+    session = result["sessions"][0]
+    assert session["health_status"] == "weak"
+    assert "missing_tracker_file" in session["health_issues"]
+    assert not tracker_path.exists()
+    assert tracker_lock.read_bytes() == lock_before
+
+    claim_path = claims_dir / "codex_enforced-planning_missing-tracker-status.yaml"
+    claim_payload = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    claim_payload["heartbeat_at"] = "2000-01-01T00:00:00+00:00"
+    claim_path.write_text(yaml.safe_dump(claim_payload, sort_keys=False), encoding="utf-8")
+    stale = session_lifecycle.status_sessions(
+        project="enforced-planning",
+        scope="missing-tracker-status",
+    )["sessions"][0]
+    assert stale["health_status"] == "stale"
+    assert "missing_tracker_file" in stale["health_issues"]
+
+
 def test_resume_reports_post_commit_mailbox_failure_without_rolling_back(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -3888,6 +4044,82 @@ def test_resume_reports_post_commit_mailbox_failure_without_rolling_back(
     assert result["coordination_mailbox"]["degraded_reason"] == "post_commit_mailbox_poll_failed"
     assert result["claim_session_transfer"] is not None
     assert claim["session_id"] == tracker["claim"]["session_id"] == "codex:new-runtime"
+
+
+def test_resume_receipt_failure_rolls_back_before_successor_heartbeat_can_enter(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Receipt failure restores predecessor bytes while custody locks remain held."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    worktree = tmp_path / "worktree"
+    worktree.mkdir()
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    started = session_lifecycle.start_session(
+        agent="codex",
+        project="enforced-planning",
+        scope="receipt-after-resume",
+        intent="prove committed receipt reporting",
+        repo_root=str(tmp_path),
+        worktree_path=str(worktree),
+        branch="receipt-after-resume",
+        broader_goal="Truthful Custody Receipt",
+        current_phase="fixture setup",
+        plan_ref="UNPLANNED",
+        session_id="codex:old-runtime",
+        tracker_dir=trackers_dir,
+    )
+    _handoff_session_as_owner(
+        agent="codex",
+        project="enforced-planning",
+        scope="receipt-after-resume",
+        note="ready",
+    )
+    claim_path = claims_dir / "codex_enforced-planning_receipt-after-resume.yaml"
+    tracker_path = Path(started["tracker_path"])
+    claim_before = claim_path.read_bytes()
+    tracker_before = tracker_path.read_bytes()
+    entered_receipt = Event()
+    release_receipt = Event()
+
+    def paused_receipt_failure(**_kwargs: object) -> dict[str, object]:
+        entered_receipt.set()
+        assert release_receipt.wait(timeout=5)
+        raise OSError("receipt store unavailable")
+
+    monkeypatch.setattr(session_lifecycle, "_persist_claim_session_transfer_receipt", paused_receipt_failure)
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        resume_future = executor.submit(
+            _resume_session_as_native,
+            agent="codex",
+            project="enforced-planning",
+            scope="receipt-after-resume",
+            worktree_path=str(worktree),
+            branch="receipt-after-resume",
+            current_phase="successor active",
+            session_id="codex:new-runtime",
+        )
+        assert entered_receipt.wait(timeout=5)
+        heartbeat_future = executor.submit(
+            _heartbeat_session_as_native,
+            agent="codex",
+            project="enforced-planning",
+            scope="receipt-after-resume",
+            current_phase="successor heartbeat",
+            session_id="codex:new-runtime",
+        )
+        time.sleep(0.05)
+        assert not heartbeat_future.done()
+        release_receipt.set()
+        with pytest.raises(OSError, match="receipt store unavailable"):
+            resume_future.result(timeout=5)
+        with pytest.raises((PermissionError, ValueError), match="session|owner|owned"):
+            heartbeat_future.result(timeout=5)
+
+    assert claim_path.read_bytes() == claim_before
+    assert tracker_path.read_bytes() == tracker_before
 
 
 def test_resume_rolls_back_claim_and_tracker_when_tracker_write_fails(

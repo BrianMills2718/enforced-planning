@@ -168,10 +168,12 @@ its exact path and SHA-256. The receipt binds the project, scope, repository,
 worktree, branch, predecessor and successor sessions, transfer time, and exact
 pre/post claim bytes. Downstream execution cursors may consume that receipt to
 move their own lease without treating prose or a session ID alone as transfer
-authority. Same-runtime resume returns no custody-transfer receipt. If receipt
-persistence or tracker replacement fails after claim custody changes, resume
-restores the exact predecessor claim and tracker bytes before failing. It never
-reports a successor while those two authorities disagree.
+authority. Same-runtime resume returns no custody-transfer receipt. Claim,
+tracker, projection, mutation evidence, and custody receipt are serialized under
+the claim-registry then tracker locks. Failure before those locks release restores
+the exact predecessor claim and tracker bytes before failing, so a successor
+heartbeat cannot race rollback or be erased by it. Resume never reports a
+successor while the claim and tracker disagree.
 
 The legacy `~/.claude/coordination/active-work-registry.yaml` and tracked
 `generated/runtime/active_work_registry.*` files may survive as compatibility,

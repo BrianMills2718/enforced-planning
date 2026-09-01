@@ -274,7 +274,10 @@ def test_validate_doc_authority_accepts_recorded_obligation(tmp_path: Path) -> N
     assert issues[0].evidence["obligation_ids"] == [obligation.obligation_id]
 
 
-def test_finish_session_fails_when_lane_owns_unresolved_authority_obligation(tmp_path: Path) -> None:
+def test_finish_session_fails_when_lane_owns_unresolved_authority_obligation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     repo_root = tmp_path / "demo"
     claims_dir = tmp_path / "claims"
     obligations_dir = tmp_path / "authority_obligations"
@@ -300,6 +303,7 @@ def test_finish_session_fails_when_lane_owns_unresolved_authority_obligation(tmp
         created_by_scope="plan-41",
         owner_scope="authority-owner",
     )
+    monkeypatch.setenv("CODEX_THREAD_ID", "test-session")
 
     try:
         session_lifecycle.finish_session(

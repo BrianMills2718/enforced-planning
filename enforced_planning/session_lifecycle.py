@@ -111,7 +111,10 @@ def _read_session_tracker_for_status(path: Path) -> dict[str, Any] | None:
         lock_fd = _shared_lock_fd_if_present(lock_path)
         if lock_fd is not None:
             try:
-                return session_contracts.read_session_tracker(resolved)
+                try:
+                    return session_contracts.read_session_tracker(resolved)
+                except FileNotFoundError:
+                    return None
             finally:
                 _release_shared_lock(lock_fd)
         before = _file_observation_fingerprint(resolved)
@@ -633,8 +636,16 @@ def _apply_cross_session_resume_transaction(
     updated_at: str,
     expected_fields: dict[str, Any],
     transfer_preflight: outcome_selection.PreparedOutcomeSessionTransfer | None,
-) -> tuple[dict[str, Any], outcome_selection.OutcomeSessionTransferV1 | None]:
-    """Commit claim and tracker identity under claim-registry then tracker lock."""
+    project: str,
+    scope: str,
+    worktree_path: str,
+    branch: str,
+) -> tuple[
+    dict[str, Any],
+    outcome_selection.OutcomeSessionTransferV1 | None,
+    dict[str, Any],
+]:
+    """Commit custody and bind its receipt under claim-registry then tracker lock."""
 
     with (
         coordination_claims.claim_registry_lock(coordination_claims.CLAIMS_DIR),
@@ -707,12 +718,138 @@ def _apply_cross_session_resume_transaction(
                 session_id=successor_session_id,
                 projection_digest_after=projection_digest_after,
             )
+            claim_session_transfer = _persist_claim_session_transfer_receipt(
+                claim=claim,
+                project=project,
+                scope=scope,
+                worktree_path=worktree_path,
+                branch=branch,
+                successor_session_id=successor_session_id,
+                transferred_at=updated_at,
+                prior_claim_bytes=claim_bytes_before,
+                successor_claim_bytes=claim_file.read_bytes(),
+            )
         except Exception:
             _atomic_restore_bytes(claim_file, claim_bytes_before)
             _atomic_restore_bytes(tracker_path, tracker_bytes_before)
             coordination_claims.refresh_prewrite_authority_projection(coordination_claims.CLAIMS_DIR)
             raise
-    return current, transfer_receipt
+    return current, transfer_receipt, claim_session_transfer
+
+
+def _validate_same_runtime_tracker_identity(
+    *,
+    claim: coordination_claims.ClaimRecord,
+    tracker_path: Path,
+    tracker_payload: dict[str, Any],
+) -> None:
+    """Require exact claim and tracker custody before reattaching a lost path."""
+
+    tracker_claim = tracker_payload.get("claim")
+    if not isinstance(tracker_claim, dict):
+        raise ValueError(f"Session tracker at {tracker_path} is missing claim metadata")
+
+    expected = {
+        "agent": claim.agent,
+        "project": claim.primary_project(),
+        "scope": claim.scope,
+        "session_id": claim.session_id,
+        "branch": claim.branch,
+    }
+    mismatches = [field for field, value in expected.items() if tracker_claim.get(field) != value]
+    for field in ("repo_root", "worktree_path"):
+        claim_value = getattr(claim, field)
+        tracker_value = tracker_claim.get(field)
+        if not isinstance(claim_value, str) or not isinstance(tracker_value, str):
+            mismatches.append(field)
+        elif Path(claim_value).expanduser().resolve() != Path(tracker_value).expanduser().resolve():
+            mismatches.append(field)
+    tracker_custody = tracker_claim.get("tracker_path")
+    if (
+        not isinstance(tracker_custody, str)
+        or Path(tracker_custody).expanduser().resolve() != tracker_path.expanduser().resolve()
+    ):
+        mismatches.append("tracker_path")
+    if mismatches:
+        raise ValueError(
+            "Exact session tracker does not match claim custody: " + ", ".join(sorted(set(mismatches)))
+        )
+
+
+def _reattach_same_runtime_tracker(
+    *,
+    claim: coordination_claims.ClaimRecord,
+    claim_file: Path,
+    tracker_path: Path,
+    current_phase: str,
+    note: str | None,
+    updated_at: str,
+    expected_fields: dict[str, Any],
+) -> dict[str, Any]:
+    """Atomically restore a uniquely identified tracker path and resume its lane."""
+
+    claim_bytes_before = claim_file.read_bytes()
+    tracker_bytes_before = tracker_path.read_bytes()
+    with (
+        coordination_claims.claim_registry_lock(coordination_claims.CLAIMS_DIR),
+        session_contracts.session_tracker_lock(tracker_path),
+    ):
+        if claim_file.read_bytes() != claim_bytes_before:
+            raise ValueError("claim changed after same-runtime tracker reattachment preflight")
+        if tracker_path.read_bytes() != tracker_bytes_before:
+            raise ValueError("session tracker changed after same-runtime reattachment preflight")
+        current = yaml.safe_load(claim_bytes_before)
+        if not isinstance(current, dict):
+            raise ValueError("same-runtime reattachment claim must be a YAML mapping")
+        for field, expected in expected_fields.items():
+            if current.get(field) != expected:
+                raise ValueError(f"claim field {field} changed after same-runtime reattachment preflight")
+        tracker_payload = session_contracts.read_session_tracker(tracker_path)
+        _validate_same_runtime_tracker_identity(
+            claim=claim,
+            tracker_path=tracker_path,
+            tracker_payload=tracker_payload,
+        )
+        tracker_section = tracker_payload.get("tracker")
+        timestamps = tracker_payload.get("timestamps")
+        if not isinstance(tracker_section, dict) or not isinstance(timestamps, dict):
+            raise ValueError("session tracker is missing tracker or timestamps state")
+        current.update(
+            {
+                "status": "active",
+                "session_id": claim.session_id,
+                "tracker_path": str(tracker_path),
+                "heartbeat_at": updated_at,
+                "updated_at": updated_at,
+                "notes": note or "session resumed with its exact tracker reattached",
+            }
+        )
+        tracker_section["current_phase"] = current_phase
+        tracker_section["notes"] = current["notes"]
+        timestamps["updated_at"] = updated_at
+        registry_digest_before = coordination_claims._registry_digest(coordination_claims.CLAIMS_DIR)
+        try:
+            _write_claim_payload(claim_file, current)
+            session_contracts._atomic_write_session_tracker(tracker_path, tracker_payload)
+            _projection_path, projection_digest_after = coordination_claims.refresh_prewrite_authority_projection(
+                coordination_claims.CLAIMS_DIR
+            )
+            coordination_claims.record_claim_mutation(
+                operation="session_upsert",
+                claims_dir=coordination_claims.CLAIMS_DIR,
+                registry_digest_before=registry_digest_before,
+                target_project=claim.primary_project(),
+                target_scope=claim.scope,
+                target_claim_path=claim_file,
+                session_id=claim.session_id,
+                projection_digest_after=projection_digest_after,
+            )
+        except Exception:
+            _atomic_restore_bytes(claim_file, claim_bytes_before)
+            _atomic_restore_bytes(tracker_path, tracker_bytes_before)
+            coordination_claims.refresh_prewrite_authority_projection(coordination_claims.CLAIMS_DIR)
+            raise
+    return current
 
 
 def _persist_claim_session_transfer_receipt(
@@ -2278,15 +2415,26 @@ def _status_sessions_locked(
             if item.session_id == claim.session_id and item.claim_type == "program" and not item.parent_scope
         ]
         tracker_payload: dict[str, Any] | None = None
+        missing_tracker_file = False
         if claim.tracker_path:
             path = Path(claim.tracker_path).expanduser()
             tracker_payload = _read_session_tracker_for_status(path)
+            missing_tracker_file = tracker_payload is None
         tracker_section = tracker_payload.get("tracker") if isinstance(tracker_payload, dict) else {}
         timestamps = tracker_payload.get("timestamps") if isinstance(tracker_payload, dict) else {}
         health_issues = coordination_claims.coordination_health_issues(
             claim,
             active_claims=project_claims,
         )
+        if missing_tracker_file and "missing_tracker_file" not in health_issues:
+            health_issues = [*health_issues, "missing_tracker_file"]
+        claim_health_status = coordination_claims.claim_runtime_status(
+            claim,
+            active_claims=project_claims,
+            now=observed_at,
+        )
+        if missing_tracker_file and claim_health_status != "stale":
+            claim_health_status = "weak"
         progress_issues = coordination_claims.claim_progress_issues(
             claim,
             now=observed_at,
@@ -2313,11 +2461,7 @@ def _status_sessions_locked(
                 "broader_goal": claim.broader_goal,
                 "tracker_path": claim.tracker_path,
                 "claim_status": claim.status,
-                "health_status": coordination_claims.claim_runtime_status(
-                    claim,
-                    active_claims=project_claims,
-                    now=observed_at,
-                ),
+                "health_status": claim_health_status,
                 "health_issues": health_issues,
                 "progress_at": claim.progress_at,
                 "progress_kind": claim.progress_kind,
@@ -2796,6 +2940,17 @@ def resume_session(
     tracker_bytes_before: bytes | None = None
     tracker_path_text = claim.tracker_path
     tracker_path = Path(tracker_path_text).expanduser() if tracker_path_text else None
+    if same_runtime and tracker_path is None:
+        tracker_path = session_contracts.find_session_tracker_path(
+            agent=claim.agent,
+            project=project,
+            scope=claim.scope,
+            session_id=claim.session_id,
+        )
+        if tracker_path is None:
+            raise ValueError("same-runtime resume could not find one unique exact session tracker")
+        tracker_path = tracker_path.expanduser().resolve()
+        tracker_path_text = str(tracker_path)
     if not same_runtime:
         claim_bytes_before = claim_file.read_bytes()
         if tracker_path is None or not tracker_path.is_file():
@@ -2823,19 +2978,31 @@ def resume_session(
     claim_session_transfer: dict[str, Any] | None = None
     try:
         if same_runtime:
-            payload = _apply_claim_payload_updates(
-                claim=claim,
-                claim_file=claim_file,
-                updates={
-                    "status": "active",
-                    "session_id": resolved_session_id,
-                    "heartbeat_at": updated_at,
-                    "updated_at": updated_at,
-                    "notes": note or "session resumed with a fresh runtime attachment",
-                },
-                expected_fields=expected_fields,
-            )
-            if tracker_path is not None:
+            if claim.tracker_path is None:
+                assert tracker_path is not None
+                payload = _reattach_same_runtime_tracker(
+                    claim=claim,
+                    claim_file=claim_file,
+                    tracker_path=tracker_path,
+                    current_phase=current_phase,
+                    note=note,
+                    updated_at=updated_at,
+                    expected_fields=expected_fields,
+                )
+            else:
+                payload = _apply_claim_payload_updates(
+                    claim=claim,
+                    claim_file=claim_file,
+                    updates={
+                        "status": "active",
+                        "session_id": resolved_session_id,
+                        "heartbeat_at": updated_at,
+                        "updated_at": updated_at,
+                        "notes": note or "session resumed with a fresh runtime attachment",
+                    },
+                    expected_fields=expected_fields,
+                )
+                assert tracker_path is not None
                 session_contracts.update_session_tracker(
                     tracker_path,
                     current_phase=current_phase,
@@ -2845,7 +3012,7 @@ def resume_session(
         else:
             if claim_bytes_before is None or tracker_bytes_before is None or tracker_path is None:
                 raise SessionTransferIncompleteError("cross-session resume lacks exact predecessor bytes")
-            payload, transfer_receipt = _apply_cross_session_resume_transaction(
+            payload, transfer_receipt, claim_session_transfer = _apply_cross_session_resume_transaction(
                 claim=claim,
                 claim_file=claim_file,
                 claim_bytes_before=claim_bytes_before,
@@ -2857,17 +3024,10 @@ def resume_session(
                 updated_at=updated_at,
                 expected_fields=expected_fields,
                 transfer_preflight=transfer_preflight,
-            )
-            claim_session_transfer = _persist_claim_session_transfer_receipt(
-                claim=claim,
                 project=project,
                 scope=scope,
                 worktree_path=worktree_path,
                 branch=branch,
-                successor_session_id=resolved_session_id,
-                transferred_at=updated_at,
-                prior_claim_bytes=claim_bytes_before,
-                successor_claim_bytes=claim_file.read_bytes(),
             )
     except Exception as transfer_error:
         if same_runtime:

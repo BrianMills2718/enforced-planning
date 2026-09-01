@@ -15,11 +15,9 @@ import re
 import shutil
 import subprocess
 import tempfile
+from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
-from collections.abc import Iterator
 from pathlib import Path
-from typing import Mapping
-
 
 GITHUB_TOKEN_ENV_VARS: tuple[str, ...] = (
     "GITHUB_TOKEN",
@@ -176,8 +174,68 @@ def isolated_github_auth(
 
 
 def _fetch_and_rebase(cwd: Path, base: str) -> None:
-    run_cmd(["git", "fetch", "origin", base], cwd=cwd)
+    run_cmd(["git", "fetch", "origin"], cwd=cwd)
     run_cmd(["git", "rebase", f"origin/{base}"], cwd=cwd)
+
+
+def _remote_branch_exists(cwd: Path, branch: str) -> bool:
+    result = run_cmd(
+        ["git", "ls-remote", "--exit-code", "--heads", "origin", f"refs/heads/{branch}"],
+        cwd=cwd,
+        check=False,
+    )
+    if result.returncode == 0:
+        return True
+    if result.returncode == 2:
+        return False
+    raise SystemExit(
+        "Preflight failed: unable to determine whether the feature branch is published.\n"
+        f"stderr: {result.stderr.strip()}",
+    )
+
+
+def _is_ancestor(cwd: Path, ancestor: str, descendant: str = "HEAD") -> bool:
+    result = run_cmd(
+        ["git", "merge-base", "--is-ancestor", ancestor, descendant],
+        cwd=cwd,
+        check=False,
+    )
+    if result.returncode in {0, 1}:
+        return result.returncode == 0
+    raise SystemExit(
+        f"Preflight failed: unable to compare '{ancestor}' with '{descendant}'.\n"
+        f"stderr: {result.stderr.strip()}",
+    )
+
+
+def _prepare_branch_for_push(cwd: Path, *, branch: str, base: str) -> None:
+    """Update an unpublished branch or validate a published fast-forward push.
+
+    Rebasing is safe to automate only before the branch has a public history.
+    Once ``origin/<branch>`` exists, this workflow must never rewrite it or
+    force-push it implicitly.
+    """
+    if not _remote_branch_exists(cwd, branch):
+        _fetch_and_rebase(cwd, base)
+        return
+
+    run_cmd(["git", "fetch", "origin"], cwd=cwd)
+    remote_branch = f"origin/{branch}"
+    remote_base = f"origin/{base}"
+    if not _is_ancestor(cwd, remote_branch):
+        raise SystemExit(
+            f"Preflight failed: published branch '{branch}' is not an ancestor of local HEAD.\n"
+            "pr-auto will not rebase or overwrite published history. Reconcile the local and "
+            "remote branch explicitly, then push with --force-with-lease only if rewriting that "
+            "published history is intentional.",
+        )
+    if not _is_ancestor(cwd, remote_base):
+        raise SystemExit(
+            f"Preflight failed: origin/{base} advanced after published branch '{branch}'.\n"
+            f"pr-auto will not automatically rebase a published branch. Explicitly run "
+            f"'git rebase origin/{base}', review the rewritten commits, then recover with "
+            f"'git push --force-with-lease origin HEAD:{branch}' if the rewrite is intentional.",
+        )
 
 
 def _push_branch(cwd: Path) -> None:
@@ -269,7 +327,7 @@ def main() -> int:
             print("Preflight passed.")
             return 0
 
-        _fetch_and_rebase(cwd, args.base)
+        _prepare_branch_for_push(cwd, branch=branch, base=args.base)
         _push_branch(cwd)
 
         pr = _find_open_pr(cwd=cwd, gh_env=isolated_env, branch=branch, base=args.base)

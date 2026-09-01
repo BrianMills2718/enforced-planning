@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import importlib.util
 import os
+import subprocess
 import sys
 from pathlib import Path
-
 
 SCRIPTS_DIR = Path(__file__).resolve().parents[1] / "scripts"
 MODULE_PATH = SCRIPTS_DIR / "pr_auto.py"
@@ -107,3 +107,155 @@ def test_isolated_github_auth_does_not_mutate_shared_config(tmp_path: Path) -> N
     assert observed[0][1] == "expected-owner"
     assert hosts.read_text(encoding="utf-8") == "active: original\n"
     assert not isolated_dir.exists()
+
+
+def _completed(
+    cmd: list[str],
+    *,
+    returncode: int = 0,
+    stdout: str = "",
+    stderr: str = "",
+) -> subprocess.CompletedProcess[str]:
+    return subprocess.CompletedProcess(cmd, returncode, stdout, stderr)
+
+
+def test_unpublished_branch_rebases_before_first_push(tmp_path: Path) -> None:
+    """A branch without a remote ref may be rebased before its first publication."""
+    module = _load()
+    commands: list[list[str]] = []
+
+    def fake_run(
+        cmd: list[str],
+        *,
+        cwd: Path,
+        env: dict[str, str] | None = None,
+        check: bool = True,
+    ) -> subprocess.CompletedProcess[str]:
+        del cwd, env, check
+        commands.append(cmd)
+        if cmd[:4] == ["git", "ls-remote", "--exit-code", "--heads"]:
+            return _completed(cmd, returncode=2)
+        return _completed(cmd)
+
+    module.run_cmd = fake_run  # type: ignore[attr-defined]
+    module._prepare_branch_for_push(  # type: ignore[attr-defined]
+        tmp_path,
+        branch="fix/unpublished",
+        base="main",
+    )
+    module._push_branch(tmp_path)  # type: ignore[attr-defined]
+
+    assert commands == [
+        ["git", "ls-remote", "--exit-code", "--heads", "origin", "refs/heads/fix/unpublished"],
+        ["git", "fetch", "origin"],
+        ["git", "rebase", "origin/main"],
+        ["git", "push", "-u", "origin", "HEAD"],
+    ]
+
+
+def test_published_branch_allows_only_normal_fast_forward_push(tmp_path: Path) -> None:
+    """A published branch already containing its remote and base may push normally."""
+    module = _load()
+    commands: list[list[str]] = []
+
+    def fake_run(
+        cmd: list[str],
+        *,
+        cwd: Path,
+        env: dict[str, str] | None = None,
+        check: bool = True,
+    ) -> subprocess.CompletedProcess[str]:
+        del cwd, env, check
+        commands.append(cmd)
+        return _completed(cmd)
+
+    module.run_cmd = fake_run  # type: ignore[attr-defined]
+    module._prepare_branch_for_push(  # type: ignore[attr-defined]
+        tmp_path,
+        branch="fix/published",
+        base="main",
+    )
+    module._push_branch(tmp_path)  # type: ignore[attr-defined]
+
+    assert commands == [
+        ["git", "ls-remote", "--exit-code", "--heads", "origin", "refs/heads/fix/published"],
+        ["git", "fetch", "origin"],
+        ["git", "merge-base", "--is-ancestor", "origin/fix/published", "HEAD"],
+        ["git", "merge-base", "--is-ancestor", "origin/main", "HEAD"],
+        ["git", "push", "-u", "origin", "HEAD"],
+    ]
+    assert not any(command[:2] == ["git", "rebase"] for command in commands)
+
+
+def test_published_branch_divergence_refuses_without_rebase_or_push(tmp_path: Path) -> None:
+    """Divergence from a published feature ref requires explicit recovery."""
+    module = _load()
+    commands: list[list[str]] = []
+
+    def fake_run(
+        cmd: list[str],
+        *,
+        cwd: Path,
+        env: dict[str, str] | None = None,
+        check: bool = True,
+    ) -> subprocess.CompletedProcess[str]:
+        del cwd, env, check
+        commands.append(cmd)
+        if cmd[:3] == ["git", "merge-base", "--is-ancestor"]:
+            return _completed(cmd, returncode=1)
+        return _completed(cmd)
+
+    module.run_cmd = fake_run  # type: ignore[attr-defined]
+
+    try:
+        module._prepare_branch_for_push(  # type: ignore[attr-defined]
+            tmp_path,
+            branch="fix/diverged",
+            base="main",
+        )
+    except SystemExit as exc:
+        assert "not an ancestor of local HEAD" in str(exc)
+        assert "--force-with-lease" in str(exc)
+    else:
+        raise AssertionError("published divergence should be refused")
+
+    assert not any(command[:2] in (["git", "rebase"], ["git", "push"]) for command in commands)
+
+
+def test_published_branch_base_advance_refuses_without_branch_mutation(tmp_path: Path) -> None:
+    """A newer base must not trigger an automatic rewrite of published history."""
+    module = _load()
+    commands: list[list[str]] = []
+    ancestry_checks = 0
+
+    def fake_run(
+        cmd: list[str],
+        *,
+        cwd: Path,
+        env: dict[str, str] | None = None,
+        check: bool = True,
+    ) -> subprocess.CompletedProcess[str]:
+        nonlocal ancestry_checks
+        del cwd, env, check
+        commands.append(cmd)
+        if cmd[:3] == ["git", "merge-base", "--is-ancestor"]:
+            ancestry_checks += 1
+            return _completed(cmd, returncode=0 if ancestry_checks == 1 else 1)
+        return _completed(cmd)
+
+    module.run_cmd = fake_run  # type: ignore[attr-defined]
+
+    try:
+        module._prepare_branch_for_push(  # type: ignore[attr-defined]
+            tmp_path,
+            branch="fix/base-advanced",
+            base="main",
+        )
+    except SystemExit as exc:
+        assert "origin/main advanced" in str(exc)
+        assert "git rebase origin/main" in str(exc)
+        assert "--force-with-lease" in str(exc)
+    else:
+        raise AssertionError("published branch behind base should be refused")
+
+    assert not any(command[:2] in (["git", "rebase"], ["git", "push"]) for command in commands)

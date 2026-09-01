@@ -8,6 +8,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 SCRIPTS_DIR = Path(__file__).resolve().parents[1] / "scripts"
 MODULE_PATH = SCRIPTS_DIR / "pr_auto.py"
 
@@ -119,6 +121,10 @@ def _completed(
     return subprocess.CompletedProcess(cmd, returncode, stdout, stderr)
 
 
+def _published_ref(cmd: list[str]) -> subprocess.CompletedProcess[str]:
+    return _completed(cmd, stdout=f"{'a' * 40}\t{cmd[-1]}\n")
+
+
 def test_unpublished_branch_rebases_before_first_push(tmp_path: Path) -> None:
     """A branch without a remote ref may be rebased before its first publication."""
     module = _load()
@@ -148,6 +154,7 @@ def test_unpublished_branch_rebases_before_first_push(tmp_path: Path) -> None:
     assert commands == [
         ["git", "ls-remote", "--exit-code", "--heads", "origin", "refs/heads/fix/unpublished"],
         ["git", "fetch", "origin"],
+        ["git", "ls-remote", "--exit-code", "--heads", "origin", "refs/heads/fix/unpublished"],
         ["git", "rebase", "origin/main"],
         ["git", "push", "-u", "origin", "HEAD"],
     ]
@@ -167,6 +174,8 @@ def test_published_branch_allows_only_normal_fast_forward_push(tmp_path: Path) -
     ) -> subprocess.CompletedProcess[str]:
         del cwd, env, check
         commands.append(cmd)
+        if cmd[:4] == ["git", "ls-remote", "--exit-code", "--heads"]:
+            return _published_ref(cmd)
         return _completed(cmd)
 
     module.run_cmd = fake_run  # type: ignore[attr-defined]
@@ -201,6 +210,8 @@ def test_published_branch_divergence_refuses_without_rebase_or_push(tmp_path: Pa
     ) -> subprocess.CompletedProcess[str]:
         del cwd, env, check
         commands.append(cmd)
+        if cmd[:4] == ["git", "ls-remote", "--exit-code", "--heads"]:
+            return _published_ref(cmd)
         if cmd[:3] == ["git", "merge-base", "--is-ancestor"]:
             return _completed(cmd, returncode=1)
         return _completed(cmd)
@@ -238,6 +249,8 @@ def test_published_branch_base_advance_refuses_without_branch_mutation(tmp_path:
         nonlocal ancestry_checks
         del cwd, env, check
         commands.append(cmd)
+        if cmd[:4] == ["git", "ls-remote", "--exit-code", "--heads"]:
+            return _published_ref(cmd)
         if cmd[:3] == ["git", "merge-base", "--is-ancestor"]:
             ancestry_checks += 1
             return _completed(cmd, returncode=0 if ancestry_checks == 1 else 1)
@@ -259,3 +272,71 @@ def test_published_branch_base_advance_refuses_without_branch_mutation(tmp_path:
         raise AssertionError("published branch behind base should be refused")
 
     assert not any(command[:2] in (["git", "rebase"], ["git", "push"]) for command in commands)
+
+
+def test_unpublished_branch_refuses_if_published_between_lookup_and_fetch(tmp_path: Path) -> None:
+    """A concurrent first publication must stop before local history is rewritten."""
+    module = _load()
+    commands: list[list[str]] = []
+    remote_lookups = 0
+
+    def fake_run(
+        cmd: list[str],
+        *,
+        cwd: Path,
+        env: dict[str, str] | None = None,
+        check: bool = True,
+    ) -> subprocess.CompletedProcess[str]:
+        nonlocal remote_lookups
+        del cwd, env, check
+        commands.append(cmd)
+        if cmd[:4] == ["git", "ls-remote", "--exit-code", "--heads"]:
+            remote_lookups += 1
+            return _completed(cmd, returncode=2) if remote_lookups == 1 else _published_ref(cmd)
+        return _completed(cmd)
+
+    module.run_cmd = fake_run  # type: ignore[attr-defined]
+
+    with pytest.raises(SystemExit, match="was published while pr-auto was preparing it") as exc_info:
+        module._prepare_branch_for_push(  # type: ignore[attr-defined]
+            tmp_path,
+            branch="fix/publication-race",
+            base="main",
+        )
+
+    assert "No rebase or push was attempted" in str(exc_info.value)
+    assert commands == [
+        ["git", "ls-remote", "--exit-code", "--heads", "origin", "refs/heads/fix/publication-race"],
+        ["git", "fetch", "origin"],
+        ["git", "ls-remote", "--exit-code", "--heads", "origin", "refs/heads/fix/publication-race"],
+    ]
+
+
+@pytest.mark.parametrize(
+    "stdout",
+    [
+        "",
+        f"{'a' * 40}\trefs/heads/fix/exact\n{'b' * 40}\trefs/heads/fix/exact\n",
+        "not-a-full-object-id\trefs/heads/fix/exact\n",
+        f"{'a' * 40}\trefs/heads/fix/other\n",
+    ],
+    ids=["empty", "multiple", "malformed-sha", "mismatched-ref"],
+)
+def test_remote_branch_exists_rejects_non_exact_evidence(tmp_path: Path, stdout: str) -> None:
+    """Successful lookup status is insufficient without one exact ref record."""
+    module = _load()
+
+    def fake_run(
+        cmd: list[str],
+        *,
+        cwd: Path,
+        env: dict[str, str] | None = None,
+        check: bool = True,
+    ) -> subprocess.CompletedProcess[str]:
+        del cwd, env, check
+        return _completed(cmd, stdout=stdout)
+
+    module.run_cmd = fake_run  # type: ignore[attr-defined]
+
+    with pytest.raises(SystemExit, match="remote branch lookup"):
+        module._remote_branch_exists(tmp_path, "fix/exact")  # type: ignore[attr-defined]

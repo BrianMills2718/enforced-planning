@@ -173,25 +173,40 @@ def isolated_github_auth(
         yield isolated_env
 
 
-def _fetch_and_rebase(cwd: Path, base: str) -> None:
-    run_cmd(["git", "fetch", "origin"], cwd=cwd)
-    run_cmd(["git", "rebase", f"origin/{base}"], cwd=cwd)
-
-
 def _remote_branch_exists(cwd: Path, branch: str) -> bool:
+    expected_ref = f"refs/heads/{branch}"
     result = run_cmd(
-        ["git", "ls-remote", "--exit-code", "--heads", "origin", f"refs/heads/{branch}"],
+        ["git", "ls-remote", "--exit-code", "--heads", "origin", expected_ref],
         cwd=cwd,
         check=False,
     )
-    if result.returncode == 0:
-        return True
     if result.returncode == 2:
+        if result.stdout.strip():
+            raise SystemExit(
+                "Preflight failed: remote branch lookup reported absence with unexpected output.",
+            )
         return False
-    raise SystemExit(
-        "Preflight failed: unable to determine whether the feature branch is published.\n"
-        f"stderr: {result.stderr.strip()}",
-    )
+    if result.returncode != 0:
+        raise SystemExit(
+            "Preflight failed: unable to determine whether the feature branch is published.\n"
+            f"stderr: {result.stderr.strip()}",
+        )
+
+    lines = result.stdout.splitlines()
+    if len(lines) != 1:
+        raise SystemExit(
+            "Preflight failed: remote branch lookup did not return exactly one ref.",
+        )
+    fields = lines[0].split()
+    if (
+        len(fields) != 2
+        or re.fullmatch(r"[0-9a-fA-F]{40}", fields[0]) is None
+        or fields[1] != expected_ref
+    ):
+        raise SystemExit(
+            f"Preflight failed: remote branch lookup returned malformed or mismatched evidence for '{expected_ref}'.",
+        )
+    return True
 
 
 def _is_ancestor(cwd: Path, ancestor: str, descendant: str = "HEAD") -> bool:
@@ -216,7 +231,14 @@ def _prepare_branch_for_push(cwd: Path, *, branch: str, base: str) -> None:
     force-push it implicitly.
     """
     if not _remote_branch_exists(cwd, branch):
-        _fetch_and_rebase(cwd, base)
+        run_cmd(["git", "fetch", "origin"], cwd=cwd)
+        if _remote_branch_exists(cwd, branch):
+            raise SystemExit(
+                f"Preflight failed: branch '{branch}' was published while pr-auto was preparing it.\n"
+                "No rebase or push was attempted. Rerun pr-auto so the published-branch safety "
+                "checks can evaluate the current remote history.",
+            )
+        run_cmd(["git", "rebase", f"origin/{base}"], cwd=cwd)
         return
 
     run_cmd(["git", "fetch", "origin"], cwd=cwd)

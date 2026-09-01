@@ -1,0 +1,105 @@
+{
+  "schema_version": "1.0",
+  "record_type": "coordination_activation_remediation",
+  "recorded_at": "2026-09-01T06:22:00Z",
+  "owner_session_id": "codex:01a05b24-a6f6-7781-b812-558dd75ee0d7",
+  "source_revision_at_start": "cfbc59e48e9987ddd94fe33627d1eb7c52220adb",
+  "installed_runtime_revision": "bd7bcda3ead4d5be4eac7b9faa6b622b151c7ecc",
+  "activation_order": {
+    "initial_config_sha256": "370111dc0268338e89d811c6b34ade057e32adfde5deb9023c8cdcf59abea755",
+    "disabled_before_candidate_probes": true,
+    "disabled_config_mtime": "2026-08-31T22:51:37.969692701-07:00",
+    "reenabled_after_candidate_probes": true,
+    "reenabled_config_mtime": "2026-08-31T22:52:11.978654515-07:00",
+    "post_install_trust_invalidation_observed": true,
+    "post_install_trust_invalidation_reason": "The installed pre-tool artifact changed at bd7bcda, so fresh Codex recalculated the trusted hash and persisted the changed hooks disabled until the new digest was explicitly accepted.",
+    "final_enabled_states": {
+      "/home/brian/.codex/config.toml:pre_tool_use:1:1": {
+        "enabled": true,
+        "trusted_hash": "sha256:ad316cbf374c238f0561693b63f3379d8f092de1b0143f091cd048f7cedd878d"
+      },
+      "/home/brian/.codex/config.toml:pre_tool_use:2:0": {
+        "enabled": true,
+        "trusted_hash": "sha256:26c69b766a8d3f62e9a2e8a93a16bd59b92ba908c294d135c3d9277563d81a46"
+      }
+    }
+  },
+  "installed_candidate_probes_while_disabled": [
+    {
+      "case": "provably_read_only_bash",
+      "decision": "allow",
+      "reason_code": "bash_read_only",
+      "receipt_id": "prewrite_db143f28e4c24cd182c2b1afa7176a94"
+    },
+    {
+      "case": "exact_claimed_mutation_authorization",
+      "decision": "allow",
+      "reason_code": "exact_live_claim",
+      "receipt_id": "prewrite_d57798f13a0d428b9c012fa484ba9096"
+    },
+    {
+      "case": "outside_claim_negative_control",
+      "decision": "deny",
+      "reason_code": "path_outside_claim",
+      "receipt_id": "prewrite_250380713fc54de6aa0227267a9dbd9f"
+    }
+  ],
+  "native_claude_startup": {
+    "session_id": "claude-code:8f4ea6fe-5bf5-4fc7-b552-3e6516caea2a",
+    "session_log": "/home/brian/.claude/projects/-home-brian-code-active-enforced-planning-worktrees-audit-activation-evidence-remediation-20260901/8f4ea6fe-5bf5-4fc7-b552-3e6516caea2a.jsonl",
+    "model_call_exit_code": 1,
+    "model_cost_usd": 0,
+    "session_start_hook_executed": true,
+    "exact_owner_label_observed": false,
+    "global_context_label_observed": true,
+    "observed_global_context": "project=enforced-planning; scope=audit-activation-evidence-remediation-20260901; status=active; owner=codex; session=codex:01a05b24-a6f6-7781-b812-558dd75ee0d7",
+    "truthful_interpretation": "Claude did not adopt the Codex lane; it rendered the live foreign claim as global context.",
+    "separate_followup": {
+      "issue": "The repository-local scripts/meta/coordination_hook.py wrapper did not seed the repository root on sys.path before runpy executed scripts/coordination_hook.py.",
+      "effect": "A traceback was printed for imports of hook_receipts and scripts.hook_receipts, while the separate global installed hook still emitted the correct startup label.",
+      "status": "requires_separate_claimed_fix"
+    }
+  },
+  "native_codex_mutation": {
+    "session_id": "codex:01a05b9d-3953-7441-a251-d7d790740697",
+    "scope": "probe/native-codex-host-mutation-v3-20260901",
+    "hooks_enabled": true,
+    "hook_trust_bypassed": false,
+    "transient_target": "docs/evidence/transient_native_codex_host_probe_v3_20260901.json",
+    "creation": {
+      "tool": "apply_patch",
+      "decision": "allow",
+      "reason_code": "exact_live_claim",
+      "receipt_id": "prewrite_bcaae1ec9245490f837f5bd370123498"
+    },
+    "deletion": {
+      "tool": "apply_patch",
+      "decision": "allow",
+      "reason_code": "exact_live_claim",
+      "receipt_id": "prewrite_f645c53a149949ec8c1ffbe1ce46c909"
+    },
+    "worktree_clean_after_probe": true,
+    "closeout": {
+      "disposition": "merged",
+      "merge_evidence": "branch_ancestor",
+      "claim_archive_id": "7c92c3d4b719f9a3493ffe965936f0fd33e6bc3759bd66890bd29cbe72728571",
+      "claim_released": true,
+      "worktree_removed": true,
+      "branch_deleted": true
+    }
+  },
+  "negative_controls_and_recovery": [
+    "A maintenance bootstrap using claim_type=write was rejected because the typed contract requires program.",
+    "A source-checkout claim_bootstrap path was rejected by the installed runtime; the installed runtime path was admitted.",
+    "Short-lived Codex processes truthfully moved their claims to session_ended before a resumed process could mutate; both zero-change lanes were closed through session_close.",
+    "An initial transient mutation produced no host receipt while the post-update trusted hook hashes were disabled; that lane was cleaned and closed without claiming success.",
+    "The final canary used normal trusted-hook activation and retained exact-session creation and deletion allow receipts."
+  ],
+  "result": {
+    "activation_audit_gaps_remediated": true,
+    "pre_tool_hooks_enabled": true,
+    "native_claude_vantage_verified": true,
+    "native_codex_mutation_receipted": true,
+    "new_wrapper_defect_remains": true
+  }
+}

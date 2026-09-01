@@ -145,6 +145,7 @@ def test_push_check_detects_overlapping_live_write_owned_claim(
             "scope": "plan-42-demo",
             "intent": "Own current branch",
             "claim_type": "program",
+            "plan_ref": "UNPLANNED",
             "branch": "plan-42-demo",
             "worktree_path": str(repo_root),
                 "session_id": "codex:thread-1",
@@ -327,12 +328,16 @@ def test_push_check_warns_on_active_decisions_without_blocking(
             "scope": "plan-42-demo",
             "intent": "Own current branch",
             "claim_type": "program",
+            "plan_ref": "UNPLANNED",
             "branch": "plan-42-demo",
-                "worktree_path": str(repo_root),
-                "session_id": "codex:thread-1",
-                "session_name": "current-branch-owner",
-                "heartbeat_at": datetime.now(timezone.utc).isoformat(),
-                "status": "active",
+            "worktree_path": str(repo_root),
+            "repo_root": str(repo_root),
+            "session_id": "codex:thread-1",
+            "session_name": "current-branch-owner",
+            "broader_goal": "Own the current branch",
+            "tracker_path": str(tmp_path / "current-tracker.yaml"),
+            "heartbeat_at": datetime.now(timezone.utc).isoformat(),
+            "status": "active",
         },
     )
     decision_queries: list[str] = []
@@ -344,7 +349,7 @@ def test_push_check_warns_on_active_decisions_without_blocking(
     monkeypatch.setattr(push_safety, "load_active_decisions", _load_decisions)
 
     default_payload = push_safety.evaluate_push_safety(repo_root)
-    assert default_payload["ok"]
+    assert default_payload["ok"], default_payload
     assert decision_queries == []
     assert not any(
         item["code"] == "active_decisions_present"
@@ -382,9 +387,13 @@ def test_push_check_rejects_branch_claim_without_complete_session_identity(
             "scope": "plan-identity",
             "intent": "Unattributed legacy lane",
             "claim_type": "program",
+            "plan_ref": "UNPLANNED",
             "branch": "plan-identity",
             "worktree_path": str(repo_root),
+            "repo_root": str(repo_root),
             "session_id": "codex:legacy",
+            "broader_goal": "Preserve anonymous-claim rejection coverage",
+            "tracker_path": str(tmp_path / "anonymous-tracker.yaml"),
             "heartbeat_at": datetime.now(timezone.utc).isoformat(),
             "expires_at": "2099-08-22T00:00:00+00:00",
             "status": "active",
@@ -444,11 +453,14 @@ def test_push_check_preserves_authority_for_report_only_stalled_claim(
             "scope": "plan-110-progress",
             "intent": "Own the progress branch",
             "claim_type": "program",
+            "plan_ref": "UNPLANNED",
             "branch": "plan-110-progress",
             "worktree_path": str(repo_root),
             "repo_root": str(repo_root),
             "session_id": "codex:owner",
             "session_name": "progress-owner",
+            "broader_goal": "Own the progress branch",
+            "tracker_path": str(tmp_path / "progress-tracker.yaml"),
             "heartbeat_at": datetime.now(timezone.utc).isoformat(),
             "expires_at": "2099-08-22T00:00:00+00:00",
             "status": "active",
@@ -496,10 +508,14 @@ def test_push_check_resolves_canonical_project_from_linked_worktree(
             "scope": "plan-identity",
             "intent": "Attributed worktree lane",
             "claim_type": "program",
+            "plan_ref": "UNPLANNED",
             "branch": "plan-identity",
             "worktree_path": str(worktree),
+            "repo_root": str(repo_root),
             "session_id": "codex:thread-identity",
             "session_name": "identity-enforcement",
+            "broader_goal": "Exercise linked-worktree project resolution",
+            "tracker_path": str(tmp_path / "identity-tracker.yaml"),
             "heartbeat_at": datetime.now(timezone.utc).isoformat(),
             "status": "active",
         },
@@ -554,6 +570,7 @@ def test_create_review_claim_uses_target_branch_as_parent_scope(
         target_branch="plan-99-target",
         intent="Inspect target lane",
         write_paths=["src/demo.py|tests/test_demo.py"],
+        plan_ref="UNPLANNED",
         session_name="review-plan-99",
     )
 
@@ -593,6 +610,7 @@ def test_create_review_claim_allows_read_only_review(
             "scope": "plan-99-target",
             "intent": "Implement the target lane",
             "claim_type": "write",
+            "plan_ref": "UNPLANNED",
             "write_paths": ["src/demo.py"],
             "branch": "plan-99-target",
             "worktree_path": str(tmp_path / "target-worktree"),
@@ -608,6 +626,7 @@ def test_create_review_claim_allows_read_only_review(
         target_branch="plan-99-target",
         intent="Inspect target lane without applying fixes",
         write_paths=[],
+        plan_ref="UNPLANNED",
         session_name="review-plan-99",
     )
 

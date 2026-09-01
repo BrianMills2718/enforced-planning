@@ -107,6 +107,7 @@ def _create_write_claim(
         project=repo_root.name,
         scope=scope,
         intent="test claim",
+        plan_ref="UNPLANNED",
         claim_type=claim_type,
         write_paths=write_paths,
         worktree_path=str(repo_root),

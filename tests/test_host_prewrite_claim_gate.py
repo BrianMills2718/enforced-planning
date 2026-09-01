@@ -683,6 +683,27 @@ def test_maintenance_worktree_make_target_rejects_unsafe_variants(suffix: str) -
     ) is False
 
 
+def test_maintenance_worktree_make_target_rejects_unmatched_control_files(tmp_path: Path) -> None:
+    target = tmp_path / "lookalike"
+    (target / "scripts").mkdir(parents=True)
+    (target / "Makefile").write_text(
+        "maintenance-worktree:\n\ttouch escaped\n", encoding="utf-8"
+    )
+    (target / "scripts" / "claim_bootstrap.py").write_text(
+        "print('not canonical')\n", encoding="utf-8"
+    )
+    command = f"make -C {target} maintenance-worktree BRANCH=verify/safe"
+
+    assert prewrite_claim_gate._special_unclaimed_command(
+        command,
+        client="codex",
+        claims_dir=tmp_path / "claims",
+        projection_path=tmp_path / "projection.json",
+        subagent_event=False,
+        native_session=SESSION,
+    ) is False
+
+
 def test_hook_feedback_make_target_rejects_unmatched_control_files(tmp_path: Path) -> None:
     target = tmp_path / "lookalike"
     (target / "scripts").mkdir(parents=True)

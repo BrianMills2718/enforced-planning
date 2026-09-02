@@ -429,9 +429,16 @@ def _bash_declared_paths(command: str) -> tuple[str, ...]:
 
     commands = _shell_commands(command)
     if commands is not None and len(commands) == 1:
-        git_paths = _git_declared_paths(_bash_effective_argv(commands[0]))
+        effective_argv = _bash_effective_argv(commands[0])
+        git_paths = _git_declared_paths(effective_argv)
         if git_paths is not None:
             return git_paths
+        lifecycle_paths = _lifecycle_declared_paths(effective_argv)
+        if lifecycle_paths is not None:
+            return lifecycle_paths
+        make_lifecycle_paths = _make_lifecycle_declared_paths(effective_argv)
+        if make_lifecycle_paths is not None:
+            return make_lifecycle_paths
 
     pytest_node_paths: dict[str, str] = {}
     if commands is not None:
@@ -529,6 +536,122 @@ def _bash_effective_argv(argv: tuple[str, ...]) -> tuple[str, ...]:
     if len(argv) >= 4 and argv[:2] == ("/usr/bin/env", "-C"):
         return argv[3:]
     return argv
+
+
+_LIFECYCLE_IDENTIFIER_OPTIONS = {
+    "--agent",
+    "--branch",
+    "--disposition",
+    "--disposition-reason",
+    "--merge-commit",
+    "--note",
+    "--project",
+    "--recovery-ref",
+    "--scope",
+    "--session-id",
+}
+_LIFECYCLE_PATH_OPTIONS = {"--worktree-path"}
+_MAKE_LIFECYCLE_IDENTIFIER_VARIABLES = {
+    "BRANCH",
+    "SESSION_NOTE",
+    "WORKTREE_AGENT",
+    "WORKTREE_DISPOSITION",
+    "WORKTREE_DISPOSITION_REASON",
+    "WORKTREE_MERGE_COMMIT",
+    "WORKTREE_PROJECT",
+    "WORKTREE_RECOVERY_REF",
+}
+
+
+def _path_shaped(value: str) -> bool:
+    return value.startswith(("/", "~", "./", "../")) or "/" in value
+
+
+def _lifecycle_declared_paths(argv: tuple[str, ...]) -> tuple[str, ...] | None:
+    """Return only filesystem operands from a direct lifecycle invocation.
+
+    Branches, scopes, and recovery refs are typed identifiers and commonly
+    contain slashes.  Treating those values as paths makes the canonical
+    closeout command unable to retire exactly the lanes it created.  Unknown
+    path-shaped operands still fail through the ordinary path gate.
+    """
+
+    if len(argv) < 2 or Path(argv[0]).name not in {"python", "python3", "python3.12"}:
+        return None
+    if argv[1] not in {
+        "scripts/session_close.py",
+        "scripts/session_finish.py",
+        "scripts/meta/session_close.py",
+        "scripts/meta/session_finish.py",
+    }:
+        return None
+    paths: list[str] = []
+    index = 2
+    while index < len(argv):
+        token = argv[index]
+        option, separator, inline_value = token.partition("=")
+        if option in _LIFECYCLE_IDENTIFIER_OPTIONS:
+            if not separator and index + 1 >= len(argv):
+                return None
+            index += 1 if separator else 2
+            continue
+        if option in _LIFECYCLE_PATH_OPTIONS:
+            if separator:
+                if inline_value:
+                    paths.append(inline_value)
+                index += 1
+            elif index + 1 < len(argv):
+                paths.append(argv[index + 1])
+                index += 2
+            else:
+                index += 1
+            continue
+        candidate = inline_value if separator and token.startswith("-") else token
+        if _path_shaped(candidate):
+            paths.append(candidate)
+        index += 1
+    return tuple(dict.fromkeys(paths))
+
+
+def _make_lifecycle_declared_paths(argv: tuple[str, ...]) -> tuple[str, ...] | None:
+    """Return path operands for the sanctioned Make lifecycle targets."""
+
+    if not argv or Path(argv[0]).name not in {"make", "gmake"}:
+        return None
+    paths: list[str] = []
+    targets: list[str] = []
+    assignments: list[tuple[str, str]] = []
+    index = 1
+    while index < len(argv):
+        token = argv[index]
+        if token in {"-C", "--directory", "-f", "--file", "--makefile"}:
+            if index + 1 >= len(argv):
+                return None
+            paths.append(argv[index + 1])
+            index += 2
+            continue
+        if token.startswith(("--directory=", "--file=", "--makefile=")):
+            paths.append(token.split("=", 1)[1])
+            index += 1
+            continue
+        if "=" in token and not token.startswith("-"):
+            name, value = token.split("=", 1)
+            assignments.append((name, value))
+            index += 1
+            continue
+        if token.startswith("-"):
+            index += 1
+            continue
+        targets.append(token)
+        index += 1
+    if targets not in [["session-close"], ["session-finish"]]:
+        return None
+    for name, value in assignments:
+        if name in _MAKE_LIFECYCLE_IDENTIFIER_VARIABLES:
+            continue
+        if _path_shaped(value):
+            paths.append(value)
+    return tuple(dict.fromkeys(paths))
 
 
 def _git_declared_paths(argv: tuple[str, ...]) -> tuple[str, ...] | None:

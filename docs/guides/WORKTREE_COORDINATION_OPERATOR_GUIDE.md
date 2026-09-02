@@ -193,6 +193,15 @@ without mutation. The acceptance alone never transfers or releases custody;
 the existing fenced claim/tracker transaction remains the only commit point.
 Manual handoff and recovery remain compatible and do not require these flags.
 
+A successor runtime may author that receipt explicitly at the transfer boundary
+instead of first writing a separate acceptance file: pass the exact offer with
+`--successor-custody-offer <offer.json> --accept-successor-custody-offer`.
+`session-resume` resolves the current native session, binds the command's exact
+project, scope, branch, and worktree to the offer, and passes the strict receipt
+directly into the same fenced transaction. The flag is an explicit successor
+action; a launcher or predecessor cannot use it to accept on the successor's
+behalf.
+
 Codex-to-Codex custody transfer additionally requires
 `--predecessor-process-pid` and `--predecessor-process-start-ticks`. Before
 changing claim custody, `session-resume` proves that exact PID generation is a
@@ -663,6 +672,11 @@ command requires exactly one live claim owned by the native session, timestamps
 the event itself, updates the claim atomically, refreshes the pre-write
 projection, and emits the existing backward-compatible typed session-mutation
 receipt. A new event without a quiet interval clears an obsolete interval.
+
+Last verified 2026-09-02 at framework revision
+`5e9e9ca6e7141ed0c74cc71fe626d366e0aa7d21`: JSON reporting must serialize
+`other_session_last_active_at` as an ISO-8601 string or `null`; a raw datetime
+is a contract defect, not a consumer-supported value.
 
 By default, a complete event becomes `stalled` at 60 minutes without another
 accepted event. `COORDINATION_PROGRESS_STALE_MINUTES` may set a positive numeric

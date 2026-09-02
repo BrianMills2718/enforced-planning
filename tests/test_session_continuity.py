@@ -14,6 +14,7 @@ import pytest
 from enforced_planning import coordination_messages
 from enforced_planning.session_continuity import (
     CodexActivityV1,
+    SuccessorCustodyAcceptanceV1,
     SuccessorCustodyOfferV1,
     accept_successor_custody_offer,
     assess_continuity,
@@ -556,6 +557,78 @@ def test_session_resume_cli_passes_strict_offer_and_acceptance(
     assert observed["successor_custody_offer"] == offer
     assert observed["successor_custody_acceptance"] == acceptance
     assert json.loads(capsys.readouterr().out)["action"] == "resumed"
+
+
+def test_session_resume_cli_current_successor_explicitly_accepts_offer(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    offer = successor_custody_offer()
+    offer_path = tmp_path / "offer.json"
+    offer_path.write_text(offer.model_dump_json(), encoding="utf-8")
+    observed: dict[str, object] = {}
+
+    def fake_resume(**kwargs: object) -> dict[str, object]:
+        observed.update(kwargs)
+        return {
+            "action": "resumed",
+            "plan_ref": "UNPLANNED",
+            "session_id": "codex:successor",
+            "coordination_mailbox": {"summary": "no active messages"},
+        }
+
+    monkeypatch.setenv("CODEX_THREAD_ID", "successor")
+    monkeypatch.setattr(resume_cli.session_lifecycle, "resume_session", fake_resume)
+
+    result = resume_cli.main(
+        [
+            "--agent",
+            "codex",
+            "--project",
+            offer.project,
+            "--scope",
+            offer.scope,
+            "--worktree-path",
+            offer.worktree_path,
+            "--branch",
+            offer.branch,
+            "--current-phase",
+            "accept exact successor custody",
+            "--successor-custody-offer",
+            str(offer_path),
+            "--accept-successor-custody-offer",
+            "--json",
+        ]
+    )
+
+    acceptance = observed["successor_custody_acceptance"]
+    assert result == 0
+    assert observed["session_id"] == "codex:successor"
+    assert observed["successor_custody_offer"] == offer
+    assert isinstance(acceptance, SuccessorCustodyAcceptanceV1)
+    assert acceptance.successor_session_id == "codex:successor"
+    assert acceptance.offer_sha256 == successor_custody_offer_sha256(offer)
+
+
+def test_session_resume_cli_refuses_explicit_acceptance_without_offer() -> None:
+    with pytest.raises(ValueError, match="offer and exactly one acceptance mode"):
+        resume_cli.main(
+            [
+                "--agent",
+                "codex",
+                "--project",
+                "demo",
+                "--scope",
+                "feature-lane",
+                "--worktree-path",
+                "/tmp/demo/worktrees/feature-lane",
+                "--branch",
+                "feature-lane",
+                "--current-phase",
+                "accept exact successor custody",
+                "--accept-successor-custody-offer",
+            ]
+        )
 
 
 def test_cli_offer_resolves_claim_epoch_and_exact_git_revision(tmp_path: Path) -> None:

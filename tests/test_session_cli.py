@@ -3433,6 +3433,29 @@ def test_close_session_terminalizes_merged_child_then_parent_closes_shared_workt
     _git(repo_root, "merge", "--no-ff", branch, "-m", "merge feature")
     merge_commit = _git(repo_root, "rev-parse", "HEAD")
 
+    with pytest.raises(ValueError, match="worktree override does not match recorded custody"):
+        _close_session_as_owner(
+            agent="claude-code",
+            project="enforced-planning",
+            scope=child_scope,
+            disposition="merged",
+            merge_commit=merge_commit,
+            worktree_path=str(repo_root),
+            terminalize_shared_child=True,
+        )
+    with pytest.raises(ValueError, match="branch override does not match recorded custody"):
+        _close_session_as_owner(
+            agent="claude-code",
+            project="enforced-planning",
+            scope=child_scope,
+            disposition="merged",
+            merge_commit=merge_commit,
+            branch="different-branch",
+            terminalize_shared_child=True,
+        )
+    assert child_claim_file.exists()
+    assert worktree.exists()
+
     child_result = _close_session_as_owner(
         agent="claude-code",
         project="enforced-planning",

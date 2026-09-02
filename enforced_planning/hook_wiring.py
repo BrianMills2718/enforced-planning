@@ -123,6 +123,7 @@ PREWRITE_SUPPORT_FILES: dict[str, str] = {
     "enforced_planning/repository_authority.py": "enforced_planning/repository_authority.py",
     "enforced_planning/session_contracts.py": "enforced_planning/session_contracts.py",
     "enforced_planning/session_lifecycle.py": "enforced_planning/session_lifecycle.py",
+    "enforced_planning/session_process_fencing.py": "enforced_planning/session_process_fencing.py",
     "enforced_planning/session_target.py": "enforced_planning/session_target.py",
     "enforced_planning/surface_runtime.py": "enforced_planning/surface_runtime.py",
     "enforced_planning/worktree_lifecycle.yaml": "enforced_planning/worktree_lifecycle.yaml",

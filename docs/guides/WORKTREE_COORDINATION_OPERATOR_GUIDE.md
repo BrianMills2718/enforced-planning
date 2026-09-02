@@ -436,10 +436,12 @@ child claim that shares its parent's worktree and branch. Close that child
 first with `session-close --terminalize-shared-child --disposition merged
 --merge-commit <sha>`. The command requires the exact owning session,
 `parent_scope`, one live parent with the same canonical repository, worktree,
-and branch, and ordinary canonical merge ancestry. It archives only the child
-and reports the worktree and branch retained for the parent. Then close the
-parent through ordinary `session-close`; the child flag never removes or
-releases parent-owned Git resources.
+and branch, and ordinary canonical merge ancestry. Worktree or branch arguments
+must equal the child's recorded custody; caller overrides cannot substitute a
+different parent's resources. The command archives only the child and reports
+the worktree and branch retained for the parent. Then close the parent through
+ordinary `session-close`; the child flag never removes or releases parent-owned
+Git resources.
 
 The compatibility `scripts/worktree-coordination/finish_pr.py` path also fails
 closed. It resolves the repository owner through the isolated GitHub-account

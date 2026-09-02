@@ -3590,9 +3590,16 @@ def close_session(
             raise ValueError("Shared child terminalization requires disposition=merged.")
         if not claim.parent_scope:
             raise ValueError("Shared child terminalization requires an exact parent_scope.")
-        if not resolved_worktree_path or not resolved_branch:
+        if not claim.worktree_path or not claim.branch:
             raise ValueError("Shared child terminalization requires exact worktree and branch custody.")
-        canonical_worktree_path = resolved_worktree_path.resolve()
+        recorded_worktree_path = Path(claim.worktree_path).expanduser().resolve()
+        if worktree_path and Path(worktree_path).expanduser().resolve() != recorded_worktree_path:
+            raise ValueError("Shared child worktree override does not match recorded custody.")
+        if branch and branch != claim.branch:
+            raise ValueError("Shared child branch override does not match recorded custody.")
+        resolved_worktree_path = recorded_worktree_path
+        resolved_branch = claim.branch
+        canonical_worktree_path = recorded_worktree_path
         parent_matches = [
             sibling
             for sibling in coordination_claims.check_claims()

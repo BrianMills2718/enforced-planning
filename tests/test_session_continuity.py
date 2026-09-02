@@ -1305,6 +1305,54 @@ def test_accepted_native_delivery_promotes_once_after_transcript_consumption(
     assert records[-1]["runtime_consumed"] is True
 
 
+def test_reconciliation_only_cli_reports_receipts_without_delivery(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    receipt_path = tmp_path / "receipts.jsonl"
+    correlation = "a" * 24
+    receipt_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "1.0",
+                "record_type": "native_codex_resume_consumption",
+                "owner_session_id": "codex:01a05b94-d5d8-7d82-8a9a-6c64c6979e96",
+                "thread_id": "01a05b94-d5d8-7d82-8a9a-6c64c6979e96",
+                "correlation_id": correlation,
+                "queued_submission_id": "01a0608f-1498-7413-b469-3e538a9bf171",
+                "transcript_path": "/tmp/session.jsonl",
+                "consumed_at": NOW.isoformat(),
+                "evidence_event": "correlated_user_message",
+                "runtime_consumed": True,
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        continuity_cli,
+        "deliver_native_resume_offers",
+        lambda **_kwargs: pytest.fail("reconciliation-only mode must not deliver"),
+    )
+
+    assert continuity_cli.main(
+        [
+            "--reconcile-native-resume-consumption",
+            "--receipt-jsonl",
+            str(receipt_path),
+            "--json",
+        ]
+    ) == 0
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["record_type"] == "native_resume_consumption_reconciliation"
+    assert payload["consumed_count"] == 1
+    assert payload["consumed_correlations"] == [correlation]
+    assert payload["native_queue_invoked"] is False
+    assert payload["successor_launch_allowed"] is False
+
+
 def test_two_consumed_attempts_without_progress_reach_typed_circuit_breaker(
     tmp_path: Path,
 ) -> None:

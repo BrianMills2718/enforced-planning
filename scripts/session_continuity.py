@@ -76,6 +76,11 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Install one shared timer that queues bounded exact-owner Codex resume prompts.",
     )
+    mode.add_argument(
+        "--reconcile-native-resume-consumption",
+        action="store_true",
+        help="Reconcile and report exact transcript consumption without scanning or queuing.",
+    )
     parser.add_argument("--agent", default="codex", choices=("codex",))
     parser.add_argument("--project")
     parser.add_argument("--scope")
@@ -134,12 +139,24 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         not args.scan_all_live_claims
         and not args.install_observe_timer
         and not args.install_native_delivery_timer
+        and not args.reconcile_native_resume_consumption
         and (not args.project or not args.scope)
     ):
         parser.error("exact assessment requires --project and --scope")
     if args.scan_all_live_claims and (args.project or args.scope):
         parser.error("--scan-all-live-claims cannot be combined with --project or --scope")
-    if (args.scan_all_live_claims or args.install_observe_timer or args.install_native_delivery_timer) and (
+    if args.reconcile_native_resume_consumption and (
+        args.project or args.scope or args.deliver_native_resume_offers
+    ):
+        parser.error(
+            "--reconcile-native-resume-consumption cannot assess claims or deliver prompts"
+        )
+    if (
+        args.scan_all_live_claims
+        or args.install_observe_timer
+        or args.install_native_delivery_timer
+        or args.reconcile_native_resume_consumption
+    ) and (
         args.send_resume_offer
         or args.queue_native_resume_offer
         or args.resume_offer_message_id
@@ -731,6 +748,27 @@ def run_native_delivery_sweep(
         return payload
 
 
+def run_native_consumption_reconciliation(*, receipt_path: Path) -> dict[str, Any]:
+    """Reconcile exact owner turns and report all durable receipts without delivery."""
+
+    with _exclusive_sweep(receipt_path):
+        newly_reconciled = reconcile_native_resume_consumption(receipt_path=receipt_path)
+        consumed = _native_consumption_receipts(receipt_path)
+        payload = {
+            "schema_version": "1.0",
+            "record_type": "native_resume_consumption_reconciliation",
+            "observed_at": datetime.now(UTC).isoformat(),
+            "newly_reconciled": newly_reconciled,
+            "consumed_count": len(consumed),
+            "consumed_correlations": sorted(consumed),
+            "native_queue_invoked": False,
+            "successor_launch_allowed": False,
+            "transfer_eligible": False,
+        }
+        _append_receipt(receipt_path, payload)
+        return payload
+
+
 def render_observe_timer(
     *,
     script_path: Path,
@@ -896,6 +934,12 @@ def install_observe_timer(
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
+    if args.reconcile_native_resume_consumption:
+        payload = run_native_consumption_reconciliation(
+            receipt_path=args.receipt_jsonl
+        )
+        print(json.dumps(payload, indent=2, sort_keys=True))
+        return 0
     if args.install_observe_timer or args.install_native_delivery_timer:
         payload = install_observe_timer(
             unit_dir=args.unit_dir,

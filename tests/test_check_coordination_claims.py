@@ -4660,6 +4660,8 @@ def test_check_json_outputs_claims_and_candidate_conflict_classification(
     module = _load_module()
     claims_dir = tmp_path / "claims"
     monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
+    last_active_at = datetime(2026, 4, 2, 8, 30, tzinfo=timezone.utc)
+    monkeypatch.setattr(claims_impl, "session_last_active_at", lambda _session_id: last_active_at)
     _write_claim(
         claims_dir,
         "existing.yaml",
@@ -4712,6 +4714,9 @@ def test_check_json_outputs_claims_and_candidate_conflict_classification(
     assert payload["check"]["has_hard_conflict"] is True
     assert payload["check"]["candidate_health_status"] == "weak"
     assert payload["check"]["interactions"][0]["severity"] == "hard_conflict"
+    assert payload["check"]["interactions"][0]["other_session_last_active_at"] == (
+        "2026-04-02T08:30:00+00:00"
+    )
 
 
 def test_check_json_outputs_stale_session_liveness_issue(

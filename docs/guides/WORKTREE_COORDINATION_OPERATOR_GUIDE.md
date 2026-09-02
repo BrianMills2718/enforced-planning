@@ -182,11 +182,15 @@ Codex-to-Codex custody transfer additionally requires
 proves that exact PID is a direct Codex resume of the predecessor session, is
 using the successor runtime's exact Codex executable, and has the claimed
 worktree as its current directory. It binds `/proc` start ticks against PID
-reuse, terminates only that PID with bounded TERM/KILL escalation, proves exit,
-and writes an immutable mode-0600 process-fence receipt. The custody-transfer
-receipt embeds the exact fence receipt path and SHA-256. Missing, ambiguous, or
-mismatched process identity fails before the claim or tracker changes; never
-replace this exact-PID contract with a process-name-wide kill.
+reuse, opens an exact kernel pidfd before validation, and sends bounded
+TERM/KILL escalation only through that handle. Before signaling, it fsyncs a
+deterministic active intent. After a confirmed exit it atomically finalizes an
+immutable mode-0600 process-fence receipt; retry either resumes the same
+start-tick identity or finalizes an already-absent/replaced predecessor without
+signaling the replacement. The custody-transfer receipt embeds the exact fence
+receipt path and SHA-256. Missing, ambiguous, or mismatched process identity
+fails before the claim or tracker changes; never replace this contract with a
+process-name-wide kill.
 
 The legacy `~/.claude/coordination/active-work-registry.yaml` and tracked
 `generated/runtime/active_work_registry.*` files may survive as compatibility,

@@ -138,7 +138,8 @@ def test_fence_fails_closed_when_exact_process_does_not_exit(tmp_path: Path) -> 
         )
 
     assert signals == [(99, signal.SIGTERM), (99, signal.SIGKILL)]
-    assert not (tmp_path / "receipts").exists()
+    assert list((tmp_path / "receipts" / "intents").glob("*.json"))
+    assert not list((tmp_path / "receipts").glob("*.json"))
 
 
 def test_fence_rejects_ambiguous_display_name(tmp_path: Path) -> None:
@@ -252,6 +253,91 @@ def test_pid_reuse_at_signal_boundary_cannot_receive_signal(tmp_path: Path) -> N
     assert replacement_signals == []
     assert result["signal"] == "SIGTERM"
     assert Path(str(result["receipt_path"])).is_file()
+
+
+def test_receipt_write_failure_after_exit_retries_from_durable_intent(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    proc_root, _pid_root, session_index, worktree = _fake_process(tmp_path)
+    receipt_root = tmp_path / "receipts"
+    signals, pidfd_controls = _pidfd_controls(exit_on=signal.SIGTERM)
+    original_write = session_process_fencing._write_durable_exclusive
+    failed_final_write = False
+
+    def fail_first_final_write(path: Path, payload: bytes) -> None:
+        nonlocal failed_final_write
+        if path.parent == receipt_root and not failed_final_write:
+            failed_final_write = True
+            raise OSError("injected final receipt write failure")
+        original_write(path, payload)
+
+    monkeypatch.setattr(
+        session_process_fencing, "_write_durable_exclusive", fail_first_final_write
+    )
+    with pytest.raises(OSError, match="injected final receipt write failure"):
+        fence_predecessor_process(
+            predecessor_session_id="codex:old-session",
+            successor_session_id="codex:new-session",
+            worktree_path=str(worktree),
+            predecessor_pid=4242,
+            proc_root=proc_root,
+            session_index=session_index,
+            receipt_root=receipt_root,
+            trusted_codex_executable=tmp_path / "bin" / "codex",
+            **pidfd_controls,
+        )
+
+    assert signals == [(99, signal.SIGTERM)]
+    assert list((receipt_root / "intents").glob("*.json"))
+    assert not list(receipt_root.glob("*.json"))
+
+    retry = fence_predecessor_process(
+        predecessor_session_id="codex:old-session",
+        successor_session_id="codex:new-session",
+        worktree_path=str(worktree),
+        predecessor_pid=4242,
+        proc_root=proc_root,
+        session_index=session_index,
+        receipt_root=receipt_root,
+        trusted_codex_executable=tmp_path / "bin" / "codex",
+        open_pidfd=lambda _pid: (_ for _ in ()).throw(ProcessLookupError()),
+        signal_pidfd=lambda _pidfd, _signal: pytest.fail("retry must not signal"),
+        pidfd_exited=lambda _pidfd, _timeout: True,
+        close_pidfd=lambda _pidfd: None,
+    )
+
+    assert retry["signal"] == "RECOVERED_ABSENT_AFTER_INTENT"
+    assert Path(str(retry["receipt_path"])).is_file()
+
+
+def test_completed_fence_retry_is_idempotent_without_opening_pidfd(tmp_path: Path) -> None:
+    proc_root, _pid_root, session_index, worktree = _fake_process(tmp_path)
+    controls_signals, pidfd_controls = _pidfd_controls(exit_on=signal.SIGTERM)
+    first = fence_predecessor_process(
+        predecessor_session_id="codex:old-session",
+        successor_session_id="codex:new-session",
+        worktree_path=str(worktree),
+        predecessor_pid=4242,
+        proc_root=proc_root,
+        session_index=session_index,
+        receipt_root=tmp_path / "receipts",
+        trusted_codex_executable=tmp_path / "bin" / "codex",
+        **pidfd_controls,
+    )
+    second = fence_predecessor_process(
+        predecessor_session_id="codex:old-session",
+        successor_session_id="codex:new-session",
+        worktree_path=str(worktree),
+        predecessor_pid=4242,
+        proc_root=proc_root,
+        session_index=session_index,
+        receipt_root=tmp_path / "receipts",
+        trusted_codex_executable=tmp_path / "bin" / "codex",
+        open_pidfd=lambda _pid: pytest.fail("completed retry must not open pidfd"),
+    )
+
+    assert controls_signals == [(99, signal.SIGTERM)]
+    assert second["receipt_sha256"] == first["receipt_sha256"]
 
 
 def test_trusted_codex_skips_inaccessible_intermediate_ancestor(

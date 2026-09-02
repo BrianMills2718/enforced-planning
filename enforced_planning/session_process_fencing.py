@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import secrets
 import select
 import signal
 from collections.abc import Callable
@@ -48,8 +49,50 @@ class ProcessFenceReceiptV1(BaseModel):
     pid: int = Field(gt=1)
     process_start_ticks: int = Field(ge=1)
     command_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
-    signal: Literal["SIGTERM", "SIGTERM+SIGKILL"] = "SIGTERM"
+    signal: Literal["SIGTERM", "SIGTERM+SIGKILL", "RECOVERED_ABSENT_AFTER_INTENT"] = "SIGTERM"
     fenced_at: datetime
+
+
+class ProcessFenceIntentV1(BaseModel):
+    """Durable pre-signal identity used to recover an interrupted fence."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    schema_version: Literal["1.0"] = "1.0"
+    record_type: Literal["session_predecessor_process_fence_intent"] = (
+        "session_predecessor_process_fence_intent"
+    )
+    predecessor_session_id: str = Field(min_length=1)
+    successor_session_id: str = Field(min_length=1)
+    worktree_path: str = Field(min_length=1)
+    pid: int = Field(gt=1)
+    process_start_ticks: int = Field(ge=1)
+    command_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    created_at: datetime
+
+
+def _write_durable_exclusive(path: Path, payload: bytes) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.parent / f".{path.name}.{os.getpid()}.{secrets.token_hex(8)}.tmp"
+    descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        with os.fdopen(descriptor, "wb") as handle:
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.link(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
+    for directory in (path.parent, path.parent.parent, path.parent.parent.parent):
+        directory_fd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(directory_fd)
+        finally:
+            os.close(directory_fd)
+
+
+def _load_json_model(path: Path, model: type[BaseModel]) -> BaseModel:
+    return model.model_validate_json(path.read_text(encoding="utf-8"))
 
 
 def _read_start_ticks(stat_path: Path) -> int:
@@ -176,12 +219,103 @@ def fence_predecessor_process(
     if predecessor_pid <= 1 or predecessor_pid in _current_ancestor_pids(proc_root):
         raise ValueError("refusing to fence the current successor process or one of its ancestors")
     canonical_worktree = Path(worktree_path).expanduser().resolve(strict=True)
+    receipt_root = receipt_root.expanduser().resolve()
+    request_bytes = json.dumps(
+        {
+            "predecessor_session_id": predecessor_session_id,
+            "successor_session_id": successor_session_id,
+            "worktree_path": str(canonical_worktree),
+            "pid": predecessor_pid,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    intent_id = hashlib.sha256(request_bytes).hexdigest()
+    intent_path = receipt_root / "intents" / f"{intent_id}.json"
+    receipt_path = receipt_root / f"{intent_id}.json"
+
+    def validate_request_binding(record: ProcessFenceIntentV1 | ProcessFenceReceiptV1) -> None:
+        if (
+            record.predecessor_session_id != predecessor_session_id
+            or record.successor_session_id != successor_session_id
+            or record.worktree_path != str(canonical_worktree)
+            or record.pid != predecessor_pid
+        ):
+            raise RuntimeError("persisted process-fence state does not match this exact request")
+
+    def completed_result() -> dict[str, object] | None:
+        if not receipt_path.exists():
+            return None
+        if intent is None:
+            raise RuntimeError("completed process-fence receipt lacks its durable intent")
+        receipt = ProcessFenceReceiptV1.model_validate_json(
+            receipt_path.read_text(encoding="utf-8")
+        )
+        validate_request_binding(receipt)
+        if (
+            receipt.process_start_ticks != intent.process_start_ticks
+            or receipt.command_sha256 != intent.command_sha256
+        ):
+            raise RuntimeError("completed process-fence receipt does not match its durable intent")
+        return {
+            **receipt.model_dump(mode="json"),
+            "receipt_path": str(receipt_path),
+            "receipt_sha256": hashlib.sha256(receipt_path.read_bytes()).hexdigest(),
+        }
+
+    intent = (
+        ProcessFenceIntentV1.model_validate_json(intent_path.read_text(encoding="utf-8"))
+        if intent_path.exists()
+        else None
+    )
+    if intent is not None:
+        validate_request_binding(intent)
+
+    already_completed = completed_result()
+    if already_completed is not None:
+        return already_completed
+
+    def finalize(
+        active_intent: ProcessFenceIntentV1,
+        final_signal: Literal[
+            "SIGTERM", "SIGTERM+SIGKILL", "RECOVERED_ABSENT_AFTER_INTENT"
+        ],
+    ) -> dict[str, object]:
+        receipt = ProcessFenceReceiptV1(
+            predecessor_session_id=active_intent.predecessor_session_id,
+            successor_session_id=active_intent.successor_session_id,
+            worktree_path=active_intent.worktree_path,
+            pid=active_intent.pid,
+            process_start_ticks=active_intent.process_start_ticks,
+            command_sha256=active_intent.command_sha256,
+            signal=final_signal,
+            fenced_at=datetime.now(UTC),
+        )
+        serialized = receipt.model_dump_json(indent=2).encode("utf-8") + b"\n"
+        try:
+            _write_durable_exclusive(receipt_path, serialized)
+        except FileExistsError:
+            pass
+        completed = completed_result()
+        if completed is None:
+            raise RuntimeError("process-fence receipt was not durably finalized")
+        return completed
+
     pid_root = proc_root / str(predecessor_pid)
-    pidfd = open_pidfd(predecessor_pid)
+    try:
+        pidfd = open_pidfd(predecessor_pid)
+    except ProcessLookupError:
+        if intent is None:
+            raise
+        return finalize(intent, "RECOVERED_ABSENT_AFTER_INTENT")
     try:
         if pidfd_exited(pidfd, 0):
+            if intent is not None:
+                return finalize(intent, "RECOVERED_ABSENT_AFTER_INTENT")
             raise RuntimeError("exact predecessor process exited before identity validation")
         start_ticks = _read_start_ticks(pid_root / "stat")
+        if intent is not None and start_ticks != intent.process_start_ticks:
+            return finalize(intent, "RECOVERED_ABSENT_AFTER_INTENT")
         predecessor_worktree = pid_root.joinpath("cwd").resolve(strict=True)
         if predecessor_worktree != canonical_worktree:
             raise ValueError("predecessor PID is not running in the exact claimed worktree")
@@ -199,7 +333,35 @@ def fence_predecessor_process(
         if _read_start_ticks(pid_root / "stat") != start_ticks:
             raise RuntimeError("predecessor PID was reused before it could be signalled")
         if pidfd_exited(pidfd, 0):
+            if intent is not None:
+                return finalize(intent, "RECOVERED_ABSENT_AFTER_INTENT")
             raise RuntimeError("exact predecessor process exited during identity validation")
+
+        if intent is None:
+            intent = ProcessFenceIntentV1(
+                predecessor_session_id=predecessor_session_id,
+                successor_session_id=successor_session_id,
+                worktree_path=str(canonical_worktree),
+                pid=predecessor_pid,
+                process_start_ticks=start_ticks,
+                command_sha256=command_sha256,
+                created_at=datetime.now(UTC),
+            )
+            try:
+                _write_durable_exclusive(
+                    intent_path,
+                    intent.model_dump_json(indent=2).encode("utf-8") + b"\n",
+                )
+            except FileExistsError:
+                persisted_intent = ProcessFenceIntentV1.model_validate_json(
+                    intent_path.read_text(encoding="utf-8")
+                )
+                validate_request_binding(persisted_intent)
+                if persisted_intent != intent:
+                    raise RuntimeError("concurrent process-fence intent has different identity")
+                intent = persisted_intent
+        elif intent.command_sha256 != command_sha256:
+            raise RuntimeError("live predecessor command does not match durable fence intent")
 
         signal_pidfd(pidfd, signal.SIGTERM)
         final_signal: Literal["SIGTERM", "SIGTERM+SIGKILL"] = "SIGTERM"
@@ -210,32 +372,7 @@ def fence_predecessor_process(
                 raise RuntimeError("exact predecessor process did not exit after SIGKILL")
     finally:
         close_pidfd(pidfd)
-
-    receipt = ProcessFenceReceiptV1(
-        predecessor_session_id=predecessor_session_id,
-        successor_session_id=successor_session_id,
-        worktree_path=str(canonical_worktree),
-        pid=predecessor_pid,
-        process_start_ticks=start_ticks,
-        command_sha256=command_sha256,
-        signal=final_signal,
-        fenced_at=datetime.now(UTC),
-    )
-    serialized = receipt.model_dump_json(indent=2).encode("utf-8") + b"\n"
-    receipt_root = receipt_root.expanduser().resolve()
-    receipt_root.mkdir(parents=True, exist_ok=True)
-    receipt_id = hashlib.sha256(serialized).hexdigest()
-    receipt_path = receipt_root / f"{receipt_id}.json"
-    descriptor = os.open(receipt_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    with os.fdopen(descriptor, "wb") as handle:
-        handle.write(serialized)
-        handle.flush()
-        os.fsync(handle.fileno())
-    return {
-        **receipt.model_dump(mode="json"),
-        "receipt_path": str(receipt_path),
-        "receipt_sha256": hashlib.sha256(receipt_path.read_bytes()).hexdigest(),
-    }
+    return finalize(intent, final_signal)
 
 
-__all__ = ["ProcessFenceReceiptV1", "fence_predecessor_process"]
+__all__ = ["ProcessFenceIntentV1", "ProcessFenceReceiptV1", "fence_predecessor_process"]

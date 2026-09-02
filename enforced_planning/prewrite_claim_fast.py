@@ -1265,7 +1265,9 @@ def evaluate_request_fast(
             details=(str(target_error),) if target_error else (),
             recovery=(
                 "Create one healthy claim for this native session with the exact typed maintenance_worktree "
-                "claim-bootstrap transaction, or close duplicate claims before mutating."
+                "claim-bootstrap transaction, or close duplicate claims before mutating. The raw Bash "
+                "bootstrap form must start with /usr/bin/python3 and the installed canonical "
+                "scripts/claim_bootstrap.py; bare python3 is intentionally not admitted."
             ),
         )
         _record_receipt(receipt_path, result)

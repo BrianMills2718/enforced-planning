@@ -2065,6 +2065,12 @@ def test_workspace_root_child_cannot_borrow_parent_claim(
 
     assert code == 2
     assert decision["reason_code"] == "no_exact_session_target"
+    assert decision["recovery"] == (
+        "Create one healthy claim for this native session with the exact typed maintenance_worktree "
+        "claim-bootstrap transaction, or close duplicate claims before mutating. The raw Bash "
+        "bootstrap form must start with /usr/bin/python3 and the installed canonical "
+        "scripts/claim_bootstrap.py; bare python3 is intentionally not admitted."
+    )
 
 
 @pytest.mark.parametrize(

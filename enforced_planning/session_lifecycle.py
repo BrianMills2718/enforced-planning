@@ -1478,6 +1478,7 @@ def _upsert_session_claim(
     staged_reservation: coordination_claims.ClaimRecord | None = None,
     maintenance_snapshot: _MaintenanceRefreshSnapshot | None = None,
     registry_lock_held: bool = False,
+    verified_goal_default_revision: str | None = None,
 ) -> str:
     """Create or update the compact claim-side session contract metadata."""
 
@@ -1514,6 +1515,7 @@ def _upsert_session_claim(
             broad_scope_reason=broad_scope_reason,
             target_worktree_path=target_worktree_path,
             require_native_session_binding=True,
+            verified_goal_default_revision=verified_goal_default_revision,
         )
         if not ok:
             raise ValueError(message)
@@ -2606,6 +2608,7 @@ def start_session(
     outcome_selected: bool = False,
     outcome_bootstrap_plan: int | None = None,
     outcome_admission_receipt_path: Path = (outcome_admission.DEFAULT_OUTCOME_ADMISSION_RECEIPT_PATH),
+    verified_goal_default_revision: str | None = None,
 ) -> dict[str, Any]:
     """Create or refresh the session contract plus linked tracker artifact."""
 
@@ -2828,6 +2831,7 @@ def start_session(
             staged_reservation=staged_reservation,
             maintenance_snapshot=maintenance_snapshot,
             registry_lock_held=registry_lock_held,
+            verified_goal_default_revision=verified_goal_default_revision,
         )
 
     existing_action: str | None = None

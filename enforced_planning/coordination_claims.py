@@ -2902,8 +2902,11 @@ def create_claim(
     broad_scope_mode: str | None = None,
     broad_scope_reason: str | None = None,
     target_worktree_path: str | None = None,
+    verified_goal_default_revision: str | None = None,
 ) -> tuple[bool, str]:
     """Create a new claim after checking for hard conflicts."""
+    if verified_goal_default_revision is not None and not is_goal_authority_ref(plan_ref):
+        raise ValueError("verified goal default revision is valid only for goal-bound ownership")
     now = datetime.now(timezone.utc)
     initial_progress = build_progress_event(
         progress_kind="claim_started",
@@ -2991,6 +2994,35 @@ def create_claim(
             )
         validate_start_revision_targets(
             repo_root=repo_root,
+            start_revision=start_revision,
+            branch=branch,
+            worktree_path=worktree_path,
+            require_branch=tracker_path is not None,
+            require_worktree=tracker_path is not None,
+        )
+    elif write_paths and is_goal_authority_ref(plan_ref):
+        if not repo_root:
+            raise ValueError("Goal-bound write ownership requires --repo-root for revision custody")
+        root = Path(repo_root).expanduser().resolve()
+        start_revision = _resolve_commit(root, start_point, label="goal worktree start")
+        default_revision = (
+            verified_goal_default_revision
+            if verified_goal_default_revision is not None
+            else resolve_default_integration_revision(root)
+        )
+        if verified_goal_default_revision is not None and not (tracker_path and branch and worktree_path):
+            raise ValueError(
+                "verified goal default revision requires one exact tracker, branch, and worktree transaction"
+            )
+        if START_REVISION_PATTERN.fullmatch(default_revision) is None:
+            raise ValueError("verified goal default revision must be one full lowercase Git object ID")
+        if start_revision != default_revision:
+            raise ValueError(
+                f"new goal-bound claim start revision {start_revision} is not canonical "
+                f"default-integration tip {default_revision}"
+            )
+        validate_start_revision_targets(
+            repo_root=root,
             start_revision=start_revision,
             branch=branch,
             worktree_path=worktree_path,

@@ -333,6 +333,16 @@ and refresh the pre-write projection in the same locked mutation.
    In sanctioned repos use
    `make worktree BRANCH=... TASK="..." [PLAN=N]`; do not create new lanes in
    `~/worktrees/`, `_worktrees/`, `<repo>_worktrees/`, or ad hoc sibling paths.
+   For an active long-running `/goal` that does not need a numbered work graph,
+   use `make goal-worktree BRANCH=... GOAL_REF=goal:<stable-id>
+   SESSION_GOAL="..." SESSION_PHASE="..." [SESSION_NEXT="..."]
+   [SESSION_WRITE_PATHS="..."]`. This is a single typed transaction: it fetches
+   the declared canonical remote, pins the branch, worktree, claim, and tracker
+   to that exact default-integration revision, and preserves the `goal:`
+   authority without inventing a work graph. If write paths are not yet known,
+   the temporary repository-wide bootstrap scope must be narrowed before the
+   first scoped write. A stale local default branch, malformed goal reference,
+   or lifecycle failure leaves no partially owned lane.
    For bounded light maintenance without a numbered plan, use
    `make maintenance-worktree BRANCH=<name>`; the Make target builds one typed
    `maintenance_worktree` request and delegates claim, worktree, tracker, and

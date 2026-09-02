@@ -372,13 +372,39 @@ def _validate_session_ended_closeout_reconciliation(
     expected_claim_sha256: str | None,
     expected_tracker_sha256: str | None,
 ) -> dict[str, str]:
-    """Authorize terminal closeout without transferring predecessor write custody."""
+    """Authorize terminal closeout without transferring predecessor write custody.
 
-    resolved_actor = coordination_claims.resolve_session_id(claim.agent, actor_session_id)
+    The actor identity and native-runtime marker are resolved against the
+    ACTING client -- parsed from ``actor_session_id``'s own ``<agent>:`` prefix
+    -- never ``claim.agent``, the predecessor's client. ``close_session()``'s
+    outer ``agent`` argument cannot serve this purpose: it selects which
+    agent-keyed claim file to load and must stay bound to the claim's own
+    owner (``claim.agent``) even during cross-client reconciliation. The
+    operator guide's own "exact ownerless session-ended closeout" section
+    describes this path as "a different native runtime" inheriting a stranded
+    lane; binding the native-marker check to claim.agent instead made that
+    structurally impossible -- a Claude Code session closing a stranded Codex
+    claim was checked for a live Codex native marker it can never have, and
+    refused with a message only a Codex runtime could satisfy
+    (lrn-20260902T182546895692Z-f56b908b6b).
+    """
+
+    if not actor_session_id or ":" not in actor_session_id:
+        raise ValueError(
+            "Session-ended closeout reconciliation requires an exact actor_session_id "
+            "in '<agent>:<value>' form"
+        )
+    acting_agent = actor_session_id.split(":", 1)[0]
+    if acting_agent not in coordination_claims.SUPPORTED_AGENTS:
+        raise ValueError(
+            f"Session-ended closeout reconciliation actor_session_id names an unsupported "
+            f"agent {acting_agent!r}"
+        )
+    resolved_actor = coordination_claims.resolve_session_id(acting_agent, actor_session_id)
     if not resolved_actor:
         raise ValueError("Session-ended closeout reconciliation requires an exact actor_session_id")
     coordination_claims.validate_native_session_binding(
-        claim.agent,
+        acting_agent,
         resolved_actor,
         require_native_marker=True,
     )

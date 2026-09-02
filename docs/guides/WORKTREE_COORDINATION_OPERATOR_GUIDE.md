@@ -1825,6 +1825,15 @@ and invalid Git evidence before lifecycle mutation. Unmerged work that must
 continue still requires the sanctioned custody-transfer path and its process
 fencing.
 
+The acting client does not have to match the stranded claim's own client: a
+Claude Code session may terminally close a stranded Codex lane, and vice
+versa. The native-runtime marker required above is the *acting* client's own
+marker (parsed from `--session-id`'s `<agent>:` prefix), never the
+predecessor's -- binding it to the predecessor's client made cross-client
+reconciliation structurally impossible until fixed
+(lrn-20260902T182546895692Z-f56b908b6b), since the acting client can never
+present a native marker belonging to a different tool.
+
 Explicit archive closeout for an unmerged branch whose exact tip remains on a
 durable remote or tag ref:
 

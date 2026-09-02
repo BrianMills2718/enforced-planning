@@ -180,6 +180,7 @@ def _aware_timestamp(value: object) -> datetime | None:
 def read_codex_activity(*, session_id: str, transcript_path: Path) -> CodexActivityV1:
     """Read the latest task boundary; malformed transcript records fail visibly."""
 
+    expected_thread_id = session_id.removeprefix("codex:")
     latest_event: Literal["task_started", "task_complete", "turn_aborted"] | None = None
     latest_boundary_at: datetime | None = None
     latest_record_at: datetime | None = None
@@ -210,6 +211,8 @@ def read_codex_activity(*, session_id: str, transcript_path: Path) -> CodexActiv
                         raise ValueError(
                             f"Codex session metadata is invalid at line {line_number}"
                         )
+                    if payload.get("id") != expected_thread_id:
+                        continue
                     source = payload.get("thread_source")
                     thread_source = (
                         source if source in {"user", "subagent"} else "unknown"

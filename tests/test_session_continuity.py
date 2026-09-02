@@ -14,12 +14,16 @@ import pytest
 from enforced_planning import coordination_messages
 from enforced_planning.session_continuity import (
     CodexActivityV1,
+    SuccessorCustodyOfferV1,
+    accept_successor_custody_offer,
     assess_continuity,
     assess_resume_offer,
     build_native_codex_resume_offer,
     build_resume_offer_request,
+    build_successor_custody_offer,
     parse_native_codex_queue_receipt,
     read_codex_activity,
+    successor_custody_offer_sha256,
 )
 from scripts import session_continuity as continuity_cli
 
@@ -356,6 +360,151 @@ def test_delivered_unanswered_offer_allows_successor_launch_not_transfer() -> No
     assert review.successor_launch_allowed is True
     assert review.transfer_eligible is False
     assert "must accept exact claim" in review.resume_condition
+
+
+def successor_custody_offer() -> SuccessorCustodyOfferV1:
+    assessment = assess_continuity(
+        claim=Claim(), activity=activity("between_turns", 31), now=NOW
+    )
+    review = assess_resume_offer(
+        assessment=assessment,
+        status=offer_status(delivered=True),
+        now=NOW,
+    )
+    return build_successor_custody_offer(
+        review=review,
+        project="demo",
+        scope="feature-lane",
+        branch="feat/example",
+        worktree_path="/tmp/demo/worktrees/feat/example",
+        claim_epoch_sha256="c" * 64,
+        head_revision="d" * 40,
+        next_action="run the focused integration",
+        created_at=NOW,
+    )
+
+
+def test_successor_offer_freezes_exact_recoverable_custody() -> None:
+    offer = successor_custody_offer()
+
+    assert offer.offer_id == "875e78a8ddd0890b386bc038"
+    assert offer.predecessor_session_id == "codex:owner"
+    assert offer.owner_resume_message_id == "msg_" + "a" * 32
+    assert offer.project == "demo"
+    assert offer.scope == "feature-lane"
+    assert offer.branch == "feat/example"
+    assert offer.worktree_path == "/tmp/demo/worktrees/feat/example"
+    assert offer.claim_epoch_sha256 == "c" * 64
+    assert offer.head_revision == "d" * 40
+    assert offer.next_action == "run the focused integration"
+
+
+def test_different_successor_accepts_every_exact_offer_field() -> None:
+    offer = successor_custody_offer()
+
+    acceptance = accept_successor_custody_offer(
+        offer=offer,
+        successor_session_id="codex:successor",
+        project=offer.project,
+        scope=offer.scope,
+        branch=offer.branch,
+        worktree_path=offer.worktree_path,
+        claim_epoch_sha256=offer.claim_epoch_sha256,
+        head_revision=offer.head_revision,
+        next_action=offer.next_action,
+        accepted_at=NOW + timedelta(minutes=1),
+    )
+
+    assert acceptance.disposition == "successor_accepted"
+    assert acceptance.offer_id == offer.offer_id
+    assert acceptance.offer_sha256 == successor_custody_offer_sha256(offer)
+    assert acceptance.successor_session_id == "codex:successor"
+
+
+@pytest.mark.parametrize(
+    ("field", "wrong"),
+    [
+        ("project", "other"),
+        ("scope", "other"),
+        ("branch", "other"),
+        ("worktree_path", "/tmp/other"),
+        ("claim_epoch_sha256", "e" * 64),
+        ("head_revision", "e" * 40),
+        ("next_action", "do something else"),
+    ],
+)
+def test_successor_acceptance_rejects_any_changed_custody_field(
+    field: str,
+    wrong: str,
+) -> None:
+    offer = successor_custody_offer()
+    observed = {
+        "project": offer.project,
+        "scope": offer.scope,
+        "branch": offer.branch,
+        "worktree_path": offer.worktree_path,
+        "claim_epoch_sha256": offer.claim_epoch_sha256,
+        "head_revision": offer.head_revision,
+        "next_action": offer.next_action,
+    }
+    observed[field] = wrong
+
+    with pytest.raises(ValueError, match=field):
+        accept_successor_custody_offer(
+            offer=offer,
+            successor_session_id="codex:successor",
+            **observed,
+        )
+
+
+def test_predecessor_cannot_self_accept_successor_offer() -> None:
+    offer = successor_custody_offer()
+
+    with pytest.raises(ValueError, match="different exact session"):
+        accept_successor_custody_offer(
+            offer=offer,
+            successor_session_id=offer.predecessor_session_id,
+            project=offer.project,
+            scope=offer.scope,
+            branch=offer.branch,
+            worktree_path=offer.worktree_path,
+            claim_epoch_sha256=offer.claim_epoch_sha256,
+            head_revision=offer.head_revision,
+            next_action=offer.next_action,
+        )
+
+
+def test_cli_offer_resolves_claim_epoch_and_exact_git_revision(tmp_path: Path) -> None:
+    claim_file = tmp_path / "claim.yaml"
+    claim_file.write_text("status: handoff\n", encoding="utf-8")
+    claim = SweepClaim(
+        session_id="codex:owner",
+        scope="feature-lane",
+    )
+    claim.source_file = str(claim_file)
+    claim.worktree_path = str(tmp_path / "worktree")
+    claim.branch = "feat/example"
+    review = assess_resume_offer(
+        assessment=assess_continuity(
+            claim=Claim(), activity=activity("between_turns", 31), now=NOW
+        ),
+        status=offer_status(delivered=True),
+        now=NOW,
+    )
+
+    offer = continuity_cli.build_successor_offer_for_claim(
+        review=review,
+        claim=claim,
+        run=lambda command, **_kwargs: subprocess.CompletedProcess(
+            command, 0, "d" * 40 + "\n", ""
+        ),
+    )
+
+    assert offer.claim_epoch_sha256 == __import__("hashlib").sha256(
+        claim_file.read_bytes()
+    ).hexdigest()
+    assert offer.head_revision == "d" * 40
+    assert offer.worktree_path == str((tmp_path / "worktree").resolve())
 
 
 def test_owner_acknowledgement_retains_current_custody() -> None:

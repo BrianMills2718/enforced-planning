@@ -185,6 +185,7 @@ def build_codex_command(
     repo_root: Path,
     output_schema: Path,
     output_path: Path,
+    writable_directory: Path | None = None,
     model: str | None,
     effort: str,
 ) -> tuple[str, ...]:
@@ -195,7 +196,9 @@ def build_codex_command(
         "--ephemeral",
         "--ignore-user-config",
         "--sandbox",
-        "read-only",
+        "workspace-write",
+        "--add-dir",
+        str(writable_directory or output_path.parent),
         "--config",
         f'model_reasoning_effort="{effort}"',
         "--cd",
@@ -208,8 +211,33 @@ def build_codex_command(
         "-",
     ]
     if model:
-        command[6:6] = ["--model", model]
+        command[8:8] = ["--model", model]
     return tuple(command)
+
+
+def _mount_aliases_for(path: Path) -> tuple[Path, ...]:
+    device = path.stat().st_dev
+    device_id = f"{os.major(device)}:{os.minor(device)}"
+    aliases: set[Path] = {path}
+    mountinfo = Path("/proc/self/mountinfo").read_text(encoding="utf-8")
+    for line in mountinfo.splitlines():
+        fields = line.split()
+        if len(fields) < 5 or fields[2] != device_id or fields[3] != "/":
+            continue
+        mount_path = fields[4]
+        for escaped, decoded in (
+            (r"\040", " "),
+            (r"\011", "\t"),
+            (r"\012", "\n"),
+            (r"\134", "\\"),
+        ):
+            mount_path = mount_path.replace(escaped, decoded)
+        candidate = Path(mount_path)
+        if candidate.is_dir():
+            aliases.add(candidate)
+    if any(any(character.isspace() for character in str(alias)) for alias in aliases):
+        raise RuntimeError("host user-runtime mount aliases contain unsupported whitespace")
+    return tuple(sorted(aliases, key=str))
 
 
 def evaluate_signoff(
@@ -513,19 +541,22 @@ def _run_reviewer_lane(
         repo_root=root,
         output_schema=output_schema,
         output_path=semantic_path,
+        writable_directory=lane_directory,
         model=model,
         effort=effort,
     )
+    blocked_runtimes = " ".join(str(path) for path in _mount_aliases_for(host_runtime))
     confined_command = [
         "systemd-run",
         "--user",
         "--pipe",
         "--quiet",
         "--collect",
+        "--property=NoNewPrivileges=yes",
         "--property=ReadOnlyPaths=/",
         "--property=ReadWritePaths=/proc",
         f"--property=ReadWritePaths={lane_directory}",
-        f"--property=InaccessiblePaths={host_runtime}",
+        f"--property=InaccessiblePaths={blocked_runtimes}",
         f"--property=WorkingDirectory={root}",
         f"--setenv=CODEX_HOME={lane_codex_home}",
         f"--setenv=XDG_RUNTIME_DIR={lane_runtime}",

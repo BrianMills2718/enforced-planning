@@ -29,11 +29,14 @@ planning format and must not invent or weaken criteria.
    temp, and ephemeral Codex-home directory writable; the temporary home gets
    only the authentication material required to start the client and is deleted
    with the review workspace. The non-persistent `/proc` process filesystem stays
-   writable so the client's nested read-only sandbox can initialize (the client
-   read-only flag is defense in depth). The canonical host user-runtime directory
+   writable so the client's nested sandbox can initialize. The canonical host
+   user-runtime directory
    at `/run/user/<uid>` is hidden unconditionally and replaced with a lane-private
    runtime so a reviewer cannot ask the user systemd manager or session bus to
-   launch a process outside the boundary, even by addressing its socket directly;
+   launch a process outside the boundary, even through another mount alias or by
+   addressing its socket directly. The client uses `workspace-write` only for the
+   lane-private directory; the outer OS unit remains the authoritative read-only
+   boundary for the checkout and host;
 4. concurrent execution and explicit session custody for every declared lane;
 5. schema validation of every independent semantic result;
 6. the final deterministic signoff decision and receipt digest; and

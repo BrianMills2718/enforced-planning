@@ -423,7 +423,7 @@ def test_criterion_result_requires_concrete_evidence() -> None:
         )
 
 
-def test_codex_command_is_ephemeral_read_only_and_schema_bound(tmp_path: Path) -> None:
+def test_codex_command_is_ephemeral_lane_write_and_schema_bound(tmp_path: Path) -> None:
     command = build_codex_command(
         codex_bin="codex",
         repo_root=tmp_path,
@@ -435,7 +435,8 @@ def test_codex_command_is_ephemeral_read_only_and_schema_bound(tmp_path: Path) -
 
     assert command[:2] == ("codex", "exec")
     assert "--ephemeral" in command
-    assert command[command.index("--sandbox") + 1] == "read-only"
+    assert command[command.index("--sandbox") + 1] == "workspace-write"
+    assert command[command.index("--add-dir") + 1] == str(tmp_path)
     assert command[command.index("--output-schema") + 1].endswith("pr-review-signoff.schema.json")
     assert command[command.index("--output-last-message") + 1].endswith("semantic.json")
 
@@ -556,11 +557,12 @@ def test_runner_executes_checks_and_fresh_schema_bound_reviewer(tmp_path: Path) 
         "runtime_home = pathlib.Path(os.environ['CODEX_HOME'])\n"
         "runtime_home.joinpath('runtime-marker').write_text('ok', encoding='utf-8')\n"
         "subprocess.run(['unshare', '--user', '--map-root-user', 'true'], check=True)\n"
-        "host_runtime = f'/run/user/{os.getuid()}'\n"
-        "escape_env = os.environ | {'XDG_RUNTIME_DIR': host_runtime, 'DBUS_SESSION_BUS_ADDRESS': f'unix:path={host_runtime}/bus'}\n"
-        "escape = subprocess.run(['systemd-run', '--user', '--wait', '--quiet', 'true'], env=escape_env)\n"
-        "if escape.returncode == 0:\n"
-        "    raise SystemExit('reviewer could reach the host user manager')\n"
+        "host_runtimes = [f'/run/user/{os.getuid()}', f'/mnt/wslg/run/user/{os.getuid()}']\n"
+        "for host_runtime in host_runtimes:\n"
+        "    escape_env = os.environ | {'XDG_RUNTIME_DIR': host_runtime, 'DBUS_SESSION_BUS_ADDRESS': f'unix:path={host_runtime}/bus'}\n"
+        "    escape = subprocess.run(['systemd-run', '--user', '--wait', '--quiet', 'true'], env=escape_env)\n"
+        "    if escape.returncode == 0:\n"
+        "        raise SystemExit(f'reviewer could reach host user manager at {host_runtime}')\n"
         "args = sys.argv[1:]\n"
         "out = pathlib.Path(args[args.index('--output-last-message') + 1])\n"
         f"semantic = {semantic!r}\n"

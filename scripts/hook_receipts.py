@@ -149,6 +149,55 @@ def _digest(value: str) -> str:
     return hashlib.sha256(value.encode()).hexdigest()
 
 
+def classify_hook_output(
+    output: str | None,
+    *,
+    event_name: str | None,
+    client: str | None = None,
+) -> dict[str, Any]:
+    """Describe stdout shape without retaining its potentially private content."""
+
+    raw = output or ""
+    stripped = raw.strip()
+    base: dict[str, Any] = {
+        "output_bytes": len(raw.encode("utf-8")),
+        "output_sha256": _digest(raw),
+    }
+    if not stripped:
+        return {**base, "output_parse_status": "silent", "output_envelope_kind": "silent",
+                "output_contract_status": "valid"}
+    try:
+        payload = json.loads(stripped)
+    except json.JSONDecodeError:
+        if client not in {None, "codex"}:
+            return {**base, "output_parse_status": "plain_text", "output_envelope_kind": "plain_text",
+                    "output_contract_status": "valid"}
+        return {**base, "output_parse_status": "invalid_json", "output_envelope_kind": "invalid_json",
+                "output_contract_status": "invalid"}
+    if not isinstance(payload, dict):
+        return {**base, "output_parse_status": "valid_json", "output_envelope_kind": "non_object_json",
+                "output_contract_status": "invalid"}
+    if not payload:
+        kind, valid = "empty_object", True
+    elif isinstance(payload.get("systemMessage"), str):
+        kind, valid = "system_message", True
+    elif isinstance(payload.get("hookSpecificOutput"), dict):
+        specific = payload["hookSpecificOutput"]
+        hook_event = specific.get("hookEventName")
+        kind = "hook_specific_output"
+        valid = isinstance(hook_event, str) and (event_name is None or hook_event == event_name)
+    elif payload.get("decision") in {"allow", "block"}:
+        kind, valid = "decision", True
+    else:
+        kind, valid = "unsupported_object", False
+    return {
+        **base,
+        "output_parse_status": "valid_json",
+        "output_envelope_kind": kind,
+        "output_contract_status": "valid" if valid else "invalid",
+    }
+
+
 def _atomic_write(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     descriptor, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
@@ -178,9 +227,22 @@ class HookInvocation:
     def receipt_id(self) -> str:
         return str(self.base_payload["receipt_id"])
 
-    def complete(self, *, decision: str, reason_code: str, exit_status: int = 0) -> Path:
+    def complete(
+        self,
+        *,
+        decision: str,
+        reason_code: str,
+        exit_status: int = 0,
+        output: str | None = None,
+        client: str | None = None,
+    ) -> Path:
         payload = {
             **self.base_payload,
+            **classify_hook_output(
+                output,
+                event_name=self.base_payload.get("event_name"),
+                client=client,
+            ),
             "phase": "completed",
             "decision": decision,
             "reason_code": reason_code,
@@ -633,6 +695,7 @@ def summarize_hook_health(
     completed_totals: Counter = Counter()
     latencies: dict[str, list[float]] = {}
     exits: dict[str, Counter] = {}
+    output_contracts: dict[str, Counter] = {}
     latency_missing: Counter = Counter()
 
     for receipt in scan.completed:
@@ -646,6 +709,10 @@ def summarize_hook_health(
         status = receipt.get("exit_status")
         if isinstance(status, int) and not isinstance(status, bool) and status != 0:
             exits.setdefault(name, Counter())[status] += 1
+        contract = receipt.get("output_contract_status")
+        envelope = receipt.get("output_envelope_kind")
+        if isinstance(contract, str) and isinstance(envelope, str):
+            output_contracts.setdefault(name, Counter())[(contract, envelope)] += 1
 
     malformed_per_hook: Counter = Counter(record.hook_name for record in scan.malformed if record.hook_name)
     names = sorted(set(completed_totals) | set(orphan_counts) | set(scan.started_by_hook))
@@ -663,6 +730,7 @@ def summarize_hook_health(
             budget_ratio = p95 / declared_timeout
             over_budget = budget_ratio > budget_fraction
         nonzero = exits.get(name, Counter())
+        contracts = output_contracts.get(name, Counter())
         hooks.append(
             {
                 "hook_name": name,
@@ -679,6 +747,12 @@ def summarize_hook_health(
                 "max_elapsed_ms": max(sample) if sample else None,
                 "nonzero_exit_count": sum(nonzero.values()),
                 "nonzero_exit_by_code": {str(code): count for code, count in sorted(nonzero.items())},
+                "invalid_output_contract_count": sum(
+                    count for (status, _kind), count in contracts.items() if status == "invalid"
+                ),
+                "output_contract_by_shape": {
+                    f"{status}:{kind}": count for (status, kind), count in sorted(contracts.items())
+                },
                 "declared_timeout_ms": declared_timeout,
                 "declared_timeout_matched": bool(declared_entry.get("matched")),
                 "declared_timeout_events": declared_entry.get("events", []),

@@ -87,6 +87,30 @@ def test_cli_json_format_carries_health_and_recurrence(tmp_path: Path, capsys: p
     assert report["recurrence"]["groups"][0]["count"] == 2
 
 
+def test_cli_reports_invalid_output_contract_separately_from_zero_exit(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    receipts = tmp_path / "receipts"
+    _receipt(
+        receipts,
+        "a" * 32,
+        exit_status=0,
+        output_contract_status="invalid",
+        output_envelope_kind="unsupported_object",
+        output_parse_status="valid_json",
+        output_bytes=19,
+        output_sha256="1" * 64,
+    )
+    settings = tmp_path / "settings.json"
+    settings.write_text(json.dumps({"hooks": {}}), encoding="utf-8")
+
+    assert main(["--receipt-root", str(receipts), "--settings", str(settings)]) == 0
+    output = capsys.readouterr().out
+    assert "Nonzero exits\n  none" in output
+    assert "Output envelope contract failures" in output
+    assert "invalid:unsupported_object x1" in output
+
+
 def test_report_on_absent_receipt_root_is_empty_not_an_error(tmp_path: Path) -> None:
     settings = tmp_path / "settings.json"
     settings.write_text(json.dumps({"hooks": {}}), encoding="utf-8")

@@ -1,0 +1,41 @@
+{
+  "schema_version": "1.0",
+  "record_type": "hook_adapter_attribution_evidence",
+  "observed_at": "2026-09-01T17:56:00Z",
+  "source_revision": "dc5ef2a5b7e911bc6bf813edb7dd26bd939c698c",
+  "contract": {
+    "retained_fields": [
+      "output_bytes",
+      "output_sha256",
+      "output_parse_status",
+      "output_envelope_kind",
+      "output_contract_status"
+    ],
+    "raw_output_retained": false,
+    "separate_dimensions": [
+      "exit_status",
+      "output_contract_status"
+    ]
+  },
+  "negative_control": {
+    "output_shape": "top-level internal status object",
+    "exit_status": 0,
+    "output_parse_status": "valid_json",
+    "output_envelope_kind": "unsupported_object",
+    "output_contract_status": "invalid",
+    "feedback_report_section": "Output envelope contract failures (independent of process exit)"
+  },
+  "verification": {
+    "command": "pytest -q tests/test_hook_receipts.py tests/test_hook_feedback_report.py tests/test_coordination_hook.py tests/test_learning_capture_hook.py",
+    "outcome": "pass",
+    "summary": "59 passed in 7.90s"
+  },
+  "adoption": {
+    "instrumented_hooks": [
+      "coordination-lifecycle",
+      "learning-capture"
+    ],
+    "installed_runtime_pending": true,
+    "next_boundary": "merge the sanctioned installed-runtime updater, install this exact Enforced Planning revision, then run a fresh Codex mutation and inspect its content-free output fields"
+  }
+}

@@ -11,6 +11,7 @@ import pytest
 from scripts.hook_feedback_report import build_report
 from scripts.hook_receipts import (
     HookReceiptError,
+    classify_hook_output,
     group_hook_recurrences,
     group_prewrite_recurrences,
     load_completed_receipts,
@@ -22,6 +23,58 @@ from scripts.hook_receipts import (
     start_hook_invocation,
     summarize_hook_health,
 )
+
+
+def test_codex_output_contract_distinguishes_exit_from_invalid_envelope() -> None:
+    raw_internal_result = '{"status":"queued","fingerprint":"private"}'
+    classified = classify_hook_output(
+        raw_internal_result,
+        event_name="PostToolUse",
+        client="codex",
+    )
+
+    assert classified["output_parse_status"] == "valid_json"
+    assert classified["output_envelope_kind"] == "unsupported_object"
+    assert classified["output_contract_status"] == "invalid"
+    assert "private" not in json.dumps(classified)
+    assert classified["output_bytes"] == len(raw_internal_result.encode())
+
+
+def test_codex_system_message_and_claude_plain_text_are_valid_shapes() -> None:
+    codex = classify_hook_output(
+        '{"systemMessage":"bounded context"}', event_name="PostToolUse", client="codex"
+    )
+    claude = classify_hook_output("bounded context", event_name="PostToolUse", client="claude-code")
+
+    assert (codex["output_contract_status"], codex["output_envelope_kind"]) == (
+        "valid", "system_message"
+    )
+    assert (claude["output_contract_status"], claude["output_envelope_kind"]) == (
+        "valid", "plain_text"
+    )
+
+
+def test_completed_receipt_records_content_free_output_shape(tmp_path: Path) -> None:
+    invocation = start_hook_invocation(
+        hook_name="example-hook",
+        hook_version="7",
+        script_path=Path(__file__),
+        payload={"session_id": "secret", "hook_event_name": "PostToolUse"},
+        receipt_root=tmp_path,
+    )
+    path = invocation.complete(
+        decision="allow",
+        reason_code="hook_exit_zero",
+        exit_status=0,
+        output='{"status":"queued","secret":"must-not-persist"}',
+        client="codex",
+    )
+
+    receipt = json.loads(path.read_text())
+    assert receipt["exit_status"] == 0
+    assert receipt["output_contract_status"] == "invalid"
+    assert receipt["output_envelope_kind"] == "unsupported_object"
+    assert "must-not-persist" not in json.dumps(receipt)
 
 
 def test_started_then_completed_receipts_are_correlatable(tmp_path: Path) -> None:

@@ -547,6 +547,12 @@ def test_runner_executes_checks_and_fresh_schema_bound_reviewer(tmp_path: Path) 
         "import json, pathlib, sys\n"
         "prompt = sys.stdin.read()\n"
         "lane = 'test-evidence' if '\"review_lane\": \"test-evidence\"' in prompt else 'correctness'\n"
+        "try:\n"
+        "    pathlib.Path('reviewer-mutation.txt').write_text('changed', encoding='utf-8')\n"
+        "except OSError:\n"
+        "    pass\n"
+        "else:\n"
+        "    raise SystemExit('reviewer filesystem was writable')\n"
         "args = sys.argv[1:]\n"
         "out = pathlib.Path(args[args.index('--output-last-message') + 1])\n"
         f"semantic = {semantic!r}\n"
@@ -576,6 +582,7 @@ def test_runner_executes_checks_and_fresh_schema_bound_reviewer(tmp_path: Path) 
     )
 
     assert receipt.verdict == "signed_off"
+    assert not (repo / "reviewer-mutation.txt").exists()
     assert {session.session_id for session in receipt.reviewer_sessions} == {
         "codex:fresh-correctness",
         "codex:fresh-test-evidence",

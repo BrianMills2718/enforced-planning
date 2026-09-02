@@ -24,8 +24,9 @@ planning format and must not invent or weaken criteria.
 2. deterministic execution of argument-vector commands without a shell, under
    a fail-closed systemd read-only mount for the frozen checkout and a private
    network namespace with GitHub/SSH credential environment variables cleared;
-3. one fresh ephemeral Codex process per semantic review lane in a read-only
-   sandbox;
+3. one fresh ephemeral Codex process per semantic review lane inside an
+   OS-enforced read-only filesystem unit, with only its isolated receipt/temp
+   directory writable (the client read-only flag is defense in depth);
 4. concurrent execution and explicit session custody for every declared lane;
 5. schema validation of every independent semantic result;
 6. the final deterministic signoff decision and receipt digest; and

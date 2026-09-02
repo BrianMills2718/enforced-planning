@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shutil
 import subprocess
 import tempfile
 from collections.abc import Callable
@@ -480,16 +481,34 @@ def _run_reviewer_lane(
 ) -> tuple[ReviewerSession, SemanticReviewResult]:
     lane_digest = hashlib.sha256(review_lane.encode("utf-8")).hexdigest()[:12]
     semantic_path = output_directory / f"semantic-review-{lane_digest}.json"
+    lane_tmp = output_directory / f"reviewer-tmp-{lane_digest}"
+    lane_tmp.mkdir(parents=True, exist_ok=True)
+    resolved_codex = shutil.which(codex_bin) or codex_bin
     command = build_codex_command(
-        codex_bin=codex_bin,
+        codex_bin=resolved_codex,
         repo_root=root,
         output_schema=output_schema,
         output_path=semantic_path,
         model=model,
         effort=effort,
     )
+    confined_command = [
+        "systemd-run",
+        "--user",
+        "--pipe",
+        "--quiet",
+        "--collect",
+        "--property=ReadOnlyPaths=/",
+        f"--property=ReadWritePaths={output_directory}",
+        f"--property=WorkingDirectory={root}",
+        f"--setenv=TMPDIR={lane_tmp}",
+        f"--setenv=TEMP={lane_tmp}",
+        f"--setenv=TMP={lane_tmp}",
+        "--",
+        *command,
+    ]
     completed = subprocess.run(
-        list(command),
+        confined_command,
         input=build_reviewer_prompt(spec, checks, review_lane=review_lane),
         capture_output=True,
         text=True,

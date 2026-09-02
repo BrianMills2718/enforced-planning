@@ -349,7 +349,7 @@ endif
 		$(foreach path,$(SESSION_READ_PATHS),--read-path "$(path)") \
 		$(if $(SESSION_WORK_GRAPH),--work-graph "$(SESSION_WORK_GRAPH)",) \
 		$(if $(SESSION_WORK_UNIT_ID),--work-unit-id "$(SESSION_WORK_UNIT_ID)",) \
-		$(if $(PLAN),--plan "$(PLAN_PROJECT)#$(PLAN)",) \
+		$(if $(PLAN),--plan "$(PLAN_PROJECT)#$(PLAN)",$(if $(ALLOW_UNPLANNED),--plan UNPLANNED,)) \
 		$(if $(PLAN),--start-revision "$(WORKTREE_START_REVISION)",) \
 		$(if $(PLAN_REPO_ROOT),--plan-repo-root "$(PLAN_REPO_ROOT)",) \
 		$(if $(PLAN_START_POINT),--plan-start-point "$(PLAN_START_POINT)",) \
@@ -471,7 +471,7 @@ endif
 		$(foreach path,$(SESSION_READ_PATHS),--read-path "$(path)") \
 		$(if $(SESSION_WORK_GRAPH),--work-graph "$(SESSION_WORK_GRAPH)",) \
 		$(if $(SESSION_WORK_UNIT_ID),--work-unit-id "$(SESSION_WORK_UNIT_ID)",) \
-		$(if $(PLAN),--plan "$(PLAN_PROJECT)#$(PLAN)",) \
+		$(if $(PLAN),--plan "$(PLAN_PROJECT)#$(PLAN)",$(if $(ALLOW_UNPLANNED),--plan UNPLANNED,)) \
 		$(if $(PLAN_REPO_ROOT),--plan-repo-root "$(PLAN_REPO_ROOT)",) \
 		$(if $(PLAN_START_POINT),--plan-start-point "$(PLAN_START_POINT)",) \
 		$(if $(ALLOW_UNPLANNED),--allow-unplanned,) \

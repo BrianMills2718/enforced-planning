@@ -394,9 +394,27 @@ def classify_bash_command(
     if commands is None:
         return "claim_required"
 
-    if all(_argv_is_read_only(argv) for argv in commands):
+    if all(_if_control_argv_is_read_only(argv) for argv in commands):
         return "read_only"
     return "claim_required"
+
+
+def _if_control_argv_is_read_only(argv: tuple[str, ...]) -> bool:
+    """Admit a flat shell ``if`` only when every contained command is read-only.
+
+    ``_shell_commands`` already rejects substitution, redirection, background
+    execution, malformed separators, and assignment-led commands.  A flat
+    ``if`` therefore arrives as groups beginning with ``if``, ``then``,
+    ``elif``, ``else``, and the terminal ``fi`` marker.  Strip only those
+    reserved words and reuse the existing command allowlist; loops, nesting,
+    shell interpreters, and any mutating condition or branch still fail closed.
+    """
+
+    if argv == ("fi",):
+        return True
+    if argv and argv[0] in {"if", "then", "elif", "else"}:
+        return len(argv) > 1 and _argv_is_read_only(argv[1:])
+    return _argv_is_read_only(argv)
 
 
 def _bash_declared_paths(command: str) -> tuple[str, ...]:
@@ -1360,6 +1378,11 @@ def evaluate_request_fast(
         _record_receipt(receipt_path, result)
         return result
     if outside_bash_paths:
+        recovery = (
+            "If this is inspection, split it into simple read-only commands without shell loops, "
+            "substitutions, or redirection. Otherwise run the mutation inside the exact claimed "
+            "worktree or create a separate claimed lane."
+        )
         result = _decision(
             started=started,
             request=request,
@@ -1368,7 +1391,7 @@ def evaluate_request_fast(
             reason_code="bash_path_outside_worktree",
             context=context,
             details=outside_bash_paths,
-            recovery="Run the mutation inside the exact claimed worktree or create a separate claimed lane.",
+            recovery=recovery,
         )
         _record_receipt(receipt_path, result)
         return result
@@ -1394,7 +1417,11 @@ def evaluate_request_fast(
     ]
     if not candidates:
         reason_code = "no_exact_claim"
-        recovery = "Create or resume an exact claimed worktree lane for this session before editing."
+        recovery = (
+            "If this is inspection, split it into simple read-only commands without shell control flow. "
+            "Otherwise create or resume an exact claimed worktree lane before editing; from a shared-root "
+            f"session use /usr/bin/make -C {context['repo_root']} maintenance-worktree BRANCH=<safe-branch>."
+        )
     elif len(authorizing_candidates) > 1:
         reason_code = "ambiguous_exact_claim"
         details = tuple(

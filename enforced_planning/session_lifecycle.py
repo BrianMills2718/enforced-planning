@@ -919,19 +919,51 @@ def _persist_claim_session_transfer_receipt(
         if not isinstance(receipt_path_raw, str) or not isinstance(receipt_sha256, str):
             raise ValueError("process-fence evidence lacks an exact receipt path and digest")
         process_receipt_path = Path(receipt_path_raw).expanduser().resolve()
-        if hashlib.sha256(process_receipt_path.read_bytes()).hexdigest() != receipt_sha256:
+        process_receipt_bytes = process_receipt_path.read_bytes()
+        if hashlib.sha256(process_receipt_bytes).hexdigest() != receipt_sha256:
             raise ValueError("process-fence receipt digest does not match its exact bytes")
+        parsed_fence = session_process_fencing.ProcessFenceReceiptV1.model_validate_json(
+            process_receipt_bytes
+        )
         expected_transfer_epoch = hashlib.sha256(prior_claim_bytes).hexdigest()
-        if process_fence.get("transfer_epoch_sha256") != expected_transfer_epoch:
+        expected_worktree = str(Path(worktree_path).expanduser().resolve())
+        expected_fields = {
+            "predecessor_session_id": prior_session_id,
+            "successor_session_id": successor_session_id,
+            "worktree_path": expected_worktree,
+            "pid": process_fence.get("pid"),
+            "process_start_ticks": process_fence.get("process_start_ticks"),
+            "transfer_epoch_sha256": expected_transfer_epoch,
+        }
+        parsed_fields = {
+            "predecessor_session_id": parsed_fence.predecessor_session_id,
+            "successor_session_id": parsed_fence.successor_session_id,
+            "worktree_path": parsed_fence.worktree_path,
+            "pid": parsed_fence.pid,
+            "process_start_ticks": parsed_fence.process_start_ticks,
+            "transfer_epoch_sha256": parsed_fence.transfer_epoch_sha256,
+        }
+        returned_fields = {
+            key: process_fence.get(key)
+            for key in (
+                "predecessor_session_id",
+                "successor_session_id",
+                "worktree_path",
+                "pid",
+                "process_start_ticks",
+                "transfer_epoch_sha256",
+            )
+        }
+        if parsed_fields != expected_fields or parsed_fields != returned_fields:
             raise ValueError(
-                "process-fence evidence is not bound to the exact predecessor claim-bytes epoch"
+                "typed process-fence receipt does not match the exact transfer inputs and result"
             )
         process_fence_binding = {
             "receipt_path": str(process_receipt_path),
             "receipt_sha256": receipt_sha256,
-            "pid": process_fence.get("pid"),
-            "transfer_epoch_sha256": process_fence.get("transfer_epoch_sha256"),
-            "process_start_ticks": process_fence.get("process_start_ticks"),
+            "pid": parsed_fence.pid,
+            "transfer_epoch_sha256": parsed_fence.transfer_epoch_sha256,
+            "process_start_ticks": parsed_fence.process_start_ticks,
         }
     payload = {
         "schema_version": "1.0",

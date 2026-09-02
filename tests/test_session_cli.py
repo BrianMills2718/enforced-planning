@@ -126,22 +126,30 @@ def _stub_exact_predecessor_process_fence(
     """Keep lifecycle fixtures deterministic; process identity has its own real seam tests."""
 
     receipt_path = tmp_path / "process-fence-receipt.json"
-    receipt_path.write_text('{"fixture":"exact predecessor fenced"}\n', encoding="utf-8")
-    receipt_sha256 = hashlib.sha256(receipt_path.read_bytes()).hexdigest()
+
+    def stub_fence(**kwargs: object) -> dict[str, object]:
+        receipt = session_lifecycle.session_process_fencing.ProcessFenceReceiptV1(
+            predecessor_session_id=str(kwargs["predecessor_session_id"]),
+            successor_session_id=str(kwargs["successor_session_id"]),
+            worktree_path=str(Path(str(kwargs["worktree_path"])).resolve()),
+            pid=int(kwargs["predecessor_pid"]),
+            transfer_epoch_sha256=str(kwargs["transfer_epoch_sha256"]),
+            process_start_ticks=int(kwargs["predecessor_process_start_ticks"]),
+            command_sha256="b" * 64,
+            signal="SIGTERM",
+            fenced_at=datetime.now(timezone.utc),
+        )
+        receipt_path.write_text(receipt.model_dump_json(indent=2) + "\n", encoding="utf-8")
+        return {
+            **receipt.model_dump(mode="json"),
+            "receipt_path": str(receipt_path),
+            "receipt_sha256": hashlib.sha256(receipt_path.read_bytes()).hexdigest(),
+        }
+
     monkeypatch.setattr(
         session_lifecycle.session_process_fencing,
         "fence_predecessor_process",
-        lambda **kwargs: {
-            "record_type": "session_predecessor_process_fence",
-            "pid": kwargs["predecessor_pid"],
-            "predecessor_session_id": kwargs["predecessor_session_id"],
-            "successor_session_id": kwargs["successor_session_id"],
-            "worktree_path": kwargs["worktree_path"],
-            "process_start_ticks": 123456,
-            "transfer_epoch_sha256": kwargs["transfer_epoch_sha256"],
-            "receipt_path": str(receipt_path),
-            "receipt_sha256": receipt_sha256,
-        },
+        stub_fence,
     )
 
 
@@ -4967,24 +4975,30 @@ def test_resume_session_rebinds_stale_or_handoff_lane(
     assert claim_path.read_bytes() == claim_before_unfenced_resume
     fence_calls: list[dict[str, object]] = []
     fence_receipt_path = tmp_path / "verified-process-fence.json"
-    fence_receipt_path.write_text('{"fixture":"verified before transfer"}\n', encoding="utf-8")
-    fence_receipt_sha256 = hashlib.sha256(fence_receipt_path.read_bytes()).hexdigest()
 
     def verify_predecessor_fenced_before_transfer(**kwargs: object) -> dict[str, object]:
         current_claim = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
         assert current_claim["session_id"] == "codex:old-session"
         assert current_claim["status"] == "handoff"
         fence_calls.append(kwargs)
+        receipt = session_lifecycle.session_process_fencing.ProcessFenceReceiptV1(
+            predecessor_session_id=str(kwargs["predecessor_session_id"]),
+            successor_session_id=str(kwargs["successor_session_id"]),
+            worktree_path=str(Path(str(kwargs["worktree_path"])).resolve()),
+            pid=int(kwargs["predecessor_pid"]),
+            transfer_epoch_sha256=str(kwargs["transfer_epoch_sha256"]),
+            process_start_ticks=int(kwargs["predecessor_process_start_ticks"]),
+            command_sha256="c" * 64,
+            signal="SIGTERM",
+            fenced_at=datetime.now(timezone.utc),
+        )
+        fence_receipt_path.write_text(
+            receipt.model_dump_json(indent=2) + "\n", encoding="utf-8"
+        )
         return {
-            "record_type": "session_predecessor_process_fence",
-            "pid": kwargs["predecessor_pid"],
-            "predecessor_session_id": kwargs["predecessor_session_id"],
-            "successor_session_id": kwargs["successor_session_id"],
-                "worktree_path": kwargs["worktree_path"],
-                "process_start_ticks": 123456,
-                "transfer_epoch_sha256": kwargs["transfer_epoch_sha256"],
-                "receipt_path": str(fence_receipt_path),
-            "receipt_sha256": fence_receipt_sha256,
+            **receipt.model_dump(mode="json"),
+            "receipt_path": str(fence_receipt_path),
+            "receipt_sha256": hashlib.sha256(fence_receipt_path.read_bytes()).hexdigest(),
         }
 
     monkeypatch.setattr(
@@ -5026,7 +5040,7 @@ def test_resume_session_rebinds_stale_or_handoff_lane(
     assert custody_payload["prior_session_id"] == "codex:old-session"
     assert custody_payload["successor_session_id"] == "codex:new-session"
     assert custody_payload["predecessor_process_fence"]["receipt_sha256"] == (
-        fence_receipt_sha256
+        hashlib.sha256(fence_receipt_path.read_bytes()).hexdigest()
     )
     assert custody_payload["predecessor_process_fence"]["transfer_epoch_sha256"] == (
         hashlib.sha256(claim_before_unfenced_resume).hexdigest()
@@ -5378,6 +5392,76 @@ def test_resume_receipt_failure_rolls_back_before_successor_heartbeat_can_enter(
     assert mutation_receipts[-1].session_id == "codex:old-runtime"
     assert mutation_receipts[-1].registry_digest_after == coordination_claims._registry_digest(claims_dir)
     assert mutation_receipts[-1].projection_current_after is True
+
+
+@pytest.mark.parametrize("mode", ["malformed", "stale_epoch", "returned_mismatch"])
+def test_custody_consumer_rejects_untrusted_referenced_fence_receipt(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mode: str,
+) -> None:
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    worktree = tmp_path / "worktree"
+    worktree.mkdir()
+    prior_claim_bytes = b"exact predecessor claim bytes\n"
+    expected_epoch = hashlib.sha256(prior_claim_bytes).hexdigest()
+    claim = coordination_claims.build_candidate_claim(
+        agent="codex",
+        project="enforced-planning",
+        scope="typed-fence-consumer",
+        intent="reject untrusted process fence evidence",
+        claim_type="write",
+        write_paths=["feature.txt"],
+        repo_root=str(tmp_path),
+        worktree_path=str(worktree),
+        branch="typed-fence-consumer",
+        session_id="codex:old-session",
+        session_name="typed-fence-consumer",
+        broader_goal="Typed Fence Consumer",
+        claimed_at="2026-09-01T00:00:00+00:00",
+        expires_at="2099-09-01T00:00:00+00:00",
+    )
+    fence_path = tmp_path / "referenced-fence.json"
+    if mode == "malformed":
+        fence_path.write_text('{"record_type":"not_a_fence"}\n', encoding="utf-8")
+    else:
+        fence = session_lifecycle.session_process_fencing.ProcessFenceReceiptV1(
+            predecessor_session_id="codex:old-session",
+            successor_session_id="codex:new-session",
+            worktree_path=str(worktree.resolve()),
+            pid=4242,
+            transfer_epoch_sha256=("d" * 64 if mode == "stale_epoch" else expected_epoch),
+            process_start_ticks=123456,
+            command_sha256="e" * 64,
+            signal="SIGTERM",
+            fenced_at=datetime.now(timezone.utc),
+        )
+        fence_path.write_text(fence.model_dump_json(indent=2) + "\n", encoding="utf-8")
+    process_fence = {
+        "predecessor_session_id": "codex:old-session",
+        "successor_session_id": "codex:new-session",
+        "worktree_path": str(worktree.resolve()),
+        "pid": 9999 if mode == "returned_mismatch" else 4242,
+        "transfer_epoch_sha256": expected_epoch,
+        "process_start_ticks": 123456,
+        "receipt_path": str(fence_path),
+        "receipt_sha256": hashlib.sha256(fence_path.read_bytes()).hexdigest(),
+    }
+
+    with pytest.raises(ValueError):
+        session_lifecycle._persist_claim_session_transfer_receipt(
+            claim=claim,
+            project="enforced-planning",
+            scope="typed-fence-consumer",
+            worktree_path=str(worktree),
+            branch="typed-fence-consumer",
+            successor_session_id="codex:new-session",
+            transferred_at="2026-09-01T01:00:00+00:00",
+            prior_claim_bytes=prior_claim_bytes,
+            successor_claim_bytes=b"successor claim bytes\n",
+            process_fence=process_fence,
+        )
 
 
 def test_resume_rolls_back_claim_and_tracker_when_tracker_write_fails(

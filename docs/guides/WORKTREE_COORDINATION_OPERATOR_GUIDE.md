@@ -191,8 +191,12 @@ immutable mode-0600 process-fence receipt; retry either resumes the same
 start-tick identity or finalizes an already-absent/replaced predecessor without
 signaling the replacement. The custody-transfer receipt embeds the exact fence
 receipt path and SHA-256, and the custody transaction independently recomputes
-the predecessor claim-bytes digest before consuming that fence epoch. Missing,
-ambiguous, or mismatched process identity
+the predecessor claim-bytes digest before consuming that fence epoch. The
+consumer parses the referenced bytes as the typed process-fence receipt, checks
+its predecessor, successor, worktree, PID generation, and epoch against both
+the pre-transfer claim and the fencing result, and derives the custody binding
+only from that parsed receipt. Missing, malformed, stale, ambiguous, or
+mismatched process identity
 fails before the claim or tracker changes; never replace this contract with a
 process-name-wide kill.
 

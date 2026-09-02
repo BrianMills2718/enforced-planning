@@ -526,7 +526,7 @@ def test_runner_executes_checks_and_fresh_schema_bound_reviewer(tmp_path: Path) 
     }
     spec_file = tmp_path / "spec.json"
     spec_file.write_text(json.dumps(spec_payload), encoding="utf-8")
-    fake_codex = tmp_path / "fake-codex"
+    fake_codex = repo / ".git" / "fake-codex"
     semantic = {
         "schema_version": "1.0",
         "review_lane": "correctness",
@@ -556,6 +556,7 @@ def test_runner_executes_checks_and_fresh_schema_bound_reviewer(tmp_path: Path) 
         "    raise SystemExit('reviewer filesystem was writable')\n"
         "runtime_home = pathlib.Path(os.environ['CODEX_HOME'])\n"
         "runtime_home.joinpath('runtime-marker').write_text('ok', encoding='utf-8')\n"
+        "pathlib.Path('/tmp/reviewer-private-tmp-proof').write_text('ok', encoding='utf-8')\n"
         "subprocess.run(['unshare', '--user', '--map-root-user', 'true'], check=True)\n"
         "host_runtimes = [f'/run/user/{os.getuid()}', f'/mnt/wslg/run/user/{os.getuid()}']\n"
         "for host_runtime in host_runtimes:\n"
@@ -593,6 +594,7 @@ def test_runner_executes_checks_and_fresh_schema_bound_reviewer(tmp_path: Path) 
 
     assert receipt.verdict == "signed_off"
     assert not (repo / "reviewer-mutation.txt").exists()
+    assert not Path("/tmp/reviewer-private-tmp-proof").exists()
     assert {session.session_id for session in receipt.reviewer_sessions} == {
         "codex:fresh-correctness",
         "codex:fresh-test-evidence",

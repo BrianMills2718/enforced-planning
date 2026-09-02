@@ -29,7 +29,8 @@ planning format and must not invent or weaken criteria.
    temp, and ephemeral Codex-home directory writable; the temporary home gets
    only the authentication material required to start the client and is deleted
    with the review workspace. The non-persistent `/proc` process filesystem stays
-   writable so the client's nested sandbox can initialize. The canonical host
+   writable and each unit receives a private writable `/tmp` tmpfs so the client's
+   nested sandbox can initialize without exposing host temporary storage. The canonical host
    user-runtime directory
    at `/run/user/<uid>` is hidden unconditionally and replaced with a lane-private
    runtime so a reviewer cannot ask the user systemd manager or session bus to

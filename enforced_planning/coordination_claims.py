@@ -904,6 +904,13 @@ def claim_health_issues(claim: ClaimRecord) -> list[str]:
             if not claim.broader_goal:
                 issues.append("missing_broader_goal")
             if not claim.tracker_path:
+                # tracker_path being unset here is a legitimate staged
+                # reservation, not always a defect -- see "tracker_path's
+                # three lifecycle states" in
+                # docs/guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md before
+                # moving this into CREATION_BLOCKING_HEALTH_ISSUES or having
+                # a caller pre-set tracker_path to a path nothing has written
+                # yet (crashes start_session()'s resume-reload instead).
                 issues.append("missing_tracker_path")
         if claim.schema_version >= 3 and claim.write_paths and requires_work_graph(claim.plan_ref):
             if not claim.work_unit_id:

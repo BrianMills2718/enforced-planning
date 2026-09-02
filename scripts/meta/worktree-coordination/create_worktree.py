@@ -577,6 +577,11 @@ def verify_scoped_write_claim(
     weak_matching_claims = []
     for claim in matching_claims:
         issues = claims_module.claim_health_issues(claim)
+        # staged_plan_reservation / staged_unplanned_reservation below tolerate
+        # claim.tracker_path is None as a legitimate mid-bootstrap state, not
+        # a defect. See "tracker_path's three lifecycle states" in
+        # docs/guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md before touching
+        # this exemption or coordination_claims.py's CREATION_BLOCKING set.
         staged_plan_reservation = (
             claim.tracker_path is None
             and claims_module.requires_work_graph(claim.plan_ref)

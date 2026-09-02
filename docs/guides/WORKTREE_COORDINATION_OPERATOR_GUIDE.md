@@ -178,10 +178,12 @@ whose terminal registry digest matches the restored authority. Resume never
 reports a successor while the claim and tracker disagree.
 
 Codex-to-Codex custody transfer additionally requires
-`--predecessor-process-pid`. Before changing claim custody, `session-resume`
-proves that exact PID is a direct Codex resume of the predecessor session, is
-using the successor runtime's exact Codex executable, and has the claimed
-worktree as its current directory. It binds `/proc` start ticks against PID
+`--predecessor-process-pid` and `--predecessor-process-start-ticks`. Before
+changing claim custody, `session-resume` proves that exact PID generation is a
+direct Codex resume of the predecessor session, is using the successor runtime's
+exact Codex executable, and has the claimed worktree as its current directory.
+The state key also binds the exact pre-transfer claim-bytes SHA-256 so evidence
+cannot cross custody epochs. It binds `/proc` start ticks against PID
 reuse, opens an exact kernel pidfd before validation, and sends bounded
 TERM/KILL escalation only through that handle. Before signaling, it fsyncs a
 deterministic active intent. After a confirmed exit it atomically finalizes an

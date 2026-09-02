@@ -173,7 +173,8 @@ adoption.
    other metadata-only exception: close the child first with
    `session-close --terminalize-shared-child`, then close the retained parent
    normally. Cross-session Codex `session-resume` requires the exact
-   predecessor PID and fences that verified session/worktree process before
+   predecessor PID plus `/proc` start ticks, and fences that verified
+   session/worktree process under the exact claim-bytes transfer epoch before
    claim custody changes.
 8. One runtime session owns one unparented live claim root by default. Claim
    type does not exempt a lane from this lifecycle guard. Related work declares

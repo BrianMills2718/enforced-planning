@@ -925,6 +925,7 @@ def _persist_claim_session_transfer_receipt(
             "receipt_path": str(process_receipt_path),
             "receipt_sha256": receipt_sha256,
             "pid": process_fence.get("pid"),
+            "transfer_epoch_sha256": process_fence.get("transfer_epoch_sha256"),
             "process_start_ticks": process_fence.get("process_start_ticks"),
         }
     payload = {
@@ -3787,6 +3788,7 @@ def resume_session(
     session_id: str | None = None,
     note: str | None = None,
     predecessor_process_pid: int | None = None,
+    predecessor_process_start_ticks: int | None = None,
 ) -> dict[str, Any]:
     """Reattach a new runtime session to an existing plan-bound lane."""
 
@@ -3863,6 +3865,11 @@ def resume_session(
                     "Cross-session Codex resume requires --predecessor-process-pid so the exact "
                     "prior runtime is fenced before custody transfer."
                 )
+            if predecessor_process_start_ticks is None:
+                raise ValueError(
+                    "Cross-session Codex resume requires --predecessor-process-start-ticks "
+                    "to bind one exact process generation."
+                )
             if not claim.session_id:
                 raise ValueError("Cross-session Codex resume cannot fence an unbound predecessor session.")
             process_fence = session_process_fencing.fence_predecessor_process(
@@ -3870,6 +3877,8 @@ def resume_session(
                 successor_session_id=resolved_session_id,
                 worktree_path=worktree_path,
                 predecessor_pid=predecessor_process_pid,
+                transfer_epoch_sha256=hashlib.sha256(claim_bytes_before).hexdigest(),
+                predecessor_process_start_ticks=predecessor_process_start_ticks,
             )
 
     expected_fields = (

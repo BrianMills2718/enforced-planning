@@ -47,6 +47,7 @@ class ProcessFenceReceiptV1(BaseModel):
     successor_session_id: str = Field(min_length=1)
     worktree_path: str = Field(min_length=1)
     pid: int = Field(gt=1)
+    transfer_epoch_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     process_start_ticks: int = Field(ge=1)
     command_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     signal: Literal["SIGTERM", "SIGTERM+SIGKILL", "RECOVERED_ABSENT_AFTER_INTENT"] = "SIGTERM"
@@ -66,6 +67,7 @@ class ProcessFenceIntentV1(BaseModel):
     successor_session_id: str = Field(min_length=1)
     worktree_path: str = Field(min_length=1)
     pid: int = Field(gt=1)
+    transfer_epoch_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     process_start_ticks: int = Field(ge=1)
     command_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     created_at: datetime
@@ -200,6 +202,8 @@ def fence_predecessor_process(
     successor_session_id: str,
     worktree_path: str,
     predecessor_pid: int,
+    transfer_epoch_sha256: str,
+    predecessor_process_start_ticks: int,
     proc_root: Path = Path("/proc"),
     session_index: Path = DEFAULT_CODEX_SESSION_INDEX,
     receipt_root: Path = DEFAULT_FENCE_RECEIPT_ROOT,
@@ -218,6 +222,12 @@ def fence_predecessor_process(
         raise ValueError("exact process fencing currently supports Codex-to-Codex transfer only")
     if predecessor_pid <= 1 or predecessor_pid in _current_ancestor_pids(proc_root):
         raise ValueError("refusing to fence the current successor process or one of its ancestors")
+    if len(transfer_epoch_sha256) != 64 or any(
+        character not in "0123456789abcdef" for character in transfer_epoch_sha256
+    ):
+        raise ValueError("process fencing requires one exact lowercase claim-bytes SHA-256 epoch")
+    if predecessor_process_start_ticks < 1:
+        raise ValueError("process fencing requires positive predecessor process start ticks")
     canonical_worktree = Path(worktree_path).expanduser().resolve(strict=True)
     receipt_root = receipt_root.expanduser().resolve()
     request_bytes = json.dumps(
@@ -226,6 +236,8 @@ def fence_predecessor_process(
             "successor_session_id": successor_session_id,
             "worktree_path": str(canonical_worktree),
             "pid": predecessor_pid,
+            "transfer_epoch_sha256": transfer_epoch_sha256,
+            "process_start_ticks": predecessor_process_start_ticks,
         },
         sort_keys=True,
         separators=(",", ":"),
@@ -240,6 +252,8 @@ def fence_predecessor_process(
             or record.successor_session_id != successor_session_id
             or record.worktree_path != str(canonical_worktree)
             or record.pid != predecessor_pid
+            or record.transfer_epoch_sha256 != transfer_epoch_sha256
+            or record.process_start_ticks != predecessor_process_start_ticks
         ):
             raise RuntimeError("persisted process-fence state does not match this exact request")
 
@@ -272,8 +286,6 @@ def fence_predecessor_process(
         validate_request_binding(intent)
 
     already_completed = completed_result()
-    if already_completed is not None:
-        return already_completed
 
     def finalize(
         active_intent: ProcessFenceIntentV1,
@@ -286,6 +298,7 @@ def fence_predecessor_process(
             successor_session_id=active_intent.successor_session_id,
             worktree_path=active_intent.worktree_path,
             pid=active_intent.pid,
+            transfer_epoch_sha256=active_intent.transfer_epoch_sha256,
             process_start_ticks=active_intent.process_start_ticks,
             command_sha256=active_intent.command_sha256,
             signal=final_signal,
@@ -305,17 +318,26 @@ def fence_predecessor_process(
     try:
         pidfd = open_pidfd(predecessor_pid)
     except ProcessLookupError:
+        if already_completed is not None:
+            return already_completed
         if intent is None:
             raise
         return finalize(intent, "RECOVERED_ABSENT_AFTER_INTENT")
     try:
         if pidfd_exited(pidfd, 0):
+            if already_completed is not None:
+                return already_completed
             if intent is not None:
                 return finalize(intent, "RECOVERED_ABSENT_AFTER_INTENT")
             raise RuntimeError("exact predecessor process exited before identity validation")
         start_ticks = _read_start_ticks(pid_root / "stat")
-        if intent is not None and start_ticks != intent.process_start_ticks:
-            return finalize(intent, "RECOVERED_ABSENT_AFTER_INTENT")
+        if start_ticks != predecessor_process_start_ticks:
+            raise RuntimeError(
+                "live predecessor generation does not match --predecessor-process-start-ticks; "
+                "inspect the exact process and retry with a fresh generation"
+            )
+        if already_completed is not None:
+            raise RuntimeError("completed fence evidence cannot be replayed for a live process generation")
         predecessor_worktree = pid_root.joinpath("cwd").resolve(strict=True)
         if predecessor_worktree != canonical_worktree:
             raise ValueError("predecessor PID is not running in the exact claimed worktree")
@@ -333,6 +355,8 @@ def fence_predecessor_process(
         if _read_start_ticks(pid_root / "stat") != start_ticks:
             raise RuntimeError("predecessor PID was reused before it could be signalled")
         if pidfd_exited(pidfd, 0):
+            if already_completed is not None:
+                return already_completed
             if intent is not None:
                 return finalize(intent, "RECOVERED_ABSENT_AFTER_INTENT")
             raise RuntimeError("exact predecessor process exited during identity validation")
@@ -343,7 +367,8 @@ def fence_predecessor_process(
                 successor_session_id=successor_session_id,
                 worktree_path=str(canonical_worktree),
                 pid=predecessor_pid,
-                process_start_ticks=start_ticks,
+                transfer_epoch_sha256=transfer_epoch_sha256,
+                process_start_ticks=predecessor_process_start_ticks,
                 command_sha256=command_sha256,
                 created_at=datetime.now(UTC),
             )

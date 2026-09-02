@@ -114,6 +114,7 @@ def _owner_bound_call(function, **kwargs: object) -> dict[str, object]:
 def _resume_session_as_native(**kwargs: object) -> dict[str, object]:
     session_id = str(kwargs["session_id"])
     kwargs.setdefault("predecessor_process_pid", 4242)
+    kwargs.setdefault("predecessor_process_start_ticks", 123456)
     with _native_actor(str(kwargs["agent"]), session_id):
         return session_lifecycle.resume_session(**kwargs)
 
@@ -137,6 +138,7 @@ def _stub_exact_predecessor_process_fence(
             "successor_session_id": kwargs["successor_session_id"],
             "worktree_path": kwargs["worktree_path"],
             "process_start_ticks": 123456,
+            "transfer_epoch_sha256": kwargs["transfer_epoch_sha256"],
             "receipt_path": str(receipt_path),
             "receipt_sha256": receipt_sha256,
         },
@@ -4949,6 +4951,20 @@ def test_resume_session_rebinds_stale_or_handoff_lane(
             session_id="codex:new-session",
         )
     assert claim_path.read_bytes() == claim_before_unfenced_resume
+    with _native_actor("codex", "codex:new-session"), pytest.raises(
+        ValueError, match="predecessor-process-start-ticks"
+    ):
+        session_lifecycle.resume_session(
+            agent="codex",
+            project="enforced-planning",
+            scope="plan-37-session-recovery",
+            worktree_path=str(worktree),
+            branch="plan-37-session-recovery",
+            current_phase="generation-unbound resume",
+            session_id="codex:new-session",
+            predecessor_process_pid=4242,
+        )
+    assert claim_path.read_bytes() == claim_before_unfenced_resume
     fence_calls: list[dict[str, object]] = []
     fence_receipt_path = tmp_path / "verified-process-fence.json"
     fence_receipt_path.write_text('{"fixture":"verified before transfer"}\n', encoding="utf-8")
@@ -4964,9 +4980,10 @@ def test_resume_session_rebinds_stale_or_handoff_lane(
             "pid": kwargs["predecessor_pid"],
             "predecessor_session_id": kwargs["predecessor_session_id"],
             "successor_session_id": kwargs["successor_session_id"],
-            "worktree_path": kwargs["worktree_path"],
-            "process_start_ticks": 123456,
-            "receipt_path": str(fence_receipt_path),
+                "worktree_path": kwargs["worktree_path"],
+                "process_start_ticks": 123456,
+                "transfer_epoch_sha256": kwargs["transfer_epoch_sha256"],
+                "receipt_path": str(fence_receipt_path),
             "receipt_sha256": fence_receipt_sha256,
         }
 
@@ -4994,6 +5011,10 @@ def test_resume_session_rebinds_stale_or_handoff_lane(
     assert payload["session_id"] == "codex:new-session"
     assert payload["predecessor_process_fence"]["pid"] == 4242
     assert len(fence_calls) == 1
+    assert fence_calls[0]["predecessor_process_start_ticks"] == 123456
+    assert fence_calls[0]["transfer_epoch_sha256"] == hashlib.sha256(
+        claim_before_unfenced_resume
+    ).hexdigest()
     custody = payload["claim_session_transfer"]
     assert custody is not None
     custody_path = Path(custody["receipt_path"])
@@ -5006,6 +5027,9 @@ def test_resume_session_rebinds_stale_or_handoff_lane(
     assert custody_payload["successor_session_id"] == "codex:new-session"
     assert custody_payload["predecessor_process_fence"]["receipt_sha256"] == (
         fence_receipt_sha256
+    )
+    assert custody_payload["predecessor_process_fence"]["transfer_epoch_sha256"] == (
+        hashlib.sha256(claim_before_unfenced_resume).hexdigest()
     )
     assert custody_payload["repo_root"] == str(Path("~/projects/enforced-planning").expanduser().resolve())
     assert custody_payload["worktree_path"] == str(worktree.resolve())

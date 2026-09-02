@@ -9,7 +9,15 @@ from pathlib import Path
 import pytest
 
 from enforced_planning import session_process_fencing
-from enforced_planning.session_process_fencing import fence_predecessor_process
+from enforced_planning.session_process_fencing import (
+    fence_predecessor_process as _fence_predecessor_process,
+)
+
+
+def fence_predecessor_process(**kwargs: object) -> dict[str, object]:
+    kwargs.setdefault("transfer_epoch_sha256", "a" * 64)
+    kwargs.setdefault("predecessor_process_start_ticks", 123456)
+    return _fence_predecessor_process(**kwargs)
 
 
 def _pidfd_controls(
@@ -310,7 +318,9 @@ def test_receipt_write_failure_after_exit_retries_from_durable_intent(
     assert Path(str(retry["receipt_path"])).is_file()
 
 
-def test_completed_fence_retry_is_idempotent_without_opening_pidfd(tmp_path: Path) -> None:
+def test_completed_fence_retry_is_idempotent_after_proving_generation_absent(
+    tmp_path: Path,
+) -> None:
     proc_root, _pid_root, session_index, worktree = _fake_process(tmp_path)
     controls_signals, pidfd_controls = _pidfd_controls(exit_on=signal.SIGTERM)
     first = fence_predecessor_process(
@@ -333,11 +343,94 @@ def test_completed_fence_retry_is_idempotent_without_opening_pidfd(tmp_path: Pat
         session_index=session_index,
         receipt_root=tmp_path / "receipts",
         trusted_codex_executable=tmp_path / "bin" / "codex",
-        open_pidfd=lambda _pid: pytest.fail("completed retry must not open pidfd"),
+        open_pidfd=lambda _pid: (_ for _ in ()).throw(ProcessLookupError()),
     )
 
     assert controls_signals == [(99, signal.SIGTERM)]
     assert second["receipt_sha256"] == first["receipt_sha256"]
+
+
+def test_completed_receipt_rejects_live_restarted_same_session_generation(
+    tmp_path: Path,
+) -> None:
+    proc_root, pid_root, session_index, worktree = _fake_process(tmp_path)
+    _signals, first_controls = _pidfd_controls(exit_on=signal.SIGTERM)
+    fence_predecessor_process(
+        predecessor_session_id="codex:old-session",
+        successor_session_id="codex:new-session",
+        worktree_path=str(worktree),
+        predecessor_pid=4242,
+        proc_root=proc_root,
+        session_index=session_index,
+        receipt_root=tmp_path / "receipts",
+        trusted_codex_executable=tmp_path / "bin" / "codex",
+        **first_controls,
+    )
+    stat_fields = ["S", *(["0"] * 18), "999999"]
+    pid_root.joinpath("stat").write_text(
+        f"4242 (codex) {' '.join(stat_fields)}\n", encoding="utf-8"
+    )
+    replacement_signals, replacement_controls = _pidfd_controls(exit_on=signal.SIGTERM)
+
+    with pytest.raises(RuntimeError, match="fresh generation"):
+        fence_predecessor_process(
+            predecessor_session_id="codex:old-session",
+            successor_session_id="codex:new-session",
+            worktree_path=str(worktree),
+            predecessor_pid=4242,
+            proc_root=proc_root,
+            session_index=session_index,
+            receipt_root=tmp_path / "receipts",
+            trusted_codex_executable=tmp_path / "bin" / "codex",
+            **replacement_controls,
+        )
+
+    assert replacement_signals == []
+
+
+def test_active_intent_rejects_live_restarted_same_session_generation(
+    tmp_path: Path,
+) -> None:
+    proc_root, pid_root, session_index, worktree = _fake_process(tmp_path)
+
+    with pytest.raises(RuntimeError, match="injected crash after durable intent"):
+        fence_predecessor_process(
+            predecessor_session_id="codex:old-session",
+            successor_session_id="codex:new-session",
+            worktree_path=str(worktree),
+            predecessor_pid=4242,
+            proc_root=proc_root,
+            session_index=session_index,
+            receipt_root=tmp_path / "receipts",
+            trusted_codex_executable=tmp_path / "bin" / "codex",
+            open_pidfd=lambda _pid: 99,
+            signal_pidfd=lambda _pidfd, _signal: (_ for _ in ()).throw(
+                RuntimeError("injected crash after durable intent")
+            ),
+            pidfd_exited=lambda _pidfd, _timeout: False,
+            close_pidfd=lambda _pidfd: None,
+        )
+    assert list((tmp_path / "receipts" / "intents").glob("*.json"))
+    stat_fields = ["S", *(["0"] * 18), "999999"]
+    pid_root.joinpath("stat").write_text(
+        f"4242 (codex) {' '.join(stat_fields)}\n", encoding="utf-8"
+    )
+    replacement_signals, replacement_controls = _pidfd_controls(exit_on=signal.SIGTERM)
+
+    with pytest.raises(RuntimeError, match="fresh generation"):
+        fence_predecessor_process(
+            predecessor_session_id="codex:old-session",
+            successor_session_id="codex:new-session",
+            worktree_path=str(worktree),
+            predecessor_pid=4242,
+            proc_root=proc_root,
+            session_index=session_index,
+            receipt_root=tmp_path / "receipts",
+            trusted_codex_executable=tmp_path / "bin" / "codex",
+            **replacement_controls,
+        )
+
+    assert replacement_signals == []
 
 
 def test_trusted_codex_skips_inaccessible_intermediate_ancestor(

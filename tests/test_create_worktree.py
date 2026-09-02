@@ -677,6 +677,67 @@ def test_create_worktree_allows_matching_scoped_write_claim(tmp_path: Path) -> N
     assert delete_branch.returncode == 0, delete_branch.stdout + delete_branch.stderr
 
 
+def test_create_worktree_allows_staged_goal_reservation_without_tracker(
+    tmp_path: Path,
+) -> None:
+    """A typed goal claim may reserve its exact worktree before session activation."""
+
+    module = _load_module()
+    repo_root = tmp_path / "repo"
+    worktree_path = tmp_path / "repo_worktrees" / "goal-runtime-sync"
+    claims_dir = tmp_path / "claims"
+    _init_temp_repo(repo_root)
+
+    _write_claim(
+        claims_dir,
+        "codex.yaml",
+        {
+            "schema_version": 6,
+            "agent": "codex",
+            "claimed_at": "2026-04-02T08:00:00+00:00",
+            "expires_at": "2099-04-02T09:00:00+00:00",
+            "projects": ["repo"],
+            "scope": "goal-runtime-sync",
+            "intent": "Execute the accepted runtime-sync goal",
+            "claim_type": "write",
+            "write_paths": ["docs/goal.md"],
+            "branch": "goal-runtime-sync",
+            "repo_root": str(repo_root),
+            "worktree_path": str(worktree_path),
+            "session_id": "codex-session",
+            "session_name": "runtime-sync",
+            "broader_goal": "Converge the installed runtime",
+            "tracker_path": None,
+            "plan_ref": "goal:coordination-runtime-consumer-sync",
+            "status": "active",
+        },
+    )
+
+    result = module.create_worktree(
+        repo_root=repo_root,
+        worktree_path=worktree_path,
+        branch="goal-runtime-sync",
+        start_point="HEAD",
+        split_brain_threshold=5,
+        keep_failed_worktree=False,
+        require_write_claim=True,
+        claim_agent="codex",
+        claim_project="repo",
+        claim_write_paths=["docs/goal.md"],
+        claims_dir=claims_dir,
+    )
+
+    assert result.ok, result.message
+    assert result.classification == "clean"
+    assert result.coordination_message is not None
+    assert "Scoped write claim verified" in result.coordination_message
+
+    cleanup_result = _run_git(repo_root, "worktree", "remove", "--force", str(worktree_path))
+    assert cleanup_result.returncode == 0, cleanup_result.stdout + cleanup_result.stderr
+    delete_branch = _run_git(repo_root, "branch", "-D", "goal-runtime-sync")
+    assert delete_branch.returncode == 0, delete_branch.stdout + delete_branch.stderr
+
+
 def test_bootstrap_claim_validates_exact_target_without_granting_worktree_authority(
     tmp_path: Path,
 ) -> None:

@@ -596,7 +596,19 @@ def verify_scoped_write_claim(
             == worktree_path.resolve()
             and bool(claim.session_id and claim.session_name and claim.broader_goal)
         )
-        if staged_plan_reservation or staged_unplanned_reservation:
+        staged_goal_reservation = (
+            claim.tracker_path is None
+            and claim.schema_version >= 6
+            and isinstance(claim.plan_ref, str)
+            and claim.plan_ref.strip().startswith("goal:")
+            and bool(claim.plan_ref.strip().removeprefix("goal:").strip())
+            and claim.branch == branch
+            and (claim.target_worktree_path or claim.worktree_path) is not None
+            and Path(str(claim.target_worktree_path or claim.worktree_path)).expanduser().resolve()
+            == worktree_path.resolve()
+            and bool(claim.session_id and claim.session_name and claim.broader_goal)
+        )
+        if staged_plan_reservation or staged_unplanned_reservation or staged_goal_reservation:
             issues = [issue for issue in issues if issue != "missing_tracker_path"]
         if claim.broad_scope_mode == "bootstrap":
             issues = [issue for issue in issues if issue != "bootstrap_broad_claim_requires_narrowing"]

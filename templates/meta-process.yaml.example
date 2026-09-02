@@ -68,6 +68,7 @@ meta_process:
     # Valid prefixes (regex patterns)
     valid_prefixes:
       - "\\[Plan #\\d+\\]"
+      - "\\[Goal\\]"
       - "\\[Trivial\\]"
       - "\\[Unplanned\\]"  # Emergency escape hatch
   # =============================================================================

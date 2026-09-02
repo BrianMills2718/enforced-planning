@@ -4237,6 +4237,128 @@ def test_close_session_reconciles_exact_session_ended_missing_worktree(
     assert session_contracts.read_session_tracker(tracker)["tracker"]["current_phase"] == "closed"
 
 
+def test_close_session_reconciles_foreign_session_ended_linked_worktree(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A native successor may terminalize merged residue without acquiring write custody."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    repo_root, worktree, branch = _real_repo_with_worktree(tmp_path)
+    claim_file = _start_real_closeout_claim(
+        repo_root=repo_root,
+        worktree=worktree,
+        branch=branch,
+        claims_dir=claims_dir,
+        trackers_dir=trackers_dir,
+    )
+    _git(repo_root, "merge", "--no-ff", branch, "-m", "merge feature")
+    session_lifecycle.end_runtime_session(
+        agent="codex",
+        session_id="codex:test-session",
+        reason="runtime ended after its work merged",
+        claims_dir=claims_dir,
+    )
+    claim_before = claim_file.read_bytes()
+    tracker = Path(yaml.safe_load(claim_before)["tracker_path"])
+    tracker_digest = session_lifecycle._tracker_sha256(tracker)
+    claim_digest = hashlib.sha256(claim_before).hexdigest()
+
+    with _native_actor("codex", "codex:reconciliation-runtime"):
+        with pytest.raises(ValueError, match="belongs to session codex:test-session"):
+            session_lifecycle.close_session(
+                agent="codex",
+                project="enforced-planning",
+                scope=branch,
+                actor_session_id="codex:reconciliation-runtime",
+            )
+        assert claim_file.read_bytes() == claim_before
+        payload = session_lifecycle.close_session(
+            agent="codex",
+            project="enforced-planning",
+            scope=branch,
+            actor_session_id="codex:reconciliation-runtime",
+            reconcile_session_ended=True,
+            expected_claim_sha256=claim_digest,
+            expected_tracker_sha256=tracker_digest,
+        )
+
+    assert payload["action"] == "closed"
+    assert not worktree.exists()
+    assert not claim_file.exists()
+    archived = _archived_claim_payload(payload["claim_archive_id"])
+    receipt = archived["session_ended_closeout_reconciliation"]
+    assert receipt["claim_status_before"] == "session_ended"
+    assert receipt["predecessor_session_id"] == "codex:test-session"
+    assert receipt["reconciliation_actor_session_id"] == "codex:reconciliation-runtime"
+    assert receipt["claim_sha256"] == claim_digest
+    assert receipt["tracker_sha256"] == tracker_digest
+    assert receipt["filesystem_action"] == "removed"
+    assert receipt["branch_action"] == "deleted"
+
+
+@pytest.mark.parametrize(
+    ("ended", "claim_digest", "tracker_digest", "expected"),
+    [
+        (False, "correct", "correct", "session_ended"),
+        (True, "wrong", "correct", "claim digest mismatch"),
+        (True, "correct", "wrong", "tracker digest mismatch"),
+    ],
+)
+def test_close_session_ended_reconciliation_rejects_before_mutation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    ended: bool,
+    claim_digest: str,
+    tracker_digest: str,
+    expected: str,
+) -> None:
+    """Foreign terminal reconciliation requires non-live status and exact immutable inputs."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    repo_root, worktree, branch = _real_repo_with_worktree(tmp_path)
+    claim_file = _start_real_closeout_claim(
+        repo_root=repo_root,
+        worktree=worktree,
+        branch=branch,
+        claims_dir=claims_dir,
+        trackers_dir=trackers_dir,
+    )
+    _git(repo_root, "merge", "--no-ff", branch, "-m", "merge feature")
+    if ended:
+        session_lifecycle.end_runtime_session(
+            agent="codex",
+            session_id="codex:test-session",
+            reason="runtime ended after its work merged",
+            claims_dir=claims_dir,
+        )
+    claim_before = claim_file.read_bytes()
+    tracker = Path(yaml.safe_load(claim_before)["tracker_path"])
+    actual_claim_digest = hashlib.sha256(claim_before).hexdigest()
+    actual_tracker_digest = session_lifecycle._tracker_sha256(tracker)
+    supplied_claim_digest = actual_claim_digest if claim_digest == "correct" else "0" * 64
+    supplied_tracker_digest = actual_tracker_digest if tracker_digest == "correct" else "0" * 64
+
+    with _native_actor("codex", "codex:reconciliation-runtime"):
+        with pytest.raises(ValueError, match=expected):
+            session_lifecycle.close_session(
+                agent="codex",
+                project="enforced-planning",
+                scope=branch,
+                actor_session_id="codex:reconciliation-runtime",
+                reconcile_session_ended=True,
+                expected_claim_sha256=supplied_claim_digest,
+                expected_tracker_sha256=supplied_tracker_digest,
+            )
+
+    assert claim_file.read_bytes() == claim_before
+    assert worktree.exists()
+
+
 def test_close_session_archives_session_ended_canonical_root_without_removal(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

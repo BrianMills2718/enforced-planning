@@ -250,7 +250,7 @@ it does not admit generic Python or change `claims.prewrite_mode`.
 | Key | Type | Default | Read By | Default When Absent |
 |-----|------|---------|---------|---------------------|
 | `commits.require_prefix` | bool | `false` | `hooks/git/commit-msg` | Prefix not required |
-| `commits.valid_prefixes` | list | `["\\[Plan #\\d+\\]", "\\[Trivial\\]", "\\[Unplanned\\]"]` | `hooks/git/commit-msg` | Framework defaults |
+| `commits.valid_prefixes` | list | `["\\[Plan #\\d+\\]", "\\[Goal\\]", "\\[Trivial\\]", "\\[Unplanned\\]"]` | `hooks/git/commit-msg` | Framework defaults |
 
 ## planning
 

@@ -47,11 +47,12 @@ meta_process:
     protect_main: true
 
   commits:
-    # Require [Plan #N] or [Trivial] prefix
+    # Require a durable planning/provenance prefix
     require_prefix: true
     # Valid prefixes (regex patterns)
     valid_prefixes:
       - "\\[Plan #\\d+\\]"
+      - "\\[Goal\\]"
       - "\\[Trivial\\]"
       - "\\[Unplanned\\]"  # Emergency escape hatch
   # =============================================================================

@@ -49,6 +49,12 @@ DEFAULT_RECEIPT_PATH = (
     Path.home() / ".local/state/enforced-planning/session-continuity-sweeps.jsonl"
 )
 DEFAULT_UNIT_NAME = "enforced-planning-session-continuity"
+DEFAULT_SUCCESSOR_OFFER_DIR = (
+    Path.home() / ".local/state/enforced-planning/successor-custody-offers"
+)
+DEFAULT_INSTALLED_RESUME_SCRIPT = (
+    Path.home() / ".codex/runtime/enforced-planning/scripts/session_resume.py"
+)
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
@@ -95,6 +101,24 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         help="Review one exact prior resume offer against current owner activity and receipts.",
     )
     parser.add_argument("--successor-after-minutes", type=int, default=30)
+    parser.add_argument(
+        "--launch-successor",
+        action="store_true",
+        help="Start one transient Codex fork only after the exact review permits launch.",
+    )
+    parser.add_argument(
+        "--successor-offer-dir",
+        type=Path,
+        default=DEFAULT_SUCCESSOR_OFFER_DIR,
+        help=argparse.SUPPRESS,
+    )
+    parser.add_argument(
+        "--installed-resume-script",
+        type=Path,
+        default=DEFAULT_INSTALLED_RESUME_SCRIPT,
+        help=argparse.SUPPRESS,
+    )
+    parser.add_argument("--systemd-run", default="systemd-run", help=argparse.SUPPRESS)
     parser.add_argument("--receipt-jsonl", type=Path, default=DEFAULT_RECEIPT_PATH)
     parser.add_argument("--timer-minutes", type=int, default=10)
     parser.add_argument(
@@ -115,7 +139,10 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     if args.scan_all_live_claims and (args.project or args.scope):
         parser.error("--scan-all-live-claims cannot be combined with --project or --scope")
     if (args.scan_all_live_claims or args.install_observe_timer or args.install_native_delivery_timer) and (
-        args.send_resume_offer or args.queue_native_resume_offer or args.resume_offer_message_id
+        args.send_resume_offer
+        or args.queue_native_resume_offer
+        or args.resume_offer_message_id
+        or args.launch_successor
     ):
         parser.error("shared observe mode cannot send or review resume offers")
     if args.deliver_native_resume_offers and not args.scan_all_live_claims:
@@ -124,6 +151,8 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         parser.error("observe timer cannot enable native resume delivery")
     if args.send_resume_offer and args.queue_native_resume_offer:
         parser.error("select only one resume-offer delivery path")
+    if args.launch_successor and not args.resume_offer_message_id:
+        parser.error("--launch-successor requires --resume-offer-message-id")
     if args.notify_minutes <= 0 or args.timer_minutes <= 0:
         parser.error("notification and timer intervals must be positive")
     return args
@@ -201,6 +230,61 @@ def build_successor_offer_for_claim(
         claim_epoch_sha256=hashlib.sha256(claim_bytes).hexdigest(),
         head_revision=head.stdout.strip(),
         next_action=claim.next_action,
+    )
+
+
+def persist_successor_offer(
+    offer: session_continuity.SuccessorCustodyOfferV1,
+    *,
+    offer_dir: Path = DEFAULT_SUCCESSOR_OFFER_DIR,
+) -> Path:
+    """Persist one immutable exact offer before any successor process starts."""
+
+    target_dir = offer_dir.expanduser().resolve()
+    target_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+    target = target_dir / f"{offer.offer_id}.json"
+    content = (offer.model_dump_json(indent=2) + "\n").encode("utf-8")
+    if target.exists():
+        if target.read_bytes() != content:
+            raise RuntimeError(f"successor offer collision at {target}")
+        return target
+    temporary = target_dir / f".{offer.offer_id}.{secrets.token_hex(6)}.tmp"
+    descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        with os.fdopen(descriptor, "wb") as handle:
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, target)
+    finally:
+        temporary.unlink(missing_ok=True)
+    return target
+
+
+def launch_codex_successor(
+    launch: session_continuity.CodexSuccessorLaunchV1,
+    *,
+    run: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+) -> session_continuity.CodexSuccessorLaunchReceiptV1:
+    """Start one transient unit; launch acknowledgement is not custody acceptance."""
+
+    completed = run(
+        launch.argv,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if completed.returncode != 0:
+        detail = (completed.stderr or completed.stdout).strip() or "no runtime detail"
+        raise RuntimeError(f"Codex successor launch failed visibly: {detail}")
+    stdout = completed.stdout.strip()
+    if launch.systemd_unit not in stdout:
+        raise RuntimeError("successor launcher did not acknowledge the exact transient unit")
+    return session_continuity.CodexSuccessorLaunchReceiptV1(
+        offer_id=launch.offer_id,
+        offer_sha256=launch.offer_sha256,
+        systemd_unit=launch.systemd_unit,
+        runtime_stdout=stdout,
     )
 
 
@@ -706,6 +790,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     payload["native_resume_offer"] = None
     payload["resume_offer_review"] = None
     payload["successor_custody_offer"] = None
+    payload["successor_launch"] = None
     store = coordination_messages.CoordinationMessageStore(
         root=coordination_messages.default_message_root(coordination_claims.CLAIMS_DIR),
         claims_dir=coordination_claims.CLAIMS_DIR,
@@ -778,6 +863,20 @@ def main(argv: Sequence[str] | None = None) -> int:
                 claim=claim,
             )
             payload["successor_custody_offer"] = successor_offer.model_dump(mode="json")
+            if args.launch_successor:
+                offer_path = persist_successor_offer(
+                    successor_offer,
+                    offer_dir=args.successor_offer_dir,
+                )
+                launch = session_continuity.build_codex_successor_launch(
+                    offer=successor_offer,
+                    offer_path=str(offer_path),
+                    resume_script=str(args.installed_resume_script),
+                    codex=args.codex,
+                    systemd_run=args.systemd_run,
+                )
+                receipt = launch_codex_successor(launch)
+                payload["successor_launch"] = receipt.model_dump(mode="json")
     if args.json:
         print(json.dumps(payload, indent=2, sort_keys=True))
     else:

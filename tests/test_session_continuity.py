@@ -14,11 +14,13 @@ import pytest
 from enforced_planning import coordination_messages
 from enforced_planning.session_continuity import (
     CodexActivityV1,
+    CodexSuccessorLaunchReceiptV1,
     SuccessorCustodyAcceptanceV1,
     SuccessorCustodyOfferV1,
     accept_successor_custody_offer,
     assess_continuity,
     assess_resume_offer,
+    build_codex_successor_launch,
     build_native_codex_resume_offer,
     build_resume_offer_request,
     build_successor_custody_offer,
@@ -400,6 +402,107 @@ def test_successor_offer_freezes_exact_recoverable_custody() -> None:
     assert offer.claim_epoch_sha256 == "c" * 64
     assert offer.head_revision == "d" * 40
     assert offer.next_action == "run the focused integration"
+
+
+def test_codex_successor_launch_requires_acceptance_before_work(tmp_path: Path) -> None:
+    offer = successor_custody_offer()
+    offer_path = tmp_path / "offer.json"
+    resume_script = tmp_path / "session_resume.py"
+
+    launch = build_codex_successor_launch(
+        offer=offer,
+        offer_path=str(offer_path),
+        resume_script=str(resume_script),
+    )
+
+    assert launch.predecessor_thread_id == "owner"
+    assert launch.offer_sha256 == successor_custody_offer_sha256(offer)
+    assert launch.argv[:8] == [
+        "systemd-run",
+        "--user",
+        "--collect",
+        "--unit",
+        f"enforced-planning-successor-{offer.offer_id}",
+        "--property",
+        f"WorkingDirectory={offer.worktree_path}",
+        "--",
+    ]
+    assert launch.argv[8:13] == ["codex", "exec", "fork", "--json", "owner"]
+    assert "--accept-successor-custody-offer" in launch.prompt
+    assert str(offer_path) in launch.prompt
+    assert offer.next_action in launch.prompt
+    assert launch.transfer_eligible is False
+
+
+def test_codex_successor_launch_rejects_relative_control_paths() -> None:
+    with pytest.raises(ValueError, match="paths must be absolute"):
+        build_codex_successor_launch(
+            offer=successor_custody_offer(),
+            offer_path="offer.json",
+            resume_script="scripts/session_resume.py",
+        )
+
+
+def test_successor_offer_persistence_and_transient_launch_receipt(tmp_path: Path) -> None:
+    offer = successor_custody_offer()
+    offer_path = continuity_cli.persist_successor_offer(offer, offer_dir=tmp_path)
+    assert continuity_cli.persist_successor_offer(offer, offer_dir=tmp_path) == offer_path
+    assert SuccessorCustodyOfferV1.model_validate_json(offer_path.read_text()) == offer
+    assert offer_path.stat().st_mode & 0o777 == 0o600
+    launch = build_codex_successor_launch(
+        offer=offer,
+        offer_path=str(offer_path),
+        resume_script=str(tmp_path / "session_resume.py"),
+    )
+    observed: list[str] = []
+
+    def fake_run(command: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        observed.extend(command)
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            f"Running as unit: {launch.systemd_unit}.service\n",
+            "",
+        )
+
+    receipt = continuity_cli.launch_codex_successor(launch, run=fake_run)
+
+    assert observed == launch.argv
+    assert isinstance(receipt, CodexSuccessorLaunchReceiptV1)
+    assert receipt.launch_started is True
+    assert receipt.successor_session_id is None
+    assert receipt.successor_accepted is False
+    assert receipt.transfer_eligible is False
+
+
+def test_successor_launch_fails_visible_without_exact_unit_ack(tmp_path: Path) -> None:
+    offer = successor_custody_offer()
+    launch = build_codex_successor_launch(
+        offer=offer,
+        offer_path=str(tmp_path / "offer.json"),
+        resume_script=str(tmp_path / "session_resume.py"),
+    )
+
+    with pytest.raises(RuntimeError, match="exact transient unit"):
+        continuity_cli.launch_codex_successor(
+            launch,
+            run=lambda command, **_kwargs: subprocess.CompletedProcess(
+                command, 0, "Running as unit: different.service\n", ""
+            ),
+        )
+
+
+def test_cli_successor_launch_requires_exact_offer_review() -> None:
+    with pytest.raises(SystemExit):
+        continuity_cli.parse_args(
+            [
+                "--project",
+                "demo",
+                "--scope",
+                "feature-lane",
+                "--launch-successor",
+            ]
+        )
 
 
 def test_different_successor_accepts_every_exact_offer_field() -> None:

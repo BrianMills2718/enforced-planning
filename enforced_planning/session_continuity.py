@@ -405,13 +405,26 @@ def read_native_codex_consumption(
                 raise ValueError(
                     f"Codex transcript has malformed JSON at line {line_number}"
                 ) from exc
-            if not isinstance(record, dict) or record.get("type") != "event_msg":
+            if not isinstance(record, dict):
                 continue
             payload = record.get("payload")
-            if (
-                not isinstance(payload, dict)
-                or payload.get("type") != "user_message"
-                or not contains_marker(payload)
+            if not isinstance(payload, dict):
+                continue
+            response_user_message = (
+                record.get("type") == "response_item"
+                and payload.get("type") == "message"
+                and payload.get("role") == "user"
+            )
+            item = payload.get("item")
+            completed_user_message = (
+                record.get("type") == "event_msg"
+                and payload.get("type") == "item_completed"
+                and isinstance(item, dict)
+                and item.get("type") == "UserMessage"
+                and payload.get("thread_id") == thread_id
+            )
+            if not (response_user_message or completed_user_message) or not contains_marker(
+                payload
             ):
                 continue
             consumed_at = _aware_timestamp(record.get("timestamp"))

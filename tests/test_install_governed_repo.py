@@ -950,6 +950,8 @@ def test_install_governed_repo_write_bootstraps_minimum_repo_and_passes_audit(
     assert (tmp_path / ".claude" / "settings.json").exists()
     makefile_text = (tmp_path / "Makefile").read_text(encoding="utf-8")
     assert "worktree:" in makefile_text
+    assert "goal-worktree:" in makefile_text
+    assert '"operation":"goal_worktree"' in makefile_text
     assert "maintenance-worktree:" in makefile_text
     assert "scripts/meta/claim_bootstrap.py --request-json" in makefile_text
     assert "worktree-list:" in makefile_text

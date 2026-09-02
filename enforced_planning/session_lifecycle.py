@@ -7,6 +7,7 @@ inventing a second coordination registry.
 
 from __future__ import annotations
 
+import base64
 import fcntl
 import hashlib
 import json
@@ -37,6 +38,7 @@ from enforced_planning import (
 from enforced_planning.worktree_paths import resolve_canonical_repo_root
 
 WORKTREE_LIFECYCLE_CONFIG_PATH = Path(__file__).with_name("worktree_lifecycle.yaml")
+SESSION_TRANSFER_JOURNAL_FIELD = "transfer_journal"
 
 
 class SessionTransferIncompleteError(RuntimeError):
@@ -431,16 +433,13 @@ def _validate_canonical_root_reconciliation(
         common_dir = recorded_worktree / common_dir
     common_dir = common_dir.resolve()
     if top_level != recorded_worktree or common_dir != (recorded_worktree / ".git").resolve():
-        raise ValueError(
-            "Canonical-root reconciliation rejects linked worktrees and non-canonical Git identities."
-        )
+        raise ValueError("Canonical-root reconciliation rejects linked worktrees and non-canonical Git identities.")
     if not (recorded_worktree / ".git").is_dir():
         raise ValueError("Canonical-root reconciliation requires a main-worktree .git directory")
     clean, dirty_details = _worktree_is_clean(str(recorded_worktree))
     if not clean:
         raise ValueError(
-            "Canonical-root reconciliation requires a clean canonical checkout. Uncommitted state:\n"
-            + dirty_details
+            "Canonical-root reconciliation requires a clean canonical checkout. Uncommitted state:\n" + dirty_details
         )
     current_branch = git_output("symbolic-ref", "--quiet", "--short", "HEAD")
     if not claim.branch or current_branch != claim.branch:
@@ -625,7 +624,7 @@ def _atomic_restore_bytes(path: Path, content: bytes) -> None:
             temp_path.unlink()
 
 
-def _apply_cross_session_resume_transaction(
+def _apply_legacy_cross_session_resume_transaction(
     *,
     claim: coordination_claims.ClaimRecord,
     claim_file: Path,
@@ -642,16 +641,12 @@ def _apply_cross_session_resume_transaction(
     scope: str,
     worktree_path: str,
     branch: str,
-    process_fence: dict[str, Any] | None,
-    predecessor_process_pid: int | None,
-    predecessor_process_start_ticks: int | None,
-    takeover_reservation: dict[str, Any] | None,
 ) -> tuple[
     dict[str, Any],
     outcome_selection.OutcomeSessionTransferV1 | None,
     dict[str, Any],
 ]:
-    """Commit custody and bind its receipt under claim-registry then tracker lock."""
+    """Commit an unfenced non-Codex custody transfer with exact rollback."""
 
     with (
         coordination_claims.claim_registry_lock(coordination_claims.CLAIMS_DIR),
@@ -669,7 +664,6 @@ def _apply_cross_session_resume_transaction(
                 raise ValueError(f"claim field {field} changed after cross-session resume preflight")
         if claim.broad_scope_mode == "bootstrap" and claim.target_worktree_path:
             current["worktree_path"] = claim.target_worktree_path
-        current.pop(coordination_claims.SESSION_TAKEOVER_RESERVATION_FIELD, None)
         current.update(
             {
                 "status": "active",
@@ -679,7 +673,10 @@ def _apply_cross_session_resume_transaction(
                 "notes": note or "session resumed with a fresh runtime attachment",
             }
         )
-        successor_claim = coordination_claims.normalize_claim(current, source_file=str(claim_file.resolve()))
+        successor_claim = coordination_claims.normalize_claim(
+            current,
+            source_file=str(claim_file.resolve()),
+        )
         if successor_claim is None:
             raise ValueError("resumed claim could not be normalized before tracker transfer")
         tracker_payload = session_contracts.read_session_tracker(tracker_path)
@@ -735,25 +732,17 @@ def _apply_cross_session_resume_transaction(
                 transferred_at=updated_at,
                 prior_claim_bytes=claim_bytes_before,
                 successor_claim_bytes=claim_file.read_bytes(),
-                process_fence=process_fence,
-                predecessor_process_pid=predecessor_process_pid,
-                predecessor_process_start_ticks=predecessor_process_start_ticks,
-                process_fence_transfer_epoch_sha256=(
-                    takeover_reservation.get("claim_epoch_sha256")
-                    if takeover_reservation is not None
-                    else None
-                ),
+                process_fence=None,
+                predecessor_process_pid=None,
+                predecessor_process_start_ticks=None,
+                process_fence_transfer_epoch_sha256=None,
             )
         except Exception:
-            rollback_registry_digest_before = coordination_claims._registry_digest(
-                coordination_claims.CLAIMS_DIR
-            )
+            rollback_registry_digest_before = coordination_claims._registry_digest(coordination_claims.CLAIMS_DIR)
             _atomic_restore_bytes(claim_file, claim_bytes_before)
             _atomic_restore_bytes(tracker_path, tracker_bytes_before)
-            _projection_path, rollback_projection_digest = (
-                coordination_claims.refresh_prewrite_authority_projection(
-                    coordination_claims.CLAIMS_DIR
-                )
+            _projection_path, rollback_projection_digest = coordination_claims.refresh_prewrite_authority_projection(
+                coordination_claims.CLAIMS_DIR
             )
             coordination_claims.record_claim_mutation(
                 operation="session_upsert",
@@ -767,6 +756,270 @@ def _apply_cross_session_resume_transaction(
             )
             raise
     return current, transfer_receipt, claim_session_transfer
+
+
+def _apply_codex_cross_session_resume_transaction(
+    *,
+    claim: coordination_claims.ClaimRecord,
+    claim_file: Path,
+    claim_bytes_before: bytes,
+    tracker_path: Path,
+    tracker_bytes_before: bytes,
+    successor_session_id: str,
+    current_phase: str,
+    note: str | None,
+    updated_at: str,
+    expected_fields: dict[str, Any],
+    transfer_preflight: outcome_selection.PreparedOutcomeSessionTransfer | None,
+    project: str,
+    scope: str,
+    worktree_path: str,
+    branch: str,
+    process_fence: dict[str, Any] | None,
+    predecessor_process_pid: int | None,
+    predecessor_process_start_ticks: int | None,
+    takeover_reservation: dict[str, Any] | None,
+) -> tuple[
+    dict[str, Any],
+    outcome_selection.OutcomeSessionTransferV1 | None,
+    dict[str, Any],
+]:
+    """Commit custody through a reservation journal with the claim written last."""
+
+    def yaml_bytes(payload: dict[str, Any]) -> bytes:
+        return yaml.safe_dump(payload, default_flow_style=False, sort_keys=False).encode("utf-8")
+
+    def decode_journal_bytes(
+        journal: dict[str, Any],
+        *,
+        prefix: str,
+    ) -> bytes:
+        encoded = journal.get(f"{prefix}_bytes_base64")
+        expected_sha256 = journal.get(f"{prefix}_sha256")
+        if not isinstance(encoded, str) or not isinstance(expected_sha256, str):
+            raise TypeError(f"session transfer journal lacks exact {prefix} bytes")
+        try:
+            decoded = base64.b64decode(encoded, validate=True)
+        except ValueError as exc:
+            raise ValueError(f"session transfer journal has invalid {prefix} bytes") from exc
+        if hashlib.sha256(decoded).hexdigest() != expected_sha256:
+            raise ValueError(f"session transfer journal {prefix} digest mismatch")
+        return decoded
+
+    def validate_journal(
+        journal: dict[str, Any],
+        *,
+        reservation: dict[str, Any],
+    ) -> tuple[bytes, bytes, bytes]:
+        expected = {
+            "record_type": "claim_session_transfer_journal",
+            "predecessor_session_id": claim.session_id,
+            "successor_session_id": successor_session_id,
+            "worktree_path": str(Path(worktree_path).expanduser().resolve()),
+            "branch": branch,
+            "claim_epoch_sha256": reservation.get("claim_epoch_sha256"),
+            "process_fence_receipt_path": process_fence.get("receipt_path") if process_fence else None,
+            "process_fence_receipt_sha256": process_fence.get("receipt_sha256") if process_fence else None,
+        }
+        if any(journal.get(field) != value for field, value in expected.items()):
+            raise ValueError("session transfer journal does not match exact custody inputs")
+        predecessor_tracker_bytes = decode_journal_bytes(
+            journal,
+            prefix="predecessor_tracker",
+        )
+        successor_claim_bytes = decode_journal_bytes(journal, prefix="successor_claim")
+        successor_tracker_bytes = decode_journal_bytes(
+            journal,
+            prefix="successor_tracker",
+        )
+        successor_claim_payload = yaml.safe_load(successor_claim_bytes)
+        successor_tracker_payload = yaml.safe_load(successor_tracker_bytes)
+        if not isinstance(successor_claim_payload, dict) or not isinstance(successor_tracker_payload, dict):
+            raise TypeError("session transfer journal successor state must contain YAML mappings")
+        if (
+            successor_claim_payload.get("session_id") != successor_session_id
+            or coordination_claims.SESSION_TAKEOVER_RESERVATION_FIELD in successor_claim_payload
+        ):
+            raise ValueError("session transfer journal has invalid successor claim custody")
+        tracker_claim = successor_tracker_payload.get("claim")
+        if not isinstance(tracker_claim, dict) or tracker_claim.get("session_id") != successor_session_id:
+            raise ValueError("session transfer journal has invalid successor tracker custody")
+        return predecessor_tracker_bytes, successor_claim_bytes, successor_tracker_bytes
+
+    with (
+        coordination_claims.claim_registry_lock(coordination_claims.CLAIMS_DIR),
+        session_contracts.session_tracker_lock(tracker_path),
+    ):
+        current_claim_bytes = claim_file.read_bytes()
+        current = yaml.safe_load(current_claim_bytes)
+        if not isinstance(current, dict):
+            raise TypeError("cross-session resume claim must be a YAML mapping")
+        reservation = coordination_claims.active_session_takeover_reservation(current)
+        if reservation is None or takeover_reservation is None:
+            raise ValueError("cross-session Codex transfer requires one active takeover reservation")
+        for field in (
+            "predecessor_session_id",
+            "successor_session_id",
+            "worktree_path",
+            "pid",
+            "process_start_ticks",
+            "claim_epoch_sha256",
+        ):
+            if reservation.get(field) != takeover_reservation.get(field):
+                raise ValueError("takeover reservation changed before custody commit")
+
+        raw_journal = reservation.get(SESSION_TRANSFER_JOURNAL_FIELD)
+        transfer_receipt: outcome_selection.OutcomeSessionTransferV1 | None = None
+        if raw_journal is None:
+            if current_claim_bytes != claim_bytes_before:
+                raise ValueError("claim changed after cross-session resume preflight")
+            if tracker_path.read_bytes() != tracker_bytes_before:
+                raise ValueError("session tracker changed after cross-session resume preflight")
+            for field, expected in expected_fields.items():
+                if current.get(field) != expected:
+                    raise ValueError(f"claim field {field} changed after cross-session resume preflight")
+
+            successor_payload = dict(current)
+            if claim.broad_scope_mode == "bootstrap" and claim.target_worktree_path:
+                successor_payload["worktree_path"] = claim.target_worktree_path
+            successor_payload.pop(coordination_claims.SESSION_TAKEOVER_RESERVATION_FIELD, None)
+            successor_payload.update(
+                {
+                    "status": "active",
+                    "session_id": successor_session_id,
+                    "heartbeat_at": updated_at,
+                    "updated_at": updated_at,
+                    "notes": note or "session resumed with a fresh runtime attachment",
+                }
+            )
+            successor_claim = coordination_claims.normalize_claim(
+                successor_payload,
+                source_file=str(claim_file.resolve()),
+            )
+            if successor_claim is None:
+                raise ValueError("resumed claim could not be normalized before tracker transfer")
+            tracker_payload = yaml.safe_load(tracker_bytes_before)
+            if not isinstance(tracker_payload, dict):
+                raise TypeError("session tracker predecessor state must be a YAML mapping")
+            if transfer_preflight is not None:
+                tracker_payload = outcome_selection.build_prepared_outcome_session_transfer_payload(
+                    transfer_preflight,
+                    tracker_payload=tracker_payload,
+                    predecessor_claim=claim,
+                    successor_claim=successor_claim,
+                    current_phase=current_phase,
+                    notes=successor_payload["notes"],
+                    updated_at=updated_at,
+                )
+                transfer_receipt = transfer_preflight.transfer
+            else:
+                tracker_claim = tracker_payload.get("claim")
+                tracker_section = tracker_payload.get("tracker")
+                timestamps = tracker_payload.get("timestamps")
+                if not isinstance(tracker_claim, dict) or tracker_claim.get("session_id") != claim.session_id:
+                    raise ValueError("session tracker predecessor identity does not match the claim")
+                if not isinstance(tracker_section, dict) or not isinstance(timestamps, dict):
+                    raise ValueError("session tracker is missing tracker or timestamps state")
+                tracker_claim["session_id"] = successor_session_id
+                tracker_section["current_phase"] = current_phase
+                tracker_section["notes"] = successor_payload["notes"]
+                timestamps["updated_at"] = updated_at
+
+            successor_claim_bytes = yaml_bytes(successor_payload)
+            successor_tracker_bytes = yaml_bytes(tracker_payload)
+            if process_fence is None:
+                raise ValueError("Codex transfer journal requires typed process-fence evidence")
+            journal = {
+                "record_type": "claim_session_transfer_journal",
+                "predecessor_session_id": claim.session_id,
+                "successor_session_id": successor_session_id,
+                "worktree_path": str(Path(worktree_path).expanduser().resolve()),
+                "branch": branch,
+                "claim_epoch_sha256": reservation["claim_epoch_sha256"],
+                "transferred_at": updated_at,
+                "process_fence_receipt_path": process_fence.get("receipt_path"),
+                "process_fence_receipt_sha256": process_fence.get("receipt_sha256"),
+                "predecessor_tracker_sha256": hashlib.sha256(tracker_bytes_before).hexdigest(),
+                "predecessor_tracker_bytes_base64": base64.b64encode(tracker_bytes_before).decode("ascii"),
+                "successor_claim_sha256": hashlib.sha256(successor_claim_bytes).hexdigest(),
+                "successor_claim_bytes_base64": base64.b64encode(successor_claim_bytes).decode("ascii"),
+                "successor_tracker_sha256": hashlib.sha256(successor_tracker_bytes).hexdigest(),
+                "successor_tracker_bytes_base64": base64.b64encode(successor_tracker_bytes).decode("ascii"),
+            }
+            journalized_reservation = dict(reservation)
+            journalized_reservation[SESSION_TRANSFER_JOURNAL_FIELD] = journal
+            journalized_claim = dict(current)
+            journalized_claim[coordination_claims.SESSION_TAKEOVER_RESERVATION_FIELD] = journalized_reservation
+            registry_digest_before = coordination_claims._registry_digest(coordination_claims.CLAIMS_DIR)
+            _write_claim_payload(claim_file, journalized_claim)
+            _projection_path, projection_digest_after = coordination_claims.refresh_prewrite_authority_projection(
+                coordination_claims.CLAIMS_DIR
+            )
+            coordination_claims.record_claim_mutation(
+                operation="session_upsert",
+                claims_dir=coordination_claims.CLAIMS_DIR,
+                registry_digest_before=registry_digest_before,
+                target_project=claim.primary_project(),
+                target_scope=claim.scope,
+                target_claim_path=claim_file,
+                session_id=claim.session_id,
+                projection_digest_after=projection_digest_after,
+            )
+            current_claim_bytes = claim_file.read_bytes()
+            current = journalized_claim
+            reservation = journalized_reservation
+            raw_journal = journal
+        elif not isinstance(raw_journal, dict):
+            raise TypeError("session takeover reservation has malformed transfer journal state")
+
+        assert isinstance(raw_journal, dict)
+        predecessor_tracker_bytes, successor_claim_bytes, successor_tracker_bytes = validate_journal(
+            raw_journal, reservation=reservation
+        )
+        current_tracker_bytes = tracker_path.read_bytes()
+        if current_tracker_bytes not in {predecessor_tracker_bytes, successor_tracker_bytes}:
+            raise ValueError("session tracker changed outside the durable custody journal")
+
+        transferred_at = raw_journal.get("transferred_at")
+        if not isinstance(transferred_at, str) or not transferred_at:
+            raise ValueError("session transfer journal lacks its transfer timestamp")
+        claim_session_transfer = _persist_claim_session_transfer_receipt(
+            claim=claim,
+            project=project,
+            scope=scope,
+            worktree_path=worktree_path,
+            branch=branch,
+            successor_session_id=successor_session_id,
+            transferred_at=transferred_at,
+            prior_claim_bytes=current_claim_bytes,
+            successor_claim_bytes=successor_claim_bytes,
+            process_fence=process_fence,
+            predecessor_process_pid=predecessor_process_pid,
+            predecessor_process_start_ticks=predecessor_process_start_ticks,
+            process_fence_transfer_epoch_sha256=reservation.get("claim_epoch_sha256"),
+        )
+        if current_tracker_bytes != successor_tracker_bytes:
+            _atomic_restore_bytes(tracker_path, successor_tracker_bytes)
+
+        registry_digest_before = coordination_claims._registry_digest(coordination_claims.CLAIMS_DIR)
+        _atomic_restore_bytes(claim_file, successor_claim_bytes)
+        successor_payload = yaml.safe_load(successor_claim_bytes)
+        if not isinstance(successor_payload, dict):
+            raise TypeError("session transfer journal successor claim must be a YAML mapping")
+        _projection_path, projection_digest_after = coordination_claims.refresh_prewrite_authority_projection(
+            coordination_claims.CLAIMS_DIR
+        )
+        coordination_claims.record_claim_mutation(
+            operation="session_upsert",
+            claims_dir=coordination_claims.CLAIMS_DIR,
+            registry_digest_before=registry_digest_before,
+            target_project=claim.primary_project(),
+            target_scope=claim.scope,
+            target_claim_path=claim_file,
+            session_id=successor_session_id,
+            projection_digest_after=projection_digest_after,
+        )
+    return successor_payload, transfer_receipt, claim_session_transfer
 
 
 def _validate_same_runtime_tracker_identity(
@@ -795,8 +1048,7 @@ def _validate_same_runtime_tracker_identity(
         if (
             not isinstance(claim_value, str)
             or not isinstance(tracker_value, str)
-            or Path(claim_value).expanduser().resolve()
-            != Path(tracker_value).expanduser().resolve()
+            or Path(claim_value).expanduser().resolve() != Path(tracker_value).expanduser().resolve()
         ):
             mismatches.append(field)
     tracker_custody = tracker_claim.get("tracker_path")
@@ -806,9 +1058,7 @@ def _validate_same_runtime_tracker_identity(
     ):
         mismatches.append("tracker_path")
     if mismatches:
-        raise ValueError(
-            "Exact session tracker does not match claim custody: " + ", ".join(sorted(set(mismatches)))
-        )
+        raise ValueError("Exact session tracker does not match claim custody: " + ", ".join(sorted(set(mismatches))))
 
 
 def _reattach_same_runtime_tracker(
@@ -880,15 +1130,11 @@ def _reattach_same_runtime_tracker(
                 projection_digest_after=projection_digest_after,
             )
         except Exception:
-            rollback_registry_digest_before = coordination_claims._registry_digest(
-                coordination_claims.CLAIMS_DIR
-            )
+            rollback_registry_digest_before = coordination_claims._registry_digest(coordination_claims.CLAIMS_DIR)
             _atomic_restore_bytes(claim_file, claim_bytes_before)
             _atomic_restore_bytes(tracker_path, tracker_bytes_before)
-            _projection_path, rollback_projection_digest = (
-                coordination_claims.refresh_prewrite_authority_projection(
-                    coordination_claims.CLAIMS_DIR
-                )
+            _projection_path, rollback_projection_digest = coordination_claims.refresh_prewrite_authority_projection(
+                coordination_claims.CLAIMS_DIR
             )
             coordination_claims.record_claim_mutation(
                 operation="session_upsert",
@@ -932,9 +1178,7 @@ def _persist_claim_session_transfer_receipt(
     process_fence_binding: dict[str, object] | None = None
     if process_fence is not None:
         if predecessor_process_pid is None or predecessor_process_start_ticks is None:
-            raise ValueError(
-                "process-fence evidence requires the exact requested predecessor PID generation"
-            )
+            raise ValueError("process-fence evidence requires the exact requested predecessor PID generation")
         receipt_path_raw = process_fence.get("receipt_path")
         receipt_sha256 = process_fence.get("receipt_sha256")
         if not isinstance(receipt_path_raw, str) or not isinstance(receipt_sha256, str):
@@ -943,9 +1187,7 @@ def _persist_claim_session_transfer_receipt(
         process_receipt_bytes = process_receipt_path.read_bytes()
         if hashlib.sha256(process_receipt_bytes).hexdigest() != receipt_sha256:
             raise ValueError("process-fence receipt digest does not match its exact bytes")
-        parsed_fence = session_process_fencing.ProcessFenceReceiptV1.model_validate_json(
-            process_receipt_bytes
-        )
+        parsed_fence = session_process_fencing.ProcessFenceReceiptV1.model_validate_json(process_receipt_bytes)
         if process_fence_transfer_epoch_sha256 is None:
             raise ValueError("process-fence evidence lacks its reserved predecessor claim epoch")
         expected_transfer_epoch = process_fence_transfer_epoch_sha256
@@ -978,9 +1220,7 @@ def _persist_claim_session_transfer_receipt(
             )
         }
         if parsed_fields != expected_fields or parsed_fields != returned_fields:
-            raise ValueError(
-                "typed process-fence receipt does not match the exact transfer inputs and result"
-            )
+            raise ValueError("typed process-fence receipt does not match the exact transfer inputs and result")
         process_fence_binding = {
             "receipt_path": str(process_receipt_path),
             "receipt_sha256": receipt_sha256,
@@ -1006,10 +1246,7 @@ def _persist_claim_session_transfer_receipt(
     }
     canonical = (json.dumps(payload, indent=2, sort_keys=True) + "\n").encode("utf-8")
     receipt_sha256 = hashlib.sha256(canonical).hexdigest()
-    receipt_root = (
-        coordination_claims.CLAIMS_DIR.expanduser().resolve().parent
-        / "session-custody-transfers-v1"
-    )
+    receipt_root = coordination_claims.CLAIMS_DIR.expanduser().resolve().parent / "session-custody-transfers-v1"
     receipt_path = receipt_root / f"{receipt_sha256[:32]}.json"
     if receipt_path.exists():
         if receipt_path.read_bytes() != canonical:
@@ -1222,7 +1459,9 @@ def _upsert_session_claim(
         if existing.session_id and existing.session_id != session_id:
             raise ValueError(f"Claim at {path} belongs to session {existing.session_id}, not {session_id}")
         if maintenance_snapshot is not None and path.read_bytes() != maintenance_snapshot.claim_bytes:
-            raise ValueError("sanctioned maintenance provenance changed during session refresh; retry from current state")
+            raise ValueError(
+                "sanctioned maintenance provenance changed during session refresh; retry from current state"
+            )
 
         effective_claim_type = claim_type or existing.claim_type
         effective_write_paths = existing.write_paths if write_paths is None else write_paths
@@ -2160,18 +2399,20 @@ def _validate_locked_sanctioned_maintenance_refresh(
         plan_sha256=existing_claim.plan_sha256 if effective_plan_repo_root is not None else None,
         allow_unplanned=allow_unplanned,
     )
-    candidate_tracker_path = session_contracts.session_tracker_path(
-        contract,
-        tracker_dir=tracker_dir,
-    ).expanduser().resolve()
+    candidate_tracker_path = (
+        session_contracts.session_tracker_path(
+            contract,
+            tracker_dir=tracker_dir,
+        )
+        .expanduser()
+        .resolve()
+    )
     expected_tracker_path = tracker_path.expanduser().resolve()
     existing_tracker_fields = existing_tracker.get("tracker")
     if not isinstance(existing_tracker_fields, dict):
         raise ValueError("sanctioned maintenance tracker is missing execution metadata")
     effective_intended_next_phases = (
-        existing_tracker_fields.get("intended_next_phases")
-        if intended_next_phases is None
-        else intended_next_phases
+        existing_tracker_fields.get("intended_next_phases") if intended_next_phases is None else intended_next_phases
     )
     effective_depends_on_repos = (
         existing_tracker_fields.get("depends_on_repos") if depends_on_repos is None else depends_on_repos
@@ -2231,9 +2472,7 @@ def _validate_locked_sanctioned_maintenance_refresh(
             )
     mismatches = sorted(field for field, (candidate, existing) in immutable_inputs.items() if candidate != existing)
     if mismatches:
-        raise ValueError(
-            "sanctioned maintenance refresh cannot change immutable provenance: " + ", ".join(mismatches)
-        )
+        raise ValueError("sanctioned maintenance refresh cannot change immutable provenance: " + ", ".join(mismatches))
 
     return _MaintenanceRefreshSnapshot(
         claim=existing_claim,
@@ -2472,6 +2711,7 @@ def start_session(
     )
     claim_slot_path = _claim_path(agent, project, scope)
     maintenance_snapshot: _MaintenanceRefreshSnapshot | None = None
+
     def upsert_claim(*, registry_lock_held: bool = False) -> str:
         return _upsert_session_claim(
             agent=agent,
@@ -2522,9 +2762,7 @@ def start_session(
                 else None
             )
             if locked_claim is None:
-                raise ValueError(
-                    "session refresh could not reload the initially live claim; refusing recreation"
-                )
+                raise ValueError("session refresh could not reload the initially live claim; refusing recreation")
             initial_owner = (
                 existing_claim.agent,
                 tuple(existing_claim.projects),
@@ -2678,7 +2916,9 @@ def start_session(
                 try:
                     with session_contracts.session_tracker_lock(tracker_path):
                         if tracker_path.read_bytes() != tracker_bytes_written:
-                            raise ValueError("session tracker changed after this start attempt; refusing unsafe rollback")
+                            raise ValueError(
+                                "session tracker changed after this start attempt; refusing unsafe rollback"
+                            )
                         if tracker_preexisting:
                             assert tracker_bytes_before is not None
                             _atomic_restore_bytes(tracker_path, tracker_bytes_before)
@@ -2929,12 +3169,10 @@ def start_delegated_session(
         session_contracts.write_session_tracker(tracker, tracker_dir=tracker_dir)
         tracker_written = tracker_path.read_bytes()
         try:
-            _projection_path, projection_digest = (
-                coordination_claims._replace_claim_and_refresh_projection_fail_atomic(
-                    claim_path=claim_path,
-                    payload=claim_payload,
-                    claims_dir=coordination_claims.CLAIMS_DIR,
-                )
+            _projection_path, projection_digest = coordination_claims._replace_claim_and_refresh_projection_fail_atomic(
+                claim_path=claim_path,
+                payload=claim_payload,
+                claims_dir=coordination_claims.CLAIMS_DIR,
             )
             coordination_claims.record_claim_mutation(
                 operation="create",
@@ -3597,12 +3835,7 @@ def _resolve_closeout_worktree_path(
 ) -> Path:
     """Resolve physical cleanup to the real bootstrap target, never its sentinel."""
 
-    return Path(
-        requested_worktree_path
-        or claim.target_worktree_path
-        or claim.worktree_path
-        or ""
-    ).expanduser()
+    return Path(requested_worktree_path or claim.target_worktree_path or claim.worktree_path or "").expanduser()
 
 
 def close_session(
@@ -3948,31 +4181,35 @@ def resume_session(
                 )
             if not claim.session_id:
                 raise ValueError("Cross-session Codex resume cannot fence an unbound predecessor session.")
-            claim, payload, claim_bytes_before, takeover_reservation = (
-                coordination_claims.reserve_session_takeover(
-                    claim_file=claim_file,
-                    agent=agent,
-                    project=project,
-                    scope=scope,
-                    predecessor_session_id=claim.session_id,
-                    successor_session_id=resolved_session_id,
-                    worktree_path=worktree_path,
-                    predecessor_pid=predecessor_process_pid,
-                    predecessor_process_start_ticks=predecessor_process_start_ticks,
-                    reserved_at=updated_at,
-                    pre_reservation_claim_bytes=claim_snapshot_bytes,
-                )
+            claim, payload, claim_bytes_before, takeover_reservation = coordination_claims.reserve_session_takeover(
+                claim_file=claim_file,
+                agent=agent,
+                project=project,
+                scope=scope,
+                predecessor_session_id=claim.session_id,
+                successor_session_id=resolved_session_id,
+                worktree_path=worktree_path,
+                predecessor_pid=predecessor_process_pid,
+                predecessor_process_start_ticks=predecessor_process_start_ticks,
+                reserved_at=updated_at,
+                pre_reservation_claim_bytes=claim_snapshot_bytes,
             )
         else:
             claim_bytes_before = claim_file.read_bytes()
         tracker_bytes_before = tracker_path.read_bytes()
-        transfer_preflight = outcome_selection.prepare_outcome_session_transfer(
-            claim=claim,
-            successor_session_id=resolved_session_id,
-            transferred_at=datetime.fromisoformat(updated_at),
+        existing_transfer_journal = (
+            takeover_reservation.get(SESSION_TRANSFER_JOURNAL_FIELD) if takeover_reservation is not None else None
         )
-        if transfer_preflight is not None and transfer_preflight.tracker_path != tracker_path.resolve():
-            raise ValueError("selected outcome transfer resolved a different tracker path")
+        if existing_transfer_journal is None:
+            transfer_preflight = outcome_selection.prepare_outcome_session_transfer(
+                claim=claim,
+                successor_session_id=resolved_session_id,
+                transferred_at=datetime.fromisoformat(updated_at),
+            )
+            if transfer_preflight is not None and transfer_preflight.tracker_path != tracker_path.resolve():
+                raise ValueError("selected outcome transfer resolved a different tracker path")
+        elif not isinstance(existing_transfer_journal, dict):
+            raise TypeError("session takeover reservation has malformed transfer journal state")
         if agent == "codex":
             assert takeover_reservation is not None
             assert predecessor_process_pid is not None
@@ -4035,29 +4272,53 @@ def resume_session(
         else:
             if claim_bytes_before is None or tracker_bytes_before is None or tracker_path is None:
                 raise SessionTransferIncompleteError("cross-session resume lacks exact predecessor bytes")
-            payload, transfer_receipt, claim_session_transfer = _apply_cross_session_resume_transaction(
-                claim=claim,
-                claim_file=claim_file,
-                claim_bytes_before=claim_bytes_before,
-                tracker_path=tracker_path,
-                tracker_bytes_before=tracker_bytes_before,
-                successor_session_id=resolved_session_id,
-                current_phase=current_phase,
-                note=note,
-                updated_at=updated_at,
-                expected_fields=expected_fields,
-                transfer_preflight=transfer_preflight,
-                project=project,
-                scope=scope,
-                worktree_path=worktree_path,
-                branch=branch,
-                process_fence=process_fence,
-                predecessor_process_pid=predecessor_process_pid,
-                predecessor_process_start_ticks=predecessor_process_start_ticks,
-                takeover_reservation=takeover_reservation,
-            )
+            if takeover_reservation is not None:
+                payload, transfer_receipt, claim_session_transfer = _apply_codex_cross_session_resume_transaction(
+                    claim=claim,
+                    claim_file=claim_file,
+                    claim_bytes_before=claim_bytes_before,
+                    tracker_path=tracker_path,
+                    tracker_bytes_before=tracker_bytes_before,
+                    successor_session_id=resolved_session_id,
+                    current_phase=current_phase,
+                    note=note,
+                    updated_at=updated_at,
+                    expected_fields=expected_fields,
+                    transfer_preflight=transfer_preflight,
+                    project=project,
+                    scope=scope,
+                    worktree_path=worktree_path,
+                    branch=branch,
+                    process_fence=process_fence,
+                    predecessor_process_pid=predecessor_process_pid,
+                    predecessor_process_start_ticks=predecessor_process_start_ticks,
+                    takeover_reservation=takeover_reservation,
+                )
+            else:
+                payload, transfer_receipt, claim_session_transfer = _apply_legacy_cross_session_resume_transaction(
+                    claim=claim,
+                    claim_file=claim_file,
+                    claim_bytes_before=claim_bytes_before,
+                    tracker_path=tracker_path,
+                    tracker_bytes_before=tracker_bytes_before,
+                    successor_session_id=resolved_session_id,
+                    current_phase=current_phase,
+                    note=note,
+                    updated_at=updated_at,
+                    expected_fields=expected_fields,
+                    transfer_preflight=transfer_preflight,
+                    project=project,
+                    scope=scope,
+                    worktree_path=worktree_path,
+                    branch=branch,
+                )
     except Exception as transfer_error:
         if same_runtime:
+            raise
+        if takeover_reservation is not None:
+            # A fenced Codex transfer is recoverable only by replaying its durable
+            # reservation journal. Restoring predecessor bytes would erase the
+            # proof needed to finish custody without refencing a gone process.
             raise
         if claim_bytes_before is None or tracker_bytes_before is None:
             raise SessionTransferIncompleteError(

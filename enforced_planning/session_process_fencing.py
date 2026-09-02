@@ -40,9 +40,7 @@ class ProcessFenceReceiptV1(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     schema_version: Literal["1.0"] = "1.0"
-    record_type: Literal["session_predecessor_process_fence"] = (
-        "session_predecessor_process_fence"
-    )
+    record_type: Literal["session_predecessor_process_fence"] = "session_predecessor_process_fence"
     predecessor_session_id: str = Field(min_length=1)
     successor_session_id: str = Field(min_length=1)
     worktree_path: str = Field(min_length=1)
@@ -60,9 +58,7 @@ class ProcessFenceIntentV1(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     schema_version: Literal["1.0"] = "1.0"
-    record_type: Literal["session_predecessor_process_fence_intent"] = (
-        "session_predecessor_process_fence_intent"
-    )
+    record_type: Literal["session_predecessor_process_fence_intent"] = "session_predecessor_process_fence_intent"
     predecessor_session_id: str = Field(min_length=1)
     successor_session_id: str = Field(min_length=1)
     worktree_path: str = Field(min_length=1)
@@ -116,8 +112,7 @@ def _current_ancestor_pids(proc_root: Path) -> tuple[int, ...]:
         status_path = proc_root / str(current) / "status"
         try:
             parent_line = next(
-                line for line in status_path.read_text(encoding="utf-8").splitlines()
-                if line.startswith("PPid:")
+                line for line in status_path.read_text(encoding="utf-8").splitlines() if line.startswith("PPid:")
             )
         except (FileNotFoundError, StopIteration):
             break
@@ -177,10 +172,53 @@ def _validate_codex_process_command(
         raise ValueError("predecessor PID executable is not the successor runtime's exact Codex client")
     command_bytes = pid_root.joinpath("cmdline").read_bytes()
     tokens = [token.decode("utf-8") for token in command_bytes.split(b"\0") if token]
-    if not tokens or Path(tokens[0]).name != "codex" or tokens.count("resume") != 1:
+    if not tokens or Path(tokens[0]).name != "codex":
         raise ValueError("predecessor PID command is not one direct Codex resume process")
-    resume_index = tokens.index("resume")
-    if resume_index + 1 >= len(tokens) or tokens[resume_index + 1].startswith("-"):
+
+    flag_only_globals = {
+        "--dangerously-bypass-approvals-and-sandbox",
+        "--full-auto",
+        "--no-alt-screen",
+        "--oss",
+        "--search",
+    }
+    valued_globals = {
+        "--add-dir",
+        "--ask-for-approval",
+        "--chdir",
+        "--config",
+        "--disable",
+        "--enable",
+        "--image",
+        "--model",
+        "--profile",
+        "--sandbox",
+        "-C",
+        "-a",
+        "-c",
+        "-i",
+        "-m",
+        "-p",
+        "-s",
+    }
+    index = 1
+    while index < len(tokens) and tokens[index] != "resume":
+        token = tokens[index]
+        if token in flag_only_globals:
+            index += 1
+            continue
+        option, separator, value = token.partition("=")
+        if separator and option in valued_globals and value:
+            index += 1
+            continue
+        if token in valued_globals and index + 1 < len(tokens):
+            index += 2
+            continue
+        raise ValueError("predecessor PID command is not one direct Codex resume process")
+    if index >= len(tokens) or tokens[index] != "resume":
+        raise ValueError("predecessor PID command is not one direct Codex resume process")
+    resume_index = index
+    if resume_index + 2 != len(tokens) or tokens[resume_index + 1].startswith("-"):
         raise ValueError("predecessor Codex process does not name one exact resumed session")
 
     raw_session_id = predecessor_session_id.removeprefix("codex:")
@@ -262,14 +300,9 @@ def fence_predecessor_process(
             return None
         if intent is None:
             raise RuntimeError("completed process-fence receipt lacks its durable intent")
-        receipt = ProcessFenceReceiptV1.model_validate_json(
-            receipt_path.read_text(encoding="utf-8")
-        )
+        receipt = ProcessFenceReceiptV1.model_validate_json(receipt_path.read_text(encoding="utf-8"))
         validate_request_binding(receipt)
-        if (
-            receipt.process_start_ticks != intent.process_start_ticks
-            or receipt.command_sha256 != intent.command_sha256
-        ):
+        if receipt.process_start_ticks != intent.process_start_ticks or receipt.command_sha256 != intent.command_sha256:
             raise RuntimeError("completed process-fence receipt does not match its durable intent")
         return {
             **receipt.model_dump(mode="json"),
@@ -289,9 +322,7 @@ def fence_predecessor_process(
 
     def finalize(
         active_intent: ProcessFenceIntentV1,
-        final_signal: Literal[
-            "SIGTERM", "SIGTERM+SIGKILL", "RECOVERED_ABSENT_AFTER_INTENT"
-        ],
+        final_signal: Literal["SIGTERM", "SIGTERM+SIGKILL", "RECOVERED_ABSENT_AFTER_INTENT"],
     ) -> dict[str, object]:
         receipt = ProcessFenceReceiptV1(
             predecessor_session_id=active_intent.predecessor_session_id,
@@ -378,9 +409,7 @@ def fence_predecessor_process(
                     intent.model_dump_json(indent=2).encode("utf-8") + b"\n",
                 )
             except FileExistsError:
-                persisted_intent = ProcessFenceIntentV1.model_validate_json(
-                    intent_path.read_text(encoding="utf-8")
-                )
+                persisted_intent = ProcessFenceIntentV1.model_validate_json(intent_path.read_text(encoding="utf-8"))
                 validate_request_binding(persisted_intent)
                 if persisted_intent != intent:
                     raise RuntimeError("concurrent process-fence intent has different identity")

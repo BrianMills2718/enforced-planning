@@ -20,9 +20,7 @@ def fence_predecessor_process(**kwargs: object) -> dict[str, object]:
     return _fence_predecessor_process(**kwargs)
 
 
-def _pidfd_controls(
-    *, exit_on: int | None
-) -> tuple[list[tuple[int, int]], dict[str, object]]:
+def _pidfd_controls(*, exit_on: int | None) -> tuple[list[tuple[int, int]], dict[str, object]]:
     signals: list[tuple[int, int]] = []
     state = {"exited": False}
 
@@ -46,6 +44,7 @@ def _fake_process(
     pid: int = 4242,
     target: str = "old-agent",
     start_ticks: int = 123456,
+    command_args: list[str] | None = None,
 ) -> tuple[Path, Path, Path, Path]:
     proc_root = tmp_path / "proc"
     pid_root = proc_root / str(pid)
@@ -54,8 +53,9 @@ def _fake_process(
     codex.parent.mkdir()
     codex.write_text("fixture\n", encoding="utf-8")
     pid_root.joinpath("exe").symlink_to(codex)
+    argv = command_args or ["resume", target]
     pid_root.joinpath("cmdline").write_bytes(
-        f"{codex}\0resume\0{target}\0--yolo\0".encode()
+        b"\0".join([str(codex).encode(), *(argument.encode() for argument in argv)]) + b"\0"
     )
     stat_fields = ["S", *(["0"] * 18), str(start_ticks)]
     pid_root.joinpath("stat").write_text(
@@ -106,9 +106,7 @@ def test_fence_terminates_only_exact_session_pid_and_persists_receipt(tmp_path: 
 
 
 def test_fence_rejects_pid_for_different_session_without_signalling(tmp_path: Path) -> None:
-    proc_root, _pid_root, session_index, worktree = _fake_process(
-        tmp_path, target="another-agent"
-    )
+    proc_root, _pid_root, session_index, worktree = _fake_process(tmp_path, target="another-agent")
     signals, pidfd_controls = _pidfd_controls(exit_on=signal.SIGTERM)
 
     with pytest.raises(ValueError, match="different Codex session"):
@@ -125,6 +123,65 @@ def test_fence_rejects_pid_for_different_session_without_signalling(tmp_path: Pa
         )
 
     assert signals == []
+
+
+@pytest.mark.parametrize(
+    "command_args",
+    [
+        ["exec", "resume", "old-agent"],
+        ["exec", "--", "resume", "old-agent"],
+        ["--unknown-global", "resume", "old-agent"],
+        ["resume", "old-agent", "unexpected-prompt"],
+        ["resume", "old-agent", "--yolo"],
+    ],
+)
+def test_fence_rejects_nested_or_ambiguous_resume_argv_without_signalling(
+    tmp_path: Path,
+    command_args: list[str],
+) -> None:
+    proc_root, _pid_root, session_index, worktree = _fake_process(
+        tmp_path,
+        command_args=command_args,
+    )
+    signals, pidfd_controls = _pidfd_controls(exit_on=signal.SIGTERM)
+
+    with pytest.raises(ValueError, match="direct Codex resume|one exact resumed session"):
+        fence_predecessor_process(
+            predecessor_session_id="codex:old-session",
+            successor_session_id="codex:new-session",
+            worktree_path=str(worktree),
+            predecessor_pid=4242,
+            proc_root=proc_root,
+            session_index=session_index,
+            receipt_root=tmp_path / "receipts",
+            trusted_codex_executable=tmp_path / "bin" / "codex",
+            **pidfd_controls,
+        )
+
+    assert signals == []
+
+
+def test_fence_accepts_only_explicit_allowed_globals_before_resume(tmp_path: Path) -> None:
+    proc_root, _pid_root, session_index, worktree = _fake_process(
+        tmp_path,
+        command_args=["--model", "gpt-5", "--no-alt-screen", "resume", "old-agent"],
+    )
+    signals, pidfd_controls = _pidfd_controls(exit_on=signal.SIGTERM)
+
+    result = fence_predecessor_process(
+        predecessor_session_id="codex:old-session",
+        successor_session_id="codex:new-session",
+        worktree_path=str(worktree),
+        predecessor_pid=4242,
+        proc_root=proc_root,
+        session_index=session_index,
+        receipt_root=tmp_path / "receipts",
+        trusted_codex_executable=tmp_path / "bin" / "codex",
+        **pidfd_controls,
+    )
+
+    assert signals == [(99, signal.SIGTERM)]
+    assert result["pid"] == 4242
 
 
 def test_fence_fails_closed_when_exact_process_does_not_exit(tmp_path: Path) -> None:
@@ -279,9 +336,7 @@ def test_receipt_write_failure_after_exit_retries_from_durable_intent(
             raise OSError("injected final receipt write failure")
         original_write(path, payload)
 
-    monkeypatch.setattr(
-        session_process_fencing, "_write_durable_exclusive", fail_first_final_write
-    )
+    monkeypatch.setattr(session_process_fencing, "_write_durable_exclusive", fail_first_final_write)
     with pytest.raises(OSError, match="injected final receipt write failure"):
         fence_predecessor_process(
             predecessor_session_id="codex:old-session",
@@ -367,9 +422,7 @@ def test_completed_receipt_rejects_live_restarted_same_session_generation(
         **first_controls,
     )
     stat_fields = ["S", *(["0"] * 18), "999999"]
-    pid_root.joinpath("stat").write_text(
-        f"4242 (codex) {' '.join(stat_fields)}\n", encoding="utf-8"
-    )
+    pid_root.joinpath("stat").write_text(f"4242 (codex) {' '.join(stat_fields)}\n", encoding="utf-8")
     replacement_signals, replacement_controls = _pidfd_controls(exit_on=signal.SIGTERM)
 
     with pytest.raises(RuntimeError, match="fresh generation"):
@@ -412,9 +465,7 @@ def test_active_intent_rejects_live_restarted_same_session_generation(
         )
     assert list((tmp_path / "receipts" / "intents").glob("*.json"))
     stat_fields = ["S", *(["0"] * 18), "999999"]
-    pid_root.joinpath("stat").write_text(
-        f"4242 (codex) {' '.join(stat_fields)}\n", encoding="utf-8"
-    )
+    pid_root.joinpath("stat").write_text(f"4242 (codex) {' '.join(stat_fields)}\n", encoding="utf-8")
     replacement_signals, replacement_controls = _pidfd_controls(exit_on=signal.SIGTERM)
 
     with pytest.raises(RuntimeError, match="fresh generation"):
@@ -446,14 +497,10 @@ def test_trusted_codex_skips_inaccessible_intermediate_ancestor(
     (proc_root / "111" / "comm").write_text("bash\n", encoding="utf-8")
     (proc_root / "222" / "comm").write_text("codex\n", encoding="utf-8")
     (proc_root / "222" / "exe").symlink_to(codex_exe)
-    monkeypatch.setattr(
-        session_process_fencing, "_current_ancestor_pids", lambda _root: (111, 222)
-    )
+    monkeypatch.setattr(session_process_fencing, "_current_ancestor_pids", lambda _root: (111, 222))
     original_resolve = Path.resolve
 
-    def resolve_with_inaccessible_intermediate(
-        path: Path, strict: bool = False
-    ) -> Path:
+    def resolve_with_inaccessible_intermediate(path: Path, strict: bool = False) -> Path:
         if path == inaccessible:
             raise PermissionError(path)
         return original_resolve(path, strict=strict)
@@ -463,9 +510,7 @@ def test_trusted_codex_skips_inaccessible_intermediate_ancestor(
     assert session_process_fencing._trusted_codex_executable(proc_root) == codex_exe
 
 
-def test_trusted_codex_selects_nearest_codex_ancestor(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_trusted_codex_selects_nearest_codex_ancestor(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     proc_root = tmp_path / "proc"
     near_codex = tmp_path / "near" / "codex"
     far_codex = tmp_path / "far" / "codex"
@@ -477,8 +522,6 @@ def test_trusted_codex_selects_nearest_codex_ancestor(
         (proc_root / str(pid)).mkdir(parents=True)
         (proc_root / str(pid) / "comm").write_text("codex\n", encoding="utf-8")
         (proc_root / str(pid) / "exe").symlink_to(executable)
-    monkeypatch.setattr(
-        session_process_fencing, "_current_ancestor_pids", lambda _root: (111, 222)
-    )
+    monkeypatch.setattr(session_process_fencing, "_current_ancestor_pids", lambda _root: (111, 222))
 
     assert session_process_fencing._trusted_codex_executable(proc_root) == near_codex

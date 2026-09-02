@@ -8,6 +8,7 @@ import fcntl
 import hashlib
 import json
 import os
+import re
 import secrets
 import shlex
 import shutil
@@ -167,6 +168,8 @@ def _assess_claim(claim: coordination_claims.ClaimRecord, *, notify_minutes: int
         "scope": claim.scope,
         "session_id": claim.session_id,
         "next_action": claim.next_action,
+        "progress_at": claim.progress_at,
+        "worktree_path": getattr(claim, "worktree_path", None),
     }
     try:
         transcript = coordination_claims.session_transcript_path(claim.session_id)
@@ -405,6 +408,7 @@ def _append_delivery_state(
         owner_session_id=offer.owner_session_id,
         thread_id=offer.thread_id,
         correlation_id=offer.correlation_id,
+        progress_fingerprint=offer.progress_fingerprint,
         state=state,
         recorded_at=datetime.now(UTC),
         queued_submission_id=queued_submission_id,
@@ -508,10 +512,15 @@ def deliver_native_resume_offers(
     receipt_path: Path,
     codex: str = "codex",
     run: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+    git_run: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+    max_consumed_attempts_without_progress: int = 2,
 ) -> list[dict[str, Any]]:
-    """Queue once per unchanged owner activity boundary, failing closed on uncertainty."""
+    """Queue bounded consumed attempts per unchanged durable progress fingerprint."""
 
+    if max_consumed_attempts_without_progress <= 0:
+        raise ValueError("native resume consumed-attempt bound must be positive")
     states = _delivery_journal_states(receipt_path)
+    consumed = _native_consumption_receipts(receipt_path)
     results: list[dict[str, Any]] = []
     for item in sweep.get("items", []):
         assessment_data = item.get("assessment") if isinstance(item, dict) else None
@@ -548,11 +557,70 @@ def deliver_native_resume_offers(
             assessment = session_continuity.ContinuityAssessmentV1.model_validate(
                 assessment_data
             )
+            supplied_fingerprint = item.get("progress_fingerprint")
+            if supplied_fingerprint is None:
+                worktree_path = item.get("worktree_path")
+                if not isinstance(worktree_path, str) or not worktree_path.strip():
+                    raise ValueError("native resume delivery lacks an exact worktree")
+                head = git_run(
+                    (
+                        "git",
+                        "-C",
+                        str(Path(worktree_path).expanduser().resolve()),
+                        "rev-parse",
+                        "--verify",
+                        "HEAD^{commit}",
+                    ),
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                if head.returncode != 0:
+                    detail = (head.stderr or head.stdout).strip() or "Git revision unavailable"
+                    raise ValueError(
+                        f"native resume progress cannot resolve worktree revision: {detail}"
+                    )
+                progress_fingerprint = (
+                    session_continuity.native_resume_progress_fingerprint(
+                        progress_at=(
+                            str(item["progress_at"])
+                            if item.get("progress_at") is not None
+                            else None
+                        ),
+                        head_revision=head.stdout.strip(),
+                        next_action=str(item.get("next_action") or ""),
+                    )
+                )
+            else:
+                progress_fingerprint = str(supplied_fingerprint)
+                if re.fullmatch(r"[0-9a-f]{64}", progress_fingerprint) is None:
+                    raise ValueError("native resume delivery has an invalid progress fingerprint")
+            consumed_without_progress = sum(
+                correlation_id in consumed
+                and state.progress_fingerprint == progress_fingerprint
+                for correlation_id, state in states.items()
+            )
+            if consumed_without_progress >= max_consumed_attempts_without_progress:
+                results.append(
+                    {
+                        **base,
+                        "progress_fingerprint": progress_fingerprint,
+                        "consumed_attempt_count": consumed_without_progress,
+                        "action": "circuit_breaker",
+                        "reason_code": "native_resume_progress_not_observed",
+                        "resume_condition": (
+                            "record a changed Git revision, claim progress timestamp, or exact "
+                            "next action before another automatic owner resume"
+                        ),
+                    }
+                )
+                continue
             offer = session_continuity.build_native_codex_resume_offer(
                 assessment=assessment,
                 project=str(item.get("project") or ""),
                 scope=str(item.get("scope") or ""),
                 next_action=str(item.get("next_action") or ""),
+                progress_fingerprint=progress_fingerprint,
             )
             prior = states.get(offer.correlation_id)
             if prior is not None:
@@ -914,11 +982,37 @@ def main(argv: Sequence[str] | None = None) -> int:
             "message_path": sent.message_path,
         }
     if args.queue_native_resume_offer and assessment.action == "notify_owner":
+        worktree_path = getattr(claim, "worktree_path", None)
+        if not isinstance(worktree_path, str) or not worktree_path.strip():
+            raise ValueError("native resume delivery lacks an exact worktree")
+        head = subprocess.run(
+            (
+                "git",
+                "-C",
+                str(Path(worktree_path).expanduser().resolve()),
+                "rev-parse",
+                "--verify",
+                "HEAD^{commit}",
+            ),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if head.returncode != 0:
+            detail = (head.stderr or head.stdout).strip() or "Git revision unavailable"
+            raise ValueError(
+                f"native resume progress cannot resolve worktree revision: {detail}"
+            )
         offer = session_continuity.build_native_codex_resume_offer(
             assessment=assessment,
             project=args.project,
             scope=args.scope,
             next_action=claim.next_action or "reach the next verified checkpoint",
+            progress_fingerprint=session_continuity.native_resume_progress_fingerprint(
+                progress_at=claim.progress_at,
+                head_revision=head.stdout.strip(),
+                next_action=claim.next_action or "reach the next verified checkpoint",
+            ),
         )
         queued = subprocess.run(
             (

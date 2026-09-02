@@ -19,7 +19,7 @@ from contextlib import nullcontext
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import yaml  # type: ignore[import-untyped]
 
@@ -4095,6 +4095,98 @@ def close_session(
     }
 
 
+def _verify_successor_custody_offer_state(
+    *,
+    claim: coordination_claims.ClaimRecord,
+    claim_snapshot_bytes: bytes,
+    project: str,
+    scope: str,
+    worktree_path: str,
+    branch: str,
+    successor_custody_offer: session_continuity.SuccessorCustodyOfferV1,
+    git_run: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+) -> dict[str, Any]:
+    """Bind one immutable offer to the current lane without changing custody."""
+
+    current_head = git_run(
+        ("git", "-C", worktree_path, "rev-parse", "--verify", "HEAD^{commit}"),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    exact_runtime = {
+        "predecessor_session_id": claim.session_id,
+        "project": project,
+        "scope": scope,
+        "branch": branch,
+        "worktree_path": str(Path(worktree_path).expanduser().resolve()),
+        "claim_epoch_sha256": hashlib.sha256(claim_snapshot_bytes).hexdigest(),
+        "head_revision": current_head.stdout.strip() if current_head.returncode == 0 else None,
+        "next_action": claim.next_action,
+    }
+    mismatched = [
+        field
+        for field, value in exact_runtime.items()
+        if value != getattr(successor_custody_offer, field)
+    ]
+    if mismatched:
+        raise ValueError(
+            "successor offer no longer matches current custody state: "
+            + ", ".join(mismatched)
+        )
+    return {
+        "schema_version": "1.0",
+        "record_type": "successor_custody_offer_verification",
+        "action": "successor_custody_offer_verified",
+        "offer_id": successor_custody_offer.offer_id,
+        "predecessor_session_id": successor_custody_offer.predecessor_session_id,
+        "project": project,
+        "scope": scope,
+        "branch": branch,
+        "worktree_path": exact_runtime["worktree_path"],
+        "head_revision": exact_runtime["head_revision"],
+        "successor_acceptance_required": True,
+        "successor_launch_allowed": False,
+        "custody_mutation_performed": False,
+        "transfer_eligible": False,
+    }
+
+
+def verify_successor_custody_offer_state(
+    *,
+    agent: str,
+    project: str,
+    scope: str,
+    worktree_path: str,
+    branch: str,
+    successor_custody_offer: session_continuity.SuccessorCustodyOfferV1,
+) -> dict[str, Any]:
+    """Verify a prepared offer against live state without reserving custody."""
+
+    claim, _payload, _claim_file, claim_snapshot_bytes = _claim_snapshot_any_status(
+        agent=agent,
+        project=project,
+        scope=scope,
+    )
+    if claim.status not in coordination_claims.CLOSEABLE_STATUSES:
+        raise ValueError(f"Cannot verify lane from lifecycle status {claim.status!r}")
+    if not claim.plan_ref:
+        raise ValueError("Cannot verify a lane with no plan_ref")
+    if claim.branch and claim.branch != branch:
+        raise ValueError(f"Claim branch is {claim.branch}, not {branch}")
+    if claim.worktree_path and claim.worktree_path != worktree_path:
+        raise ValueError(f"Claim worktree is {claim.worktree_path}, not {worktree_path}")
+    return _verify_successor_custody_offer_state(
+        claim=claim,
+        claim_snapshot_bytes=claim_snapshot_bytes,
+        project=project,
+        scope=scope,
+        worktree_path=worktree_path,
+        branch=branch,
+        successor_custody_offer=successor_custody_offer,
+    )
+
+
 def resume_session(
     *,
     agent: str,
@@ -4139,36 +4231,23 @@ def resume_session(
     if (successor_custody_offer is None) != (successor_custody_acceptance is None):
         raise ValueError("automatic successor transfer requires both offer and acceptance")
     if successor_custody_offer is not None and successor_custody_acceptance is not None:
+        _verify_successor_custody_offer_state(
+            claim=claim,
+            claim_snapshot_bytes=claim_snapshot_bytes,
+            project=project,
+            scope=scope,
+            worktree_path=worktree_path,
+            branch=branch,
+            successor_custody_offer=successor_custody_offer,
+        )
         session_continuity.validate_successor_custody_acceptance(
             offer=successor_custody_offer,
             acceptance=successor_custody_acceptance,
         )
-        current_head = subprocess.run(
-            ("git", "-C", worktree_path, "rev-parse", "--verify", "HEAD^{commit}"),
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        exact_runtime = {
-            "predecessor_session_id": claim.session_id,
-            "successor_session_id": resolved_session_id,
-            "project": project,
-            "scope": scope,
-            "branch": branch,
-            "worktree_path": str(Path(worktree_path).expanduser().resolve()),
-            "claim_epoch_sha256": hashlib.sha256(claim_snapshot_bytes).hexdigest(),
-            "head_revision": current_head.stdout.strip() if current_head.returncode == 0 else None,
-            "next_action": claim.next_action,
-        }
-        mismatched = [
-            field
-            for field, value in exact_runtime.items()
-            if value != getattr(successor_custody_acceptance, field)
-        ]
-        if mismatched:
+        if successor_custody_acceptance.successor_session_id != resolved_session_id:
             raise ValueError(
                 "successor acceptance no longer matches current custody state: "
-                + ", ".join(mismatched)
+                "successor_session_id"
             )
     explicitly_transferable = claim.status in {
         "handoff",

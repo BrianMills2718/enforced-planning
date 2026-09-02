@@ -193,6 +193,25 @@ without mutation. The acceptance alone never transfers or releases custody;
 the existing fenced claim/tracker transaction remains the only commit point.
 Manual handoff and recovery remain compatible and do not require these flags.
 
+Before any successor exists, an operator or lifecycle service may preflight one
+prepared packet through the same live claim and Git checks without accepting or
+transferring custody:
+
+```bash
+python scripts/session_resume.py \
+  --agent codex --project <project> --scope <scope> \
+  --worktree-path <absolute-worktree> --branch <branch> \
+  --current-phase "verify prepared successor offer" \
+  --successor-custody-offer <offer.json> \
+  --verify-successor-custody-offer-only --json
+```
+
+The result reports `successor_acceptance_required: true` and keeps successor
+launch, claim mutation, process fencing, and transfer disabled. It fails if the
+predecessor session, project, scope, branch, worktree, claim bytes, Git `HEAD`,
+or next action changed. This is packet readiness evidence only; it is not
+successor acceptance or custody transfer.
+
 A successor runtime may author that receipt explicitly at the transfer boundary
 instead of first writing a separate acceptance file: pass the exact offer with
 `--successor-custody-offer <offer.json> --accept-successor-custody-offer`.

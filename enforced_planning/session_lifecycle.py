@@ -921,6 +921,11 @@ def _persist_claim_session_transfer_receipt(
         process_receipt_path = Path(receipt_path_raw).expanduser().resolve()
         if hashlib.sha256(process_receipt_path.read_bytes()).hexdigest() != receipt_sha256:
             raise ValueError("process-fence receipt digest does not match its exact bytes")
+        expected_transfer_epoch = hashlib.sha256(prior_claim_bytes).hexdigest()
+        if process_fence.get("transfer_epoch_sha256") != expected_transfer_epoch:
+            raise ValueError(
+                "process-fence evidence is not bound to the exact predecessor claim-bytes epoch"
+            )
         process_fence_binding = {
             "receipt_path": str(process_receipt_path),
             "receipt_sha256": receipt_sha256,

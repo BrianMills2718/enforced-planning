@@ -190,7 +190,9 @@ deterministic active intent. After a confirmed exit it atomically finalizes an
 immutable mode-0600 process-fence receipt; retry either resumes the same
 start-tick identity or finalizes an already-absent/replaced predecessor without
 signaling the replacement. The custody-transfer receipt embeds the exact fence
-receipt path and SHA-256. Missing, ambiguous, or mismatched process identity
+receipt path and SHA-256, and the custody transaction independently recomputes
+the predecessor claim-bytes digest before consuming that fence epoch. Missing,
+ambiguous, or mismatched process identity
 fails before the claim or tracker changes; never replace this contract with a
 process-name-wide kill.
 

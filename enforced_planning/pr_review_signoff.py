@@ -518,6 +518,7 @@ def _run_reviewer_lane(
         "--quiet",
         "--collect",
         "--property=ReadOnlyPaths=/",
+        "--property=ReadWritePaths=/proc",
         f"--property=ReadWritePaths={lane_directory}",
         f"--property=WorkingDirectory={root}",
         f"--setenv=CODEX_HOME={lane_codex_home}",

@@ -28,7 +28,9 @@ planning format and must not invent or weaken criteria.
    OS-enforced read-only filesystem unit, with only its lane-private receipt,
    temp, and ephemeral Codex-home directory writable; the temporary home gets
    only the authentication material required to start the client and is deleted
-   with the review workspace (the client read-only flag is defense in depth);
+   with the review workspace. The non-persistent `/proc` process filesystem stays
+   writable so the client's nested read-only sandbox can initialize (the client
+   read-only flag is defense in depth);
 4. concurrent execution and explicit session custody for every declared lane;
 5. schema validation of every independent semantic result;
 6. the final deterministic signoff decision and receipt digest; and

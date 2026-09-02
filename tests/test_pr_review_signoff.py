@@ -544,7 +544,7 @@ def test_runner_executes_checks_and_fresh_schema_bound_reviewer(tmp_path: Path) 
     }
     fake_codex.write_text(
         "#!/usr/bin/env python3\n"
-        "import json, pathlib, sys\n"
+        "import json, pathlib, subprocess, sys\n"
         "prompt = sys.stdin.read()\n"
         "lane = 'test-evidence' if '\"review_lane\": \"test-evidence\"' in prompt else 'correctness'\n"
         "try:\n"
@@ -555,6 +555,7 @@ def test_runner_executes_checks_and_fresh_schema_bound_reviewer(tmp_path: Path) 
         "    raise SystemExit('reviewer filesystem was writable')\n"
         "runtime_home = pathlib.Path(__import__('os').environ['CODEX_HOME'])\n"
         "runtime_home.joinpath('runtime-marker').write_text('ok', encoding='utf-8')\n"
+        "subprocess.run(['unshare', '--user', '--map-root-user', 'true'], check=True)\n"
         "args = sys.argv[1:]\n"
         "out = pathlib.Path(args[args.index('--output-last-message') + 1])\n"
         f"semantic = {semantic!r}\n"

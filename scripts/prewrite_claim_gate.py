@@ -643,14 +643,14 @@ def _trusted_merged_closeout_worktree(target: Path) -> bool:
     return object_check.returncode == 0 and ancestry.returncode == 0
 
 
-def _parse_native_closeout_make_command(
+def _native_closeout_args_from_make_command(
     command: str,
     *,
     client: str,
     claims_dir: Path,
     native_session: str | None = None,
-) -> None:
-    """Validate the canonical Make closeout for one exact merged live owner."""
+) -> tuple[Path, list[str]]:
+    """Translate one exact owner-bound Make request to installed CLI arguments."""
 
     from enforced_planning import coordination_claims
     from scripts import session_close
@@ -710,9 +710,6 @@ def _parse_native_closeout_make_command(
     project = claim.projects[0]
     if assignments.get("WORKTREE_PROJECT", project) != project:
         raise ValueError("Make closeout project does not match the exact live claim")
-    if not _trusted_merged_closeout_worktree(target):
-        raise ValueError("Make closeout control worktree is dirty, unmerged, or not installed history")
-
     close_args = [
         "--agent",
         client,
@@ -747,6 +744,65 @@ def _parse_native_closeout_make_command(
             session_close.parse_args(close_args)
     except SystemExit as exc:
         raise ValueError("Make closeout does not map to the canonical CLI grammar") from exc
+    return target, close_args
+
+
+def _parse_native_closeout_make_command(
+    command: str,
+    *,
+    client: str,
+    claims_dir: Path,
+    native_session: str | None = None,
+) -> None:
+    """Validate the canonical Make closeout for one exact merged live owner."""
+
+    target, _close_args = _native_closeout_args_from_make_command(
+        command,
+        client=client,
+        claims_dir=claims_dir,
+        native_session=native_session,
+    )
+    if not _trusted_merged_closeout_worktree(target):
+        raise ValueError("Make closeout control worktree is dirty, unmerged, or not installed history")
+
+
+def _native_closeout_recovery_for_make_command(
+    command: str,
+    *,
+    client: str,
+    claims_dir: Path,
+    native_session: str | None = None,
+) -> str | None:
+    """Render the installed closeout equivalent of one exact consumer request.
+
+    A consumer Makefile is repository-owned executable code and cannot receive
+    claimless authority merely because its generated lifecycle block matches a
+    template: another target or parse-time expression can change what Make
+    executes.  Once a clean merged claim is intentionally unhealthy, route the
+    already-validated request to the installed runtime instead.
+    """
+
+    try:
+        target, close_args = _native_closeout_args_from_make_command(
+            command,
+            client=client,
+            claims_dir=claims_dir,
+            native_session=native_session,
+        )
+    except (OSError, TypeError, ValueError):
+        return None
+    if _trusted_merged_closeout_worktree(target) or native_session is None:
+        return None
+    return shlex.join(
+        [
+            "/usr/bin/python3",
+            str((REPO_ROOT / "scripts" / "session_close.py").resolve()),
+            *close_args,
+            "--session-id",
+            native_session,
+            "--json",
+        ]
+    )
 
 
 def _same_file_digest(left: Path, right: Path) -> bool:
@@ -1433,6 +1489,37 @@ def main(argv: list[str] | None = None) -> int:
             claim_bootstrap_classifier=special_classifier,
             projection_recovery_command=recovery_command,
         )
+        details = decision.get("details")
+        if (
+            decision.get("decision") == "deny"
+            and decision.get("reason_code") == "claim_not_healthy"
+            and isinstance(details, list)
+            and any(
+                "merged_active_claim_requires_disposition" in str(item)
+                for item in details
+            )
+            and payload.get("tool_name") == "Bash"
+        ):
+            rebound_input = payload.get("tool_input")
+            rebound_command = (
+                rebound_input.get("command") if isinstance(rebound_input, dict) else None
+            )
+            if isinstance(rebound_command, str):
+                installed_closeout = _native_closeout_recovery_for_make_command(
+                    rebound_command,
+                    client=args.client,
+                    claims_dir=args.claims_dir,
+                    native_session=native_session,
+                )
+                if installed_closeout is not None:
+                    decision = {
+                        **decision,
+                        "recovery": (
+                            "The consumer Makefile cannot receive claimless execution authority. "
+                            "Run the exact installed-runtime closeout instead: "
+                            f"{installed_closeout}"
+                        ),
+                    }
     except (json.JSONDecodeError, FastPreWriteError, OSError, TypeError, ValueError) as exc:
         try:
             mode = _mode(payload if isinstance(payload, dict) else {}, args.mode)

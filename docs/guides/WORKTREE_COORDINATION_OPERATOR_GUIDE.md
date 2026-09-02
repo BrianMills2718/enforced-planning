@@ -1588,10 +1588,17 @@ the claim is dispositioned. Two strict control paths remain available through
 the installed runtime: the absolute mailbox command printed in the hook notice,
 and the exact `session_close.py` command whose agent, project, scope, branch,
 worktree, and ambient native session resolve to one live claim. Shell-composed,
-cross-session, or retargeted variants are denied.
+cross-session, or retargeted variants are denied. If a governed consumer's
+`make session-close` request reaches this terminal state, the hook prints that
+fully translated installed-runtime command. It does not grant claimless
+execution authority to the consumer Makefile: another target override,
+included file, or parse-time expression could otherwise change what Make runs.
 
-- use `session-close` for direct CLI closeout
-- use `make worktree-remove BRANCH=...` in governed repos
+- use the hook's exact installed `session_close.py` recovery for terminal
+  consumer claims under hard native pre-write enforcement
+- use `make worktree-remove BRANCH=...` while the governed repository's Make
+  surface still has ordinary claim authority, or when no native hard gate is
+  active
 - `session-finish` cannot mark a clean managed lane completed or release its
   claim; generic claim release likewise refuses while the managed worktree or
   branch exists
@@ -1667,6 +1674,13 @@ Normal merged closeout:
 ```bash
 make session-close BRANCH=plan-59-safe-closeout
 ```
+
+Under hard native pre-write enforcement, a clean consumer branch can become a
+terminal merged claim before Make itself is admitted. The denial then includes
+the exact equivalent command rooted in the installed Enforced Planning runtime;
+run that command verbatim. The installed command is not a second lifecycle
+implementation: it invokes the same canonical `session_close.py` owner while
+avoiding claimless evaluation of repository-owned Make code.
 
 For a squash merge, provide the exact canonical one-parent merge commit through
 the same sanctioned wrapper. It forwards the evidence unchanged to

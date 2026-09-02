@@ -1204,6 +1204,7 @@ def native_delivery_sweep_fixture() -> dict[str, object]:
         "items": [
             {
                 "project": "demo",
+                "agent": "codex",
                 "scope": "feature-lane",
                 "session_id": session_id,
                 "next_action": "run the focused integration",
@@ -1558,6 +1559,7 @@ def test_bounded_native_retry_persists_offer_without_launch_or_transfer(
     sweep = {
         "items": [
             {
+                "agent": "codex",
                 "project": "demo",
                 "scope": "feature-lane",
                 "session_id": owner,
@@ -1582,6 +1584,20 @@ def test_bounded_native_retry_persists_offer_without_launch_or_transfer(
         }
     ]
 
+    verified: list[dict[str, object]] = []
+
+    def verify_offer(**kwargs: object) -> dict[str, object]:
+        verified.append(kwargs)
+        return {
+            "record_type": "successor_custody_offer_verification",
+            "action": "successor_custody_offer_verified",
+            "head_revision": head_revision,
+            "successor_acceptance_required": True,
+            "successor_launch_allowed": False,
+            "custody_mutation_performed": False,
+            "transfer_eligible": False,
+        }
+
     result = continuity_cli.prepare_native_successor_offers(
         sweep=sweep,
         deliveries=deliveries,
@@ -1590,16 +1606,46 @@ def test_bounded_native_retry_persists_offer_without_launch_or_transfer(
         git_run=lambda command, **_kwargs: subprocess.CompletedProcess(
             command, 0, head_revision + "\n", ""
         ),
+        offer_verifier=verify_offer,
     )
 
     assert result[0]["action"] == "successor_offer_prepared"
     assert result[0]["owner_resume_correlation_id"] == correlation
+    assert result[0]["successor_offer_verified"] is True
+    assert result[0]["successor_acceptance_required"] is True
     assert result[0]["successor_launch_allowed"] is False
+    assert result[0]["custody_mutation_performed"] is False
     assert result[0]["transfer_eligible"] is False
+    assert verified[0]["agent"] == "codex"
+    assert verified[0]["successor_custody_offer"] == SuccessorCustodyOfferV1.model_validate_json(
+        Path(result[0]["offer_path"]).read_text()
+    )
     offer_path = Path(result[0]["offer_path"])
     offer = SuccessorCustodyOfferV1.model_validate_json(offer_path.read_text())
     assert offer.owner_resume_correlation_id == correlation
     assert offer_path.stat().st_mode & 0o777 == 0o600
+
+    unsafe = continuity_cli.prepare_native_successor_offers(
+        sweep=sweep,
+        deliveries=deliveries,
+        receipt_path=receipt_path,
+        offer_dir=tmp_path / "unsafe-offers",
+        git_run=lambda command, **_kwargs: subprocess.CompletedProcess(
+            command, 0, head_revision + "\n", ""
+        ),
+        offer_verifier=lambda **_kwargs: {
+            "record_type": "successor_custody_offer_verification",
+            "action": "successor_custody_offer_verified",
+            "successor_acceptance_required": True,
+            "successor_launch_allowed": False,
+            "custody_mutation_performed": True,
+            "transfer_eligible": False,
+        },
+    )
+    assert unsafe[0]["action"] == "fail_visible"
+    assert unsafe[0]["reason_code"] == "native_successor_offer_invalid"
+    assert "unsafe or invalid" in unsafe[0]["error"]
+    assert len(list((tmp_path / "unsafe-offers").glob("*.json"))) == 1
 
 
 def test_unresolved_delivery_intent_fails_visible_without_retry(

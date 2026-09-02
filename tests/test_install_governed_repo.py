@@ -85,6 +85,7 @@ MAILBOX_ROLLOUT_PATHS = MAILBOX_COMMON_ROLLOUT_PATHS | {
     "enforced_planning/push_safety.py",
     "enforced_planning/session_contracts.py",
     "enforced_planning/session_lifecycle.py",
+    "enforced_planning/session_process_fencing.py",
     "enforced_planning/session_target.py",
     "enforced_planning/surface_runtime.py",
     "enforced_planning/worktree_lifecycle.yaml",
@@ -111,6 +112,7 @@ CLAIM_PROJECTION_REFRESH_PATHS = {
     "enforced_planning/push_safety.py",
     "enforced_planning/session_contracts.py",
     "enforced_planning/session_lifecycle.py",
+    "enforced_planning/session_process_fencing.py",
     "enforced_planning/session_target.py",
     "enforced_planning/surface_runtime.py",
     "enforced_planning/worktree_lifecycle.yaml",
@@ -346,15 +348,23 @@ def test_coordination_messages_only_rollout_is_bounded_runnable_and_idempotent(
             check=False,
         )
         assert help_result.returncode == 0, help_result.stdout + help_result.stderr
-    close_help = subprocess.run(
-        [sys.executable, str(tmp_path / "scripts/meta/session_close.py"), "--help"],
-        cwd=str(tmp_path),
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert close_help.returncode == 0, close_help.stdout + close_help.stderr
-    assert "--mailbox-disposition" in close_help.stdout
+    clean_env = dict(os.environ)
+    clean_env.pop("PYTHONPATH", None)
+    lifecycle_help = {}
+    for lifecycle_wrapper in ("session_close.py", "session_resume.py"):
+        lifecycle_help[lifecycle_wrapper] = subprocess.run(
+            [sys.executable, str(tmp_path / "scripts/meta" / lifecycle_wrapper), "--help"],
+            cwd=str(tmp_path),
+            env=clean_env,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert lifecycle_help[lifecycle_wrapper].returncode == 0, (
+            lifecycle_help[lifecycle_wrapper].stdout
+            + lifecycle_help[lifecycle_wrapper].stderr
+        )
+    assert "--mailbox-disposition" in lifecycle_help["session_close.py"].stdout
 
     repeat = _run(
         "--repo-root",
@@ -424,10 +434,18 @@ def test_claim_projection_refresh_only_is_bounded_and_idempotent(tmp_path: Path)
         installed_lifecycle.read_bytes()
         == (PROJECT_META_ROOT / "enforced_planning" / "session_lifecycle.py").read_bytes()
     )
-    for wrapper in ("session_start.py", "session_narrow.py", "session_close.py"):
+    clean_env = dict(os.environ)
+    clean_env.pop("PYTHONPATH", None)
+    for wrapper in (
+        "session_start.py",
+        "session_narrow.py",
+        "session_close.py",
+        "session_resume.py",
+    ):
         help_result = subprocess.run(
             [sys.executable, str(tmp_path / "scripts/meta" / wrapper), "--help"],
             cwd=str(tmp_path),
+            env=clean_env,
             capture_output=True,
             text=True,
             check=False,
@@ -897,6 +915,7 @@ def test_install_governed_repo_write_bootstraps_minimum_repo_and_passes_audit(
     assert (tmp_path / "enforced_planning" / "repository_authority.py").exists()
     assert (tmp_path / "enforced_planning" / "session_contracts.py").exists()
     assert (tmp_path / "enforced_planning" / "session_lifecycle.py").exists()
+    assert (tmp_path / "enforced_planning" / "session_process_fencing.py").exists()
     assert (tmp_path / "enforced_planning" / "worktree_lifecycle.yaml").exists()
     assert (tmp_path / "enforced_planning" / "worktree_paths.py").exists()
     assert (tmp_path / "scripts" / "meta" / "audit_dead_code.py").exists()
@@ -2141,9 +2160,10 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
             "install:enforced_planning/plan_validation.py",
             "install:enforced_planning/push_safety.py",
             "install:enforced_planning/repository_status.py",
-            "install:enforced_planning/session_contracts.py",
-            "install:enforced_planning/session_lifecycle.py",
-            "install:enforced_planning/session_target.py",
+                "install:enforced_planning/session_contracts.py",
+                "install:enforced_planning/session_lifecycle.py",
+                "install:enforced_planning/session_process_fencing.py",
+                "install:enforced_planning/session_target.py",
             "install:enforced_planning/surface_runtime.py",
             "install:enforced_planning/verification_batch.py",
             "install:enforced_planning/worktree_lifecycle.yaml",

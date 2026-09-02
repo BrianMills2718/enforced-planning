@@ -74,6 +74,7 @@ def _supported_closeout_kwargs(args: argparse.Namespace) -> dict[str, object]:
         ("mailbox_disposition", args.mailbox_disposition),
         ("mailbox_note", args.mailbox_note),
         ("actor_session_id", args.session_id),
+        ("terminalize_shared_child", args.terminalize_shared_child),
     ):
         if name in supported:
             kwargs[name] = value
@@ -130,6 +131,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--claim-sha256",
         help="Exact SHA-256 of the preserved claim required for canonical-root reconciliation.",
+    )
+    parser.add_argument(
+        "--terminalize-shared-child",
+        action="store_true",
+        help=(
+            "Archive one merged child claim while retaining the exact live parent's shared "
+            "worktree and branch."
+        ),
     )
     parser.add_argument(
         "--allow-discard-unique",

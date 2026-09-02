@@ -5,8 +5,8 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import select
 import signal
-import time
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -16,6 +16,21 @@ from pydantic import BaseModel, ConfigDict, Field
 
 DEFAULT_CODEX_SESSION_INDEX = Path("~/.codex/session_index.jsonl")
 DEFAULT_FENCE_RECEIPT_ROOT = Path("~/.claude/coordination/session-process-fences-v1")
+
+
+def _open_pidfd(pid: int) -> int:
+    return os.pidfd_open(pid, 0)
+
+
+def _signal_pidfd(pidfd: int, sent_signal: int) -> None:
+    signal.pidfd_send_signal(pidfd, sent_signal, None, 0)
+
+
+def _pidfd_exited(pidfd: int, timeout_seconds: float) -> bool:
+    poller = select.poll()
+    poller.register(pidfd, select.POLLIN)
+    timeout_ms = max(0, round(timeout_seconds * 1000))
+    return bool(poller.poll(timeout_ms))
 
 
 class ProcessFenceReceiptV1(BaseModel):
@@ -69,12 +84,17 @@ def _trusted_codex_executable(proc_root: Path) -> Path:
     """Resolve the exact Codex executable used by this successor runtime."""
 
     for pid in _current_ancestor_pids(proc_root):
+        pid_root = proc_root / str(pid)
         try:
-            executable = proc_root.joinpath(str(pid), "exe").resolve(strict=True)
+            process_name = pid_root.joinpath("comm").read_text(encoding="utf-8").strip()
         except OSError:
             continue
-        if executable.name == "codex":
-            return executable
+        if process_name != "codex":
+            continue
+        try:
+            return pid_root.joinpath("exe").resolve(strict=True)
+        except OSError as exc:
+            raise ValueError("nearest Codex ancestor executable is not inspectable") from exc
     raise ValueError("successor runtime has no exact Codex ancestor executable")
 
 
@@ -142,8 +162,10 @@ def fence_predecessor_process(
     receipt_root: Path = DEFAULT_FENCE_RECEIPT_ROOT,
     trusted_codex_executable: Path | None = None,
     timeout_seconds: float = 5.0,
-    signal_process: Callable[[int, int], None] = os.kill,
-    sleep: Callable[[float], None] = time.sleep,
+    open_pidfd: Callable[[int], int] = _open_pidfd,
+    signal_pidfd: Callable[[int, int], None] = _signal_pidfd,
+    pidfd_exited: Callable[[int, float], bool] = _pidfd_exited,
+    close_pidfd: Callable[[int], None] = os.close,
 ) -> dict[str, object]:
     """Terminate one exact Codex predecessor and persist fail-closed evidence."""
 
@@ -155,52 +177,39 @@ def fence_predecessor_process(
         raise ValueError("refusing to fence the current successor process or one of its ancestors")
     canonical_worktree = Path(worktree_path).expanduser().resolve(strict=True)
     pid_root = proc_root / str(predecessor_pid)
-    start_ticks = _read_start_ticks(pid_root / "stat")
-    predecessor_worktree = pid_root.joinpath("cwd").resolve(strict=True)
-    if predecessor_worktree != canonical_worktree:
-        raise ValueError("predecessor PID is not running in the exact claimed worktree")
-    trusted_executable = (
-        trusted_codex_executable.resolve(strict=True)
-        if trusted_codex_executable is not None
-        else _trusted_codex_executable(proc_root)
-    )
-    command_sha256 = _validate_codex_process_command(
-        pid_root=pid_root,
-        predecessor_session_id=predecessor_session_id,
-        session_index=session_index,
-        trusted_codex_executable=trusted_executable,
-    )
+    pidfd = open_pidfd(predecessor_pid)
+    try:
+        if pidfd_exited(pidfd, 0):
+            raise RuntimeError("exact predecessor process exited before identity validation")
+        start_ticks = _read_start_ticks(pid_root / "stat")
+        predecessor_worktree = pid_root.joinpath("cwd").resolve(strict=True)
+        if predecessor_worktree != canonical_worktree:
+            raise ValueError("predecessor PID is not running in the exact claimed worktree")
+        trusted_executable = (
+            trusted_codex_executable.resolve(strict=True)
+            if trusted_codex_executable is not None
+            else _trusted_codex_executable(proc_root)
+        )
+        command_sha256 = _validate_codex_process_command(
+            pid_root=pid_root,
+            predecessor_session_id=predecessor_session_id,
+            session_index=session_index,
+            trusted_codex_executable=trusted_executable,
+        )
+        if _read_start_ticks(pid_root / "stat") != start_ticks:
+            raise RuntimeError("predecessor PID was reused before it could be signalled")
+        if pidfd_exited(pidfd, 0):
+            raise RuntimeError("exact predecessor process exited during identity validation")
 
-    if _read_start_ticks(pid_root / "stat") != start_ticks:
-        raise RuntimeError("predecessor PID was reused before it could be signalled")
-
-    def wait_for_exit(deadline: float) -> bool:
-        while pid_root.exists():
-            try:
-                current_start_ticks = _read_start_ticks(pid_root / "stat")
-            except FileNotFoundError:
-                return True
-            if current_start_ticks != start_ticks:
-                raise RuntimeError("predecessor PID was reused before termination could be proven")
-            if time.monotonic() >= deadline:
-                return False
-            sleep(0.05)
-        return True
-
-    signal_process(predecessor_pid, signal.SIGTERM)
-    final_signal: Literal["SIGTERM", "SIGTERM+SIGKILL"] = "SIGTERM"
-    if not wait_for_exit(time.monotonic() + timeout_seconds):
-        try:
-            current_start_ticks = _read_start_ticks(pid_root / "stat")
-        except FileNotFoundError:
-            current_start_ticks = None
-        if current_start_ticks is not None:
-            if current_start_ticks != start_ticks:
-                raise RuntimeError("predecessor PID was reused before termination could be proven")
-            signal_process(predecessor_pid, signal.SIGKILL)
+        signal_pidfd(pidfd, signal.SIGTERM)
+        final_signal: Literal["SIGTERM", "SIGTERM+SIGKILL"] = "SIGTERM"
+        if not pidfd_exited(pidfd, timeout_seconds):
+            signal_pidfd(pidfd, signal.SIGKILL)
             final_signal = "SIGTERM+SIGKILL"
-            if not wait_for_exit(time.monotonic() + timeout_seconds):
+            if not pidfd_exited(pidfd, timeout_seconds):
                 raise RuntimeError("exact predecessor process did not exit after SIGKILL")
+    finally:
+        close_pidfd(pidfd)
 
     receipt = ProcessFenceReceiptV1(
         predecessor_session_id=predecessor_session_id,

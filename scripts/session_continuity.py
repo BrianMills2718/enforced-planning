@@ -9,11 +9,26 @@ import sys
 from datetime import timedelta
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
 
-from enforced_planning import (  # noqa: E402
+def _bootstrap_package() -> None:
+    """Load vendored support at either source or installed script depth."""
+
+    current = Path(__file__).resolve()
+    for parent in current.parents:
+        if (parent / "enforced_planning").is_dir():
+            if str(parent) not in sys.path:
+                sys.path.insert(0, str(parent))
+            return
+    import importlib.util
+
+    if importlib.util.find_spec("enforced_planning") is not None:
+        return
+    raise RuntimeError("Unable to locate local or installed enforced_planning support")
+
+
+_bootstrap_package()
+
+from enforced_planning import (
     coordination_claims,
     coordination_messages,
     session_continuity,

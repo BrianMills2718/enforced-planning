@@ -60,6 +60,7 @@ MAILBOX_COMMON_ROLLOUT_PATHS = {
     "scripts/meta/session_heartbeat.py",
     "scripts/meta/session_narrow.py",
     "scripts/meta/session_close.py",
+    "scripts/meta/session_continuity.py",
     "scripts/meta/session_resume.py",
     "scripts/meta/session_start.py",
     "scripts/hook_receipts.py",
@@ -84,6 +85,7 @@ MAILBOX_ROLLOUT_PATHS = MAILBOX_COMMON_ROLLOUT_PATHS | {
     "enforced_planning/doc_authority.py",
     "enforced_planning/push_safety.py",
     "enforced_planning/session_contracts.py",
+    "enforced_planning/session_continuity.py",
     "enforced_planning/session_lifecycle.py",
     "enforced_planning/session_process_fencing.py",
     "enforced_planning/session_target.py",
@@ -111,6 +113,7 @@ CLAIM_PROJECTION_REFRESH_PATHS = {
     "enforced_planning/plan_validation.py",
     "enforced_planning/push_safety.py",
     "enforced_planning/session_contracts.py",
+    "enforced_planning/session_continuity.py",
     "enforced_planning/session_lifecycle.py",
     "enforced_planning/session_process_fencing.py",
     "enforced_planning/session_target.py",
@@ -122,6 +125,7 @@ CLAIM_PROJECTION_REFRESH_PATHS = {
     "scripts/meta/check_coordination_claims.py",
     "scripts/meta/worktree-coordination/create_worktree.py",
     "scripts/meta/session_close.py",
+    "scripts/meta/session_continuity.py",
     "scripts/meta/session_end.py",
     "scripts/meta/session_finish.py",
     "scripts/meta/session_heartbeat.py",
@@ -2161,6 +2165,7 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
             "install:enforced_planning/push_safety.py",
             "install:enforced_planning/repository_status.py",
                 "install:enforced_planning/session_contracts.py",
+                "install:enforced_planning/session_continuity.py",
                 "install:enforced_planning/session_lifecycle.py",
                 "install:enforced_planning/session_process_fencing.py",
                 "install:enforced_planning/session_target.py",
@@ -2177,6 +2182,7 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
             "install:scripts/meta/check_plan_readiness.py",
             "install:scripts/meta/plan_close.py",
             "install:scripts/meta/session_close.py",
+            "install:scripts/meta/session_continuity.py",
             "install:scripts/meta/session_end.py",
             "install:scripts/meta/session_finish.py",
             "install:scripts/meta/session_heartbeat.py",
@@ -2238,6 +2244,7 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
     assert (tmp_path / "scripts" / "meta" / "session_start.py").exists()
     assert (tmp_path / "scripts" / "meta" / "session_heartbeat.py").exists()
     assert (tmp_path / "scripts" / "meta" / "session_status.py").exists()
+    assert (tmp_path / "scripts" / "meta" / "session_continuity.py").exists()
     assert (tmp_path / "scripts" / "meta" / "session_resume.py").exists()
     assert (tmp_path / "scripts" / "meta" / "surface_runtime.py").exists()
     assert (tmp_path / "scripts" / "meta" / "verification_batch.py").exists()
@@ -2887,3 +2894,59 @@ def test_every_claim_runtime_installer_profile_carries_session_narrow() -> None:
         install_governed_repo.CLAIM_PROJECTION_SHARED_FILES,
     ):
         assert manifest["scripts/meta/session_narrow.py"] == "scripts/session_narrow.py"
+
+
+def test_every_claim_runtime_installer_profile_carries_session_continuity() -> None:
+    """Every installed claim runtime exposes the observe-only continuity CLI."""
+
+    from scripts import install_governed_repo
+
+    for shared_manifest, package_manifest in (
+        (install_governed_repo.SYNC_SUPPORT_FILES, install_governed_repo.SYNC_SUPPORT_FILES),
+        (
+            install_governed_repo.WORKTREE_ONLY_SYNC_SUPPORT_FILES,
+            install_governed_repo.WORKTREE_ONLY_SYNC_SUPPORT_FILES,
+        ),
+        (
+            install_governed_repo.COORDINATION_MESSAGES_SHARED_FILES,
+            install_governed_repo.COORDINATION_MESSAGES_LOCAL_PACKAGE_FILES,
+        ),
+        (
+            install_governed_repo.CLAIM_PROJECTION_SHARED_FILES,
+            install_governed_repo.CLAIM_PROJECTION_LOCAL_PACKAGE_FILES,
+        ),
+    ):
+        assert shared_manifest["scripts/meta/session_continuity.py"] == "scripts/session_continuity.py"
+        assert package_manifest["enforced_planning/session_continuity.py"] == (
+            "enforced_planning/session_continuity.py"
+        )
+
+
+def test_installed_coordination_runtime_exposes_session_continuity_cli(tmp_path: Path) -> None:
+    """A real bounded install must leave the one-shot continuity entrypoint runnable."""
+
+    _prepare_mailbox_target(tmp_path)
+    installed = _run(
+        "--repo-root",
+        str(tmp_path),
+        "--write",
+        "--coordination-messages-only",
+        "--json",
+        cwd=PROJECT_META_ROOT,
+    )
+    assert installed.returncode == 0, installed.stdout + installed.stderr
+
+    clean_env = dict(os.environ)
+    clean_env.pop("PYTHONPATH", None)
+    result = subprocess.run(
+        [sys.executable, str(tmp_path / "scripts/meta/session_continuity.py"), "--help"],
+        cwd=tmp_path,
+        env=clean_env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "--send-resume-offer" in result.stdout
+    assert "--resume-offer-message-id" in result.stdout

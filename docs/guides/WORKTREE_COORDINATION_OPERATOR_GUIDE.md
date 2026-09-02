@@ -1944,6 +1944,62 @@ still propagates. Resuming under a degraded poll does not clear the rule above â
 a live-agent decision may still be pending, so do not cross a coordination
 boundary until a claim is held and polling is restored.
 
+## Native Client Messaging Is A Second Channel
+
+The three gaps named in the next section -- real-time presence, and asynchronous
+interruption of an existing session -- are not gaps in the ecosystem. Both
+supported clients ship their own live messaging, and it is complementary to this
+mailbox rather than a competitor. Reach for the right one deliberately.
+
+| | Canonical mailbox | Native client messaging |
+| --- | --- | --- |
+| Address | `claude-code:<uuid>` / `codex:<uuid>`, derived from a live **claim** | Claude Code: the session **name**. Codex: an agent path such as `/root` |
+| Transport | host hooks polled at lifecycle events | Claude Code: a unix socket. Codex: the shared app-server daemon |
+| Requires | a live claim owning the recipient | a live process |
+| Crosses clients | yes | no -- Claude reaches Claude, Codex reaches Codex |
+| Durable and audited | yes: receipts, dispositions, boundary blocks | no |
+| Real-time | no, by design | yes |
+
+Use the **mailbox** for anything that must survive the session, be attributable,
+or cross clients: handoffs, review requests, coordination requests, and every
+message whose disposition matters. Use **native messaging** to ask a live peer a
+question now, or to interrupt one before it does something expensive. A native
+exchange that changes ownership, scope, or a lane's next action still needs a
+mailbox message; the socket leaves no receipt.
+
+Claude Code exposes `ListAgents` and `SendMessage` and keeps one JSON record per
+live session at `~/.claude/sessions/<pid>.json`. Codex exposes a `collaboration`
+tool namespace -- `spawn_agent`, `send_message`, `wait_agent`, `interrupt_agent`,
+`list_agents`, `followup_task` -- over its shared daemon, and records parent to
+child lineage natively.
+
+### Turning a claim into something you can message
+
+A claim records `session_id`; the native registries record the same identifier
+next to the name a peer can actually address. `resolve_client_session_display()`
+joins them, so this lookup is one call rather than a hand-written scan of the
+session registry:
+
+```python
+from enforced_planning import client_session_metadata
+
+display = client_session_metadata.resolve_client_session_display(claim.session_id)
+# display.state: resolved | not_found | source_unavailable | not_supported
+# display.display_name: the name a peer uses to address it
+```
+
+`coordination_operator_status.py --message-id <id>` already reports this for a
+message recipient. A `not_found` state is meaningful: the claim's owning runtime
+is no longer live, so no native channel will reach it and the mailbox is the only
+route left.
+
+**Two asymmetries worth remembering.** A session with no live claim is invisible
+to the mailbox -- `coordination_inbox.py` returns `UnknownSessionError: No live
+claim owns session ...` -- while remaining natively reachable. And the reverse:
+a `session_ended` lane's owner is addressable by neither, because mailbox routing
+requires a live claim and the runtime is gone. Reconciling such a lane is a
+closeout problem, not a messaging one.
+
 ## What Coordination Does And Does Not Do
 
 What it does:

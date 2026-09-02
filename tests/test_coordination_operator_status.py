@@ -139,18 +139,77 @@ def test_codex_display_resolution_keeps_routing_identity_and_latest_name(tmp_pat
     assert display.warnings == ("invalid_json_line:3",)
 
 
-def test_missing_index_and_non_codex_client_remain_explicit(tmp_path: Path) -> None:
+def test_missing_index_and_unsupported_client_remain_explicit(tmp_path: Path) -> None:
     missing = client_session_metadata.resolve_client_session_display(
         SESSION_ID,
         codex_session_index=tmp_path / "missing.jsonl",
     )
-    claude = client_session_metadata.resolve_client_session_display(
+    absent_registry = client_session_metadata.resolve_client_session_display(
         "claude-code:session-1",
         codex_session_index=tmp_path / "unused.jsonl",
+        claude_session_registry=tmp_path / "missing-sessions",
+    )
+    openclaw = client_session_metadata.resolve_client_session_display(
+        "openclaw:session-1",
+        codex_session_index=tmp_path / "unused.jsonl",
+        claude_session_registry=tmp_path / "unused-sessions",
     )
 
     assert (missing.state, missing.display_name) == ("source_unavailable", None)
-    assert (claude.state, claude.display_name) == ("not_supported", None)
+    assert (absent_registry.state, absent_registry.display_name) == ("source_unavailable", None)
+    assert (openclaw.state, openclaw.display_name) == ("not_supported", None)
+
+
+def _write_claude_registry(registry: Path) -> None:
+    registry.mkdir(parents=True, exist_ok=True)
+    (registry / "104821.json").write_text(
+        json.dumps(
+            {
+                "pid": 104821,
+                "sessionId": "58a54b6c-683c-454c-a1b2-430cf78fc48a",
+                "name": "never_0902",
+                "updatedAt": 1788370433034,
+            }
+        ),
+        encoding="utf-8",
+    )
+    (registry / "21735.json").write_text(
+        json.dumps({"pid": 21735, "sessionId": "other-session", "name": "organization_0902"}),
+        encoding="utf-8",
+    )
+    (registry / "broken.json").write_text("{not json", encoding="utf-8")
+
+
+def test_claude_code_display_resolves_the_name_peers_address(tmp_path: Path) -> None:
+    registry = tmp_path / "sessions"
+    _write_claude_registry(registry)
+
+    display = client_session_metadata.resolve_client_session_display(
+        "claude-code:58a54b6c-683c-454c-a1b2-430cf78fc48a",
+        codex_session_index=tmp_path / "unused.jsonl",
+        claude_session_registry=registry,
+    )
+
+    assert display.session_id == "claude-code:58a54b6c-683c-454c-a1b2-430cf78fc48a"
+    assert display.client == "claude-code"
+    assert display.state == "resolved"
+    assert display.display_name == "never_0902"
+    assert display.client_updated_at == "2026-09-02T17:33:53.034000+00:00"
+    assert display.warnings == ("unreadable_record:broken.json",)
+
+
+def test_claude_code_session_absent_from_registry_is_not_found(tmp_path: Path) -> None:
+    registry = tmp_path / "sessions"
+    _write_claude_registry(registry)
+
+    display = client_session_metadata.resolve_client_session_display(
+        "claude-code:no-such-session",
+        codex_session_index=tmp_path / "unused.jsonl",
+        claude_session_registry=registry,
+    )
+
+    assert (display.state, display.display_name) == ("not_found", None)
+    assert display.source == str(registry)
 
 
 @pytest.mark.parametrize(

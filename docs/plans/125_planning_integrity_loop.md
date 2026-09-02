@@ -224,10 +224,12 @@ claim pruning applies optional agent/project/scope selectors before archival,
 and claimless Bash admission accepts only fully classified read-only command
 groups (including safe `jq` pipelines), never an arbitrary interpreter help or
 write-capable lookalike. The later installed-runtime repair keeps that boundary
-closed while admitting one strict Python-backed observer: canonical
+closed while admitting one strict Python-backed observer:
 `session_status.py` with only its query grammar and optional absolute
 worktree-binding wrapper. This does not create an interpreter bypass or expand
 Planning Integrity authority.
+Canonical claim-classification JSON normalizes typed session-activity timestamps
+to an ISO-8601 string or `null` before a read-only `jq` consumer receives them.
 
 ### Plan #130 extension — external plan authority
 

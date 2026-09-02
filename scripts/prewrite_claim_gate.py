@@ -610,6 +610,145 @@ def _parse_native_closeout_command(
         raise ValueError("closeout branch does not match the exact live claim")
 
 
+def _trusted_merged_closeout_worktree(target: Path) -> bool:
+    """Accept only clean control code already present in installed history."""
+
+    if not (target / "Makefile").is_file() or not (
+        target / "scripts" / "meta" / "session_close.py"
+    ).is_file():
+        return False
+
+    def git(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            ["git", "-C", str(repo), *args],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+    status = git(target, "status", "--porcelain=v1", "--untracked-files=normal")
+    target_head = git(target, "rev-parse", "HEAD")
+    installed_head = git(REPO_ROOT, "rev-parse", "HEAD")
+    if (
+        status.returncode != 0
+        or status.stdout.strip()
+        or target_head.returncode != 0
+        or installed_head.returncode != 0
+    ):
+        return False
+    revision = target_head.stdout.strip()
+    installed_revision = installed_head.stdout.strip()
+    object_check = git(REPO_ROOT, "cat-file", "-e", f"{revision}^{{commit}}")
+    ancestry = git(REPO_ROOT, "merge-base", "--is-ancestor", revision, installed_revision)
+    return object_check.returncode == 0 and ancestry.returncode == 0
+
+
+def _parse_native_closeout_make_command(
+    command: str,
+    *,
+    client: str,
+    claims_dir: Path,
+    native_session: str | None = None,
+) -> None:
+    """Validate the canonical Make closeout for one exact merged live owner."""
+
+    from enforced_planning import coordination_claims
+    from scripts import session_close
+
+    if "\n" in command or "\r" in command or any(char in command for char in ";&|<>`$"):
+        raise ValueError("Make closeout command cannot compose shell operations")
+    tokens = shlex.split(command)
+    if (
+        len(tokens) < 5
+        or tokens[0] != "/usr/bin/make"
+        or tokens[1] != "-C"
+        or tokens[3] != "session-close"
+    ):
+        raise ValueError("Make closeout must use /usr/bin/make -C <worktree> session-close")
+    target = Path(tokens[2]).expanduser()
+    if not target.is_absolute() or target.resolve() != target:
+        raise ValueError("Make closeout target must be one canonical absolute worktree")
+    target = target.resolve()
+    assignments: dict[str, str] = {}
+    allowed = {
+        "BRANCH",
+        "SESSION_NOTE",
+        "WORKTREE_AGENT",
+        "WORKTREE_ALLOW_DISCARD_UNIQUE",
+        "WORKTREE_DISPOSITION",
+        "WORKTREE_DISPOSITION_REASON",
+        "WORKTREE_MERGE_COMMIT",
+        "WORKTREE_PROJECT",
+        "WORKTREE_RECOVERY_REF",
+    }
+    for token in tokens[4:]:
+        key, separator, value = token.partition("=")
+        if not separator or key not in allowed or key in assignments:
+            raise ValueError("Make closeout accepts only unique bounded lifecycle assignments")
+        assignments[key] = value
+    branch = assignments.get("BRANCH")
+    if native_session is None or not branch:
+        raise ValueError("Make closeout requires the native session and exact branch")
+    asserted_agent = assignments.get("WORKTREE_AGENT")
+    if asserted_agent is not None and asserted_agent != client:
+        raise ValueError("Make closeout agent does not match the ambient native client")
+
+    matches = [
+        claim
+        for claim in coordination_claims._load_claims(claims_dir)
+        if claim.agent == client
+        and claim.session_id == native_session
+        and claim.scope == branch
+        and claim.branch == branch
+        and claim.is_live()
+        and Path(claim.target_worktree_path or claim.worktree_path or "").expanduser().resolve()
+        == target
+    ]
+    if len(matches) != 1:
+        raise ValueError("Make closeout target is not the ambient runtime's exact live claim")
+    claim = matches[0]
+    project = claim.projects[0]
+    if assignments.get("WORKTREE_PROJECT", project) != project:
+        raise ValueError("Make closeout project does not match the exact live claim")
+    if not _trusted_merged_closeout_worktree(target):
+        raise ValueError("Make closeout control worktree is dirty, unmerged, or not installed history")
+
+    close_args = [
+        "--agent",
+        client,
+        "--project",
+        project,
+        "--scope",
+        branch,
+        "--worktree-path",
+        str(target),
+        "--branch",
+        branch,
+        "--disposition",
+        assignments.get("WORKTREE_DISPOSITION", "merged"),
+    ]
+    mapped_values = {
+        "SESSION_NOTE": "--note",
+        "WORKTREE_DISPOSITION_REASON": "--disposition-reason",
+        "WORKTREE_MERGE_COMMIT": "--merge-commit",
+        "WORKTREE_RECOVERY_REF": "--recovery-ref",
+    }
+    for variable, option in mapped_values.items():
+        if variable in assignments:
+            close_args.extend([option, assignments[variable]])
+    allow_discard = assignments.get("WORKTREE_ALLOW_DISCARD_UNIQUE")
+    if allow_discard is not None:
+        if allow_discard not in {"", "0", "1", "false", "no", "true", "yes"}:
+            raise ValueError("Make closeout discard override must be one literal boolean")
+        if allow_discard in {"1", "true", "yes"}:
+            close_args.append("--allow-discard-unique")
+    try:
+        with contextlib.redirect_stderr(io.StringIO()):
+            session_close.parse_args(close_args)
+    except SystemExit as exc:
+        raise ValueError("Make closeout does not map to the canonical CLI grammar") from exc
+
+
 def _same_file_digest(left: Path, right: Path) -> bool:
     """Compare bounded control files without trusting path names alone."""
 
@@ -913,6 +1052,16 @@ def _special_unclaimed_command(
         pass
     try:
         _parse_native_closeout_command(
+            command,
+            client=client,
+            claims_dir=claims_dir,
+            native_session=native_session,
+        )
+        return "native_closeout"
+    except Exception:  # noqa: BLE001 -- try the remaining strict control grammars
+        pass
+    try:
+        _parse_native_closeout_make_command(
             command,
             client=client,
             claims_dir=claims_dir,

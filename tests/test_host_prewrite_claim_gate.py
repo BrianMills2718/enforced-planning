@@ -1034,6 +1034,76 @@ def test_host_gate_admits_exact_native_closeout_for_merged_claim(
     assert decision["decision"] == "allow"
     assert decision["reason_code"] == "native_closeout_command"
 
+
+def test_host_gate_admits_exact_make_closeout_for_merged_claim(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _workspace, repo, worktree, claims_dir, _claim_path = _fixture(tmp_path)
+    (worktree / "Makefile").write_text("session-close:\n\t@true\n", encoding="utf-8")
+    close_script = worktree / "scripts" / "meta" / "session_close.py"
+    close_script.parent.mkdir(parents=True)
+    close_script.write_text("# trusted fixture\n", encoding="utf-8")
+    _git(worktree, "add", "src/allowed.py", "Makefile", "scripts/meta/session_close.py")
+    _git(worktree, "commit", "-m", "merged lane work")
+    _git(repo, "merge", "--ff-only", "host-gate-lane")
+    monkeypatch.setattr(prewrite_claim_gate, "REPO_ROOT", repo)
+    merge_commit = _git(repo, "rev-parse", "HEAD")
+    command = (
+        f"/usr/bin/make -C {worktree} session-close BRANCH=host-gate-lane "
+        f"WORKTREE_AGENT=claude-code WORKTREE_PROJECT=host-gate-test "
+        f"WORKTREE_DISPOSITION=merged WORKTREE_MERGE_COMMIT={merge_commit}"
+    )
+    payload = _payload(cwd=worktree, tool="Bash", tool_input={"command": command})
+
+    code, decision = _run_cli(
+        monkeypatch,
+        capsys,
+        tmp_path,
+        payload,
+        claims_dir=claims_dir,
+        projection_path=tmp_path / "projection.json",
+    )
+
+    assert code == 0, decision
+    assert decision["decision"] == "allow"
+    assert decision["reason_code"] == "native_closeout_command"
+
+
+@pytest.mark.parametrize("tamper", ["dirty", "wrong-agent", "extra-assignment"])
+def test_host_gate_rejects_tampered_make_closeout(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    tamper: str,
+) -> None:
+    _workspace, repo, worktree, claims_dir, _claim_path = _fixture(tmp_path)
+    (worktree / "Makefile").write_text("session-close:\n\t@true\n", encoding="utf-8")
+    close_script = worktree / "scripts" / "meta" / "session_close.py"
+    close_script.parent.mkdir(parents=True)
+    close_script.write_text("# trusted fixture\n", encoding="utf-8")
+    _git(worktree, "add", "src/allowed.py", "Makefile", "scripts/meta/session_close.py")
+    _git(worktree, "commit", "-m", "merged lane work")
+    _git(repo, "merge", "--ff-only", "host-gate-lane")
+    monkeypatch.setattr(prewrite_claim_gate, "REPO_ROOT", repo)
+    if tamper == "dirty":
+        (worktree / "Makefile").write_text("session-close:\n\t@echo tampered\n", encoding="utf-8")
+    agent = "codex" if tamper == "wrong-agent" else "claude-code"
+    extra = " PYTHON=/tmp/python" if tamper == "extra-assignment" else ""
+    command = (
+        f"/usr/bin/make -C {worktree} session-close BRANCH=host-gate-lane "
+        f"WORKTREE_AGENT={agent}{extra}"
+    )
+
+    assert prewrite_claim_gate._special_unclaimed_command(
+        command,
+        client="claude-code",
+        claims_dir=claims_dir,
+        projection_path=tmp_path / "projection.json",
+        subagent_event=False,
+        native_session=SESSION,
+    ) is False
+
 def test_host_gate_admits_exact_dirty_handoff_finish_for_live_owner(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

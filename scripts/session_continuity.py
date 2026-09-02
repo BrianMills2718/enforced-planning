@@ -114,6 +114,14 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         help="Start one transient Codex fork only after the exact review permits launch.",
     )
     parser.add_argument(
+        "--launch-native-successors",
+        action="store_true",
+        help=(
+            "Opt in to idempotent transient launch for exact verified native offers; "
+            "launch acknowledgement is not custody acceptance."
+        ),
+    )
+    parser.add_argument(
         "--successor-offer-dir",
         type=Path,
         default=DEFAULT_SUCCESSOR_OFFER_DIR,
@@ -172,6 +180,13 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         parser.error("select only one resume-offer delivery path")
     if args.launch_successor and not args.resume_offer_message_id:
         parser.error("--launch-successor requires --resume-offer-message-id")
+    if args.launch_native_successors and not (
+        args.install_native_delivery_timer
+        or (args.scan_all_live_claims and args.deliver_native_resume_offers)
+    ):
+        parser.error(
+            "--launch-native-successors requires native delivery installation or sweep"
+        )
     if args.notify_minutes <= 0 or args.timer_minutes <= 0:
         parser.error("notification and timer intervals must be positive")
     return args
@@ -468,6 +483,57 @@ def _native_consumption_receipts(
             )
             receipts[receipt.correlation_id] = receipt
     return receipts
+
+
+def _native_successor_launch_states(
+    receipt_path: Path,
+) -> dict[str, session_continuity.NativeCodexSuccessorLaunchJournalV1]:
+    """Load the latest typed launch state for every exact successor offer."""
+
+    resolved = receipt_path.expanduser().resolve()
+    if not resolved.exists():
+        return {}
+    states: dict[str, session_continuity.NativeCodexSuccessorLaunchJournalV1] = {}
+    with resolved.open(encoding="utf-8") as handle:
+        for line_number, line in enumerate(handle, start=1):
+            if not line.strip():
+                continue
+            try:
+                record = json.loads(line)
+            except json.JSONDecodeError as exc:
+                raise ValueError(
+                    f"continuity receipt journal has malformed JSON at line {line_number}"
+                ) from exc
+            if not isinstance(record, dict) or record.get("record_type") != (
+                "native_codex_successor_launch"
+            ):
+                continue
+            entry = session_continuity.NativeCodexSuccessorLaunchJournalV1.model_validate(
+                record
+            )
+            states[entry.offer_id] = entry
+    return states
+
+
+def _append_native_successor_launch_state(
+    *,
+    receipt_path: Path,
+    launch: session_continuity.CodexSuccessorLaunchV1,
+    state: Literal["intent", "started", "failed"],
+    launch_receipt: session_continuity.CodexSuccessorLaunchReceiptV1 | None = None,
+    error: str | None = None,
+) -> session_continuity.NativeCodexSuccessorLaunchJournalV1:
+    entry = session_continuity.NativeCodexSuccessorLaunchJournalV1(
+        offer_id=launch.offer_id,
+        offer_sha256=launch.offer_sha256,
+        systemd_unit=launch.systemd_unit,
+        state=state,
+        recorded_at=datetime.now(UTC),
+        launch_receipt=launch_receipt,
+        error=error,
+    )
+    _append_receipt(receipt_path, entry.model_dump(mode="json"))
+    return entry
 
 
 def reconcile_native_resume_consumption(*, receipt_path: Path) -> list[dict[str, Any]]:
@@ -860,12 +926,134 @@ def prepare_native_successor_offers(
     return results
 
 
+def launch_verified_native_successors(
+    *,
+    successor_offers: Sequence[Mapping[str, Any]],
+    receipt_path: Path,
+    resume_script: Path = DEFAULT_INSTALLED_RESUME_SCRIPT,
+    codex: str = "codex",
+    systemd_run: str = "systemd-run",
+    run: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+) -> list[dict[str, Any]]:
+    """Launch each exact verified offer at most once; never claim acceptance."""
+
+    states = _native_successor_launch_states(receipt_path)
+    results: list[dict[str, Any]] = []
+    for prepared in successor_offers:
+        if (
+            prepared.get("action") != "successor_offer_prepared"
+            or prepared.get("successor_offer_verified") is not True
+        ):
+            continue
+        base = {
+            "project": prepared.get("project"),
+            "scope": prepared.get("scope"),
+            "session_id": prepared.get("session_id"),
+            "offer_id": prepared.get("offer_id"),
+        }
+        launch: session_continuity.CodexSuccessorLaunchV1 | None = None
+        intent_written = False
+        try:
+            offer_path = Path(str(prepared.get("offer_path") or "")).expanduser().resolve()
+            offer = session_continuity.SuccessorCustodyOfferV1.model_validate_json(
+                offer_path.read_text(encoding="utf-8")
+            )
+            if offer.offer_id != prepared.get("offer_id"):
+                raise ValueError("verified native successor result names a different offer")
+            launch = session_continuity.build_codex_successor_launch(
+                offer=offer,
+                offer_path=str(offer_path),
+                resume_script=str(resume_script.expanduser().resolve()),
+                codex=codex,
+                systemd_run=systemd_run,
+            )
+            prior = states.get(offer.offer_id)
+            if prior is not None:
+                if (
+                    prior.offer_sha256 != launch.offer_sha256
+                    or prior.systemd_unit != launch.systemd_unit
+                ):
+                    raise ValueError("prior successor launch belongs to different offer bytes")
+                if prior.state == "started":
+                    results.append(
+                        {
+                            **base,
+                            "action": "successor_launch_already_started",
+                            "reason_code": "exact_successor_launch_receipt_exists",
+                            "launch_started": True,
+                            "successor_session_id": None,
+                            "successor_accepted": False,
+                            "transfer_eligible": False,
+                        }
+                    )
+                    continue
+                results.append(
+                    {
+                        **base,
+                        "action": "fail_visible",
+                        "reason_code": (
+                            "prior_successor_launch_outcome_indeterminate"
+                            if prior.state == "intent"
+                            else "prior_successor_launch_failed"
+                        ),
+                        "error": prior.error,
+                    }
+                )
+                continue
+            states[offer.offer_id] = _append_native_successor_launch_state(
+                receipt_path=receipt_path,
+                launch=launch,
+                state="intent",
+            )
+            intent_written = True
+            launch_receipt = launch_codex_successor(launch, run=run)
+            states[offer.offer_id] = _append_native_successor_launch_state(
+                receipt_path=receipt_path,
+                launch=launch,
+                state="started",
+                launch_receipt=launch_receipt,
+            )
+            results.append(
+                {
+                    **base,
+                    "action": "successor_launch_started",
+                    "reason_code": "verified_native_successor_launch_acknowledged",
+                    "launch_receipt": launch_receipt.model_dump(mode="json"),
+                    "launch_started": True,
+                    "successor_session_id": None,
+                    "successor_accepted": False,
+                    "transfer_eligible": False,
+                }
+            )
+        except (OSError, RuntimeError, TypeError, ValueError) as exc:
+            if launch is not None and intent_written:
+                states[launch.offer_id] = _append_native_successor_launch_state(
+                    receipt_path=receipt_path,
+                    launch=launch,
+                    state="failed",
+                    error=str(exc),
+                )
+            results.append(
+                {
+                    **base,
+                    "action": "fail_visible",
+                    "reason_code": "native_successor_launch_invalid",
+                    "error": str(exc),
+                }
+            )
+    return results
+
+
 def run_native_delivery_sweep(
     *,
     notify_minutes: int,
     receipt_path: Path,
     codex: str = "codex",
     successor_offer_dir: Path = DEFAULT_SUCCESSOR_OFFER_DIR,
+    launch_native_successors: bool = False,
+    installed_resume_script: Path = DEFAULT_INSTALLED_RESUME_SCRIPT,
+    systemd_run: str = "systemd-run",
+    launch_run: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
 ) -> dict[str, Any]:
     """Observe and deliver owner-first prompts under one shared process lock."""
 
@@ -883,10 +1071,24 @@ def run_native_delivery_sweep(
             receipt_path=receipt_path,
             offer_dir=successor_offer_dir,
         )
+        successor_launches = (
+            launch_verified_native_successors(
+                successor_offers=successor_offers,
+                receipt_path=receipt_path,
+                resume_script=installed_resume_script,
+                codex=codex,
+                systemd_run=systemd_run,
+                run=launch_run,
+            )
+            if launch_native_successors
+            else []
+        )
         payload["mode"] = "native_resume_delivery"
         payload["native_resume_deliveries"] = deliveries
         payload["native_resume_consumptions"] = consumptions
         payload["native_successor_offers"] = successor_offers
+        payload["native_successor_launch_enabled"] = launch_native_successors
+        payload["native_successor_launches"] = successor_launches
         payload["native_successor_offer_prepared_count"] = sum(
             item["action"] == "successor_offer_prepared" for item in successor_offers
         )
@@ -895,6 +1097,13 @@ def run_native_delivery_sweep(
         )
         payload["native_successor_offer_fail_visible_count"] = sum(
             item["action"] == "fail_visible" for item in successor_offers
+        )
+        payload["native_successor_launch_started_count"] = sum(
+            item["action"] in {"successor_launch_started", "successor_launch_already_started"}
+            for item in successor_launches
+        )
+        payload["native_successor_launch_fail_visible_count"] = sum(
+            item["action"] == "fail_visible" for item in successor_launches
         )
         payload["native_resume_consumed_count"] = sum(
             item["action"] == "owner_resume_consumed" for item in consumptions
@@ -944,12 +1153,15 @@ def render_observe_timer(
     timer_minutes: int,
     notify_minutes: int,
     delivery_enabled: bool = False,
+    successor_launch_enabled: bool = False,
     codex_path: Path | None = None,
 ) -> tuple[str, str]:
     """Render one shared oneshot service and its bounded observe timer."""
 
     if timer_minutes <= 0 or notify_minutes <= 0:
         raise ValueError("timer and notification intervals must be positive")
+    if successor_launch_enabled and not delivery_enabled:
+        raise ValueError("successor launch requires native delivery mode")
     command_parts = [
             str(python_path.expanduser().resolve()),
             str(script_path.expanduser().resolve()),
@@ -972,6 +1184,8 @@ def render_observe_timer(
                 str(codex_path.expanduser().resolve()),
             )
         )
+        if successor_launch_enabled:
+            command_parts.append("--launch-native-successors")
     command = shlex.join(command_parts)
     description = (
         "Deliver bounded Codex owner-resume prompts"
@@ -1009,6 +1223,7 @@ def install_observe_timer(
     notify_minutes: int,
     run: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
     delivery_enabled: bool = False,
+    successor_launch_enabled: bool = False,
     codex: str = "codex",
 ) -> dict[str, Any]:
     """Install one shared observe or bounded native-delivery timer."""
@@ -1026,6 +1241,7 @@ def install_observe_timer(
         timer_minutes=timer_minutes,
         notify_minutes=notify_minutes,
         delivery_enabled=delivery_enabled,
+        successor_launch_enabled=successor_launch_enabled,
         codex_path=resolved_codex,
     )
     resolved_dir = unit_dir.expanduser().resolve()
@@ -1065,6 +1281,7 @@ def install_observe_timer(
         "notify_minutes": notify_minutes,
         "receipt_path": str(receipt_path.expanduser().resolve()),
         "codex_path": str(resolved_codex.resolve()) if resolved_codex else None,
+        "successor_launch_enabled": successor_launch_enabled,
     }
 
     def atomic_write(path: Path, content: str) -> None:
@@ -1114,6 +1331,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             timer_minutes=args.timer_minutes,
             notify_minutes=args.notify_minutes,
             delivery_enabled=args.install_native_delivery_timer,
+            successor_launch_enabled=args.launch_native_successors,
             codex=args.codex,
         )
         print(json.dumps(payload, indent=2, sort_keys=True))
@@ -1124,6 +1342,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                 notify_minutes=args.notify_minutes,
                 receipt_path=args.receipt_jsonl,
                 codex=args.codex,
+                launch_native_successors=args.launch_native_successors,
+                installed_resume_script=args.installed_resume_script,
+                systemd_run=args.systemd_run,
             )
         else:
             payload = run_observe_sweep(
@@ -1131,8 +1352,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                 receipt_path=args.receipt_jsonl,
             )
         print(json.dumps(payload, indent=2, sort_keys=True))
-        if args.deliver_native_resume_offers and payload.get(
-            "native_resume_fail_visible_count", 0
+        if args.deliver_native_resume_offers and (
+            payload.get("native_resume_fail_visible_count", 0)
+            or payload.get("native_successor_offer_fail_visible_count", 0)
+            or payload.get("native_successor_launch_fail_visible_count", 0)
         ):
             return 1
         return 0

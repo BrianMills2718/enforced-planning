@@ -697,6 +697,111 @@ def test_successor_launch_fails_visible_without_exact_unit_ack(tmp_path: Path) -
         )
 
 
+def test_verified_native_successor_launch_is_journaled_exactly_once(
+    tmp_path: Path,
+) -> None:
+    offer = successor_custody_offer()
+    offer_path = continuity_cli.persist_successor_offer(
+        offer, offer_dir=tmp_path / "offers"
+    )
+    prepared = [
+        {
+            "project": offer.project,
+            "scope": offer.scope,
+            "session_id": offer.predecessor_session_id,
+            "offer_id": offer.offer_id,
+            "offer_path": str(offer_path),
+            "action": "successor_offer_prepared",
+            "successor_offer_verified": True,
+        }
+    ]
+    calls: list[tuple[str, ...]] = []
+
+    def fake_run(
+        command: tuple[str, ...], **_kwargs: object
+    ) -> subprocess.CompletedProcess[str]:
+        calls.append(command)
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            f"Running as unit: enforced-planning-successor-{offer.offer_id}.service\n",
+            "",
+        )
+
+    receipt_path = tmp_path / "receipts.jsonl"
+    first = continuity_cli.launch_verified_native_successors(
+        successor_offers=prepared,
+        receipt_path=receipt_path,
+        resume_script=tmp_path / "session_resume.py",
+        run=fake_run,
+    )
+    second = continuity_cli.launch_verified_native_successors(
+        successor_offers=prepared,
+        receipt_path=receipt_path,
+        resume_script=tmp_path / "session_resume.py",
+        run=fake_run,
+    )
+
+    assert first[0]["action"] == "successor_launch_started"
+    assert first[0]["successor_session_id"] is None
+    assert first[0]["successor_accepted"] is False
+    assert first[0]["transfer_eligible"] is False
+    assert second[0]["action"] == "successor_launch_already_started"
+    assert len(calls) == 1
+    records = [
+        json.loads(line)
+        for line in receipt_path.read_text(encoding="utf-8").splitlines()
+    ]
+    assert [record["state"] for record in records] == ["intent", "started"]
+    assert records[-1]["launch_receipt"]["successor_accepted"] is False
+
+
+def test_failed_verified_native_successor_launch_is_not_retried(
+    tmp_path: Path,
+) -> None:
+    offer = successor_custody_offer()
+    offer_path = continuity_cli.persist_successor_offer(
+        offer, offer_dir=tmp_path / "offers"
+    )
+    prepared = [
+        {
+            "project": offer.project,
+            "scope": offer.scope,
+            "session_id": offer.predecessor_session_id,
+            "offer_id": offer.offer_id,
+            "offer_path": str(offer_path),
+            "action": "successor_offer_prepared",
+            "successor_offer_verified": True,
+        }
+    ]
+    calls = 0
+
+    def reject(
+        command: tuple[str, ...], **_kwargs: object
+    ) -> subprocess.CompletedProcess[str]:
+        nonlocal calls
+        calls += 1
+        return subprocess.CompletedProcess(command, 1, "", "launcher unavailable")
+
+    receipt_path = tmp_path / "receipts.jsonl"
+    first = continuity_cli.launch_verified_native_successors(
+        successor_offers=prepared,
+        receipt_path=receipt_path,
+        resume_script=tmp_path / "session_resume.py",
+        run=reject,
+    )
+    second = continuity_cli.launch_verified_native_successors(
+        successor_offers=prepared,
+        receipt_path=receipt_path,
+        resume_script=tmp_path / "session_resume.py",
+        run=reject,
+    )
+
+    assert first[0]["reason_code"] == "native_successor_launch_invalid"
+    assert second[0]["reason_code"] == "prior_successor_launch_failed"
+    assert calls == 1
+
+
 def test_cli_successor_launch_requires_exact_offer_review() -> None:
     with pytest.raises(SystemExit):
         continuity_cli.parse_args(
@@ -706,6 +811,28 @@ def test_cli_successor_launch_requires_exact_offer_review() -> None:
                 "--scope",
                 "feature-lane",
                 "--launch-successor",
+            ]
+        )
+
+
+def test_cli_native_successor_launch_requires_shared_delivery_mode() -> None:
+    args = continuity_cli.parse_args(
+        [
+            "--scan-all-live-claims",
+            "--deliver-native-resume-offers",
+            "--launch-native-successors",
+        ]
+    )
+    assert args.launch_native_successors is True
+
+    with pytest.raises(SystemExit):
+        continuity_cli.parse_args(
+            [
+                "--project",
+                "demo",
+                "--scope",
+                "feature-lane",
+                "--launch-native-successors",
             ]
         )
 
@@ -1695,6 +1822,19 @@ def test_delivery_timer_uses_one_shared_process_with_native_queue_enabled(
     assert "Type=oneshot" in service
     assert service.count("--deliver-native-resume-offers") == 1
     assert "--codex /opt/codex/bin/codex" in service
+    assert "--launch-native-successors" not in service
+
+    launch_service, _timer = continuity_cli.render_observe_timer(
+        script_path=tmp_path / "session_continuity.py",
+        python_path=Path("/usr/bin/python3"),
+        receipt_path=tmp_path / "receipts.jsonl",
+        timer_minutes=10,
+        notify_minutes=15,
+        delivery_enabled=True,
+        successor_launch_enabled=True,
+        codex_path=Path("/opt/codex/bin/codex"),
+    )
+    assert launch_service.count("--launch-native-successors") == 1
 
 
 def test_delivery_sweep_cli_exits_nonzero_for_fail_visible_delivery(

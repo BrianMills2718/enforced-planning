@@ -200,6 +200,43 @@ class CodexSuccessorLaunchReceiptV1(BaseModel):
     runtime_stdout: str
 
 
+class NativeCodexSuccessorLaunchJournalV1(BaseModel):
+    """Write-ahead state for one verified native successor launch."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    schema_version: Literal["1.0"] = "1.0"
+    record_type: Literal["native_codex_successor_launch"] = (
+        "native_codex_successor_launch"
+    )
+    offer_id: str = Field(pattern=r"^[0-9a-f]{24}$")
+    offer_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    systemd_unit: str = Field(pattern=r"^[a-zA-Z0-9_.@-]+$")
+    state: Literal["intent", "started", "failed"]
+    recorded_at: datetime
+    launch_receipt: CodexSuccessorLaunchReceiptV1 | None = None
+    error: str | None = None
+
+    @model_validator(mode="after")
+    def validate_state_payload(self) -> NativeCodexSuccessorLaunchJournalV1:
+        if self.state == "intent" and (self.launch_receipt or self.error):
+            raise ValueError("successor launch intent cannot contain a terminal result")
+        if self.state == "started":
+            if self.launch_receipt is None or self.error is not None:
+                raise ValueError("started successor launch requires only its receipt")
+            if (
+                self.launch_receipt.offer_id != self.offer_id
+                or self.launch_receipt.offer_sha256 != self.offer_sha256
+                or self.launch_receipt.systemd_unit != self.systemd_unit
+            ):
+                raise ValueError("successor launch receipt does not match its journal")
+        if self.state == "failed" and (
+            not self.error or self.launch_receipt is not None
+        ):
+            raise ValueError("failed successor launch requires only an error")
+        return self
+
+
 class NativeCodexResumeOfferV1(BaseModel):
     """One exact, idempotently identifiable prompt for Codex's durable queue."""
 
@@ -1032,6 +1069,7 @@ __all__ = [
     "NativeCodexDeliveryJournalV1",
     "NativeCodexQueueReceiptV1",
     "NativeCodexResumeOfferV1",
+    "NativeCodexSuccessorLaunchJournalV1",
     "ResumeOfferReviewV1",
     "SuccessorCustodyAcceptanceV1",
     "SuccessorCustodyOfferV1",

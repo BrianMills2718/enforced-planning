@@ -70,6 +70,7 @@ def _supported_closeout_kwargs(args: argparse.Namespace) -> dict[str, object]:
         ("reconcile_missing_worktree", args.reconcile_missing_worktree),
         ("expected_tracker_sha256", args.tracker_sha256),
         ("reconcile_canonical_root", args.reconcile_canonical_root),
+        ("reconcile_session_ended", args.reconcile_session_ended),
         ("expected_claim_sha256", args.claim_sha256),
         ("mailbox_disposition", args.mailbox_disposition),
         ("mailbox_note", args.mailbox_note),
@@ -129,8 +130,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--reconcile-session-ended",
+        action="store_true",
+        help=(
+            "Terminally close one exact session-ended linked worktree as the current native "
+            "actor without transferring predecessor write custody; requires claim and tracker digests."
+        ),
+    )
+    parser.add_argument(
         "--claim-sha256",
-        help="Exact SHA-256 of the preserved claim required for canonical-root reconciliation.",
+        help="Exact SHA-256 required for canonical-root or session-ended reconciliation.",
     )
     parser.add_argument(
         "--terminalize-shared-child",

@@ -58,6 +58,7 @@ STANDARD_YAML = textwrap.dedent("""\
         require_prefix: true
         valid_prefixes:
           - "\\\\[Plan #\\\\d+\\\\]"
+          - "\\\\[Goal [a-z0-9][a-z0-9._:-]*\\\\]"
           - "\\\\[Trivial\\\\]"
           - "\\\\[Unplanned\\\\]"
 """)
@@ -67,6 +68,22 @@ def test_accepts_plan_prefix(tmp_path: Path) -> None:
     """Valid [Plan #N] prefix should be accepted."""
     result = _run_hook("[Plan #7] Add feature X", tmp_path, yaml_content=STANDARD_YAML)
     assert result.returncode == 0
+
+
+def test_accepts_goal_prefix(tmp_path: Path) -> None:
+    """A durable autonomous goal is planned provenance, not unplanned work."""
+    result = _run_hook(
+        "[Goal coordination-runtime-consumer-sync] Reconcile coordination consumers",
+        tmp_path,
+        yaml_content=STANDARD_YAML,
+    )
+    assert result.returncode == 0
+
+
+def test_rejects_goal_prefix_without_stable_reference(tmp_path: Path) -> None:
+    """A bare goal label must not manufacture planned provenance."""
+    result = _run_hook("[Goal] Reconcile coordination consumers", tmp_path, yaml_content=STANDARD_YAML)
+    assert result.returncode == 1
 
 
 def test_accepts_trivial_prefix(tmp_path: Path) -> None:

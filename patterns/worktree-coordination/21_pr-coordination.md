@@ -268,8 +268,8 @@ STALE_HOURS = 4  # Claims older than this are flagged
   if: github.event.action == 'opened'
   run: |
     TITLE="${{ github.event.pull_request.title }}"
-    if [[ ! "$TITLE" =~ \[Plan\ #[0-9]+\] ]] && [[ ! "$TITLE" =~ \[Unplanned\] ]]; then
-      echo "PR title must include [Plan #N] or [Unplanned]"
+    if [[ ! "$TITLE" =~ \[Plan\ #[0-9]+\] ]] && [[ ! "$TITLE" =~ \[Goal\ [a-z0-9][a-z0-9._:-]*\] ]] && [[ ! "$TITLE" =~ \[Unplanned\] ]]; then
+      echo "PR title must include [Plan #N], [Goal stable-ref], or [Unplanned]"
       exit 1
     fi
 ```

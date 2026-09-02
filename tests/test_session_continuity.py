@@ -16,7 +16,9 @@ from enforced_planning.session_continuity import (
     CodexActivityV1,
     assess_continuity,
     assess_resume_offer,
+    build_native_codex_resume_offer,
     build_resume_offer_request,
+    parse_native_codex_queue_receipt,
     read_codex_activity,
 )
 from scripts import session_continuity as continuity_cli
@@ -149,6 +151,143 @@ def test_active_owner_cannot_receive_idle_resume_offer() -> None:
             scope="feature-lane",
             next_action="continue",
         )
+
+
+def test_idle_assessment_builds_exact_native_codex_queue_offer() -> None:
+    assessment = assess_continuity(
+        claim=Claim(session_id="codex:01a05b94-d5d8-7d82-8a9a-6c64c6979e96"),
+        activity=activity("between_turns", 30).model_copy(
+            update={"session_id": "codex:01a05b94-d5d8-7d82-8a9a-6c64c6979e96"}
+        ),
+        now=NOW,
+    )
+
+    first = build_native_codex_resume_offer(
+        assessment=assessment,
+        project="demo",
+        scope="feature-lane",
+        next_action="run the focused integration",
+    )
+    second = build_native_codex_resume_offer(
+        assessment=assessment,
+        project="demo",
+        scope="feature-lane",
+        next_action="run the focused integration",
+    )
+
+    assert first.thread_id == "01a05b94-d5d8-7d82-8a9a-6c64c6979e96"
+    assert first.correlation_id == second.correlation_id
+    assert f"continuity-resume:{first.correlation_id}" in first.prompt
+    assert "run the focused integration" in first.prompt
+
+
+def test_native_codex_queue_receipt_requires_exact_thread() -> None:
+    assessment = assess_continuity(
+        claim=Claim(session_id="codex:01a05b94-d5d8-7d82-8a9a-6c64c6979e96"),
+        activity=activity("between_turns", 30).model_copy(
+            update={"session_id": "codex:01a05b94-d5d8-7d82-8a9a-6c64c6979e96"}
+        ),
+        now=NOW,
+    )
+    offer = build_native_codex_resume_offer(
+        assessment=assessment,
+        project="demo",
+        scope="feature-lane",
+        next_action="continue",
+    )
+
+    receipt = parse_native_codex_queue_receipt(
+        offer=offer,
+        stdout=(
+            "Queued message 01a0608f-1498-7413-b469-3e538a9bf171 for thread "
+            "01a05b94-d5d8-7d82-8a9a-6c64c6979e96.\n"
+        ),
+    )
+
+    assert receipt.runtime_accepted is True
+    assert receipt.correlation_id == offer.correlation_id
+
+
+def test_native_codex_queue_receipt_rejects_wrong_thread() -> None:
+    assessment = assess_continuity(
+        claim=Claim(session_id="codex:01a05b94-d5d8-7d82-8a9a-6c64c6979e96"),
+        activity=activity("between_turns", 30).model_copy(
+            update={"session_id": "codex:01a05b94-d5d8-7d82-8a9a-6c64c6979e96"}
+        ),
+        now=NOW,
+    )
+    offer = build_native_codex_resume_offer(
+        assessment=assessment,
+        project="demo",
+        scope="feature-lane",
+        next_action="continue",
+    )
+
+    with pytest.raises(ValueError, match="different thread"):
+        parse_native_codex_queue_receipt(
+            offer=offer,
+            stdout=(
+                "Queued message 01a0608f-1498-7413-b469-3e538a9bf171 for thread "
+                "00000000-0000-0000-0000-000000000001.\n"
+            ),
+        )
+
+
+def test_exact_cli_queues_native_offer_and_returns_typed_receipt(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    claim = SweepClaim(
+        session_id="codex:01a05b94-d5d8-7d82-8a9a-6c64c6979e96"
+    )
+    idle = activity("between_turns", 30).model_copy(
+        update={"session_id": claim.session_id}
+    )
+    monkeypatch.setattr(continuity_cli.coordination_claims, "check_claims", lambda: [claim])
+    monkeypatch.setattr(
+        continuity_cli.coordination_claims,
+        "session_transcript_path",
+        lambda _session_id: Path("/tmp/unused.jsonl"),
+    )
+    monkeypatch.setattr(
+        continuity_cli.session_continuity,
+        "read_codex_activity",
+        lambda **_kwargs: idle,
+    )
+    monkeypatch.setattr(
+        continuity_cli.subprocess,
+        "run",
+        lambda command, **_kwargs: subprocess.CompletedProcess(
+            command,
+            0,
+            (
+                "Queued message 01a0608f-1498-7413-b469-3e538a9bf171 for thread "
+                "01a05b94-d5d8-7d82-8a9a-6c64c6979e96.\n"
+            ),
+            "",
+        ),
+    )
+
+    assert continuity_cli.main(
+        [
+            "--project",
+            "demo",
+            "--scope",
+            "feature-lane",
+            "--queue-native-resume-offer",
+            "--json",
+        ]
+    ) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["native_resume_offer"] == {
+        "schema_version": "1.0",
+        "record_type": "native_codex_queue_receipt",
+        "owner_session_id": "codex:01a05b94-d5d8-7d82-8a9a-6c64c6979e96",
+        "thread_id": "01a05b94-d5d8-7d82-8a9a-6c64c6979e96",
+        "correlation_id": payload["native_resume_offer"]["correlation_id"],
+        "queued_submission_id": "01a0608f-1498-7413-b469-3e538a9bf171",
+        "runtime_accepted": True,
+    }
 
 
 @dataclass
@@ -365,6 +504,10 @@ class SweepClaim(Claim):
     agent: str = "codex"
     scope: str = "feature-lane"
     project: str = "demo"
+
+    @property
+    def projects(self) -> list[str]:
+        return [self.project]
 
     def primary_project(self) -> str:
         return self.project

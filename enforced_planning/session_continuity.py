@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
+import uuid
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Literal, Protocol
@@ -99,11 +101,43 @@ class ResumeOfferReviewV1(BaseModel):
     resume_condition: str = Field(min_length=1)
 
 
+class NativeCodexResumeOfferV1(BaseModel):
+    """One exact, idempotently identifiable prompt for Codex's durable queue."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    schema_version: Literal["1.0"] = "1.0"
+    record_type: Literal["native_codex_resume_offer"] = "native_codex_resume_offer"
+    owner_session_id: str = Field(min_length=1)
+    thread_id: str = Field(min_length=1)
+    correlation_id: str = Field(pattern=r"^[0-9a-f]{24}$")
+    prompt: str = Field(min_length=1)
+
+
+class NativeCodexQueueReceiptV1(BaseModel):
+    """Strictly parsed acceptance receipt from the installed Codex client."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    schema_version: Literal["1.0"] = "1.0"
+    record_type: Literal["native_codex_queue_receipt"] = "native_codex_queue_receipt"
+    owner_session_id: str = Field(min_length=1)
+    thread_id: str = Field(min_length=1)
+    correlation_id: str = Field(pattern=r"^[0-9a-f]{24}$")
+    queued_submission_id: str = Field(min_length=1)
+    runtime_accepted: Literal[True] = True
+
+
+_CODEX_QUEUE_RECEIPT = re.compile(
+    r"Queued message ([0-9a-f-]{36}) for thread ([0-9a-f-]{36})\.\s*"
+)
+
+
 def _aware_timestamp(value: object) -> datetime | None:
     if not isinstance(value, str) or not value.strip():
         return None
     try:
-        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(value)
     except ValueError:
         return None
     if parsed.tzinfo is None or parsed.utcoffset() is None:
@@ -298,16 +332,11 @@ def build_resume_offer_request(
         raise ValueError("resume offers require one exact idle-owner notification assessment")
     if assessment.last_client_activity_at is None:
         raise ValueError("resume offer lacks exact client activity evidence")
-    correlation = hashlib.sha256(
-        "\0".join(
-            (
-                assessment.session_id,
-                assessment.last_client_activity_at.isoformat(),
-                project,
-                scope,
-            )
-        ).encode("utf-8")
-    ).hexdigest()[:24]
+    correlation_source = (
+        f"{assessment.session_id}\0{assessment.last_client_activity_at.isoformat()}"
+        f"\0{project}\0{scope}"
+    )
+    correlation = hashlib.sha256(correlation_source.encode("utf-8")).hexdigest()[:24]
     return coordination_messages.SendMessageRequest(
         caller_session_id=sender_session_id,
         sender_session_id=sender_session_id,
@@ -325,6 +354,71 @@ def build_resume_offer_request(
         ttl_seconds=60 * 60,
         idempotency_key=f"continuity-resume-offer-{correlation}",
         claim_ref=scope,
+    )
+
+
+def build_native_codex_resume_offer(
+    *,
+    assessment: ContinuityAssessmentV1,
+    project: str,
+    scope: str,
+    next_action: str,
+) -> NativeCodexResumeOfferV1:
+    """Build one exact-thread prompt accepted by the native Codex queue CLI."""
+
+    if assessment.action != "notify_owner" or assessment.session_id is None:
+        raise ValueError("native resume offers require one exact idle-owner assessment")
+    if assessment.last_client_activity_at is None:
+        raise ValueError("native resume offer lacks exact client activity evidence")
+    prefix = "codex:"
+    if not assessment.session_id.startswith(prefix):
+        raise ValueError("native Codex resume offer requires a codex-prefixed session")
+    raw_thread_id = assessment.session_id.removeprefix(prefix)
+    try:
+        thread_id = str(uuid.UUID(raw_thread_id))
+    except ValueError as exc:
+        raise ValueError("native Codex resume offer requires a UUID thread id") from exc
+    if not project.strip() or not scope.strip() or not next_action.strip():
+        raise ValueError("native Codex resume offer requires project, scope, and next action")
+    correlation_source = (
+        f"{assessment.session_id}\0{assessment.last_client_activity_at.isoformat()}"
+        f"\0{project}\0{scope}"
+    )
+    correlation_id = hashlib.sha256(correlation_source.encode("utf-8")).hexdigest()[:24]
+    prompt = (
+        f"continuity-resume:{correlation_id}: Authorized work remains in {project}/{scope}. "
+        "Continue in this exact thread toward the next verified checkpoint. "
+        f"Next action: {next_action}"
+    )
+    return NativeCodexResumeOfferV1(
+        owner_session_id=assessment.session_id,
+        thread_id=thread_id,
+        correlation_id=correlation_id,
+        prompt=prompt,
+    )
+
+
+def parse_native_codex_queue_receipt(
+    *, offer: NativeCodexResumeOfferV1, stdout: str
+) -> NativeCodexQueueReceiptV1:
+    """Accept only Codex's exact queue acknowledgement for the requested thread."""
+
+    matched = _CODEX_QUEUE_RECEIPT.fullmatch(stdout)
+    if matched is None:
+        raise ValueError("Codex queue returned an invalid acceptance receipt")
+    submission_id, thread_id = matched.groups()
+    try:
+        submission_id = str(uuid.UUID(submission_id))
+        thread_id = str(uuid.UUID(thread_id))
+    except ValueError as exc:
+        raise ValueError("Codex queue receipt contains an invalid UUID") from exc
+    if thread_id != offer.thread_id:
+        raise ValueError("Codex queue receipt belongs to a different thread")
+    return NativeCodexQueueReceiptV1(
+        owner_session_id=offer.owner_session_id,
+        thread_id=thread_id,
+        correlation_id=offer.correlation_id,
+        queued_submission_id=submission_id,
     )
 
 
@@ -401,9 +495,13 @@ def assess_resume_offer(
 __all__ = [
     "CodexActivityV1",
     "ContinuityAssessmentV1",
+    "NativeCodexQueueReceiptV1",
+    "NativeCodexResumeOfferV1",
     "ResumeOfferReviewV1",
-    "assess_resume_offer",
     "assess_continuity",
+    "assess_resume_offer",
+    "build_native_codex_resume_offer",
     "build_resume_offer_request",
+    "parse_native_codex_queue_receipt",
     "read_codex_activity",
 ]

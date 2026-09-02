@@ -513,6 +513,114 @@ class SweepClaim(Claim):
         return self.project
 
 
+def native_delivery_sweep_fixture() -> dict[str, object]:
+    session_id = "codex:01a05b94-d5d8-7d82-8a9a-6c64c6979e96"
+    assessment = assess_continuity(
+        claim=Claim(session_id=session_id),
+        activity=activity("between_turns", 30).model_copy(
+            update={"session_id": session_id}
+        ),
+        now=NOW,
+    )
+    return {
+        "items": [
+            {
+                "project": "demo",
+                "scope": "feature-lane",
+                "session_id": session_id,
+                "next_action": "run the focused integration",
+                "assessment": assessment.model_dump(mode="json"),
+            }
+        ]
+    }
+
+
+def test_native_delivery_journal_prevents_duplicate_queue_for_same_boundary(
+    tmp_path: Path,
+) -> None:
+    receipt_path = tmp_path / "receipts.jsonl"
+    calls: list[tuple[str, ...]] = []
+
+    def fake_run(
+        command: tuple[str, ...], **_kwargs: object
+    ) -> subprocess.CompletedProcess[str]:
+        calls.append(command)
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            (
+                "Queued message 01a0608f-1498-7413-b469-3e538a9bf171 for thread "
+                "01a05b94-d5d8-7d82-8a9a-6c64c6979e96.\n"
+            ),
+            "",
+        )
+
+    first = continuity_cli.deliver_native_resume_offers(
+        sweep=native_delivery_sweep_fixture(),
+        receipt_path=receipt_path,
+        run=fake_run,
+    )
+    second = continuity_cli.deliver_native_resume_offers(
+        sweep=native_delivery_sweep_fixture(),
+        receipt_path=receipt_path,
+        run=fake_run,
+    )
+
+    assert first[0]["action"] == "queued_owner_resume"
+    assert second[0]["reason_code"] == "already_accepted_for_activity_boundary"
+    assert len(calls) == 1
+    records = [json.loads(line) for line in receipt_path.read_text().splitlines()]
+    assert [record["state"] for record in records] == ["intent", "accepted"]
+
+
+def test_unresolved_delivery_intent_fails_visible_without_retry(
+    tmp_path: Path,
+) -> None:
+    receipt_path = tmp_path / "receipts.jsonl"
+    sweep = native_delivery_sweep_fixture()
+    assessment = continuity_cli.session_continuity.ContinuityAssessmentV1.model_validate(
+        sweep["items"][0]["assessment"]  # type: ignore[index]
+    )
+    offer = build_native_codex_resume_offer(
+        assessment=assessment,
+        project="demo",
+        scope="feature-lane",
+        next_action="run the focused integration",
+    )
+    continuity_cli._append_delivery_state(
+        receipt_path=receipt_path,
+        offer=offer,
+        state="intent",
+    )
+
+    result = continuity_cli.deliver_native_resume_offers(
+        sweep=sweep,
+        receipt_path=receipt_path,
+        run=lambda *_args, **_kwargs: pytest.fail("indeterminate intent must not retry"),
+    )
+
+    assert result[0]["action"] == "fail_visible"
+    assert result[0]["reason_code"] == "prior_delivery_outcome_indeterminate"
+
+
+def test_delivery_timer_uses_one_shared_process_with_native_queue_enabled(
+    tmp_path: Path,
+) -> None:
+    service, _timer = continuity_cli.render_observe_timer(
+        script_path=tmp_path / "session_continuity.py",
+        python_path=Path("/usr/bin/python3"),
+        receipt_path=tmp_path / "receipts.jsonl",
+        timer_minutes=10,
+        notify_minutes=15,
+        delivery_enabled=True,
+        codex_path=Path("/opt/codex/bin/codex"),
+    )
+
+    assert "Type=oneshot" in service
+    assert service.count("--deliver-native-resume-offers") == 1
+    assert "--codex /opt/codex/bin/codex" in service
+
+
 def test_shared_sweep_observes_all_codex_claims_without_transfer_authority(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -636,6 +744,38 @@ def test_install_observe_timer_records_owner_review_and_retirement(
             "enforced-planning-session-continuity.timer",
         ),
     ]
+
+
+def test_install_native_delivery_timer_records_mode_and_exact_codex(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        continuity_cli.shutil,
+        "which",
+        lambda _name: "/opt/codex/bin/codex",
+    )
+
+    def fake_run(
+        command: tuple[str, ...], **_kwargs: object
+    ) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    result = continuity_cli.install_observe_timer(
+        unit_dir=tmp_path / "units",
+        receipt_path=tmp_path / "state/receipts.jsonl",
+        timer_minutes=10,
+        notify_minutes=15,
+        delivery_enabled=True,
+        run=fake_run,
+    )
+
+    metadata = json.loads(Path(result["metadata_path"]).read_text(encoding="utf-8"))
+    service = Path(result["service_path"]).read_text(encoding="utf-8")
+    assert metadata["mode"] == "native_resume_delivery"
+    assert metadata["codex_path"] == "/opt/codex/bin/codex"
+    assert "--deliver-native-resume-offers" in service
+    assert "--codex /opt/codex/bin/codex" in service
 
 
 def test_install_observe_timer_rejects_unowned_unit_collision(tmp_path: Path) -> None:

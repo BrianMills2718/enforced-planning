@@ -9,13 +9,14 @@ import json
 import os
 import secrets
 import shlex
+import shutil
 import subprocess
 import sys
-from collections.abc import Callable, Iterator, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 
 def _bootstrap_package() -> None:
@@ -62,6 +63,11 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Install one shared user timer that runs observe-only continuity sweeps.",
     )
+    mode.add_argument(
+        "--install-native-delivery-timer",
+        action="store_true",
+        help="Install one shared timer that queues bounded exact-owner Codex resume prompts.",
+    )
     parser.add_argument("--agent", default="codex", choices=("codex",))
     parser.add_argument("--project")
     parser.add_argument("--scope")
@@ -75,6 +81,11 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         "--queue-native-resume-offer",
         action="store_true",
         help="Queue one typed resume prompt to the exact idle Codex thread.",
+    )
+    parser.add_argument(
+        "--deliver-native-resume-offers",
+        action="store_true",
+        help="During a shared sweep, durably queue at most one prompt per activity boundary.",
     )
     parser.add_argument("--codex", default="codex", help=argparse.SUPPRESS)
     parser.add_argument("--sender-session-id")
@@ -96,15 +107,20 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     if (
         not args.scan_all_live_claims
         and not args.install_observe_timer
+        and not args.install_native_delivery_timer
         and (not args.project or not args.scope)
     ):
         parser.error("exact assessment requires --project and --scope")
     if args.scan_all_live_claims and (args.project or args.scope):
         parser.error("--scan-all-live-claims cannot be combined with --project or --scope")
-    if (args.scan_all_live_claims or args.install_observe_timer) and (
+    if (args.scan_all_live_claims or args.install_observe_timer or args.install_native_delivery_timer) and (
         args.send_resume_offer or args.queue_native_resume_offer or args.resume_offer_message_id
     ):
         parser.error("shared observe mode cannot send or review resume offers")
+    if args.deliver_native_resume_offers and not args.scan_all_live_claims:
+        parser.error("--deliver-native-resume-offers requires --scan-all-live-claims")
+    if args.install_observe_timer and args.deliver_native_resume_offers:
+        parser.error("observe timer cannot enable native resume delivery")
     if args.send_resume_offer and args.queue_native_resume_offer:
         parser.error("select only one resume-offer delivery path")
     if args.notify_minutes <= 0 or args.timer_minutes <= 0:
@@ -120,6 +136,7 @@ def _assess_claim(claim: coordination_claims.ClaimRecord, *, notify_minutes: int
         "project": claim.primary_project(),
         "scope": claim.scope,
         "session_id": claim.session_id,
+        "next_action": claim.next_action,
     }
     try:
         transcript = coordination_claims.session_transcript_path(claim.session_id)
@@ -224,6 +241,181 @@ def run_observe_sweep(*, notify_minutes: int, receipt_path: Path) -> dict[str, A
         return payload
 
 
+def _delivery_journal_states(
+    receipt_path: Path,
+) -> dict[str, session_continuity.NativeCodexDeliveryJournalV1]:
+    """Load the latest valid write-ahead state for every delivery correlation."""
+
+    resolved = receipt_path.expanduser().resolve()
+    if not resolved.exists():
+        return {}
+    states: dict[str, session_continuity.NativeCodexDeliveryJournalV1] = {}
+    with resolved.open(encoding="utf-8") as handle:
+        for line_number, line in enumerate(handle, start=1):
+            if not line.strip():
+                continue
+            try:
+                record = json.loads(line)
+            except json.JSONDecodeError as exc:
+                raise ValueError(
+                    f"continuity receipt journal has malformed JSON at line {line_number}"
+                ) from exc
+            if not isinstance(record, dict) or record.get("record_type") != "native_codex_resume_delivery":
+                continue
+            entry = session_continuity.NativeCodexDeliveryJournalV1.model_validate(record)
+            states[entry.correlation_id] = entry
+    return states
+
+
+def _append_delivery_state(
+    *,
+    receipt_path: Path,
+    offer: session_continuity.NativeCodexResumeOfferV1,
+    state: Literal["intent", "accepted", "failed"],
+    queued_submission_id: str | None = None,
+    error: str | None = None,
+) -> session_continuity.NativeCodexDeliveryJournalV1:
+    entry = session_continuity.NativeCodexDeliveryJournalV1(
+        owner_session_id=offer.owner_session_id,
+        thread_id=offer.thread_id,
+        correlation_id=offer.correlation_id,
+        state=state,
+        recorded_at=datetime.now(UTC),
+        queued_submission_id=queued_submission_id,
+        error=error,
+    )
+    _append_receipt(receipt_path, entry.model_dump(mode="json"))
+    return entry
+
+
+def deliver_native_resume_offers(
+    *,
+    sweep: Mapping[str, Any],
+    receipt_path: Path,
+    codex: str = "codex",
+    run: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+) -> list[dict[str, Any]]:
+    """Queue once per unchanged owner activity boundary, failing closed on uncertainty."""
+
+    states = _delivery_journal_states(receipt_path)
+    results: list[dict[str, Any]] = []
+    for item in sweep.get("items", []):
+        assessment_data = item.get("assessment") if isinstance(item, dict) else None
+        if not isinstance(assessment_data, dict) or assessment_data.get("action") != "notify_owner":
+            continue
+        base = {
+            "project": item.get("project"),
+            "scope": item.get("scope"),
+            "session_id": item.get("session_id"),
+        }
+        try:
+            assessment = session_continuity.ContinuityAssessmentV1.model_validate(
+                assessment_data
+            )
+            offer = session_continuity.build_native_codex_resume_offer(
+                assessment=assessment,
+                project=str(item.get("project") or ""),
+                scope=str(item.get("scope") or ""),
+                next_action=str(item.get("next_action") or ""),
+            )
+            prior = states.get(offer.correlation_id)
+            if prior is not None:
+                reason = {
+                    "accepted": "already_accepted_for_activity_boundary",
+                    "intent": "prior_delivery_outcome_indeterminate",
+                    "failed": "prior_delivery_failed_for_activity_boundary",
+                }[prior.state]
+                results.append(
+                    {
+                        **base,
+                        "correlation_id": offer.correlation_id,
+                        "action": "none" if prior.state == "accepted" else "fail_visible",
+                        "reason_code": reason,
+                        "queued_submission_id": prior.queued_submission_id,
+                    }
+                )
+                continue
+            _append_delivery_state(receipt_path=receipt_path, offer=offer, state="intent")
+            queued = run(
+                (codex, "queue", "--thread", offer.thread_id, "--message", offer.prompt),
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if queued.returncode != 0:
+                detail = (queued.stderr or queued.stdout).strip() or "Codex queue exited nonzero"
+                _append_delivery_state(
+                    receipt_path=receipt_path,
+                    offer=offer,
+                    state="failed",
+                    error=detail,
+                )
+                results.append(
+                    {
+                        **base,
+                        "correlation_id": offer.correlation_id,
+                        "action": "fail_visible",
+                        "reason_code": "native_queue_rejected",
+                        "error": detail,
+                    }
+                )
+                continue
+            receipt = session_continuity.parse_native_codex_queue_receipt(
+                offer=offer,
+                stdout=queued.stdout,
+            )
+            accepted_entry = _append_delivery_state(
+                receipt_path=receipt_path,
+                offer=offer,
+                state="accepted",
+                queued_submission_id=receipt.queued_submission_id,
+            )
+            states[offer.correlation_id] = accepted_entry
+            results.append(
+                {
+                    **base,
+                    "correlation_id": offer.correlation_id,
+                    "action": "queued_owner_resume",
+                    "reason_code": "native_queue_runtime_accepted",
+                    "queued_submission_id": receipt.queued_submission_id,
+                }
+            )
+        except (OSError, TypeError, ValueError) as exc:
+            results.append(
+                {
+                    **base,
+                    "action": "fail_visible",
+                    "reason_code": "native_queue_delivery_invalid",
+                    "error": str(exc),
+                }
+            )
+    return results
+
+
+def run_native_delivery_sweep(
+    *, notify_minutes: int, receipt_path: Path, codex: str = "codex"
+) -> dict[str, Any]:
+    """Observe and deliver owner-first prompts under one shared process lock."""
+
+    with _exclusive_sweep(receipt_path):
+        payload = build_observe_sweep(notify_minutes=notify_minutes)
+        deliveries = deliver_native_resume_offers(
+            sweep=payload,
+            receipt_path=receipt_path,
+            codex=codex,
+        )
+        payload["mode"] = "native_resume_delivery"
+        payload["native_resume_deliveries"] = deliveries
+        payload["native_resume_queued_count"] = sum(
+            item["action"] == "queued_owner_resume" for item in deliveries
+        )
+        payload["native_resume_fail_visible_count"] = sum(
+            item["action"] == "fail_visible" for item in deliveries
+        )
+        _append_receipt(receipt_path, payload)
+        return payload
+
+
 def render_observe_timer(
     *,
     script_path: Path,
@@ -231,13 +423,14 @@ def render_observe_timer(
     receipt_path: Path,
     timer_minutes: int,
     notify_minutes: int,
+    delivery_enabled: bool = False,
+    codex_path: Path | None = None,
 ) -> tuple[str, str]:
     """Render one shared oneshot service and its bounded observe timer."""
 
     if timer_minutes <= 0 or notify_minutes <= 0:
         raise ValueError("timer and notification intervals must be positive")
-    command = shlex.join(
-        (
+    command_parts = [
             str(python_path.expanduser().resolve()),
             str(script_path.expanduser().resolve()),
             "--scan-all-live-claims",
@@ -248,11 +441,26 @@ def render_observe_timer(
             "--receipt-jsonl",
             str(receipt_path.expanduser().resolve()),
             "--json",
+    ]
+    if delivery_enabled:
+        if codex_path is None:
+            raise ValueError("native delivery timer requires an exact Codex executable")
+        command_parts.extend(
+            (
+                "--deliver-native-resume-offers",
+                "--codex",
+                str(codex_path.expanduser().resolve()),
+            )
         )
+    command = shlex.join(command_parts)
+    description = (
+        "Deliver bounded Codex owner-resume prompts"
+        if delivery_enabled
+        else "Observe authorized Codex work continuity"
     )
     service = (
         "[Unit]\n"
-        "Description=Observe authorized Codex work continuity\n\n"
+        f"Description={description}\n\n"
         "[Service]\n"
         "Type=oneshot\n"
         f"ExecStart={command}\n"
@@ -280,15 +488,25 @@ def install_observe_timer(
     timer_minutes: int,
     notify_minutes: int,
     run: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+    delivery_enabled: bool = False,
+    codex: str = "codex",
 ) -> dict[str, Any]:
-    """Install and enable one shared observe-only timer with retirement metadata."""
+    """Install one shared observe or bounded native-delivery timer."""
 
+    resolved_codex: Path | None = None
+    if delivery_enabled:
+        discovered_codex = shutil.which(codex)
+        if discovered_codex is None:
+            raise ValueError(f"Codex executable is unavailable: {codex}")
+        resolved_codex = Path(discovered_codex)
     service, timer = render_observe_timer(
         script_path=Path(__file__),
         python_path=Path(sys.executable),
         receipt_path=receipt_path,
         timer_minutes=timer_minutes,
         notify_minutes=notify_minutes,
+        delivery_enabled=delivery_enabled,
+        codex_path=resolved_codex,
     )
     resolved_dir = unit_dir.expanduser().resolve()
     service_path = resolved_dir / f"{DEFAULT_UNIT_NAME}.service"
@@ -316,16 +534,17 @@ def install_observe_timer(
     resolved_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
     metadata = {
         "schema_version": "1.0",
-        "mode": "observe",
+        "mode": "native_resume_delivery" if delivery_enabled else "observe",
         "owner": "enforced-planning",
         "review_after": (datetime.now(UTC) + timedelta(days=14)).date().isoformat(),
         "retirement_condition": (
-            "replace when delivered owner-resume triggering is enforced, or retire after "
-            "30 days with no decision-changing idle-owner observations"
+            "retire after 30 days with no decision-changing idle-owner observations, or replace "
+            "when accepted-successor transfer is independently enforced"
         ),
         "timer_minutes": timer_minutes,
         "notify_minutes": notify_minutes,
         "receipt_path": str(receipt_path.expanduser().resolve()),
+        "codex_path": str(resolved_codex.resolve()) if resolved_codex else None,
     }
 
     def atomic_write(path: Path, content: str) -> None:
@@ -362,20 +581,29 @@ def install_observe_timer(
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
-    if args.install_observe_timer:
+    if args.install_observe_timer or args.install_native_delivery_timer:
         payload = install_observe_timer(
             unit_dir=args.unit_dir,
             receipt_path=args.receipt_jsonl,
             timer_minutes=args.timer_minutes,
             notify_minutes=args.notify_minutes,
+            delivery_enabled=args.install_native_delivery_timer,
+            codex=args.codex,
         )
         print(json.dumps(payload, indent=2, sort_keys=True))
         return 0
     if args.scan_all_live_claims:
-        payload = run_observe_sweep(
-            notify_minutes=args.notify_minutes,
-            receipt_path=args.receipt_jsonl,
-        )
+        if args.deliver_native_resume_offers:
+            payload = run_native_delivery_sweep(
+                notify_minutes=args.notify_minutes,
+                receipt_path=args.receipt_jsonl,
+                codex=args.codex,
+            )
+        else:
+            payload = run_observe_sweep(
+                notify_minutes=args.notify_minutes,
+                receipt_path=args.receipt_jsonl,
+            )
         print(json.dumps(payload, indent=2, sort_keys=True))
         return 0
     matches = [

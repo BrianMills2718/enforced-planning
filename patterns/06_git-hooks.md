@@ -95,12 +95,16 @@ if [[ "$FIRST_LINE" =~ ^\[Plan\ \#[0-9]+\] ]]; then
     exit 0
 fi
 
+if [[ "$FIRST_LINE" =~ ^\[Goal\] ]]; then
+    exit 0
+fi
+
 if [[ "$FIRST_LINE" =~ ^\[Unplanned\] ]]; then
     echo "WARNING: Unplanned work. Create a plan before merging."
     exit 0
 fi
 
-echo "ERROR: Commit message must include [Plan #N] or [Unplanned]"
+echo "ERROR: Commit message must include [Plan #N], [Goal], or [Unplanned]"
 echo "  e.g. [Plan #3] Implement feature X"
 exit 1
 ```

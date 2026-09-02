@@ -26,7 +26,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--project", required=True)
     parser.add_argument("--scope", required=True)
     parser.add_argument("--notify-minutes", type=int, default=15)
-    parser.add_argument("--transfer-observe-minutes", type=int, default=30)
     parser.add_argument(
         "--send-resume-offer",
         action="store_true",
@@ -67,7 +66,6 @@ def main() -> int:
         claim=claim,
         activity=activity,
         notify_after=timedelta(minutes=args.notify_minutes),
-        transfer_observe_after=timedelta(minutes=args.transfer_observe_minutes),
     )
     payload = assessment.model_dump(mode="json")
     payload["resume_offer"] = None

@@ -260,6 +260,22 @@ def test_bounded_quiet_suppresses_idle_recovery() -> None:
     assert result.transfer_eligible is False
 
 
+def test_malformed_quiet_declaration_fails_visible() -> None:
+    claim = Claim(
+        expected_quiet_until="not-a-timestamp",
+        quiet_reason="bounded integration test",
+    )
+
+    result = assess_continuity(
+        claim=claim, activity=activity("between_turns", 60), now=NOW
+    )
+
+    assert result.activity_state == "unknown"
+    assert result.action == "fail_visible"
+    assert result.reason_code == "invalid_quiet_declaration"
+    assert result.transfer_eligible is False
+
+
 def test_unknown_activity_fails_visible_without_takeover() -> None:
     result = assess_continuity(claim=Claim(), activity=None, now=NOW)
 

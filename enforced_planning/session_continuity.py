@@ -176,13 +176,12 @@ def assess_continuity(
     activity: CodexActivityV1 | None,
     now: datetime | None = None,
     notify_after: timedelta = timedelta(minutes=15),
-    transfer_observe_after: timedelta = timedelta(minutes=30),
 ) -> ContinuityAssessmentV1:
     """Classify custody while withholding transfer authority from passive signals."""
 
     observed_at = (now or datetime.now(UTC)).astimezone(UTC)
-    if notify_after <= timedelta(0) or transfer_observe_after < notify_after:
-        raise ValueError("continuity thresholds must be positive and ordered")
+    if notify_after <= timedelta(0):
+        raise ValueError("continuity notification threshold must be positive")
     if not claim.is_live() or not claim.next_action:
         return ContinuityAssessmentV1(
             session_id=claim.session_id,
@@ -195,6 +194,19 @@ def assess_continuity(
         )
 
     quiet_until = _aware_timestamp(claim.expected_quiet_until)
+    if (claim.expected_quiet_until is None) != (claim.quiet_reason is None) or (
+        claim.expected_quiet_until is not None and quiet_until is None
+    ):
+        return ContinuityAssessmentV1(
+            session_id=claim.session_id,
+            activity_state="unknown",
+            continuity_disposition="circuit_breaker",
+            action="fail_visible",
+            reason_code="invalid_quiet_declaration",
+            observed_at=observed_at,
+            last_client_activity_at=activity.observed_at if activity else None,
+            resume_condition="repair the bounded quiet deadline and reason",
+        )
     if quiet_until is not None and quiet_until > observed_at and claim.quiet_reason:
         return ContinuityAssessmentV1(
             session_id=claim.session_id,

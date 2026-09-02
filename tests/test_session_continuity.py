@@ -24,8 +24,10 @@ from enforced_planning.session_continuity import (
     parse_native_codex_queue_receipt,
     read_codex_activity,
     successor_custody_offer_sha256,
+    validate_successor_custody_acceptance,
 )
 from scripts import session_continuity as continuity_cli
+from scripts import session_resume as resume_cli
 
 NOW = datetime(2026, 9, 2, 4, 30, tzinfo=UTC)
 
@@ -472,6 +474,88 @@ def test_predecessor_cannot_self_accept_successor_offer() -> None:
             head_revision=offer.head_revision,
             next_action=offer.next_action,
         )
+
+
+def test_acceptance_digest_tampering_is_rejected() -> None:
+    offer = successor_custody_offer()
+    acceptance = accept_successor_custody_offer(
+        offer=offer,
+        successor_session_id="codex:successor",
+        project=offer.project,
+        scope=offer.scope,
+        branch=offer.branch,
+        worktree_path=offer.worktree_path,
+        claim_epoch_sha256=offer.claim_epoch_sha256,
+        head_revision=offer.head_revision,
+        next_action=offer.next_action,
+    ).model_copy(update={"offer_sha256": "f" * 64})
+
+    with pytest.raises(ValueError, match="offer_sha256"):
+        validate_successor_custody_acceptance(offer=offer, acceptance=acceptance)
+
+
+def test_session_resume_cli_passes_strict_offer_and_acceptance(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    offer = successor_custody_offer()
+    acceptance = accept_successor_custody_offer(
+        offer=offer,
+        successor_session_id="codex:successor",
+        project=offer.project,
+        scope=offer.scope,
+        branch=offer.branch,
+        worktree_path=offer.worktree_path,
+        claim_epoch_sha256=offer.claim_epoch_sha256,
+        head_revision=offer.head_revision,
+        next_action=offer.next_action,
+    )
+    offer_path = tmp_path / "offer.json"
+    acceptance_path = tmp_path / "acceptance.json"
+    offer_path.write_text(offer.model_dump_json(), encoding="utf-8")
+    acceptance_path.write_text(acceptance.model_dump_json(), encoding="utf-8")
+    observed: dict[str, object] = {}
+
+    def fake_resume(**kwargs: object) -> dict[str, object]:
+        observed.update(kwargs)
+        return {
+            "action": "resumed",
+            "plan_ref": "UNPLANNED",
+            "session_id": "codex:successor",
+            "coordination_mailbox": {"summary": "no active messages"},
+        }
+
+    monkeypatch.setattr(resume_cli.session_lifecycle, "resume_session", fake_resume)
+
+    result = resume_cli.main(
+        [
+            "--agent",
+            "codex",
+            "--project",
+            offer.project,
+            "--scope",
+            offer.scope,
+            "--worktree-path",
+            offer.worktree_path,
+            "--branch",
+            offer.branch,
+            "--current-phase",
+            "accepted successor custody",
+            "--session-id",
+            acceptance.successor_session_id,
+            "--successor-custody-offer",
+            str(offer_path),
+            "--successor-custody-acceptance",
+            str(acceptance_path),
+            "--json",
+        ]
+    )
+
+    assert result == 0
+    assert observed["successor_custody_offer"] == offer
+    assert observed["successor_custody_acceptance"] == acceptance
+    assert json.loads(capsys.readouterr().out)["action"] == "resumed"
 
 
 def test_cli_offer_resolves_claim_epoch_and_exact_git_revision(tmp_path: Path) -> None:

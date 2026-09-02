@@ -34,7 +34,11 @@ def _bootstrap_package() -> None:
 
 _bootstrap_package()
 
-from enforced_planning import session_lifecycle  # noqa: E402
+from enforced_planning import session_lifecycle
+from enforced_planning.session_continuity import (
+    SuccessorCustodyAcceptanceV1,
+    SuccessorCustodyOfferV1,
+)
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -58,6 +62,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Exact /proc start ticks for the predecessor PID generation.",
     )
     parser.add_argument("--note")
+    parser.add_argument(
+        "--successor-custody-offer",
+        type=Path,
+        help="Exact offer JSON that this successor explicitly accepted.",
+    )
+    parser.add_argument(
+        "--successor-custody-acceptance",
+        type=Path,
+        help="Successor-authored acceptance JSON bound to the exact offer.",
+    )
     parser.add_argument("--json", action="store_true")
     return parser.parse_args(argv)
 
@@ -65,6 +79,24 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     """Resume the session and expose its current mailbox state."""
     args = parse_args(argv)
+    if (args.successor_custody_offer is None) != (
+        args.successor_custody_acceptance is None
+    ):
+        raise ValueError("automatic successor resume requires both offer and acceptance JSON")
+    offer = (
+        SuccessorCustodyOfferV1.model_validate_json(
+            args.successor_custody_offer.expanduser().read_text(encoding="utf-8")
+        )
+        if args.successor_custody_offer is not None
+        else None
+    )
+    acceptance = (
+        SuccessorCustodyAcceptanceV1.model_validate_json(
+            args.successor_custody_acceptance.expanduser().read_text(encoding="utf-8")
+        )
+        if args.successor_custody_acceptance is not None
+        else None
+    )
     payload = session_lifecycle.resume_session(
         agent=args.agent,
         project=args.project,
@@ -76,6 +108,8 @@ def main(argv: list[str] | None = None) -> int:
         note=args.note,
         predecessor_process_pid=args.predecessor_process_pid,
         predecessor_process_start_ticks=args.predecessor_process_start_ticks,
+        successor_custody_offer=offer,
+        successor_custody_acceptance=acceptance,
     )
     if args.json:
         print(json.dumps(payload, indent=2, sort_keys=True))

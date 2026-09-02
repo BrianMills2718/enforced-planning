@@ -178,6 +178,21 @@ Codex uses the durable fenced-transfer journal below instead of rollback, becaus
 restoring pre-fence bytes would erase the evidence required to recover custody.
 Resume never reports a successor while the claim and tracker disagree.
 
+An automatically selected successor must additionally pass both
+`--successor-custody-offer <offer.json>` and
+`--successor-custody-acceptance <acceptance.json>` to `session-resume`. The
+offer is emitted only after an exact delivered owner-resume request remains
+unanswered for its bounded response window. It freezes the predecessor
+session, project, scope, branch, absolute worktree, claim epoch, Git `HEAD`, and
+next action. The acceptance is authored by a different exact native session,
+repeats every field, and binds the canonical offer SHA-256. Before reservation
+or process fencing, `session-resume` validates both closed schemas and compares
+the acceptance with the live claim bytes and worktree revision. Missing one
+artifact, self-acceptance, digest drift, or any changed custody field fails
+without mutation. The acceptance alone never transfers or releases custody;
+the existing fenced claim/tracker transaction remains the only commit point.
+Manual handoff and recovery remain compatible and do not require these flags.
+
 Codex-to-Codex custody transfer additionally requires
 `--predecessor-process-pid` and `--predecessor-process-start-ticks`. Before
 changing claim custody, `session-resume` proves that exact PID generation is a

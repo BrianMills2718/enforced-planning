@@ -26,6 +26,7 @@ from enforced_planning.session_continuity import (
     build_successor_custody_offer,
     parse_native_codex_queue_receipt,
     read_codex_activity,
+    read_native_codex_consumption,
     successor_custody_offer_sha256,
     validate_successor_custody_acceptance,
 )
@@ -241,6 +242,70 @@ def test_native_codex_queue_receipt_rejects_wrong_thread() -> None:
                 "00000000-0000-0000-0000-000000000001.\n"
             ),
         )
+
+
+def test_native_consumption_requires_correlated_owner_user_turn(tmp_path: Path) -> None:
+    transcript = tmp_path / "session.jsonl"
+    correlation_id = "a" * 24
+    records = [
+        {
+            "timestamp": "2026-09-02T04:31:00Z",
+            "type": "event_msg",
+            "payload": {
+                "type": "agent_message",
+                "message": f"continuity-resume:{correlation_id}: echoed",
+            },
+        },
+        {
+            "timestamp": "2026-09-02T04:32:00Z",
+            "type": "event_msg",
+            "payload": {
+                "type": "user_message",
+                "message": f"continuity-resume:{correlation_id}: continue",
+            },
+        },
+    ]
+    transcript.write_text(
+        "".join(json.dumps(record) + "\n" for record in records), encoding="utf-8"
+    )
+
+    receipt = read_native_codex_consumption(
+        owner_session_id="codex:01a05b94-d5d8-7d82-8a9a-6c64c6979e96",
+        correlation_id=correlation_id,
+        queued_submission_id="01a0608f-1498-7413-b469-3e538a9bf171",
+        transcript_path=transcript,
+    )
+
+    assert receipt is not None
+    assert receipt.runtime_consumed is True
+    assert receipt.consumed_at == datetime(2026, 9, 2, 4, 32, tzinfo=UTC)
+    assert receipt.evidence_event == "correlated_user_message"
+
+
+def test_native_consumption_does_not_accept_agent_echo(tmp_path: Path) -> None:
+    transcript = tmp_path / "session.jsonl"
+    correlation_id = "a" * 24
+    transcript.write_text(
+        json.dumps(
+            {
+                "timestamp": "2026-09-02T04:31:00Z",
+                "type": "event_msg",
+                "payload": {
+                    "type": "agent_message",
+                    "message": f"continuity-resume:{correlation_id}: echoed",
+                },
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    assert read_native_codex_consumption(
+        owner_session_id="codex:01a05b94-d5d8-7d82-8a9a-6c64c6979e96",
+        correlation_id=correlation_id,
+        queued_submission_id="01a0608f-1498-7413-b469-3e538a9bf171",
+        transcript_path=transcript,
+    ) is None
 
 
 def test_exact_cli_queues_native_offer_and_returns_typed_receipt(
@@ -1117,6 +1182,63 @@ def test_native_delivery_journal_prevents_duplicate_queue_for_same_boundary(
     assert len(calls) == 1
     records = [json.loads(line) for line in receipt_path.read_text().splitlines()]
     assert [record["state"] for record in records] == ["intent", "accepted"]
+
+
+def test_accepted_native_delivery_promotes_once_after_transcript_consumption(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    receipt_path = tmp_path / "receipts.jsonl"
+    queued = continuity_cli.deliver_native_resume_offers(
+        sweep=native_delivery_sweep_fixture(),
+        receipt_path=receipt_path,
+        run=lambda command, **_kwargs: subprocess.CompletedProcess(
+            command,
+            0,
+            (
+                "Queued message 01a0608f-1498-7413-b469-3e538a9bf171 for thread "
+                "01a05b94-d5d8-7d82-8a9a-6c64c6979e96.\n"
+            ),
+            "",
+        ),
+    )
+    correlation_id = queued[0]["correlation_id"]
+    transcript = tmp_path / "session.jsonl"
+    transcript.write_text(
+        json.dumps(
+            {
+                "timestamp": "2026-09-02T04:32:00Z",
+                "type": "event_msg",
+                "payload": {
+                    "type": "user_message",
+                    "message": f"continuity-resume:{correlation_id}: continue",
+                },
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        continuity_cli.coordination_claims,
+        "session_transcript_path",
+        lambda _session_id: transcript,
+    )
+
+    first = continuity_cli.reconcile_native_resume_consumption(
+        receipt_path=receipt_path
+    )
+    second = continuity_cli.reconcile_native_resume_consumption(
+        receipt_path=receipt_path
+    )
+
+    assert first[0]["action"] == "owner_resume_consumed"
+    assert first[0]["queued_submission_id"] == (
+        "01a0608f-1498-7413-b469-3e538a9bf171"
+    )
+    assert second == []
+    records = [json.loads(line) for line in receipt_path.read_text().splitlines()]
+    assert records[-1]["record_type"] == "native_codex_resume_consumption"
+    assert records[-1]["runtime_consumed"] is True
 
 
 def test_unresolved_delivery_intent_fails_visible_without_retry(

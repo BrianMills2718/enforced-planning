@@ -214,6 +214,25 @@ class NativeCodexQueueReceiptV1(BaseModel):
     runtime_accepted: Literal[True] = True
 
 
+class NativeCodexConsumptionReceiptV1(BaseModel):
+    """Transcript proof that the exact queued prompt became an owner user turn."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    schema_version: Literal["1.0"] = "1.0"
+    record_type: Literal["native_codex_resume_consumption"] = (
+        "native_codex_resume_consumption"
+    )
+    owner_session_id: str = Field(min_length=1)
+    thread_id: str = Field(min_length=1)
+    correlation_id: str = Field(pattern=r"^[0-9a-f]{24}$")
+    queued_submission_id: str = Field(min_length=1)
+    transcript_path: str = Field(min_length=1)
+    consumed_at: datetime
+    evidence_event: Literal["correlated_user_message"] = "correlated_user_message"
+    runtime_consumed: Literal[True] = True
+
+
 class NativeCodexDeliveryJournalV1(BaseModel):
     """Write-ahead state for one correlation-bound native queue attempt."""
 
@@ -348,6 +367,67 @@ def read_codex_activity(*, session_id: str, transcript_path: Path) -> CodexActiv
         turn_id=latest_turn_id,
         evidence_event=latest_event,
     )
+
+
+def read_native_codex_consumption(
+    *,
+    owner_session_id: str,
+    correlation_id: str,
+    queued_submission_id: str,
+    transcript_path: Path,
+) -> NativeCodexConsumptionReceiptV1 | None:
+    """Find the exact continuity marker only in a native owner user-message event."""
+
+    thread_id = owner_session_id.removeprefix("codex:")
+    try:
+        thread_id = str(uuid.UUID(thread_id))
+    except ValueError as exc:
+        raise ValueError("native consumption requires a UUID Codex owner session") from exc
+    marker = f"continuity-resume:{correlation_id}:"
+
+    def contains_marker(value: object) -> bool:
+        if isinstance(value, str):
+            return marker in value
+        if isinstance(value, list):
+            return any(contains_marker(item) for item in value)
+        if isinstance(value, dict):
+            return any(contains_marker(item) for item in value.values())
+        return False
+
+    resolved = transcript_path.expanduser().resolve()
+    with resolved.open(encoding="utf-8") as handle:
+        for line_number, line in enumerate(handle, start=1):
+            if not line.strip():
+                continue
+            try:
+                record = json.loads(line)
+            except json.JSONDecodeError as exc:
+                raise ValueError(
+                    f"Codex transcript has malformed JSON at line {line_number}"
+                ) from exc
+            if not isinstance(record, dict) or record.get("type") != "event_msg":
+                continue
+            payload = record.get("payload")
+            if (
+                not isinstance(payload, dict)
+                or payload.get("type") != "user_message"
+                or not contains_marker(payload)
+            ):
+                continue
+            consumed_at = _aware_timestamp(record.get("timestamp"))
+            if consumed_at is None:
+                raise ValueError(
+                    f"correlated native user message has invalid timestamp at line {line_number}"
+                )
+            return NativeCodexConsumptionReceiptV1(
+                owner_session_id=owner_session_id,
+                thread_id=thread_id,
+                correlation_id=correlation_id,
+                queued_submission_id=queued_submission_id,
+                transcript_path=str(resolved),
+                consumed_at=consumed_at,
+            )
+    return None
 
 
 def assess_continuity(
@@ -842,6 +922,7 @@ __all__ = [
     "CodexSuccessorLaunchReceiptV1",
     "CodexSuccessorLaunchV1",
     "ContinuityAssessmentV1",
+    "NativeCodexConsumptionReceiptV1",
     "NativeCodexDeliveryJournalV1",
     "NativeCodexQueueReceiptV1",
     "NativeCodexResumeOfferV1",
@@ -857,6 +938,7 @@ __all__ = [
     "build_successor_custody_offer",
     "parse_native_codex_queue_receipt",
     "read_codex_activity",
+    "read_native_codex_consumption",
     "successor_custody_offer_sha256",
     "validate_successor_custody_acceptance",
 ]

@@ -176,7 +176,11 @@ def fence_predecessor_process(
 
     def wait_for_exit(deadline: float) -> bool:
         while pid_root.exists():
-            if _read_start_ticks(pid_root / "stat") != start_ticks:
+            try:
+                current_start_ticks = _read_start_ticks(pid_root / "stat")
+            except FileNotFoundError:
+                return True
+            if current_start_ticks != start_ticks:
                 raise RuntimeError("predecessor PID was reused before termination could be proven")
             if time.monotonic() >= deadline:
                 return False
@@ -186,12 +190,17 @@ def fence_predecessor_process(
     signal_process(predecessor_pid, signal.SIGTERM)
     final_signal: Literal["SIGTERM", "SIGTERM+SIGKILL"] = "SIGTERM"
     if not wait_for_exit(time.monotonic() + timeout_seconds):
-        if _read_start_ticks(pid_root / "stat") != start_ticks:
-            raise RuntimeError("predecessor PID was reused before termination could be proven")
-        signal_process(predecessor_pid, signal.SIGKILL)
-        final_signal = "SIGTERM+SIGKILL"
-        if not wait_for_exit(time.monotonic() + timeout_seconds):
-            raise RuntimeError("exact predecessor process did not exit after SIGKILL")
+        try:
+            current_start_ticks = _read_start_ticks(pid_root / "stat")
+        except FileNotFoundError:
+            current_start_ticks = None
+        if current_start_ticks is not None:
+            if current_start_ticks != start_ticks:
+                raise RuntimeError("predecessor PID was reused before termination could be proven")
+            signal_process(predecessor_pid, signal.SIGKILL)
+            final_signal = "SIGTERM+SIGKILL"
+            if not wait_for_exit(time.monotonic() + timeout_seconds):
+                raise RuntimeError("exact predecessor process did not exit after SIGKILL")
 
     receipt = ProcessFenceReceiptV1(
         predecessor_session_id=predecessor_session_id,

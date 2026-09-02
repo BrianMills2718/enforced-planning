@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pytest
 
+from enforced_planning import session_process_fencing
 from enforced_planning.session_process_fencing import fence_predecessor_process
 
 
@@ -200,3 +201,71 @@ def test_fence_rejects_alternate_codex_executable_without_signalling(tmp_path: P
         )
 
     assert signals == []
+
+
+def test_fence_records_term_exit_when_proc_stat_disappears_during_wait(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    proc_root, _pid_root, session_index, worktree = _fake_process(tmp_path)
+    original_read = session_process_fencing._read_start_ticks
+    reads = 0
+
+    def disappear_on_term_wait(stat_path: Path) -> int:
+        nonlocal reads
+        reads += 1
+        if reads == 3:
+            raise FileNotFoundError(stat_path)
+        return original_read(stat_path)
+
+    monkeypatch.setattr(session_process_fencing, "_read_start_ticks", disappear_on_term_wait)
+    signals: list[tuple[int, int]] = []
+    result = fence_predecessor_process(
+        predecessor_session_id="codex:old-session",
+        successor_session_id="codex:new-session",
+        worktree_path=str(worktree),
+        predecessor_pid=4242,
+        proc_root=proc_root,
+        session_index=session_index,
+        receipt_root=tmp_path / "receipts",
+        trusted_codex_executable=tmp_path / "bin" / "codex",
+        signal_process=lambda pid, sent_signal: signals.append((pid, sent_signal)),
+    )
+
+    assert signals == [(4242, signal.SIGTERM)]
+    assert result["signal"] == "SIGTERM"
+    assert Path(str(result["receipt_path"])).is_file()
+
+
+def test_fence_records_kill_exit_when_proc_stat_disappears_during_kill_wait(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    proc_root, _pid_root, session_index, worktree = _fake_process(tmp_path)
+    original_read = session_process_fencing._read_start_ticks
+    reads = 0
+
+    def disappear_on_kill_wait(stat_path: Path) -> int:
+        nonlocal reads
+        reads += 1
+        if reads == 5:
+            raise FileNotFoundError(stat_path)
+        return original_read(stat_path)
+
+    monkeypatch.setattr(session_process_fencing, "_read_start_ticks", disappear_on_kill_wait)
+    signals: list[tuple[int, int]] = []
+    result = fence_predecessor_process(
+        predecessor_session_id="codex:old-session",
+        successor_session_id="codex:new-session",
+        worktree_path=str(worktree),
+        predecessor_pid=4242,
+        proc_root=proc_root,
+        session_index=session_index,
+        receipt_root=tmp_path / "receipts",
+        trusted_codex_executable=tmp_path / "bin" / "codex",
+        timeout_seconds=0,
+        signal_process=lambda pid, sent_signal: signals.append((pid, sent_signal)),
+        sleep=lambda _seconds: None,
+    )
+
+    assert signals == [(4242, signal.SIGTERM), (4242, signal.SIGKILL)]
+    assert result["signal"] == "SIGTERM+SIGKILL"
+    assert Path(str(result["receipt_path"])).is_file()

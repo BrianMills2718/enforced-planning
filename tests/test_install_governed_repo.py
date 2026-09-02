@@ -70,6 +70,7 @@ MAILBOX_ROLLOUT_PATHS = MAILBOX_COMMON_ROLLOUT_PATHS | {
     "enforced_planning/claim_mutation_receipts.py",
     "enforced_planning/client_session_metadata.py",
     "enforced_planning/coordination_claims.py",
+    "enforced_planning/mailbox_execution_identity.py",
     "enforced_planning/coordination_messages.py",
     "enforced_planning/outcome_admission.py",
     "enforced_planning/outcome_continuation.py",
@@ -95,6 +96,7 @@ CLAIM_PROJECTION_REFRESH_PATHS = {
     "enforced_planning/claim_mutation_receipts.py",
     "enforced_planning/client_session_metadata.py",
     "enforced_planning/coordination_claims.py",
+    "enforced_planning/mailbox_execution_identity.py",
     "enforced_planning/coordination_messages.py",
     "enforced_planning/outcome_admission.py",
     "enforced_planning/outcome_continuation.py",
@@ -326,6 +328,10 @@ def test_coordination_messages_only_rollout_is_bounded_runnable_and_idempotent(
     assert written.returncode == 0, written.stdout + written.stderr
     for relative in MAILBOX_ROLLOUT_PATHS:
         assert (tmp_path / relative).exists()
+    codex_settings = json.loads(
+        (tmp_path / ".codex" / "hooks.json").read_text(encoding="utf-8")
+    )
+    assert "enforce-make-merge.sh" not in json.dumps(codex_settings)
     for wrapper in (
         "coordination_hook.py",
         "coordination_inbox.py",
@@ -594,6 +600,58 @@ def test_relationship_context_only_rejects_unmarked_make_target(tmp_path: Path) 
     assert result.returncode == 1
     payload = json.loads(result.stdout)
     assert any("unmarked relationship-context Make targets" in item for item in payload["blockers"])
+    assert makefile.read_text(encoding="utf-8") == original
+
+
+def test_worktree_rollout_rejects_unmarked_legacy_merge_targets(tmp_path: Path) -> None:
+    """An installer must not append a sanctioned finish behind legacy bypasses."""
+
+    _write_minimal_claude(tmp_path)
+    makefile = tmp_path / "Makefile"
+    original = (
+        "merge:\n\t@python scripts/meta/merge_pr.py $(PR)\n\n"
+        "finish:\n\t@gh pr merge $(PR) --squash --delete-branch\n"
+    )
+    makefile.write_text(original, encoding="utf-8")
+
+    result = _run(
+        "--repo-root",
+        str(tmp_path),
+        "--worktree-only",
+        "--write",
+        "--json",
+        cwd=PROJECT_META_ROOT,
+    )
+
+    assert result.returncode == 1
+    payload = json.loads(result.stdout)
+    assert any("legacy PR Make targets" in item for item in payload["blockers"])
+    assert makefile.read_text(encoding="utf-8") == original
+
+
+def test_worktree_rollout_rejects_legacy_finish_outside_existing_marker(tmp_path: Path) -> None:
+    """An upgrade must catch a historical recipe trailing a generated block."""
+
+    _write_minimal_claude(tmp_path)
+    generated = (PROJECT_META_ROOT / "templates/Makefile.worktree.block.template").read_text(
+        encoding="utf-8"
+    )
+    makefile = tmp_path / "Makefile"
+    original = generated + "\nfinish:\n\t@gh pr merge $(PR) --squash --delete-branch\n"
+    makefile.write_text(original, encoding="utf-8")
+
+    result = _run(
+        "--repo-root",
+        str(tmp_path),
+        "--worktree-only",
+        "--write",
+        "--json",
+        cwd=PROJECT_META_ROOT,
+    )
+
+    assert result.returncode == 1
+    payload = json.loads(result.stdout)
+    assert any("outside the generated worktree block" in item for item in payload["blockers"])
     assert makefile.read_text(encoding="utf-8") == original
 
 
@@ -1711,6 +1769,7 @@ def test_full_install_coordination_hook_has_clean_import_closure(tmp_path: Path)
     assert installed.returncode == 0, installed.stdout + installed.stderr
     assert (tmp_path / "scripts" / "hook_receipts.py").is_file()
     assert (tmp_path / "scripts" / "meta" / "hook_receipts.py").is_file()
+    assert (tmp_path / "enforced_planning" / "mailbox_execution_identity.py").is_file()
 
     imported = subprocess.run(
         [
@@ -2056,19 +2115,23 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
     assert payload["worktree_only_mode"] is True
     assert not (tmp_path / "enforced_planning" / "__init__.py").read_bytes().endswith(b"\n\n")
     assert sorted(payload["actions"]) == sorted(
-        [
-            "install:enforced_planning/__init__.py",
+            [
+                "install:contracts/pr-review-signoff.schema.json",
+                "install:enforced_planning/__init__.py",
             "install:enforced_planning/artifact_creation.py",
             "install:enforced_planning/concern_routing.py",
             "install:enforced_planning/claim_mutation_receipts.py",
             "install:enforced_planning/client_session_metadata.py",
             "install:enforced_planning/coordination_claims.py",
+            "install:enforced_planning/mailbox_execution_identity.py",
             "install:enforced_planning/coordination_messages.py",
             "install:enforced_planning/outcome_admission.py",
             "install:enforced_planning/outcome_continuation.py",
             "install:enforced_planning/outcome_portfolio.py",
             "install:enforced_planning/outcome_selection.py",
-            "install:enforced_planning/prewrite_claim_fast.py",
+                "install:enforced_planning/prewrite_claim_fast.py",
+                "install:enforced_planning/integration_authority.py",
+                "install:enforced_planning/pr_review_signoff.py",
             "install:enforced_planning/prewrite_claim_projection.py",
             "install:enforced_planning/plan_readiness.py",
             "install:enforced_planning/plan_close.py",
@@ -2096,11 +2159,13 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
             "install:scripts/meta/session_close.py",
             "install:scripts/meta/session_end.py",
             "install:scripts/meta/session_finish.py",
-                "install:scripts/meta/session_heartbeat.py",
-                "install:scripts/meta/session_narrow.py",
-                "install:scripts/meta/session_start.py",
+            "install:scripts/meta/session_heartbeat.py",
+            "install:scripts/meta/session_narrow.py",
+            "install:scripts/meta/session_start.py",
             "install:scripts/meta/session_status.py",
             "install:scripts/meta/project_status.py",
+            "install:scripts/meta/pr_auto.py",
+            "install:scripts/meta/pr_review_signoff_runtime.py",
             "install:scripts/meta/session_resume.py",
             "install:scripts/meta/surface_runtime.py",
             "install:scripts/meta/validate_doc_authority.py",
@@ -2114,8 +2179,15 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
             "install:scripts/meta/worktree-coordination/create_worktree.py",
             "install:scripts/meta/worktree-coordination/create_publish_worktree.py",
             "install:scripts/meta/worktree-coordination/create_review_claim.py",
+            "install:scripts/meta/worktree-coordination/finish_pr.py",
+            "install:scripts/meta/worktree-coordination/integration_authority.py",
             "install:scripts/meta/worktree-coordination/raise_concern.py",
             "install:scripts/meta/worktree-coordination/safe_worktree_remove.py",
+            "sync:.claude/hooks/worktree-coordination/check-hook-enabled.sh",
+            "sync:.claude/hooks/worktree-coordination/enforce-make-merge.sh",
+            "sync:.claude/settings.json",
+            "sync:.codex/hooks/enforce-make-merge.sh",
+            "sync:.codex/hooks.json",
             "append:Makefile.status",
             "append:Makefile.worktree",
         ]
@@ -2183,11 +2255,21 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
         assert help_result.returncode == 0, help_result.stdout + help_result.stderr
     assert (tmp_path / "scripts" / "meta" / "worktree-coordination" / "create_worktree.py").exists()
     assert (tmp_path / "scripts" / "meta" / "worktree-coordination" / "create_publish_worktree.py").exists()
+    assert (tmp_path / "scripts" / "meta" / "worktree-coordination" / "finish_pr.py").exists()
+    assert (
+        tmp_path / "scripts" / "meta" / "worktree-coordination" / "integration_authority.py"
+    ).exists()
     assert (tmp_path / "scripts" / "meta" / "worktree-coordination" / "safe_worktree_remove.py").exists()
+    assert (tmp_path / "enforced_planning" / "pr_review_signoff.py").exists()
+    assert (tmp_path / "enforced_planning" / "integration_authority.py").exists()
+    assert (tmp_path / "scripts" / "meta" / "pr_review_signoff_runtime.py").exists()
+    assert (tmp_path / "contracts" / "pr-review-signoff.schema.json").exists()
     makefile_text = (tmp_path / "Makefile").read_text(encoding="utf-8")
     assert "worktree:" in makefile_text
     assert "worktree-list:" in makefile_text
     assert "worktree-remove:" in makefile_text
+    assert "finish:" in makefile_text
+    assert 'REVIEW_SPEC=/absolute/review-spec.json' in makefile_text
     assert "session-start:" in makefile_text
     assert "session-finish:" in makefile_text
     assert "session-close:" in makefile_text
@@ -2641,12 +2723,31 @@ def test_worktree_only_install_preserves_declared_framework_dependency(tmp_path:
     assert result.returncode == 0, result.stdout + result.stderr
     payload = json.loads(result.stdout)
     assert not (tmp_path / "enforced_planning").exists()
+    assert (tmp_path / "scripts/meta/pr_review_signoff_runtime.py").is_file()
+    assert (tmp_path / "scripts/meta/worktree-coordination/finish_pr.py").is_file()
+    assert (tmp_path / "scripts/meta/worktree-coordination/integration_authority.py").is_file()
     assert "mode:installed-package" in payload["actions"]
     assert (tmp_path / "pyproject.toml").read_bytes() == declaration
     assert "PLAN_REPO_ROOT ?=" in (tmp_path / "Makefile").read_text(encoding="utf-8")
     assert (tmp_path / "scripts/meta/session_start.py").read_bytes() == (
         PROJECT_META_ROOT / "scripts/session_start.py"
     ).read_bytes()
+    shadow = tmp_path / "shadow" / "enforced_planning"
+    shadow.mkdir(parents=True)
+    (shadow / "__init__.py").write_text("", encoding="utf-8")
+    help_result = subprocess.run(
+        [
+            sys.executable,
+            str(tmp_path / "scripts/meta/worktree-coordination/finish_pr.py"),
+            "--help",
+        ],
+        cwd=tmp_path,
+        env={**os.environ, "PYTHONPATH": str(shadow.parent)},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert help_result.returncode == 0, help_result.stdout + help_result.stderr
     repeated = _run("--repo-root", str(tmp_path), "--check", "--worktree-only", "--json", cwd=PROJECT_META_ROOT)
     assert repeated.returncode == 0, repeated.stdout + repeated.stderr
     assert json.loads(repeated.stdout)["drift_files"] == []

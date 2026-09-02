@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import subprocess
 import sys
 from contextlib import contextmanager
@@ -15,8 +16,16 @@ MODULE_PATH = (
     / "worktree-coordination"
     / "finish_pr.py"
 )
+HOOK_PATH = (
+    Path(__file__).resolve().parents[1]
+    / "hooks"
+    / "claude"
+    / "worktree-coordination"
+    / "enforce-make-merge.sh"
+)
 SHA_A = "a" * 40
 SHA_B = "b" * 40
+SHA_C = "c" * 40
 
 
 def _load():
@@ -32,163 +41,223 @@ def completed(cmd, returncode=0, stdout="", stderr=""):
     return subprocess.CompletedProcess(cmd, returncode, stdout, stderr)
 
 
-def snapshot(module, sha=SHA_A, checks=()):
-    return module.PrSnapshot(sha, "feature", "main", "OPEN", "MERGEABLE", tuple(checks))
+def snapshot(module, sha=SHA_A, checks=(), base_sha=SHA_B):
+    return module.PrSnapshot(
+        base_sha, sha, "feature", "main", "OPEN", "MERGEABLE", tuple(checks)
+    )
 
 
-def test_status_context_success_requires_exact_creator_and_target() -> None:
+def test_review_spec_must_be_absolute_and_outside_repository(
+    tmp_path, monkeypatch
+) -> None:
     module = _load()
-    status = {
-        "context": "coordination-approval",
-        "state": "success",
-        "creator": {"login": "owner"},
-        "target_url": "https://github.com/owner/repo/pull/304",
-    }
-    assert module.evaluate_coordination_approval(
-        statuses=[status], check_runs=[], head_sha=SHA_A,
-        trusted_creator="owner", trusted_check_app_id=None,
-        expected_target_url="https://github.com/owner/repo/pull/304",
-    ) == (True, "OK")
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    inside = repo / "review.json"
+    inside.write_text("{}", encoding="utf-8")
+    external_worktree = tmp_path / "external-worktree"
+    external_worktree.mkdir()
+    external_spec = external_worktree / "review.json"
+    external_spec.write_text("{}", encoding="utf-8")
+    outside = tmp_path / "review.json"
+    outside.write_text("{}", encoding="utf-8")
+    symlinked_spec = repo / "review-link.json"
+    symlinked_spec.symlink_to(outside)
 
-    status["creator"] = {"login": "other-user"}
-    ok, reason = module.evaluate_coordination_approval(
-        statuses=[status], check_runs=[], head_sha=SHA_A,
-        trusted_creator="owner", trusted_check_app_id=None,
-        expected_target_url="https://github.com/owner/repo/pull/304",
-    )
-    assert ok is False
-    assert "trusted producer" in reason
+    roots = (repo, external_worktree)
+    monkeypatch.setattr(module, "registered_worktree_roots", lambda _root: roots)
+    for candidate in (Path("review.json"), inside, external_spec, symlinked_spec):
+        try:
+            module.load_trusted_review_spec(
+                candidate,
+                canonical_root=repo,
+            )
+        except ValueError as exc:
+            assert "outside the repository" in str(exc)
+        else:
+            raise AssertionError("PR-controlled review specs must be rejected")
 
-
-def test_app_binding_disables_owner_status_compatibility_arm() -> None:
-    status = {
-        "context": "coordination-approval",
-        "state": "success",
-        "creator": {"login": "owner"},
-        "target_url": "https://github.com/owner/repo/pull/304",
-    }
-    module = _load()
-
-    ok, reason = module.evaluate_coordination_approval(
-        statuses=[status], check_runs=[], head_sha=SHA_A,
-        trusted_creator="owner", trusted_check_app_id=99,
-        expected_target_url="https://github.com/owner/repo/pull/304",
-    )
-
-    assert ok is False
-    assert "trusted producer" in reason
-
-
-def test_missing_or_pending_coordination_approval_fails_visibly() -> None:
-    module = _load()
-    ok, missing = module.evaluate_coordination_approval(
-        statuses=[], check_runs=[], head_sha=SHA_A,
-        trusted_creator="owner", trusted_check_app_id=None,
-        expected_target_url="https://github.com/owner/repo/pull/304",
-    )
-    assert ok is False
-    assert "missing required coordination-approval" in missing
-
-    pending_run = {
-        "name": "coordination-approval",
-        "head_sha": SHA_A,
-        "status": "in_progress",
-        "conclusion": "success",
-        "app": {"id": 99},
-    }
-    ok, pending = module.evaluate_coordination_approval(
-        statuses=[], check_runs=[pending_run], head_sha=SHA_A,
-        trusted_creator="owner", trusted_check_app_id=99,
-        expected_target_url="https://github.com/owner/repo/pull/304",
-    )
-    assert ok is False
-    assert "trusted producer" in pending
-
-
-def test_same_named_check_run_from_wrong_app_is_rejected() -> None:
-    module = _load()
-    run = {
-        "name": "coordination-approval",
-        "head_sha": SHA_A,
-        "status": "completed",
-        "conclusion": "success",
-        "app": {"id": 55, "slug": "untrusted-app"},
-    }
-    ok, reason = module.evaluate_coordination_approval(
-        statuses=[], check_runs=[run], head_sha=SHA_A,
-        trusted_creator="owner", trusted_check_app_id=99,
-        expected_target_url="https://github.com/owner/repo/pull/304",
-    )
-    assert ok is False
-    assert "trusted producer" in reason
-
-    run["app"] = {"id": 99, "slug": "coordination-approver"}
-    assert module.evaluate_coordination_approval(
-        statuses=[], check_runs=[run], head_sha=SHA_A,
-        trusted_creator="owner", trusted_check_app_id=99,
-        expected_target_url="https://github.com/owner/repo/pull/304",
-    ) == (True, "OK")
-
-    ok, reason = module.evaluate_coordination_approval(
-        statuses=[], check_runs=[run], head_sha=SHA_A,
-        trusted_creator="owner", trusted_check_app_id=None,
-        expected_target_url="https://github.com/owner/repo/pull/304",
-    )
-    assert ok is False
-    assert "trusted producer" in reason
-
-
-def test_newer_pending_status_invalidates_older_success() -> None:
-    module = _load()
-    status_base = {
-        "context": "coordination-approval",
-        "creator": {"login": "owner"},
-        "target_url": "https://github.com/owner/repo/pull/304",
-    }
-    ok, reason = module.evaluate_coordination_approval(
-        statuses=[
-            {**status_base, "state": "pending"},
-            {**status_base, "state": "success"},
-        ],
-        check_runs=[], head_sha=SHA_A, trusted_creator="owner",
-        trusted_check_app_id=None,
-        expected_target_url="https://github.com/owner/repo/pull/304",
-    )
-    assert ok is False
-    assert "trusted producer" in reason
+    expected = object()
+    monkeypatch.setattr(module, "load_review_spec", lambda path: expected)
+    assert module.load_trusted_review_spec(
+        outside,
+        canonical_root=repo,
+    ) is expected
 
 
 def test_head_change_invalidates_previously_successful_approval(monkeypatch) -> None:
     module = _load()
-    approval = ({"context": "coordination-approval", "state": "SUCCESS"},)
     snapshots = iter([
-        (snapshot(module, SHA_A, approval), None),
-        (snapshot(module, SHA_B, approval), None),
+        (snapshot(module, SHA_A), None),
+        (snapshot(module, SHA_B), None),
     ])
     monkeypatch.setattr(module, "fetch_pr_snapshot", lambda *_args: next(snapshots))
     monkeypatch.setattr(module, "fetch_exact_pr_head", lambda *_args: (True, "OK"))
     monkeypatch.setattr(module, "require_all_required_checks", lambda *_args: (True, "OK"))
-    monkeypatch.setattr(module, "require_coordination_approval", lambda *_args: (True, "OK"))
 
     try:
-        module.prepare_merge_gate(304, "feature", "owner/repo", {})
+        module.prepare_merge_gate(
+            304,
+            "feature",
+            "owner/repo",
+            {},
+            review_spec_path=Path("/tmp/review.json"),
+            review_output_root=Path("/tmp/reviews"),
+        )
     except RuntimeError as exc:
-        assert "approval is stale" in str(exc)
+        assert "review is stale" in str(exc)
     else:
-        raise AssertionError("changed head must invalidate approval")
+        raise AssertionError("changed head must invalidate review")
+
+
+def test_prepare_merge_gate_runs_local_review_and_rechecks_head(monkeypatch) -> None:
+    module = _load()
+    snapshots = iter([(snapshot(module), None)] * 4)
+    monkeypatch.setattr(module, "fetch_pr_snapshot", lambda *_args: next(snapshots))
+    monkeypatch.setattr(module, "fetch_exact_pr_head", lambda *_args: (True, "OK"))
+    monkeypatch.setattr(module, "require_all_required_checks", lambda *_args: (True, "OK"))
+    spec = SimpleNamespace()
+    trusted = module.TrustedReviewSpec(spec=spec, sha256="d" * 64)
+    monkeypatch.setattr(
+        module, "load_trusted_review_bundle", lambda *_args, **_kwargs: trusted
+    )
+    monkeypatch.setattr(module, "resolve_branch_worktree", lambda _branch: Path("/review"))
+    observed = {}
+
+    def review(**kwargs):
+        observed.update(kwargs)
+        return SimpleNamespace(verdict="signed_off"), Path("/receipts/receipt.json")
+
+    monkeypatch.setattr(module, "run_local_review_gate", review)
+    result, receipt, observed_trusted = module.prepare_merge_gate(
+        304,
+        "feature",
+        "owner/repo",
+        {},
+        review_spec_path=Path("/tmp/review.json"),
+        review_output_root=Path("/tmp/reviews"),
+    )
+    assert result.head_sha == SHA_A
+    assert receipt == Path("/receipts/receipt.json")
+    assert observed_trusted is trusted
+    assert observed["spec"] is spec
+    assert observed["review_worktree"] == Path("/review")
+
+
+def test_base_change_after_review_invalidates_signoff(monkeypatch) -> None:
+    module = _load()
+    snapshots = iter([
+        (snapshot(module), None),
+        (snapshot(module), None),
+        (snapshot(module, base_sha=SHA_C), None),
+    ])
+    monkeypatch.setattr(module, "fetch_pr_snapshot", lambda *_args: next(snapshots))
+    monkeypatch.setattr(module, "fetch_exact_pr_head", lambda *_args: (True, "OK"))
+    monkeypatch.setattr(module, "require_all_required_checks", lambda *_args: (True, "OK"))
+    monkeypatch.setattr(
+        module,
+        "load_trusted_review_bundle",
+        lambda *_args, **_kwargs: module.TrustedReviewSpec(spec=object(), sha256="d" * 64),
+    )
+    monkeypatch.setattr(module, "resolve_branch_worktree", lambda _branch: Path("/review"))
+    monkeypatch.setattr(
+        module,
+        "run_local_review_gate",
+        lambda **_kwargs: (object(), Path("/receipt.json")),
+    )
+
+    try:
+        module.prepare_merge_gate(
+            304,
+            "feature",
+            "owner/repo",
+            {},
+            review_spec_path=Path("/tmp/review.json"),
+            review_output_root=Path("/tmp/reviews"),
+        )
+    except RuntimeError as exc:
+        assert "changed after review" in str(exc)
+    else:
+        raise AssertionError("changed base must invalidate review")
+
+
+def test_head_change_during_final_check_invalidates_signoff(monkeypatch) -> None:
+    module = _load()
+    snapshots = iter([
+        (snapshot(module), None),
+        (snapshot(module), None),
+        (snapshot(module), None),
+        (snapshot(module, SHA_C), None),
+    ])
+    monkeypatch.setattr(module, "fetch_pr_snapshot", lambda *_args: next(snapshots))
+    monkeypatch.setattr(module, "fetch_exact_pr_head", lambda *_args: (True, "OK"))
+    monkeypatch.setattr(module, "require_all_required_checks", lambda *_args: (True, "OK"))
+    monkeypatch.setattr(
+        module,
+        "load_trusted_review_bundle",
+        lambda *_args, **_kwargs: module.TrustedReviewSpec(spec=object(), sha256="d" * 64),
+    )
+    monkeypatch.setattr(module, "resolve_branch_worktree", lambda _branch: Path("/review"))
+    monkeypatch.setattr(
+        module,
+        "run_local_review_gate",
+        lambda **_kwargs: (object(), Path("/receipt.json")),
+    )
+
+    try:
+        module.prepare_merge_gate(
+            304,
+            "feature",
+            "owner/repo",
+            {},
+            review_spec_path=Path("/tmp/review.json"),
+            review_output_root=Path("/tmp/reviews"),
+        )
+    except RuntimeError as exc:
+        assert "final required checks" in str(exc)
+    else:
+        raise AssertionError("head movement during final checks must invalidate review")
 
 
 def test_merge_uses_match_head_commit_and_never_deletes_branch(monkeypatch) -> None:
     module = _load()
     calls = []
+    guard_calls = []
 
     def fake_run(cmd, check=True, capture=True, *, env=None):
         calls.append(cmd)
         return completed(cmd)
 
+    @contextmanager
+    def guard(authority, **kwargs):
+        guard_calls.append((authority, kwargs))
+        yield
+
     monkeypatch.setattr(module, "run_cmd", fake_run)
-    ok, _ = module.merge_exact_head(304, snapshot(module), "owner/repo", {})
+    monkeypatch.setattr(module, "integration_authority_guard", guard)
+    authority = SimpleNamespace(assertion_sha256="d" * 64)
+    target = SimpleNamespace()
+    ok, _ = module.merge_exact_head(
+        304,
+        snapshot(module),
+        "owner/repo",
+        {},
+        authority=authority,
+        target=target,
+        agent="codex",
+        repo_root=Path("/repo"),
+        review_spec_path=Path("/review.json"),
+    )
     assert ok is True
+    assert guard_calls == [(
+        authority,
+        {
+            "expected_target": target,
+            "agent": "codex",
+            "repo_root": Path("/repo"),
+            "review_spec_path": Path("/review.json"),
+        },
+    )]
     assert calls == [[
         "gh", "pr", "merge", "304", "--repo", "owner/repo", "--squash",
         "--match-head-commit", SHA_A,
@@ -225,6 +294,30 @@ def test_repository_context_routes_to_origin_owner_in_isolated_auth(monkeypatch)
     assert observed["account"] == "ExactOwner"
 
 
+def test_integration_target_binds_review_work_unit_authority(monkeypatch) -> None:
+    module = _load()
+    trusted = module.TrustedReviewSpec(
+        spec=SimpleNamespace(
+            work_graph_sha256="e" * 64,
+            work_unit_id="review-pr-304",
+        ),
+        sha256="d" * 64,
+    )
+
+    target = module.integration_target(
+        snapshot=snapshot(module),
+        repository="owner/repo",
+        project="enforced-planning",
+        pr_number=304,
+        branch="feature",
+        trusted_review=trusted,
+    )
+
+    assert target.review_spec_sha256 == "d" * 64
+    assert target.review_work_graph_sha256 == "e" * 64
+    assert target.review_work_unit_id == "review-pr-304"
+
+
 def test_required_check_command_is_repository_bound(monkeypatch) -> None:
     module = _load()
     calls = []
@@ -240,7 +333,7 @@ def test_required_check_command_is_repository_bound(monkeypatch) -> None:
     ]]
 
 
-def test_closeout_precedes_canonical_pull_and_uses_merge_receipt(monkeypatch) -> None:
+def test_closeout_refreshes_remote_before_removal_and_uses_merge_receipt(monkeypatch) -> None:
     module = _load()
     calls = []
 
@@ -251,6 +344,261 @@ def test_closeout_precedes_canonical_pull_and_uses_merge_receipt(monkeypatch) ->
     monkeypatch.setattr(module, "run_cmd", fake_run)
     assert module.close_merged_lane("feature", SHA_B, "main") == (True, "Closed")
     assert calls == [
+        ["git", "fetch", "--no-tags", "origin", "main"],
+        ["git", "merge-base", "--is-ancestor", SHA_B, "origin/main"],
         ["make", "worktree-remove", "BRANCH=feature", f"WORKTREE_MERGE_COMMIT={SHA_B}"],
         ["git", "pull", "--ff-only", "origin", "main"],
     ]
+
+
+def test_failed_merge_verification_never_closes_lane(monkeypatch, tmp_path) -> None:
+    module = _load()
+    closed = []
+
+    @contextmanager
+    def repository_context():
+        yield "owner/repo", {}
+
+    monkeypatch.setattr(module, "is_in_worktree", lambda: False)
+    monkeypatch.setattr(module, "github_repository_context", repository_context)
+    monkeypatch.setattr(
+        module,
+        "fetch_pr_snapshot",
+        lambda *_args: (snapshot(module), None),
+    )
+    monkeypatch.setattr(
+        module,
+        "prepare_merge_gate",
+        lambda *_args, **_kwargs: (
+            snapshot(module),
+            tmp_path / "receipt.json",
+            module.TrustedReviewSpec(
+                spec=SimpleNamespace(work_graph_sha256=None, work_unit_id=None),
+                sha256="d" * 64,
+            ),
+        ),
+    )
+    monkeypatch.setattr(module, "integration_target", lambda **_kwargs: object())
+    monkeypatch.setattr(
+        module,
+        "assert_integration_authority",
+        lambda **_kwargs: SimpleNamespace(assertion_sha256="d" * 64),
+    )
+    monkeypatch.setattr(
+        module, "merge_exact_head", lambda *_args, **_kwargs: (True, "Merged")
+    )
+    monkeypatch.setattr(
+        module,
+        "verify_merged_pr",
+        lambda *_args: (False, None, "missing merge evidence"),
+    )
+    monkeypatch.setattr(
+        module,
+        "close_merged_lane",
+        lambda *_args: closed.append(True) or (True, "Closed"),
+    )
+
+    assert module.finish_pr(
+        "feature",
+        42,
+        agent="codex",
+        project="enforced-planning",
+        review_spec_path=tmp_path / "spec.json",
+        review_output_root=tmp_path,
+    ) is False
+    assert closed == []
+
+
+def test_post_merge_recovery_reproves_review_and_claim_authority(
+    monkeypatch, tmp_path
+) -> None:
+    module = _load()
+    merged = module.PrSnapshot(
+        SHA_B, SHA_A, "feature", "main", "MERGED", "MERGEABLE", ()
+    )
+    spec = object()
+    trusted = module.TrustedReviewSpec(spec=spec, sha256="d" * 64)
+    target = object()
+    authority = SimpleNamespace(assertion_sha256="d" * 64)
+    observed = {}
+
+    monkeypatch.setattr(module, "require_all_required_checks", lambda *_args: (True, "OK"))
+    monkeypatch.setattr(
+        module, "load_trusted_review_bundle", lambda *_args, **_kwargs: trusted
+    )
+    monkeypatch.setattr(module, "resolve_branch_worktree", lambda _branch: Path("/review"))
+
+    def review(**kwargs):
+        observed["review"] = kwargs
+        return SimpleNamespace(verdict="signed_off"), Path("/receipt.json")
+
+    monkeypatch.setattr(module, "run_local_review_gate", review)
+
+    def build_target(**kwargs):
+        observed["target"] = kwargs
+        return target
+
+    def assert_authority(**kwargs):
+        observed["authority"] = kwargs
+        return authority
+
+    monkeypatch.setattr(module, "integration_target", build_target)
+    monkeypatch.setattr(
+        module,
+        "assert_integration_authority",
+        assert_authority,
+    )
+
+    result = module.prepare_post_merge_recovery(
+        snapshot=merged,
+        merge_commit=SHA_C,
+        branch="feature",
+        pr_number=42,
+        repo_slug="owner/repo",
+        gh_env={},
+        agent="codex",
+        project="enforced-planning",
+        repo_root=Path("/repo"),
+        review_spec_path=tmp_path / "review.json",
+        review_output_root=tmp_path / "receipts",
+    )
+
+    assert result == (SHA_C, Path("/receipt.json"), authority)
+    assert observed["review"]["spec"] is spec
+    assert observed["review"]["snapshot"] == merged
+    assert observed["review"]["review_worktree"] == Path("/review")
+    assert observed["target"] == {
+        "snapshot": merged,
+        "repository": "owner/repo",
+        "project": "enforced-planning",
+        "pr_number": 42,
+        "branch": "feature",
+        "trusted_review": trusted,
+    }
+    assert observed["authority"] == {
+        "target": target,
+        "agent": "codex",
+        "repo_root": Path("/repo"),
+        "review_spec_path": tmp_path / "review.json",
+    }
+
+
+def test_retry_after_merge_skips_second_merge_and_closes_exact_lane(
+    monkeypatch, tmp_path
+) -> None:
+    module = _load()
+    merged = module.PrSnapshot(
+        SHA_B, SHA_A, "feature", "main", "MERGED", "MERGEABLE", ()
+    )
+    closed = []
+
+    @contextmanager
+    def repository_context():
+        yield "owner/repo", {}
+
+    monkeypatch.setattr(module, "is_in_worktree", lambda: False)
+    monkeypatch.setattr(module, "github_repository_context", repository_context)
+    monkeypatch.setattr(module, "get_main_repo_root", lambda: Path("/repo"))
+    monkeypatch.setattr(module, "fetch_pr_snapshot", lambda *_args: (merged, SHA_C))
+    monkeypatch.setattr(
+        module,
+        "prepare_post_merge_recovery",
+        lambda **_kwargs: (
+            SHA_C,
+            Path("/receipt.json"),
+            SimpleNamespace(assertion_sha256="d" * 64),
+        ),
+    )
+    monkeypatch.setattr(
+        module,
+        "merge_exact_head",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("retry must not submit a second merge")
+        ),
+    )
+    monkeypatch.setattr(
+        module,
+        "close_merged_lane",
+        lambda *args: closed.append(args) or (True, "Closed"),
+    )
+
+    assert module.finish_pr(
+        "feature",
+        42,
+        agent="codex",
+        project="enforced-planning",
+        review_spec_path=tmp_path / "review.json",
+        review_output_root=tmp_path / "receipts",
+    ) is True
+    assert closed == [("feature", SHA_C, "main")]
+
+
+def test_hook_blocks_direct_merge_and_finish_command_variants() -> None:
+    commands = (
+        "python scripts/worktree-coordination/finish_pr.py --branch feature --pr 42",
+        "python ./scripts/worktree-coordination/finish_pr.py --branch feature --pr 42",
+        "/usr/bin/python3 scripts/meta/worktree-coordination/finish_pr.py --branch feature --pr 42",
+        "uv run python scripts/worktree-coordination/finish_pr.py --branch feature --pr 42",
+        "./scripts/meta/worktree-coordination/finish_pr.py --branch feature --pr 42",
+        "gh pr merge 42",
+        "gh --repo owner/repo pr merge 42 --squash",
+        "gh pr --repo owner/repo merge 42 --squash",
+        "env gh pr merge 42",
+        "command gh pr merge 42",
+        "sudo gh pr merge 42",
+        "timeout 30 gh pr merge 42",
+        "nice gh pr merge 42",
+        "stdbuf -oL gh pr merge 42",
+        "exec gh pr merge 42",
+        "exec python scripts/worktree-coordination/finish_pr.py --branch feature --pr 42",
+        "env -S \"gh pr merge 42\"",
+        "env --split-string=\"gh pr merge 42\"",
+        "GH_HOST=github.com gh pr merge 42",
+        "bash -lc 'gh pr merge 42'",
+        "sh -c 'python scripts/worktree-coordination/finish_pr.py --branch feature --pr 42'",
+        "gh api --method PUT repos/owner/repo/pulls/42/merge",
+        "gh api graphql -f 'query=mutation{mergePullRequest(input:{pullRequestId:\"x\"}){pullRequest{id}}}'",
+        "make merge PR=42",
+        "make -f /tmp/untrusted.mk finish BRANCH=feature PR=42 REVIEW_SPEC=/tmp/spec.json",
+        "make finish BRANCH=feature PR=42 REVIEW_SPEC=/tmp/spec.json WORKTREE_FINISH_SCRIPT=/tmp/untrusted.py",
+        "make finish 'BRANCH=x\"; gh pr merge 42; echo \"' PR=42 REVIEW_SPEC=/tmp/spec.json",
+        "make finish BRANCH='$(gh pr merge 42)' PR=42 REVIEW_SPEC=/tmp/spec.json",
+        "make finish BRANCH=feature PR=42 REVIEW_SPEC='$(python scripts/worktree-coordination/finish_pr.py --branch feature --pr 42)'",
+        "FOO='$(gh pr merge 42)' make finish BRANCH=feature PR=42 REVIEW_SPEC=/tmp/spec.json",
+        "PYTHON='/tmp/untrusted-python' make finish BRANCH=feature PR=42 REVIEW_SPEC=/tmp/spec.json",
+        "python -c \"import runpy; runpy.run_path('scripts/worktree-coordination/finish_pr.py', run_name='__main__')\"",
+        "true\ngh pr merge 42",
+        "MERGER=gh; \"$MERGER\" pr merge 42 --squash",
+        "SCRIPT=scripts/worktree-coordination/finish_pr.py; python \"$SCRIPT\" --branch feature --pr 42",
+        "env python scripts/worktree-coordination/finish_pr.py --branch feature --pr 42",
+        "command python scripts/worktree-coordination/finish_pr.py --branch feature --pr 42",
+        "PYTHONPATH=. python scripts/worktree-coordination/finish_pr.py --branch feature --pr 42",
+    )
+    for command in commands:
+        payload = json.dumps({"tool_input": {"command": command}, "cwd": "/repo"})
+        result = subprocess.run(
+            ["bash", str(HOOK_PATH)],
+            input=payload,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == 2, command
+        assert "make finish" in result.stderr
+        if "gh pr merge" in command and command.startswith("gh pr merge"):
+            assert "canonical claim authority" in result.stderr
+
+
+def test_hook_allows_search_that_only_mentions_finish_filename() -> None:
+    payload = (
+        '{"tool_input":{"command":"rg finish_pr.py scripts tests"},'
+        '"cwd":"/repo"}'
+    )
+    result = subprocess.run(
+        ["bash", str(HOOK_PATH)],
+        input=payload,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0

@@ -1,0 +1,30 @@
+{
+  "generated_at": "2026-09-02T06:44:27Z",
+  "pages": [
+    "wiki/README.md",
+    "wiki/architecture-and-capabilities.md",
+    "wiki/current-work.md",
+    "wiki/evidence-and-verification.md",
+    "wiki/goal-and-requirements.md",
+    "wiki/log.md"
+  ],
+  "sources": [
+    "src-repository-15cd61a14612",
+    "src-repository-15cd61a14612-f66e192c",
+    "src-repository-39a1cd180ea8",
+    "src-repository-39a1cd180ea8-79b1f98b",
+    "src-repository-3a517734fc69",
+    "src-repository-3a517734fc69-949f2e8e",
+    "src-repository-6b5684f88799",
+    "src-repository-6b5684f88799-03d49981",
+    "src-repository-6d892250b3e8",
+    "src-repository-6d892250b3e8-caba9f80",
+    "src-repository-96eb39bc8147",
+    "src-repository-96eb39bc8147-cb5e4de7",
+    "src-repository-bafb57ab8783",
+    "src-repository-c469e0e86916",
+    "src-repository-c469e0e86916-1ffbe173",
+    "src-repository-fe0693bf70aa",
+    "src-repository-fe0693bf70aa-ba174ff4"
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "wiki/README.md": [
+    "wiki/architecture-and-capabilities.md",
+    "wiki/evidence-and-verification.md",
+    "wiki/log.md"
+  ],
+  "wiki/architecture-and-capabilities.md": [
+    "wiki/README.md",
+    "wiki/current-work.md",
+    "wiki/evidence-and-verification.md",
+    "wiki/goal-and-requirements.md"
+  ],
+  "wiki/current-work.md": [
+    "wiki/README.md",
+    "wiki/architecture-and-capabilities.md",
+    "wiki/evidence-and-verification.md",
+    "wiki/goal-and-requirements.md"
+  ],
+  "wiki/evidence-and-verification.md": [
+    "wiki/README.md",
+    "wiki/architecture-and-capabilities.md",
+    "wiki/current-work.md",
+    "wiki/goal-and-requirements.md"
+  ],
+  "wiki/goal-and-requirements.md": [
+    "wiki/README.md",
+    "wiki/current-work.md",
+    "wiki/evidence-and-verification.md"
+  ],
+  "wiki/log.md": [
+    "wiki/README.md"
+  ]
+}

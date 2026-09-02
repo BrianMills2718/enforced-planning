@@ -1,0 +1,16 @@
+{
+  "action": "capture",
+  "data": {
+    "source": {
+      "capture_variant_of": "src-repository-39a1cd180ea8",
+      "path": "raw/sources/2026/src-repository-39a1cd180ea8-79b1f98b",
+      "sha256": "39a1cd180ea8f4ae5ab1a0e2647c0a34c8359325640f29e8d5e493852ada355a",
+      "source_id": "src-repository-39a1cd180ea8-79b1f98b",
+      "status": "created-variant"
+    }
+  },
+  "id": "20260902T063843852329Z-04152a33",
+  "message": "Captured source src-repository-39a1cd180ea8-79b1f98b",
+  "schema_version": 1,
+  "timestamp": "2026-09-02T06:38:43.852Z"
+}

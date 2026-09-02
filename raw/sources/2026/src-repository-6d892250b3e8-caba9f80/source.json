@@ -1,0 +1,27 @@
+{
+  "adapter": "repository",
+  "authority": "native",
+  "capture_variant_of": "src-repository-6d892250b3e8",
+  "captured_at": "2026-09-02T06:38:44Z",
+  "classification": "internal",
+  "external_key": null,
+  "git_tracking": {
+    "captured_revision": "ecbf214664cd6db2d3bbc2e0689e2107927414cd",
+    "mode": "tracks_current",
+    "path": "meta-process.yaml",
+    "repository": "BrianMills2718/enforced-planning"
+  },
+  "id": "src-repository-6d892250b3e8-caba9f80",
+  "mime": "application/yaml",
+  "origin_uri": "git:BrianMills2718/enforced-planning@ecbf214664cd6db2d3bbc2e0689e2107927414cd:meta-process.yaml",
+  "original_path": "raw/sources/2026/src-repository-6d892250b3e8-caba9f80/original/meta-process.yaml",
+  "pointer_only": false,
+  "published_at": null,
+  "schema_version": 1,
+  "sha256": "6d892250b3e875e244c1e8b10a5b50d260d92f3bb33434c2add4b769737c7d97",
+  "source_type": "repository",
+  "supersedes": [
+    "src-repository-6d892250b3e8"
+  ],
+  "title": "Live meta-process configuration, exact revision"
+}

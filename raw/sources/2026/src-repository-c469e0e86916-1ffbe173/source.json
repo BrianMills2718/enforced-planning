@@ -1,0 +1,27 @@
+{
+  "adapter": "repository",
+  "authority": "native",
+  "capture_variant_of": "src-repository-c469e0e86916",
+  "captured_at": "2026-09-02T06:38:43Z",
+  "classification": "internal",
+  "external_key": null,
+  "git_tracking": {
+    "captured_revision": "ecbf214664cd6db2d3bbc2e0689e2107927414cd",
+    "mode": "tracks_current",
+    "path": "ROADMAP.md",
+    "repository": "BrianMills2718/enforced-planning"
+  },
+  "id": "src-repository-c469e0e86916-1ffbe173",
+  "mime": "text/markdown",
+  "origin_uri": "git:BrianMills2718/enforced-planning@ecbf214664cd6db2d3bbc2e0689e2107927414cd:ROADMAP.md",
+  "original_path": "raw/sources/2026/src-repository-c469e0e86916-1ffbe173/original/ROADMAP.md",
+  "pointer_only": false,
+  "published_at": null,
+  "schema_version": 1,
+  "sha256": "c469e0e86916803e82902ca0694c7c12536f1d41b220aa22a14db26d48f3c4ef",
+  "source_type": "repository",
+  "supersedes": [
+    "src-repository-c469e0e86916"
+  ],
+  "title": "Enforced Planning roadmap, exact revision"
+}

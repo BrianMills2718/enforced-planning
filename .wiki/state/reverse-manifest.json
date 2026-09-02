@@ -1,0 +1,675 @@
+{
+  "pages": {
+    "wiki/README.md": {
+      "authority": "derived",
+      "file_back": {
+        "path": "wiki/README.md",
+        "sha256": "5aca9817f270d2266c1bdc053e8618c33da9117c15e7c252fbbc63ad2c93d933"
+      },
+      "source_authorities": [
+        {
+          "authority": "native",
+          "file_back": {
+            "path": "raw/sources/2026/src-repository-15cd61a14612-f66e192c/original/PLANNING_OPERATING_MODEL.md",
+            "sha256": "15cd61a146127b44e0d2362a8ab3c2c443d1c816d5990171e5fddf33f02caf8f"
+          },
+          "origin_uri": "git:BrianMills2718/enforced-planning@ecbf214664cd6db2d3bbc2e0689e2107927414cd:PLANNING_OPERATING_MODEL.md",
+          "source_id": "src-repository-15cd61a14612-f66e192c"
+        },
+        {
+          "authority": "native",
+          "file_back": {
+            "path": "raw/sources/2026/src-repository-39a1cd180ea8-79b1f98b/original/docs-plans-CLAUDE.md",
+            "sha256": "39a1cd180ea8f4ae5ab1a0e2647c0a34c8359325640f29e8d5e493852ada355a"
+          },
+          "origin_uri": "git:BrianMills2718/enforced-planning@ecbf214664cd6db2d3bbc2e0689e2107927414cd:docs/plans/CLAUDE.md",
+          "source_id": "src-repository-39a1cd180ea8-79b1f98b"
+        },
+        {
+          "authority": "native",
+          "file_back": {
+            "path": "raw/sources/2026/src-repository-6b5684f88799-03d49981/original/README.md",
+            "sha256": "6b5684f88799e1461fd8d203a85c76fb70d29cf7b79be7a907cb597cfb172b33"
+          },
+          "origin_uri": "git:BrianMills2718/enforced-planning@ecbf214664cd6db2d3bbc2e0689e2107927414cd:README.md",
+          "source_id": "src-repository-6b5684f88799-03d49981"
+        },
+        {
+          "authority": "native",
+          "file_back": {
+            "path": "raw/sources/2026/src-repository-c469e0e86916-1ffbe173/original/ROADMAP.md",
+            "sha256": "c469e0e86916803e82902ca0694c7c12536f1d41b220aa22a14db26d48f3c4ef"
+          },
+          "origin_uri": "git:BrianMills2718/enforced-planning@ecbf214664cd6db2d3bbc2e0689e2107927414cd:ROADMAP.md",
+          "source_id": "src-repository-c469e0e86916-1ffbe173"
+        },
+        {
+          "authority": "native",
+          "file_back": {
+            "path": "raw/sources/2026/src-repository-fe0693bf70aa-ba174ff4/original/CLAUDE.md",
+            "sha256": "fe0693bf70aa64be41c7ebac37df093ec0e4ac0a55e945ed09e779329f19d4e4"
+          },
+          "origin_uri": "git:BrianMills2718/enforced-planning@ecbf214664cd6db2d3bbc2e0689e2107927414cd:CLAUDE.md",
+          "source_id": "src-repository-fe0693bf70aa-ba174ff4"
+        }
+      ],
+      "sources": [
+        "src-repository-15cd61a14612-f66e192c",
+        "src-repository-39a1cd180ea8-79b1f98b",
+        "src-repository-6b5684f88799-03d49981",
+        "src-repository-c469e0e86916-1ffbe173",
+        "src-repository-fe0693bf70aa-ba174ff4"
+      ],
+      "status": "current"
+    },
+    "wiki/architecture-and-capabilities.md": {
+      "authority": "derived",
+      "file_back": {
+        "path": "wiki/architecture-and-capabilities.md",
+        "sha256": "2859778493964b3b4a908797a059778c8607974dfb099046bb622c3706c20e59"
+      },
+      "source_authorities": [
+        {
+          "authority": "native",
+          "file_back": {
+            "path": "raw/sources/2026/src-repository-15cd61a14612-f66e192c/original/PLANNING_OPERATING_MODEL.md",
+            "sha256": "15cd61a146127b44e0d2362a8ab3c2c443d1c816d5990171e5fddf33f02caf8f"
+          },
+          "origin_uri": "git:BrianMills2718/enforced-planning@ecbf214664cd6db2d3bbc2e0689e2107927414cd:PLANNING_OPERATING_MODEL.md",
+          "source_id": "src-repository-15cd61a14612-f66e192c"
+        },
+        {
+          "authority": "native",
+          "file_back": {
+            "path": "raw/sources/2026/src-repository-3a517734fc69-949f2e8e/original/adr-0005-hierarchical-context-compression.md",
+            "sha256": "3a517734fc69eeb58d066f60706726b830f7af0975662c5e40e90c76af6937fe"
+          },
+          "origin_uri": "git:BrianMills2718/enforced-planning@ecbf214664cd6db2d3bbc2e0689e2107927414cd:adr/0005-hierarchical-context-compression.md",
+          "source_id": "src-repository-3a517734fc69-949f2e8e"
+        },
+        {
+          "authority": "native",
+          "file_back": {
+            "path": "raw/sources/2026/src-repository-6b5684f88799-03d49981/original/README.md",
+            "sha256": "6b5684f88799e1461fd8d203a85c76fb70d29cf7b79be7a907cb597cfb172b33"
+          },
+          "origin_uri": "git:BrianMills2718/enforced-planning@ecbf214664cd6db2d3bbc2e0689e2107927414cd:README.md",
+          "source_id": "src-repository-6b5684f88799-03d49981"
+        },
+        {
+          "authority": "native",
+          "file_back": {
+            "path": "raw/sources/2026/src-repository-6d892250b3e8-caba9f80/original/meta-process.yaml",
+            "sha256": "6d892250b3e875e244c1e8b10a5b50d260d92f3bb33434c2add4b769737c7d97"
+          },
+          "origin_uri": "git:BrianMills2718/enforced-planning@ecbf214664cd6db2d3bbc2e0689e2107927414cd:meta-process.yaml",
+          "source_id": "src-repository-6d892250b3e8-caba9f80"
+        },
+        {
+          "authority": "native",
+          "file_back": {
+            "path": "raw/sources/2026/src-repository-96eb39bc8147-cb5e4de7/original/docs-plans-128_portable_governance_and_wiki_profile.md",
+            "sha256": "96eb39bc814757e176fb55ec2eef85569e20ed49f46c3a60a31c6e4aa886ded5"
+          },
+          "origin_uri": "git:BrianMills2718/enforced-planning@ecbf214664cd6db2d3bbc2e0689e2107927414cd:docs/plans/128_portable_governance_and_wiki_profile.md",
+          "source_id": "src-repository-96eb39bc8147-cb5e4de7"
+        }
+      ],
+      "sources": [
+        "src-repository-15cd61a14612-f66e192c",
+        "src-repository-3a517734fc69-949f2e8e",
+        "src-repository-6b5684f88799-03d49981",
+        "src-repository-6d892250b3e8-caba9f80",
+        "src-repository-96eb39bc8147-cb5e4de7"
+      ],
+      "status": "current"
+    },
+    "wiki/current-work.md": {
+      "authority": "derived",
+      "file_back": {
+        "path": "wiki/current-work.md",
+        "sha256": "9316af927855b4ac8c5aad2b74e8c0415dcd42f8aac2c72d9967ccb7880f8055"
+      },
+      "source_authorities": [
+        {
+          "authority": "native",
+          "file_back": {
+            "path": "raw/sources/2026/src-repository-39a1cd180ea8-79b1f98b/original/docs-plans-CLAUDE.md",
+            "sha256": "39a1cd180ea8f4ae5ab1a0e2647c0a34c8359325640f29e8d5e493852ada355a"
+          },
+          "origin_uri": "git:BrianMills2718/enforced-planning@ecbf214664cd6db2d3bbc2e0689e2107927414cd:docs/plans/CLAUDE.md",
+          "source_id": "src-repository-39a1cd180ea8-79b1f98b"
+        },
+        {
+          "authority": "native",
+          "file_back": {
+            "path": "raw/sources/2026/src-repository-96eb39bc8147-cb5e4de7/original/docs-plans-128_portable_governance_and_wiki_profile.md",
+            "sha256": "96eb39bc814757e176fb55ec2eef85569e20ed49f46c3a60a31c6e4aa886ded5"
+          },
+          "origin_uri": "git:BrianMills2718/enforced-planning@ecbf214664cd6db2d3bbc2e0689e2107927414cd:docs/plans/128_portable_governance_and_wiki_profile.md",
+          "source_id": "src-repository-96eb39bc8147-cb5e4de7"
+        },
+        {
+          "authority": "native",
+          "file_back": {
+            "path": "raw/sources/2026/src-repository-c469e0e86916-1ffbe173/original/ROADMAP.md",
+            "sha256": "c469e0e86916803e82902ca0694c7c12536f1d41b220aa22a14db26d48f3c4ef"
+          },
+          "origin_uri": "git:BrianMills2718/enforced-planning@ecbf214664cd6db2d3bbc2e0689e2107927414cd:ROADMAP.md",
+          "source_id": "src-repository-c469e0e86916-1ffbe173"
+        }
+      ],
+      "sources": [
+        "src-repository-39a1cd180ea8-79b1f98b",
+        "src-repository-96eb39bc8147-cb5e4de7",
+        "src-repository-c469e0e86916-1ffbe173"
+      ],
+      "status": "current"
+    },
+    "wiki/evidence-and-verification.md": {
+      "authority": "derived",
+      "file_back": {
+        "path": "wiki/evidence-and-verification.md",
+        "sha256": "42cc746dace04534fb510cc6cfa611bfa80fe5dc3a4c690a0f3f2bb2b348139c"
+      },
+      "source_authorities": [
+        {
+          "authority": "native",
+          "file_back": {
+            "path": "raw/sources/2026/src-repository-15cd61a14612-f66e192c/original/PLANNING_OPERATING_MODEL.md",
+            "sha256": "15cd61a146127b44e0d2362a8ab3c2c443d1c816d5990171e5fddf33f02caf8f"
+          },
+          "origin_uri": "git:BrianMills2718/enforced-planning@ecbf214664cd6db2d3bbc2e0689e2107927414cd:PLANNING_OPERATING_MODEL.md",
+          "source_id": "src-repository-15cd61a14612-f66e192c"
+        },
+        {
+          "authority": "native",
+          "file_back": {
+            "path": "raw/sources/2026/src-repository-6b5684f88799-03d49981/original/README.md",
+            "sha256": "6b5684f88799e1461fd8d203a85c76fb70d29cf7b79be7a907cb597cfb172b33"
+          },
+          "origin_uri": "git:BrianMills2718/enforced-planning@ecbf214664cd6db2d3bbc2e0689e2107927414cd:README.md",
+          "source_id": "src-repository-6b5684f88799-03d49981"
+        },
+        {
+          "authority": "native",
+          "file_back": {
+            "path": "raw/sources/2026/src-repository-6d892250b3e8-caba9f80/original/meta-process.yaml",
+            "sha256": "6d892250b3e875e244c1e8b10a5b50d260d92f3bb33434c2add4b769737c7d97"
+          },
+          "origin_uri": "git:BrianMills2718/enforced-planning@ecbf214664cd6db2d3bbc2e0689e2107927414cd:meta-process.yaml",
+          "source_id": "src-repository-6d892250b3e8-caba9f80"
+        }
+      ],
+      "sources": [
+        "src-repository-15cd61a14612-f66e192c",
+        "src-repository-6b5684f88799-03d49981",
+        "src-repository-6d892250b3e8-caba9f80"
+      ],
+      "status": "current"
+    },
+    "wiki/goal-and-requirements.md": {
+      "authority": "derived",
+      "file_back": {
+        "path": "wiki/goal-and-requirements.md",
+        "sha256": "677f815bf30c29e43f5c8d486815ca52295749f6615a3070f274afd4b620fc1c"
+      },
+      "source_authorities": [
+        {
+          "authority": "native",
+          "file_back": {
+            "path": "raw/sources/2026/src-repository-15cd61a14612-f66e192c/original/PLANNING_OPERATING_MODEL.md",
+            "sha256": "15cd61a146127b44e0d2362a8ab3c2c443d1c816d5990171e5fddf33f02caf8f"
+          },
+          "origin_uri": "git:BrianMills2718/enforced-planning@ecbf214664cd6db2d3bbc2e0689e2107927414cd:PLANNING_OPERATING_MODEL.md",
+          "source_id": "src-repository-15cd61a14612-f66e192c"
+        },
+        {
+          "authority": "native",
+          "file_back": {
+            "path": "raw/sources/2026/src-repository-6b5684f88799-03d49981/original/README.md",
+            "sha256": "6b5684f88799e1461fd8d203a85c76fb70d29cf7b79be7a907cb597cfb172b33"
+          },
+          "origin_uri": "git:BrianMills2718/enforced-planning@ecbf214664cd6db2d3bbc2e0689e2107927414cd:README.md",
+          "source_id": "src-repository-6b5684f88799-03d49981"
+        },
+        {
+          "authority": "native",
+          "file_back": {
+            "path": "raw/sources/2026/src-repository-fe0693bf70aa-ba174ff4/original/CLAUDE.md",
+            "sha256": "fe0693bf70aa64be41c7ebac37df093ec0e4ac0a55e945ed09e779329f19d4e4"
+          },
+          "origin_uri": "git:BrianMills2718/enforced-planning@ecbf214664cd6db2d3bbc2e0689e2107927414cd:CLAUDE.md",
+          "source_id": "src-repository-fe0693bf70aa-ba174ff4"
+        }
+      ],
+      "sources": [
+        "src-repository-15cd61a14612-f66e192c",
+        "src-repository-6b5684f88799-03d49981",
+        "src-repository-fe0693bf70aa-ba174ff4"
+      ],
+      "status": "current"
+    },
+    "wiki/log.md": {
+      "authority": "derived",
+      "file_back": {
+        "path": "wiki/log.md",
+        "sha256": "6784e26bde06186171490b04f406c7d468b15580828fc56f326dc425aed286c3"
+      },
+      "source_authorities": [
+        {
+          "authority": "native",
+          "file_back": {
+            "path": "raw/sources/2026/src-repository-15cd61a14612-f66e192c/original/PLANNING_OPERATING_MODEL.md",
+            "sha256": "15cd61a146127b44e0d2362a8ab3c2c443d1c816d5990171e5fddf33f02caf8f"
+          },
+          "origin_uri": "git:BrianMills2718/enforced-planning@ecbf214664cd6db2d3bbc2e0689e2107927414cd:PLANNING_OPERATING_MODEL.md",
+          "source_id": "src-repository-15cd61a14612-f66e192c"
+        },
+        {
+          "authority": "native",
+          "file_back": {
+            "path": "raw/sources/2026/src-repository-39a1cd180ea8-79b1f98b/original/docs-plans-CLAUDE.md",
+            "sha256": "39a1cd180ea8f4ae5ab1a0e2647c0a34c8359325640f29e8d5e493852ada355a"
+          },
+          "origin_uri": "git:BrianMills2718/enforced-planning@ecbf214664cd6db2d3bbc2e0689e2107927414cd:docs/plans/CLAUDE.md",
+          "source_id": "src-repository-39a1cd180ea8-79b1f98b"
+        },
+        {
+          "authority": "native",
+          "file_back": {
+            "path": "raw/sources/2026/src-repository-3a517734fc69-949f2e8e/original/adr-0005-hierarchical-context-compression.md",
+            "sha256": "3a517734fc69eeb58d066f60706726b830f7af0975662c5e40e90c76af6937fe"
+          },
+          "origin_uri": "git:BrianMills2718/enforced-planning@ecbf214664cd6db2d3bbc2e0689e2107927414cd:adr/0005-hierarchical-context-compression.md",
+          "source_id": "src-repository-3a517734fc69-949f2e8e"
+        },
+        {
+          "authority": "native",
+          "file_back": {
+            "path": "raw/sources/2026/src-repository-6b5684f88799-03d49981/original/README.md",
+            "sha256": "6b5684f88799e1461fd8d203a85c76fb70d29cf7b79be7a907cb597cfb172b33"
+          },
+          "origin_uri": "git:BrianMills2718/enforced-planning@ecbf214664cd6db2d3bbc2e0689e2107927414cd:README.md",
+          "source_id": "src-repository-6b5684f88799-03d49981"
+        },
+        {
+          "authority": "native",
+          "file_back": {
+            "path": "raw/sources/2026/src-repository-6d892250b3e8-caba9f80/original/meta-process.yaml",
+            "sha256": "6d892250b3e875e244c1e8b10a5b50d260d92f3bb33434c2add4b769737c7d97"
+          },
+          "origin_uri": "git:BrianMills2718/enforced-planning@ecbf214664cd6db2d3bbc2e0689e2107927414cd:meta-process.yaml",
+          "source_id": "src-repository-6d892250b3e8-caba9f80"
+        },
+        {
+          "authority": "native",
+          "file_back": {
+            "path": "raw/sources/2026/src-repository-96eb39bc8147-cb5e4de7/original/docs-plans-128_portable_governance_and_wiki_profile.md",
+            "sha256": "96eb39bc814757e176fb55ec2eef85569e20ed49f46c3a60a31c6e4aa886ded5"
+          },
+          "origin_uri": "git:BrianMills2718/enforced-planning@ecbf214664cd6db2d3bbc2e0689e2107927414cd:docs/plans/128_portable_governance_and_wiki_profile.md",
+          "source_id": "src-repository-96eb39bc8147-cb5e4de7"
+        },
+        {
+          "authority": "native",
+          "file_back": {
+            "path": "raw/sources/2026/src-repository-c469e0e86916-1ffbe173/original/ROADMAP.md",
+            "sha256": "c469e0e86916803e82902ca0694c7c12536f1d41b220aa22a14db26d48f3c4ef"
+          },
+          "origin_uri": "git:BrianMills2718/enforced-planning@ecbf214664cd6db2d3bbc2e0689e2107927414cd:ROADMAP.md",
+          "source_id": "src-repository-c469e0e86916-1ffbe173"
+        },
+        {
+          "authority": "native",
+          "file_back": {
+            "path": "raw/sources/2026/src-repository-fe0693bf70aa-ba174ff4/original/CLAUDE.md",
+            "sha256": "fe0693bf70aa64be41c7ebac37df093ec0e4ac0a55e945ed09e779329f19d4e4"
+          },
+          "origin_uri": "git:BrianMills2718/enforced-planning@ecbf214664cd6db2d3bbc2e0689e2107927414cd:CLAUDE.md",
+          "source_id": "src-repository-fe0693bf70aa-ba174ff4"
+        }
+      ],
+      "sources": [
+        "src-repository-15cd61a14612-f66e192c",
+        "src-repository-39a1cd180ea8-79b1f98b",
+        "src-repository-3a517734fc69-949f2e8e",
+        "src-repository-6b5684f88799-03d49981",
+        "src-repository-6d892250b3e8-caba9f80",
+        "src-repository-96eb39bc8147-cb5e4de7",
+        "src-repository-c469e0e86916-1ffbe173",
+        "src-repository-fe0693bf70aa-ba174ff4"
+      ],
+      "status": "current"
+    }
+  },
+  "schema_version": 1,
+  "sources": {
+    "src-repository-15cd61a14612": {
+      "authority": "native",
+      "classification": "internal",
+      "dependent_pages": [],
+      "file_back": {
+        "path": "raw/sources/2026/src-repository-15cd61a14612/original/PLANNING_OPERATING_MODEL.md",
+        "sha256": "15cd61a146127b44e0d2362a8ab3c2c443d1c816d5990171e5fddf33f02caf8f"
+      },
+      "metadata_path": "raw/sources/2026/src-repository-15cd61a14612/source.json",
+      "origin_uri": "git:BrianMills2718/enforced-planning:PLANNING_OPERATING_MODEL.md",
+      "pointer_only": false,
+      "sha256": "15cd61a146127b44e0d2362a8ab3c2c443d1c816d5990171e5fddf33f02caf8f",
+      "superseded_by": [
+        "src-repository-15cd61a14612-f66e192c"
+      ],
+      "supersedes": []
+    },
+    "src-repository-15cd61a14612-f66e192c": {
+      "authority": "native",
+      "classification": "internal",
+      "dependent_pages": [
+        "wiki/README.md",
+        "wiki/architecture-and-capabilities.md",
+        "wiki/evidence-and-verification.md",
+        "wiki/goal-and-requirements.md",
+        "wiki/log.md"
+      ],
+      "file_back": {
+        "path": "raw/sources/2026/src-repository-15cd61a14612-f66e192c/original/PLANNING_OPERATING_MODEL.md",
+        "sha256": "15cd61a146127b44e0d2362a8ab3c2c443d1c816d5990171e5fddf33f02caf8f"
+      },
+      "metadata_path": "raw/sources/2026/src-repository-15cd61a14612-f66e192c/source.json",
+      "origin_uri": "git:BrianMills2718/enforced-planning@ecbf214664cd6db2d3bbc2e0689e2107927414cd:PLANNING_OPERATING_MODEL.md",
+      "pointer_only": false,
+      "sha256": "15cd61a146127b44e0d2362a8ab3c2c443d1c816d5990171e5fddf33f02caf8f",
+      "superseded_by": [],
+      "supersedes": [
+        "src-repository-15cd61a14612"
+      ]
+    },
+    "src-repository-39a1cd180ea8": {
+      "authority": "native-plan-index",
+      "classification": "internal",
+      "dependent_pages": [],
+      "file_back": {
+        "path": "raw/sources/2026/src-repository-39a1cd180ea8/original/docs-plans-CLAUDE.md",
+        "sha256": "39a1cd180ea8f4ae5ab1a0e2647c0a34c8359325640f29e8d5e493852ada355a"
+      },
+      "metadata_path": "raw/sources/2026/src-repository-39a1cd180ea8/source.json",
+      "origin_uri": "git:BrianMills2718/enforced-planning:docs/plans/CLAUDE.md",
+      "pointer_only": false,
+      "sha256": "39a1cd180ea8f4ae5ab1a0e2647c0a34c8359325640f29e8d5e493852ada355a",
+      "superseded_by": [
+        "src-repository-39a1cd180ea8-79b1f98b"
+      ],
+      "supersedes": []
+    },
+    "src-repository-39a1cd180ea8-79b1f98b": {
+      "authority": "native",
+      "classification": "internal",
+      "dependent_pages": [
+        "wiki/README.md",
+        "wiki/current-work.md",
+        "wiki/log.md"
+      ],
+      "file_back": {
+        "path": "raw/sources/2026/src-repository-39a1cd180ea8-79b1f98b/original/docs-plans-CLAUDE.md",
+        "sha256": "39a1cd180ea8f4ae5ab1a0e2647c0a34c8359325640f29e8d5e493852ada355a"
+      },
+      "metadata_path": "raw/sources/2026/src-repository-39a1cd180ea8-79b1f98b/source.json",
+      "origin_uri": "git:BrianMills2718/enforced-planning@ecbf214664cd6db2d3bbc2e0689e2107927414cd:docs/plans/CLAUDE.md",
+      "pointer_only": false,
+      "sha256": "39a1cd180ea8f4ae5ab1a0e2647c0a34c8359325640f29e8d5e493852ada355a",
+      "superseded_by": [],
+      "supersedes": [
+        "src-repository-39a1cd180ea8"
+      ]
+    },
+    "src-repository-3a517734fc69": {
+      "authority": "native",
+      "classification": "internal",
+      "dependent_pages": [],
+      "file_back": {
+        "path": "raw/sources/2026/src-repository-3a517734fc69/original/0005-hierarchical-context-compression.md",
+        "sha256": "3a517734fc69eeb58d066f60706726b830f7af0975662c5e40e90c76af6937fe"
+      },
+      "metadata_path": "raw/sources/2026/src-repository-3a517734fc69/source.json",
+      "origin_uri": "git:BrianMills2718/enforced-planning:adr/0005-hierarchical-context-compression.md",
+      "pointer_only": false,
+      "sha256": "3a517734fc69eeb58d066f60706726b830f7af0975662c5e40e90c76af6937fe",
+      "superseded_by": [
+        "src-repository-3a517734fc69-949f2e8e"
+      ],
+      "supersedes": []
+    },
+    "src-repository-3a517734fc69-949f2e8e": {
+      "authority": "native",
+      "classification": "internal",
+      "dependent_pages": [
+        "wiki/architecture-and-capabilities.md",
+        "wiki/log.md"
+      ],
+      "file_back": {
+        "path": "raw/sources/2026/src-repository-3a517734fc69-949f2e8e/original/adr-0005-hierarchical-context-compression.md",
+        "sha256": "3a517734fc69eeb58d066f60706726b830f7af0975662c5e40e90c76af6937fe"
+      },
+      "metadata_path": "raw/sources/2026/src-repository-3a517734fc69-949f2e8e/source.json",
+      "origin_uri": "git:BrianMills2718/enforced-planning@ecbf214664cd6db2d3bbc2e0689e2107927414cd:adr/0005-hierarchical-context-compression.md",
+      "pointer_only": false,
+      "sha256": "3a517734fc69eeb58d066f60706726b830f7af0975662c5e40e90c76af6937fe",
+      "superseded_by": [],
+      "supersedes": [
+        "src-repository-3a517734fc69"
+      ]
+    },
+    "src-repository-6b5684f88799": {
+      "authority": "native",
+      "classification": "internal",
+      "dependent_pages": [],
+      "file_back": {
+        "path": "raw/sources/2026/src-repository-6b5684f88799/original/README.md",
+        "sha256": "6b5684f88799e1461fd8d203a85c76fb70d29cf7b79be7a907cb597cfb172b33"
+      },
+      "metadata_path": "raw/sources/2026/src-repository-6b5684f88799/source.json",
+      "origin_uri": "git:BrianMills2718/enforced-planning:README.md",
+      "pointer_only": false,
+      "sha256": "6b5684f88799e1461fd8d203a85c76fb70d29cf7b79be7a907cb597cfb172b33",
+      "superseded_by": [
+        "src-repository-bafb57ab8783"
+      ],
+      "supersedes": []
+    },
+    "src-repository-6b5684f88799-03d49981": {
+      "authority": "native",
+      "classification": "internal",
+      "dependent_pages": [
+        "wiki/README.md",
+        "wiki/architecture-and-capabilities.md",
+        "wiki/evidence-and-verification.md",
+        "wiki/goal-and-requirements.md",
+        "wiki/log.md"
+      ],
+      "file_back": {
+        "path": "raw/sources/2026/src-repository-6b5684f88799-03d49981/original/README.md",
+        "sha256": "6b5684f88799e1461fd8d203a85c76fb70d29cf7b79be7a907cb597cfb172b33"
+      },
+      "metadata_path": "raw/sources/2026/src-repository-6b5684f88799-03d49981/source.json",
+      "origin_uri": "git:BrianMills2718/enforced-planning@ecbf214664cd6db2d3bbc2e0689e2107927414cd:README.md",
+      "pointer_only": false,
+      "sha256": "6b5684f88799e1461fd8d203a85c76fb70d29cf7b79be7a907cb597cfb172b33",
+      "superseded_by": [],
+      "supersedes": [
+        "src-repository-bafb57ab8783"
+      ]
+    },
+    "src-repository-6d892250b3e8": {
+      "authority": "native",
+      "classification": "internal",
+      "dependent_pages": [],
+      "file_back": {
+        "path": "raw/sources/2026/src-repository-6d892250b3e8/original/meta-process.yaml",
+        "sha256": "6d892250b3e875e244c1e8b10a5b50d260d92f3bb33434c2add4b769737c7d97"
+      },
+      "metadata_path": "raw/sources/2026/src-repository-6d892250b3e8/source.json",
+      "origin_uri": "git:BrianMills2718/enforced-planning:meta-process.yaml",
+      "pointer_only": false,
+      "sha256": "6d892250b3e875e244c1e8b10a5b50d260d92f3bb33434c2add4b769737c7d97",
+      "superseded_by": [
+        "src-repository-6d892250b3e8-caba9f80"
+      ],
+      "supersedes": []
+    },
+    "src-repository-6d892250b3e8-caba9f80": {
+      "authority": "native",
+      "classification": "internal",
+      "dependent_pages": [
+        "wiki/architecture-and-capabilities.md",
+        "wiki/evidence-and-verification.md",
+        "wiki/log.md"
+      ],
+      "file_back": {
+        "path": "raw/sources/2026/src-repository-6d892250b3e8-caba9f80/original/meta-process.yaml",
+        "sha256": "6d892250b3e875e244c1e8b10a5b50d260d92f3bb33434c2add4b769737c7d97"
+      },
+      "metadata_path": "raw/sources/2026/src-repository-6d892250b3e8-caba9f80/source.json",
+      "origin_uri": "git:BrianMills2718/enforced-planning@ecbf214664cd6db2d3bbc2e0689e2107927414cd:meta-process.yaml",
+      "pointer_only": false,
+      "sha256": "6d892250b3e875e244c1e8b10a5b50d260d92f3bb33434c2add4b769737c7d97",
+      "superseded_by": [],
+      "supersedes": [
+        "src-repository-6d892250b3e8"
+      ]
+    },
+    "src-repository-96eb39bc8147": {
+      "authority": "native",
+      "classification": "internal",
+      "dependent_pages": [],
+      "file_back": {
+        "path": "raw/sources/2026/src-repository-96eb39bc8147/original/128_portable_governance_and_wiki_profile.md",
+        "sha256": "96eb39bc814757e176fb55ec2eef85569e20ed49f46c3a60a31c6e4aa886ded5"
+      },
+      "metadata_path": "raw/sources/2026/src-repository-96eb39bc8147/source.json",
+      "origin_uri": "git:BrianMills2718/enforced-planning:docs/plans/128_portable_governance_and_wiki_profile.md",
+      "pointer_only": false,
+      "sha256": "96eb39bc814757e176fb55ec2eef85569e20ed49f46c3a60a31c6e4aa886ded5",
+      "superseded_by": [
+        "src-repository-96eb39bc8147-cb5e4de7"
+      ],
+      "supersedes": []
+    },
+    "src-repository-96eb39bc8147-cb5e4de7": {
+      "authority": "native",
+      "classification": "internal",
+      "dependent_pages": [
+        "wiki/architecture-and-capabilities.md",
+        "wiki/current-work.md",
+        "wiki/log.md"
+      ],
+      "file_back": {
+        "path": "raw/sources/2026/src-repository-96eb39bc8147-cb5e4de7/original/docs-plans-128_portable_governance_and_wiki_profile.md",
+        "sha256": "96eb39bc814757e176fb55ec2eef85569e20ed49f46c3a60a31c6e4aa886ded5"
+      },
+      "metadata_path": "raw/sources/2026/src-repository-96eb39bc8147-cb5e4de7/source.json",
+      "origin_uri": "git:BrianMills2718/enforced-planning@ecbf214664cd6db2d3bbc2e0689e2107927414cd:docs/plans/128_portable_governance_and_wiki_profile.md",
+      "pointer_only": false,
+      "sha256": "96eb39bc814757e176fb55ec2eef85569e20ed49f46c3a60a31c6e4aa886ded5",
+      "superseded_by": [],
+      "supersedes": [
+        "src-repository-96eb39bc8147"
+      ]
+    },
+    "src-repository-bafb57ab8783": {
+      "authority": "native",
+      "classification": "internal",
+      "dependent_pages": [],
+      "file_back": {
+        "path": "raw/sources/2026/src-repository-bafb57ab8783/original/README.md",
+        "sha256": "bafb57ab87836dec3dfa6f244fd1630eced1464bdf7a3b3a39b2e8ba3f5787e0"
+      },
+      "metadata_path": "raw/sources/2026/src-repository-bafb57ab8783/source.json",
+      "origin_uri": "git:BrianMills2718/enforced-planning@ecbf214664cd6db2d3bbc2e0689e2107927414cd:README.md",
+      "pointer_only": false,
+      "sha256": "bafb57ab87836dec3dfa6f244fd1630eced1464bdf7a3b3a39b2e8ba3f5787e0",
+      "superseded_by": [
+        "src-repository-6b5684f88799-03d49981"
+      ],
+      "supersedes": [
+        "src-repository-6b5684f88799"
+      ]
+    },
+    "src-repository-c469e0e86916": {
+      "authority": "native",
+      "classification": "internal",
+      "dependent_pages": [],
+      "file_back": {
+        "path": "raw/sources/2026/src-repository-c469e0e86916/original/ROADMAP.md",
+        "sha256": "c469e0e86916803e82902ca0694c7c12536f1d41b220aa22a14db26d48f3c4ef"
+      },
+      "metadata_path": "raw/sources/2026/src-repository-c469e0e86916/source.json",
+      "origin_uri": "git:BrianMills2718/enforced-planning:ROADMAP.md",
+      "pointer_only": false,
+      "sha256": "c469e0e86916803e82902ca0694c7c12536f1d41b220aa22a14db26d48f3c4ef",
+      "superseded_by": [
+        "src-repository-c469e0e86916-1ffbe173"
+      ],
+      "supersedes": []
+    },
+    "src-repository-c469e0e86916-1ffbe173": {
+      "authority": "native",
+      "classification": "internal",
+      "dependent_pages": [
+        "wiki/README.md",
+        "wiki/current-work.md",
+        "wiki/log.md"
+      ],
+      "file_back": {
+        "path": "raw/sources/2026/src-repository-c469e0e86916-1ffbe173/original/ROADMAP.md",
+        "sha256": "c469e0e86916803e82902ca0694c7c12536f1d41b220aa22a14db26d48f3c4ef"
+      },
+      "metadata_path": "raw/sources/2026/src-repository-c469e0e86916-1ffbe173/source.json",
+      "origin_uri": "git:BrianMills2718/enforced-planning@ecbf214664cd6db2d3bbc2e0689e2107927414cd:ROADMAP.md",
+      "pointer_only": false,
+      "sha256": "c469e0e86916803e82902ca0694c7c12536f1d41b220aa22a14db26d48f3c4ef",
+      "superseded_by": [],
+      "supersedes": [
+        "src-repository-c469e0e86916"
+      ]
+    },
+    "src-repository-fe0693bf70aa": {
+      "authority": "native-instruction",
+      "classification": "internal",
+      "dependent_pages": [],
+      "file_back": {
+        "path": "raw/sources/2026/src-repository-fe0693bf70aa/original/CLAUDE.md",
+        "sha256": "fe0693bf70aa64be41c7ebac37df093ec0e4ac0a55e945ed09e779329f19d4e4"
+      },
+      "metadata_path": "raw/sources/2026/src-repository-fe0693bf70aa/source.json",
+      "origin_uri": "git:BrianMills2718/enforced-planning:CLAUDE.md",
+      "pointer_only": false,
+      "sha256": "fe0693bf70aa64be41c7ebac37df093ec0e4ac0a55e945ed09e779329f19d4e4",
+      "superseded_by": [
+        "src-repository-fe0693bf70aa-ba174ff4"
+      ],
+      "supersedes": []
+    },
+    "src-repository-fe0693bf70aa-ba174ff4": {
+      "authority": "native",
+      "classification": "internal",
+      "dependent_pages": [
+        "wiki/README.md",
+        "wiki/goal-and-requirements.md",
+        "wiki/log.md"
+      ],
+      "file_back": {
+        "path": "raw/sources/2026/src-repository-fe0693bf70aa-ba174ff4/original/CLAUDE.md",
+        "sha256": "fe0693bf70aa64be41c7ebac37df093ec0e4ac0a55e945ed09e779329f19d4e4"
+      },
+      "metadata_path": "raw/sources/2026/src-repository-fe0693bf70aa-ba174ff4/source.json",
+      "origin_uri": "git:BrianMills2718/enforced-planning@ecbf214664cd6db2d3bbc2e0689e2107927414cd:CLAUDE.md",
+      "pointer_only": false,
+      "sha256": "fe0693bf70aa64be41c7ebac37df093ec0e4ac0a55e945ed09e779329f19d4e4",
+      "superseded_by": [],
+      "supersedes": [
+        "src-repository-fe0693bf70aa"
+      ]
+    }
+  }
+}

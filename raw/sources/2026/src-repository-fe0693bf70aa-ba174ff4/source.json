@@ -1,0 +1,27 @@
+{
+  "adapter": "repository",
+  "authority": "native",
+  "capture_variant_of": "src-repository-fe0693bf70aa",
+  "captured_at": "2026-09-02T06:38:43Z",
+  "classification": "internal",
+  "external_key": null,
+  "git_tracking": {
+    "captured_revision": "ecbf214664cd6db2d3bbc2e0689e2107927414cd",
+    "mode": "tracks_current",
+    "path": "CLAUDE.md",
+    "repository": "BrianMills2718/enforced-planning"
+  },
+  "id": "src-repository-fe0693bf70aa-ba174ff4",
+  "mime": "text/markdown",
+  "origin_uri": "git:BrianMills2718/enforced-planning@ecbf214664cd6db2d3bbc2e0689e2107927414cd:CLAUDE.md",
+  "original_path": "raw/sources/2026/src-repository-fe0693bf70aa-ba174ff4/original/CLAUDE.md",
+  "pointer_only": false,
+  "published_at": null,
+  "schema_version": 1,
+  "sha256": "fe0693bf70aa64be41c7ebac37df093ec0e4ac0a55e945ed09e779329f19d4e4",
+  "source_type": "repository",
+  "supersedes": [
+    "src-repository-fe0693bf70aa"
+  ],
+  "title": "Enforced Planning repository instructions, exact revision"
+}

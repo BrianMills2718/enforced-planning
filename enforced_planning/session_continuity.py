@@ -112,7 +112,12 @@ class SuccessorCustodyOfferV1(BaseModel):
     schema_version: Literal["1.0"] = "1.0"
     record_type: Literal["successor_custody_offer"] = "successor_custody_offer"
     offer_id: str = Field(pattern=r"^[0-9a-f]{24}$")
-    owner_resume_message_id: str = Field(pattern=r"^msg_[0-9a-f]{32}$")
+    owner_resume_message_id: str | None = Field(
+        default=None, pattern=r"^msg_[0-9a-f]{32}$"
+    )
+    owner_resume_correlation_id: str | None = Field(
+        default=None, pattern=r"^[0-9a-f]{24}$"
+    )
     predecessor_session_id: str = Field(min_length=1)
     project: str = Field(min_length=1)
     scope: str = Field(min_length=1)
@@ -122,6 +127,14 @@ class SuccessorCustodyOfferV1(BaseModel):
     head_revision: str = Field(pattern=r"^[0-9a-f]{40,64}$")
     next_action: str = Field(min_length=1)
     created_at: datetime
+
+    @model_validator(mode="after")
+    def validate_owner_resume_reference(self) -> SuccessorCustodyOfferV1:
+        if (self.owner_resume_message_id is None) == (
+            self.owner_resume_correlation_id is None
+        ):
+            raise ValueError("successor offer requires exactly one owner resume reference")
+        return self
 
 
 class SuccessorCustodyAcceptanceV1(BaseModel):
@@ -798,11 +811,62 @@ def build_successor_custody_offer(
     return SuccessorCustodyOfferV1(offer_id=correlation, **exact)
 
 
+def build_native_successor_custody_offer(
+    *,
+    delivery: NativeCodexDeliveryJournalV1,
+    consumption: NativeCodexConsumptionReceiptV1,
+    consumed_attempt_count: int,
+    project: str,
+    scope: str,
+    branch: str,
+    worktree_path: str,
+    claim_epoch_sha256: str,
+    head_revision: str,
+    next_action: str,
+    created_at: datetime | None = None,
+) -> SuccessorCustodyOfferV1:
+    """Freeze custody after bounded, consumed native retries without launching it."""
+
+    if consumed_attempt_count < 2:
+        raise ValueError("native successor offer requires the bounded retry circuit breaker")
+    if delivery.state != "accepted" or delivery.progress_fingerprint is None:
+        raise ValueError("native successor offer requires an accepted progress-bound delivery")
+    matching = (
+        delivery.owner_session_id == consumption.owner_session_id
+        and delivery.thread_id == consumption.thread_id
+        and delivery.correlation_id == consumption.correlation_id
+        and delivery.queued_submission_id == consumption.queued_submission_id
+    )
+    if not matching:
+        raise ValueError("native successor offer requires matching delivery and consumption")
+    offered_at = (created_at or datetime.now(UTC)).astimezone(UTC)
+    exact = {
+        "owner_resume_correlation_id": delivery.correlation_id,
+        "predecessor_session_id": delivery.owner_session_id,
+        "project": project.strip(),
+        "scope": scope.strip(),
+        "branch": branch.strip(),
+        "worktree_path": str(Path(worktree_path).expanduser().resolve()),
+        "claim_epoch_sha256": claim_epoch_sha256,
+        "head_revision": head_revision,
+        "next_action": next_action.strip(),
+        "created_at": offered_at.isoformat(),
+    }
+    if any(not exact[field] for field in ("project", "scope", "branch", "next_action")):
+        raise ValueError("native successor offer requires complete exact lane state")
+    correlation = hashlib.sha256(
+        json.dumps(exact, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()[:24]
+    return SuccessorCustodyOfferV1(offer_id=correlation, **exact)
+
+
 def successor_custody_offer_sha256(offer: SuccessorCustodyOfferV1) -> str:
     """Return the canonical digest bound into a successor acceptance receipt."""
 
     canonical = json.dumps(
-        offer.model_dump(mode="json"), sort_keys=True, separators=(",", ":")
+        offer.model_dump(mode="json", exclude_none=True),
+        sort_keys=True,
+        separators=(",", ":"),
     ).encode("utf-8")
     return hashlib.sha256(canonical).hexdigest()
 
@@ -976,6 +1040,7 @@ __all__ = [
     "assess_resume_offer",
     "build_codex_successor_launch",
     "build_native_codex_resume_offer",
+    "build_native_successor_custody_offer",
     "build_resume_offer_request",
     "build_successor_custody_offer",
     "native_resume_progress_fingerprint",

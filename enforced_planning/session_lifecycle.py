@@ -31,6 +31,7 @@ from enforced_planning import (
     outcome_admission,
     outcome_selection,
     push_safety,
+    session_continuity,
     session_contracts,
     session_process_fencing,
     surface_runtime,
@@ -4106,6 +4107,8 @@ def resume_session(
     note: str | None = None,
     predecessor_process_pid: int | None = None,
     predecessor_process_start_ticks: int | None = None,
+    successor_custody_offer: session_continuity.SuccessorCustodyOfferV1 | None = None,
+    successor_custody_acceptance: session_continuity.SuccessorCustodyAcceptanceV1 | None = None,
 ) -> dict[str, Any]:
     """Reattach a new runtime session to an existing plan-bound lane."""
 
@@ -4133,6 +4136,40 @@ def resume_session(
     )
 
     same_runtime = claim.session_id == resolved_session_id
+    if (successor_custody_offer is None) != (successor_custody_acceptance is None):
+        raise ValueError("automatic successor transfer requires both offer and acceptance")
+    if successor_custody_offer is not None and successor_custody_acceptance is not None:
+        session_continuity.validate_successor_custody_acceptance(
+            offer=successor_custody_offer,
+            acceptance=successor_custody_acceptance,
+        )
+        current_head = subprocess.run(
+            ("git", "-C", worktree_path, "rev-parse", "--verify", "HEAD^{commit}"),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        exact_runtime = {
+            "predecessor_session_id": claim.session_id,
+            "successor_session_id": resolved_session_id,
+            "project": project,
+            "scope": scope,
+            "branch": branch,
+            "worktree_path": str(Path(worktree_path).expanduser().resolve()),
+            "claim_epoch_sha256": hashlib.sha256(claim_snapshot_bytes).hexdigest(),
+            "head_revision": current_head.stdout.strip() if current_head.returncode == 0 else None,
+            "next_action": claim.next_action,
+        }
+        mismatched = [
+            field
+            for field, value in exact_runtime.items()
+            if value != getattr(successor_custody_acceptance, field)
+        ]
+        if mismatched:
+            raise ValueError(
+                "successor acceptance no longer matches current custody state: "
+                + ", ".join(mismatched)
+            )
     explicitly_transferable = claim.status in {
         "handoff",
         coordination_claims.SESSION_ENDED_STATUS,
@@ -4360,6 +4397,11 @@ def resume_session(
             transfer_receipt.model_dump(mode="json") if transfer_receipt is not None else None
         ),
         "claim_session_transfer": claim_session_transfer,
+        "successor_custody_acceptance": (
+            successor_custody_acceptance.model_dump(mode="json")
+            if successor_custody_acceptance is not None
+            else None
+        ),
         "predecessor_process_fence": process_fence,
         "coordination_mailbox": _poll_mailbox_after_committed_transition(
             agent=agent,

@@ -687,6 +687,38 @@ def accept_successor_custody_offer(
     )
 
 
+def validate_successor_custody_acceptance(
+    *,
+    offer: SuccessorCustodyOfferV1,
+    acceptance: SuccessorCustodyAcceptanceV1,
+) -> SuccessorCustodyAcceptanceV1:
+    """Verify a successor receipt is bound to the exact immutable offer."""
+
+    expected = {
+        "offer_id": offer.offer_id,
+        "offer_sha256": successor_custody_offer_sha256(offer),
+        "predecessor_session_id": offer.predecessor_session_id,
+        "project": offer.project,
+        "scope": offer.scope,
+        "branch": offer.branch,
+        "worktree_path": offer.worktree_path,
+        "claim_epoch_sha256": offer.claim_epoch_sha256,
+        "head_revision": offer.head_revision,
+        "next_action": offer.next_action,
+    }
+    mismatched = [
+        field for field, value in expected.items() if getattr(acceptance, field) != value
+    ]
+    if acceptance.successor_session_id == offer.predecessor_session_id:
+        mismatched.append("successor_session_id")
+    if mismatched:
+        raise ValueError(
+            "successor custody acceptance is not bound to exact offer fields: "
+            + ", ".join(mismatched)
+        )
+    return acceptance
+
+
 __all__ = [
     "CodexActivityV1",
     "ContinuityAssessmentV1",
@@ -705,4 +737,5 @@ __all__ = [
     "parse_native_codex_queue_receipt",
     "read_codex_activity",
     "successor_custody_offer_sha256",
+    "validate_successor_custody_acceptance",
 ]

@@ -269,3 +269,51 @@ def test_fence_records_kill_exit_when_proc_stat_disappears_during_kill_wait(
     assert signals == [(4242, signal.SIGTERM), (4242, signal.SIGKILL)]
     assert result["signal"] == "SIGTERM+SIGKILL"
     assert Path(str(result["receipt_path"])).is_file()
+
+
+def test_trusted_codex_skips_inaccessible_intermediate_ancestor(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    proc_root = tmp_path / "proc"
+    inaccessible = proc_root / "111" / "exe"
+    codex_exe = tmp_path / "codex-runtime" / "codex"
+    codex_exe.parent.mkdir()
+    codex_exe.write_text("trusted\n", encoding="utf-8")
+    (proc_root / "111").mkdir(parents=True)
+    (proc_root / "222").mkdir(parents=True)
+    (proc_root / "222" / "exe").symlink_to(codex_exe)
+    monkeypatch.setattr(
+        session_process_fencing, "_current_ancestor_pids", lambda _root: (111, 222)
+    )
+    original_resolve = Path.resolve
+
+    def resolve_with_inaccessible_intermediate(
+        path: Path, strict: bool = False
+    ) -> Path:
+        if path == inaccessible:
+            raise PermissionError(path)
+        return original_resolve(path, strict=strict)
+
+    monkeypatch.setattr(Path, "resolve", resolve_with_inaccessible_intermediate)
+
+    assert session_process_fencing._trusted_codex_executable(proc_root) == codex_exe
+
+
+def test_trusted_codex_selects_nearest_codex_ancestor(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    proc_root = tmp_path / "proc"
+    near_codex = tmp_path / "near" / "codex"
+    far_codex = tmp_path / "far" / "codex"
+    near_codex.parent.mkdir()
+    far_codex.parent.mkdir()
+    near_codex.write_text("near\n", encoding="utf-8")
+    far_codex.write_text("far\n", encoding="utf-8")
+    for pid, executable in ((111, near_codex), (222, far_codex)):
+        (proc_root / str(pid)).mkdir(parents=True)
+        (proc_root / str(pid) / "exe").symlink_to(executable)
+    monkeypatch.setattr(
+        session_process_fencing, "_current_ancestor_pids", lambda _root: (111, 222)
+    )
+
+    assert session_process_fencing._trusted_codex_executable(proc_root) == near_codex

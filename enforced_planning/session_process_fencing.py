@@ -48,11 +48,11 @@ def _read_start_ticks(stat_path: Path) -> int:
     return int(fields_after_command[19])
 
 
-def _current_ancestor_pids(proc_root: Path) -> set[int]:
-    ancestors: set[int] = set()
+def _current_ancestor_pids(proc_root: Path) -> tuple[int, ...]:
+    ancestors: list[int] = []
     current = os.getpid()
     while current > 1 and current not in ancestors:
-        ancestors.add(current)
+        ancestors.append(current)
         status_path = proc_root / str(current) / "status"
         try:
             parent_line = next(
@@ -62,7 +62,7 @@ def _current_ancestor_pids(proc_root: Path) -> set[int]:
         except (FileNotFoundError, StopIteration):
             break
         current = int(parent_line.partition(":")[2].strip())
-    return ancestors
+    return tuple(ancestors)
 
 
 def _trusted_codex_executable(proc_root: Path) -> Path:
@@ -71,7 +71,7 @@ def _trusted_codex_executable(proc_root: Path) -> Path:
     for pid in _current_ancestor_pids(proc_root):
         try:
             executable = proc_root.joinpath(str(pid), "exe").resolve(strict=True)
-        except FileNotFoundError:
+        except OSError:
             continue
         if executable.name == "codex":
             return executable

@@ -170,12 +170,13 @@ pre/post claim bytes. Downstream execution cursors may consume that receipt to
 move their own lease without treating prose or a session ID alone as transfer
 authority. Same-runtime resume returns no custody-transfer receipt. Claim,
 tracker, projection, mutation evidence, and custody receipt are serialized under
-the claim-registry then tracker locks. Failure before those locks release restores
-the exact predecessor claim and tracker bytes before failing, so a successor
-heartbeat cannot race rollback or be erased by it. When a successor mutation
-event was already appended, rollback appends a compensating predecessor event
-whose terminal registry digest matches the restored authority. Resume never
-reports a successor while the claim and tracker disagree.
+the claim-registry then tracker locks. Non-Codex cross-session transfer restores
+the exact predecessor claim and tracker bytes when a commit step fails. When a
+successor mutation event was already appended, rollback appends a compensating
+predecessor event whose terminal registry digest matches the restored authority.
+Codex uses the durable fenced-transfer journal below instead of rollback, because
+restoring pre-fence bytes would erase the evidence required to recover custody.
+Resume never reports a successor while the claim and tracker disagree.
 
 Codex-to-Codex custody transfer additionally requires
 `--predecessor-process-pid` and `--predecessor-process-start-ticks`. Before
@@ -207,6 +208,19 @@ malformed, stale, ambiguous, or
 mismatched process identity
 fails before the claim or tracker changes; never replace this contract with a
 process-name-wide kill.
+
+After fencing, the reservation gains an exact-byte
+`claim_session_transfer_journal`. The journal binds the predecessor tracker,
+successor tracker, successor claim, claim epoch, and typed process-fence receipt
+by SHA-256. The locked write order is journalized predecessor claim, immutable
+custody receipt, successor tracker, then successor claim last. The final claim
+write is the commit point and consumes the reservation. An abrupt stop after
+the journal, receipt, or tracker write therefore leaves the durable reservation
+and journal available for exact replay; the tracker may equal only the recorded
+predecessor or successor bytes. Retry reuses the same process-fence receipt and
+must not signal an absent or replacement process. An abrupt stop after the final
+claim write is already committed and resumes through the ordinary same-runtime
+path. Any bytes outside the journal's two allowed authority states fail closed.
 
 The legacy `~/.claude/coordination/active-work-registry.yaml` and tracked
 `generated/runtime/active_work_registry.*` files may survive as compatibility,

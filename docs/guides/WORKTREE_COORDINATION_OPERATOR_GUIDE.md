@@ -780,6 +780,49 @@ resumed reservation) or is composing the claim without the higher-level
 session lifecycle. A live write/program/review/research claim with a
 `plan_ref` cannot reach `healthy` push-check status without one.
 
+### `tracker_path`'s three lifecycle states
+
+This field has exactly three legitimate states, and three separate pieces of
+code each enforce or depend on one of them without referencing the others.
+Read all three before changing any of them — a change made against only one
+site's contract has twice broken the other two in the same afternoon
+(2026-09-02; see `lrn-20260902T174949452389Z-53c1db6bda` in Project Meta's
+learnings register for the full incident trace).
+
+1. **Unset — a staged reservation.** `tracker_path is None` on a fresh claim
+   is not an error by itself. `create_claim()`'s CLI creates claims in this
+   state whenever a caller (including `make maintenance-worktree`'s own
+   bootstrap path) doesn't pass `--tracker-path`; a real tracker is expected
+   moments later via `start_session()`. `scripts/{meta/,}worktree-coordination/create_worktree.py`'s
+   narrow-write-claim check explicitly tolerates this: see its
+   `staged_unplanned_reservation` / `staged_plan_reservation` conditions,
+   which strip `missing_tracker_path` from a claim's health issues only when
+   the surrounding identity fields (`session_id`, `session_name`,
+   `broader_goal`, matching `branch`/`worktree_path`) are already present.
+   `claim_health_issues()` in `coordination_claims.py` still reports
+   `missing_tracker_path` for this state — that is correct; it makes the
+   claim `weak`/unhealthy for push-check until state 3 below, not creation-
+   blocked. **Do not make `missing_tracker_path` (or the sibling
+   `missing_repo_root`/`missing_broader_goal` issues) unconditionally
+   creation-blocking** — that repeats the exact regression this note exists
+   to prevent.
+2. **Set, pointing at nothing yet.** A caller may pass `--tracker-path
+   <path>` to `create_claim()` explicitly, or (a rejected approach — see the
+   incident trace) `create_claim()` may try to pre-compute and set the path
+   itself before the file exists. This state is dangerous for a different
+   reason: `session_lifecycle.py`'s `start_session()` locked-reload logic
+   (`if locked_claim.tracker_path:`) treats *any* truthy value as "a real
+   tracker already exists, read and validate it" and calls
+   `locked_tracker_path.read_bytes()` — which raises `FileNotFoundError` if
+   the file was only reserved, not written. A `tracker_path` string must
+   never be set on a claim before the file it names is actually written.
+3. **Set and real.** `start_session()` itself sets `tracker_path` after it
+   writes the tracker file, in the same locked mutation — this is the only
+   sanctioned way state 2 is reached safely. `create_claim()`'s `--tracker-
+   path` flag is for a caller *attaching* an already-existing tracker (a
+   resumed or externally-managed one), not for pre-declaring a path that
+   nothing has written yet.
+
 Tracker-only session fields hold restart-safe execution context:
 
 - `current_phase`

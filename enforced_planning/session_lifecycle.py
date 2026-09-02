@@ -643,6 +643,8 @@ def _apply_cross_session_resume_transaction(
     worktree_path: str,
     branch: str,
     process_fence: dict[str, Any] | None,
+    predecessor_process_pid: int | None,
+    predecessor_process_start_ticks: int | None,
 ) -> tuple[
     dict[str, Any],
     outcome_selection.OutcomeSessionTransferV1 | None,
@@ -732,6 +734,8 @@ def _apply_cross_session_resume_transaction(
                 prior_claim_bytes=claim_bytes_before,
                 successor_claim_bytes=claim_file.read_bytes(),
                 process_fence=process_fence,
+                predecessor_process_pid=predecessor_process_pid,
+                predecessor_process_start_ticks=predecessor_process_start_ticks,
             )
         except Exception:
             rollback_registry_digest_before = coordination_claims._registry_digest(
@@ -902,6 +906,8 @@ def _persist_claim_session_transfer_receipt(
     prior_claim_bytes: bytes,
     successor_claim_bytes: bytes,
     process_fence: dict[str, Any] | None,
+    predecessor_process_pid: int | None,
+    predecessor_process_start_ticks: int | None,
 ) -> dict[str, Any]:
     """Persist one immutable, digest-bound receipt for cross-session claim custody."""
 
@@ -914,6 +920,10 @@ def _persist_claim_session_transfer_receipt(
         raise ValueError("Codex custody transfer requires exact predecessor process-fence evidence")
     process_fence_binding: dict[str, object] | None = None
     if process_fence is not None:
+        if predecessor_process_pid is None or predecessor_process_start_ticks is None:
+            raise ValueError(
+                "process-fence evidence requires the exact requested predecessor PID generation"
+            )
         receipt_path_raw = process_fence.get("receipt_path")
         receipt_sha256 = process_fence.get("receipt_sha256")
         if not isinstance(receipt_path_raw, str) or not isinstance(receipt_sha256, str):
@@ -931,8 +941,8 @@ def _persist_claim_session_transfer_receipt(
             "predecessor_session_id": prior_session_id,
             "successor_session_id": successor_session_id,
             "worktree_path": expected_worktree,
-            "pid": process_fence.get("pid"),
-            "process_start_ticks": process_fence.get("process_start_ticks"),
+            "pid": predecessor_process_pid,
+            "process_start_ticks": predecessor_process_start_ticks,
             "transfer_epoch_sha256": expected_transfer_epoch,
         }
         parsed_fields = {
@@ -3983,6 +3993,8 @@ def resume_session(
                 worktree_path=worktree_path,
                 branch=branch,
                 process_fence=process_fence,
+                predecessor_process_pid=predecessor_process_pid,
+                predecessor_process_start_ticks=predecessor_process_start_ticks,
             )
     except Exception as transfer_error:
         if same_runtime:

@@ -194,8 +194,9 @@ receipt path and SHA-256, and the custody transaction independently recomputes
 the predecessor claim-bytes digest before consuming that fence epoch. The
 consumer parses the referenced bytes as the typed process-fence receipt, checks
 its predecessor, successor, worktree, PID generation, and epoch against both
-the pre-transfer claim and the fencing result, and derives the custody binding
-only from that parsed receipt. Missing, malformed, stale, ambiguous, or
+the pre-transfer claim, exact requested PID/start generation, and fencing
+result, and derives the custody binding only from that parsed receipt. Missing,
+malformed, stale, ambiguous, or
 mismatched process identity
 fails before the claim or tracker changes; never replace this contract with a
 process-name-wide kill.

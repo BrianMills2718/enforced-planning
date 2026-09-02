@@ -5394,7 +5394,10 @@ def test_resume_receipt_failure_rolls_back_before_successor_heartbeat_can_enter(
     assert mutation_receipts[-1].projection_current_after is True
 
 
-@pytest.mark.parametrize("mode", ["malformed", "stale_epoch", "returned_mismatch"])
+@pytest.mark.parametrize(
+    "mode",
+    ["malformed", "stale_epoch", "returned_mismatch", "requested_generation_mismatch"],
+)
 def test_custody_consumer_rejects_untrusted_referenced_fence_receipt(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -5426,13 +5429,15 @@ def test_custody_consumer_rejects_untrusted_referenced_fence_receipt(
     if mode == "malformed":
         fence_path.write_text('{"record_type":"not_a_fence"}\n', encoding="utf-8")
     else:
+        fence_pid = 9999 if mode == "requested_generation_mismatch" else 4242
+        fence_start_ticks = 999999 if mode == "requested_generation_mismatch" else 123456
         fence = session_lifecycle.session_process_fencing.ProcessFenceReceiptV1(
             predecessor_session_id="codex:old-session",
             successor_session_id="codex:new-session",
             worktree_path=str(worktree.resolve()),
-            pid=4242,
+            pid=fence_pid,
             transfer_epoch_sha256=("d" * 64 if mode == "stale_epoch" else expected_epoch),
-            process_start_ticks=123456,
+            process_start_ticks=fence_start_ticks,
             command_sha256="e" * 64,
             signal="SIGTERM",
             fenced_at=datetime.now(timezone.utc),
@@ -5442,9 +5447,9 @@ def test_custody_consumer_rejects_untrusted_referenced_fence_receipt(
         "predecessor_session_id": "codex:old-session",
         "successor_session_id": "codex:new-session",
         "worktree_path": str(worktree.resolve()),
-        "pid": 9999 if mode == "returned_mismatch" else 4242,
+        "pid": 9999 if mode in {"returned_mismatch", "requested_generation_mismatch"} else 4242,
         "transfer_epoch_sha256": expected_epoch,
-        "process_start_ticks": 123456,
+        "process_start_ticks": 999999 if mode == "requested_generation_mismatch" else 123456,
         "receipt_path": str(fence_path),
         "receipt_sha256": hashlib.sha256(fence_path.read_bytes()).hexdigest(),
     }
@@ -5461,6 +5466,8 @@ def test_custody_consumer_rejects_untrusted_referenced_fence_receipt(
             prior_claim_bytes=prior_claim_bytes,
             successor_claim_bytes=b"successor claim bytes\n",
             process_fence=process_fence,
+            predecessor_process_pid=4242,
+            predecessor_process_start_ticks=123456,
         )
 
 

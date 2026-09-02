@@ -221,6 +221,21 @@ result is retained as `native_successor_offer_invalid` and is never launch
 authority. The sweep's verified count is readiness telemetry, not evidence that
 a successor accepted custody.
 
+Native successor launch is a separate, explicit opt-in. Add
+`--launch-native-successors` only to a native-delivery sweep or timer install;
+the default timer and ordinary reconciliation remain launch-disabled. The
+launcher rereads the exact typed offer and requires the sweep's canonical
+`successor_offer_verified` receipt before building the existing Codex resume
+command. It journals an immutable `intent` before process creation and then one
+terminal `started` or `failed` state. A repeated sweep never relaunches a
+terminal offer; an interrupted `intent` and a recorded failure both remain
+fail-visible for operator reconciliation rather than being guessed safe to
+retry. A `started` launch receipt proves only that the exact native resume
+command acknowledged process creation. It does not create a successor session,
+accept custody, mutate the claim, fence the predecessor, or transfer ownership.
+Only the successor's explicit acceptance through the fenced `session-resume`
+transaction can establish successor custody.
+
 A successor runtime may author that receipt explicitly at the transfer boundary
 instead of first writing a separate acceptance file: pass the exact offer with
 `--successor-custody-offer <offer.json> --accept-successor-custody-offer`.

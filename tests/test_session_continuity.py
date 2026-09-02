@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import fcntl
 import json
+import subprocess
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -10,7 +12,6 @@ from pathlib import Path
 import pytest
 
 from enforced_planning import coordination_messages
-
 from enforced_planning.session_continuity import (
     CodexActivityV1,
     assess_continuity,
@@ -18,7 +19,7 @@ from enforced_planning.session_continuity import (
     build_resume_offer_request,
     read_codex_activity,
 )
-
+from scripts import session_continuity as continuity_cli
 
 NOW = datetime(2026, 9, 2, 4, 30, tzinfo=UTC)
 
@@ -357,3 +358,179 @@ def test_malformed_transcript_fails_visible(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="malformed JSON"):
         read_codex_activity(session_id="codex:owner", transcript_path=transcript)
+
+
+@dataclass
+class SweepClaim(Claim):
+    agent: str = "codex"
+    scope: str = "feature-lane"
+    project: str = "demo"
+
+    def primary_project(self) -> str:
+        return self.project
+
+
+def test_shared_sweep_observes_all_codex_claims_without_transfer_authority(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    recent = tmp_path / "recent.jsonl"
+    idle = tmp_path / "idle.jsonl"
+    now = datetime.now(UTC)
+    write_transcript(
+        recent,
+        [((now - timedelta(minutes=1)).isoformat(), "task_started")],
+    )
+    write_transcript(
+        idle,
+        [((now - timedelta(minutes=30)).isoformat(), "task_complete")],
+    )
+    claims = [
+        SweepClaim(session_id="codex:recent", scope="recent"),
+        SweepClaim(session_id="codex:idle", scope="idle"),
+    ]
+    transcripts = {"codex:recent": recent, "codex:idle": idle}
+    monkeypatch.setattr(continuity_cli.coordination_claims, "check_claims", lambda: claims)
+    monkeypatch.setattr(
+        continuity_cli.coordination_claims,
+        "session_transcript_path",
+        lambda session_id: transcripts.get(session_id),
+    )
+
+    result = continuity_cli.build_observe_sweep(notify_minutes=15)
+
+    assert result["claim_count"] == 2
+    assert result["notify_owner_count"] == 1
+    assert result["fail_visible_count"] == 0
+    assert result["transfer_eligible"] is False
+    assert result["successor_launch_allowed"] is False
+    assert {item["scope"] for item in result["items"]} == {"recent", "idle"}
+
+
+def test_shared_sweep_keeps_malformed_transcript_visible(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    transcript = tmp_path / "malformed.jsonl"
+    transcript.write_text("{bad-json}\n", encoding="utf-8")
+    claim = SweepClaim()
+    monkeypatch.setattr(continuity_cli.coordination_claims, "check_claims", lambda: [claim])
+    monkeypatch.setattr(
+        continuity_cli.coordination_claims,
+        "session_transcript_path",
+        lambda _session_id: transcript,
+    )
+
+    result = continuity_cli.build_observe_sweep(notify_minutes=15)
+
+    assert result["fail_visible_count"] == 1
+    assert result["items"][0]["assessment"] is None
+    assert result["items"][0]["error"]["type"] == "ValueError"
+    assert result["transfer_eligible"] is False
+
+
+def test_observe_timer_is_one_shared_oneshot_process(tmp_path: Path) -> None:
+    service, timer = continuity_cli.render_observe_timer(
+        script_path=tmp_path / "session_continuity.py",
+        python_path=Path("/usr/bin/python3"),
+        receipt_path=tmp_path / "receipts.jsonl",
+        timer_minutes=10,
+        notify_minutes=15,
+    )
+
+    assert "Type=oneshot" in service
+    assert "--scan-all-live-claims" in service
+    assert "--send-resume-offer" not in service
+    assert "OnUnitActiveSec=10m" in timer
+    assert timer.count("Unit=enforced-planning-session-continuity.service") == 1
+
+
+def test_install_observe_timer_records_owner_review_and_retirement(
+    tmp_path: Path,
+) -> None:
+    calls: list[tuple[str, ...]] = []
+
+    def fake_run(
+        command: tuple[str, ...],
+        **_kwargs: object,
+    ) -> subprocess.CompletedProcess[str]:
+        calls.append(command)
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    result = continuity_cli.install_observe_timer(
+        unit_dir=tmp_path / "units",
+        receipt_path=tmp_path / "state/receipts.jsonl",
+        timer_minutes=10,
+        notify_minutes=15,
+        run=fake_run,
+    )
+
+    metadata = json.loads(Path(result["metadata_path"]).read_text(encoding="utf-8"))
+    assert metadata["mode"] == "observe"
+    assert metadata["owner"] == "enforced-planning"
+    assert metadata["review_after"]
+    assert "retire" in metadata["retirement_condition"]
+    assert calls == [
+        ("systemctl", "--user", "show-environment"),
+        ("systemctl", "--user", "daemon-reload"),
+        (
+            "systemctl",
+            "--user",
+            "enable",
+            "--now",
+            "enforced-planning-session-continuity.timer",
+        ),
+        (
+            "systemctl",
+            "--user",
+            "is-enabled",
+            "enforced-planning-session-continuity.timer",
+        ),
+        (
+            "systemctl",
+            "--user",
+            "is-active",
+            "enforced-planning-session-continuity.timer",
+        ),
+    ]
+
+
+def test_install_observe_timer_rejects_unowned_unit_collision(tmp_path: Path) -> None:
+    unit_dir = tmp_path / "units"
+    unit_dir.mkdir()
+    (unit_dir / "enforced-planning-session-continuity.service").write_text(
+        "unrelated service\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="occupied without owner metadata"):
+        continuity_cli.install_observe_timer(
+            unit_dir=unit_dir,
+            receipt_path=tmp_path / "receipts.jsonl",
+            timer_minutes=10,
+            notify_minutes=15,
+        )
+
+
+def test_sweep_receipt_is_one_json_line(tmp_path: Path) -> None:
+    receipt = tmp_path / "receipts.jsonl"
+    payload = {"schema_version": "1.0", "mode": "observe"}
+
+    continuity_cli._append_receipt(receipt, payload)
+
+    assert json.loads(receipt.read_text(encoding="utf-8")) == payload
+    assert receipt.stat().st_mode & 0o777 == 0o600
+
+
+def test_full_sweep_rejects_overlapping_invocation(tmp_path: Path) -> None:
+    receipt = tmp_path / "receipts.jsonl"
+    lock_path = receipt.with_suffix(receipt.suffix + ".sweep.lock")
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+
+    with lock_path.open("a+", encoding="utf-8") as held:
+        fcntl.flock(held.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        with pytest.raises(RuntimeError, match="still active"):
+            continuity_cli.run_observe_sweep(
+                notify_minutes=15,
+                receipt_path=receipt,
+            )

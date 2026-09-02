@@ -484,8 +484,10 @@ def _run_reviewer_lane(
     semantic_path = lane_directory / "semantic-review.json"
     lane_tmp = lane_directory / "tmp"
     lane_codex_home = lane_directory / "codex-home"
+    lane_runtime = lane_directory / "xdg-runtime"
     lane_tmp.mkdir(parents=True, exist_ok=True)
     lane_codex_home.mkdir(mode=0o700)
+    lane_runtime.mkdir(mode=0o700)
     resolved_codex = shutil.which(codex_bin) or codex_bin
     source_codex_home = Path(
         os.environ.get("CODEX_HOME", str(Path.home() / ".codex"))
@@ -522,12 +524,17 @@ def _run_reviewer_lane(
         f"--property=ReadWritePaths={lane_directory}",
         f"--property=WorkingDirectory={root}",
         f"--setenv=CODEX_HOME={lane_codex_home}",
+        f"--setenv=XDG_RUNTIME_DIR={lane_runtime}",
+        f"--setenv=DBUS_SESSION_BUS_ADDRESS=unix:path={lane_runtime / 'bus'}",
         f"--setenv=TMPDIR={lane_tmp}",
         f"--setenv=TEMP={lane_tmp}",
         f"--setenv=TMP={lane_tmp}",
         "--",
         *command,
     ]
+    host_runtime = os.environ.get("XDG_RUNTIME_DIR")
+    if host_runtime:
+        confined_command.insert(8, f"--property=InaccessiblePaths={host_runtime}")
     completed = subprocess.run(
         confined_command,
         input=build_reviewer_prompt(spec, checks, review_lane=review_lane),

@@ -842,6 +842,31 @@ learnings register for the full incident trace).
    resumed or externally-managed one), not for pre-declaring a path that
    nothing has written yet.
 
+### `plan_ref`'s `ALLOW_UNPLANNED` fallback must be symmetric across every call site
+
+`session_contracts.normalize_plan_ref(plan_ref, allow_unplanned=...)` returns
+`UNPLANNED_PLAN_REF` when `plan_ref` is `None` and `allow_unplanned` is true —
+this is the one place that behavior is implemented, and every Python caller
+gets it for free. The Makefile is not a caller of that function; it is a
+second, independent place the same fallback has to be reimplemented by hand,
+once per script invocation that constructs a `--plan` argument. Any site that
+passes `--allow-unplanned` without also falling back to `--plan UNPLANNED`
+when `PLAN` is unset produces a claim with `plan_ref: null` — `missing_plan_ref`
+on `claim_health_issues()` — with no error at claim-creation time, only a later
+`no_healthy_branch_claim` push-check failure once someone tries to publish it.
+
+Found independently on `orgchart` and `llm_client` during Plan #51's write-mode
+verification (2026-09-02): both repos' installed Makefiles reproduced this at
+the `--claim` step itself (the oldest call site, predating the pattern's fix
+there), and the *current* template additionally lacked it at the later
+`session-start` invocation — invisible against an up-to-date checkout because
+`normalize_plan_ref()` covers a `None` there anyway, but not against any
+consumer whose vendored copy predates that fallback. Before adding a new
+`--plan`-constructing call site to the Makefile template or this repo's own
+`Makefile`, grep both files for `--plan "$(PLAN_PROJECT)#$(PLAN)"` and confirm
+every match falls back to `$(if $(ALLOW_UNPLANNED),--plan UNPLANNED,)` — not
+just the isolated line being added.
+
 Tracker-only session fields hold restart-safe execution context:
 
 - `current_phase`

@@ -4301,6 +4301,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--broader-goal",
         help="Human-readable outcome that the claimed session advances.",
     )
+    parser.add_argument(
+        "--tracker-path",
+        help=(
+            "Path to a durable session tracker for this claim; required for a "
+            "live program/write/research claim to pass push-check. "
+            "`make maintenance-worktree` / `start_session` generate one "
+            "automatically -- only pass this directly when creating a claim "
+            "through the bare --claim CLI."
+        ),
+    )
     parser.add_argument("--status", default="active", help="Claim status (default: active)")
     parser.add_argument("--parent-scope", help="Parent/broad-scope identifier")
     parser.add_argument(
@@ -4589,6 +4599,7 @@ def main(argv: list[str] | None = None) -> int:
                 branch=args.branch,
                 session_name=args.session_name,
                 broader_goal=args.broader_goal,
+                tracker_path=args.tracker_path,
                 session_id=args.session_id,
                 status=args.status,
                 parent_scope=args.parent_scope,

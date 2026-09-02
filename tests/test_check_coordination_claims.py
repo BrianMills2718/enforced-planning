@@ -831,6 +831,68 @@ def test_create_claim_accepts_program_claim_with_live_metadata(
     assert projection["claims"][0]["session_id"] == "codex-session-1"
 
 
+def test_claim_cli_can_supply_tracker_path_directly(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The bare --claim CLI must be able to set tracker_path on creation.
+
+    Regression for: create_claim() has always accepted tracker_path, and
+    claim_health_issues() has always required it for a live write/program
+    claim with a plan_ref, but parse_args() exposed no --tracker-path flag,
+    so a claim created through the CLI's own documented direct-usage examples
+    (docs/guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md's work-unit-readiness
+    example) could never carry a tracker_path and so could never reach
+    healthy status for push-check, with no way to supply one short of routing
+    through make maintenance-worktree / start_session instead.
+    """
+    module = _load_module()
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
+    tracker_path = tmp_path / "tracker.yaml"
+    tracker_path.write_text("current_phase: demo\n", encoding="utf-8")
+
+    args = module.parse_args(
+        [
+            "--claim",
+            "--agent",
+            "claude-code",
+            "--project",
+            "demo",
+            "--scope",
+            "demo-scope",
+            "--intent",
+            "demo intent",
+            "--tracker-path",
+            str(tracker_path),
+        ]
+    )
+    assert args.tracker_path == str(tracker_path)
+
+    ok, _message = module.create_claim(
+        "claude-code",
+        "demo",
+        "demo-scope",
+        "demo intent",
+        plan_ref="UNPLANNED",
+        claim_type="write",
+        write_paths=["some/file.txt"],
+        worktree_path=str(tmp_path / "worktree"),
+        repo_root=str(tmp_path / "repo"),
+        branch="demo-scope",
+        session_id="claude-code:test-session",
+        session_name="demo-scope",
+        broader_goal="prove the tracker_path CLI gap is closed",
+        tracker_path=str(tracker_path),
+        require_native_session_binding=False,
+    )
+    assert ok is True
+    payload = yaml.safe_load((claims_dir / "claude-code_demo_demo-scope.yaml").read_text(encoding="utf-8"))
+    claim = claims_impl.normalize_claim(payload)
+    assert claim is not None
+    assert "missing_tracker_path" not in claims_impl.claim_health_issues(claim)
+
+
 def test_heartbeat_and_release_refresh_prewrite_projection(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

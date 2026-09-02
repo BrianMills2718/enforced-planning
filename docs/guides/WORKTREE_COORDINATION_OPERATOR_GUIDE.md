@@ -772,6 +772,14 @@ Claim-side session fields should stay compact:
 - `broader_goal`
 - `tracker_path`
 
+The sanctioned entrypoints (`make maintenance-worktree`, `session_start.py`)
+generate and attach `tracker_path` automatically. The bare `--claim` CLI
+accepts `--tracker-path` to set it directly for a caller that already owns a
+tracker artifact (for example, attaching an existing one during a staged or
+resumed reservation) or is composing the claim without the higher-level
+session lifecycle. A live write/program/review/research claim with a
+`plan_ref` cannot reach `healthy` push-check status without one.
+
 Tracker-only session fields hold restart-safe execution context:
 
 - `current_phase`

@@ -107,10 +107,34 @@ def test_a_mixed_claim_still_conflicts_on_its_mutable_half() -> None:
         ("learnings.md", False),
         ("learnings/entries-archive", False),
         ("scripts", False),
+        ("policy/proposals", True),
+        ("policy/proposals/", True),
+        ("policy/proposals/2026-09-02-a-thing.yaml", True),
+        ("policy/proposals-archive", False),
+        ("policy", False),
+        ("policy/registry.yaml", False),
     ],
 )
 def test_append_only_classification(path: str, expected: bool) -> None:
     assert cc._is_append_only_path(path) is expected
+
+
+def test_two_lanes_filing_different_proposals_do_not_contend() -> None:
+    """Observed 2026-09-02: two sessions each adding a new proposal file blocked
+    each other, while the refusal text said an append-only store never contends.
+    """
+    left = _claim("propose-a", ["policy/proposals"])
+    right = _claim("propose-b", ["policy/proposals"])
+    assert cc._compute_overlapping_write_paths(left, right) == []
+
+
+def test_the_policy_registry_itself_still_contends() -> None:
+    """registry.yaml is rewritten in place, so it must keep conflicting."""
+    left = _claim("promote-a", ["policy/proposals", "policy/registry.yaml"])
+    right = _claim("promote-b", ["policy/proposals", "policy/registry.yaml"])
+    assert cc._compute_overlapping_write_paths(left, right) == [
+        "yours=policy/registry.yaml <-> theirs=policy/registry.yaml"
+    ]
 
 
 def test_overlap_labels_say_which_side_is_yours() -> None:

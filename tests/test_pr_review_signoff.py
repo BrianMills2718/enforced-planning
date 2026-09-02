@@ -544,7 +544,7 @@ def test_runner_executes_checks_and_fresh_schema_bound_reviewer(tmp_path: Path) 
     }
     fake_codex.write_text(
         "#!/usr/bin/env python3\n"
-        "import json, pathlib, subprocess, sys\n"
+        "import json, os, pathlib, subprocess, sys\n"
         "prompt = sys.stdin.read()\n"
         "lane = 'test-evidence' if '\"review_lane\": \"test-evidence\"' in prompt else 'correctness'\n"
         "try:\n"
@@ -553,10 +553,12 @@ def test_runner_executes_checks_and_fresh_schema_bound_reviewer(tmp_path: Path) 
         "    pass\n"
         "else:\n"
         "    raise SystemExit('reviewer filesystem was writable')\n"
-        "runtime_home = pathlib.Path(__import__('os').environ['CODEX_HOME'])\n"
+        "runtime_home = pathlib.Path(os.environ['CODEX_HOME'])\n"
         "runtime_home.joinpath('runtime-marker').write_text('ok', encoding='utf-8')\n"
         "subprocess.run(['unshare', '--user', '--map-root-user', 'true'], check=True)\n"
-        "escape = subprocess.run(['systemd-run', '--user', '--wait', '--quiet', 'true'])\n"
+        "host_runtime = f'/run/user/{os.getuid()}'\n"
+        "escape_env = os.environ | {'XDG_RUNTIME_DIR': host_runtime, 'DBUS_SESSION_BUS_ADDRESS': f'unix:path={host_runtime}/bus'}\n"
+        "escape = subprocess.run(['systemd-run', '--user', '--wait', '--quiet', 'true'], env=escape_env)\n"
         "if escape.returncode == 0:\n"
         "    raise SystemExit('reviewer could reach the host user manager')\n"
         "args = sys.argv[1:]\n"

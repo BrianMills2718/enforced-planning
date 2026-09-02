@@ -485,6 +485,9 @@ def _run_reviewer_lane(
     lane_tmp = lane_directory / "tmp"
     lane_codex_home = lane_directory / "codex-home"
     lane_runtime = lane_directory / "xdg-runtime"
+    host_runtime = Path("/run/user") / str(os.getuid())
+    if not host_runtime.is_dir():
+        raise RuntimeError(f"host user runtime is unavailable: {host_runtime}")
     lane_tmp.mkdir(parents=True, exist_ok=True)
     lane_codex_home.mkdir(mode=0o700)
     lane_runtime.mkdir(mode=0o700)
@@ -522,6 +525,7 @@ def _run_reviewer_lane(
         "--property=ReadOnlyPaths=/",
         "--property=ReadWritePaths=/proc",
         f"--property=ReadWritePaths={lane_directory}",
+        f"--property=InaccessiblePaths={host_runtime}",
         f"--property=WorkingDirectory={root}",
         f"--setenv=CODEX_HOME={lane_codex_home}",
         f"--setenv=XDG_RUNTIME_DIR={lane_runtime}",
@@ -532,9 +536,6 @@ def _run_reviewer_lane(
         "--",
         *command,
     ]
-    host_runtime = os.environ.get("XDG_RUNTIME_DIR")
-    if host_runtime:
-        confined_command.insert(8, f"--property=InaccessiblePaths={host_runtime}")
     completed = subprocess.run(
         confined_command,
         input=build_reviewer_prompt(spec, checks, review_lane=review_lane),

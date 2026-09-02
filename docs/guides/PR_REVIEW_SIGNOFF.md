@@ -30,9 +30,10 @@ planning format and must not invent or weaken criteria.
    only the authentication material required to start the client and is deleted
    with the review workspace. The non-persistent `/proc` process filesystem stays
    writable so the client's nested read-only sandbox can initialize (the client
-   read-only flag is defense in depth). The host user-runtime directory is hidden
-   and replaced with a lane-private runtime so a reviewer cannot ask the user
-   systemd manager or session bus to launch a process outside the boundary;
+   read-only flag is defense in depth). The canonical host user-runtime directory
+   at `/run/user/<uid>` is hidden unconditionally and replaced with a lane-private
+   runtime so a reviewer cannot ask the user systemd manager or session bus to
+   launch a process outside the boundary, even by addressing its socket directly;
 4. concurrent execution and explicit session custody for every declared lane;
 5. schema validation of every independent semantic result;
 6. the final deterministic signoff decision and receipt digest; and

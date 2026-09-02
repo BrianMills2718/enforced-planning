@@ -417,7 +417,8 @@ def build_native_codex_resume_offer(
     correlation_id = hashlib.sha256(correlation_source.encode("utf-8")).hexdigest()[:24]
     prompt = (
         f"continuity-resume:{correlation_id}: Authorized work remains in {project}/{scope}. "
-        "Continue in this exact thread toward the next verified checkpoint. "
+        "Continue in this exact thread yourself toward the next verified checkpoint. "
+        "Do not spawn or delegate to any new agents as part of this automatic resume. "
         f"Next action: {next_action}"
     )
     return NativeCodexResumeOfferV1(

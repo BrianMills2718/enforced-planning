@@ -178,6 +178,7 @@ def test_idle_assessment_builds_exact_native_codex_queue_offer() -> None:
     assert first.thread_id == "01a05b94-d5d8-7d82-8a9a-6c64c6979e96"
     assert first.correlation_id == second.correlation_id
     assert f"continuity-resume:{first.correlation_id}" in first.prompt
+    assert "Do not spawn or delegate to any new agents" in first.prompt
     assert "run the focused integration" in first.prompt
 
 

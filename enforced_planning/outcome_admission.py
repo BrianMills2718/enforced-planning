@@ -297,11 +297,24 @@ class SelectionPendingActivationEvidenceV1(StrictModel):
     repo_root: str = Field(min_length=1)
     worktree_path: str = Field(min_length=1)
     branch: str = Field(min_length=1)
-    work_unit_id: str = Field(min_length=1)
-    work_graph_path: str = Field(min_length=1)
-    work_graph_sha256: str = Field(pattern=HEX_SHA256_PATTERN)
-    start_revision: str = Field(pattern=r"^[0-9a-f]{40}$")
+    authority_ref: str | None = Field(default=None, min_length=1)
+    work_unit_id: str | None = Field(default=None, min_length=1)
+    work_graph_path: str | None = Field(default=None, min_length=1)
+    work_graph_sha256: str | None = Field(default=None, pattern=HEX_SHA256_PATTERN)
+    start_revision: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
     sole_health_issue: Literal["missing_tracker_path"] = "missing_tracker_path"
+
+    @model_validator(mode="after")
+    def validate_authority_shape(self) -> SelectionPendingActivationEvidenceV1:
+        graph_fields = (self.work_unit_id, self.work_graph_path, self.work_graph_sha256)
+        if self.authority_ref is None:
+            if not all(value is not None for value in (*graph_fields, self.start_revision)):
+                raise ValueError("plan pending activation requires complete work-unit identity")
+        elif not coordination_claims.is_goal_authority_ref(self.authority_ref):
+            raise ValueError("pending activation authority_ref must use exact goal:<id> syntax")
+        elif any(value is not None for value in graph_fields):
+            raise ValueError("goal pending activation cannot retain plan work-unit identity")
+        return self
 
 
 class SelectionPendingActivationResultV1(StrictModel):
@@ -1099,6 +1112,8 @@ def evaluate_selection_pending_session_activation(
     """
 
     project = claim.primary_project()
+    goal_authority = coordination_claims.is_goal_authority_ref(claim.plan_ref)
+    plan_authority = coordination_claims.requires_work_graph(claim.plan_ref)
     required = {
         "project": project,
         "session_id": claim.session_id,
@@ -1107,11 +1122,16 @@ def evaluate_selection_pending_session_activation(
         "branch": claim.branch,
         "claim_source_file": claim.source_file,
         "plan_ref": claim.plan_ref,
-        "work_unit_id": claim.work_unit_id,
-        "work_graph_path": claim.work_graph_path,
-        "work_graph_sha256": claim.work_graph_sha256,
-        "start_revision": claim.start_revision,
     }
+    if plan_authority:
+        required.update(
+            {
+                "work_unit_id": claim.work_unit_id,
+                "work_graph_path": claim.work_graph_path,
+                "work_graph_sha256": claim.work_graph_sha256,
+                "start_revision": claim.start_revision,
+            }
+        )
     missing = sorted(name for name, value in required.items() if not value)
     if missing:
         return _selection_pending_failure(
@@ -1133,13 +1153,18 @@ def evaluate_selection_pending_session_activation(
             "selection_pending_tracker_already_linked",
             "staged session activation is valid only before the first tracker is linked",
         )
-    if not coordination_claims.requires_work_graph(claim.plan_ref):
+    if not goal_authority and not plan_authority:
         return _selection_pending_failure(
             "selection_pending_plan_authority_invalid",
-            "staged session activation requires numbered-plan work-graph authority",
+            "staged session activation requires exact goal or numbered-plan authority",
         )
-    assert claim.start_revision is not None
-    if re.fullmatch(r"[0-9a-f]{40}", claim.start_revision) is None:
+    graph_fields = (claim.work_unit_id, claim.work_graph_path, claim.work_graph_sha256)
+    if goal_authority and any(value is not None for value in graph_fields):
+        return _selection_pending_failure(
+            "selection_pending_goal_authority_mixed",
+            "goal staged activation cannot mix in numbered-plan work-unit identity",
+        )
+    if plan_authority and re.fullmatch(r"[0-9a-f]{40}", str(claim.start_revision)) is None:
         return _selection_pending_failure(
             "selection_pending_start_revision_invalid",
             "staged session activation requires one bare 40-hex Git commit",
@@ -1183,48 +1208,51 @@ def evaluate_selection_pending_session_activation(
             + (", ".join(health_issues) if health_issues else "no missing-tracker invariant"),
         )
 
-    assert claim.repo_root is not None
-    assert claim.work_graph_path is not None
-    assert claim.work_unit_id is not None
-    assert claim.plan_ref is not None
-    try:
-        binding = coordination_claims.coerce_canonical_work_unit_binding(
-            coordination_claims.resolve_canonical_work_unit_binding(
-                repo_root=claim.repo_root,
-                plan_ref=claim.plan_ref,
-                work_graph_path=claim.work_graph_path,
-                work_unit_id=claim.work_unit_id,
-                start_point=claim.start_revision,
-                plan_repo_root=claim.plan_repo_root,
-                plan_start_point=claim.plan_revision,
-                target_repository_id=str(project),
+    binding = None
+    if plan_authority:
+        assert claim.repo_root is not None
+        assert claim.work_graph_path is not None
+        assert claim.work_unit_id is not None
+        assert claim.plan_ref is not None
+        assert claim.start_revision is not None
+        try:
+            binding = coordination_claims.coerce_canonical_work_unit_binding(
+                coordination_claims.resolve_canonical_work_unit_binding(
+                    repo_root=claim.repo_root,
+                    plan_ref=claim.plan_ref,
+                    work_graph_path=claim.work_graph_path,
+                    work_unit_id=claim.work_unit_id,
+                    start_point=claim.start_revision,
+                    plan_repo_root=claim.plan_repo_root,
+                    plan_start_point=claim.plan_revision,
+                    target_repository_id=str(project),
+                )
             )
-        )
-        coordination_claims.validate_start_revision_targets(
-            repo_root=claim.repo_root,
-            start_revision=claim.start_revision,
-            branch=claim.branch,
-            worktree_path=claim.worktree_path,
-            require_branch=True,
-            require_worktree=True,
-        )
-    except (OSError, TypeError, ValueError) as exc:
-        return _selection_pending_failure(
-            "selection_pending_binding_unresolvable",
-            f"unable to resolve staged work-unit custody: {exc}",
-        )
-    if (
-        binding.work_graph_sha256 != claim.work_graph_sha256
-        or binding.approval_revisions != claim.approval_revisions
-        or binding.start_revision != claim.start_revision
-        or binding.plan_repo_root != claim.plan_repo_root
-        or binding.plan_revision != claim.plan_revision
-        or binding.plan_sha256 != claim.plan_sha256
-    ):
-        return _selection_pending_failure(
-            "selection_pending_binding_mismatch",
-            "staged work-unit evidence does not match the exact claim binding",
-        )
+            coordination_claims.validate_start_revision_targets(
+                repo_root=claim.repo_root,
+                start_revision=claim.start_revision,
+                branch=claim.branch,
+                worktree_path=claim.worktree_path,
+                require_branch=True,
+                require_worktree=True,
+            )
+        except (OSError, TypeError, ValueError) as exc:
+            return _selection_pending_failure(
+                "selection_pending_binding_unresolvable",
+                f"unable to resolve staged work-unit custody: {exc}",
+            )
+        if (
+            binding.work_graph_sha256 != claim.work_graph_sha256
+            or binding.approval_revisions != claim.approval_revisions
+            or binding.start_revision != claim.start_revision
+            or binding.plan_repo_root != claim.plan_repo_root
+            or binding.plan_revision != claim.plan_revision
+            or binding.plan_sha256 != claim.plan_sha256
+        ):
+            return _selection_pending_failure(
+                "selection_pending_binding_mismatch",
+                "staged work-unit evidence does not match the exact claim binding",
+            )
 
     evidence = SelectionPendingActivationEvidenceV1(
         agent=claim.agent,
@@ -1237,9 +1265,10 @@ def evaluate_selection_pending_session_activation(
         repo_root=str(Path(claim.repo_root).expanduser().resolve()),
         worktree_path=str(Path(str(claim.worktree_path)).expanduser().resolve()),
         branch=str(claim.branch),
+        authority_ref=claim.plan_ref if goal_authority else None,
         work_unit_id=claim.work_unit_id,
         work_graph_path=claim.work_graph_path,
-        work_graph_sha256=binding.work_graph_sha256,
+        work_graph_sha256=binding.work_graph_sha256 if binding is not None else None,
         start_revision=claim.start_revision,
     )
     return SelectionPendingActivationResultV1(

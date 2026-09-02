@@ -27,6 +27,7 @@ from enforced_planning import (
     outcome_admission,
     prewrite_claim_fast,
     prewrite_claim_projection,
+    session_continuity,
     session_contracts,
     session_lifecycle,
 )
@@ -4812,6 +4813,102 @@ def test_same_runtime_resume_atomically_reattaches_one_exact_tracker(
     assert restored_claim["tracker_path"] == str(tracker_path.resolve())
     assert restored_claim["session_id"] == restored_tracker["claim"]["session_id"] == "codex:same-runtime"
     assert restored_tracker["tracker"]["current_phase"] == "tracker restored"
+
+
+def test_verify_successor_offer_cli_checks_live_state_without_mutating_custody(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A prepared offer can reach the resume seam without accepting or transferring."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    worktree = tmp_path / "worktree"
+    worktree.mkdir()
+    _git(worktree, "init")
+    _git(worktree, "config", "user.email", "test@example.com")
+    _git(worktree, "config", "user.name", "Test Agent")
+    (worktree / "checkpoint.txt").write_text("prepared\n", encoding="utf-8")
+    _git(worktree, "add", "checkpoint.txt")
+    _git(worktree, "commit", "-m", "prepared checkpoint")
+    head_revision = _git(worktree, "rev-parse", "HEAD")
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    monkeypatch.setattr(session_contracts, "DEFAULT_SESSION_TRACKERS_DIR", trackers_dir)
+    started = session_lifecycle.start_session(
+        agent="codex",
+        project="enforced-planning",
+        scope="verify-prepared-offer",
+        intent="verify prepared offer",
+        repo_root=str(tmp_path),
+        worktree_path=str(worktree),
+        branch="verify-prepared-offer",
+        broader_goal="Verify Prepared Offer",
+        current_phase="fixture setup",
+        plan_ref="UNPLANNED",
+        session_id="codex:owning-runtime",
+        tracker_dir=trackers_dir,
+    )
+    claim_path = claims_dir / "codex_enforced-planning_verify-prepared-offer.yaml"
+    claim_before = claim_path.read_bytes()
+    tracker_path = Path(started["tracker_path"])
+    tracker_before = tracker_path.read_bytes()
+    offer = session_continuity.SuccessorCustodyOfferV1(
+        offer_id="b" * 24,
+        owner_resume_correlation_id="a" * 24,
+        predecessor_session_id="codex:owning-runtime",
+        project="enforced-planning",
+        scope="verify-prepared-offer",
+        branch="verify-prepared-offer",
+        worktree_path=str(worktree.resolve()),
+        claim_epoch_sha256=hashlib.sha256(claim_before).hexdigest(),
+        head_revision=head_revision,
+        next_action="verify prepared offer",
+        created_at=datetime(2026, 9, 2, tzinfo=timezone.utc),
+    )
+    offer_path = tmp_path / "offer.json"
+    offer_path.write_text(offer.model_dump_json(indent=2) + "\n", encoding="utf-8")
+    module_path = Path(__file__).resolve().parents[1] / "scripts" / "session_resume.py"
+    spec = importlib.util.spec_from_file_location("session_resume_offer_verify_test", module_path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    args = [
+        "--agent",
+        "codex",
+        "--project",
+        "enforced-planning",
+        "--scope",
+        "verify-prepared-offer",
+        "--worktree-path",
+        str(worktree),
+        "--branch",
+        "verify-prepared-offer",
+        "--current-phase",
+        "verify prepared offer only",
+        "--successor-custody-offer",
+        str(offer_path),
+        "--verify-successor-custody-offer-only",
+        "--json",
+    ]
+
+    assert module.main(args) == 0
+    result = json.loads(capsys.readouterr().out)
+    assert result["action"] == "successor_custody_offer_verified"
+    assert result["successor_acceptance_required"] is True
+    assert result["successor_launch_allowed"] is False
+    assert result["custody_mutation_performed"] is False
+    assert result["transfer_eligible"] is False
+    assert claim_path.read_bytes() == claim_before
+    assert tracker_path.read_bytes() == tracker_before
+
+    (worktree / "checkpoint.txt").write_text("advanced\n", encoding="utf-8")
+    _git(worktree, "add", "checkpoint.txt")
+    _git(worktree, "commit", "-m", "advance checkpoint")
+    with pytest.raises(ValueError, match="head_revision"):
+        module.main(args)
+    assert claim_path.read_bytes() == claim_before
+    assert tracker_path.read_bytes() == tracker_before
 
 
 def test_same_runtime_resume_rejects_tracker_with_mismatched_exact_custody(

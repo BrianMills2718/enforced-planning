@@ -68,6 +68,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         type=Path,
         help="Exact offer JSON that this successor explicitly accepted.",
     )
+    parser.add_argument(
+        "--verify-successor-custody-offer-only",
+        action="store_true",
+        help=(
+            "Verify the exact offer against current claim and Git state without "
+            "accepting, reserving, fencing, or transferring custody."
+        ),
+    )
     acceptance = parser.add_mutually_exclusive_group()
     acceptance.add_argument(
         "--successor-custody-acceptance",
@@ -94,7 +102,12 @@ def main(argv: list[str] | None = None) -> int:
         args.successor_custody_acceptance is not None
         or args.accept_successor_custody_offer
     )
-    if has_offer != has_acceptance:
+    if args.verify_successor_custody_offer_only:
+        if not has_offer or has_acceptance:
+            raise ValueError(
+                "offer-only verification requires one offer and no acceptance mode"
+            )
+    elif has_offer != has_acceptance:
         raise ValueError(
             "automatic successor resume requires an offer and exactly one acceptance mode"
         )
@@ -106,6 +119,20 @@ def main(argv: list[str] | None = None) -> int:
         else None
     )
     successor_session_id = args.session_id
+    if args.verify_successor_custody_offer_only:
+        payload = session_lifecycle.verify_successor_custody_offer_state(
+            agent=args.agent,
+            project=args.project,
+            scope=args.scope,
+            worktree_path=args.worktree_path,
+            branch=args.branch,
+            successor_custody_offer=offer,
+        )
+        if args.json:
+            print(json.dumps(payload, indent=2, sort_keys=True))
+        else:
+            print(f"{payload['action']}: {payload['offer_id']}")
+        return 0
     if offer is not None and args.accept_successor_custody_offer:
         successor_session_id = coordination_claims.resolve_session_id(
             args.agent, args.session_id

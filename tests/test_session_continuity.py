@@ -492,6 +492,59 @@ def test_codex_transcript_tracks_completed_turn(tmp_path: Path) -> None:
     assert result.evidence_event == "task_complete"
 
 
+def test_codex_transcript_identifies_top_level_owner(tmp_path: Path) -> None:
+    transcript = tmp_path / "session.jsonl"
+    records = [
+        {
+            "timestamp": "2026-09-02T04:00:00Z",
+            "type": "session_meta",
+            "payload": {"thread_source": "user"},
+        },
+        {
+            "timestamp": "2026-09-02T04:21:00Z",
+            "type": "event_msg",
+            "payload": {"type": "task_complete", "turn_id": "turn-1"},
+        },
+    ]
+    transcript.write_text(
+        "".join(json.dumps(record) + "\n" for record in records), encoding="utf-8"
+    )
+
+    result = read_codex_activity(session_id="codex:owner", transcript_path=transcript)
+
+    assert result.thread_source == "user"
+    assert result.parent_thread_id is None
+
+
+def test_codex_transcript_identifies_spawned_owner_and_exact_parent(
+    tmp_path: Path,
+) -> None:
+    transcript = tmp_path / "session.jsonl"
+    records = [
+        {
+            "timestamp": "2026-09-02T04:00:00Z",
+            "type": "session_meta",
+            "payload": {
+                "thread_source": "subagent",
+                "parent_thread_id": "01a05b30-4bdb-7051-86d0-f20575c46fdf",
+            },
+        },
+        {
+            "timestamp": "2026-09-02T04:21:00Z",
+            "type": "event_msg",
+            "payload": {"type": "task_complete", "turn_id": "turn-1"},
+        },
+    ]
+    transcript.write_text(
+        "".join(json.dumps(record) + "\n" for record in records), encoding="utf-8"
+    )
+
+    result = read_codex_activity(session_id="codex:child", transcript_path=transcript)
+
+    assert result.thread_source == "subagent"
+    assert result.parent_thread_id == "01a05b30-4bdb-7051-86d0-f20575c46fdf"
+
+
 def test_malformed_transcript_fails_visible(tmp_path: Path) -> None:
     transcript = tmp_path / "session.jsonl"
     transcript.write_text("{not-json}\n", encoding="utf-8")
@@ -530,10 +583,84 @@ def native_delivery_sweep_fixture() -> dict[str, object]:
                 "scope": "feature-lane",
                 "session_id": session_id,
                 "next_action": "run the focused integration",
+                "thread_source": "user",
+                "parent_thread_id": None,
                 "assessment": assessment.model_dump(mode="json"),
             }
         ]
     }
+
+
+def test_spawned_owner_reaches_typed_circuit_breaker_without_queue(
+    tmp_path: Path,
+) -> None:
+    sweep = native_delivery_sweep_fixture()
+    item = sweep["items"][0]  # type: ignore[index]
+    item["thread_source"] = "subagent"
+    item["parent_thread_id"] = "01a05b30-4bdb-7051-86d0-f20575c46fdf"
+
+    result = continuity_cli.deliver_native_resume_offers(
+        sweep=sweep,
+        receipt_path=tmp_path / "receipts.jsonl",
+        run=lambda *_args, **_kwargs: pytest.fail("spawned owner must not be queued"),
+    )
+
+    assert result == [
+        {
+            "project": "demo",
+            "scope": "feature-lane",
+            "session_id": "codex:01a05b94-d5d8-7d82-8a9a-6c64c6979e96",
+            "action": "circuit_breaker",
+            "reason_code": "spawned_agent_native_queue_unsupported",
+            "parent_thread_id": "01a05b30-4bdb-7051-86d0-f20575c46fdf",
+            "resume_condition": (
+                "resume from the exact parent when the active resource boundary "
+                "permits sub-agent execution"
+            ),
+        }
+    ]
+    assert not (tmp_path / "receipts.jsonl").exists()
+
+
+def test_unknown_thread_origin_reaches_circuit_breaker_without_queue(
+    tmp_path: Path,
+) -> None:
+    sweep = native_delivery_sweep_fixture()
+    item = sweep["items"][0]  # type: ignore[index]
+    item["thread_source"] = "unknown"
+
+    result = continuity_cli.deliver_native_resume_offers(
+        sweep=sweep,
+        receipt_path=tmp_path / "receipts.jsonl",
+        run=lambda *_args, **_kwargs: pytest.fail("unknown owner must not be queued"),
+    )
+
+    assert result[0]["action"] == "circuit_breaker"
+    assert result[0]["reason_code"] == "thread_origin_not_verified_top_level"
+    assert result[0]["resume_condition"] == (
+        "record valid top-level Codex session metadata before delivery"
+    )
+    assert not (tmp_path / "receipts.jsonl").exists()
+
+
+def test_delivery_sweep_counts_spawned_circuit_breaker_as_expected(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    sweep = native_delivery_sweep_fixture()
+    item = sweep["items"][0]  # type: ignore[index]
+    item["thread_source"] = "subagent"
+    item["parent_thread_id"] = "01a05b30-4bdb-7051-86d0-f20575c46fdf"
+    monkeypatch.setattr(continuity_cli, "build_observe_sweep", lambda **_kwargs: sweep)
+
+    result = continuity_cli.run_native_delivery_sweep(
+        notify_minutes=15,
+        receipt_path=tmp_path / "receipts.jsonl",
+    )
+
+    assert result["native_resume_circuit_breaker_count"] == 1
+    assert result["native_resume_fail_visible_count"] == 0
+    assert result["native_resume_queued_count"] == 0
 
 
 def test_native_delivery_journal_prevents_duplicate_queue_for_same_boundary(

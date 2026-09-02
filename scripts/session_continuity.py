@@ -153,7 +153,13 @@ def _assess_claim(claim: coordination_claims.ClaimRecord, *, notify_minutes: int
             activity=activity,
             notify_after=timedelta(minutes=notify_minutes),
         )
-        return {**base, "assessment": assessment.model_dump(mode="json"), "error": None}
+        return {
+            **base,
+            "thread_source": activity.thread_source if activity is not None else "unknown",
+            "parent_thread_id": activity.parent_thread_id if activity is not None else None,
+            "assessment": assessment.model_dump(mode="json"),
+            "error": None,
+        }
     except (OSError, TypeError, ValueError) as exc:
         return {
             **base,
@@ -308,6 +314,28 @@ def deliver_native_resume_offers(
             "scope": item.get("scope"),
             "session_id": item.get("session_id"),
         }
+        thread_source = item.get("thread_source")
+        if thread_source != "user":
+            spawned = thread_source == "subagent"
+            results.append(
+                {
+                    **base,
+                    "action": "circuit_breaker",
+                    "reason_code": (
+                        "spawned_agent_native_queue_unsupported"
+                        if spawned
+                        else "thread_origin_not_verified_top_level"
+                    ),
+                    "parent_thread_id": item.get("parent_thread_id"),
+                    "resume_condition": (
+                        "resume from the exact parent when the active resource boundary "
+                        "permits sub-agent execution"
+                        if spawned
+                        else "record valid top-level Codex session metadata before delivery"
+                    ),
+                }
+            )
+            continue
         try:
             assessment = session_continuity.ContinuityAssessmentV1.model_validate(
                 assessment_data
@@ -411,6 +439,9 @@ def run_native_delivery_sweep(
         )
         payload["native_resume_fail_visible_count"] = sum(
             item["action"] == "fail_visible" for item in deliveries
+        )
+        payload["native_resume_circuit_breaker_count"] = sum(
+            item["action"] == "circuit_breaker" for item in deliveries
         )
         _append_receipt(receipt_path, payload)
         return payload

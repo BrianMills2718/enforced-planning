@@ -46,6 +46,8 @@ class CodexActivityV1(BaseModel):
     record_type: Literal["codex_session_activity"] = "codex_session_activity"
     session_id: str = Field(min_length=1)
     transcript_path: str = Field(min_length=1)
+    thread_source: Literal["user", "subagent", "unknown"] = "unknown"
+    parent_thread_id: str | None = None
     state: Literal["active_operation", "between_turns", "unknown"]
     observed_at: datetime | None = None
     boundary_at: datetime | None = None
@@ -182,6 +184,8 @@ def read_codex_activity(*, session_id: str, transcript_path: Path) -> CodexActiv
     latest_boundary_at: datetime | None = None
     latest_record_at: datetime | None = None
     latest_turn_id: str | None = None
+    thread_source: Literal["user", "subagent", "unknown"] = "unknown"
+    parent_thread_id: str | None = None
     with transcript_path.expanduser().open(encoding="utf-8") as handle:
         for line_number, line in enumerate(handle, start=1):
             if not line.strip():
@@ -193,9 +197,32 @@ def read_codex_activity(*, session_id: str, transcript_path: Path) -> CodexActiv
                     f"Codex transcript has malformed JSON at line {line_number}"
                 ) from exc
             if not isinstance(record, dict) or record.get("type") != "event_msg":
-                record_at = _aware_timestamp(record.get("timestamp")) if isinstance(record, dict) else None
+                record_at = (
+                    _aware_timestamp(record.get("timestamp"))
+                    if isinstance(record, dict)
+                    else None
+                )
                 if record_at is not None:
                     latest_record_at = record_at
+                if isinstance(record, dict) and record.get("type") == "session_meta":
+                    payload = record.get("payload")
+                    if not isinstance(payload, dict):
+                        raise ValueError(
+                            f"Codex session metadata is invalid at line {line_number}"
+                        )
+                    source = payload.get("thread_source")
+                    thread_source = (
+                        source if source in {"user", "subagent"} else "unknown"
+                    )
+                    parent = payload.get("parent_thread_id")
+                    parent_thread_id = (
+                        parent if isinstance(parent, str) and parent.strip() else None
+                    )
+                    if thread_source == "subagent" and parent_thread_id is None:
+                        raise ValueError(
+                            "Codex spawned-agent session metadata lacks parent_thread_id "
+                            f"at line {line_number}"
+                        )
                 continue
             record_at = _aware_timestamp(record.get("timestamp"))
             if record_at is not None:
@@ -226,6 +253,8 @@ def read_codex_activity(*, session_id: str, transcript_path: Path) -> CodexActiv
     return CodexActivityV1(
         session_id=session_id,
         transcript_path=str(transcript_path.expanduser().resolve()),
+        thread_source=thread_source,
+        parent_thread_id=parent_thread_id,
         state=state,
         observed_at=latest_record_at,
         boundary_at=latest_boundary_at,

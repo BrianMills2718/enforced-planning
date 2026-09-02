@@ -194,8 +194,7 @@ def build_codex_command(
         "exec",
         "--ephemeral",
         "--ignore-user-config",
-        "--sandbox",
-        "workspace-write",
+        "--dangerously-bypass-approvals-and-sandbox",
         "--config",
         f'model_reasoning_effort="{effort}"',
         "--cd",
@@ -208,7 +207,7 @@ def build_codex_command(
         "-",
     ]
     if model:
-        command[6:6] = ["--model", model]
+        command[5:5] = ["--model", model]
     return tuple(command)
 
 
@@ -552,7 +551,6 @@ def _run_reviewer_lane(
         "--property=TemporaryFileSystem=/tmp:rw,nosuid,nodev",
         "--property=ReadOnlyPaths=/",
         f"--property=BindReadOnlyPaths={root}",
-        "--property=ReadWritePaths=/proc",
         f"--property=ReadWritePaths={lane_directory}",
         f"--property=InaccessiblePaths={blocked_runtimes}",
         f"--property=WorkingDirectory={root}",
@@ -562,6 +560,11 @@ def _run_reviewer_lane(
         f"--setenv=TMPDIR={lane_tmp}",
         f"--setenv=TEMP={lane_tmp}",
         f"--setenv=TMP={lane_tmp}",
+        "--setenv=GH_TOKEN=",
+        "--setenv=GITHUB_TOKEN=",
+        "--setenv=SSH_AUTH_SOCK=",
+        "--setenv=GIT_ASKPASS=/bin/false",
+        "--setenv=GIT_TERMINAL_PROMPT=0",
         "--",
         *command,
     ]

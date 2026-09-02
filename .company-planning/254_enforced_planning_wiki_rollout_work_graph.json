@@ -1,0 +1,180 @@
+{
+  "units": [
+    {
+      "schema_version": "1.0",
+      "record_type": "work_unit",
+      "id": "P254-R02",
+      "initiative_id": "PLAN-254",
+      "goal_id": "activity-prioritized-governed-wiki-rollout",
+      "design_revision": "sha256:a76d16241a2aae5456b84bee1331987e0f253c46050b7d780df5073e2cd67d58",
+      "spec_revision": "P254-R02@5",
+      "title": "Adopt governed wiki in Enforced Planning",
+      "class": "integration",
+      "objective": "At enforced-planning's revalidated canonical default tip, protect human-owned goals and requirements, reduce documentation sprawl through safe consolidation/retirement/archive, make the interlinked wiki the primary agent-navigation route, keep development history outside default context, and prove source traceability, secondary retrieval fallback, actionable lint, and source-safe exit.",
+      "profile": "standard",
+      "execution_class": "independently_executable",
+      "claimability": "ready_for_execution",
+      "authorization_mode": "registry_claim",
+      "scope": {
+        "included": [
+          "One claimed linked worktree at the revalidated canonical default tip",
+          "Bounded README/roadmap/decision/evidence source custody",
+          "Existing or one newly declared integrated wiki entrypoint",
+          "Provider-free rebuild, query/file-back, positive lint, injected negative control, measurement, and exit verification"
+        ],
+        "excluded": [
+          "Wholesale canonical documentation rewrite",
+          "Shared runtime or skill-suite copy into the consumer",
+          "Company repositories, real Parallax, deployment, publication, package release, and paid provider fallback"
+        ]
+      },
+      "inputs": [
+        {
+          "kind": "adopted_design",
+          "id": "project-meta/docs/plans/254_activity_prioritized_governed_wiki_rollout.md",
+          "revision": "sha256:a76d16241a2aae5456b84bee1331987e0f253c46050b7d780df5073e2cd67d58"
+        },
+        {
+          "kind": "selection_evidence",
+          "id": "P254-PRIORITY01:activity-ranking",
+          "revision": "accepted"
+        },
+        {
+          "kind": "repository_revision",
+          "id": "enforced-planning:canonical-default",
+          "revision": "2466b1143bc64455f7c9ac0fd05b34648ad59956"
+        },
+        {
+          "kind": "shared_foundation",
+          "id": "wiki_methodology:governed-karpathy-wiki",
+          "revision": "5480e56e7228bef3c9e1146d45b36a502bd1b2d1"
+        }
+      ],
+      "outputs": [
+        "enforced-planning canonical-default commit containing or revalidating the governed wiki route",
+        "enforced-planning goal-authority, wiki-navigation, documentation-sprawl, traceability/query-fallback, lint/history-exclusion, and source-safe-exit receipts",
+        "Closed enforced-planning claim, linked worktree, and task branch"
+      ],
+      "dependencies": [],
+      "conflict_surfaces": [
+        {
+          "kind": "repository_path",
+          "repository": "enforced-planning",
+          "target": ".company-planning",
+          "access": "exclusive",
+          "coordination_key": "plan254-enforced-planning-cursor"
+        },
+        {
+          "kind": "repository_path",
+          "repository": "enforced-planning",
+          "target": ".wiki",
+          "access": "exclusive",
+          "coordination_key": "plan254-enforced-planning-wiki"
+        },
+        {
+          "kind": "repository_path",
+          "repository": "enforced-planning",
+          "target": "raw/sources",
+          "access": "exclusive",
+          "coordination_key": "plan254-enforced-planning-wiki"
+        },
+        {
+          "kind": "repository_path",
+          "repository": "enforced-planning",
+          "target": "wiki",
+          "access": "exclusive",
+          "coordination_key": "plan254-enforced-planning-wiki"
+        },
+        {
+          "kind": "repository_path",
+          "repository": "enforced-planning",
+          "target": "README.md",
+          "access": "exclusive",
+          "coordination_key": "plan254-enforced-planning-wiki"
+        },
+        {
+          "kind": "repository_path",
+          "repository": "enforced-planning",
+          "target": "docs/evidence/wiki-rollout/plan254",
+          "access": "exclusive",
+          "coordination_key": "plan254-enforced-planning-wiki"
+        },
+        {
+          "kind": "repository_path",
+          "repository": "enforced-planning",
+          "target": "docs/ops",
+          "access": "exclusive",
+          "coordination_key": "plan254-enforced-planning-lifecycle"
+        },
+        {
+          "kind": "repository_path",
+          "repository": "wiki_methodology",
+          "target": "foundation/llm-wiki",
+          "access": "read",
+          "coordination_key": "plan254-shared-foundation"
+        }
+      ],
+      "acceptance": [
+        {
+          "id": "P254-R02-AC01",
+          "criterion": "enforced-planning states goals and requirements only from exact human or decision authority; code, tests, wiki prose, search, and RAG remain implementation or discovery evidence and cannot silently resolve missing or conflicting intent.",
+          "evidence_required": [
+            "Goal/requirement authority map with exact revisions",
+            "Repository concern references for every unresolved interpretation",
+            "Unresolved-goal negative-control receipt"
+          ],
+          "negative_control": "A plausible goal inferred only from current implementation must be rejected and routed for human review."
+        },
+        {
+          "id": "P254-R02-AC02",
+          "criterion": "From enforced-planning's authentic root entrypoint, an agent traverses the integrated wiki without an initial keyword or vector search to representative current goals, requirements, active plans, governing ADRs, capabilities, and exact code/evidence in at most four documented hops when those classes exist.",
+          "evidence_required": [
+            "Before/after graph-guided navigation measurement",
+            "Clean canonical-tip navigation receipt with route, hops, dead ends, fallback use, and explicit not-applicable classes"
+          ],
+          "negative_control": "A wiki that exists but requires search/RAG for initial orientation, or a file that is not reachable from the authentic entrypoint, does not pass."
+        },
+        {
+          "id": "P254-R02-AC03",
+          "criterion": "enforced-planning records documentation_sprawl as improved only after observed consolidation, Git retirement, or external archival plus a better before/after sprawl measure, or as already_clean only with evidence that no redundant/superseded active material existed and no active growth occurred; review_required remains unresolved work.",
+          "evidence_required": [
+            "Exhaustive reconciled disposition receipt",
+            "Before/after active-document, duplicate-authority, stale/broken/orphan, and default-context measurement",
+            "Recovery and archive-exclusion evidence for every retired artifact"
+          ],
+          "negative_control": "Complete labels, a smaller query payload, or a source-backed exception with no lifecycle subtraction must produce not_proven and cannot satisfy subtractive acceptance."
+        },
+        {
+          "id": "P254-R02-AC04",
+          "criterion": "enforced-planning retains current-claim traceability through source SHA-256 custody and bidirectional reverse-manifest lineage, while bounded keyword/vector retrieval is verified only as a secondary fallback with complete file-back and byte/token/exclusion/truncation telemetry.",
+          "evidence_required": [
+            "Source-integrity receipt",
+            "Reverse-manifest lookup",
+            "Secondary-fallback query result and query receipt"
+          ],
+          "negative_control": "A retrieval result without current authority/file-back, any source mutation, a missing derived-to-source edge, or unmetered expansion fails the unit."
+        },
+        {
+          "id": "P254-R02-AC05",
+          "criterion": "enforced-planning passes strict lint and injected broken-link/archive-exclusion controls; completed, superseded, and historical artifacts remain outside default navigation and context, with development history available only through Git, one compact log, or an on-demand archive route; source-safe exit leaves current Markdown and evidence readable.",
+          "evidence_required": [
+            "Positive strict-lint receipt",
+            "Injected negative-control receipts",
+            "Default navigation/search archive exclusion",
+            "Exit/removal verification"
+          ],
+          "negative_control": "Warning-only detection, historical documents presented as current knowledge, or an archive item returned by default navigation/search cannot pass."
+        }
+      ],
+      "readiness": {
+        "status": "ready",
+        "required_approval_types": [],
+        "approvals": [],
+        "failed_guards": []
+      },
+      "status": "ready",
+      "record_version": 5,
+      "updated_at": "2026-09-02T06:07:00Z"
+    }
+  ]
+}

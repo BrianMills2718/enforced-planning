@@ -265,6 +265,46 @@ def test_compound_bash_does_not_require_claim_when_every_command_is_read_only(tm
     assert decision["reason_code"] == "bash_read_only"
 
 
+def test_read_only_if_control_flow_does_not_require_claim(tmp_path: Path) -> None:
+    command = (
+        "git status --short && "
+        "if test -f generated/runtime/active_work_registry.json; "
+        "then jq -r '.claims[]?' generated/runtime/active_work_registry.json; "
+        "else echo 'active registry missing'; fi"
+    )
+    payload = _payload(
+        cwd=tmp_path,
+        tool="Bash",
+        tool_input={"command": command},
+        session="unclaimed-session",
+    )
+
+    decision = _evaluate(tmp_path, payload, tmp_path / "missing-claims")
+
+    assert decision["decision"] == "allow", decision
+    assert decision["reason_code"] == "bash_read_only"
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "if true; then touch marker; fi",
+        "if touch marker; then echo safe; fi",
+        "if true; then echo safe; else rm marker; fi",
+    ],
+)
+def test_if_control_flow_with_any_mutation_still_requires_claim(
+    tmp_path: Path,
+    command: str,
+) -> None:
+    payload = _payload(cwd=tmp_path, tool="Bash", tool_input={"command": command})
+
+    decision = _evaluate(tmp_path, payload, tmp_path / "missing-claims")
+
+    assert decision["decision"] == "deny", decision
+    assert decision["reason_code"] == "repository_identity_unavailable"
+
+
 def test_compound_cat_inventory_from_workspace_root_does_not_require_claim(tmp_path: Path) -> None:
     payload = _payload(
         cwd=tmp_path,
@@ -430,6 +470,8 @@ def test_mutating_bash_is_allowed_only_by_exact_healthy_worktree_claim(tmp_path:
     assert allowed["normalized_target_paths"] == ["src/generated.py"]
     assert denied["decision"] == "deny"
     assert denied["reason_code"] == "no_exact_claim"
+    assert "/usr/bin/make -C" in denied["recovery"]
+    assert "split it into simple read-only commands" in denied["recovery"]
 
 
 def test_bootstrap_bash_bypasses_claim_only_when_strict_classifier_accepts(tmp_path: Path) -> None:

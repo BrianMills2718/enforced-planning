@@ -36,7 +36,9 @@ class NonGitWorkingDirectory(FastPreWriteError):
 _DENIAL_SUMMARIES = {
     "ambiguous_exact_claim": "More than one claim matches this repository lane.",
     "ambiguous_exact_session_target": "More than one healthy claim could select the session target.",
-    "bash_path_outside_worktree": "The command names a mutation path outside the claimed worktree.",
+    "bash_path_outside_worktree": (
+        "The command is not provably read-only and names a path outside the claimed worktree."
+    ),
     "bash_runtime_workdir_unattested": "The shell command does not prove it will run in the claimed worktree.",
     "bash_target_unprovable": "The command uses a target that cannot be resolved safely from the hook payload.",
     "claim_git_identity_mismatch": "The claimed worktree no longer matches its recorded Git identity.",

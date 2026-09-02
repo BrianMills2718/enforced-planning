@@ -757,6 +757,25 @@ This operational claim progress is distinct from the tracker-backed selected
 outcome progress described below. Neither stream renews the other implicitly;
 an accepted outcome receipt may be named explicitly as `evidence_ref`.
 
+The exempt prefixes are `learnings/entries`, `learnings/invalid_entries`, and
+`policy/proposals`. Each is a register whose ordinary write is a new, uniquely
+named file, so two lanes writing one cannot clobber each other and an overlap
+there is not contention. `policy/proposals` was added on 2026-09-02 after two
+sessions each filing a different proposal blocked each other while being shown
+the message above.
+
+The exemption is prefix-exact and deliberately narrow. A path that merely starts
+with a register's name is not covered -- `learnings.md`, `learnings/entries-archive`,
+`policy/registry.yaml`, and a claim on `policy/` itself all still conflict,
+because each is rewritten in place. Where a register does permit rewriting an
+existing entry -- `policy/proposals` allows explicit supersession or retirement --
+the push-time overlapping-write-claim check remains the backstop, so two rewrites
+of one file are still caught before they merge.
+
+These prefixes are consumer-specific paths held in framework code. Making the
+list repository-configurable is the intended shape; until then, adding a register
+means editing `APPEND_ONLY_WRITE_PREFIXES` in `coordination_claims.py`.
+
 ## Session Contract Model
 
 The coordination stack uses one canonical mutable object plus one linked

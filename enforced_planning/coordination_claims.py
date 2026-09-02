@@ -77,9 +77,21 @@ SESSION_TAKEOVER_RESERVATION_FIELD = "session_takeover_reservation"
 # A path is exempt only when writes to it are append-only ALL the way down. Add
 # a prefix here solely when its writer creates new files and never modifies,
 # renames, or deletes an existing one.
+# Registers whose entries are added as new files and never rewritten in place.
+# Two lanes adding different files here cannot clobber each other, so an overlap
+# on one of these prefixes is not contention -- which is what the refusal message
+# already tells operators ("an append-only store never contends with itself").
+# policy/proposals earns its place by its own governing rule, "Preserve proposal
+# history unless a proposal is explicitly superseded or retired": supersession is
+# rare and deliberate, while the ordinary write is a new dated file. The push-time
+# overlapping-write-claim check stays the backstop for the supersession case.
+# NOTE: these are consumer-specific paths living in framework code. Making the
+# list repository-configurable is the right long-term shape; it is deliberately
+# not done here to keep this change to the observed defect.
 APPEND_ONLY_WRITE_PREFIXES = (
     "learnings/entries",
     "learnings/invalid_entries",
+    "policy/proposals",
 )
 CREATION_BLOCKING_HEALTH_ISSUES = {
     "missing_project",

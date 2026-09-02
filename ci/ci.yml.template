@@ -128,13 +128,14 @@ jobs:
           echo "Checking commits:"
           echo "$COMMITS"
 
-          # Each commit must have [Plan #N] or [Trivial]
+          # Each commit must have [Plan #N], [Goal stable-ref], [Trivial], or [Unplanned]
           while IFS= read -r msg; do
             if [[ ! "$msg" =~ \[Plan\ \#[0-9]+\] ]] && \
+               [[ ! "$msg" =~ \[Goal\ [a-z0-9][a-z0-9._:-]*\] ]] && \
                [[ ! "$msg" =~ \[Trivial\] ]] && \
                [[ ! "$msg" =~ \[Unplanned\] ]]; then
               echo "ERROR: Commit missing plan reference: $msg"
-              echo "Use: [Plan #N] or [Trivial] prefix"
+              echo "Use: [Plan #N], [Goal stable-ref], [Trivial], or [Unplanned] prefix"
               exit 1
             fi
           done <<< "$COMMITS"

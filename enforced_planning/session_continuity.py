@@ -10,7 +10,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Literal, Protocol
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from enforced_planning import coordination_messages
 
@@ -126,6 +126,36 @@ class NativeCodexQueueReceiptV1(BaseModel):
     correlation_id: str = Field(pattern=r"^[0-9a-f]{24}$")
     queued_submission_id: str = Field(min_length=1)
     runtime_accepted: Literal[True] = True
+
+
+class NativeCodexDeliveryJournalV1(BaseModel):
+    """Write-ahead state for one correlation-bound native queue attempt."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    schema_version: Literal["1.0"] = "1.0"
+    record_type: Literal["native_codex_resume_delivery"] = "native_codex_resume_delivery"
+    owner_session_id: str = Field(min_length=1)
+    thread_id: str = Field(min_length=1)
+    correlation_id: str = Field(pattern=r"^[0-9a-f]{24}$")
+    state: Literal["intent", "accepted", "failed"]
+    recorded_at: datetime
+    queued_submission_id: str | None = None
+    error: str | None = None
+
+    @model_validator(mode="after")
+    def validate_state_payload(self) -> NativeCodexDeliveryJournalV1:
+        if self.state == "intent" and (self.queued_submission_id or self.error):
+            raise ValueError("delivery intent cannot contain a terminal result")
+        if self.state == "accepted" and (
+            not self.queued_submission_id or self.error is not None
+        ):
+            raise ValueError("accepted delivery requires only a queued submission id")
+        if self.state == "failed" and (
+            not self.error or self.queued_submission_id is not None
+        ):
+            raise ValueError("failed delivery requires only an error")
+        return self
 
 
 _CODEX_QUEUE_RECEIPT = re.compile(
@@ -495,6 +525,7 @@ def assess_resume_offer(
 __all__ = [
     "CodexActivityV1",
     "ContinuityAssessmentV1",
+    "NativeCodexDeliveryJournalV1",
     "NativeCodexQueueReceiptV1",
     "NativeCodexResumeOfferV1",
     "ResumeOfferReviewV1",

@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import shlex
 import uuid
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -145,6 +146,45 @@ class SuccessorCustodyAcceptanceV1(BaseModel):
     head_revision: str = Field(pattern=r"^[0-9a-f]{40,64}$")
     next_action: str = Field(min_length=1)
     accepted_at: datetime
+
+
+class CodexSuccessorLaunchV1(BaseModel):
+    """Exact disabled-by-default native launch request for one successor."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    schema_version: Literal["1.0"] = "1.0"
+    record_type: Literal["codex_successor_launch"] = "codex_successor_launch"
+    offer_id: str = Field(pattern=r"^[0-9a-f]{24}$")
+    offer_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    predecessor_session_id: str = Field(min_length=1)
+    predecessor_thread_id: str = Field(min_length=1)
+    offer_path: str = Field(min_length=1)
+    worktree_path: str = Field(min_length=1)
+    prompt: str = Field(min_length=1)
+    prompt_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    systemd_unit: str = Field(pattern=r"^[a-zA-Z0-9_.@-]+$")
+    argv: list[str] = Field(min_length=1)
+    transfer_eligible: Literal[False] = False
+
+
+class CodexSuccessorLaunchReceiptV1(BaseModel):
+    """Host acknowledgement that a successor unit started, not custody acceptance."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    schema_version: Literal["1.0"] = "1.0"
+    record_type: Literal["codex_successor_launch_receipt"] = (
+        "codex_successor_launch_receipt"
+    )
+    offer_id: str = Field(pattern=r"^[0-9a-f]{24}$")
+    offer_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    systemd_unit: str = Field(pattern=r"^[a-zA-Z0-9_.@-]+$")
+    launch_started: Literal[True] = True
+    successor_session_id: None = None
+    successor_accepted: Literal[False] = False
+    transfer_eligible: Literal[False] = False
+    runtime_stdout: str
 
 
 class NativeCodexResumeOfferV1(BaseModel):
@@ -645,6 +685,84 @@ def successor_custody_offer_sha256(offer: SuccessorCustodyOfferV1) -> str:
     return hashlib.sha256(canonical).hexdigest()
 
 
+def build_codex_successor_launch(
+    *,
+    offer: SuccessorCustodyOfferV1,
+    offer_path: str,
+    resume_script: str,
+    codex: str = "codex",
+    systemd_run: str = "systemd-run",
+) -> CodexSuccessorLaunchV1:
+    """Build one transient fork whose first authorized mutation is acceptance."""
+
+    if not offer.predecessor_session_id.startswith("codex:"):
+        raise ValueError("Codex successor launch requires a Codex predecessor session")
+    predecessor_thread_id = offer.predecessor_session_id.removeprefix("codex:")
+    resolved_offer = Path(offer_path).expanduser()
+    resolved_resume = Path(resume_script).expanduser()
+    if not resolved_offer.is_absolute() or not resolved_resume.is_absolute():
+        raise ValueError("successor offer and resume script paths must be absolute")
+    resolved_offer = resolved_offer.resolve()
+    resolved_resume = resolved_resume.resolve()
+    accept_command = shlex.join(
+        [
+            "/usr/bin/python3",
+            str(resolved_resume),
+            "--agent",
+            "codex",
+            "--project",
+            offer.project,
+            "--scope",
+            offer.scope,
+            "--worktree-path",
+            offer.worktree_path,
+            "--branch",
+            offer.branch,
+            "--current-phase",
+            "accept exact successor custody",
+            "--successor-custody-offer",
+            str(resolved_offer),
+            "--accept-successor-custody-offer",
+            "--json",
+        ]
+    )
+    prompt = (
+        f"Automatic successor custody offer {offer.offer_id}. Before any mutation, run exactly:\n"
+        f"{accept_command}\n"
+        "If exact acceptance fails, stop and report the failure without changing custody. "
+        f"After acceptance, continue this authorized next action: {offer.next_action}"
+    )
+    unit = f"enforced-planning-successor-{offer.offer_id}"
+    argv = [
+        systemd_run,
+        "--user",
+        "--collect",
+        "--unit",
+        unit,
+        "--property",
+        f"WorkingDirectory={offer.worktree_path}",
+        "--",
+        codex,
+        "exec",
+        "fork",
+        "--json",
+        predecessor_thread_id,
+        prompt,
+    ]
+    return CodexSuccessorLaunchV1(
+        offer_id=offer.offer_id,
+        offer_sha256=successor_custody_offer_sha256(offer),
+        predecessor_session_id=offer.predecessor_session_id,
+        predecessor_thread_id=predecessor_thread_id,
+        offer_path=str(resolved_offer),
+        worktree_path=offer.worktree_path,
+        prompt=prompt,
+        prompt_sha256=hashlib.sha256(prompt.encode("utf-8")).hexdigest(),
+        systemd_unit=unit,
+        argv=argv,
+    )
+
+
 def accept_successor_custody_offer(
     *,
     offer: SuccessorCustodyOfferV1,
@@ -721,6 +839,8 @@ def validate_successor_custody_acceptance(
 
 __all__ = [
     "CodexActivityV1",
+    "CodexSuccessorLaunchReceiptV1",
+    "CodexSuccessorLaunchV1",
     "ContinuityAssessmentV1",
     "NativeCodexDeliveryJournalV1",
     "NativeCodexQueueReceiptV1",
@@ -731,6 +851,7 @@ __all__ = [
     "accept_successor_custody_offer",
     "assess_continuity",
     "assess_resume_offer",
+    "build_codex_successor_launch",
     "build_native_codex_resume_offer",
     "build_resume_offer_request",
     "build_successor_custody_offer",

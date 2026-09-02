@@ -436,7 +436,7 @@ def test_codex_command_is_ephemeral_lane_write_and_schema_bound(tmp_path: Path) 
     assert command[:2] == ("codex", "exec")
     assert "--ephemeral" in command
     assert command[command.index("--sandbox") + 1] == "workspace-write"
-    assert command[command.index("--add-dir") + 1] == str(tmp_path)
+    assert "--add-dir" not in command
     assert command[command.index("--output-schema") + 1].endswith("pr-review-signoff.schema.json")
     assert command[command.index("--output-last-message") + 1].endswith("semantic.json")
 

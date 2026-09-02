@@ -34,9 +34,11 @@ planning format and must not invent or weaken criteria.
    at `/run/user/<uid>` is hidden unconditionally and replaced with a lane-private
    runtime so a reviewer cannot ask the user systemd manager or session bus to
    launch a process outside the boundary, even through another mount alias or by
-   addressing its socket directly. The client uses `workspace-write` only for the
-   lane-private directory; the outer OS unit remains the authoritative read-only
-   boundary for the checkout and host;
+   addressing its socket directly. The ephemeral lane directories live inside
+   the frozen checkout so the client's `workspace-write` sandbox can use its
+   normal workspace model; the outer OS unit reopens only those exact temporary
+   subtrees and remains the authoritative read-only boundary for the rest of the
+   checkout and host. The subtrees are deleted before the clean-head recheck;
 4. concurrent execution and explicit session custody for every declared lane;
 5. schema validation of every independent semantic result;
 6. the final deterministic signoff decision and receipt digest; and

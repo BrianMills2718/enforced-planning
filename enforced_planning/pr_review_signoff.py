@@ -185,7 +185,6 @@ def build_codex_command(
     repo_root: Path,
     output_schema: Path,
     output_path: Path,
-    writable_directory: Path | None = None,
     model: str | None,
     effort: str,
 ) -> tuple[str, ...]:
@@ -197,8 +196,6 @@ def build_codex_command(
         "--ignore-user-config",
         "--sandbox",
         "workspace-write",
-        "--add-dir",
-        str(writable_directory or output_path.parent),
         "--config",
         f'model_reasoning_effort="{effort}"',
         "--cd",
@@ -211,7 +208,7 @@ def build_codex_command(
         "-",
     ]
     if model:
-        command[8:8] = ["--model", model]
+        command[6:6] = ["--model", model]
     return tuple(command)
 
 
@@ -541,7 +538,6 @@ def _run_reviewer_lane(
         repo_root=root,
         output_schema=output_schema,
         output_path=semantic_path,
-        writable_directory=lane_directory,
         model=model,
         effort=effort,
     )
@@ -630,7 +626,7 @@ def run_review(
     checks = run_programmatic_checks(spec, repo_root=root)
     _assert_frozen_worktree(root, spec.head_sha, phase="post-check")
 
-    with tempfile.TemporaryDirectory(prefix="pr-review-signoff-") as directory:
+    with tempfile.TemporaryDirectory(prefix=".pr-review-signoff-", dir=root) as directory:
         output_directory = Path(directory)
 
         def run_lane(review_lane: str) -> tuple[ReviewerSession, SemanticReviewResult]:

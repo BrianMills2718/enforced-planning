@@ -244,29 +244,48 @@ def test_native_codex_queue_receipt_rejects_wrong_thread() -> None:
         )
 
 
-def test_native_consumption_requires_correlated_owner_user_turn(tmp_path: Path) -> None:
+@pytest.mark.parametrize("record_shape", ["response_item", "completed_item"])
+def test_native_consumption_requires_authentic_correlated_owner_user_turn(
+    tmp_path: Path,
+    record_shape: str,
+) -> None:
     transcript = tmp_path / "session.jsonl"
     correlation_id = "a" * 24
-    records = [
-        {
-            "timestamp": "2026-09-02T04:31:00Z",
-            "type": "event_msg",
+    if record_shape == "response_item":
+        consumed = {
+            "timestamp": "2026-09-02T04:32:00Z",
+            "type": "response_item",
             "payload": {
-                "type": "agent_message",
-                "message": f"continuity-resume:{correlation_id}: echoed",
+                "type": "message",
+                "role": "user",
+                "content": [
+                    {
+                        "type": "input_text",
+                        "text": f"continuity-resume:{correlation_id}: continue",
+                    }
+                ],
             },
-        },
-        {
+        }
+    else:
+        consumed = {
             "timestamp": "2026-09-02T04:32:00Z",
             "type": "event_msg",
             "payload": {
-                "type": "user_message",
-                "message": f"continuity-resume:{correlation_id}: continue",
+                "type": "item_completed",
+                "thread_id": "01a05b94-d5d8-7d82-8a9a-6c64c6979e96",
+                "item": {
+                    "type": "UserMessage",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": f"continuity-resume:{correlation_id}: continue",
+                        }
+                    ],
+                },
             },
-        },
-    ]
+        }
     transcript.write_text(
-        "".join(json.dumps(record) + "\n" for record in records), encoding="utf-8"
+        json.dumps(consumed) + "\n", encoding="utf-8"
     )
 
     receipt = read_native_codex_consumption(
@@ -289,10 +308,16 @@ def test_native_consumption_does_not_accept_agent_echo(tmp_path: Path) -> None:
         json.dumps(
             {
                 "timestamp": "2026-09-02T04:31:00Z",
-                "type": "event_msg",
+                "type": "response_item",
                 "payload": {
-                    "type": "agent_message",
-                    "message": f"continuity-resume:{correlation_id}: echoed",
+                    "type": "message",
+                    "role": "assistant",
+                    "content": [
+                        {
+                            "type": "output_text",
+                            "text": f"continuity-resume:{correlation_id}: echoed",
+                        }
+                    ],
                 },
             }
         )
@@ -1208,10 +1233,16 @@ def test_accepted_native_delivery_promotes_once_after_transcript_consumption(
         json.dumps(
             {
                 "timestamp": "2026-09-02T04:32:00Z",
-                "type": "event_msg",
+                "type": "response_item",
                 "payload": {
-                    "type": "user_message",
-                    "message": f"continuity-resume:{correlation_id}: continue",
+                    "type": "message",
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "input_text",
+                            "text": f"continuity-resume:{correlation_id}: continue",
+                        }
+                    ],
                 },
             }
         )

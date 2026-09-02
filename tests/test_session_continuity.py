@@ -15,6 +15,8 @@ from enforced_planning import coordination_messages
 from enforced_planning.session_continuity import (
     CodexActivityV1,
     CodexSuccessorLaunchReceiptV1,
+    NativeCodexConsumptionReceiptV1,
+    NativeCodexDeliveryJournalV1,
     SuccessorCustodyAcceptanceV1,
     SuccessorCustodyOfferV1,
     accept_successor_custody_offer,
@@ -22,6 +24,7 @@ from enforced_planning.session_continuity import (
     assess_resume_offer,
     build_codex_successor_launch,
     build_native_codex_resume_offer,
+    build_native_successor_custody_offer,
     build_resume_offer_request,
     build_successor_custody_offer,
     native_resume_progress_fingerprint,
@@ -523,6 +526,87 @@ def test_successor_offer_freezes_exact_recoverable_custody() -> None:
     assert offer.claim_epoch_sha256 == "c" * 64
     assert offer.head_revision == "d" * 40
     assert offer.next_action == "run the focused integration"
+
+
+def test_native_consumed_retry_builds_offer_without_mailbox_or_launch() -> None:
+    owner = "codex:01a05b94-d5d8-7d82-8a9a-6c64c6979e96"
+    thread = owner.removeprefix("codex:")
+    correlation = "a" * 24
+    submission = "01a0608f-1498-7413-b469-3e538a9bf171"
+    delivery = NativeCodexDeliveryJournalV1(
+        owner_session_id=owner,
+        thread_id=thread,
+        correlation_id=correlation,
+        progress_fingerprint=PROGRESS_FINGERPRINT,
+        state="accepted",
+        recorded_at=NOW,
+        queued_submission_id=submission,
+    )
+    consumption = NativeCodexConsumptionReceiptV1(
+        owner_session_id=owner,
+        thread_id=thread,
+        correlation_id=correlation,
+        queued_submission_id=submission,
+        transcript_path="/tmp/session.jsonl",
+        consumed_at=NOW,
+    )
+
+    offer = build_native_successor_custody_offer(
+        delivery=delivery,
+        consumption=consumption,
+        consumed_attempt_count=2,
+        project="demo",
+        scope="feature-lane",
+        branch="feat/example",
+        worktree_path="/tmp/demo/worktrees/feat/example",
+        claim_epoch_sha256="c" * 64,
+        head_revision="d" * 40,
+        next_action="run the focused integration",
+        created_at=NOW,
+    )
+
+    assert offer.owner_resume_message_id is None
+    assert offer.owner_resume_correlation_id == correlation
+    assert offer.predecessor_session_id == owner
+
+
+def test_native_successor_offer_rejects_unconsumed_or_unbounded_attempt() -> None:
+    owner = "codex:01a05b94-d5d8-7d82-8a9a-6c64c6979e96"
+    thread = owner.removeprefix("codex:")
+    delivery = NativeCodexDeliveryJournalV1(
+        owner_session_id=owner,
+        thread_id=thread,
+        correlation_id="a" * 24,
+        progress_fingerprint=PROGRESS_FINGERPRINT,
+        state="accepted",
+        recorded_at=NOW,
+        queued_submission_id="01a0608f-1498-7413-b469-3e538a9bf171",
+    )
+    consumption = NativeCodexConsumptionReceiptV1(
+        owner_session_id=owner,
+        thread_id=thread,
+        correlation_id="b" * 24,
+        queued_submission_id="01a0608f-1498-7413-b469-3e538a9bf171",
+        transcript_path="/tmp/session.jsonl",
+        consumed_at=NOW,
+    )
+    kwargs = {
+        "delivery": delivery,
+        "consumption": consumption,
+        "project": "demo",
+        "scope": "feature-lane",
+        "branch": "feat/example",
+        "worktree_path": "/tmp/demo/worktrees/feat/example",
+        "claim_epoch_sha256": "c" * 64,
+        "head_revision": "d" * 40,
+        "next_action": "run the focused integration",
+        "created_at": NOW,
+    }
+
+    with pytest.raises(ValueError, match="bounded retry"):
+        build_native_successor_custody_offer(consumed_attempt_count=1, **kwargs)
+    with pytest.raises(ValueError, match="matching delivery"):
+        build_native_successor_custody_offer(consumed_attempt_count=2, **kwargs)
 
 
 def test_codex_successor_launch_requires_acceptance_before_work(tmp_path: Path) -> None:

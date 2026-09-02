@@ -668,6 +668,7 @@ def test_installed_prewrite_runtime_projects_and_classifies_native_payloads(
     )
     assert install.returncode == 0, install.stderr
     assert (repo / "enforced_planning" / "__init__.py").is_file()
+    assert (repo / "enforced_planning" / "session_continuity.py").is_file()
 
     claims_dir = tmp_path / "claims"
     claims_dir.mkdir()

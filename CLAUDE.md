@@ -172,7 +172,12 @@ adoption.
    A merged temporary child sharing its exact parent worktree and branch is the
    other metadata-only exception: close the child first with
    `session-close --terminalize-shared-child`, then close the retained parent
-   normally. Cross-session Codex `session-resume` requires the exact
+   normally. A different exact native runtime may close an existing linked
+   worktree only after its claim is truly `session_ended`, its claim and tracker
+   digests are supplied to `session-close --reconcile-session-ended`, and the
+   ordinary merge or durable-recovery preflight passes. This terminal cleanup
+   does not transfer write custody; continuing unmerged work still uses
+   `session-resume`. Cross-session Codex `session-resume` requires the exact
    predecessor PID plus `/proc` start ticks, and fences that verified
    session/worktree process under the exact claim-bytes transfer epoch before
    claim custody changes.

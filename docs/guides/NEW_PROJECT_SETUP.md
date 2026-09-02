@@ -99,6 +99,7 @@ meta_process:
     require_prefix: true
     valid_prefixes:
       - "\\[Plan #\\d+\\]"
+      - "\\[Goal [a-z0-9][a-z0-9._:-]*\\]"
       - "\\[Trivial\\]"
       - "\\[Unplanned\\]"
 

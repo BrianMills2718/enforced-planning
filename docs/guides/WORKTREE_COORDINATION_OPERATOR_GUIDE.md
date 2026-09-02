@@ -1715,6 +1715,36 @@ python scripts/session_close.py \
 The JSON response and completed claim retain a `missing_worktree_reconciliation`
 receipt. Do not use this path to close a live, handoff, or existing worktree.
 
+### Exact ownerless session-ended closeout
+
+When a different native runtime inherits a clean linked worktree whose claim is
+already `session_ended`, do not invent a predecessor PID and do not transfer
+write custody merely to remove merged residue. The successor may terminally
+close the lane with exact claim and tracker digests plus the ordinary merge or
+recovery evidence:
+
+```bash
+python scripts/session_close.py \
+  --agent codex --project enforced-planning --scope finished-lane \
+  --session-id "$CODEX_THREAD_ID" \
+  --reconcile-session-ended \
+  --claim-sha256 "$(sha256sum ~/.claude/coordination/claims/codex_enforced-planning_finished-lane.yaml | cut -d' ' -f1)" \
+  --tracker-sha256 "$(sha256sum /absolute/path/to/exact-tracker.yaml | cut -d' ' -f1)" \
+  --merge-commit <canonical-merge-or-squash-commit> \
+  --json
+```
+
+This path is terminal reconciliation, not takeover. It requires a different
+exact native actor, non-canonical linked-worktree custody, one identity-matched
+tracker, byte-exact digests, and a valid pushed merge or durable recovery
+disposition. The original `session_ended` claim and tracker bytes remain intact
+until physical cleanup succeeds, so a retry can finish after partial cleanup
+even when the recorded worktree is then absent. It rejects live claims,
+canonical-root custody, digest drift, dirty state, unique unpreserved commits,
+and invalid Git evidence before lifecycle mutation. Unmerged work that must
+continue still requires the sanctioned custody-transfer path and its process
+fencing.
+
 Explicit archive closeout for an unmerged branch whose exact tip remains on a
 durable remote or tag ref:
 

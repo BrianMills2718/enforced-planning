@@ -79,6 +79,14 @@ mutation-receipt checks, source/generated parity, and framework self-test.
 expand or escape its old paths through the narrow command, a bootstrap-broad
 claim authorizes an ordinary write, or parent/child overlap stops blocking.
 
+**Post-completion lifecycle integration (2026-09-02):** The real gate now also
+permits a different exact native runtime to terminally reconcile a preserved
+`session_ended` linked worktree through `session-close
+--reconcile-session-ended`, but only with byte-exact claim/tracker digests and
+the existing merge or durable-recovery preflight. This does not weaken Plan
+132's ownership rules or transfer write custody; it removes already-finished
+ownerless residue that would otherwise prevent a new narrow goal-bound claim.
+
 ---
 
 ## References Reviewed

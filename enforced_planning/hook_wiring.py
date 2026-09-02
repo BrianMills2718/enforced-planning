@@ -122,6 +122,7 @@ PREWRITE_SUPPORT_FILES: dict[str, str] = {
     "enforced_planning/read_target.py": "enforced_planning/read_target.py",
     "enforced_planning/repository_authority.py": "enforced_planning/repository_authority.py",
     "enforced_planning/session_contracts.py": "enforced_planning/session_contracts.py",
+    "enforced_planning/session_continuity.py": "enforced_planning/session_continuity.py",
     "enforced_planning/session_lifecycle.py": "enforced_planning/session_lifecycle.py",
     "enforced_planning/session_process_fencing.py": "enforced_planning/session_process_fencing.py",
     "enforced_planning/session_target.py": "enforced_planning/session_target.py",

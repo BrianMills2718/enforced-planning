@@ -15,14 +15,19 @@ Usage::
     # Preview what would change — never modifies files
     python scripts/upgrade_governed_repos.py --registry governed_repos.yaml --dry-run
 
-    # Write mode is fail-closed until claimed-worktree orchestration is implemented.
-    # Apply one reviewed dry-run through install_governed_repo.py inside that
-    # repository's own claimed linked worktree instead.
+    # Sync one repo through its own claimed linked worktree: creates the
+    # worktree via `make maintenance-worktree`, runs install --write + audit
+    # inside it (never the primary checkout), and pushes a branch/PR if the
+    # sync produced a diff. Never merges. --repo is mandatory for --write --
+    # this slice is intentionally one repo at a time (see "Minimal First
+    # Slice" in the design doc); batch write-mode is a later slice.
+    python scripts/upgrade_governed_repos.py --registry governed_repos.yaml --repo llm_client --write
 
     # Output machine-readable report
     python scripts/upgrade_governed_repos.py --registry governed_repos.yaml --dry-run --json
 
 Design: docs/designs/GOVERNED_REPO_UPGRADE_AUTOMATION.md
+Plan: docs/plans/51_upgrade-automation-implementation-and-write-mode-rollout.md
 """
 
 from __future__ import annotations
@@ -31,7 +36,9 @@ import argparse
 import json
 import subprocess
 import sys
+import time
 from dataclasses import dataclass, field
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -59,18 +66,32 @@ class RepoUpgradeResult:
     audit_stderr: str = ""
     classification: str = "unknown"
     blockers: list[str] = field(default_factory=list)
+    # write-mode only
+    branch: str = ""
+    had_diff: bool = False
+    pr_url: str = ""
+    write_error: str = ""
 
     @property
     def success(self) -> bool:
         if self.skipped:
+            return False
+        if self.write_error:
             return False
         return self.install_rc == 0 and self.audit_rc == 0
 
     def summary_line(self) -> str:
         if self.skipped:
             return f"  SKIP  {self.repo_id}: {self.skip_reason}"
+        if self.write_error:
+            return f"  FAIL  {self.repo_id}: {self.write_error}"
         status = "OK  " if self.success else "FAIL"
-        return f"  {status}  {self.repo_id} [{self.classification}]"
+        tail = ""
+        if self.pr_url:
+            tail = f" -> {self.pr_url}"
+        elif self.branch and not self.had_diff:
+            tail = " (already in sync, no PR needed)"
+        return f"  {status}  {self.repo_id} [{self.classification}]{tail}"
 
 
 def _expand(path: str) -> Path:
@@ -85,6 +106,236 @@ def _has_local_dirt(repo_root: Path) -> bool:
         text=True,
     )
     return bool(result.stdout.strip())
+
+
+def _run(cmd: list[str], cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(cmd, cwd=cwd, capture_output=True, text=True)
+
+
+def _single_line(text: str, limit: int) -> str:
+    """Collapse to one line for safe embedding as a Makefile recipe argument.
+
+    A multi-line value (e.g. captured subprocess stderr) breaks Make's
+    `"$(VAR)"` recipe-line expansion once it contains an embedded newline --
+    the shell sees the rest as separate commands. Found live: this silently
+    made the session-close retry after an abandoned write never actually run.
+    """
+    return " ".join(text.split())[:limit]
+
+
+def write_repo(repo_id: str, repo_root: Path, tier: str, owner: str) -> RepoUpgradeResult:
+    """Sync one repo through its own claimed linked worktree.
+
+    Never touches repo_root's primary checkout. Sequence:
+      1. `make maintenance-worktree` in repo_root creates a claimed branch +
+         worktree via that repo's own sanctioned entrypoint (installed by
+         install_governed_repo.py, so every eligible repo already has it).
+      2. install_governed_repo.py --write, then audit_governed_repo.py
+         --strict-governed, both run *inside the worktree*.
+      3. If the worktree has no diff, the sync was a no-op: close the lane
+         with disposition=merged (nothing unique) and report "already in
+         sync." If it has a diff, commit + push + open a PR. Never merges.
+      4. On any failure, abandon the worktree (`make worktree-remove`) rather
+         than leave partial state or touch the primary checkout.
+    """
+    result = RepoUpgradeResult(repo_id=repo_id, repo_root=repo_root, tier=tier)
+
+    if owner and owner != "brian":
+        result.skipped = True
+        result.skip_reason = (
+            f"owner={owner!r}: write-mode for a non-Brian-owned repo needs its own "
+            "explicit authorization, not blanket fleet write-mode. Sync it by hand "
+            "(the pattern this script automates) until that authority exists."
+        )
+        return result
+
+    if not repo_root.exists():
+        result.skipped = True
+        result.skip_reason = f"repo root does not exist: {repo_root}"
+        return result
+
+    if not (repo_root / "Makefile").exists():
+        result.skipped = True
+        result.skip_reason = "no Makefile -- cannot use the sanctioned maintenance-worktree entrypoint"
+        return result
+
+    branch = f"sync-enforced-planning-{date.today().isoformat()}"
+    result.branch = branch
+    worktree_path = repo_root / "worktrees" / branch
+
+    makefile_text = (repo_root / "Makefile").read_text(encoding="utf-8", errors="ignore")
+    task = "Sync installer-declared coordination consumer files from canonical enforced-planning"
+    goal = "Close installer-declared drift from canonical enforced-planning"
+    # Named, not ".": the actual directories install_governed_repo.py's
+    # closure writes to. A repo whose Makefile requires an explicit narrow
+    # scope (some do -- SESSION_WRITE_PATHS_REQUIRED-style policy) rejects a
+    # bootstrap "." claim outright, and this is genuinely what gets touched.
+    write_paths = "enforced_planning scripts/meta .claude .codex contracts AGENTS.md Makefile"
+    if "\nmaintenance-worktree:" in makefile_text or makefile_text.startswith("maintenance-worktree:"):
+        # Newer installed Makefile: the convenience wrapper exists.
+        make_cmd = [
+            "make", "-C", str(repo_root), "maintenance-worktree",
+            f"BRANCH={branch}", f"TASK={task}", f"SESSION_GOAL={goal}",
+            "SESSION_PHASE=sync", "WORKTREE_AGENT=claude-code", "SESSION_ALLOW_PARALLEL=1",
+            f"SESSION_WRITE_PATHS={write_paths}",
+        ]
+    elif "\nworktree:" in makefile_text or makefile_text.startswith("worktree:"):
+        # Older installed Makefile: this is exactly the drift being fixed, so
+        # the newer wrapper isn't installed yet. Fall back to the base target
+        # it already has, supplying explicitly what maintenance-worktree
+        # would otherwise derive.
+        make_cmd = [
+            "make", "-C", str(repo_root), "worktree",
+            f"BRANCH={branch}", f"TASK={task}", f"SESSION_GOAL={goal}",
+            "SESSION_PHASE=sync", "WORKTREE_AGENT=claude-code", "SESSION_ALLOW_PARALLEL=1",
+            f"SESSION_WRITE_PATHS={write_paths}",
+        ]
+    else:
+        result.write_error = "Makefile has neither maintenance-worktree nor worktree target"
+        return result
+    make_proc = _run(make_cmd)
+    if make_proc.returncode != 0:
+        result.write_error = (
+            "make maintenance-worktree failed: "
+            f"{(make_proc.stderr or make_proc.stdout).strip()[:500]}"
+        )
+        return result
+
+    if not worktree_path.exists():
+        result.write_error = f"maintenance-worktree reported success but {worktree_path} does not exist"
+        return result
+
+    def _abandon(reason: str) -> None:
+        result.write_error = reason
+        # session-close refuses to touch a dirty worktree at all (not even
+        # with WORKTREE_ALLOW_DISCARD_UNIQUE, which governs unique *commits*,
+        # not uncommitted working-tree state). A failure between install
+        # --write and the eventual commit (e.g. a repo-local pre-commit hook
+        # rejecting the sync) leaves real uncommitted output sitting there.
+        # Stash it -- never discard -- so a human can recover exactly what
+        # the sync produced, then close cleanly.
+        status = _run(["git", "status", "--porcelain"], cwd=worktree_path)
+        if status.stdout.strip():
+            _run(
+                ["git", "stash", "push", "-u", "-m", f"upgrade_governed_repos.py --write abandoned: {reason[:150]}"],
+                cwd=worktree_path,
+            )
+        remove_proc = _run(
+            [
+                "make",
+                "-C",
+                str(repo_root),
+                "worktree-remove",
+                f"BRANCH={branch}",
+                "WORKTREE_AGENT=claude-code",
+                "WORKTREE_DISPOSITION=abandoned",
+                f"WORKTREE_DISPOSITION_REASON=upgrade_governed_repos.py --write failed: {_single_line(reason, 200)}",
+            ]
+        )
+        if remove_proc.returncode != 0:
+            # Empty-after-stash branches read as "already integrated" by the
+            # closeout preflight; retry as the disposition it actually wants.
+            # A retry fired immediately (machine-speed, not human-paced) can
+            # still observe a lock/registry write from the failed attempt in
+            # flight; a short wait made this reliably succeed in testing.
+            time.sleep(1.5)
+            _run(
+                [
+                    "make",
+                    "-C",
+                    str(repo_root),
+                    "worktree-remove",
+                    f"BRANCH={branch}",
+                    "WORKTREE_AGENT=claude-code",
+                    "WORKTREE_DISPOSITION=merged",
+                    f"WORKTREE_DISPOSITION_REASON=no unique commit; sync attempt failed: {_single_line(reason, 150)}",
+                ]
+            )
+
+    install_proc = _run([sys.executable, str(INSTALL_SCRIPT), "--repo-root", str(worktree_path), "--write"])
+    result.install_rc = install_proc.returncode
+    result.install_stdout = install_proc.stdout
+    result.install_stderr = install_proc.stderr
+    if install_proc.returncode != 0:
+        _abandon(f"install --write failed inside worktree: {install_proc.stderr.strip()[:500]}")
+        return result
+
+    audit_proc = _run([sys.executable, str(AUDIT_SCRIPT), "--repo-root", str(worktree_path), "--strict-governed", "--json"])
+    result.audit_rc = audit_proc.returncode
+    result.audit_stdout = audit_proc.stdout
+    result.audit_stderr = audit_proc.stderr
+    try:
+        audit_data = json.loads(audit_proc.stdout)
+        result.classification = audit_data.get("classification", "unknown")
+        result.blockers = audit_data.get("blockers", [])
+    except (json.JSONDecodeError, AttributeError):
+        result.classification = "unknown"
+    if audit_proc.returncode != 0:
+        _abandon(f"audit --strict-governed failed inside worktree: {audit_proc.stderr.strip()[:500]}")
+        return result
+
+    status_proc = _run(["git", "status", "--porcelain"], cwd=worktree_path)
+    if not status_proc.stdout.strip():
+        result.had_diff = False
+        close_proc = _run(
+            [
+                "make",
+                "-C",
+                str(repo_root),
+                "session-close",
+                f"BRANCH={branch}",
+                "WORKTREE_AGENT=claude-code",
+                "WORKTREE_DISPOSITION=merged",
+                "WORKTREE_DISPOSITION_REASON=install --write produced no diff; already in sync with canonical enforced-planning",
+            ]
+        )
+        if close_proc.returncode != 0:
+            result.write_error = f"already in sync, but session-close failed: {close_proc.stderr.strip()[:500]}"
+            return result
+        return result
+
+    result.had_diff = True
+    add_proc = _run(["git", "add", "-A"], cwd=worktree_path)
+    commit_proc = _run(
+        [
+            "git",
+            "commit",
+            "-m",
+            f"[Unplanned] Sync coordination consumer files from canonical enforced-planning\n\n"
+            f"Automated via upgrade_governed_repos.py --write, Plan #51.\n\n"
+            f"Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>",
+        ],
+        cwd=worktree_path,
+    )
+    if add_proc.returncode != 0 or commit_proc.returncode != 0:
+        _abandon(f"git commit failed: {(commit_proc.stderr or add_proc.stderr).strip()[:500]}")
+        return result
+
+    push_proc = _run(["git", "push", "-u", "origin", branch], cwd=worktree_path)
+    if push_proc.returncode != 0:
+        _abandon(f"git push failed: {push_proc.stderr.strip()[:500]}")
+        return result
+
+    pr_proc = _run(
+        [
+            "gh",
+            "pr",
+            "create",
+            "--title",
+            f"Sync coordination consumer files from canonical enforced-planning ({date.today().isoformat()})",
+            "--body",
+            "Automated via `scripts/upgrade_governed_repos.py --write` (Plan #51). "
+            "Not auto-merged -- review before merging.\n\n"
+            "🤖 Generated with [Claude Code](https://claude.com/claude-code)",
+        ],
+        cwd=worktree_path,
+    )
+    if pr_proc.returncode == 0:
+        result.pr_url = pr_proc.stdout.strip()
+    else:
+        result.write_error = f"pushed but PR creation failed: {pr_proc.stderr.strip()[:500]}"
+
+    return result
 
 
 def upgrade_repo(
@@ -195,7 +446,10 @@ def run_upgrade(
         if not as_json:
             print(f"  → {repo_id} ({tier}) at {repo_root}")
 
-        result = upgrade_repo(repo_id, repo_root, tier, dry_run)
+        if dry_run:
+            result = upgrade_repo(repo_id, repo_root, tier, dry_run)
+        else:
+            result = write_repo(repo_id, repo_root, tier, entry.get("owner", "brian"))
         results.append(result)
 
         if not as_json:
@@ -226,6 +480,10 @@ def run_upgrade(
                     "blockers": r.blockers,
                     "install_rc": r.install_rc,
                     "audit_rc": r.audit_rc,
+                    "branch": r.branch,
+                    "had_diff": r.had_diff,
+                    "pr_url": r.pr_url,
+                    "write_error": r.write_error,
                 }
                 for r in results
             ],
@@ -261,7 +519,12 @@ def main(argv: list[str] | None = None) -> int:
         "--write",
         action="store_true",
         default=False,
-        help="Reserved; currently fails closed until claimed-worktree write orchestration exists.",
+        help=(
+            "Sync one repo (requires --repo) through its own claimed linked "
+            "worktree: make maintenance-worktree, install --write, audit "
+            "--strict-governed, then commit+push+PR if there was a diff. "
+            "Never touches the primary checkout and never auto-merges."
+        ),
     )
     parser.add_argument(
         "--json",
@@ -271,12 +534,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    if args.write:
+    if args.write and not args.repo:
         print(
-            "ERROR: fleet --write is disabled because this command does not yet "
-            "create claimed linked worktrees, commits, publication receipts, or "
-            "sanctioned closeout. Run the fleet dry-run, then apply the selected "
-            "installer profile inside each repository's own claimed worktree.",
+            "ERROR: --write requires --repo REPO_ID. This slice is intentionally "
+            "one repo at a time (see the design doc's 'Minimal First Slice'); "
+            "batch fleet write-mode is a later slice, not this command's default.",
             file=sys.stderr,
         )
         return 2

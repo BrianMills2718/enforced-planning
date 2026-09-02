@@ -11,7 +11,8 @@ import secrets
 import shlex
 import subprocess
 import sys
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterator, Sequence
+from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -184,9 +185,35 @@ def _append_receipt(path: Path, payload: dict[str, Any]) -> None:
         except BlockingIOError as exc:
             raise RuntimeError("another session continuity sweep is still active") from exc
         with resolved.open("a", encoding="utf-8") as receipt:
+            resolved.chmod(0o600)
             receipt.write(json.dumps(payload, sort_keys=True) + "\n")
             receipt.flush()
             os.fsync(receipt.fileno())
+
+
+@contextmanager
+def _exclusive_sweep(receipt_path: Path) -> Iterator[None]:
+    """Prevent two shared timer invocations from scanning concurrently."""
+
+    resolved = receipt_path.expanduser().resolve()
+    resolved.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    lock_path = resolved.with_suffix(resolved.suffix + ".sweep.lock")
+    with lock_path.open("a+", encoding="utf-8") as lock:
+        lock_path.chmod(0o600)
+        try:
+            fcntl.flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            raise RuntimeError("another session continuity sweep is still active") from exc
+        yield
+
+
+def run_observe_sweep(*, notify_minutes: int, receipt_path: Path) -> dict[str, Any]:
+    """Run and receipt one full observe sweep under the shared process lock."""
+
+    with _exclusive_sweep(receipt_path):
+        payload = build_observe_sweep(notify_minutes=notify_minutes)
+        _append_receipt(receipt_path, payload)
+        return payload
 
 
 def render_observe_timer(
@@ -308,6 +335,8 @@ def install_observe_timer(
     for command in (
         ("systemctl", "--user", "daemon-reload"),
         ("systemctl", "--user", "enable", "--now", f"{DEFAULT_UNIT_NAME}.timer"),
+        ("systemctl", "--user", "is-enabled", f"{DEFAULT_UNIT_NAME}.timer"),
+        ("systemctl", "--user", "is-active", f"{DEFAULT_UNIT_NAME}.timer"),
     ):
         result = run(command, capture_output=True, text=True, check=False)
         if result.returncode != 0:
@@ -335,8 +364,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(json.dumps(payload, indent=2, sort_keys=True))
         return 0
     if args.scan_all_live_claims:
-        payload = build_observe_sweep(notify_minutes=args.notify_minutes)
-        _append_receipt(args.receipt_jsonl, payload)
+        payload = run_observe_sweep(
+            notify_minutes=args.notify_minutes,
+            receipt_path=args.receipt_jsonl,
+        )
         print(json.dumps(payload, indent=2, sort_keys=True))
         return 0
     matches = [

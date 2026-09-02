@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import fcntl
 import json
 import subprocess
 from dataclasses import dataclass
@@ -479,6 +480,18 @@ def test_install_observe_timer_records_owner_review_and_retirement(
             "--now",
             "enforced-planning-session-continuity.timer",
         ),
+        (
+            "systemctl",
+            "--user",
+            "is-enabled",
+            "enforced-planning-session-continuity.timer",
+        ),
+        (
+            "systemctl",
+            "--user",
+            "is-active",
+            "enforced-planning-session-continuity.timer",
+        ),
     ]
 
 
@@ -506,3 +519,18 @@ def test_sweep_receipt_is_one_json_line(tmp_path: Path) -> None:
     continuity_cli._append_receipt(receipt, payload)
 
     assert json.loads(receipt.read_text(encoding="utf-8")) == payload
+    assert receipt.stat().st_mode & 0o777 == 0o600
+
+
+def test_full_sweep_rejects_overlapping_invocation(tmp_path: Path) -> None:
+    receipt = tmp_path / "receipts.jsonl"
+    lock_path = receipt.with_suffix(receipt.suffix + ".sweep.lock")
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+
+    with lock_path.open("a+", encoding="utf-8") as held:
+        fcntl.flock(held.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        with pytest.raises(RuntimeError, match="still active"):
+            continuity_cli.run_observe_sweep(
+                notify_minutes=15,
+                receipt_path=receipt,
+            )

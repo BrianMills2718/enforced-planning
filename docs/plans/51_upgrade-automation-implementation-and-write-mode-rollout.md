@@ -1,6 +1,6 @@
 # Plan #51: Upgrade Automation Implementation and Write-Mode Rollout
 
-**Status:** 🟡 Partial (dry-run shipped; safe claimed-worktree write mode implemented and verified against real repos 2026-09-02; fleet-wide rollout not yet run)
+**Status:** 🟡 Partial (dry-run shipped; safe claimed-worktree write mode implemented and verified against real repos 2026-09-02; an 18-repo fleet attempt the same day found 0/18 succeeding for several distinct, now-catalogued reasons, one already fixed at the source (PR #388); fleet-wide rollout not yet run)
 **Type:** implementation
 **Priority:** High
 **Blocked By:** Plan #20 (design)
@@ -60,11 +60,44 @@ governed repos, not mocks.
 ### What this does not yet cover
 
 - Batch write-mode across many repos in one invocation (deliberately deferred,
-  matching "Minimal First Slice").
-- The `plan_ref` gap some older `maintenance-worktree` installs have (found on
-  `orgchart`; not yet reproduced/fixed for every historical variant).
+  matching "Minimal First Slice"). Attempted manually across 18 repos on
+  2026-09-02: 0 succeeded, for several distinct reasons (see below).
 - `owner: inside-success` repos, which need their own explicit authorization
   before this script should touch them at all.
+
+### `plan_ref` gap — root-caused and fixed at the source (2026-09-02)
+
+Reproduced on a second repo, `llm_client`, during the 18-repo manual batch
+attempt above. Root-caused past "some older installs have a quirk": the
+session-start Makefile invocation was missing the same `ALLOW_UNPLANNED ->
+--plan UNPLANNED` fallback the earlier `--claim` step already had, in both
+the distributed template and this repo's own root Makefile. Fixed at the
+source in `enforced-planning` PR #388 (merged,
+`441a84e6248b47a9bcf3959be25d254e742a0e5b`); documented as a standing
+invariant in `docs/guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md`.
+
+This closes the *cause*, not the two already-affected repos: `orgchart` and
+`llm_client` both still have the old, un-fixed Makefile installed. Their next
+`upgrade_governed_repos.py --write` run installs the corrected template as
+part of the sync itself, so no separate repair is needed there -- but that
+run hasn't happened yet.
+
+### The 18-repo manual batch attempt (2026-09-02) — 0 of 18 succeeded
+
+Distinct causes, not one bug: 5 repos have the already-documented broken
+vendored `enforced_planning/__init__.py`; 2 (`greer`,
+`graph_application_toolkit`) have no worktree/claim Makefile targets
+installed; 1 (`ecosystem-ops`) has a plan-gate that refuses unplanned
+maintenance work outright; 3 (`ac16`, `process_tracing`, `theory-forge`)
+failed with an empty `write_error` string -- `install --write failed inside
+worktree: ` with nothing after the colon, which is a bug in
+`upgrade_governed_repos.py`'s own error capture, not yet fixed; 1
+(`osint_tools`) got to a real commit and was correctly blocked by that
+repo's own doc-code coupling pre-commit hook; 1 (`llm_client`) got to a real
+commit and failed push on the `plan_ref` bug above (work preserved, then
+formally abandoned as superseded once the root cause was confirmed); 3
+(`ac15`, `digimon-for-kg-application`, `agent_memory`) failed with generic
+tracebacks not yet individually diagnosed.
 
 ---
 

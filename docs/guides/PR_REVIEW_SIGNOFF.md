@@ -25,8 +25,10 @@ planning format and must not invent or weaken criteria.
    a fail-closed systemd read-only mount for the frozen checkout and a private
    network namespace with GitHub/SSH credential environment variables cleared;
 3. one fresh ephemeral Codex process per semantic review lane inside an
-   OS-enforced read-only filesystem unit, with only its isolated receipt/temp
-   directory writable (the client read-only flag is defense in depth);
+   OS-enforced read-only filesystem unit, with only its lane-private receipt,
+   temp, and ephemeral Codex-home directory writable; the temporary home gets
+   only the authentication material required to start the client and is deleted
+   with the review workspace (the client read-only flag is defense in depth);
 4. concurrent execution and explicit session custody for every declared lane;
 5. schema validation of every independent semantic result;
 6. the final deterministic signoff decision and receipt digest; and

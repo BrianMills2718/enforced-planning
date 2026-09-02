@@ -553,6 +553,8 @@ def test_runner_executes_checks_and_fresh_schema_bound_reviewer(tmp_path: Path) 
         "    pass\n"
         "else:\n"
         "    raise SystemExit('reviewer filesystem was writable')\n"
+        "runtime_home = pathlib.Path(__import__('os').environ['CODEX_HOME'])\n"
+        "runtime_home.joinpath('runtime-marker').write_text('ok', encoding='utf-8')\n"
         "args = sys.argv[1:]\n"
         "out = pathlib.Path(args[args.index('--output-last-message') + 1])\n"
         f"semantic = {semantic!r}\n"

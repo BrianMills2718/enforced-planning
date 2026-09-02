@@ -480,10 +480,29 @@ def _run_reviewer_lane(
     timeout_seconds: int,
 ) -> tuple[ReviewerSession, SemanticReviewResult]:
     lane_digest = hashlib.sha256(review_lane.encode("utf-8")).hexdigest()[:12]
-    semantic_path = output_directory / f"semantic-review-{lane_digest}.json"
-    lane_tmp = output_directory / f"reviewer-tmp-{lane_digest}"
+    lane_directory = output_directory / f"reviewer-{lane_digest}"
+    semantic_path = lane_directory / "semantic-review.json"
+    lane_tmp = lane_directory / "tmp"
+    lane_codex_home = lane_directory / "codex-home"
     lane_tmp.mkdir(parents=True, exist_ok=True)
+    lane_codex_home.mkdir(mode=0o700)
     resolved_codex = shutil.which(codex_bin) or codex_bin
+    source_codex_home = Path(
+        os.environ.get("CODEX_HOME", str(Path.home() / ".codex"))
+    ).resolve()
+    installed_codex = source_codex_home / "packages/standalone/current/bin/codex"
+    default_codex = shutil.which("codex")
+    if (
+        installed_codex.is_file()
+        and default_codex is not None
+        and Path(resolved_codex).resolve() == Path(default_codex).resolve()
+    ):
+        resolved_codex = str(installed_codex)
+    auth_source = source_codex_home / "auth.json"
+    if auth_source.is_file():
+        auth_target = lane_codex_home / "auth.json"
+        shutil.copyfile(auth_source, auth_target)
+        auth_target.chmod(0o600)
     command = build_codex_command(
         codex_bin=resolved_codex,
         repo_root=root,
@@ -499,8 +518,9 @@ def _run_reviewer_lane(
         "--quiet",
         "--collect",
         "--property=ReadOnlyPaths=/",
-        f"--property=ReadWritePaths={output_directory}",
+        f"--property=ReadWritePaths={lane_directory}",
         f"--property=WorkingDirectory={root}",
+        f"--setenv=CODEX_HOME={lane_codex_home}",
         f"--setenv=TMPDIR={lane_tmp}",
         f"--setenv=TEMP={lane_tmp}",
         f"--setenv=TMP={lane_tmp}",

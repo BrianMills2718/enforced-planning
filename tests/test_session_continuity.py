@@ -1493,6 +1493,8 @@ def test_two_consumed_attempts_without_progress_reach_typed_circuit_breaker(
             "session_id": owner,
             "progress_fingerprint": PROGRESS_FINGERPRINT,
             "consumed_attempt_count": 2,
+            "consumed_correlation_ids": ["a" * 24, "b" * 24],
+            "latest_consumed_correlation_id": "b" * 24,
             "action": "circuit_breaker",
             "reason_code": "native_resume_progress_not_observed",
             "resume_condition": (
@@ -1501,6 +1503,103 @@ def test_two_consumed_attempts_without_progress_reach_typed_circuit_breaker(
             ),
         }
     ]
+
+
+def test_bounded_native_retry_persists_offer_without_launch_or_transfer(
+    tmp_path: Path,
+) -> None:
+    owner = "codex:01a05b94-d5d8-7d82-8a9a-6c64c6979e96"
+    thread = owner.removeprefix("codex:")
+    correlation = "b" * 24
+    submission = "01a0615e-330c-7680-8547-ef1850675131"
+    head_revision = "d" * 40
+    next_action = "run the focused integration"
+    progress_at = "2026-09-02T04:00:00+00:00"
+    progress_fingerprint = native_resume_progress_fingerprint(
+        progress_at=progress_at,
+        head_revision=head_revision,
+        next_action=next_action,
+    )
+    receipt_path = tmp_path / "receipts.jsonl"
+    receipt_path.write_text(
+        "".join(
+            json.dumps(record) + "\n"
+            for record in (
+                {
+                    "schema_version": "1.0",
+                    "record_type": "native_codex_resume_delivery",
+                    "owner_session_id": owner,
+                    "thread_id": thread,
+                    "correlation_id": correlation,
+                    "progress_fingerprint": progress_fingerprint,
+                    "state": "accepted",
+                    "recorded_at": NOW.isoformat(),
+                    "queued_submission_id": submission,
+                    "error": None,
+                },
+                {
+                    "schema_version": "1.0",
+                    "record_type": "native_codex_resume_consumption",
+                    "owner_session_id": owner,
+                    "thread_id": thread,
+                    "correlation_id": correlation,
+                    "queued_submission_id": submission,
+                    "transcript_path": "/tmp/session.jsonl",
+                    "consumed_at": NOW.isoformat(),
+                    "evidence_event": "correlated_user_message",
+                    "runtime_consumed": True,
+                },
+            )
+        ),
+        encoding="utf-8",
+    )
+    claim_source = tmp_path / "claim.yaml"
+    claim_source.write_text("scope: feature-lane\n", encoding="utf-8")
+    sweep = {
+        "items": [
+            {
+                "project": "demo",
+                "scope": "feature-lane",
+                "session_id": owner,
+                "next_action": next_action,
+                "progress_at": progress_at,
+                "worktree_path": str(tmp_path),
+                "branch": "feat/example",
+                "claim_source_file": str(claim_source),
+            }
+        ]
+    }
+    deliveries = [
+        {
+            "project": "demo",
+            "scope": "feature-lane",
+            "session_id": owner,
+            "progress_fingerprint": progress_fingerprint,
+            "consumed_attempt_count": 2,
+            "latest_consumed_correlation_id": correlation,
+            "action": "circuit_breaker",
+            "reason_code": "native_resume_progress_not_observed",
+        }
+    ]
+
+    result = continuity_cli.prepare_native_successor_offers(
+        sweep=sweep,
+        deliveries=deliveries,
+        receipt_path=receipt_path,
+        offer_dir=tmp_path / "offers",
+        git_run=lambda command, **_kwargs: subprocess.CompletedProcess(
+            command, 0, head_revision + "\n", ""
+        ),
+    )
+
+    assert result[0]["action"] == "successor_offer_prepared"
+    assert result[0]["owner_resume_correlation_id"] == correlation
+    assert result[0]["successor_launch_allowed"] is False
+    assert result[0]["transfer_eligible"] is False
+    offer_path = Path(result[0]["offer_path"])
+    offer = SuccessorCustodyOfferV1.model_validate_json(offer_path.read_text())
+    assert offer.owner_resume_correlation_id == correlation
+    assert offer_path.stat().st_mode & 0o777 == 0o600
 
 
 def test_unresolved_delivery_intent_fails_visible_without_retry(

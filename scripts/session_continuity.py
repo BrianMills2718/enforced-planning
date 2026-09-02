@@ -179,6 +179,8 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 def _assess_claim(claim: coordination_claims.ClaimRecord, *, notify_minutes: int) -> dict[str, Any]:
     """Produce one fail-visible observation without creating takeover authority."""
 
+    worktree_path = getattr(claim, "worktree_path", None)
+    claim_source_file = getattr(claim, "source_file", None)
     base = {
         "agent": claim.agent,
         "project": claim.primary_project(),
@@ -186,7 +188,9 @@ def _assess_claim(claim: coordination_claims.ClaimRecord, *, notify_minutes: int
         "session_id": claim.session_id,
         "next_action": claim.next_action,
         "progress_at": claim.progress_at,
-        "worktree_path": getattr(claim, "worktree_path", None),
+        "worktree_path": str(worktree_path) if worktree_path else None,
+        "branch": getattr(claim, "branch", None),
+        "claim_source_file": str(claim_source_file) if claim_source_file else None,
     }
     try:
         transcript = coordination_claims.session_transcript_path(claim.session_id)
@@ -612,17 +616,27 @@ def deliver_native_resume_offers(
                 progress_fingerprint = str(supplied_fingerprint)
                 if re.fullmatch(r"[0-9a-f]{64}", progress_fingerprint) is None:
                     raise ValueError("native resume delivery has an invalid progress fingerprint")
-            consumed_without_progress = sum(
-                correlation_id in consumed
-                and state.progress_fingerprint == progress_fingerprint
-                for correlation_id, state in states.items()
+            consumed_correlations = sorted(
+                (
+                    correlation_id
+                    for correlation_id, state in states.items()
+                    if correlation_id in consumed
+                    and state.progress_fingerprint == progress_fingerprint
+                ),
+                key=lambda correlation_id: (
+                    consumed[correlation_id].consumed_at,
+                    correlation_id,
+                ),
             )
+            consumed_without_progress = len(consumed_correlations)
             if consumed_without_progress >= max_consumed_attempts_without_progress:
                 results.append(
                     {
                         **base,
                         "progress_fingerprint": progress_fingerprint,
                         "consumed_attempt_count": consumed_without_progress,
+                        "consumed_correlation_ids": consumed_correlations,
+                        "latest_consumed_correlation_id": consumed_correlations[-1],
                         "action": "circuit_breaker",
                         "reason_code": "native_resume_progress_not_observed",
                         "resume_condition": (
@@ -713,8 +727,115 @@ def deliver_native_resume_offers(
     return results
 
 
+def prepare_native_successor_offers(
+    *,
+    sweep: Mapping[str, Any],
+    deliveries: Sequence[Mapping[str, Any]],
+    receipt_path: Path,
+    offer_dir: Path = DEFAULT_SUCCESSOR_OFFER_DIR,
+    git_run: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+) -> list[dict[str, Any]]:
+    """Persist exact custody offers for exhausted native retries without launching."""
+
+    states = _delivery_journal_states(receipt_path)
+    consumed = _native_consumption_receipts(receipt_path)
+    items = {
+        (item.get("session_id"), item.get("project"), item.get("scope")): item
+        for item in sweep.get("items", [])
+        if isinstance(item, dict)
+    }
+    results: list[dict[str, Any]] = []
+    for delivery_result in deliveries:
+        if delivery_result.get("reason_code") != "native_resume_progress_not_observed":
+            continue
+        base = {
+            "project": delivery_result.get("project"),
+            "scope": delivery_result.get("scope"),
+            "session_id": delivery_result.get("session_id"),
+        }
+        item = items.get((base["session_id"], base["project"], base["scope"]))
+        try:
+            if item is None:
+                raise ValueError("native successor offer lacks its exact sweep claim")
+            latest = str(delivery_result.get("latest_consumed_correlation_id") or "")
+            state = states.get(latest)
+            consumption = consumed.get(latest)
+            if state is None or consumption is None:
+                raise ValueError("native successor offer lacks exact consumed delivery evidence")
+            claim_source = item.get("claim_source_file")
+            worktree_path = item.get("worktree_path")
+            branch = item.get("branch")
+            if not all(isinstance(value, str) and value.strip() for value in (
+                claim_source,
+                worktree_path,
+                branch,
+            )):
+                raise ValueError("native successor offer lacks exact claim, worktree, or branch")
+            claim_bytes = Path(str(claim_source)).expanduser().resolve().read_bytes()
+            resolved_worktree = Path(str(worktree_path)).expanduser().resolve()
+            head = git_run(
+                ("git", "-C", str(resolved_worktree), "rev-parse", "--verify", "HEAD^{commit}"),
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if head.returncode != 0:
+                detail = (head.stderr or head.stdout).strip() or "Git revision unavailable"
+                raise ValueError(f"native successor offer cannot resolve worktree revision: {detail}")
+            current_fingerprint = session_continuity.native_resume_progress_fingerprint(
+                progress_at=(
+                    str(item["progress_at"])
+                    if item.get("progress_at") is not None
+                    else None
+                ),
+                head_revision=head.stdout.strip(),
+                next_action=str(item.get("next_action") or ""),
+            )
+            if current_fingerprint != delivery_result.get("progress_fingerprint"):
+                raise ValueError("native successor offer progress changed after retry review")
+            offer = session_continuity.build_native_successor_custody_offer(
+                delivery=state,
+                consumption=consumption,
+                consumed_attempt_count=int(delivery_result.get("consumed_attempt_count") or 0),
+                project=str(item.get("project") or ""),
+                scope=str(item.get("scope") or ""),
+                branch=str(branch),
+                worktree_path=str(resolved_worktree),
+                claim_epoch_sha256=hashlib.sha256(claim_bytes).hexdigest(),
+                head_revision=head.stdout.strip(),
+                next_action=str(item.get("next_action") or ""),
+            )
+            offer_path = persist_successor_offer(offer, offer_dir=offer_dir)
+            results.append(
+                {
+                    **base,
+                    "action": "successor_offer_prepared",
+                    "reason_code": "bounded_native_retry_offer_preserved",
+                    "offer_id": offer.offer_id,
+                    "offer_path": str(offer_path),
+                    "owner_resume_correlation_id": offer.owner_resume_correlation_id,
+                    "successor_launch_allowed": False,
+                    "transfer_eligible": False,
+                }
+            )
+        except (OSError, TypeError, ValueError) as exc:
+            results.append(
+                {
+                    **base,
+                    "action": "fail_visible",
+                    "reason_code": "native_successor_offer_invalid",
+                    "error": str(exc),
+                }
+            )
+    return results
+
+
 def run_native_delivery_sweep(
-    *, notify_minutes: int, receipt_path: Path, codex: str = "codex"
+    *,
+    notify_minutes: int,
+    receipt_path: Path,
+    codex: str = "codex",
+    successor_offer_dir: Path = DEFAULT_SUCCESSOR_OFFER_DIR,
 ) -> dict[str, Any]:
     """Observe and deliver owner-first prompts under one shared process lock."""
 
@@ -726,9 +847,22 @@ def run_native_delivery_sweep(
             receipt_path=receipt_path,
             codex=codex,
         )
+        successor_offers = prepare_native_successor_offers(
+            sweep=payload,
+            deliveries=deliveries,
+            receipt_path=receipt_path,
+            offer_dir=successor_offer_dir,
+        )
         payload["mode"] = "native_resume_delivery"
         payload["native_resume_deliveries"] = deliveries
         payload["native_resume_consumptions"] = consumptions
+        payload["native_successor_offers"] = successor_offers
+        payload["native_successor_offer_prepared_count"] = sum(
+            item["action"] == "successor_offer_prepared" for item in successor_offers
+        )
+        payload["native_successor_offer_fail_visible_count"] = sum(
+            item["action"] == "fail_visible" for item in successor_offers
+        )
         payload["native_resume_consumed_count"] = sum(
             item["action"] == "owner_resume_consumed" for item in consumptions
         )

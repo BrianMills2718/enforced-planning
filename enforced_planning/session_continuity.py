@@ -103,6 +103,50 @@ class ResumeOfferReviewV1(BaseModel):
     resume_condition: str = Field(min_length=1)
 
 
+class SuccessorCustodyOfferV1(BaseModel):
+    """Exact recoverable lane state offered to one future successor runtime."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    schema_version: Literal["1.0"] = "1.0"
+    record_type: Literal["successor_custody_offer"] = "successor_custody_offer"
+    offer_id: str = Field(pattern=r"^[0-9a-f]{24}$")
+    owner_resume_message_id: str = Field(pattern=r"^msg_[0-9a-f]{32}$")
+    predecessor_session_id: str = Field(min_length=1)
+    project: str = Field(min_length=1)
+    scope: str = Field(min_length=1)
+    branch: str = Field(min_length=1)
+    worktree_path: str = Field(min_length=1)
+    claim_epoch_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    head_revision: str = Field(pattern=r"^[0-9a-f]{40,64}$")
+    next_action: str = Field(min_length=1)
+    created_at: datetime
+
+
+class SuccessorCustodyAcceptanceV1(BaseModel):
+    """Successor-authored acceptance of every exact offered custody field."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    schema_version: Literal["1.0"] = "1.0"
+    record_type: Literal["successor_custody_acceptance"] = (
+        "successor_custody_acceptance"
+    )
+    disposition: Literal["successor_accepted"] = "successor_accepted"
+    offer_id: str = Field(pattern=r"^[0-9a-f]{24}$")
+    offer_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    predecessor_session_id: str = Field(min_length=1)
+    successor_session_id: str = Field(min_length=1)
+    project: str = Field(min_length=1)
+    scope: str = Field(min_length=1)
+    branch: str = Field(min_length=1)
+    worktree_path: str = Field(min_length=1)
+    claim_epoch_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    head_revision: str = Field(pattern=r"^[0-9a-f]{40,64}$")
+    next_action: str = Field(min_length=1)
+    accepted_at: datetime
+
+
 class NativeCodexResumeOfferV1(BaseModel):
     """One exact, idempotently identifiable prompt for Codex's durable queue."""
 
@@ -555,6 +599,94 @@ def assess_resume_offer(
     )
 
 
+def build_successor_custody_offer(
+    *,
+    review: ResumeOfferReviewV1,
+    project: str,
+    scope: str,
+    branch: str,
+    worktree_path: str,
+    claim_epoch_sha256: str,
+    head_revision: str,
+    next_action: str,
+    created_at: datetime | None = None,
+) -> SuccessorCustodyOfferV1:
+    """Freeze the exact lane state a later successor may explicitly accept."""
+
+    if review.action != "launch_successor" or not review.successor_launch_allowed:
+        raise ValueError("successor custody offer requires an allowed successor launch")
+    offered_at = (created_at or datetime.now(UTC)).astimezone(UTC)
+    exact = {
+        "owner_resume_message_id": review.message_id,
+        "predecessor_session_id": review.owner_session_id,
+        "project": project.strip(),
+        "scope": scope.strip(),
+        "branch": branch.strip(),
+        "worktree_path": str(Path(worktree_path).expanduser().resolve()),
+        "claim_epoch_sha256": claim_epoch_sha256,
+        "head_revision": head_revision,
+        "next_action": next_action.strip(),
+        "created_at": offered_at.isoformat(),
+    }
+    if any(not exact[field] for field in ("project", "scope", "branch", "next_action")):
+        raise ValueError("successor custody offer requires complete exact lane state")
+    correlation = hashlib.sha256(
+        json.dumps(exact, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()[:24]
+    return SuccessorCustodyOfferV1(offer_id=correlation, **exact)
+
+
+def successor_custody_offer_sha256(offer: SuccessorCustodyOfferV1) -> str:
+    """Return the canonical digest bound into a successor acceptance receipt."""
+
+    canonical = json.dumps(
+        offer.model_dump(mode="json"), sort_keys=True, separators=(",", ":")
+    ).encode("utf-8")
+    return hashlib.sha256(canonical).hexdigest()
+
+
+def accept_successor_custody_offer(
+    *,
+    offer: SuccessorCustodyOfferV1,
+    successor_session_id: str,
+    project: str,
+    scope: str,
+    branch: str,
+    worktree_path: str,
+    claim_epoch_sha256: str,
+    head_revision: str,
+    next_action: str,
+    accepted_at: datetime | None = None,
+) -> SuccessorCustodyAcceptanceV1:
+    """Accept only an exact offer; this receipt does not itself mutate custody."""
+
+    if not successor_session_id.strip() or successor_session_id == offer.predecessor_session_id:
+        raise ValueError("successor acceptance requires a different exact session")
+    observed = {
+        "project": project.strip(),
+        "scope": scope.strip(),
+        "branch": branch.strip(),
+        "worktree_path": str(Path(worktree_path).expanduser().resolve()),
+        "claim_epoch_sha256": claim_epoch_sha256,
+        "head_revision": head_revision,
+        "next_action": next_action.strip(),
+    }
+    mismatched = [field for field, value in observed.items() if value != getattr(offer, field)]
+    if mismatched:
+        raise ValueError(
+            "successor acceptance does not match offered custody fields: "
+            + ", ".join(mismatched)
+        )
+    return SuccessorCustodyAcceptanceV1(
+        offer_id=offer.offer_id,
+        offer_sha256=successor_custody_offer_sha256(offer),
+        predecessor_session_id=offer.predecessor_session_id,
+        successor_session_id=successor_session_id,
+        accepted_at=(accepted_at or datetime.now(UTC)).astimezone(UTC),
+        **observed,
+    )
+
+
 __all__ = [
     "CodexActivityV1",
     "ContinuityAssessmentV1",
@@ -562,10 +694,15 @@ __all__ = [
     "NativeCodexQueueReceiptV1",
     "NativeCodexResumeOfferV1",
     "ResumeOfferReviewV1",
+    "SuccessorCustodyAcceptanceV1",
+    "SuccessorCustodyOfferV1",
+    "accept_successor_custody_offer",
     "assess_continuity",
     "assess_resume_offer",
     "build_native_codex_resume_offer",
     "build_resume_offer_request",
+    "build_successor_custody_offer",
     "parse_native_codex_queue_receipt",
     "read_codex_activity",
+    "successor_custody_offer_sha256",
 ]

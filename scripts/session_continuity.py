@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import fcntl
+import hashlib
 import json
 import os
 import secrets
@@ -166,6 +167,41 @@ def _assess_claim(claim: coordination_claims.ClaimRecord, *, notify_minutes: int
             "assessment": None,
             "error": {"type": type(exc).__name__, "message": str(exc)},
         }
+
+
+def build_successor_offer_for_claim(
+    *,
+    review: session_continuity.ResumeOfferReviewV1,
+    claim: coordination_claims.ClaimRecord,
+    run: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+) -> session_continuity.SuccessorCustodyOfferV1:
+    """Resolve exact durable claim and Git state for a launch-eligible offer."""
+
+    if not claim.source_file or not claim.worktree_path or not claim.branch:
+        raise ValueError("successor custody offer requires claim file, worktree, and branch")
+    if not claim.next_action:
+        raise ValueError("successor custody offer requires an exact next action")
+    claim_bytes = Path(claim.source_file).expanduser().resolve().read_bytes()
+    resolved_worktree = Path(claim.worktree_path).expanduser().resolve()
+    head = run(
+        ("git", "-C", str(resolved_worktree), "rev-parse", "--verify", "HEAD^{commit}"),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if head.returncode != 0:
+        detail = (head.stderr or head.stdout).strip() or "Git revision unavailable"
+        raise ValueError(f"successor custody offer cannot resolve worktree revision: {detail}")
+    return session_continuity.build_successor_custody_offer(
+        review=review,
+        project=claim.primary_project(),
+        scope=claim.scope,
+        branch=claim.branch,
+        worktree_path=str(resolved_worktree),
+        claim_epoch_sha256=hashlib.sha256(claim_bytes).hexdigest(),
+        head_revision=head.stdout.strip(),
+        next_action=claim.next_action,
+    )
 
 
 def build_observe_sweep(*, notify_minutes: int) -> dict[str, Any]:
@@ -669,6 +705,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     payload["resume_offer"] = None
     payload["native_resume_offer"] = None
     payload["resume_offer_review"] = None
+    payload["successor_custody_offer"] = None
     store = coordination_messages.CoordinationMessageStore(
         root=coordination_messages.default_message_root(coordination_claims.CLAIMS_DIR),
         claims_dir=coordination_claims.CLAIMS_DIR,
@@ -735,6 +772,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             successor_after=timedelta(minutes=args.successor_after_minutes),
         )
         payload["resume_offer_review"] = review.model_dump(mode="json")
+        if review.action == "launch_successor":
+            successor_offer = build_successor_offer_for_claim(
+                review=review,
+                claim=claim,
+            )
+            payload["successor_custody_offer"] = successor_offer.model_dump(mode="json")
     if args.json:
         print(json.dumps(payload, indent=2, sort_keys=True))
     else:

@@ -58,6 +58,26 @@ def _maintenance_payload(repo: Path, **updates: object) -> dict[str, object]:
     return payload
 
 
+def _goal_worktree_payload(repo: Path, **updates: object) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "schema_version": "1.0",
+        "operation": "goal_worktree",
+        "agent": "codex",
+        "project": repo.name,
+        "scope": "goal/owner-visible-outcome",
+        "repo_root": str(repo),
+        "branch": "goal/owner-visible-outcome",
+        "claim_type": "program",
+        "plan_ref": "goal:owner-visible-outcome",
+        "broader_goal": "Deliver one owner-visible outcome",
+        "current_phase": "first vertical",
+        "next_action": "exercise the owner-visible boundary",
+        "write_paths": ["src/vertical.py", "tests/test_vertical.py"],
+    }
+    payload.update(updates)
+    return payload
+
+
 def _delegated_maintenance_payload(repo: Path, **updates: object) -> dict[str, object]:
     payload: dict[str, object] = {
         "schema_version": "1.0",
@@ -1105,7 +1125,7 @@ def test_typed_maintenance_worktree_transaction_creates_claim_tracker_and_projec
     write_paths: list[str] | None,
 ) -> None:
     repo = _governed_repo(tmp_path)
-    claims_dir, trackers_dir = _configure_maintenance_runtime(tmp_path, monkeypatch)
+    _claims_dir, trackers_dir = _configure_maintenance_runtime(tmp_path, monkeypatch)
     request = claim_bootstrap.parse_request_json(
         json.dumps(_maintenance_payload(
             repo, **({"write_paths": write_paths} if write_paths is not None else {})
@@ -1218,6 +1238,124 @@ def test_typed_maintenance_worktree_transaction_creates_claim_tracker_and_projec
             receipt_path=tmp_path / "admitted-receipts.jsonl",
         )
         assert admitted["decision"] == "allow"
+
+
+def test_goal_worktree_transaction_pins_fresh_default_and_preserves_goal_authority(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo, _graph, stale_head, fresh_head = _project_graph_fixture(tmp_path)
+    authority = claim_bootstrap.RepositoryAuthority(
+        "agent-skills", "Brian/agent-skills", "main", str(tmp_path / "agent-skills.git")
+    )
+    real_fresh = claim_bootstrap._fresh_remote_default_revision
+    _claims_dir, trackers_dir = _configure_maintenance_runtime(tmp_path, monkeypatch)
+    monkeypatch.setattr(claim_bootstrap, "_repository_authority", lambda _target, **_kwargs: authority)
+    monkeypatch.setattr(claim_bootstrap, "_fresh_remote_default_revision", real_fresh)
+
+    receipt = claim_bootstrap.execute_request(
+        claim_bootstrap.parse_request_json(json.dumps(_goal_worktree_payload(repo)))
+    )
+
+    worktree = repo / "worktrees" / "goal" / "owner-visible-outcome"
+    lane_head = subprocess.run(
+        ["git", "-C", str(worktree), "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    claim = claim_bootstrap.coordination_claims.check_claims(repo.name)[0]
+    tracker_path = next(trackers_dir.rglob("*.yaml"))
+    tracker = yaml.safe_load(tracker_path.read_text(encoding="utf-8"))
+
+    assert stale_head != fresh_head
+    assert lane_head == fresh_head
+    assert receipt["result"]["start_revision"] == fresh_head
+    assert claim.start_revision == fresh_head
+    assert claim.plan_ref == "goal:owner-visible-outcome"
+    assert claim.work_graph_path is None
+    assert claim.work_unit_id is None
+    assert tracker["claim"]["start_revision"] == fresh_head
+    assert tracker["claim"]["plan_ref"] == "goal:owner-visible-outcome"
+    assert tracker["tracker"]["current_phase"] == "first vertical"
+    assert tracker["tracker"]["intended_next_phases"] == ["exercise the owner-visible boundary"]
+
+
+@pytest.mark.parametrize(
+    ("updates", "message"),
+    [
+        ({"plan_ref": "UNPLANNED"}, "plan_ref"),
+        ({"plan_ref": "goal:owner visible"}, "plan_ref"),
+        ({"broader_goal": " padded"}, "surrounding whitespace"),
+        ({"current_phase": "phase "}, "surrounding whitespace"),
+    ],
+)
+def test_goal_worktree_rejects_malformed_goal_contract(
+    tmp_path: Path,
+    updates: dict[str, object],
+    message: str,
+) -> None:
+    repo = tmp_path / "demo"
+    with pytest.raises(claim_bootstrap.ClaimBootstrapError, match=message):
+        claim_bootstrap.parse_request_json(json.dumps(_goal_worktree_payload(repo, **updates)))
+
+
+def test_goal_worktree_lifecycle_failure_rolls_back_all_lane_artifacts(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = _governed_repo(tmp_path)
+    claims_dir, trackers_dir = _configure_maintenance_runtime(tmp_path, monkeypatch)
+
+    def fail_lifecycle(**_kwargs: object) -> dict[str, object]:
+        raise ValueError("simulated goal lifecycle failure")
+
+    monkeypatch.setattr(claim_bootstrap.session_lifecycle, "start_session", fail_lifecycle)
+    request = claim_bootstrap.parse_request_json(json.dumps(_goal_worktree_payload(repo)))
+
+    with pytest.raises(claim_bootstrap.ClaimBootstrapError, match="transaction rolled back"):
+        claim_bootstrap.execute_request(request)
+
+    assert not claims_dir.exists() or not list(claims_dir.glob("*.yaml"))
+    assert not list(trackers_dir.rglob("*.yaml"))
+    assert not (repo / "worktrees" / "goal" / "owner-visible-outcome").exists()
+    assert subprocess.run(
+        ["git", "-C", str(repo), "show-ref", "--verify", "refs/heads/goal/owner-visible-outcome"],
+        capture_output=True,
+        check=False,
+    ).returncode != 0
+
+
+def test_goal_worktree_preserves_entire_lane_when_persisted_identity_changes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = _governed_repo(tmp_path)
+    _claims_dir, trackers_dir = _configure_maintenance_runtime(tmp_path, monkeypatch)
+    real_start = claim_bootstrap.session_lifecycle.start_session
+
+    def persist_tamper_then_fail(**kwargs: object) -> dict[str, object]:
+        real_start(**kwargs)
+        tracker_path = next(trackers_dir.rglob("*.yaml"))
+        tracker = yaml.safe_load(tracker_path.read_text(encoding="utf-8"))
+        tracker["claim"]["session_id"] = "codex:foreign-runtime"
+        tracker_path.write_text(yaml.safe_dump(tracker, sort_keys=False), encoding="utf-8")
+        raise RuntimeError("simulated goal failure after ownership changed")
+
+    monkeypatch.setattr(claim_bootstrap.session_lifecycle, "start_session", persist_tamper_then_fail)
+    request = claim_bootstrap.parse_request_json(json.dumps(_goal_worktree_payload(repo)))
+
+    with pytest.raises(claim_bootstrap.ClaimBootstrapError, match="intact lane preserved"):
+        claim_bootstrap.execute_request(request)
+
+    worktree = repo / "worktrees" / "goal" / "owner-visible-outcome"
+    assert worktree.is_dir()
+    assert claim_bootstrap.coordination_claims.check_claims(repo.name)
+    assert subprocess.run(
+        ["git", "-C", str(repo), "show-ref", "--verify", "refs/heads/goal/owner-visible-outcome"],
+        capture_output=True,
+        check=False,
+    ).returncode == 0
 
 def test_parent_delegates_one_narrow_child_owned_maintenance_lane(
     tmp_path: Path,

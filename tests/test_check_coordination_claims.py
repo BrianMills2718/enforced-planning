@@ -2137,8 +2137,16 @@ def test_goal_bound_write_claim_preserves_authority_without_work_graph(
     claims_dir = tmp_path / "claims"
     monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
     repo_root = tmp_path / "demo"
+    _init_git_repo(repo_root)
+    start_revision = _git_head(repo_root)
     worktree = repo_root / "worktrees" / "owner-week"
-    worktree.mkdir(parents=True)
+    worktree.parent.mkdir()
+    subprocess.run(
+        ["git", "-C", str(repo_root), "worktree", "add", "-b", "owner-week", str(worktree), start_revision],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
 
     ok, _message = module.create_claim(
         agent="codex",
@@ -2155,17 +2163,51 @@ def test_goal_bound_write_claim_preserves_authority_without_work_graph(
         session_name="owner-visible-outcome",
         broader_goal="Owner visible outcome",
         tracker_path=str(tmp_path / "tracker.yaml"),
+        start_point=start_revision,
     )
 
     assert ok is True
     payload = yaml.safe_load((claims_dir / "codex_demo_owner-week.yaml").read_text(encoding="utf-8"))
     assert payload["plan_ref"] == "goal:owner-visible-outcome"
+    assert payload["start_revision"] == start_revision
     assert payload["write_paths"] == ["src/vertical.py", "tests/test_vertical.py"]
     assert payload["work_graph_path"] is None
     assert payload["work_unit_id"] is None
     claim = module.normalize_claim(payload)
     assert claim is not None
     assert "missing_work_graph_path" not in module.claim_health_issues(claim)
+
+
+def test_goal_bound_write_claim_rejects_stale_default_revision(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_module()
+    monkeypatch.setattr(module, "CLAIMS_DIR", tmp_path / "claims")
+    repo_root = tmp_path / "demo"
+    _init_git_repo(repo_root)
+    (repo_root / "README.md").write_text("old\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(repo_root), "add", "README.md"], check=True, capture_output=True)
+    subprocess.run(["git", "-C", str(repo_root), "commit", "-m", "old"], check=True, capture_output=True)
+    stale_revision = _git_head(repo_root)
+    (repo_root / "README.md").write_text("current\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(repo_root), "add", "README.md"], check=True, capture_output=True)
+    subprocess.run(["git", "-C", str(repo_root), "commit", "-m", "current"], check=True, capture_output=True)
+
+    with pytest.raises(ValueError, match="not canonical default-integration tip"):
+        module.create_claim(
+            agent="codex",
+            project="demo",
+            scope="stale-goal",
+            intent="reject stale ownership",
+            plan_ref="goal:owner-visible-outcome",
+            claim_type="program",
+            write_paths=["README.md"],
+            repo_root=str(repo_root),
+            branch="stale-goal",
+            session_id="codex:goal-test",
+            start_point=stale_revision,
+        )
 
 
 @pytest.mark.parametrize("authority", ["Plan #117", "enforced-planning#117", "descriptive authority"])

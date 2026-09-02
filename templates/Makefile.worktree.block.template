@@ -53,7 +53,7 @@ REVIEW_SCOPE ?=
 REVIEW_NOTES ?=
 RECIPIENT ?=
 
-.PHONY: worktree maintenance-worktree worktree-list worktree-remove finish session-start session-narrow session-heartbeat session-status session-end session-finish session-close review-claim raise-concern verification-batch-freeze verification-batch-check verification-batch-thaw surface-up surface-preview surface-status surface-down surface-audit
+.PHONY: worktree goal-worktree maintenance-worktree worktree-list worktree-remove finish session-start session-narrow session-heartbeat session-status session-end session-finish session-close review-claim raise-concern verification-batch-freeze verification-batch-check verification-batch-thaw surface-up surface-preview surface-status surface-down surface-audit
 
 verification-batch-freeze:  ## Freeze clean HEAD for DECISION="..." VERIFY_COMMAND="..."
 	@test -n "$(DECISION)" || (echo "DECISION is required" && exit 1)
@@ -255,6 +255,20 @@ MAINTENANCE_AGENT = $(if $(strip $(WORKTREE_AGENT)),$(WORKTREE_AGENT),claude-cod
 # saw a CONFLICT naming the other lanes rather than their own claim.
 MAINTENANCE_BOOTSTRAP_WRITE_PATHS = $(if $(strip $(SESSION_WRITE_PATHS)),$(SESSION_WRITE_PATHS),.)
 MAINTENANCE_REQUEST_JSON = $(shell $(PYTHON) -c 'import json,sys; print(json.dumps({"schema_version":"1.0","operation":"maintenance_worktree","agent":sys.argv[1],"project":sys.argv[2],"scope":sys.argv[3],"repo_root":sys.argv[4],"branch":sys.argv[3],"claim_type":"program","write_paths":sys.argv[5:]},separators=(",",":")))' "$(MAINTENANCE_AGENT)" "$(WORKTREE_PROJECT)" "$(BRANCH)" "$(WORKTREE_REPO_ROOT)" $(foreach path,$(MAINTENANCE_BOOTSTRAP_WRITE_PATHS),"$(path)"))
+
+GOAL_BOOTSTRAP_WRITE_PATHS = $(if $(strip $(SESSION_WRITE_PATHS)),$(SESSION_WRITE_PATHS),.)
+GOAL_REQUEST_ARG = $(shell $(PYTHON) -c 'import json,shlex,sys; print(shlex.quote(json.dumps({"schema_version":"1.0","operation":"goal_worktree","agent":sys.argv[1],"project":sys.argv[2],"scope":sys.argv[3],"repo_root":sys.argv[4],"branch":sys.argv[3],"claim_type":"program","plan_ref":sys.argv[5],"broader_goal":sys.argv[6],"current_phase":sys.argv[7],"next_action":sys.argv[8] or None,"write_paths":sys.argv[9:]},separators=(",",":"))))' "$(WORKTREE_AGENT)" "$(WORKTREE_PROJECT)" "$(BRANCH)" "$(WORKTREE_REPO_ROOT)" "$(GOAL_REF)" "$(SESSION_GOAL)" "$(SESSION_PHASE)" "$(SESSION_NEXT)" $(foreach path,$(GOAL_BOOTSTRAP_WRITE_PATHS),"$(path)"))
+
+goal-worktree:  ## Atomic goal-bound claim/worktree/tracker; requires BRANCH, GOAL_REF, SESSION_GOAL, SESSION_PHASE
+	@if [ -z "$(strip $(BRANCH))" ] || [ -z "$(strip $(GOAL_REF))" ] || [ -z "$(strip $(SESSION_GOAL))" ] || [ -z "$(strip $(SESSION_PHASE))" ]; then \
+		echo 'Usage: make goal-worktree BRANCH=... GOAL_REF=goal:... SESSION_GOAL="..." SESSION_PHASE="..."'; \
+		exit 2; \
+	fi
+	@if [ -z "$(strip $(WORKTREE_AGENT))" ]; then \
+		echo "Unable to infer agent runtime. Set WORKTREE_AGENT=codex|claude-code|openclaw"; \
+		exit 2; \
+	fi
+	@$(PYTHON) scripts/meta/claim_bootstrap.py --request-json $(GOAL_REQUEST_ARG)
 
 maintenance-worktree:  ## Claimed light maintenance worktree; needs BRANCH (other maintenance metadata has safe defaults)
 	@if [ -n "$(PLAN)" ]; then \

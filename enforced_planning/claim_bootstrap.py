@@ -184,6 +184,23 @@ class MaintenanceWorktreeRequest(_StrictRequest):
         return self
 
 
+class GoalWorktreeRequest(MaintenanceWorktreeRequest):
+    """Atomic claim/worktree/session bootstrap under explicit goal authority."""
+
+    operation: Literal["goal_worktree"]
+    plan_ref: str = Field(pattern=r"^goal:[A-Za-z0-9][A-Za-z0-9._:-]*$")
+    broader_goal: str = Field(min_length=1)
+    current_phase: str = Field(min_length=1)
+    next_action: str | None = Field(default=None, min_length=1)
+
+    @field_validator("broader_goal", "current_phase", "next_action")
+    @classmethod
+    def _validate_goal_text(cls, value: str | None) -> str | None:
+        if value is not None and value != value.strip():
+            raise ValueError("goal lifecycle text must not contain surrounding whitespace")
+        return value
+
+
 class DelegatedMaintenanceWorktreeRequest(MaintenanceWorktreeRequest):
     """Parent-authorized creation of one narrow child-owned maintenance lane."""
 
@@ -390,6 +407,7 @@ ClaimBootstrapRequest = Annotated[
     | ProgressRequest
     | RevokeDelegatedMaintenanceWorktreeRequest
     | DelegatedMaintenanceWorktreeRequest
+    | GoalWorktreeRequest
     | MaintenanceWorktreeRequest
     | LocalRepositoryWorktreeRequest
     | LocalRepositoryIntegrateRequest
@@ -1017,9 +1035,7 @@ def execute_request(request: ClaimBootstrapRequest) -> dict[str, Any]:
         payload = _execute_local_repository_worktree(request, agent=agent, session_id=session_id)
     elif isinstance(request, RevokeDelegatedMaintenanceWorktreeRequest):
         payload = _execute_revoke_delegated_worktree(request, agent=agent, session_id=session_id)
-    elif isinstance(request, DelegatedMaintenanceWorktreeRequest):
-        payload = _execute_maintenance_worktree(request, agent=agent, session_id=session_id)
-    elif isinstance(request, MaintenanceWorktreeRequest):
+    elif isinstance(request, (DelegatedMaintenanceWorktreeRequest, MaintenanceWorktreeRequest)):
         payload = _execute_maintenance_worktree(request, agent=agent, session_id=session_id)
     elif isinstance(request, SessionStartOrUpdateRequest):
         _require_self_owned_slot(
@@ -1774,12 +1790,12 @@ def _execute_revoke_delegated_worktree(
 
 
 def _execute_maintenance_worktree(
-    request: MaintenanceWorktreeRequest | DelegatedMaintenanceWorktreeRequest,
+    request: MaintenanceWorktreeRequest | DelegatedMaintenanceWorktreeRequest | GoalWorktreeRequest,
     *,
     agent: AgentName,
     session_id: str,
 ) -> dict[str, Any]:
-    """Create one unplanned worktree and exact claim as a typed transaction."""
+    """Create one maintenance or goal-bound worktree as a typed transaction."""
 
     repo = Path(request.repo_root).resolve()
     authority = _repository_authority(repo, branch=request.branch)
@@ -1819,6 +1835,7 @@ def _execute_maintenance_worktree(
             f"maintenance claim slot already exists for {request.project}:{request.scope}: {owners}"
         )
     delegated = isinstance(request, DelegatedMaintenanceWorktreeRequest)
+    goal_bound = isinstance(request, GoalWorktreeRequest)
     owner_session_id = session_id
     parent_scope: str | None = None
     claim_type: ClaimType = "program"
@@ -1857,12 +1874,15 @@ def _execute_maintenance_worktree(
         if existing_roots:
             labels = ", ".join(sorted(f"{claim.primary_project()}:{claim.scope}" for claim in existing_roots))
             raise ClaimBootstrapError(
-                "maintenance bootstrap requires the native session to own zero existing claim roots; "
+                "worktree bootstrap requires the native session to own zero existing claim roots; "
                 f"close or transfer first: {labels}"
             )
 
-    goal_prefix = "Delegated maintenance" if delegated else "Unplanned maintenance"
-    goal = f"{goal_prefix}: {request.branch.replace('-', ' ').replace('/', ' ')}"
+    if goal_bound:
+        goal = request.broader_goal
+    else:
+        goal_prefix = "Delegated maintenance" if delegated else "Unplanned maintenance"
+        goal = f"{goal_prefix}: {request.branch.replace('-', ' ').replace('/', ' ')}"
     session_name = session_contracts.derive_session_name(goal)
     contract = session_contracts.SessionContract.build(
         agent=agent,
@@ -1875,7 +1895,8 @@ def _execute_maintenance_worktree(
         session_id=owner_session_id,
         broader_goal=goal,
         session_name=session_name,
-        allow_unplanned=True,
+        plan_ref=request.plan_ref if goal_bound else None,
+        allow_unplanned=not goal_bound,
     )
     tracker_path = session_contracts.session_tracker_path(contract, tracker_dir=SESSION_TRACKERS_DIR)
     if tracker_path.exists():
@@ -1904,6 +1925,7 @@ def _execute_maintenance_worktree(
         raise ClaimBootstrapError("maintenance worktree path escapes the governed repository")
 
     bootstrap_broad = request.write_paths == ["."]
+    bootstrap_kind = "goal-bound" if goal_bound else "maintenance"
     branch_created = False
 
     def create_git_artifacts() -> None:
@@ -1979,6 +2001,8 @@ def _execute_maintenance_worktree(
                 tracker_dir=SESSION_TRACKERS_DIR,
             )
         else:
+            if goal_bound:
+                create_git_artifacts()
             payload = session_lifecycle.start_session(
                 agent=agent,
                 project=request.project,
@@ -1988,8 +2012,8 @@ def _execute_maintenance_worktree(
                 worktree_path=str(worktree),
                 branch=request.branch,
                 broader_goal=goal,
-                current_phase="maintenance-bootstrap",
-                plan_ref=None,
+                current_phase=request.current_phase if goal_bound else "maintenance-bootstrap",
+                plan_ref=request.plan_ref if goal_bound else None,
                 session_id=owner_session_id,
                 session_name=session_name,
                 claim_type=claim_type,
@@ -1997,14 +2021,21 @@ def _execute_maintenance_worktree(
                 read_paths=[],
                 parent_scope=parent_scope,
                 tracker_dir=SESSION_TRACKERS_DIR,
-                allow_unplanned=True,
+                start_revision=starting_head if goal_bound else None,
+                intended_next_phases=(
+                    [request.next_action]
+                    if goal_bound and request.next_action
+                    else None
+                ),
+                allow_unplanned=not goal_bound,
                 broad_scope_mode="bootstrap" if bootstrap_broad else None,
                 broad_scope_reason=(
-                    "construct this maintenance lane, then narrow before its first repository write"
+                    f"construct this {bootstrap_kind} lane, then narrow before its first repository write"
                     if bootstrap_broad
                     else None
                 ),
                 target_worktree_path=str(worktree) if bootstrap_broad else None,
+                verified_goal_default_revision=starting_head if goal_bound else None,
             )
     except Exception as exc:
         if delegated:
@@ -2098,18 +2129,31 @@ def _execute_maintenance_worktree(
                         tracker_path.unlink(missing_ok=True)
             except Exception as cleanup_exc:  # noqa: BLE001
                 cleanup_errors.append(f"claim/tracker cleanup failed: {cleanup_exc}")
-        for candidate in reversed(created_dirs):
-            try:
-                candidate.rmdir()
-            except OSError:
-                pass
+        if branch_created and not cleanup_errors:
+            cleanup_errors.extend(
+                _rollback_created_worktree(
+                    repo=repo,
+                    worktree=worktree,
+                    branch=request.branch,
+                    expected_head=starting_head,
+                    branch_created=branch_created,
+                    created_dirs=created_dirs,
+                )
+            )
+        elif not branch_created:
+            for candidate in reversed(created_dirs):
+                try:
+                    candidate.rmdir()
+                except OSError:
+                    pass
         detail = f"; {'; '.join(cleanup_errors)}" if cleanup_errors else ""
+        disposition = "; intact lane preserved for inspection" if cleanup_errors else "; transaction rolled back"
         raise ClaimBootstrapError(
-            f"maintenance claim bootstrap failed before Git artifacts: {exc}{detail}"
+            f"worktree claim bootstrap failed: {exc}{disposition}{detail}"
         ) from exc
 
     try:
-        if not delegated:
+        if not delegated and not goal_bound:
             create_git_artifacts()
         lock_reconciliation = _reconcile_canonical_after_claim(
             repo,
@@ -2231,12 +2275,13 @@ __all__ = [
     "ClaimBootstrapError",
     "ClaimBootstrapRequest",
     "DelegatedMaintenanceWorktreeRequest",
+    "GoalWorktreeRequest",
     "HeartbeatRequest",
     "LocalRepositoryWorktreeRequest",
     "MaintenanceWorktreeRequest",
     "ProgressRequest",
-    "RevokeDelegatedMaintenanceWorktreeRequest",
     "RepositoryAuthority",
+    "RevokeDelegatedMaintenanceWorktreeRequest",
     "SessionStartOrUpdateRequest",
     "canonical_script_path",
     "execute_request",

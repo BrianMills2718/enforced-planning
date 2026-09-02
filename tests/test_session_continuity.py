@@ -621,6 +621,30 @@ def test_delivery_timer_uses_one_shared_process_with_native_queue_enabled(
     assert "--codex /opt/codex/bin/codex" in service
 
 
+def test_delivery_sweep_cli_exits_nonzero_for_fail_visible_delivery(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    payload = {
+        "schema_version": "1.0",
+        "record_type": "session_continuity_sweep",
+        "mode": "native_resume_delivery",
+        "native_resume_fail_visible_count": 1,
+    }
+    monkeypatch.setattr(
+        continuity_cli,
+        "run_native_delivery_sweep",
+        lambda **_kwargs: payload,
+    )
+
+    result = continuity_cli.main(
+        ["--scan-all-live-claims", "--deliver-native-resume-offers", "--json"]
+    )
+
+    assert result == 1
+    assert json.loads(capsys.readouterr().out) == payload
+
+
 def test_shared_sweep_observes_all_codex_claims_without_transfer_authority(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

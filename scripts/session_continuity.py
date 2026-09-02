@@ -605,6 +605,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                 receipt_path=args.receipt_jsonl,
             )
         print(json.dumps(payload, indent=2, sort_keys=True))
+        if args.deliver_native_resume_offers and payload.get(
+            "native_resume_fail_visible_count", 0
+        ):
+            return 1
         return 0
     matches = [
         claim

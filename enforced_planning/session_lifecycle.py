@@ -2875,6 +2875,12 @@ def start_session(
                     "refusing reactivation"
                 )
             if locked_claim.tracker_path:
+                # A truthy tracker_path here means "a real tracker file
+                # already exists" -- never "a path reserved for one about to
+                # be written." A caller that pre-sets tracker_path on a fresh
+                # claim before writing the file hits FileNotFoundError below.
+                # See "tracker_path's three lifecycle states" in
+                # docs/guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md.
                 locked_tracker_path = Path(locked_claim.tracker_path).expanduser().resolve()
                 with session_contracts.session_tracker_lock(locked_tracker_path):
                     locked_tracker_bytes = locked_tracker_path.read_bytes()

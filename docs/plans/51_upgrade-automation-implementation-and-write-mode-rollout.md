@@ -1,10 +1,70 @@
 # Plan #51: Upgrade Automation Implementation and Write-Mode Rollout
 
-**Status:** 🟡 Partial (dry-run shipped; unsafe direct-primary write mode disabled 2026-08-03)
+**Status:** 🟡 Partial (dry-run shipped; safe claimed-worktree write mode implemented and verified against real repos 2026-09-02; fleet-wide rollout not yet run)
 **Type:** implementation
 **Priority:** High
 **Blocked By:** Plan #20 (design)
 **Blocks:** Phase 9 write-mode fleet rollout
+
+---
+
+## Implementation (2026-09-02)
+
+`--write` now requires an explicit `--repo REPO_ID` (matching "Minimal First
+Slice" below -- batch write-mode is still a later slice) and runs the exact
+sequence this doc already specified: `make maintenance-worktree` (or the base
+`worktree` target as a fallback for a repo whose installed Makefile predates
+the convenience wrapper -- which several of the 25 currently-drifted repos
+do, since that wrapper is itself part of the drift), `install_governed_repo.py
+--write` and `audit_governed_repo.py --strict-governed` both run inside that
+worktree, then commit + push + `gh pr create` only if there was a real diff.
+Never merges. Never touches the primary checkout. A repo tagged
+`owner: inside-success` in the registry is skipped with an explicit reason --
+that authority is separate and not yet granted.
+
+On any failure the worktree is abandoned through the sanctioned
+`session-close` path; uncommitted output is stashed, never discarded, so a
+human can recover exactly what a sync attempt produced.
+
+### Verification against real repos, not fixtures
+
+Per this doc's "Verify against a REAL caller" pattern (and the hard lesson
+from a same-day sibling regression, `lrn-20260902T164715155794Z-4d2c5ca668`
+and `lrn-20260902T174949452389Z-53c1db6bda`): ran `--write` against five real
+governed repos, not mocks.
+
+- `osint_tools`, `qualitative_coding`, `theory-forge`: worktree creation,
+  `install --write`, and `audit --strict-governed` all succeeded and correctly
+  reclassified the repo (`partial` -> `governed`) once run; the commit step
+  was then correctly *refused* by that repo's own local pre-commit
+  doc-coupling hook, or (theory-forge) `install_governed_repo.py` itself
+  refused because of a legacy `merge`/`finish` Make-target conflict it
+  detected. Both are the safety design working as intended -- a repo-local
+  policy blocking an automated bulk sync, not a bug in this script -- and the
+  worktree was abandoned cleanly with the produced diff preserved in a stash.
+- `orgchart`: reached a full commit (real diff, real content). Push was
+  correctly refused by that repo's own push-check (`missing_plan_ref`) because
+  its installed `maintenance-worktree` variant does not set `plan_ref` even
+  with `ALLOW_UNPLANNED=1`, and `plan_ref` cannot be patched onto an existing
+  claim afterward. This is the one genuine remaining gap this pass found:
+  some installed Makefile variants pass "unplanned" authority differently, and
+  this script does not yet detect or work around all of them.
+- Found and fixed one real bug during this verification: a multi-line failure
+  reason embedded in a `WORKTREE_DISPOSITION_REASON` Makefile variable broke
+  Make's `"$(VAR)"` recipe-line expansion, silently preventing the
+  abandoned-then-merged session-close retry from ever running and leaving
+  worktrees/branches behind after every failed write attempt. Fixed by
+  collapsing any multi-line reason to one line before it reaches a Makefile
+  variable (`_single_line`); a regression test locks this in.
+
+### What this does not yet cover
+
+- Batch write-mode across many repos in one invocation (deliberately deferred,
+  matching "Minimal First Slice").
+- The `plan_ref` gap some older `maintenance-worktree` installs have (found on
+  `orgchart`; not yet reproduced/fixed for every historical variant).
+- `owner: inside-success` repos, which need their own explicit authorization
+  before this script should touch them at all.
 
 ---
 

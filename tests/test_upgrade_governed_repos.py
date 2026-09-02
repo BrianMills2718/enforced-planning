@@ -19,12 +19,61 @@ def _load():
     return module
 
 
-def test_write_mode_fails_before_registry_or_repository_mutation(capsys) -> None:
-    """A clean primary checkout must not license direct fleet mutation."""
+def test_write_mode_requires_explicit_repo(capsys) -> None:
+    """--write must never fan out to the whole fleet in one shot.
 
+    Regression for the design doc's "Minimal First Slice": batch write-mode
+    is a later slice, not this command's default. Checked before the
+    registry is even read, so a missing --repo can never license mutation.
+    """
     module = _load()
 
     assert module.main(["--write", "--registry", "/definitely/missing.yaml"]) == 2
     captured = capsys.readouterr()
-    assert "fleet --write is disabled" in captured.err
-    assert "claimed linked worktrees" in captured.err
+    assert "--write requires --repo REPO_ID" in captured.err
+    assert "one repo at a time" in captured.err
+
+
+def test_write_repo_refuses_non_brian_owner(tmp_path: Path) -> None:
+    """Fleet write-mode must not silently reach a non-Brian-owned repo.
+
+    A company/org repo needs its own explicit authorization distinct from
+    blanket personal-fleet write-mode (see CLAUDE.md's repository-routing
+    rules); this must be a skip, not an attempted sync.
+    """
+    module = _load()
+
+    result = module.write_repo("some-org-repo", tmp_path, "governed", "inside-success")
+    assert result.skipped is True
+    assert "inside-success" in result.skip_reason
+    assert "explicit authorization" in result.skip_reason
+
+
+def test_write_repo_skips_missing_repo_root(tmp_path: Path) -> None:
+    module = _load()
+    missing = tmp_path / "does-not-exist"
+    result = module.write_repo("ghost-repo", missing, "governed", "brian")
+    assert result.skipped is True
+    assert "does not exist" in result.skip_reason
+
+
+def test_write_repo_skips_repo_without_makefile(tmp_path: Path) -> None:
+    """Cannot use the sanctioned maintenance-worktree entrypoint without one."""
+    module = _load()
+    result = module.write_repo("no-makefile-repo", tmp_path, "governed", "brian")
+    assert result.skipped is True
+    assert "Makefile" in result.skip_reason
+
+
+def test_single_line_collapses_multiline_reason() -> None:
+    """A multi-line reason breaks Make's `"$(VAR)"` recipe-line expansion.
+
+    Regression for a live bug: an embedded newline in WORKTREE_DISPOSITION_REASON
+    silently made the abandoned-then-merged session-close retry never actually
+    run, leaving worktrees/branches behind after every failed write attempt.
+    """
+    module = _load()
+    multiline = "Running pre-commit checks...\nChecking doc-code coupling...\n  Violation: X"
+    collapsed = module._single_line(multiline, 200)
+    assert "\n" not in collapsed
+    assert "Running pre-commit checks..." in collapsed

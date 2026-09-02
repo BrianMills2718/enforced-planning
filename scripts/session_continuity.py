@@ -71,6 +71,12 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Persist one idempotent exact-session resume offer when the assessment requests it.",
     )
+    parser.add_argument(
+        "--queue-native-resume-offer",
+        action="store_true",
+        help="Queue one typed resume prompt to the exact idle Codex thread.",
+    )
+    parser.add_argument("--codex", default="codex", help=argparse.SUPPRESS)
     parser.add_argument("--sender-session-id")
     parser.add_argument(
         "--resume-offer-message-id",
@@ -96,9 +102,11 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     if args.scan_all_live_claims and (args.project or args.scope):
         parser.error("--scan-all-live-claims cannot be combined with --project or --scope")
     if (args.scan_all_live_claims or args.install_observe_timer) and (
-        args.send_resume_offer or args.resume_offer_message_id
+        args.send_resume_offer or args.queue_native_resume_offer or args.resume_offer_message_id
     ):
         parser.error("shared observe mode cannot send or review resume offers")
+    if args.send_resume_offer and args.queue_native_resume_offer:
+        parser.error("select only one resume-offer delivery path")
     if args.notify_minutes <= 0 or args.timer_minutes <= 0:
         parser.error("notification and timer intervals must be positive")
     return args
@@ -396,6 +404,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     payload = assessment.model_dump(mode="json")
     payload["resume_offer"] = None
+    payload["native_resume_offer"] = None
     payload["resume_offer_review"] = None
     store = coordination_messages.CoordinationMessageStore(
         root=coordination_messages.default_message_root(coordination_claims.CLAIMS_DIR),
@@ -423,6 +432,34 @@ def main(argv: Sequence[str] | None = None) -> int:
             ),
             "message_path": sent.message_path,
         }
+    if args.queue_native_resume_offer and assessment.action == "notify_owner":
+        offer = session_continuity.build_native_codex_resume_offer(
+            assessment=assessment,
+            project=args.project,
+            scope=args.scope,
+            next_action=claim.next_action or "reach the next verified checkpoint",
+        )
+        queued = subprocess.run(
+            (
+                args.codex,
+                "queue",
+                "--thread",
+                offer.thread_id,
+                "--message",
+                offer.prompt,
+            ),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if queued.returncode != 0:
+            detail = (queued.stderr or queued.stdout).strip()
+            raise RuntimeError(f"native Codex resume queue failed: {detail}")
+        receipt = session_continuity.parse_native_codex_queue_receipt(
+            offer=offer,
+            stdout=queued.stdout,
+        )
+        payload["native_resume_offer"] = receipt.model_dump(mode="json")
     if args.resume_offer_message_id:
         status = store.status(
             coordination_messages.MessageStatusRequest(

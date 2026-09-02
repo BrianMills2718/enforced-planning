@@ -1071,6 +1071,95 @@ def test_host_gate_admits_exact_make_closeout_for_merged_claim(
     assert decision["reason_code"] == "native_closeout_command"
 
 
+def test_host_gate_routes_merged_consumer_make_closeout_to_installed_runtime(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Unrelated consumer Git history gets an executable recovery, not bootstrap."""
+
+    _workspace, repo, worktree, claims_dir, _claim_path = _fixture(tmp_path)
+    _git(worktree, "add", "src/allowed.py")
+    _git(worktree, "commit", "-m", "merged consumer lane work")
+    _git(repo, "merge", "--ff-only", "host-gate-lane")
+    merge_commit = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "commit", "--allow-empty", "-m", "advance default after merge")
+    command = (
+        f"/usr/bin/make -C {worktree} session-close BRANCH=host-gate-lane "
+        f"WORKTREE_AGENT=claude-code WORKTREE_PROJECT=host-gate-test "
+        f"WORKTREE_DISPOSITION=merged WORKTREE_MERGE_COMMIT={merge_commit}"
+    )
+    payload = _payload(cwd=worktree, tool="Bash", tool_input={"command": command})
+
+    code, decision = _run_cli(
+        monkeypatch,
+        capsys,
+        tmp_path,
+        payload,
+        claims_dir=claims_dir,
+        projection_path=tmp_path / "projection.json",
+    )
+
+    recovery = decision["recovery"]
+    installed_script = prewrite_claim_gate.REPO_ROOT / "scripts" / "session_close.py"
+    assert code == 2
+    assert decision["reason_code"] == "claim_not_healthy"
+    assert any(
+        "merged_active_claim_requires_disposition" in str(item)
+        for item in decision["details"]
+    )
+    assert f"/usr/bin/python3 {installed_script}" in recovery
+    assert "--session-id claude-code:host-gate-test" in recovery
+    assert f"--worktree-path {worktree}" in recovery
+    assert f"--merge-commit {merge_commit}" in recovery
+    assert "/usr/bin/make" not in recovery
+    assert "maintenance_worktree" not in recovery
+    installed_command = recovery.split("instead: ", 1)[1]
+    assert prewrite_claim_gate._special_unclaimed_command(
+        installed_command,
+        client="claude-code",
+        claims_dir=claims_dir,
+        projection_path=tmp_path / "projection.json",
+        subagent_event=False,
+        native_session=SESSION,
+    ) == "native_closeout"
+
+
+@pytest.mark.parametrize("tamper", ["wrong-agent", "extra-assignment"])
+def test_host_gate_does_not_translate_untrusted_consumer_make_closeout(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tamper: str,
+) -> None:
+    _workspace, repo, worktree, claims_dir, _claim_path = _fixture(tmp_path)
+    _git(worktree, "add", "src/allowed.py")
+    _git(worktree, "commit", "-m", "merged consumer lane work")
+    _git(repo, "merge", "--ff-only", "host-gate-lane")
+    _git(repo, "commit", "--allow-empty", "-m", "advance default after merge")
+    agent = "codex" if tamper == "wrong-agent" else "claude-code"
+    extra = " PYTHON=/tmp/python" if tamper == "extra-assignment" else ""
+    command = (
+        f"/usr/bin/make -C {worktree} session-close BRANCH=host-gate-lane "
+        f"WORKTREE_AGENT={agent}{extra}"
+    )
+    payload = _payload(cwd=worktree, tool="Bash", tool_input={"command": command})
+
+    code, decision = _run_cli(
+        monkeypatch,
+        capsys,
+        tmp_path,
+        payload,
+        claims_dir=claims_dir,
+        projection_path=tmp_path / "projection.json",
+    )
+
+    assert code == 2
+    assert str(prewrite_claim_gate.REPO_ROOT / "scripts" / "session_close.py") not in str(
+        decision.get("recovery")
+    )
+
+
 @pytest.mark.parametrize("tamper", ["dirty", "wrong-agent", "extra-assignment"])
 def test_host_gate_rejects_tampered_make_closeout(
     tmp_path: Path,

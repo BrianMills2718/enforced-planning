@@ -629,6 +629,105 @@ def test_pytest_node_selector_retains_only_its_file_path() -> None:
     assert _bash_declared_paths(command) == ("tests/test_feature.py",)
 
 
+def test_session_close_scope_branch_and_recovery_ref_are_identifiers() -> None:
+    command = (
+        "/usr/bin/env -C /repo/worktrees/lane /usr/bin/python3 scripts/session_close.py "
+        "--agent codex --project enforced-planning --scope runtime/install-fix "
+        "--worktree-path /repo/worktrees/lane --branch runtime/install-fix "
+        "--disposition merged --recovery-ref refs/recovery/runtime/install-fix"
+    )
+
+    assert _bash_declared_paths(command) == ("/repo/worktrees/lane",)
+
+
+def test_make_session_close_branch_override_is_an_identifier() -> None:
+    command = (
+        "/usr/bin/make -C /repo/worktrees/lane session-close "
+        "BRANCH=runtime/install-fix WORKTREE_RECOVERY_REF=refs/recovery/runtime/install-fix"
+    )
+
+    assert _bash_declared_paths(command) == ("/repo/worktrees/lane",)
+
+
+def test_make_session_close_unknown_path_override_remains_a_target() -> None:
+    command = (
+        "/usr/bin/make -C /repo/worktrees/lane session-close "
+        "BRANCH=runtime/install-fix PYTHON=/outside/python"
+    )
+
+    assert _bash_declared_paths(command) == (
+        "/repo/worktrees/lane",
+        "/outside/python",
+    )
+
+
+def test_untrusted_session_close_basename_does_not_gain_identifier_parsing() -> None:
+    command = (
+        "/usr/bin/python3 /tmp/session_close.py "
+        "--scope /outside/claim --worktree-path /repo/worktrees/lane"
+    )
+
+    assert _bash_declared_paths(command) == (
+        "/tmp/session_close.py",
+        "/outside/claim",
+        "/repo/worktrees/lane",
+    )
+
+
+def test_host_gate_admits_claimed_make_closeout_with_slash_branch(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _workspace, _repo, worktree, claims_dir, _claim_path = _fixture(tmp_path)
+    command = (
+        f"/usr/bin/make -C {worktree} session-close "
+        "BRANCH=runtime/host-gate-lane"
+    )
+    payload = _payload(cwd=worktree, tool="Bash", tool_input={"command": command})
+
+    code, decision = _run_cli(
+        monkeypatch,
+        capsys,
+        tmp_path,
+        payload,
+        claims_dir=claims_dir,
+        projection_path=tmp_path / "projection.json",
+    )
+
+    assert code == 0, decision
+    assert decision["decision"] == "allow"
+    assert decision["reason_code"] == "exact_live_claim"
+
+
+def test_host_gate_admits_claimed_relative_closeout_with_slash_identifiers(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _workspace, _repo, worktree, claims_dir, _claim_path = _fixture(tmp_path)
+    command = (
+        f"/usr/bin/env -C {worktree} /usr/bin/python3 scripts/session_close.py "
+        "--agent claude-code --project host-gate-test --scope runtime/host-gate-lane "
+        f"--worktree-path {worktree} --branch runtime/host-gate-lane "
+        "--disposition merged --recovery-ref refs/recovery/runtime/host-gate-lane"
+    )
+    payload = _payload(cwd=worktree, tool="Bash", tool_input={"command": command})
+
+    code, decision = _run_cli(
+        monkeypatch,
+        capsys,
+        tmp_path,
+        payload,
+        claims_dir=claims_dir,
+        projection_path=tmp_path / "projection.json",
+    )
+
+    assert code == 0, decision
+    assert decision["decision"] == "allow"
+    assert decision["reason_code"] == "exact_live_claim"
+
+
 def test_claimed_env_bound_python_manager_uses_candidate_as_the_write_target(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

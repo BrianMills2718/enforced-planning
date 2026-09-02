@@ -1,0 +1,12 @@
+{
+  "action": "rebuild",
+  "data": {
+    "backup": null,
+    "pages": 5,
+    "sources": 8
+  },
+  "id": "20260902T063718724644Z-f02f2698",
+  "message": "Rebuilt generated wiki navigation",
+  "schema_version": 1,
+  "timestamp": "2026-09-02T06:37:18.724Z"
+}

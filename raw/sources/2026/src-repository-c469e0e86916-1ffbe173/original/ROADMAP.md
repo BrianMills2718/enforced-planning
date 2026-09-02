@@ -1,0 +1,371 @@
+# Enforced Planning Framework — Roadmap
+
+**Status:** Active
+
+Plan #128 is the current portable-profile vertical: extend the existing installer,
+audit, and Plan #63 wiki owner with default-on governance, one master off switch,
+and a disposable installed-consumer proof. Generated wiki pages remain navigation.
+
+**Updated:** 2026-08-21
+**Canonical methodology:** `PLANNING_OPERATING_MODEL.md`
+
+## Vision
+
+A portable framework where:
+- Programmatic checks catch structural governance violations exhaustively
+- Agents verify semantic drift and fix or escalate — no "warn and hope"
+- Humans set direction, review escalations, and make architectural decisions
+- Every repo in the ecosystem can adopt incrementally without big-bang migration
+
+## Current Proof Frontier
+
+Plan #113 established the first authentic vertical through the neutral
+clean-room, installed planning authority, documentation linkage, explicit
+course-correction control, and an independent verifier. Its stable regression
+probe remains:
+
+```text
+python src/hello_app.py --name Ada
+-> Ada uses shared-lib
+```
+
+The existing default behavior must remain, the README and bounded plan must be
+truthful, only declared paths may change, and worker self-report cannot certify
+completion.
+
+The first receipt now exists at
+`docs/evidence/plan113_governed_delivery_receipt.json`: framework revision
+`757ebcb7` prepared baseline `af8b4a9`, and this Codex session committed result
+`e5c00c1`; all 15 independent checks passed. The observation licenses one real
+governed-delivery vertical, not utility on Brian's real project portfolio,
+colleague-ready portability, or a self-improving ecosystem.
+
+Plan #62 completed the approved repeat: a copied consumer profile selects a
+custom one-project `status-cli` inventory and requests:
+
+```text
+python src/status_cli.py --json
+-> {"project_id":"status-cli","status":"adapter-placeholder"}
+```
+
+The retained receipt at
+`docs/evidence/plan62_status_cli_delivery_receipt.json` binds profile
+`status-cli-json`, framework revision `0c6eab42`, baseline `c9d77fa`, result
+`83f4d59`, the authentic session, and 16 passing checks. The worker committed
+its consumer plan before source work and changed only the four declared result
+paths.
+
+Two configured generated consumers pass the same plan, documentation, progress,
+scope, portability, and independent-verifier controls. This is mechanical
+repeatability evidence. Plans #55 and #114–#122 then crossed the owner frontier
+on Enforced Planning itself:
+
+- Plan #55 reduced the required context for one real framework module from 11
+  documents and 13,052 words to four documents and 2,577 words while retaining
+  its plan, decision, schema, and repository authority.
+- Plans #114 and #115 made progress evidence—not approval, cost, or elapsed
+  time—the continuation signal and bound the positive case to that merged owner
+  result.
+- Plan #116 sent the identical real claimed Codex pre-write payload through the
+  ordinary gate twice. Both ordinary decisions remained
+  `allow/exact_live_claim`; owner progress correlated to
+  `would_allow/active_in_scope`, while two synthetic non-outcome receipts
+  correlated to `would_deny/recovery_required`.
+- Plans #117 and #118 bound the real claimed session to create-once outcome
+  state, then preserved it and its failure history across exact-session handoff
+  and a same-project stalled-to-active causal restart. Both-sign selected
+  observations remained advisory; independent review, owner-class resolution,
+  cross-project successors, and blocking remain downstream.
+- Plan #119 made that selected lease evolve through append-only progress
+  receipts. The real owner lane advanced and replayed one current head without
+  changing tracker bytes; selected pre-write consumed the effective scenario,
+  while refresh, restart, recovery-required, and successor-session paths passed
+  focused controls without changing ordinary admission.
+- Plan #120 bound classed outcome selection to exact reviewed Project Graph
+  owner authority and a separate append-only allocation command. The real
+  maintenance lane first failed without allocation, then allocated, replayed,
+  selected, and observed successfully before an append-only parking event
+  released the global slot and invalidated later resolution. Focused controls
+  enforce one product per owner class and one shared maintenance/external slot.
+- Plan #121 froze 30 representative admission cases before implementation and
+  evaluated the exact candidate twice. All 29 scored cases matched with zero
+  critical false blocks, false allows, or unexpected defers; both-sign,
+  corruption, invalid-input, and eight fresh adversarial verifier controls
+  passed. Independent sign-off licenses one first-consumer implementation but
+  excludes hook activation, fleet rollout, and cross-repository membership.
+- Plan #122 implemented that first source consumer behind explicit flags. One
+  real maintenance allocation admitted selected inspection, heartbeat, and an
+  ordinary-authorized hard pre-write; parking the allocation then denied the
+  same heartbeat and pre-write before mutation or success. Missing selection,
+  source-smuggling bootstrap, and equivalent circular `outcome_stalled` public
+  controls also denied, while default lifecycle and ordinary pre-write behavior
+  remained compatible across 191 focused tests.
+- Plan #123 activated the source consumer. The sanctioned Make bootstrap
+  admitted only exact Plan artifacts; configured Make lifecycle and native
+  pre-write enforced the selected outcome without flags; and canonical
+  lifecycle sources displaced stale generated mirrors. An authentic second
+  scoped-file probe caught a single-example-target false block before
+  acceptance; the repaired candidate admits every immutable contract-scoped
+  target and still denies claimed-but-contract-out-of-scope writes without
+  mutation. The frozen candidate passed 112 focused checks, retains direct
+  rollback, and did not run the installer against a consumer.
+- Plan #124 selected the clean, Brian-owned Qualitative Coding repository for
+  the first normal-project pilot without selecting a product feature, model
+  run, deployment, or user-data change. Its design probe exposed one exact
+  source prerequisite: the contract's project identity grammar cannot yet
+  represent QC's authoritative Project Graph ID `qualitative_coding`.
+  Candidate `70d2d334` now validates that exact ID and resolves it through the
+  production portfolio owner against pinned Project Meta source; 61 focused
+  checks and malformed/outcome-lineage controls pass. Canonical merge and
+  terminal parking of the source allocation remain prerequisites before the
+  separately claimed QC-local activation may start.
+
+These observations prove useful owner-real behavior at the documentation,
+continuation, exact-session identity, durable current-head, explicit
+portfolio-admission, deterministic admission-decision, and opt-in source
+enforcement seams. They do not yet make outcome selection mandatory for new
+plans or claims, block default ordinary writes without a selection, establish a
+fleet false-block rate, choose the one product project, or prove installed fleet
+enforcement or usefulness across Brian's ordinary project portfolio. The
+current proof frontier is therefore Plan #124's exact Project Graph identity
+compatibility prerequisite followed by one separately claimed normal-project
+pilot in Qualitative Coding. The pilot must prove that bootstrap,
+ordinary work, evidence closeout, inactive-state denial, and rollback remain
+usable outside the framework's own repository before any installer default or
+fleet propagation decision. Repeated normal-project use, independent evidence
+selection, colleague packaging, external-user validation, and broader
+usability remain downstream of those next proof stages.
+
+Plan #125 adds the missing semantic planning-admission seam required by the
+accepted Agentic Engineering roadmap. The planning method, outcome-continuation
+engine, and four-layer documentation mechanism already exist; the new frontier
+is to bind them through one versioned Planning Integrity result. The bounded
+order is: accept the Plan 125 contract, enforce it before coordinated/release
+lane mutation in this source repository, bind selected continuation to that
+accepted plan revision, prove exact successor selection, separately select and
+sync the coupled operator entrypoint, prove an installed AES evidence join,
+then stop framework expansion. A selected valuable
+project reboot may advance in parallel once its own plan is ready: authentic
+consumer failures become focused regressions and narrow trust in the affected
+control rather than turning AES completion into a platform prerequisite. This
+does not replace or broaden Plan #124's separate Qualitative Coding
+outcome-admission pilot.
+
+In the broader **Agentic Engineering System** vocabulary, Enforced Planning
+currently owns Agentic Delivery planning/control mechanisms and selected
+Orchestration/Loops and Evidence/Improvement controls. It is not the whole
+system and does not absorb Agent Runtime/Harness or optional shared
+infrastructure.
+
+**Roadmap authority boundary.** This roadmap owns *control-plane mechanics*:
+the planning, claim, worktree, outcome-admission, and installer machinery, and
+the numbered plan queue in `docs/plans/`. Project Meta's
+`vision/04_ROADMAP.md` owns *program sequence* for the Agentic Engineering
+System: phases, gates, verdicts, and which proof lane comes next. Neither
+overrides the other inside the other's scope. When they appear to disagree,
+that is a scope error to reconcile rather than a decision to arbitrate. Fleet
+distribution of this framework is tracked there as Phase 4a and here as the
+installer/propagation work its gates depend on. A new top-level repository, shared `data-contracts` extraction,
+`llm_client` integration, Plan #111 feedback evolution, installer rollout, and
+blocking remain deferred until a demonstrated consumer seam makes one of them
+the smallest next move.
+
+## Phase Map
+
+### Phase 1: Core Framework (COMPLETE)
+
+**Gate:** Portable patterns, templates, and scripts that any repo can install.
+
+| Plan | What | Status |
+|------|------|--------|
+| — | 27 patterns + opt-in modules | ✅ Shipped (pre-extraction) |
+| — | Plan template with acceptance criteria, tests, capabilities | ✅ Shipped |
+| — | Read-gating hooks, doc-code coupling, git hooks | ✅ Shipped |
+| — | `install.sh` for governed repo bootstrap | ✅ Shipped |
+
+### Phase 2: Canonical Methodology (COMPLETE)
+
+**Gate:** Single source of truth for the planning artifact dependency graph.
+
+| Plan | What | Status |
+|------|------|--------|
+| #2 | Planning Operating Model (canonical methodology) | ✅ Complete |
+| #3 | Static Graph / Runtime Truth split | ✅ Complete |
+| #1 | Capabilities section in plan template | ✅ Complete (template done, pre-commit hook wired as check #6) |
+
+### Phase 3: Truth-Surface Validation (COMPLETE)
+
+**Gate:** Deterministic validator that checks agreement between static declarations and runtime facts.
+
+| Plan | What | Status |
+|------|------|--------|
+| #4 | First truth-surface drift validator | ✅ Complete |
+| #5 | Validator completion (audit parity, renderer) | ✅ Complete |
+| #6 | Governed repo adoption pilot | ✅ Complete |
+| #8 | Adoption pilot execution sprint | ✅ Complete |
+| #9 | Scoped validation by canonical repo identity | ✅ Complete |
+
+### Phase 4: Relationships V2 — Inference + Agent Verification (COMPLETE)
+
+**Gate:** Dependency inference engine running in CI; agent verification protocol for "validated" couplings; no "soft/warn" tier.
+
+| Item | What | Status |
+|------|------|--------|
+| Design doc | `docs/designs/RELATIONSHIPS_V2_DESIGN.md` | ✅ Complete |
+| Plan dep format | `#N`, `project#N`, `[future]` in template + `check_plan_deps.py` | ✅ Complete |
+| Inference engine | `infer_dependencies.py` — markdown links, imports, plan refs | ✅ Complete |
+| V2 schema | `relationships.yaml` V2 with locked/generated/validated types | ✅ Complete |
+| Migration script | `migrate_relationships.py` V1→V2 | ✅ Complete |
+| Tests | 149 tests (42 new for V2 tools) | ✅ Complete |
+| Self-import filter | Inference skips repo's own package imports | ✅ Complete |
+| Makefile targets | `make infer`, `make check-deps`, `make check-caps`, `make migrate-rels` | ✅ Complete |
+| **V2 adoption pilot** | Migrate a real governed repo's relationships.yaml to V2 | ✅ Complete (llm_client: 4 couplings migrated, 425 inferred edges, read-gate verified) |
+| **Pre-commit enforcement** | Hook that validates locked couplings on commit | ✅ Complete (`check_locked_couplings.py` wired into pre-commit, 24 tests) |
+| **Agent verification protocol** | Bounded mission spec for "validated" couplings (`Plan #11`) | ✅ Complete (181 tests, shipped) |
+
+### Phase 5: Semantic Review Layer (COMPLETE)
+
+**Gate:** LLM/agent layer that catches semantic drift (stale prose, misleading summaries) that deterministic checks can't express.
+
+| Plan | What | Status |
+|------|------|--------|
+| #7 | LLM semantic truth-surface review | ✅ Complete (semantic review layer shipped; canonical path now `review_truth_surface_semantic.py`) |
+| — | Promote stable LLM findings into deterministic checks | ✅ Complete (`promote_to_deterministic.py`, `make promote`; 3 candidates identified, 3 fixed in this session) |
+
+**Note:** Plan #7 (semantic review) and Plan #11 (agent verification protocol) both complete. Plan #7 specializes the verification pattern established by Plan #11.
+
+**Convergence outcome:** Plan #18 made the config-driven path canonical.
+`review_truth_surface_semantic.py` now owns semantic review, append-only review
+history, and promotion input. `review_truth_surfaces.py` remains only as a
+deprecated compatibility wrapper.
+
+### Phase 6: Cross-Repo Governance (COMPLETE — 2 items permanently deferred)
+
+**Gate:** Multiple repos using V2 relationships.yaml with inference + enforcement + agent verification. Ecosystem-wide dependency map.
+
+| Item | What | Status |
+|------|------|--------|
+| Cross-repo plan index | Consumable plan registry across all repos | ✅ Complete (327 plans, 22 repos, `make plan-registry`) |
+| Ecosystem dependency map | Inference engine run across all active repos | ✅ Complete (22 repos, 14177 edges, 103 cross-repo; `make infer-all && make ecosystem-deps`) |
+| Visibility grammar | Bazel-style `__pkg__`/`__subpackages__` for doc governance scope | 📋 Deferred — see `docs/backlog/DEFERRED_FEATURES.md` |
+| Distributed governance | Per-directory `.governance.yaml` (Buck2 pattern) | 📋 Deferred — see `docs/backlog/DEFERRED_FEATURES.md` |
+
+### Phase 7: Onboarding Reconciliation (COMPLETE)
+
+**Gate:** GETTING_STARTED.md, README, and pattern docs all align with the canonical operating model and V2 tooling.
+
+| Plan | What | Status |
+|------|------|--------|
+| #10 | Framework truth-surface and onboarding reconciliation | ✅ Complete |
+
+**Follow-on result:** Plans #16, #17, and #18 completed the second convergence
+pass, so the product surface now has one canonical installer story, one
+canonical semantic-review path, and a cleaner source-vs-installed doc split.
+
+### Phase 8: Multi-Tool Support and Ecosystem Observability (DESIGN COMPLETE — IMPLEMENTATION NEXT)
+
+**Gate (measurable proxy — verifiable within this repo):**
+All three conditions green as of 2026-04-04 overnight sprint:
+1. ✅ `.pre-commit-hooks.yaml` integration tested end-to-end — documented in `docs/evidence/phase8_precommit_test.md`
+2. ✅ `install.sh --pre-commit` verified in a repo that has no `.claude/` directory — documented in same evidence file
+3. ✅ `render_agents_md.py` produces an 84-line AGENTS.md that a Codex agent can navigate — documented in same evidence file
+
+> **Gate outcome**: All three proxy conditions pass. Phase 8 work may begin.
+> Evidence committed to `docs/evidence/phase8_precommit_test.md`.
+
+> **Why a proxy gate?** "≥ 3 teams" is unverifiable from inside the repo. The proxy
+> gate above tests the same underlying capability (non-Claude-Code adoption is
+> possible) with artifacts that can be committed and reviewed here.
+
+| Plan | What | Status |
+|------|------|--------|
+| #19 | Multi-tool support matrix, support tiers, and rollout policy | ✅ Complete |
+| #20 | Governed-repo upgrade automation and registry model | ✅ Complete |
+| #21 | Ecosystem dashboard and status surfaces | ✅ Complete |
+| #22 | Framework self-measurement and ROI metrics | ✅ Complete |
+
+### Coordination Runtime Surface (PACKAGEIZED — HEALTHY LANE SURFACE)
+
+**Gate:** Live coordination state is package-backed, mechanically consistent,
+and readable as bounded active lanes instead of only raw claims.
+
+| Plan | What | Status |
+|------|------|--------|
+| #24 | Coordination-state packageization and consistency gate | ✅ Complete |
+| #25 | Lane model and active-lane registry | ✅ Complete |
+| #26 | Claim session auto-hydration and weak-lane remediation | ✅ Complete |
+| #27 | V2 worktree entrypoints and claim propagation | ✅ Complete |
+| #28 | Stale claim lifecycle and cleanup automation | ✅ Complete |
+| #29 | Session heartbeats and agent liveness | ✅ Complete |
+| #30 | Session bootstrap contract and tracker | ✅ Complete |
+| #31 | Session CLI and governed-repo entrypoint enforcement | ✅ Complete |
+| #32 | Cross-tool session adapters and adoption rollout | ✅ Complete |
+| #33 | Assignment-layer session contract integration | ✅ Complete |
+| #34 | Weak-claim remediation and live-lane migration | ✅ Complete |
+| #35 | Queue-based assignment and session routing architecture | ✅ Complete |
+| #37 | Plan-bound session identity and resume lifecycle | ✅ Complete |
+| #38 | Authority-drift reconciliation gates | ✅ Complete |
+| #39 | Worktree-aware markdown-link validation and root resolution | ✅ Complete |
+| #40 | Overnight coordination implementation sprint | ✅ Complete |
+| #41 | Documentation authority governance and enforcement | ✅ Complete |
+| #42 | Atomic closeout and claimed worktree removal | ✅ Complete |
+| #43 | Publish-lane safety and dirty primary checkout handling | ✅ Complete |
+| #44 | Interactive startup mode and session-owned surface policy | ✅ Complete |
+| #73 | Coordination status integrity | 🚧 In Progress — reject stale default-branch authority and incomplete plan-session health |
+
+**Deferred item blockers:**
+
+| Item | Blocked By | Would Unblock |
+|------|-----------|--------------|
+| Multi-tool hook support | No Cursor/Windsurf equivalent of `.claude/hooks/` is publicly documented yet. Unblocks: any non-CC adopter. | Plan #19 support-tier decision + concrete adapter path |
+| Adoption automation | Need ≥ 5 governed repos before upgrade automation is worth building. Currently at ~3. | 5+ governed repos |
+| Framework self-measurement | Metric definitions are complete, but collection/reporting is not implemented yet. | future implementation slice on top of Plans #21 and #22 |
+
+**Long-term deferred (no near-term consumer):** Visibility grammar and distributed governance moved to `docs/backlog/DEFERRED_FEATURES.md`.
+
+## Phase 9: Fleet Adoption and Framework Maintenance
+
+**Gate:** Plans #43, #44, and #35 all complete. ✅ Gate met (2026-04-05). Coordination Runtime Surface is closed.
+
+**Strategic choice:** Phase 9 is **fleet adoption and maintenance** — not a broad new
+capability phase. Phase 9 primarily deploys what exists and measures it. New
+framework code is limited to direct adoption blockers found through observed
+use. Plan #109 is such a blocker: the relationship registry and context packet
+existed, but could not prevent newly created documentation from bypassing
+authority and directory policy.
+
+| Item | What | Trigger |
+|------|------|---------|
+| Mac mini pilot | Execute first controlled pilot from `docs/guides/MAC_MINI_CONTINUOUS_AUTOMATION_BOOTSTRAP.md` | Plans #43/#44/#35 complete |
+| Upgrade automation rollout | `scripts/upgrade_governed_repos.py` implemented (2026-04-05); 16/16 repos dry-run ok. Write-mode rollout **deferred to Mac mini pilot** — run repo-by-repo after pilot confirms unattended dry-run runs clean. See Plan #51. | ✅ Script shipped; write-mode pending Mac mini pilot |
+| Ecosystem status renderer | `make ecosystem-status`, `generated/ecosystem_status.json`, operator metrics on top of Plans #21/#22 | Plans #43/#44/#35 complete |
+| Recursive doc-spine dogfood | Make `enforced-planning` itself the first adopter of the execution-brief/current-state/gap-summary/ancestor-read contract before downstream rollout. See Plans #54 and #55. | Plan #54 design complete; Plan #55 implementation planned |
+| Modality-aware planning maintenance | Fold `/bounded-design` into the canonical operating model and plan templates so plans distinguish deductive, exploratory, and hybrid work. See Plan #56. | ✅ Complete |
+| Landscape and prior-art contract | Make research-before-build explicit in methodology, plans, relationship lineage, and report-only validation. See Plan #101. | ✅ Complete; enforcement deferred pending dogfood |
+| Cross-client mailbox | Add client-neutral persisted/observed/acknowledged message semantics on the existing claim/session identity model. See Plan #67. | ISSUE-054 confirmed the Claude-only inbox has no reliable Codex delivery path |
+| Native Codex mailbox lifecycle | Install Codex lifecycle hooks and prove a live send-observe-acknowledge chain. See Plan #100. | ✅ Complete; native resumed-thread proof retained |
+| Mailbox fleet delivery certification | Move the canonical delivery adapter to the host boundary, detect repository drift without conflating configuration with observation, and certify Codex↔Claude in all four directions. See Plan #106. | In progress; MF-01/MF-02/MF-04 accepted, read-only MF-03A host candidate is next, and host apply/live certification remain approval-gated |
+| Pre-write claim enforcement | Check supported native Codex/Claude write events against exact live session, worktree, branch, and path ownership before mutation. See Plan #108. | PW-01/PW-02A/PW-02 are accepted; PW-02B0 writer provenance is the only ready leaf, followed by frozen inventory, bounded rollout, fleet certification, and the fixed enforced-planning pilot |
+| Artifact creation enforcement | Gate selected new tracked artifacts against repository directory rules and durable intent, with receipts and feedback. See Plan #109. | Portable mechanism first, then an Inside Success Markdown observe pilot before any blocking promotion |
+| No-passive-waiting enforcement | Separate liveness from progress, reject whole-goal blockage while compatible work remains, and preserve recoverable true blockers. See Plan #110. | NPW-02 provider-free blocker disposition accepted with replayable both-sign evidence; NPW-01 progress visibility remains the ready leaf before NPW-03 |
+| Outcome continuation lease | Require typed progress evidence before supported coding-agent continuation; ordinary approval and cost do not renew authority. See Plans #114–#124. | Plan #124 accepted the exact qualitative_coding identity candidate against the real portfolio owner; merge/park then the isolated QC-local pilot are next, while installer defaults and fleet rollout remain excluded |
+| Planning integrity loop | Require a versioned, revision-bound semantic plan result before selected coordinated/release work; join its frontier and reassessment obligations to existing outcome continuation and AES projection. See Plan #125. | Complete. PI-01 through PI-03 are accepted, including the authentic installed AES consumer at PR #4 and a v12 synchronized closeout across plan, graph, roadmap, and canonical plan queue. Framework expansion stops here. |
+| Turn-end safety and hook feedback | Keep corrupt sessions fail-safe, fresh startup fast, and ordinary response yield distinct from progress checkpoints, agent rotation/handoff, and strict lane closure; repair or safely degrade stale derived claim state and aggregate existing content-free hook receipts without creating another feedback store. See Plans #126 and #127. | Complete. Plan #126 was superseded without implementation after source inspection rejected its nested-lock candidate. Plan #127 landed bounded turn-end repair, read-only startup, stable recovery incidents, exact-receipt recurrence reporting, and strict mutation/close controls; the configured installed hook and focused controls pass. |
+| Cross-repository plan authority | Keep a qualified plan's repository/revision separate from the target repository/revision that owns the work graph and mutation claim. See Plan #130. | Delivered: source PR #264 and AES PR #33 are merged; the installed `~/code -> AES under project-meta#249` bootstrap and terminal closeout pass. The source implementation and both AES claims are terminal. Resume the bounded Plan #249 consumer slice; retain the documented CI-credential and canonical-lock-path limitations. |
+| Broad-claim narrowing | Prevent accidental parent-directory reservations from serializing disjoint work while preserving hard parent/child exclusion. See Plan #132. | Complete: schema-v6 broad intent, owner-only fail-atomic narrowing, bootstrap first-write denial, explanatory conflicts, exact maintenance provenance, and a generated deny-narrow-admit-close consumer proof are accepted. Project Meta adoption remains separately claimed; fleet rollout is deferred. |
+| Multi-tool adoption | Cursor/Windsurf hook adapters when their hook surfaces are publicly documented | External dependency: tool documentation |
+| Project-meta topic-research adoption | Apply portable topic-research pattern in `research_synthesis/` with manifests, ADR links, freshness metadata | Plans #43/#44/#35 complete |
+
+**What Phase 9 does NOT include (deferred — see `docs/backlog/DEFERRED_FEATURES.md`):**
+- Visibility grammar (Bazel-style `__pkg__` scoping) — no consuming project needs it yet
+- Distributed governance (per-directory `.governance.yaml`) — no multi-team repo yet
+
+**Phase 9 end state:** The framework is self-measuring, the ecosystem has ≥ 5 governed repos with active upgrade automation, and operator overhead is ≤ 30 min/day.
+
+## Design Principles
+
+- **Programmatic for coverage, agents for judgment, humans for direction** (root CLAUDE.md)
+- **No "shoulds"** — every validation outcome has a concrete action (fix/escalate/block)
+- **Incremental adoption** — repos can use V1 forever; V2 is opt-in with migration path
+- **Inference + overrides > exhaustive declarations** — scan first, declare exceptions
+- **Stolen patterns** — Pants (inference), Nx (dependsOn), Bazel (dep types) — credited in design doc

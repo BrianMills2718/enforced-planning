@@ -4,11 +4,6 @@ Status: active
 
 A portable framework for coordinating AI coding assistants on shared codebases.
 
-For compact project orientation, start with the
-[integrated development wiki](wiki/README.md). It routes by goal, architecture,
-current work, and evidence while preserving native plans, ADRs, code, config,
-and tests as authority. Search is a secondary fallback, not the initial route.
-
 > **Tool support:** `enforced-planning` uses a four-tier support matrix:
 > `native-interactive`, `portable-governed`, `legacy-compatible`, and
 > `unsupported`.

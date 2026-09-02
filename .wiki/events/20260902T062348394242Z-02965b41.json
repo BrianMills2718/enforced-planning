@@ -1,0 +1,28 @@
+{
+  "action": "configure",
+  "data": {
+    "bridges": {
+      "created": [],
+      "preserved": [],
+      "skipped": [
+        "external-foundation"
+      ],
+      "updated": []
+    },
+    "created": [
+      ".wiki/policy.md",
+      "wiki/_schema.md",
+      ".wiki/templates/page.md",
+      ".wiki/templates/query-output.md",
+      ".wiki/version",
+      "wiki/_index.md"
+    ],
+    "updated": [
+      ".wiki/config.json"
+    ]
+  },
+  "id": "20260902T062348394242Z-02965b41",
+  "message": "Initialized managed wiki structure",
+  "schema_version": 1,
+  "timestamp": "2026-09-02T06:23:48.394Z"
+}

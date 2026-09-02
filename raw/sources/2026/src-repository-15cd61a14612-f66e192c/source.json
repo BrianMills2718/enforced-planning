@@ -1,0 +1,27 @@
+{
+  "adapter": "repository",
+  "authority": "native",
+  "capture_variant_of": "src-repository-15cd61a14612",
+  "captured_at": "2026-09-02T06:38:43Z",
+  "classification": "internal",
+  "external_key": null,
+  "git_tracking": {
+    "captured_revision": "ecbf214664cd6db2d3bbc2e0689e2107927414cd",
+    "mode": "tracks_current",
+    "path": "PLANNING_OPERATING_MODEL.md",
+    "repository": "BrianMills2718/enforced-planning"
+  },
+  "id": "src-repository-15cd61a14612-f66e192c",
+  "mime": "text/markdown",
+  "origin_uri": "git:BrianMills2718/enforced-planning@ecbf214664cd6db2d3bbc2e0689e2107927414cd:PLANNING_OPERATING_MODEL.md",
+  "original_path": "raw/sources/2026/src-repository-15cd61a14612-f66e192c/original/PLANNING_OPERATING_MODEL.md",
+  "pointer_only": false,
+  "published_at": null,
+  "schema_version": 1,
+  "sha256": "15cd61a146127b44e0d2362a8ab3c2c443d1c816d5990171e5fddf33f02caf8f",
+  "source_type": "repository",
+  "supersedes": [
+    "src-repository-15cd61a14612"
+  ],
+  "title": "Planning operating model, exact revision"
+}

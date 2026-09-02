@@ -1,0 +1,27 @@
+{
+  "adapter": "repository",
+  "authority": "native",
+  "capture_variant_of": "src-repository-6b5684f88799",
+  "captured_at": "2026-09-02T06:38:43Z",
+  "classification": "internal",
+  "external_key": null,
+  "git_tracking": {
+    "captured_revision": "ecbf214664cd6db2d3bbc2e0689e2107927414cd",
+    "mode": "tracks_current",
+    "path": "README.md",
+    "repository": "BrianMills2718/enforced-planning"
+  },
+  "id": "src-repository-6b5684f88799-03d49981",
+  "mime": "text/markdown",
+  "origin_uri": "git:BrianMills2718/enforced-planning@ecbf214664cd6db2d3bbc2e0689e2107927414cd:README.md",
+  "original_path": "raw/sources/2026/src-repository-6b5684f88799-03d49981/original/README.md",
+  "pointer_only": false,
+  "published_at": null,
+  "schema_version": 1,
+  "sha256": "6b5684f88799e1461fd8d203a85c76fb70d29cf7b79be7a907cb597cfb172b33",
+  "source_type": "repository",
+  "supersedes": [
+    "src-repository-bafb57ab8783"
+  ],
+  "title": "Enforced Planning README, exact revision"
+}

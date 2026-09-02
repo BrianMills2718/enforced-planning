@@ -1,0 +1,15 @@
+{
+  "action": "capture",
+  "data": {
+    "source": {
+      "path": "raw/sources/2026/src-repository-bafb57ab8783",
+      "sha256": "bafb57ab87836dec3dfa6f244fd1630eced1464bdf7a3b3a39b2e8ba3f5787e0",
+      "source_id": "src-repository-bafb57ab8783",
+      "status": "created"
+    }
+  },
+  "id": "20260902T063808919182Z-c10fde4d",
+  "message": "Captured source src-repository-bafb57ab8783",
+  "schema_version": 1,
+  "timestamp": "2026-09-02T06:38:08.919Z"
+}

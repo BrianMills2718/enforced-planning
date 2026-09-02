@@ -1,0 +1,68 @@
+{
+  "agent_integration": {
+    "mode": "external-foundation"
+  },
+  "capture_exclude": [
+    ".agents/**",
+    ".claude/**",
+    ".company-planning/**",
+    ".wiki/**",
+    "AGENTS.md",
+    "CLAUDE.md",
+    "raw/**",
+    "wiki/**"
+  ],
+  "defaults": {
+    "authority": "repository-native",
+    "classification": "internal",
+    "freshness_sla_days": null
+  },
+  "exports": {
+    "site": {
+      "addons": {
+        "search": {
+          "enabled": true
+        }
+      },
+      "theme": "default",
+      "theme_options": {}
+    }
+  },
+  "files": {
+    "backlinks": "wiki/_backlinks.json",
+    "base": "wiki/Wiki.base",
+    "catalog": "wiki/_catalog.md",
+    "index": "wiki/_index.md",
+    "policy": ".wiki/policy.md",
+    "schema": "wiki/_schema.md",
+    "sources": "wiki/_sources.md"
+  },
+  "git": {
+    "repositories": {
+      "BrianMills2718/enforced-planning": "origin"
+    },
+    "tracking": {}
+  },
+  "governance": {
+    "legacy_source_references": "reject",
+    "page_exclude": [],
+    "require_derived_page_authority": true
+  },
+  "language": "en",
+  "paths": {
+    "events": ".wiki/events",
+    "human_owned": [],
+    "legacy_raw_entries": "raw/entries",
+    "outputs": ".wiki/outputs",
+    "raw_derived": ".wiki/raw-derived",
+    "raw_sources": "raw/sources",
+    "state": ".wiki/state",
+    "transactions": ".wiki/transactions",
+    "wiki": "wiki"
+  },
+  "query": {
+    "max_bytes": 4096,
+    "token_estimator": "utf8-bytes-ceil-div-4"
+  },
+  "schema_version": 1
+}

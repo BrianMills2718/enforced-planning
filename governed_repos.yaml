@@ -1,54 +1,140 @@
 version: 1
+# Rebuilt 2026-09-02 from a fresh filesystem sweep of every directory
+# containing an enforced_planning/ install (37 consumers + this source repo),
+# not the prior hand-maintained 16-entry list, which had drifted stale:
+# 4 of its paths pointed at directories that had moved (project-meta,
+# llm_client, research_v3, osint_tools all relocated ~/projects -> ~/code),
+# including this repo's own "source" entry -- meaning fleet tooling reading
+# that field had been resolving the framework source to a stale clone.
+# Where a repo's remote existed checked out in two places, the more recently
+# committed-to checkout was kept as canonical (verified via `git log -1`,
+# not guessed).
 repos:
   - id: enforced-planning
-    path: ~/projects/enforced-planning
+    path: ~/code/active/enforced-planning
     tier: source
-  - id: llm_client
-    path: ~/projects/llm_client
+  - id: ac15
+    path: ~/code/ac15
     tier: governed
-  - id: prompt_eval
-    path: ~/projects/prompt_eval
-    tier: governed
-  - id: open_web_retrieval
-    path: ~/projects/open_web_retrieval
-    tier: governed
-  - id: agentic_scaffolding
-    path: ~/projects/agentic_scaffolding
-    tier: governed
-  - id: project-meta
-    path: ~/projects/project-meta
+  - id: ac16
+    path: ~/code/ac16
     tier: governed
   - id: agent_memory
-    path: ~/projects/agent_memory
+    path: ~/code/active/agent_memory
+    tier: governed
+  - id: agent_ontology
+    path: ~/code/agent_ontology
+    tier: governed
+  - id: cybernetic_influence_v3
+    path: ~/code/cybernetic_influence_v3
+    tier: governed
+  - id: data-contracts
+    path: ~/code/active/data-contracts
+    tier: governed
+  - id: digimon-for-kg-application
+    path: ~/projects/Digimon_for_KG_application
     tier: governed
   - id: ecosystem-ops
-    path: ~/projects/ecosystem-ops
+    path: ~/code/active/ecosystem-ops
     tier: governed
-  - id: moltbot
-    path: ~/projects/moltbot
+  - id: epistemic-contracts
+    path: ~/code/research-workspace/epistemic-contracts
     tier: governed
-  - id: qualitative_coding
-    path: ~/projects/qualitative_coding
+  - id: graph_application_toolkit
+    path: ~/projects/graph_application_toolkit
+    tier: governed
+  - id: greer
+    path: ~/code/greer
+    tier: governed
+  - id: investigations
+    path: ~/code/active/investigations
+    tier: governed
+  - id: kgas1
+    path: ~/code/kgas1
+    tier: governed
+  - id: llm_client
+    path: ~/code/active/llm_client
+    tier: governed
+  - id: onto-canon6
+    path: ~/code/active/onto-canon6
+    tier: governed
+  - id: open_web_retrieval
+    path: ~/code/active/open_web_retrieval
+    tier: governed
+  - id: openclaw
+    path: ~/code/openclaw
     tier: governed
   - id: orgchart
-    path: ~/projects/orgchart
-    tier: governed
-  - id: trajectory
-    path: ~/projects/trajectory
-    tier: governed
-  - id: grounded-research
-    path: ~/projects/grounded-research
-    tier: governed
-  - id: research_v3
-    path: ~/projects/research_v3
-    tier: governed
-  - id: data_contracts
-    path: ~/projects/data_contracts
+    path: ~/code/orgchart
     tier: governed
   - id: osint_tools
-    path: ~/projects/osint_tools
+    path: ~/code/research-workspace/osint_tools
     tier: governed
   - id: process_tracing
     path: ~/projects/process_tracing
     tier: governed
-# Note: agent_ecology2 intentionally excluded (PR #1148 pending merge)
+  - id: project-meta
+    path: ~/code/active/project-meta
+    tier: governed
+  - id: prompt_eval
+    path: ~/code/active/prompt_eval
+    tier: governed
+  - id: qualitative_coding
+    path: ~/code/qualitative_coding
+    tier: governed
+  - id: research_v3
+    path: ~/code/research-workspace/research_v3
+    tier: governed
+  - id: theory-forge
+    path: ~/projects/theory-forge
+    tier: governed
+  - id: ufotrust
+    path: ~/code/ufotrust
+    tier: governed
+  - id: utils
+    path: ~/code/utils
+    tier: governed
+  - id: whygame4
+    path: ~/code/whygame4
+    tier: governed
+  # Inside-Success org repos: separate remotes/owners from the personal repos
+  # above with the same short name. Included because they have
+  # enforced_planning/ installed and drift the same way, but write-mode
+  # rollout onto these needs its own authority check (see CLAUDE.md's
+  # repository-routing rules) before it's treated the same as a personal repo.
+  - id: brians-2nd-brain-integration-work
+    path: ~/projects/inside-success/planning
+    tier: governed
+    owner: inside-success
+  - id: grounded-research
+    path: ~/code/active/grounded-research
+    tier: governed
+    owner: inside-success
+  - id: graph-retrieval
+    path: ~/projects/inside-success/repos/graph-retrieval
+    tier: governed
+    owner: inside-success
+  - id: initiative-roadmap-dashboard
+    path: ~/projects/inside-success/repos/initiative-roadmap-dashboard
+    tier: governed
+    owner: inside-success
+  - id: inside-success-data-contracts
+    path: ~/projects/inside-success/repos/data-contracts
+    tier: governed
+    owner: inside-success
+  - id: inside-success-llm-client
+    path: ~/projects/inside-success/repos/llm_client
+    tier: governed
+    owner: inside-success
+  - id: inside-success-open-web-retrieval
+    path: ~/code/active/open_web_retrieval-inside-success
+    tier: governed
+    owner: inside-success
+# Previously registered but not currently installed (enforced_planning/ absent
+# at the current path) -- kept as a note rather than silently dropped:
+#   agentic_scaffolding: exists at ~/code/active/agentic_scaffolding, no install found
+#   trajectory: exists at ~/code/trajectory, no install found
+#   moltbot: renamed/relocated -- now registered above as "openclaw" (~/code/openclaw,
+#     confirmed via PROJECT_GRAPH.json's moltbot record, which points at that same path)
+# agent_ecology2 remains intentionally excluded (PR #1148 pending merge, as
+# originally noted).

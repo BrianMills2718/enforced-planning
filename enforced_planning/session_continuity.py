@@ -172,6 +172,8 @@ class CodexSuccessorLaunchV1(BaseModel):
     offer_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     predecessor_session_id: str = Field(min_length=1)
     predecessor_thread_id: str = Field(min_length=1)
+    predecessor_process_pid: int = Field(gt=1)
+    predecessor_process_start_ticks: int = Field(ge=1)
     offer_path: str = Field(min_length=1)
     worktree_path: str = Field(min_length=1)
     prompt: str = Field(min_length=1)
@@ -913,6 +915,8 @@ def build_codex_successor_launch(
     offer: SuccessorCustodyOfferV1,
     offer_path: str,
     resume_script: str,
+    predecessor_process_pid: int,
+    predecessor_process_start_ticks: int,
     codex: str = "codex",
     systemd_run: str = "systemd-run",
 ) -> CodexSuccessorLaunchV1:
@@ -920,6 +924,8 @@ def build_codex_successor_launch(
 
     if not offer.predecessor_session_id.startswith("codex:"):
         raise ValueError("Codex successor launch requires a Codex predecessor session")
+    if predecessor_process_pid <= 1 or predecessor_process_start_ticks < 1:
+        raise ValueError("Codex successor launch requires exact predecessor process identity")
     predecessor_thread_id = offer.predecessor_session_id.removeprefix("codex:")
     resolved_offer = Path(offer_path).expanduser()
     resolved_resume = Path(resume_script).expanduser()
@@ -946,6 +952,10 @@ def build_codex_successor_launch(
             "--successor-custody-offer",
             str(resolved_offer),
             "--accept-successor-custody-offer",
+            "--predecessor-process-pid",
+            str(predecessor_process_pid),
+            "--predecessor-process-start-ticks",
+            str(predecessor_process_start_ticks),
             "--json",
         ]
     )
@@ -977,6 +987,8 @@ def build_codex_successor_launch(
         offer_sha256=successor_custody_offer_sha256(offer),
         predecessor_session_id=offer.predecessor_session_id,
         predecessor_thread_id=predecessor_thread_id,
+        predecessor_process_pid=predecessor_process_pid,
+        predecessor_process_start_ticks=predecessor_process_start_ticks,
         offer_path=str(resolved_offer),
         worktree_path=offer.worktree_path,
         prompt=prompt,

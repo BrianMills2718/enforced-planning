@@ -69,6 +69,22 @@ class ProcessFenceIntentV1(BaseModel):
     created_at: datetime
 
 
+class PredecessorProcessIdentityV1(BaseModel):
+    """Exact live Codex process generation resolved before successor launch."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    schema_version: Literal["1.0"] = "1.0"
+    record_type: Literal["codex_predecessor_process_identity"] = (
+        "codex_predecessor_process_identity"
+    )
+    predecessor_session_id: str = Field(min_length=1)
+    worktree_path: str = Field(min_length=1)
+    pid: int = Field(gt=1)
+    process_start_ticks: int = Field(ge=1)
+    command_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
 def _write_durable_exclusive(path: Path, payload: bytes) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.parent / f".{path.name}.{os.getpid()}.{secrets.token_hex(8)}.tmp"
@@ -232,6 +248,56 @@ def _validate_codex_process_command(
     if tokens[resume_index + 1] not in allowed_targets:
         raise ValueError("predecessor PID command targets a different Codex session")
     return hashlib.sha256(command_bytes).hexdigest()
+
+
+def resolve_predecessor_process(
+    *,
+    predecessor_session_id: str,
+    worktree_path: str,
+    trusted_codex_executable: Path,
+    proc_root: Path = Path("/proc"),
+    session_index: Path = DEFAULT_CODEX_SESSION_INDEX,
+) -> PredecessorProcessIdentityV1:
+    """Resolve exactly one direct Codex resume process for an offered owner."""
+
+    if not predecessor_session_id.startswith("codex:"):
+        raise ValueError("predecessor process resolution requires a Codex session")
+    canonical_worktree = Path(worktree_path).expanduser().resolve(strict=True)
+    trusted_executable = trusted_codex_executable.expanduser().resolve(strict=True)
+    matches: list[PredecessorProcessIdentityV1] = []
+    for pid_root in sorted(
+        (candidate for candidate in proc_root.iterdir() if candidate.name.isdigit()),
+        key=lambda candidate: int(candidate.name),
+    ):
+        pid = int(pid_root.name)
+        if pid <= 1:
+            continue
+        try:
+            if pid_root.joinpath("cwd").resolve(strict=True) != canonical_worktree:
+                continue
+            command_sha256 = _validate_codex_process_command(
+                pid_root=pid_root,
+                predecessor_session_id=predecessor_session_id,
+                session_index=session_index,
+                trusted_codex_executable=trusted_executable,
+            )
+            start_ticks = _read_start_ticks(pid_root / "stat")
+        except (FileNotFoundError, OSError, UnicodeDecodeError, ValueError):
+            continue
+        matches.append(
+            PredecessorProcessIdentityV1(
+                predecessor_session_id=predecessor_session_id,
+                worktree_path=str(canonical_worktree),
+                pid=pid,
+                process_start_ticks=start_ticks,
+                command_sha256=command_sha256,
+            )
+        )
+    if not matches:
+        raise ValueError("no exact live predecessor Codex resume process was found")
+    if len(matches) != 1:
+        raise ValueError("multiple exact predecessor Codex resume processes were found")
+    return matches[0]
 
 
 def fence_predecessor_process(
@@ -429,4 +495,10 @@ def fence_predecessor_process(
     return finalize(intent, final_signal)
 
 
-__all__ = ["ProcessFenceIntentV1", "ProcessFenceReceiptV1", "fence_predecessor_process"]
+__all__ = [
+    "PredecessorProcessIdentityV1",
+    "ProcessFenceIntentV1",
+    "ProcessFenceReceiptV1",
+    "fence_predecessor_process",
+    "resolve_predecessor_process",
+]

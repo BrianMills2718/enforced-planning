@@ -55,7 +55,7 @@ See `ROADMAP.md` for the full phase map and recommended priority order.
 | 48 | ADR-0010 Guide Propagation (`48_adr0010-guide-propagation.md`) | High | ✅ Complete | WORKTREE guide + ROADMAP Phase 6 label |
 | 49 | Canonical Continuous Execution Contract (`49_canonical-execution-contract.md`) | Medium | ✅ Complete | Canonical execution contract pattern in enforced-planning |
 | 50 | Ecosystem Status Renderer (`50_ecosystem-status-renderer.md`) | Medium | ✅ Complete | `make ecosystem-status` builds fleet JSON + Markdown summary |
-| 51 | Upgrade Automation Implementation and Write-Mode Rollout (`51_upgrade-automation-implementation-and-write-mode-rollout.md`) | High | 🟡 Partial — write mode implemented and verified against real repos; fleet-wide rollout not yet run | Phase 9 fleet write-mode rollout |
+| 51 | Upgrade Automation Implementation and Write-Mode Rollout (`51_upgrade-automation-implementation-and-write-mode-rollout.md`) | High | ❓  | Phase 9 fleet write-mode rollout |
 | 53 | Agent-Memory Research Citations And Validation (`53_agent-memory-research-citations-and-validation.md`) | High | ✅ Complete | Structured prior-session provenance field and validator coverage |
 | 54 | Recursive Documentation Spine And Required-Read Closure (`54_recursive-documentation-spine-and-required-read-closure.md`) | High | 📋 Planned | [future] recursive doc-spine validation and read-gating rollout |
 | 55 | Enforced-Planning Recursive Doc Spine Dogfood (`55_enforced-planning_recursive_doc_spine_dogfood.md`) | High | ✅ Complete | integrated owner-first context-and-continuation proof |
@@ -69,7 +69,7 @@ See `ROADMAP.md` for the full phase map and recommended priority order.
 | 63 | Relationship Context and Docstring Wiki (`63_relationship_context_and_docstring_wiki.md`) | Critical | ✅ Complete (report-only rollout; hard enforcement deferred) | reviewed consumer edges and calibrated enforcement |
 | 64 | Requirement-Linked Test Relationships (`64_requirement_linked_test_relationships.md`) | High | ✅ Complete (report-only pilot; enforcement deferred) | reviewed expansion before any consolidation or hard gate |
 | 65 | Report-Only Document Archive Lifecycle (`65_document_archive_lifecycle_report.md`) | High | ✅ Complete (report-only; semantic eligibility and enforcement deferred) | Greer lifecycle calibration and archive integration |
-| 66 | Evidence-Bound Semantic Document Lifecycle Assessment (`66_semantic_document_lifecycle_assessment.md`) | High | ✅ Design complete — awaiting human mockup disposition; no implementation authority | [future] reviewed archive-readiness and tombstone integration |
+| 66 | Evidence-Bound Semantic Document Lifecycle Assessment (`66_semantic_document_lifecycle_assessment.md`) | High | ❓ Design complete — awaiting human mockup disposition; no implementation authority | [future] reviewed archive-readiness and tombstone integration |
 | — | Plan 66 Semantic Document Lifecycle Assessment Mockup (`66_semantic_document_lifecycle_assessment_mockup.md`) | High | 🟡 Proposed design seam — awaiting human disposition | Plan #66 mockup review |
 | 67 | Cross-Client Mailbox and Acknowledgement (`67_cross_client_mailbox_and_acknowledgement.md`) | High | ✅ Complete | Trustworthy Claude Code ↔ Codex coordination without human copy/paste |
 | 68 | Bounded Mailbox Fleet Rollout (`68_bounded_mailbox_fleet_rollout.md`) | High | ✅ Complete | Mailbox adoption without unrelated governance drift |

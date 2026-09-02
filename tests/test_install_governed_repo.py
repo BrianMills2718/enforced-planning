@@ -2933,9 +2933,12 @@ def test_installed_coordination_runtime_exposes_session_continuity_cli(tmp_path:
     )
     assert installed.returncode == 0, installed.stdout + installed.stderr
 
+    clean_env = dict(os.environ)
+    clean_env.pop("PYTHONPATH", None)
     result = subprocess.run(
         [sys.executable, str(tmp_path / "scripts/meta/session_continuity.py"), "--help"],
         cwd=tmp_path,
+        env=clean_env,
         capture_output=True,
         text=True,
         check=False,

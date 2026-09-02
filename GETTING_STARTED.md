@@ -114,6 +114,7 @@ After a successful minimum install, your repo should have:
 - `scripts/meta/file_context.py`
 - `scripts/meta/render_agents_md.py`
 - `scripts/meta/session_finish.py`
+- `scripts/meta/session_continuity.py`
 - `scripts/meta/session_heartbeat.py`
 - `scripts/meta/session_narrow.py`
 - `scripts/meta/session_start.py`
@@ -322,11 +323,13 @@ installed environment separately through its package workflow. An unchanged
 For external plan ownership, the upgraded runtime and wrappers must both
 support the operator guide's explicit plan-authority root/revision inputs.
 The bounded mailbox and claim-projection profiles install their complete local
-import closure, including the shared mailbox execution-identity resolver and
-the exact predecessor-process fence used by cross-session Codex resume. An
-installed `scripts/meta/session_resume.py --help` must run without the source
-checkout on `PYTHONPATH`. Worktree bootstrap fetches and resolves the advertised
-remote default before creating a claim, branch, or linked worktree.
+import closure, including the shared mailbox execution-identity resolver, the
+observe-only `scripts/meta/session_continuity.py` owner assessment, and the exact
+predecessor-process fence used by cross-session Codex resume. Installed
+`scripts/meta/session_continuity.py --help` and
+`scripts/meta/session_resume.py --help` must run without the source checkout on
+`PYTHONPATH`. Worktree bootstrap fetches and resolves the advertised remote
+default before creating a claim, branch, or linked worktree.
 
 - `./install.sh /path/to/your/project --worktree-only`
   - canonical bounded sync for sanctioned worktree entrypoints only

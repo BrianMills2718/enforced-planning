@@ -498,7 +498,7 @@ def test_codex_transcript_identifies_top_level_owner(tmp_path: Path) -> None:
         {
             "timestamp": "2026-09-02T04:00:00Z",
             "type": "session_meta",
-            "payload": {"thread_source": "user"},
+            "payload": {"id": "owner", "thread_source": "user"},
         },
         {
             "timestamp": "2026-09-02T04:21:00Z",
@@ -525,8 +525,17 @@ def test_codex_transcript_identifies_spawned_owner_and_exact_parent(
             "timestamp": "2026-09-02T04:00:00Z",
             "type": "session_meta",
             "payload": {
+                "id": "child",
                 "thread_source": "subagent",
                 "parent_thread_id": "01a05b30-4bdb-7051-86d0-f20575c46fdf",
+            },
+        },
+        {
+            "timestamp": "2026-09-02T04:00:01Z",
+            "type": "session_meta",
+            "payload": {
+                "id": "01a05b30-4bdb-7051-86d0-f20575c46fdf",
+                "thread_source": "user",
             },
         },
         {

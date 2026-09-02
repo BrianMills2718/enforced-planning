@@ -197,6 +197,7 @@ class NativeCodexResumeOfferV1(BaseModel):
     owner_session_id: str = Field(min_length=1)
     thread_id: str = Field(min_length=1)
     correlation_id: str = Field(pattern=r"^[0-9a-f]{24}$")
+    progress_fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
     prompt: str = Field(min_length=1)
 
 
@@ -243,6 +244,9 @@ class NativeCodexDeliveryJournalV1(BaseModel):
     owner_session_id: str = Field(min_length=1)
     thread_id: str = Field(min_length=1)
     correlation_id: str = Field(pattern=r"^[0-9a-f]{24}$")
+    progress_fingerprint: str | None = Field(
+        default=None, pattern=r"^[0-9a-f]{64}$"
+    )
     state: Literal["intent", "accepted", "failed"]
     recorded_at: datetime
     queued_submission_id: str | None = None
@@ -557,6 +561,29 @@ def assess_continuity(
     )
 
 
+def native_resume_progress_fingerprint(
+    *, progress_at: str | None, head_revision: str, next_action: str
+) -> str:
+    """Bind retry accounting to durable outcome evidence, not liveness telemetry."""
+
+    normalized_progress = ""
+    if progress_at is not None:
+        parsed_progress = _aware_timestamp(progress_at)
+        if parsed_progress is None:
+            raise ValueError("native resume progress_at must be an aware timestamp")
+        normalized_progress = parsed_progress.isoformat()
+    normalized_head = head_revision.strip().lower()
+    if re.fullmatch(r"[0-9a-f]{40,64}", normalized_head) is None:
+        raise ValueError("native resume progress requires an exact Git revision")
+    normalized_action = next_action.strip()
+    if not normalized_action:
+        raise ValueError("native resume progress requires an exact next action")
+    fingerprint = (
+        f"{normalized_progress}\0{normalized_head}\0{normalized_action}"
+    ).encode()
+    return hashlib.sha256(fingerprint).hexdigest()
+
+
 def build_resume_offer_request(
     *,
     assessment: ContinuityAssessmentV1,
@@ -602,6 +629,7 @@ def build_native_codex_resume_offer(
     project: str,
     scope: str,
     next_action: str,
+    progress_fingerprint: str,
 ) -> NativeCodexResumeOfferV1:
     """Build one exact-thread prompt accepted by the native Codex queue CLI."""
 
@@ -621,7 +649,7 @@ def build_native_codex_resume_offer(
         raise ValueError("native Codex resume offer requires project, scope, and next action")
     correlation_source = (
         f"{assessment.session_id}\0{assessment.last_client_activity_at.isoformat()}"
-        f"\0{project}\0{scope}"
+        f"\0{project}\0{scope}\0{progress_fingerprint}"
     )
     correlation_id = hashlib.sha256(correlation_source.encode("utf-8")).hexdigest()[:24]
     prompt = (
@@ -634,6 +662,7 @@ def build_native_codex_resume_offer(
         owner_session_id=assessment.session_id,
         thread_id=thread_id,
         correlation_id=correlation_id,
+        progress_fingerprint=progress_fingerprint,
         prompt=prompt,
     )
 
@@ -949,6 +978,7 @@ __all__ = [
     "build_native_codex_resume_offer",
     "build_resume_offer_request",
     "build_successor_custody_offer",
+    "native_resume_progress_fingerprint",
     "parse_native_codex_queue_receipt",
     "read_codex_activity",
     "read_native_codex_consumption",

@@ -24,6 +24,7 @@ from enforced_planning.session_continuity import (
     build_native_codex_resume_offer,
     build_resume_offer_request,
     build_successor_custody_offer,
+    native_resume_progress_fingerprint,
     parse_native_codex_queue_receipt,
     read_codex_activity,
     read_native_codex_consumption,
@@ -34,6 +35,7 @@ from scripts import session_continuity as continuity_cli
 from scripts import session_resume as resume_cli
 
 NOW = datetime(2026, 9, 2, 4, 30, tzinfo=UTC)
+PROGRESS_FINGERPRINT = "1" * 64
 
 
 @dataclass
@@ -177,12 +179,14 @@ def test_idle_assessment_builds_exact_native_codex_queue_offer() -> None:
         project="demo",
         scope="feature-lane",
         next_action="run the focused integration",
+        progress_fingerprint=PROGRESS_FINGERPRINT,
     )
     second = build_native_codex_resume_offer(
         assessment=assessment,
         project="demo",
         scope="feature-lane",
         next_action="run the focused integration",
+        progress_fingerprint=PROGRESS_FINGERPRINT,
     )
 
     assert first.thread_id == "01a05b94-d5d8-7d82-8a9a-6c64c6979e96"
@@ -190,6 +194,30 @@ def test_idle_assessment_builds_exact_native_codex_queue_offer() -> None:
     assert f"continuity-resume:{first.correlation_id}" in first.prompt
     assert "Do not spawn or delegate to any new agents" in first.prompt
     assert "run the focused integration" in first.prompt
+
+
+def test_native_resume_progress_fingerprint_changes_with_durable_evidence() -> None:
+    baseline = native_resume_progress_fingerprint(
+        progress_at="2026-09-02T04:00:00+00:00",
+        head_revision="a" * 40,
+        next_action="run the focused integration",
+    )
+
+    assert baseline != native_resume_progress_fingerprint(
+        progress_at="2026-09-02T04:00:00+00:00",
+        head_revision="b" * 40,
+        next_action="run the focused integration",
+    )
+    assert baseline != native_resume_progress_fingerprint(
+        progress_at="2026-09-02T04:01:00+00:00",
+        head_revision="a" * 40,
+        next_action="run the focused integration",
+    )
+    assert baseline != native_resume_progress_fingerprint(
+        progress_at="2026-09-02T04:00:00+00:00",
+        head_revision="a" * 40,
+        next_action="inspect the new receipt",
+    )
 
 
 def test_native_codex_queue_receipt_requires_exact_thread() -> None:
@@ -205,6 +233,7 @@ def test_native_codex_queue_receipt_requires_exact_thread() -> None:
         project="demo",
         scope="feature-lane",
         next_action="continue",
+        progress_fingerprint=PROGRESS_FINGERPRINT,
     )
 
     receipt = parse_native_codex_queue_receipt(
@@ -232,6 +261,7 @@ def test_native_codex_queue_receipt_rejects_wrong_thread() -> None:
         project="demo",
         scope="feature-lane",
         next_action="continue",
+        progress_fingerprint=PROGRESS_FINGERPRINT,
     )
 
     with pytest.raises(ValueError, match="different thread"):
@@ -354,19 +384,20 @@ def test_exact_cli_queues_native_offer_and_returns_typed_receipt(
         "read_codex_activity",
         lambda **_kwargs: idle,
     )
-    monkeypatch.setattr(
-        continuity_cli.subprocess,
-        "run",
-        lambda command, **_kwargs: subprocess.CompletedProcess(
-            command,
-            0,
-            (
+    def fake_run(
+        command: tuple[str, ...], **_kwargs: object
+    ) -> subprocess.CompletedProcess[str]:
+        stdout = (
+            "a" * 40 + "\n"
+            if command[0] == "git"
+            else (
                 "Queued message 01a0608f-1498-7413-b469-3e538a9bf171 for thread "
                 "01a05b94-d5d8-7d82-8a9a-6c64c6979e96.\n"
-            ),
-            "",
-        ),
-    )
+            )
+        )
+        return subprocess.CompletedProcess(command, 0, stdout, "")
+
+    monkeypatch.setattr(continuity_cli.subprocess, "run", fake_run)
 
     assert continuity_cli.main(
         [
@@ -1066,6 +1097,7 @@ class SweepClaim(Claim):
     agent: str = "codex"
     scope: str = "feature-lane"
     project: str = "demo"
+    worktree_path: str = "/tmp"
 
     @property
     def projects(self) -> list[str]:
@@ -1091,6 +1123,7 @@ def native_delivery_sweep_fixture() -> dict[str, object]:
                 "scope": "feature-lane",
                 "session_id": session_id,
                 "next_action": "run the focused integration",
+                "progress_fingerprint": PROGRESS_FINGERPRINT,
                 "thread_source": "user",
                 "parent_thread_id": None,
                 "assessment": assessment.model_dump(mode="json"),
@@ -1272,6 +1305,72 @@ def test_accepted_native_delivery_promotes_once_after_transcript_consumption(
     assert records[-1]["runtime_consumed"] is True
 
 
+def test_two_consumed_attempts_without_progress_reach_typed_circuit_breaker(
+    tmp_path: Path,
+) -> None:
+    receipt_path = tmp_path / "receipts.jsonl"
+    owner = "codex:01a05b94-d5d8-7d82-8a9a-6c64c6979e96"
+    thread = owner.removeprefix("codex:")
+    records: list[dict[str, object]] = []
+    for correlation, submission in (
+        ("a" * 24, "01a0608f-1498-7413-b469-3e538a9bf171"),
+        ("b" * 24, "01a0615e-330c-7680-8547-ef1850675131"),
+    ):
+        records.extend(
+            [
+                {
+                    "schema_version": "1.0",
+                    "record_type": "native_codex_resume_delivery",
+                    "owner_session_id": owner,
+                    "thread_id": thread,
+                    "correlation_id": correlation,
+                    "progress_fingerprint": PROGRESS_FINGERPRINT,
+                    "state": "accepted",
+                    "recorded_at": NOW.isoformat(),
+                    "queued_submission_id": submission,
+                    "error": None,
+                },
+                {
+                    "schema_version": "1.0",
+                    "record_type": "native_codex_resume_consumption",
+                    "owner_session_id": owner,
+                    "thread_id": thread,
+                    "correlation_id": correlation,
+                    "queued_submission_id": submission,
+                    "transcript_path": "/tmp/session.jsonl",
+                    "consumed_at": NOW.isoformat(),
+                    "evidence_event": "correlated_user_message",
+                    "runtime_consumed": True,
+                },
+            ]
+        )
+    receipt_path.write_text(
+        "".join(json.dumps(record) + "\n" for record in records), encoding="utf-8"
+    )
+
+    result = continuity_cli.deliver_native_resume_offers(
+        sweep=native_delivery_sweep_fixture(),
+        receipt_path=receipt_path,
+        run=lambda *_args, **_kwargs: pytest.fail("circuit breaker must not queue"),
+    )
+
+    assert result == [
+        {
+            "project": "demo",
+            "scope": "feature-lane",
+            "session_id": owner,
+            "progress_fingerprint": PROGRESS_FINGERPRINT,
+            "consumed_attempt_count": 2,
+            "action": "circuit_breaker",
+            "reason_code": "native_resume_progress_not_observed",
+            "resume_condition": (
+                "record a changed Git revision, claim progress timestamp, or exact "
+                "next action before another automatic owner resume"
+            ),
+        }
+    ]
+
+
 def test_unresolved_delivery_intent_fails_visible_without_retry(
     tmp_path: Path,
 ) -> None:
@@ -1285,6 +1384,7 @@ def test_unresolved_delivery_intent_fails_visible_without_retry(
         project="demo",
         scope="feature-lane",
         next_action="run the focused integration",
+        progress_fingerprint=PROGRESS_FINGERPRINT,
     )
     continuity_cli._append_delivery_state(
         receipt_path=receipt_path,

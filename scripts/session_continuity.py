@@ -414,6 +414,94 @@ def _append_delivery_state(
     return entry
 
 
+def _native_consumption_receipts(
+    receipt_path: Path,
+) -> dict[str, session_continuity.NativeCodexConsumptionReceiptV1]:
+    """Load one immutable active-client consumption receipt per correlation."""
+
+    resolved = receipt_path.expanduser().resolve()
+    if not resolved.exists():
+        return {}
+    receipts: dict[str, session_continuity.NativeCodexConsumptionReceiptV1] = {}
+    with resolved.open(encoding="utf-8") as handle:
+        for line_number, line in enumerate(handle, start=1):
+            if not line.strip():
+                continue
+            try:
+                record = json.loads(line)
+            except json.JSONDecodeError as exc:
+                raise ValueError(
+                    f"continuity receipt journal has malformed JSON at line {line_number}"
+                ) from exc
+            if not isinstance(record, dict) or record.get("record_type") != (
+                "native_codex_resume_consumption"
+            ):
+                continue
+            receipt = session_continuity.NativeCodexConsumptionReceiptV1.model_validate(
+                record
+            )
+            receipts[receipt.correlation_id] = receipt
+    return receipts
+
+
+def reconcile_native_resume_consumption(*, receipt_path: Path) -> list[dict[str, Any]]:
+    """Promote queue acceptance only when the exact owner transcript consumed it."""
+
+    deliveries = _delivery_journal_states(receipt_path)
+    consumed = _native_consumption_receipts(receipt_path)
+    results: list[dict[str, Any]] = []
+    for correlation_id, delivery in deliveries.items():
+        if delivery.state != "accepted" or correlation_id in consumed:
+            continue
+        transcript = coordination_claims.session_transcript_path(delivery.owner_session_id)
+        if transcript is None:
+            results.append(
+                {
+                    "correlation_id": correlation_id,
+                    "action": "fail_visible",
+                    "reason_code": "owner_transcript_unavailable",
+                }
+            )
+            continue
+        try:
+            receipt = session_continuity.read_native_codex_consumption(
+                owner_session_id=delivery.owner_session_id,
+                correlation_id=correlation_id,
+                queued_submission_id=delivery.queued_submission_id or "",
+                transcript_path=transcript,
+            )
+        except (OSError, ValueError) as exc:
+            results.append(
+                {
+                    "correlation_id": correlation_id,
+                    "action": "fail_visible",
+                    "reason_code": "owner_transcript_consumption_invalid",
+                    "error": str(exc),
+                }
+            )
+            continue
+        if receipt is None:
+            results.append(
+                {
+                    "correlation_id": correlation_id,
+                    "action": "await_owner_consumption",
+                    "reason_code": "native_queue_accepted_not_consumed",
+                }
+            )
+            continue
+        _append_receipt(receipt_path, receipt.model_dump(mode="json"))
+        results.append(
+            {
+                "correlation_id": correlation_id,
+                "action": "owner_resume_consumed",
+                "reason_code": "correlated_owner_user_turn_observed",
+                "queued_submission_id": receipt.queued_submission_id,
+                "consumed_at": receipt.consumed_at.isoformat(),
+            }
+        )
+    return results
+
+
 def deliver_native_resume_offers(
     *,
     sweep: Mapping[str, Any],
@@ -547,6 +635,7 @@ def run_native_delivery_sweep(
 
     with _exclusive_sweep(receipt_path):
         payload = build_observe_sweep(notify_minutes=notify_minutes)
+        consumptions = reconcile_native_resume_consumption(receipt_path=receipt_path)
         deliveries = deliver_native_resume_offers(
             sweep=payload,
             receipt_path=receipt_path,
@@ -554,6 +643,13 @@ def run_native_delivery_sweep(
         )
         payload["mode"] = "native_resume_delivery"
         payload["native_resume_deliveries"] = deliveries
+        payload["native_resume_consumptions"] = consumptions
+        payload["native_resume_consumed_count"] = sum(
+            item["action"] == "owner_resume_consumed" for item in consumptions
+        )
+        payload["native_resume_awaiting_consumption_count"] = sum(
+            item["action"] == "await_owner_consumption" for item in consumptions
+        )
         payload["native_resume_queued_count"] = sum(
             item["action"] == "queued_owner_resume" for item in deliveries
         )

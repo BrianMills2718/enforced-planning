@@ -646,6 +646,130 @@ def _prepare_selection_pending_reservation(
     return repo_root, worktree, claim_path, trackers_dir, revision
 
 
+def _prepare_goal_selection_pending_reservation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> tuple[Path, Path, Path, Path]:
+    """Create one exact goal claim whose only health gap is its first tracker."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    repo_root = tmp_path / "repo"
+    worktree = repo_root / "worktrees" / "goal-lane"
+    repo_root.mkdir()
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    monkeypatch.setattr(
+        coordination_claims,
+        "validate_native_session_binding",
+        lambda _agent, _session_id, **_kwargs: None,
+    )
+    _git(repo_root, "init", "-b", "main")
+    _git(repo_root, "config", "user.email", "tests@example.com")
+    _git(repo_root, "config", "user.name", "Test User")
+    (repo_root / "meta-process.yaml").write_text(
+        """meta_process:
+  claims:
+    outcome_admission_mode: enforce_selected
+""",
+        encoding="utf-8",
+    )
+    _git(repo_root, "add", ".")
+    _git(repo_root, "commit", "-m", "goal reservation")
+    _git(repo_root, "worktree", "add", "-b", "goal-lane", str(worktree), "HEAD")
+
+    created, _message = coordination_claims.create_claim(
+        agent="codex",
+        project="demo",
+        scope="goal-lane",
+        intent="activate one exact goal reservation",
+        plan_ref="goal:durable-outcome",
+        claim_type="write",
+        write_paths=["src/feature.py"],
+        repo_root=str(repo_root),
+        worktree_path=str(worktree),
+        branch="goal-lane",
+        session_id="codex:goal-owner",
+        session_name="Prove Goal Activation",
+        broader_goal="Prove Goal Activation",
+    )
+    assert created
+    claim_path = claims_dir / "codex_demo_goal-lane.yaml"
+    return repo_root, worktree, claim_path, trackers_dir
+
+
+def test_goal_claim_can_create_first_tracker_without_plan_graph_identity(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Goal authority reaches the real first-tracker boundary without plan fields."""
+
+    repo_root, worktree, claim_path, trackers_dir = (
+        _prepare_goal_selection_pending_reservation(tmp_path, monkeypatch)
+    )
+    receipt_path = tmp_path / "outcome-admission.jsonl"
+
+    started = session_lifecycle.start_session(
+        agent="codex",
+        project="demo",
+        scope="goal-lane",
+        intent="activate one exact goal reservation",
+        repo_root=str(repo_root),
+        worktree_path=str(worktree),
+        branch="goal-lane",
+        broader_goal="Prove Goal Activation",
+        current_phase="attach the first goal tracker",
+        plan_ref="goal:durable-outcome",
+        session_id="codex:goal-owner",
+        claim_type="write",
+        write_paths=["src/feature.py"],
+        tracker_dir=trackers_dir,
+        outcome_admission_receipt_path=receipt_path,
+    )
+
+    pending_path = outcome_admission.selection_pending_activation_receipt_path(
+        receipt_path
+    )
+    [activation] = outcome_admission.load_selection_pending_activation_receipts(
+        pending_path
+    )
+    assert activation.result.disposition == "defer"
+    assert activation.result.evidence is not None
+    assert activation.result.evidence.authority_ref == "goal:durable-outcome"
+    assert activation.result.evidence.work_unit_id is None
+    assert activation.result.evidence.work_graph_path is None
+    assert activation.result.evidence.work_graph_sha256 is None
+    assert Path(started["tracker_path"]).is_file()
+    assert yaml.safe_load(claim_path.read_text(encoding="utf-8"))["tracker_path"] == (
+        started["tracker_path"]
+    )
+
+
+def test_stale_goal_reservation_cannot_create_pending_activation_evidence(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Goal authority does not weaken exact-source freshness at first activation."""
+
+    _repo_root, _worktree, claim_path, _trackers_dir = (
+        _prepare_goal_selection_pending_reservation(tmp_path, monkeypatch)
+    )
+    payload = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    reservation = coordination_claims.normalize_claim(
+        payload, source_file=str(claim_path)
+    )
+    assert reservation is not None
+    payload["intent"] = "changed after exact reservation was read"
+    claim_path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
+
+    result = outcome_admission.evaluate_selection_pending_session_activation(
+        reservation
+    )
+
+    assert result.disposition == "deny"
+    assert result.resolution_error_code == "selection_pending_claim_source_changed"
+    assert result.evidence is None
+
+
 def test_configured_session_start_defers_only_tracker_creation_until_selection(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

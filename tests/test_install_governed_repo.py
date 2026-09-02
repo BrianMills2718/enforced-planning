@@ -2165,6 +2165,7 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
             "install:enforced_planning/push_safety.py",
             "install:enforced_planning/repository_status.py",
                 "install:enforced_planning/session_contracts.py",
+                "install:enforced_planning/session_continuity.py",
                 "install:enforced_planning/session_lifecycle.py",
                 "install:enforced_planning/session_process_fencing.py",
                 "install:enforced_planning/session_target.py",
@@ -2181,6 +2182,7 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
             "install:scripts/meta/check_plan_readiness.py",
             "install:scripts/meta/plan_close.py",
             "install:scripts/meta/session_close.py",
+            "install:scripts/meta/session_continuity.py",
             "install:scripts/meta/session_end.py",
             "install:scripts/meta/session_finish.py",
             "install:scripts/meta/session_heartbeat.py",
@@ -2242,6 +2244,7 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
     assert (tmp_path / "scripts" / "meta" / "session_start.py").exists()
     assert (tmp_path / "scripts" / "meta" / "session_heartbeat.py").exists()
     assert (tmp_path / "scripts" / "meta" / "session_status.py").exists()
+    assert (tmp_path / "scripts" / "meta" / "session_continuity.py").exists()
     assert (tmp_path / "scripts" / "meta" / "session_resume.py").exists()
     assert (tmp_path / "scripts" / "meta" / "surface_runtime.py").exists()
     assert (tmp_path / "scripts" / "meta" / "verification_batch.py").exists()

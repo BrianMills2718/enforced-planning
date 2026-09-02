@@ -43,6 +43,7 @@ from enforced_planning import (  # noqa: I001
     coordination_claims,
     coordination_messages,
     session_continuity,
+    session_lifecycle,
 )
 
 
@@ -734,8 +735,11 @@ def prepare_native_successor_offers(
     receipt_path: Path,
     offer_dir: Path = DEFAULT_SUCCESSOR_OFFER_DIR,
     git_run: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+    offer_verifier: Callable[..., Mapping[str, Any]] = (
+        session_lifecycle.verify_successor_custody_offer_state
+    ),
 ) -> list[dict[str, Any]]:
-    """Persist exact custody offers for exhausted native retries without launching."""
+    """Persist and verify exhausted-retry custody offers without launching."""
 
     states = _delivery_journal_states(receipt_path)
     consumed = _native_consumption_receipts(receipt_path)
@@ -806,6 +810,27 @@ def prepare_native_successor_offers(
                 next_action=str(item.get("next_action") or ""),
             )
             offer_path = persist_successor_offer(offer, offer_dir=offer_dir)
+            verification = offer_verifier(
+                agent=str(item.get("agent") or ""),
+                project=offer.project,
+                scope=offer.scope,
+                worktree_path=offer.worktree_path,
+                branch=offer.branch,
+                successor_custody_offer=offer,
+            )
+            safe_verification = (
+                verification.get("action") == "successor_custody_offer_verified"
+                and verification.get("record_type")
+                == "successor_custody_offer_verification"
+                and verification.get("successor_acceptance_required") is True
+                and verification.get("successor_launch_allowed") is False
+                and verification.get("custody_mutation_performed") is False
+                and verification.get("transfer_eligible") is False
+            )
+            if not safe_verification:
+                raise ValueError(
+                    "native successor offer verifier returned an unsafe or invalid result"
+                )
             results.append(
                 {
                     **base,
@@ -814,7 +839,12 @@ def prepare_native_successor_offers(
                     "offer_id": offer.offer_id,
                     "offer_path": str(offer_path),
                     "owner_resume_correlation_id": offer.owner_resume_correlation_id,
+                    "successor_offer_verified": True,
+                    "verification_record_type": verification["record_type"],
+                    "verified_head_revision": verification.get("head_revision"),
+                    "successor_acceptance_required": True,
                     "successor_launch_allowed": False,
+                    "custody_mutation_performed": False,
                     "transfer_eligible": False,
                 }
             )
@@ -859,6 +889,9 @@ def run_native_delivery_sweep(
         payload["native_successor_offers"] = successor_offers
         payload["native_successor_offer_prepared_count"] = sum(
             item["action"] == "successor_offer_prepared" for item in successor_offers
+        )
+        payload["native_successor_offer_verified_count"] = sum(
+            item.get("successor_offer_verified") is True for item in successor_offers
         )
         payload["native_successor_offer_fail_visible_count"] = sum(
             item["action"] == "fail_visible" for item in successor_offers

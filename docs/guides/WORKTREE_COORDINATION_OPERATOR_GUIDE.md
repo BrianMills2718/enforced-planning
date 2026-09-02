@@ -212,6 +212,15 @@ predecessor session, project, scope, branch, worktree, claim bytes, Git `HEAD`,
 or next action changed. This is packet readiness evidence only; it is not
 successor acceptance or custody transfer.
 
+The shared native-delivery sweep performs this same preflight immediately after
+it persists an offer for an exhausted no-progress retry epoch. It journals a
+`successor_offer_verified` result only when the lifecycle verifier explicitly
+reports that acceptance is still required and launch, claim mutation, and
+transfer all remained disabled. Any changed lane state or anomalous verifier
+result is retained as `native_successor_offer_invalid` and is never launch
+authority. The sweep's verified count is readiness telemetry, not evidence that
+a successor accepted custody.
+
 A successor runtime may author that receipt explicitly at the transfer boundary
 instead of first writing a separate acceptance file: pass the exact offer with
 `--successor-custody-offer <offer.json> --accept-successor-custody-offer`.

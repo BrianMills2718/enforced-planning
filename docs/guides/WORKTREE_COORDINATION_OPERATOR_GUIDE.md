@@ -186,7 +186,14 @@ The state key also binds the exact pre-transfer claim-bytes SHA-256 so evidence
 cannot cross custody epochs. It binds `/proc` start ticks against PID
 reuse, opens an exact kernel pidfd before validation, and sends bounded
 TERM/KILL escalation only through that handle. Before signaling, it fsyncs a
-deterministic active intent. After a confirmed exit it atomically finalizes an
+deterministic active intent. Before that signal boundary, `session-resume`
+also writes a `session_takeover_reservation` into the predecessor claim under
+the claim-registry lock. The reservation binds the exact pre-reservation claim
+bytes, successor, worktree, PID, and start ticks; predecessor heartbeat and
+progress mutations reject while it is active. A failed custody commit retains
+the reservation so retry consumes the same fence epoch without signaling a
+gone process, and only the successful successor commit removes it. After a
+confirmed exit the process fence atomically finalizes an
 immutable mode-0600 process-fence receipt; retry either resumes the same
 start-tick identity or finalizes an already-absent/replaced predecessor without
 signaling the replacement. The custody-transfer receipt embeds the exact fence

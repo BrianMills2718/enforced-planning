@@ -5317,7 +5317,7 @@ def test_resume_receipt_failure_rolls_back_before_successor_heartbeat_can_enter(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Receipt failure restores predecessor bytes while custody locks remain held."""
+    """Receipt failure restores the reserved predecessor epoch while locks remain held."""
 
     claims_dir = tmp_path / "claims"
     trackers_dir = tmp_path / "sessions"
@@ -5385,13 +5385,245 @@ def test_resume_receipt_failure_rolls_back_before_successor_heartbeat_can_enter(
         with pytest.raises((PermissionError, ValueError), match="session|owner|owned"):
             heartbeat_future.result(timeout=5)
 
-    assert claim_path.read_bytes() == claim_before
+    reserved_claim = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    reservation = reserved_claim[coordination_claims.SESSION_TAKEOVER_RESERVATION_FIELD]
+    assert reservation["claim_epoch_sha256"] == hashlib.sha256(claim_before).hexdigest()
+    assert reserved_claim["session_id"] == "codex:old-runtime"
     assert tracker_path.read_bytes() == tracker_before
     mutation_receipts = claim_mutation_receipts.load_receipts()
     assert mutation_receipts[-2].session_id == "codex:new-runtime"
     assert mutation_receipts[-1].session_id == "codex:old-runtime"
     assert mutation_receipts[-1].registry_digest_after == coordination_claims._registry_digest(claims_dir)
     assert mutation_receipts[-1].projection_current_after is True
+
+
+def test_takeover_reservation_blocks_predecessor_heartbeat_and_retry_reuses_fence(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    worktree = tmp_path / "worktree"
+    worktree.mkdir()
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    session_lifecycle.start_session(
+        agent="codex",
+        project="enforced-planning",
+        scope="reserved-takeover-retry",
+        intent="prove reservation survives the process-fence boundary",
+        repo_root=str(tmp_path),
+        worktree_path=str(worktree),
+        branch="reserved-takeover-retry",
+        broader_goal="Reserved Takeover Retry",
+        current_phase="fixture setup",
+        plan_ref="UNPLANNED",
+        session_id="codex:old-runtime",
+        tracker_dir=trackers_dir,
+    )
+    _handoff_session_as_owner(
+        agent="codex",
+        project="enforced-planning",
+        scope="reserved-takeover-retry",
+        note="ready",
+    )
+    claim_path = claims_dir / "codex_enforced-planning_reserved-takeover-retry.yaml"
+    claim_before = claim_path.read_bytes()
+    fence_entered = Event()
+    release_fence = Event()
+    fence_calls: list[str] = []
+    signals: list[str] = []
+    fence_receipt_path = tmp_path / "reserved-takeover-fence.json"
+
+    def idempotent_fence(**kwargs: object) -> dict[str, object]:
+        fence_calls.append(str(kwargs["transfer_epoch_sha256"]))
+        if not fence_receipt_path.exists():
+            fence_entered.set()
+            assert release_fence.wait(timeout=5)
+            signals.append("SIGTERM")
+            receipt = session_lifecycle.session_process_fencing.ProcessFenceReceiptV1(
+                predecessor_session_id=str(kwargs["predecessor_session_id"]),
+                successor_session_id=str(kwargs["successor_session_id"]),
+                worktree_path=str(Path(str(kwargs["worktree_path"])).resolve()),
+                pid=int(kwargs["predecessor_pid"]),
+                transfer_epoch_sha256=str(kwargs["transfer_epoch_sha256"]),
+                process_start_ticks=int(kwargs["predecessor_process_start_ticks"]),
+                command_sha256="f" * 64,
+                signal="SIGTERM",
+                fenced_at=datetime.now(timezone.utc),
+            )
+            fence_receipt_path.write_text(
+                receipt.model_dump_json(indent=2) + "\n",
+                encoding="utf-8",
+            )
+        parsed = session_lifecycle.session_process_fencing.ProcessFenceReceiptV1.model_validate_json(
+            fence_receipt_path.read_bytes()
+        )
+        return {
+            **parsed.model_dump(mode="json"),
+            "receipt_path": str(fence_receipt_path),
+            "receipt_sha256": hashlib.sha256(fence_receipt_path.read_bytes()).hexdigest(),
+        }
+
+    original_persist = session_lifecycle._persist_claim_session_transfer_receipt
+    persist_attempts = 0
+
+    def fail_first_persist(**kwargs: object) -> dict[str, object]:
+        nonlocal persist_attempts
+        persist_attempts += 1
+        if persist_attempts == 1:
+            raise OSError("injected custody persistence failure")
+        return original_persist(**kwargs)
+
+    monkeypatch.setattr(
+        session_lifecycle.session_process_fencing,
+        "fence_predecessor_process",
+        idempotent_fence,
+    )
+    monkeypatch.setattr(
+        session_lifecycle,
+        "_persist_claim_session_transfer_receipt",
+        fail_first_persist,
+    )
+
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        first_resume = executor.submit(
+            _resume_session_as_native,
+            agent="codex",
+            project="enforced-planning",
+            scope="reserved-takeover-retry",
+            worktree_path=str(worktree),
+            branch="reserved-takeover-retry",
+            current_phase="successor active",
+            session_id="codex:new-runtime",
+        )
+        assert fence_entered.wait(timeout=5)
+        with pytest.raises(ValueError, match="custody takeover is reserved"):
+            _heartbeat_session_as_native(
+                agent="codex",
+                project="enforced-planning",
+                scope="reserved-takeover-retry",
+                current_phase="predecessor final heartbeat",
+                session_id="codex:old-runtime",
+            )
+        with pytest.raises(ValueError, match="custody takeover is reserved"):
+            coordination_claims.record_progress_claims(
+                agent="codex",
+                project="enforced-planning",
+                scope="reserved-takeover-retry",
+                progress_kind="new_diagnostic",
+                evidence_ref="paused-fence-race",
+                next_action="attempt predecessor progress during takeover",
+                session_id="codex:old-runtime",
+            )
+        release_fence.set()
+        with pytest.raises(OSError, match="injected custody persistence failure"):
+            first_resume.result(timeout=5)
+
+    reserved_claim = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    reservation = reserved_claim[coordination_claims.SESSION_TAKEOVER_RESERVATION_FIELD]
+    assert reservation["claim_epoch_sha256"] == hashlib.sha256(claim_before).hexdigest()
+    resumed = _resume_session_as_native(
+        agent="codex",
+        project="enforced-planning",
+        scope="reserved-takeover-retry",
+        worktree_path=str(worktree),
+        branch="reserved-takeover-retry",
+        current_phase="successor active",
+        session_id="codex:new-runtime",
+    )
+    assert resumed["session_id"] == "codex:new-runtime"
+    assert fence_calls == [reservation["claim_epoch_sha256"], reservation["claim_epoch_sha256"]]
+    assert signals == ["SIGTERM"]
+    transferred_claim = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    assert coordination_claims.SESSION_TAKEOVER_RESERVATION_FIELD not in transferred_claim
+
+
+@pytest.mark.parametrize("mutation", ["heartbeat", "progress"])
+def test_takeover_reservation_rejects_claim_epoch_race_before_fencing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mutation: str,
+) -> None:
+    """Eligibility and reservation consume the same exact predecessor bytes."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    worktree = tmp_path / "worktree"
+    worktree.mkdir()
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    session_lifecycle.start_session(
+        agent="codex",
+        project="enforced-planning",
+        scope="pre-reservation-epoch-race",
+        intent="reject mutation between eligibility and takeover reservation",
+        repo_root=str(tmp_path),
+        worktree_path=str(worktree),
+        branch="pre-reservation-epoch-race",
+        broader_goal="Exact Pre-Reservation Epoch",
+        current_phase="fixture setup",
+        plan_ref="UNPLANNED",
+        session_id="codex:old-runtime",
+        tracker_dir=trackers_dir,
+    )
+    _handoff_session_as_owner(
+        agent="codex",
+        project="enforced-planning",
+        scope="pre-reservation-epoch-race",
+        note="ready",
+    )
+    claim_path = claims_dir / "codex_enforced-planning_pre-reservation-epoch-race.yaml"
+    original_reserve = coordination_claims.reserve_session_takeover
+    fence_called = False
+
+    def mutate_before_reservation(**kwargs: object):
+        if mutation == "heartbeat":
+            _heartbeat_session_as_native(
+                agent="codex",
+                project="enforced-planning",
+                scope="pre-reservation-epoch-race",
+                current_phase="predecessor raced eligibility",
+                session_id="codex:old-runtime",
+            )
+        else:
+            with _native_actor("codex", "codex:old-runtime"):
+                coordination_claims.record_progress_claims(
+                    agent="codex",
+                    project="enforced-planning",
+                    scope="pre-reservation-epoch-race",
+                    progress_kind="new_diagnostic",
+                    evidence_ref="pre-reservation-race",
+                    next_action="predecessor raced eligibility",
+                    session_id="codex:old-runtime",
+                )
+        return original_reserve(**kwargs)
+
+    def unexpected_fence(**_kwargs: object) -> dict[str, object]:
+        nonlocal fence_called
+        fence_called = True
+        raise AssertionError("process fence must not run after the claim epoch changes")
+
+    monkeypatch.setattr(coordination_claims, "reserve_session_takeover", mutate_before_reservation)
+    monkeypatch.setattr(
+        session_lifecycle.session_process_fencing,
+        "fence_predecessor_process",
+        unexpected_fence,
+    )
+
+    with pytest.raises(ValueError, match="claim changed before exact custody takeover reservation"):
+        _resume_session_as_native(
+            agent="codex",
+            project="enforced-planning",
+            scope="pre-reservation-epoch-race",
+            worktree_path=str(worktree),
+            branch="pre-reservation-epoch-race",
+            current_phase="successor active",
+            session_id="codex:new-runtime",
+        )
+
+    claim_after = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    assert coordination_claims.SESSION_TAKEOVER_RESERVATION_FIELD not in claim_after
+    assert claim_after["session_id"] == "codex:old-runtime"
+    assert fence_called is False
 
 
 @pytest.mark.parametrize(
@@ -5468,6 +5700,7 @@ def test_custody_consumer_rejects_untrusted_referenced_fence_receipt(
             process_fence=process_fence,
             predecessor_process_pid=4242,
             predecessor_process_start_ticks=123456,
+            process_fence_transfer_epoch_sha256=expected_epoch,
         )
 
 
@@ -5523,7 +5756,10 @@ def test_resume_rolls_back_claim_and_tracker_when_tracker_write_fails(
             session_id="codex:new-session",
         )
 
-    assert (claim_path.read_bytes(), tracker_path.read_bytes()) == before
+    reserved_claim = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    reservation = reserved_claim[coordination_claims.SESSION_TAKEOVER_RESERVATION_FIELD]
+    assert reservation["claim_epoch_sha256"] == hashlib.sha256(before[0]).hexdigest()
+    assert tracker_path.read_bytes() == before[1]
     assert prewrite_claim_projection.projection_is_current(
         claims_dir=claims_dir,
         projection_path=projection_path,

@@ -645,6 +645,7 @@ def _apply_cross_session_resume_transaction(
     process_fence: dict[str, Any] | None,
     predecessor_process_pid: int | None,
     predecessor_process_start_ticks: int | None,
+    takeover_reservation: dict[str, Any] | None,
 ) -> tuple[
     dict[str, Any],
     outcome_selection.OutcomeSessionTransferV1 | None,
@@ -662,12 +663,13 @@ def _apply_cross_session_resume_transaction(
             raise ValueError("session tracker changed after cross-session resume preflight")
         current = yaml.safe_load(claim_bytes_before)
         if not isinstance(current, dict):
-            raise ValueError("cross-session resume claim must be a YAML mapping")
+            raise TypeError("cross-session resume claim must be a YAML mapping")
         for field, expected in expected_fields.items():
             if current.get(field) != expected:
                 raise ValueError(f"claim field {field} changed after cross-session resume preflight")
         if claim.broad_scope_mode == "bootstrap" and claim.target_worktree_path:
             current["worktree_path"] = claim.target_worktree_path
+        current.pop(coordination_claims.SESSION_TAKEOVER_RESERVATION_FIELD, None)
         current.update(
             {
                 "status": "active",
@@ -736,6 +738,11 @@ def _apply_cross_session_resume_transaction(
                 process_fence=process_fence,
                 predecessor_process_pid=predecessor_process_pid,
                 predecessor_process_start_ticks=predecessor_process_start_ticks,
+                process_fence_transfer_epoch_sha256=(
+                    takeover_reservation.get("claim_epoch_sha256")
+                    if takeover_reservation is not None
+                    else None
+                ),
             )
         except Exception:
             rollback_registry_digest_before = coordination_claims._registry_digest(
@@ -772,7 +779,7 @@ def _validate_same_runtime_tracker_identity(
 
     tracker_claim = tracker_payload.get("claim")
     if not isinstance(tracker_claim, dict):
-        raise ValueError(f"Session tracker at {tracker_path} is missing claim metadata")
+        raise TypeError(f"Session tracker at {tracker_path} is missing claim metadata")
 
     expected = {
         "agent": claim.agent,
@@ -785,9 +792,12 @@ def _validate_same_runtime_tracker_identity(
     for field in ("repo_root", "worktree_path"):
         claim_value = getattr(claim, field)
         tracker_value = tracker_claim.get(field)
-        if not isinstance(claim_value, str) or not isinstance(tracker_value, str):
-            mismatches.append(field)
-        elif Path(claim_value).expanduser().resolve() != Path(tracker_value).expanduser().resolve():
+        if (
+            not isinstance(claim_value, str)
+            or not isinstance(tracker_value, str)
+            or Path(claim_value).expanduser().resolve()
+            != Path(tracker_value).expanduser().resolve()
+        ):
             mismatches.append(field)
     tracker_custody = tracker_claim.get("tracker_path")
     if (
@@ -908,6 +918,7 @@ def _persist_claim_session_transfer_receipt(
     process_fence: dict[str, Any] | None,
     predecessor_process_pid: int | None,
     predecessor_process_start_ticks: int | None,
+    process_fence_transfer_epoch_sha256: str | None,
 ) -> dict[str, Any]:
     """Persist one immutable, digest-bound receipt for cross-session claim custody."""
 
@@ -935,7 +946,9 @@ def _persist_claim_session_transfer_receipt(
         parsed_fence = session_process_fencing.ProcessFenceReceiptV1.model_validate_json(
             process_receipt_bytes
         )
-        expected_transfer_epoch = hashlib.sha256(prior_claim_bytes).hexdigest()
+        if process_fence_transfer_epoch_sha256 is None:
+            raise ValueError("process-fence evidence lacks its reserved predecessor claim epoch")
+        expected_transfer_epoch = process_fence_transfer_epoch_sha256
         expected_worktree = str(Path(worktree_path).expanduser().resolve())
         expected_fields = {
             "predecessor_session_id": prior_session_id,
@@ -1080,6 +1093,10 @@ def _apply_claim_payload_updates(
         current = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
         if not isinstance(current, dict):
             raise ValueError(f"Claim file at {claim_file} must be a YAML mapping")
+        coordination_claims.reject_mutation_during_session_takeover(
+            current,
+            operation=str(operation),
+        )
         for field, expected in (expected_fields or {}).items():
             if current.get(field) != expected:
                 raise ValueError(
@@ -1685,6 +1702,28 @@ def _worktree_is_clean(worktree_path: str) -> tuple[bool, str]:
     return (not result.stdout.strip(), result.stdout.strip())
 
 
+def _claim_snapshot_any_status(
+    *,
+    agent: str,
+    project: str,
+    scope: str,
+) -> tuple[coordination_claims.ClaimRecord, dict[str, Any], Path, bytes]:
+    """Load one exact claim-byte snapshot regardless of lifecycle status."""
+
+    claim_file = _claim_path(agent, project, scope)
+    try:
+        claim_bytes = claim_file.read_bytes()
+    except FileNotFoundError:
+        raise ValueError(f"Claim file missing for {agent} → {project}:{scope}")
+    payload = yaml.safe_load(claim_bytes)
+    if not isinstance(payload, dict):
+        raise TypeError(f"Claim file invalid for {agent} → {project}:{scope}")
+    claim = coordination_claims.normalize_claim(payload, source_file=str(claim_file))
+    if claim is None:
+        raise ValueError(f"Claim file invalid for {agent} → {project}:{scope}")
+    return claim, payload, claim_file, claim_bytes
+
+
 def _claim_record_any_status(
     *,
     agent: str,
@@ -1693,13 +1732,11 @@ def _claim_record_any_status(
 ) -> tuple[coordination_claims.ClaimRecord, dict[str, Any], Path]:
     """Load one claim regardless of current lifecycle status."""
 
-    claim_file = _claim_path(agent, project, scope)
-    payload = _load_claim_payload(agent, project, scope)
-    if payload is None:
-        raise ValueError(f"Claim file missing for {agent} → {project}:{scope}")
-    claim = coordination_claims.normalize_claim(payload, source_file=str(claim_file))
-    if claim is None:
-        raise ValueError(f"Claim file invalid for {agent} → {project}:{scope}")
+    claim, payload, claim_file, _claim_bytes = _claim_snapshot_any_status(
+        agent=agent,
+        project=project,
+        scope=scope,
+    )
     return claim, payload, claim_file
 
 
@@ -3839,7 +3876,7 @@ def resume_session(
 ) -> dict[str, Any]:
     """Reattach a new runtime session to an existing plan-bound lane."""
 
-    claim, payload, claim_file = _claim_record_any_status(
+    claim, payload, claim_file, claim_snapshot_bytes = _claim_snapshot_any_status(
         agent=agent,
         project=project,
         scope=scope,
@@ -3881,6 +3918,7 @@ def resume_session(
     process_fence: dict[str, Any] | None = None
     claim_bytes_before: bytes | None = None
     tracker_bytes_before: bytes | None = None
+    takeover_reservation: dict[str, Any] | None = None
     tracker_path_text = claim.tracker_path
     tracker_path = Path(tracker_path_text).expanduser() if tracker_path_text else None
     if same_runtime and tracker_path is None:
@@ -3895,17 +3933,8 @@ def resume_session(
         tracker_path = tracker_path.expanduser().resolve()
         tracker_path_text = str(tracker_path)
     if not same_runtime:
-        claim_bytes_before = claim_file.read_bytes()
         if tracker_path is None or not tracker_path.is_file():
             raise ValueError("cross-session resume requires one existing exact session tracker")
-        tracker_bytes_before = tracker_path.read_bytes()
-        transfer_preflight = outcome_selection.prepare_outcome_session_transfer(
-            claim=claim,
-            successor_session_id=resolved_session_id,
-            transferred_at=datetime.fromisoformat(updated_at),
-        )
-        if transfer_preflight is not None and transfer_preflight.tracker_path != tracker_path.resolve():
-            raise ValueError("selected outcome transfer resolved a different tracker path")
         if agent == "codex":
             if predecessor_process_pid is None:
                 raise ValueError(
@@ -3919,12 +3948,42 @@ def resume_session(
                 )
             if not claim.session_id:
                 raise ValueError("Cross-session Codex resume cannot fence an unbound predecessor session.")
+            claim, payload, claim_bytes_before, takeover_reservation = (
+                coordination_claims.reserve_session_takeover(
+                    claim_file=claim_file,
+                    agent=agent,
+                    project=project,
+                    scope=scope,
+                    predecessor_session_id=claim.session_id,
+                    successor_session_id=resolved_session_id,
+                    worktree_path=worktree_path,
+                    predecessor_pid=predecessor_process_pid,
+                    predecessor_process_start_ticks=predecessor_process_start_ticks,
+                    reserved_at=updated_at,
+                    pre_reservation_claim_bytes=claim_snapshot_bytes,
+                )
+            )
+        else:
+            claim_bytes_before = claim_file.read_bytes()
+        tracker_bytes_before = tracker_path.read_bytes()
+        transfer_preflight = outcome_selection.prepare_outcome_session_transfer(
+            claim=claim,
+            successor_session_id=resolved_session_id,
+            transferred_at=datetime.fromisoformat(updated_at),
+        )
+        if transfer_preflight is not None and transfer_preflight.tracker_path != tracker_path.resolve():
+            raise ValueError("selected outcome transfer resolved a different tracker path")
+        if agent == "codex":
+            assert takeover_reservation is not None
+            assert predecessor_process_pid is not None
+            assert predecessor_process_start_ticks is not None
+            assert claim.session_id is not None
             process_fence = session_process_fencing.fence_predecessor_process(
                 predecessor_session_id=claim.session_id,
                 successor_session_id=resolved_session_id,
                 worktree_path=worktree_path,
                 predecessor_pid=predecessor_process_pid,
-                transfer_epoch_sha256=hashlib.sha256(claim_bytes_before).hexdigest(),
+                transfer_epoch_sha256=takeover_reservation["claim_epoch_sha256"],
                 predecessor_process_start_ticks=predecessor_process_start_ticks,
             )
 
@@ -3995,6 +4054,7 @@ def resume_session(
                 process_fence=process_fence,
                 predecessor_process_pid=predecessor_process_pid,
                 predecessor_process_start_ticks=predecessor_process_start_ticks,
+                takeover_reservation=takeover_reservation,
             )
     except Exception as transfer_error:
         if same_runtime:

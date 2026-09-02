@@ -23,6 +23,43 @@ Items start as **unconfirmed** observations and get triaged into confirmed issue
 
 ## Open
 
+### MP-019: Coordination claims link by file path, not by topic
+
+| Field | Value |
+|-------|-------|
+| Status | `unconfirmed` |
+| Severity | low |
+| Reported | 2026-09-02 |
+
+Cross-session messages currently fire on write-path overlap (two claims
+declaring overlapping `write_paths`). On 2026-09-02, three sessions
+independently converged on the same root cause in coordination-claims
+lifecycle code (`tracker_path` creation-blocking breaking `start_session()`'s
+resume-vs-create branching — see the `learned` register,
+lrn-20260821T142911613711Z-6a1f4f2824 and its 2026-09-02 successors) via three
+different implementation approaches. Only one of the three ever received a
+live warning about the others' findings, and only because that pair's fix
+happened to touch the same two files (`Makefile`, `create_worktree.py`); the
+third fix touched only `coordination_claims.py`, so a file-overlap trigger
+alone would have missed it.
+
+Idea to consider, not yet designed: let a claim optionally declare a `topic`
+or `problem` tag (free text or a small controlled vocabulary) separate from
+`write_paths`, and have the cross-session-message mechanism also fire on
+topic overlap between concurrently live claims, not only file-path overlap.
+This would catch "same underlying bug, different files" collisions that pure
+path-based coordination structurally cannot see. A companion policy proposal
+(`policy/proposals/2026-09-02-recall-injection-on-high-risk-file-edit.yaml`
+in `project-meta`) addresses the narrower, cheaper piece of this same problem
+— surfacing prior recorded findings on file touch — without requiring this
+larger claim-schema change. Do not treat that proposal as covering this idea;
+it is a different, smaller mechanism aimed at a different failure mode
+(unread prior findings vs. unwarned concurrent duplicate work).
+
+**Next:** Not yet triaged. Worth revisiting if topic-overlap collisions recur
+after the file-touch recall-injection proposal (if adopted) has had a chance
+to reduce the more common case.
+
 ### MP-018: Markdown-link fallback test uses the retired worktree layout
 
 | Field | Value |

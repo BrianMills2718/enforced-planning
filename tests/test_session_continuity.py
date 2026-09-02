@@ -34,11 +34,24 @@ from enforced_planning.session_continuity import (
     successor_custody_offer_sha256,
     validate_successor_custody_acceptance,
 )
+from enforced_planning.session_process_fencing import PredecessorProcessIdentityV1
 from scripts import session_continuity as continuity_cli
 from scripts import session_resume as resume_cli
 
 NOW = datetime(2026, 9, 2, 4, 30, tzinfo=UTC)
 PROGRESS_FINGERPRINT = "1" * 64
+
+
+def predecessor_process(
+    offer: SuccessorCustodyOfferV1,
+) -> PredecessorProcessIdentityV1:
+    return PredecessorProcessIdentityV1(
+        predecessor_session_id=offer.predecessor_session_id,
+        worktree_path=offer.worktree_path,
+        pid=4242,
+        process_start_ticks=123456,
+        command_sha256="e" * 64,
+    )
 
 
 @dataclass
@@ -618,6 +631,8 @@ def test_codex_successor_launch_requires_acceptance_before_work(tmp_path: Path) 
         offer=offer,
         offer_path=str(offer_path),
         resume_script=str(resume_script),
+        predecessor_process_pid=4242,
+        predecessor_process_start_ticks=123456,
     )
 
     assert launch.predecessor_thread_id == "owner"
@@ -634,6 +649,10 @@ def test_codex_successor_launch_requires_acceptance_before_work(tmp_path: Path) 
     ]
     assert launch.argv[8:13] == ["codex", "exec", "fork", "--json", "owner"]
     assert "--accept-successor-custody-offer" in launch.prompt
+    assert "--predecessor-process-pid 4242" in launch.prompt
+    assert "--predecessor-process-start-ticks 123456" in launch.prompt
+    assert launch.predecessor_process_pid == 4242
+    assert launch.predecessor_process_start_ticks == 123456
     assert str(offer_path) in launch.prompt
     assert offer.next_action in launch.prompt
     assert launch.transfer_eligible is False
@@ -645,6 +664,8 @@ def test_codex_successor_launch_rejects_relative_control_paths() -> None:
             offer=successor_custody_offer(),
             offer_path="offer.json",
             resume_script="scripts/session_resume.py",
+            predecessor_process_pid=4242,
+            predecessor_process_start_ticks=123456,
         )
 
 
@@ -658,6 +679,8 @@ def test_successor_offer_persistence_and_transient_launch_receipt(tmp_path: Path
         offer=offer,
         offer_path=str(offer_path),
         resume_script=str(tmp_path / "session_resume.py"),
+        predecessor_process_pid=4242,
+        predecessor_process_start_ticks=123456,
     )
     observed: list[str] = []
 
@@ -686,6 +709,8 @@ def test_successor_launch_fails_visible_without_exact_unit_ack(tmp_path: Path) -
         offer=offer,
         offer_path=str(tmp_path / "offer.json"),
         resume_script=str(tmp_path / "session_resume.py"),
+        predecessor_process_pid=4242,
+        predecessor_process_start_ticks=123456,
     )
 
     with pytest.raises(RuntimeError, match="exact transient unit"):
@@ -735,12 +760,14 @@ def test_verified_native_successor_launch_is_journaled_exactly_once(
         receipt_path=receipt_path,
         resume_script=tmp_path / "session_resume.py",
         run=fake_run,
+        process_resolver=predecessor_process,
     )
     second = continuity_cli.launch_verified_native_successors(
         successor_offers=prepared,
         receipt_path=receipt_path,
         resume_script=tmp_path / "session_resume.py",
         run=fake_run,
+        process_resolver=predecessor_process,
     )
 
     assert first[0]["action"] == "successor_launch_started"
@@ -791,17 +818,63 @@ def test_failed_verified_native_successor_launch_is_not_retried(
         receipt_path=receipt_path,
         resume_script=tmp_path / "session_resume.py",
         run=reject,
+        process_resolver=predecessor_process,
     )
     second = continuity_cli.launch_verified_native_successors(
         successor_offers=prepared,
         receipt_path=receipt_path,
         resume_script=tmp_path / "session_resume.py",
         run=reject,
+        process_resolver=predecessor_process,
     )
 
     assert first[0]["reason_code"] == "native_successor_launch_invalid"
     assert second[0]["reason_code"] == "prior_successor_launch_failed"
     assert calls == 1
+
+
+def test_verified_native_successor_launch_rejects_process_for_other_custody(
+    tmp_path: Path,
+) -> None:
+    offer = successor_custody_offer()
+    offer_path = continuity_cli.persist_successor_offer(
+        offer, offer_dir=tmp_path / "offers"
+    )
+    prepared = [
+        {
+            "project": offer.project,
+            "scope": offer.scope,
+            "session_id": offer.predecessor_session_id,
+            "offer_id": offer.offer_id,
+            "offer_sha256": successor_custody_offer_sha256(offer),
+            "offer_path": str(offer_path),
+            "action": "successor_offer_prepared",
+            "successor_offer_verified": True,
+        }
+    ]
+    wrong_process = predecessor_process(offer).model_copy(
+        update={"predecessor_session_id": "codex:different-owner"}
+    )
+    calls = 0
+
+    def fake_run(
+        command: tuple[str, ...], **_kwargs: object
+    ) -> subprocess.CompletedProcess[str]:
+        nonlocal calls
+        calls += 1
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    result = continuity_cli.launch_verified_native_successors(
+        successor_offers=prepared,
+        receipt_path=tmp_path / "receipts.jsonl",
+        resume_script=tmp_path / "session_resume.py",
+        run=fake_run,
+        process_resolver=lambda _offer: wrong_process,
+    )
+
+    assert result[0]["action"] == "fail_visible"
+    assert "different offered custody" in result[0]["error"]
+    assert calls == 0
 
 
 def test_verified_native_successor_launch_rejects_changed_offer_bytes(

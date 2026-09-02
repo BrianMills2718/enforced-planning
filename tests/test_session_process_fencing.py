@@ -12,6 +12,9 @@ from enforced_planning import session_process_fencing
 from enforced_planning.session_process_fencing import (
     fence_predecessor_process as _fence_predecessor_process,
 )
+from enforced_planning.session_process_fencing import (
+    resolve_predecessor_process,
+)
 
 
 def fence_predecessor_process(**kwargs: object) -> dict[str, object]:
@@ -103,6 +106,67 @@ def test_fence_terminates_only_exact_session_pid_and_persists_receipt(tmp_path: 
     assert receipt_path.is_file()
     assert receipt_path.stat().st_mode & 0o777 == 0o600
     assert result["receipt_sha256"]
+
+
+def test_resolve_predecessor_process_returns_exact_live_generation(
+    tmp_path: Path,
+) -> None:
+    proc_root, _pid_root, session_index, worktree = _fake_process(tmp_path)
+
+    result = resolve_predecessor_process(
+        predecessor_session_id="codex:old-session",
+        worktree_path=str(worktree),
+        trusted_codex_executable=tmp_path / "bin" / "codex",
+        proc_root=proc_root,
+        session_index=session_index,
+    )
+
+    assert result.pid == 4242
+    assert result.process_start_ticks == 123456
+    assert result.predecessor_session_id == "codex:old-session"
+    assert result.worktree_path == str(worktree.resolve())
+
+
+def test_resolve_predecessor_process_rejects_ambiguous_exact_generations(
+    tmp_path: Path,
+) -> None:
+    proc_root, pid_root, session_index, worktree = _fake_process(tmp_path)
+    second = proc_root / "4343"
+    second.mkdir()
+    second.joinpath("exe").symlink_to(pid_root.joinpath("exe").resolve())
+    second.joinpath("cwd").symlink_to(worktree)
+    second.joinpath("cmdline").write_bytes(pid_root.joinpath("cmdline").read_bytes())
+    second.joinpath("stat").write_text(
+        "4343 (codex) " + " ".join(["S", *(["0"] * 18), "654321"]) + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="multiple exact predecessor"):
+        resolve_predecessor_process(
+            predecessor_session_id="codex:old-session",
+            worktree_path=str(worktree),
+            trusted_codex_executable=tmp_path / "bin" / "codex",
+            proc_root=proc_root,
+            session_index=session_index,
+        )
+
+
+def test_resolve_predecessor_process_rejects_missing_exact_generation(
+    tmp_path: Path,
+) -> None:
+    proc_root, _pid_root, session_index, worktree = _fake_process(
+        tmp_path,
+        target="different-owner",
+    )
+
+    with pytest.raises(ValueError, match="no exact live predecessor"):
+        resolve_predecessor_process(
+            predecessor_session_id="codex:old-session",
+            worktree_path=str(worktree),
+            trusted_codex_executable=tmp_path / "bin" / "codex",
+            proc_root=proc_root,
+            session_index=session_index,
+        )
 
 
 def test_fence_rejects_pid_for_different_session_without_signalling(tmp_path: Path) -> None:

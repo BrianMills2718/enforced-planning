@@ -44,6 +44,7 @@ from enforced_planning import (  # noqa: I001
     coordination_messages,
     session_continuity,
     session_lifecycle,
+    session_process_fencing,
 )
 
 
@@ -57,6 +58,21 @@ DEFAULT_SUCCESSOR_OFFER_DIR = (
 DEFAULT_INSTALLED_RESUME_SCRIPT = (
     Path.home() / ".codex/runtime/enforced-planning/scripts/session_resume.py"
 )
+
+
+def _resolve_native_predecessor_process(
+    offer: session_continuity.SuccessorCustodyOfferV1,
+    *,
+    codex: str,
+) -> session_process_fencing.PredecessorProcessIdentityV1:
+    codex_path = shutil.which(codex)
+    if codex_path is None:
+        raise ValueError("native successor launch cannot resolve the configured Codex executable")
+    return session_process_fencing.resolve_predecessor_process(
+        predecessor_session_id=offer.predecessor_session_id,
+        worktree_path=offer.worktree_path,
+        trusted_codex_executable=Path(codex_path),
+    )
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
@@ -937,6 +953,11 @@ def launch_verified_native_successors(
     codex: str = "codex",
     systemd_run: str = "systemd-run",
     run: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+    process_resolver: Callable[
+        [session_continuity.SuccessorCustodyOfferV1],
+        session_process_fencing.PredecessorProcessIdentityV1,
+    ]
+    | None = None,
 ) -> list[dict[str, Any]]:
     """Launch each exact verified offer at most once; never claim acceptance."""
 
@@ -963,15 +984,35 @@ def launch_verified_native_successors(
             )
             if offer.offer_id != prepared.get("offer_id"):
                 raise ValueError("verified native successor result names a different offer")
+            if session_continuity.successor_custody_offer_sha256(offer) != prepared.get(
+                "offer_sha256"
+            ):
+                raise ValueError("verified native successor offer bytes changed before launch")
+            predecessor_process = (
+                process_resolver(offer)
+                if process_resolver is not None
+                else _resolve_native_predecessor_process(offer, codex=codex)
+            )
+            if (
+                predecessor_process.predecessor_session_id
+                != offer.predecessor_session_id
+                or Path(predecessor_process.worktree_path).expanduser().resolve()
+                != Path(offer.worktree_path).expanduser().resolve()
+            ):
+                raise ValueError(
+                    "resolved predecessor process belongs to different offered custody"
+                )
             launch = session_continuity.build_codex_successor_launch(
                 offer=offer,
                 offer_path=str(offer_path),
                 resume_script=str(resume_script.expanduser().resolve()),
+                predecessor_process_pid=predecessor_process.pid,
+                predecessor_process_start_ticks=(
+                    predecessor_process.process_start_ticks
+                ),
                 codex=codex,
                 systemd_run=systemd_run,
             )
-            if launch.offer_sha256 != prepared.get("offer_sha256"):
-                raise ValueError("verified native successor offer bytes changed before launch")
             prior = states.get(offer.offer_id)
             if prior is not None:
                 if (
@@ -1497,10 +1538,18 @@ def main(argv: Sequence[str] | None = None) -> int:
                     successor_offer,
                     offer_dir=args.successor_offer_dir,
                 )
+                predecessor_process = _resolve_native_predecessor_process(
+                    successor_offer,
+                    codex=args.codex,
+                )
                 launch = session_continuity.build_codex_successor_launch(
                     offer=successor_offer,
                     offer_path=str(offer_path),
                     resume_script=str(args.installed_resume_script),
+                    predecessor_process_pid=predecessor_process.pid,
+                    predecessor_process_start_ticks=(
+                        predecessor_process.process_start_ticks
+                    ),
                     codex=args.codex,
                     systemd_run=args.systemd_run,
                 )

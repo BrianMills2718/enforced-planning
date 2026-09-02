@@ -226,7 +226,14 @@ Native successor launch is a separate, explicit opt-in. Add
 the default timer and ordinary reconciliation remain launch-disabled. The
 launcher rereads the exact typed offer and requires the sweep's canonical
 `successor_offer_verified` receipt before building the existing Codex resume
-command. It journals an immutable `intent` before process creation and then one
+command. Before launch it resolves exactly one live direct Codex resume process
+for the predecessor session in the offered worktree. The generated successor
+acceptance command carries that exact PID and `/proc` start-tick generation into
+the existing process-fencing transaction; no process match or multiple matches
+fail visibly before successor creation. The fencing boundary revalidates the
+executable, session target, worktree, PID generation, and command bytes before
+signalling, so discovery is not itself transfer authority. The launcher
+journals an immutable `intent` before process creation and then one
 terminal `started` or `failed` state. A repeated sweep never relaunches a
 terminal offer; an interrupted `intent` and a recorded failure both remain
 fail-visible for operator reconciliation rather than being guessed safe to

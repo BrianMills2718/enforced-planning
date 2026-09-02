@@ -692,8 +692,8 @@ the event itself, updates the claim atomically, refreshes the pre-write
 projection, and emits the existing backward-compatible typed session-mutation
 receipt. A new event without a quiet interval clears an obsolete interval.
 
-Last verified 2026-09-02 at framework revision
-`5e9e9ca6e7141ed0c74cc71fe626d366e0aa7d21`: JSON reporting must serialize
+Last verified 2026-09-02 through the canonical read-only claim check piped to
+`jq`: JSON reporting must serialize
 `other_session_last_active_at` as an ISO-8601 string or `null`; a raw datetime
 is a contract defect, not a consumer-supported value.
 

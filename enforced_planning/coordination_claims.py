@@ -750,7 +750,10 @@ class ClaimInteraction:
 
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-safe interaction summary."""
-        return asdict(self)
+        data = asdict(self)
+        if self.other_session_last_active_at is not None:
+            data["other_session_last_active_at"] = self.other_session_last_active_at.isoformat()
+        return data
 
 
 @dataclass(frozen=True)

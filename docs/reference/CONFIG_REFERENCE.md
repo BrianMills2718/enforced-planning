@@ -134,6 +134,9 @@ Every component of a compound command or pipeline must be in the bounded read
 grammar; this includes safe `date`, `git ls-remote`, GitHub CLI query, and `jq`
 forms. Clock-setting, upload-pack overrides, GitHub mutations, redirection,
 substitution, and unbounded interpreter commands remain claim-required.
+Claim-classification JSON serializes typed session-activity timestamps as
+ISO-8601 strings or `null`, so admitted read-only `jq` pipelines never receive
+Python datetime objects.
 
 ### Host repository-authority provider
 

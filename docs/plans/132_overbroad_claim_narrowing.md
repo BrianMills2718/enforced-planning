@@ -593,3 +593,14 @@ not broad claim authority: it requires exact claim/tracker digests and a clean
 main-worktree identity, archives only coordination metadata, and retains the
 filesystem and branch. Focused lifecycle controls prove the removal helpers are
 never invoked for this case.
+
+The same source/installed lifecycle lineage now includes two bounded closeout
+and transfer controls without changing Plan 132 claim authority. A merged child
+claim may be terminalized only when its exact live parent retains the same
+repository, worktree, and branch; the parent then closes normally. A
+cross-session Codex resume must fence one exact predecessor PID whose session,
+start-tick generation, Codex executable, and current worktree match the
+transferring claim. Fence state binds the exact pre-transfer claim digest, and
+the immutable process-fence receipt is then bound into the custody-transfer
+receipt before reporting success. Installer import-closure tests execute the installed
+`session_resume.py` adapter with source `PYTHONPATH` removed.

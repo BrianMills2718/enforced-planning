@@ -66,6 +66,7 @@ STRICT_LIVE_METADATA_CLAIM_TYPES = {"program", "write", "review", "research"}
 CURRENT_CLAIM_SCHEMA_VERSION = 6
 BROAD_SCOPE_MODES = {"bootstrap", "bounded"}
 BOOTSTRAP_AUTHORITY_DISABLED_SUFFIX = ".bootstrap-no-mutation-authority"
+SESSION_TAKEOVER_RESERVATION_FIELD = "session_takeover_reservation"
 
 # Directories whose contents are immutable, uniquely-named artifacts created by
 # an atomic exclusive open. Two lanes appending to one of these cannot collide:
@@ -445,6 +446,131 @@ def record_claim_mutation(
             cause=exc,
         ) from exc
     return receipt
+
+
+def active_session_takeover_reservation(payload: dict[str, Any]) -> dict[str, Any] | None:
+    """Return one validated active custody-takeover reservation from raw claim state."""
+
+    raw = payload.get(SESSION_TAKEOVER_RESERVATION_FIELD)
+    if raw is None:
+        return None
+    if not isinstance(raw, dict):
+        raise TypeError("claim has malformed session takeover reservation state")
+    required_text = (
+        "record_type",
+        "predecessor_session_id",
+        "successor_session_id",
+        "worktree_path",
+        "claim_epoch_sha256",
+        "reserved_at",
+    )
+    if any(not isinstance(raw.get(field), str) or not raw[field] for field in required_text):
+        raise ValueError("claim has incomplete session takeover reservation identity")
+    if raw["record_type"] != "claim_session_takeover_reservation":
+        raise ValueError("claim has an unsupported session takeover reservation record type")
+    if re.fullmatch(r"[0-9a-f]{64}", raw["claim_epoch_sha256"]) is None:
+        raise ValueError("claim takeover reservation has an invalid predecessor claim epoch")
+    if not isinstance(raw.get("pid"), int) or raw["pid"] <= 1:
+        raise ValueError("claim takeover reservation has an invalid predecessor PID")
+    if not isinstance(raw.get("process_start_ticks"), int) or raw["process_start_ticks"] < 1:
+        raise ValueError("claim takeover reservation has invalid process start ticks")
+    return dict(raw)
+
+
+def reject_mutation_during_session_takeover(
+    payload: dict[str, Any],
+    *,
+    operation: str,
+) -> None:
+    """Fence predecessor claim mutations while an exact custody takeover is active."""
+
+    reservation = active_session_takeover_reservation(payload)
+    if reservation is None:
+        return
+    raise ValueError(
+        f"Cannot {operation} claim while custody takeover is reserved for successor "
+        f"{reservation['successor_session_id']!r} at predecessor claim epoch "
+        f"{reservation['claim_epoch_sha256']}"
+    )
+
+
+def reserve_session_takeover(
+    *,
+    claim_file: Path,
+    agent: str,
+    project: str,
+    scope: str,
+    predecessor_session_id: str,
+    successor_session_id: str,
+    worktree_path: str,
+    predecessor_pid: int,
+    predecessor_process_start_ticks: int,
+    reserved_at: str,
+    pre_reservation_claim_bytes: bytes,
+    claims_dir: Path | None = None,
+) -> tuple[ClaimRecord, dict[str, Any], bytes, dict[str, Any]]:
+    """Durably reserve one exact predecessor claim epoch before process fencing."""
+
+    resolved_claims_dir = (claims_dir or CLAIMS_DIR).expanduser().resolve()
+    resolved_claim_file = claim_file.expanduser().resolve()
+    expected_worktree = str(Path(worktree_path).expanduser().resolve())
+    with claim_registry_lock(resolved_claims_dir):
+        claim_bytes = resolved_claim_file.read_bytes()
+        if claim_bytes != pre_reservation_claim_bytes:
+            raise ValueError("claim changed before exact custody takeover reservation")
+        payload = yaml.safe_load(claim_bytes)
+        if not isinstance(payload, dict):
+            raise TypeError("session takeover claim must be a YAML mapping")
+        claim = normalize_claim(payload, source_file=str(resolved_claim_file))
+        if claim is None or claim.status not in CLOSEABLE_STATUSES:
+            raise ValueError("session takeover requires one closeable predecessor claim")
+        if (
+            claim.agent != agent
+            or project not in claim.projects
+            or claim.scope != scope
+            or claim.session_id != predecessor_session_id
+        ):
+            raise ValueError("session takeover claim identity changed before reservation")
+        if claim.worktree_path and str(Path(claim.worktree_path).expanduser().resolve()) != expected_worktree:
+            raise ValueError("session takeover worktree changed before reservation")
+
+        requested = {
+            "record_type": "claim_session_takeover_reservation",
+            "predecessor_session_id": predecessor_session_id,
+            "successor_session_id": successor_session_id,
+            "worktree_path": expected_worktree,
+            "pid": predecessor_pid,
+            "process_start_ticks": predecessor_process_start_ticks,
+        }
+        existing = active_session_takeover_reservation(payload)
+        if existing is not None:
+            if any(existing.get(field) != value for field, value in requested.items()):
+                raise ValueError("claim is reserved for a different exact custody takeover")
+            return claim, payload, claim_bytes, existing
+
+        reservation = {
+            **requested,
+            "claim_epoch_sha256": hashlib.sha256(claim_bytes).hexdigest(),
+            "reserved_at": reserved_at,
+        }
+        registry_digest_before = _registry_digest(resolved_claims_dir)
+        payload[SESSION_TAKEOVER_RESERVATION_FIELD] = reservation
+        _atomic_write_claim(resolved_claim_file, payload)
+        reserved_claim_bytes = resolved_claim_file.read_bytes()
+        _projection_path, projection_digest_after = refresh_prewrite_authority_projection(
+            resolved_claims_dir
+        )
+        record_claim_mutation(
+            operation="session_upsert",
+            claims_dir=resolved_claims_dir,
+            registry_digest_before=registry_digest_before,
+            target_project=claim.primary_project(),
+            target_scope=claim.scope,
+            target_claim_path=resolved_claim_file,
+            session_id=predecessor_session_id,
+            projection_digest_after=projection_digest_after,
+        )
+        return claim, payload, reserved_claim_bytes, reservation
 
 
 def record_claim_narrow_mutation(
@@ -3244,6 +3370,7 @@ def heartbeat_claims(
                 continue
             if not require_exact_session and claim.session_id and claim.session_id not in owned:
                 continue
+            reject_mutation_during_session_takeover(data, operation="heartbeat")
             data["session_id"] = resolved_session_id
             data["heartbeat_at"] = heartbeat_at
             data["updated_at"] = heartbeat_at
@@ -3337,6 +3464,7 @@ def record_progress_claims(
             )
 
         claim_file, data, claim = matches[0]
+        reject_mutation_during_session_takeover(data, operation="record progress on")
         previous_progress_at = _parse_aware_iso_datetime(claim.progress_at)
         if previous_progress_at is not None and event.recorded_at <= previous_progress_at:
             raise ValueError("Progress event timestamp must advance beyond the claim's current progress_at")

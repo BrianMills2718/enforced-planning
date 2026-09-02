@@ -177,6 +177,37 @@ event was already appended, rollback appends a compensating predecessor event
 whose terminal registry digest matches the restored authority. Resume never
 reports a successor while the claim and tracker disagree.
 
+Codex-to-Codex custody transfer additionally requires
+`--predecessor-process-pid` and `--predecessor-process-start-ticks`. Before
+changing claim custody, `session-resume` proves that exact PID generation is a
+direct Codex resume of the predecessor session, is using the successor runtime's
+exact Codex executable, and has the claimed worktree as its current directory.
+The state key also binds the exact pre-transfer claim-bytes SHA-256 so evidence
+cannot cross custody epochs. It binds `/proc` start ticks against PID
+reuse, opens an exact kernel pidfd before validation, and sends bounded
+TERM/KILL escalation only through that handle. Before signaling, it fsyncs a
+deterministic active intent. Before that signal boundary, `session-resume`
+also writes a `session_takeover_reservation` into the predecessor claim under
+the claim-registry lock. The reservation binds the exact pre-reservation claim
+bytes, successor, worktree, PID, and start ticks; predecessor heartbeat and
+progress mutations reject while it is active. A failed custody commit retains
+the reservation so retry consumes the same fence epoch without signaling a
+gone process, and only the successful successor commit removes it. After a
+confirmed exit the process fence atomically finalizes an
+immutable mode-0600 process-fence receipt; retry either resumes the same
+start-tick identity or finalizes an already-absent/replaced predecessor without
+signaling the replacement. The custody-transfer receipt embeds the exact fence
+receipt path and SHA-256, and the custody transaction independently recomputes
+the predecessor claim-bytes digest before consuming that fence epoch. The
+consumer parses the referenced bytes as the typed process-fence receipt, checks
+its predecessor, successor, worktree, PID generation, and epoch against both
+the pre-transfer claim, exact requested PID/start generation, and fencing
+result, and derives the custody binding only from that parsed receipt. Missing,
+malformed, stale, ambiguous, or
+mismatched process identity
+fails before the claim or tracker changes; never replace this contract with a
+process-name-wide kill.
+
 The legacy `~/.claude/coordination/active-work-registry.yaml` and tracked
 `generated/runtime/active_work_registry.*` files may survive as compatibility,
 historical, or explicitly regenerated snapshot surfaces. They are not live
@@ -419,6 +450,18 @@ failure as a high-severity command failure, including when the local worktree
 is already absent. `session-close` itself refuses physical cleanup while any
 other live claim still references the same canonical worktree path and lists
 the sibling scopes that must be disposed or transferred first.
+
+One exact exception breaks the closeout circularity for a merged temporary
+child claim that shares its parent's worktree and branch. Close that child
+first with `session-close --terminalize-shared-child --disposition merged
+--merge-commit <sha>`. The command requires the exact owning session,
+`parent_scope`, one live parent with the same canonical repository, worktree,
+and branch, and ordinary canonical merge ancestry. Worktree or branch arguments
+must equal the child's recorded custody; caller overrides cannot substitute a
+different parent's resources. The command archives only the child and reports
+the worktree and branch retained for the parent. Then close the parent through
+ordinary `session-close`; the child flag never removes or releases parent-owned
+Git resources.
 
 The compatibility `scripts/worktree-coordination/finish_pr.py` path also fails
 closed. It resolves the repository owner through the isolated GitHub-account

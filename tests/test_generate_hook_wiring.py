@@ -268,6 +268,7 @@ def test_generate_hook_wiring_installs_prewrite_gate_only_when_opted_in(tmp_path
     assert (tmp_path / ".codex" / "hooks" / "prewrite-claim-gate.sh").is_file()
     assert (tmp_path / "enforced_planning" / "prewrite_claim_fast.py").is_file()
     assert (tmp_path / "enforced_planning" / "prewrite_claim_projection.py").is_file()
+    assert (tmp_path / "enforced_planning" / "session_process_fencing.py").is_file()
     assert (tmp_path / "scripts" / "refresh_prewrite_claim_projection.py").is_file()
     claude = json.loads((tmp_path / ".claude" / "settings.json").read_text(encoding="utf-8"))
     codex = json.loads((tmp_path / ".codex" / "hooks.json").read_text(encoding="utf-8"))

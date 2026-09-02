@@ -115,6 +115,7 @@ python scripts/check_coordination_claims.py --progress --help
 python scripts/session_end.py --help
 python scripts/session_finish.py --help
 python scripts/session_close.py --help
+python scripts/session_resume.py --help
 python scripts/session_narrow.py --help
 
 # Tests
@@ -168,6 +169,13 @@ adoption.
    --reconcile-canonical-root` with exact claim and tracker SHA-256 digests so
    only coordination metadata is archived and the repository and branch stay
    intact.
+   A merged temporary child sharing its exact parent worktree and branch is the
+   other metadata-only exception: close the child first with
+   `session-close --terminalize-shared-child`, then close the retained parent
+   normally. Cross-session Codex `session-resume` requires the exact
+   predecessor PID plus `/proc` start ticks, and fences that verified
+   session/worktree process under the exact claim-bytes transfer epoch before
+   claim custody changes.
 8. One runtime session owns one unparented live claim root by default. Claim
    type does not exempt a lane from this lifecycle guard. Related work declares
    `parent_scope`; intentional additional roots require explicit parallel

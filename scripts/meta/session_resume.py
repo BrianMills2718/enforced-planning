@@ -47,6 +47,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--branch", required=True)
     parser.add_argument("--current-phase", required=True)
     parser.add_argument("--session-id")
+    parser.add_argument(
+        "--predecessor-process-pid",
+        type=int,
+        help="Exact prior Codex process PID to verify and terminate before cross-session transfer.",
+    )
+    parser.add_argument(
+        "--predecessor-process-start-ticks",
+        type=int,
+        help="Exact /proc start ticks for the predecessor PID generation.",
+    )
     parser.add_argument("--note")
     parser.add_argument("--json", action="store_true")
     return parser.parse_args(argv)
@@ -64,6 +74,8 @@ def main(argv: list[str] | None = None) -> int:
         current_phase=args.current_phase,
         session_id=args.session_id,
         note=args.note,
+        predecessor_process_pid=args.predecessor_process_pid,
+        predecessor_process_start_ticks=args.predecessor_process_start_ticks,
     )
     if args.json:
         print(json.dumps(payload, indent=2, sort_keys=True))

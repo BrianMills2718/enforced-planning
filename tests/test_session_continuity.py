@@ -9,9 +9,13 @@ from pathlib import Path
 
 import pytest
 
+from enforced_planning import coordination_messages
+
 from enforced_planning.session_continuity import (
     CodexActivityV1,
     assess_continuity,
+    assess_resume_offer,
+    build_resume_offer_request,
     read_codex_activity,
 )
 
@@ -64,12 +68,13 @@ def test_active_task_retains_owner_even_when_started_long_ago() -> None:
     assert result.transfer_eligible is False
 
 
-def test_silent_open_task_fails_visible_instead_of_licensing_takeover() -> None:
+def test_silent_open_task_gets_owner_offer_without_licensing_takeover() -> None:
     result = assess_continuity(claim=Claim(), activity=activity("active_operation", 120), now=NOW)
 
-    assert result.activity_state == "unknown"
-    assert result.action == "fail_visible"
-    assert result.reason_code == "open_task_activity_stale"
+    assert result.activity_state == "idle_owner"
+    assert result.action == "notify_owner"
+    assert result.reason_code == "open_task_resume_offer_due"
+    assert result.transfer_candidate_observe_only is False
     assert result.transfer_eligible is False
 
 
@@ -94,9 +99,152 @@ def test_thirty_minutes_is_observe_only_not_transfer_authority() -> None:
     result = assess_continuity(claim=Claim(), activity=activity("between_turns", 30), now=NOW)
 
     assert result.action == "notify_owner"
-    assert result.transfer_candidate_observe_only is True
+    assert result.transfer_candidate_observe_only is False
     assert result.transfer_eligible is False
     assert result.continuity_disposition == "active_continuing"
+
+
+def test_idle_assessment_builds_exact_idempotent_resume_offer() -> None:
+    assessment = assess_continuity(
+        claim=Claim(),
+        activity=activity("between_turns", 30),
+        now=NOW,
+    )
+
+    first = build_resume_offer_request(
+        assessment=assessment,
+        sender_session_id="codex:coordinator",
+        project="demo",
+        scope="feature-lane",
+        next_action="run the focused integration",
+    )
+    second = build_resume_offer_request(
+        assessment=assessment,
+        sender_session_id="codex:coordinator",
+        project="demo",
+        scope="feature-lane",
+        next_action="run the focused integration",
+    )
+
+    assert first.recipient.session_id == "codex:owner"
+    assert first.idempotency_key == second.idempotency_key
+    assert first.claim_ref == "feature-lane"
+    assert "run the focused integration" in (first.body or "")
+    assert first.ttl_seconds == 60 * 60
+
+
+def test_active_owner_cannot_receive_idle_resume_offer() -> None:
+    assessment = assess_continuity(
+        claim=Claim(),
+        activity=activity("active_operation", 1),
+        now=NOW,
+    )
+
+    with pytest.raises(ValueError, match="idle-owner"):
+        build_resume_offer_request(
+            assessment=assessment,
+            sender_session_id="codex:coordinator",
+            project="demo",
+            scope="feature-lane",
+            next_action="continue",
+        )
+
+
+@dataclass
+class OfferStatus:
+    message: coordination_messages.CoordinationMessage
+    runtime_accepted: bool = False
+    observed: bool = False
+    acknowledged: bool = False
+
+
+def offer_status(*, delivered: bool, acknowledged: bool = False) -> OfferStatus:
+    message = coordination_messages.CoordinationMessage(
+        schema_version="1.0",
+        message_id="msg_" + "a" * 32,
+        sender_session_id="codex:coordinator",
+        recipient_selector=coordination_messages.ExactSessionSelector(
+            kind="session", session_id="codex:owner"
+        ),
+        recipient_session_id="codex:owner",
+        project="demo",
+        kind="coordination_request",
+        subject="Resume",
+        body="Resume exact custody",
+        created_at=NOW - timedelta(minutes=31),
+        expires_at=NOW + timedelta(minutes=29),
+        request_sha256="b" * 64,
+        claim_ref="feature-lane",
+    )
+    return OfferStatus(
+        message=message,
+        runtime_accepted=delivered,
+        observed=delivered,
+        acknowledged=acknowledged,
+    )
+
+
+def test_persisted_only_offer_fails_visible_and_cannot_launch_successor() -> None:
+    assessment = assess_continuity(
+        claim=Claim(), activity=activity("between_turns", 31), now=NOW
+    )
+
+    review = assess_resume_offer(
+        assessment=assessment,
+        status=offer_status(delivered=False),
+        now=NOW,
+    )
+
+    assert review.action == "fail_visible"
+    assert review.successor_launch_allowed is False
+    assert review.transfer_eligible is False
+
+
+def test_delivered_unanswered_offer_allows_successor_launch_not_transfer() -> None:
+    assessment = assess_continuity(
+        claim=Claim(), activity=activity("between_turns", 31), now=NOW
+    )
+
+    review = assess_resume_offer(
+        assessment=assessment,
+        status=offer_status(delivered=True),
+        now=NOW,
+    )
+
+    assert review.action == "launch_successor"
+    assert review.successor_launch_allowed is True
+    assert review.transfer_eligible is False
+    assert "must accept exact claim" in review.resume_condition
+
+
+def test_owner_acknowledgement_retains_current_custody() -> None:
+    assessment = assess_continuity(
+        claim=Claim(), activity=activity("between_turns", 31), now=NOW
+    )
+
+    review = assess_resume_offer(
+        assessment=assessment,
+        status=offer_status(delivered=True, acknowledged=True),
+        now=NOW,
+    )
+
+    assert review.action == "owner_responded"
+    assert review.successor_launch_allowed is False
+    assert review.transfer_eligible is False
+
+
+def test_fresh_owner_activity_after_offer_cancels_successor_launch() -> None:
+    assessment = assess_continuity(
+        claim=Claim(), activity=activity("active_operation", 1), now=NOW
+    )
+    status = offer_status(delivered=True)
+
+    review = assess_resume_offer(assessment=assessment, status=status, now=NOW)
+
+    assert review.action == "owner_responded"
+    assert review.reason_code == "owner_activity_after_resume_offer"
+    assert review.successor_launch_allowed is False
+    assert review.transfer_eligible is False
 
 
 def test_bounded_quiet_suppresses_idle_recovery() -> None:

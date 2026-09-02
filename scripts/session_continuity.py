@@ -13,7 +13,11 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from enforced_planning import coordination_claims, session_continuity  # noqa: E402
+from enforced_planning import (  # noqa: E402
+    coordination_claims,
+    coordination_messages,
+    session_continuity,
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -23,6 +27,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--scope", required=True)
     parser.add_argument("--notify-minutes", type=int, default=15)
     parser.add_argument("--transfer-observe-minutes", type=int, default=30)
+    parser.add_argument(
+        "--send-resume-offer",
+        action="store_true",
+        help="Persist one idempotent exact-session resume offer when the assessment requests it.",
+    )
+    parser.add_argument("--sender-session-id")
+    parser.add_argument(
+        "--resume-offer-message-id",
+        help="Review one exact prior resume offer against current owner activity and receipts.",
+    )
+    parser.add_argument("--successor-after-minutes", type=int, default=30)
     parser.add_argument("--json", action="store_true")
     return parser.parse_args()
 
@@ -55,6 +70,46 @@ def main() -> int:
         transfer_observe_after=timedelta(minutes=args.transfer_observe_minutes),
     )
     payload = assessment.model_dump(mode="json")
+    payload["resume_offer"] = None
+    payload["resume_offer_review"] = None
+    store = coordination_messages.CoordinationMessageStore(
+        root=coordination_messages.default_message_root(coordination_claims.CLAIMS_DIR),
+        claims_dir=coordination_claims.CLAIMS_DIR,
+    )
+    if args.send_resume_offer and assessment.action == "notify_owner":
+        resolved_sender = coordination_claims.resolve_session_id(args.agent, args.sender_session_id)
+        if resolved_sender != args.sender_session_id:
+            raise ValueError("resume offer sender must equal the current native session")
+        request = session_continuity.build_resume_offer_request(
+            assessment=assessment,
+            sender_session_id=resolved_sender,
+            project=args.project,
+            scope=args.scope,
+            next_action=claim.next_action or "reach the next verified checkpoint",
+        )
+        sent = store.send(request, require_live_claim=False)
+        payload["resume_offer"] = {
+            "message_id": sent.message.message_id,
+            "recipient_session_id": sent.message.recipient_session_id,
+            "idempotent_replay": sent.idempotent_replay,
+            "delivery_mode": sent.local_host_delivery_capability.delivery_mode,
+            "delivery_enforced": (
+                sent.local_host_delivery_capability.delivery_mode == "enforced"
+            ),
+            "message_path": sent.message_path,
+        }
+    if args.resume_offer_message_id:
+        status = store.status(
+            coordination_messages.MessageStatusRequest(
+                message_id=args.resume_offer_message_id
+            )
+        )
+        review = session_continuity.assess_resume_offer(
+            assessment=assessment,
+            status=status,
+            successor_after=timedelta(minutes=args.successor_after_minutes),
+        )
+        payload["resume_offer_review"] = review.model_dump(mode="json")
     if args.json:
         print(json.dumps(payload, indent=2, sort_keys=True))
     else:

@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Literal, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field
+
+from enforced_planning import coordination_messages
 
 
 class ContinuityClaim(Protocol):
@@ -21,6 +24,15 @@ class ContinuityClaim(Protocol):
     quiet_reason: str | None
 
     def is_live(self) -> bool: ...
+
+
+class ResumeOfferStatus(Protocol):
+    """Mailbox status fields required before a successor may be launched."""
+
+    message: coordination_messages.CoordinationMessage
+    runtime_accepted: bool
+    observed: bool
+    acknowledged: bool
 
 
 class CodexActivityV1(BaseModel):
@@ -69,6 +81,22 @@ class ContinuityAssessmentV1(BaseModel):
     transfer_eligible: Literal[False] = False
     observe_only: Literal[True] = True
     resume_condition: str | None = None
+
+
+class ResumeOfferReviewV1(BaseModel):
+    """Decision after projecting one exact owner resume offer and its receipts."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    schema_version: Literal["1.0"] = "1.0"
+    record_type: Literal["resume_offer_review"] = "resume_offer_review"
+    message_id: str = Field(pattern=r"^msg_[0-9a-f]{32}$")
+    owner_session_id: str = Field(min_length=1)
+    action: Literal["wait_for_owner", "owner_responded", "launch_successor", "fail_visible"]
+    reason_code: str = Field(min_length=1)
+    successor_launch_allowed: bool
+    transfer_eligible: Literal[False] = False
+    resume_condition: str = Field(min_length=1)
 
 
 def _aware_timestamp(value: object) -> datetime | None:
@@ -210,14 +238,14 @@ def assess_continuity(
     if activity.state == "active_operation":
         return ContinuityAssessmentV1(
             session_id=claim.session_id,
-            activity_state="unknown",
-            continuity_disposition="circuit_breaker",
-            action="fail_visible",
-            reason_code="open_task_activity_stale",
+            activity_state="idle_owner",
+            continuity_disposition="active_continuing",
+            action="notify_owner",
+            reason_code="open_task_resume_offer_due",
             observed_at=observed_at,
             last_client_activity_at=activity.observed_at,
             inactivity_seconds=inactivity_seconds,
-            resume_condition="observe a fresh client event or a bounded quiet declaration",
+            resume_condition="current owner resumes or declares a bounded quiet interval",
         )
     if inactivity < notify_after:
         return ContinuityAssessmentV1(
@@ -239,14 +267,131 @@ def assess_continuity(
         observed_at=observed_at,
         last_client_activity_at=activity.observed_at,
         inactivity_seconds=inactivity_seconds,
-        transfer_candidate_observe_only=inactivity >= transfer_observe_after,
+        transfer_candidate_observe_only=False,
         resume_condition="current owner resumes or an exact successor handshake is accepted",
+    )
+
+
+def build_resume_offer_request(
+    *,
+    assessment: ContinuityAssessmentV1,
+    sender_session_id: str,
+    project: str,
+    scope: str,
+    next_action: str,
+) -> coordination_messages.SendMessageRequest:
+    """Build one idempotent owner-first resume offer from an idle assessment."""
+
+    if assessment.action != "notify_owner" or assessment.session_id is None:
+        raise ValueError("resume offers require one exact idle-owner notification assessment")
+    if assessment.last_client_activity_at is None:
+        raise ValueError("resume offer lacks exact client activity evidence")
+    correlation = hashlib.sha256(
+        "\0".join(
+            (
+                assessment.session_id,
+                assessment.last_client_activity_at.isoformat(),
+                project,
+                scope,
+            )
+        ).encode("utf-8")
+    ).hexdigest()[:24]
+    return coordination_messages.SendMessageRequest(
+        caller_session_id=sender_session_id,
+        sender_session_id=sender_session_id,
+        recipient=coordination_messages.ExactSessionSelector(
+            kind="session",
+            session_id=assessment.session_id,
+        ),
+        project=project,
+        kind="coordination_request",
+        subject="Resume authorized work toward the next verified checkpoint",
+        body=(
+            "Your exact Codex session is between turns with authorized work remaining. "
+            f"Resume current custody and continue this next action: {next_action}"
+        ),
+        ttl_seconds=60 * 60,
+        idempotency_key=f"continuity-resume-offer-{correlation}",
+        claim_ref=scope,
+    )
+
+
+def assess_resume_offer(
+    *,
+    assessment: ContinuityAssessmentV1,
+    status: ResumeOfferStatus,
+    now: datetime | None = None,
+    successor_after: timedelta = timedelta(minutes=30),
+) -> ResumeOfferReviewV1:
+    """Allow successor launch only after the exact owner offer reached its runtime."""
+
+    if successor_after <= timedelta(0):
+        raise ValueError("successor threshold must be positive")
+    if assessment.session_id is None or status.message.recipient_session_id != assessment.session_id:
+        raise ValueError("resume offer status belongs to a different owner session")
+    observed_at = (now or datetime.now(UTC)).astimezone(UTC)
+    age = observed_at - status.message.created_at.astimezone(UTC)
+    base = {
+        "message_id": status.message.message_id,
+        "owner_session_id": assessment.session_id,
+        "transfer_eligible": False,
+    }
+    if (
+        assessment.action != "notify_owner"
+        or assessment.activity_state != "idle_owner"
+        or (
+            assessment.last_client_activity_at is not None
+            and assessment.last_client_activity_at > status.message.created_at
+        )
+    ):
+        return ResumeOfferReviewV1(
+            **base,
+            action="owner_responded",
+            reason_code="owner_activity_after_resume_offer",
+            successor_launch_allowed=False,
+            resume_condition="current owner retains custody while client activity continues",
+        )
+    if status.acknowledged:
+        return ResumeOfferReviewV1(
+            **base,
+            action="owner_responded",
+            reason_code="owner_acknowledged_resume_offer",
+            successor_launch_allowed=False,
+            resume_condition="current owner retains custody unless it explicitly hands off",
+        )
+    if not (status.runtime_accepted or status.observed):
+        return ResumeOfferReviewV1(
+            **base,
+            action="fail_visible",
+            reason_code="resume_offer_not_delivered",
+            successor_launch_allowed=False,
+            resume_condition="obtain runtime acceptance evidence for the exact owner offer",
+        )
+    if age < successor_after:
+        return ResumeOfferReviewV1(
+            **base,
+            action="wait_for_owner",
+            reason_code="owner_response_window_active",
+            successor_launch_allowed=False,
+            resume_condition=(
+                f"owner response window reaches {successor_after.total_seconds():.0f} seconds"
+            ),
+        )
+    return ResumeOfferReviewV1(
+        **base,
+        action="launch_successor",
+        reason_code="delivered_resume_offer_unanswered",
+        successor_launch_allowed=True,
+        resume_condition="successor must accept exact claim, revision, branch, worktree, and next action",
     )
 
 
 __all__ = [
     "CodexActivityV1",
     "ContinuityAssessmentV1",
+    "ResumeOfferReviewV1",
+    "assess_resume_offer",
     "assess_continuity",
+    "build_resume_offer_request",
     "read_codex_activity",
 ]

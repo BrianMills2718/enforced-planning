@@ -159,19 +159,31 @@ LEARNINGS_STATUS_MARKER = re.compile(
 )
 
 
-def _parse_learnings_status_marker(disposition: str) -> dict[str, str] | None:
-    """Return the structured trailer's fields, or ``None`` if absent or malformed.
+class MalformedLearningsStatusMarker(Exception):
+    """A ``learnings-status`` marker was attempted but its syntax is invalid.
 
-    A malformed marker (unknown status, missing ``ref``) must fall back to the
-    prose heuristic exactly like a missing marker -- never raise, and never be
-    treated as a silent pass.
+    This is deliberately a distinct outcome from "no marker present at all" --
+    silently treating a broken attempt the same as a genuine absence would
+    reproduce, in the new structured path, the exact silent-degradation
+    failure this marker exists to remove from the old prose path. A reader
+    who typed the marker and got it wrong needs to be told, not guessed past.
+    """
+
+
+def _parse_learnings_status_marker(disposition: str) -> dict[str, str] | None:
+    """Return the structured trailer's fields, or ``None`` if no marker is present.
+
+    Raises ``MalformedLearningsStatusMarker`` if a marker was attempted (the
+    literal ``<!-- learnings-status:`` prefix is present) but does not parse
+    into a valid ``status``/``ref`` pair -- that case must never fall back to
+    the prose heuristic as if nothing had been written.
     """
     match = LEARNINGS_STATUS_MARKER.search(disposition)
     if match is None:
         return None
     tokens = match.group("body").split()
     if not tokens:
-        return None
+        raise MalformedLearningsStatusMarker("marker body is empty")
     fields = {"status": tokens[0]}
     for token in tokens[1:]:
         key, sep, value = token.partition("=")
@@ -179,7 +191,10 @@ def _parse_learnings_status_marker(disposition: str) -> dict[str, str] | None:
             fields[key] = value
     if fields.get("status") == "prior-record" and fields.get("ref"):
         return fields
-    return None
+    raise MalformedLearningsStatusMarker(
+        f"expected 'prior-record ref=<entry-id>', found status={fields.get('status')!r} "
+        f"ref={fields.get('ref')!r}"
+    )
 
 
 def classify_report(report: str) -> tuple[str, str]:
@@ -221,7 +236,18 @@ def classify_report(report: str) -> tuple[str, str]:
                     "do not use it as an empty bypass."
                 ),
             )
-        marker = _parse_learnings_status_marker(disposition)
+        try:
+            marker = _parse_learnings_status_marker(disposition)
+        except MalformedLearningsStatusMarker as exc:
+            return (
+                "block_malformed_learnings_marker",
+                (
+                    f"A learnings-status marker was present but invalid: {exc}. "
+                    "Fix its syntax -- `<!-- learnings-status: prior-record "
+                    "ref=<entry-id> -->` -- or remove it entirely to fall back to "
+                    "the plain-text disposition."
+                ),
+            )
         if marker is not None:
             # Structured-first path: the report has unambiguously declared
             # this is a prior-record decline and named its reference. Trust

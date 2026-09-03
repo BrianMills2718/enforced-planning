@@ -420,11 +420,11 @@ def test_structured_marker_trusts_prior_record_without_prose_guessing(tmp_path: 
     The prose reference ("this morning's standup notes") matches none of the
     REFERENCE_PATTERNS shapes, so the old prose-only heuristic would block
     this exact reason as an unreferenced decline (see
-    test_decline_claiming_prior_capture_must_name_it and
-    test_malformed_structured_marker_falls_back_to_prose_heuristic below,
-    which reproduces that exact block with the marker removed). The
-    structured marker states the disposition and its reference unambiguously
-    and must be trusted directly -- no regex-guessing needed to reach 'none'.
+    test_decline_claiming_prior_capture_must_name_it, and
+    test_no_marker_prose_still_governs_unchanged below, which reproduces that
+    exact block with the marker removed entirely). The structured marker
+    states the disposition and its reference unambiguously and must be
+    trusted directly -- no regex-guessing needed to reach 'none'.
     """
     result = run_hook(
         tmp_path,
@@ -441,11 +441,14 @@ def test_structured_marker_trusts_prior_record_without_prose_guessing(tmp_path: 
     assert "lrn-20260903T144848367412Z-731e6c1389" in receipt["detail"]
 
 
-def test_malformed_structured_marker_falls_back_to_prose_heuristic(tmp_path: Path) -> None:
-    """A marker missing its required 'ref' field must not crash or silently
+def test_malformed_structured_marker_blocks_loudly_instead_of_guessing(tmp_path: Path) -> None:
+    """A marker missing its required 'ref' field must block with an explicit
 
-    pass -- it must fall back to the exact old prose heuristic, which blocks
-    this reason because it claims prior capture but names nothing checkable.
+    syntax error, never silently fall back to the prose heuristic as if the
+    marker had never been attempted. Silently guessing past a broken
+    structured attempt would reproduce, one level down, the exact
+    silent-degradation failure (a value the source clearly stated getting
+    quietly misread) this marker exists to remove.
     """
     result = run_hook(
         tmp_path,
@@ -457,14 +460,15 @@ def test_malformed_structured_marker_falls_back_to_prose_heuristic(tmp_path: Pat
 
     payload = json.loads(result.stdout)
     assert payload["decision"] == "block"
-    assert "name it" in payload["reason"]
-    assert receipts(tmp_path)[0]["decision"] == "block_unreferenced_decline"
+    assert "invalid" in payload["reason"].lower()
+    assert "learnings-status" in payload["reason"]
+    assert receipts(tmp_path)[0]["decision"] == "block_malformed_learnings_marker"
 
 
-def test_unknown_marker_status_falls_back_without_crashing(tmp_path: Path) -> None:
-    """An unrecognized status value is also malformed and must fall back,
+def test_unknown_marker_status_blocks_loudly_instead_of_guessing(tmp_path: Path) -> None:
+    """An unrecognized status value is also malformed and must block loudly,
 
-    not crash and not silently pass.
+    not crash and not silently degrade into the prose heuristic.
     """
     result = run_hook(
         tmp_path,
@@ -476,7 +480,8 @@ def test_unknown_marker_status_falls_back_without_crashing(tmp_path: Path) -> No
 
     payload = json.loads(result.stdout)
     assert payload["decision"] == "block"
-    assert receipts(tmp_path)[0]["decision"] == "block_unreferenced_decline"
+    assert "invalid" in payload["reason"].lower()
+    assert receipts(tmp_path)[0]["decision"] == "block_malformed_learnings_marker"
 
 
 def test_no_marker_prose_still_governs_unchanged(tmp_path: Path) -> None:

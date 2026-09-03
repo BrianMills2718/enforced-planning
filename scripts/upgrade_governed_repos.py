@@ -48,6 +48,38 @@ FRAMEWORK_ROOT = Path(__file__).resolve().parents[1]
 INSTALL_SCRIPT = FRAMEWORK_ROOT / "scripts" / "install_governed_repo.py"
 AUDIT_SCRIPT = FRAMEWORK_ROOT / "scripts" / "audit_governed_repo.py"
 
+sys.path.insert(0, str(FRAMEWORK_ROOT))
+from enforced_planning import coordination_claims, session_contracts  # noqa: E402
+
+
+def _repair_missing_plan_ref(*, agent: str, project: str, scope: str) -> None:
+    """Fix a claim's `plan_ref: null` in place if the target repo's own
+    installed Makefile is too old to set it itself.
+
+    `make maintenance-worktree`/`worktree` in a target repo run *that repo's
+    own* vendored Makefile and coordination_claims copy, not this repo's
+    current one -- the whole reason the sync exists is that copy may be old.
+    Consumer Makefiles observed missing the `ALLOW_UNPLANNED -> --plan
+    UNPLANNED` fallback at the initial --claim step (orgchart, llm_client,
+    2026-09-02, fixed at the source in enforced-planning#388) produce a claim
+    with `plan_ref: null`, which later fails push-check with
+    `no_healthy_branch_claim`. Fixing the template does not retroactively fix
+    a claim a stale copy already created; repair it here, using this
+    (current, canonical) coordination_claims module, so write-mode does not
+    depend on the target repo's own tooling being current -- the one
+    invariant it cannot assume, by construction.
+    """
+
+    claim_path = coordination_claims.CLAIMS_DIR / coordination_claims._claim_filename(agent, project, scope)
+    with coordination_claims.claim_registry_lock(coordination_claims.CLAIMS_DIR):
+        if not claim_path.is_file():
+            return
+        payload = yaml.safe_load(claim_path.read_bytes())
+        if not isinstance(payload, dict) or payload.get("plan_ref"):
+            return
+        payload["plan_ref"] = session_contracts.UNPLANNED_PLAN_REF
+        claim_path.write_text(yaml.safe_dump(payload, default_flow_style=False, sort_keys=False), encoding="utf-8")
+
 
 @dataclass
 class RepoUpgradeResult:
@@ -204,6 +236,8 @@ def write_repo(repo_id: str, repo_root: Path, tier: str, owner: str) -> RepoUpgr
     if not worktree_path.exists():
         result.write_error = f"maintenance-worktree reported success but {worktree_path} does not exist"
         return result
+
+    _repair_missing_plan_ref(agent="claude-code", project=repo_id, scope=branch)
 
     def _abandon(reason: str) -> None:
         result.write_error = reason

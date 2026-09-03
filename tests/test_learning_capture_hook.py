@@ -396,6 +396,106 @@ def test_the_refusal_does_not_read_as_never_record(tmp_path: Path) -> None:
     )
 
 
+def test_backtick_wrapped_recorded_is_accepted(tmp_path: Path) -> None:
+    """Regression for commit 9efdfee: a `Recorded` disposition wrapped in
+
+    backticks -- correct content, ordinary formatting -- must not fail a
+    strict startswith-style match the way it did before that fix, costing
+    two round-trips in the same session.
+    """
+    result = run_hook(
+        tmp_path,
+        _report("`Recorded` — project-meta/learnings.md at commit abc1234."),
+        agent="claude-code",
+    )
+
+    assert result.returncode == 0
+    assert result.stdout == ""
+    assert receipts(tmp_path)[0]["decision"] == "recorded"
+
+
+def test_structured_marker_trusts_prior_record_without_prose_guessing(tmp_path: Path) -> None:
+    """A well-formed learnings-status trailer settles the decision directly.
+
+    The prose reference ("this morning's standup notes") matches none of the
+    REFERENCE_PATTERNS shapes, so the old prose-only heuristic would block
+    this exact reason as an unreferenced decline (see
+    test_decline_claiming_prior_capture_must_name_it and
+    test_malformed_structured_marker_falls_back_to_prose_heuristic below,
+    which reproduces that exact block with the marker removed). The
+    structured marker states the disposition and its reference unambiguously
+    and must be trusted directly -- no regex-guessing needed to reach 'none'.
+    """
+    result = run_hook(
+        tmp_path,
+        _report(
+            "None -- already recorded, see this morning's standup notes.\n"
+            "<!-- learnings-status: prior-record ref=lrn-20260903T144848367412Z-731e6c1389 -->"
+        ),
+    )
+
+    assert result.returncode == 0
+    assert result.stdout == ""
+    receipt = receipts(tmp_path)[0]
+    assert receipt["decision"] == "none"
+    assert "lrn-20260903T144848367412Z-731e6c1389" in receipt["detail"]
+
+
+def test_malformed_structured_marker_falls_back_to_prose_heuristic(tmp_path: Path) -> None:
+    """A marker missing its required 'ref' field must not crash or silently
+
+    pass -- it must fall back to the exact old prose heuristic, which blocks
+    this reason because it claims prior capture but names nothing checkable.
+    """
+    result = run_hook(
+        tmp_path,
+        _report(
+            "None -- already recorded, see this morning's standup notes.\n"
+            "<!-- learnings-status: prior-record -->"
+        ),
+    )
+
+    payload = json.loads(result.stdout)
+    assert payload["decision"] == "block"
+    assert "name it" in payload["reason"]
+    assert receipts(tmp_path)[0]["decision"] == "block_unreferenced_decline"
+
+
+def test_unknown_marker_status_falls_back_without_crashing(tmp_path: Path) -> None:
+    """An unrecognized status value is also malformed and must fall back,
+
+    not crash and not silently pass.
+    """
+    result = run_hook(
+        tmp_path,
+        _report(
+            "None -- already recorded, see this morning's standup notes.\n"
+            "<!-- learnings-status: bogus-status ref=whatever -->"
+        ),
+    )
+
+    payload = json.loads(result.stdout)
+    assert payload["decision"] == "block"
+    assert receipts(tmp_path)[0]["decision"] == "block_unreferenced_decline"
+
+
+def test_no_marker_prose_still_governs_unchanged(tmp_path: Path) -> None:
+    """No marker at all: behavior is byte-for-byte the old prose heuristic.
+
+    Same reason as the two marker tests above, with the trailer removed --
+    proves the fallback path (no marker present) still blocks exactly as it
+    did before this change.
+    """
+    result = run_hook(
+        tmp_path, _report("None -- already recorded, see this morning's standup notes.")
+    )
+
+    payload = json.loads(result.stdout)
+    assert payload["decision"] == "block"
+    assert "name it" in payload["reason"]
+    assert receipts(tmp_path)[0]["decision"] == "block_unreferenced_decline"
+
+
 def test_stop_hook_active_ends_the_turn(monkeypatch, tmp_path: Path) -> None:
     """A re-fired Stop must not refuse the same report again.
 

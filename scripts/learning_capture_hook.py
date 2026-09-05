@@ -141,6 +141,47 @@ def _names_a_reference(reason: str) -> bool:
     return any(re.search(pattern, reason, re.IGNORECASE) for pattern in REFERENCE_PATTERNS)
 
 
+# A closing report can state the "already recorded elsewhere" disposition
+# unambiguously with a structured trailer placed right after the Learnings
+# bullet, instead of leaving the hook to infer intent from the free-text
+# prose below it -- the failure mode this file has hit before: a value
+# wrapped in backticks or an unrecognized phrasing defeating a string/regex
+# guess (see the `Recorded` normalization above). When this marker is
+# present and well-formed it is trusted directly and the prior_claim /
+# _names_a_reference prose heuristic below is never consulted for that
+# report. When it is absent -- or present but malformed -- classification
+# falls back completely unchanged to that prose heuristic: this hook fires
+# for every other live session right now, and none of them know this syntax
+# yet.
+LEARNINGS_STATUS_MARKER = re.compile(
+    r"<!--\s*learnings-status:\s*(?P<body>[^>]*?)\s*-->",
+    re.IGNORECASE,
+)
+
+
+def _parse_learnings_status_marker(disposition: str) -> dict[str, str] | None:
+    """Return the structured trailer's fields, or ``None`` if absent or malformed.
+
+    A malformed marker (unknown status, missing ``ref``) must fall back to the
+    prose heuristic exactly like a missing marker -- never raise, and never be
+    treated as a silent pass.
+    """
+    match = LEARNINGS_STATUS_MARKER.search(disposition)
+    if match is None:
+        return None
+    tokens = match.group("body").split()
+    if not tokens:
+        return None
+    fields = {"status": tokens[0]}
+    for token in tokens[1:]:
+        key, sep, value = token.partition("=")
+        if sep and key and value:
+            fields[key] = value
+    if fields.get("status") == "prior-record" and fields.get("ref"):
+        return fields
+    return None
+
+
 def classify_report(report: str) -> tuple[str, str]:
     """Return ``(decision, detail)`` for one final assistant report."""
     if report_field(report, "Done") is None:
@@ -180,6 +221,14 @@ def classify_report(report: str) -> tuple[str, str]:
                     "do not use it as an empty bypass."
                 ),
             )
+        marker = _parse_learnings_status_marker(disposition)
+        if marker is not None:
+            # Structured-first path: the report has unambiguously declared
+            # this is a prior-record decline and named its reference. Trust
+            # it directly -- no prose regex-guessing needed to reach the
+            # decision.
+            return "none", f"{reason} (learnings-status ref: {marker['ref']})"
+
         prior_claim = re.search(
             r"already\s+(?:been\s+)?(?:recorded|captured|covered|logged|filed)|"
             r"belongs\s+(?:in|to|elsewhere)|lives\s+in|covered\s+by",

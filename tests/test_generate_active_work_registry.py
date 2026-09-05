@@ -43,6 +43,10 @@ def test_generate_registry_outputs_json_and_markdown(tmp_path: Path) -> None:
     coordination_b = worktrees_root / "plan-62-coordination-v2"
     coordination_a.mkdir(parents=True)
     coordination_b.mkdir(parents=True)
+    sessions_dir = tmp_path / "sessions"
+    sessions_dir.mkdir(parents=True)
+    (sessions_dir / "claude.yaml").write_text("session_id: claude-code-session\n", encoding="utf-8")
+    (sessions_dir / "codex.yaml").write_text("session_id: codex-session\n", encoding="utf-8")
 
     _write_claim(
         claims_dir,
@@ -371,6 +375,8 @@ def test_registry_reports_correlated_stalled_progress_evidence(tmp_path: Path) -
 
     repo_root = tmp_path / "demo"
     _init_git_repo(repo_root)
+    tracker_path = tmp_path / "tracker.yaml"
+    tracker_path.write_text("session_id: codex:owner\n", encoding="utf-8")
     claim = coordination_claims.build_candidate_claim(
         agent="codex",
         project="demo",
@@ -383,7 +389,7 @@ def test_registry_reports_correlated_stalled_progress_evidence(tmp_path: Path) -
         branch="main",
         session_name="progress-lane",
         broader_goal="Progress lease",
-        tracker_path=str(tmp_path / "tracker.yaml"),
+        tracker_path=str(tracker_path),
         session_id="codex:owner",
         heartbeat_at="2026-08-21T09:59:00+00:00",
         expires_at="2099-08-22T00:00:00+00:00",
@@ -431,6 +437,8 @@ def test_registry_lane_reports_weak_before_stalled_for_mixed_progress_claims(
 
     repo_root = tmp_path / "demo"
     _init_git_repo(repo_root)
+    tracker_path = tmp_path / "tracker.yaml"
+    tracker_path.write_text("session_id: codex:owner\n", encoding="utf-8")
     common = {
         "agent": "codex",
         "project": "demo",
@@ -442,7 +450,7 @@ def test_registry_lane_reports_weak_before_stalled_for_mixed_progress_claims(
         "branch": "main",
         "session_name": "mixed-progress-lane",
         "broader_goal": "Progress Lease",
-        "tracker_path": str(tmp_path / "tracker.yaml"),
+        "tracker_path": str(tracker_path),
         "session_id": "codex:owner",
         "heartbeat_at": "2026-08-21T09:59:00+00:00",
         "expires_at": "2099-08-22T00:00:00+00:00",

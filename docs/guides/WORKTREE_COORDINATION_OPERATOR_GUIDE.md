@@ -476,6 +476,16 @@ Add a prefix only when writes to it are append-only all the way down — its
 writer creates new files and never modifies, renames, or deletes an existing
 one. Anything else belongs in an ordinary exclusive claim.
 
+This conflict-only exemption is distinct from the zero-claim exemption in
+`enforced_planning/prewrite_claim_fast.py::evaluate_request_fast()`: a
+session with **no live claim at all** could still be denied `no_exact_claim`
+when its only mutation was an append-only write, since that gate's
+`if not candidates:` branch never looked at the target path. That module is
+intentionally stdlib-only (no import of `coordination_claims`), so it keeps
+its own copy of `APPEND_ONLY_WRITE_PREFIXES` — update both together. The
+zero-claim exemption is narrower still: every normalized target path must be
+append-only, or the whole mutation still requires a claim.
+
 The default disposition for completed desired work is `merged`. Every finished,
 stale, or out-of-policy lane must have one disposition before cleanup:
 

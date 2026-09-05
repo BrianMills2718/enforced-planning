@@ -617,6 +617,51 @@ def test_evaluate_claim_detects_parent_child_write_overlap_as_hard_conflict(
     }
 
 
+def test_evaluate_claim_does_not_self_conflict_when_session_id_is_missing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A claim loaded from disk without session_id must never conflict with itself.
+
+    build_registry_payload() (enforced_planning/active_work_registry.py) calls
+    evaluate_claim(claim, active_claims=sorted_claims) once per claim, where
+    claim IS one of the elements of active_claims itself -- self-exclusion is
+    the only thing that stops a claim from "conflicting" with its own write
+    paths. The exclusion previously required candidate.session_id to be
+    truthy (`other.agent == candidate.agent and candidate.session_id and
+    other.session_id == candidate.session_id`), so a claim file with no
+    session_id key at all -- an ordinary, valid claim shape, not the
+    exception -- fell through to a real write-path comparison against itself
+    and reported a phantom hard_conflict against its own scope.
+    """
+    module = _load_module()
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
+    _write_claim(
+        claims_dir,
+        "no-session-id.yaml",
+        {
+            "agent": "codex",
+            "claimed_at": "2026-04-02T08:10:00+00:00",
+            "expires_at": "2099-04-02T09:10:00+00:00",
+            "projects": ["project-meta"],
+            "scope": "coordination-v2-b",
+            "intent": "Generate registry",
+            "claim_type": "write",
+            "write_paths": ["scripts/meta/generate_active_work_registry.py"],
+            "status": "active",
+        },
+    )
+
+    claims = module.check_claims("project-meta")
+    candidate = next(claim for claim in claims if claim.scope == "coordination-v2-b")
+    assert candidate.session_id is None
+
+    result = module.evaluate_claim(candidate, active_claims=claims)
+
+    assert result.hard_conflicts == []
+
+
 def test_parent_conflict_explains_bounded_reservation_and_advisory_diff(
     tmp_path: Path,
 ) -> None:
@@ -2794,6 +2839,89 @@ def test_claim_lifecycle_issues_detect_missing_worktree_on_disk(tmp_path: Path) 
 
     assert module.claim_lifecycle_issues(claim) == ["missing_worktree_on_disk"]
     assert module.claim_runtime_status(claim) == "stale"
+
+
+def test_claim_lifecycle_issues_detect_missing_tracker_on_disk(tmp_path: Path) -> None:
+    """A tracker_path explicitly set but pointing at nothing must not be healthy.
+
+    Operator-guide "state 2" (WORKTREE_COORDINATION_OPERATOR_GUIDE.md): a
+    tracker_path attached without the file existing is dangerous because
+    start_session()'s locked-reload logic treats any truthy value as "read
+    and validate an existing tracker" and crashes FileNotFoundError. An unset
+    tracker_path ("state 1", a staged reservation) must NOT be flagged here --
+    that is claim_health_issues()'s job and is explicitly not creation-blocking
+    (PR project-meta#1275 / enforced-planning e8de895's staged_unplanned_reservation
+    exemption). PR project-meta#1275's own commit message said this lifecycle
+    check was kept, but it was never actually implemented anywhere -- this test
+    and the paired implementation close that gap.
+
+    claim_runtime_status() classifies missing_tracker_on_disk as "weak" rather
+    than the unconditional "stale" every other lifecycle issue produces:
+    session_lifecycle.py's status_sessions() already has its own deliberate
+    "weak while the session heartbeat is still fresh, stale once the
+    heartbeat is also stale" precedence for exactly this case
+    (test_status_with_persistent_lock_and_missing_tracker_is_read_only_and_weak
+    in tests/test_session_cli.py) -- an unconditional stale here would
+    short-circuit that downgrade and always report stale regardless of
+    heartbeat freshness.
+    """
+    module = _load_module()
+    repo_root = tmp_path / "demo"
+    _init_git_repo(repo_root)
+    subprocess.run(
+        ["git", "-C", str(repo_root), "branch", "plan-91-demo"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    worktree_path = tmp_path / "demo_worktrees" / "plan-91-demo"
+    worktree_path.mkdir(parents=True)
+
+    claim = module.build_candidate_claim(
+        agent="codex",
+        project="demo",
+        scope="demo-scope",
+        intent="Demo lifecycle issue",
+        claim_type="write",
+        write_paths=["README.md"],
+        branch="plan-91-demo",
+        worktree_path=str(worktree_path),
+        tracker_path=str(tmp_path / "never-written-tracker.yaml"),
+        session_id="codex:test",
+    )
+
+    assert module.claim_lifecycle_issues(claim) == ["missing_tracker_on_disk"]
+    assert module.claim_runtime_status(claim) == "weak"
+
+
+def test_claim_lifecycle_issues_do_not_flag_unset_tracker_path(tmp_path: Path) -> None:
+    """A staged reservation (tracker_path unset) is not a lifecycle issue by itself."""
+    module = _load_module()
+    repo_root = tmp_path / "demo"
+    _init_git_repo(repo_root)
+    subprocess.run(
+        ["git", "-C", str(repo_root), "branch", "plan-92-demo"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    worktree_path = tmp_path / "demo_worktrees" / "plan-92-demo"
+    worktree_path.mkdir(parents=True)
+
+    claim = module.build_candidate_claim(
+        agent="codex",
+        project="demo",
+        scope="demo-scope",
+        intent="Demo staged reservation",
+        claim_type="write",
+        write_paths=["README.md"],
+        branch="plan-92-demo",
+        worktree_path=str(worktree_path),
+        tracker_path=None,
+        session_id="codex:test",
+    )
+
+    assert module.claim_lifecycle_issues(claim) == []
 
 
 def test_runtime_session_rejects_unrelated_second_root_unless_explicit(
@@ -5376,6 +5504,8 @@ def test_progress_classifier_has_frozen_boundaries_and_stale_precedence(
 
     repo_root = tmp_path / "repo"
     _init_git_repo(repo_root)
+    tracker_path = tmp_path / "tracker.yaml"
+    tracker_path.write_text("session_id: codex:owner\n", encoding="utf-8")
     base = claims_impl.build_candidate_claim(
         agent="codex",
         project="demo",
@@ -5388,7 +5518,7 @@ def test_progress_classifier_has_frozen_boundaries_and_stale_precedence(
         branch="main",
         session_name="progress-lane",
         broader_goal="Progress lease",
-        tracker_path=str(tmp_path / "tracker.yaml"),
+        tracker_path=str(tracker_path),
         session_id="codex:owner",
         heartbeat_at="2026-08-21T09:59:00+00:00",
         expires_at="2099-08-22T00:00:00+00:00",
@@ -5463,6 +5593,8 @@ def test_heartbeat_file_dirt_and_stalled_prune_preserve_progress_and_ownership(
     monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
     repo_root = tmp_path / "repo"
     _init_git_repo(repo_root)
+    tracker_path = tmp_path / "tracker.yaml"
+    tracker_path.write_text("session_id: codex:owner\n", encoding="utf-8")
     claim_payload = {
         "agent": "codex",
         "projects": ["demo"],
@@ -5476,7 +5608,7 @@ def test_heartbeat_file_dirt_and_stalled_prune_preserve_progress_and_ownership(
         "branch": "main",
         "session_name": "stalled-lane",
         "broader_goal": "Preserve stalled lane custody",
-        "tracker_path": str(tmp_path / "tracker.yaml"),
+        "tracker_path": str(tracker_path),
         "session_id": "codex:owner",
         "heartbeat_at": datetime.now(timezone.utc).isoformat(),
         "status": "active",

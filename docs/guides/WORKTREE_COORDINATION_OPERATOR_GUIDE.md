@@ -476,6 +476,16 @@ Add a prefix only when writes to it are append-only all the way down — its
 writer creates new files and never modifies, renames, or deletes an existing
 one. Anything else belongs in an ordinary exclusive claim.
 
+This conflict-only exemption is distinct from the zero-claim exemption in
+`enforced_planning/prewrite_claim_fast.py::evaluate_request_fast()`: a
+session with **no live claim at all** could still be denied `no_exact_claim`
+when its only mutation was an append-only write, since that gate's
+`if not candidates:` branch never looked at the target path. That module is
+intentionally stdlib-only (no import of `coordination_claims`), so it keeps
+its own copy of `APPEND_ONLY_WRITE_PREFIXES` — update both together. The
+zero-claim exemption is narrower still: every normalized target path must be
+append-only, or the whole mutation still requires a claim.
+
 The default disposition for completed desired work is `merged`. Every finished,
 stale, or out-of-policy lane must have one disposition before cleanup:
 
@@ -489,6 +499,20 @@ stale, or out-of-policy lane must have one disposition before cleanup:
 
 Cleanliness is not a disposition. A clean worktree can still contain committed
 work that is absent from the canonical default branch.
+
+### `evaluate_claim` never conflicts a claim with itself
+
+`enforced_planning/active_work_registry.py`'s registry generation calls
+`evaluate_claim(claim, active_claims=all_claims)` once per claim, where
+`claim` is one of the elements of `all_claims` itself — self-exclusion by
+identity (`other is candidate`) is what stops a claim from "conflicting" with
+its own declared write paths. A same-session dedup check (matching
+`agent` and `session_id`) also exists for the distinct case of a program
+claim and its own narrower child write claims, but that check alone is not
+sufficient: it depends on `session_id` being present, and an ordinary claim
+file with no `session_id` key at all is a valid shape, not an exception. The
+identity check runs first and unconditionally, regardless of what fields
+either claim happens to carry.
 
 The exact closeable/non-closeable vocabulary and recovery/discard classes are
 loaded from `enforced_planning/worktree_lifecycle.yaml`. Invalid, blank,
@@ -536,6 +560,17 @@ canonical stale diagnostics are:
 - `stale_session_heartbeat`
 
 Stale outranks weak. A stale claim should be cleaned up, not merely tolerated.
+
+`claim_lifecycle_issues()` also reports `missing_tracker_on_disk` — an
+explicitly *set* `tracker_path` (state 2 below) whose file does not exist; an
+unset `tracker_path` (state 1) is not flagged. Unlike the diagnostics above,
+`claim_runtime_status()` treats it as **weak, not stale**, on its own: a
+session's heartbeat can still be actively renewing while its tracker file has
+merely vanished, and `session_lifecycle.py`'s own `status_sessions()`
+implements exactly that precedence independently (weak while the heartbeat
+stays fresh, stale once the heartbeat also goes stale). Combined with any
+other lifecycle issue, or with a genuinely stale heartbeat, the claim is still
+stale overall.
 `branch_merged_to_default` is also a high-severity enforcement failure: the
 standard `--check` command exits nonzero until the owner runs sanctioned
 `session-close` or records an explicit supported non-merge disposition. The

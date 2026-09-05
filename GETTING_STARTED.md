@@ -331,6 +331,14 @@ predecessor-process fence used by cross-session Codex resume. Installed
 `scripts/meta/session_resume.py --help` must run without the source checkout on
 `PYTHONPATH`. Worktree bootstrap fetches and resolves the advertised remote
 default before creating a claim, branch, or linked worktree.
+`--worktree-only` also installs the full local import closure `make
+maintenance-worktree`/`make worktree` need for their
+`scripts/meta/claim_bootstrap.py` wrapper: both
+`enforced_planning/claim_bootstrap.py` and
+`enforced_planning/repository_authority.py`. A real end-to-end exercise of
+`make maintenance-worktree` + `make session-close` against a disposable
+branch, run as an actual subprocess rather than a `make -n` dry run, is
+`enforced-planning/tests/test_e2e_sanctioned_entrypoints.py`.
 
 - `./install.sh /path/to/your/project --worktree-only`
   - canonical bounded sync for sanctioned worktree entrypoints only

@@ -396,6 +396,111 @@ def test_the_refusal_does_not_read_as_never_record(tmp_path: Path) -> None:
     )
 
 
+def test_backtick_wrapped_recorded_is_accepted(tmp_path: Path) -> None:
+    """Regression for commit 9efdfee: a `Recorded` disposition wrapped in
+
+    backticks -- correct content, ordinary formatting -- must not fail a
+    strict startswith-style match the way it did before that fix, costing
+    two round-trips in the same session.
+    """
+    result = run_hook(
+        tmp_path,
+        _report("`Recorded` — project-meta/learnings.md at commit abc1234."),
+        agent="claude-code",
+    )
+
+    assert result.returncode == 0
+    assert result.stdout == ""
+    assert receipts(tmp_path)[0]["decision"] == "recorded"
+
+
+def test_structured_marker_trusts_prior_record_without_prose_guessing(tmp_path: Path) -> None:
+    """A well-formed learnings-status trailer settles the decision directly.
+
+    The prose reference ("this morning's standup notes") matches none of the
+    REFERENCE_PATTERNS shapes, so the old prose-only heuristic would block
+    this exact reason as an unreferenced decline (see
+    test_decline_claiming_prior_capture_must_name_it, and
+    test_no_marker_prose_still_governs_unchanged below, which reproduces that
+    exact block with the marker removed entirely). The structured marker
+    states the disposition and its reference unambiguously and must be
+    trusted directly -- no regex-guessing needed to reach 'none'.
+    """
+    result = run_hook(
+        tmp_path,
+        _report(
+            "None -- already recorded, see this morning's standup notes.\n"
+            "<!-- learnings-status: prior-record ref=lrn-20260903T144848367412Z-731e6c1389 -->"
+        ),
+    )
+
+    assert result.returncode == 0
+    assert result.stdout == ""
+    receipt = receipts(tmp_path)[0]
+    assert receipt["decision"] == "none"
+    assert "lrn-20260903T144848367412Z-731e6c1389" in receipt["detail"]
+
+
+def test_malformed_structured_marker_blocks_loudly_instead_of_guessing(tmp_path: Path) -> None:
+    """A marker missing its required 'ref' field must block with an explicit
+
+    syntax error, never silently fall back to the prose heuristic as if the
+    marker had never been attempted. Silently guessing past a broken
+    structured attempt would reproduce, one level down, the exact
+    silent-degradation failure (a value the source clearly stated getting
+    quietly misread) this marker exists to remove.
+    """
+    result = run_hook(
+        tmp_path,
+        _report(
+            "None -- already recorded, see this morning's standup notes.\n"
+            "<!-- learnings-status: prior-record -->"
+        ),
+    )
+
+    payload = json.loads(result.stdout)
+    assert payload["decision"] == "block"
+    assert "invalid" in payload["reason"].lower()
+    assert "learnings-status" in payload["reason"]
+    assert receipts(tmp_path)[0]["decision"] == "block_malformed_learnings_marker"
+
+
+def test_unknown_marker_status_blocks_loudly_instead_of_guessing(tmp_path: Path) -> None:
+    """An unrecognized status value is also malformed and must block loudly,
+
+    not crash and not silently degrade into the prose heuristic.
+    """
+    result = run_hook(
+        tmp_path,
+        _report(
+            "None -- already recorded, see this morning's standup notes.\n"
+            "<!-- learnings-status: bogus-status ref=whatever -->"
+        ),
+    )
+
+    payload = json.loads(result.stdout)
+    assert payload["decision"] == "block"
+    assert "invalid" in payload["reason"].lower()
+    assert receipts(tmp_path)[0]["decision"] == "block_malformed_learnings_marker"
+
+
+def test_no_marker_prose_still_governs_unchanged(tmp_path: Path) -> None:
+    """No marker at all: behavior is byte-for-byte the old prose heuristic.
+
+    Same reason as the two marker tests above, with the trailer removed --
+    proves the fallback path (no marker present) still blocks exactly as it
+    did before this change.
+    """
+    result = run_hook(
+        tmp_path, _report("None -- already recorded, see this morning's standup notes.")
+    )
+
+    payload = json.loads(result.stdout)
+    assert payload["decision"] == "block"
+    assert "name it" in payload["reason"]
+    assert receipts(tmp_path)[0]["decision"] == "block_unreferenced_decline"
+
+
 def test_stop_hook_active_ends_the_turn(monkeypatch, tmp_path: Path) -> None:
     """A re-fired Stop must not refuse the same report again.
 

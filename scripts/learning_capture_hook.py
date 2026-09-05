@@ -141,6 +141,62 @@ def _names_a_reference(reason: str) -> bool:
     return any(re.search(pattern, reason, re.IGNORECASE) for pattern in REFERENCE_PATTERNS)
 
 
+# A closing report can state the "already recorded elsewhere" disposition
+# unambiguously with a structured trailer placed right after the Learnings
+# bullet, instead of leaving the hook to infer intent from the free-text
+# prose below it -- the failure mode this file has hit before: a value
+# wrapped in backticks or an unrecognized phrasing defeating a string/regex
+# guess (see the `Recorded` normalization above). When this marker is
+# present and well-formed it is trusted directly and the prior_claim /
+# _names_a_reference prose heuristic below is never consulted for that
+# report. When it is absent -- or present but malformed -- classification
+# falls back completely unchanged to that prose heuristic: this hook fires
+# for every other live session right now, and none of them know this syntax
+# yet.
+LEARNINGS_STATUS_MARKER = re.compile(
+    r"<!--\s*learnings-status:\s*(?P<body>[^>]*?)\s*-->",
+    re.IGNORECASE,
+)
+
+
+class MalformedLearningsStatusMarker(Exception):
+    """A ``learnings-status`` marker was attempted but its syntax is invalid.
+
+    This is deliberately a distinct outcome from "no marker present at all" --
+    silently treating a broken attempt the same as a genuine absence would
+    reproduce, in the new structured path, the exact silent-degradation
+    failure this marker exists to remove from the old prose path. A reader
+    who typed the marker and got it wrong needs to be told, not guessed past.
+    """
+
+
+def _parse_learnings_status_marker(disposition: str) -> dict[str, str] | None:
+    """Return the structured trailer's fields, or ``None`` if no marker is present.
+
+    Raises ``MalformedLearningsStatusMarker`` if a marker was attempted (the
+    literal ``<!-- learnings-status:`` prefix is present) but does not parse
+    into a valid ``status``/``ref`` pair -- that case must never fall back to
+    the prose heuristic as if nothing had been written.
+    """
+    match = LEARNINGS_STATUS_MARKER.search(disposition)
+    if match is None:
+        return None
+    tokens = match.group("body").split()
+    if not tokens:
+        raise MalformedLearningsStatusMarker("marker body is empty")
+    fields = {"status": tokens[0]}
+    for token in tokens[1:]:
+        key, sep, value = token.partition("=")
+        if sep and key and value:
+            fields[key] = value
+    if fields.get("status") == "prior-record" and fields.get("ref"):
+        return fields
+    raise MalformedLearningsStatusMarker(
+        f"expected 'prior-record ref=<entry-id>', found status={fields.get('status')!r} "
+        f"ref={fields.get('ref')!r}"
+    )
+
+
 def classify_report(report: str) -> tuple[str, str]:
     """Return ``(decision, detail)`` for one final assistant report."""
     if report_field(report, "Done") is None:
@@ -180,6 +236,25 @@ def classify_report(report: str) -> tuple[str, str]:
                     "do not use it as an empty bypass."
                 ),
             )
+        try:
+            marker = _parse_learnings_status_marker(disposition)
+        except MalformedLearningsStatusMarker as exc:
+            return (
+                "block_malformed_learnings_marker",
+                (
+                    f"A learnings-status marker was present but invalid: {exc}. "
+                    "Fix its syntax -- `<!-- learnings-status: prior-record "
+                    "ref=<entry-id> -->` -- or remove it entirely to fall back to "
+                    "the plain-text disposition."
+                ),
+            )
+        if marker is not None:
+            # Structured-first path: the report has unambiguously declared
+            # this is a prior-record decline and named its reference. Trust
+            # it directly -- no prose regex-guessing needed to reach the
+            # decision.
+            return "none", f"{reason} (learnings-status ref: {marker['ref']})"
+
         prior_claim = re.search(
             r"already\s+(?:been\s+)?(?:recorded|captured|covered|logged|filed)|"
             r"belongs\s+(?:in|to|elsewhere)|lives\s+in|covered\s+by",

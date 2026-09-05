@@ -29,6 +29,18 @@ DEFAULT_RECEIPT_PATH = (
     Path.home() / ".claude" / "coordination" / "prewrite-events-v1.jsonl"
 )
 LIVE_STATUSES = {"active", "blocked", "handoff"}
+# Kept identical to enforced_planning/coordination_claims.py's
+# APPEND_ONLY_WRITE_PREFIXES by design, not imported: this module is
+# intentionally stdlib-only (see module docstring), and coordination_claims.py
+# pulls in yaml and heavier machinery unsuited to a per-tool-call hot path.
+# An append-only store cannot contend with itself, so a session with zero
+# live claim may still write here -- but only here; a mutation touching any
+# non-append-only path still requires the ordinary exact-claim gate below.
+APPEND_ONLY_WRITE_PREFIXES = (
+    "learnings/entries",
+    "learnings/invalid_entries",
+    "policy/proposals",
+)
 PROJECTION_FIELDS = {
     "schema_version",
     "generated_at",
@@ -1286,6 +1298,19 @@ def _path_is_claimed(target: str, claimed_path: str) -> bool:
     return target == normalized or target.startswith(f"{normalized}/")
 
 
+def _is_append_only_path(path: str) -> bool:
+    """Return whether a normalized target path lands only in an append-only store.
+
+    ``path`` is already a clean, worktree-relative POSIX path by the time this
+    is called (see ``_repository_context``'s ``normalized_target_paths``), so
+    no further normalization is needed here.
+    """
+
+    return any(
+        path == prefix or path.startswith(f"{prefix}/") for prefix in APPEND_ONLY_WRITE_PREFIXES
+    )
+
+
 def _claim_covers_targets(claim: dict[str, Any], targets: tuple[str, ...]) -> bool:
     """Return whether one claim alone authorizes every normalized target."""
 
@@ -1538,7 +1563,16 @@ def evaluate_request_fast(
         for candidate in candidates
         if _claim_covers_targets(candidate, context["normalized_target_paths"])
     ]
-    if not candidates:
+    if not candidates and context["normalized_target_paths"] and all(
+        _is_append_only_path(path) for path in context["normalized_target_paths"]
+    ):
+        # An append-only store cannot contend with itself (mirrors
+        # coordination_claims.py's APPEND_ONLY_WRITE_PREFIXES conflict
+        # exemption). Every target must be append-only -- a mutation mixing
+        # one append-only path with any ordinary path still requires a claim.
+        authorized = True
+        reason_code = "append_only_exempt"
+    elif not candidates:
         reason_code = "no_exact_claim"
         recovery = (
             "If this is inspection, split it into simple read-only commands without shell control flow. "

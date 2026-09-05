@@ -2792,3 +2792,99 @@ def test_ambiguous_or_mutating_bash_fails_closed_without_claim(tmp_path: Path, c
 @pytest.mark.parametrize("option", ["--in-p", "--in-p=.bak"])
 def test_sed_abbreviated_in_place_long_option_is_not_read_only(option: str) -> None:
     assert not _argv_is_read_only(("sed", "-n", "1p", option, "victim.txt"))
+
+
+def _no_claim_fixture(tmp_path: Path) -> tuple[Path, Path]:
+    """A real git repo with an empty (no live claim) claims registry.
+
+    Distinct from `_fixture`, which always seeds one claim -- this exercises
+    the append-only exemption's actual trigger condition: zero matching
+    claims at all, not merely an unhealthy or non-covering one.
+    """
+    repo = tmp_path / "project"
+    repo.mkdir()
+    _git(repo, "init", "-b", "main")
+    _git(repo, "config", "user.name", "Test User")
+    _git(repo, "config", "user.email", "test@example.com")
+    (repo / "README.md").write_text("seed\n", encoding="utf-8")
+    _git(repo, "add", "README.md")
+    _git(repo, "commit", "-m", "seed")
+    (repo / "learnings" / "entries").mkdir(parents=True)
+    (repo / "policy" / "proposals").mkdir(parents=True)
+    claims_dir = tmp_path / "claims"
+    claims_dir.mkdir()
+    write_projection(claims_dir=claims_dir, projection_path=tmp_path / "projection.json")
+    return repo, claims_dir
+
+
+def test_append_only_write_is_exempt_with_zero_live_claims(tmp_path: Path) -> None:
+    """A session with no claim at all can still record a learning/finding.
+
+    An append-only store cannot contend with itself
+    (enforced_planning/coordination_claims.py's APPEND_ONLY_WRITE_PREFIXES);
+    this is the same exemption for the earlier gate a zero-claim session
+    actually hits (lrn: Plan #259 Step 5 -- evaluate_request_fast()'s
+    `if not candidates` branch previously denied this unconditionally).
+    """
+    repo, claims_dir = _no_claim_fixture(tmp_path)
+    payload = _payload(
+        cwd=repo,
+        tool="Write",
+        tool_input={"file_path": str(repo / "learnings" / "entries" / "probe.json")},
+    )
+
+    decision = _evaluate(tmp_path, payload, claims_dir)
+
+    assert decision["decision"] == "allow", decision
+    assert decision["reason_code"] == "append_only_exempt"
+
+
+def test_append_only_exemption_covers_policy_proposals_too(tmp_path: Path) -> None:
+    """The exemption follows the same prefix list as coordination_claims.py, not just learnings/."""
+    repo, claims_dir = _no_claim_fixture(tmp_path)
+    payload = _payload(
+        cwd=repo,
+        tool="Write",
+        tool_input={"file_path": str(repo / "policy" / "proposals" / "2026-09-05-idea.yaml")},
+    )
+
+    decision = _evaluate(tmp_path, payload, claims_dir)
+
+    assert decision["decision"] == "allow", decision
+    assert decision["reason_code"] == "append_only_exempt"
+
+
+def test_append_only_exemption_does_not_cover_a_mixed_mutation(tmp_path: Path) -> None:
+    """One append-only path plus one ordinary path must still require a claim.
+
+    The exemption is narrow by design: every target must be append-only, or
+    a session could smuggle an arbitrary write through by pairing it with a
+    throwaway learnings/entries touch.
+    """
+    repo, claims_dir = _no_claim_fixture(tmp_path)
+    payload = _payload(
+        cwd=repo,
+        tool="Bash",
+        tool_input={
+            "command": (
+                f"echo hi > {repo}/learnings/entries/probe.json && "
+                f"echo hi > {repo}/README.md"
+            )
+        },
+    )
+
+    decision = _evaluate(tmp_path, payload, claims_dir)
+
+    assert decision["decision"] == "deny", decision
+    assert decision["reason_code"] == "no_exact_claim"
+
+
+def test_ordinary_path_alone_still_denies_with_zero_claims(tmp_path: Path) -> None:
+    """A non-append-only write with zero claims is unaffected by the exemption."""
+    repo, claims_dir = _no_claim_fixture(tmp_path)
+    payload = _payload(cwd=repo, tool="Write", tool_input={"file_path": str(repo / "README.md")})
+
+    decision = _evaluate(tmp_path, payload, claims_dir)
+
+    assert decision["decision"] == "deny", decision
+    assert decision["reason_code"] == "no_exact_claim"

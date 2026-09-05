@@ -617,6 +617,51 @@ def test_evaluate_claim_detects_parent_child_write_overlap_as_hard_conflict(
     }
 
 
+def test_evaluate_claim_does_not_self_conflict_when_session_id_is_missing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A claim loaded from disk without session_id must never conflict with itself.
+
+    build_registry_payload() (enforced_planning/active_work_registry.py) calls
+    evaluate_claim(claim, active_claims=sorted_claims) once per claim, where
+    claim IS one of the elements of active_claims itself -- self-exclusion is
+    the only thing that stops a claim from "conflicting" with its own write
+    paths. The exclusion previously required candidate.session_id to be
+    truthy (`other.agent == candidate.agent and candidate.session_id and
+    other.session_id == candidate.session_id`), so a claim file with no
+    session_id key at all -- an ordinary, valid claim shape, not the
+    exception -- fell through to a real write-path comparison against itself
+    and reported a phantom hard_conflict against its own scope.
+    """
+    module = _load_module()
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
+    _write_claim(
+        claims_dir,
+        "no-session-id.yaml",
+        {
+            "agent": "codex",
+            "claimed_at": "2026-04-02T08:10:00+00:00",
+            "expires_at": "2099-04-02T09:10:00+00:00",
+            "projects": ["project-meta"],
+            "scope": "coordination-v2-b",
+            "intent": "Generate registry",
+            "claim_type": "write",
+            "write_paths": ["scripts/meta/generate_active_work_registry.py"],
+            "status": "active",
+        },
+    )
+
+    claims = module.check_claims("project-meta")
+    candidate = next(claim for claim in claims if claim.scope == "coordination-v2-b")
+    assert candidate.session_id is None
+
+    result = module.evaluate_claim(candidate, active_claims=claims)
+
+    assert result.hard_conflicts == []
+
+
 def test_parent_conflict_explains_bounded_reservation_and_advisory_diff(
     tmp_path: Path,
 ) -> None:

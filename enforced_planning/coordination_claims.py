@@ -2579,6 +2579,8 @@ def evaluate_claim(candidate: ClaimRecord, *, active_claims: list[ClaimRecord] |
     claims = active_claims if active_claims is not None else check_claims()
     interactions: list[ClaimInteraction] = []
     for other in claims:
+        if other is candidate:
+            continue
         if other.agent == candidate.agent and candidate.session_id and other.session_id == candidate.session_id:
             continue
         if not _projects_overlap(candidate, other):

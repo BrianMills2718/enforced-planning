@@ -490,6 +490,20 @@ stale, or out-of-policy lane must have one disposition before cleanup:
 Cleanliness is not a disposition. A clean worktree can still contain committed
 work that is absent from the canonical default branch.
 
+### `evaluate_claim` never conflicts a claim with itself
+
+`enforced_planning/active_work_registry.py`'s registry generation calls
+`evaluate_claim(claim, active_claims=all_claims)` once per claim, where
+`claim` is one of the elements of `all_claims` itself — self-exclusion by
+identity (`other is candidate`) is what stops a claim from "conflicting" with
+its own declared write paths. A same-session dedup check (matching
+`agent` and `session_id`) also exists for the distinct case of a program
+claim and its own narrower child write claims, but that check alone is not
+sufficient: it depends on `session_id` being present, and an ordinary claim
+file with no `session_id` key at all is a valid shape, not an exception. The
+identity check runs first and unconditionally, regardless of what fields
+either claim happens to carry.
+
 The exact closeable/non-closeable vocabulary and recovery/discard classes are
 loaded from `enforced_planning/worktree_lifecycle.yaml`. Invalid, blank,
 duplicate, or overlapping configuration fails at import rather than silently

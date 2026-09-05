@@ -1345,6 +1345,11 @@ def claim_lifecycle_issues(claim: ClaimRecord) -> list[str]:
     if worktree_path is not None and not worktree_path.exists():
         issues.append("missing_worktree_on_disk")
 
+    if claim.tracker_path:
+        tracker_path = Path(claim.tracker_path).expanduser()
+        if not tracker_path.exists():
+            issues.append("missing_tracker_on_disk")
+
     if claim.branch and repo_root is not None:
         branch_ref = f"refs/heads/{claim.branch}"
         branch_check = _run_git(repo_root, ["show-ref", "--verify", branch_ref])
@@ -1517,7 +1522,8 @@ def claim_runtime_status(
     now: datetime | None = None,
 ) -> str:
     """Classify one live claim across stale/stalled/weak/healthy states."""
-    if claim_lifecycle_issues(claim):
+    lifecycle_issues = claim_lifecycle_issues(claim)
+    if any(issue != "missing_tracker_on_disk" for issue in lifecycle_issues):
         return "stale"
     liveness_issues = claim_liveness_issues(claim, now=now)
     if any(issue != "missing_session_heartbeat" for issue in liveness_issues):
@@ -1533,6 +1539,8 @@ def claim_runtime_status(
         return "weak"
     if progress_issues == ["stalled_progress_lease"]:
         return "stalled"
+    if lifecycle_issues:
+        return "weak"
     return "healthy"
 
 

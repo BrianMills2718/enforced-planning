@@ -536,6 +536,17 @@ canonical stale diagnostics are:
 - `stale_session_heartbeat`
 
 Stale outranks weak. A stale claim should be cleaned up, not merely tolerated.
+
+`claim_lifecycle_issues()` also reports `missing_tracker_on_disk` — an
+explicitly *set* `tracker_path` (state 2 below) whose file does not exist; an
+unset `tracker_path` (state 1) is not flagged. Unlike the diagnostics above,
+`claim_runtime_status()` treats it as **weak, not stale**, on its own: a
+session's heartbeat can still be actively renewing while its tracker file has
+merely vanished, and `session_lifecycle.py`'s own `status_sessions()`
+implements exactly that precedence independently (weak while the heartbeat
+stays fresh, stale once the heartbeat also goes stale). Combined with any
+other lifecycle issue, or with a genuinely stale heartbeat, the claim is still
+stale overall.
 `branch_merged_to_default` is also a high-severity enforcement failure: the
 standard `--check` command exits nonzero until the owner runs sanctioned
 `session-close` or records an explicit supported non-merge disposition. The

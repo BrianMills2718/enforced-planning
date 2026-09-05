@@ -261,6 +261,10 @@ def test_default_push_allows_only_current_session_integrated_source_claim(
     monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
     monkeypatch.setenv("CODEX_THREAD_ID", "thread-1")
     now = datetime.now(timezone.utc).isoformat()
+    sessions_dir = tmp_path / "sessions"
+    sessions_dir.mkdir(parents=True)
+    tracker_path = sessions_dir / "source.yaml"
+    tracker_path.write_text(f"session_id: {claim_session_id}\n", encoding="utf-8")
     _write_claim(
         claims_dir,
         "source.yaml",
@@ -281,7 +285,7 @@ def test_default_push_allows_only_current_session_integrated_source_claim(
             "session_id": claim_session_id,
             "session_name": "maintenance-source",
             "broader_goal": "Publish maintenance source",
-            "tracker_path": str(tmp_path / "sessions" / "source.yaml"),
+            "tracker_path": str(tracker_path),
             "heartbeat_at": now,
             "updated_at": now,
             "progress_at": now,
@@ -317,6 +321,8 @@ def test_push_check_warns_on_active_decisions_without_blocking(
     subprocess.run(["git", "-C", str(repo_root), "checkout", "-b", "plan-42-demo"], check=True, capture_output=True, text=True)
     claims_dir = tmp_path / "claims"
     monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    tracker_path = tmp_path / "current-tracker.yaml"
+    tracker_path.write_text("session_id: codex:thread-1\n", encoding="utf-8")
     _write_claim(
         claims_dir,
         "current.yaml",
@@ -335,7 +341,7 @@ def test_push_check_warns_on_active_decisions_without_blocking(
             "session_id": "codex:thread-1",
             "session_name": "current-branch-owner",
             "broader_goal": "Own the current branch",
-            "tracker_path": str(tmp_path / "current-tracker.yaml"),
+            "tracker_path": str(tracker_path),
             "heartbeat_at": datetime.now(timezone.utc).isoformat(),
             "status": "active",
         },
@@ -499,6 +505,8 @@ def test_push_check_resolves_canonical_project_from_linked_worktree(
     claims_dir = tmp_path / "claims"
     monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
     monkeypatch.setattr(push_safety, "load_active_decisions", lambda project, limit=5: [])
+    tracker_path = tmp_path / "identity-tracker.yaml"
+    tracker_path.write_text("session_id: codex:thread-identity\n", encoding="utf-8")
     _write_claim(
         claims_dir,
         "attributed.yaml",
@@ -515,7 +523,7 @@ def test_push_check_resolves_canonical_project_from_linked_worktree(
             "session_id": "codex:thread-identity",
             "session_name": "identity-enforcement",
             "broader_goal": "Exercise linked-worktree project resolution",
-            "tracker_path": str(tmp_path / "identity-tracker.yaml"),
+            "tracker_path": str(tracker_path),
             "heartbeat_at": datetime.now(timezone.utc).isoformat(),
             "status": "active",
         },

@@ -450,6 +450,41 @@ contents, and submodules. It never calls worktree removal or branch deletion.
 Use ordinary `session-close` for real linked worktrees and
 `--reconcile-missing-worktree` only for an already-absent recorded worktree.
 
+### Orphaned session trackers with no claim left to close
+
+A tracker whose worktree is gone **and** whose claim file was already released
+is coordination residue: `session-close` cannot reach it at all, because it
+loads the claim first and raises `Claim file missing for <agent> - <project>:<scope>`.
+Nothing owns the lane, so there is nothing to release and nothing to clean up,
+yet the tracker keeps reporting a lane that no longer exists.
+
+Archive that tracker instead:
+
+```bash
+python scripts/session_archive_tracker.py \
+  --tracker-path ~/.claude/coordination/sessions/PROJECT/TRACKER.yaml \
+  --tracker-sha256 EXACT_TRACKER_SHA256 \
+  --json
+```
+
+This is coordination-metadata-only. It refuses unless the recorded
+`worktree_path` is genuinely absent from disk, the claim file for that exact
+`(agent, project, scope)` does not exist, the tracker bytes match the supplied
+digest, and the tracker lives inside the canonical session-tracker tree. If the
+recorded branch still exists in its `repo_root`, it is compared against the
+canonical default branch with `git cherry`, which is patch-based on purpose:
+these repositories squash-merge, so `git merge-base --is-ancestor` reports a
+fully integrated branch as unmerged. Any commit with no patch-equivalent on the
+default branch refuses the archival; `--allow-unique-branch-commits` records the
+retained branch explicitly instead.
+
+The tracker is **moved**, never deleted, to
+`~/.claude/coordination/sessions-archive/<YYYY-MM-DD>/<project>/`, and the
+archived copy carries an `archive:` section holding the pre-move digest, the
+absent worktree path, the missing claim path, and the observed branch state. No
+branch is ever deleted and no repository working tree is touched. To restore
+one, move it back to the matching path under `sessions/`.
+
 ### Append-only stores do not create contention
 
 Two lanes declaring the same write path normally conflict, and the second lane

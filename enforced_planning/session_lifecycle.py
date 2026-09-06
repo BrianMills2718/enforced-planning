@@ -4736,3 +4736,250 @@ def abandon_session(
         "action": "abandoned",
         "tracker_path": tracker_path_text,
     }
+
+
+ORPHANED_TRACKER_ARCHIVE_DIRNAME = "sessions-archive"
+
+
+def _session_tracker_archive_root() -> Path:
+    """Return the canonical archive root beside the live session-tracker tree."""
+
+    return session_contracts.DEFAULT_SESSION_TRACKERS_DIR.expanduser().parent / ORPHANED_TRACKER_ARCHIVE_DIRNAME
+
+
+def _branch_unique_commits(repo_root: Path, *, branch: str, upstream_ref: str) -> list[str]:
+    """Return branch commits with no patch-equivalent already on ``upstream_ref``.
+
+    ``git cherry`` is patch-based on purpose. These repositories squash-merge,
+    so ``git merge-base --is-ancestor`` reports a fully integrated branch as
+    unmerged and would make every archival look like it discards work.
+    """
+
+    result = subprocess.run(
+        ["git", "cherry", upstream_ref, branch],
+        cwd=str(repo_root),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise ValueError(
+            f"Orphaned-tracker archival could not compare '{branch}' with '{upstream_ref}': "
+            + (result.stderr or result.stdout).strip()
+        )
+    return [line[2:].strip() for line in result.stdout.splitlines() if line.startswith("+ ")]
+
+
+def _validate_orphaned_tracker_archival(
+    *,
+    tracker_path: Path,
+    expected_tracker_sha256: str | None,
+    allow_unique_branch_commits: bool,
+) -> dict[str, Any]:
+    """Fail closed before archiving one claim-less tracker with no worktree.
+
+    ``close_session()`` cannot reach these: it loads the claim first and raises
+    "Claim file missing" because the claim was already released. What remains is
+    coordination residue, so archival is metadata-only -- it never removes a
+    worktree, never deletes a branch, and never touches a repository working
+    tree.
+    """
+
+    sessions_root = session_contracts.DEFAULT_SESSION_TRACKERS_DIR.expanduser().resolve()
+    resolved_tracker = tracker_path.expanduser().resolve()
+    if not resolved_tracker.is_file():
+        raise ValueError(f"Orphaned-tracker archival requires an existing tracker file at {resolved_tracker}")
+    try:
+        relative_tracker = resolved_tracker.relative_to(sessions_root)
+    except ValueError:
+        raise ValueError(
+            "Orphaned-tracker archival only accepts a tracker inside the canonical session-tracker tree "
+            f"{sessions_root}"
+        ) from None
+
+    expected_digest = (expected_tracker_sha256 or "").strip().lower()
+    if not re.fullmatch(r"[0-9a-f]{64}", expected_digest):
+        raise ValueError("Orphaned-tracker archival requires --tracker-sha256 as a SHA-256 digest.")
+    actual_digest = _tracker_sha256(resolved_tracker)
+    if actual_digest != expected_digest:
+        raise ValueError(
+            "Orphaned-tracker archival tracker digest mismatch; preserve the tracker and regenerate evidence."
+        )
+
+    payload = session_contracts.read_session_tracker(resolved_tracker)
+    contract = payload.get("claim")
+    if not isinstance(contract, dict):
+        raise ValueError(f"Session tracker at {resolved_tracker} is missing claim metadata")
+    agent = contract.get("agent")
+    project = contract.get("project")
+    scope = contract.get("scope")
+    if not agent or not project or not scope:
+        raise ValueError(
+            f"Session tracker at {resolved_tracker} is missing the agent/project/scope identity archival requires"
+        )
+    if agent not in coordination_claims.SUPPORTED_AGENTS:
+        raise ValueError(f"Session tracker at {resolved_tracker} names an unsupported agent {agent!r}")
+
+    recorded_worktree_text = contract.get("worktree_path")
+    if not recorded_worktree_text:
+        raise ValueError("Orphaned-tracker archival requires a recorded worktree path")
+    recorded_worktree = Path(str(recorded_worktree_text)).expanduser()
+    if recorded_worktree.exists():
+        raise ValueError(
+            "Orphaned-tracker archival rejects an existing recorded worktree; "
+            "use the ordinary sanctioned session-close flow instead."
+        )
+
+    claim_file = _claim_path(str(agent), str(project), str(scope))
+    if claim_file.exists():
+        raise ValueError(
+            f"Orphaned-tracker archival rejects a tracker whose claim {claim_file} still exists; "
+            "that is a live lane, not residue. Close it through session-close."
+        )
+
+    repo_root_text = contract.get("repo_root")
+    branch = contract.get("branch")
+    branch_state = "not_recorded"
+    default_branch: str | None = None
+    comparison_ref: str | None = None
+    unique_commits: list[str] = []
+    repo_root: Path | None = None
+    if repo_root_text:
+        repo_root = Path(str(repo_root_text)).expanduser()
+    if branch:
+        if repo_root is None:
+            branch_state = "repo_root_not_recorded"
+        elif not (repo_root / ".git").exists():
+            branch_state = "repo_root_absent"
+        elif not _branch_exists(repo_root, str(branch)):
+            branch_state = "branch_absent"
+        else:
+            default_branch = push_safety.resolve_default_branch(repo_root)
+            if not default_branch:
+                raise ValueError(
+                    f"Orphaned-tracker archival cannot resolve the canonical default branch in {repo_root}, "
+                    f"so unique work on '{branch}' cannot be ruled out."
+                )
+            remote_ref = f"refs/remotes/origin/{default_branch}"
+            comparison_ref = remote_ref if _ref_exists(repo_root, remote_ref) else f"refs/heads/{default_branch}"
+            unique_commits = _branch_unique_commits(
+                repo_root,
+                branch=str(branch),
+                upstream_ref=comparison_ref,
+            )
+            branch_state = "branch_present_with_unique_commits" if unique_commits else "branch_present_integrated"
+            if unique_commits and not allow_unique_branch_commits:
+                preview = ", ".join(unique_commits[:5])
+                raise ValueError(
+                    f"Branch '{branch}' in {repo_root} still holds {len(unique_commits)} commit(s) with no "
+                    f"patch-equivalent on '{comparison_ref}': {preview}. Archiving would hide unique work; "
+                    "integrate or preserve the branch first, or pass allow_unique_branch_commits to record "
+                    "the retained branch explicitly."
+                )
+
+    return {
+        "schema_version": "1.0",
+        "agent": str(agent),
+        "project": str(project),
+        "scope": str(scope),
+        "session_id": contract.get("session_id"),
+        "tracker_path": str(resolved_tracker),
+        "tracker_relative_path": str(relative_tracker),
+        "tracker_sha256": actual_digest,
+        "current_phase_before": (payload.get("tracker") or {}).get("current_phase")
+        if isinstance(payload.get("tracker"), dict)
+        else None,
+        "claim_path": str(claim_file),
+        "claim_present": False,
+        "recorded_worktree_path": str(recorded_worktree),
+        "repo_root": str(repo_root) if repo_root is not None else None,
+        "branch": str(branch) if branch else None,
+        "branch_state": branch_state,
+        "default_branch": default_branch,
+        "branch_comparison_ref": comparison_ref,
+        "unique_commits": unique_commits,
+        "unique_commits_authorized": bool(unique_commits) and allow_unique_branch_commits,
+        "filesystem_action": "not_attempted_absent_recorded_worktree",
+        "branch_action": "untouched",
+    }
+
+
+def archive_orphaned_session_tracker(
+    *,
+    tracker_path: str | Path,
+    expected_tracker_sha256: str | None,
+    note: str | None = None,
+    allow_unique_branch_commits: bool = False,
+    archive_root: str | Path | None = None,
+) -> dict[str, Any]:
+    """Archive one claim-less session tracker whose worktree is already gone.
+
+    This is the missing terminal path for coordination residue. The claim was
+    released long ago, so there is nothing to release and nothing to clean up;
+    the tracker alone keeps reporting a lane that no longer exists. It is moved
+    into the sibling archive tree rather than deleted, because the tracker is
+    the only durable account of who held that write lane.
+    """
+
+    resolved_tracker = Path(tracker_path).expanduser().resolve()
+    receipt = _validate_orphaned_tracker_archival(
+        tracker_path=resolved_tracker,
+        expected_tracker_sha256=expected_tracker_sha256,
+        allow_unique_branch_commits=allow_unique_branch_commits,
+    )
+
+    archived_at = datetime.now(timezone.utc)
+    root = Path(archive_root).expanduser() if archive_root is not None else _session_tracker_archive_root()
+    destination = root / archived_at.strftime("%Y-%m-%d") / receipt["tracker_relative_path"]
+    notes = note or (
+        "archived orphaned session tracker: recorded worktree absent and claim already released"
+    )
+
+    with session_contracts.session_tracker_lock(resolved_tracker):
+        if _tracker_sha256(resolved_tracker) != receipt["tracker_sha256"]:
+            raise ValueError("Orphaned-tracker archival tracker changed before mutation.")
+        if _claim_path(receipt["agent"], receipt["project"], receipt["scope"]).exists():
+            raise ValueError("Orphaned-tracker archival claim reappeared before mutation.")
+        if destination.exists():
+            raise ValueError(f"Orphaned-tracker archival refuses to overwrite an existing archive entry {destination}")
+        destination.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        os.replace(resolved_tracker, destination)
+
+    def record_archival(payload: dict[str, Any]) -> None:
+        tracker_section = payload.get("tracker")
+        if not isinstance(tracker_section, dict):
+            raise TypeError(f"Archived session tracker at {destination} is missing its tracker section")
+        tracker_section["current_phase"] = "closed"
+        tracker_section["notes"] = notes
+        payload["archive"] = {
+            "schema_version": "1.0",
+            "reason": "orphaned_tracker_no_claim_no_worktree",
+            "archived_at": archived_at.isoformat(),
+            "archived_from": receipt["tracker_path"],
+            "tracker_sha256_before_archive": receipt["tracker_sha256"],
+            "recorded_worktree_path": receipt["recorded_worktree_path"],
+            "claim_path": receipt["claim_path"],
+            "repo_root": receipt["repo_root"],
+            "branch": receipt["branch"],
+            "branch_state": receipt["branch_state"],
+            "branch_comparison_ref": receipt["branch_comparison_ref"],
+            "unique_commits": receipt["unique_commits"],
+            "unique_commits_authorized": receipt["unique_commits_authorized"],
+            "branch_action": "untouched",
+            "notes": notes,
+        }
+
+    session_contracts.mutate_session_tracker(
+        destination,
+        record_archival,
+        updated_at=archived_at.isoformat(),
+    )
+
+    return {
+        "action": "archived_orphaned_tracker",
+        "archived_tracker_path": str(destination),
+        "archived_at": archived_at.isoformat(),
+        "released": False,
+        "notes": notes,
+        **receipt,
+    }

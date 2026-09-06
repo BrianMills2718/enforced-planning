@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from collections.abc import Iterator
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
@@ -39,6 +39,12 @@ def _maintenance_payload(tmp_path: Path) -> dict[str, Any]:
         "claim_type": "program",
         "write_paths": ["src"],
     }
+
+
+def test_package_registers_chatgpt_as_portable_claim_owner() -> None:
+    assert "chatgpt" in coordination_claims.SUPPORTED_AGENTS
+    assert coordination_claims.SESSION_ENV_KEYS["chatgpt"] == ("CHATGPT_SESSION_ID",)
+    assert coordination_claims.STRICT_NATIVE_SESSION_ENV_KEYS["chatgpt"] == "CHATGPT_SESSION_ID"
 
 
 def test_chatgpt_request_retains_canonical_bootstrap_validation(tmp_path: Path) -> None:
@@ -90,7 +96,7 @@ def test_runtime_registration_derives_exact_chatgpt_session(
     assert session_id == "chatgpt:rdc-session-1234"
     assert "chatgpt" in coordination_claims.SUPPORTED_AGENTS
     assert coordination_claims.resolve_session_id("chatgpt") == session_id
-    assert claim_bootstrap._native_agent("chatgpt") == ("chatgpt", session_id)
+    assert claim_bootstrap._native_agent(cast(Any, "chatgpt")) == ("chatgpt", session_id)
 
 
 def test_runtime_registration_requires_valid_explicit_lane_marker(

@@ -66,6 +66,20 @@ from enforced_planning import (
 SUPPORTED_EVENTS = {"SessionStart", "UserPromptSubmit", "PostToolUse", "PreToolUse", "Stop"}
 MUTATION_TOOL_NAMES = frozenset({"bash", "apply_patch", "edit", "write"})
 REPOSITORY_SCAN_MAX_WORKERS = 16
+# Mid-turn events use this budget too, deliberately, and an earlier revision of
+# this change did not. The reasoning for a tighter mid-turn budget was that
+# PostToolUse fires on every tool call while Stop fires once, so a tool call
+# should not wait as long for the global registry lock. Measurement killed it:
+# the repair spawns a Python subprocess, and interpreter startup plus package
+# import is 0.40-0.45s warm and 3.35s cold on this machine. The dominant cost is
+# startup, not lock waiting, so a 0.5s mid-turn budget did not shorten a wait --
+# it turned a repairable turn back into the lost one this change exists to stop,
+# and `test_real_subprocess_secondary_posttool_preserves_root_pretool_obligation`
+# went red with "claim projection repair exceeded 0.5s (last_phase=complete)".
+#
+# The healthy path never spawns anything: the guards in `_active_claims` only
+# reach the repair when the projection is missing or genuinely behind, and one
+# rebuild makes it current for the calls that follow.
 TURN_END_PROJECTION_REPAIR_TIMEOUT_SECONDS = 1.5
 STARTUP_PROJECTION_READ_LOCK_TIMEOUT_SECONDS = 1.0
 STARTUP_PROJECTION_READ_LOCK_POLL_SECONDS = 0.01
@@ -296,7 +310,11 @@ def _repair_phase(output: str | bytes | None) -> str:
     return phases[-1] if phases else "startup"
 
 
-def _repair_turn_end_projection(claims_dir: Path) -> dict[str, Any]:
+def _repair_turn_end_projection(
+    claims_dir: Path,
+    *,
+    timeout: float = TURN_END_PROJECTION_REPAIR_TIMEOUT_SECONDS,
+) -> dict[str, Any]:
     """Run the lock-owning projection repair in a killable, bounded subprocess."""
 
     command = [
@@ -312,12 +330,12 @@ def _repair_turn_end_projection(claims_dir: Path) -> dict[str, Any]:
             capture_output=True,
             text=True,
             check=False,
-            timeout=TURN_END_PROJECTION_REPAIR_TIMEOUT_SECONDS,
+            timeout=timeout,
         )
     except subprocess.TimeoutExpired as exc:
         last_phase = _repair_phase(exc.stderr)
         raise TurnEndProjectionError(
-            f"claim projection repair exceeded {TURN_END_PROJECTION_REPAIR_TIMEOUT_SECONDS:g}s "
+            f"claim projection repair exceeded {timeout:g}s "
             f"(last_phase={last_phase})"
         ) from exc
     if completed.returncode:
@@ -391,22 +409,41 @@ def _active_claims(claims_dir: Path | None, *, turn_end: bool = False) -> tuple[
             raise error_type(f"active-claim projection targets {projection.claims_dir}, expected {resolved}")
         return projection
 
+    # The bounded repair used to be reachable only from `Stop`. Every other event
+    # that loads claims -- PostToolUse in practice -- refused on the first digest
+    # mismatch, and the caller then discarded the claims notice and the mailbox
+    # summary it had already assembled. "active-claim projection is stale relative
+    # to the canonical claim registry" appears 1,972 times in one machine's
+    # transcripts, and it was 164 of 171 recorded blocks across three runs.
+    #
+    # Refusing was never the safe half of that trade. The registry is the
+    # authority and the projection is derived from it; the mismatch is a race
+    # between a writer's atomic projection write and this reader, not a claim
+    # conflict. The repair takes the registry lock and rebuilds only what is
+    # genuinely stale -- run against a settled registry it returns
+    # `already_current` -- so attempting it converts a lost turn into a correct
+    # one, and a repair that cannot close the gap still raises exactly as before.
+    #
+    # Cost is bounded on both axes. The guards below mean a healthy projection
+    # never acquires the lock, and `_repair_turn_end_projection` is capped at
+    # TURN_END_PROJECTION_REPAIR_TIMEOUT_SECONDS. PreToolUse, the latency
+    # boundary, does not call this function at all.
     repaired = False
-    if turn_end and (not projection_path.is_file() or _projection_has_registry_change(projection_path, resolved)):
+    if not projection_path.is_file() or _projection_has_registry_change(projection_path, resolved):
         _repair_turn_end_projection(resolved)
         repaired = True
     if projection_path.is_file():
         try:
             projection = load_projection()
         except TurnEndProjectionError:
-            if not turn_end or repaired:
+            if repaired:
                 raise
             _repair_turn_end_projection(resolved)
             repaired = True
             projection = load_projection()
         registry_digest = prewrite_claim_fast.registry_digest(resolved)
         if projection.registry_digest != registry_digest:
-            if turn_end and not repaired:
+            if not repaired:
                 _repair_turn_end_projection(resolved)
                 repaired = True
                 projection = load_projection()
@@ -1061,23 +1098,32 @@ def main(argv: list[str] | None = None) -> int:
         subprocess.SubprocessError,
         ValueError,
     ) as exc:
+        closeout_failure = isinstance(exc, RepositoryCloseoutError)
         prefix = (
             "turn-end repository safety unavailable"
-            if isinstance(exc, RepositoryCloseoutError)
+            if closeout_failure
             else "coordination mailbox unavailable"
         )
         warning = f"{prefix}: {type(exc).__name__}: {exc}"
-        telemetry_decision = "block" if isinstance(exc, RepositoryCloseoutError) else "warn"
         telemetry_reason = (
             "turn_end_repository_safety_unavailable"
-            if isinstance(exc, RepositoryCloseoutError)
+            if closeout_failure
             else "coordination_mailbox_unavailable"
         )
-        if (
-            isinstance(exc, RepositoryCloseoutError)
+        # One condition now decides both what is emitted and what is recorded.
+        # They used to be computed separately, and the receipt said `block` for
+        # every closeout failure while only `Stop` rendered a denial -- so a
+        # PostToolUse failure printed a warning, returned 0, blocked nothing, and
+        # was filed as a block. 164 of the 171 blocks across three runs read on
+        # 2026-09-06 were that, and a governance record that overstates what it
+        # refused is worse than none: it is the number someone quotes.
+        denies = (
+            closeout_failure
             and "payload" in locals()
             and payload.get("hook_event_name") == "Stop"
-        ):
+        )
+        telemetry_decision = "block" if denies else "warn"
+        if denies:
             print(json.dumps(_render_boundary_denial("Stop", warning)))
         else:
             print(json.dumps({"systemMessage": warning}))

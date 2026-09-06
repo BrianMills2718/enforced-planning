@@ -19,9 +19,12 @@ A suitable value is an opaque label such as:
 export CHATGPT_SESSION_ID=rdc-20260906-cybernetic-review
 ```
 
-The compatibility process registers `chatgpt:<CHATGPT_SESSION_ID>` only in that
-process. It does not add ChatGPT to native hook-client dispatch, and it does not
-borrow another client's session identity.
+The package recognizes `chatgpt` as a portable claim owner in ordinary
+coordination and lifecycle processes, so persisted claims do not become
+unreadable when the bridge command exits. Session identity is still resolved
+only when `CHATGPT_SESSION_ID` is present in the calling process. ChatGPT is not
+added to native hook-client dispatch and never borrows another client's session
+identity.
 
 ## Safety surface
 
@@ -38,6 +41,12 @@ workspace file moves, deployment, merge, force-push, and arbitrary shell
 execution. The request is otherwise validated by the existing strict
 `claim_bootstrap` schema, including duplicate-key rejection and exact worktree
 request shapes.
+
+Existing lifecycle commands such as `scripts/session_finish.py` and
+`scripts/session_close.py` can operate on a ChatGPT-owned lane when the same
+`CHATGPT_SESSION_ID` is supplied. Those commands retain their existing closeout,
+dirty-worktree, disposition, and claim-release protections; the compatibility
+bridge does not add a weaker cleanup path.
 
 ## Prerequisite: GitHub transport
 
@@ -75,10 +84,32 @@ If the repository requires a whole-repository bootstrap scope, use the existing
 narrowing path before the first repository write. The compatibility layer does
 not weaken that requirement.
 
+## Finish or close a lane
+
+Keep the same lane marker when calling ordinary lifecycle commands. For example,
+to finish and release a clean claim without removing its worktree:
+
+```sh
+CHATGPT_SESSION_ID=rdc-20260906-cybernetic-review \
+  /usr/bin/python3 scripts/session_finish.py \
+  --agent chatgpt \
+  --project example-project \
+  --scope chatgpt/review-example \
+  --session-id chatgpt:rdc-20260906-cybernetic-review \
+  --worktree-path /absolute/path/to/worktree \
+  --release-claim \
+  --json
+```
+
+Use `scripts/session_close.py` instead when the existing closeout policy permits
+worktree/branch cleanup. Do not bypass its dirty-worktree, recovery, mailbox, or
+unique-commit safeguards.
+
 ## Recommended operating pattern
 
 Treat GitHub as source of truth, create a governed ChatGPT lane from a fresh
 remote default, edit only inside the claimed worktree, run the repository's
-canonical verification, commit the verified change, and publish a branch/draft
-PR when Git authentication is valid. Keep merge and deployment as separate,
-explicitly authorized actions.
+canonical verification, commit the verified change, publish a branch/draft PR
+when Git authentication is valid, then finish or close the lane through the
+existing lifecycle. Keep merge and deployment as separate, explicitly
+authorized actions.

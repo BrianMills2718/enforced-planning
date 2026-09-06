@@ -185,6 +185,18 @@ activate it in downstream repositories.
 | `worktrees.worktree_dir` | string | `"../worktrees"` | Not enforced by script | No effect |
 | `worktrees.safe_remove_only` | bool | `true` | Not enforced by script | No effect |
 
+### Tracker lock location (environment, not config)
+
+| Variable | Default | Read By | Why it exists |
+|----------|---------|---------|---------------|
+| `ENFORCED_PLANNING_LOCK_DIR` | `$XDG_RUNTIME_DIR/enforced-planning/tracker-locks`, falling back to `~/.cache/...` | `session_contracts.tracker_lock_path` | The session-tracker mutation lock is deliberately **not** a sibling of the tracker file. A lock beside a tracker inside a canonical checkout that a live claim has made read-only cannot be created, so the lane can never be closed. Locks are process coordination, not repository content. |
+
+The lock file is named for the sha256 of the resolved tracker path, so two
+trackers never share one and every worktree asking about the same tracker
+computes the same lock. Derive it with `session_contracts.tracker_lock_path`;
+never construct the path by hand, or a reader and a writer can disagree about
+where the lock is and silently stop serialising.
+
 ## artifact_creation
 
 | Key | Type | Default | Read By | Default When Absent |

@@ -178,6 +178,29 @@ Codex uses the durable fenced-transfer journal below instead of rollback, becaus
 restoring pre-fence bytes would erase the evidence required to recover custody.
 Resume never reports a successor while the claim and tracker disagree.
 
+**Where the tracker lock lives, and why it is not beside the tracker.** The
+tracker mutation lock is named under `XDG_RUNTIME_DIR` (falling back to
+`~/.cache`) as `enforced-planning/tracker-locks/<sha256 of the resolved tracker
+path>.lock`, and `ENFORCED_PLANNING_LOCK_DIR` overrides that root. It used to be
+a sibling of the tracker file, which made a lane impossible to close whenever
+its tracker sat in a canonical checkout that a live claim had deliberately made
+read-only: the lock could not be created, so every closeout failed with a
+`PermissionError` naming a lock file, and a crashed process left a stale lock
+inside the read-only tree where it could not be cleared. A lock is process
+coordination, not repository content. The path is derived, never stored, so any
+worktree asking about the same tracker computes the same lock; do not construct
+it by hand, call `session_contracts.tracker_lock_path`.
+
+**A tracker path must be readable as YAML.** Every closeout reads and rewrites
+its tracker, so `create_claim` refuses a `--tracker-path` that exists and does
+not parse as YAML. A Markdown document -- a plan file or a register front door,
+both natural-looking choices -- used to be accepted and then killed the closeout
+with a parser error after the lane's work was already merged. A path that does
+not exist yet is still accepted, because a later step may write it, and a file
+that parses but is not a mapping is also accepted so that placeholders keep
+working. Claims recorded before this check report `tracker_path_not_yaml` in
+their health issues rather than failing at closeout.
+
 An automatically selected successor must additionally pass both
 `--successor-custody-offer <offer.json>` and
 `--successor-custody-acceptance <acceptance.json>` to `session-resume`. The
@@ -803,7 +826,7 @@ the event itself, updates the claim atomically, refreshes the pre-write
 projection, and emits the existing backward-compatible typed session-mutation
 receipt. A new event without a quiet interval clears an obsolete interval.
 
-Last verified 2026-09-02 through the canonical read-only claim check piped to
+Last verified 2026-09-06 through the canonical read-only claim check piped to
 `jq`: JSON reporting must serialize
 `other_session_last_active_at` as an ISO-8601 string or `null`; a raw datetime
 is a contract defect, not a consumer-supported value.

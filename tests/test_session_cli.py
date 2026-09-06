@@ -5599,7 +5599,10 @@ def test_status_observer_does_not_create_chmod_or_prune_coordination_artifacts(
     )
     tracker_path = Path(started["tracker_path"])
     claim_lock = claims_dir.parent / f".{claims_dir.name}.lock"
-    tracker_lock = tracker_path.parent / f".{tracker_path.name}.lock"
+    # The tracker lock is no longer a sibling of the tracker: a lock beside a
+    # tracker inside a read-only canonical checkout made lane closeout
+    # impossible. Ask the module where it lives instead of rebuilding the path.
+    tracker_lock = session_contracts.tracker_lock_path(tracker_path)
     claim_lock.unlink()
     tracker_lock.unlink()
     legacy_staging = claims_dir / ".owner.yaml.status-observer.tmp"
@@ -5674,8 +5677,12 @@ def test_status_with_persistent_lock_and_missing_tracker_is_read_only_and_weak(
         tracker_dir=trackers_dir,
     )
     tracker_path = Path(started["tracker_path"])
-    tracker_lock = tracker_path.parent / f".{tracker_path.name}.lock"
+    tracker_lock = session_contracts.tracker_lock_path(tracker_path)
     assert tracker_lock.is_file()
+    assert tracker_lock.parent != tracker_path.parent, (
+        "the lock is a sibling of the tracker again, which is what made a lane "
+        "in a read-only canonical checkout impossible to close"
+    )
     tracker_path.unlink()
     lock_before = tracker_lock.read_bytes()
 

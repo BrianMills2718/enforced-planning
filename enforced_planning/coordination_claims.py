@@ -1349,6 +1349,11 @@ def claim_lifecycle_issues(claim: ClaimRecord) -> list[str]:
         tracker_path = Path(claim.tracker_path).expanduser()
         if not tracker_path.exists():
             issues.append("missing_tracker_on_disk")
+        elif _tracker_path_yaml_error(claim.tracker_path):
+            # Creation now refuses these; this catches claims recorded before
+            # that check existed, so an un-closeable lane is visible as an
+            # unhealthy claim instead of as a traceback at closeout time.
+            issues.append("tracker_path_not_yaml")
 
     if claim.branch and repo_root is not None:
         branch_ref = f"refs/heads/{claim.branch}"
@@ -2898,6 +2903,56 @@ def _refresh_exact_owner_claim(
     return True, f"Refreshed exact-owner claim: {agent} → {project}:{scope}"
 
 
+def _tracker_path_yaml_error(tracker_path: str | None) -> str | None:
+    """Why this tracker path cannot serve as a session tracker, or None.
+
+    A tracker is read and rewritten as a YAML mapping by every lane closeout.
+    Nothing used to check that at claim time, so a Markdown path -- a plan
+    document or a register front door, both natural-looking things to name --
+    was accepted, and the lane then died at CLOSEOUT on a bare
+    ``yaml.scanner.ScannerError`` after its work was already merged. The lane
+    could not be closed at all, and the failure surfaced only as a parser
+    traceback pointing at a line of English prose.
+
+    A missing file is NOT an error here: a claim may legitimately name a
+    tracker that a later step will write. Only a file that exists and cannot
+    be a tracker is refused.
+    """
+
+    if not tracker_path:
+        return None
+    path = Path(tracker_path).expanduser()
+    if not path.exists() or not path.is_file():
+        return None
+    try:
+        raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except OSError:
+        return None
+    except yaml.YAMLError as exc:
+        first = str(exc).strip().splitlines()[0] if str(exc).strip() else "parse error"
+        return (
+            f"tracker_path {tracker_path!r} exists but is not parseable as YAML "
+            f"({first}). Every lane closeout reads and rewrites its tracker as a "
+            f"YAML mapping, so this claim could be created and then never closed."
+        )
+    # Deliberately NOT rejecting a file that parses as YAML but is not a
+    # mapping. A scalar placeholder is common in fixtures and in trackers a
+    # later step overwrites, and refusing it here breaks claim creation for
+    # cases that were never the problem. The defect this check exists to stop
+    # -- a Markdown document as a tracker path -- fails to PARSE, so the
+    # narrower rule still catches it. `read_session_tracker` reports a
+    # non-mapping clearly if one ever reaches a closeout.
+    return None
+
+
+def _reject_unreadable_tracker_path(tracker_path: str | None) -> None:
+    """Fail at claim time rather than stranding a lane at closeout."""
+
+    problem = _tracker_path_yaml_error(tracker_path)
+    if problem:
+        raise ValueError(problem)
+
+
 def create_claim(
     agent: str,
     project: str,
@@ -3058,6 +3113,7 @@ def create_claim(
             require_branch=tracker_path is not None,
             require_worktree=tracker_path is not None,
         )
+    _reject_unreadable_tracker_path(tracker_path)
     candidate = build_candidate_claim(
         agent=agent,
         project=project,

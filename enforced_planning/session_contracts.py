@@ -8,6 +8,7 @@ should live in a linked per-session artifact.
 from __future__ import annotations
 
 import fcntl
+import hashlib
 import os
 import re
 import tempfile
@@ -448,13 +449,57 @@ def write_session_tracker(
     return path
 
 
+def tracker_lock_path(path: Path) -> Path:
+    """Where the mutation lock for one tracker lives.
+
+    NOT beside the tracker. A lock is process coordination, not repository
+    content, and a sibling lock cannot be created when the tracker sits in a
+    canonical checkout that a live lane claim has deliberately made read-only.
+    That is not a hypothetical: closing a project-meta lane was impossible on
+    2026-09-06 because ``learnings.md`` is in that repository's root, so the
+    sibling lock landed inside the read-only tree and every closeout died on
+    ``PermissionError: '.learnings.md.lock'``. The same closeout ran cleanly
+    five times that session against a repository whose tracker was not in a
+    locked root -- the failure was the lock's LOCATION, not the tracker.
+
+    A crashed process also used to leave that sibling behind inside the locked
+    tree, where it could not be cleared without unlocking the checkout again.
+
+    The name is the sha256 of the resolved tracker path, so two different
+    trackers never share a lock and the same tracker always resolves to the
+    same one regardless of which worktree is asking.
+    """
+
+    resolved = path.expanduser().resolve()
+    digest = hashlib.sha256(str(resolved).encode("utf-8")).hexdigest()[:32]
+    root = Path(
+        os.environ.get("ENFORCED_PLANNING_LOCK_DIR")
+        or (Path(os.environ.get("XDG_RUNTIME_DIR") or Path.home() / ".cache")
+            / "enforced-planning" / "tracker-locks")
+    )
+    # PURE. Computing where a lock lives must not create anything: the status
+    # observer calls this only to LOOK for an existing lock, and an earlier
+    # version of this function made the directory as a side effect, so merely
+    # reading status started writing to disk. `session_tracker_lock` creates
+    # the directory when it actually takes the lock.
+    return root / f"{digest}.lock"
+
+
+class TrackerPathNotYAML(TypeError):
+    """A claim's tracker path is not a readable YAML mapping.
+
+    A TypeError subclass so existing handlers that catch TypeError still work.
+    """
+
+
 @contextmanager
 def session_tracker_lock(path: Path) -> Iterator[None]:
-    """Serialize exact-session tracker mutations through one sibling lock."""
+    """Serialize exact-session tracker mutations through one out-of-tree lock."""
 
     resolved = path.expanduser().resolve()
     resolved.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-    lock_path = resolved.parent / f".{resolved.name}.lock"
+    lock_path = tracker_lock_path(resolved)
+    lock_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     with lock_path.open("a+", encoding="utf-8") as handle:
         lock_path.chmod(0o600)
         fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
@@ -491,11 +536,33 @@ def _atomic_write_session_tracker(path: Path, payload: dict[str, Any]) -> None:
 
 
 def read_session_tracker(path: Path) -> dict[str, Any]:
-    """Load one tracker artifact and fail loud if the structure is invalid."""
+    """Load one tracker artifact and fail loud if the structure is invalid.
 
-    raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+    A parse failure is reported against the tracker path, not as a raw parser
+    traceback. A claim recorded with a tracker path that is not a YAML mapping
+    -- a Markdown document, say -- used to be accepted silently and then kill
+    the CLOSEOUT with a bare ``yaml.scanner.ScannerError``, stranding a lane
+    whose work was already merged. `check_coordination_claims.py` now refuses
+    such a path when the claim is made; this is the second line of defence for
+    claims recorded before that check existed.
+    """
+
+    text = path.read_text(encoding="utf-8")
+    try:
+        raw = yaml.safe_load(text)
+    except yaml.YAMLError as exc:
+        raise TrackerPathNotYAML(
+            f"Session tracker at {path} is not parseable as YAML, so the lane "
+            f"holding it cannot be read or closed. A tracker must be a YAML "
+            f"mapping; this looks like another kind of document. Underlying "
+            f"parser error: {exc}"
+        ) from exc
     if not isinstance(raw, dict):
-        raise TypeError(f"Session tracker at {path} must be a YAML mapping")
+        raise TrackerPathNotYAML(
+            f"Session tracker at {path} parsed as {type(raw).__name__}, not a "
+            "YAML mapping. A Markdown or prose file passed as --tracker-path is "
+            "the usual cause."
+        )
     return raw
 
 

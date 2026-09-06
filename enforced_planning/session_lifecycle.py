@@ -111,7 +111,12 @@ def _read_session_tracker_for_status(path: Path) -> dict[str, Any] | None:
     """Read one tracker under an existing shared lock or a verified stable snapshot."""
 
     resolved = path.expanduser().resolve()
-    lock_path = resolved.parent / f".{resolved.name}.lock"
+    # Must be the SAME function the writer uses. This reader constructed the
+    # sibling path independently, so moving the lock out of the repository
+    # without changing here would leave it looking where no lock is ever
+    # written again -- it would find nothing, fall through to the fingerprint
+    # path, and silently stop serialising against live writers.
+    lock_path = session_contracts.tracker_lock_path(resolved)
     for _attempt in range(_STATUS_OBSERVATION_ATTEMPTS):
         lock_fd = _shared_lock_fd_if_present(lock_path)
         if lock_fd is not None:

@@ -941,3 +941,196 @@ def test_native_shaped_stop_repairs_interrupted_projection_and_allows_turn(tmp_p
     assert completed.stdout == ""
     claims = coordination_hook._active_claims(claims_dir)
     assert [claim.scope for claim in claims] == ["native-stop"]
+
+
+def test_posttool_repairs_stale_projection_instead_of_discarding_the_turn(tmp_path: Path) -> None:
+    """The non-Stop path must get the bounded repair the Stop path already has.
+
+    Same fixture as `test_stop_repairs_stale_projection_before_turn_end_check`,
+    with `turn_end=False`. Before this, the repair was reachable only from `Stop`,
+    so a PostToolUse event that arrived while the projection was momentarily
+    behind raised and the handler threw away the claims notice and the mailbox
+    summary it had already assembled. The message
+    "active-claim projection is stale relative to the canonical claim registry"
+    appears 1,972 times in this machine's Claude Code transcripts.
+
+    The staleness is transient by construction: the registry is the authority,
+    the projection is derived from it, and the repair takes the registry lock.
+    Run by hand against a settled registry the repair returns `already_current`
+    and the digests then match, which is why refusing without attempting it was
+    never the safe choice -- only the loud one.
+    """
+
+    claims_dir = tmp_path / "claims"
+    claims_dir.mkdir()
+    coordination_hook.coordination_claims.refresh_prewrite_authority_projection(claims_dir)
+    time.sleep(0.002)
+    _write_live_claim(claims_dir, scope="repair-posttool")
+
+    claims = coordination_hook._active_claims(claims_dir)
+
+    assert [claim.scope for claim in claims] == ["repair-posttool"]
+
+
+def test_posttool_projection_failure_is_not_recorded_as_a_block(
+    monkeypatch, tmp_path: Path, capsys
+) -> None:
+    """A PostToolUse event blocks nothing, so its receipt must not say `block`.
+
+    On `Stop` the handler renders a real boundary denial. On every other event it
+    prints a `systemMessage` and returns 0 -- nothing is blocked -- and it still
+    completed the receipt with `decision="block"`. 164 of the 171 blocks across
+    the three runs read on 2026-09-06 were this, and every one of them was a
+    PostToolUse event where nothing was denied.
+
+    A governance record that reports blocks it did not make is worse than no
+    record: it is the number someone quotes.
+    """
+
+    monkeypatch.setattr(
+        coordination_hook,
+        "_active_claims",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            coordination_hook.RepositoryCloseoutError("active-claim projection is stale")
+        ),
+    )
+    monkeypatch.setattr(coordination_hook, "_canonical_project", lambda _cwd: "demo")
+    monkeypatch.setattr(coordination_hook, "_write_closeout_baseline", lambda **_kwargs: None)
+    monkeypatch.setattr(coordination_hook, "_repository_closeout_failure", lambda **_kwargs: None)
+    monkeypatch.setattr(
+        coordination_hook.coordination_messages,
+        "poll_session_inbox",
+        lambda **_kwargs: type(
+            "Notice", (), {"active_count": 0, "acknowledgement_count": 0, "summary": "", "message_ids": ()}
+        )(),
+    )
+    monkeypatch.setattr(
+        "sys.stdin",
+        type(
+            "Input",
+            (),
+            {
+                "read": lambda _self: json.dumps(
+                    {"session_id": "posttool-stale", "cwd": "/tmp", "hook_event_name": "PostToolUse"}
+                )
+            },
+        )(),
+    )
+
+    receipts = tmp_path / "receipts"
+    assert coordination_hook.main(
+        ["--claims-dir", str(tmp_path / "claims"), "--hook-receipt-dir", str(receipts)]
+    ) == 0
+
+    output = json.loads(capsys.readouterr().out)
+    assert "decision" not in output, "PostToolUse must not render a denial"
+
+    completed = list(receipts.rglob("completed.json"))
+    assert len(completed) == 1
+    receipt = json.loads(completed[0].read_text(encoding="utf-8"))
+    assert receipt["decision"] == "warn", (
+        "the handler printed a warning and returned 0; recording that as a block "
+        "makes the governance record overstate what AES actually did"
+    )
+    assert receipt["reason_code"] == "turn_end_repository_safety_unavailable"
+
+
+def test_stop_projection_failure_is_still_recorded_as_a_block(
+    monkeypatch, tmp_path: Path, capsys
+) -> None:
+    """The counterpart control: on Stop a denial is rendered, so `block` is true.
+
+    Without this, the fix above could be satisfied by never recording a block at
+    all, which would hide the one event where AES does refuse something.
+    """
+
+    monkeypatch.setattr(
+        coordination_hook,
+        "_active_claims",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            coordination_hook.RepositoryCloseoutError("active-claim projection is stale")
+        ),
+    )
+    monkeypatch.setattr(coordination_hook, "_canonical_project", lambda _cwd: "demo")
+    monkeypatch.setattr(coordination_hook, "_write_closeout_baseline", lambda **_kwargs: None)
+    monkeypatch.setattr(coordination_hook, "_repository_closeout_failure", lambda **_kwargs: None)
+    monkeypatch.setattr(
+        coordination_hook.coordination_messages,
+        "poll_session_inbox",
+        lambda **_kwargs: type(
+            "Notice", (), {"active_count": 0, "acknowledgement_count": 0, "summary": "", "message_ids": ()}
+        )(),
+    )
+    monkeypatch.setattr(
+        "sys.stdin",
+        type(
+            "Input",
+            (),
+            {
+                "read": lambda _self: json.dumps(
+                    {
+                        "session_id": "stop-stale",
+                        "cwd": "/tmp",
+                        "hook_event_name": "Stop",
+                        "last_assistant_message": "terminal",
+                    }
+                )
+            },
+        )(),
+    )
+
+    receipts = tmp_path / "receipts"
+    assert coordination_hook.main(
+        ["--claims-dir", str(tmp_path / "claims"), "--hook-receipt-dir", str(receipts)]
+    ) == 0
+
+    receipt = json.loads(next(receipts.rglob("completed.json")).read_text(encoding="utf-8"))
+    assert receipt["decision"] == "block"
+
+
+def test_the_repair_budget_clears_measured_interpreter_startup(monkeypatch, tmp_path: Path) -> None:
+    """The budget must exceed subprocess startup, or the repair can never finish.
+
+    Replaces a test asserting a tighter mid-turn budget. That looked right -- a
+    tool call should not wait as long for the global lock as a once-per-turn Stop
+    -- and measurement disproved it: the repair spawns a Python interpreter, and
+    startup plus package import is 0.40-0.45s warm and 3.35s cold here. The
+    dominant cost is startup, not lock waiting, so a 0.5s budget did not shorten
+    a wait, it turned a repairable turn back into a lost one.
+
+    So the budget is one value, and the property worth protecting is that it
+    clears real startup with headroom rather than that it is small.
+    """
+
+    import time as _time
+
+    started = _time.monotonic()
+    completed = subprocess.run(
+        [sys.executable, "-c", "import sys; sys.path.insert(0, '.'); import enforced_planning"],
+        cwd=Path(__file__).resolve().parents[1],
+        capture_output=True,
+        check=False,
+    )
+    startup = _time.monotonic() - started
+    assert completed.returncode == 0, completed.stderr
+
+    assert coordination_hook.TURN_END_PROJECTION_REPAIR_TIMEOUT_SECONDS > startup * 2, (
+        f"repair budget {coordination_hook.TURN_END_PROJECTION_REPAIR_TIMEOUT_SECONDS}s leaves no "
+        f"room above {startup:.3f}s of measured interpreter and import startup; the repair would "
+        "time out on its own overhead before reaching the lock"
+    )
+
+
+def test_repair_timeout_is_an_explicit_parameter() -> None:
+    """The budget is a named argument, so a caller can be read and tested.
+
+    It was a module constant read inside the function, which is why the earlier
+    per-event budget experiment could be written at all -- and why its cost was
+    invisible until a real-subprocess test went red.
+    """
+
+    import inspect
+
+    parameters = inspect.signature(coordination_hook._repair_turn_end_projection).parameters
+    assert "timeout" in parameters
+    assert parameters["timeout"].default == coordination_hook.TURN_END_PROJECTION_REPAIR_TIMEOUT_SECONDS

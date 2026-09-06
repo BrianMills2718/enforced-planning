@@ -7,7 +7,6 @@ import subprocess
 import textwrap
 from pathlib import Path
 
-
 PROJECT_META_ROOT = Path(__file__).resolve().parents[1]
 HOOK_SCRIPT = PROJECT_META_ROOT / "hooks" / "git" / "pre-commit"
 
@@ -249,3 +248,54 @@ def test_pre_commit_hook_blocks_mutation_of_frozen_verification_batch(tmp_path: 
     assert result.returncode == 1
     assert marker.read_text(encoding="utf-8") == f"--repo-root {repo_root} check"
     assert "frozen for exact terminal verification" in result.stdout
+
+
+def test_every_variable_the_hook_dereferences_is_defined() -> None:
+    """An undefined variable in a command position makes a check silently not run.
+
+    `$PYTHON` was used in three command positions and assigned nowhere. Under
+    `set -e` without `set -u` it expands to the empty string, bash reports
+    "command not found", the surrounding `if !` reads that as the check failing,
+    and in this repository's default warn mode it prints a warning and continues.
+    So the topic-tag gate had never executed once -- it had only ever failed to
+    start, which looks the same from outside as a check that ran and found
+    nothing worth blocking.
+
+    This asserts the class rather than the instance: every variable the template
+    dereferences must be assigned in the template, carry a `${VAR:-default}`, or
+    be a declared environment input.
+    """
+
+    import re
+
+    source = HOOK_SCRIPT.read_text(encoding="utf-8")
+
+    # Environment inputs the hook is entitled to read without assigning.
+    environment_inputs = {
+        "PYTHON_BIN",
+        "ENFORCED_PLANNING_HOOK_MODE",
+        "HOME",
+        "PATH",
+        "PWD",
+        "USER",
+        "BASH_SOURCE",
+        "PIPESTATUS",
+        "FUNCNAME",
+        "IFS",
+    }
+
+    assigned = set(re.findall(r"^\s*(?:local\s+|export\s+)?([A-Z_][A-Z0-9_]*)=", source, re.MULTILINE))
+    assigned |= set(re.findall(r"^\s*for\s+([A-Za-z_][A-Za-z0-9_]*)\s+in\b", source, re.MULTILINE))
+    assigned |= set(re.findall(r"([A-Z_][A-Z0-9_]*)\+=\(", source))
+    # `${VAR:-...}` and `${VAR+...}` supply their own value.
+    defaulted = set(re.findall(r"\$\{([A-Z_][A-Z0-9_]*)(?::-|:\+|\+|-)", source))
+
+    used = set(re.findall(r'"\$([A-Z_][A-Z0-9_]*)"', source))
+    used |= set(re.findall(r'\$\{([A-Z_][A-Z0-9_]*)\[', source))
+
+    undefined = sorted(used - assigned - defaulted - environment_inputs)
+    assert not undefined, (
+        f"the hook dereferences variables nothing assigns: {undefined}. "
+        "In a command position that makes the check fail to start, which this "
+        "repository's warn mode reports the same way as a check that ran."
+    )

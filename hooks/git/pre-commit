@@ -473,6 +473,47 @@ if [[ -n "$TERM_LINTER" ]] && [[ -f "$VOCAB_PACK" ]]; then
     fi
 fi
 
+# 10b. No prose string-matching (policy no-prose-string-matching, if installed).
+# A check that decides what a report *means* by looking for words in it cannot
+# tell a claim from a receipt, so it produces false blocks and false passes at
+# once and neither is visible to whoever is relying on it. Four Stop-event gates
+# on this machine were switched off for that in two days, and those four are the
+# only events at which anything can refuse a turn on Claude Code.
+#
+# Where the judgement is semantic, use a light LLM. Parsing structured output is
+# allowed only where the owner approved it for that gate -- and approval is not
+# finished until the producing agent is told to emit the fields, because a
+# structured path nothing emits is a dead branch and the prose fallback beneath
+# it hides that the branch never fires. That happened here: the learnings-status
+# marker added in #391 appears in no instruction file, so nothing has ever
+# emitted it.
+#
+# Staged Python only, like the checks around it: the rule is about the moment a
+# matcher is written, and the author is the only person who still knows whether
+# the text is prose or a grammar. Through handle_failure, so it reports in this
+# repository's default warn mode and blocks where a repo declares it blocking --
+# ten known sites live here today, in evidence_sample_hook.py, complete_plan.py
+# and learning_capture_hook.py, and a check that blocked every commit touching
+# them would block their repair first.
+#
+# --allow-vacuous is correct for a staged-file run and wrong for a sweep: the
+# checker refuses to report a clean sweep over a corpus its vocabulary never
+# touched, but one staged file with no prose in it is ordinary.
+PROSE_CHECK=$(find_script "check_no_prose_string_matching.py")
+if [[ -n "$PROSE_CHECK" ]]; then
+    STAGED_PY=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.py$' || true)
+    if [[ -n "$STAGED_PY" ]]; then
+        echo "Checking for prose string-matching..."
+        # shellcheck disable=SC2086
+        if ! "$PYTHON_BIN" "$PROSE_CHECK" --allow-vacuous --roots $STAGED_PY; then
+            echo ""
+            echo "Use a light LLM for the semantic judgement, or annotate a reviewed"
+            echo "exception on the line:  # prose-matching-exempt: <why>"
+            handle_failure "prose string-matching" || exit 1
+        fi
+    fi
+fi
+
 # 11. Topic-tag vocabulary gate and view regeneration (if installed).
 # A `Topics:` tag in a module docstring must resolve against
 # docs/topics/registry.yaml. Free-text tags fragment into near-duplicates and
@@ -485,10 +526,10 @@ fi
 TOPIC_VIEWS=$(find_script "topic_views.py")
 if [[ -n "$TOPIC_VIEWS" ]] && [[ -f "$REPO_ROOT/docs/topics/registry.yaml" ]]; then
     echo "Checking topic tags..."
-    if ! "$PYTHON" "$TOPIC_VIEWS" --root "$REPO_ROOT" --check --write >/dev/null; then
+    if ! "$PYTHON_BIN" "$TOPIC_VIEWS" --root "$REPO_ROOT" --check --write >/dev/null; then
         echo ""
         echo "ERROR: undeclared topic tag."
-        "$PYTHON" "$TOPIC_VIEWS" --root "$REPO_ROOT" --check >/dev/null || true
+        "$PYTHON_BIN" "$TOPIC_VIEWS" --root "$REPO_ROOT" --check >/dev/null || true
         echo "Declare it in docs/topics/registry.yaml with a one-sentence"
         echo "definition, or fix the tag."
         echo ""

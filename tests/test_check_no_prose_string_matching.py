@@ -167,3 +167,36 @@ def test_named_roots_that_read_nothing_are_not_checked(tmp_path: Path) -> None:
     )
     assert completed.returncode == 2, completed.stdout + completed.stderr
     assert "no file was read" in completed.stderr
+
+
+def test_git_hook_environment_does_not_move_the_repository_root(tmp_path: Path) -> None:
+    """`GIT_DIR` in the environment must not redirect path resolution.
+
+    Git hooks export GIT_DIR and GIT_INDEX_FILE, and `rev-parse --show-toplevel`
+    answers about that environment rather than the working directory. Inside the
+    pre-commit hook the root resolved to the scripts directory, every staged path
+    then resolved under `<repo>/scripts/scripts/...`, and the scan read zero
+    files while exiting 0 -- a clean report over nothing, which is the defect the
+    policy exists to stop.
+    """
+
+    import os
+
+    environment = dict(os.environ)
+    environment["GIT_DIR"] = str(REPO / ".git")
+    environment["GIT_INDEX_FILE"] = str(REPO / ".git" / "index")
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(REPO / "scripts" / "check_no_prose_string_matching.py"),
+            "--allow-vacuous",
+            "--roots",
+            "scripts/check_no_prose_string_matching.py",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+        env=environment,
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert "in 1 file(s)" in completed.stdout

@@ -46,14 +46,23 @@ from pathlib import Path
 # fixed `parents[N]` is wrong in one of the two layouts. Ask Git, and fall back
 # to the layout only when there is no repository to ask.
 def _project_root() -> Path:
+    import os
     import subprocess
 
+    # Git hooks export GIT_DIR, GIT_INDEX_FILE and friends, and `rev-parse
+    # --show-toplevel` under them answers about that environment rather than the
+    # working directory. Inside the pre-commit hook this returned the scripts
+    # directory, so every staged path resolved under `<repo>/scripts/scripts/...`
+    # and the scan read zero files while exiting 0. Stripping GIT_* is the same
+    # thing the assessment worker does for the same reason.
+    environment = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
     completed = subprocess.run(
         ["git", "rev-parse", "--show-toplevel"],
         cwd=str(Path(__file__).resolve().parent),
         capture_output=True,
         text=True,
         check=False,
+        env=environment,
     )
     if completed.returncode == 0 and completed.stdout.strip():
         return Path(completed.stdout.strip())

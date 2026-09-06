@@ -5,8 +5,10 @@ remote shell processes. This adapter therefore requires one explicit, non-secret
 ``CHATGPT_SESSION_ID`` marker for the lifetime of a ChatGPT work lane, then
 reuses the framework's existing typed claim-bootstrap transactions.
 
-The bridge intentionally does not register ChatGPT as a native hook client and
-exposes only the subset needed to create and maintain governed worktree lanes.
+The package recognizes ChatGPT as a portable claim owner so persisted claims
+remain readable by ordinary governance processes. The bridge still does not
+register ChatGPT as a native hook client and exposes only the subset needed to
+create and maintain governed worktree lanes.
 """
 
 from __future__ import annotations
@@ -64,12 +66,13 @@ def _session_marker() -> str:
 
 
 def enable_chatgpt_runtime() -> str:
-    """Register ChatGPT as a process-local claim owner backed by one RDC marker.
+    """Require the RDC lane marker and ensure portable claim-owner registration.
 
-    This is intentionally process-local. It does not edit the canonical list of
-    native hook clients or pretend that RDC exposes Codex/Claude/OpenClaw runtime
-    identity. The existing lifecycle code sees the registration only for this
-    compatibility process.
+    Package initialization registers the ChatGPT owner label and session-marker
+    mapping for ordinary governance processes. These assignments are repeated
+    defensively so vendored or partially upgraded installations fail toward the
+    same explicit identity rather than borrowing another client's runtime.
+    Native hook-client dispatch remains unchanged.
     """
 
     marker = _session_marker()

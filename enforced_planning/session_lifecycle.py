@@ -2643,6 +2643,27 @@ def start_session(
 ) -> dict[str, Any]:
     """Create or refresh the session contract plus linked tracker artifact."""
 
+    # Claim creation has always enforced SUPPORTED_AGENTS; tracker creation
+    # never did. That asymmetry is what produced 23 permanently stranded
+    # trackers between 2026-07-24 and 2026-08-21, written with legacy per-lane
+    # identities such as 'codex-evidence-reader-wiki' and 'codex-root'. A
+    # tracker naming an agent the claim registry will not accept can never have
+    # a matching claim, so session-close cannot reach it -- it loads the claim
+    # first -- and it becomes residue the moment its worktree is removed.
+    #
+    # Validating here closes the write path. `validate_native_session_binding`
+    # below does not catch this: STRICT_NATIVE_SESSION_ENV_KEYS.get(agent)
+    # returns None for an unknown agent, so it silently no-ops rather than
+    # rejecting the name.
+    if agent not in coordination_claims.SUPPORTED_AGENTS:
+        supported = ", ".join(coordination_claims.SUPPORTED_AGENTS)
+        raise ValueError(
+            f"start_session refuses an unsupported agent {agent!r}: a tracker naming an "
+            f"agent the claim registry will not accept can never be closed through "
+            f"session-close, because that path loads the claim first. Use one of: {supported}. "
+            "A per-lane or per-task identity belongs in scope or session_name, not agent."
+        )
+
     resolved_session_id = coordination_claims.resolve_session_id(agent, session_id)
     if not resolved_session_id:
         raise ValueError(
@@ -4822,8 +4843,32 @@ def _validate_orphaned_tracker_archival(
         raise ValueError(
             f"Session tracker at {resolved_tracker} is missing the agent/project/scope identity archival requires"
         )
-    if agent not in coordination_claims.SUPPORTED_AGENTS:
-        raise ValueError(f"Session tracker at {resolved_tracker} names an unsupported agent {agent!r}")
+    # Deliberately NOT refused on an unsupported agent name.
+    #
+    # SUPPORTED_AGENTS gates who may *act* -- claim a repository, close another
+    # runtime's session. Archiving an orphaned tracker is neither: it moves a
+    # dead bookkeeping file into the archive tree and leaves the branch, the
+    # worktree, and every claim untouched. Asking "is this agent allowed to act
+    # here?" where nobody acts blocked the cleanup and protected nothing.
+    #
+    # The operator guide's own contract for this operation lists the conditions
+    # that make it safe -- the recorded worktree absent from disk, the claim file
+    # gone, the tracker bytes matching the supplied digest, the tracker inside
+    # the canonical tree. All four are enforced above and below. The agent name
+    # is not among them, and never was.
+    #
+    # Measured 2026-09-08: 23 of 74 orphaned trackers were unarchivable for this
+    # reason alone -- legacy per-lane identities such as
+    # 'codex-evidence-reader-wiki' and 'codex-root' written between 2026-07-24
+    # and 2026-08-21. Because claim creation DID enforce SUPPORTED_AGENTS while
+    # start_session did not, these trackers could never have a matching claim,
+    # so session-close could never reach them and archival refused them too.
+    # They were permanent residue by construction. start_session now validates
+    # the agent, so no new tracker can enter that state.
+    #
+    # The name is still reported in the receipt: an unexpected identity stays
+    # visible rather than being silently normalised away.
+    agent_supported = agent in coordination_claims.SUPPORTED_AGENTS
 
     recorded_worktree_text = contract.get("worktree_path")
     if not recorded_worktree_text:
@@ -4885,6 +4930,7 @@ def _validate_orphaned_tracker_archival(
     return {
         "schema_version": "1.0",
         "agent": str(agent),
+        "agent_supported": agent_supported,
         "project": str(project),
         "scope": str(scope),
         "session_id": contract.get("session_id"),

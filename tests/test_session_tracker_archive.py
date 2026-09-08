@@ -349,3 +349,121 @@ def test_cli_archives_through_the_wrapper(
 
     assert exit_code == 0
     assert not tracker.exists()
+
+
+def test_archives_a_legacy_agent_id_tracker(
+    coordination: dict[str, Path],
+    tmp_path: Path,
+) -> None:
+    """A legacy per-lane agent id must not block archival of a genuine orphan.
+
+    Before 2026-09-08 this raised "names an unsupported agent". 23 of 74
+    orphaned trackers in the live workspace were unarchivable for that reason
+    alone, written with identities such as 'codex-evidence-reader-wiki' and
+    'codex-root'. Because claim creation enforced SUPPORTED_AGENTS while
+    start_session did not, those trackers could never have a matching claim,
+    so session-close could not reach them either: permanent residue.
+    """
+    repo = _seed_repo(tmp_path)
+    _git(repo, "branch", "lane")
+    tracker = _write_tracker(
+        coordination["sessions"],
+        agent="codex-evidence-reader-wiki",
+        repo_root=repo,
+        worktree_path=tmp_path / "gone-worktree",
+    )
+
+    result = session_lifecycle.archive_orphaned_session_tracker(
+        tracker_path=tracker,
+        expected_tracker_sha256=_digest(tracker),
+    )
+
+    assert result["action"] == "archived_orphaned_tracker"
+    assert result["agent"] == "codex-evidence-reader-wiki"
+    # The unusual identity stays visible rather than being normalised away.
+    assert result["agent_supported"] is False
+    assert result["branch_action"] == "untouched"
+    assert not tracker.exists()
+    assert Path(result["archived_tracker_path"]).is_file()
+    # The branch is untouched, as for any other archival.
+    assert "lane" in _git(repo, "branch", "--format=%(refname:short)").splitlines()
+
+
+def test_supported_agent_still_reported_as_supported(
+    coordination: dict[str, Path],
+    tmp_path: Path,
+) -> None:
+    """The receipt field must discriminate, not report False for everyone."""
+    repo = _seed_repo(tmp_path)
+    tracker = _write_tracker(
+        coordination["sessions"],
+        agent="claude-code",
+        repo_root=repo,
+        worktree_path=tmp_path / "gone-worktree",
+    )
+
+    result = session_lifecycle.archive_orphaned_session_tracker(
+        tracker_path=tracker,
+        expected_tracker_sha256=_digest(tracker),
+    )
+
+    assert result["agent_supported"] is True
+
+
+def test_legacy_agent_id_does_not_bypass_the_real_safety_guards(
+    coordination: dict[str, Path],
+    tmp_path: Path,
+) -> None:
+    """Relaxing the agent check must not relax what actually makes this safe.
+
+    The operator guide's contract for this operation names four conditions:
+    the recorded worktree absent, the claim file gone, the tracker digest
+    matching, and the tracker inside the canonical tree. None of them depends
+    on the agent name, and all must still hold for a legacy identity.
+    """
+    repo = _seed_repo(tmp_path)
+    live_worktree = tmp_path / "live-worktree"
+    live_worktree.mkdir()
+    tracker = _write_tracker(
+        coordination["sessions"],
+        agent="codex-root",
+        repo_root=repo,
+        worktree_path=live_worktree,
+    )
+
+    with pytest.raises(ValueError, match="rejects an existing recorded worktree"):
+        session_lifecycle.archive_orphaned_session_tracker(
+            tracker_path=tracker,
+            expected_tracker_sha256=_digest(tracker),
+        )
+    assert tracker.is_file()
+
+    # And the digest guard, on the same legacy identity.
+    with pytest.raises(ValueError):
+        session_lifecycle.archive_orphaned_session_tracker(
+            tracker_path=tracker,
+            expected_tracker_sha256="0" * 64,
+        )
+    assert tracker.is_file()
+
+
+def test_start_session_refuses_an_unsupported_agent(tmp_path: Path) -> None:
+    """The write path that created those 23 stranded trackers is now closed.
+
+    start_session never validated `agent`, while claim creation always did.
+    validate_native_session_binding does not catch it either:
+    STRICT_NATIVE_SESSION_ENV_KEYS.get(agent) returns None for an unknown
+    agent, so it no-ops instead of rejecting.
+    """
+    with pytest.raises(ValueError, match="refuses an unsupported agent"):
+        session_lifecycle.start_session(
+            agent="codex-evidence-reader-wiki",
+            project="demo",
+            scope="lane",
+            intent="should never reach tracker creation",
+            repo_root=str(tmp_path),
+            worktree_path=str(tmp_path / "wt"),
+            branch="lane",
+            broader_goal="prove the write path is closed",
+            current_phase="implementation",
+        )

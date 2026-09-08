@@ -4450,6 +4450,7 @@ def resume_session(
     successor_custody_offer: session_continuity.SuccessorCustodyOfferV1 | None = None,
     successor_custody_acceptance: session_continuity.SuccessorCustodyAcceptanceV1 | None = None,
     repair_worktree_path: bool = False,
+    repair_missing_plan_ref: bool = False,
 ) -> dict[str, Any]:
     """Reattach a new runtime session to an existing plan-bound lane."""
 
@@ -4460,8 +4461,48 @@ def resume_session(
     )
     if claim.status not in coordination_claims.CLOSEABLE_STATUSES:
         raise ValueError(f"Cannot resume lane from lifecycle status {claim.status!r}")
+    if claim.plan_ref and repair_missing_plan_ref:
+        raise ValueError(
+            f"repair_missing_plan_ref refuses a lane that already records plan_ref "
+            f"{claim.plan_ref!r}; it exists only to stamp the explicit UNPLANNED marker "
+            "onto a claim whose plan_ref is absent, never to overwrite a real authority."
+        )
     if not claim.plan_ref:
-        raise ValueError("Cannot resume a lane with no plan_ref")
+        if not repair_missing_plan_ref:
+            raise ValueError(
+                "Cannot resume a lane with no plan_ref. The guide's mandatory rule is that no "
+                "live session lacks one, and bounded maintenance satisfies it with the explicit "
+                "UNPLANNED marker -- but a Makefile call site that passed --allow-unplanned "
+                "without falling back to --plan UNPLANNED wrote a literal null instead, and "
+                "claims created before that fallback landed still carry it. Refusing here left "
+                "such a lane no sanctioned exit at all: it could not be resumed, therefore not "
+                "pushed (the pre-push gate wants a live claim) and therefore not closed (closeout "
+                "wants merge evidence the push would have produced) "
+                "-- lrn-20260825T051949695806Z-29b10f7045. Pass repair_missing_plan_ref "
+                "(--repair-missing-plan-ref) to stamp UNPLANNED first, then resume normally."
+            )
+        # One explicit locked mutation before the resume transaction, rather than
+        # threading a repaired value through all four of its update branches. It
+        # is deliberately durable on its own: if resume then fails for an
+        # unrelated reason, the claim is still compliant with the mandatory rule
+        # and the next attempt no longer needs the flag.
+        _apply_claim_payload_updates(
+            claim=claim,
+            claim_file=claim_file,
+            updates={"plan_ref": session_contracts.UNPLANNED_PLAN_REF},
+            expected_fields={
+                "plan_ref": payload.get("plan_ref"),
+                "session_id": payload.get("session_id"),
+                "status": payload.get("status"),
+            },
+        )
+        claim, payload, claim_file, claim_snapshot_bytes = _claim_snapshot_any_status(
+            agent=agent,
+            project=project,
+            scope=scope,
+        )
+        if not claim.plan_ref:
+            raise ValueError("plan_ref repair did not take effect; refusing to resume")
     if claim.branch and claim.branch != branch:
         raise ValueError(f"Claim branch is {claim.branch}, not {branch}")
     if claim.worktree_path and claim.worktree_path != worktree_path:

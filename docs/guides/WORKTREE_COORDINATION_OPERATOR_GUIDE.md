@@ -612,6 +612,51 @@ refused with an actor mismatch because a different runtime session_id still
 owned the claim; and plain `session-resume` refused on the path mismatch
 itself. This flag closes exactly that gap.
 
+### Resuming a lane whose claim records no `plan_ref`
+
+The mandatory rule below is that no live session lacks a `plan_ref`, and bounded
+maintenance satisfies it with the explicit `UNPLANNED` marker. A Makefile call
+site that passed `--allow-unplanned` without also falling back to
+`--plan UNPLANNED` wrote a literal `null` instead -- the defect described under
+"`plan_ref`'s `ALLOW_UNPLANNED` fallback must be symmetric across every call
+site". That creation path is fixed, but claims written before it landed still
+carry the null.
+
+Such a lane had **no sanctioned exit at all** once its session ended, and each
+guard was individually correct:
+
+| Attempted exit | Refusal |
+|---|---|
+| `session-resume` | `Cannot resume a lane with no plan_ref` |
+| a fresh claim on the same scope | the existing `session_ended` claim is not overwritable |
+| `git push` (to create merge evidence) | `missing_branch_claim` -- no live claim on the branch |
+| `session-close --reconcile-session-ended` | wants the merge evidence the push would have produced |
+
+Recorded 2026-08-25 as `lrn-20260825T051949695806Z-29b10f7045`, then
+independently rediscovered on 2026-09-08 and escalated as a design gap; the
+manual workaround each time was to cherry-pick the commit into a second
+maintenance lane and merge from there.
+
+Pass `--repair-missing-plan-ref` to stamp the marker and resume normally:
+
+```bash
+python scripts/session_resume.py \
+  --agent AGENT --project PROJECT --scope SCOPE \
+  --worktree-path /path/to/repo/worktrees/BRANCH \
+  --branch BRANCH --current-phase "..." \
+  --repair-missing-plan-ref \
+  --json
+```
+
+It fails closed on both halves, mirroring `--repair-worktree-path`: it applies
+only when `plan_ref` is genuinely absent, and it **refuses** a claim that already
+records a real plan authority, so it can never silently downgrade a numbered or
+`goal:` lane to `UNPLANNED` and drop its work-graph binding. The stamp is one
+explicit locked mutation applied before the resume transaction and is durable on
+its own -- if resume then fails for an unrelated reason, the claim is already
+compliant and the retry no longer needs the flag. Every other resume
+precondition is unchanged.
+
 ### Append-only stores do not create contention
 
 Two lanes declaring the same write path normally conflict, and the second lane

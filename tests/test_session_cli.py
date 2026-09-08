@@ -6775,3 +6775,158 @@ def test_start_session_auto_resolves_claude_code_runtime_session_id(
     assert loaded_claim is not None
     assert loaded_claim.session_name == "cross-tool-session-adapter-rollout"
     assert loaded_claim.broader_goal == "Cross-Tool Session Adapter Rollout"
+
+
+def _seed_ended_lane_with_null_plan_ref(
+    tmp_path: Path,
+    claims_dir: Path,
+    trackers_dir: Path,
+) -> tuple[Path, Path]:
+    """Build a preserved session_ended lane whose claim records plan_ref: null."""
+
+    source_repo = tmp_path / "source"
+    source_repo.mkdir()
+    _git(source_repo, "init", "-b", "main")
+    _git(source_repo, "config", "user.name", "Test")
+    _git(source_repo, "config", "user.email", "test@example.com")
+    (source_repo / "README.md").write_text("seed\n", encoding="utf-8")
+    _git(source_repo, "add", ".")
+    _git(source_repo, "commit", "-m", "seed")
+
+    worktree = source_repo / "worktrees" / "legacy-maintenance"
+    worktree.parent.mkdir(parents=True)
+    _git(source_repo, "worktree", "add", "-b", "legacy-maintenance", str(worktree))
+
+    session_lifecycle.start_session(
+        agent="claude-code",
+        project="demo-project",
+        scope="legacy-maintenance",
+        intent="bounded maintenance written before the UNPLANNED fallback existed",
+        repo_root=str(source_repo),
+        worktree_path=str(worktree),
+        branch="legacy-maintenance",
+        broader_goal="Legacy Unplanned Lane Recovery",
+        current_phase="mid-implementation",
+        plan_ref="UNPLANNED",
+        session_id="claude-code:predecessor",
+        tracker_dir=trackers_dir,
+    )
+    claim_path = claims_dir / "claude-code_demo-project_legacy-maintenance.yaml"
+    claim_payload = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    # Reproduce the real legacy record: a Makefile call site that passed
+    # --allow-unplanned without falling back to --plan UNPLANNED wrote a literal
+    # null here, with no error at claim-creation time.
+    claim_payload["plan_ref"] = None
+    claim_payload["status"] = "session_ended"
+    claim_payload["previous_status"] = "active"
+    claim_payload["session_end_reason"] = "other"
+    claim_path.write_text(yaml.safe_dump(claim_payload, sort_keys=False), encoding="utf-8")
+    return claim_path, worktree
+
+
+def test_resume_session_repairs_a_missing_plan_ref(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The defect this pins: a session_ended claim carrying plan_ref: null had no
+    sanctioned exit at all. Resume refused on the plan-shaped predicate, so no
+    live claim could be attached; the pre-push gate then refused the push for
+    want of a live claim, and closeout refused for want of the merge evidence
+    that push would have produced. Recorded 2026-08-25 as
+    lrn-20260825T051949695806Z-29b10f7045 and still reproducing 2026-09-08 on
+    ecosystem-ops:windows-notify-and-scout-scheduler.
+    """
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    monkeypatch.delenv("CODEX_THREAD_ID", raising=False)
+
+    claim_path, worktree = _seed_ended_lane_with_null_plan_ref(tmp_path, claims_dir, trackers_dir)
+    assert yaml.safe_load(claim_path.read_text(encoding="utf-8"))["plan_ref"] is None
+
+    payload = _resume_session_as_native(
+        agent="claude-code",
+        project="demo-project",
+        scope="legacy-maintenance",
+        worktree_path=str(worktree),
+        branch="legacy-maintenance",
+        current_phase="push the stranded commit and close the lane",
+        session_id="claude-code:successor",
+        repair_missing_plan_ref=True,
+    )
+    resumed_claim = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+
+    assert payload["action"] == "resumed"
+    assert payload["plan_ref"] == session_contracts.UNPLANNED_PLAN_REF
+    assert resumed_claim["plan_ref"] == session_contracts.UNPLANNED_PLAN_REF
+    assert resumed_claim["session_id"] == "claude-code:successor"
+    assert resumed_claim["status"] == "active"
+    assert prewrite_claim_projection.projection_is_current(claims_dir=claims_dir)
+
+
+def test_resume_session_refuses_a_missing_plan_ref_without_the_repair_flag(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Default behaviour is unchanged, and the refusal names the remedy: a gate
+    whose message does not reach its own escape hatch is what stranded these
+    lanes for two weeks."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    monkeypatch.delenv("CODEX_THREAD_ID", raising=False)
+
+    claim_path, worktree = _seed_ended_lane_with_null_plan_ref(tmp_path, claims_dir, trackers_dir)
+
+    with pytest.raises(ValueError) as excinfo:
+        _resume_session_as_native(
+            agent="claude-code",
+            project="demo-project",
+            scope="legacy-maintenance",
+            worktree_path=str(worktree),
+            branch="legacy-maintenance",
+            current_phase="attempt an unrepaired resume",
+            session_id="claude-code:successor",
+        )
+
+    assert "Cannot resume a lane with no plan_ref" in str(excinfo.value)
+    assert "--repair-missing-plan-ref" in str(excinfo.value)
+    unchanged = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    assert unchanged["plan_ref"] is None
+    assert unchanged["status"] == "session_ended"
+    assert unchanged["session_id"] == "claude-code:predecessor"
+
+
+def test_resume_session_refuses_plan_ref_repair_when_a_real_plan_ref_exists(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The flag stamps an absent marker; it must never overwrite a real plan
+    authority with UNPLANNED, which would silently drop work-graph binding."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    monkeypatch.delenv("CODEX_THREAD_ID", raising=False)
+
+    claim_path, worktree = _seed_ended_lane_with_null_plan_ref(tmp_path, claims_dir, trackers_dir)
+    claim_payload = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    claim_payload["plan_ref"] = "demo-project#42"
+    claim_path.write_text(yaml.safe_dump(claim_payload, sort_keys=False), encoding="utf-8")
+
+    with pytest.raises(ValueError) as excinfo:
+        _resume_session_as_native(
+            agent="claude-code",
+            project="demo-project",
+            scope="legacy-maintenance",
+            worktree_path=str(worktree),
+            branch="legacy-maintenance",
+            current_phase="attempt to clobber a real plan authority",
+            session_id="claude-code:successor",
+            repair_missing_plan_ref=True,
+        )
+
+    assert "already records plan_ref" in str(excinfo.value)
+    assert yaml.safe_load(claim_path.read_text(encoding="utf-8"))["plan_ref"] == "demo-project#42"

@@ -142,13 +142,20 @@ def test_refuses_when_the_recorded_worktree_still_exists(
     repo = _seed_repo(tmp_path)
     live_worktree = tmp_path / "live-worktree"
     live_worktree.mkdir()
+    # A genuine linked worktree, which is what "still exists" has to mean here:
+    # a `.git` FILE pointing back into the parent repository. An empty directory
+    # was the original stand-in, but a bare directory is not a lane checkout and
+    # is no longer refused (2026-09-08).
+    (live_worktree / ".git").write_text(
+        f"gitdir: {repo}/.git/worktrees/lane\n", encoding="utf-8"
+    )
     tracker = _write_tracker(
         coordination["sessions"],
         repo_root=repo,
         worktree_path=live_worktree,
     )
 
-    with pytest.raises(ValueError, match="rejects an existing recorded worktree"):
+    with pytest.raises(ValueError, match="still a linked worktree"):
         session_lifecycle.archive_orphaned_session_tracker(
             tracker_path=tracker,
             expected_tracker_sha256=_digest(tracker),
@@ -424,6 +431,9 @@ def test_legacy_agent_id_does_not_bypass_the_real_safety_guards(
     repo = _seed_repo(tmp_path)
     live_worktree = tmp_path / "live-worktree"
     live_worktree.mkdir()
+    (live_worktree / ".git").write_text(
+        f"gitdir: {repo}/.git/worktrees/lane\n", encoding="utf-8"
+    )
     tracker = _write_tracker(
         coordination["sessions"],
         agent="codex-root",
@@ -431,7 +441,7 @@ def test_legacy_agent_id_does_not_bypass_the_real_safety_guards(
         worktree_path=live_worktree,
     )
 
-    with pytest.raises(ValueError, match="rejects an existing recorded worktree"):
+    with pytest.raises(ValueError, match="still a linked worktree"):
         session_lifecycle.archive_orphaned_session_tracker(
             tracker_path=tracker,
             expected_tracker_sha256=_digest(tracker),
@@ -503,3 +513,100 @@ def test_chatgpt_is_a_supported_agent(tmp_path: Path) -> None:
         )
     except Exception:  # noqa: BLE001 - any later failure is not this guard
         pass
+
+
+def test_refuses_a_real_linked_worktree(
+    coordination: dict[str, Path],
+    tmp_path: Path,
+) -> None:
+    """A present lane checkout must still be refused. This is the boundary.
+
+    Relaxing the existence check must not let archival hide a lane that is
+    physically on disk. A linked worktree is identified by a `.git` FILE.
+    """
+    repo = _seed_repo(tmp_path)
+    linked = tmp_path / "linked-worktree"
+    linked.mkdir()
+    (linked / ".git").write_text(f"gitdir: {repo}/.git/worktrees/lane\n", encoding="utf-8")
+    tracker = _write_tracker(
+        coordination["sessions"], repo_root=repo, worktree_path=linked
+    )
+
+    with pytest.raises(ValueError, match="still a linked worktree"):
+        session_lifecycle.archive_orphaned_session_tracker(
+            tracker_path=tracker,
+            expected_tracker_sha256=_digest(tracker),
+        )
+    assert tracker.is_file()
+    assert (linked / ".git").is_file(), "the worktree must not be touched"
+
+
+def test_archives_when_the_recorded_path_is_a_canonical_repo_root(
+    coordination: dict[str, Path],
+    tmp_path: Path,
+) -> None:
+    """A tracker recording the canonical checkout is not a removable lane.
+
+    The operator guide's canonical-root reconciliation says ordinary
+    session-close must never treat that record as a removable linked worktree.
+    Archival previously refused it anyway, and session-close could not reach it
+    because the claim was gone -- so it was unretireable. 11 live cases.
+    """
+    repo = _seed_repo(tmp_path)
+    tracker = _write_tracker(
+        coordination["sessions"], repo_root=repo, worktree_path=repo
+    )
+
+    result = session_lifecycle.archive_orphaned_session_tracker(
+        tracker_path=tracker,
+        expected_tracker_sha256=_digest(tracker),
+    )
+    assert result["recorded_worktree_kind"] == "canonical_repository_root"
+    assert result["filesystem_action"] == "retained_untouched_canonical_repository_root"
+    assert not tracker.exists()
+    assert (repo / ".git").is_dir(), "the repository must be retained untouched"
+    assert (repo / "README.md").is_file()
+
+
+def test_archives_when_the_recorded_path_is_not_a_git_worktree(
+    coordination: dict[str, Path],
+    tmp_path: Path,
+) -> None:
+    """A shared/umbrella directory is not a lane and will never be removed.
+
+    12 live cases recorded `~/projects/inside-success`, a parent directory
+    holding several repositories. Refusing on its mere existence made those
+    trackers permanent residue.
+    """
+    repo = _seed_repo(tmp_path)
+    umbrella = tmp_path / "umbrella"
+    umbrella.mkdir()
+    (umbrella / "some-sibling-repo").mkdir()
+    tracker = _write_tracker(
+        coordination["sessions"], repo_root=repo, worktree_path=umbrella
+    )
+
+    result = session_lifecycle.archive_orphaned_session_tracker(
+        tracker_path=tracker,
+        expected_tracker_sha256=_digest(tracker),
+    )
+    assert result["recorded_worktree_kind"] == "not_a_git_worktree"
+    assert not tracker.exists()
+    assert (umbrella / "some-sibling-repo").is_dir(), "the directory must be retained"
+
+
+def test_absent_worktree_still_reports_the_original_action(
+    coordination: dict[str, Path],
+    tmp_path: Path,
+) -> None:
+    """The ordinary orphan path must keep its existing receipt vocabulary."""
+    repo = _seed_repo(tmp_path)
+    tracker = _write_tracker(
+        coordination["sessions"], repo_root=repo, worktree_path=tmp_path / "gone"
+    )
+    result = session_lifecycle.archive_orphaned_session_tracker(
+        tracker_path=tracker,
+        expected_tracker_sha256=_digest(tracker),
+    )
+    assert result["recorded_worktree_kind"] == "absent"
+    assert result["filesystem_action"] == "not_attempted_absent_recorded_worktree"

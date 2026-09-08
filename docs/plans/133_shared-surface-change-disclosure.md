@@ -122,6 +122,28 @@ never interprets the agent's report — it reads git and board state, computes a
 diff, and emits structured data. No adjudication is required because nothing needs
 to be inferred. This also sidesteps the 2026-09-03 failure by never blocking.
 
+**Two controls merged here on 2026-09-06 change this plan and were not read when
+it was drafted.** `scripts/check_no_prose_string_matching.py` (#398) already
+refuses code that infers meaning by string-matching prose, and is runnable — so
+acceptance criterion 5 below invokes it rather than describing a manual grep.
+
+And `scripts/assertion_evidence_gate.py` (#399, 600 lines, "structural evidence,
+model adjudication, no prose regex") was **deleted the same day** in #401 for
+having no consumer, with the deletion verified rather than assumed. Brian's
+stated reason: *"a control AES ships belongs in AES's route and should be
+installable into one workspace rather than wired machine-wide."* AES now owns
+it at `agentic-engineering-system/src/aes/assertion_evidence_gate.py`.
+
+That is a hard precedent for this plan and it cuts two ways. It confirms the
+design direction — structural evidence over prose regex is the pattern that
+survived. It also sets the bar for survival: **a control with no consumer gets
+deleted here within a day.** This plan's home is defensible on the same
+principle rather than in spite of it — the mechanism extends `session_end.py`,
+which is enforced-planning's own closeout seam, and its consumer is the closing
+report of the session it runs in. It is not a control another route ships. If
+slice 1's emissions turn out to have no consumer, the correct outcome is
+deletion, and the Reassessment Contract says so.
+
 `monday_enumeration.py` (`11e2f84e`) is the reusable pattern for the non-git legs:
 an artifact carrying its own `observed_at`, a count derived from its own items, and
 a staleness bound that refuses rather than reassures. **Disposition: extend** —
@@ -188,6 +210,10 @@ report parser, or a parallel session-state store.
   fixtures for the three coverage states.
 - **Plan revision required:** moving computation from `SessionEnd` to `Stop`,
   adding a fourth surface, or changing what counts as a shared surface.
+- **Delete rather than keep:** if the ignore counter shows the emission is
+  reliably unused, remove the mechanism instead of hardening it. #401 deleted a
+  600-line gate the day it was written for exactly this reason, and that is the
+  right call, not a failure.
 - **Human decision required:** escalating from emission to any refusal, requiring
   a Monday re-enumeration before every closeout, or accepting a permanently
   unbounded Slack leg as sufficient.
@@ -261,7 +287,9 @@ all-clear, and worse than an honest refusal.
 2. A closeout in a session without it contains no delta section.
 3. All three coverage states are distinguishable in rendered output, with a test that fails if two collapse.
 4. Nothing blocks: no Stop-hook refusal, no turn-end gate. Emission only.
-5. Nothing string-matches the agent's prose. Grep the implementation for regexes over report text; there must be none.
+5. Nothing string-matches the agent's prose, proved by the existing checker
+   rather than by inspection: `python3 scripts/check_no_prose_string_matching.py
+   --roots scripts/shared_surface_delta.py` exits clean.
 6. Emissions and whether the report acknowledged them are counted, so ignore rate is measurable from slice 1.
 
 ## Open Questions

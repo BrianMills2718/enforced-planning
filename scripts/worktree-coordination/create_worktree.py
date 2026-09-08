@@ -1007,6 +1007,34 @@ def main(argv: list[str] | None = None) -> int:
             missing.append("--branch")
         raise SystemExit(f"Missing required arguments for worktree creation: {', '.join(missing)}")
 
+    # Claim metadata is consumed only by verify_scoped_write_claim, which runs
+    # only under --require-write-claim. Accepting these flags without it silently
+    # discarded them, so a caller who supplied claim identity and write paths got
+    # an UNCLAIMED worktree while believing it was claimed -- and the JSON reports
+    # coordination_checked: false, which reads as "the check ran and found nothing"
+    # rather than "no check was requested". Three unclaimed lanes were created that
+    # way on 2026-09-08 across two repositories before anyone read this function.
+    supplied_claim_flags = [
+        name
+        for name, value in (
+            ("--claim-agent", args.claim_agent),
+            ("--claim-project", args.claim_project),
+            ("--claim-write-path", args.claim_write_path),
+            ("--claim-start-revision", args.claim_start_revision),
+        )
+        if value
+    ]
+    if supplied_claim_flags and not args.require_write_claim:
+        raise SystemExit(
+            "Refusing to create an unclaimed worktree while claim metadata was "
+            f"supplied: {', '.join(supplied_claim_flags)}. These are read only under "
+            "--require-write-claim, so without it they would be discarded and the "
+            "worktree would carry no claim. Add --require-write-claim to enforce the "
+            "claim, or drop the claim flags to state plainly that this lane is "
+            "unclaimed. Prefer the repository's own entry point (`make worktree` / "
+            "`make maintenance-worktree`), which passes --require-write-claim for you."
+        )
+
     worktree_path = Path(args.path).expanduser().resolve()
     claims_dir = Path(args.claims_dir).expanduser().resolve() if args.claims_dir else None
     try:

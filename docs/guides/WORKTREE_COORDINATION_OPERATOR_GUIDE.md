@@ -736,6 +736,35 @@ outcome authority, not an alias for `UNPLANNED`. If work resumes in a new
 runtime, reattach it to the existing plan- or goal-bound lane instead of
 silently creating a new one.
 
+### What `session-close` tells you about the shared branch
+
+Every close prints one line to stderr saying whether `origin/main` moved from
+outside the lane while it was open, and lists what landed if it did. Policy
+`shared-surface-state-claims` requires checking a surface other agents can write
+before describing its state; this is that check for the default branch.
+
+It reports movement, not authorship. Two measurements on 2026-09-08 ruled both
+identity signals out: every agent session commits as the same operator (and a
+`gh` squash-merge rewrites the author to the GitHub noreply address regardless),
+and a `Claude-Session` trailer appeared on 1 of the 60 most recent commits. Either
+filter would have been wrong on nearly every close. What the report does instead
+is set membership -- commits on the ref that neither the lane branch nor its
+squash-merge commit reaches.
+
+Three outcomes, and the last two are deliberately not interchangeable:
+
+- commits are listed -- read them before describing this branch's state
+- `unchanged from outside this lane` -- the range was read and held nothing
+- `NOT CHECKED`, with the reason -- do not report the branch as though nothing
+  landed
+
+The range's lower bound is the claim's `start_revision` where one exists, and the
+lane's merge-base otherwise. Only 2 of 72 live claims carried a `start_revision`
+when this shipped, because it is populated for plan-graph-backed lanes and
+nothing else, so the merge-base is the common case; the rendered line says which
+was used, because a lane that rebased onto newer main moves its merge-base
+forward and will under-report.
+
 ### Overlapping an undeclared whole-repository claim
 
 A claim holding `["."]` because a scope was omitted has an owner who never

@@ -29,6 +29,8 @@ REPO_ROOT = _find_repo_root()
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from enforced_planning import concurrent_writers  # noqa: E402
+from enforced_planning import coordination_claims  # noqa: E402
 from enforced_planning import session_lifecycle  # noqa: E402
 
 
@@ -215,8 +217,54 @@ def _reconcile_canonical_lock(scope: str) -> None:
         print(result.stdout.strip(), file=sys.stderr)
 
 
+
+def _lane_range_basis(project: str, scope: str, branch: str | None) -> tuple[str | None, str]:
+    """The revision this lane branched from, read before the claim is released.
+
+    A claim's ``start_revision`` is recorded once and never moves, which is what
+    this report wants, but it is populated only for plan-graph-backed lanes: 2 of
+    72 live claims carried one when this was written. So an unplanned maintenance
+    lane -- the common case -- falls back to its branch's merge-base against the
+    shared ref, which keeps the report alive at a cost the rendered text states.
+    """
+    for claim in coordination_claims._load_claims():
+        if claim.scope == scope and project in claim.projects and claim.start_revision:
+            return claim.start_revision, concurrent_writers.BASIS_START_REVISION
+
+    candidate = branch or scope
+    completed = subprocess.run(
+        ["git", "-C", str(REPO_ROOT), "merge-base", candidate, "origin/main"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if completed.returncode != 0:
+        return None, concurrent_writers.BASIS_MERGE_BASE
+    return completed.stdout.strip() or None, concurrent_writers.BASIS_MERGE_BASE
+
+
+def _report_shared_ref_movement(
+    since_revision: str | None, basis: str, lane_refs: tuple[str, ...]
+) -> None:
+    """Say whether the shared branch moved from outside this lane while it was open.
+
+    Policy shared-surface-state-claims: a closeout that describes what was
+    written is only ever speaking for its own session. Printed to stderr so it
+    reaches the operator without disturbing --json consumers.
+    """
+    report = concurrent_writers.collect_shared_ref_movement(
+        REPO_ROOT,
+        ref="origin/main",
+        since_revision=since_revision,
+        lane_refs=lane_refs,
+        basis=basis,
+    )
+    print(concurrent_writers.render_report(report), file=sys.stderr)
+
+
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
+    since_revision, range_basis = _lane_range_basis(args.project, args.scope, args.branch)
     payload = session_lifecycle.close_session(**_supported_closeout_kwargs(args))
     if args.json:
         print(json.dumps(payload, indent=2, sort_keys=True))
@@ -227,6 +275,11 @@ def main(argv: list[str] | None = None) -> int:
             f"released={payload['released']}"
         )
     _reconcile_canonical_lock(args.scope)
+    _report_shared_ref_movement(
+        since_revision,
+        range_basis,
+        tuple(ref for ref in (args.branch or args.scope, args.merge_commit) if ref),
+    )
     return 0
 
 

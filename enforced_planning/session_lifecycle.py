@@ -781,6 +781,14 @@ def _apply_legacy_cross_session_resume_transaction(
                 raise ValueError(f"claim field {field} changed after cross-session resume preflight")
         if claim.broad_scope_mode == "bootstrap" and claim.target_worktree_path:
             current["worktree_path"] = claim.target_worktree_path
+        elif claim.worktree_path and claim.worktree_path != worktree_path:
+            # Reaching this branch means resume_session()'s own
+            # _validate_worktree_path_repair already confirmed the recorded
+            # path is gone and the provided one is a real linked worktree on
+            # the claimed branch -- the only way worktree_path could differ
+            # here at all is a validated repair, never an unchecked caller
+            # value.
+            current["worktree_path"] = worktree_path
         current.update(
             {
                 "status": "active",
@@ -2161,6 +2169,63 @@ def _is_ancestor(repo_root: Path, ancestor_ref: str, descendant_ref: str) -> boo
         check=False,
     )
     return result.returncode == 0
+
+
+def _validate_worktree_path_repair(
+    *,
+    recorded_worktree_path: str,
+    provided_worktree_path: str,
+    branch: str,
+) -> None:
+    """Fail closed before accepting a corrected ``worktree_path`` on resume.
+
+    A worktree legitimately relocated from a non-standard path to the
+    sanctioned ``<repo>/worktrees/<branch>/`` convention leaves its claim's
+    recorded ``worktree_path`` stale. Nothing before this could repair that
+    pointer: a fresh claim on the same scope refuses because the existing one
+    is not overwritable while non-live, ``session-close`` requires the exact
+    owning runtime, and plain resume requires the caller's path to match the
+    stale record exactly. Observed 2026-09-08:
+    ``open_web_retrieval:case001/tool-adoption`` ended with worktree_path
+    recorded at a non-standard location that no longer existed, while the
+    real worktree -- with the real committed work -- already lived at the
+    correct convention path.
+
+    This mirrors ``session_archive_tracker.py``'s own safety contract rather
+    than inventing a new one: the recorded path must be genuinely gone (not
+    merely different), and the provided replacement must be a real linked
+    worktree actually checked out on the exact claimed branch. Neither
+    condition trusts the caller's say-so.
+    """
+
+    recorded_path = Path(recorded_worktree_path).expanduser()
+    if recorded_path.exists():
+        raise ValueError(
+            f"Refusing to repair worktree_path: the recorded path {recorded_worktree_path} "
+            "still exists on disk. Repair only applies when the recorded worktree is "
+            "genuinely gone; if two worktrees exist, resolve that first."
+        )
+
+    provided_path = Path(provided_worktree_path).expanduser()
+    git_marker = provided_path / ".git"
+    if not git_marker.is_file():
+        raise ValueError(
+            f"Refusing to repair worktree_path: {provided_worktree_path} is not a linked "
+            "git worktree (expected a '.git' file, not a directory or nothing at all)."
+        )
+    result = subprocess.run(
+        ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+        cwd=str(provided_path),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    actual_branch = result.stdout.strip()
+    if result.returncode != 0 or actual_branch != branch:
+        raise ValueError(
+            f"Refusing to repair worktree_path: {provided_worktree_path} is checked out on "
+            f"{actual_branch or 'an unresolvable ref'!r}, not the claimed branch {branch!r}."
+        )
 
 
 def _patch_without_blob_identity(patch: bytes) -> bytes:
@@ -4384,6 +4449,7 @@ def resume_session(
     predecessor_process_start_ticks: int | None = None,
     successor_custody_offer: session_continuity.SuccessorCustodyOfferV1 | None = None,
     successor_custody_acceptance: session_continuity.SuccessorCustodyAcceptanceV1 | None = None,
+    repair_worktree_path: bool = False,
 ) -> dict[str, Any]:
     """Reattach a new runtime session to an existing plan-bound lane."""
 
@@ -4399,7 +4465,13 @@ def resume_session(
     if claim.branch and claim.branch != branch:
         raise ValueError(f"Claim branch is {claim.branch}, not {branch}")
     if claim.worktree_path and claim.worktree_path != worktree_path:
-        raise ValueError(f"Claim worktree is {claim.worktree_path}, not {worktree_path}")
+        if not repair_worktree_path:
+            raise ValueError(f"Claim worktree is {claim.worktree_path}, not {worktree_path}")
+        _validate_worktree_path_repair(
+            recorded_worktree_path=claim.worktree_path,
+            provided_worktree_path=worktree_path,
+            branch=branch,
+        )
 
     resolved_session_id = coordination_claims.resolve_session_id(agent, session_id)
     if not resolved_session_id:

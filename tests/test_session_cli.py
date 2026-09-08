@@ -7,6 +7,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -6494,6 +6495,152 @@ def test_resume_session_rebinds_lane_with_stale_heartbeat(
     assert resumed_claim["session_id"] == "codex:recovery-runtime"
     assert resumed_claim["status"] == "active"
     assert prewrite_claim_projection.projection_is_current(claims_dir=claims_dir)
+
+
+def test_resume_session_repairs_a_relocated_worktree_path(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The defect this pins: a worktree relocated to the sanctioned
+    <repo>/worktrees/<branch>/ convention left its ended claim's worktree_path
+    pointing at a location that no longer existed. No sanctioned tool could
+    reattach a new runtime: a fresh claim refused (session_ended, not
+    overwritable), session-close refused (actor mismatch, different owning
+    session_id), and plain resume refused on the exact path mismatch.
+    Observed 2026-09-08: open_web_retrieval:case001/tool-adoption.
+    """
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    monkeypatch.delenv("CODEX_THREAD_ID", raising=False)
+
+    source_repo = tmp_path / "source"
+    source_repo.mkdir()
+    _git(source_repo, "init", "-b", "main")
+    _git(source_repo, "config", "user.name", "Test")
+    _git(source_repo, "config", "user.email", "test@example.com")
+    (source_repo / "README.md").write_text("seed\n", encoding="utf-8")
+    _git(source_repo, "add", ".")
+    _git(source_repo, "commit", "-m", "seed")
+    _git(source_repo, "branch", "case001/relocated")
+
+    stale_worktree = tmp_path / "worktrees" / "non-standard-location"
+    stale_worktree.mkdir(parents=True)
+
+    session_lifecycle.start_session(
+        agent="claude-code",
+        project="demo-project",
+        scope="case001/relocated",
+        intent="do the real work",
+        repo_root=str(source_repo),
+        worktree_path=str(stale_worktree),
+        branch="case001/relocated",
+        broader_goal="Relocated Worktree Recovery",
+        current_phase="mid-implementation",
+        plan_ref="UNPLANNED",
+        session_id="claude-code:predecessor",
+        tracker_dir=trackers_dir,
+    )
+    claim_path = claims_dir / "claude-code_demo-project_case001_relocated.yaml"
+    claim_payload = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    claim_payload["status"] = "session_ended"
+    claim_payload["previous_status"] = "active"
+    claim_payload["session_end_reason"] = "other"
+    claim_path.write_text(yaml.safe_dump(claim_payload, sort_keys=False), encoding="utf-8")
+
+    # The worktree relocates: the non-standard path is gone, and a real linked
+    # worktree for the same branch now lives at the sanctioned convention path.
+    shutil.rmtree(stale_worktree)
+    real_worktree = source_repo / "worktrees" / "case001" / "relocated"
+    real_worktree.parent.mkdir(parents=True)
+    _git(source_repo, "worktree", "add", str(real_worktree), "case001/relocated")
+
+    payload = _resume_session_as_native(
+        agent="claude-code",
+        project="demo-project",
+        scope="case001/relocated",
+        worktree_path=str(real_worktree),
+        branch="case001/relocated",
+        current_phase="push and merge the recovered fix",
+        session_id="claude-code:successor",
+        repair_worktree_path=True,
+    )
+    resumed_claim = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+
+    assert payload["action"] == "resumed"
+    assert resumed_claim["session_id"] == "claude-code:successor"
+    assert resumed_claim["status"] == "active"
+    assert resumed_claim["worktree_path"] == str(real_worktree)
+    assert prewrite_claim_projection.projection_is_current(claims_dir=claims_dir)
+
+
+def test_resume_session_refuses_worktree_path_repair_when_recorded_path_survives(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Negative control: repair must not become a way to silently pick a side
+    when the recorded worktree is not actually gone -- that is a real
+    conflict (two worktrees for one claim) to resolve by hand, not paper over.
+    """
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    monkeypatch.delenv("CODEX_THREAD_ID", raising=False)
+
+    source_repo = tmp_path / "source"
+    source_repo.mkdir()
+    _git(source_repo, "init", "-b", "main")
+    _git(source_repo, "config", "user.name", "Test")
+    _git(source_repo, "config", "user.email", "test@example.com")
+    (source_repo / "README.md").write_text("seed\n", encoding="utf-8")
+    _git(source_repo, "add", ".")
+    _git(source_repo, "commit", "-m", "seed")
+    _git(source_repo, "branch", "case002/still-there")
+
+    recorded_worktree = tmp_path / "worktrees" / "non-standard-location"
+    recorded_worktree.mkdir(parents=True)  # deliberately NOT removed
+
+    session_lifecycle.start_session(
+        agent="claude-code",
+        project="demo-project",
+        scope="case002/still-there",
+        intent="do the real work",
+        repo_root=str(source_repo),
+        worktree_path=str(recorded_worktree),
+        branch="case002/still-there",
+        broader_goal="Relocated Worktree Recovery",
+        current_phase="mid-implementation",
+        plan_ref="UNPLANNED",
+        session_id="claude-code:predecessor",
+        tracker_dir=trackers_dir,
+    )
+    claim_path = claims_dir / "claude-code_demo-project_case002_still-there.yaml"
+    claim_payload = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    claim_payload["status"] = "session_ended"
+    claim_payload["previous_status"] = "active"
+    claim_payload["session_end_reason"] = "other"
+    claim_path.write_text(yaml.safe_dump(claim_payload, sort_keys=False), encoding="utf-8")
+
+    other_worktree = source_repo / "worktrees" / "case002" / "still-there"
+    other_worktree.parent.mkdir(parents=True)
+    _git(source_repo, "worktree", "add", str(other_worktree), "case002/still-there")
+
+    with pytest.raises(ValueError, match="still exists on disk"):
+        _resume_session_as_native(
+            agent="claude-code",
+            project="demo-project",
+            scope="case002/still-there",
+            worktree_path=str(other_worktree),
+            branch="case002/still-there",
+            current_phase="push and merge the recovered fix",
+            session_id="claude-code:successor",
+            repair_worktree_path=True,
+        )
+    unchanged_claim = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    assert unchanged_claim["status"] == "session_ended"
+    assert unchanged_claim["worktree_path"] == str(recorded_worktree)
 
 
 def test_abandon_session_removes_lane_from_live_status(

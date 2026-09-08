@@ -4874,10 +4874,46 @@ def _validate_orphaned_tracker_archival(
     if not recorded_worktree_text:
         raise ValueError("Orphaned-tracker archival requires a recorded worktree path")
     recorded_worktree = Path(str(recorded_worktree_text)).expanduser()
+    # Refuse only a genuine LINKED worktree -- a real lane checkout that is
+    # still physically present. A linked worktree has a `.git` FILE containing
+    # a `gitdir:` pointer; a canonical repository root has a `.git` DIRECTORY;
+    # a shared or umbrella directory has no `.git` at all.
+    #
+    # The old check refused on mere existence and told the caller to use
+    # session-close instead. For an orphaned tracker that advice is impossible:
+    # session-close loads the claim first and the claim is, by definition here,
+    # already gone. So every such tracker was unretireable by any path.
+    #
+    # Measured 2026-09-08 across the live residue, of the trackers blocked this
+    # way: 16 recorded a real linked worktree (still correctly refused below),
+    # 11 recorded a canonical repository root, and 12 recorded a directory with
+    # no `.git` at all -- most of them the shared umbrella `~/projects/
+    # inside-success`, which is not a lane checkout and will never be removed.
+    # Those 23 could never satisfy the old condition.
+    #
+    # Refusing a canonical root is also wrong on the operator guide's own terms:
+    # its "Legacy canonical-root claim reconciliation" section states that
+    # ordinary session-close "must never process that record as a removable
+    # linked worktree" and provides a metadata-only path for exactly that shape.
+    # This is the claimless equivalent of that exception.
+    #
+    # Nothing here is removed, and the four conditions that make archival safe
+    # are unchanged: claim gone, tracker digest matching, tracker inside the
+    # canonical tree, and -- for a real lane -- its worktree absent.
+    recorded_worktree_kind = "absent"
     if recorded_worktree.exists():
+        git_marker = recorded_worktree / ".git"
+        if git_marker.is_file():
+            recorded_worktree_kind = "linked_worktree"
+        elif git_marker.is_dir():
+            recorded_worktree_kind = "canonical_repository_root"
+        else:
+            recorded_worktree_kind = "not_a_git_worktree"
+    if recorded_worktree_kind == "linked_worktree":
         raise ValueError(
-            "Orphaned-tracker archival rejects an existing recorded worktree; "
-            "use the ordinary sanctioned session-close flow instead."
+            f"Orphaned-tracker archival rejects {recorded_worktree}: it is still a linked "
+            "worktree on disk, so the lane is physically present. Remove it through the "
+            "sanctioned worktree-removal path first, then archive the tracker."
         )
 
     claim_file = _claim_path(str(agent), str(project), str(scope))
@@ -4950,7 +4986,16 @@ def _validate_orphaned_tracker_archival(
         "branch_comparison_ref": comparison_ref,
         "unique_commits": unique_commits,
         "unique_commits_authorized": bool(unique_commits) and allow_unique_branch_commits,
-        "filesystem_action": "not_attempted_absent_recorded_worktree",
+        # What the recorded worktree_path actually was. `absent` is the ordinary
+        # orphan; `canonical_repository_root` and `not_a_git_worktree` are paths
+        # that were never a removable lane checkout and are retained untouched.
+        # A `linked_worktree` never reaches here -- it is refused above.
+        "recorded_worktree_kind": recorded_worktree_kind,
+        "filesystem_action": (
+            "not_attempted_absent_recorded_worktree"
+            if recorded_worktree_kind == "absent"
+            else f"retained_untouched_{recorded_worktree_kind}"
+        ),
         "branch_action": "untouched",
     }
 

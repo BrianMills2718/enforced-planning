@@ -502,9 +502,35 @@ python scripts/session_archive_tracker.py \
 ```
 
 This is coordination-metadata-only. It refuses unless the recorded
-`worktree_path` is genuinely absent from disk, the claim file for that exact
+`worktree_path` is not a live lane checkout, the claim file for that exact
 `(agent, project, scope)` does not exist, the tracker bytes match the supplied
 digest, and the tracker lives inside the canonical session-tracker tree.
+
+"Not a live lane checkout" is decided by what the recorded path actually is,
+not by whether something exists there (changed 2026-09-08):
+
+| Recorded path | `recorded_worktree_kind` | Archival |
+|---|---|---|
+| absent from disk | `absent` | allowed — the ordinary orphan |
+| `.git` is a FILE (a linked worktree) | `linked_worktree` | **refused** — the lane is physically present |
+| `.git` is a DIRECTORY (a canonical repository root) | `canonical_repository_root` | allowed, directory retained untouched |
+| no `.git` (a shared or umbrella directory) | `not_a_git_worktree` | allowed, directory retained untouched |
+
+The check previously refused on mere existence and directed the caller to
+session-close. For an orphaned tracker that advice is impossible: session-close
+loads the claim first, and the claim is by definition already gone. Measured
+across the live residue that day, of the trackers blocked this way 16 recorded a
+real linked worktree — still refused — while 11 recorded a canonical repository
+root and 12 recorded a directory with no `.git`, most of them the shared
+umbrella `~/projects/inside-success`, which is not a lane and will never be
+removed. Those 23 were unretireable by any path.
+
+Refusing a canonical root also contradicted this guide's own
+"Legacy canonical-root claim reconciliation" section above, which states that
+ordinary session-close must never treat that record as a removable linked
+worktree. This is the claimless equivalent of that exception. No directory,
+repository, or branch is removed in any case; the receipt reports
+`recorded_worktree_kind` and a `retained_untouched_*` filesystem action.
 
 Those four conditions are the whole safety contract. In particular the tracker's
 `agent` is **not** checked against `SUPPORTED_AGENTS` here, and deliberately so:

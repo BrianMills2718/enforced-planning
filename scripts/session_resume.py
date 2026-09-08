@@ -75,6 +75,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--repair-missing-plan-ref",
+        action="store_true",
+        help=(
+            "Stamp the explicit UNPLANNED marker onto a claim whose plan_ref is "
+            "absent, then resume normally. Only for a lane written before the "
+            "--allow-unplanned/--plan UNPLANNED fallback existed; it refuses a "
+            "claim that already records a real plan authority."
+        ),
+    )
+    parser.add_argument(
         "--successor-custody-offer",
         type=Path,
         help="Exact offer JSON that this successor explicitly accepted.",
@@ -187,6 +197,7 @@ def main(argv: list[str] | None = None) -> int:
         successor_custody_offer=offer,
         successor_custody_acceptance=acceptance,
         repair_worktree_path=args.repair_worktree_path,
+        repair_missing_plan_ref=args.repair_missing_plan_ref,
     )
     if args.json:
         print(json.dumps(payload, indent=2, sort_keys=True))

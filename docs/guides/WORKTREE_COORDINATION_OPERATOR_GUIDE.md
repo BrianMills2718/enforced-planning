@@ -493,7 +493,30 @@ python scripts/session_archive_tracker.py \
 This is coordination-metadata-only. It refuses unless the recorded
 `worktree_path` is genuinely absent from disk, the claim file for that exact
 `(agent, project, scope)` does not exist, the tracker bytes match the supplied
-digest, and the tracker lives inside the canonical session-tracker tree. If the
+digest, and the tracker lives inside the canonical session-tracker tree.
+
+Those four conditions are the whole safety contract. In particular the tracker's
+`agent` is **not** checked against `SUPPORTED_AGENTS` here, and deliberately so:
+that list gates who may *act* — claim a repository, close another runtime's
+session — while archiving moves a dead bookkeeping file and touches no branch,
+worktree, or claim. Until 2026-09-08 archival did refuse an unrecognised agent,
+and 23 of 74 orphaned trackers in the live workspace were unarchivable for that
+reason alone. They carried legacy per-lane identities such as
+`codex-evidence-reader-wiki` and `codex-root`, written between 2026-07-24 and
+2026-08-21 by a `start_session` that never validated the name. Because claim
+creation *did* enforce `SUPPORTED_AGENTS`, such a tracker could never have a
+matching claim, so `session-close` could not reach it either — it loads the
+claim first. They were permanent residue by construction. The receipt reports
+`agent_supported` so an unexpected identity stays visible.
+
+`start_session` now validates `agent` against `SUPPORTED_AGENTS`, which closes
+that write path: a new tracker cannot name an agent the claim registry will not
+accept. A per-lane or per-task identity belongs in `scope` or `session_name`,
+never in `agent`. Note that `validate_native_session_binding` does not cover
+this — `STRICT_NATIVE_SESSION_ENV_KEYS.get(agent)` returns `None` for an unknown
+agent, so it silently no-ops rather than rejecting.
+
+If the
 recorded branch still exists in its `repo_root`, it is compared against the
 canonical default branch with `git cherry`, which is patch-based on purpose:
 these repositories squash-merge, so `git merge-base --is-ancestor` reports a

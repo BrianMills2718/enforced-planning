@@ -219,6 +219,21 @@ def _claim_overlap_for_paths(
     return sorted(set(overlaps))
 
 
+def _is_overbroad_undeclared_claim(claim: "coordination_claims.ClaimRecord") -> bool:
+    """True when a claim holds the whole repository without deliberately reserving it.
+
+    A `bounded` broad scope is a deliberate reservation and still blocks. A
+    `bootstrap` scope is a lane that has not narrowed yet, and an unclassified one
+    is legacy: in both cases the owner declared no paths, so treating the overlap
+    as a hard conflict blocks work over a scope nobody chose.
+    """
+    if claim.write_paths not in (["."], ["./"]):
+        return False
+    if claim.broad_scope_mode == "bounded":
+        return False
+    return True
+
+
 def _is_same_session_default_integration(
     repo_root: Path,
     *,
@@ -417,6 +432,26 @@ def evaluate_push_safety(
                         message=(
                             "The current native session still owns this source claim, and its branch is "
                             "integrated without later changes to the claimed paths."
+                        ),
+                        details=claim_details,
+                    )
+                )
+                continue
+            # An overbroad claim is one whose owner never declared these paths: it
+            # holds the whole repository because a scope was omitted, not chosen.
+            # coordination_claims already tells these apart from a deliberate
+            # bounded reservation and the distinction was computed, stored, printed
+            # and read by nothing, so a seven-hour lockout on 2026-09-08 was
+            # enforced with the same weight as a real conflict. Blocking on
+            # undeclared scope is what caused the harm, so it warns instead.
+            if _is_overbroad_undeclared_claim(claim):
+                warnings.append(
+                    PushCheckFinding(
+                        code="overbroad_overlapping_claim",
+                        message=(
+                            "Changed files overlap a claim that holds the whole repository without "
+                            "declaring these paths. Its owner has not reserved them deliberately, so "
+                            "this is a warning rather than a block; coordinate before writing shared files."
                         ),
                         details=claim_details,
                     )

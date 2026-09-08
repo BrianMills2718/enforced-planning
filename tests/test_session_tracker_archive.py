@@ -467,3 +467,39 @@ def test_start_session_refuses_an_unsupported_agent(tmp_path: Path) -> None:
             broader_goal="prove the write path is closed",
             current_phase="implementation",
         )
+
+
+def test_chatgpt_is_a_supported_agent(tmp_path: Path) -> None:
+    """The ChatGPT extension must be able to open lanes.
+
+    It creates claims and trackers through the Python API, which never
+    validated `agent`; only the CLI's argparse `choices` did. When
+    start_session began validating (PR #403), that silently blocked an agent
+    that was actively doing real work -- 10 live dodaf lanes and dozens of
+    merged PRs on the day this was found. The validation was right; the list
+    was incomplete.
+    """
+    assert "chatgpt" in coordination_claims.SUPPORTED_AGENTS
+
+    # start_session must not reject it on agent grounds. It may still fail
+    # later for unrelated reasons (session-id resolution), which is the
+    # ordinary path this agent already took.
+    try:
+        session_lifecycle.start_session(
+            agent="chatgpt",
+            project="demo",
+            scope="probe",
+            intent="probe",
+            repo_root=str(tmp_path),
+            worktree_path=str(tmp_path / "wt"),
+            branch="probe",
+            broader_goal="prove chatgpt is admitted",
+            current_phase="implementation",
+            session_id="chatgpt:probe-fixture",
+        )
+    except ValueError as exc:
+        assert "unsupported agent" not in str(exc), (
+            f"chatgpt must not be rejected as an unsupported agent: {exc}"
+        )
+    except Exception:  # noqa: BLE001 - any later failure is not this guard
+        pass

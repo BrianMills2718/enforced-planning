@@ -61,7 +61,25 @@ COMPLETED_STATUSES = {"complete", "completed"}
 SESSION_ENDED_STATUS = "session_ended"
 CLOSEABLE_STATUSES = LIVE_STATUSES | {SESSION_ENDED_STATUS}
 CLAIM_TYPES = {"program", "write", "review", "research"}
-SUPPORTED_AGENTS = ("claude-code", "codex", "openclaw")
+# `chatgpt` is the ChatGPT/Codex VS Code extension, admitted 2026-09-08. It is a
+# real, actively used agent here, not a typo: on the day it was added it owned 10
+# live dodaf lanes with trackers and had merged dozens of pull requests that day.
+#
+# It had been creating claims and session trackers through the Python API for
+# some time. That API never validated `agent` -- only the argparse `choices` on
+# the CLI did -- so the value flowed straight through. When `start_session`
+# started validating the agent (PR #403, closing the hole that produced
+# unretireable trackers), that silently blocked this agent from opening any new
+# lane. Admitting it here is the correct repair: the validation is right, and the
+# list it validated against was simply incomplete. Admitting it also makes those
+# existing lanes closeable through ordinary `session-close` for the first time.
+#
+# It has no `STRICT_NATIVE_SESSION_ENV_KEYS` entry, so
+# `validate_native_session_binding` no-ops for it and its `session_id` is a
+# caller-supplied label rather than a native runtime marker. That is unchanged
+# from how these lanes already worked; giving it a native marker would tighten
+# identity further and is a separate improvement, not a prerequisite.
+SUPPORTED_AGENTS = ("claude-code", "codex", "openclaw", "chatgpt")
 STRICT_LIVE_METADATA_CLAIM_TYPES = {"program", "write", "review", "research"}
 CURRENT_CLAIM_SCHEMA_VERSION = 6
 BROAD_SCOPE_MODES = {"bootstrap", "bounded"}

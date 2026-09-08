@@ -89,7 +89,7 @@ artifacts, and client mismatch are denied.
 
 The optional `write_paths` array narrows initial ownership to literal
 repository-relative paths, for example `["scripts/adapter.py", "tests/test_adapter.py"]`.
-Omitting it requests the legacy-looking `["."]` scope, but new maintenance
+Omitting it is refused by `make maintenance-worktree` and `make goal-worktree` as of 2026-09-08; the direct `claim_bootstrap.py` request still accepts an omitted field and requests the legacy-looking `["."]` scope, but new maintenance
 bootstraps persist that scope as typed `bootstrap` custody: the real target is
 available for instruction/read context while ordinary repository mutations are
 denied. The canonical claim and tracker always retain the same physical
@@ -735,6 +735,20 @@ graph. Exact `goal:<outcome-id>` is a real sequential
 outcome authority, not an alias for `UNPLANNED`. If work resumes in a new
 runtime, reattach it to the existing plan- or goal-bound lane instead of
 silently creating a new one.
+
+### Overlapping an undeclared whole-repository claim
+
+A claim holding `["."]` because a scope was omitted has an owner who never
+reserved those paths. `push_safety` now treats an overlap with such a claim as a
+warning (`overbroad_overlapping_claim`) rather than the blocking
+`overlapping_write_claim`. A `broad_scope_mode` of `bounded` is a deliberate
+reservation and still blocks; `bootstrap` and unclassified do not.
+
+The distinction was already computed as `reservation_kind` and read by nothing,
+so a lane that claimed the whole repository by omission locked a concurrent
+session out of this repository for seven hours on 2026-09-08. Coordinate before
+writing shared files — a warning is not permission to collide, only a refusal to
+treat an unchosen scope as a real conflict.
 
 ### Seeing other sessions on the same goal
 

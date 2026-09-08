@@ -402,10 +402,16 @@ MAINTENANCE_AGENT = $(if $(strip $(WORKTREE_AGENT)),$(WORKTREE_AGENT),claude-cod
 # SESSION_WRITE_PATHS must win: silently discarding it made every maintenance
 # lane conflict with every other active lane by construction, and the operator
 # saw a CONFLICT naming the other lanes rather than their own claim.
-MAINTENANCE_BOOTSTRAP_WRITE_PATHS = $(if $(strip $(SESSION_WRITE_PATHS)),$(SESSION_WRITE_PATHS),.)
+# Defaulting an omitted scope to "." claims the whole repository and locks out
+# every other lane on it -- one such claim cost a concurrent session seven hours
+# on 2026-09-08. scripts/meta/worktree-coordination/create_worktree.py already
+# refuses a lane with no declared write boundary; these bootstraps now agree with
+# it rather than silently choosing the most aggressive possible scope. Pass
+# SESSION_WRITE_PATHS="." explicitly when the whole repository really is the target.
+MAINTENANCE_BOOTSTRAP_WRITE_PATHS = $(if $(strip $(SESSION_WRITE_PATHS)),$(SESSION_WRITE_PATHS),$(error SESSION_WRITE_PATHS is required. Use the narrowest paths this lane will write; pass SESSION_WRITE_PATHS="." only when the whole repository really is the target))
 MAINTENANCE_REQUEST_JSON = $(shell $(PYTHON) -c 'import json,sys; print(json.dumps({"schema_version":"1.0","operation":"maintenance_worktree","agent":sys.argv[1],"project":sys.argv[2],"scope":sys.argv[3],"repo_root":sys.argv[4],"branch":sys.argv[3],"claim_type":"program","write_paths":sys.argv[5:]},separators=(",",":")))' "$(MAINTENANCE_AGENT)" "$(WORKTREE_PROJECT)" "$(BRANCH)" "$(WORKTREE_REPO_ROOT)" $(foreach path,$(MAINTENANCE_BOOTSTRAP_WRITE_PATHS),"$(path)"))
 
-GOAL_BOOTSTRAP_WRITE_PATHS = $(if $(strip $(SESSION_WRITE_PATHS)),$(SESSION_WRITE_PATHS),.)
+GOAL_BOOTSTRAP_WRITE_PATHS = $(if $(strip $(SESSION_WRITE_PATHS)),$(SESSION_WRITE_PATHS),$(error SESSION_WRITE_PATHS is required. Use the narrowest paths this lane will write; pass SESSION_WRITE_PATHS="." only when the whole repository really is the target))
 GOAL_REQUEST_ARG = $(shell $(PYTHON) -c 'import json,shlex,sys; print(shlex.quote(json.dumps({"schema_version":"1.0","operation":"goal_worktree","agent":sys.argv[1],"project":sys.argv[2],"scope":sys.argv[3],"repo_root":sys.argv[4],"branch":sys.argv[3],"claim_type":"program","plan_ref":sys.argv[5],"broader_goal":sys.argv[6],"current_phase":sys.argv[7],"next_action":sys.argv[8] or None,"write_paths":sys.argv[9:]},separators=(",",":"))))' "$(WORKTREE_AGENT)" "$(WORKTREE_PROJECT)" "$(BRANCH)" "$(WORKTREE_REPO_ROOT)" "$(GOAL_REF)" "$(SESSION_GOAL)" "$(SESSION_PHASE)" "$(SESSION_NEXT)" $(foreach path,$(GOAL_BOOTSTRAP_WRITE_PATHS),"$(path)"))
 
 goal-worktree:  ## Atomic goal-bound claim/worktree/tracker; requires BRANCH, GOAL_REF, SESSION_GOAL, SESSION_PHASE

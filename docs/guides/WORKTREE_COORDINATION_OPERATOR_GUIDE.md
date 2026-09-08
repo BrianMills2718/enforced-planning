@@ -887,6 +887,37 @@ Liveness is heartbeat-backed:
 - once a claim has a heartbeat, an overly old heartbeat becomes
   `stale_session_heartbeat`
 
+`heartbeat_at` and `expires_at` are different clocks and both matter. The
+heartbeat says when the owner last checked in; the lease says when the claim
+stops being a claim at all. Claims carry a 24-hour TTL, and `_load_claims()`
+drops an expired record **before** normalization, so an expired claim is not
+merely unhealthy -- it is invisible. Every registry consumer, including the
+pre-push gate, then reports `missing_branch_claim` (*no claim is attached to
+this branch*) about a file on disk that plainly says `status: active` with the
+caller's own `session_id`. The message names the wrong problem, and every
+claim-health predicate agrees with the file rather than the gate.
+
+`session-heartbeat` and `session-resume` therefore renew the lease as well as
+the heartbeat: a session that is still attached, or one that has just taken a
+lane back, keeps its claim. Renewal cannot keep a dead lane alive, because
+abandonment is detected by `heartbeat_at` ageing rather than by the TTL
+lapsing -- a session that stops heartbeating stops renewing, and
+`stale_session_heartbeat` still classifies it for `--prune-stale`.
+`session-narrow` deliberately renews neither.
+
+Renewal only ever **extends**. A claim may deliberately carry an expiry beyond
+the default TTL, and a liveness signal must never be what shortens it: renewing
+to `now + TTL` unconditionally would quietly pull a long-lived lease back to a
+day. Both paths take the later of the current and the renewed expiry.
+
+Before 2026-09-08 neither renewed it, so a lane resumed more than a day after
+it was created came back owned and active but unpushable, and the documented
+recovery was the exact-owner claim refresh
+(`check_coordination_claims.py --claim` with the same identity), which also
+refuses if you retype a retained field such as `intent` instead of copying it
+from the claim. That refresh is still the repair for a claim that expired
+before this change (`lrn-20260908T170436862573Z-d2c739d527`).
+
 The canonical v2 claim CLI now auto-resolves `session_id` from supported tool
 runtime env vars when possible. In governed repos the installed local entrypoint
 is `scripts/meta/check_coordination_claims.py`. In the framework repo the

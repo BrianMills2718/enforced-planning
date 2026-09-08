@@ -741,6 +741,41 @@ def _atomic_restore_bytes(path: Path, content: bytes) -> None:
             temp_path.unlink()
 
 
+def _renewed_lease_expiry(updated_at: str, current_expires_at: str | None) -> str:
+    """Return the lease expiry a resume attaching at ``updated_at`` should carry.
+
+    Resume takes a lane back into live ownership, so it must renew the lease and
+    not only the heartbeat. Claims carry a 24-hour TTL, and the registry loader
+    drops an expired claim *before* normalization -- so a lane resumed a day or
+    more after it was created came back with ``status: active`` and the caller's
+    own ``session_id``, and was still invisible to every consumer that reads the
+    registry. The pre-push gate then reported ``missing_branch_claim``, naming
+    the wrong problem: not "your claim is expired" but "no claim is attached to
+    this branch", about a file sitting on disk saying otherwise
+    (lrn-20260908T170436862573Z-d2c739d527).
+
+    Renewal only ever extends. A claim may deliberately carry an expiry further
+    out than the default TTL, and a liveness signal must never be the thing that
+    shortens it -- clamping every heartbeat to ``now + TTL`` would quietly pull a
+    long-lived lease back to a day.
+    """
+
+    parsed = datetime.fromisoformat(updated_at)
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    renewed = parsed + timedelta(hours=coordination_claims.DEFAULT_TTL_HOURS)
+    if current_expires_at:
+        try:
+            existing = datetime.fromisoformat(current_expires_at)
+        except ValueError:
+            return renewed.isoformat()
+        if existing.tzinfo is None:
+            existing = existing.replace(tzinfo=timezone.utc)
+        if existing > renewed:
+            return current_expires_at
+    return renewed.isoformat()
+
+
 def _apply_legacy_cross_session_resume_transaction(
     *,
     claim: coordination_claims.ClaimRecord,
@@ -794,6 +829,7 @@ def _apply_legacy_cross_session_resume_transaction(
                 "status": "active",
                 "session_id": successor_session_id,
                 "heartbeat_at": updated_at,
+                "expires_at": _renewed_lease_expiry(updated_at, claim.expires_at),
                 "updated_at": updated_at,
                 "notes": note or "session resumed with a fresh runtime attachment",
             }
@@ -1013,6 +1049,7 @@ def _apply_codex_cross_session_resume_transaction(
                     "status": "active",
                     "session_id": successor_session_id,
                     "heartbeat_at": updated_at,
+                    "expires_at": _renewed_lease_expiry(updated_at, claim.expires_at),
                     "updated_at": updated_at,
                     "notes": note or "session resumed with a fresh runtime attachment",
                 }
@@ -1230,6 +1267,7 @@ def _reattach_same_runtime_tracker(
                 "session_id": claim.session_id,
                 "tracker_path": str(tracker_path),
                 "heartbeat_at": updated_at,
+                "expires_at": _renewed_lease_expiry(updated_at, claim.expires_at),
                 "updated_at": updated_at,
                 "notes": note or "session resumed with its exact tracker reattached",
             }
@@ -4669,6 +4707,7 @@ def resume_session(
                         "status": "active",
                         "session_id": resolved_session_id,
                         "heartbeat_at": updated_at,
+                        "expires_at": _renewed_lease_expiry(updated_at, claim.expires_at),
                         "updated_at": updated_at,
                         "notes": note or "session resumed with a fresh runtime attachment",
                     },

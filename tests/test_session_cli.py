@@ -6930,3 +6930,215 @@ def test_resume_session_refuses_plan_ref_repair_when_a_real_plan_ref_exists(
 
     assert "already records plan_ref" in str(excinfo.value)
     assert yaml.safe_load(claim_path.read_text(encoding="utf-8"))["plan_ref"] == "demo-project#42"
+
+
+def _seed_lane_with_expired_lease(
+    tmp_path: Path,
+    claims_dir: Path,
+    trackers_dir: Path,
+    *,
+    status: str,
+) -> tuple[Path, Path]:
+    """Build a lane whose claim is past its TTL but still says it is owned."""
+
+    source_repo = tmp_path / "source"
+    source_repo.mkdir()
+    _git(source_repo, "init", "-b", "main")
+    _git(source_repo, "config", "user.name", "Test")
+    _git(source_repo, "config", "user.email", "test@example.com")
+    (source_repo / "README.md").write_text("seed\n", encoding="utf-8")
+    _git(source_repo, "add", ".")
+    _git(source_repo, "commit", "-m", "seed")
+
+    worktree = source_repo / "worktrees" / "long-running-lane"
+    worktree.parent.mkdir(parents=True)
+    _git(source_repo, "worktree", "add", "-b", "long-running-lane", str(worktree))
+
+    session_lifecycle.start_session(
+        agent="claude-code",
+        project="demo-project",
+        scope="long-running-lane",
+        intent="work that outlived its 24-hour claim TTL",
+        repo_root=str(source_repo),
+        worktree_path=str(worktree),
+        branch="long-running-lane",
+        broader_goal="Lease Renewal On Recovery",
+        current_phase="mid-implementation",
+        plan_ref="UNPLANNED",
+        session_id="claude-code:predecessor",
+        tracker_dir=trackers_dir,
+    )
+    claim_path = claims_dir / "claude-code_demo-project_long-running-lane.yaml"
+    claim_payload = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    stale = datetime.now(timezone.utc) - timedelta(hours=2)
+    claim_payload["expires_at"] = stale.isoformat()
+    claim_payload["status"] = status
+    if status == "session_ended":
+        claim_payload["previous_status"] = "active"
+        claim_payload["session_end_reason"] = "other"
+    claim_path.write_text(yaml.safe_dump(claim_payload, sort_keys=False), encoding="utf-8")
+    return claim_path, worktree
+
+
+def test_resume_session_renews_the_lease_not_only_the_heartbeat(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The defect this pins: resume restored ownership but not the lease, so a
+    lane resumed more than its 24-hour TTL after creation came back with
+    status active and the caller's own session_id while _load_claims still
+    dropped it as expired. Every registry consumer therefore saw no claim at
+    all, and the pre-push gate reported missing_branch_claim -- naming the
+    wrong problem -- about a file on disk saying it was owned and active
+    (lrn-20260908T170436862573Z-d2c739d527).
+    """
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    monkeypatch.delenv("CODEX_THREAD_ID", raising=False)
+
+    claim_path, worktree = _seed_lane_with_expired_lease(
+        tmp_path, claims_dir, trackers_dir, status="session_ended"
+    )
+
+    # Before resume the lane is invisible to every registry consumer.
+    assert not [
+        claim
+        for claim in coordination_claims.check_claims(claims_dir=claims_dir)
+        if claim.scope == "long-running-lane"
+    ]
+
+    before = datetime.now(timezone.utc)
+    _resume_session_as_native(
+        agent="claude-code",
+        project="demo-project",
+        scope="long-running-lane",
+        worktree_path=str(worktree),
+        branch="long-running-lane",
+        current_phase="push the recovered work",
+        session_id="claude-code:successor",
+    )
+    resumed = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+
+    assert datetime.fromisoformat(resumed["expires_at"]) > before
+    assert resumed["status"] == "active"
+    assert resumed["session_id"] == "claude-code:successor"
+    # The point of the renewal: the lane is a claim again, not just a file.
+    assert [
+        claim
+        for claim in coordination_claims.check_claims(claims_dir=claims_dir)
+        if claim.scope == "long-running-lane"
+    ]
+
+
+def test_heartbeat_renews_the_lease_so_a_long_session_does_not_expire(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A heartbeat's documented job is to refresh the lease, and the guide
+    contrasts it with session-narrow precisely by saying narrow renews neither
+    heartbeat nor expiry. It wrote only heartbeat_at, so a session still
+    actively heartbeating past its 24-hour TTL vanished from the registry
+    anyway."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    monkeypatch.delenv("CODEX_THREAD_ID", raising=False)
+
+    claim_path, _worktree = _seed_lane_with_expired_lease(
+        tmp_path, claims_dir, trackers_dir, status="active"
+    )
+    assert not coordination_claims.check_claims(claims_dir=claims_dir)
+
+    before = datetime.now(timezone.utc)
+    updated_count, updated_scopes, _session, _heartbeat_at = coordination_claims.heartbeat_claims(
+        agent="claude-code",
+        project="demo-project",
+        session_id="claude-code:predecessor",
+        scope="long-running-lane",
+        claims_dir=claims_dir,
+    )
+    renewed = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+
+    assert updated_count == 1
+    assert updated_scopes == ["long-running-lane"]
+    assert datetime.fromisoformat(renewed["expires_at"]) > before
+    assert coordination_claims.check_claims(claims_dir=claims_dir)
+
+
+def test_heartbeat_does_not_revive_a_claim_owned_by_another_session(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Lease renewal must not become a way to reach into a foreign lane: only
+    the owning session's heartbeat renews, so an expired claim someone else
+    owns stays expired and invisible."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    monkeypatch.delenv("CODEX_THREAD_ID", raising=False)
+
+    claim_path, _worktree = _seed_lane_with_expired_lease(
+        tmp_path, claims_dir, trackers_dir, status="active"
+    )
+    expired_before = yaml.safe_load(claim_path.read_text(encoding="utf-8"))["expires_at"]
+
+    updated_count, updated_scopes, _session, _heartbeat_at = coordination_claims.heartbeat_claims(
+        agent="claude-code",
+        project="demo-project",
+        session_id="claude-code:a-different-runtime",
+        scope="long-running-lane",
+        claims_dir=claims_dir,
+        require_exact_session=True,
+    )
+
+    assert updated_count == 0
+    assert updated_scopes == []
+    assert yaml.safe_load(claim_path.read_text(encoding="utf-8"))["expires_at"] == expired_before
+    assert not coordination_claims.check_claims(claims_dir=claims_dir)
+
+
+def test_lease_renewal_only_ever_extends_never_shortens(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A claim may deliberately carry an expiry beyond the default TTL. A
+    liveness signal must never be what shortens it: the first version of this
+    renewal clamped every heartbeat to now + 24h, which pulled a far-future
+    lease back to a day. The existing heartbeat-invariant test caught it."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    monkeypatch.delenv("CODEX_THREAD_ID", raising=False)
+
+    claim_path, worktree = _seed_lane_with_expired_lease(
+        tmp_path, claims_dir, trackers_dir, status="session_ended"
+    )
+    far_future = "2099-08-22T00:00:00+00:00"
+    payload = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    payload["expires_at"] = far_future
+    claim_path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
+
+    _resume_session_as_native(
+        agent="claude-code",
+        project="demo-project",
+        scope="long-running-lane",
+        worktree_path=str(worktree),
+        branch="long-running-lane",
+        current_phase="resume a lane holding a deliberately long lease",
+        session_id="claude-code:successor",
+    )
+    assert yaml.safe_load(claim_path.read_text(encoding="utf-8"))["expires_at"] == far_future
+
+    coordination_claims.heartbeat_claims(
+        agent="claude-code",
+        project="demo-project",
+        session_id="claude-code:successor",
+        scope="long-running-lane",
+        claims_dir=claims_dir,
+    )
+    assert yaml.safe_load(claim_path.read_text(encoding="utf-8"))["expires_at"] == far_future

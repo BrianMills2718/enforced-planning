@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -952,3 +953,76 @@ def test_create_worktree_rejects_weak_matching_write_claim(tmp_path: Path) -> No
     assert "matching active write claim is weak" in result.message
     assert "missing_worktree_path" in result.message
     assert not worktree_path.exists()
+
+
+# ---------------------------------------------------------------------------
+# Claim metadata is consumed only under --require-write-claim. Accepting it
+# without that flag silently discarded it, so a caller who supplied claim
+# identity and write paths got an UNCLAIMED worktree while believing otherwise.
+# Three unclaimed lanes were created that way on 2026-09-08 across two repos.
+
+
+def _cli(repo_root: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, str(MODULE_PATH), "--repo-root", str(repo_root), *args],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def test_claim_flags_without_enforcement_are_refused(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    _init_temp_repo(repo)
+    result = _cli(
+        repo,
+        "--path", str(tmp_path / "wt"),
+        "--branch", "guard-branch",
+        "--start-point", "HEAD",
+        "--claim-agent", "claude-code",
+        "--claim-project", "demo",
+        "--claim-write-path", "scripts",
+    )
+    assert result.returncode != 0, result.stdout
+    combined = result.stdout + result.stderr
+    assert "Refusing to create an unclaimed worktree" in combined
+    # It must name what was supplied and how to proceed, not just fail.
+    assert "--claim-agent" in combined
+    assert "--require-write-claim" in combined
+    assert not (tmp_path / "wt").exists(), "must not create the worktree it refused"
+
+
+def test_a_deliberately_unclaimed_lane_is_still_allowed(tmp_path: Path) -> None:
+    """The guard must not force a claim on callers who never asked for one."""
+    repo = tmp_path / "repo"
+    _init_temp_repo(repo)
+    result = _cli(
+        repo,
+        "--path", str(tmp_path / "wt"),
+        "--branch", "unclaimed-branch",
+        "--start-point", "HEAD",
+        "--json",
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["ok"] is True
+    assert payload["coordination_checked"] is False
+
+
+def test_claim_flags_with_enforcement_reach_the_real_claim_check(tmp_path: Path) -> None:
+    """Guard the other direction: it must not short-circuit actual enforcement."""
+    repo = tmp_path / "repo"
+    _init_temp_repo(repo)
+    result = _cli(
+        repo,
+        "--path", str(tmp_path / "wt"),
+        "--branch", "enforced-branch",
+        "--start-point", "HEAD",
+        "--require-write-claim",
+        "--claim-agent", "claude-code",
+        "--claim-project", "demo",
+        "--claim-write-path", "scripts",
+    )
+    combined = result.stdout + result.stderr
+    assert "Refusing to create an unclaimed worktree" not in combined
+    assert "write-claim enforcement failed" in combined or "write claim" in combined

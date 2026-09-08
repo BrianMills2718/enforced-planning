@@ -64,6 +64,17 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--note")
     parser.add_argument(
+        "--repair-worktree-path",
+        action="store_true",
+        help=(
+            "Accept a --worktree-path that differs from the claim's recorded one, "
+            "only when the recorded path is genuinely gone and the provided path is "
+            "a real linked worktree checked out on the exact claimed branch. For a "
+            "worktree legitimately relocated to the sanctioned "
+            "<repo>/worktrees/<branch>/ convention after the claim was created."
+        ),
+    )
+    parser.add_argument(
         "--successor-custody-offer",
         type=Path,
         help="Exact offer JSON that this successor explicitly accepted.",
@@ -175,6 +186,7 @@ def main(argv: list[str] | None = None) -> int:
         predecessor_process_start_ticks=args.predecessor_process_start_ticks,
         successor_custody_offer=offer,
         successor_custody_acceptance=acceptance,
+        repair_worktree_path=args.repair_worktree_path,
     )
     if args.json:
         print(json.dumps(payload, indent=2, sort_keys=True))

@@ -568,6 +568,50 @@ absent worktree path, the missing claim path, and the observed branch state. No
 branch is ever deleted and no repository working tree is touched. To restore
 one, move it back to the matching path under `sessions/`.
 
+### Resuming a lane whose worktree_path became stale through relocation
+
+A worktree legitimately relocated from a non-standard path to the sanctioned
+`<repo>/worktrees/<branch>/` convention after its claim was created leaves the
+claim's recorded `worktree_path` stale. This is distinct from the orphaned-
+tracker case above: the claim still exists (typically `session_ended`, not yet
+released), so `session-resume` -- not archival -- is the right tool, but plain
+resume requires the caller's `--worktree-path` to match the stale record
+exactly and refuses otherwise.
+
+Pass `--repair-worktree-path` to accept a corrected path instead:
+
+```bash
+python scripts/session_resume.py \
+  --agent AGENT --project PROJECT --scope SCOPE \
+  --worktree-path /path/to/repo/worktrees/BRANCH \
+  --branch BRANCH --current-phase "..." \
+  --repair-worktree-path \
+  --json
+```
+
+This mirrors `session_archive_tracker.py`'s own safety contract rather than
+inventing a new one, and fails closed on either half: the recorded path must
+be genuinely gone (`Path.exists()` is false), not merely different -- if two
+worktrees exist, that is a real conflict to resolve by hand, not something
+this flag silently prefers one side of. And the provided replacement must be
+a real linked worktree (`.git` is a file, not a directory or absent) actually
+checked out on the exact claimed branch (`git rev-parse --abbrev-ref HEAD`),
+not merely a directory that happens to exist at that path. Every other
+resume precondition -- lifecycle status, branch match, same-runtime or
+explicit-handoff or stale-heartbeat authorization, Codex process fencing --
+still applies unchanged; this flag only widens what counts as a matching
+`worktree_path`, nothing else.
+
+Observed 2026-09-08: `open_web_retrieval:case001/tool-adoption` ended with
+`worktree_path` recorded at a non-standard location that no longer existed,
+while the real worktree -- with the real committed work, never pushed or
+merged -- already lived at the correct convention path. No sanctioned tool
+could reattach a new runtime to it: a fresh claim on the same scope refused
+because the existing one is `session_ended`, not overwritable; `session-close`
+refused with an actor mismatch because a different runtime session_id still
+owned the claim; and plain `session-resume` refused on the path mismatch
+itself. This flag closes exactly that gap.
+
 ### Append-only stores do not create contention
 
 Two lanes declaring the same write path normally conflict, and the second lane

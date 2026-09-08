@@ -110,6 +110,7 @@ See `ROADMAP.md` for the full phase map and recommended priority order.
 | 130 | Cross-Repository Plan Authority Binding (`130_cross_repository_plan_claim_binding.md`) | Critical | ✅ Complete | Project Meta Plan #249 AES implementation lane |
 | 131 | Terminal Closeout and Hook Hot-Path Repair (`131_terminal_closeout_and_hook_hotpath.md`) | Critical | ✅ Complete | one terminal claimed-lane path and bounded coordination-hook latency |
 | 132 | Overbroad Claim Narrowing and False-Serialization Repair (`132_overbroad_claim_narrowing.md`) | Critical | ✅ Complete | schema-v6 atomic narrowing and installed deny-narrow-admit-close proof accepted; Project Meta rollout is a separately claimed consumer phase |
+| 133 | Shared-surface change disclosure at closeout (`133_shared-surface-change-disclosure.md`) | Medium | 📋 Planned | closes the mechanism gap under pending policy `shared-surface-state-claims` (project-meta `0cda1bc2f0`) |
 
 ## Status Key
 

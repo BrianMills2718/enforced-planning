@@ -1567,6 +1567,45 @@ def claim_runtime_status(
     return "healthy"
 
 
+def peer_claims_by_goal(claims: "list[ClaimRecord]") -> "dict[str, list[ClaimRecord]]":
+    """Group live claims that declare a byte-identical ``broader_goal``.
+
+    Exact equality only, never similarity. This reports that two sessions
+    declared the same string -- identity, not an inference about what either
+    means -- so it stays clear of the rule against deciding meaning by
+    string-matching prose. A typo therefore shows as two groups rather than
+    silently merging unrelated work, which is the safe direction to fail.
+
+    Why this exists: ``parent_scope`` links a session's second lane to its
+    first, so it is empty whenever every session holds one lane, which is the
+    normal case. Measured 2026-09-08: 11 live claims across 11 distinct
+    sessions, ``parent_scope`` populated 0 times, while five separate sessions
+    on one project carried an identical ``broader_goal``. That adjacency is
+    real, already declared, and was previously discoverable only by colliding
+    on a write.
+    """
+    grouped: dict[str, list[ClaimRecord]] = {}
+    for claim in claims:
+        goal = (claim.broader_goal or "").strip()
+        if not goal:
+            continue
+        grouped.setdefault(goal, []).append(claim)
+    return {goal: members for goal, members in grouped.items() if len(members) > 1}
+
+
+def render_peer_claim_groups(claims: "list[ClaimRecord]") -> "list[str]":
+    """Render the shared-goal groups as display lines, or nothing when none."""
+    groups = peer_claims_by_goal(claims)
+    if not groups:
+        return []
+    lines = ["", "Other sessions working the same stated goal:"]
+    for goal, members in sorted(groups.items(), key=lambda item: (-len(item[1]), item[0])):
+        lines.append(f'  "{goal}"')
+        for member in sorted(members, key=lambda c: (c.agent, c.scope)):
+            lines.append(f"    [{member.agent}] {member.primary_project()}:{member.scope}")
+    return lines
+
+
 def claim_enforcement_issues(claim: ClaimRecord) -> list[dict[str, str]]:
     """Return blocking operator findings that require an explicit disposition."""
 
@@ -4676,6 +4715,8 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  [{claim.agent}] {claim.primary_project()}:{claim.scope} [{claim.claim_type}] — {claim.intent}")
             if "legacy_broad_scope_unclassified" in _broad_scope_contract_issues(claim):
                 print("    broad_scope: legacy_unclassified")
+        for line in render_peer_claim_groups(claims):
+            print(line)
         return 0
 
     if args.progress:

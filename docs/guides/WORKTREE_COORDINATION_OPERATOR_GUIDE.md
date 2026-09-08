@@ -736,6 +736,28 @@ outcome authority, not an alias for `UNPLANNED`. If work resumes in a new
 runtime, reattach it to the existing plan- or goal-bound lane instead of
 silently creating a new one.
 
+### Seeing other sessions on the same goal
+
+`--list` groups live claims that declare a byte-identical `broader_goal` and
+prints them under "Other sessions working the same stated goal". Nothing is
+declared or configured for this; it reads a field every claim already carries.
+
+It exists because `parent_scope` cannot express this adjacency. `parent_scope`
+links a session's *second* lane to its first, so it is empty whenever every
+session holds one lane. Measured 2026-09-08: 11 live claims across 11 distinct
+sessions, `parent_scope` populated 0 times, while five separate sessions on one
+project carried an identical `broader_goal`. One program, five claims, and no
+way to see it except by colliding on a write.
+
+The match is exact equality, never similarity. It reports that two sessions
+declared the same string — identity, not an inference about what either means —
+so it does not decide meaning by string-matching prose. A typo therefore yields
+no group rather than a false one.
+
+Use it to notice a neighbour, not to assume ownership: a shared goal grants no
+rights over another lane's paths, and grouping does not link lifecycles the way
+`parent_scope` does.
+
 A runtime session may own one unparented live claim root by default. Claim type
 classifies work and path-conflict behavior; it does not exempt a lane from
 session-root lifecycle enforcement. Related work must declare `parent_scope`.

@@ -150,6 +150,17 @@ can prove local integration and close the lane.
 Registration in Project Graph and remote publication remain separate authority
 decisions.
 
+The supported agent classes are `claude-code`, `codex`, `openclaw`, and
+`chatgpt`. `chatgpt` is the ChatGPT/Codex VS Code extension, admitted
+2026-09-08 after it was found owning 10 live lanes and merging pull requests
+daily; it had been reaching the registry through the Python API, which did not
+validate `agent`, while only the CLI's argparse `choices` did. `start_session`
+now validates the agent, so a lane can no longer be opened under a name the
+claim registry will not accept. Unlike the other three, `chatgpt` has no
+`STRICT_NATIVE_SESSION_ENV_KEYS` entry, so `validate_native_session_binding`
+no-ops for it and its `session_id` is a caller-supplied label rather than a
+native runtime marker.
+
 `agent` identifies the client class; `session_id` identifies the runtime that
 owns a live claim. Two Codex windows are therefore two writers even though both
 claims say `agent: codex`. A live `agent + project + scope` slot may be refreshed

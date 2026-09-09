@@ -39,7 +39,7 @@ import subprocess
 import sys
 import time
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -231,7 +231,8 @@ def write_repo(repo_id: str, repo_root: Path, tier: str, owner: str) -> RepoUpgr
     except ValueError as exc:
         result.write_error = str(exc)
         return result
-    branch = f"sync-enforced-planning-{date.today().isoformat()}-{source_revision}"
+    attempt = datetime.now(UTC).strftime("%Y-%m-%d-%H%M%S%f")
+    branch = f"sync-enforced-planning-{attempt}-{source_revision}"
     result.branch = branch
     worktree_path = repo_root / "worktrees" / branch
 
@@ -281,8 +282,35 @@ def write_repo(repo_id: str, repo_root: Path, tier: str, owner: str) -> RepoUpgr
         result.write_error = "Makefile has neither maintenance-worktree nor worktree target"
         return result
     make_proc = _run(make_cmd)
+    make_output = "\n".join(part for part in (make_proc.stdout, make_proc.stderr) if part).strip()
+    if (
+        make_proc.returncode != 0
+        and "broad_scope_mode_required" in make_output
+        and "broad_scope_reason_required" in make_output
+        and ("\nworktree:" in makefile_text or makefile_text.startswith("worktree:"))
+        and not worktree_path.exists()
+    ):
+        make_cmd = [
+            "make",
+            "-C",
+            str(repo_root),
+            "worktree",
+            f"BRANCH={branch}",
+            f"TASK={task}",
+            f"SESSION_GOAL={goal}",
+            "SESSION_PHASE=sync",
+            f"WORKTREE_AGENT={native_agent}",
+            "SESSION_ALLOW_PARALLEL=1",
+            "ALLOW_UNPLANNED=1",
+            "SESSION_BROAD_SCOPE_MODE=bootstrap",
+            "SESSION_BROAD_SCOPE_REASON=construct fleet sync lane then narrow before installer mutation",
+            f"SESSION_TARGET_WORKTREE_PATH={worktree_path}",
+            "SESSION_WRITE_PATHS=.",
+        ]
+        make_proc = _run(make_cmd)
+        make_output = "\n".join(part for part in (make_proc.stdout, make_proc.stderr) if part).strip()
     if make_proc.returncode != 0:
-        result.write_error = f"make maintenance-worktree failed: {(make_proc.stderr or make_proc.stdout).strip()[:500]}"
+        result.write_error = f"make maintenance-worktree failed: {make_output[:1000]}"
         return result
 
     if not worktree_path.exists():

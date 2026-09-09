@@ -431,6 +431,51 @@ def _fixture(
     return repo, worktree, claims_dir, claim_path, scenario_path
 
 
+def test_live_claim_loading_ignores_unnormalizable_completed_residue(tmp_path: Path) -> None:
+    """A terminal legacy record cannot disable outcome selection for every project."""
+
+    _repo, _worktree, claims_dir, _claim, _scenario = _fixture(tmp_path)
+    (claims_dir / "legacy_completed.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "schema_version": 3,
+                "status": "completed",
+                "claim_type": "write",
+                "write_paths": ["legacy/file.py"],
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    records = outcome_selection._load_claim_records(claims_dir)
+
+    assert len(records) == 1
+    assert records[0].scope == "plan117-test"
+
+
+def test_live_claim_loading_rejects_unnormalizable_active_record(tmp_path: Path) -> None:
+    """Skipping terminal residue must not weaken live-state validation."""
+
+    claims_dir = tmp_path / "claims"
+    claims_dir.mkdir()
+    (claims_dir / "malformed_live.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "schema_version": 3,
+                "status": "active",
+                "claim_type": "write",
+                "write_paths": ["live/file.py"],
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(OutcomeSelectionError, match="cannot be normalized"):
+        outcome_selection._load_claim_records(claims_dir)
+
+
 def _select(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

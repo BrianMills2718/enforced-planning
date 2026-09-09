@@ -369,6 +369,14 @@ class ResolvedOutcomeProgressHead:
 
 
 def _load_claim_records(claims_dir: Path) -> list[coordination_claims.ClaimRecord]:
+    """Load live-claim candidates without coupling them to terminal residue.
+
+    Outcome selection only consumes live claims. A legacy completed record may
+    predate fields required by the current normalizer, and must not make an
+    unrelated live claim unavailable. Live or status-ambiguous malformed
+    records still fail closed.
+    """
+
     records: list[coordination_claims.ClaimRecord] = []
     if not claims_dir.is_dir():
         return records
@@ -385,6 +393,8 @@ def _load_claim_records(claims_dir: Path) -> list[coordination_claims.ClaimRecor
                 "claim_registry_invalid",
                 f"canonical claim {path} must be a YAML mapping",
             )
+        if payload.get("status") in coordination_claims.COMPLETED_STATUSES:
+            continue
         record = coordination_claims.normalize_claim(payload, source_file=str(path.resolve()))
         if record is None:
             raise OutcomeSelectionError(

@@ -28,6 +28,14 @@ bootstrap scope, then invokes `session-narrow` to reduce ownership to the exact
 installer closure before `install --write`. A negative control proves a failed
 narrowing attempt closes the lane without invoking the installer.
 
+The first successful full install/audit pilot then reached a correct repo-local
+doc-coupling refusal because the general installer changed unrelated workflow
+helpers. Plan #134 adoption therefore uses a dedicated
+`--coordination-claims-only` installer profile: the canonical claim module and
+its stable CLI facade only. The profile is exact and idempotent in focused
+tests, and the upgrader narrows its temporary bootstrap claim to those same two
+paths before invoking it.
+
 ---
 
 ## Implementation (2026-09-02)

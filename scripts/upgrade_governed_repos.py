@@ -222,7 +222,7 @@ def write_repo(repo_id: str, repo_root: Path, tier: str, owner: str) -> RepoUpgr
     # closure writes to. A repo whose Makefile requires an explicit narrow
     # scope (some do -- SESSION_WRITE_PATHS_REQUIRED-style policy) rejects a
     # bootstrap "." claim outright, and this is genuinely what gets touched.
-    write_paths = "enforced_planning scripts/meta .claude .codex contracts AGENTS.md Makefile"
+    write_paths = "enforced_planning/coordination_claims.py scripts/meta/check_coordination_claims.py"
     if "\nmaintenance-worktree:" in makefile_text or makefile_text.startswith("maintenance-worktree:"):
         # Bootstrap with the temporary whole-repository authority every
         # supported maintenance wrapper understands. The claim is narrowed to
@@ -336,7 +336,16 @@ def write_repo(repo_id: str, repo_root: Path, tier: str, owner: str) -> RepoUpgr
         )
         return result
 
-    install_proc = _run([sys.executable, str(INSTALL_SCRIPT), "--repo-root", str(worktree_path), "--write"])
+    install_proc = _run(
+        [
+            sys.executable,
+            str(INSTALL_SCRIPT),
+            "--repo-root",
+            str(worktree_path),
+            "--write",
+            "--coordination-claims-only",
+        ]
+    )
     result.install_rc = install_proc.returncode
     result.install_stdout = install_proc.stdout
     result.install_stderr = install_proc.stderr

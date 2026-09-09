@@ -47,6 +47,15 @@ maintenance wrappers that drop broad-scope metadata, the upgrader retries the
 base target only after the exact missing-mode/reason failure and supplies the
 bootstrap reason plus exact target worktree itself.
 
+One further live boundary appeared in `project-meta`: an intermediate wrapper
+accepted the broad-scope fields but its base target then required a qualified
+plan, so no lane was created. After that exact refusal, and only while the
+target worktree is still absent, the upgrader now calls the current atomic
+`maintenance_worktree` bootstrap transaction directly. That transaction keeps
+the authority, native-session, fresh-remote, claim, tracker, and worktree
+checks intact; `session-narrow` must still reduce the temporary `.` claim to
+the two-file installer closure before any target mutation.
+
 ---
 
 ## Implementation (2026-09-02)

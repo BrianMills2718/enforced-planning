@@ -6,6 +6,7 @@ import importlib.util
 import sys
 from pathlib import Path
 
+import pytest
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / "scripts" / "upgrade_governed_repos.py"
 
@@ -77,3 +78,23 @@ def test_single_line_collapses_multiline_reason() -> None:
     collapsed = module._single_line(multiline, 200)
     assert "\n" not in collapsed
     assert "Running pre-commit checks..." in collapsed
+
+
+def test_native_agent_uses_exact_codex_runtime_marker(monkeypatch: pytest.MonkeyPatch) -> None:
+    module = _load()
+    for env_key in module.coordination_claims.STRICT_NATIVE_SESSION_ENV_KEYS.values():
+        monkeypatch.delenv(env_key, raising=False)
+    monkeypatch.setenv("CODEX_THREAD_ID", "native-codex-thread")
+
+    assert module._native_agent() == "codex"
+
+
+def test_native_agent_rejects_ambiguous_runtime_markers(monkeypatch: pytest.MonkeyPatch) -> None:
+    module = _load()
+    for env_key in module.coordination_claims.STRICT_NATIVE_SESSION_ENV_KEYS.values():
+        monkeypatch.delenv(env_key, raising=False)
+    monkeypatch.setenv("CODEX_THREAD_ID", "native-codex-thread")
+    monkeypatch.setenv("CLAUDE_CODE_SESSION_ID", "native-claude-thread")
+
+    with pytest.raises(ValueError, match="exactly one native agent runtime marker"):
+        module._native_agent()

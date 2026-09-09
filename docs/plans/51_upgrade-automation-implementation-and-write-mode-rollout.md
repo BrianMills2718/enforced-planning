@@ -8,6 +8,20 @@
 
 ---
 
+## Native runtime identity repair (2026-09-09)
+
+The first authorized Plan #134 fleet pilot proved that write mode still
+hard-coded `WORKTREE_AGENT=claude-code`, including claim repair and closeout.
+That made the sanctioned upgrader unusable from a native Codex session even
+though the target repository remained untouched. Write mode now derives exactly
+one agent from the runtime markers already governed by the coordination claim
+contract, uses that identity throughout the lane lifecycle, and fails visibly
+when the environment is absent or ambiguous. Focused both-sign tests cover
+Codex detection and ambiguous-marker refusal; the real `prompt_eval` pilot is
+the acceptance journey after this repair lands.
+
+---
+
 ## Implementation (2026-09-02)
 
 `--write` now requires an explicit `--repo REPO_ID` (matching "Minimal First

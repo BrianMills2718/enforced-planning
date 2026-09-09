@@ -316,6 +316,46 @@ def build_session_tracker(
     )
 
 
+# A tracker is rewritten through _atomic_write_session_tracker, which creates a
+# sibling named ".{filename}.XXXXXXXX.tmp" -- one leading dot, one separator, the
+# eight characters tempfile appends, and ".tmp". That is fourteen bytes the
+# generator never budgeted for, so a filename the writer accepted could be one
+# byte too long to ever update. Observed 2026-09-09: a 242-byte tracker produced a
+# 256-byte temp name against Linux's 255-byte limit and every close of that lane
+# died with "OSError: [Errno 36] File name too long", leaving the claim permanent.
+# The overrun came from session_name, which is derived from free-text task wording.
+_TRACKER_TEMP_DECORATION_BYTES = len(".") + len(".") + 8 + len(".tmp")
+MAX_TRACKER_FILENAME_BYTES = 255
+MAX_TRACKER_NAME_BYTES = MAX_TRACKER_FILENAME_BYTES - _TRACKER_TEMP_DECORATION_BYTES
+
+
+def _bounded_tracker_filename(
+    *, agent: str, project: str, safe_session_id: str, session_name: str
+) -> str:
+    """Compose a tracker filename that survives its own atomic rewrite.
+
+    Only session_name is shortened. The identity prefix is what
+    find_session_tracker_path globs on, and identity itself is read back out of
+    the file's claim payload, never parsed from the name -- so trimming the
+    descriptive tail cannot change which claim this is.
+    """
+
+    prefix = f"{agent}__{project}__{safe_session_id}__"
+    suffix = ".yaml"
+    budget = MAX_TRACKER_NAME_BYTES - len(prefix.encode()) - len(suffix.encode())
+    if budget <= 0:
+        raise ValueError(
+            "Session tracker identity prefix alone exceeds the writable filename budget "
+            f"({len(prefix.encode()) + len(suffix.encode())} bytes against "
+            f"{MAX_TRACKER_NAME_BYTES}): agent={agent!r}, project={project!r}, "
+            f"session_id={safe_session_id!r}. Shorten the agent or project identifier."
+        )
+    encoded = session_name.encode()
+    if len(encoded) > budget:
+        session_name = encoded[:budget].decode("utf-8", "ignore")
+    return f"{prefix}{session_name}{suffix}"
+
+
 def session_tracker_path(
     contract: SessionContract,
     *,
@@ -324,8 +364,23 @@ def session_tracker_path(
     """Return the canonical tracker path for one session contract."""
 
     safe_session_id = re.sub(r"[^a-zA-Z0-9._-]+", "-", contract.session_id)
-    filename = f"{contract.agent}__{contract.project}__{safe_session_id}__{contract.session_name}.yaml"
-    return tracker_dir / contract.project / filename
+    directory = tracker_dir / contract.project
+    bounded = directory / _bounded_tracker_filename(
+        agent=contract.agent,
+        project=contract.project,
+        safe_session_id=safe_session_id,
+        session_name=contract.session_name,
+    )
+    legacy = (
+        directory
+        / f"{contract.agent}__{contract.project}__{safe_session_id}__{contract.session_name}.yaml"
+    )
+    # A record written before the bound existed keeps its own path. Returning the
+    # shortened name for it would strand the live tracker and start a second one
+    # for the same claim.
+    if legacy != bounded and legacy.is_file():
+        return legacy
+    return bounded
 
 
 def find_session_tracker_path(

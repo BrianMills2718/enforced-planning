@@ -643,6 +643,43 @@ refused with an actor mismatch because a different runtime session_id still
 owned the claim; and plain `session-resume` refused on the path mismatch
 itself. This flag closes exactly that gap.
 
+### Resuming a lane a different agent explicitly handed off
+
+Before 2026-09-09, `resume_session()` used one `agent` value both to select
+which claim file to open (`<agent>_<project>_<scope>.yaml`) and to prove the
+current runtime's native identity via `validate_native_session_binding`.
+That conflated the claim's *recorded* agent with the *resuming* agent, so a
+claim one tool explicitly left in `handoff` status -- which this guide's
+Crash/Resume Policy already lists as a sanctioned cross-session resume
+condition -- could in practice only ever be resumed by that same tool. A
+Codex session's `handoff` claim could not be picked up by a Claude Code
+session, or vice versa, even though nothing in the claim model restricts
+`handoff` to same-agent successors.
+
+Pass `--successor-agent` to `session_resume.py` (or `successor_agent=` to
+`resume_session()`) when a different supported agent is legitimately taking
+over such a lane:
+
+```bash
+python scripts/session_resume.py \
+  --agent codex --project PROJECT --scope SCOPE \
+  --worktree-path /path/to/repo/worktrees/BRANCH \
+  --branch BRANCH --current-phase "..." \
+  --successor-agent claude-code \
+  --json
+```
+
+`--agent` still names the claim's recorded agent, purely to locate the file;
+`--successor-agent` is the one whose native identity gets proven and who
+receives custody. This is refused for any status other than `handoff` --
+a live, stale-heartbeat, or session-ended claim still needs the existing
+same-agent transfer paths above, which exist to protect a possibly-live
+predecessor process that a voluntary handoff by definition no longer has, so
+no process fencing or transfer-journal machinery applies here. On success the
+claim file is renamed to the successor's `<agent>_<project>_<scope>.yaml` and
+its `agent` field updated; the session tracker keeps its original filename as
+provenance of which agent created it.
+
 ### Resuming a lane whose claim records no `plan_ref`
 
 The mandatory rule below is that no live session lacks a `plan_ref`, and bounded

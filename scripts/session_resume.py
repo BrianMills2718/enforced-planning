@@ -53,6 +53,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--current-phase", required=True)
     parser.add_argument("--session-id")
     parser.add_argument(
+        "--successor-agent",
+        help=(
+            "Different supported agent legitimately taking over a claim the "
+            "recorded agent explicitly left in 'handoff' status. Proves this "
+            "agent's own native identity and transfers claim custody/filename "
+            "to it. Refused for any status other than handoff."
+        ),
+    )
+    parser.add_argument(
         "--predecessor-process-pid",
         type=int,
         help="Exact prior Codex process PID to verify and terminate before cross-session transfer.",
@@ -198,6 +207,7 @@ def main(argv: list[str] | None = None) -> int:
         successor_custody_acceptance=acceptance,
         repair_worktree_path=args.repair_worktree_path,
         repair_missing_plan_ref=args.repair_missing_plan_ref,
+        successor_agent=args.successor_agent,
     )
     if args.json:
         print(json.dumps(payload, indent=2, sort_keys=True))

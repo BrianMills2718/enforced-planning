@@ -70,7 +70,7 @@ its repository-relative paths overlap; the same physical checkout becomes
 multi-writer; a canonical checkout or shared-state surface becomes advisory;
 the predecessor branch/claim is deleted; or silence alone transfers custody.
 
-## Evidence Reviewed
+## References Reviewed
 
 - Live host probe at 2026-09-09T17:53Z: the user timer is enabled and runs
   `native_resume_delivery`; `successor_launch_enabled` is false.
@@ -91,7 +91,7 @@ the predecessor branch/claim is deleted; or silence alone transfers custody.
   `2026-09-01-prevent-authorized-work-abandonment.yaml` record the same policy
   direction but are not treated as implementation authority.
 
-## Landscape And Decision
+## Landscape And Prior Art
 
 | Alternative | Disposition | Reason |
 |---|---|---|
@@ -100,8 +100,32 @@ the predecessor branch/claim is deleted; or silence alone transfers custody.
 | Enable native successor launch as the only repair | Deferred | It helps verified top-level live predecessors but does not handle already-dead or spawned-agent owners. |
 | Admit distinct linked worktrees with an integration advisory | Selected | Uses the isolation already created for every agent, preserves both histories, and leaves content reconciliation to Git. |
 
+**Alternatives:** Automatic takeover, pruning, and successor-only recovery were
+rejected or deferred as shown above; physical isolation with advisory merge
+risk is selected.
+
+**Project implications:** Extend the canonical claim interaction/admission
+owner and its installed projections. Preserve the existing registry, worktree
+creation transaction, continuity timer, pre-write session binding, and Git
+merge boundary.
+
 This plan changes claim admission, not branch merge policy. It creates no new
 registry and no automatic cleanup mechanism.
+
+## Capability Adoption
+
+**Disposition:** extend
+
+Extend the existing claim interaction classifier, admission result, and
+continuity status vocabulary. Reuse the current claim registry, linked-worktree
+entrypoint, pre-write projection, and owner-resume timer; create no parallel
+authority or scheduler.
+
+## Plan
+
+**Critical-path classification: direct_blocker.** Remove false serialization at
+the exact claim-admission boundary while retaining existing physical-write
+exclusion and resume-first prevention.
 
 ## Design Contract
 
@@ -131,7 +155,7 @@ registry and no automatic cleanup mechanism.
 | resume-first recovery disposition | claim health plus continuity delivery evidence and physical conflict class | actionable owner-resume, isolated-recovery, or hard-conflict result | existing continuity sweep plus claim interaction renderer | agents and operators starting or recovering work |
 | exact-worktree mutation confinement | current native session, claimed worktree, and write path | allow only inside the selected claim's physical worktree | existing pre-write projection and hook | every governed repository mutation |
 
-## Acceptance
+## Acceptance Criteria
 
 - Both-sign tests admit overlapping paths in two valid distinct linked
   worktrees and return `isolated_worktree_overlap` evidence.
@@ -144,6 +168,32 @@ registry and no automatic cleanup mechanism.
   spawned-agent fail-visible behavior.
 - The focused claim and continuity suites pass, followed by the repository's
   terminal check before merge.
+
+## Epistemic Planning Frontier
+
+| Area | State | Current contract | Trigger or stopping rule | Downstream update |
+|---|---|---|---|---|
+| Physical worktree conflict | fully_specifiable_now | Claim repo/worktree identity and Git metadata determine whether writes share a checkout | Stop when distinct linked worktrees admit and same/unverified physical targets deny in both-sign tests | Update claim interaction output and operator guide |
+| Owner-first prevention | fully_specifiable_now | Installed timer queues bounded exact top-level Codex resume prompts with progress-bound receipts | Stop after current delivery and circuit-breaker tests remain green | Retain the existing timer mode and record unchanged behavior in Plan #134 evidence |
+| Shared non-Git state | deliberately_deferred | Repository-relative claim paths do not currently model services, databases, or other shared external state | Reassess only when a typed shared-surface contract is adopted | Route to Plan #133 or its accepted successor rather than guessing from prose |
+| Fleet activation | conditional | Source and installer parity must precede consumer rollout | Stop this plan at source merge unless changed files require installer parity | Open a separately claimed consumer adoption only after exact source acceptance |
+
+## Reassessment Contract
+
+- **Triggers:** A candidate worktree does not yet exist during claim admission,
+  Git cannot prove repository/worktree identity, an existing consumer depends on
+  hard logical path exclusion across linked worktrees, or focused tests expose
+  a same-checkout admission.
+- **Autonomous action:** Preserve hard conflict for the ambiguous case, refine
+  the physical-identity predicate, and rerun the smallest discriminating test.
+- **Plan revision required:** Change the selected advisory-by-physical-isolation
+  policy, add a new claim schema/shared-state contract, or introduce automatic
+  custody transfer, process termination, cleanup, or fleet activation.
+- **Human decision required:** Cross into non-Git shared infrastructure,
+  destructive predecessor handling, external deployment, or spend.
+- **Stopping rule:** Stop when both-sign claim admission, exact-worktree
+  pre-write confinement, existing continuity behavior, and the terminal source
+  gate pass at one clean revision.
 
 ## Scope
 

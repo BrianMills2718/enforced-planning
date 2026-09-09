@@ -1134,3 +1134,50 @@ def test_repair_timeout_is_an_explicit_parameter() -> None:
     parameters = inspect.signature(coordination_hook._repair_turn_end_projection).parameters
     assert "timeout" in parameters
     assert parameters["timeout"].default == coordination_hook.TURN_END_PROJECTION_REPAIR_TIMEOUT_SECONDS
+
+
+def test_closeout_gate_marker_does_not_disable_message_delivery(monkeypatch, tmp_path: Path) -> None:
+    """The split. Turning off the dirty-tree gate must not take delivery with it.
+
+    On 2026-09-03 the dirty-repository half of this hook blocked turn end
+    wrongly, and the fix replaced the whole Stop command in
+    ~/.claude/settings.json with `true`. That silently disabled cross-session
+    message delivery for every claude-code session on the host for six days,
+    visible only as one warning line when somebody sent a message. These two
+    concerns share a hook and a shape; they must not share a switch.
+    """
+    marker = tmp_path / "closeout-gate-disabled"
+    monkeypatch.setattr(coordination_hook, "CLOSEOUT_GATE_DISABLE_MARKER", marker)
+
+    assert coordination_hook._repository_closeout_gate_disabled() is False
+    marker.write_text("disabled for a stated reason\n", encoding="utf-8")
+    assert coordination_hook._repository_closeout_gate_disabled() is True
+
+    # Delivery is decided by the inbox notice, never by this marker: nothing in
+    # the mailbox path reads it.
+    source = Path(coordination_hook.__file__).read_text(encoding="utf-8")
+    call_sites = [
+        line
+        for line in source.splitlines()
+        if "_repository_closeout_gate_disabled()" in line
+        and not line.lstrip().startswith("def ")
+    ]
+    assert len(call_sites) == 1, f"the marker must gate one call site, found {call_sites}"
+    guarded = source.split(call_sites[0])[1][:400]
+    assert "_repository_closeout_failure(" in guarded
+
+
+def test_closeout_gate_fails_safe_when_the_marker_cannot_be_read(monkeypatch) -> None:
+    """An unreadable marker is not consent.
+
+    A silently-skipped closeout check is how uncommitted work gets lost, so any
+    error leaves the dirty-repository gate ENABLED.
+    """
+
+    class Unreadable:
+        def is_file(self) -> bool:
+            raise OSError("permission denied")
+
+    monkeypatch.setattr(coordination_hook, "CLOSEOUT_GATE_DISABLE_MARKER", Unreadable())
+
+    assert coordination_hook._repository_closeout_gate_disabled() is False

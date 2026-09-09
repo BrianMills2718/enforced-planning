@@ -47,7 +47,16 @@ CODEX_SESSION = "codex:thread-123"
 CLAUDE_SESSION = "claude-code:session-456"
 
 
-def _write_claim(claims_dir: Path, *, agent: str, project: str, scope: str, session_id: str) -> None:
+def _write_claim(
+    claims_dir: Path,
+    *,
+    agent: str,
+    project: str,
+    scope: str,
+    session_id: str,
+    status: str = "active",
+    updated_at: datetime | None = None,
+) -> None:
     """Persist one real v2 claim fixture consumed by the production resolver."""
 
     claims_dir.mkdir(parents=True, exist_ok=True)
@@ -62,9 +71,10 @@ def _write_claim(claims_dir: Path, *, agent: str, project: str, scope: str, sess
         "read_paths": [],
         "session_id": session_id,
         "heartbeat_at": NOW.isoformat(),
-        "status": "active",
+        "status": status,
         "claimed_at": NOW.isoformat(),
         "expires_at": datetime(2099, 1, 1, tzinfo=UTC).isoformat(),
+        "updated_at": (updated_at or NOW).isoformat(),
     }
     path = claims_dir / f"{agent}_{project}_{scope}.yaml"
     path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
@@ -587,6 +597,100 @@ def test_claim_selector_resolves_unique_session_and_rejects_ambiguity(
         store.resolve_recipient(ClaimRecipientSelector(kind="claim", project="enforced-planning"))
     with pytest.raises(UnknownSessionError):
         store.resolve_recipient(ExactSessionSelector(kind="session", session_id="codex:missing"))
+
+
+def test_exact_selector_resolves_a_recently_ended_claim(
+    mailbox: tuple[CoordinationMessageStore, Path, Path],
+) -> None:
+    """A recipient whose claim ended minutes ago is still reachable.
+
+    Regression target: policy_friction.md cluster
+    coordination-mailbox-session-resolution -- "the mailbox rejected a message
+    to the registry's active Plan 136 session... the active owner cannot be
+    notified through the prescribed channel" because the claim had just ended.
+    """
+    store, claims_dir, _root = mailbox
+    _write_claim(
+        claims_dir,
+        agent="claude-code",
+        project="enforced-planning",
+        scope="recipient-lane",
+        session_id=CLAUDE_SESSION,
+        status="session_ended",
+        updated_at=NOW - timedelta(hours=1),
+    )
+
+    assert (
+        store.resolve_recipient(ExactSessionSelector(kind="session", session_id=CLAUDE_SESSION), now=NOW)
+        == CLAUDE_SESSION
+    )
+
+
+def test_exact_selector_rejects_a_claim_ended_too_long_ago(
+    mailbox: tuple[CoordinationMessageStore, Path, Path],
+) -> None:
+    """A claim that ended days ago is not a live process anymore -- must still fail."""
+    store, claims_dir, _root = mailbox
+    _write_claim(
+        claims_dir,
+        agent="claude-code",
+        project="enforced-planning",
+        scope="recipient-lane",
+        session_id=CLAUDE_SESSION,
+        status="session_ended",
+        updated_at=NOW - timedelta(hours=48),
+    )
+
+    with pytest.raises(UnknownSessionError):
+        store.resolve_recipient(ExactSessionSelector(kind="session", session_id=CLAUDE_SESSION), now=NOW)
+
+
+def test_claim_selector_resolves_a_recently_ended_claim_by_scope(
+    mailbox: tuple[CoordinationMessageStore, Path, Path],
+) -> None:
+    """Project/scope routing also reaches a claim that ended minutes ago."""
+    store, claims_dir, _root = mailbox
+    _write_claim(
+        claims_dir,
+        agent="claude-code",
+        project="enforced-planning",
+        scope="recipient-lane",
+        session_id=CLAUDE_SESSION,
+        status="session_ended",
+        updated_at=NOW - timedelta(hours=1),
+    )
+
+    selector = ClaimRecipientSelector(kind="claim", project="enforced-planning", scope="recipient-lane")
+    assert store.resolve_recipient(selector, now=NOW) == CLAUDE_SESSION
+
+
+def test_caller_authorization_is_unaffected_by_recently_ended_recipient_fallback(
+    mailbox: tuple[CoordinationMessageStore, Path, Path],
+) -> None:
+    """_require_live_session (caller/write-authority checks) must not loosen.
+
+    Recipient reachability and caller authorization are deliberately different
+    questions -- see the module docstring. A session whose own claim recently
+    ended must still fail the strict caller check even though it would now
+    resolve as a message RECIPIENT.
+    """
+    store, claims_dir, _root = mailbox
+    _write_claim(
+        claims_dir,
+        agent="claude-code",
+        project="enforced-planning",
+        scope="recipient-lane",
+        session_id=CLAUDE_SESSION,
+        status="session_ended",
+        updated_at=NOW - timedelta(hours=1),
+    )
+
+    with pytest.raises(UnknownSessionError):
+        store._require_live_session(CLAUDE_SESSION)
+    assert (
+        store.resolve_recipient(ExactSessionSelector(kind="session", session_id=CLAUDE_SESSION), now=NOW)
+        == CLAUDE_SESSION
+    )
 
 
 def test_idempotency_reuses_identical_message_and_rejects_changed_content(

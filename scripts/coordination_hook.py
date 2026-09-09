@@ -654,6 +654,43 @@ def _record_touched_repositories(
     temporary.replace(ledger_path)
 
 
+# One Stop hook, two unrelated jobs: deliver coordination messages the session
+# has not seen, and refuse a turn end that left a repository dirty. They were
+# bundled because they share a shape -- do not let the agent walk away -- but
+# they do not share a failure mode.
+#
+# On 2026-09-03 the dirty-repository half blocked turn end wrongly, and the fix
+# was to replace the whole hook command in ~/.claude/settings.json with `true`.
+# That also disabled message delivery for every claude-code session on the host,
+# and it stayed disabled for six days: the only visible symptom was one warning
+# line when somebody sent a message, saying persistence is not delivery.
+#
+# The hook command shape is pinned -- coordination_messages validates the Stop
+# entry as exactly `<python> coordination_hook.py --agent <client>`, so a
+# `--no-closeout` flag would make the command six tokens and report delivery
+# unavailable all over again. The toggle therefore lives beside the claims
+# registry rather than on the command line.
+CLOSEOUT_GATE_DISABLE_MARKER = (
+    Path.home() / ".claude" / "coordination" / "closeout-gate-disabled"
+)
+
+
+def _repository_closeout_gate_disabled() -> bool:
+    """Whether the dirty-repository turn-end gate is switched off.
+
+    Fails safe: any error reading the marker leaves the gate ENABLED, because a
+    silently-skipped closeout check is how uncommitted work gets lost, and an
+    unreadable file is not consent.
+
+    Message delivery is deliberately unaffected by this. Turning off the
+    dirty-tree gate must never again take cross-session delivery with it.
+    """
+    try:
+        return CLOSEOUT_GATE_DISABLE_MARKER.is_file()
+    except OSError:
+        return False
+
+
 def _repository_closeout_failure(
     *,
     agent: str,
@@ -1024,7 +1061,11 @@ def main(argv: list[str] | None = None) -> int:
                 summary="",
             )
         closeout_failure = None
-        if primary_execution and payload["hook_event_name"] == "Stop":
+        if (
+            primary_execution
+            and payload["hook_event_name"] == "Stop"
+            and not _repository_closeout_gate_disabled()
+        ):
             closeout_failure = _repository_closeout_failure(
                 agent=args.agent,
                 session_id=session_id,

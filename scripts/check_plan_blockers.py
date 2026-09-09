@@ -159,18 +159,27 @@ def update_plan_status(plan: PlanInfo, new_status: str) -> None:
     emoji = status_emoji.get(new_status, "❓")
     new_status_line = f"**Status:** {emoji} {new_status}"
 
-    # Replace the status line
+    # Replace only the canonical status line -- the first `**Status:**`
+    # occurrence, which is always the header-block line in every observed
+    # plan template (confirmed across enforced-planning, project-meta,
+    # llm_client, and process_tracing plan files, including ones that quote
+    # an older status line later in the body, e.g. inside a Progress-section
+    # example or backtick-quoted prose). Without `count=1`, re.sub rewrote
+    # every such quoted occurrence too.
     updated = re.sub(
         r"\*\*Status:\*\*\s*.+?(?=\n)",
         new_status_line,
         content,
+        count=1,
     )
 
-    # Clear the Blocked By field since we're unblocking
+    # Clear the Blocked By field since we're unblocking -- same single-line,
+    # first-occurrence-only rewrite as the status line above.
     updated = re.sub(
         r"\*\*Blocked By:\*\*\s*.+?(?=\n)",
         "**Blocked By:** None",
         updated,
+        count=1,
     )
 
     plan.file_path.write_text(updated)

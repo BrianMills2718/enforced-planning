@@ -77,7 +77,11 @@ do, since that wrapper is itself part of the drift), `install_governed_repo.py
 worktree, then commit + push + `gh pr create` only if there was a real diff.
 Never merges. Never touches the primary checkout. A repo tagged
 `owner: inside-success` in the registry is skipped with an explicit reason --
-that authority is separate and not yet granted.
+that authority is separate and must be passed explicitly with
+`--authorize-owner inside-success`. PR creation also accepts an explicit,
+allowlisted `--github-cli` account wrapper, keeping mutation authority distinct
+from credential routing instead of relying on whichever global account happens
+to be active.
 
 On any failure the worktree is abandoned through the sanctioned
 `session-close` path; uncommitted output is stashed, never discarded, so a

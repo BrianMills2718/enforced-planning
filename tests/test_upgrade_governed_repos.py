@@ -52,6 +52,91 @@ def test_write_repo_refuses_non_brian_owner(tmp_path: Path) -> None:
     assert "explicit authorization" in result.skip_reason
 
 
+def test_write_repo_accepts_explicitly_authorized_owner(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Owner authorization is explicit and does not weaken other preflights."""
+
+    module = _load()
+    missing = tmp_path / "still-missing"
+    monkeypatch.setattr(
+        module,
+        "_native_agent",
+        lambda: (_ for _ in ()).throw(AssertionError("missing-root preflight should run first")),
+    )
+
+    result = module.write_repo(
+        "inside-success-repo",
+        missing,
+        "governed",
+        "inside-success",
+        authorized_owners=frozenset({"brian", "inside-success"}),
+        github_cli="gh-insidesuccess",
+    )
+
+    assert result.skipped is True
+    assert "does not exist" in result.skip_reason
+    assert "explicit authorization" not in result.skip_reason
+
+
+def test_write_repo_routes_pr_creation_through_selected_github_cli(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Org authorization and account routing remain separate explicit inputs."""
+
+    module = _load()
+    repo = tmp_path / "consumer"
+    repo.mkdir()
+    (repo / "Makefile").write_text("maintenance-worktree:\n\t@true\n", encoding="utf-8")
+    for env_key in module.coordination_claims.STRICT_NATIVE_SESSION_ENV_KEYS.values():
+        monkeypatch.delenv(env_key, raising=False)
+    monkeypatch.setenv("CODEX_THREAD_ID", "native-codex-thread")
+    monkeypatch.setattr(module, "_source_revision_tag", lambda: "abc123def456")
+    calls: list[list[str]] = []
+
+    def complete_sync(cmd: list[str], cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
+        calls.append(cmd)
+        if "maintenance-worktree" in cmd:
+            branch = next(item.split("=", 1)[1] for item in cmd if item.startswith("BRANCH="))
+            (repo / "worktrees" / branch).mkdir(parents=True)
+            return subprocess.CompletedProcess(cmd, 0, stdout="created", stderr="")
+        if "session-narrow" in cmd:
+            return subprocess.CompletedProcess(cmd, 0, stdout="narrowed", stderr="")
+        if str(module.INSTALL_SCRIPT) in cmd:
+            return subprocess.CompletedProcess(cmd, 0, stdout="installed", stderr="")
+        if str(module.AUDIT_SCRIPT) in cmd:
+            return subprocess.CompletedProcess(
+                cmd,
+                0,
+                stdout='{"classification":"governed","blockers":[]}',
+                stderr="",
+            )
+        if cmd[:3] == ["git", "status", "--porcelain"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout=" M governed-file\n", stderr="")
+        if cmd[:2] in (["git", "add"], ["git", "commit"], ["git", "push"]):
+            return subprocess.CompletedProcess(cmd, 0, stdout="ok", stderr="")
+        if cmd[0] == "gh-insidesuccess":
+            return subprocess.CompletedProcess(cmd, 0, stdout="https://example.invalid/pr/1\n", stderr="")
+        raise AssertionError(f"unexpected command: {cmd} (cwd={cwd})")
+
+    monkeypatch.setattr(module, "_run", complete_sync)
+
+    result = module.write_repo(
+        "consumer",
+        repo,
+        "governed",
+        "inside-success",
+        authorized_owners=frozenset({"brian", "inside-success"}),
+        github_cli="gh-insidesuccess",
+    )
+
+    assert result.success is True
+    assert result.pr_url == "https://example.invalid/pr/1"
+    assert any(cmd[0] == "gh-insidesuccess" and cmd[1:3] == ["pr", "create"] for cmd in calls)
+
+
 def test_write_repo_skips_missing_repo_root(tmp_path: Path) -> None:
     module = _load()
     missing = tmp_path / "does-not-exist"

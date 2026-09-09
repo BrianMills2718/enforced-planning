@@ -39,7 +39,7 @@ import subprocess
 import sys
 import time
 from dataclasses import dataclass, field
-from datetime import UTC, date, datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -186,7 +186,15 @@ def _source_revision_tag() -> str:
     return revision
 
 
-def write_repo(repo_id: str, repo_root: Path, tier: str, owner: str) -> RepoUpgradeResult:
+def write_repo(
+    repo_id: str,
+    repo_root: Path,
+    tier: str,
+    owner: str,
+    *,
+    authorized_owners: frozenset[str] = frozenset({"brian"}),
+    github_cli: str = "gh",
+) -> RepoUpgradeResult:
     """Sync one repo through its own claimed linked worktree.
 
     Never touches repo_root's primary checkout. Sequence:
@@ -203,12 +211,12 @@ def write_repo(repo_id: str, repo_root: Path, tier: str, owner: str) -> RepoUpgr
     """
     result = RepoUpgradeResult(repo_id=repo_id, repo_root=repo_root, tier=tier)
 
-    if owner and owner != "brian":
+    if owner and owner not in authorized_owners:
         result.skipped = True
         result.skip_reason = (
             f"owner={owner!r}: write-mode for a non-Brian-owned repo needs its own "
-            "explicit authorization, not blanket fleet write-mode. Sync it by hand "
-            "(the pattern this script automates) until that authority exists."
+            "explicit authorization, not blanket fleet write-mode. Pass "
+            f"--authorize-owner {owner} only when that authority exists."
         )
         return result
 
@@ -524,11 +532,14 @@ def write_repo(repo_id: str, repo_root: Path, tier: str, owner: str) -> RepoUpgr
 
     pr_proc = _run(
         [
-            "gh",
+            github_cli,
             "pr",
             "create",
             "--title",
-            f"Sync coordination consumer files from canonical enforced-planning ({date.today().isoformat()})",
+            (
+                "Sync coordination consumer files from canonical enforced-planning "
+                f"({datetime.now(UTC).date().isoformat()})"
+            ),
             "--body",
             (
                 "Automated via `scripts/upgrade_governed_repos.py --write` (Plan #51). "
@@ -630,6 +641,8 @@ def run_upgrade(
     target_repo: str | None,
     dry_run: bool,
     as_json: bool,
+    authorized_owners: frozenset[str] = frozenset({"brian"}),
+    github_cli: str = "gh",
 ) -> int:
     """Main upgrade loop. Returns exit code."""
     repos = load_registry(registry_path)
@@ -657,7 +670,14 @@ def run_upgrade(
         if dry_run:
             result = upgrade_repo(repo_id, repo_root, tier, dry_run)
         else:
-            result = write_repo(repo_id, repo_root, tier, entry.get("owner", "brian"))
+            result = write_repo(
+                repo_id,
+                repo_root,
+                tier,
+                entry.get("owner", "brian"),
+                authorized_owners=authorized_owners,
+                github_cli=github_cli,
+            )
         results.append(result)
 
         if not as_json:
@@ -745,6 +765,22 @@ def main(argv: list[str] | None = None) -> int:
         default=False,
         help="Output machine-readable JSON report.",
     )
+    parser.add_argument(
+        "--authorize-owner",
+        action="append",
+        default=[],
+        metavar="OWNER",
+        help=(
+            "Explicitly authorize write-mode for a non-Brian owner named in the registry. "
+            "Repeat for multiple owners; omitted owners remain fail-closed."
+        ),
+    )
+    parser.add_argument(
+        "--github-cli",
+        choices=("gh", "gh-personal", "gh-insidesuccess"),
+        default="gh",
+        help="Credential-routed GitHub CLI used only to create the resulting PR.",
+    )
     args = parser.parse_args(argv)
 
     if args.write and not args.repo:
@@ -768,6 +804,8 @@ def main(argv: list[str] | None = None) -> int:
         target_repo=args.repo,
         dry_run=dry_run,
         as_json=args.json,
+        authorized_owners=frozenset({"brian", *args.authorize_owner}),
+        github_cli=args.github_cli,
     )
 
 

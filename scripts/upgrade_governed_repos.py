@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 import time
@@ -155,6 +156,22 @@ def _single_line(text: str, limit: int) -> str:
     return " ".join(text.split())[:limit]
 
 
+def _native_agent() -> str:
+    """Return the one agent identity proved by this process environment."""
+
+    detected = [
+        agent
+        for agent, env_key in coordination_claims.STRICT_NATIVE_SESSION_ENV_KEYS.items()
+        if os.environ.get(env_key, "").strip()
+    ]
+    if len(detected) != 1:
+        raise ValueError(
+            "write-mode requires exactly one native agent runtime marker; "
+            f"detected {len(detected)}"
+        )
+    return detected[0]
+
+
 def write_repo(repo_id: str, repo_root: Path, tier: str, owner: str) -> RepoUpgradeResult:
     """Sync one repo through its own claimed linked worktree.
 
@@ -191,6 +208,12 @@ def write_repo(repo_id: str, repo_root: Path, tier: str, owner: str) -> RepoUpgr
         result.skip_reason = "no Makefile -- cannot use the sanctioned maintenance-worktree entrypoint"
         return result
 
+    try:
+        native_agent = _native_agent()
+    except ValueError as exc:
+        result.write_error = str(exc)
+        return result
+
     branch = f"sync-enforced-planning-{date.today().isoformat()}"
     result.branch = branch
     worktree_path = repo_root / "worktrees" / branch
@@ -208,7 +231,7 @@ def write_repo(repo_id: str, repo_root: Path, tier: str, owner: str) -> RepoUpgr
         make_cmd = [
             "make", "-C", str(repo_root), "maintenance-worktree",
             f"BRANCH={branch}", f"TASK={task}", f"SESSION_GOAL={goal}",
-            "SESSION_PHASE=sync", "WORKTREE_AGENT=claude-code", "SESSION_ALLOW_PARALLEL=1",
+            "SESSION_PHASE=sync", f"WORKTREE_AGENT={native_agent}", "SESSION_ALLOW_PARALLEL=1",
             f"SESSION_WRITE_PATHS={write_paths}",
         ]
     elif "\nworktree:" in makefile_text or makefile_text.startswith("worktree:"):
@@ -219,7 +242,7 @@ def write_repo(repo_id: str, repo_root: Path, tier: str, owner: str) -> RepoUpgr
         make_cmd = [
             "make", "-C", str(repo_root), "worktree",
             f"BRANCH={branch}", f"TASK={task}", f"SESSION_GOAL={goal}",
-            "SESSION_PHASE=sync", "WORKTREE_AGENT=claude-code", "SESSION_ALLOW_PARALLEL=1",
+            "SESSION_PHASE=sync", f"WORKTREE_AGENT={native_agent}", "SESSION_ALLOW_PARALLEL=1",
             f"SESSION_WRITE_PATHS={write_paths}",
         ]
     else:
@@ -237,7 +260,7 @@ def write_repo(repo_id: str, repo_root: Path, tier: str, owner: str) -> RepoUpgr
         result.write_error = f"maintenance-worktree reported success but {worktree_path} does not exist"
         return result
 
-    _repair_missing_plan_ref(agent="claude-code", project=repo_id, scope=branch)
+    _repair_missing_plan_ref(agent=native_agent, project=repo_id, scope=branch)
 
     def _abandon(reason: str) -> None:
         result.write_error = reason
@@ -261,7 +284,7 @@ def write_repo(repo_id: str, repo_root: Path, tier: str, owner: str) -> RepoUpgr
                 str(repo_root),
                 "worktree-remove",
                 f"BRANCH={branch}",
-                "WORKTREE_AGENT=claude-code",
+                f"WORKTREE_AGENT={native_agent}",
                 "WORKTREE_DISPOSITION=abandoned",
                 f"WORKTREE_DISPOSITION_REASON=upgrade_governed_repos.py --write failed: {_single_line(reason, 200)}",
             ]
@@ -280,7 +303,7 @@ def write_repo(repo_id: str, repo_root: Path, tier: str, owner: str) -> RepoUpgr
                     str(repo_root),
                     "worktree-remove",
                     f"BRANCH={branch}",
-                    "WORKTREE_AGENT=claude-code",
+                    f"WORKTREE_AGENT={native_agent}",
                     "WORKTREE_DISPOSITION=merged",
                     f"WORKTREE_DISPOSITION_REASON=no unique commit; sync attempt failed: {_single_line(reason, 150)}",
                 ]
@@ -318,7 +341,7 @@ def write_repo(repo_id: str, repo_root: Path, tier: str, owner: str) -> RepoUpgr
                 str(repo_root),
                 "session-close",
                 f"BRANCH={branch}",
-                "WORKTREE_AGENT=claude-code",
+                f"WORKTREE_AGENT={native_agent}",
                 "WORKTREE_DISPOSITION=merged",
                 "WORKTREE_DISPOSITION_REASON=install --write produced no diff; already in sync with canonical enforced-planning",
             ]
@@ -335,9 +358,10 @@ def write_repo(repo_id: str, repo_root: Path, tier: str, owner: str) -> RepoUpgr
             "git",
             "commit",
             "-m",
-            f"[Unplanned] Sync coordination consumer files from canonical enforced-planning\n\n"
-            f"Automated via upgrade_governed_repos.py --write, Plan #51.\n\n"
-            f"Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>",
+            (
+                "[Unplanned] Sync coordination consumer files from canonical enforced-planning\n\n"
+                "Automated via upgrade_governed_repos.py --write, Plan #51."
+            ),
         ],
         cwd=worktree_path,
     )
@@ -358,9 +382,11 @@ def write_repo(repo_id: str, repo_root: Path, tier: str, owner: str) -> RepoUpgr
             "--title",
             f"Sync coordination consumer files from canonical enforced-planning ({date.today().isoformat()})",
             "--body",
-            "Automated via `scripts/upgrade_governed_repos.py --write` (Plan #51). "
-            "Not auto-merged -- review before merging.\n\n"
-            "🤖 Generated with [Claude Code](https://claude.com/claude-code)",
+            (
+                "Automated via `scripts/upgrade_governed_repos.py --write` (Plan #51). "
+                "Not auto-merged -- review before merging.\n\n"
+                f"Generated by the native {native_agent} rollout session."
+            ),
         ],
         cwd=worktree_path,
     )

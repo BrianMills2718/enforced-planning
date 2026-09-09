@@ -174,9 +174,11 @@ exclusion and resume-first prevention.
 
 **Behavioral evidence:** At the implementation revision, the focused admission
 batch passed 6/6, the full claim suite passed 170/170, and the unchanged
-continuity suite passed 75/75. A fixture-equivalent pre-worktree claim path
-admitted the second lane while retaining both claims; same, canonical, and
-unverified targets remained hard conflicts. `make check` reached the
+continuity suite passed 75/75. The complete hook-contract batch passed 460/460,
+including both delegated and ordinary maintenance-worktree admission. A
+fixture-equivalent pre-worktree claim path admitted the second lane while
+retaining both claims; same, canonical, and unverified targets remained hard
+conflicts. `make check` reached the
 repository-wide Ruff gate and stopped on 510 baseline-identical findings before
 tests; the changed files also report the same 58 findings as `main`, with no
 new lint finding. PR CI and the merge revision retain terminal source evidence.

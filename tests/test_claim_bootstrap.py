@@ -1511,7 +1511,7 @@ def test_delegated_maintenance_requires_exact_healthy_parent_before_artifacts(
     ).returncode != 0
 
 
-def test_delegated_maintenance_keeps_sibling_overlap_as_hard_conflict(
+def test_delegated_maintenance_admits_sibling_overlap_in_distinct_worktree(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1532,10 +1532,23 @@ def test_delegated_maintenance_keeps_sibling_overlap_as_hard_conflict(
         )
     )
 
-    with pytest.raises(claim_bootstrap.ClaimBootstrapError, match="conflict"):
-        claim_bootstrap.execute_request(second)
+    result = claim_bootstrap.execute_request(second)
 
-    assert not (repo / "worktrees" / "fix" / "sibling-lane").exists()
+    assert result["ok"] is True
+    assert (repo / "worktrees" / "fix" / "child-lane").is_dir()
+    assert (repo / "worktrees" / "fix" / "sibling-lane").is_dir()
+    sibling_claims = [
+        claim
+        for claim in claim_bootstrap.coordination_claims.check_claims(repo.name)
+        if claim.scope in {"fix/child-lane", "fix/sibling-lane"}
+    ]
+    assert {claim.scope for claim in sibling_claims} == {"fix/child-lane", "fix/sibling-lane"}
+    interaction = claim_bootstrap.coordination_claims.evaluate_claim(
+        next(claim for claim in sibling_claims if claim.scope == "fix/sibling-lane"),
+        active_claims=[next(claim for claim in sibling_claims if claim.scope == "fix/child-lane")],
+    ).interactions[0]
+    assert interaction.severity == "advisory_overlap"
+    assert interaction.reason == "isolated_worktree_overlap"
 
 
 def test_delegated_post_claim_failure_revokes_before_git_artifacts_disappear(
@@ -2267,14 +2280,18 @@ def test_narrow_bootstrap_preserves_other_writers(
     request = claim_bootstrap.parse_request_json(json.dumps(
         _maintenance_payload(repo, write_paths=["src/adapter.py"])
     ))
-    if other_path != "unrelated.txt":
-        with pytest.raises(claim_bootstrap.ClaimBootstrapError, match="CONFLICT"):
-            claim_bootstrap.execute_request(request)
-    else:
-        assert claim_bootstrap.execute_request(request)["ok"]
-    other = [c for c in claim_bootstrap.coordination_claims.check_claims(repo.name)
-             if c.scope == "other-lane"]
+    assert claim_bootstrap.execute_request(request)["ok"]
+    claims = claim_bootstrap.coordination_claims.check_claims(repo.name)
+    other = [c for c in claims if c.scope == "other-lane"]
     assert len(other) == 1 and other[0].write_paths == [other_path]
+    if other_path != "unrelated.txt":
+        candidate = next(c for c in claims if c.scope == "fix/safe-lane")
+        interaction = claim_bootstrap.coordination_claims.evaluate_claim(
+            candidate,
+            active_claims=other,
+        ).interactions[0]
+        assert interaction.severity == "advisory_overlap"
+        assert interaction.reason == "isolated_worktree_overlap"
 
 
 @pytest.mark.parametrize(("left", "right"), [

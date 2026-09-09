@@ -204,3 +204,7 @@ the changed files are installer-managed.
 **Excluded:** automatic merge/rebase; deletion or pruning; force-push; process
 killing; automatic custody transfer; deployment outside the existing host
 timer; semantic judgment about whether predecessor work is valuable.
+
+The executable implementation boundary is the single ready unit
+`olr-01-physical-conflict-admission` in
+`docs/plans/134_owner_loss_recovery_work_graph.json`.

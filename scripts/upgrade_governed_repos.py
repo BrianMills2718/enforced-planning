@@ -169,6 +169,21 @@ def _native_agent() -> str:
     return detected[0]
 
 
+def _source_revision_tag() -> str:
+    """Return a stable revision tag so retained trackers never block retries."""
+
+    resolved = subprocess.run(
+        ["git", "-C", str(FRAMEWORK_ROOT), "rev-parse", "--short=12", "HEAD"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    revision = resolved.stdout.strip()
+    if resolved.returncode != 0 or not revision:
+        raise ValueError("unable to resolve the canonical enforced-planning source revision")
+    return revision
+
+
 def write_repo(repo_id: str, repo_root: Path, tier: str, owner: str) -> RepoUpgradeResult:
     """Sync one repo through its own claimed linked worktree.
 
@@ -211,7 +226,12 @@ def write_repo(repo_id: str, repo_root: Path, tier: str, owner: str) -> RepoUpgr
         result.write_error = str(exc)
         return result
 
-    branch = f"sync-enforced-planning-{date.today().isoformat()}"
+    try:
+        source_revision = _source_revision_tag()
+    except ValueError as exc:
+        result.write_error = str(exc)
+        return result
+    branch = f"sync-enforced-planning-{date.today().isoformat()}-{source_revision}"
     result.branch = branch
     worktree_path = repo_root / "worktrees" / branch
 

@@ -36,6 +36,12 @@ its stable CLI facade only. The profile is exact and idempotent in focused
 tests, and the upgrader narrows its temporary bootstrap claim to those same two
 paths before invoking it.
 
+Same-day pilot retries also proved that date-only rollout branches collide with
+intentionally retained session trackers. Rollout branch identities now include
+the canonical Enforced Planning source revision. This preserves historical
+trackers while making a new source revision a naturally distinct retry lane;
+the upgrader fails before target mutation if that revision cannot be resolved.
+
 ---
 
 ## Implementation (2026-09-02)

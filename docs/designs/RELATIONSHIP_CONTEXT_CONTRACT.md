@@ -142,6 +142,54 @@ summary from the selected source artifact. Packets always include the target,
 rank declared semantic neighbors before legacy edges, enforce configurable
 item/character budgets, and report unresolved or omitted context.
 
+### Required full-file atoms and expected receipts (V3 opt-in)
+
+Existing callers continue to receive byte-compatible `ContextPacket` V2 JSON.
+A caller that supplies the complete receipt identity opts into
+`ContextPacketV3`, which adds a separate capacity for mandatory full-file
+context. Required atoms come from:
+
+- repository `required_reading.defaults`;
+- `required_reading.gates[*].documents` when the target matches
+  `applies_to`; and
+- applicable explicit relationships whose relation is `required_reading`.
+
+Each selector must resolve to a complete repository-relative UTF-8 file. The
+compiler reads every atom without clipping and records its content, SHA-256,
+byte count, declaration provenance, and source revision. A clean atom's revision
+is the last commit that changed that file, so an unrelated commit does not
+invalidate it. A staged, modified, or untracked atom is explicitly
+`working_copy` with no committed revision. Missing, non-regular, unreadable,
+unresolved-glob, mid-observation-change, and over-capacity states raise
+`ContextPacketError`; required atoms never fall into optional top-k omission.
+
+The returned `ContextReceipt` is deliberately content-free. It binds the packet
+SHA-256 and required-atom identities to the exact session, context epoch,
+action, target, adapter id, and adapter version. Its only visibility value is
+`expected`: compilation proves what the adapter selected for the dependent
+action, not what a client host delivered, retained, displayed, read, or
+understood. Later native adapters may add stronger receipts only at boundaries
+they can actually observe.
+
+The existing CLI exposes V3 only when all receipt fields are present together:
+
+```bash
+python scripts/context_packet.py src/service.py \
+  --repo-root /path/to/repo \
+  --required-capacity-bytes 24000 \
+  --receipt-path /path/to/receipts/before-edit.json \
+  --session-id session-identity \
+  --context-epoch epoch-identity \
+  --action edit \
+  --adapter-id context-packet-cli \
+  --adapter-version 3
+```
+
+The packet, including full required content, remains on stdout. The separate
+receipt path stores digests and provenance but not the payload. Omitting all V3
+arguments preserves the V2 CLI. Supplying only some is an error rather than an
+implicit fallback.
+
 ## Impact Obligation Extension (Slice 3)
 
 A changed source path matching an outgoing edge with maintenance

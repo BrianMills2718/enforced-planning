@@ -2,15 +2,20 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
-from pathlib import Path
 import subprocess
+from pathlib import Path
 
 import pytest
 
-from enforced_planning.context_packet import ContextPacketError
-from enforced_planning.context_packet import build_context_packet
-from enforced_planning.context_packet import relationship_specs
+from enforced_planning.context_packet import (
+    ContextPacketError,
+    build_context_packet,
+    build_context_packet_with_receipt,
+    relationship_specs,
+)
+from enforced_planning.context_packet import main as context_packet_main
 
 
 def _write(path: Path, content: str) -> None:
@@ -43,6 +48,33 @@ def authorize(principal: str, resource: str) -> bool:
     )
     subprocess.run(["git", "-C", str(repo), "add", "-A"], check=True)
     return repo
+
+
+def _commit(repo: Path) -> str:
+    """Commit the staged fixture and return its exact revision."""
+
+    subprocess.run(
+        [
+            "git",
+            "-C",
+            str(repo),
+            "-c",
+            "user.name=Context Packet Test",
+            "-c",
+            "user.email=context-packet@example.invalid",
+            "commit",
+            "-m",
+            "fixture",
+        ],
+        check=True,
+        capture_output=True,
+    )
+    return subprocess.run(
+        ["git", "-C", str(repo), "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
 
 
 def _relationships() -> dict[str, object]:
@@ -208,6 +240,243 @@ def test_packet_budget_is_deterministic_and_reports_omissions(tmp_path: Path) ->
     assert first.omitted_count == 2
     assert [item.code for item in first.diagnostics] == ["context-budget-omitted"]
     assert first.included_chars <= first.max_chars
+
+
+def test_v3_compiles_defaults_gates_and_required_edges_as_full_file_atoms(tmp_path: Path) -> None:
+    """Applicable mandatory context is exact, revision-bound, and never summary-ranked."""
+
+    repo = _repo(tmp_path)
+    _write(repo / "CLAUDE.md", "# Instructions\n\nFollow the governed contract.\n")
+    _write(repo / "docs/gate.md", "# Gate\n\nRequired for source edits.\n")
+    _write(repo / "docs/required.md", "# Required\n\nRead the whole authority.\n")
+    subprocess.run(["git", "-C", str(repo), "add", "-A"], check=True)
+    revision = _commit(repo)
+    relationships = _relationships()
+    relationships["required_reading"] = {
+        "defaults": ["CLAUDE.md"],
+        "gates": [
+            {
+                "id": "source-gate",
+                "documents": ["docs/gate.md"],
+                "applies_to": ["src/**"],
+                "reason": "Source edits require the gate authority.",
+            }
+        ],
+    }
+    relationships["relationships"].append(
+        {
+            "source": "src/**/*.py",
+            "target": "docs/required.md",
+            "relation": "required_reading",
+            "reason": "The full authority is mandatory before source edits.",
+            "maintenance": "block",
+        }
+    )
+
+    packet, receipt = build_context_packet_with_receipt(
+        repo,
+        "src/service.py",
+        relationships,
+        required_capacity_bytes=10_000,
+        session_id="session-1",
+        context_epoch="epoch-1",
+        action="edit",
+        adapter_id="test-adapter",
+        adapter_version="1.0",
+    )
+
+    assert packet.schema_version == 3
+    assert [atom.path for atom in packet.required_atoms] == [
+        "CLAUDE.md",
+        "docs/gate.md",
+        "docs/required.md",
+    ]
+    assert all(atom.revision == revision for atom in packet.required_atoms)
+    assert all(atom.working_tree_state == "clean" for atom in packet.required_atoms)
+    for atom in packet.required_atoms:
+        raw = (repo / atom.path).read_bytes()
+        assert atom.byte_count == len(raw)
+        assert atom.content_sha256 == hashlib.sha256(raw).hexdigest()
+        assert atom.content == raw.decode("utf-8")
+    assert receipt.visibility == "expected"
+    assert receipt.context_epoch == "epoch-1"
+    assert receipt.packet_sha256 == hashlib.sha256(packet.to_json().encode("utf-8")).hexdigest()
+    receipt_payload = json.loads(receipt.to_json())
+    assert all("content" not in atom for atom in receipt_payload["required_atoms"])
+
+
+def test_v3_authority_change_invalidates_packet_and_receipt_digest(tmp_path: Path) -> None:
+    """Working-copy bytes cannot inherit the clean HEAD revision identity."""
+
+    repo = _repo(tmp_path)
+    _write(repo / "CLAUDE.md", "first\n")
+    subprocess.run(["git", "-C", str(repo), "add", "-A"], check=True)
+    _commit(repo)
+    relationships = {"required_reading": {"defaults": ["CLAUDE.md"]}}
+    first_packet, first_receipt = build_context_packet_with_receipt(
+        repo,
+        "src/service.py",
+        relationships,
+        required_capacity_bytes=1_000,
+        session_id="session-1",
+        context_epoch="epoch-1",
+        action="edit",
+        adapter_id="test-adapter",
+        adapter_version="1.0",
+    )
+    _write(repo / "docs/unrelated.md", "unrelated\n")
+    subprocess.run(["git", "-C", str(repo), "add", "-A"], check=True)
+    _commit(repo)
+    stable_packet, stable_receipt = build_context_packet_with_receipt(
+        repo,
+        "src/service.py",
+        relationships,
+        required_capacity_bytes=1_000,
+        session_id="session-1",
+        context_epoch="epoch-2",
+        action="edit",
+        adapter_id="test-adapter",
+        adapter_version="1.0",
+    )
+    assert stable_packet.required_atoms[0].revision == first_packet.required_atoms[0].revision
+    assert stable_receipt.packet_sha256 == first_receipt.packet_sha256
+
+    _write(repo / "CLAUDE.md", "second\n")
+
+    second_packet, second_receipt = build_context_packet_with_receipt(
+        repo,
+        "src/service.py",
+        relationships,
+        required_capacity_bytes=1_000,
+        session_id="session-1",
+        context_epoch="epoch-3",
+        action="edit",
+        adapter_id="test-adapter",
+        adapter_version="1.0",
+    )
+
+    changed = second_packet.required_atoms[0]
+    assert changed.revision is None
+    assert changed.working_tree_state == "working_copy"
+    assert first_receipt.packet_sha256 != second_receipt.packet_sha256
+    assert first_packet.required_atoms[0].content_sha256 != changed.content_sha256
+
+
+def test_v3_missing_or_over_capacity_required_context_blocks(tmp_path: Path) -> None:
+    """Required full files cannot be silently omitted or clipped."""
+
+    repo = _repo(tmp_path)
+    _commit(repo)
+    receipt_args = {
+        "session_id": "session-1",
+        "context_epoch": "epoch-1",
+        "action": "edit",
+        "adapter_id": "test-adapter",
+        "adapter_version": "1.0",
+    }
+    missing = {"required_reading": {"defaults": ["docs/missing.md"]}}
+    with pytest.raises(ContextPacketError, match="required context file is missing"):
+        build_context_packet_with_receipt(
+            repo,
+            "src/service.py",
+            missing,
+            required_capacity_bytes=1_000,
+            **receipt_args,
+        )
+
+    over_capacity = {"required_reading": {"defaults": ["docs/requirements.md"]}}
+    with pytest.raises(ContextPacketError, match="required context needs .* bytes but capacity is 5"):
+        build_context_packet_with_receipt(
+            repo,
+            "src/service.py",
+            over_capacity,
+            required_capacity_bytes=5,
+            **receipt_args,
+        )
+
+
+def test_v3_required_capacity_is_separate_from_optional_item_budget(tmp_path: Path) -> None:
+    """Optional omission remains legal and cannot clip a required atom."""
+
+    repo = _repo(tmp_path)
+    _commit(repo)
+    relationships = _relationships()
+    relationships["required_reading"] = {"defaults": ["docs/requirements.md"]}
+
+    packet, _receipt = build_context_packet_with_receipt(
+        repo,
+        "src/service.py",
+        relationships,
+        max_items=1,
+        max_chars=500,
+        required_capacity_bytes=10_000,
+        session_id="session-1",
+        context_epoch="epoch-1",
+        action="edit",
+        adapter_id="test-adapter",
+        adapter_version="1.0",
+    )
+
+    assert packet.omitted_count > 0
+    assert packet.required_atoms[0].content == (repo / "docs/requirements.md").read_text(encoding="utf-8")
+    assert packet.required_bytes == len((repo / "docs/requirements.md").read_bytes())
+
+
+def test_existing_packet_json_remains_v2_without_receipt_inputs(tmp_path: Path) -> None:
+    """The new contract is opt-in and does not alter existing hook payloads."""
+
+    repo = _repo(tmp_path)
+    packet = build_context_packet(repo, "src/service.py", _relationships())
+    payload = json.loads(packet.to_json())
+
+    assert payload["schema_version"] == 2
+    assert "required_atoms" not in payload
+
+
+def test_cli_v3_writes_expected_receipt_and_prints_packet(tmp_path: Path, capsys) -> None:
+    """The existing CLI emits the packet and a separate payload-free receipt."""
+
+    repo = _repo(tmp_path)
+    _write(repo / "CLAUDE.md", "# Required instructions\n")
+    _write(
+        repo / "relationships.yaml",
+        "required_reading:\n  defaults:\n    - CLAUDE.md\n",
+    )
+    subprocess.run(["git", "-C", str(repo), "add", "-A"], check=True)
+    _commit(repo)
+    receipt_path = tmp_path / "receipts" / "expected.json"
+
+    code = context_packet_main(
+        [
+            "src/service.py",
+            "--repo-root",
+            str(repo),
+            "--config",
+            "relationships.yaml",
+            "--required-capacity-bytes",
+            "1000",
+            "--receipt-path",
+            str(receipt_path),
+            "--session-id",
+            "session-1",
+            "--context-epoch",
+            "epoch-1",
+            "--action",
+            "edit",
+            "--adapter-id",
+            "context-packet-cli",
+            "--adapter-version",
+            "3",
+        ]
+    )
+
+    packet_payload = json.loads(capsys.readouterr().out)
+    receipt_payload = json.loads(receipt_path.read_text(encoding="utf-8"))
+    assert code == 0
+    assert packet_payload["schema_version"] == 3
+    assert packet_payload["required_atoms"][0]["content"] == "# Required instructions\n"
+    assert receipt_payload["visibility"] == "expected"
+    assert "content" not in receipt_payload["required_atoms"][0]
 
 
 def test_unresolved_neighbor_and_untracked_target_are_explicit(tmp_path: Path) -> None:

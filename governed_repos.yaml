@@ -102,7 +102,7 @@ repos:
   # enforced_planning/ installed and drift the same way, but write-mode
   # rollout onto these needs its own authority check (see CLAUDE.md's
   # repository-routing rules) before it's treated the same as a personal repo.
-  - id: brians-2nd-brain-integration-work
+  - id: inside-success
     path: ~/projects/inside-success/planning
     tier: governed
     owner: inside-success

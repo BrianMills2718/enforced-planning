@@ -91,6 +91,12 @@ allowlisted `--github-cli` account wrapper, keeping mutation authority distinct
 from credential routing instead of relying on whichever global account happens
 to be active.
 
+Registry ids used as claim projects must match the canonical Project Graph id
+for the resolved checkout, even when the GitHub repository has a different
+name. The planning checkout is therefore registered as `inside-success`, which
+matches both Project Graph and its repo-local `PROJECT`, rather than the remote
+repository name `brians-2nd-brain-integration-work`.
+
 On any failure the worktree is abandoned through the sanctioned
 `session-close` path; uncommitted output is stashed, never discarded, so a
 human can recover exactly what a sync attempt produced.

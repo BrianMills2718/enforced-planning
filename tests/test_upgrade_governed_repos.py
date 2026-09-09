@@ -258,3 +258,55 @@ def test_write_repo_cannot_install_when_claim_narrowing_fails(
     assert result.write_error == "session-narrow failed before installer mutation: narrowing denied"
     assert any("session-narrow" in cmd for cmd in calls)
     assert all(str(module.INSTALL_SCRIPT) not in cmd for cmd in calls)
+
+
+def test_write_repo_uses_stable_narrow_cli_when_make_target_is_missing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A stale Make facade cannot force installer mutation under broad scope."""
+
+    module = _load()
+    repo = tmp_path / "consumer"
+    repo.mkdir()
+    (repo / "Makefile").write_text("maintenance-worktree:\n\t@true\n", encoding="utf-8")
+    for env_key in module.coordination_claims.STRICT_NATIVE_SESSION_ENV_KEYS.values():
+        monkeypatch.delenv(env_key, raising=False)
+    monkeypatch.setenv("CODEX_THREAD_ID", "native-codex-thread")
+    calls: list[tuple[list[str], Path | None]] = []
+
+    def run_until_cli_narrowing_fails(
+        cmd: list[str],
+        cwd: Path | None = None,
+    ) -> subprocess.CompletedProcess[str]:
+        calls.append((cmd, cwd))
+        if "maintenance-worktree" in cmd:
+            branch = next(item.split("=", 1)[1] for item in cmd if item.startswith("BRANCH="))
+            (repo / "worktrees" / branch).mkdir(parents=True)
+            return subprocess.CompletedProcess(cmd, 0, stdout="created", stderr="")
+        if "session-narrow" in cmd:
+            return subprocess.CompletedProcess(
+                cmd,
+                2,
+                stdout="",
+                stderr="make: *** No rule to make target 'session-narrow'.  Stop.",
+            )
+        if str(module.SESSION_NARROW_SCRIPT) in cmd:
+            return subprocess.CompletedProcess(cmd, 1, stdout='{"ok":false}', stderr="")
+        if cmd[:3] == ["git", "status", "--porcelain"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+        if "worktree-remove" in cmd:
+            return subprocess.CompletedProcess(cmd, 0, stdout="closed", stderr="")
+        raise AssertionError(f"unexpected command: {cmd}")
+
+    monkeypatch.setattr(module, "_run", run_until_cli_narrowing_fails)
+
+    result = module.write_repo("consumer", repo, "governed", "brian")
+
+    assert result.write_error == 'session-narrow failed before installer mutation: {"ok":false}'
+    cli_cmd, cli_cwd = next(call for call in calls if str(module.SESSION_NARROW_SCRIPT) in call[0])
+    assert cli_cwd == repo / "worktrees" / result.branch
+    assert cli_cmd.count("--write-path") == 2
+    assert "enforced_planning/coordination_claims.py" in cli_cmd
+    assert "scripts/meta/check_coordination_claims.py" in cli_cmd
+    assert all(str(module.INSTALL_SCRIPT) not in cmd for cmd, _cwd in calls)

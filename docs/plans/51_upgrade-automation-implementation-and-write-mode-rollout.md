@@ -56,6 +56,13 @@ the authority, native-session, fresh-remote, claim, tracker, and worktree
 checks intact; `session-narrow` must still reduce the temporary `.` claim to
 the two-file installer closure before any target mutation.
 
+The same consumer also predates the `session-narrow` Make facade. When that
+specific target is absent, the upgrader invokes the current stable narrowing
+CLI directly against the same native-session-owned claim. This preserves the
+strict-subset, target-worktree identity, conflict, projection, and receipt
+checks that the newer Make target delegates to; any refusal still abandons the
+lane before installer mutation.
+
 ---
 
 ## Implementation (2026-09-02)

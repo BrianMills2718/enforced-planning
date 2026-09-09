@@ -101,11 +101,11 @@ def test_native_agent_rejects_ambiguous_runtime_markers(monkeypatch: pytest.Monk
         module._native_agent()
 
 
-def test_write_repo_uses_base_target_with_bounded_upgrade_scope(
+def test_write_repo_bootstraps_with_whole_repository_scope(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Legacy maintenance wrappers cannot discard required scope metadata."""
+    """Every supported maintenance wrapper understands bootstrap `.` scope."""
 
     module = _load()
     repo = tmp_path / "consumer"
@@ -129,7 +129,52 @@ def test_write_repo_uses_base_target_with_bounded_upgrade_scope(
     result = module.write_repo("consumer", repo, "governed", "brian")
 
     assert result.write_error.startswith("make maintenance-worktree failed")
-    assert calls[0][3] == "worktree"
+    assert calls[0][3] == "maintenance-worktree"
     assert "WORKTREE_AGENT=codex" in calls[0]
-    assert "ALLOW_UNPLANNED=1" in calls[0]
-    assert "SESSION_BROAD_SCOPE_MODE=bounded" in calls[0]
+    assert "SESSION_WRITE_PATHS=." in calls[0]
+
+
+def test_write_repo_cannot_install_when_claim_narrowing_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The temporary broad bootstrap cannot reach installer mutation."""
+
+    module = _load()
+    repo = tmp_path / "consumer"
+    repo.mkdir()
+    (repo / "Makefile").write_text(
+        "worktree:\n\t@true\n\nmaintenance-worktree:\n\t@true\n",
+        encoding="utf-8",
+    )
+    for env_key in module.coordination_claims.STRICT_NATIVE_SESSION_ENV_KEYS.values():
+        monkeypatch.delenv(env_key, raising=False)
+    monkeypatch.setenv("CODEX_THREAD_ID", "native-codex-thread")
+    calls: list[list[str]] = []
+
+    def run_until_narrowing_fails(
+        cmd: list[str],
+        cwd: Path | None = None,
+    ) -> subprocess.CompletedProcess[str]:
+        del cwd
+        calls.append(cmd)
+        if "maintenance-worktree" in cmd:
+            (repo / "worktrees" / next(item.split("=", 1)[1] for item in cmd if item.startswith("BRANCH="))).mkdir(
+                parents=True
+            )
+            return subprocess.CompletedProcess(cmd, 0, stdout="created", stderr="")
+        if "session-narrow" in cmd:
+            return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="narrowing denied")
+        if cmd[:3] == ["git", "status", "--porcelain"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+        if "worktree-remove" in cmd:
+            return subprocess.CompletedProcess(cmd, 0, stdout="closed", stderr="")
+        raise AssertionError(f"unexpected command after narrowing failure: {cmd}")
+
+    monkeypatch.setattr(module, "_run", run_until_narrowing_fails)
+
+    result = module.write_repo("consumer", repo, "governed", "brian")
+
+    assert result.write_error == "session-narrow failed before installer mutation: narrowing denied"
+    assert any("session-narrow" in cmd for cmd in calls)
+    assert all(str(module.INSTALL_SCRIPT) not in cmd for cmd in calls)

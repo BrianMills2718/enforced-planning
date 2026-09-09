@@ -165,10 +165,7 @@ def _native_agent() -> str:
         if os.environ.get(env_key, "").strip()
     ]
     if len(detected) != 1:
-        raise ValueError(
-            "write-mode requires exactly one native agent runtime marker; "
-            f"detected {len(detected)}"
-        )
+        raise ValueError(f"write-mode requires exactly one native agent runtime marker; detected {len(detected)}")
     return detected[0]
 
 
@@ -226,39 +223,46 @@ def write_repo(repo_id: str, repo_root: Path, tier: str, owner: str) -> RepoUpgr
     # scope (some do -- SESSION_WRITE_PATHS_REQUIRED-style policy) rejects a
     # bootstrap "." claim outright, and this is genuinely what gets touched.
     write_paths = "enforced_planning scripts/meta .claude .codex contracts AGENTS.md Makefile"
-    if "\nworktree:" in makefile_text or makefile_text.startswith("worktree:"):
-        # Use the explicit base target even when the convenience wrapper is
-        # present. Older maintenance wrappers do not propagate broad-scope
-        # metadata into their atomic request, but the base target does. The
-        # installer closure legitimately spans several top-level directories,
-        # so declare that bounded surface rather than relying on version-specific
-        # bootstrap inference.
+    if "\nmaintenance-worktree:" in makefile_text or makefile_text.startswith("maintenance-worktree:"):
+        # Bootstrap with the temporary whole-repository authority every
+        # supported maintenance wrapper understands. The claim is narrowed to
+        # the exact installer closure below before install --write can run.
         make_cmd = [
-            "make", "-C", str(repo_root), "worktree",
-            f"BRANCH={branch}", f"TASK={task}", f"SESSION_GOAL={goal}",
-            "SESSION_PHASE=sync", f"WORKTREE_AGENT={native_agent}", "SESSION_ALLOW_PARALLEL=1",
-            "ALLOW_UNPLANNED=1", "SESSION_BROAD_SCOPE_MODE=bounded",
-            "SESSION_BROAD_SCOPE_REASON=installer-declared multi-directory upgrade surface",
-            f"SESSION_WRITE_PATHS={write_paths}",
+            "make",
+            "-C",
+            str(repo_root),
+            "maintenance-worktree",
+            f"BRANCH={branch}",
+            f"TASK={task}",
+            f"SESSION_GOAL={goal}",
+            "SESSION_PHASE=sync",
+            f"WORKTREE_AGENT={native_agent}",
+            "SESSION_ALLOW_PARALLEL=1",
+            "SESSION_WRITE_PATHS=.",
         ]
-    elif "\nmaintenance-worktree:" in makefile_text or makefile_text.startswith("maintenance-worktree:"):
-        # Compatibility-only fallback for an unusual install that exposes the
-        # convenience wrapper without the base target.
+    elif "\nworktree:" in makefile_text or makefile_text.startswith("worktree:"):
+        # Older installs may expose only the base target. Its whole-repository
+        # bootstrap follows the same narrow-before-write contract.
         make_cmd = [
-            "make", "-C", str(repo_root), "maintenance-worktree",
-            f"BRANCH={branch}", f"TASK={task}", f"SESSION_GOAL={goal}",
-            "SESSION_PHASE=sync", f"WORKTREE_AGENT={native_agent}", "SESSION_ALLOW_PARALLEL=1",
-            f"SESSION_WRITE_PATHS={write_paths}",
+            "make",
+            "-C",
+            str(repo_root),
+            "worktree",
+            f"BRANCH={branch}",
+            f"TASK={task}",
+            f"SESSION_GOAL={goal}",
+            "SESSION_PHASE=sync",
+            f"WORKTREE_AGENT={native_agent}",
+            "SESSION_ALLOW_PARALLEL=1",
+            "ALLOW_UNPLANNED=1",
+            "SESSION_WRITE_PATHS=.",
         ]
     else:
         result.write_error = "Makefile has neither maintenance-worktree nor worktree target"
         return result
     make_proc = _run(make_cmd)
     if make_proc.returncode != 0:
-        result.write_error = (
-            "make maintenance-worktree failed: "
-            f"{(make_proc.stderr or make_proc.stdout).strip()[:500]}"
-        )
+        result.write_error = f"make maintenance-worktree failed: {(make_proc.stderr or make_proc.stdout).strip()[:500]}"
         return result
 
     if not worktree_path.exists():
@@ -314,6 +318,24 @@ def write_repo(repo_id: str, repo_root: Path, tier: str, owner: str) -> RepoUpgr
                 ]
             )
 
+    narrow_proc = _run(
+        [
+            "make",
+            "-C",
+            str(repo_root),
+            "session-narrow",
+            f"BRANCH={branch}",
+            f"WORKTREE_AGENT={native_agent}",
+            f"SESSION_WRITE_PATHS={write_paths}",
+        ]
+    )
+    if narrow_proc.returncode != 0:
+        _abandon(
+            "session-narrow failed before installer mutation: "
+            f"{(narrow_proc.stderr or narrow_proc.stdout).strip()[:500]}"
+        )
+        return result
+
     install_proc = _run([sys.executable, str(INSTALL_SCRIPT), "--repo-root", str(worktree_path), "--write"])
     result.install_rc = install_proc.returncode
     result.install_stdout = install_proc.stdout
@@ -322,7 +344,9 @@ def write_repo(repo_id: str, repo_root: Path, tier: str, owner: str) -> RepoUpgr
         _abandon(f"install --write failed inside worktree: {install_proc.stderr.strip()[:500]}")
         return result
 
-    audit_proc = _run([sys.executable, str(AUDIT_SCRIPT), "--repo-root", str(worktree_path), "--strict-governed", "--json"])
+    audit_proc = _run(
+        [sys.executable, str(AUDIT_SCRIPT), "--repo-root", str(worktree_path), "--strict-governed", "--json"]
+    )
     result.audit_rc = audit_proc.returncode
     result.audit_stdout = audit_proc.stdout
     result.audit_stderr = audit_proc.stderr
@@ -528,31 +552,36 @@ def run_upgrade(
     failed = len(results) - ok - skipped
 
     if as_json:
-        print(json.dumps({
-            "mode": mode,
-            "total": len(results),
-            "ok": ok,
-            "skipped": skipped,
-            "failed": failed,
-            "repos": [
+        print(
+            json.dumps(
                 {
-                    "repo_id": r.repo_id,
-                    "tier": r.tier,
-                    "success": r.success,
-                    "skipped": r.skipped,
-                    "skip_reason": r.skip_reason,
-                    "classification": r.classification,
-                    "blockers": r.blockers,
-                    "install_rc": r.install_rc,
-                    "audit_rc": r.audit_rc,
-                    "branch": r.branch,
-                    "had_diff": r.had_diff,
-                    "pr_url": r.pr_url,
-                    "write_error": r.write_error,
-                }
-                for r in results
-            ],
-        }, indent=2))
+                    "mode": mode,
+                    "total": len(results),
+                    "ok": ok,
+                    "skipped": skipped,
+                    "failed": failed,
+                    "repos": [
+                        {
+                            "repo_id": r.repo_id,
+                            "tier": r.tier,
+                            "success": r.success,
+                            "skipped": r.skipped,
+                            "skip_reason": r.skip_reason,
+                            "classification": r.classification,
+                            "blockers": r.blockers,
+                            "install_rc": r.install_rc,
+                            "audit_rc": r.audit_rc,
+                            "branch": r.branch,
+                            "had_diff": r.had_diff,
+                            "pr_url": r.pr_url,
+                            "write_error": r.write_error,
+                        }
+                        for r in results
+                    ],
+                },
+                indent=2,
+            )
+        )
     else:
         print()
         print(f"  Result: {ok} ok, {skipped} skipped, {failed} failed of {len(results)} total")

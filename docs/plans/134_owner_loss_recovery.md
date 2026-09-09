@@ -1,6 +1,6 @@
 # Plan #134: Resume-First Owner-Loss Recovery
 
-**Status:** Complete — source behavior accepted; fleet activation excluded
+**Status:** Complete — source behavior accepted; host and three real consumers activated
 **Type:** implementation
 **Priority:** Critical
 **phase_ref:** "Phase 9: Fleet Adoption and Framework Maintenance"
@@ -182,6 +182,18 @@ conflicts. `make check` reached the
 repository-wide Ruff gate and stopped on 510 baseline-identical findings before
 tests; the changed files also report the same 58 findings as `main`, with no
 new lint finding. PR CI and the merge revision retain terminal source evidence.
+
+**Activation evidence (2026-09-09):** The installed Codex runtime is pinned to
+Enforced Planning `0b41e09e27d1`, which contains the accepted classifier, and
+the shared continuity timer is enabled; its latest observed sweep exited
+successfully. Exact coordination-consumer syncs are merged in `prompt_eval`
+PR #15 (`03e6a14879f3`), Project Meta PR #1678 (`55cef89ae9b4`), and
+Inside Success PR #688 (`a80eeccb5646`). The Inside Success adoption is the
+representative incident boundary: two unrelated legacy stale claims were
+preserved, the new lane received exact two-file ownership in a distinct linked
+worktree, and all four repository CI jobs passed. Remaining registry-wide copy
+refresh is Plan #51 rollout work, not a condition on this behavior's accepted
+and activated status.
 
 ## Epistemic Planning Frontier
 

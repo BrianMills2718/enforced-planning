@@ -20,6 +20,13 @@ when the environment is absent or ambiguous. Focused both-sign tests cover
 Codex detection and ambiguous-marker refusal; the real `prompt_eval` pilot is
 the acceptance journey after this repair lands.
 
+That pilot then reached a second compatibility boundary: older maintenance
+wrappers discard broad-scope metadata before claim creation. The upgrader now
+uses the sanctioned base `worktree` target with explicit `ALLOW_UNPLANNED=1`
+and a bounded installer-directory declaration. A command-capture negative
+control proves the base target, native agent, and scope metadata are all present
+before a target repository may be mutated.
+
 ---
 
 ## Implementation (2026-09-02)

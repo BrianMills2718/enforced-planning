@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import subprocess
 import sys
 from pathlib import Path
 
@@ -98,3 +99,37 @@ def test_native_agent_rejects_ambiguous_runtime_markers(monkeypatch: pytest.Monk
 
     with pytest.raises(ValueError, match="exactly one native agent runtime marker"):
         module._native_agent()
+
+
+def test_write_repo_uses_base_target_with_bounded_upgrade_scope(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Legacy maintenance wrappers cannot discard required scope metadata."""
+
+    module = _load()
+    repo = tmp_path / "consumer"
+    repo.mkdir()
+    (repo / "Makefile").write_text(
+        "worktree:\n\t@true\n\nmaintenance-worktree:\n\t@true\n",
+        encoding="utf-8",
+    )
+    for env_key in module.coordination_claims.STRICT_NATIVE_SESSION_ENV_KEYS.values():
+        monkeypatch.delenv(env_key, raising=False)
+    monkeypatch.setenv("CODEX_THREAD_ID", "native-codex-thread")
+    calls: list[list[str]] = []
+
+    def reject_after_capture(cmd: list[str], cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
+        del cwd
+        calls.append(cmd)
+        return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="fixture stop")
+
+    monkeypatch.setattr(module, "_run", reject_after_capture)
+
+    result = module.write_repo("consumer", repo, "governed", "brian")
+
+    assert result.write_error.startswith("make maintenance-worktree failed")
+    assert calls[0][3] == "worktree"
+    assert "WORKTREE_AGENT=codex" in calls[0]
+    assert "ALLOW_UNPLANNED=1" in calls[0]
+    assert "SESSION_BROAD_SCOPE_MODE=bounded" in calls[0]

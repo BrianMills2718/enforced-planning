@@ -9,21 +9,25 @@ reports unresolved or budget-omitted context explicitly.
 from __future__ import annotations
 
 import argparse
-from dataclasses import asdict, dataclass, replace
 import fnmatch
+import hashlib
 import json
+import stat
+import subprocess
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path, PurePosixPath
 from typing import Any, Literal, TypeAlias
 
 import yaml  # type: ignore[import-untyped]
 
-from enforced_planning.relationship_context import ArtifactRecord
-from enforced_planning.relationship_context import Diagnostic
-from enforced_planning.relationship_context import InventoryReport
-from enforced_planning.relationship_context import classify_artifact
-from enforced_planning.relationship_context import classify_format
-from enforced_planning.relationship_context import inventory_repository
-
+from enforced_planning.relationship_context import (
+    ArtifactRecord,
+    Diagnostic,
+    InventoryReport,
+    classify_artifact,
+    classify_format,
+    inventory_repository,
+)
 
 Direction: TypeAlias = Literal["self", "outgoing", "incoming"]
 MaintenanceAction: TypeAlias = Literal["regenerate", "reconcile", "block", "lineage_only"]
@@ -56,6 +60,8 @@ ALLOWED_ARCHIVE_EFFECTS = {
     "review_required",
 }
 CONTEXT_PACKET_SCHEMA_VERSION = 2
+CONTEXT_PACKET_V3_SCHEMA_VERSION = 3
+CONTEXT_RECEIPT_SCHEMA_VERSION = 1
 RELATION_PRIORITY = {
     "self": 0,
     "governed_by": 10,
@@ -141,6 +147,70 @@ class ContextPacket:
             sort_keys=True,
             ensure_ascii=True,
         ) + "\n"
+
+
+@dataclass(frozen=True)
+class RequiredContextAtom:
+    """Carry one complete required file and its exact source identity."""
+
+    path: str
+    content: str
+    content_sha256: str
+    revision: str | None
+    working_tree_state: Literal["clean", "working_copy"]
+    byte_count: int
+    provenance: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class RequiredAtomReceipt:
+    """Describe one expected atom without archiving its payload."""
+
+    path: str
+    content_sha256: str
+    revision: str | None
+    working_tree_state: Literal["clean", "working_copy"]
+    byte_count: int
+    provenance: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class ContextPacketV3(ContextPacket):
+    """Separate unclipped required files from bounded optional summaries."""
+
+    required_capacity_bytes: int
+    required_bytes: int
+    required_atoms: tuple[RequiredContextAtom, ...]
+
+
+@dataclass(frozen=True)
+class ContextReceipt:
+    """Bind expected context to an action without claiming host delivery."""
+
+    schema_version: int
+    packet_sha256: str
+    session_id: str
+    context_epoch: str
+    action: str
+    target: str
+    adapter_id: str
+    adapter_version: str
+    visibility: Literal["expected"]
+    required_atoms: tuple[RequiredAtomReceipt, ...]
+
+    def to_json(self, *, pretty: bool = False) -> str:
+        """Serialize the expected receipt deterministically."""
+
+        return (
+            json.dumps(
+                asdict(self),
+                indent=2 if pretty else None,
+                separators=None if pretty else (",", ":"),
+                sort_keys=True,
+                ensure_ascii=True,
+            )
+            + "\n"
+        )
 
 
 def _to_strings(value: Any) -> tuple[str, ...]:
@@ -367,6 +437,167 @@ def selector_path_matches(selector: str, path: str) -> bool:
     return _glob_matches(path, selector_path)
 
 
+def _required_selector_provenance(
+    target_path: str,
+    target_symbol: str | None,
+    relationships: dict[str, Any],
+) -> dict[str, set[str]]:
+    """Resolve applicable required-reading declarations to selectors and provenance."""
+
+    selected: dict[str, set[str]] = {}
+
+    def add(selectors: tuple[str, ...], provenance: str) -> None:
+        for selector in selectors:
+            selected.setdefault(selector, set()).add(provenance)
+
+    for spec in relationship_specs(relationships):
+        if spec.relation != "required_reading":
+            continue
+        source_match = any(_selector_matches(item, target_path, target_symbol) for item in spec.sources)
+        target_match = any(_selector_matches(item, target_path, target_symbol) for item in spec.targets)
+        if source_match:
+            add(spec.targets, spec.provenance)
+        elif target_match:
+            add(spec.sources, spec.provenance)
+
+    required_reading = relationships.get("required_reading", {}) or {}
+    if not isinstance(required_reading, dict):
+        raise ContextPacketError("required_reading must be a mapping")
+    gates = required_reading.get("gates", []) or []
+    if not isinstance(gates, list):
+        raise ContextPacketError("required_reading.gates must be a list")
+    for index, gate in enumerate(gates):
+        provenance = f"required_reading.gates[{index}]"
+        if not isinstance(gate, dict):
+            raise ContextPacketError(f"{provenance} must be a mapping")
+        applies_to = _to_strings(gate.get("applies_to"))
+        documents = _to_strings(gate.get("documents"))
+        if not applies_to or not documents:
+            raise ContextPacketError(f"{provenance} requires non-empty applies_to and documents")
+        if any(_selector_matches(selector, target_path, target_symbol) for selector in applies_to):
+            add(documents, provenance)
+    return selected
+
+
+def _required_paths(
+    inventory: InventoryReport,
+    selector_provenance: dict[str, set[str]],
+) -> dict[str, set[str]]:
+    """Expand required full-file selectors without accepting symbol fragments."""
+
+    paths: dict[str, set[str]] = {}
+    for selector, provenance in selector_provenance.items():
+        selector_path, selector_symbol = _split_selector(selector)
+        parts = PurePosixPath(selector_path)
+        if not selector_path or parts.is_absolute() or ".." in parts.parts:
+            raise ContextPacketError(f"required context selector must be repository-relative: {selector!r}")
+        if selector_symbol is not None:
+            raise ContextPacketError(f"required context must select a full file, not a symbol: {selector!r}")
+        if any(character in selector_path for character in "*?["):
+            matches = sorted(
+                artifact.path for artifact in inventory.artifacts if _glob_matches(artifact.path, selector_path)
+            )
+            if not matches:
+                raise ContextPacketError(f"required context selector resolved no files: {selector!r}")
+        else:
+            matches = [selector_path]
+        for path in matches:
+            paths.setdefault(path, set()).update(provenance)
+    return paths
+
+
+def _git_output(repo_root: Path, args: list[str]) -> str:
+    """Run one bounded read-only Git query and return stripped stdout."""
+
+    result = subprocess.run(
+        ["git", "-C", str(repo_root), *args],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout).strip()
+        raise ContextPacketError(f"Git context identity query failed: {detail}")
+    return result.stdout.strip()
+
+
+def _git_bytes(repo_root: Path, args: list[str]) -> bytes:
+    """Run one bounded read-only Git query that must preserve exact bytes."""
+
+    result = subprocess.run(
+        ["git", "-C", str(repo_root), *args],
+        check=False,
+        capture_output=True,
+    )
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout).decode("utf-8", errors="replace").strip()
+        raise ContextPacketError(f"Git context byte query failed: {detail}")
+    return result.stdout
+
+
+def _required_atoms(
+    repo_root: Path,
+    target_path: str,
+    target_symbol: str | None,
+    relationships: dict[str, Any],
+    inventory: InventoryReport,
+    required_capacity_bytes: int,
+) -> tuple[RequiredContextAtom, ...]:
+    """Read every applicable required file whole or block compilation."""
+
+    if required_capacity_bytes < 1:
+        raise ContextPacketError("required_capacity_bytes must be positive")
+    selectors = _required_selector_provenance(target_path, target_symbol, relationships)
+    paths = _required_paths(inventory, selectors)
+    atoms: list[RequiredContextAtom] = []
+    for relative_path in sorted(paths):
+        path = repo_root / relative_path
+        try:
+            mode = path.stat().st_mode
+        except FileNotFoundError as exc:
+            raise ContextPacketError(f"required context file is missing: {relative_path}") from exc
+        except OSError as exc:
+            raise ContextPacketError(f"required context file is unreadable: {relative_path}: {exc}") from exc
+        if not stat.S_ISREG(mode):
+            raise ContextPacketError(f"required context path is not a regular file: {relative_path}")
+        state_before = _git_output(repo_root, ["status", "--porcelain=v1", "--", relative_path])
+        try:
+            raw = path.read_bytes()
+            content = raw.decode("utf-8")
+        except (OSError, UnicodeError) as exc:
+            raise ContextPacketError(f"required context file is unreadable UTF-8: {relative_path}: {exc}") from exc
+        state_after = _git_output(repo_root, ["status", "--porcelain=v1", "--", relative_path])
+        if state_before != state_after:
+            raise ContextPacketError(f"required context changed during observation: {relative_path}")
+        dirty = bool(state_after)
+        revision: str | None = None
+        if not dirty:
+            revision = _git_output(repo_root, ["log", "-1", "--format=%H", "--", relative_path])
+            if not revision:
+                raise ContextPacketError(f"required context has no source revision: {relative_path}")
+            committed = _git_bytes(repo_root, ["show", f"{revision}:{relative_path}"])
+            if committed != raw:
+                raise ContextPacketError(f"required context does not match its source revision: {relative_path}")
+        atoms.append(
+            RequiredContextAtom(
+                path=relative_path,
+                content=content,
+                content_sha256=hashlib.sha256(raw).hexdigest(),
+                revision=revision,
+                working_tree_state="working_copy" if dirty else "clean",
+                byte_count=len(raw),
+                provenance=tuple(sorted(paths[relative_path])),
+            )
+        )
+    required_bytes = sum(atom.byte_count for atom in atoms)
+    if required_bytes > required_capacity_bytes:
+        raise ContextPacketError(
+            f"required context needs {required_bytes} bytes but capacity is {required_capacity_bytes}; "
+            "required atoms cannot be clipped"
+        )
+    return tuple(atoms)
+
+
 def _context_item(
     artifact: ArtifactRecord,
     *,
@@ -577,6 +808,91 @@ def build_context_packet(
     )
 
 
+def build_context_packet_with_receipt(
+    repo_root: Path,
+    target_path: str,
+    relationships: dict[str, Any],
+    *,
+    required_capacity_bytes: int,
+    session_id: str,
+    context_epoch: str,
+    action: str,
+    adapter_id: str,
+    adapter_version: str,
+    target_symbol: str | None = None,
+    max_items: int = 20,
+    max_chars: int = 8_000,
+    allow_untracked_target: bool = False,
+) -> tuple[ContextPacketV3, ContextReceipt]:
+    """Build V3 required context and an honest expected-visibility receipt."""
+
+    identities = {
+        "session_id": session_id,
+        "context_epoch": context_epoch,
+        "action": action,
+        "adapter_id": adapter_id,
+        "adapter_version": adapter_version,
+    }
+    empty = [name for name, value in identities.items() if not value.strip()]
+    if empty:
+        raise ContextPacketError(f"receipt identity fields must be non-empty: {', '.join(empty)}")
+    base = build_context_packet(
+        repo_root,
+        target_path,
+        relationships,
+        target_symbol=target_symbol,
+        max_items=max_items,
+        max_chars=max_chars,
+        allow_untracked_target=allow_untracked_target,
+    )
+    inventory = inventory_repository(repo_root)
+    atoms = _required_atoms(
+        repo_root,
+        target_path,
+        target_symbol,
+        relationships,
+        inventory,
+        required_capacity_bytes,
+    )
+    packet = ContextPacketV3(
+        schema_version=CONTEXT_PACKET_V3_SCHEMA_VERSION,
+        target=base.target,
+        max_items=base.max_items,
+        max_chars=base.max_chars,
+        included_chars=base.included_chars,
+        omitted_count=base.omitted_count,
+        items=base.items,
+        diagnostics=base.diagnostics,
+        required_capacity_bytes=required_capacity_bytes,
+        required_bytes=sum(atom.byte_count for atom in atoms),
+        required_atoms=atoms,
+    )
+    receipt_atoms = tuple(
+        RequiredAtomReceipt(
+            path=atom.path,
+            content_sha256=atom.content_sha256,
+            revision=atom.revision,
+            working_tree_state=atom.working_tree_state,
+            byte_count=atom.byte_count,
+            provenance=atom.provenance,
+        )
+        for atom in atoms
+    )
+    receipt = ContextReceipt(
+        schema_version=CONTEXT_RECEIPT_SCHEMA_VERSION,
+        packet_sha256=hashlib.sha256(packet.to_json().encode("utf-8")).hexdigest(),
+        session_id=session_id,
+        context_epoch=context_epoch,
+        action=action,
+        target=packet.target,
+        adapter_id=adapter_id,
+        adapter_version=adapter_version,
+        visibility="expected",
+        required_atoms=receipt_atoms,
+    )
+    return packet, receipt
+
+
 def _load_relationships(repo_root: Path, config_path: str | Path) -> dict[str, Any]:
     """Load one repository relationship graph without legacy module coupling."""
 
@@ -602,23 +918,76 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--max-items", type=int, default=20)
     parser.add_argument("--max-chars", type=int, default=8_000)
     parser.add_argument(
+        "--required-capacity-bytes",
+        type=int,
+        help="Opt into V3 and reserve this separate capacity for complete required files.",
+    )
+    parser.add_argument("--receipt-path", type=Path, help="Write the V3 expected-context receipt here.")
+    parser.add_argument("--session-id", help="Exact native session identity for a V3 receipt.")
+    parser.add_argument("--context-epoch", help="Action epoch invalidated by compaction or context reset.")
+    parser.add_argument("--action", help="Dependent action named by the V3 receipt.")
+    parser.add_argument("--adapter-id", help="Context adapter producing the expected packet.")
+    parser.add_argument("--adapter-version", help="Exact adapter contract or implementation version.")
+    parser.add_argument(
         "--allow-untracked-target",
         action="store_true",
         help="Resolve path-level context for a new file that is not Git-tracked yet.",
     )
     parser.add_argument("--pretty", action="store_true")
     args = parser.parse_args(argv)
+    v3_values = {
+        "required_capacity_bytes": args.required_capacity_bytes,
+        "receipt_path": args.receipt_path,
+        "session_id": args.session_id,
+        "context_epoch": args.context_epoch,
+        "action": args.action,
+        "adapter_id": args.adapter_id,
+        "adapter_version": args.adapter_version,
+    }
+    supplied_v3 = [name for name, value in v3_values.items() if value is not None]
+    missing_v3 = [name for name, value in v3_values.items() if value is None]
+    if supplied_v3 and missing_v3:
+        parser.error(
+            "V3 receipt mode requires all of: --required-capacity-bytes, --receipt-path, "
+            "--session-id, --context-epoch, --action, --adapter-id, --adapter-version"
+        )
     try:
         relationships = _load_relationships(args.repo_root, args.config)
-        packet = build_context_packet(
-            args.repo_root,
-            args.target,
-            relationships,
-            target_symbol=args.symbol,
-            max_items=args.max_items,
-            max_chars=args.max_chars,
-            allow_untracked_target=args.allow_untracked_target,
-        )
+        if supplied_v3:
+            assert args.required_capacity_bytes is not None
+            assert args.receipt_path is not None
+            assert args.session_id is not None
+            assert args.context_epoch is not None
+            assert args.action is not None
+            assert args.adapter_id is not None
+            assert args.adapter_version is not None
+            packet, receipt = build_context_packet_with_receipt(
+                args.repo_root,
+                args.target,
+                relationships,
+                target_symbol=args.symbol,
+                max_items=args.max_items,
+                max_chars=args.max_chars,
+                required_capacity_bytes=args.required_capacity_bytes,
+                session_id=args.session_id,
+                context_epoch=args.context_epoch,
+                action=args.action,
+                adapter_id=args.adapter_id,
+                adapter_version=args.adapter_version,
+                allow_untracked_target=args.allow_untracked_target,
+            )
+            args.receipt_path.parent.mkdir(parents=True, exist_ok=True)
+            args.receipt_path.write_text(receipt.to_json(pretty=args.pretty), encoding="utf-8")
+        else:
+            packet = build_context_packet(
+                args.repo_root,
+                args.target,
+                relationships,
+                target_symbol=args.symbol,
+                max_items=args.max_items,
+                max_chars=args.max_chars,
+                allow_untracked_target=args.allow_untracked_target,
+            )
     except (ContextPacketError, OSError) as exc:
         parser.exit(2, f"context-packet: {exc}\n")
     print(packet.to_json(pretty=args.pretty), end="")
@@ -631,8 +1000,13 @@ __all__ = [
     "ContextItem",
     "ContextPacket",
     "ContextPacketError",
+    "ContextPacketV3",
+    "ContextReceipt",
     "RelationshipSpec",
+    "RequiredAtomReceipt",
+    "RequiredContextAtom",
     "build_context_packet",
+    "build_context_packet_with_receipt",
     "expand_selectors",
     "main",
     "relationship_specs",

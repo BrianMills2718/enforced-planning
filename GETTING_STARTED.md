@@ -215,6 +215,16 @@ From the framework repo, you can also re-run the mechanical audit:
 python scripts/audit_governed_repo.py --repo-root /path/to/your/project --strict-governed
 ```
 
+Before shipping any sync-profile change in this framework repo (a new
+`scripts/meta/*.py` facade, or a new `enforced_planning/*.py` module),
+`python scripts/self_test.py --facade-sync` (also run as part of the full
+`python scripts/self_test.py`) walks every profile's transitive
+`enforced_planning` import graph and fails loudly if a shipped facade imports
+a module that profile never syncs. This is the mechanical guard against the
+class of failure where a consumer repo runs a clean install/upgrade and then
+crashes with `ImportError` the first time it calls the affected entrypoint
+(`scripts/check_facade_sync_completeness.py` is the standalone check).
+
 ## Configure `meta-process.yaml`
 
 Start with the minimum keys that are already meaningful today:

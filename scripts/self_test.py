@@ -6,6 +6,7 @@ Verifies internal consistency:
 2. Link checker - markdown cross-references resolve
 3. Install test - canonical installer bootstraps a governed repo cleanly
 4. Doc surface coherence - top-level docs do not regress to stale authority/config language
+5. Facade sync completeness - every sync profile ships everything its own shipped facades import
 
 Usage:
     python enforced-planning/scripts/self_test.py              # All checks
@@ -13,6 +14,7 @@ Usage:
     python enforced-planning/scripts/self_test.py --links      # Link checker only
     python enforced-planning/scripts/self_test.py --docs       # Doc surface only
     python enforced-planning/scripts/self_test.py --install    # Install test only
+    python enforced-planning/scripts/self_test.py --facade-sync  # Facade sync completeness only
 """
 
 import argparse
@@ -24,6 +26,12 @@ import sys
 import tempfile
 from pathlib import Path
 from urllib.parse import urlparse
+
+_SCRIPTS_DIR = Path(__file__).resolve().parent
+if str(_SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS_DIR))
+
+import check_facade_sync_completeness as _facade_sync_checker  # noqa: E402
 
 
 def find_framework_root() -> Path:
@@ -538,6 +546,29 @@ def check_install(root: Path) -> list[str]:
     return errors
 
 
+def check_facade_sync_completeness(root: Path) -> list[str]:
+    """Every governed-repo sync profile must ship its own transitive imports.
+
+    Regression guard for policy_friction.md cluster
+    ``coordination-claims-wrapper``: a shipped facade importing an
+    ``enforced_planning`` module that its own sync profile never copies is
+    exactly the ImportError class that hit process_tracing, qualitative_coding,
+    and project-meta across 2026-07-16 to 2026-08-03.
+    """
+    violations = _facade_sync_checker.check_all(framework_root=root)
+    if not violations:
+        return []
+    errors = []
+    for profile_name, missing in violations.items():
+        errors.append(
+            f"sync profile {profile_name} ships a facade that imports "
+            f"{missing} but never syncs it -- add the missing "
+            "enforced_planning/<module>.py entry to that profile's dict "
+            "in scripts/install_governed_repo.py"
+        )
+    return errors
+
+
 def _run(cmd: list[str]) -> subprocess.CompletedProcess[str]:
     """Run a command, raising on failure."""
     return subprocess.run(cmd, capture_output=True, text=True, check=True)
@@ -553,10 +584,11 @@ def main() -> None:
     parser.add_argument("--links", action="store_true", help="Link checker only")
     parser.add_argument("--docs", action="store_true", help="Doc surface coherence check only")
     parser.add_argument("--install", action="store_true", help="Install test only")
+    parser.add_argument("--facade-sync", action="store_true", help="Facade sync completeness check only")
     args = parser.parse_args()
 
     # If no flags, run all
-    run_all = not (args.files or args.links or args.docs or args.install)
+    run_all = not (args.files or args.links or args.docs or args.install or args.facade_sync)
 
     root = find_framework_root()
     print(f"Framework root: {root}")
@@ -590,6 +622,12 @@ def main() -> None:
     if run_all or args.install:
         print("=== Install Test ===")
         errors = check_install(root)
+        _report(errors)
+        all_errors.extend(errors)
+
+    if run_all or args.facade_sync:
+        print("=== Facade Sync Completeness Check ===")
+        errors = check_facade_sync_completeness(root)
         _report(errors)
         all_errors.extend(errors)
 

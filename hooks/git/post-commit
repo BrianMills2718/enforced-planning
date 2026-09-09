@@ -11,6 +11,25 @@ if [[ -f "$REPO_ROOT/.doc-coupling-acks" ]]; then
     rm "$REPO_ROOT/.doc-coupling-acks"
 fi
 
+# Plan status drift detector (if script exists).
+# The pre-commit staged-only guard cannot see a plan status changed in the
+# working tree *after* a clean commit -- observed in project-meta on
+# 2026-09-08, where a commit reported passing checks and a plan was then
+# found modified with its status changed to Complete. Warn-only here: the
+# commit already exists, and refusing in post-commit would leave the agent
+# with nothing actionable to fix.
+STATUS_TRANSITIONS=""
+for candidate in "$REPO_ROOT/scripts/meta/check_plan_status_transitions.py" \
+                 "$REPO_ROOT/scripts/check_plan_status_transitions.py"; do
+    if [[ -f "$candidate" ]]; then
+        STATUS_TRANSITIONS="$candidate"
+        break
+    fi
+done
+if [[ -n "$STATUS_TRANSITIONS" ]]; then
+    "${PYTHON_BIN:-python3}" "$STATUS_TRANSITIONS" --mode worktree --warn-only || true
+fi
+
 BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null) || exit 0
 REMOTE="origin/$BRANCH"
 

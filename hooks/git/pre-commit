@@ -419,6 +419,29 @@ if [[ -n "$SYNC_STATUS" ]]; then
     fi
 fi
 
+# 7b. Plan status transition guard (if script exists and plan files staged)
+# A plan with a terminal status is excluded from the generated active-plan
+# queue, so marking one Complete removes it from the context every agent loads
+# at session start. Observed in project-meta on 2026-09-08: a governed commit
+# left a plan marked Complete in the working tree with its actual outcome
+# still missing, and the writer was never identified; only the pre-push
+# dirty-tree gate caught it. This guards the outcome rather than the route: a
+# terminal status must arrive with the evidence block complete_plan.py writes.
+STATUS_TRANSITIONS=$(find_script "check_plan_status_transitions.py")
+if [[ -n "$STATUS_TRANSITIONS" ]]; then
+    STAGED_PLANS=$(git diff --cached --name-only --diff-filter=ACM | grep '^docs/plans/' || true)
+    if [[ -n "$STAGED_PLANS" ]]; then
+        echo "Checking plan status transitions..."
+        if ! "$PYTHON_BIN" "$STATUS_TRANSITIONS" --mode staged; then
+            echo ""
+            echo "ERROR: Plan status transition check failed!"
+            echo "Run 'python $STATUS_TRANSITIONS --mode staged' to see details"
+            echo ""
+            handle_failure "plan status transitions check" || exit 1
+        fi
+    fi
+fi
+
 # 8. Dead code check (the script itself honors meta-process.yaml enablement)
 DEAD_CODE=$(find_script "check_dead_code.py")
 if [[ -n "$DEAD_CODE" ]] && [[ -n "$STAGED_PY" ]]; then

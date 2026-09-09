@@ -12,6 +12,7 @@ import pytest
 from enforced_planning.cleanroom_alpha import CleanroomSpec, materialize_cleanroom
 from enforced_planning.governed_delivery import (
     GovernedDeliveryError,
+    _plan_status_is_complete,
     prepare_governed_task,
     probe_governed_task,
     record_course_checkpoint,
@@ -673,3 +674,52 @@ def test_cli_prepare_accepts_copied_status_profile(tmp_path: Path) -> None:
     assert payload["verdict"] == "prepared"
     assert payload["profile_id"] == "status-cli-json"
     assert payload["task_root"] == "projects/status-cli"
+
+
+@pytest.mark.parametrize(
+    "status_line",
+    [
+        "**Status:** Complete",
+        "**Status:** ✅ Complete",
+        "**Status:** ✅  Complete",
+    ],
+)
+def test_plan_status_is_complete_accepts_bare_and_emoji_forms(status_line: str) -> None:
+    """Regression for the sanctioned completion tool's emoji-prefixed status.
+
+    `scripts/complete_plan.py` (the sanctioned completion tool) writes
+    `**Status:** ✅ Complete`, not the bare `**Status:** Complete` the old
+    regex required -- so every plan it completed read back as incomplete.
+    """
+
+    plan_content = f"# Plan #1: Example\n\n{status_line}\n\n## User Outcome\n"
+    assert _plan_status_is_complete(plan_content) is True
+
+
+@pytest.mark.parametrize(
+    "status_line",
+    [
+        "**Status:** In Progress",
+        "**Status:** 🚧 In Progress",
+        "**Status:** Blocked",
+        "**Status:** ⏸️ Blocked",
+        "**Status:** Planned",
+        "**Status:** 📋 Planned",
+        "**Status:** Needs Plan",
+        "**Status:** Complete (report-only; enforcement deferred)",
+        "**Status:** Complete — superseded without implementation",
+        "**Status:** Not Complete",
+    ],
+)
+def test_plan_status_is_complete_rejects_incomplete_and_qualified_statuses(status_line: str) -> None:
+    """Never matches "Complete" as a substring or accepts a caveated status.
+
+    A qualified line like `Complete (report-only; ...)` or `Complete —
+    superseded without implementation` is not a truthful unqualified
+    completion for this gate's purpose, and must still be rejected -- the fix
+    for the emoji-prefix case must not loosen the check to match "Complete"
+    anywhere in a longer status string.
+    """
+
+    plan_content = f"# Plan #1: Example\n\n{status_line}\n\n## User Outcome\n"
+    assert _plan_status_is_complete(plan_content) is False

@@ -18,6 +18,10 @@ SCRIPT = PROJECT_META_ROOT / "scripts" / "install_governed_repo.py"
 INSTALL_SH = PROJECT_META_ROOT / "install.sh"
 CANONICAL_FILE_CONTEXT = PROJECT_META_ROOT / "scripts" / "file_context.py"
 CANONICAL_FILE_CONTEXT_MODULE = PROJECT_META_ROOT / "enforced_planning" / "file_context.py"
+COORDINATION_CLAIMS_ROLLOUT_PATHS = {
+    "enforced_planning/coordination_claims.py",
+    "scripts/meta/check_coordination_claims.py",
+}
 RELATIONSHIP_CONTEXT_ROLLOUT_PATHS = {
     ".claude/hooks/check-hook-enabled.sh",
     ".claude/hooks/gate-edit.sh",
@@ -376,6 +380,48 @@ def test_coordination_messages_only_rollout_is_bounded_runnable_and_idempotent(
         "--repo-root",
         str(tmp_path),
         "--coordination-messages-only",
+        "--json",
+        cwd=PROJECT_META_ROOT,
+    )
+    assert repeat.returncode == 0
+    assert json.loads(repeat.stdout)["actions"] == []
+
+
+def test_coordination_claims_only_rollout_is_exact_and_idempotent(tmp_path: Path) -> None:
+    """One claim-policy repair must not drag unrelated fleet surfaces with it."""
+
+    _prepare_mailbox_target(tmp_path)
+    dry_run = _run(
+        "--repo-root",
+        str(tmp_path),
+        "--coordination-claims-only",
+        "--json",
+        cwd=PROJECT_META_ROOT,
+    )
+    assert dry_run.returncode == 0, dry_run.stdout + dry_run.stderr
+    payload = json.loads(dry_run.stdout)
+    assert payload["coordination_claims_only_mode"] is True
+    assert {action.split(":", 1)[1] for action in payload["actions"]} == (
+        COORDINATION_CLAIMS_ROLLOUT_PATHS
+    )
+    assert payload["blockers"] == []
+
+    written = _run(
+        "--repo-root",
+        str(tmp_path),
+        "--coordination-claims-only",
+        "--write",
+        "--json",
+        cwd=PROJECT_META_ROOT,
+    )
+    assert written.returncode == 0, written.stdout + written.stderr
+    for relative in COORDINATION_CLAIMS_ROLLOUT_PATHS:
+        assert (tmp_path / relative).read_bytes() == (PROJECT_META_ROOT / relative).read_bytes()
+
+    repeat = _run(
+        "--repo-root",
+        str(tmp_path),
+        "--coordination-claims-only",
         "--json",
         cwd=PROJECT_META_ROOT,
     )

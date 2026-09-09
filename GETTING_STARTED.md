@@ -83,6 +83,19 @@ Equivalent convenience wrapper:
 
 That wrapper delegates to the same canonical minimum installer.
 
+For a revision-specific coordination-claim policy repair, use the bounded
+profile instead of refreshing unrelated workflow surfaces:
+
+```bash
+python scripts/install_governed_repo.py \
+  --repo-root /path/to/your/project \
+  --coordination-claims-only \
+  --write
+```
+
+This profile updates only the local `coordination_claims` module and its stable
+CLI facade. It does not change hooks, Makefiles, or repository documentation.
+
 The installer activates the repository's versioned `hooks/` directory when no
 hook path is configured. An existing relative or absolute `core.hooksPath` is
 preserved when it resolves to that same directory; a genuinely custom hook

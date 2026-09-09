@@ -101,6 +101,15 @@ def test_native_agent_rejects_ambiguous_runtime_markers(monkeypatch: pytest.Monk
         module._native_agent()
 
 
+def test_source_revision_tag_is_stable_git_identity() -> None:
+    module = _load()
+
+    revision = module._source_revision_tag()
+
+    assert len(revision) == 12
+    assert all(char in "0123456789abcdef" for char in revision)
+
+
 def test_write_repo_bootstraps_with_whole_repository_scope(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -129,6 +138,7 @@ def test_write_repo_bootstraps_with_whole_repository_scope(
     result = module.write_repo("consumer", repo, "governed", "brian")
 
     assert result.write_error.startswith("make maintenance-worktree failed")
+    assert result.branch.endswith(module._source_revision_tag())
     assert calls[0][3] == "maintenance-worktree"
     assert "WORKTREE_AGENT=codex" in calls[0]
     assert "SESSION_WRITE_PATHS=." in calls[0]

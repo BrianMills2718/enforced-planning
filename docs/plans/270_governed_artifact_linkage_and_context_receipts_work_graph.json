@@ -1,0 +1,137 @@
+{
+  "units": [
+    {
+      "schema_version": "1.0",
+      "record_type": "work_unit",
+      "id": "p270-required-atoms-expected-receipts",
+      "initiative_id": "PLAN-270",
+      "goal_id": "governed-artifact-linkage-and-context-receipts",
+      "design_revision": "sha256:ebc78399f4c7d8b473e70316781c6fd1b305f6914391d675f384e360a7593991",
+      "spec_revision": "p270-required-atoms-expected-receipts@1",
+      "title": "Compile required context atoms and expected receipts",
+      "class": "implementation",
+      "objective": "Extend the existing context-packet owner with revision-bound required full-file atoms that cannot be clipped and an expected-receipt artifact that states only selection/emission evidence. Preserve ContextPacket V2 behavior for existing callers and optional ranked items.",
+      "profile": "standard",
+      "execution_class": "independently_executable",
+      "claimability": "ready_for_execution",
+      "authorization_mode": "registry_claim",
+      "scope": {
+        "included": [
+          "enforced_planning/context_packet.py typed required-atom and expected-receipt contracts",
+          "Existing required_reading defaults, gates, and relationship edges as atom inputs",
+          "Digest, working-tree basis, capacity, missing-input, and compatibility tests",
+          "Existing context-packet CLI and installer lineage",
+          "Relationship-context contract documentation"
+        ],
+        "excluded": [
+          "Claims of host delivery, retention, reading, understanding, or provider attention",
+          "Claude or Codex hook activation",
+          "Wiki custody or compiler changes",
+          "Fleet rollout, deployment, publication, a new daemon, or a new executable"
+        ]
+      },
+      "inputs": [
+        {
+          "kind": "external_adopted_design",
+          "id": "project-meta/docs/plans/270_governed_artifact_linkage_and_context_receipts.md",
+          "revision": "project-meta@87785049c41746be8a7a08f633d5c5d416e86676+sha256:ebc78399f4c7d8b473e70316781c6fd1b305f6914391d675f384e360a7593991"
+        },
+        {
+          "kind": "existing_contract",
+          "id": "enforced_planning.context_packet.ContextPacket",
+          "revision": "enforced-planning@648a0e1f2814a5beddb956bc53bbb7e9fd8f4b9f"
+        }
+      ],
+      "outputs": [
+        "Backward-compatible ContextPacket V3 opt-in contract",
+        "Required atom records with repository-relative paths, SHA-256 digests, byte counts, and revision basis",
+        "Expected receipt with session, context epoch, action, target, adapter identity, packet digest, and honest visibility",
+        "Visible blocking diagnostics for missing or over-capacity required atoms"
+      ],
+      "dependencies": [],
+      "conflict_surfaces": [
+        {
+          "kind": "repository_path",
+          "repository": "enforced-planning",
+          "target": "enforced_planning/context_packet.py",
+          "access": "exclusive",
+          "coordination_key": "plan270-required-atoms"
+        },
+        {
+          "kind": "repository_path",
+          "repository": "enforced-planning",
+          "target": "tests/test_context_packet.py",
+          "access": "exclusive",
+          "coordination_key": "plan270-required-atoms"
+        },
+        {
+          "kind": "repository_path",
+          "repository": "enforced-planning",
+          "target": "docs/designs/RELATIONSHIP_CONTEXT_CONTRACT.md",
+          "access": "exclusive",
+          "coordination_key": "plan270-required-atoms"
+        },
+        {
+          "kind": "repository_path",
+          "repository": "enforced-planning",
+          "target": "docs/plans/270_governed_artifact_linkage_and_context_receipts_work_graph.json",
+          "access": "exclusive",
+          "coordination_key": "plan270-required-atoms"
+        }
+      ],
+      "acceptance": [
+        {
+          "id": "P270-EP-A1",
+          "criterion": "Every applicable required full-file atom is bound to exact bytes and provenance and is never top-k ranked or clipped.",
+          "evidence_required": [
+            "Exact digest and revision-basis tests",
+            "Defaults, gate, and relationship-edge fixture"
+          ],
+          "negative_control": "A missing required file or required-byte total above capacity blocks packet compilation instead of omitting an atom."
+        },
+        {
+          "id": "P270-EP-A2",
+          "criterion": "The receipt distinguishes expected context from emitted, delivered, and retained context and binds session plus epoch plus packet digest.",
+          "evidence_required": [
+            "Receipt JSON contract test",
+            "Changed authority invalidates the prior packet and receipt digest"
+          ],
+          "negative_control": "The library cannot serialize delivered or retained visibility from this adapter."
+        },
+        {
+          "id": "P270-EP-A3",
+          "criterion": "Existing V2 callers and optional-item budgeting remain byte-for-byte compatible unless the V3 receipt inputs are explicitly supplied.",
+          "evidence_required": [
+            "Existing focused context-packet suite",
+            "V2 golden compatibility test",
+            "Installer lineage check"
+          ],
+          "negative_control": "Optional item omission remains legal and cannot consume capacity reserved for required atoms."
+        }
+      ],
+      "control_approval_types": [
+        "design"
+      ],
+      "readiness": {
+        "status": "ready",
+        "required_approval_types": [
+          "design"
+        ],
+        "approvals": [
+          {
+            "approval_type": "design",
+            "role": "owner",
+            "approver_id": "Brian Mills",
+            "approved_revision": "sha256:ebc78399f4c7d8b473e70316781c6fd1b305f6914391d675f384e360a7593991",
+            "approved_at": "2026-09-09T01:30:59Z"
+          }
+        ],
+        "failed_guards": []
+      },
+      "status": "ready",
+      "record_version": 1,
+      "created_at": "2026-09-09T01:30:59Z",
+      "updated_at": "2026-09-09T01:30:59Z"
+    }
+  ]
+}

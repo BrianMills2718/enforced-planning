@@ -827,7 +827,11 @@ class ClaimCheckResult:
         """
         conflicts = self.hard_conflicts
         blocked_paths = sorted(
-            {overlap.split(" <-> ", 1)[0] for conflict in conflicts for overlap in conflict.overlapping_write_paths}
+            {
+                overlap.split(" <-> ", 1)[0].removeprefix("yours=")
+                for conflict in conflicts
+                for overlap in conflict.overlapping_write_paths
+            }
         )
         writable_paths = sorted(
             {
@@ -2362,6 +2366,72 @@ def _interaction_explanation(candidate: ClaimRecord, other: ClaimRecord) -> dict
     }
 
 
+def _git_worktree_boundary(claim: ClaimRecord) -> tuple[Path, Path, Path, str] | None:
+    """Return verified repository, common-dir, worktree, and target kind.
+
+    A candidate claim is created before its managed worktree exists. That one
+    absent target is accepted only at the sanctioned ``repo/worktrees/branch``
+    location; the surrounding claim/worktree transaction removes the claim if
+    creation fails. Existing targets must be exact Git worktree roots sharing
+    the declared repository's common directory.
+    """
+
+    if not claim.repo_root or not claim.worktree_path or not claim.branch:
+        return None
+    repo_root = Path(claim.repo_root).expanduser().resolve()
+    worktree_path = Path(claim.worktree_path).expanduser().resolve()
+    if not repo_root.is_dir():
+        return None
+
+    def git_path(root: Path, field: str) -> Path | None:
+        result = subprocess.run(
+            ["git", "-C", str(root), "rev-parse", "--path-format=absolute", field],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode != 0 or not result.stdout.strip():
+            return None
+        return Path(result.stdout.strip()).expanduser().resolve()
+
+    canonical_top = git_path(repo_root, "--show-toplevel")
+    common_dir = git_path(repo_root, "--git-common-dir")
+    if canonical_top != repo_root or common_dir is None:
+        return None
+    if worktree_path == repo_root:
+        return repo_root, common_dir, worktree_path, "canonical"
+    if worktree_path.exists():
+        worktree_top = git_path(worktree_path, "--show-toplevel")
+        worktree_common = git_path(worktree_path, "--git-common-dir")
+        if worktree_top != worktree_path or worktree_common != common_dir:
+            return None
+        return repo_root, common_dir, worktree_path, "linked"
+
+    planned_target = (repo_root / "worktrees" / claim.branch).resolve()
+    if worktree_path == planned_target:
+        return repo_root, common_dir, worktree_path, "planned_linked"
+    return None
+
+
+def _has_isolated_worktree_boundary(candidate: ClaimRecord, other: ClaimRecord) -> bool:
+    """Return whether Git isolates the two overlapping mutation surfaces."""
+
+    candidate_boundary = _git_worktree_boundary(candidate)
+    other_boundary = _git_worktree_boundary(other)
+    if candidate_boundary is None or other_boundary is None:
+        return False
+    candidate_root, candidate_common, candidate_worktree, candidate_kind = candidate_boundary
+    other_root, other_common, other_worktree, other_kind = other_boundary
+    return (
+        candidate_kind != "canonical"
+        and other_kind != "canonical"
+        and candidate_root == other_root
+        and candidate_common == other_common
+        and candidate_worktree != other_worktree
+        and candidate.branch != other.branch
+    )
+
+
 def _has_write_ownership(claim: ClaimRecord) -> bool:
     """Return whether a claim owns its declared write paths.
 
@@ -2650,10 +2720,15 @@ def evaluate_claim(candidate: ClaimRecord, *, active_claims: list[ClaimRecord] |
 
         overlapping_write_paths = _compute_overlapping_write_paths(candidate, other)
         if _has_write_ownership(candidate) and _has_write_ownership(other) and overlapping_write_paths:
+            isolated_worktrees = _has_isolated_worktree_boundary(candidate, other)
             interactions.append(
                 ClaimInteraction(
-                    severity="hard_conflict",
-                    reason="write ownership overlaps across active claims",
+                    severity="advisory_overlap" if isolated_worktrees else "hard_conflict",
+                    reason=(
+                        "isolated_worktree_overlap"
+                        if isolated_worktrees
+                        else "write ownership overlaps across active claims"
+                    ),
                     other_agent=other.agent,
                     other_scope=other.scope,
                     other_claim_type=other.claim_type,

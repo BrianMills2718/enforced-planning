@@ -13,7 +13,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from dataclasses import replace
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -599,7 +599,7 @@ def test_evaluate_claim_detects_parent_child_write_overlap_as_hard_conflict(
     assert len(result.hard_conflicts) == 1
     conflict = result.hard_conflicts[0]
     assert conflict.reason == "write ownership overlaps across active claims"
-    assert conflict.overlapping_write_paths == ["docs/ops/INDEX.md <-> docs/ops"]
+    assert conflict.overlapping_write_paths == ["yours=docs/ops/INDEX.md <-> theirs=docs/ops"]
     assert conflict.overlap_relations == ("owner_parent",)
     assert conflict.reservation_kind is None
     assert conflict.current_diff_disjoint is None
@@ -3386,6 +3386,189 @@ def test_same_client_different_sessions_conflict_on_program_write_ownership(
 
     assert len(result.hard_conflicts) == 1
     assert result.hard_conflicts[0].other_scope == "first-lane"
+    assert result.hard_conflicts[0].reason == "write ownership overlaps across active claims"
+
+
+def test_distinct_linked_worktrees_make_path_overlap_advisory(tmp_path: Path) -> None:
+    """Git-isolated writes are merge risk, not concurrent filesystem ownership."""
+
+    repo = tmp_path / "demo"
+    _init_git_repo(repo)
+    owner_worktree = repo / "worktrees" / "owner-lane"
+    candidate_worktree = repo / "worktrees" / "candidate-lane"
+    owner_worktree.parent.mkdir()
+    subprocess.run(
+        ["git", "-C", str(repo), "worktree", "add", "-b", "owner-lane", str(owner_worktree)],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(repo), "worktree", "add", "-b", "candidate-lane", str(candidate_worktree)],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    owner = claims_impl.build_candidate_claim(
+        agent="claude-code",
+        project="demo",
+        scope="owner-lane",
+        intent="edit the shared logical path in the owner lane",
+        claim_type="write",
+        write_paths=["README.md"],
+        repo_root=str(repo),
+        worktree_path=str(owner_worktree),
+        branch="owner-lane",
+        session_id="claude-code:owner",
+    )
+    candidate = claims_impl.build_candidate_claim(
+        agent="codex",
+        project="demo",
+        scope="candidate-lane",
+        intent="recover independently in another worktree",
+        claim_type="write",
+        write_paths=["README.md"],
+        repo_root=str(repo),
+        worktree_path=str(candidate_worktree),
+        branch="candidate-lane",
+        session_id="codex:successor",
+    )
+
+    result = claims_impl.evaluate_claim(candidate, active_claims=[owner])
+
+    assert result.hard_conflicts == []
+    assert result.continuation()["state"] == "ready"
+    assert len(result.interactions) == 1
+    assert result.interactions[0].severity == "advisory_overlap"
+    assert result.interactions[0].reason == "isolated_worktree_overlap"
+
+
+def test_claim_creation_admits_planned_distinct_worktree_overlap(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Pre-worktree claim acquisition recognizes the sanctioned future target."""
+
+    repo = tmp_path / "demo"
+    _init_git_repo(repo)
+    owner_worktree = repo / "worktrees" / "owner-lane"
+    candidate_worktree = repo / "worktrees" / "candidate-lane"
+    owner_worktree.parent.mkdir()
+    subprocess.run(
+        ["git", "-C", str(repo), "worktree", "add", "-b", "owner-lane", str(owner_worktree)],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(claims_impl, "CLAIMS_DIR", claims_dir)
+    now = datetime.now(UTC).isoformat()
+    _write_claim(
+        claims_dir,
+        "claude-code_demo_owner-lane.yaml",
+        {
+            "schema_version": 6,
+            "agent": "claude-code",
+            "claimed_at": now,
+            "expires_at": "2099-09-09T00:00:00+00:00",
+            "projects": ["demo"],
+            "scope": "owner-lane",
+            "intent": "edit the owner lane",
+            "claim_type": "write",
+            "write_paths": ["README.md"],
+            "read_paths": [],
+            "repo_root": str(repo),
+            "worktree_path": str(owner_worktree),
+            "branch": "owner-lane",
+            "session_name": "owner-lane",
+            "broader_goal": "preserve both isolated attempts",
+            "session_id": "claude-code:owner",
+            "heartbeat_at": now,
+            "status": "active",
+            "updated_at": now,
+            "plan_ref": "UNPLANNED",
+        },
+    )
+
+    ok, message = claims_impl.create_claim(
+        agent="codex",
+        project="demo",
+        scope="candidate-lane",
+        intent="start isolated recovery",
+        plan_ref="UNPLANNED",
+        claim_type="write",
+        write_paths=["README.md"],
+        repo_root=str(repo),
+        worktree_path=str(candidate_worktree),
+        branch="candidate-lane",
+        session_name="candidate-lane",
+        broader_goal="preserve both isolated attempts",
+        session_id="codex:successor",
+        require_new=True,
+    )
+
+    assert ok is True
+    assert message.startswith("Claimed:")
+    assert candidate_worktree.exists() is False
+    created = claims_impl.check_claims("demo", claims_dir=claims_dir)
+    candidate = next(item for item in created if item.scope == "candidate-lane")
+    owner = next(item for item in created if item.scope == "owner-lane")
+    interaction = claims_impl.evaluate_claim(candidate, active_claims=[owner]).interactions[0]
+    assert interaction.severity == "advisory_overlap"
+    assert interaction.reason == "isolated_worktree_overlap"
+
+
+@pytest.mark.parametrize("candidate_target", ["same", "canonical", "unverified"])
+def test_physical_or_unverified_overlap_remains_hard(
+    tmp_path: Path,
+    candidate_target: str,
+) -> None:
+    """Same-checkout, canonical, and unverifiable targets stay exclusive."""
+
+    repo = tmp_path / "demo"
+    _init_git_repo(repo)
+    owner_worktree = repo / "worktrees" / "owner-lane"
+    owner_worktree.parent.mkdir()
+    subprocess.run(
+        ["git", "-C", str(repo), "worktree", "add", "-b", "owner-lane", str(owner_worktree)],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    candidate_path = {
+        "same": owner_worktree,
+        "canonical": repo,
+        "unverified": tmp_path / "not-a-managed-worktree",
+    }[candidate_target]
+    candidate_branch = "owner-lane" if candidate_target == "same" else "candidate-lane"
+    owner = claims_impl.build_candidate_claim(
+        agent="claude-code",
+        project="demo",
+        scope="owner-lane",
+        intent="own one physical write boundary",
+        claim_type="write",
+        write_paths=["README.md"],
+        repo_root=str(repo),
+        worktree_path=str(owner_worktree),
+        branch="owner-lane",
+        session_id="claude-code:owner",
+    )
+    candidate = claims_impl.build_candidate_claim(
+        agent="codex",
+        project="demo",
+        scope="candidate-lane",
+        intent="request overlapping ownership",
+        claim_type="write",
+        write_paths=["README.md"],
+        repo_root=str(repo),
+        worktree_path=str(candidate_path),
+        branch=candidate_branch,
+        session_id="codex:successor",
+    )
+
+    result = claims_impl.evaluate_claim(candidate, active_claims=[owner])
+
+    assert len(result.hard_conflicts) == 1
     assert result.hard_conflicts[0].reason == "write ownership overlaps across active claims"
 
 

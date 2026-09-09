@@ -131,7 +131,12 @@ def test_write_repo_bootstraps_with_whole_repository_scope(
     def reject_after_capture(cmd: list[str], cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
         del cwd
         calls.append(cmd)
-        return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="fixture stop")
+        return subprocess.CompletedProcess(
+            cmd,
+            1,
+            stdout="broad_scope_mode_required; broad_scope_reason_required",
+            stderr="fixture stop",
+        )
 
     monkeypatch.setattr(module, "_run", reject_after_capture)
 
@@ -142,6 +147,9 @@ def test_write_repo_bootstraps_with_whole_repository_scope(
     assert calls[0][3] == "maintenance-worktree"
     assert "WORKTREE_AGENT=codex" in calls[0]
     assert "SESSION_WRITE_PATHS=." in calls[0]
+    assert calls[1][3] == "worktree"
+    assert "SESSION_BROAD_SCOPE_MODE=bootstrap" in calls[1]
+    assert any(item.startswith("SESSION_TARGET_WORKTREE_PATH=") for item in calls[1])
 
 
 def test_write_repo_cannot_install_when_claim_narrowing_fails(

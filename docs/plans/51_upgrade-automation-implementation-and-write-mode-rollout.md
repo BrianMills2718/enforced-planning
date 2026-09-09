@@ -41,6 +41,11 @@ intentionally retained session trackers. Rollout branch identities now include
 the canonical Enforced Planning source revision. This preserves historical
 trackers while making a new source revision a naturally distinct retry lane;
 the upgrader fails before target mutation if that revision cannot be resolved.
+Each attempt also carries a UTC suffix, so a retained tracker from a failed
+attempt cannot block a retry at the same source revision. For delegating legacy
+maintenance wrappers that drop broad-scope metadata, the upgrader retries the
+base target only after the exact missing-mode/reason failure and supplies the
+bootstrap reason plus exact target worktree itself.
 
 ---
 

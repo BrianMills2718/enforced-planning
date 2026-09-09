@@ -424,6 +424,65 @@ def test_non_ancestor_claim_does_not_probe_worktree_status(
     assert decision["reason_code"] == "exact_live_claim"
 
 
+def test_projection_build_skips_an_unnormalizable_claim_belonging_to_another_project(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A malformed claim in an unrelated project must not block everyone else's projection.
+
+    Regression target: 2026-09-09, a live claim for a different project
+    (`chatgpt_brians-2nd-brain-integration-work_...yaml`, an older claim
+    shape with no agent/scope/intent fields at all) made `build_projection`
+    raise ProjectionBuildError, blocking a `make maintenance-worktree` for a
+    completely unrelated project until the other session released its own
+    claim -- a malformed claim anywhere broke prewrite gating everywhere.
+    """
+    _repo, _worktree, claims_dir, _claim_path = _fixture(tmp_path)
+    now = datetime.now(timezone.utc)
+    unrelated_claim = claims_dir / "chatgpt_unrelated-project_some-scope.yaml"
+    unrelated_claim.write_text(
+        yaml.safe_dump(
+            {
+                "schema_version": 3,
+                "status": "active",
+                "claim_type": "write",
+                "branch": "fix/something",
+                "repo_root": "/tmp/unrelated",
+                "worktree_path": "/tmp/unrelated/worktrees/fix",
+                "write_paths": ["some/path.py"],
+                "broader_goal": "an older claim shape with no agent/scope/intent fields",
+                "updated_at": now.isoformat(),
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    projection = prewrite_claim_projection.build_projection(claims_dir=claims_dir)
+
+    assert any(claim.scope == "projection-lane" for claim in projection.claims)
+    assert not any("unrelated" in claim.scope for claim in projection.claims)
+    captured = capsys.readouterr()
+    assert "cannot be normalized" in captured.err
+    assert "chatgpt_unrelated-project_some-scope.yaml" in captured.err
+
+
+def test_projection_build_skips_an_unparseable_claim_file(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A claim file with invalid YAML must not block the rest of the projection."""
+    _repo, _worktree, claims_dir, _claim_path = _fixture(tmp_path)
+    broken_claim = claims_dir / "codex_other-project_broken.yaml"
+    broken_claim.write_text("agent: codex\n  bad indentation: [unclosed\n", encoding="utf-8")
+
+    projection = prewrite_claim_projection.build_projection(claims_dir=claims_dir)
+
+    assert any(claim.scope == "projection-lane" for claim in projection.claims)
+    captured = capsys.readouterr()
+    assert "skipping unreadable claim" in captured.err
+    assert "broken.yaml" in captured.err
+
+
 def test_projection_build_rejects_concurrent_registry_change(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

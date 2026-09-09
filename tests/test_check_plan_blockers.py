@@ -288,3 +288,74 @@ def test_suggest_new_status_returns_needs_plan_as_default(tmp_path: Path) -> Non
     assert info is not None
     suggestion = m.suggest_new_status(info)  # type: ignore[attr-defined]
     assert suggestion == "Needs Plan"
+
+
+# ---------------------------------------------------------------------------
+# update_plan_status
+# ---------------------------------------------------------------------------
+
+
+def test_update_plan_status_leaves_quoted_status_line_in_body_untouched(tmp_path: Path) -> None:
+    """Regression: re.sub without count=1 rewrote every Status line in the file.
+
+    Real plan files quote an earlier status line later in the document, e.g.
+    inside a Progress-section example or backtick-quoted prose (observed in
+    this repo's own docs/plans/102_plan_status_projection.md, and in other
+    governed repos' plan files). Only the canonical header-block line -- the
+    first occurrence -- may ever be live-updated.
+    """
+    m = _load()
+    path = _write_plan(
+        tmp_path,
+        "07_example.md",
+        """
+        # Plan #7: Example
+
+        **Status:** ⏸️ Blocked
+        **Blocked By:** #3
+
+        ## Progress
+
+        Phase 1 shipped when the plan read `**Status:** ⏸️ Blocked` before
+        Plan #3 landed.
+        """,
+    )
+    info = m.parse_plan_file(path)  # type: ignore[attr-defined]
+    assert info is not None
+
+    m.update_plan_status(info, "Complete")  # type: ignore[attr-defined]
+
+    updated = path.read_text()
+    status_lines = [line for line in updated.splitlines() if line.startswith("**Status:**")]
+    assert status_lines == ["**Status:** ✅ Complete"]
+    assert "the plan read `**Status:** ⏸️ Blocked` before" in updated
+    assert "**Blocked By:** None" in updated
+
+
+def test_update_plan_status_leaves_quoted_blocked_by_line_untouched(tmp_path: Path) -> None:
+    """Same regression for the Blocked By rewrite."""
+    m = _load()
+    path = _write_plan(
+        tmp_path,
+        "08_example.md",
+        """
+        # Plan #8: Example
+
+        **Status:** ⏸️ Blocked
+        **Blocked By:** #3
+
+        ## Progress
+
+        The stale-blocker check exists because a line like
+        `**Blocked By:** #3` can go unnoticed once #3 completes.
+        """,
+    )
+    info = m.parse_plan_file(path)  # type: ignore[attr-defined]
+    assert info is not None
+
+    m.update_plan_status(info, "Complete")  # type: ignore[attr-defined]
+
+    updated = path.read_text()
+    blocked_by_lines = [line for line in updated.splitlines() if line.startswith("**Blocked By:**")]
+    assert blocked_by_lines == ["**Blocked By:** None"]
+    assert "a line like\n`**Blocked By:** #3` can go unnoticed" in updated

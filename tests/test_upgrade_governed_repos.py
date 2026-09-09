@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -150,6 +151,67 @@ def test_write_repo_bootstraps_with_whole_repository_scope(
     assert calls[1][3] == "worktree"
     assert "SESSION_BROAD_SCOPE_MODE=bootstrap" in calls[1]
     assert any(item.startswith("SESSION_TARGET_WORKTREE_PATH=") for item in calls[1])
+
+
+def test_write_repo_uses_atomic_bootstrap_after_legacy_plan_gate(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Version-skew fallback remains an authority-checked transaction."""
+
+    module = _load()
+    repo = tmp_path / "consumer"
+    repo.mkdir()
+    (repo / "Makefile").write_text(
+        "worktree:\n\t@true\n\nmaintenance-worktree:\n\t@true\n",
+        encoding="utf-8",
+    )
+    for env_key in module.coordination_claims.STRICT_NATIVE_SESSION_ENV_KEYS.values():
+        monkeypatch.delenv(env_key, raising=False)
+    monkeypatch.setenv("CODEX_THREAD_ID", "native-codex-thread")
+    calls: list[tuple[list[str], Path | None]] = []
+
+    def reject_in_sequence(
+        cmd: list[str],
+        cwd: Path | None = None,
+    ) -> subprocess.CompletedProcess[str]:
+        calls.append((cmd, cwd))
+        if len(calls) == 1:
+            return subprocess.CompletedProcess(
+                cmd,
+                1,
+                stdout="broad_scope_mode_required; broad_scope_reason_required",
+                stderr="",
+            )
+        if len(calls) == 2:
+            return subprocess.CompletedProcess(
+                cmd,
+                1,
+                stdout="Plan-start gate failed: coordinated work requires a qualified plan identity",
+                stderr="",
+            )
+        return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="atomic fixture stop")
+
+    monkeypatch.setattr(module, "_run", reject_in_sequence)
+
+    result = module.write_repo("consumer", repo, "governed", "brian")
+
+    assert result.write_error.startswith("make maintenance-worktree failed")
+    atomic_cmd, atomic_cwd = calls[2]
+    assert atomic_cmd[:2] == [sys.executable, str(module.CLAIM_BOOTSTRAP_SCRIPT)]
+    assert atomic_cwd == repo
+    request = json.loads(atomic_cmd[atomic_cmd.index("--request-json") + 1])
+    assert request == {
+        "schema_version": "1.0",
+        "operation": "maintenance_worktree",
+        "agent": "codex",
+        "project": "consumer",
+        "scope": result.branch,
+        "repo_root": str(repo),
+        "branch": result.branch,
+        "claim_type": "program",
+        "write_paths": ["."],
+    }
 
 
 def test_write_repo_cannot_install_when_claim_narrowing_fails(

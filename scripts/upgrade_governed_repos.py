@@ -49,6 +49,7 @@ FRAMEWORK_ROOT = Path(__file__).resolve().parents[1]
 INSTALL_SCRIPT = FRAMEWORK_ROOT / "scripts" / "install_governed_repo.py"
 AUDIT_SCRIPT = FRAMEWORK_ROOT / "scripts" / "audit_governed_repo.py"
 CLAIM_BOOTSTRAP_SCRIPT = FRAMEWORK_ROOT / "scripts" / "claim_bootstrap.py"
+SESSION_NARROW_SCRIPT = FRAMEWORK_ROOT / "scripts" / "session_narrow.py"
 
 sys.path.insert(0, str(FRAMEWORK_ROOT))
 from enforced_planning import coordination_claims, session_contracts  # noqa: E402
@@ -412,10 +413,36 @@ def write_repo(repo_id: str, repo_root: Path, tier: str, owner: str) -> RepoUpgr
             f"SESSION_WRITE_PATHS={write_paths}",
         ]
     )
+    narrow_output = "\n".join(part for part in (narrow_proc.stdout, narrow_proc.stderr) if part).strip()
+    if narrow_proc.returncode != 0 and "No rule to make target 'session-narrow'." in narrow_output:
+        # An older target can have the narrowing implementation installed but
+        # not yet expose its Make facade. Invoke the current stable CLI against
+        # the same owner/session-bound claim; its subset and worktree-identity
+        # validation is the contract the Make target delegates to.
+        narrow_proc = _run(
+            [
+                sys.executable,
+                str(SESSION_NARROW_SCRIPT),
+                "--agent",
+                native_agent,
+                "--project",
+                repo_id,
+                "--scope",
+                branch,
+                *[
+                    argument
+                    for path in write_paths.split()
+                    for argument in ("--write-path", path)
+                ],
+                "--json",
+            ],
+            cwd=worktree_path,
+        )
+        narrow_output = "\n".join(part for part in (narrow_proc.stdout, narrow_proc.stderr) if part).strip()
     if narrow_proc.returncode != 0:
         _abandon(
             "session-narrow failed before installer mutation: "
-            f"{(narrow_proc.stderr or narrow_proc.stdout).strip()[:500]}"
+            f"{narrow_output[:500]}"
         )
         return result
 

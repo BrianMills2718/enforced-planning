@@ -436,6 +436,14 @@ def test_projection_build_skips_an_unnormalizable_claim_belonging_to_another_pro
     raise ProjectionBuildError, blocking a `make maintenance-worktree` for a
     completely unrelated project until the other session released its own
     claim -- a malformed claim anywhere broke prewrite gating everywhere.
+
+    Silent by design (asserts empty stderr): the prewrite gate's CLI
+    contract requires clean stdout/stderr on every invocation (see
+    test_git_launch_cwd_does_not_hide_stale_session_target_projection in
+    test_host_prewrite_claim_gate.py, which relies on a non-mapping fixture
+    file being skipped without printing anything). Visibility for a
+    malformed claim belongs to `check_coordination_claims.py --list`, not
+    this hot path.
     """
     _repo, _worktree, claims_dir, _claim_path = _fixture(tmp_path)
     now = datetime.now(timezone.utc)
@@ -462,8 +470,7 @@ def test_projection_build_skips_an_unnormalizable_claim_belonging_to_another_pro
     assert any(claim.scope == "projection-lane" for claim in projection.claims)
     assert not any("unrelated" in claim.scope for claim in projection.claims)
     captured = capsys.readouterr()
-    assert "cannot be normalized" in captured.err
-    assert "chatgpt_unrelated-project_some-scope.yaml" in captured.err
+    assert captured.err == ""
 
 
 def test_projection_build_skips_an_unparseable_claim_file(
@@ -479,8 +486,7 @@ def test_projection_build_skips_an_unparseable_claim_file(
 
     assert any(claim.scope == "projection-lane" for claim in projection.claims)
     captured = capsys.readouterr()
-    assert "skipping unreadable claim" in captured.err
-    assert "broken.yaml" in captured.err
+    assert captured.err == ""
 
 
 def test_projection_build_rejects_concurrent_registry_change(

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import hashlib
 import os
-import sys
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
@@ -70,7 +69,7 @@ def _parse_time(value: str | None) -> datetime | None:
 
 
 def _load_projection_claims(claims_dir: Path) -> list[coordination_claims.ClaimRecord]:
-    """Load valid unexpired claims, skipping unreadable records loudly.
+    """Load valid unexpired claims, skipping unreadable records.
 
     `claims_dir` is one shared directory across every project this machine
     coordinates, not scoped to the caller's own project. A claim file was
@@ -82,9 +81,16 @@ def _load_projection_claims(claims_dir: Path) -> list[coordination_claims.ClaimR
     worktree from being created with no way to route around it except
     waiting for the other session to release its own claim. A malformed
     claim belonging to another project is real signal about that claim, not
-    grounds to deny every unrelated write in the whole ecosystem: skip it
-    with a loud stderr warning naming the exact file, and keep building the
-    projection from the claims that ARE readable.
+    grounds to deny every unrelated write in the whole ecosystem: skip it and
+    keep building the projection from the claims that ARE readable.
+
+    Deliberately silent, not a printed warning: this function backs the
+    prewrite gate's hot path, whose CLI contract is clean stdout/stderr on
+    every invocation (test_git_launch_cwd_does_not_hide_stale_session_target_projection
+    asserts empty stderr even when the claims dir contains a deliberately
+    non-mapping fixture file). Visibility for a malformed claim already has
+    an owned surface: `check_coordination_claims.py --list` reports files "in
+    unregistered format" separately from the live-claim table.
     """
 
     if not claims_dir.exists():
@@ -94,11 +100,9 @@ def _load_projection_claims(claims_dir: Path) -> list[coordination_claims.ClaimR
     for claim_file in sorted(claims_dir.glob("*.yaml")):
         try:
             payload = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
-        except (OSError, yaml.YAMLError) as exc:
-            print(f"prewrite_claim_projection: skipping unreadable claim {claim_file}: {exc}", file=sys.stderr)
+        except (OSError, yaml.YAMLError):
             continue
         if not isinstance(payload, dict):
-            print(f"prewrite_claim_projection: skipping claim {claim_file}: not a YAML mapping", file=sys.stderr)
             continue
         raw_status = payload.get("status", "active")
         if isinstance(raw_status, str) and raw_status.strip().lower() not in coordination_claims.LIVE_STATUSES:
@@ -109,7 +113,6 @@ def _load_projection_claims(claims_dir: Path) -> list[coordination_claims.ClaimR
             continue
         claim = coordination_claims.normalize_claim(payload, source_file=str(claim_file.resolve()))
         if claim is None:
-            print(f"prewrite_claim_projection: skipping claim {claim_file}: cannot be normalized", file=sys.stderr)
             continue
         if claim.is_live():
             claims.append(claim)

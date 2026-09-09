@@ -169,6 +169,17 @@ handoff/session-end plus session-resume before it may hand off, abandon, finish,
 or close the lane; claim creation fails
 without changing the claim or its derived projection.
 
+Write-path overlap is hard ownership conflict only when the physical mutation
+boundary is shared or cannot be verified. Two claims whose paths resolve to the
+same worktree, the canonical checkout, the same Git branch, or an unverified
+target remain blocked. When both claims instead name different verified linked
+worktrees of the same canonical repository (including a new claim's exact
+future `<repo>/worktrees/<branch>` target), the interaction is
+`advisory_overlap` with reason `isolated_worktree_overlap`: claim creation may
+continue, each session remains confined to its own worktree, and Git owns later
+content reconciliation. This does not transfer, delete, or weaken the older
+claim, and heartbeat age is not part of the safety decision.
+
 New-lane creation is stricter: `require_new` bypasses same-owner refresh, then
 rejects an occupied slot or creates the claim while holding the registry lock.
 A concurrent exact-owner claim therefore cannot turn bootstrap into refresh.

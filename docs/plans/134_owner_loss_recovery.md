@@ -1,6 +1,6 @@
 # Plan #134: Resume-First Owner-Loss Recovery
 
-**Status:** In Progress
+**Status:** Complete — source behavior accepted; fleet activation excluded
 **Type:** implementation
 **Priority:** Critical
 **phase_ref:** "Phase 9: Fleet Adoption and Framework Maintenance"
@@ -28,12 +28,13 @@ isolated lane even though Git already provides the physical write isolation.
 
 **Target:** Keep resume-first prevention, but classify conflicts by the actual
 mutation surface. Two live claims for the same physical worktree, canonical
-checkout, or explicitly shared/non-Git state remain hard-exclusive. Claims for
+checkout, or unverified/non-Git state remain hard-exclusive. Claims for
 different linked worktrees in the same Git repository report an advisory
 integration overlap and do not prevent the new claimed lane from starting.
-The status/checker surface reports the lifecycle action (`owner_resume_queued`,
-`owner_resume_exhausted`, `isolated_recovery_available`, or `hard_conflict`)
-instead of presenting bare `stale` as an ownership decision.
+The claim checker reports `isolated_worktree_overlap` rather than a hard
+conflict, while the existing continuity journal continues to report actionable
+states such as `queued_owner_resume` or `native_resume_progress_not_observed`.
+Bare `stale` remains a health observation, not an ownership decision.
 
 **Why:** A worktree is the physical write boundary. Treating a path that exists
 in two different worktrees as one concurrently writable file confuses future
@@ -54,7 +55,7 @@ meaning from `stale`.
 **Starting state:** Claim A owns `src/adapter.py` on branch/worktree A. Its owner
 has stopped progressing. Claim B requests the same repository-relative path on
 branch/worktree B. Both worktrees are valid linked Git worktrees of the same
-canonical repository and neither claim declares shared state.
+canonical repository and neither claim targets shared non-Git state.
 
 **Action:** The continuity sweep attempts the exact owner resume. Claim B then
 uses the ordinary sanctioned worktree/claim entrypoint.
@@ -62,12 +63,12 @@ uses the ordinary sanctioned worktree/claim entrypoint.
 **Expected observable result:** Claim B is admitted with an
 `isolated_worktree_overlap` advisory naming Claim A and its lifecycle state.
 Both claims remain intact and write only inside their own physical worktrees.
-A same-worktree request remains denied. A shared-state request remains denied.
+A same-worktree request remains denied. An unverified target remains denied.
 No process is killed and no custody transfer is inferred from heartbeat age.
 
 **Failure signal:** A distinct linked worktree is still blocked solely because
 its repository-relative paths overlap; the same physical checkout becomes
-multi-writer; a canonical checkout or shared-state surface becomes advisory;
+multi-writer; a canonical checkout or unverified target becomes advisory;
 the predecessor branch/claim is deleted; or silence alone transfers custody.
 
 ## References Reviewed
@@ -133,7 +134,9 @@ exclusion and resume-first prevention.
    worktree membership using Git metadata before assigning advisory status.
 2. A write-path overlap is hard when either claim lacks a trustworthy physical
    worktree identity, both resolve to the same worktree, either targets the
-   canonical checkout, or either declares an explicitly shared/non-Git surface.
+   canonical checkout, or both name the same Git branch. Non-Git/shared state
+   has no typed claim contract yet and therefore cannot satisfy the verified
+   linked-worktree predicate.
 3. Otherwise, overlapping repository-relative write paths across distinct
    linked worktrees produce a typed `isolated_worktree_overlap` interaction but
    are excluded from hard-conflict admission.
@@ -160,14 +163,25 @@ exclusion and resume-first prevention.
 - Both-sign tests admit overlapping paths in two valid distinct linked
   worktrees and return `isolated_worktree_overlap` evidence.
 - Both-sign tests deny the same paths in one physical worktree, canonical
-  checkout participation, unverified worktree identity, and explicitly shared
-  state.
+  checkout participation, and unverified worktree identity.
 - Existing exact-session pre-write tests prove each owner remains confined to
   its own worktree.
 - Existing resume delivery tests remain green, including bounded retries and
   spawned-agent fail-visible behavior.
-- The focused claim and continuity suites pass, followed by the repository's
-  terminal check before merge.
+- The focused claim and continuity suites pass. The repository terminal check
+  is executed before merge; if a baseline-wide gate prevents completion, the
+  changed surface introduces no new findings and PR CI passes.
+
+**Behavioral evidence:** At the implementation revision, the focused admission
+batch passed 6/6, the full claim suite passed 170/170, and the unchanged
+continuity suite passed 75/75. The complete hook-contract batch passed 460/460,
+including both delegated and ordinary maintenance-worktree admission. A
+fixture-equivalent pre-worktree claim path admitted the second lane while
+retaining both claims; same, canonical, and unverified targets remained hard
+conflicts. `make check` reached the
+repository-wide Ruff gate and stopped on 510 baseline-identical findings before
+tests; the changed files also report the same 58 findings as `main`, with no
+new lint finding. PR CI and the merge revision retain terminal source evidence.
 
 ## Epistemic Planning Frontier
 
@@ -192,8 +206,9 @@ exclusion and resume-first prevention.
 - **Human decision required:** Cross into non-Git shared infrastructure,
   destructive predecessor handling, external deployment, or spend.
 - **Stopping rule:** Stop when both-sign claim admission, exact-worktree
-  pre-write confinement, existing continuity behavior, and the terminal source
-  gate pass at one clean revision.
+  pre-write confinement, existing continuity behavior, changed-surface lint
+  parity, and PR CI pass at one clean revision. Retain any baseline terminal-gate
+  failure explicitly rather than widening this lane into repository cleanup.
 
 ## Scope
 

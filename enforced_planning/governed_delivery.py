@@ -579,6 +579,30 @@ def _path_allowed(path: str, contract: GovernedTaskV1) -> bool:
     return any(fnmatch.fnmatchcase(path, pattern) for pattern in contract.allowed_paths)
 
 
+def _plan_status_is_complete(plan_content: str) -> bool:
+    """True only for a canonical, unqualified `**Status:** Complete` line.
+
+    `scripts/complete_plan.py` (the sanctioned completion tool) writes the
+    status emoji prefix `**Status:** ✅ Complete`, matching
+    `scripts/check_plan_blockers.py`'s `status_emoji` mapping for other
+    statuses (e.g. `\U0001f6a7 In Progress`, `⏸️ Blocked`). The optional
+    prefix is restricted to non-word characters so it can only ever consume an
+    emoji/symbol token, never a qualifying word. This intentionally still
+    rejects a caveated status such as `Complete (report-only; enforcement
+    deferred)` or `Complete — superseded without implementation` -- those
+    plans are not truthfully complete for this gate's purpose -- and it never
+    matches "Complete" as a substring of an unrelated status.
+    """
+
+    return bool(
+        re.search(
+            r"^\*\*Status:\*\*\s*(?:[^\w\s]+\s+)?Complete\s*$",
+            plan_content,
+            flags=re.MULTILINE,
+        )
+    )
+
+
 def _extract_section(content: str, heading: str) -> str:
     """Extract one level-two Markdown section."""
 
@@ -702,7 +726,7 @@ def _collect_checks(task_root: Path, contract: GovernedTaskV1) -> list[CheckResu
             observed=plan_paths[0] if len(plan_paths) == 1 else None,
         )
     )
-    plan_complete = bool(re.search(r"^\*\*Status:\*\*\s*Complete\s*$", plan_content, flags=re.MULTILINE))
+    plan_complete = _plan_status_is_complete(plan_content)
     required_sections = all(
         _extract_section(plan_content, heading)
         for heading in ("User Outcome", "Canonical Behavioral Example", "Authority Used", "Required Tests", "Acceptance Criteria")

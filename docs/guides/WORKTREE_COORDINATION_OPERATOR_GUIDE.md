@@ -561,6 +561,37 @@ fully integrated branch as unmerged. Any commit with no patch-equivalent on the
 default branch refuses the archival; `--allow-unique-branch-commits` records the
 retained branch explicitly instead.
 
+### Closing a squash-merged lane
+
+The same squash-merge reality applies to `session-close`, and until 2026-09-09 it
+was only half handled. `_validate_closeout_preflight` decides integration with
+`_is_ancestor`, which a squash merge can never satisfy: the squash creates a new
+commit, so the task branch tip is never an ancestor of the default branch. The
+preflight would refuse a branch whose pull request was already merged, with
+"Branch X is clean but not integrated into canonical default branch main."
+
+`_squash_merge_matches_branch` could always prove the merge, but it only ran when
+the operator passed `--merge-commit` — and nobody knows a squash SHA offhand, so
+in practice no squash-merged lane could be closed by the sanctioned route. Lanes
+then accumulate until the claim bootstrap refuses to open a new one at all
+("requires the native session to own zero existing claim roots"), naming lanes
+whose work shipped days earlier and which the preflight will not let anyone close.
+That deadlock is the reason stale worktrees and claims pile up.
+
+`session-close` now discovers the merge commit itself when you do not supply one.
+Discovery only supplies the input: every candidate still has to pass the same
+patch-equality proof, so it cannot approve anything a hand-supplied SHA would not
+have. Candidates are bounded to commits on the canonical default branch that are
+absent from the task branch and that touch the paths the branch changed, so an
+unmerged branch finds nothing rather than matching by accident, and a different
+change to the same file is refused.
+
+`merge_evidence` distinguishes how integration was established:
+`branch_ancestor` for a true merge, `squash_patch_equivalent` when you supplied
+the SHA, `squash_patch_equivalent_discovered` when the closeout found it. If
+discovery finds nothing the preflight refuses exactly as before —
+`--merge-commit` and the non-merge dispositions remain available.
+
 The tracker is **moved**, never deleted, to
 `~/.claude/coordination/sessions-archive/<YYYY-MM-DD>/<project>/`, and the
 archived copy carries an `archive:` section holding the pre-move digest, the
@@ -1071,7 +1102,7 @@ the event itself, updates the claim atomically, refreshes the pre-write
 projection, and emits the existing backward-compatible typed session-mutation
 receipt. A new event without a quiet interval clears an obsolete interval.
 
-Last verified 2026-09-06 through the canonical read-only claim check piped to
+Last verified 2026-09-09 through the canonical read-only claim check piped to
 `jq`: JSON reporting must serialize
 `other_session_last_active_at` as an ISO-8601 string or `null`; a raw datetime
 is a contract defect, not a consumer-supported value.

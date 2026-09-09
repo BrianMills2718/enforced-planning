@@ -2318,6 +2318,56 @@ def _squash_merge_matches_branch(
     return branch_patch is not None and branch_patch == merged_patch
 
 
+def _discover_squash_merge_commit(
+    repo_root: Path,
+    *,
+    branch_ref: str,
+    default_ref: str,
+    candidate_cap: int = 100,
+) -> str | None:
+    """Find the squash-merge commit for a branch, or None.
+
+    The proof in _squash_merge_matches_branch was always here, but it only ran
+    when the operator hand-supplied --merge-commit, and nobody knows a squash SHA
+    offhand. So in practice a squash-merged lane could not be closed by the
+    sanctioned route at all, and both project-meta and enforced-planning squash by
+    default. Their lanes accumulated until the claim bootstrap refused to open any
+    new lane -- "requires the native session to own zero existing claim roots" --
+    naming two lanes whose work was already merged and which this same preflight
+    would not let anyone close. Enforcement whose remedy is unreachable.
+
+    This supplies the input only. Every candidate must still pass the existing
+    patch-equality proof, so discovery cannot approve anything a hand-supplied SHA
+    would not have. Candidates are bounded to commits on the canonical default
+    branch that are absent from the task branch and that touch the paths the branch
+    changed, so an unmerged branch finds nothing rather than matching by accident.
+    """
+
+    def git(*args: str) -> str:
+        result = subprocess.run(
+            ["git", *args], cwd=str(repo_root), capture_output=True, text=True, check=False
+        )
+        return result.stdout.strip() if result.returncode == 0 else ""
+
+    merge_base = git("merge-base", branch_ref, default_ref)
+    if not merge_base:
+        return None
+    changed_paths = [
+        line for line in git("diff", "--name-only", f"{merge_base}..{branch_ref}").splitlines() if line
+    ]
+    if not changed_paths:
+        return None
+    candidates = git(
+        "rev-list", f"--max-count={candidate_cap}", default_ref, f"^{branch_ref}", "--", *changed_paths
+    ).splitlines()
+    for candidate in candidates:
+        if candidate and _squash_merge_matches_branch(
+            repo_root, branch_ref=branch_ref, merge_commit=candidate, default_ref=default_ref
+        ):
+            return candidate
+    return None
+
+
 def _validate_closeout_preflight(
     *,
     repo_root: Path,
@@ -2386,8 +2436,14 @@ def _validate_closeout_preflight(
     if normalized_disposition == MERGED_DISPOSITION:
         normalized_merge_commit = merge_commit.strip() if merge_commit else None
         merge_evidence = "branch_ancestor" if merged_to_default else None
+        canonical_default_ref = default_remote_ref if remote_default_exists else default_ref
+        discovered_merge_commit = False
+        if not merged_to_default and not normalized_merge_commit:
+            normalized_merge_commit = _discover_squash_merge_commit(
+                repo_root, branch_ref=branch_ref, default_ref=canonical_default_ref
+            )
+            discovered_merge_commit = normalized_merge_commit is not None
         if not merged_to_default and normalized_merge_commit:
-            canonical_default_ref = default_remote_ref if remote_default_exists else default_ref
             if _squash_merge_matches_branch(
                 repo_root,
                 branch_ref=branch_ref,
@@ -2395,7 +2451,11 @@ def _validate_closeout_preflight(
                 default_ref=canonical_default_ref,
             ):
                 merged_to_default = True
-                merge_evidence = "squash_patch_equivalent"
+                merge_evidence = (
+                    "squash_patch_equivalent_discovered"
+                    if discovered_merge_commit
+                    else "squash_patch_equivalent"
+                )
         if not merged_to_default:
             if merged_to_local_default and default_branch_pushed is False:
                 raise ValueError(

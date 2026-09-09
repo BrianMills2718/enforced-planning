@@ -1,0 +1,120 @@
+{
+  "units": [
+    {
+      "schema_version": "1.0",
+      "record_type": "work_unit",
+      "id": "olr-01-physical-conflict-admission",
+      "initiative_id": "agentic-engineering",
+      "goal_id": "prevent-owner-loss-and-false-serialization",
+      "design_revision": "plan-134-adopted-v2",
+      "spec_revision": "plan-134-work-graph-v1",
+      "title": "Admit isolated-worktree overlap without weakening physical exclusion",
+      "class": "implementation",
+      "objective": "Classify overlapping repository paths by their physical worktree boundary so distinct linked worktrees receive an integration advisory while same, canonical, or unverified targets remain hard conflicts.",
+      "profile": "standard",
+      "execution_class": "independently_executable",
+      "claimability": "ready_for_execution",
+      "scope": {
+        "included": [
+          "Claim interaction physical-boundary classification",
+          "Advisory admission across distinct verified linked worktrees",
+          "Same, canonical, and unverified target denial",
+          "Focused both-sign tests and operator guidance"
+        ],
+        "excluded": [
+          "Automatic merge, rebase, cleanup, or custody transfer",
+          "Process termination",
+          "Shared external infrastructure",
+          "Fleet activation"
+        ]
+      },
+      "inputs": [
+        {
+          "kind": "plan",
+          "id": "enforced-planning#134",
+          "revision": "445123abe4b54bfbd2f7556ab2f592812504b251"
+        }
+      ],
+      "outputs": [
+        "Typed isolated-worktree overlap interaction",
+        "Hard physical-conflict controls",
+        "Both-sign claim admission evidence",
+        "Updated operator guidance"
+      ],
+      "dependencies": [],
+      "conflict_surfaces": [
+        {
+          "kind": "repository_path",
+          "target": "enforced_planning/coordination_claims.py",
+          "repository": "enforced-planning",
+          "access": "exclusive"
+        },
+        {
+          "kind": "repository_path",
+          "target": "tests/test_check_coordination_claims.py",
+          "repository": "enforced-planning",
+          "access": "exclusive"
+        },
+        {
+          "kind": "repository_path",
+          "target": "docs/guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md",
+          "repository": "enforced-planning",
+          "access": "exclusive"
+        },
+        {
+          "kind": "repository_path",
+          "target": "docs/plans/134_owner_loss_recovery.md",
+          "repository": "enforced-planning",
+          "access": "exclusive"
+        },
+        {
+          "kind": "repository_path",
+          "target": "docs/plans/CLAUDE.md",
+          "repository": "enforced-planning",
+          "access": "exclusive"
+        }
+      ],
+      "acceptance": [
+        {
+          "id": "OLR01-A1",
+          "criterion": "Distinct verified linked worktrees with overlapping repository paths are admitted with typed advisory evidence.",
+          "evidence_required": [
+            "Focused positive claim interaction test",
+            "Claim-creation admission test"
+          ],
+          "negative_control": "The same physical worktree remains a hard conflict."
+        },
+        {
+          "id": "OLR01-A2",
+          "criterion": "Canonical or unverified physical targets never receive advisory admission.",
+          "evidence_required": [
+            "Canonical-checkout denial test",
+            "Missing or invalid worktree identity denial test"
+          ],
+          "negative_control": "No liveness label can convert an ambiguous physical target into an advisory."
+        },
+        {
+          "id": "OLR01-A3",
+          "criterion": "Existing exact-session pre-write confinement and owner-resume continuity behavior remain unchanged.",
+          "evidence_required": [
+            "Focused claim suite",
+            "Focused continuity suite",
+            "Terminal repository check"
+          ],
+          "negative_control": "No predecessor claim, branch, process, or worktree is transferred, killed, or deleted."
+        }
+      ],
+      "readiness": {
+        "status": "ready",
+        "required_approval_types": [],
+        "approvals": [],
+        "failed_guards": []
+      },
+      "authorization_mode": "registry_claim",
+      "status": "ready",
+      "record_version": 1,
+      "created_at": "2026-09-09T18:12:00Z",
+      "updated_at": "2026-09-09T18:12:00Z"
+    }
+  ]
+}

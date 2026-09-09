@@ -3,8 +3,14 @@
 
 Claims remain authoritative for recipient routing and write ownership. Exact
 native client identity may authorize message-only send, poll, and
-acknowledgement after a write claim ends; it cannot restore write authority or
-route to an unclaimed recipient. This module owns only immutable message intent,
+acknowledgement after a write claim ends; it cannot restore write authority.
+Recipient routing (resolve_recipient) is claim-backed but not limited to
+currently-live claims: a session whose claim ended within the last
+DEFAULT_TTL_HOURS is still an addressable recipient (see
+_reachable_recipient_claims), because ending a claim reflects that lane's
+lifecycle, not proof the process is gone. Caller authorization for send/poll/
+acknowledge is unaffected by this and still requires a genuinely live claim or
+the native-identity bypass. This module owns only immutable message intent,
 runtime/observation/acknowledgement evidence, and derived status. JSON is the
 canonical storage format; human-readable projections remain outside this
 boundary.
@@ -970,13 +976,83 @@ class CoordinationMessageStore:
         if not any(claim.session_id == session_id for claim in self._live_claims()):
             raise UnknownSessionError(f"No live claim owns session {session_id!r}")
 
-    def resolve_recipient(self, selector: RecipientSelector) -> str:
-        """Resolve an exact or claim-backed selector to one canonical session."""
+    def _reachable_recipient_claims(
+        self, project: str | None = None, *, now: datetime | None = None
+    ) -> list[coordination_claims.ClaimRecord]:
+        """Live claims plus recently-ended ones, for RECIPIENT resolution only.
+
+        A claim's ``session_ended`` status means the runtime session stopped
+        heartbeating that specific lane -- not that the process is gone. The
+        friction this closes (2026-07-16, cluster coordination-mailbox-session-
+        resolution): "the mailbox rejected a message to the registry's active
+        Plan 136 session... the active owner cannot be notified through the
+        prescribed channel" -- a sender could not reach a recipient whose claim
+        had just ended, exactly when a handoff notice was most needed.
+
+        Deliberately narrower than a general relaxation: caller authorization
+        (``_require_live_session``, used by send/poll/acknowledge) is untouched
+        and still requires a genuinely live claim or the existing native-identity
+        bypass. This module's own docstring states claims "cannot restore write
+        authority" for a session past its claim -- recipient reachability for a
+        message is a different, lower-stakes question than write authority, and
+        this method is invoked only from resolve_recipient, never from a write
+        or caller-identity path.
+
+        Bounded by DEFAULT_TTL_HOURS (24h, the same claim-lifetime constant used
+        throughout coordination_claims.py) measured from the claim's own
+        ``updated_at`` -- a session_ended claim from weeks ago almost certainly
+        has no live process behind it anymore.
+        """
+        list_claims = cast(
+            "Callable[..., list[coordination_claims.ClaimRecord]]",
+            coordination_claims.list_claims,
+        )
+        parameters = inspect.signature(list_claims).parameters
+        kwargs: dict[str, Any] = {"include_inactive": True}
+        if "claims_dir" in parameters:
+            kwargs["claims_dir"] = self.claims_dir
+        else:
+            canonical_claims_dir = Path(coordination_claims.CLAIMS_DIR).expanduser().resolve()
+            if self.claims_dir != canonical_claims_dir:
+                raise CoordinationMessageError(
+                    "Installed claim registry cannot read a custom claims directory; "
+                    "upgrade enforced_planning.coordination_claims before overriding claims_dir"
+                )
+        all_claims = list_claims(project, **kwargs)
+        now = now or _utc_now()
+        cutoff = timedelta(hours=coordination_claims.DEFAULT_TTL_HOURS)
+        reachable = []
+        for claim in all_claims:
+            if claim.is_live():
+                reachable.append(claim)
+                continue
+            if claim.status != "session_ended" or not claim.updated_at:
+                continue
+            try:
+                updated = datetime.fromisoformat(claim.updated_at.replace("Z", "+00:00"))
+            except ValueError:
+                continue
+            if updated.tzinfo is None:
+                updated = updated.replace(tzinfo=UTC)
+            if now - updated <= cutoff:
+                reachable.append(claim)
+        return reachable
+
+    def resolve_recipient(self, selector: RecipientSelector, *, now: datetime | None = None) -> str:
+        """Resolve an exact or claim-backed selector to one canonical session.
+
+        Reachability (not write authority) also admits a claim that ended
+        within the last DEFAULT_TTL_HOURS -- see _reachable_recipient_claims.
+        """
 
         if isinstance(selector, ExactSessionSelector):
-            self._require_live_session(selector.session_id)
+            if not any(
+                claim.session_id == selector.session_id
+                for claim in self._reachable_recipient_claims(now=now)
+            ):
+                raise UnknownSessionError(f"No live claim owns session {selector.session_id!r}")
             return selector.session_id
-        claims = self._live_claims(selector.project)
+        claims = self._reachable_recipient_claims(selector.project, now=now)
         if selector.scope is not None:
             claims = [claim for claim in claims if claim.scope == selector.scope]
         sessions = sorted({claim.session_id for claim in claims if claim.session_id})
@@ -1299,10 +1375,10 @@ class CoordinationMessageStore:
                         existing.recipient_session_id
                     ),
                 )
-        recipient_session_id = self.resolve_recipient(request.recipient)
         created_at = now or _utc_now()
         if created_at.tzinfo is None:
             raise ValueError("now must be timezone-aware")
+        recipient_session_id = self.resolve_recipient(request.recipient, now=created_at)
         message = CoordinationMessage(
             schema_version=SCHEMA_VERSION,
             message_id=message_id,

@@ -776,6 +776,101 @@ def _renewed_lease_expiry(updated_at: str, current_expires_at: str | None) -> st
     return renewed.isoformat()
 
 
+def _apply_cross_agent_handoff_transaction(
+    *,
+    claim: coordination_claims.ClaimRecord,
+    claim_file: Path,
+    claim_bytes_before: bytes,
+    successor_agent: str,
+    successor_session_id: str,
+    current_phase: str,
+    note: str | None,
+    updated_at: str,
+    expected_fields: dict[str, Any],
+    project: str,
+    scope: str,
+) -> dict[str, Any]:
+    """Transfer an explicitly-handed-off claim's identity to a different native agent.
+
+    Reachable only for ``claim.status == "handoff"``: the predecessor already
+    voluntarily quiesced with no live process to fence, so there is nothing to
+    verify beyond the successor's own proven native identity and the claim's
+    exact unchanged bytes. This intentionally does not reuse the same-agent
+    cross-session transfer machinery (process fencing, transfer journals):
+    those exist to protect a *live* predecessor runtime, which a handoff
+    claim by definition no longer has. The claim file itself is renamed
+    because every other lookup (`_claim_path`, heartbeat, close) is keyed by
+    ``<agent>_<project>_<scope>.yaml``; the session tracker keeps its
+    original filename as accurate provenance of which agent created it.
+    """
+
+    new_claim_file = _claim_path(successor_agent, project, scope)
+    if new_claim_file.exists():
+        raise ValueError(
+            f"Cannot transfer {project}:{scope} to agent {successor_agent!r}; "
+            f"a claim already exists at {new_claim_file}"
+        )
+    with coordination_claims.claim_registry_lock(coordination_claims.CLAIMS_DIR):
+        if claim_file.read_bytes() != claim_bytes_before:
+            raise ValueError("claim changed after cross-agent handoff preflight")
+        current = yaml.safe_load(claim_bytes_before)
+        if not isinstance(current, dict):
+            raise TypeError("cross-agent handoff claim must be a YAML mapping")
+        for field, expected in expected_fields.items():
+            if current.get(field) != expected:
+                raise ValueError(f"claim field {field} changed after cross-agent handoff preflight")
+        predecessor_agent = current.get("agent")
+        current.update(
+            {
+                "agent": successor_agent,
+                "status": "active",
+                "session_id": successor_session_id,
+                "heartbeat_at": updated_at,
+                "expires_at": _renewed_lease_expiry(updated_at, claim.expires_at),
+                "updated_at": updated_at,
+                "notes": note
+                or f"session resumed under a different native agent ({predecessor_agent} -> {successor_agent})",
+            }
+        )
+        registry_digest_before = coordination_claims._registry_digest(coordination_claims.CLAIMS_DIR)
+        try:
+            _write_claim_payload(new_claim_file, current)
+            claim_file.unlink()
+            _projection_path, projection_digest_after = coordination_claims.refresh_prewrite_authority_projection(
+                coordination_claims.CLAIMS_DIR
+            )
+            coordination_claims.record_claim_mutation(
+                operation="session_upsert",
+                claims_dir=coordination_claims.CLAIMS_DIR,
+                registry_digest_before=registry_digest_before,
+                target_project=project,
+                target_scope=scope,
+                target_claim_path=new_claim_file,
+                session_id=successor_session_id,
+                projection_digest_after=projection_digest_after,
+            )
+        except Exception:
+            rollback_registry_digest_before = coordination_claims._registry_digest(coordination_claims.CLAIMS_DIR)
+            if new_claim_file.exists():
+                new_claim_file.unlink()
+            _atomic_restore_bytes(claim_file, claim_bytes_before)
+            _projection_path, rollback_projection_digest = coordination_claims.refresh_prewrite_authority_projection(
+                coordination_claims.CLAIMS_DIR
+            )
+            coordination_claims.record_claim_mutation(
+                operation="session_upsert",
+                claims_dir=coordination_claims.CLAIMS_DIR,
+                registry_digest_before=rollback_registry_digest_before,
+                target_project=project,
+                target_scope=scope,
+                target_claim_path=claim_file,
+                session_id=claim.session_id,
+                projection_digest_after=rollback_projection_digest,
+            )
+            raise
+    return current
+
+
 def _apply_legacy_cross_session_resume_transaction(
     *,
     claim: coordination_claims.ClaimRecord,
@@ -4549,8 +4644,22 @@ def resume_session(
     successor_custody_acceptance: session_continuity.SuccessorCustodyAcceptanceV1 | None = None,
     repair_worktree_path: bool = False,
     repair_missing_plan_ref: bool = False,
+    successor_agent: str | None = None,
 ) -> dict[str, Any]:
-    """Reattach a new runtime session to an existing plan-bound lane."""
+    """Reattach a new runtime session to an existing plan-bound lane.
+
+    ``agent`` always selects which claim file to open (``<agent>_<project>_
+    <scope>.yaml``) -- that is the claim's recorded, and by default required,
+    native identity. Pass ``successor_agent`` only when a *different*
+    supported agent is legitimately taking over a claim the recorded agent
+    explicitly left in ``handoff`` status: this proves the successor's own
+    native identity (never the departed agent's) and transfers the claim's
+    recorded identity, including renaming its file, to ``successor_agent``.
+    It is refused for any other lifecycle status -- a live, stale-heartbeat,
+    or session-ended claim still needs the existing same-agent transfer paths
+    below, which protect a possibly-live predecessor process that a handoff
+    claim by definition no longer has.
+    """
 
     claim, payload, claim_file, claim_snapshot_bytes = _claim_snapshot_any_status(
         agent=agent,
@@ -4611,6 +4720,71 @@ def resume_session(
             provided_worktree_path=worktree_path,
             branch=branch,
         )
+
+    if successor_agent is not None and successor_agent != agent:
+        if claim.status != "handoff":
+            raise ValueError(
+                f"Cross-agent resume requires an explicit 'handoff' claim status, not "
+                f"{claim.status!r}. A live, stale-heartbeat, or session-ended claim can "
+                "only be resumed by its own recorded agent; have the recorded agent "
+                "explicitly hand off the lane first."
+            )
+        if successor_agent not in coordination_claims.SUPPORTED_AGENTS:
+            raise ValueError(f"Unsupported successor agent {successor_agent!r}")
+        resolved_successor_session_id = coordination_claims.resolve_session_id(successor_agent, session_id)
+        if not resolved_successor_session_id:
+            raise ValueError("Unable to resolve a native session ID for the successor agent.")
+        coordination_claims.validate_native_session_binding(
+            successor_agent,
+            resolved_successor_session_id,
+            require_native_marker=True,
+        )
+        transfer_updated_at = datetime.now(timezone.utc).isoformat()
+        transferred_claim = _apply_cross_agent_handoff_transaction(
+            claim=claim,
+            claim_file=claim_file,
+            claim_bytes_before=claim_snapshot_bytes,
+            successor_agent=successor_agent,
+            successor_session_id=resolved_successor_session_id,
+            current_phase=current_phase,
+            note=note,
+            updated_at=transfer_updated_at,
+            expected_fields={
+                "status": claim.status,
+                "session_id": claim.session_id,
+                "heartbeat_at": claim.heartbeat_at,
+                "updated_at": claim.updated_at,
+                "agent": claim.agent,
+            },
+            project=project,
+            scope=scope,
+        )
+        if claim.tracker_path:
+            tracker_path_obj = Path(claim.tracker_path).expanduser()
+            if tracker_path_obj.is_file():
+                session_contracts.update_session_tracker(
+                    tracker_path_obj,
+                    current_phase=current_phase,
+                    notes=transferred_claim["notes"],
+                    updated_at=transferred_claim["updated_at"],
+                )
+        return {
+            "action": "resumed",
+            "session_id": resolved_successor_session_id,
+            "tracker_path": claim.tracker_path,
+            "plan_ref": claim.plan_ref,
+            "outcome_session_transfer": None,
+            "claim_session_transfer": None,
+            "successor_custody_acceptance": None,
+            "predecessor_process_fence": None,
+            "predecessor_agent": claim.agent,
+            "successor_agent": successor_agent,
+            "coordination_mailbox": _poll_mailbox_after_committed_transition(
+                agent=successor_agent,
+                project=project,
+                session_id=resolved_successor_session_id,
+            ),
+        }
 
     resolved_session_id = coordination_claims.resolve_session_id(agent, session_id)
     if not resolved_session_id:

@@ -63,6 +63,14 @@ strict-subset, target-worktree identity, conflict, projection, and receipt
 checks that the newer Make target delegates to; any refusal still abandons the
 lane before installer mutation.
 
+For a legacy governed consumer with neither worktree Make target, the current
+atomic transaction is the documented isolated fallback. It starts with the
+final two-file installer scope rather than temporary `.` authority, so active
+owners of unrelated paths remain non-blocking even when one of their old claim
+records cannot prove a live worktree boundary. The same transaction still
+checks repository authority, native ownership, remote freshness, claim
+conflicts, tracker creation, and linked-worktree creation before returning.
+
 ---
 
 ## Implementation (2026-09-02)

@@ -253,7 +253,12 @@ def write_repo(
     # closure writes to. A repo whose Makefile requires an explicit narrow
     # scope (some do -- SESSION_WRITE_PATHS_REQUIRED-style policy) rejects a
     # bootstrap "." claim outright, and this is genuinely what gets touched.
-    write_paths = "enforced_planning/coordination_claims.py scripts/meta/check_coordination_claims.py"
+    write_path_list = [
+        "enforced_planning/coordination_claims.py",
+        "scripts/meta/check_coordination_claims.py",
+    ]
+    write_paths = " ".join(write_path_list)
+    bootstrap_requires_narrowing = True
     if "\nmaintenance-worktree:" in makefile_text or makefile_text.startswith("maintenance-worktree:"):
         # Bootstrap with the temporary whole-repository authority every
         # supported maintenance wrapper understands. The claim is narrowed to
@@ -289,9 +294,30 @@ def write_repo(
             "SESSION_WRITE_PATHS=.",
         ]
     else:
-        result.write_error = "Makefile has neither maintenance-worktree nor worktree target"
-        return result
-    make_proc = _run(make_cmd)
+        # Some legacy governed consumers predate both Make entrypoints. Use
+        # the current atomic transaction as the documented isolated fallback,
+        # starting with the final two-file authority so unrelated owners do
+        # not become blockers merely because an intermediate broad claim was
+        # needed for older wrappers.
+        request = {
+            "schema_version": "1.0",
+            "operation": "maintenance_worktree",
+            "agent": native_agent,
+            "project": repo_id,
+            "scope": branch,
+            "repo_root": str(repo_root),
+            "branch": branch,
+            "claim_type": "program",
+            "write_paths": write_path_list,
+        }
+        make_cmd = [
+            sys.executable,
+            str(CLAIM_BOOTSTRAP_SCRIPT),
+            "--request-json",
+            json.dumps(request, separators=(",", ":")),
+        ]
+        bootstrap_requires_narrowing = False
+    make_proc = _run(make_cmd, cwd=repo_root if not bootstrap_requires_narrowing else None)
     make_output = "\n".join(part for part in (make_proc.stdout, make_proc.stderr) if part).strip()
     if (
         make_proc.returncode != 0
@@ -410,49 +436,50 @@ def write_repo(
                 ]
             )
 
-    narrow_proc = _run(
-        [
-            "make",
-            "-C",
-            str(repo_root),
-            "session-narrow",
-            f"BRANCH={branch}",
-            f"WORKTREE_AGENT={native_agent}",
-            f"SESSION_WRITE_PATHS={write_paths}",
-        ]
-    )
-    narrow_output = "\n".join(part for part in (narrow_proc.stdout, narrow_proc.stderr) if part).strip()
-    if narrow_proc.returncode != 0 and "No rule to make target 'session-narrow'." in narrow_output:
-        # An older target can have the narrowing implementation installed but
-        # not yet expose its Make facade. Invoke the current stable CLI against
-        # the same owner/session-bound claim; its subset and worktree-identity
-        # validation is the contract the Make target delegates to.
+    if bootstrap_requires_narrowing:
         narrow_proc = _run(
             [
-                sys.executable,
-                str(SESSION_NARROW_SCRIPT),
-                "--agent",
-                native_agent,
-                "--project",
-                repo_id,
-                "--scope",
-                branch,
-                *[
-                    argument
-                    for path in write_paths.split()
-                    for argument in ("--write-path", path)
-                ],
-                "--json",
-            ],
-            cwd=worktree_path,
+                "make",
+                "-C",
+                str(repo_root),
+                "session-narrow",
+                f"BRANCH={branch}",
+                f"WORKTREE_AGENT={native_agent}",
+                f"SESSION_WRITE_PATHS={write_paths}",
+            ]
         )
         narrow_output = "\n".join(part for part in (narrow_proc.stdout, narrow_proc.stderr) if part).strip()
-    if narrow_proc.returncode != 0:
-        _abandon(
-            "session-narrow failed before installer mutation: "
-            f"{narrow_output[:500]}"
-        )
-        return result
+        if narrow_proc.returncode != 0 and "No rule to make target 'session-narrow'." in narrow_output:
+            # An older target can have the narrowing implementation installed but
+            # not yet expose its Make facade. Invoke the current stable CLI against
+            # the same owner/session-bound claim; its subset and worktree-identity
+            # validation is the contract the Make target delegates to.
+            narrow_proc = _run(
+                [
+                    sys.executable,
+                    str(SESSION_NARROW_SCRIPT),
+                    "--agent",
+                    native_agent,
+                    "--project",
+                    repo_id,
+                    "--scope",
+                    branch,
+                    *[
+                        argument
+                        for path in write_path_list
+                        for argument in ("--write-path", path)
+                    ],
+                    "--json",
+                ],
+                cwd=worktree_path,
+            )
+            narrow_output = "\n".join(part for part in (narrow_proc.stdout, narrow_proc.stderr) if part).strip()
+        if narrow_proc.returncode != 0:
+            _abandon(
+                "session-narrow failed before installer mutation: "
+                f"{narrow_output[:500]}"
+            )
+            return result
 
     install_proc = _run(
         [

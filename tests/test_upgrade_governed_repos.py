@@ -89,7 +89,7 @@ def test_write_repo_routes_pr_creation_through_selected_github_cli(
     module = _load()
     repo = tmp_path / "consumer"
     repo.mkdir()
-    (repo / "Makefile").write_text("maintenance-worktree:\n\t@true\n", encoding="utf-8")
+    (repo / "Makefile").write_text("check:\n\t@true\n", encoding="utf-8")
     for env_key in module.coordination_claims.STRICT_NATIVE_SESSION_ENV_KEYS.values():
         monkeypatch.delenv(env_key, raising=False)
     monkeypatch.setenv("CODEX_THREAD_ID", "native-codex-thread")
@@ -98,8 +98,9 @@ def test_write_repo_routes_pr_creation_through_selected_github_cli(
 
     def complete_sync(cmd: list[str], cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
         calls.append(cmd)
-        if "maintenance-worktree" in cmd:
-            branch = next(item.split("=", 1)[1] for item in cmd if item.startswith("BRANCH="))
+        if str(module.CLAIM_BOOTSTRAP_SCRIPT) in cmd:
+            request = json.loads(cmd[cmd.index("--request-json") + 1])
+            branch = request["branch"]
             (repo / "worktrees" / branch).mkdir(parents=True)
             return subprocess.CompletedProcess(cmd, 0, stdout="created", stderr="")
         if "session-narrow" in cmd:
@@ -135,6 +136,13 @@ def test_write_repo_routes_pr_creation_through_selected_github_cli(
     assert result.success is True
     assert result.pr_url == "https://example.invalid/pr/1"
     assert any(cmd[0] == "gh-insidesuccess" and cmd[1:3] == ["pr", "create"] for cmd in calls)
+    bootstrap_cmd = next(cmd for cmd in calls if str(module.CLAIM_BOOTSTRAP_SCRIPT) in cmd)
+    bootstrap_request = json.loads(bootstrap_cmd[bootstrap_cmd.index("--request-json") + 1])
+    assert bootstrap_request["write_paths"] == [
+        "enforced_planning/coordination_claims.py",
+        "scripts/meta/check_coordination_claims.py",
+    ]
+    assert all("session-narrow" not in cmd for cmd in calls)
 
 
 def test_write_repo_skips_missing_repo_root(tmp_path: Path) -> None:

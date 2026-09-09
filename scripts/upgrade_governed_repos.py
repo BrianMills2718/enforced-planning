@@ -226,21 +226,26 @@ def write_repo(repo_id: str, repo_root: Path, tier: str, owner: str) -> RepoUpgr
     # scope (some do -- SESSION_WRITE_PATHS_REQUIRED-style policy) rejects a
     # bootstrap "." claim outright, and this is genuinely what gets touched.
     write_paths = "enforced_planning scripts/meta .claude .codex contracts AGENTS.md Makefile"
-    if "\nmaintenance-worktree:" in makefile_text or makefile_text.startswith("maintenance-worktree:"):
-        # Newer installed Makefile: the convenience wrapper exists.
-        make_cmd = [
-            "make", "-C", str(repo_root), "maintenance-worktree",
-            f"BRANCH={branch}", f"TASK={task}", f"SESSION_GOAL={goal}",
-            "SESSION_PHASE=sync", f"WORKTREE_AGENT={native_agent}", "SESSION_ALLOW_PARALLEL=1",
-            f"SESSION_WRITE_PATHS={write_paths}",
-        ]
-    elif "\nworktree:" in makefile_text or makefile_text.startswith("worktree:"):
-        # Older installed Makefile: this is exactly the drift being fixed, so
-        # the newer wrapper isn't installed yet. Fall back to the base target
-        # it already has, supplying explicitly what maintenance-worktree
-        # would otherwise derive.
+    if "\nworktree:" in makefile_text or makefile_text.startswith("worktree:"):
+        # Use the explicit base target even when the convenience wrapper is
+        # present. Older maintenance wrappers do not propagate broad-scope
+        # metadata into their atomic request, but the base target does. The
+        # installer closure legitimately spans several top-level directories,
+        # so declare that bounded surface rather than relying on version-specific
+        # bootstrap inference.
         make_cmd = [
             "make", "-C", str(repo_root), "worktree",
+            f"BRANCH={branch}", f"TASK={task}", f"SESSION_GOAL={goal}",
+            "SESSION_PHASE=sync", f"WORKTREE_AGENT={native_agent}", "SESSION_ALLOW_PARALLEL=1",
+            "ALLOW_UNPLANNED=1", "SESSION_BROAD_SCOPE_MODE=bounded",
+            "SESSION_BROAD_SCOPE_REASON=installer-declared multi-directory upgrade surface",
+            f"SESSION_WRITE_PATHS={write_paths}",
+        ]
+    elif "\nmaintenance-worktree:" in makefile_text or makefile_text.startswith("maintenance-worktree:"):
+        # Compatibility-only fallback for an unusual install that exposes the
+        # convenience wrapper without the base target.
+        make_cmd = [
+            "make", "-C", str(repo_root), "maintenance-worktree",
             f"BRANCH={branch}", f"TASK={task}", f"SESSION_GOAL={goal}",
             "SESSION_PHASE=sync", f"WORKTREE_AGENT={native_agent}", "SESSION_ALLOW_PARALLEL=1",
             f"SESSION_WRITE_PATHS={write_paths}",
